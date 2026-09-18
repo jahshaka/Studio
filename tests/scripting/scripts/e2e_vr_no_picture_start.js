@@ -145,6 +145,22 @@ assert(giAfter.follows === giBefore.follows,
 assert(giAfter.vr === giBefore.vr,
        "the cascade profile followed the SESSION and not the frame (" + giBefore.vr +
        " -> " + giAfter.vr + ")");
+// ...AND THE COLUMN IS THE HEADSET'S, WHICH THE LINE ABOVE DOES NOT SAY
+// (ENGINE-SMALL-B fix round item 1). `giBefore.vr === giAfter.vr` is satisfied
+// by false === false: a session whose chain never left the DESKTOP column would
+// pass it while wearing the wrong cascade set for its whole life. That is not
+// hypothetical — it is exactly what a chain-shape debt dropped on the floor
+// looks like, and one was: `applyPendingGi` cleared the debt before calling
+// `rebuildVct`, which can come back having built nothing (no camera yet, or an
+// albedo still streaming — BOOTVOX-1), and nothing re-arms it afterwards
+// because `updateGiTracking` raises it on a driver CHANGE only. The debt is now
+// cleared by a BUILD. `awaitingVoxelTextures` is logged beside it because it is
+// the state that used to swallow it.
+console.log("the chain's column: vr=" + giAfter.vr +
+            " cascades=" + world.giStatus().cascades.length +
+            " awaitingVoxelTextures=" + world.giStatus().awaitingVoxelTextures);
+assert(giAfter.vr === true,
+       "THE CHAIN IS IN THE VR COLUMN — the session's own profile, not the desktop's");
 console.log("after 40 frames of 'no picture': " + JSON.stringify(st));
 assert(st.rendered === 0, "the runtime has asked for NO picture so far (rendered " +
                           st.rendered + ")");

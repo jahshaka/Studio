@@ -874,3 +874,26 @@ add_dependencies(test_gi_chain_face JahshakaEngineMedia)
 add_test(NAME gi.chain_face COMMAND test_gi_chain_face
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL TRUE)
+
+# gi.boot_textures — THE ARM WAITS FOR THE ALBEDO IT IS ABOUT TO VOXELISE
+# (BOOTVOX-1). The voxeliser reads a material's albedo and emissive maps, and a
+# scene that binds one and pushes its GI in the same frame used to voxelise
+# without it and then re-voxelise EVERY cascade when the pixels arrived — which
+# is what the shipped default scene did on every boot (its ground's tile.png).
+# RUN_SERIAL like every cascade suite: the chain holds four voxel volumes at
+# once and the case counts rebuilds per frame.
+add_executable(test_gi_boot_textures test_gi_boot_textures.cpp)
+set_target_properties(test_gi_boot_textures PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_boot_textures PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_boot_textures PRIVATE JahshakaEngine)
+add_dependencies(test_gi_boot_textures JahshakaEngineMedia)
+add_test(NAME gi.boot_textures COMMAND test_gi_boot_textures
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)

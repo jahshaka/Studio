@@ -3,7 +3,11 @@
 # (a reachable DISPLAY, a Vulkan driver or lavapipe). The file header carries the
 # defect, the model and its reference.
 function(jahshaka_sky_test target)
-    add_executable(${target} test_sun_transmittance.cpp)
+    jahshaka_sky_test_src(${target} test_sun_transmittance.cpp)
+endfunction()
+
+function(jahshaka_sky_test_src target src)
+    add_executable(${target} ${src})
     set_target_properties(${target} PROPERTIES
         AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
         CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
@@ -34,3 +38,20 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(sky.sun_transmittance_asan PROPERTIES TIMEOUT 300 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
+
+# sky.env_layout — THE REFLECTION CUBE'S LAYOUT (lane ENGINE-SMALL-B,
+# ENVPROBE-LAYOUT-1). Under the Khronos validation layer, like
+# shadow.cache_kinds: the convolution used to leave the cubemap every PBR
+# datablock samples in `ResourceLayout::Uav` (VK_IMAGE_LAYOUT_GENERAL) and
+# nothing moved it — `VUID-vkCmdDraw-None-09600` on ten subresources of one
+# image on an ordinary editor run. Any "Validation Error" fails the row
+# whatever the exit code says, and the row's own assertions prove the mirror
+# cube really samples the sky (so the layer half cannot pass by accident).
+jahshaka_sky_test_src(test_env_layout test_env_layout.cpp)
+target_link_libraries(test_env_layout PRIVATE JahshakaEngine)
+add_test(NAME sky.env_layout COMMAND test_env_layout
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(sky.env_layout PROPERTIES
+    TIMEOUT 180 LABELS "engine"
+    ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+    FAIL_REGULAR_EXPRESSION "Validation Error")
