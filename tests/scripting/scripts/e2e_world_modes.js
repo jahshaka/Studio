@@ -108,6 +108,77 @@ assert(byTier.high.probeFaceSize === 512 && byTier.high.probeHdr === true &&
        "High's probes are 512 px per face, HDR and shadowed");
 assert(byTier.epic.bounces === 3 && byTier.high.bounces === 1,
        "Epic's one column over High is the bounce count");
+
+// ---- THE SAME TABLE'S VR COLUMN (lane V1-RIG item 4) ------------------------
+//
+// A headset renders the chain five times over for half the frame (2160x2376 per
+// eye against a desktop 1080p is 10.26 against 2.07 megapixels; 11.1 ms at 90 Hz
+// against 16.7 at 60), and the march costs a MEASURED 0.31 ms per eye per
+// cascade at that size. So `vrChain` is the tier's own chain with the redundant
+// middle cascade dropped and the outermost step doubled. It is asserted here,
+// with no runtime and no headset in sight, because it is arithmetic on one table
+// — the same reason the desktop column is asserted above.
+//
+// EVERY ASSERTION READS `vrChain`, never `chain`: the whole point of the column
+// is that the two differ.
+Object.keys(byTier).forEach(function (tn) {
+    var row = byTier[tn];
+    // `row.vrChain && row.vrChain.length`, NOT `Array.isArray`: a QVariantList
+    // handed to QJSEngine indexes and reports `length` like an array but is not
+    // one by `Array.isArray` (measured — the first version of this assertion
+    // failed on a table that was perfectly correct). The rest of this file reads
+    // `row.chain.length` the same way for the same reason.
+    assert(row.vrChain && row.vrChain.length >= 2,
+           tn + " carries a VR chain of at least two cascades");
+    // FEWER OR EQUAL CASCADES than the desktop column, never more: the column
+    // exists to buy pixel march back.
+    assert(row.vrChain.length <= row.chain.length,
+           tn + "'s VR chain is not longer than its desktop chain (" +
+           row.vrChain.length + " vs " + row.chain.length + ")");
+    // THE SAME TWO MONOTONICITIES the desktop column must satisfy — Ogre derives
+    // the hand-over LOD from the ratio of the cells, so an outer cascade that is
+    // smaller or finer makes the march never hand over.
+    for (var c = 1; c < row.vrChain.length; ++c)
+        assert(row.vrChain[c].halfSize > row.vrChain[c - 1].halfSize &&
+               row.vrChain[c].cell > row.vrChain[c - 1].cell,
+               tn + "'s VR chain grows outward in reach AND in cell at row " + c);
+    // THE REACH AND THE INNER CELL ARE UNTOUCHED: what the column gives up is a
+    // hand-over in the middle, never the near field or the far horizon.
+    assert(Math.abs(row.vrChain[0].halfSize - row.chain[0].halfSize) < 1e-4 &&
+           Math.abs(row.vrChain[0].cell - row.chain[0].cell) < 1e-4,
+           tn + "'s VR chain keeps the desktop inner cascade exactly");
+    assert(Math.abs(row.vrChain[row.vrChain.length - 1].halfSize -
+                    row.chain[row.chain.length - 1].halfSize) < 1e-4,
+           tn + "'s VR chain keeps the desktop REACH exactly");
+    // THE OUTERMOST STEP IS PINNED AT 16 CELLS — the engine's own outer default
+    // is 8, so this is the doubling, stated as the number the table writes.
+    assert(row.vrChain[row.vrChain.length - 1].stepCells === 16,
+           tn + "'s VR chain pins the outermost step at 16 cells, got " +
+           row.vrChain[row.vrChain.length - 1].stepCells);
+    // ...and nothing else is pinned: every inner row leaves the step to the
+    // engine's derivation (0 = derive).
+    for (var i = 0; i + 1 < row.vrChain.length; ++i)
+        assert(row.vrChain[i].stepCells === 0,
+               tn + "'s VR chain leaves inner step " + i + " to the engine");
+});
+// THE TWO HALVES OF THE TRANSFORM APPLY INDEPENDENTLY, which is exactly where
+// the first note was wrong: LOW has no middle cascade to drop and keeps its two
+// rows, but its outermost step doubles with everybody else's — so NO tier's VR
+// column equals its desktop one.
+assert(byTier.low.vrChain.length === byTier.low.chain.length &&
+       byTier.low.vrChain.length === 2,
+       "Low keeps both its cascades in VR (there is no middle to drop)");
+assert(byTier.low.chain[byTier.low.chain.length - 1].stepCells !== 16,
+       "...and its DESKTOP outer step is not the VR one (the columns differ at Low too)");
+["medium", "high", "epic"].forEach(function (tn) {
+    assert(byTier[tn].vrChain.length === byTier[tn].chain.length - 1,
+           tn + " drops exactly one cascade in VR (" + byTier[tn].chain.length +
+           " -> " + byTier[tn].vrChain.length + ")");
+    // The row that went is the SECOND one, the one closest in reach to the row
+    // outside it.
+    assert(Math.abs(byTier[tn].vrChain[1].halfSize - byTier[tn].chain[2].halfSize) < 1e-4,
+           tn + "'s VR chain drops row 1, so its second row is the desktop's third");
+});
 // The World mode -> Photon tier mapping, by name rather than by ordinal.
 var worldMap = {};
 for (var wi = 0; wi < tiers.world.length; ++wi) worldMap[tiers.world[wi].mode] = tiers.world[wi].photon;
