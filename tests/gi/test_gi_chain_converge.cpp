@@ -273,6 +273,146 @@ int main()
     CHECK(moved > 4.0f, "A LIGHT THAT MOVED REACHES THE FIELD (it re-integrated)");
     CHECK(scene->giStatus().ifdConverged, "...and the field is converged again");
 
+    // ---- 6. A CAMERA WALK THAT COMES BACK LEAVES THE CHAIN WHERE IT WAS ---
+    // (LAMPREST-3.) A cascade rebuild ends with ONE injection of THAT cascade
+    // over the radiance it held where it used to stand — one Jacobi pass of a
+    // fixed point over coupled volumes — and a camera walk moves no light and
+    // no geometry, so the mirror's cadence never ticks and nothing finished the
+    // iteration. Measured before the fix, on the movable-lamp room: the camera
+    // walked 35 m away and back to the SAME pose (the placements returned
+    // exactly, the albedo voxels came back byte-identical) and cascade 0's
+    // light came back 60,852 of its 82,176 lit bytes different, by up to
+    // 55/255, for ever; one at-rest injection put every byte back.
+    //
+    // So the observable is the same history test the cases above take, with the
+    // CAMERA as the history instead of the lamp: the picture from one pose must
+    // not depend on where the camera has been. The scheduler pays the settle on
+    // the first frame it owes no rebuild, which is why the counter must move
+    // ONCE for the walk and then stand still while nothing happens.
+    CHECK(scene->setGlobalIllumination(gi), "the chain builds again for the walk (field off)");
+    render(e, 10);
+    lampAt(-2.0f);
+    scene->refreshGiLighting(false);
+    Image beforeWalk;
+    shot(beforeWalk);
+    const long long settlesBefore = scene->giStatus().chainSettles;
+
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 60.0f), Vec3(0.0f, 0.8f, 50.0f));
+    render(e, 40);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
+    render(e, 40);
+    Image afterWalk;
+    shot(afterWalk);
+    const GiStatus walked = scene->giStatus();
+    const float walkDelta = worstDiff(beforeWalk, afterWalk);
+    std::printf("   walked away and back: %.2f/255, cascade 0 rebuilds %llu, settles %lld -> %lld\n",
+                walkDelta, (unsigned long long)walked.cascades[0].rebuilds,
+                settlesBefore, walked.chainSettles);
+    CHECK(walked.cascades[0].rebuilds >= 2,
+          "the walk really did re-voxelise cascade 0 (away, and back again)");
+    CHECK(walked.chainSettles > settlesBefore,
+          "A REBUILT CHAIN IS RUN TO ITS FIXED POINT — the scheduler paid the "
+          "at-rest injection the rebuild owed, one cheap step per frame");
+    CHECK(walkDelta <= 1.5f,
+          "AND THE PICTURE FROM ONE POSE DOES NOT DEPEND ON WHERE THE CAMERA "
+          "HAS BEEN (it was 5/255 and permanent before the settle existed)");
+    // ...ONCE PER BURST, NOT ONCE PER FRAME: the cost of the rule is one at-rest
+    // tick per camera step, and a still scene must pay nothing at all.
+    const long long settledAt = walked.chainSettles;
+    render(e, 30);
+    CHECK(scene->giStatus().chainSettles == settledAt,
+          "...and a still camera pays no further settle (the flag is spent, not standing)");
+
+    // AND THE DEFECT ITSELF, so this case proves what it guards rather than
+    // asserting a number that happens to pass: with the rule stood down the SAME
+    // walk must visibly move the picture (measured 13.00/255 here).
+    ::setenv("JAHSHAKA_GI_NO_REBUILD_SETTLE", "1", 1);
+    Image beforeBare;
+    scene->refreshGiLighting(false);
+    shot(beforeBare);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 60.0f), Vec3(0.0f, 0.8f, 50.0f));
+    render(e, 40);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
+    render(e, 40);
+    Image afterBare;
+    shot(afterBare);
+    const float bareDelta = worstDiff(beforeBare, afterBare);
+    const long long bareSettles = scene->giStatus().chainSettles;
+    ::unsetenv("JAHSHAKA_GI_NO_REBUILD_SETTLE");
+    std::printf("   with the settle stood down: %.2f/255 (settles %lld -> %lld)\n",
+                bareDelta, settledAt, bareSettles);
+    CHECK(bareSettles == settledAt, "the diagnostic really does stand the settle down");
+    CHECK(bareDelta > 2.0f,
+          "...and WITHOUT it the same walk leaves the chain somewhere else — which "
+          "is the defect this case exists for");
+    // ...and the scene is put back where the cases after this one expect it.
+    // (The stand-down left a debt armed — the scheduler raised it and the knob
+    // refused to pay it — and this is what spends it: whoever pays the
+    // injection pays the debt.)
+    scene->refreshGiLighting(false);
+
+    // ---- 7. A CAMERA THAT NEVER STANDS STILL STILL GETS THE SETTLE --------
+    // (LAMPREST-3 fix round item 1, and it is the VR case.) In a headset the GI
+    // driver is the session's view and its camera is the TRACKED HEAD, written
+    // every frame: a rule that waited for two frames at one position would
+    // never fire for a wearer, and the defect above would simply live in the
+    // headset until a light or an object moved. So the settle has NO
+    // camera-still gate — it rides the scheduler's own idle slot — and this
+    // case is the proof: the camera jitters a millimetre every frame, for ever.
+    Image jitBefore, jitAfter;
+    scene->refreshGiLighting(false);
+    shot(jitBefore);
+    const long long jitSettles = scene->giStatus().chainSettles;
+    const auto jitterAt = [&](float z, int frames) {
+        for (int f = 0; f < frames; ++f) {
+            enginetest::testCameraLookAt(view, Vec3(f % 2 ? 0.001f : 0.0f, 1.6f, z),
+                                         Vec3(0.0f, 0.8f, z - 10.0f));
+            render(e, 1);
+        }
+    };
+    jitterAt(60.0f, 40);
+    jitterAt(5.2f, 60);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
+    render(e, 6);
+    shot(jitAfter);
+    const GiStatus jit = scene->giStatus();
+    std::printf("   a camera jittering 1 mm a frame: %.2f/255 (settles %lld -> %lld)\n",
+                worstDiff(jitBefore, jitAfter), jitSettles, jit.chainSettles);
+    CHECK(jit.chainSettles > jitSettles,
+          "A JITTERING CAMERA IS PAID TOO — the settle has no still gate, because "
+          "a headset's head pose never holds one position (VR would never settle)");
+    CHECK(worstDiff(jitBefore, jitAfter) <= 1.5f,
+          "...and the picture comes back to where it was");
+
+    // ---- 8. THE FIELD IS RE-INTEGRATED AFTER THE SETTLE, NOT BEFORE ------
+    // (fix round item 6.) The field is an integral of the chain and it
+    // integrates at the REBUILD frame (followCascade0Field) over a chain that
+    // has not converged yet — so the settle's last step must re-integrate it,
+    // and a converged field is the observable.
+    GiParams walkField = gi;
+    walkField.ddgi = GiToggle::On;
+    CHECK(scene->setGlobalIllumination(walkField), "the chain builds with the field on for the walk");
+    render(e, 8);
+    scene->refreshGiLighting(false);
+    Image fieldBefore, fieldAfter;
+    shot(fieldBefore);
+    const long long fieldSettles = scene->giStatus().chainSettles;
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 60.0f), Vec3(0.0f, 0.8f, 50.0f));
+    render(e, 40);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
+    render(e, 60);
+    shot(fieldAfter);
+    const GiStatus fieldSt = scene->giStatus();
+    std::printf("   with the field on: %.2f/255, converged %d (settles %lld -> %lld)\n",
+                worstDiff(fieldBefore, fieldAfter), int(fieldSt.ifdConverged),
+                fieldSettles, fieldSt.chainSettles);
+    CHECK(fieldSt.chainSettles > fieldSettles, "the walk owed a settle with the field on too");
+    CHECK(fieldSt.ifdConverged,
+          "THE FIELD IS CONVERGED AFTER THE SETTLE — its last step re-integrates "
+          "the field over a chain that has finished moving");
+    CHECK(worstDiff(fieldBefore, fieldAfter) <= 1.5f,
+          "...and the picture with the field on comes back to where it was");
+
     GiParams off; off.mode = GiMode::Off;
     CHECK(scene->setGlobalIllumination(off), "GI comes down");
     render(e, 2);
