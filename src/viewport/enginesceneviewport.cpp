@@ -2121,6 +2121,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     }
     out.cascadesAwaitingCamera = st.cascadesAwaitingCamera;
     out.cascadeVoxelLod = st.cascadeVoxelLod;
+    out.cascadeProfileVr = st.cascadeProfileVr;
     out.cascades.clear();
     out.cascades.reserve(int(st.cascades.size()));
     for (const auto &c : st.cascades) {
