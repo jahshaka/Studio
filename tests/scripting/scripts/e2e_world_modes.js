@@ -155,11 +155,35 @@ Object.keys(byTier).forEach(function (tn) {
     assert(row.vrChain[row.vrChain.length - 1].stepCells === 16,
            tn + "'s VR chain pins the outermost step at 16 cells, got " +
            row.vrChain[row.vrChain.length - 1].stepCells);
-    // ...and nothing else is pinned: every inner row leaves the step to the
-    // engine's derivation (0 = derive).
-    for (var i = 0; i + 1 < row.vrChain.length; ++i)
-        assert(row.vrChain[i].stepCells === 0,
-               tn + "'s VR chain leaves inner step " + i + " to the engine");
+    // ...and every OTHER row carries the step the engine DERIVES, reported
+    // resolved rather than as the tier row's 0 (CASCADE-STEP-1: the verb runs
+    // the renderer's own giResolveCascadeSteps, so a chain a tooltip promises
+    // is the chain that gets built, down to the step).
+    [row.chain, row.vrChain].forEach(function (ch, col) {
+        var what = tn + (col ? " VR" : " desktop");
+        for (var i = 0; i < ch.length; ++i) {
+            assert(ch[i].stepCells > 0 && ch[i].stepCells <= ch[i].resolution / 2,
+                   what + " row " + i + " carries a resolved step in cells (" +
+                   ch[i].stepCells + " of " + ch[i].resolution + ")");
+            assert(Math.abs(ch[i].step - ch[i].stepCells * ch[i].cell) < 1e-4,
+                   what + " row " + i + "'s step in metres is its cells times its cell");
+        }
+        // THE NEAR-FIELD GUARANTEE (CASCADE-STEP-1, owner 2026-09-18): the
+        // innermost cascade guarantees a radius around the head inside which
+        // the bounce is ALWAYS read from it — halfSize - step - cell, against
+        // 0.45 of the half-size. Before the rule every tier but Low guaranteed
+        // a NEGATIVE radius: the walker reached cascade 0's own face before it
+        // re-centred and read the near metre from a 2-3x coarser cascade.
+        assert(ch[0].guaranteedRadius >= ch[0].nearFieldRadius - 1e-4,
+               what + " cascade 0 guarantees its near-field radius (" +
+               ch[0].guaranteedRadius.toFixed(3) + " >= " +
+               ch[0].nearFieldRadius.toFixed(3) + " m)");
+        // ...and no row in any column guarantees nothing at all.
+        for (var j = 0; j < ch.length; ++j)
+            assert(ch[j].guaranteedRadius > 0,
+                   what + " row " + j + " guarantees a positive radius (" +
+                   ch[j].guaranteedRadius.toFixed(3) + " m)");
+    });
 });
 // THE TWO HALVES OF THE TRANSFORM APPLY INDEPENDENTLY, which is exactly where
 // the first note was wrong: LOW has no middle cascade to drop and keeps its two

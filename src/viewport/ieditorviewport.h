@@ -663,6 +663,9 @@ public:
             int       resolution = 0;
             float     cell = 0.0f;
             float     step = 0.0f;
+            /// The near-field radius this cascade guarantees, in metres
+            /// (engine GiStatus::CascadeStatus::guaranteedRadius).
+            float     guaranteedRadius = 0.0f;
             QVector3D centre;
             quint64   rebuilds = 0;
             int       pending = 0;
