@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmoray.h"
 
 #include "irisgl/irisgl.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -22,6 +23,7 @@ For more information see the LICENSE file
 #include "services/editgate.h"
 #include "services/undoservice.h"
 #include "commands/transformscenenodecommand.h"
+#include <QApplication>
 #include <QUndoStack>
 
 
@@ -89,6 +91,17 @@ Gizmo::Gizmo()
 // correct instead of arbitrary.
 void Gizmo::updateSize(iris::CameraNodePtr camera)
 {
+	// THE WEARER'S SIZE WINS WHILE ONE IS DRIVING (VR_INPUT_SPEC §5.2, stage
+	// 2). There is ONE gizmo object in the process and it has ONE scale, which
+	// both its drawing and its hit radii read — so it cannot be the desk's
+	// fraction of a window and the headset's constant angle at the same time.
+	// While a VR pick is armed the headset's rule holds and the desktop draws
+	// and drags that same object: its picture and its pick still agree with
+	// each other (the property that matters), and the size it shows is the one
+	// the person wearing the headset is working at. Disarming (session over,
+	// controllers gone) hands it straight back — the viewport re-sizes on its
+	// very next frame, because it calls this every frame.
+	if (vrPickData.valid) return;
 	if (!!selectedNode) {
 		if (camera->getProjection() == iris::CameraProjection::Perspective) {
 			float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
@@ -114,6 +127,83 @@ void Gizmo::updateSize(iris::CameraNodePtr camera)
 float Gizmo::getGizmoScale()
 {
 	return gizmoScale;
+}
+
+// THE VR SIZE RULE (VR_INPUT_SPEC §5.2; the owner's decision 5, "fixed angular
+// size"). The desktop's expression — kGizmoScreenFraction * distance *
+// tan(fov/2) — evaluated at the EYE instead of at a document camera, which
+// makes the gizmo a constant fraction of the wearer's view and therefore a
+// constant ANGLE: the same apparent size standing over an object as across the
+// room. There is no orthographic case: an eye is a perspective.
+void Gizmo::updateSizeForVr(const iris::Vec3 &eye, float fovDegrees)
+{
+	if (!selectedNode) return;
+	// ...AND THE SIZE IS FROZEN FOR THE LENGTH OF A DRAG, exactly as the frame
+	// is (gizmo.drag_frame). On the desk this never came up — a camera cannot
+	// move while the mouse is holding a handle — but a wearer's head moves
+	// constantly, and the rotation gizmo's drag angle is resolved against a
+	// SPHERE whose radius is this scale: a gizmo that grew as the wearer
+	// stepped forward would turn the object while they walked. Every handle's
+	// hit radius rides the same number, so freezing it also keeps the handle
+	// under the ray the one the press grabbed.
+	if (isDragging()) return;
+	const float distance = (selectedNode->getGlobalPosition() - eye).length();
+	gizmoScale = gizmoray::vrGizmoScale(distance, fovDegrees);
+}
+
+void Gizmo::setVrPick(const GizmoVrPick &pick)
+{
+	vrPickData = pick;
+	if (vrPickData.valid) updateSizeForVr(vrPickData.eye, vrPickData.fovDegrees);
+}
+
+bool Gizmo::vrLookDirection(const iris::Vec3 &gizmoPosition, iris::Vec3 &look) const
+{
+	if (!vrPickData.valid) return false;
+	const iris::Vec3 toGizmo = gizmoPosition - vrPickData.eye;
+	if (toGizmo.lengthSquared() < 1e-10f) return false;      // the eye is on it
+	look = toGizmo.normalized();
+	return true;
+}
+
+float Gizmo::rayTolerance(float pixels) const
+{
+	return gizmoray::toleranceRadians(pixels, vrPickData.fovDegrees);
+}
+
+void Gizmo::resolvePickRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const
+{
+	if (!vrPickData.valid) return;
+	if (vrPickData.rayDir.isNull()) return;      // armed, but this hand is not located
+	rayPos = vrPickData.rayPos;
+	rayDir = vrPickData.rayDir;
+	if (!vrPickData.viewDir.isNull()) viewDir = vrPickData.viewDir;
+}
+
+// THE SNAP MODIFIER, ASKED ONCE. The desk's Ctrl and the headset's held `menu`
+// mean the same thing, so they are one question; the three drags call this and
+// none of them reads the keyboard itself any more.
+bool Gizmo::snapHeld() const
+{
+	if (snapHeldExternally) return true;
+	return QApplication::keyboardModifiers().testFlag(Qt::ControlModifier);
+}
+
+// A CANCELLED GESTURE IS NOT A TRANSFORM (VR_INPUT_SPEC §5.4). The subclass
+// closes its own drag exactly as a release would — the dragged handle dropped,
+// the frozen frame released — and createUndoAction, seeing the flag, puts every
+// member back and pushes nothing at all.
+void Gizmo::cancelDragging()
+{
+	if (!isDragging()) return;
+	cancelPending = true;
+	endDragging();
+	cancelPending = false;
+}
+
+QString Gizmo::handleNameAt(iris::Vec3, iris::Vec3, iris::Vec3)
+{
+	return QString();
 }
 
 // ---- PIXEL-SPACE PICKING (smoke S15) ---------------------------------------
@@ -252,6 +342,25 @@ void Gizmo::applyGroupDelta()
 
 void Gizmo::createUndoAction()
 {
+	// A CANCEL RECORDS NOTHING (cancelDragging). Everything goes back to where
+	// the gesture found it — the group members through their captured start
+	// transforms, the primary through oldPos/oldRot/oldScale — and the undo
+	// stack never hears about it.
+	if (cancelPending) {
+		for (const MemberStart &m : groupStart) {
+			if (!m.node) continue;
+			m.node->setLocalPos(m.localPos);
+			m.node->setLocalRot(m.localRot);
+			m.node->setLocalScale(m.localScale);
+		}
+		groupStart.clear();
+		if (selectedNode) {
+			selectedNode->setLocalPos(oldPos);
+			selectedNode->setLocalRot(oldRot);
+			selectedNode->setLocalScale(oldScale);
+		}
+		return;
+	}
 	// ONE UNDO STEP for the whole group (EDITOR_MULTISELECT_SPEC §2.4): every
 	// member is put back to where the drag started and re-applied through its
 	// own TransformSceneNodeCommand, all inside one macro. N = 1 keeps today's

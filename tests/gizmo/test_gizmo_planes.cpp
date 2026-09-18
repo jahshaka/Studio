@@ -49,6 +49,8 @@
 #include "viewport/freecamerapolicy.h"
 #include "viewport/gizmo.h"
 #include "viewport/gizmomeshes.h"
+#include "viewport/gizmoray.h"
+#include "viewport/snapsettings.h"
 #include "viewport/translationgizmo.h"
 
 static int failures = 0;
@@ -387,6 +389,143 @@ int main(int argc, char **argv)
                         other * 100 / 289);
             CHECK(inPlane * 2 > 289, "F: over half of every square's area still grabs the plane "
                                      "(the centre ball keeps the rest)");
+        }
+    }
+
+    // ---- THE RAY ARM: THE SQUARES WITH NO PIXEL (VR phase 4b stage 2) ------
+    //
+    // A controller has no cursor, so a plane handle is measured as an ANGLE at
+    // the aim ray's origin (TranslationHandle::rayDistance, gizmoray.h): zero
+    // inside the spherical quad the square's four corners span, the angle to
+    // the nearest edge outside. Same square, same precedence, same drag.
+    {
+        std::printf("\n-- the ray arm (VR stage 2): the plane handles picked as angles --\n");
+        const iris::Vec3 eye(6, 6, 6);
+        for (const Plane &plane : kPlanes) {
+            node->setLocalPos(iris::Vec3(0, 0, 0));
+            node->update(0.0f);
+
+            TranslationGizmo gizmo;
+            gizmo.setSelectedNode(node);
+            GizmoVrPick pick;
+            pick.valid = true;
+            pick.eye = eye;
+            pick.rayPos = eye;
+            pick.viewDir = (iris::Vec3(0, 0, 0) - eye).normalized();
+            pick.rayDir = pick.viewDir;
+            gizmo.setVrPick(pick);            // sizes the gizmo by the VR rule
+            const float scale = gizmo.getGizmoScale() * kHandleScale;
+
+            const iris::Vec3 grabPoint = squareGrab(plane, scale);
+            const iris::Vec3 aim = (grabPoint - eye).normalized();
+            const Gizmo::RayPickScope raySpace(&gizmo);
+            const QString named = gizmo.handleNameAt(eye, aim, pick.viewDir);
+            CHECK(named == QLatin1String(plane.name),
+                  "the middle of the square is that plane handle, aimed at with a ray");
+
+            iris::Vec3 hitOut;
+            auto *grabbed = gizmo.getHitHandle(eye, aim, pick.viewDir, hitOut);
+            CHECK(grabbed && grabbed->axisName() == QLatin1String(plane.name),
+                  "...and a press through the same call grabs it");
+            gizmo.startDragging(eye, aim, pick.viewDir);
+
+            // THE DRAG IS THE DESKTOP'S DRAG. The ray meets the handle's own
+            // plane and the node follows it across exactly those two axes.
+            const iris::Vec3 target = plane.u * 2.5f + plane.v * (-1.75f);
+            const iris::Vec3 toTarget = (target - eye).normalized();
+            gizmo.drag(eye, toTarget, pick.viewDir);
+            node->update(0.0f);
+            const iris::Vec3 moved = node->getGlobalPosition();
+            const float onU = iris::Vec3::dotProduct(moved, plane.u);
+            const float onV = iris::Vec3::dotProduct(moved, plane.v);
+            const float offPlane = iris::Vec3::dotProduct(moved, plane.normal);
+            std::printf("   %s: dragged to (%.3f, %.3f) in its own axes, %.6f off the plane\n",
+                        plane.name, double(onU), double(onV), double(offPlane));
+            CHECK(std::fabs(offPlane) < 1e-3f,
+                  "a ray-driven plane drag moves the node in the square's two axes and NOTHING "
+                  "on the third");
+            CHECK(std::fabs(onU - (2.5f - kGrabFraction * GizmoMeshes::kPlaneHandleSpan * scale))
+                      < 0.05f &&
+                  std::fabs(onV - (-1.75f - kGrabFraction * GizmoMeshes::kPlaneHandleSpan * scale))
+                      < 0.05f,
+                  "...and it tracks the aim: the node lands the in-plane displacement away");
+            gizmo.endDragging();
+        }
+
+        // THE MODIFIER SNAPS IT — the same Gizmo::snapHeld the desk's Ctrl
+        // sets, which in a headset is `menu` held (owner answer 10). Asserted
+        // on the gizmo because that is where the snap happens; the BUTTON that
+        // sets it is asserted in scripting.e2e.vr_gizmo.
+        {
+            node->setLocalPos(iris::Vec3(0, 0, 0));
+            node->update(0.0f);
+            TranslationGizmo gizmo;
+            gizmo.setSelectedNode(node);
+            GizmoVrPick pick;
+            pick.valid = true;
+            pick.eye = eye;
+            pick.rayPos = eye;
+            pick.viewDir = (iris::Vec3(0, 0, 0) - eye).normalized();
+            pick.rayDir = pick.viewDir;
+            gizmo.setVrPick(pick);
+            const float scale = gizmo.getGizmoScale() * kHandleScale;
+            const Plane &plane = kPlanes[2];                      // xz, the ground square
+            const iris::Vec3 grabPoint = squareGrab(plane, scale);
+            const Gizmo::RayPickScope raySpace(&gizmo);
+            gizmo.setSnapHeld(true);
+            gizmo.startDragging(eye, (grabPoint - eye).normalized(), pick.viewDir);
+            const iris::Vec3 target = plane.u * 2.37f + plane.v * 1.62f;
+            gizmo.drag(eye, (target - eye).normalized(), pick.viewDir);
+            node->update(0.0f);
+            const iris::Vec3 moved = node->getGlobalPosition();
+            const float grid = SnapSettings::translateSize();
+            const float u = iris::Vec3::dotProduct(moved, plane.u);
+            const float v = iris::Vec3::dotProduct(moved, plane.v);
+            std::printf("   snapped drag on a grid of %.2f: (%.4f, %.4f)\n", double(grid),
+                        double(u), double(v));
+            CHECK(std::fabs(u / grid - std::round(u / grid)) < 1e-3f &&
+                      std::fabs(v / grid - std::round(v / grid)) < 1e-3f,
+                  "with the modifier held, a ray-driven plane drag lands on the snap grid on BOTH "
+                  "of its axes");
+            gizmo.setSnapHeld(false);
+            gizmo.endDragging();
+        }
+
+        // EDGE-ON TO THE POINTER IS NOT A HANDLE. Standing in the ground
+        // square's own plane (y = 0) must leave it unpickable — and undrawn —
+        // exactly as a camera in that plane does on the desk.
+        {
+            node->setLocalPos(iris::Vec3(0, 0, 0));
+            node->update(0.0f);
+            TranslationGizmo gizmo;
+            gizmo.setSelectedNode(node);
+            const iris::Vec3 level(6, 0, 6);
+            GizmoVrPick pick;
+            pick.valid = true;
+            pick.eye = level;
+            pick.rayPos = level;
+            pick.viewDir = (iris::Vec3(0, 0, 0) - level).normalized();
+            pick.rayDir = pick.viewDir;
+            gizmo.setVrPick(pick);
+            const float scale = gizmo.getGizmoScale() * kHandleScale;
+            const Plane &ground = kPlanes[2];                     // xz
+            const iris::Vec3 grabPoint = squareGrab(ground, scale);
+            const Gizmo::RayPickScope raySpace(&gizmo);
+            const QString named = gizmo.handleNameAt(level, (grabPoint - level).normalized(),
+                                                     pick.viewDir);
+            std::printf("   from inside its own plane the xz square answers '%s'\n",
+                        named.isEmpty() ? "(nothing)" : qPrintable(named));
+            CHECK(named != QLatin1String("xz"),
+                  "a plane handle seen edge-on BY THE POINTER is not picked (the desktop's "
+                  "kPlaneEdgeOnDegrees rule, asked of the ray)");
+
+            // The gizmo has seven handles (the centre, three arrows, three
+            // squares); with one square edge-on to the wearer, six are drawn.
+            const auto items = gizmo.drawItems(level, pick.viewDir, pick.viewDir);
+            std::printf("   ...and %d of the 7 handles are drawn there\n", items.size());
+            CHECK(items.size() == 6,
+                  "...and it is not DRAWN either: exactly the edge-on square is missing, so the "
+                  "picture and the pick say the same thing");
         }
     }
 

@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "viewport/gizmo.h"
 
+#include <QString>
+
 class ScaleHandle : public GizmoHandle
 {
 public:
@@ -72,6 +74,9 @@ public:
 
 	// hitPos is the hit position of the hit handle
 	ScaleHandle* getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPos);
+	/// "center" | "x" | "y" | "z", or empty — what a ray is on, for
+	/// `vr.gizmo()` and the suites (VR_INPUT_SPEC §5.2, stage 2).
+	QString handleNameAt(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) override;
 public:
 	QVector<GizmoDrawItem> drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) override;
 };

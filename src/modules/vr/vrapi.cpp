@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"   // quatFromJs (the one pose reader)
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/flyspeedsettings.h"
+#include "viewport/gizmo.h"
 #include "viewport/flystep.h"
 #include "services/playerservice.h"
 #include "services/services.h"
@@ -441,6 +442,31 @@ QVector<VerbInfo> VrApi::verbs() const
           "session begins and removed when it ends, and in the PLAYER only locomotion runs "
           "(the Player edits nothing — no selection, no grab, no transform writes), exactly as "
           "the desktop Player shows no editor furniture.",
+          Needs::Document },
+        { "gizmo",
+          "vr.gizmo() -> {present, mode, armed, dragging, handle, scale, toleranceDegrees, "
+          "eye:{x,y,z,fovDegrees}, drags, commits, modes}",
+          "THE EDITOR'S GIZMO IN THE WEARER'S HANDS (VR phase 4b stage 2). It is the SAME "
+          "gizmo the mouse drags — the same handles, the same frozen drag frame, the same "
+          "group delta and the same ONE undo entry per drag — pointed at with the dominant "
+          "hand's aim ray instead of a cursor. A trigger press with the ray on a handle drags "
+          "that handle (a press anywhere else selects, exactly as on the desk, where the "
+          "gizmo's hit test also runs first); `menu` HELD snaps it to the grid; a SHORT press "
+          "of `menu` cycles translate -> rotate -> scale through editor.setGizmoMode, so the "
+          "toolbar follows.\n\n"
+          "`handle` is what the ray is on right now (\"x\", \"xy\", \"screen\", "
+          "\"center\", ...) or empty — a press's answer, without pressing. `scale` is the "
+          "gizmo's world size under the VR rule: a CONSTANT ANGULAR size, proportional to the "
+          "distance from the wearer's eye, so the handles look the same standing over an "
+          "object as across the room. `toleranceDegrees` is how far off a handle the ray may "
+          "be and still take it — the desktop's 7-pixel ring target expressed as an angle at "
+          "the eye, which keeps the same target-to-handle ratio the desk was tuned to.\n\n"
+          "`armed` is whether a pointer is driving the gizmo at all. While one is, the gizmo "
+          "is sized for the wearer on BOTH surfaces: there is one gizmo object in the process "
+          "and it has one size, and the desk goes on drawing and dragging that same object "
+          "(its picture and its pick therefore never disagree). The counters are COUNTS, "
+          "monotonic for the life of the process, which is what a suite brackets a gesture "
+          "with.",
           Needs::Document },
     };
 }
@@ -883,6 +909,32 @@ void VrApi::installInteraction()
         if (player && player->isVrActive()) return player->isVrPlacing();
         return false;
     };
+    // ---- THE GIZMO (VR_INPUT_SPEC §5.2, stage 2) -------------------------
+    //
+    // THE VIEWPORT'S OWN GIZMO, and its own mode setter. Nothing is duplicated
+    // for VR: the wearer points at the object the editor is already drawing.
+    deps.gizmo = [this]() -> Gizmo * {
+        return moduleHost.viewport ? moduleHost.viewport->activeGizmo() : nullptr;
+    };
+    deps.gizmoMode = [this] {
+        return moduleHost.viewport ? moduleHost.viewport->gizmoMode() : QString();
+    };
+    // ...THROUGH `editor.setGizmoMode`'S OWN ROUTE (editorapi.cpp): the shell's
+    // slot when there is a shell, so the TOOLBAR follows a mode cycled from the
+    // headset exactly as it follows the W/E/R keys, and straight to the
+    // viewport when there is no shell (a headless run).
+    deps.setGizmoMode = [this](const QString &mode) {
+        const char *slot = mode == QLatin1String("rotate")  ? "rotateGizmo"
+                         : mode == QLatin1String("scale")   ? "scaleGizmo"
+                                                            : "translateGizmo";
+        if (moduleHost.shellWidget &&
+            QMetaObject::invokeMethod(moduleHost.shellWidget, slot))
+            return;
+        if (!moduleHost.viewport) return;
+        if (mode == QLatin1String("rotate")) moduleHost.viewport->setGizmoRot();
+        else if (mode == QLatin1String("scale")) moduleHost.viewport->setGizmoScale();
+        else moduleHost.viewport->setGizmoLoc();
+    };
     interaction.setDeps(deps);
     engineInput.setEngine(engine());
     interaction.setSource(&engineInput);
@@ -1179,4 +1231,10 @@ QVariantMap VrApi::interactionMode()
 {
     syncInteractionSession();
     return interaction.report();
+}
+
+QVariantMap VrApi::gizmo()
+{
+    syncInteractionSession();
+    return interaction.gizmoReport();
 }

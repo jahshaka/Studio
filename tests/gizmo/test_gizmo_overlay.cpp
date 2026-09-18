@@ -617,6 +617,61 @@ int main(int argc, char **argv)
         engine->destroyView(blend);
     }
 
+    // ------------------------------------------------------------------
+    // THE CHANNEL THE HEADSET DRAWS IT ON (VR phase 4b stage 2).
+    //
+    // THE CLAIM: the gizmo the wearer sees in an editor VR preview is THIS
+    // overlay's parts, and the Player sees none of them. The whole mechanism is
+    // one switch per view — GizmoOverlay marks every slot `setNodeHelper` at
+    // creation (kHelperBit instead of kVisibleBit) and a view either opens that
+    // channel or does not (View::setHelpersVisible; the Player's view and every
+    // user screenshot pass false, the editor's VR session passes
+    // VrConfig::helpers = true and the Player's false). So the proof is a
+    // PICTURE taken through that switch, and it needs no headset: the eye's own
+    // half — that a kHelperBit node reaches an editor-shape eye and not a
+    // player-shape one — is `vr.session` case 8, on the eyes' real pixels.
+    {
+        // The suite's own camera and view, re-stated: the blocks above move the
+        // camera, swap views and clear overlays, and this one is a PICTURE.
+        cam->angle = 45.0f;
+        cam->setLocalPos(iris::Vec3(0, 0, 6));
+        cam->lookAt(iris::Vec3(0, 0, 0));
+        cam->update(0.0f);
+        cam->setAspectRatio(1.0f);
+        mirror.applyCamera(cam, view);
+        gizmo.setSelectedNode(node);
+        gizmo.setPickView(cam, 128.0f, 128.0f);
+        gizmo.updateSize(cam);
+        overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1),
+                       iris::Vec3(0, 0, -1));
+        std::printf("    the overlay shows %d parts\n", overlay.visibleItems());
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        Image withHelpers;
+        view->readPixels(withHelpers);
+        const int onPx = countNonBg(withHelpers);
+
+        view->setHelpersVisible(false);            // the Player's own call
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        Image noHelpers;
+        view->readPixels(noHelpers);
+        const int offPx = countNonBg(noHelpers);
+
+        view->setHelpersVisible(true);             // ...and the editor's
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        Image backOn;
+        view->readPixels(backOn);
+        const int againPx = countNonBg(backOn);
+
+        std::printf("    the helper channel: %d gizmo pixels with it open, %d with it closed, "
+                    "%d when it is opened again\n", onPx, offPx, againPx);
+        CHECK(onPx > 5, "the gizmo draws on a view that opens the helper channel (the editor, "
+                        "and an editor VR preview)");
+        CHECK(offPx == 0, "and NOTHING at all on a view that closes it (the Player, and every "
+                          "user screenshot) — the gizmo is editor furniture, on the channel "
+                          "the switch controls");
+        CHECK(againPx == onPx, "...and it comes back exactly as it was");
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view); engine->destroyScene(target); engine.reset();
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);

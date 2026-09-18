@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/translationgizmo.h"
+#include "viewport/gizmoray.h"
 #include <QApplication>
 
 #include "irisgl/document/assets/mesh.h"
@@ -141,14 +142,88 @@ float pointToSegmentPx(const QPointF &p, const QPointF &a, const QPointF &b)
 bool TranslationHandle::planeFacesCamera() const
 {
 	if (!isPlane()) return false;
-	const GizmoPickView &view = gizmo->pickView();
-	if (!view.isValid()) return false;
 	const iris::Mat4 t = gizmo->getTransform();
 	const iris::Vec3 n = (t * iris::Vec4(planeNormal, 0)).toVector3D().normalized();
-	const iris::Vec3 forward =
-		view.camera->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+	// THE DIRECTION THE SQUARE IS JUDGED AGAINST: the wearer's view while one
+	// is driving the gizmo (stage 2) — a headset has no pick view and would
+	// otherwise draw no plane handles at all — and the pick view's camera
+	// otherwise. One gizmo, one picture: the desk sees the squares the wearer
+	// sees, for the same reason it sees the wearer's size and the wearer's
+	// ring arcs.
+	iris::Vec3 forward;
+	if (gizmo->vrPickArmed()) {
+		// ALONG THE LINE OF SIGHT TO THE GIZMO, not the eye's forward
+		// (Gizmo::vrLookDirection): a square 40 degrees off the wearer's gaze
+		// is seen from where the eye IS, and judging it by where the eye
+		// happens to be pointing would hide a handle they are looking at.
+		if (!gizmo->vrLookDirection(t.column(3).toVector3D(), forward)) return false;
+	} else {
+		const GizmoPickView &view = gizmo->pickView();
+		if (!view.isValid()) return false;
+		forward = view.camera->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+	}
 	return std::fabs(iris::Vec3::dotProduct(n, forward)) >
 	       std::sin(float(qDegreesToRadians(kPlaneEdgeOnDegrees)));
+}
+
+// THE SQUARE AGAINST A RAY, IN ANGLES (VR_INPUT_SPEC §5.2, stage 2).
+//
+// planeDistance's own construction with one substitution, exactly as the
+// rotation ring's rayDistance is screenDistance's: the four corners of the
+// square that is DRAWN are taken as directions from the ray's origin instead of
+// as pixels, "inside the quad" is the spherical test and the distance outside
+// is the angle to the nearest edge arc (gizmoray). The arrow-shaft band is the
+// same carve-out in the same unit, so an aim on a drawn shaft still reaches the
+// arrow rather than the square that shares that edge.
+bool TranslationHandle::rayDistance(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
+                                    float &distanceRad, bool *onAxisBand) const
+{
+	distanceRad = -1.0f;
+	if (onAxisBand) *onAxisBand = false;
+	if (!isPlane()) return false;
+	if (rayDir.lengthSquared() < 1e-12f) return false;
+	const iris::Vec3 d = rayDir.normalized();
+
+	// EDGE-ON TO THE POINTER IS NOT A HANDLE (the desktop's rule, asked of the
+	// ray): a square the controller points along cannot be aimed at, and the
+	// drag behind it would be a grazing ray/plane intersection.
+	const iris::Mat4 t = gizmo->getTransform();
+	const iris::Vec3 n = (t * iris::Vec4(planeNormal, 0)).toVector3D().normalized();
+	if (std::fabs(iris::Vec3::dotProduct(n, d)) <=
+	    std::sin(float(qDegreesToRadians(kPlaneEdgeOnDegrees))))
+		return false;
+
+	const float scale = handleScale * gizmo->getGizmoScale();
+	if (!(scale > 0.0f)) return false;
+	const float f = GizmoMeshes::kPlaneHandleSpan;
+	const iris::Vec3 corners[4] = {
+		iris::Vec3(0, 0, 0),         planeU * f,
+		planeU * f + planeV * f,     planeV * f,
+	};
+	iris::Vec3 dirs[4];
+	for (int i = 0; i < 4; ++i) {
+		iris::Vec3 to = (t * (corners[i] * scale)) - rayPos;
+		if (to.lengthSquared() < 1e-12f) return false;      // a corner on the eye
+		dirs[i] = to.normalized();
+	}
+
+	if (onAxisBand) {
+		// The two inner sides ARE the X/Y/Z shafts (GIZMO-2 round 2). Their
+		// drawn half-width is a world length here — kArrowShaftRadius of the
+		// handle's own units — so it converts to an angle through the distance
+		// to the origin corner, which is where both shafts start.
+		const float originDistance = (t * (corners[0] * scale) - rayPos).length();
+		const float shaftRad = originDistance > 1e-4f
+		                           ? std::atan(kArrowShaftRadius * scale / originDistance)
+		                           : 0.0f;
+		const float band = shaftRad + gizmo->rayTolerance(kPlanePickTolerancePx);
+		const float dU = gizmoray::angleToArc(d, dirs[0], dirs[1]);
+		const float dV = gizmoray::angleToArc(d, dirs[0], dirs[3]);
+		*onAxisBand = dU <= band || dV <= band;
+	}
+
+	distanceRad = gizmoray::angleToQuad(d, dirs);
+	return true;
 }
 
 bool TranslationHandle::planeDistance(const QPointF& cursor, float& distancePx,
@@ -226,6 +301,15 @@ bool TranslationHandle::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 	// conditioned however the camera is turned — the same argument the rotation
 	// rings' screen-space pick rests on (smoke S15).
 	if (isPlane()) {
+		// ...AND IN ANGLES WHEN THERE IS NO PIXEL (stage 2). The arrows and the
+		// centre ball below need no second path at all: they are picked against
+		// their own 3D geometry, which a controller's ray meets exactly as a
+		// mouse ray does.
+		if (gizmo->rayPicking()) {
+			float rad = -1.0f;
+			return rayDistance(rayPos, rayDir, rad) &&
+			       rad <= gizmo->rayTolerance(kPlanePickTolerancePx);
+		}
 		QPointF cursor;
 		if (!gizmo->rayPixel(rayPos, rayDir, gizmoTrans.column(3).toVector3D(), cursor))
 			return false;
@@ -442,9 +526,9 @@ void TranslationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 vie
 	// do snapping here as well
 	auto diff = slidingPos - hitPos;
 
-	// apply snapping (relative snapping)
-	auto mods = QApplication::keyboardModifiers();
-	if (mods.testFlag(Qt::ControlModifier)) {
+	// apply snapping (relative snapping). ONE QUESTION FOR BOTH HOSTS
+	// (Gizmo::snapHeld): Ctrl at the desk, `menu` held in the headset.
+	if (snapHeld()) {
 		if (draggedHandle->isPlane()) {
 			// A PLANE DRAG SNAPS ON BOTH OF ITS AXES (GIZMO-1 item 3), which is
 			// what "snap as the arrows do" means for two degrees of freedom:
@@ -532,15 +616,24 @@ TranslationHandle* TranslationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 
 	TranslationHandle* bandPlane = nullptr;
 	float bandPlanePx = -1.0f;
 	QPointF cursor;
-	const bool havePixel =
+	// THE PLANE PASS, IN WHICHEVER UNIT THIS CALL MEASURES IN (stage 2). The
+	// precedence — centre ball, then the squares, then the arrows, with the
+	// shaft band handed to the arrows — is one rule and is not duplicated: only
+	// the distance underneath it changes unit.
+	const bool ray = rayPicking();
+	const float planeTolerance = ray ? rayTolerance(kPlanePickTolerancePx)
+	                                 : kPlanePickTolerancePx;
+	const bool havePixel = ray ||
 		rayPixel(rayPos, rayDir, getTransform().column(3).toVector3D(), cursor);
 	if (havePixel) {
 		for (auto i = 0; i < handles.size(); i++) {
 			if (!handles[i]->isPlane()) continue;
 			float d = -1.0f;
 			bool onAxis = false;
-			if (!handles[i]->planeDistance(cursor, d, &onAxis)) continue;
-			if (d > kPlanePickTolerancePx) continue;
+			const bool answered = ray ? handles[i]->rayDistance(rayPos, rayDir, d, &onAxis)
+			                          : handles[i]->planeDistance(cursor, d, &onAxis);
+			if (!answered) continue;
+			if (d > planeTolerance) continue;
 			if (onAxis) {
 				if (!bandPlane || d < bandPlanePx) { bandPlane = handles[i]; bandPlanePx = d; }
 				continue;
@@ -598,10 +691,20 @@ QString TranslationGizmo::planeNameAtPixel(const QPointF& cursor, float& distanc
 	return distancePx <= kPlanePickTolerancePx ? nearest->axisName() : QString();
 }
 
+QString TranslationGizmo::handleNameAt(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
+{
+	iris::Vec3 hit;
+	auto* handle = getHitHandle(rayPos, rayDir, viewDir, hit);
+	return handle ? handle->axisName() : QString();
+}
+
 QVector<GizmoDrawItem> TranslationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
+	// THE WEARER'S AIM IS THE HIGHLIGHT (stage 2) — see RotationGizmo::drawItems.
+	resolvePickRay(rayPos, rayDir, viewDir);
+	const RayPickScope raySpace(vrPickArmed() ? this : nullptr);
 	const QColor highlight(255, 255, 0);
 	if (dragging) {
 		for (int i = 0; i < handles.size(); i++) {

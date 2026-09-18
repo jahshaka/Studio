@@ -24,6 +24,9 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/vrorigin.h"
+#include "viewport/gizmo.h"
+#include "viewport/gizmoray.h"
+#include "viewport/rotationgizmo.h"
 #include "viewport/scenepicker.h"
 #include "viewport/snapsettings.h"
 
@@ -53,6 +56,23 @@ inline constexpr float kNominalFrame = 1.0f / 90.0f;
 /// that lasts long enough to notice as a buzz reads as a fault.
 inline constexpr float kTickSeconds = 0.02f;
 inline constexpr float kTickAmplitude = 0.4f;
+
+/// HOW LONG A `menu` PRESS MAY LAST AND STILL BE A SHORT ONE, seconds — the
+/// line between "cycle the gizmo mode" and "hold the modifier" (VR_INPUT_SPEC
+/// §5.2, the owner's answer 10). 0.25 s is the usual short-press threshold and
+/// is comfortably longer than a deliberate click; it is charged in FRAME
+/// durations, never against a wall clock, so a scripted press of N steps lasts
+/// exactly N/90 s whatever the box is doing.
+inline constexpr float kMenuHoldSeconds = 0.25f;
+
+/// The three gizmo modes, in the order a cycle takes them — the Space key's
+/// order on the desk (translate, rotate, scale).
+inline const char *nextGizmoMode(const QString &mode)
+{
+    if (mode == QLatin1String("translate")) return "rotate";
+    if (mode == QLatin1String("rotate")) return "scale";
+    return "translate";
+}
 
 }   // namespace
 
@@ -102,6 +122,10 @@ void VrInteraction::end()
     // what they were holding any more, and committing a gesture they could not
     // finish would leave the object somewhere nobody chose.
     cancel();
+    // ...AND THE GIZMO GOES BACK TO THE DESK (stage 2): the size rule, the
+    // highlight and the camera-facing rules are the desktop camera's again from
+    // the viewport's very next frame.
+    armGizmo(dominantHand(), false);
     mInstalled = false;
     mHover = Hover();
     mMemo = PickMemo();
@@ -423,6 +447,162 @@ bool VrInteraction::beginGrab(unsigned hand)
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// THE GIZMO (VR_INPUT_SPEC §5.2, phase 4b stage 2)
+// ---------------------------------------------------------------------------
+
+Gizmo *VrInteraction::gizmoNow() const
+{
+    return mDeps.gizmo ? mDeps.gizmo() : nullptr;
+}
+
+// WHERE THE WEARER LOOKS FROM. With a session running it is the head, through
+// the rig, exactly as locomotion reads it. With NO session — the injection
+// route every gesture is gated on — it is the AIMING HAND: the wearer's eye and
+// their pointer are then one thing, which keeps the size rule and the view
+// direction exact rather than invented, and is the only honest answer a process
+// with no runtime can give.
+bool VrInteraction::eyePose(unsigned hand, iris::Vec3 &eye, iris::Vec3 &forward) const
+{
+    if (Engine *engine = engineNow()) {
+        const VrStatus st = engine->vrStatus();
+        if (st.active && st.posesValid) {
+            eye = toIris(st.headPosition);
+            forward = toIris(st.headRotation).rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+            return true;
+        }
+    }
+    const VrHandState st = handState(hand);
+    if (!st.valid || !st.aim.valid) return false;
+    eye = toIris(st.aim.position);
+    forward = toIris(st.aim.rotation).rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+    return true;
+}
+
+// THE POINTER, HANDED TO THE GIZMO ONCE A FRAME. Arming does three things at
+// once, all of them in the gizmo's own terms: it sizes the handles for the
+// wearer (a constant angular size, Gizmo::updateSizeForVr), it gives the
+// highlight the controller's ray instead of the desk's mouse, and it gives the
+// camera-facing rules (the ring arcs, the plane squares) the head's direction.
+// Disarming hands all three straight back to the desktop camera.
+void VrInteraction::armGizmo(unsigned hand, bool armed)
+{
+    Gizmo *g = gizmoNow();
+    if (mArmedGizmo && mArmedGizmo != g) {
+        mArmedGizmo->setVrPick(GizmoVrPick());
+        mArmedGizmo->setSnapHeld(false);
+        mArmedGizmo = nullptr;
+    }
+    if (!g) return;
+    GizmoVrPick pick;
+    // NO SELECTION, NO GIZMO — and therefore no pointer on it. A gizmo with no
+    // node is not drawn by the viewport either, and its handle hit tests would
+    // answer against an identity transform at the world origin (measured: a ray
+    // through the origin "hit" the Y arrow of a gizmo nobody could see).
+    if (armed && g->hasSelectedNode()) {
+        const VrHandState st = handState(hand);
+        iris::Vec3 origin, direction, eye, forward;
+        if (st.valid && ray(st, origin, direction) && eyePose(hand, eye, forward)) {
+            pick.valid = true;
+            pick.eye = eye;
+            pick.rayPos = origin;
+            pick.rayDir = direction;
+            pick.viewDir = forward;
+            // The fov is the gizmo's own nominal until the engine reports the
+            // runtime's (VrStatus carries no eye angle today — reported
+            // upward, not guessed at here).
+            pick.fovDegrees = kVrNominalEyeFovDegrees;
+        }
+    }
+    g->setVrPick(pick);
+    mArmedGizmo = pick.valid ? g : nullptr;
+    if (!pick.valid) g->setSnapHeld(false);
+}
+
+bool VrInteraction::beginGizmoDrag(unsigned hand)
+{
+    if (hand >= VrHandCount) return false;
+    if (playerHosted()) return false;          // the Player edits nothing
+    if (mGesture.active || mGizmoDrag.active) return false;
+    Gizmo *g = gizmoNow();
+    if (!g) return false;
+    // NO SELECTION, NO GIZMO. The gizmo belongs to the primary selection and
+    // the viewport only draws it when there is one; a press with nothing
+    // selected is a pick, not a drag.
+    if (!mDeps.selection || !mDeps.selection->selected()) return false;
+    const VrHandState st = handState(hand);
+    if (!st.valid || !st.aim.valid) return false;
+    iris::Vec3 origin, direction;
+    if (!ray(st, origin, direction)) return false;
+    iris::Vec3 eye, forward;
+    if (!eyePose(hand, eye, forward)) return false;
+
+    // MEASURED IN ANGLES FOR THE LENGTH OF THIS CALL (Gizmo::RayPickScope): the
+    // ring and plane handles are picked as angles at the ray's origin here and
+    // as pixels for the desk's own presses, and neither can leak into the
+    // other.
+    const Gizmo::RayPickScope raySpace(g);
+    if (!g->isHit(origin, direction)) return false;
+    // THE EDIT GATE, BEFORE THE DRAG STARTS — the mouse's own rule
+    // (enginesceneviewport.cpp: "letting it run only to drop its undo step
+    // would move the object and then snap it back").
+    if (editgate::refuse()) return false;
+    g->setSnapHeld(st.menuPressed);
+    g->startDragging(origin, direction, forward);
+    if (!g->isDragging()) return false;        // the handle let go of it again
+    mGizmoDrag.active = true;
+    mGizmoDrag.hand = hand;
+    mGizmoDrag.gizmo = g;
+    ++mGizmoDrags;
+    haptic(hand, kTickAmplitude, kTickSeconds);
+    return true;
+}
+
+bool VrInteraction::endGizmoDrag(unsigned hand)
+{
+    if (!mGizmoDrag.active) return false;
+    if (hand < VrHandCount && hand != mGizmoDrag.hand) return false;
+    Gizmo *g = mGizmoDrag.gizmo;
+    const unsigned dragHand = mGizmoDrag.hand;
+    mGizmoDrag = GizmoDrag();
+    if (!g) return false;
+    // ONE UNDO ENTRY, AND IT IS THE MOUSE DRAG'S OWN (Gizmo::createUndoAction):
+    // one TransformSceneNodeCommand for a single node, a macro over the group
+    // for several, the edit gate consulted inside it. Nothing is duplicated
+    // here — a second undo shape for VR is exactly how the two hosts would come
+    // to disagree about what one gesture costs.
+    g->endDragging();
+    g->setSnapHeld(false);
+    ++mGizmoCommits;
+    haptic(dragHand, kTickAmplitude, kTickSeconds);
+    return true;
+}
+
+bool VrInteraction::cancelGizmoDrag()
+{
+    if (!mGizmoDrag.active) return false;
+    Gizmo *g = mGizmoDrag.gizmo;
+    mGizmoDrag = GizmoDrag();
+    if (!g) return false;
+    g->cancelDragging();
+    g->setSnapHeld(false);
+    ++mCancels;
+    return true;
+}
+
+bool VrInteraction::cycleGizmoMode()
+{
+    if (playerHosted()) return false;
+    if (mGesture.active || mGizmoDrag.active) return false;   // never mid-gesture
+    if (!mDeps.setGizmoMode) return false;
+    const QString mode = mDeps.gizmoMode ? mDeps.gizmoMode() : QString();
+    const QString next = QString::fromLatin1(nextGizmoMode(mode));
+    mDeps.setGizmoMode(next);
+    ++mGizmoModes;
+    haptic(dominantHand(), kTickAmplitude, kTickSeconds);
+    return true;
+}
+
 void VrInteraction::followGesture(float seconds)
 {
     if (!mGesture.active) return;
@@ -565,7 +745,11 @@ bool VrInteraction::endGrab(unsigned hand)
 
 bool VrInteraction::cancel()
 {
-    if (!mGesture.active) return false;
+    // A HANDLE DRAG CANCELS TOO (VR_INPUT_SPEC §5.4): focus loss, the session
+    // ending, the Player taking the headset over. It is the same promise the
+    // direct gesture makes — the object goes back and nothing is recorded.
+    const bool hadHandle = cancelGizmoDrag();
+    if (!mGesture.active) return hadHandle;
     rewindGesture();
     mGesture = Gesture();
     ++mCancels;
@@ -681,8 +865,10 @@ void VrInteraction::step(float seconds)
     const bool focused = mSource && mSource->focused();
     if (!focused) {
         // THE RUNTIME TOOK THE INPUT AWAY (the dashboard came up, the session
-        // left Focused). A gesture in flight CANCELS — see the header.
+        // left Focused). A gesture in flight CANCELS — see the header — and
+        // that now includes a handle drag.
         cancel();
+        armGizmo(dominantHand(), false);
         mHover = Hover();
         pushRay();
         for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = hands[i];
@@ -699,25 +885,83 @@ void VrInteraction::step(float seconds)
     // is CANCELLED rather than left holding an object nobody will put down,
     // which is the same rule as a lost focus.
     if (player) cancel();
+    // THE PLAYER DRAWS NO GIZMO AND EDITS NOTHING: the pointer is taken off it
+    // for the duration, so the desk's own sizing is back the moment the Player
+    // takes the session over.
+    if (player) armGizmo(dominant, false);
 
     if (!player) {
         const VrHandState &d = hands[dominant];
         const VrHandState &p = mPrev[dominant];
         mHover = d.valid ? pick(dominant, d) : Hover();
         pushRay();
+        // THE GIZMO GETS THIS FRAME'S POINTER BEFORE ANY EDGE IS RUN (stage 2):
+        // the size, the highlight ray and the view direction a press will be
+        // measured against are all this frame's, not the last one's.
+        armGizmo(dominant, d.valid);
+
+        // ---- `menu`: A SHORT PRESS CYCLES, A HELD ONE MODIFIES ------------
+        //
+        // The two meanings of one button (the owner's answer 10 plus the mode
+        // cycle), told apart by HOW LONG it was down and by whether anything
+        // used it as a modifier meanwhile. The clock is the frame's own
+        // duration — counted, never read off a wall clock.
+        if (d.menuPressed && !p.menuPressed) {
+            mMenuHeldSeconds = 0.0f;
+            mMenuConsumed = false;
+        } else if (d.menuPressed) {
+            mMenuHeldSeconds += dt;
+        }
 
         // THE PRESS EDGES. Counted transitions, never a held value: a verb and
         // a button must produce exactly one gesture each.
-        if (d.selectPressed && !p.selectPressed && !mGesture.active)
-            select(dominant, d.menuPressed ? SelectMode::Toggle : SelectMode::Replace);
-        if (d.grabPressed && !p.grabPressed) beginGrab(dominant);
+        //
+        // THE GIZMO GOES FIRST, exactly as it does on the desk
+        // (enginesceneviewport.cpp's press: the gizmo hit test, then the pick):
+        // a trigger press with the ray on a handle DRAGS that handle and leaves
+        // the selection alone; anywhere else it selects.
+        if (d.selectPressed && !p.selectPressed && !mGesture.active) {
+            if (!beginGizmoDrag(dominant))
+                select(dominant, d.menuPressed ? SelectMode::Toggle : SelectMode::Replace);
+            if (d.menuPressed) mMenuConsumed = true;   // it was the modifier
+        }
+        if (!d.selectPressed && p.selectPressed) endGizmoDrag(dominant);
+        // ONE BUTTON EACH (§5.2): `grab` is stage 1's direct gesture and is
+        // refused while a handle is being dragged (beginGrab's own guard is the
+        // gesture flag; the handle drag is this one).
+        if (d.grabPressed && !p.grabPressed && !mGizmoDrag.active) beginGrab(dominant);
         else if (!d.grabPressed && p.grabPressed) endGrab(dominant);
+
+        if (mGizmoDrag.active) {
+            // MENU HELD SNAPS A HANDLE DRAG TOO — the same modifier, asked per
+            // frame, answered by the same Gizmo::snapHeld the mouse asks.
+            if (Gizmo *g = mGizmoDrag.gizmo) {
+                const VrHandState st = handState(mGizmoDrag.hand);
+                g->setSnapHeld(st.menuPressed);
+                if (st.menuPressed) mMenuConsumed = true;
+                iris::Vec3 origin, direction, eye, forward;
+                if (ray(st, origin, direction) && eyePose(mGizmoDrag.hand, eye, forward)) {
+                    const Gizmo::RayPickScope raySpace(g);
+                    g->drag(origin, direction, forward);
+                }
+            }
+        }
 
         if (mGesture.active) {
             // MENU HELD SNAPS, per frame — the Ctrl of a desktop drag, which is
             // also asked per frame and not at the press.
             mGesture.snapping = handState(mGesture.hand).menuPressed;
+            if (mGesture.snapping) mMenuConsumed = true;
             followGesture(dt);
+        }
+
+        // ...and the cycle, on the RELEASE of a press that was short and was
+        // never used as a modifier. A short press therefore cannot also fire
+        // the held action, and a held one cannot cycle.
+        if (!d.menuPressed && p.menuPressed) {
+            if (!mMenuConsumed && mMenuHeldSeconds < kMenuHoldSeconds) cycleGizmoMode();
+            mMenuHeldSeconds = 0.0f;
+            mMenuConsumed = false;
         }
     }
 
@@ -788,11 +1032,49 @@ QVariantMap VrInteraction::report() const
         rig[QStringLiteral("yaw")] = double(r.yaw);
         out[QStringLiteral("rig")] = rig;
     }
+    out[QStringLiteral("gizmo")] = gizmoReport();
     // COUNTS, never a wall clock (VR_SPEC §6 flake class b).
     out[QStringLiteral("selects")] = QVariant::fromValue(qulonglong(mSelects));
     out[QStringLiteral("grabs")] = QVariant::fromValue(qulonglong(mGrabs));
     out[QStringLiteral("commits")] = QVariant::fromValue(qulonglong(mCommits));
     out[QStringLiteral("cancels")] = QVariant::fromValue(qulonglong(mCancels));
     out[QStringLiteral("turns")] = QVariant::fromValue(qulonglong(mTurns));
+    return out;
+}
+
+// WHAT THE WEARER'S GIZMO IS DOING (`vr.gizmo()`).
+//
+// `handle` is asked of the gizmo RIGHT NOW, through the same ray-space hit test
+// a press takes, so a suite (and a person at an MCP session) can see what a
+// trigger would grab before pulling it. `scale` and `toleranceDegrees` are the
+// two numbers stage 2 is judged by: the constant-angular size rule's output and
+// the pick target it comes with.
+QVariantMap VrInteraction::gizmoReport() const
+{
+    QVariantMap out;
+    Gizmo *g = gizmoNow();
+    out[QStringLiteral("present")] = g != nullptr;
+    out[QStringLiteral("mode")] = mDeps.gizmoMode ? mDeps.gizmoMode() : QString();
+    out[QStringLiteral("armed")] = g && g->vrPickArmed();
+    out[QStringLiteral("dragging")] = mGizmoDrag.active;
+    out[QStringLiteral("scale")] = double(g ? g->getGizmoScale() : 0.0f);
+    out[QStringLiteral("toleranceDegrees")] =
+        double(g ? gizmoray::degreesOf(g->rayTolerance(kRingPickTolerancePx)) : 0.0f);
+    QString handle;
+    if (g && g->vrPickArmed()) {
+        const GizmoVrPick &pick = g->vrPick();
+        const Gizmo::RayPickScope raySpace(g);
+        handle = g->handleNameAt(pick.rayPos, pick.rayDir, pick.viewDir);
+        QVariantMap eye;
+        eye[QStringLiteral("x")] = double(pick.eye.x());
+        eye[QStringLiteral("y")] = double(pick.eye.y());
+        eye[QStringLiteral("z")] = double(pick.eye.z());
+        eye[QStringLiteral("fovDegrees")] = double(pick.fovDegrees);
+        out[QStringLiteral("eye")] = eye;
+    }
+    out[QStringLiteral("handle")] = handle;
+    out[QStringLiteral("drags")] = QVariant::fromValue(qulonglong(mGizmoDrags));
+    out[QStringLiteral("commits")] = QVariant::fromValue(qulonglong(mGizmoCommits));
+    out[QStringLiteral("modes")] = QVariant::fromValue(qulonglong(mGizmoModes));
     return out;
 }

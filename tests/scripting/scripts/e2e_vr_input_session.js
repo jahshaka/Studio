@@ -320,6 +320,91 @@ var h = vr.hover();
 console.log("vr.hover: " + JSON.stringify(h));
 assert(h !== null && h.id === cubes[0].id, "the ray finds the cube inside a live session");
 
+// ---- 4b. THE GIZMO, WITH A REAL SESSION UNDER IT (phase 4b stage 2) -----
+//
+// THE TWO THINGS ONLY A SESSION CAN SHOW, and neither is in the headless
+// suite (scripting.e2e.vr_gizmo) because neither exists there:
+//
+//   * THE EYE IS THE HEAD. With no session the wearer's eye is the aiming hand
+//     itself; with one it is the located head, which is what the gizmo's size
+//     rule measures from. Asserted against `vr.state().head` — a pose this
+//     script never wrote.
+//   * THE SIZE IS FROZEN FOR THE LENGTH OF A DRAG. This runtime's simulated
+//     head DRIFTS between frames (the control measured in section 2), and the
+//     rotation gizmo's drag angle is resolved against a sphere whose radius is
+//     that size: a gizmo that re-sized while the head wandered would turn the
+//     object as the wearer breathed.
+editor.select(cubes[0].id);
+editor.setGizmoMode("translate");
+// The hand in front of the cube, pointing at it: one frame to carry the sample
+// into the session, then one interaction frame.
+// THE HAND IS AT THE WEARER'S SIDE, not at some fixed spot in the world: this
+// script has walked and turned the wearer by now, and the gizmo is sized from
+// the HEAD (a constant angular size) — so a hand left standing next to the cube
+// while the head is fifteen metres away would be INSIDE a five-metre arrow, and
+// the first thing its ray touched would be whichever handle it was standing in.
+// A real hand is always about an arm's length from the eye, which is the case
+// the sizing rule is written for.
+function handNow() {
+    var head = vr.state().head;
+    return { x: head.x, y: head.y - 0.3, z: head.z };
+}
+function aimHandAt(to, buttons) {
+    var gHand = handNow();
+    var dx = to.x - gHand.x, dy = to.y - gHand.y, dz = to.z - gHand.z;
+    var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    dx /= len; dy /= len; dz /= len;
+    var pose = { x: gHand.x, y: gHand.y, z: gHand.z,
+                 yaw: Math.atan2(-dx, -dz) * 180 / Math.PI,
+                 pitch: Math.asin(Math.max(-1, Math.min(1, dy))) * 180 / Math.PI };
+    var m = { valid: true, aim: pose, grip: pose,
+              select: (buttons && buttons.select) || 0, grab: 0,
+              menuPressed: !!(buttons && buttons.menu), stick: { x: 0, y: 0 } };
+    assert(vr.inject("right", m) === true, "aim the hand at ("
+           + to.x.toFixed(3) + ", " + to.y.toFixed(3) + ", " + to.z.toFixed(3) + ")"
+           + ((buttons && buttons.select) ? " SELECT" : ""));
+    editor.frame(1);
+    assert(vr.step() === true, "...and step the interaction");
+}
+aimHandAt({ x: 0, y: 1, z: 0 });
+var gz = vr.gizmo();
+console.log("vr.gizmo (live session): " + JSON.stringify(gz));
+var headNow = vr.state().head;
+assert(gz.armed === true, "the gizmo is armed by the wearer's controller");
+assert(Math.abs(gz.eye.x - headNow.x) < 0.2 && Math.abs(gz.eye.y - headNow.y) < 0.2
+       && Math.abs(gz.eye.z - headNow.z) < 0.2,
+       "and its EYE is the located HEAD, not the hand (gizmo eye " + gz.eye.x.toFixed(3) + ", "
+       + gz.eye.y.toFixed(3) + ", " + gz.eye.z.toFixed(3) + " vs head " + headNow.x.toFixed(3)
+       + ", " + headNow.y.toFixed(3) + ", " + headNow.z.toFixed(3) + ")");
+
+// The X arrow, at 0.06 of the gizmo scale from the pivot (past the plane
+// squares' 0.025, short of the arrow's 0.085 tip).
+var gScale = vr.gizmo().scale;
+var arrow = { x: 0.06 * gScale, y: 1, z: 0 };
+aimHandAt(arrow);
+assert(vr.gizmo().handle === "x", "the aim ray names the X arrow (it names '"
+       + vr.gizmo().handle + "')");
+var gPushes = editor.undoState().pushes;
+aimHandAt(arrow, { select: 1 });
+assert(vr.gizmo().dragging === true, "the trigger press starts a handle drag in a live session");
+var frozen = vr.gizmo().scale;
+// ...and the head drifts while the drag runs: a few frames, then the size again.
+editor.frame(3);
+assert(vr.gizmo().scale === frozen,
+       "THE GIZMO'S SIZE IS FROZEN FOR THE LENGTH OF THE DRAG, while this runtime's head drifts "
+       + "under it (" + frozen.toFixed(4) + ")");
+aimHandAt({ x: arrow.x + 1.0, y: 1, z: 0 }, { select: 1 });
+aimHandAt({ x: arrow.x + 1.0, y: 1, z: 0 });
+var moved = node.transform(cubes[0].id).position;
+console.log("      the cube landed at (" + moved.x.toFixed(3) + ", " + moved.y.toFixed(3) + ", "
+            + moved.z.toFixed(3) + ")");
+assert(moved.x > 0.5 && Math.abs(moved.y - 1) < 1e-3 && Math.abs(moved.z) < 1e-3,
+       "the drag moved the cube along X and on no other axis");
+assert(editor.undoState().pushes === gPushes + 1, "...in exactly one undo entry");
+assert(vr.gizmo().dragging === false, "and the release ended it");
+node.transform(cubes[0].id, { position: { x: 0, y: 1, z: 0 } });
+editor.frame(1);
+
 // ---- 5. vr.move IS THE ONE LOCOMOTION VERB, AND IT WORKS HERE -----------
 var vBefore = vr.interactionMode().rig;
 assert(vr.move({ forward: true, seconds: 0.5 }) === true,

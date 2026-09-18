@@ -79,6 +79,14 @@ public:
     Q_INVOKABLE bool release(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap locomotion(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap interactionMode();
+    /// THE WEARER'S GIZMO (VR_INPUT_SPEC §5.2, phase 4b stage 2) — a READ: the
+    /// mode, the handle under the aim ray, whether a handle is being dragged,
+    /// the constant-angular size the handles are drawn at and the pick
+    /// tolerance that comes with it. The gizmo is DRIVEN by the same trigger
+    /// and `menu` edges a wearer presses (and by `vr.inject` + `vr.step` in a
+    /// gate) — there is no second verb that drags a handle, because there is no
+    /// second implementation of a drag.
+    Q_INVOKABLE QVariantMap gizmo();
 
     /// THE SHELL IS CLOSING (VR-4-FIX finding 7). Ends whatever this module
     /// started, through the object that owns it — the preview has a viewport's
