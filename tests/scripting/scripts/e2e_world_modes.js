@@ -123,7 +123,12 @@ assert(byTier.epic.bounces === 3 && byTier.high.bounces === 1,
 // is that the two differ.
 Object.keys(byTier).forEach(function (tn) {
     var row = byTier[tn];
-    assert(Array.isArray(row.vrChain) && row.vrChain.length >= 2,
+    // `row.vrChain && row.vrChain.length`, NOT `Array.isArray`: a QVariantList
+    // handed to QJSEngine indexes and reports `length` like an array but is not
+    // one by `Array.isArray` (measured — the first version of this assertion
+    // failed on a table that was perfectly correct). The rest of this file reads
+    // `row.chain.length` the same way for the same reason.
+    assert(row.vrChain && row.vrChain.length >= 2,
            tn + " carries a VR chain of at least two cascades");
     // FEWER OR EQUAL CASCADES than the desktop column, never more: the column
     // exists to buy pixel march back.
