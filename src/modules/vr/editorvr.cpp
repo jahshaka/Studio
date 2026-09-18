@@ -133,6 +133,13 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
         cfg.ssr = doc->ssrMode;
     if (options.contains(QStringLiteral("reflections")))
         cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
+    // THE HIDDEN-AREA MASK (lane HAM-1), ON unless a MEASUREMENT asks for the
+    // other arm. It is not a user row and never will be: the pixels it removes
+    // are the ones behind the lens barrel, so there is nothing to prefer — but
+    // the saving cannot be measured without a control, and the control has to
+    // be askable in the same process at the same pose (the rig's own rule).
+    if (options.contains(QStringLiteral("hiddenAreaMask")))
+        cfg.hiddenAreaMask = options.value(QStringLiteral("hiddenAreaMask")).toBool();
     // THE MIRROR VIEW IS NAMED BEFORE THE SESSION EXISTS (the engine keeps the
     // wish and applies it on begin), and only when one was ASKED for: with
     // `mirror: "none"` there is nothing to paint and the editor's view is left

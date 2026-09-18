@@ -37,6 +37,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -416,6 +417,16 @@ int main() {
         VrConfig cfg;
         cfg.mirror = VrMirrorMode::Left;
         cfg.worldScale = 1.0f;
+        // NO HIDDEN-AREA MASK IN THIS ARM (lane HAM-1), and the reason is what
+        // this case compares against: a MONO control render through a second,
+        // one-viewport view. Such a view cannot carry the mask — the mask's
+        // vertices name an eye index that only a two-viewport pass has — so an
+        // eye with masked corners and a control without them would differ by
+        // the mask's own 3 % of the picture, at 255/255, and this case's
+        // subject (the eye's PROJECTION) would be buried under it. The mask's
+        // own case, at the end of this file, asserts the corners AND that
+        // nothing else in either eye moved.
+        cfg.hiddenAreaMask = false;
         CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession (second): %s",
                   engine->lastError().c_str());
         REQUIRE(engine->vrStatus().active);
@@ -1834,6 +1845,10 @@ int main() {
         VrConfig cfg;
         cfg.mirror = VrMirrorMode::None;
         cfg.ssr = 2;                    // Epic: one ray per pixel of the eye
+        // ...and no hidden-area mask, for the reason the eye-projection case
+        // above gives: this arm is compared against a MONO control render,
+        // which cannot have one (lane HAM-1).
+        cfg.hiddenAreaMask = false;
         if (CHECK_MSG(engine->beginVrSession(scene, cfg),
                       "a session with the project's reflection row ON: %s",
                       engine->lastError().c_str())) {
@@ -2175,6 +2190,217 @@ int main() {
             if (engine->vrStatus().active) engine->endVrSession();
         }
         engine->setFrameFault(FrameFault::None, 0u);
+    }
+
+    // =======================================================================
+    // THE HIDDEN-AREA MESH (lane HAM-1; V1-RIG's COST.txt §3 measured the
+    // ceiling, this is the thing itself).
+    // =======================================================================
+    // THE SUBJECT: the corners of each eye that a headset's lenses never show
+    // are masked out at the NEAR plane, so nothing behind them is ever shaded —
+    // AND NOTHING ELSE MOVES. Four questions, each one a picture:
+    //
+    //   (a) the runtime really answered, and with what
+    //       (`hiddenArea.source`, its fraction and its triangle count);
+    //   (b) each eye's four corners are ONE colour — the background through the
+    //       post chain, i.e. nothing was shaded there — and the control render
+    //       of the same eye has them SHADED. Both eyes, which is what says the
+    //       per-vertex eye index reached both viewports: a mask that only ever
+    //       reached viewport 0 would double the left eye's and leave the right
+    //       eye's four corners exactly as the control has them;
+    //   (c) EVERYWHERE ELSE the eye is still a mono render at that eye's pose
+    //       and projection, to the same bar case 2 above uses (mean < 1/255,
+    //       under 2 % of bytes past 8). That is the "nothing else moved" half,
+    //       and it is measured against the tree's own reference rather than
+    //       against a second session — see the note on the pose below;
+    //   (d) the DESKTOP view, read while the session is live, has no masked
+    //       corner at all: kVrMaskBit plus `helperBitsToDrop` keep the mask out
+    //       of every view but the eye pair, and a leak would black the editor's
+    //       own corners.
+    //
+    // WHY THE CONTROL IS A MONO RENDER AND NOT A MASK-OFF SESSION, measured
+    // rather than chosen: a second session cannot be compared pixel for pixel
+    // with this one, because Monado's simulated head MOVES with wall time.
+    // Pinning `worldScale = 0` pins its POSITION (V1-RIG's swaying-head
+    // finding) and its ORIENTATION still turns — with the head and the exposure
+    // both pinned, two reads thirty frames apart differ by 182,003 bytes, worst
+    // 210/255. So the comparison that carries (c) is the one this suite already
+    // trusts for the eyes' projections: one stereo read paired with a control
+    // render of that same frame's eye pose, with the masked pixels excluded.
+    // The bit-exact statement about the mask lives in case 1, which asserts the
+    // two eye halves BYTE-IDENTICAL at worldScale 0 — and passes with the mask
+    // on, i.e. the two viewports received the same mask to the bit.
+    {
+        setFixtureSky(scene, true);   // the corners have SKY and floor in them
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        cfg.worldScale = 1.0f;
+        cfg.hiddenAreaMask = true;    // the default, said out loud
+        if (CHECK_MSG(engine->beginVrSession(scene, cfg),
+                      "a session with the hidden-area mask: %s", engine->lastError().c_str())) {
+            pump(engine.get(), engine->vrStatus().frames + 60ull, 600u);
+            const VrStatus st = engine->vrStatus();
+            std::printf("HAM    source='%s' fraction %.4f / %.4f, triangles %u / %u\n",
+                        st.hiddenAreaSource.c_str(), double(st.hiddenAreaFraction[0]),
+                        double(st.hiddenAreaFraction[1]), st.hiddenAreaTriangles[0],
+                        st.hiddenAreaTriangles[1]);
+            // (a)
+            CHECK_MSG(st.hiddenAreaSource == "runtime",
+                      "THE MASK IS THE RUNTIME'S OWN GEOMETRY (XR_KHR_visibility_mask) and "
+                      "not a config file's: source='%s'", st.hiddenAreaSource.c_str());
+            CHECK_MSG(st.hiddenAreaTriangles[0] > 0u && st.hiddenAreaTriangles[1] > 0u,
+                      "both eyes were given a mask (%u and %u triangles)",
+                      st.hiddenAreaTriangles[0], st.hiddenAreaTriangles[1]);
+            CHECK_MSG(st.hiddenAreaFraction[0] > 0.001f && st.hiddenAreaFraction[0] < 0.5f &&
+                          st.hiddenAreaFraction[1] > 0.001f && st.hiddenAreaFraction[1] < 0.5f,
+                      "...covering a plausible fraction of each eye (%.4f, %.4f) — the number "
+                      "is the HEADSET'S, so it is reported and bounded, never pinned",
+                      double(st.hiddenAreaFraction[0]), double(st.hiddenAreaFraction[1]));
+
+            // THE PAIRING IS CASE 2'S, for the reason case 2 gives: readPixels
+            // renders nothing, so a read taken immediately before a control
+            // call holds the very frame whose eye poses that call pins.
+            const auto stereoHalfNow = [&](unsigned eye, Image &shot, Half &half) {
+                Half a, b;
+                if (!engine->vrView() || !engine->vrView()->readPixels(shot) ||
+                    !splitEyes(shot, a, b))
+                    return false;
+                half = eye ? b : a;
+                return true;
+            };
+            std::array<unsigned char, 3> maskColour{ 0, 0, 0 };
+            bool haveMaskColour = false;
+            for (unsigned eye = 0; eye < 2u; ++eye) {
+                Image shot, mono;
+                Half h;
+                if (!CHECK_MSG(stereoHalfNow(eye, shot, h) &&
+                                   engine->vrEyeScreenshot(eye, mono),
+                               "eye %u: one stereo read and its control render: %s", eye,
+                               engine->lastError().c_str()))
+                    continue;
+                if (!CHECK_MSG(mono.width == h.w && mono.height == h.h,
+                               "the control is one eye's size (%ux%u vs %ux%u)", mono.width,
+                               mono.height, h.w, h.h))
+                    continue;
+                const auto at = [](const std::vector<unsigned char> &px, unsigned w, unsigned x,
+                                   unsigned y) {
+                    const size_t i = (size_t(y) * w + x) * 4u;
+                    return std::array<unsigned char, 3>{ px[i], px[i + 1], px[i + 2] };
+                };
+                const unsigned cx[4] = { 0u, h.w - 1u, 0u, h.w - 1u };
+                const unsigned cy[4] = { 0u, 0u, h.h - 1u, h.h - 1u };
+                // (b) ONE COLOUR AT ALL FOUR CORNERS OF THIS EYE...
+                const auto c0 = at(h.px, h.w, cx[0], cy[0]);
+                bool allSame = true, allShadedInControl = true;
+                for (int k = 0; k < 4; ++k) {
+                    if (at(h.px, h.w, cx[k], cy[k]) != c0) allSame = false;
+                    const auto m = at(mono.rgba, mono.width, cx[k], cy[k]);
+                    int worst = 0;
+                    for (int c = 0; c < 3; ++c)
+                        worst = std::max(worst, std::abs(int(m[c]) - int(c0[c])));
+                    if (worst <= 8) allShadedInControl = false;
+                }
+                CHECK_MSG(allSame,
+                          "eye %u: ALL FOUR CORNERS CARRY ONE COLOUR (%u,%u,%u) — the "
+                          "background through the post chain, i.e. nothing was shaded there",
+                          eye, unsigned(c0[0]), unsigned(c0[1]), unsigned(c0[2]));
+                CHECK_MSG(allShadedInControl,
+                          "eye %u: ...AND THE CONTROL RENDER OF THIS EYE HAS ALL FOUR SHADED — "
+                          "the mask is what removed them, in THIS eye (a mask that reached "
+                          "only viewport 0 leaves the right eye's corners exactly as the "
+                          "control has them)", eye);
+                if (eye == 0u) { maskColour = c0; haveMaskColour = true; }
+
+                // The masked SET, taken from the picture itself: the mask is in
+                // CLIP space, so it covers the same pixels in every frame
+                // whatever the head does.
+                std::vector<unsigned char> masked(size_t(h.w) * h.h, 0u);
+                size_t maskedCount = 0;
+                for (size_t p = 0; p < masked.size(); ++p) {
+                    const size_t i = p * 4u;
+                    if (h.px[i] == c0[0] && h.px[i + 1] == c0[1] && h.px[i + 2] == c0[2]) {
+                        masked[p] = 1u;
+                        ++maskedCount;
+                    }
+                }
+                const double maskedFraction = double(maskedCount) / double(masked.size());
+                // ...and it is the fraction the RUNTIME reported. One-sided
+                // plus a floor, because the two are not identities of each
+                // other: a shaded pixel that happened to land on exactly the
+                // background colour joins the set, and a masked pixel cannot
+                // leave it.
+                CHECK_MSG(maskedFraction <= double(st.hiddenAreaFraction[eye]) + 0.004 &&
+                              maskedFraction >= double(st.hiddenAreaFraction[eye]) * 0.8,
+                          "eye %u: the pixels that were never shaded are %.4f of the eye "
+                          "against the %.4f the runtime's geometry covers", eye,
+                          maskedFraction, double(st.hiddenAreaFraction[eye]));
+
+                // (c) EVERYWHERE ELSE, the same comparison case 2 makes.
+                double sum = 0.0; size_t over = 0, n = 0; int worstOut = 0;
+                for (size_t p = 0; p < masked.size(); ++p) {
+                    if (masked[p]) continue;
+                    for (int c = 0; c < 3; ++c) {
+                        const size_t i = p * 4u + size_t(c);
+                        const int d = std::abs(int(mono.rgba[i]) - int(h.px[i]));
+                        sum += d; ++n;
+                        if (d > 8) ++over;
+                        if (d > worstOut) worstOut = d;
+                    }
+                }
+                const double mean = n ? sum / double(n) : 0.0;
+                const double frac = n ? double(over) / double(n) : 0.0;
+                std::printf("HAM    eye %u: masked %.4f of the eye, the rest against its mono "
+                            "control mean %.3f/255, %.3f%% over 8, worst %d\n",
+                            eye, maskedFraction, mean, 100.0 * frac, worstOut);
+                CHECK_MSG(mean < 1.0 && frac < 0.02,
+                          "eye %u: OUTSIDE THE MASK THE EYE IS STILL A MONO RENDER AT THAT "
+                          "EYE'S POSE AND PROJECTION — mean %.3f/255 and %.3f%% of bytes over "
+                          "8 (the bars are 1.0 and 2%%, case 2's own): the mask took the "
+                          "corners and nothing else", eye, mean, 100.0 * frac);
+                if (const char *dir = std::getenv("JAH_VR_DUMP")) {
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/ham-eye%u.ppm", dir, eye);
+                    if (FILE *f = std::fopen(path, "wb")) {
+                        std::fprintf(f, "P6\n%u %u\n255\n", h.w, h.h);
+                        for (size_t i = 0; i < size_t(h.w) * h.h; ++i)
+                            std::fwrite(&h.px[i * 4], 1, 3, f);
+                        std::fclose(f);
+                    }
+                    std::snprintf(path, sizeof(path), "%s/ham-eye%u-control.ppm", dir, eye);
+                    if (FILE *f = std::fopen(path, "wb")) {
+                        std::fprintf(f, "P6\n%u %u\n255\n", mono.width, mono.height);
+                        for (size_t i = 0; i < size_t(mono.width) * mono.height; ++i)
+                            std::fwrite(&mono.rgba[i * 4], 1, 3, f);
+                        std::fclose(f);
+                    }
+                }
+            }
+
+            // (d) THE DESKTOP, WITH THE SESSION LIVE.
+            Image desk;
+            if (haveMaskColour &&
+                CHECK_MSG(desktop->readPixels(desk), "the desktop view reads back") &&
+                desk.width > 2u && desk.height > 2u) {
+                const unsigned dx[4] = { 0u, desk.width - 1u, 0u, desk.width - 1u };
+                const unsigned dy[4] = { 0u, 0u, desk.height - 1u, desk.height - 1u };
+                bool anyMaskColour = false;
+                for (int k = 0; k < 4; ++k) {
+                    const size_t i = (size_t(dy[k]) * desk.width + dx[k]) * 4u;
+                    int worst = 0;
+                    for (int c = 0; c < 3; ++c)
+                        worst = std::max(worst, std::abs(int(desk.rgba[i + size_t(c)]) -
+                                                         int(maskColour[c])));
+                    if (worst <= 2) anyMaskColour = true;
+                }
+                CHECK_MSG(!anyMaskColour,
+                          "THE MASK NEVER REACHES THE DESKTOP: no corner of the editor view "
+                          "carries the eye mask's colour while a session is live (kVrMaskBit is "
+                          "dropped from every view but the session's eye pair)");
+            }
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+        }
+        setFixtureSky(scene, false);
     }
 
     // ---- a session on a dead runtime must refuse, never hang --------------
