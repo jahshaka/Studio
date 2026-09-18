@@ -388,6 +388,15 @@ sendHand({ x: 1.5, y: 1, z: 1.7 });     // the input comes back, nothing held
 node.transform(cubeA, { position: { x: 0, y: 1, z: 0 } });
 node.transform(cubeB, { position: { x: 3, y: 1, z: 0 } });
 editor.frame(1);
+// NOTHING SELECTED FIRST, since the VR GIZMO (phase 4b stage 2): a trigger
+// press with the ray on a gizmo HANDLE drags that handle instead of selecting,
+// which is the desktop's own precedence (the gizmo's hit test runs before the
+// pick, enginesceneviewport.cpp). Cube A is still selected here from the
+// section above, so its gizmo's centre ball sits exactly where this press aims
+// — and the press would grab the ball, the release would record its own undo
+// entry, and this case, which is about the GRAB's undo shape, would be
+// counting the gizmo's. The gesture the gizmo answers is `scripting.e2e.vr_gizmo`.
+editor.selectNone();
 pushes = editor.undoState().pushes;
 clickSelect({ x: 0, y: 1, z: 3 });
 clickSelect({ x: 3, y: 1, z: 3, menu: true });
