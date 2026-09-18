@@ -751,6 +751,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->distortionMode = qBound(0, sceneObj.value("distortionMode").toInt(scene->distortionMode), 2);
     scene->distortionStrength = float(
         qBound(0.0, sceneObj.value("distortionStrength").toDouble(scene->distortionStrength), 8.0));
+    // The Player's floor (PLAYER-FLOOR-1). Absent = the constructor's false,
+    // which is what every document written before the setting existed means:
+    // it played on its floor.
+    scene->playerHidesFloor =
+        sceneObj.value("playerHidesFloor").toBool(scene->playerHidesFloor);
     // The looks stack. Absent = empty = the renderer's behaviour before this
     // feature existed, byte for byte. Everything a file can get wrong — an
     // unknown look id (a document from a newer build), the same look twice, a

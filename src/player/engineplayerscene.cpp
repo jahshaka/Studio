@@ -245,6 +245,14 @@ void EnginePlayerScene::step(float dt, int width, int height)
 
     cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror) {
+        // THE PROJECT'S ANSWER ABOUT THE DEFAULT FLOOR, stated BEFORE the sync
+        // (PLAYER-FLOOR-1, owner 2026-09-18). The mirror is the EDITOR'S and
+        // serves both views, so each host says what it wants of the shared
+        // furniture immediately before its own sync — the same shape
+        // pushEditorHelpers has on the editor side. The editor states `false`
+        // in its own syncFrame, so a page switch either way is exact and no
+        // host inherits the other's answer.
+        mMirror->setHideDefaultFloor(mDocument->playerHidesFloor);
         mMirror->sync();
         // THE SAME THREE CALLS THE EDITOR VIEWPORT MAKES, IN THE SAME ORDER
         // (EngineSceneViewport::syncFrame). applyEnvironment is what pushes the
@@ -336,6 +344,9 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
     shot->setHelpersVisible(false);
     shot->setScene(mScene);
     if (mMirror) {
+        // A PLAYER SHOT IS THE PLAYER'S PICTURE (PLAYER-FLOOR-1): the floor the
+        // project asked to hide is out of it too, at every grade.
+        mMirror->setHideDefaultFloor(mDocument && mDocument->playerHidesFloor);
         mMirror->sync();
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);

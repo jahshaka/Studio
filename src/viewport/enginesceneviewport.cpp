@@ -244,6 +244,14 @@ void EngineSceneViewport::pushGridForView(bool helpers)
 void EngineSceneViewport::pushEditorHelpers(bool helpers)
 {
     if (!mMirror) return;
+    // THE EDITOR NEVER HIDES THE DEFAULT FLOOR (PLAYER-FLOOR-1, owner
+    // 2026-09-18: the setting is about the PLAYER). Said here, on every push,
+    // because the mirror is SHARED with the Player's view: the Player switches
+    // the hide on before its own sync and this is where the editor takes it
+    // back, so a page switch in either direction is exact and neither host
+    // inherits the other's answer. Game View is still the editor — a scene
+    // being looked at without furniture is not the finished thing.
+    mMirror->setHideDefaultFloor(false);
     mMirror->setLightWires(mShowLightWires && helpers);
     // Camera bodies + frustum wires (CAMERAS_SPEC D2). Same "editor helper"
     // rule as the light wires — G (Game View) and play hide them — but a
@@ -2465,6 +2473,12 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                 mOverlay->update(nullptr, rayPos, rayDir, viewDir);
             }
         }
+        // AN EDITOR SHOT IS THE EDITOR'S PICTURE, at every grade
+        // (PLAYER-FLOOR-1): the Player may have left its floor hide on the
+        // SHARED mirror, and a plain readback that quietly lost the ground
+        // would move the whole pixel corpus. The editor's frame loop says the
+        // same thing in pushEditorHelpers; a shot does not go through it.
+        mMirror->setHideDefaultFloor(false);
         mMirror->sync();
         // The shot view starts with a hardcoded background; give it the document
         // sky (flat colour) and world settings (shadows toggle) like the live view.
@@ -2893,6 +2907,10 @@ void EngineSceneViewport::primeSceneGeometry()
     if (!mScene || !view() || !ensureEngineScene()) return;
     if (!mMirror) return;
     const bool helpers = !mGameView;
+    // ...and this second, smaller push states it too (PLAYER-FLOOR-1): it is a
+    // sync of the editor's own picture, and the Player may have left the hide
+    // on behind it.
+    mMirror->setHideDefaultFloor(false);
     mMirror->setLightWires(mShowLightWires && helpers);
     mMirror->setHighlightWireframe(mSelectionWireframe);
     pushGridForView(helpers);
