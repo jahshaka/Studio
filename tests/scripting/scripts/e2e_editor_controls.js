@@ -1021,9 +1021,13 @@ assert(pickAfter.refills - pickBase.refills === 10 && pickAfter.rebuilds === pic
 // the only place all five are measured together, because only the app has them.
 editor.select(pickA);
 editor.properties({ tab: "selection" });        // settle anything owed
-var costBase = editor.selectionCost({ reset: true });
+// The reset zeroes AFTER building the answer (a bracket reads what it is
+// closing), so the proof is the NEXT read.
+editor.selectionCost({ reset: true });
+var costBase = editor.selectionCost();
 assert(costBase.selections === 0 && costBase.totalMs === 0,
-    "editor.selectionCost({reset:true}) zeroes the counters");
+    "editor.selectionCost({reset:true}) zeroes the counters ("
+    + costBase.selections + " selections, " + costBase.totalMs + " ms)");
 // pickB first: the selection standing before the loop is pickA, so every one
 // of the twenty really moves the primary.
 for (var ci = 0; ci < 20; ci++) editor.select(ci % 2 ? pickA : pickB);
