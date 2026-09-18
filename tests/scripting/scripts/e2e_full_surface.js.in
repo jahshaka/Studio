@@ -197,8 +197,11 @@ graph.setValue(f, 0.77);
 assert(near(graph.getValue(f), 0.77), "float node value round-trips");
 var masterId = gnodes[0].id;
 assert(graph.connect(f, 0, masterId, "Roughness"), "float -> master.Roughness connected");
+// (the `hasPbrMaster` flag went with the Blinn-Phong master: there is one
+// master node now, so graph.nodeTypes() naming exactly one is the check)
+assert(graph.nodeTypes().filter(function (t) { return t === "PbrMaterial"; }).length === 1,
+       "PbrMaterial is the one master node type");
 var evald = graph.evaluate();
-assert(evald.hasPbrMaster === true, "evaluator sees the PBR master");
 assert(near(evald.values.roughness, 0.77), "graph folds to roughness 0.77");
 assert(graph.toMaterial(nodeId), "graph.toMaterial applied to the node");
 assert(graph.save(), "graph.save wrote the asset");
@@ -211,7 +214,8 @@ assert(near(graph.evaluate().values.roughness, 0.77), "reloaded graph folds iden
 // the shipped glass preset loads through the same path
 var glass = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/glass.effect");
 assert(glass.nodes >= 3, "glass.effect loads (" + glass.nodes + " nodes)");
-assert(graph.evaluate().hasPbrMaster === true, "glass has a PBR master");
+assert(graph.nodes().filter(function (n) { return n.type === "PbrMaterial"; }).length === 1,
+       "glass has a PBR master");
 
 // SAMPLES-AUDIT item: a shipped TEXTURED preset references its images by
 // APP-RELATIVE name ("materials_to_graph/brick diff.jpg"). The Effects page

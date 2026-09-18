@@ -55,32 +55,9 @@ struct MasterSlot
 	Target target;
 	QString valueKey; // constant lands here ("" = constants unsupported)
 	QString mapKey;   // texture lands here ("" = textures unsupported)
-	bool invertToRoughness = false; // legacy Shininess -> roughness
 };
 
-// The floor `invertToRoughness` lands on (lane-whitedots, 2026-09-09).
-//
-// WHY THERE HAS TO BE ONE. The legacy Blinn-Phong sockets carry GLOSS, and the
-// inversion is `1 - gloss`, so the slider's own maximum — the value every one
-// of the nine shipped legacy presets stores — inverts to roughness EXACTLY
-// ZERO. HlmsPbs floors roughness at 0.02 internally, and a GGX lobe at 0.02 is
-// a needle: its peak is 1/(pi*alpha^2), which for a normal-mapped surface means
-// any single texel whose quantised normal happens to point at the light comes
-// back as a pixel-sized white spark. That is the "white dots on the brick
-// preset" report, and it is a property of the number, not of the map.
-//
-// WHY 0.08. It is the smallest value that reads as "polished" to the eye while
-// dropping that peak by (0.08/0.02)^4 = 256x against HlmsPbs' own floor, which
-// is the whole distance between a spark and a highlight. It is deliberately
-// NOT a physical conversion: the textbook Blinn-exponent mapping
-// (alpha = sqrt(2/(n+2)), roughness = sqrt(alpha)) puts even the legacy
-// maximum near 0.37, and applying that curve would restyle every legacy
-// material in every user project. The nine SHIPPED presets are re-authored on
-// real roughness values instead (see app/shadergraph/materials_to_graph); this
-// floor is the safety net under the graphs nobody can re-author.
-constexpr double kLegacyGlossRoughnessFloor = 0.08;
-
-QVector<MasterSlot> masterSlotsFor(const QString& masterTypeName);
+QVector<MasterSlot> masterSlots();
 SocketModel* findMasterInSocket(NodeModel* master, const QString& name);
 
 class GraphBaker
@@ -104,7 +81,7 @@ public:
 
 	struct Result
 	{
-		PbrGraphEvaluator::Result eval; // values, unsupported, approximated, animated, hasPbrMaster
+		PbrGraphEvaluator::Result eval; // values, unsupported, approximated, animated
 		QJsonObject maps;        // mapKey -> emitted (prefixed) path, baked this run or cache-hit
 		QJsonObject passthrough; // mapKey -> source path bound directly
 		qint64 msElapsed = 0;
@@ -123,7 +100,6 @@ public:
 	struct CompiledGraph
 	{
 		bool hasMaster = false;
-		bool hasPbrMaster = false;
 		QString name;
 		/// THE MATERIAL'S ONE UV TRANSFORM (MATERIAL_UV_NODES_SPEC 3.2, D-1a).
 		/// When every sampler in every master sub-graph reads the mesh UVs

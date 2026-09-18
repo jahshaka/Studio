@@ -1061,7 +1061,7 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "getValue", "graph.getValue(nodeId) -> value",
           "Reads a node's value back.",
           Needs::Document },
-        { "evaluate", "graph.evaluate() -> {values, unsupported, approximated, animated, hasPbrMaster}",
+        { "evaluate", "graph.evaluate() -> {values, unsupported, approximated, animated}",
           "Folds the current graph to PBR material values (the evaluator is GL-free by design). Pure math chains fold; "
           "approximated lists nodes evaluated against the fake fragment context (worldNormal, fresnel, time at t=0, ...).",
           Needs::Document },
@@ -1314,8 +1314,9 @@ QVariantList GraphApi::nodeTypes()
     QVariantList out;
     LibraryV1 library;
     for (auto item : library.getItems()) out.append(item->name);
-    // "Material" (the legacy Blinn-Phong master) is deliberately NOT listed:
-    // addNode cannot create one, so listing it made scripts throw (audit D14).
+    // "PbrMaterial" is THE master node — the only one. ("Material", the
+    // Blinn-Phong master, is not listed because it no longer EXISTS:
+    // LEGACY-MASTER-CRUD deleted the class and converts old graphs at load.)
     out.append(QStringLiteral("PbrMaterial"));
     return out;
 }
@@ -1406,7 +1407,6 @@ QVariantMap GraphApi::evaluate()
     out["unsupported"] = QVariant(result.unsupportedNodes);
     out["approximated"] = QVariant(result.approximatedNodes);
     out["animated"] = result.animated;
-    out["hasPbrMaster"] = result.hasPbrMaster;
     return out;
 }
 

@@ -9,7 +9,6 @@
     "lighting": true,
     "name": "Gold",
     "pbrMaterial": {
-        "surfaceType": "pbr",
         "unsupportedNodes": [
         ],
         "values": {
@@ -30,25 +29,25 @@
     "shadergraph": {
         "connections": [
             {
-                "id": "a71c9f20-0011-4d3b-9c5e-2f8b1a4c0001",
-                "leftNodeId": "a71c9f20-0002-4d3b-9c5e-2f8b1a4c00aa",
+                "id": "8f3ebbab-bf8c-4393-bd0d-271b87644fc4",
+                "leftNodeId": "a71c9f20-0004-4d3b-9c5e-2f8b1a4c00ac",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
-                "rightNodeSocketIndex": 0
+                "rightNodeSocketIndex": 2
             },
             {
-                "id": "a71c9f20-0012-4d3b-9c5e-2f8b1a4c0002",
+                "id": "c4e5e9a2-03e8-4ce1-b8e6-36f2fe0b81a1",
                 "leftNodeId": "a71c9f20-0003-4d3b-9c5e-2f8b1a4c00ab",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
                 "rightNodeSocketIndex": 1
             },
             {
-                "id": "a71c9f20-0013-4d3b-9c5e-2f8b1a4c0003",
-                "leftNodeId": "a71c9f20-0004-4d3b-9c5e-2f8b1a4c00ac",
+                "id": "fff56fe6-2b76-483f-921a-a0ab381dc515",
+                "leftNodeId": "a71c9f20-0002-4d3b-9c5e-2f8b1a4c00aa",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
-                "rightNodeSocketIndex": 2
+                "rightNodeSocketIndex": 0
             }
         ],
         "masternode": "a71c9f20-0001-4d3b-9c5e-2f8b1a4c00ff",
@@ -93,18 +92,11 @@
             }
         ],
         "settings": {
-            "acceptLighting": true,
             "bakeResolution": 1024,
             "blendMode": "Opaque",
-            "castShadow": true,
-            "cullMode": "Back",
-            "depthTest": true,
-            "fog": true,
-            "name": "Gold",
-            "receiveShadow": true,
-            "renderLayer": "Opaque",
-            "zWrite": true
-        }
+            "name": "Gold"
+        },
+        "socketLayout": 2
     },
     "surfaceType": "pbr",
     "type": "shadergraph",
