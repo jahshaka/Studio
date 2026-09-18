@@ -9,8 +9,7 @@
     "lighting": true,
     "name": "Gold",
     "pbrMaterial": {
-        "unsupportedNodes": [
-        ],
+        "unsupportedNodes": [],
         "values": {
             "baseColor": {
                 "a": 1,
@@ -22,8 +21,7 @@
             "roughness": 0.25
         }
     },
-    "properties": [
-    ],
+    "properties": [],
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
@@ -98,10 +96,8 @@
         },
         "socketLayout": 2
     },
-    "surfaceType": "pbr",
     "type": "shadergraph",
-    "uniforms": [
-    ],
+    "uniforms": [],
     "vertex_shader": ":assets/shaders/surface.vert",
     "zWrite": true
 }

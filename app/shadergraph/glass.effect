@@ -9,8 +9,7 @@
     "lighting": true,
     "name": "Glass",
     "pbrMaterial": {
-        "unsupportedNodes": [
-        ],
+        "unsupportedNodes": [],
         "values": {
             "alpha": 0.3,
             "alphaMode": 2,
@@ -23,8 +22,7 @@
             "roughness": 0.05
         }
     },
-    "properties": [
-    ],
+    "properties": [],
     "receiveShadows": true,
     "renderLayer": "Transparent",
     "shadergraph": {
@@ -99,10 +97,8 @@
         },
         "socketLayout": 2
     },
-    "surfaceType": "pbr",
     "type": "shadergraph",
-    "uniforms": [
-    ],
+    "uniforms": [],
     "vertex_shader": ":assets/shaders/surface.vert",
     "zWrite": true
 }
