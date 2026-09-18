@@ -149,17 +149,6 @@ struct StudioServices;
 /// (the 2026-09-08 "the gizmo is huge in the Showroom" report).
 constexpr float kGizmoScreenFraction = 4.33f;
 
-/// THE EYE THE VR GIZMO IS SIZED FOR, vertical degrees (VR_INPUT_SPEC §5.2,
-/// the owner's decision 5: "fixed angular size").
-///
-/// A FIXED number, deliberately. The runtime's real per-eye fov is not reported
-/// by the engine today (`VrStatus` carries ipd, eyeWidth/eyeHeight and
-/// `asymmetricFov`, but no angle), and a gizmo whose apparent size changed with
-/// the headset would not be a FIXED angular size in any case. 90 degrees is the
-/// spec's own nominal; it is an ARGUMENT everywhere below so that the day a
-/// session reports its fov, exactly one call site changes.
-constexpr float kVrNominalEyeFovDegrees = 90.0f;
-
 /// WHICH UNIT A PICK IS MEASURED IN (VR_INPUT_SPEC §5.2, phase 4b stage 2).
 ///
 /// Pixel is the desk: a cursor, a camera and a widget, and the rotation rings
@@ -186,7 +175,6 @@ struct GizmoVrPick
 {
     bool valid = false;
     iris::Vec3 eye;
-    float fovDegrees = kVrNominalEyeFovDegrees;
     iris::Vec3 rayPos, rayDir, viewDir;
 };
 
@@ -295,12 +283,11 @@ public:
 	/// matters. The desk goes on drawing and dragging the same object, which is
 	/// what keeps its picture and its pick in agreement.
 	virtual void updateSize(iris::CameraNodePtr camera);
-	/// THE VR SIZE RULE (VR_INPUT_SPEC §5.2): a CONSTANT ANGULAR size,
-	/// `kGizmoScreenFraction * distance(eye, pivot) * tan(fov/2)` —
-	/// gizmoray::vrGizmoScale, which is the desktop expression evaluated at the
-	/// eye instead of at a document camera.
-	void updateSizeForVr(const iris::Vec3 &eye,
-	                     float fovDegrees = kVrNominalEyeFovDegrees);
+	/// THE VR SIZE RULE (VR_INPUT_SPEC §5.2, the owner's decision 5): a FIXED
+	/// ANGULAR size — the translate gizmo's arrows subtend
+	/// gizmoray::kVrGizmoHalfAngleDeg at the wearer's eye, whatever the
+	/// distance, the headset or its field of view (gizmoray::vrGizmoScale).
+	void updateSizeForVr(const iris::Vec3 &eye);
 	float getGizmoScale();
 
 	// ---- THE WEARER'S POINTER (VR_INPUT_SPEC §5.2, stage 2) --------------
@@ -312,10 +299,9 @@ public:
 	const GizmoVrPick &vrPick() const { return vrPickData; }
 	bool vrPickArmed() const { return vrPickData.valid; }
 
-	/// THE UNIT THIS CALL MEASURES IN. Callers do not set it by hand: the VR
-	/// interaction wraps its hit tests and drags in a RayPickScope, and
+	/// IS THIS CALL MEASURING IN ANGLES? Callers do not set the space by hand:
+	/// the VR interaction wraps its hit tests and drags in a RayPickScope, and
 	/// everything else is the desk's pixels.
-	GizmoPickSpace pickSpace() const { return pickSpaceNow; }
 	bool rayPicking() const { return pickSpaceNow == GizmoPickSpace::Ray; }
 	/// THE DIRECTION A CAMERA-FACING RULE IS JUDGED ALONG IN VR: from the
 	/// wearer's EYE TO THE GIZMO — the radial direction — and not the eye's
@@ -336,10 +322,11 @@ public:
 	/// is exact at every angle.
 	bool vrLookDirection(const iris::Vec3 &gizmoPosition, iris::Vec3 &look) const;
 
-	/// A pixel tolerance of the nominal frame, as an angle at the armed eye
-	/// (gizmoray::toleranceRadians) — the one conversion the two pick paths
-	/// share, so the desktop's tuned constants are the VR constants.
-	float rayTolerance(float pixels) const;
+	/// HOW FAR OFF A HANDLE A RAY MAY BE, and the band inside which two handles
+	/// are a tie — radians at the eye, and the POINTER's own numbers rather
+	/// than a conversion of the desk's pixels (gizmoray's note).
+	float rayTolerance() const;
+	float rayTieTolerance() const;
 
 	/// MEASURE IN ANGLES FOR THE LENGTH OF THIS SCOPE. RAII because a gesture
 	/// that threw or returned early with the gizmo left in Ray space would

@@ -25,8 +25,8 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "services/vrorigin.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmomode.h"
 #include "viewport/gizmoray.h"
-#include "viewport/rotationgizmo.h"
 #include "viewport/scenepicker.h"
 #include "viewport/snapsettings.h"
 
@@ -60,19 +60,15 @@ inline constexpr float kTickAmplitude = 0.4f;
 /// HOW LONG A `menu` PRESS MAY LAST AND STILL BE A SHORT ONE, seconds — the
 /// line between "cycle the gizmo mode" and "hold the modifier" (VR_INPUT_SPEC
 /// §5.2, the owner's answer 10). 0.25 s is the usual short-press threshold and
-/// is comfortably longer than a deliberate click; it is charged in FRAME
-/// durations, never against a wall clock, so a scripted press of N steps lasts
-/// exactly N/90 s whatever the box is doing.
+/// is comfortably longer than a deliberate click.
+///
+/// It is charged in the durations step() is given: the nominal frame on the
+/// scripted route (so N injected frames are exactly N/90 s, whatever the box is
+/// doing) and the driver's own frame time, clamped by vrorigin::frameSeconds,
+/// in a worn session — real time there, quantised by the frame rate. See the
+/// header's note on mMenuHeldSeconds.
 inline constexpr float kMenuHoldSeconds = 0.25f;
 
-/// The three gizmo modes, in the order a cycle takes them — the Space key's
-/// order on the desk (translate, rotate, scale).
-inline const char *nextGizmoMode(const QString &mode)
-{
-    if (mode == QLatin1String("translate")) return "rotate";
-    if (mode == QLatin1String("rotate")) return "scale";
-    return "translate";
-}
 
 }   // namespace
 
@@ -488,6 +484,19 @@ bool VrInteraction::eyePose(unsigned hand, iris::Vec3 &eye, iris::Vec3 &forward)
 void VrInteraction::armGizmo(unsigned hand, bool armed)
 {
     Gizmo *g = gizmoNow();
+    // A TRACKING BLIP DOES NOT END A DRAG, AND MUST NOT DISARM ONE (the lead's
+    // fix round, item 3). One unlocated frame is not a released trigger — the
+    // direct gesture has said so since stage 1 — and disarming the pick here
+    // would hand the gizmo back to the DESK mid-gesture: its per-frame
+    // updateSize would then re-size the handles the drag is measuring against
+    // (Gizmo::updateSize now refuses while dragging, which is the second half
+    // of the same fix). The pick the drag started with stands until the drag
+    // ends; a located hand replaces it below as usual.
+    if (mGizmoDrag.active && mGizmoDrag.gizmo == g && g) {
+        const VrHandState st = handState(hand);
+        iris::Vec3 origin, direction, eye, forward;
+        if (!(st.valid && ray(st, origin, direction) && eyePose(hand, eye, forward))) return;
+    }
     if (mArmedGizmo && mArmedGizmo != g) {
         mArmedGizmo->setVrPick(GizmoVrPick());
         mArmedGizmo->setDragModifiers(Qt::NoModifier);
@@ -508,10 +517,6 @@ void VrInteraction::armGizmo(unsigned hand, bool armed)
             pick.rayPos = origin;
             pick.rayDir = direction;
             pick.viewDir = forward;
-            // The fov is the gizmo's own nominal until the engine reports the
-            // runtime's (VrStatus carries no eye angle today — reported
-            // upward, not guessed at here).
-            pick.fovDegrees = kVrNominalEyeFovDegrees;
         }
     }
     g->setVrPick(pick);
@@ -541,6 +546,15 @@ bool VrInteraction::beginGizmoDrag(unsigned hand)
     // ring and plane handles are picked as angles at the ray's origin here and
     // as pixels for the desk's own presses, and neither can leak into the
     // other.
+    // ...AND NOT A DRAG SOMEBODY ELSE IS HOLDING (the lead's fix round, item 1).
+    // There is one gizmo object and two hosts can reach it: the mouse in
+    // EngineSceneViewport and the wearer here. A drag belongs to whoever
+    // started it — the viewport refuses to take one it did not start (its own
+    // mMouseDrag flag) and this refuses to restart one the desk is holding.
+    // Without the pair, a controller press during a mouse drag re-entered
+    // startDragging and the gesture changed hands mid-flight.
+    if (g->isDragging()) return false;
+
     const Gizmo::RayPickScope raySpace(g);
     if (!g->isHit(origin, direction)) return false;
     // THE EDIT GATE, BEFORE THE DRAG STARTS — the mouse's own rule
@@ -566,6 +580,14 @@ bool VrInteraction::endGizmoDrag(unsigned hand)
     const unsigned dragHand = mGizmoDrag.hand;
     mGizmoDrag = GizmoDrag();
     if (!g) return false;
+    // ONLY WHAT WE ARE STILL HOLDING (item 1). Something else may have ended
+    // this drag while the trigger was down — the desk's own release, a mode
+    // switch through setActiveGizmo, a project close — and endDragging() calls
+    // createUndoAction unconditionally, so ending a gizmo that is no longer
+    // dragging would push a SECOND undo entry for one gesture (a
+    // TransformSceneNodeCommand from wherever the node now stands to where it
+    // now stands: an undo step that does nothing and eats a Ctrl+Z).
+    if (!g->isDragging()) return false;
     // ONE UNDO ENTRY, AND IT IS THE MOUSE DRAG'S OWN (Gizmo::createUndoAction):
     // one TransformSceneNodeCommand for a single node, a macro over the group
     // for several, the edit gate consulted inside it. Nothing is duplicated
@@ -584,6 +606,7 @@ bool VrInteraction::cancelGizmoDrag()
     Gizmo *g = mGizmoDrag.gizmo;
     mGizmoDrag = GizmoDrag();
     if (!g) return false;
+    if (!g->isDragging()) return false;       // somebody else already ended it (item 1)
     g->cancelDragging();
     g->setDragModifiers(Qt::NoModifier);
     ++mCancels;
@@ -596,8 +619,9 @@ bool VrInteraction::cycleGizmoMode()
     if (mGesture.active || mGizmoDrag.active) return false;   // never mid-gesture
     if (!mDeps.setGizmoMode) return false;
     const QString mode = mDeps.gizmoMode ? mDeps.gizmoMode() : QString();
-    const QString next = QString::fromLatin1(nextGizmoMode(mode));
-    mDeps.setGizmoMode(next);
+    // THE CYCLE'S ORDER IS THE SPACE KEY'S, from the one place that spells it
+    // (viewport/gizmomode.h).
+    mDeps.setGizmoMode(gizmomode::next(mode));
     ++mGizmoModes;
     haptic(dominantHand(), kTickAmplitude, kTickSeconds);
     return true;
@@ -1060,17 +1084,30 @@ QVariantMap VrInteraction::gizmoReport() const
     out[QStringLiteral("dragging")] = mGizmoDrag.active;
     out[QStringLiteral("scale")] = double(g ? g->getGizmoScale() : 0.0f);
     out[QStringLiteral("toleranceDegrees")] =
-        double(g ? gizmoray::degreesOf(g->rayTolerance(kRingPickTolerancePx)) : 0.0f);
+        double(g ? gizmoray::degreesOf(g->rayTolerance()) : 0.0f);
+    out[QStringLiteral("halfAngleDegrees")] = double(gizmoray::kVrGizmoHalfAngleDeg);
+    // WHAT A PRESS WOULD TAKE, AND ONLY WHEN A PRESS WOULD TAKE IT (the lead's
+    // fix round, item 9). The name is the answer to "what does the trigger grab
+    // here", so it must carry the same refusals `beginGizmoDrag` applies: the
+    // PLAYER edits nothing, a gizmo the desk is already holding is not the
+    // wearer's to grab, and while a script owns the document a press is refused
+    // outright. `blocked()` is the gate's side-effect-free reading (false
+    // inside a verb, so a script asking this about its own run gets the honest
+    // answer rather than its own refusal). The SELECTION guard is already
+    // structural: nothing arms a gizmo with no selected node.
     QString handle;
+    const bool pressWouldDrag = g && g->vrPickArmed() && !playerHosted() &&
+                                !g->isDragging() && !editgate::blocked();
     if (g && g->vrPickArmed()) {
         const GizmoVrPick &pick = g->vrPick();
-        const Gizmo::RayPickScope raySpace(g);
-        handle = g->handleNameAt(pick.rayPos, pick.rayDir, pick.viewDir);
+        if (pressWouldDrag) {
+            const Gizmo::RayPickScope raySpace(g);
+            handle = g->handleNameAt(pick.rayPos, pick.rayDir, pick.viewDir);
+        }
         QVariantMap eye;
         eye[QStringLiteral("x")] = double(pick.eye.x());
         eye[QStringLiteral("y")] = double(pick.eye.y());
         eye[QStringLiteral("z")] = double(pick.eye.z());
-        eye[QStringLiteral("fovDegrees")] = double(pick.fovDegrees);
         out[QStringLiteral("eye")] = eye;
     }
     out[QStringLiteral("handle")] = handle;

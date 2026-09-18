@@ -529,6 +529,82 @@ int main(int argc, char **argv)
         }
     }
 
+        // ---- THE EYE AND THE POINTER ARE NOT THE SAME PLACE ----------------
+        //
+        // In a headset the head is above the hand, so the direction a square is
+        // SEEN from and the direction it is AIMED at from are different — and
+        // the two questions the rule asks were answered against different ones
+        // until the lead's fix round (item 4): the DRAW rule judged the line of
+        // sight from the eye, the ray path judged the ray, and between them an
+        // undrawn square could be picked and a drawn one refused.
+        //
+        // WHAT IT IS NOW: the draw rule decides what is a handle at all (asked
+        // first, exactly as the pixel path asks it), and the ray's own edge-on
+        // test survives as the grazing-DRAG guard it always was. Both have to
+        // say yes.
+        {
+            node->setLocalPos(iris::Vec3(0, 0, 0));
+            node->update(0.0f);
+            const Plane &ground = kPlanes[2];                     // xz
+
+            // (a) THE EYE IS IN THE SQUARE'S OWN PLANE — it is not drawn — while
+            // the POINTER looks down at it from above, which is a perfectly
+            // good ray. It must not be pickable: what is not drawn is not a
+            // handle, whatever the hand can reach.
+            {
+                TranslationGizmo gizmo;
+                gizmo.setSelectedNode(node);
+                GizmoVrPick pick;
+                pick.valid = true;
+                pick.eye = iris::Vec3(6, 0, 6);                   // level with the ground square
+                pick.rayPos = iris::Vec3(2, 3, 2);                // the hand, well above it
+                pick.viewDir = (iris::Vec3(0, 0, 0) - pick.eye).normalized();
+                gizmo.setVrPick(pick);                            // sizes from the EYE
+                const float scale = gizmo.getGizmoScale() * kHandleScale;
+                const iris::Vec3 grabPoint = squareGrab(ground, scale);
+                pick.rayDir = (grabPoint - pick.rayPos).normalized();
+                gizmo.setVrPick(pick);
+                const Gizmo::RayPickScope raySpace(&gizmo);
+                const QString named =
+                    gizmo.handleNameAt(pick.rayPos, pick.rayDir, pick.viewDir);
+                const auto items = gizmo.drawItems(pick.rayPos, pick.rayDir, pick.viewDir);
+                std::printf("   eye in the square's plane, ray from above: %d handles drawn, the "
+                            "pointer names '%s'\n", items.size(),
+                            named.isEmpty() ? "(nothing)" : qPrintable(named));
+                CHECK(items.size() == 6,
+                      "a square edge-on to the EYE is not drawn, however good the ray on it is");
+                CHECK(named != QLatin1String("xz"),
+                      "...and it is not picked either: the DRAW rule decides what is a handle "
+                      "(before the fix the ray's own angle picked an invisible square)");
+            }
+
+            // (b) AND THE OTHER WAY ROUND: the eye well above the square (so it
+            // is drawn and is a handle) with the hand off to one side. The
+            // pointer takes it.
+            {
+                TranslationGizmo gizmo;
+                gizmo.setSelectedNode(node);
+                GizmoVrPick pick;
+                pick.valid = true;
+                pick.eye = iris::Vec3(3, 6, 3);
+                pick.rayPos = iris::Vec3(4.5f, 3.0f, 1.0f);       // the hand, elsewhere
+                pick.viewDir = (iris::Vec3(0, 0, 0) - pick.eye).normalized();
+                gizmo.setVrPick(pick);
+                const float scale = gizmo.getGizmoScale() * kHandleScale;
+                const iris::Vec3 grabPoint = squareGrab(ground, scale);
+                pick.rayDir = (grabPoint - pick.rayPos).normalized();
+                gizmo.setVrPick(pick);
+                const Gizmo::RayPickScope raySpace(&gizmo);
+                const QString named =
+                    gizmo.handleNameAt(pick.rayPos, pick.rayDir, pick.viewDir);
+                std::printf("   eye above, hand to one side: the pointer names '%s'\n",
+                            named.isEmpty() ? "(nothing)" : qPrintable(named));
+                CHECK(named == QLatin1String("xz"),
+                      "a square the WEARER can see is picked by a ray from wherever their hand "
+                      "happens to be");
+            }
+        }
+
     std::printf("\n%s\n", failures == 0 ? "PASS" : "FAILURES");
     return failures == 0 ? 0 : 1;
 }

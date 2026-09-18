@@ -101,6 +101,15 @@ void Gizmo::updateSize(iris::CameraNodePtr camera)
 	// controllers gone) hands it straight back — the viewport re-sizes on its
 	// very next frame, because it calls this every frame.
 	if (vrPickData.valid) return;
+	// ...AND NOBODY RE-SIZES A GIZMO THAT IS BEING DRAGGED, on either surface
+	// (the lead's fix round, item 3). The handles' hit radii and the rotation
+	// drag's sphere are this one number, so a size that moves mid-gesture moves
+	// the answer the gesture is reading: a wearer whose hand blinks out for a
+	// frame would otherwise have this per-frame desktop call rewrite the frozen
+	// scale with the desk camera's, and the object would jump. On the desk the
+	// camera cannot move during a mouse drag, so this only ever skips a call
+	// that would have written the same number.
+	if (isDragging()) return;
 	if (!!selectedNode) {
 		if (camera->getProjection() == iris::CameraProjection::Perspective) {
 			float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
@@ -129,31 +138,30 @@ float Gizmo::getGizmoScale()
 }
 
 // THE VR SIZE RULE (VR_INPUT_SPEC §5.2; the owner's decision 5, "fixed angular
-// size"). The desktop's expression — kGizmoScreenFraction * distance *
-// tan(fov/2) — evaluated at the EYE instead of at a document camera, which
-// makes the gizmo a constant fraction of the wearer's view and therefore a
-// constant ANGLE: the same apparent size standing over an object as across the
-// room. There is no orthographic case: an eye is a perspective.
-void Gizmo::updateSizeForVr(const iris::Vec3 &eye, float fovDegrees)
+// size"). The translate gizmo's arrows subtend gizmoray::kVrGizmoHalfAngleDeg
+// at the wearer's eye and every other handle is built in proportion to them —
+// at every distance and in every headset, with no field of view and no frame in
+// the expression (gizmoray's note on why the desk's fraction-of-the-frame rule
+// is the wrong shape here). There is no orthographic case: an eye is a
+// perspective.
+//
+// FROZEN FOR THE LENGTH OF A DRAG, like the frame (gizmo.drag_frame): the
+// wearer's head moves constantly and the rotation drag's angle is resolved
+// against a sphere whose radius is this scale, so a gizmo that grew as they
+// stepped forward would turn the object while they walked. updateSize above
+// refuses for the same reason, on both surfaces.
+void Gizmo::updateSizeForVr(const iris::Vec3 &eye)
 {
 	if (!selectedNode) return;
-	// ...AND THE SIZE IS FROZEN FOR THE LENGTH OF A DRAG, exactly as the frame
-	// is (gizmo.drag_frame). On the desk this never came up — a camera cannot
-	// move while the mouse is holding a handle — but a wearer's head moves
-	// constantly, and the rotation gizmo's drag angle is resolved against a
-	// SPHERE whose radius is this scale: a gizmo that grew as the wearer
-	// stepped forward would turn the object while they walked. Every handle's
-	// hit radius rides the same number, so freezing it also keeps the handle
-	// under the ray the one the press grabbed.
 	if (isDragging()) return;
 	const float distance = (selectedNode->getGlobalPosition() - eye).length();
-	gizmoScale = gizmoray::vrGizmoScale(distance, fovDegrees);
+	gizmoScale = gizmoray::vrGizmoScale(distance);
 }
 
 void Gizmo::setVrPick(const GizmoVrPick &pick)
 {
 	vrPickData = pick;
-	if (vrPickData.valid) updateSizeForVr(vrPickData.eye, vrPickData.fovDegrees);
+	if (vrPickData.valid) updateSizeForVr(vrPickData.eye);
 }
 
 bool Gizmo::vrLookDirection(const iris::Vec3 &gizmoPosition, iris::Vec3 &look) const
@@ -165,15 +173,14 @@ bool Gizmo::vrLookDirection(const iris::Vec3 &gizmoPosition, iris::Vec3 &look) c
 	return true;
 }
 
-float Gizmo::rayTolerance(float pixels) const
-{
-	return gizmoray::toleranceRadians(pixels, vrPickData.fovDegrees);
-}
+float Gizmo::rayTolerance() const { return gizmoray::toleranceRadians(); }
+float Gizmo::rayTieTolerance() const { return gizmoray::tieRadians(); }
 
 void Gizmo::resolvePickRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const
 {
+	// A pick is armed only with a LOCATED ray (VrInteraction::armGizmo), so
+	// there is no "armed but no direction" case to guard here.
 	if (!vrPickData.valid) return;
-	if (vrPickData.rayDir.isNull()) return;      // armed, but this hand is not located
 	rayPos = vrPickData.rayPos;
 	rayDir = vrPickData.rayDir;
 	if (!vrPickData.viewDir.isNull()) viewDir = vrPickData.viewDir;

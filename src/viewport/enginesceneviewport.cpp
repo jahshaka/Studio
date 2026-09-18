@@ -527,6 +527,7 @@ void EngineSceneViewport::setActiveGizmo(Gizmo *g)
 {
     if (mGizmo == g) return;
     if (mGizmo && mGizmo->isDragging()) mGizmo->endDragging();
+    mMouseDrag = false;              // whoever owned that drag, it is over
     mGizmo = g;
     if (mGizmo) { if (mSelectedNode) mGizmo->setSelectedNode(mSelectedNode); else mGizmo->clearSelectedNode(); }
 }
@@ -1115,8 +1116,14 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
         // click still lands as a click (the selection below is a read), and
         // every camera gesture in this handler is untouched — the editor is
         // non-editable while a script runs, not frozen.
-        if (haveRay && mSelectedNode && mGizmo && mGizmo->isHit(rayPos, rayDir)
-            && !editgate::refuse()) {
+        // ...AND NOT A DRAG THE WEARER IS HOLDING (VR phase 4b stage 2, the
+        // ownership rule on mMouseDrag): a gizmo already being dragged by the
+        // OTHER host is not this one's to grab. A drag this viewport itself
+        // started and never saw released (a lost release) still restarts here,
+        // exactly as it always did.
+        const bool heldElsewhere = mGizmo && mGizmo->isDragging() && !mMouseDrag;
+        if (haveRay && mSelectedNode && mGizmo && !heldElsewhere
+            && mGizmo->isHit(rayPos, rayDir) && !editgate::refuse()) {
             // Alt+drag duplicates first, then drags the COPY — one undo macro
             // covers duplicate + move (EDITOR_SHORTCUTS_SPEC §4).
             if ((e->modifiers() & Qt::AltModifier) && mServices && mServices->sceneEdit &&
@@ -1145,6 +1152,7 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
             // "scale all three by this drag's ratio".
             mGizmo->setDragModifiers(e->modifiers());
             mGizmo->startDragging(rayPos, rayDir, viewDir);
+            mMouseDrag = mGizmo->isDragging();     // this host owns what it started
         } else if (e->modifiers() & Qt::AltModifier) {
             // Alt+LMB anywhere BUT the gizmo orbits around THE POINT UNDER THE
             // CURSOR (Maya/Unreal; owner report §353). The gizmo hit-test above
@@ -1192,7 +1200,11 @@ void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
     mMousePos = e->position(); mHaveMouse = true;
     const QPointF dir = mMousePos - mPrevMousePos;
     mPrevMousePos = mMousePos;
-    if (mGizmo && mGizmo->isDragging()) {
+    // OUR OWN DRAG ONLY (the ownership rule, mMouseDrag): mouse motion over the
+    // viewport while the WEARER is dragging a handle must not drive that drag
+    // with a pixel ray from the desk's camera, nor overwrite the modifiers the
+    // controller is pushing.
+    if (mGizmo && mMouseDrag && mGizmo->isDragging()) {
         // V held during a translate drag: snap the dragged node's pivot to the
         // nearest vertex of the triangle under the cursor on OTHER meshes
         // (EDITOR_SHORTCUTS_SPEC §4). No target under the cursor -> plain drag.
@@ -1212,7 +1224,14 @@ void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
 {
     e->accept();
     if (mPlaying && mPlayback) { mPlayback->mouseReleaseEvent(e); return; }
-    if (e->button() == Qt::LeftButton && mGizmo && mGizmo->isDragging()) mGizmo->endDragging();
+    if (e->button() == Qt::LeftButton && mMouseDrag) {
+        mMouseDrag = false;
+        // ...and a click that ends NOTHING of ours ends nothing at all: a stray
+        // press and release while the wearer holds a handle used to call
+        // endDragging on their drag, which commits a second undo entry for one
+        // gesture (endDragging always calls createUndoAction).
+        if (mGizmo && mGizmo->isDragging()) mGizmo->endDragging();
+    }
     // The Alt+drag macro closes AFTER endDragging pushed its transform command,
     // so duplicate + move undo as one step.
     if (e->button() == Qt::LeftButton && mAltDragMacroOpen) {

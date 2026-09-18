@@ -388,12 +388,28 @@ var gPushes = editor.undoState().pushes;
 aimHandAt(arrow, { select: 1 });
 assert(vr.gizmo().dragging === true, "the trigger press starts a handle drag in a live session");
 var frozen = vr.gizmo().scale;
-// ...and the head drifts while the drag runs: a few frames, then the size again.
-editor.frame(3);
-assert(vr.gizmo().scale === frozen,
-       "THE GIZMO'S SIZE IS FROZEN FOR THE LENGTH OF THE DRAG, while this runtime's head drifts "
-       + "under it (" + frozen.toFixed(4) + ")");
+var headAtPress = vr.state().head;
+// ...AND THE NEXT STEPPED FRAME IS WHERE THE SIZE WOULD MOVE (the lead's fix
+// round, item 5). `editor.frame()` alone proves nothing here: with an injection
+// armed the render driver's own tick returns before it steps the interaction,
+// so nothing between two reads would have run and the assertion would pass on
+// an object nobody touched. The read has to bracket a real interaction frame —
+// which is what aimHandAt does — and the head has to have MOVED across it,
+// which this runtime's drifting simulated HMD does by itself (the control in
+// section 2 measured it).
 aimHandAt({ x: arrow.x + 1.0, y: 1, z: 0 }, { select: 1 });
+var headAfter = vr.state().head;
+var headMoved = dist2(headAfter, headAtPress);
+console.log("      the head moved " + headMoved.toFixed(5) + " m across the drag's frames; "
+            + "the gizmo scale is " + vr.gizmo().scale.toFixed(4) + " (was " + frozen.toFixed(4)
+            + ")");
+assert(headMoved > 0.0,
+       "the runtime's head really did move while the drag ran (otherwise the next assertion is "
+       + "about nothing)");
+assert(vr.gizmo().scale === frozen,
+       "THE GIZMO'S SIZE IS FROZEN FOR THE LENGTH OF THE DRAG, through stepped frames in which "
+       + "the head moved (" + frozen.toFixed(4) + ") — the size rule measures from the eye, so "
+       + "an unfrozen one would re-size the handles the drag is measuring against");
 aimHandAt({ x: arrow.x + 1.0, y: 1, z: 0 });
 var moved = node.transform(cubes[0].id).position;
 console.log("      the cube landed at (" + moved.x.toFixed(3) + ", " + moved.y.toFixed(3) + ", "

@@ -105,13 +105,18 @@ assert(g1.armed === true, "a located hand arms the gizmo's VR pointer");
 assert(near(g1.eye.x, hand.x) && near(g1.eye.z, hand.z),
        "with no session the wearer's EYE is the aiming hand itself (the honest answer on a box "
        + "with no runtime)");
-// kGizmoScreenFraction * distance * tan(fov/2) = 4.33 * 3 * 1 at the nominal
-// 90-degree eye.
-assert(near(g1.scale, 4.33 * 3.0, 0.01),
-       "the gizmo is sized by the VR rule: 4.33 * 3 m = " + g1.scale.toFixed(3));
-assert(near(g1.toleranceDegrees, 0.7427, 0.001),
-       "...and the pick tolerance is the desktop's 7 px of a 1080-tall frame as an angle at that "
-       + "eye: " + g1.toleranceDegrees.toFixed(4) + " degrees");
+// THE VR SIZE RULE IS AN ANGLE AND NOTHING ELSE (gizmoray.h): the translate
+// gizmo's arrows subtend halfAngleDegrees at the eye, so the scale is
+// d * tan(8 deg) / kTranslateReach = 3 * 0.140541 / 0.095 = 4.438 at 3 m.
+var kVrScalePerMetre = Math.tan(g1.halfAngleDegrees * Math.PI / 180) / 0.095;
+assert(near(g1.halfAngleDegrees, 8.0, 1e-3),
+       "the gizmo's half-extent is the VR constant: " + g1.halfAngleDegrees + " degrees");
+assert(near(g1.scale, kVrScalePerMetre * 3.0, 0.01),
+       "the gizmo is sized by the VR rule: " + kVrScalePerMetre.toFixed(4) + " * 3 m = "
+       + g1.scale.toFixed(3));
+assert(near(g1.toleranceDegrees, 0.6, 0.001),
+       "...and the pick tolerance is the POINTER's own 0.6 degrees, not a pixel conversion: "
+       + g1.toleranceDegrees.toFixed(4) + " degrees");
 
 // THE SAME ANGLE AT EVERY DISTANCE (the owner's decision 5). Stand twice as far
 // away: the scale doubles, so what the wearer sees does not change.
@@ -312,7 +317,44 @@ assert(near(scale1.y, scale0.y, 1e-3) && near(scale1.z, scale0.z, 1e-3),
        "...and on no other axis");
 assert(editor.undoState().pushes === pushes5 + 1, "...in exactly one undo entry");
 
-// ---- 8. THE POINTER GOES AWAY WITH THE HAND ----------------------------
+// ---- 8. A DRAG HAS AN OWNER --------------------------------------------
+//
+// One gizmo object, two hosts (this ray and the desk's mouse). A drag belongs
+// to whoever started it: the viewport drives and ends only its own (its
+// mMouseDrag flag), and the wearer's release must not end — or re-commit — a
+// drag that something else already finished. The case reachable from a script
+// is the second half: `editor.setGizmoMode` switches the active gizmo, and
+// setActiveGizmo ENDS a live drag (that is its own rule, and it commits the
+// gesture). The trigger is still down at that point; its release must add
+// NOTHING, because endDragging always calls createUndoAction and a second call
+// would push an undo step that does nothing and eats the user's next Ctrl+Z.
+editor.setGizmoMode("translate");
+node.transform(cube, { position: { x: 0, y: 1, z: 0 } });
+editor.frame(1);
+sendAim({ from: hand, at: pivot });
+scale = vr.gizmo().scale;
+grip = onXArrow(pivot, scale, 0.06);
+var pushes6 = editor.undoState().pushes;
+sendAim({ from: hand, at: grip, select: 1 });
+assert(vr.gizmo().dragging === true, "a VR handle drag is running");
+var moveTo2 = onXArrow(pivot, scale, 0.06);
+moveTo2.x += 0.8;
+sendAim({ from: hand, at: moveTo2, select: 1 });
+// ...and the desk switches the mode under it (W/E/R, or the toolbar).
+assert(editor.setGizmoMode("rotate") === true, "the desk switches the gizmo mode mid-drag");
+var pushesAfterSwitch = editor.undoState().pushes;
+console.log("   pushes: " + pushes6 + " before the drag, " + pushesAfterSwitch
+            + " after the mode switch ended it");
+assert(pushesAfterSwitch === pushes6 + 1,
+       "the switch ended the drag and recorded it ONCE");
+sendAim({ from: hand, at: moveTo2 });          // the trigger comes up afterwards
+assert(editor.undoState().pushes === pushesAfterSwitch,
+       "and the wearer's release adds NOTHING — a drag it no longer owns is not its to end "
+       + "(a second createUndoAction would be an empty undo step)");
+assert(vr.gizmo().dragging === false, "nothing is being dragged now");
+editor.setGizmoMode("translate");
+
+// ---- 9. THE POINTER GOES AWAY WITH THE HAND ----------------------------
 
 assert(vr.inject("right", {}) === true, "the hand stops reporting");
 assert(vr.step() === true, "one more frame");
@@ -321,5 +363,12 @@ console.log("vr.gizmo (no hand): " + JSON.stringify(gEnd));
 assert(gEnd.armed === false,
        "with no hand located the VR pointer is disarmed and the gizmo is the desk's again");
 assert(gEnd.dragging === false, "and nothing is being dragged");
+// ...AND THE INTERACTION LETS GO WITH IT (the fix round, item 7): with no
+// session there is no lifecycle edge to end on, so a script that injected a
+// hand and withdrew it would otherwise leave the desk's gizmo sized for a
+// wearer who is not there for the life of the process.
+assert(vr.interactionMode().installed === false,
+       "the interaction uninstalls itself when the last injected hand goes (no session, no "
+       + "other edge to do it)");
 
 console.log("PASS: the editor's gizmo, driven by a controller ray, with no headset in the room");

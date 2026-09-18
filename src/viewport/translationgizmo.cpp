@@ -183,9 +183,20 @@ bool TranslationHandle::rayDistance(const iris::Vec3 &rayPos, const iris::Vec3 &
 	if (rayDir.lengthSquared() < 1e-12f) return false;
 	const iris::Vec3 d = rayDir.normalized();
 
-	// EDGE-ON TO THE POINTER IS NOT A HANDLE (the desktop's rule, asked of the
-	// ray): a square the controller points along cannot be aimed at, and the
-	// drag behind it would be a grazing ray/plane intersection.
+	// WHAT IS DRAWN IS WHAT IS PICKED, and the DRAW rule decides (the lead's
+	// fix round, item 4). planeFacesCamera judges the square against the line of
+	// sight from the wearer's EYE — the direction they see it from, and the one
+	// the drawing uses — so asking it here is what keeps an undrawn square
+	// unpickable and a drawn one pickable. It is the pixel path's own order
+	// (planeDistance asks the same question first); the version below, against
+	// the RAY, then survives only as the grazing-DRAG guard it always was.
+	if (!planeFacesCamera()) return false;
+
+	// EDGE-ON TO THE POINTER IS NOT A DRAGGABLE HANDLE either: a square the
+	// controller points along the plane of would be dragged by a grazing
+	// ray/plane intersection, which is the same reason the drawn rule exists.
+	// With a head above the hand the two questions really can differ, and both
+	// have to say yes.
 	const iris::Mat4 t = gizmo->getTransform();
 	const iris::Vec3 n = (t * iris::Vec4(planeNormal, 0)).toVector3D().normalized();
 	if (std::fabs(iris::Vec3::dotProduct(n, d)) <=
@@ -215,7 +226,7 @@ bool TranslationHandle::rayDistance(const iris::Vec3 &rayPos, const iris::Vec3 &
 		const float shaftRad = originDistance > 1e-4f
 		                           ? std::atan(kArrowShaftRadius * scale / originDistance)
 		                           : 0.0f;
-		const float band = shaftRad + gizmo->rayTolerance(kPlanePickTolerancePx);
+		const float band = shaftRad + gizmo->rayTolerance();
 		const float dU = gizmoray::angleToArc(d, dirs[0], dirs[1]);
 		const float dV = gizmoray::angleToArc(d, dirs[0], dirs[3]);
 		*onAxisBand = dU <= band || dV <= band;
@@ -306,8 +317,7 @@ bool TranslationHandle::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 		// mouse ray does.
 		if (gizmo->rayPicking()) {
 			float rad = -1.0f;
-			return rayDistance(rayPos, rayDir, rad) &&
-			       rad <= gizmo->rayTolerance(kPlanePickTolerancePx);
+			return rayDistance(rayPos, rayDir, rad) && rad <= gizmo->rayTolerance();
 		}
 		QPointF cursor;
 		if (!gizmo->rayPixel(rayPos, rayDir, gizmoTrans.column(3).toVector3D(), cursor))
@@ -623,8 +633,7 @@ TranslationHandle* TranslationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 
 	// shaft band handed to the arrows — is one rule and is not duplicated: only
 	// the distance underneath it changes unit.
 	const bool ray = rayPicking();
-	const float planeTolerance = ray ? rayTolerance(kPlanePickTolerancePx)
-	                                 : kPlanePickTolerancePx;
+	const float planeTolerance = ray ? rayTolerance() : kPlanePickTolerancePx;
 	const bool havePixel = ray ||
 		rayPixel(rayPos, rayDir, getTransform().column(3).toVector3D(), cursor);
 	if (havePixel) {

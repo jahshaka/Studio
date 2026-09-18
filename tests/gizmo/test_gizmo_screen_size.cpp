@@ -66,6 +66,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "viewport/freecamerapolicy.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmomeshes.h"
 #include "viewport/gizmoray.h"
 #include "viewport/rotationgizmo.h"
 #include "viewport/scalegizmo.h"
@@ -369,13 +370,19 @@ int main(int argc, char **argv)
 
     // ---- THE VR ARM: A CONSTANT ANGULAR SIZE (phase 4b stage 2) -----------
     //
-    // The eyes have no document camera, so the same rule is evaluated at the
-    // WEARER'S EYE instead: gizmoScale = kGizmoScreenFraction * distance *
-    // tan(fov/2), with the fov the headset's (the nominal 90 degrees — the
-    // engine reports no per-eye angle today). Being proportional to the
-    // distance is the whole claim: the gizmo then subtends a CONSTANT ANGLE,
-    // which is what "the same size at every distance" means when the frame is
-    // the wearer's field of view (the owner's decision 5).
+    // The eyes have no document camera and no frame to be a fraction of, so the
+    // VR rule is an ANGLE and nothing else: the translate gizmo's arrows
+    // subtend gizmoray::kVrGizmoHalfAngleDeg at the wearer's eye, at every
+    // distance and in every headset (the owner's decision 5, "fixed angular
+    // size"; gizmoray.h's note on why the desk's fraction-of-the-frame rule is
+    // the wrong shape here — carried over, it made the gizmo 24 degrees and
+    // growing with the eye's fov).
+    //
+    // WHAT IS ASSERTED: the scale really is gizmoray::vrGizmoScale, the
+    // measured half-extent of the DRAWN gizmo is the constant it is calibrated
+    // to (8 degrees for the arrows, and what the other two gizmos' own reaches
+    // make of it), the number does not move with distance, and the desk's own
+    // per-frame sizing stands down while a wearer is driving it.
     {
         std::printf("\n-- the VR arm: a constant ANGULAR size --\n");
         node->setLocalPos(iris::Vec3(0, 0, 0));
@@ -394,8 +401,7 @@ int main(int argc, char **argv)
                 pick.viewDir = (iris::Vec3(0, 0, 0) - eye).normalized();
                 pick.rayDir = pick.viewDir;
                 entry.g->setVrPick(pick);
-                const float expected = kGizmoScreenFraction * d *
-                                       std::tan(qDegreesToRadians(kVrNominalEyeFovDegrees * 0.5f));
+                const float expected = gizmoray::vrGizmoScale(d);
                 if (std::fabs(entry.g->getGizmoScale() - expected) > 1e-3f) {
                     std::printf("FAIL: %s at %.1f m: scale %.4f, expected %.4f\n", entry.name,
                                 double(d), double(entry.g->getGizmoScale()), double(expected));
@@ -424,24 +430,58 @@ int main(int argc, char **argv)
                         double(spreadPercent(subtended)));
             CHECK(spreadPercent(subtended) < 1.0f,
                   "the VR gizmo subtends the SAME ANGLE at every distance (within 1 %)");
+            // THE CALIBRATION ITSELF, for the translate gizmo, in the terms the
+            // rule is written in: its arrows REACH kTranslateReach of the
+            // scale, and that reach is d * tan(kVrGizmoHalfAngleDeg) — exactly,
+            // at every distance. (The rotation and scale gizmos reach 0.073 of
+            // the scale against the arrows' 0.095, so they come out
+            // proportionally smaller: 6.27 and 5.93 degrees, measured above and
+            // not pinned to a second constant that would have to be kept in
+            // step with gizmomeshes.h by hand.)
+            //
+            // THE MEASURED half-extent is 7.45 and not 8.00 because the farthest
+            // VERTEX is not perpendicular to the view axis from a 3/4 eye — the
+            // +X arrow leans towards it — which is a fact about where this
+            // suite stands, not about the rule.
+            if (QLatin1String(entry.name) == QLatin1String("translate")) {
+                entry.g->setVrPick(GizmoVrPick());
+                GizmoVrPick one;
+                one.valid = true;
+                one.eye = iris::Vec3(0, 0, 2);
+                one.rayPos = one.eye;
+                one.viewDir = iris::Vec3(0, 0, -1);
+                one.rayDir = one.viewDir;
+                entry.g->setVrPick(one);
+                const float reach = GizmoMeshes::kTranslateReach * entry.g->getGizmoScale();
+                const float want = 2.0f * std::tan(qDegreesToRadians(gizmoray::kVrGizmoHalfAngleDeg));
+                std::printf("   the arrows reach %.4f m at 2 m; 2 * tan(%.1f deg) = %.4f\n",
+                            double(reach), double(gizmoray::kVrGizmoHalfAngleDeg), double(want));
+                CHECK(std::fabs(reach - want) < 1e-4f,
+                      "the translate gizmo's arrows reach EXACTLY the angle the VR constant names "
+                      "(gizmoray::kVrGizmoHalfAngleDeg), by construction of the rule");
+                CHECK(std::fabs(subtended[1] - gizmoray::kVrGizmoHalfAngleDeg) < 1.0f,
+                      "...and the drawn gizmo measures within a degree of it from a 3/4 eye");
+            }
             entry.g->setVrPick(GizmoVrPick());
             entry.g->clearSelectedNode();
         }
 
-        // ONE RULE, TWO EVALUATIONS. A document camera at the same angle and
-        // the same distance produces the same scale, to the bit: the VR form is
-        // the desktop expression with an eye in place of a camera, and not a
-        // second size rule that would drift from it.
+        // TWO RULES, ON PURPOSE — and the difference is the point (the lead's
+        // fix round, item 2). The desk's gizmo is a constant fraction of a
+        // WINDOW on a desk; the wearer's is a constant angle in their vision.
+        // Evaluating the desktop rule at a 90-degree eye — which is what the
+        // first draft of this lane did — gives a gizmo three times the size,
+        // and one that would grow again on a wider headset.
         {
             translate.setSelectedNode(node);
-            cam->angle = kVrNominalEyeFovDegrees;
+            cam->angle = 90.0f;
             cam->setAspectRatio(16.0f / 9.0f);
             cam->setLocalPos(iris::Vec3(0, 0, 3));
             cam->lookAt(iris::Vec3(0, 0, 0));
             cam->update(0.0f);
             cam->updateCameraMatrices();
             translate.updateSize(cam);
-            const float desktop = translate.getGizmoScale();
+            const float deskAt90 = translate.getGizmoScale();
             GizmoVrPick pick;
             pick.valid = true;
             pick.eye = iris::Vec3(0, 0, 3);
@@ -450,10 +490,14 @@ int main(int argc, char **argv)
             pick.rayDir = pick.viewDir;
             translate.setVrPick(pick);
             const float wearer = translate.getGizmoScale();
-            std::printf("   the same 90-degree frame at 3 m: camera %.4f, eye %.4f\n",
-                        double(desktop), double(wearer));
-            CHECK(std::fabs(desktop - wearer) < 1e-4f,
-                  "the VR size rule IS the desktop's, evaluated at the eye");
+            std::printf("   at 3 m: the DESK's rule read at a 90-degree eye gives %.4f, the "
+                        "wearer's gives %.4f (%.2fx)\n", double(deskAt90), double(wearer),
+                        double(deskAt90 / wearer));
+            CHECK(std::fabs(wearer - gizmoray::vrGizmoScale(3.0f)) < 1e-4f,
+                  "the VR size is the VR rule's own number, with no camera and no fov in it");
+            CHECK(deskAt90 > wearer * 2.5f,
+                  "...and the frame-fraction rule read at an eye really is the several-times-too-"
+                  "big gizmo this replaced");
 
             // ...AND THE DESK STANDS DOWN WHILE A WEARER IS DRIVING. There is
             // one gizmo object and one scale; the viewport calls updateSize

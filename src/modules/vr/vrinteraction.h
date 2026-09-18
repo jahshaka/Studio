@@ -463,10 +463,21 @@ private:
     Gizmo *mArmedGizmo = nullptr;
     /// THE `menu` BUTTON'S TWO MEANINGS, told apart by HOW LONG (owner answer
     /// 10 + the mode cycle): a SHORT press cycles the gizmo mode, a HELD one is
-    /// the modifier (toggle-select, snap). The clock is the accumulated FRAME
-    /// duration, never a wall clock (CLAUDE.md: count frames), and a press that
-    /// was used as a modifier — a toggle-select, a snapping gesture frame —
-    /// cannot also cycle when it comes up.
+    /// the modifier (toggle-select, snap). A press that was used as a modifier
+    /// — a toggle-select, a snapping gesture frame — cannot also cycle when it
+    /// comes up.
+    ///
+    /// WHAT THE CLOCK IS, exactly (the lead's fix round, item 6). It is the sum
+    /// of the DURATIONS step() is charged, and those durations are not the same
+    /// thing on the two routes: a SCRIPTED step charges the nominal frame
+    /// (1/90 s), so a press of N injected frames lasts exactly N/90 s whatever
+    /// the box is doing — but a WORN session is stepped by the render driver,
+    /// which charges the wall time of the frame just gone, CLAMPED by
+    /// vrorigin::frameSeconds (1/15 s). So in a headset this is real time,
+    /// quantised by the frame rate and bounded per frame against a UI-thread
+    /// block; at 90 Hz the threshold is ~23 frames and at 30 Hz ~8. Saying
+    /// "never a wall clock" of both routes, as this comment used to, was wrong
+    /// about the one a person actually presses.
     float mMenuHeldSeconds = 0.0f;
     bool mMenuConsumed = false;
 

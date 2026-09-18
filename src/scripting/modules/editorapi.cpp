@@ -26,6 +26,7 @@ For more information see the LICENSE file
 
 #include "scripting/modules/moduleshared.h"
 #include "services/selectioncost.h"
+#include "viewport/gizmomode.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/simulationclock.h"
@@ -1152,21 +1153,12 @@ QVariantMap EditorApi::gizmoHitTest(double x, double y)
 bool EditorApi::setGizmoMode(const QString &mode)
 {
     if (!requireEngine()) return false;
-    // Through MainWindow's slots when the shell exists so the toolbar's
-    // checked state follows (the same path the W/E/R keys take); straight to
-    // the viewport otherwise.
-    if (mode == "translate") {
-        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "translateGizmo");
-        else host.viewport->setGizmoLoc();
-    } else if (mode == "rotate") {
-        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "rotateGizmo");
-        else host.viewport->setGizmoRot();
-    } else if (mode == "scale") {
-        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "scaleGizmo");
-        else host.viewport->setGizmoScale();
-    } else {
+    // ONE ROUTE FOR EVERY SURFACE (viewport/gizmomode.h): through MainWindow's
+    // slot when the shell exists, so the toolbar's checked state follows
+    // exactly as it does for the W/E/R keys, and straight to the viewport
+    // otherwise. The wearer's `menu` press takes the same call.
+    if (!gizmomode::apply(host.mainWindow, host.viewport, mode))
         return fail(QStringLiteral("editor.setGizmoMode: unknown mode '%1' (translate|rotate|scale)").arg(mode));
-    }
     return true;
 }
 

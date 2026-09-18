@@ -872,20 +872,23 @@ int main(int argc, char **argv)
         node->setLocalPos(iris::Vec3(0, 0, 0));
         node->update(0.0f);
 
-        // THE TWO NUMBERS, AS ARITHMETIC. 7 px of a 1080-tall frame at the
-        // nominal 90-degree eye = 7/1080 * 2 * tan(45 deg) = 0.012963 rad =
-        // 0.7427 degrees; the 2 px tie band = 0.2122 degrees. The size rule at
-        // the same eye is 4.33 * distance (kGizmoScreenFraction * tan(45 deg)).
-        const float tolRad = gizmoray::toleranceRadians(kRingPickTolerancePx);
-        std::printf("   tolerance: %.4f px of a %.0f-px frame at %.0f deg = %.6f rad = %.4f deg\n",
-                    kRingPickTolerancePx, gizmoray::kNominalFrameHeightPx,
-                    double(kVrNominalEyeFovDegrees), double(tolRad), double(gizmoray::degreesOf(tolRad)));
-        CHECK(std::fabs(gizmoray::degreesOf(tolRad) - 0.7427f) < 0.001f,
-              "the VR ring tolerance is the desktop's 7 px of a 1080-tall frame, as an angle at "
-              "the nominal 90-degree eye: 0.7427 degrees");
-        CHECK(std::fabs(gizmoray::degreesOf(gizmoray::toleranceRadians(kRingPickTiePx)) - 0.2122f)
-                  < 0.001f,
-              "...and the 2 px tie band converts by the same expression: 0.2122 degrees");
+        // THE TWO NUMBERS, AND THEY ARE VR'S OWN (gizmoray.h's note): the
+        // tolerance is the POINTER's precision — 0.6 degrees, about 6 mm at
+        // arm's length — and not a pixel constant converted through some eye's
+        // field of view, which is what the first draft of this lane did and
+        // what made the gizmo three times too big. The tie band is the desk's
+        // own proportion of its tolerance (2 px of 7), because ranking two
+        // handles under one pointer is a different question from reach.
+        const float tolRad = gizmoray::toleranceRadians();
+        std::printf("   tolerance %.4f deg (%.6f rad), tie band %.4f deg; the gizmo's half-extent "
+                    "is %.1f deg, so the target is %.1f %% of it\n",
+                    double(gizmoray::degreesOf(tolRad)), double(tolRad),
+                    double(gizmoray::kVrPickTieDeg), double(gizmoray::kVrGizmoHalfAngleDeg),
+                    double(100.0f * gizmoray::kVrPickToleranceDeg / gizmoray::kVrGizmoHalfAngleDeg));
+        CHECK(std::fabs(gizmoray::degreesOf(tolRad) - 0.6f) < 0.001f,
+              "the VR pick tolerance is the POINTER's own 0.6 degrees, not a pixel conversion");
+        CHECK(std::fabs(gizmoray::degreesOf(gizmoray::tieRadians()) - 0.1714f) < 0.001f,
+              "...and the tie band is the desktop's 2-of-7 proportion of it: 0.1714 degrees");
 
         // THE SIZE RULE: a CONSTANT ANGULAR size, i.e. proportional to the
         // distance from the eye. Asserted as the ratio, at two distances a
@@ -893,11 +896,13 @@ int main(int argc, char **argv)
         {
             const float s1 = gizmoray::vrGizmoScale(1.0f);
             const float s10 = gizmoray::vrGizmoScale(10.0f);
+            const float want = std::tan(float(qDegreesToRadians(gizmoray::kVrGizmoHalfAngleDeg))) /
+                               GizmoMeshes::kTranslateReach;
             std::printf("   size rule: %.4f at 1 m, %.4f at 10 m (ratio %.6f)\n",
                         double(s1), double(s10), double(s10 / s1));
-            CHECK(std::fabs(s1 - kGizmoScreenFraction) < 1e-4f,
-                  "the VR size rule is kGizmoScreenFraction * distance * tan(fov/2) = 4.33 * "
-                  "distance at the nominal 90-degree eye");
+            CHECK(std::fabs(s1 - want) < 1e-4f,
+                  "the VR size rule is tan(halfAngle) / kTranslateReach per metre — an ANGLE at "
+                  "the eye, with no field of view in it");
             CHECK(std::fabs(s10 / s1 - 10.0f) < 1e-4f,
                   "...so the gizmo subtends the SAME ANGLE at every distance (the owner's "
                   "decision 5: a fixed angular size)");
@@ -991,31 +996,56 @@ int main(int argc, char **argv)
             pick.rayDir = pick.viewDir;
             gizmo.setVrPick(pick);
             const float radius = GizmoMeshes::kRotationHandleScale * gizmo.getGizmoScale();
-            const iris::Vec3 on(radius, 0, 0);                  // 0 degrees around the Z ring
+            // A POINT AT 45 DEGREES AROUND THE Z RING, not on an axis: the
+            // three rings CROSS on the axes (the +X point of the Z ring is also
+            // on the Y ring, and a ray aimed at it from straight in front lies
+            // in the Y ring's own plane and cuts that circle), so an axis point
+            // has no "off the ring" direction at all. At 45 degrees the other
+            // two rings are ~3.9 degrees away and the only thing near the aim
+            // is the ring being measured.
+            const float k = radius * 0.70710678f;
+            const iris::Vec3 on(k, k, 0);
+            const iris::Vec3 radial = iris::Vec3(1, 1, 0).normalized();
             const iris::Vec3 aim = (on - pick.eye).normalized();
             const auto turned = [&](float radiansOff) {
-                // ACROSS the ring, not along it: the target point sits on the
-                // +X radius of the Z ring, so the miss has to move the aim in
-                // X. Rotating a direction about cross(d, x) moves it towards x
-                // — turning about the other axis would slide the ray ALONG the
-                // circle, which is no miss at all (it cost this suite one
-                // round: a 2-tolerance turn about the tangent left the ray
-                // 0.0014 rad from the ring).
-                const iris::Vec3 axis =
-                    iris::Vec3::crossProduct(aim, iris::Vec3(1, 0, 0)).normalized();
+                // MOVE THE AIM ALONG THE RING'S OWN RADIUS — outward for a
+                // positive offset, inward for a negative one. Rotating a
+                // direction about cross(d, r) carries it towards r, so this is
+                // a miss ACROSS the circle and never a slide along it (the
+                // slide cost this suite a round: a turn about the tangent left
+                // the ray 0.0014 rad from the ring and "two tolerances off"
+                // read as a hit).
+                const iris::Vec3 axis = iris::Vec3::crossProduct(aim, radial).normalized();
                 return iris::Quat::fromAxisAndAngle(axis, float(qRadiansToDegrees(radiansOff)))
                     .rotatedVector(aim)
                     .normalized();
             };
             float d0 = -1.0f, dIn = -1.0f, dOut = -1.0f;
             const bool onIt = gizmo.ringAtRay(pick.rayPos, aim, d0) != nullptr;
-            const bool inside = gizmo.ringAtRay(pick.rayPos, turned(tolRad * 0.5f), dIn) != nullptr;
-            const bool outside = gizmo.ringAtRay(pick.rayPos, turned(tolRad * 2.0f), dOut) != nullptr;
-            std::printf("   aimed at the Z ring: %.5f rad; half a tolerance off: %.5f; two "
-                        "tolerances off: %.5f\n", double(d0), double(dIn), double(dOut));
+            const bool inside = gizmo.ringAtRay(pick.rayPos, turned(-tolRad * 0.5f), dIn) != nullptr;
+            const bool outside = gizmo.ringAtRay(pick.rayPos, turned(-tolRad * 2.0f), dOut) != nullptr;
+            std::printf("   aimed at the Z ring at 45 deg: %.5f rad; half a tolerance inside: "
+                        "%.5f; two tolerances inside: %.5f\n", double(d0), double(dIn), double(dOut));
             CHECK(onIt && d0 < tolRad * 0.25f, "a ray aimed AT a ring is on it (near zero angle)");
             CHECK(inside, "half a tolerance off it still takes the ring");
             CHECK(!outside && dOut > tolRad, "two tolerances off it does not");
+
+            // ...AND THE RINGS' OWN ANGULAR SIZES, since they are what the
+            // tolerance has to live between: the three axis rings and the outer
+            // screen ring, measured from this eye.
+            {
+                const float eyeDist = pick.eye.length();
+                const float axisDeg = gizmoray::degreesOf(std::atan(radius / eyeDist));
+                const float screenDeg = gizmoray::degreesOf(
+                    std::atan(GizmoMeshes::kScreenRingRadius * radius / eyeDist));
+                std::printf("   the axis rings sit at %.2f degrees and the screen ring at %.2f "
+                            "(%.2f apart; the tolerance is %.2f)\n", double(axisDeg),
+                            double(screenDeg), double(screenDeg - axisDeg),
+                            double(gizmoray::kVrPickToleranceDeg));
+                CHECK(screenDeg - axisDeg > gizmoray::kVrPickToleranceDeg,
+                      "the outer screen ring stands more than a tolerance clear of the axis "
+                      "rings, so the two are separable by aim alone");
+            }
         }
 
         // ---- THE DRAG ANGLE, FROM A RAY ------------------------------------

@@ -33,74 +33,105 @@ For more information see the LICENSE file
 // snap) stays where it was, and only the question "is the pointer on this
 // handle" is answered twice.
 //
-// THE UNITS, ONCE. A perspective frame of vertical angle `fov` and height `h`
-// pixels subtends, at its centre, `h / (2 tan(fov/2))` pixels per radian. So a
-// tolerance of `p` pixels of that frame is
+// THE TWO NUMBERS ARE VR'S OWN, NOT THE DESK'S CONVERTED (the lead's read of
+// the first draft).
 //
-//     p / h * 2 tan(fov/2)   radians
+// That draft derived both from the desktop's pixel constants at a nominal eye
+// fov — the gizmo as the same FRACTION OF THE FRAME it fills on a monitor, the
+// tolerance as 7 px of a 1080-tall frame at that eye. Both are wrong for a
+// headset, and in the same way. A fraction of the frame is a fraction of the
+// FIELD OF VIEW, and a wearer's field of view is their whole vision: the gizmo
+// came out at ~24 degrees of half-extent (three to four times the retinal size
+// the same rule gives on a desk, where a 45-degree frustum occupies a small
+// part of what the person can see) and it GREW with the headset's fov — the
+// opposite of the fixed angular size the owner asked for (decision 5).
 //
-// — and since the gizmo's own size rule is `kGizmoScreenFraction * d *
-// tan(fov/2)` (gizmo.cpp), i.e. also proportional to `tan(fov/2)`, the RATIO of
-// the tolerance to the drawn handle is the same number on the desk and in the
-// headset. A handle that is a 4 % target of its ring on a monitor is a 4 %
-// target of the same ring at arm's length, which is the property that makes the
-// desktop's tuned constants (7 px on a ring, 4 px around a plane square) worth
-// carrying over rather than re-inventing.
+// So the VR constants stand on their own physics:
+//
+//   * THE SIZE is an ANGLE the gizmo subtends at the eye, full stop. No fov, no
+//     frame, no window, no resolution: at any distance, in any headset, the
+//     translate gizmo's arrows reach kVrGizmoHalfAngleDeg from the pivot.
+//   * THE PICK TOLERANCE is the POINTER'S OWN precision — how far a controller
+//     ray wanders while a person holds it steady — which is a property of the
+//     hand and the tracking, not of a display.
+//
+// Neither follows from the other any more, and saying so is the honest part: on
+// the desk they were ONE decision (both fractions of one frame, so a click
+// target was a fixed share of the drawn handle); here they are two measurements
+// of two different things, and the ratio between them is a consequence rather
+// than a design. At the numbers below the tolerance is 7.5 % of the gizmo's
+// half-extent, against 3.7 % on the desk — a slightly more forgiving handle,
+// which is what a hand in the air needs against a mouse on a mat.
 
 #include <cmath>
 
+// Nothing here needs the Gizmo CLASS — it is arithmetic over vectors and the
+// handle constants, which is what lets a test drive it with no gizmo at all.
 #include "irisgl/core/math/vec.h"
-#include "viewport/gizmo.h"
+#include "viewport/gizmomeshes.h"
 
 namespace gizmoray {
-
-/// THE FRAME THE DESKTOP'S PIXEL TOLERANCES WERE TUNED IN. 1080 logical pixels
-/// tall is the rig's own display (CLAUDE.md's 1920x1080 law) and the shape the
-/// pick suites measure in; it is the denominator that turns a pixel constant
-/// into a fraction of the frame, and nothing else.
-inline constexpr float kNominalFrameHeightPx = 1080.0f;
-
-/// THE EYE THE VR GIZMO IS SIZED FOR lives in gizmo.h beside the desktop's own
-/// calibration constant (`kVrNominalEyeFovDegrees`), because the two are one
-/// decision: the gizmo's size rule is the same expression on both surfaces and
-/// only the angle it is evaluated at differs.
 
 inline float radiansOf(float degrees) { return degrees * 0.01745329252f; }
 inline float degreesOf(float radians) { return radians * 57.2957795131f; }
 
-/// tan(fov/2), guarded at the ends of the range the way Gizmo::updateSize is.
-inline float halfFovTangent(float fovDegrees)
+/// THE VR GIZMO'S HALF-EXTENT, DEGREES AT THE EYE — the one number that sets
+/// how big the gizmo looks in a headset.
+///
+/// It is the angle from the pivot to the TRANSLATE gizmo's arrow tips, which is
+/// the largest thing the three gizmos draw; the rotation and scale gizmos
+/// follow from it through their own reaches (gizmomeshes.h: kRotationOuterExtent
+/// and kScaleReach are both 0.073 of the scale against the arrows' 0.095, so
+/// they come out at 6.2 degrees when the arrows are at 8).
+///
+/// WHY 8. A fist held at arm's length is about 10 degrees across and a thumb
+/// about 2, so this is a gizmo roughly the size of a held-out fist: big enough
+/// to aim a controller at against the 0.6-degree tolerance below, small enough
+/// not to swallow the object it stands on. It is ONE number and it is here for
+/// the owner's eye at the headset — nothing else has to move to change it.
+inline constexpr float kVrGizmoHalfAngleDeg = 8.0f;
+
+/// HOW FAR OFF A HANDLE THE AIM RAY MAY BE AND STILL TAKE IT, degrees.
+///
+/// THE POINTER'S OWN PRECISION, not a display's: a hand-held controller's ray
+/// wanders a few tenths of a degree while a person holds it still (tremor plus
+/// the runtime's pose noise), and a target smaller than that wander cannot be
+/// hit on purpose. 0.6 degrees is about 6 mm at arm's length and 5 cm at five
+/// metres — comfortably above the jitter and comfortably inside the 8-degree
+/// gizmo. The other number for the owner's smoke.
+inline constexpr float kVrPickToleranceDeg = 0.6f;
+
+/// TWO HANDLES UNDER ONE POINTER ARE A TIE within this many degrees, and a tie
+/// is won by the one that faces the pointer more (the pixel path's rule). This
+/// is a RANKING band and not reach, so it is carried as the desktop's own
+/// proportion of its tolerance (2 px of 7) rather than as a third measurement:
+/// 0.171 degrees.
+inline constexpr float kVrPickTieDeg = kVrPickToleranceDeg * 2.0f / 7.0f;
+
+/// THE VR SIZE RULE (VR_INPUT_SPEC §5.2, owner decision 5) — a FIXED ANGULAR
+/// SIZE, with nothing in it but the distance.
+///
+/// The gizmo's scale is a world length and every handle is built in units of
+/// it, the translate arrows reaching kTranslateReach of it (gizmomeshes.h).
+/// Asking those arrows to subtend kVrGizmoHalfAngleDeg at distance d is
+///
+///     kTranslateReach * scale = d * tan(halfAngle)
+///
+/// which is what this returns. Proportional to d is the whole point: the same
+/// apparent size standing over an object as across the room — and no fov, no
+/// resolution and no window appear, so it cannot change with the headset.
+///
+/// The desktop's rule (Gizmo::updateSize) is deliberately a different
+/// expression — a constant fraction of the FRAME — because a monitor's frame is
+/// a window on a desk and not the viewer's vision.
+inline float vrGizmoScale(float distance)
 {
-    const float f = std::fmin(std::fmax(fovDegrees, 1.0f), 179.0f);
-    return std::tan(radiansOf(f * 0.5f));
+    return distance * std::tan(radiansOf(kVrGizmoHalfAngleDeg)) / GizmoMeshes::kTranslateReach;
 }
 
-/// THE VR SIZE RULE (VR_INPUT_SPEC §5.2, owner decision 5).
-///
-/// `gizmoScale = kGizmoScreenFraction * distance * tan(fov/2)` — the desktop's
-/// own expression (gizmo.cpp's long note) with the EYE's angle in place of a
-/// document camera's and the distance measured from the wearer's head. Being
-/// proportional to the distance is the whole point: the gizmo then subtends a
-/// CONSTANT ANGLE, so it is the same apparent size whether the wearer is
-/// standing over the object or across the room, exactly as it is the same
-/// fraction of the frame at every dolly on the desk.
-///
-/// At the nominal 90-degree eye this is 4.33 * distance: a translate arrow
-/// (handleLength 1.7 * handleScale 0.05 = 0.085 of the scale) reaches 0.368 *
-/// distance, i.e. about 20 degrees of the wearer's view, which is the same
-/// fraction of the frame the desktop gizmo occupies.
-inline float vrGizmoScale(float distance, float fovDegrees = kVrNominalEyeFovDegrees)
-{
-    return kGizmoScreenFraction * distance * halfFovTangent(fovDegrees);
-}
-
-/// A PIXEL TOLERANCE OF THE NOMINAL FRAME, IN RADIANS AT THE EYE (see the unit
-/// note above). 7 px of a 1080-tall frame at a 90-degree eye = 0.01296 rad =
-/// 0.743 degrees; 4 px = 0.424 degrees; the 2 px ring tie band = 0.212 degrees.
-inline float toleranceRadians(float pixels, float fovDegrees = kVrNominalEyeFovDegrees)
-{
-    return pixels / kNominalFrameHeightPx * 2.0f * halfFovTangent(fovDegrees);
-}
+/// The pick tolerance and the tie band, as angles at the eye.
+inline float toleranceRadians() { return radiansOf(kVrPickToleranceDeg); }
+inline float tieRadians() { return radiansOf(kVrPickTieDeg); }
 
 /// The angle between two directions, radians. atan2 of the cross and the dot
 /// rather than acos of the dot: it keeps its precision at the small angles this

@@ -602,19 +602,19 @@ QString RotationGizmo::ringNameAtPixel(const QPointF& cursor, float& distancePx)
 // THE PICK IN ANGLES (stage 2). The pixel path's ranking, unchanged in every
 // detail — nearest ring wins, a tie inside the band goes to the ring that faces
 // the pointer more, the outer screen ring only wins when it is clearly nearer —
-// with the two tuned constants converted once through gizmoray::toleranceRadians
-// (7 px and 2 px of a 1080-tall frame: 0.743 and 0.212 degrees at the nominal
-// 90-degree eye). There is deliberately no separate "is it edge-on" refusal
-// here, exactly as there is none in the pixel path: an edge-on ring projects to
-// a line and is still a handle.
+// measured with the POINTER's own tolerance (gizmoray::kVrPickToleranceDeg, 0.6
+// degrees, and a tie band of 0.171) rather than with a pixel constant converted
+// through some eye's field of view. There is deliberately no separate "is it
+// edge-on" refusal here, exactly as there is none in the pixel path: an edge-on
+// ring projects to a line and is still a handle.
 RotationHandle* RotationGizmo::ringAtRay(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
                                          float& distanceRad)
 {
 	distanceRad = -1.0f;
 	if (!selectedNode) return nullptr;
 	refreshFrame();
-	const float tolerance = rayTolerance(kRingPickTolerancePx);
-	const float tie = rayTolerance(kRingPickTiePx);
+	const float tolerance = rayTolerance();
+	const float tie = rayTieTolerance();
 
 	RotationHandle* nearest = nullptr;
 	float nearestDist = -1.0f, nearestFacing = -1.0f;
