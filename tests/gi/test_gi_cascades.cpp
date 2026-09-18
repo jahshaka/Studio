@@ -228,13 +228,97 @@ int main()
     CHECK(rest1.cascadeDeferrals == rest0.cascadeDeferrals, "and queues nothing");
 
     // =====================================================================
+    // CASE 2b — A SWAYING CAMERA ON A STEP PLANE RE-VOXELISES NOTHING
+    //          (the re-centre's hysteresis band; lane V1-RIG, 2026-09-18)
+    //
+    // The scroll test is "the camera is past the plane of the step cell it was
+    // built in", and it used to have NO BAND: a camera oscillating across such a
+    // plane re-voxelised on every crossing, for ever. In a headset that is not a
+    // corner case — a wearer's head sway is centimetres and the runtime reports
+    // every millimetre of it — and it was measured: a +-0.12 m sinusoid about
+    // x = 0, which IS a step plane at every tier, cost 64 cascade rebuilds and 16
+    // whole irradiance-field re-integrations in 200 STILL frames, 32 % of frames
+    // doing 5.5-8.8 ms of GPU work each.
+    //
+    // The band is `kStepHysteresis` (0.1) of the step, applied on a lattice
+    // SHRUNK by the same fraction, so the worst distance the camera can be from
+    // the centre it was built at is unchanged at exactly one step. The two arms
+    // here are the two things that must both be true: a sway INSIDE the band
+    // costs nothing, and a walk PAST it still steps — exactly once.
+    //
+    // This case needs no runtime, no GPU timing and no headset: the subject is
+    // the scheduler's arithmetic.
+    // =====================================================================
+    std::printf("\n== case 2b: a sway on a step plane, and a walk past the band ==\n");
+    {
+        const GiStatus s0 = scene->giStatus();
+        const float stepH = s0.cascades[0].step;
+        // PARK THE CAMERA ON A STEP PLANE. The lattice the test quantises on is
+        // step*(1-0.1) metres, so x = 0 is a plane of it whatever the tier.
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
+                                                         Vec3(0.0f, 1.0f, 0.0f)));
+        render(e, 8);
+        const GiStatus a = scene->giStatus();
+        unsigned long long beforeSway = 0;
+        for (const auto &c : a.cascades) beforeSway += c.rebuilds;
+        const unsigned long long followsBeforeSway = a.ifdFollows;
+
+        // THE SWAY: 8 % of the step, which is inside the 10 % band with room to
+        // spare (0.4 m of a 5 m step) and still crosses x = 0 on every cycle —
+        // so the band is what stops it, not the amplitude. 200 frames, 12 frames
+        // a cycle.
+        const float amp = 0.08f * stepH;
+        for (int f = 0; f < 200; ++f) {
+            const float x = amp * std::sin(float(f) * 3.14159265f / 12.0f);
+            view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
+                                                             Vec3(x, 1.0f, 0.0f)));
+            render(e, 1);
+        }
+        const GiStatus b = scene->giStatus();
+        unsigned long long afterSway = 0;
+        for (const auto &c : b.cascades) afterSway += c.rebuilds;
+        std::printf("   200 frames of +-%.2f m sway about a step plane (step %.2f m, "
+                    "band %.2f m): %llu cascade rebuilds, %llu field re-placements\n",
+                    amp, stepH, 0.1f * stepH, afterSway - beforeSway,
+                    b.ifdFollows - followsBeforeSway);
+        CHECK(afterSway == beforeSway,
+              "A SWAY INSIDE THE BAND RE-VOXELISES NOTHING (it crossed the plane ~16 times)");
+        CHECK(b.ifdFollows == followsBeforeSway, "...and re-places the field not once");
+
+        // THE WALK PAST THE BAND: 1.1 steps in one move is past
+        // step*(1-h) + h*step = step, so it must trip, and having tripped the
+        // camera is inside its NEW cell's band — so exactly one step, not two.
+        unsigned long long c0Before = b.cascades[0].rebuilds;
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(1.1f * stepH, 2.0f, 6.0f),
+                                                         Vec3(1.1f * stepH, 1.0f, 0.0f)));
+        render(e, 12);
+        const GiStatus c = scene->giStatus();
+        std::printf("   a %.2f m move (1.1 steps): c0 rebuilds %llu -> %llu\n",
+                    1.1f * stepH, c0Before, c.cascades[0].rebuilds);
+        CHECK(c.cascades[0].rebuilds == c0Before + 1ull,
+              "a walk PAST the band steps cascade 0 exactly once");
+
+        // ...AND PUT THE CAMERA BACK where this case found it, so CASE 3's walk
+        // is the forward-only one it was written as (it takes its own fresh
+        // baseline below; this only keeps the walk's direction honest).
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f),
+                                                         Vec3(0.0f, 1.0f, 0.0f)));
+        render(e, 12);
+    }
+
+    // =====================================================================
     // CASE 3 — a scroll re-centres, at most one cascade per frame
     // =====================================================================
     std::printf("\n== case 3: a scroll ==\n");
-    const float step0 = rest1.cascades[0].step;
-    const Vec3 centreBefore = rest1.cascades[0].centre;
+    // A FRESH BASELINE, not `rest1`'s: case 2b walked the camera and spent a
+    // rebuild, so the at-rest snapshot no longer describes where the chain is.
+    // (Reading a stale baseline here made the first frame of the walk look like
+    // it had paid for two cascades.)
+    const GiStatus scroll0 = scene->giStatus();
+    const float step0 = scroll0.cascades[0].step;
+    const Vec3 centreBefore = scroll0.cascades[0].centre;
     unsigned long long before = 0, worstFrame = 0;
-    for (const auto &c : rest1.cascades) before += c.rebuilds;
+    for (const auto &c : scroll0.cascades) before += c.rebuilds;
     // Walk 6 of cascade 0's steps, one frame per 1/8 step, and watch the total
     // rebuild count per FRAME.
     unsigned long long prevTotal = before;

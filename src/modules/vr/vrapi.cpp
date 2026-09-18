@@ -87,6 +87,39 @@ bool poseFromMap(const QVariantMap &map, VrPose &out, QString *error)
     return true;
 }
 
+/// A PROFILE NAME OUT OF A SCRIPT'S STRING (`vr.inject`'s `profile`, stage 3).
+///
+/// A full OpenXR path is taken as written; the four SHORT NAMES a test actually
+/// types are spelled out here rather than in every script, because the thing
+/// under test is "what does the editor do with a HAND", not whether somebody
+/// can transcribe `/interaction_profiles/ext/hand_interaction_ext`.
+///
+/// An unknown name is an ERROR: a profile silently taken as "nothing bound"
+/// would make a hands test quietly assert the controller behaviour.
+bool profileFromName(const QString &raw, VrProfileName &out, QString *error)
+{
+    const QString name = raw.trimmed();
+    if (name.isEmpty()) { out.clear(); return true; }
+    if (name.startsWith(QLatin1String("/interaction_profiles/"))) {
+        out.assign(name.toUtf8().constData());
+        return true;
+    }
+    static const struct { const char *shortName, *path; } kNames[] = {
+        { "hand_interaction", "/interaction_profiles/ext/hand_interaction_ext" },
+        { "hands",            "/interaction_profiles/ext/hand_interaction_ext" },
+        { "touch",            "/interaction_profiles/oculus/touch_controller" },
+        { "simple",           "/interaction_profiles/khr/simple_controller" },
+        { "wmr",              "/interaction_profiles/microsoft/motion_controller" },
+    };
+    for (const auto &n : kNames)
+        if (name == QLatin1String(n.shortName)) { out.assign(n.path); return true; }
+    if (error)
+        *error = QStringLiteral("unknown profile '%1' — give a full "
+                                "/interaction_profiles/... path, or one of "
+                                "hand_interaction, hands, touch, simple, wmr").arg(raw);
+    return false;
+}
+
 }   // namespace
 
 VrApi::VrApi(ScriptHost &host, const ModuleHost &moduleHost)
@@ -127,7 +160,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "\"what is this runtime\" are two questions a caller asks at different times, and a "
           "tool schema reads better with both.",
           Needs::Engine },
-        { "begin", "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?, reflections?}) -> bool",
+        { "begin", "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?, reflections?, warmUp?}) -> bool",
           "THE EDITOR'S VR PREVIEW (SPECS/VR_SPEC.md §5 phase 4): starts the VR session on the "
           "editor's scene and returns true once it exists. From the next frame the render loop is "
           "PACED BY THE RUNTIME (xrWaitFrame), both eyes are drawn in one pass into a target two "
@@ -153,6 +186,15 @@ QVector<VerbInfo> VrApi::verbs() const
           "metre of room (1 = life size). `eyeWidth`/`eyeHeight` override the size each eye is "
           "RENDERED at, for measurement only; the runtime's swapchains keep the runtime's size, "
           "so the copy scales.\n\n"
+          "`warmUp` is HOW MANY STEREO WARM-UP FRAMES the session renders before its first "
+          "committed one (default 2, one forward and one back; 0 disables it). They are "
+          "rendered from the rig's origin through a wide frustum, with nothing submitted to "
+          "the runtime and nothing mirrored, and they exist because the first frame the runtime "
+          "asks a picture of used to build every shader and pipeline the two eyes need ON THE "
+          "FRAME THREAD: 1,179 ms cold and 89 ms warm on the Grand Showroom, which at 62.5 Hz "
+          "is 73 repeated headset frames. The desktop's own warm-up cannot pay it (instanced "
+          "stereo is a different shader for the same object) and neither can a warm cache at a "
+          "new eye size. `vr.state().warmUp` reports what it cost.\n\n"
           "REFLECTIONS IN THE HEADSET follow the PROJECT by default — the World panel's SSR "
           "row, the same row the desktop viewport renders with — and `reflections` (0 off, 1 "
           "half-resolution, 2 full) overrides it for a measurement. In a headset the row buys "
@@ -228,7 +270,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "has any).",
           Needs::Engine },
         { "inject",
-          "vr.inject(hand, {valid?, aim?, grip? (defaults to aim), select?, grab?, menuPressed?, stick?, "
+          "vr.inject(hand, {valid?, aim?, grip? (defaults to aim), manip?, profile?, joints?, "
+          "select?, grab?, menuPressed?, stick?, "
           "stickPressed?, focused?}) -> bool",
           "TEST-FACING: WRITES ONE HAND'S SAMPLE AS IF THE RUNTIME HAD REPORTED IT — the "
           "backbone every VR gesture test in this tree drives (SPECS/VR_INPUT_SPEC.md §2.4).\n\n"
@@ -241,7 +284,21 @@ QVector<VerbInfo> VrApi::verbs() const
           "`hands.left/right` follows, and the controller proxy is drawn where they say.\n\n"
           "`aim` and `grip` are {x, y, z, rotation:{x,y,z,w}} (Euler degrees {x,y,z} are "
           "accepted for the rotation, as everywhere else); `select` and `grab` are 0..1 and "
-          "their presses are derived at 0.5 unless given; `stick` is {x, y} in -1..1. "
+          "their presses are derived at 0.5 unless given; `stick` is {x, y} in -1..1.\n\n"
+          "BARE HANDS (stage 3): `manip` is the frame the hand HOLDS things in — the pinch "
+          "point on fingers, the grip in a fist — and defaults to `grip`; `profile` names "
+          "the interaction profile the runtime is to be pretended to have bound (a full "
+          "/interaction_profiles/... path, or one of hand_interaction, hands, touch, simple, "
+          "wmr), which is what decides the press thresholds (0.7/0.3 for a pinch against "
+          "0.5/0.4 for a trigger), the manipulation frame and which model is drawn for that "
+          "hand; `joints` is up to 26 poses in the XR_EXT_hand_tracking joint order (palm, "
+          "wrist, thumb, index, middle, ring, little), which is what the wearer's own hand "
+          "is drawn from — read back with `vr.handJoints(hand)`. A hand whose profile is a "
+          "HAND draws its skeleton and no controller; a hand re-bound mid-gesture cancels "
+          "that gesture, exactly as a lost focus does; and `menuPressed` on a hand profile is "
+          "REFUSED — `menu` is unbound there (aim_activate_ext is the pinch itself, so a bare "
+          "hand has no modifier in this build), and a sample that pressed it would be driving "
+          "a gesture no runtime can report. "
           "`focused` (true by default on every call that writes a hand) is the SESSION's "
           "input focus, not the hand's: the "
           "runtime takes focus away for the whole application — for its own dashboard, or when "
@@ -254,6 +311,11 @@ QVector<VerbInfo> VrApi::verbs() const
           "JAHSHAKA_VR_TEST_INJECT=1: a smoke in a headset can never be fooled by an injection "
           "a script left behind. The wearer's own hardware always wins.",
           Needs::Engine },
+        { "handJoints", "vr.handJoints(hand) -> {hand, tracked, count, joints:[...], drawn, bones, profile}",
+          "THE WEARER'S OWN HAND, BONE BY BONE (SPECS/VR_INPUT_SPEC.md §7, phase 4b stage 3) — what the runtime reports for that hand, and what is DRAWN for it.\n\n"
+          "`tracked`/`count`/`joints` are XR_EXT_hand_tracking's answer: up to 26 poses in world space through the rig, in the extension's own order (palm, wrist, then thumb, index, middle, ring and little from the knuckle out). 0 for a hand holding a controller and for every runtime with no hand tracking — which includes the simulated one this box gates on, so `vr.inject(hand, {joints:[...]})` is how a skeleton is driven here.\n\n"
+          "`drawn` is how many of the 24 bone segments the wearer can actually SEE (the mirror's own count) and `bones` how many exist: a hand is drawn as segments on the two helper channels — in every VR eye and in the desktop editor's picture, in no probe capture and in no user screenshot — and never beside a controller model, because the two are alternative drawings of one hand. `profile` is what the runtime bound for it.",
+          Needs::Engine },
         { "haptic", "vr.haptic(hand, amplitude?, seconds?) -> bool",
           "BUZZES ONE CONTROLLER (amplitude 0..1, default 1; seconds default 0.05, clamped to "
           "2 s) — the one output a controller has, and what a gesture uses to say \"that "
@@ -264,9 +326,10 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges, head, "
+          "frames, rendered, warmUp:{frames,ms}, ipd, mirror, worldScale, asymmetricFov, "
+          "spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
-          "bindings:{offered, accepted}, "
+          "bindings:{offered, accepted, profiles:[{profile, bindings, accepted}]}, "
           "handActions, handJoints, proxies, preview}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
@@ -287,7 +350,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "leaves nothing behind. `handActions` says the action set was attached — i.e. "
           "controllers CAN report — and `handJoints` that hand tracking supplied a pose. "
           "`preview` describes the editor's VR preview (see vr.begin).\n\n"
-          "`input.left` / `input.right` are the CONTROLS (phase 4b stage 1): {valid, aim, grip, "
+          "`input.left` / `input.right` are the CONTROLS (phase 4b stage 1; `manip`, `profile` "
+          "and `jointsTracked` are stage 3's): {valid, aim, grip, "
           "select, selectPressed, grab, grabPressed, menuPressed, stick:{x,y}, stickPressed, "
           "fromInjection}. `aim` is where the hand POINTS (the ray is -Z of its rotation) and "
           "`grip` where it IS — the runtime's two different answers, not one derived from the "
@@ -297,7 +361,13 @@ QVector<VerbInfo> VrApi::verbs() const
           "(\"/interaction_profiles/oculus/touch_controller\"), empty when it has bound none, "
           "and `bindings` counts the suggested-binding blocks offered and accepted — four are "
           "offered (simple, Touch, WMR and hand interaction) and a runtime takes the ones it "
-          "knows. `fromInjection` is true for a sample vr.inject wrote. `inputFocused` is the "
+          "knows — while `bindings.profiles` names each block with how many bindings it "
+          "carried and whether the runtime took it, because \"4 of 4\" cannot tell a block "
+          "that bound every path it meant to from one that bound half (a path spelled wrong "
+          "takes that hardware's control away silently; the bare-hand block is ten — the "
+          "grip, aim and pinch poses, select and grab, per hand, and NO menu: "
+          "aim_activate_ext is the pinch itself, so a bare hand has no modifier). "
+          "`fromInjection` is true for a sample vr.inject wrote. `inputFocused` is the "
           "SESSION's input focus — one bit, because a runtime takes focus away for the whole "
           "application and never for one hand — and a gesture in flight is cancelled on a "
           "false, never committed.",
@@ -604,7 +674,8 @@ bool VrApi::begin(const QVariantMap &options)
                                        QStringLiteral("worldScale"),
                                        QStringLiteral("eyeWidth"),
                                        QStringLiteral("eyeHeight"),
-                                       QStringLiteral("reflections") };
+                                       QStringLiteral("reflections"),
+                                       QStringLiteral("warmUp") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.begin: unknown option '%1' — known options are %2")
@@ -678,6 +749,21 @@ void VrApi::pushProxies()
     // A scene that has never worn VR pays one comparison a frame: the mirror's
     // own sync short-circuits on `active` and builds nothing.
     mirror->setVrProxies(showProxies && st.active, st);
+    // ...AND THE WEARER'S OWN HANDS, WHEN THERE ARE ANY (stage 3,
+    // VR_INPUT_SPEC §7). The joints are NOT on the status — fifty-two poses
+    // would ride every host's per-frame copy of it — so they are fetched for a
+    // hand that says it has a skeleton and pushed beside it. A hand that does
+    // not (every hand holding a controller, and every runtime without hand
+    // tracking) costs one bit's test and the mirror takes its bones down.
+    for (unsigned h = 0; h < VrHandCount; ++h) {
+        if (!e || !st.input[h].jointsTracked) {
+            mirror->setVrHandJoints(h, nullptr, 0u);
+            continue;
+        }
+        VrPose joints[kVrHandJointCount];
+        const unsigned n = e->vrHandJoints(int(h), joints, kVrHandJointCount);
+        mirror->setVrHandJoints(h, n ? joints : nullptr, n);
+    }
 }
 
 // LOCOMOTION AS A VERB — THE ONLY ONE (the CRUD of `player.vrMove`, stage 1).
@@ -763,7 +849,8 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
         return fail(QStringLiteral("vr.inject: hand must be \"left\" or \"right\" (or 0/1), "
                                    "not '%1'").arg(hand.toString()));
 
-    static const QStringList known = { "valid", "aim", "grip", "select", "selectPressed",
+    static const QStringList known = { "valid", "aim", "grip", "manip", "profile", "joints",
+                                       "select", "selectPressed",
                                        "grab", "grabPressed", "menuPressed", "stick",
                                        "stickPressed", "focused" };
     for (auto it = state.constBegin(); it != state.constEnd(); ++it)
@@ -788,8 +875,17 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
         error = QStringLiteral("vr.inject: %1: %2").arg(QLatin1String(key), error);
         return false;
     };
-    if (!readPose("aim", s.aim) || !readPose("grip", s.grip))
+    if (!readPose("aim", s.aim) || !readPose("grip", s.grip) ||
+        !readPose("manip", s.manipPose))
         return fail(error);
+    // WHICH PROFILE THE RUNTIME IS PRETENDING TO HAVE BOUND (stage 3). It is
+    // what the engine reads to decide a press threshold and a manipulation
+    // frame, and what the editor reads to cancel a gesture when a hand changes
+    // shape — so an injected hand can be a HAND, not just a controller with no
+    // name, on a box where no runtime will ever report one.
+    if (state.contains(QStringLiteral("profile")) &&
+        !profileFromName(state.value(QStringLiteral("profile")).toString(), s.profile, &error))
+        return fail(QStringLiteral("vr.inject: %1").arg(error));
     // A GRAB NEEDS A GRIP (the lead, from the Fable read at merge): the retired
     // Studio-side hook defaulted grip := aim, and a script that says only where
     // the hand POINTS still holds the thing where it points — with no grip the
@@ -807,6 +903,20 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
                         ? state.value(QStringLiteral("grabPressed")).toBool()
                         : s.grab >= 0.5f;
     s.menuPressed = state.value(QStringLiteral("menuPressed"), false).toBool();
+    // A BARE HAND HAS NO MENU BUTTON, AND AN INJECTION MAY NOT INVENT ONE
+    // (VR-HANDS-1 fix round, item 1). `menu` is unbound on the hand-interaction
+    // profile — `aim_activate_ext` IS the pinch, so binding it would make every
+    // hand select a toggle (OgreVrSession.cpp's block says why at length) — so a
+    // real hand can never report a press there, and a sample that did would be
+    // testing a gesture no runtime in this build can produce. REFUSED rather
+    // than silently dropped: a suite that thought it was driving a hand
+    // modifier should read the reason, not a green line.
+    if (s.menuPressed && vrIsHandProfile(s.profile.c_str()))
+        return fail(QStringLiteral("vr.inject: menuPressed is not a thing a bare hand can do — "
+                                   "`menu` is unbound on %1 (aim_activate_ext is the pinch "
+                                   "itself, so a hand has no modifier in this build). Inject it "
+                                   "on a controller profile, or leave it out.")
+                        .arg(QString::fromStdString(s.profile)));
     const QVariantMap stick = state.value(QStringLiteral("stick")).toMap();
     s.stickX = float(stick.value(QStringLiteral("x"), 0.0).toDouble());
     s.stickY = float(stick.value(QStringLiteral("y"), 0.0).toDouble());
@@ -833,7 +943,67 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
         return refuse(QStringLiteral("vr.inject: %1").arg(QString::fromStdString(e->lastError())));
     if (!state.isEmpty())
         e->vrInjectFocus(state.value(QStringLiteral("focused"), true).toBool());
+    // ...AND THE SKELETON, AFTER THE SAMPLE (stage 3): the joints belong to the
+    // hand the sample describes, so a refused sample never leaves a skeleton
+    // behind, and a WITHDRAWAL (an empty state) takes both away — that clearing
+    // happens below the boundary, in vrClearInjectedInput.
+    if (state.contains(QStringLiteral("joints"))) {
+        const QVariantList list = state.value(QStringLiteral("joints")).toList();
+        if (list.size() > int(kVrHandJointCount))
+            return fail(QStringLiteral("vr.inject: joints takes at most %1 poses (the "
+                                       "XR_EXT_hand_tracking joint set), not %2")
+                            .arg(kVrHandJointCount).arg(list.size()));
+        VrPose joints[kVrHandJointCount];
+        for (int j = 0; j < list.size(); ++j) {
+            if (!poseFromMap(list.at(j).toMap(), joints[j], &error))
+                return fail(QStringLiteral("vr.inject: joints[%1]: %2").arg(j).arg(error));
+        }
+        if (!e->vrInjectJoints(index, list.isEmpty() ? nullptr : joints,
+                               unsigned(list.size())))
+            return refuse(QStringLiteral("vr.inject: %1")
+                              .arg(QString::fromStdString(e->lastError())));
+    }
     return true;
+}
+
+// THE WEARER'S OWN HAND, READ BACK (stage 3, VR_INPUT_SPEC §7).
+//
+// TWO ANSWERS IN ONE MAP, and they are different questions: what the RUNTIME
+// reports (`tracked`, `joints` — the poses, in world space through the rig) and
+// what is DRAWN for it (`drawn` — how many of the twenty-four bone segments the
+// mirror is showing). A suite that asserts "the wearer can see their hand" has
+// to ask the drawer, not the tracker; the teleport arc's report is the same
+// shape for the same reason.
+QVariantMap VrApi::handJoints(const QVariant &hand)
+{
+    QVariantMap out;
+    const int index = vrnames::handFrom(hand);
+    out[QStringLiteral("hand")] =
+        index == 1 ? QStringLiteral("right") : QStringLiteral("left");
+    if (index < 0) {
+        fail(QStringLiteral("vr.handJoints: hand must be \"left\" or \"right\" (or 0/1), "
+                            "not '%1'").arg(hand.toString()));
+        return out;
+    }
+    Engine *e = engine();
+    VrPose joints[kVrHandJointCount];
+    const unsigned n = e ? e->vrHandJoints(index, joints, kVrHandJointCount) : 0u;
+    out[QStringLiteral("tracked")] = n > 0u;
+    out[QStringLiteral("count")] = n;
+    QVariantList list;
+    for (unsigned j = 0; j < n; ++j) list.append(vrnames::pose(joints[j]));
+    out[QStringLiteral("joints")] = list;
+    unsigned drawn = 0u, nodes = 0u;
+    if (SceneMirror *mirror = moduleHost.viewport ? moduleHost.viewport->sceneMirror() : nullptr) {
+        drawn = mirror->vrHandBonesShown(unsigned(index));
+        nodes = mirror->vrHandBoneNodes(unsigned(index), nullptr, 0u);
+    }
+    out[QStringLiteral("drawn")] = drawn;
+    out[QStringLiteral("bones")] = nodes;
+    out[QStringLiteral("profile")] = e ? QString::fromStdString(
+                                             e->vrStatus().input[index < 0 ? 0 : index].profile)
+                                       : QString();
+    return out;
 }
 
 bool VrApi::haptic(const QVariant &hand, double amplitude, double seconds)
@@ -883,6 +1053,12 @@ QVariantMap VrApi::state()
     out[QStringLiteral("refreshHz")] = info.refreshHz;
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(s.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(s.rendered));
+    // THE STEREO WARM-UP (lane VR-WARMUP-1): how many warm-up frames this
+    // session has rendered before its first committed one, and what they cost.
+    // A count and a measured value, like everything else here.
+    out[QStringLiteral("warmUp")] =
+        QVariantMap{ { QStringLiteral("frames"), s.warmUpFrames },
+                     { QStringLiteral("ms"), s.warmUpMs } };
     out[QStringLiteral("ipd")] = s.ipd;
     out[QStringLiteral("mirror")] = vrnames::mirror(s.mirror);
     out[QStringLiteral("worldScale")] = s.worldScale;
@@ -910,6 +1086,25 @@ QVariantMap VrApi::state()
     QVariantMap bindings;
     bindings[QStringLiteral("offered")] = s.bindingProfiles;
     bindings[QStringLiteral("accepted")] = s.bindingProfilesAccepted;
+    // ...AND BLOCK BY BLOCK (stage 3's fix round): which profile, how many
+    // bindings it carried and whether the runtime took it. The totals cannot
+    // tell a block that bound everything it meant to from one that bound half
+    // of them — a path spelled wrong, or an input a pin bump moved, takes that
+    // hardware's control away with the totals still reading 4 of 4 — so the
+    // COUNT is what a suite pins (the bare-hand block is twelve).
+    {
+        VrBindingBlock blocks[kVrBindingBlockMax];
+        const unsigned n = e ? e->vrBindingBlocks(blocks, kVrBindingBlockMax) : 0u;
+        QVariantList list;
+        for (unsigned b = 0; b < n; ++b) {
+            QVariantMap one;
+            one[QStringLiteral("profile")] = QString::fromStdString(blocks[b].profile);
+            one[QStringLiteral("bindings")] = blocks[b].bindings;
+            one[QStringLiteral("accepted")] = blocks[b].accepted;
+            list.append(one);
+        }
+        bindings[QStringLiteral("profiles")] = list;
+    }
     out[QStringLiteral("bindings")] = bindings;
     out[QStringLiteral("handActions")] = s.handActions;
     out[QStringLiteral("handJoints")] = s.handJoints;

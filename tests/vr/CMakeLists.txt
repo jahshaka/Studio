@@ -36,7 +36,14 @@ set_target_properties(test_vr_grab PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_vr_grab PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    # ...AND THE ENGINE'S PUBLIC HEADERS (stage 3): the bare-hand rules a
+    # session and a drawer BOTH apply — the profile test, the two press
+    # hysteresis bands, the bone table and a bone's transform — live in
+    # jahshaka/engine/Types.h, which is header-only maths with no Ogre, no
+    # Qt and nothing to link. Asserting them here keeps this suite what it
+    # is: the one VR test that runs on a box with no VR stack at all.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
 target_link_libraries(test_vr_grab PRIVATE IrisGL Qt6::Gui)
 add_test(NAME vr.grab_maths COMMAND ${CMAKE_BINARY_DIR}/bin/test_vr_grab
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -209,7 +216,12 @@ set_tests_properties(vr.no_picture_start PROPERTIES
     RUN_SERIAL TRUE
     SKIP_RETURN_CODE 77
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200")
+    # ...AND A BLINKING RUNTIME (JAHSHAKA_VR_TEST_BLINK_EVERY, lane V1-RIG fix
+    # round item 1): every 17th frame is answered "no picture" for as long as a
+    # session lives, which is the doff/dashboard CYCLE the other two hooks
+    # cannot make — the session's own View goes off and on again, over and over.
+    # The script's case 2b asserts the GI chain costs nothing across it.
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200;JAHSHAKA_VR_TEST_BLINK_EVERY=17")
 
 # ---------------------------------------------------------------------------
 # vr.input_session — LOCOMOTION AGAINST A REAL RUNTIME (stage 1,
@@ -243,6 +255,98 @@ set_tests_properties(vr.input_session PROPERTIES
     RUN_SERIAL TRUE
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
+
+# ---------------------------------------------------------------------------
+# vr.warmup / vr.warmup_control — THE STEREO WARM-UP (lane VR-WARMUP-1;
+# SPECS/VR_SPEC.md §6, VrConfig::warmUpFrames).
+#
+# THE RULE: no frame the runtime is SHOWN compiles a shader. Before the warm-up
+# the session's first shown frame built every permutation and pipeline the two
+# eyes needed on the frame thread — 1,179 ms cold on the Grand Showroom, 920 ms
+# on the default scene, GPU idle; at 62.5 Hz, 73 repeated headset frames.
+#
+# TWO TESTS AND TWO PROCESSES, on purpose: the warmed arm asserts ZERO compiles
+# on shown frames, and the control arm (`warmUp: 0`) asserts that the same
+# measurement DOES see compiles without it — zero is also what a broken
+# instrument reports. A second session inside ONE process finds everything
+# already built (which the warmed arm asserts at its end), so the control
+# cannot share a process with it.
+#
+# Each has its own HOME and data root like every app-spawning suite, so each
+# runs with a COLD shader cache — which is the only state in which the defect
+# is visible at its full size.
+# AND EACH RUNS ON A WIPED HOME, through the fixture pattern
+# `scripting.e2e.shadow_cache_probes` established: BOTH arms only say anything
+# on a COLD shader cache. Warm, the microcode map answers every lookup and
+# nothing is compiled anywhere — the warmed arm's "zero on shown frames" would
+# pass for the wrong reason and the control's "the shown frames compile" would
+# RED for one (measured: the second run of the control on a kept home reads
+# 8 -> 8 and fails). The fixture is what makes both reproducible.
+foreach(_arm warmup warmup_control)
+    set(_vr_warm_home "${CMAKE_CURRENT_BINARY_DIR}/vr-${_arm}-home")
+    if(_arm STREQUAL "warmup")
+        set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js")
+    else()
+        set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup_control.js")
+    endif()
+    add_test(NAME vr.${_arm}.fresh_home
+             COMMAND sh -c "rm -rf '${_vr_warm_home}' && mkdir -p '${_vr_warm_home}'")
+    set_tests_properties(vr.${_arm}.fresh_home PROPERTIES
+        FIXTURES_SETUP vr${_arm}FreshHome LABELS "scripting")
+    add_test(NAME vr.${_arm}
+             COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                     "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                     "${_vr_warm_script}"
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(vr.${_arm} PROPERTIES
+        LABELS "scripting"
+        TIMEOUT 600
+        RUN_SERIAL TRUE
+        SKIP_RETURN_CODE 77
+        FIXTURES_REQUIRED vr${_arm}FreshHome
+        ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
+endforeach()
+
+# vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
+# SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
+#
+# Split in two like perf.capture_bundle, and for the same reason: the app
+# RECORDS (vr_frame_budget.js drives a session at the Quest Pro's eye size and
+# writes two capture bundles) and a reader JUDGES what it wrote, because the
+# scripting engine has no file access. The reader prints the budget lines the
+# ledger wants and asserts only the rig-independent one — no frame over three
+# times the run's own median. Its header says why a red against 11.1 ms on an
+# Xvfb rig with free clocks would be a red about the rig.
+set(_vr_budget_home "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home")
+set(JAH_VR_BUDGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-bundles")
+set(JAH_VR_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vr_frame_budget.js.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js" @ONLY)
+
+add_executable(test_vr_frame_budget "${CMAKE_CURRENT_SOURCE_DIR}/test_vr_frame_budget.cpp")
+set_target_properties(test_vr_frame_budget PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_vr_frame_budget PRIVATE Qt6::Core)
+
+add_test(NAME vr.frame_budget
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_budget.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js"
+                 "$<TARGET_FILE:test_vr_frame_budget>" "${JAH_VR_BUDGET_DIR}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.frame_budget PROPERTIES
+    LABELS "scripting"
+    # It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and
+    # imports Showroom 2 on the way, on a rig whose present copy is 10-27 ms a
+    # frame: this is the longest VR suite there is.
+    TIMEOUT 900
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    # JAHSHAKA_PERF_ROOT is what lets the script's `out` land in the suite's own
+    # scratch: a capture's `out` is confined to the capture root, and the
+    # default root is under the user's home.
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_budget_home};JAHSHAKA_DATA_ROOT=${_vr_budget_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${JAH_VR_BUDGET_DIR}")
 
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
