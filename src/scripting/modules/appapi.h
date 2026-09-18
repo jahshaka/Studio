@@ -59,6 +59,9 @@ public:
     Q_INVOKABLE QVariantMap launchOgreSample(const QString &name,
                                              const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList apiProblems();
+    /// THE THIRD-PARTY NOTICES (NOTICES-1). `{id}` adds that component's
+    /// full licence text; with no argument it is the list.
+    Q_INVOKABLE QVariantList notices(const QVariant &which = QVariant());
     Q_INVOKABLE QVariantMap dataRoot();
     Q_INVOKABLE QVariantMap mcpLogging(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap window();

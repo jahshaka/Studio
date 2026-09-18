@@ -340,4 +340,49 @@ assert(streaming.multiLoadThreads === 0,
 assert(app.waitForTextures().waitedMs === 0,
        "app.waitForTextures() returns immediately with nothing to wait for");
 
+// ---- app.notices (NOTICES-1) ---------------------------------------------
+//
+// THE LICENCES THIS BINARY OWES, through the verb the About page shows. The
+// texts are read out of the vendored trees when the app is built
+// (cmake/Notices.cmake), so this asserts the READING worked — a manifest entry
+// whose file moved would come back here as an empty text, and a component
+// nobody declared would not come back at all (source.notices_coverage is the
+// other half: it fails on a vendored directory the manifest does not claim).
+var noticeList = app.notices();
+assert(noticeList.length >= 8,
+       "app.notices() lists the vendored components (" + noticeList.length + ")");
+var byId = {};
+noticeList.forEach(function (n) { byId[n.id] = n; });
+["ogre-next", "assimp", "bullet3", "zip", "qlementine", "qtawesome",
+ "meshoptimizer", "webxr-input-profiles"].forEach(function (id) {
+    assert(byId[id] !== undefined, "…including " + id);
+    assert(byId[id].licence.length > 0 && byId[id].role.length > 20,
+           "…with its licence name and what it does for us (" + id + ": " +
+           byId[id].licence + ")");
+    assert(byId[id].textLength > 100,
+           "…and a licence TEXT of real length read from " + byId[id].path + "/" +
+           byId[id].file + " (" + byId[id].textLength + " bytes)");
+    assert(byId[id].present === true, "…present in this build (" + id + ")");
+});
+// The list carries no texts (ten licences are ~100 KB of JSON); one id does.
+assert(noticeList[0].text === undefined,
+       "the LIST omits the texts, which are kilobytes each");
+var one = app.notices({ id: "assimp" });
+assert(one.length === 1 && one[0].text.indexOf("assimp") >= 0,
+       "app.notices({id}) answers the one component AND its text");
+assert(one[0].text.length === one[0].textLength,
+       "…and textLength is that text's own length");
+// A component declared but not in this build says so rather than vanishing.
+var absent = noticeList.filter(function (n) { return n.present === false; });
+absent.forEach(function (n) {
+    assert(n.textLength > 0,
+           n.id + " is declared but absent from this build, and says so in place of its text");
+});
+var unknownNotice = false;
+try { app.notices({ id: "not-a-component" }); } catch (e) { unknownNotice = true; }
+assert(unknownNotice, "an unknown component id is refused with the list of ids");
+var unknownNoticeKey = false;
+try { app.notices({ ids: "assimp" }); } catch (e) { unknownNoticeKey = true; }
+assert(unknownNoticeKey, "an unknown key is refused, not ignored");
+
 console.log("PASS: scripting.e2e.introspection");

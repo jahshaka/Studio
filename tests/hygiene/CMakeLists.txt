@@ -80,3 +80,16 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
     jah_no_display(source.gate_scope_rules)
 endif()
+
+# source.notices_coverage — NOTICES-1: every vendored component under
+# thirdparty/ and irisgl/thirdparty/ is claimed by app/notices.json, every
+# entry's notice file exists and reads like a licence, and no entry points at
+# text this repository wrote for the purpose. The next `git submodule add`
+# cannot ship unacknowledged: it fails here. See the script's header.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME source.notices_coverage
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/notices_coverage.py"
+                     "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.notices_coverage PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.notices_coverage)
+endif()

@@ -177,6 +177,7 @@ set(SRCS
     src/ui/controls/colorpickerwidget.cpp 
     src/ui/dialogs/preferencesdialog.cpp 
     src/ui/dialogs/aboutdialog.cpp 
+    src/ui/dialogs/noticesdialog.cpp
     src/ui/dialogs/preferences/worldsettingswidget.cpp 
     src/ui/panels/timeline/animationwidget.cpp 
     src/ui/panels/timeline/keyframewidget.cpp 
@@ -449,6 +450,7 @@ set(SRCS
     src/services/assethelper.cpp
     src/services/subscriber.cpp
     src/services/scenenodehelper.cpp
+    src/app/notices.cpp
     src/app/upgrader.cpp
     thirdparty/qtawesome/QtAwesome.cpp
     thirdparty/qtawesome/QtAwesomeAnim.cpp
@@ -476,6 +478,7 @@ set(HEADERS
     src/ui/controls/colorpickerwidget.h 
     src/ui/dialogs/preferencesdialog.h 
     src/ui/dialogs/aboutdialog.h 
+    src/ui/dialogs/noticesdialog.h
     src/ui/dialogs/preferences/worldsettingswidget.h 
     src/services/collisionhelper.h 
     src/ui/panels/timeline/animationwidget.h 
@@ -721,6 +724,7 @@ set(HEADERS
     src/ui/controls/videopreviewwidget.h
     src/ui/controls/waveformwidget.h
     src/app/breakpad.h
+    src/app/notices.h
     src/app/updatechecker.h
     src/ui/dialogs/softwareupdatedialog.h
     src/services/assethelper.h
@@ -826,12 +830,19 @@ endif()
 include(IncludeBreakpad)
 include(IncludeMaterialsModule)
 
+# THE THIRD-PARTY NOTICES (NOTICES-1): one .qrc GENERATED from
+# app/notices.json, carrying each vendored component's licence text read out of
+# its own tree — never a copy in this repository. See cmake/Notices.cmake.
+include(Notices)
+jah_generate_notices(JAH_NOTICES_QRC)
+
 set (QRCS
     ${CMAKE_SOURCE_DIR}/app/fonts.qrc
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
     ${CMAKE_SOURCE_DIR}/app/images.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
     ${CMAKE_SOURCE_DIR}/app/themes.qrc
+    ${JAH_NOTICES_QRC}
     ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc
     ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudeskills.qrc
 )

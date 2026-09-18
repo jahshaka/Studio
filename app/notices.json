@@ -1,0 +1,117 @@
+{
+  "_comment": [
+    "THE THIRD-PARTY NOTICE MANIFEST (NOTICES-1, 2026-09-18). ONE declaration per",
+    "vendored component; the LICENCE TEXT IS NEVER WRITTEN HERE — it is read out of",
+    "the vendored tree itself at build time (cmake/Notices.cmake turns each entry",
+    "into a resource, either the licence file straight or an extracted line range",
+    "from the file that carries the notice), so a licence text in the shipped binary",
+    "cannot drift from the one in the tree. `app.notices()` serves this list and the",
+    "About dialog's Third-party notices page shows it.",
+    "",
+    "EVERY ENTRY: id (stable, script-facing), name, role (what it does for us, in one",
+    "line), homepage, licence (the SPDX-ish short name, for the list column only —",
+    "the TEXT is the authority), path (the vendored directory, repo-relative), file",
+    "(the notice file inside it) or lines ([first, last] of a file that carries the",
+    "notice in a comment). `optional: true` = a component that may be absent from a",
+    "checkout (an uninitialised submodule) — the build then embeds a note saying so",
+    "instead of failing.",
+    "",
+    "COVERAGE IS A TEST, not a habit: source.notices_coverage walks thirdparty/ and",
+    "irisgl/thirdparty/ and fails on a vendored directory no entry claims."
+  ],
+  "components": [
+    {
+      "id": "ogre-next",
+      "name": "OGRE-Next",
+      "role": "The 3D engine Jahshaka renders with (Vulkan), carried as a pinned submodule plus this repository's own patch stack.",
+      "homepage": "https://github.com/OGRECave/ogre-next",
+      "licence": "MIT",
+      "path": "irisgl/thirdparty/ogre-next",
+      "file": "COPYING"
+    },
+    {
+      "id": "assimp",
+      "name": "Open Asset Import Library (assimp)",
+      "role": "Reads model files at import time (glTF, FBX, OBJ and the rest). Import-time only — nothing it produces is on the render path.",
+      "homepage": "https://github.com/assimp/assimp",
+      "licence": "BSD-3-Clause",
+      "path": "irisgl/thirdparty/assimp",
+      "file": "LICENSE"
+    },
+    {
+      "id": "bullet3",
+      "name": "Bullet Physics SDK",
+      "role": "The physics simulation behind rigid bodies, constraints and the character controller.",
+      "homepage": "https://github.com/bulletphysics/bullet3",
+      "licence": "Zlib",
+      "path": "irisgl/thirdparty/bullet3",
+      "file": "LICENSE.txt"
+    },
+    {
+      "id": "meshoptimizer",
+      "name": "meshoptimizer",
+      "role": "Builds each imported mesh's level-of-detail chain at import (simplification and vertex-cache optimisation).",
+      "homepage": "https://github.com/zeux/meshoptimizer",
+      "licence": "MIT",
+      "path": "irisgl/thirdparty/meshoptimizer",
+      "file": "LICENSE.md"
+    },
+    {
+      "id": "meshoptimizer-clusterlod",
+      "name": "meshoptimizer (cluster LOD branch)",
+      "role": "The cluster-level-of-detail work from the same project, vendored beside it for the Atom program.",
+      "homepage": "https://github.com/zeux/meshoptimizer",
+      "licence": "MIT",
+      "path": "irisgl/thirdparty/meshoptimizer-clusterlod",
+      "file": "LICENSE.md"
+    },
+    {
+      "id": "zip",
+      "name": "zip",
+      "role": "Reads and writes the .zip containers projects are exported and imported as.",
+      "homepage": "https://github.com/kuba--/zip",
+      "licence": "Unlicense",
+      "path": "irisgl/thirdparty/zip",
+      "file": "LICENSE.txt"
+    },
+    {
+      "id": "qlementine",
+      "name": "Qlementine",
+      "role": "The Qt style Jahshaka's dark theme is built on — vendored as first-class source (ours to edit) rather than a submodule.",
+      "homepage": "https://github.com/oclero/qlementine",
+      "licence": "MIT",
+      "path": "thirdparty/qlementine",
+      "file": "LICENSE"
+    },
+    {
+      "id": "qtawesome",
+      "name": "QtAwesome",
+      "role": "Draws the icon font the toolbars and panels use.",
+      "homepage": "https://github.com/gamecreature/QtAwesome",
+      "licence": "MIT",
+      "path": "thirdparty/qtawesome",
+      "lines": [1, 8],
+      "file": "QtAwesome.h"
+    },
+    {
+      "id": "breakpad",
+      "name": "Google Breakpad",
+      "role": "The crash reporter. Built only when DISABLE_BREAKPAD is off, and off in every development build.",
+      "homepage": "https://github.com/google/breakpad",
+      "licence": "BSD-3-Clause",
+      "path": "thirdparty/breakpad/breakpad",
+      "file": "LICENSE",
+      "optional": true
+    },
+    {
+      "id": "webxr-input-profiles",
+      "name": "WebXR Input Profiles assets",
+      "role": "The Meta Quest Touch Pro controller meshes drawn as the wearer's hands in VR, baked to .obj from the upstream glTF assets.",
+      "homepage": "https://github.com/immersive-web/webxr-input-profiles",
+      "licence": "MIT",
+      "path": "app/content/vr",
+      "lines": [63, 101],
+      "file": "PROVENANCE.md"
+    }
+  ]
+}

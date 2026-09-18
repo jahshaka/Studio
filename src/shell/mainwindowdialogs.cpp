@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui/dialogs/progressdialog.h"
 #include "ui/dialogs/renameprojectdialog.h"
+#include "ui/dialogs/noticesdialog.h"
 #include "ui/dialogs/screenshotwidget.h"
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "scripting/modules/assetsapi.h"
@@ -59,7 +60,11 @@ QStringList MainWindow::dialogNames() const
              QStringLiteral("sampleBrowser"), QStringLiteral("progress"),
              QStringLiteral("getName"), QStringLiteral("screenshot"),
              QStringLiteral("donate"), QStringLiteral("softwareUpdate"),
-             QStringLiteral("claudeChat"), QStringLiteral("importSettings") };
+             QStringLiteral("claudeChat"), QStringLiteral("importSettings"),
+             // THIRD-PARTY NOTICES (NOTICES-1): listed here so it is a dialog
+             // the theme walk opens twice and a script can open by name, like
+             // every other page — the About button is the human's door to it.
+             QStringLiteral("notices") };
 }
 
 QWidget *MainWindow::openDialog(const QString &name, const QVariantMap &options,
@@ -91,6 +96,8 @@ QWidget *MainWindow::openDialog(const QString &name, const QVariantMap &options,
     } else if (name == QLatin1String("sampleBrowser")) {
         dialog = pmContainer ? pmContainer->prepareSampleBrowser() : nullptr;
         owned = false;
+    } else if (name == QLatin1String("notices")) {
+        dialog = new NoticesDialog(this);
     } else if (name == QLatin1String("newProject")) {
         dialog = new NewProjectDialog;
     } else if (name == QLatin1String("renameProject")) {
