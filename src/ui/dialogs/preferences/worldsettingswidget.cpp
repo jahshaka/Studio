@@ -211,7 +211,6 @@ void WorldSettingsWidget::showFpsChanged(bool show)
     // nothing to forget. Both halves are fixed together: `show_fps` is the one
     // stored value behind the checkbox, the F3 key, the View Options row and
     // editor.setOverlays({stats}).
-    showFps = show;
     settings->setValue("show_fps", show);
     if (editorViewport) editorViewport->setShowFps(show);
 }
@@ -228,7 +227,7 @@ void WorldSettingsWidget::setShowPerspectiveLabel(bool show)
 
 void WorldSettingsWidget::enableAutoSave(bool state)
 {
-	settings->setValue("auto_save", autoSave = state);
+	settings->setValue("auto_save", state);
 }
 
 void WorldSettingsWidget::shadowMeshOptimizationChanged(bool on)
@@ -243,12 +242,17 @@ void WorldSettingsWidget::shadowMeshOptimizationChanged(bool on)
 
 void WorldSettingsWidget::enableOpenInPlayer(bool state)
 {
-	settings->setValue("open_in_player", openInPlayer = state);
+	settings->setValue("open_in_player", state);
 }
 
 void WorldSettingsWidget::enableAutoUpdate(bool state)
 {
-	settings->setValue("open_in_player", autoUpdate = state);
+	// THE AUTOMATIC-UPDATES CHECKBOX WROTE `open_in_player` (SMOKE-FIX-1's
+	// audit, a copy-paste from the row above): ticking "automatic updates"
+	// silently flipped the open-in-player preference and the update checker's
+	// own setting — `automatic_updates`, which the row READS on the way in and
+	// SoftwareUpdateDialog reads at every launch — was never written at all.
+	settings->setValue("automatic_updates", state);
 }
 
 void WorldSettingsWidget::mouseControlChanged(const QString& value)

@@ -1639,3 +1639,30 @@ set_tests_properties(scripting.e2e.atom_lods PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# THE SMOKE OF PUSH #50, AS TWO SUITES (lane SMOKE-FIX-1, 2026-09-18).
+#
+# Both scripts carry their own reasoning; in one line each:
+#   sample_open      — a sample-browser open lands in the EDITOR, through the
+#                      verb the browser's tiles call (the uninitialised
+#                      play-mode flag).
+#   player_no_editor — the Player over a process whose editor page was never
+#                      shown DRAWS, instead of enabling a View with no scene and
+#                      leaving the previous page's pixels on the screen.
+# Both are engine-up (they assert frames), so neither is --headless.
+add_script_e2e(sample_open e2e_sample_open.js)
+# 300 like the other open-and-render suites: it imports an archive and opens it.
+set_tests_properties(scripting.e2e.sample_open PROPERTIES TIMEOUT 300)
+
+configure_file(scripts/e2e_player_no_editor.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_no_editor
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.player_no_editor PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)

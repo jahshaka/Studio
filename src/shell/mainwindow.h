@@ -191,6 +191,12 @@ public:
     /// a page that works. Returns true when it bounced — callers must then stop
     /// whatever they were doing (STATS_OVERLAY_SPEC.md §6.4).
     bool bounceIfViewportIsDead();
+    /// WHY THE LAST SPACE SWITCH DID NOT HAPPEN, in the user's words — empty
+    /// unless the most recent attempt was refused (SMOKE-FIX-1). Cleared at the
+    /// start of every attempt, so it can only ever describe the last one; read
+    /// by app.space() so a verb's refusal carries the same sentence as the
+    /// toast the user saw.
+    QString lastSpaceRefusal() const { return spaceRefusal; }
     /// The ONE place the frame-stats readout is switched: F3, the View Options
     /// row, the Preferences checkbox and editor.setOverlays({stats}) all land
     /// here, and it persists `show_fps` (STATS_OVERLAY_SPEC.md §5.3).
@@ -679,6 +685,10 @@ public slots:
     /// pumping. Returns immediately; the open completes through the event loop.
     /// What a tile click uses.
     void openProjectAsync(bool playMode = false);
+    /// THE DESKTOP PAGE, for the verbs that drive what it owns — today the
+    /// sample browser's open (project.openSample). Borrowed, never null in a
+    /// windowed session, and owned by this window.
+    ProjectManager *projectPage() const { return pmContainer; }
     /// True while an asynchronous open is in flight.
     bool isOpeningProject() const;
     /// THE OPEN'S SLICE-BOUNDARY COUNTERS (lane OPEN-FRAMES-1), reported by
@@ -908,7 +918,6 @@ private:
     QPoint mousePressPos;
     QPoint mouseReleasePos;
     QPoint mousePos;
-    bool dragging;
     iris::Vec3 dragScenePos;
 
     SettingsManager* settings;
@@ -1087,6 +1096,10 @@ private:
     /// "The 3D view could not be created" — the respecced Failed state
     /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
     class Toast *viewErrorToast = nullptr;
+    /// Why the last space switch was refused (lastSpaceRefusal).
+    QString spaceRefusal;
+    /// The Player page could not start: say why and go back (SMOKE-FIX-1).
+    void bounceFromPlayer(const QString &why);
     /// THE SCENE-ERROR AREA (services/sceneissues.h): a dismissible list of the
     /// scene problems the user can fix, over the viewport beside the frame-rate
     /// readout. Built on the first issue and kept; the timer runs the scanner.
@@ -1111,8 +1124,12 @@ private:
 
 	QVector<bool> widgetStates;	// use the order in the enum
 
-    WindowSpaces previousSpace;
-    WindowSpaces currentSpace;
+    /// The space this window came FROM and the one it is on. BOTH initialised:
+    /// `previousSpace` is read by the fullscreen-exit path and was uninitialised
+    /// until the first switch wrote it (SMOKE-FIX-1's audit — the same class of
+    /// defect as the play-mode flag, two members down from it).
+    WindowSpaces previousSpace = WindowSpaces::DESKTOP;
+    WindowSpaces currentSpace = WindowSpaces::DESKTOP;
 	QPushButton *playSimBtn;
 
     QAction *actionTranslate;

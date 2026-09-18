@@ -495,8 +495,39 @@ bool MainWindow::bounceIfViewportIsDead()
     viewErrorToast->showToast(tr("3D view unavailable"),
                               tr("The 3D view could not be created: %1")
                                   .arg(sceneView->viewCreationError()));
+    const QString why = tr("the 3D view could not be created: %1").arg(sceneView->viewCreationError());
     goToDesktop();
+    // AFTER the bounce: the switch it makes clears the reason on the way in
+    // (every attempt starts with a clean slate), so recording it first would
+    // record it into the space we are leaving for.
+    spaceRefusal = why;
     return true;
+}
+
+// THE PLAYER'S HALF OF THE SAME RULE (SMOKE-FIX-1). Entering a page that cannot
+// draw is not a space switch: say why, and put the window back on the space the
+// user was looking at — never leave the Player selected over the previous
+// page's pixels.
+void MainWindow::bounceFromPlayer(const QString &why)
+{
+    qWarning("Jahshaka: the Player page refused to start - %s", qPrintable(why));
+    if (!viewErrorToast) viewErrorToast = new Toast(this);
+    viewErrorToast->setAnchor(Toast::Anchor::WindowCentre);
+    viewErrorToast->showToast(tr("Player unavailable"), why);
+    // WHERE BACK IS. With a world open that is the EDITOR, whatever page the
+    // user came from: this switch already put the app in PlayMode and hid the
+    // editor's furniture, and only switchSpace(EDITOR) undoes both (enterEditMode
+    // + SceneMode::EditMode) — landing on the desktop instead would leave an
+    // open project in play mode with nobody playing it. With no world open there
+    // is nothing to edit, so it is the desktop.
+    //
+    // Going back runs the PLAYER shutdown leg on the way, which is a no-op after
+    // a refusal because nothing started.
+    const WindowSpaces back = projectService && projectService->isSceneOpen()
+                                  ? WindowSpaces::EDITOR
+                                  : WindowSpaces::DESKTOP;
+    switchSpace(back, true);
+    spaceRefusal = why;     // after the bounce: see bounceIfViewportIsDead
 }
 
 iris::ScenePtr MainWindow::getScene()
@@ -778,8 +809,9 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     }
     switch (event->type()) {
         case QEvent::MouseButtonPress: {
-            dragging = true;
-
+            // (`dragging = true` stood here: a write-only member nothing has
+            // ever read, uninitialised until this event — deleted with the
+            // play-mode flag it sat beside, SMOKE-FIX-1.)
             if (obj == sceneContainer) {
                 QCoreApplication::sendEvent(sceneView->asWidget(), event);
             }
@@ -1391,6 +1423,9 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 {
 	if (currentSpace == space && !force)
 		return;
+	// Every attempt starts with a clean slate: whatever refused last time is
+	// not the reason this one might (SMOKE-FIX-1).
+	spaceRefusal.clear();
 	SessionMarkers::logSpaceSwitch(QString::fromLatin1(spaceName(currentSpace)),
 	                               QString::fromLatin1(spaceName(space)));
 	ListWidget::stopHighlightedNode();
@@ -1480,7 +1515,18 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
             playbackService->setSceneMode(SceneMode::PlayMode);
             playSceneBtn->hide();
             this->enterPlayMode();
-			playerView->begin();
+			// A PAGE THAT CANNOT DRAW GOES BACK (SMOKE-FIX-1) — the same
+			// contract bounceIfViewportIsDead gives the editor. The Player is a
+			// second view on the editor's engine scene; when that scene cannot
+			// be had, an enabled View with nothing bound presents NO pixels and
+			// the window keeps showing the page underneath ("it says the Player
+			// is selected but I only see the desktop"). Say why and stay where
+			// the user could see something.
+			QString playerWhy;
+			if (!playerView->begin(&playerWhy)) {
+				bounceFromPlayer(playerWhy);
+				return;
+			}
             // PLAY, not toggle (audit F4): entering the space is a statement,
             // not a button press. `app.space("player")` after `player.play()`
             // used to STOP the scene.
@@ -3625,7 +3671,10 @@ void MainWindow::setupViewPort()
 	ui->ohlayout->addWidget(buttons, 0, 2, Qt::AlignRight);
 
     connect(worlds_menu, &QPushButton::pressed, [this]() {
-		if (!currentSpace == WindowSpaces::DESKTOP) switchSpace(WindowSpaces::DESKTOP);
+		// `!currentSpace == WindowSpaces::DESKTOP` stood here and read as
+		// "(!currentSpace) == 0", which is the NEGATION of what it says and only
+		// behaved because DESKTOP is 0 (SMOKE-FIX-1's audit).
+		if (currentSpace != WindowSpaces::DESKTOP) switchSpace(WindowSpaces::DESKTOP);
 	});
     connect(player_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PLAYER); });
     connect(editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
@@ -4931,7 +4980,12 @@ void MainWindow::updateSceneSettings()
 	// the page — a verb, a fresh install's default — was invisible here.
 	if (projectService->isSceneOpen() || !!scene) outlinesettings::apply(scene.data());
 
-	actionSaveScene->setVisible(!prefsDialog->worldSettings->autoSave);
+	// THE STORED SETTING, not the Preferences page's copy of it (SMOKE-FIX-1's
+	// audit): that copy was uninitialised until the user toggled the checkbox
+	// in this session, so whether Save Scene appeared at all was undefined on
+	// every launch. `auto_save` is the one answer, and the same key the
+	// auto-save itself reads.
+	actionSaveScene->setVisible(!settings->getValue("auto_save", true).toBool());
 }
 
 void MainWindow::undo()

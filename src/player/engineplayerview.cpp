@@ -100,14 +100,38 @@ void EnginePlayerView::showEvent(QShowEvent *e)
         createView(mEngine, "player-view-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
     adoptEditorScene();
-    if (view()) mScene->attach(view());
+    // A VIEW THAT COULD NOT BE BOUND MUST NOT BE LEFT ENABLED (SMOKE-FIX-1):
+    // EngineViewWidget::showEvent has just enabled it unconditionally, and an
+    // enabled View with no Scene draws and presents NOTHING — the window then
+    // shows whatever the X server had under it, which is how a Player page over
+    // a never-shown editor came out as the Desktop page's stale pixels.
+    if (view() && !mScene->attach(view())) view()->setEnabled(false);
 }
 
-void EnginePlayerView::start()
+bool EnginePlayerView::start(QString *why)
 {
+    // ASK FIRST, MUTATE AFTER. The bind is the page's precondition: without it
+    // there is nothing to step, nothing to draw and nothing to put back on the
+    // way out, so a refusal here leaves the player exactly as it was and the
+    // shell can stay on the space the user could see (MainWindow::switchSpace).
+    adoptEditorScene();
+    if (!view()) {
+        if (why)
+            *why = viewCreationError().isEmpty()
+                       ? tr("the Player's 3D view has not been created yet")
+                       : tr("the Player's 3D view could not be created: %1").arg(viewCreationError());
+        return false;
+    }
+    if (!mScene->attach(view())) {
+        view()->setEnabled(false);
+        if (why)
+            *why = tr("the editor's 3D scene is not available yet — the Player draws the editor's "
+                      "scene, and the engine has not been able to create it");
+        return false;
+    }
+
     mActive = true;
     setFocus();
-    adoptEditorScene();
     // The editor camera may have been replaced since setScene (EditorData load).
     if (mDocument) mScene->setDocument(mDocument, editorCamera());
     mScene->begin();
@@ -115,7 +139,7 @@ void EnginePlayerView::start()
     // rule 1). AFTER begin(), which is what remembers the pose to put back on
     // the way out, and before the page's own playScene().
     mScene->spawnFrom(editorViewCamera());
-    if (view()) view()->setEnabled(true);
+    view()->setEnabled(true);
     // THE EXPOSURE HAND-OVER. Auto-exposure is per view and it ADAPTS: a view
     // that has never presented starts from the authored midpoint and walks to
     // the scene's real luminance over the next second — visibly, on the frame
@@ -134,8 +158,9 @@ void EnginePlayerView::start()
     // which is what lets them look at different parts of a world. 0 (the editor
     // never presented, no HDR, the fixed grade) leaves the descriptor's own
     // seed in place.
-    if (view() && mEditorViewport)
+    if (mEditorViewport)
         view()->seedExposureHistory(mEditorViewport->measuredExposureScale());
+    return true;
 }
 
 void EnginePlayerView::end()

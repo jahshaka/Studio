@@ -198,8 +198,6 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     );
 	project->setProjectGuid(widget->tileData.guid);
 
-	this->openInPlayMode = playMode;
-
     assetGuids.clear();
 	// The tile-open path had NO feedback at all — a multi-second silent gap
 	// between click and editor (owner, 2026-09-03). Same dialog contract as
@@ -208,7 +206,10 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	// The dialog is driven by the open runner's signals (showOpenProgress) now:
 	// the open is THREADED and sliced, so it returns before the scene is up
 	// and closing the dialog here would close it over an empty editor.
-	loadProjectAssets();
+	// THE TILE IS THE ONLY ROUTE THAT CAN MEAN "PLAY" (its Play button), and it
+	// says so here, in the call, rather than leaving it on the object for
+	// somebody else's open to read (SMOKE-FIX-1).
+	loadProjectAssets(playMode ? ProjectOpenMode::Player : ProjectOpenMode::Editor);
 }
 
 QString projectBlobGuid;
@@ -248,7 +249,13 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
         connect(archiver, &ProjectArchiver::finished, this,
                 &ProjectManager::onArchiveImportFinished);
     }
-    mImportShouldOpen = shouldOpen;
+    // AN IMPORT THAT OPENS, OPENS IN THE EDITOR. Importing an archive — the
+    // Import Scene button and every sample tile — is a request to look at the
+    // world and work on it; nothing on this road has ever meant "play it". The
+    // mode is written HERE, at every call, so the install's tail can never read
+    // a decision some other route left behind (SMOKE-FIX-1).
+    mImportOpenMode = shouldOpen ? std::optional<ProjectOpenMode>(ProjectOpenMode::Editor)
+                                 : std::nullopt;
 
     // SIGNAL-driven, pumping OFF: a pump from inside an install slice
     // re-enters the loop and can destroy the very objects the slice is using
@@ -309,7 +316,7 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
     auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(result.projectGuid);
     QDir().mkpath(pDir);
 
-    if (mImportShouldOpen) {
+    if (mImportOpenMode) {
         // The dialog stays up THROUGH the scene load (owner: it must close when
         // the scene has loaded, not before the 3-second open runs "naked").
         // Safe again because ProgressDialog::dropNativeWindow() destroys the
@@ -321,7 +328,7 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));
         // Hands over to the threaded open, which owns the dialog from here
         // and closes it when the scene is actually up.
-        loadProjectAssets();
+        loadProjectAssets(*mImportOpenMode);
         return;
     }
 
@@ -663,10 +670,75 @@ void ProjectManager::cleanupOnClose()
     AssetManager::clearAssetList();
 }
 
+// THE TWO DIRECTORIES THE SHIPPED SAMPLES LIVE IN: the Jahshaka set at the top
+// of scenes/, our ports of Ogre's demos in scenes/ogre/ (the browser's two
+// tabs). Derived rather than tabulated, so a sample added to the tree is
+// openable by name without a second list to forget.
+static QStringList sampleDirectories()
+{
+    const QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    return { dir.absolutePath(), dir.absoluteFilePath(QStringLiteral("ogre")) };
+}
+
+QStringList ProjectManager::sampleNames()
+{
+    QStringList names;
+    for (const QString &d : sampleDirectories())
+        for (const QFileInfo &fi : QDir(d).entryInfoList({ QStringLiteral("*.zip") }, QDir::Files))
+            if (!names.contains(fi.completeBaseName())) names.append(fi.completeBaseName());
+    names.sort(Qt::CaseInsensitive);
+    return names;
+}
+
+bool ProjectManager::openSampleByName(const QString &name, QString *why)
+{
+    const QString wanted = name.trimmed();
+    if (wanted.isEmpty()) {
+        if (why) *why = tr("a sample name is required");
+        return false;
+    }
+    // The Ogre tab shows a sample's TITLE, not its base name (the archive is
+    // named for the entry), so a caller may legitimately hand over either.
+    QString base = wanted;
+    for (const ogresamples::Entry &e : ogresamples::catalog())
+        if (e.title.compare(wanted, Qt::CaseInsensitive) == 0) { base = e.name; break; }
+
+    for (const QString &d : sampleDirectories()) {
+        const QString path = QDir(d).absoluteFilePath(base + QStringLiteral(".zip"));
+        if (QFileInfo::exists(path)) return openSampleArchive(path, why);
+        // Case-insensitively too: the tree's names are title-cased and a script
+        // that types "matcaps" is asking for the same file.
+        for (const QFileInfo &fi : QDir(d).entryInfoList({ QStringLiteral("*.zip") }, QDir::Files))
+            if (fi.completeBaseName().compare(base, Qt::CaseInsensitive) == 0)
+                return openSampleArchive(fi.absoluteFilePath(), why);
+    }
+    if (why)
+        *why = tr("no sample named '%1' is shipped (%2)")
+                   .arg(wanted, sampleNames().join(QStringLiteral(", ")));
+    return false;
+}
+
+bool ProjectManager::openSampleArchive(const QString &archivePath, QString *why)
+{
+    if (!QFileInfo::exists(archivePath)) {
+        if (why) *why = tr("the sample archive '%1' does not exist").arg(archivePath);
+        return false;
+    }
+    sampleDialog.close();
+    // `true` = open when the import finishes, and importProjectFromFile decides
+    // WHERE that open lands: the editor, always, for every archive (SMOKE-FIX-1
+    // — this route used to inherit the desktop tile's play-mode flag, which is
+    // why every sample opened in the Player).
+    importProjectFromFile(archivePath, true);
+    return true;
+}
+
 void ProjectManager::openSampleProject(QListWidgetItem *item)
 {
-    sampleDialog.close();
-    importProjectFromFile(item->data(Qt::UserRole).toString(), true);
+    // THE DIALOG CALLS THE VERB'S ROUTE (API-first): a tile carries the archive
+    // path it resolved at build time, so it takes the path door rather than
+    // resolving its own name back into one.
+    openSampleArchive(item->data(Qt::UserRole).toString());
 }
 
 void ProjectManager::newProject()
@@ -977,7 +1049,7 @@ QDialog *ProjectManager::prepareSampleBrowser()
     return &sampleDialog;
 }
 
-void ProjectManager::loadProjectAssets()
+void ProjectManager::loadProjectAssets(ProjectOpenMode mode)
 {
 	// The parse-everything preloader died with the ONE pipeline
 	// (ASSET_PIPELINE_SPEC Â§3.2.3): opening a project no longer runs assimp
@@ -994,7 +1066,7 @@ void ProjectManager::loadProjectAssets()
 	// that did the registrations inline and emitted `fileToOpen` — dead since
 	// the ProjectManager is only ever built by MainWindow, which sets the
 	// pointer in the next statement (CRUD).
-	mainWindow->openProjectAsync(openInPlayMode);
+	mainWindow->openProjectAsync(mode == ProjectOpenMode::Player);
 }
 
 void ProjectManager::showOpenProgress(int percent, const QString &text)

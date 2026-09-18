@@ -56,8 +56,16 @@ public:
     iris::ScenePtr getScene() override { return mScene; }
     /// The ONE engine scene and the ONE mirror (IEditorViewport's note): the
     /// Player page draws through these, as a second view.
-    jahshaka::engine::Scene *engineScene() override { return mEngineScene; }
-    SceneMirror *sceneMirror() override { return mMirror.get(); }
+    ///
+    /// CREATED ON DEMAND (SMOKE-FIX-1): the asker may be the Player page of a
+    /// session whose editor has never been shown — the desktop tile's Play
+    /// button, a `--vr` boot — and the scene is not this widget's window's to
+    /// wait for. Still null, and honestly so, before the engine has any view at
+    /// all (the pin's startup-order law; see ensureEngineScene).
+    jahshaka::engine::Scene *engineScene() override { ensureEngineScene(); return mEngineScene; }
+    /// Ensures for the same reason, and so that the two reads cannot disagree
+    /// whichever order a caller's arguments happen to be evaluated in.
+    SceneMirror *sceneMirror() override { ensureEngineScene(); return mMirror.get(); }
     float measuredExposureScale() const override {
         return view() ? view()->measuredExposureScale() : 0.0f;
     }
@@ -334,7 +342,15 @@ protected:
     void viewRecreated() override;
 
 private:
+    /// Creates the ONE engine scene if it does not exist yet (and the mirror and
+    /// gizmo overlay with it), binding this widget's View to it when there is
+    /// one. False while the engine cannot make a scene at all — before any View
+    /// exists in the process, which is the pin's own startup-order law
+    /// answering for itself (see the definition).
     bool ensureEngineScene();
+    /// Binds this widget's View to the scene, with the view-side state that
+    /// belongs to the editor's own picture (shadows, the VR helper channel).
+    void bindViewToScene();
     void setActiveGizmo(Gizmo *g);
 
     /// The ONE grid push (visibility, plane, spacing, floor offset, colours)

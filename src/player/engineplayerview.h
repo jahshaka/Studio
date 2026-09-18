@@ -28,7 +28,16 @@ public:
 
     QWidget *asWidget() { return this; }
     void setScene(iris::ScenePtr scene);
-    void start();
+    /// The page is being entered: bind this view to the EDITOR'S engine scene
+    /// (the one scene, lane PLAYER-1), remember the camera, take the editor's
+    /// viewpoint and start drawing.
+    ///
+    /// FALSE MEANS NOTHING HAPPENED (SMOKE-FIX-1): there is no view, or the
+    /// editor's scene could not be had, so the player is left exactly as it was
+    /// and `why` says which — a page that cannot draw refuses instead of
+    /// showing an enabled View with no scene, which presents nothing at all and
+    /// leaves the previous page's pixels on the screen.
+    bool start(QString *why = nullptr);
     void end();
 
     // ---- IPlayerHost (verb-coverage audit F1) ----------------------------
