@@ -14,7 +14,6 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "viewport/rotationgizmo.h"
 #include "viewport/gizmoray.h"
-#include <QApplication>
 
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/core/math/intersectionhelper.h"

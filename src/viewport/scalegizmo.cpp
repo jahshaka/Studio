@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/scalegizmo.h"
-#include <QApplication>
 
 #include "irisgl/core/math/intersectionhelper.h"
 #include "irisgl/core/math/mathhelper.h"
