@@ -94,6 +94,18 @@ assert(vr.begin({ mirror: "none", hands: true }) === true,
        "vr.begin() starts a session on the editor's scene (bare hands asked for)");
 assert(vr.state().hands.enabled === true,
        "...and the session says it was asked for them");
+// AND THE TWO REPORTS AGREE (the fix round's item 1). `vr.begin({hands:true})`
+// is a SESSION OVERRIDE like any other, so the table knows about it: the first
+// cut wrote only the session's config and `vr.locomotion()` — which resolves
+// the row through the table — still answered with the project's false while
+// `vr.state()` said true, with nothing listed as overridden.
+assert(vr.locomotion().hands === true,
+       "vr.locomotion() reports what the SESSION is running on, not the project's row");
+assert(vr.locomotion().overridden.indexOf("hands") >= 0,
+       "...and names it as this session's override: "
+       + JSON.stringify(vr.locomotion().overridden));
+assert(world.vr().hands === false,
+       "...while the PROJECT is untouched: an override writes nothing");
 
 // ---- 0a. THE BINDINGS PARSED, INCLUDING BARE HANDS ----------------------
 //
@@ -852,15 +864,33 @@ assert(vr.inject("right") === true, "the injection is withdrawn");
 // THE DECISION THIS CASE PINS (the owner, 2026-09-18, joint): bare-hand work is
 // deferred until the controllers are right on the hardware, and WHICH of the
 // two a wearer gets is the AUTHOR'S choice for their project rather than the
-// runtime's for the moment. Until VR-HANDS-1 the `ext/hand_interaction_ext`
-// block was suggested to every runtime that advertised the extension — so a
-// headset could hand a session to bare hands the instant a controller was set
-// down mid-smoke.
+// runtime's for the moment. From VR-HANDS-1 (stage 3) until this lane the
+// `ext/hand_interaction_ext` block was suggested to every runtime that
+// advertised the extension — so a headset could hand a session to bare hands
+// the instant a controller was set down mid-smoke.
 //
 // What a REAL runtime proves here, and the headless suites cannot: the block is
 // genuinely not offered (Monado is asked and answers about three profiles, not
 // four), the session reports which way it went, and the same runtime takes the
 // block the moment the project asks for it.
+// THE OVERRIDE DIED WITH THE SESSION THAT MADE IT (the fix round's item 1):
+// `release()` drops it, so what follows is the project's own answer again and
+// nothing is carried over from the session at the top of this file.
+assert(vr.locomotion().overridden.indexOf("hands") < 0,
+       "the begin override died with its session: "
+       + JSON.stringify(vr.locomotion().overridden));
+assert(vr.locomotion().hands === false, "...and the locomotion is the project's row again");
+// AND THE OPTION IS TYPE-CHECKED BY THE TABLE'S RULE (the fix round's item 2):
+// a Flag takes true or false, so the words `QVariant::toBool()` would have read
+// as YES are refused by name instead of quietly binding a wearer's hands.
+var beganWrong = false;
+try { vr.begin({ mirror: "none", hands: "no" }); beganWrong = true; } catch (e) {
+    assert(String(e).indexOf("true or false") >= 0,
+           "vr.begin({hands:'no'}) is refused by name (" + e + ")");
+}
+assert(beganWrong === false, "...and no session was begun by it");
+assert(vr.state().active === false, "...the refusal left nothing running");
+
 assert(vr.begin({ mirror: "none" }) === true,
        "a session begins on the PROJECT's own settings, with nothing overridden");
 var hOff = vr.state();

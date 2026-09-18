@@ -143,15 +143,33 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // BARE HANDS ARE THE PROJECT'S CHOICE (lane HANDS-SWITCH-1; the owner,
     // 2026-09-18, joint) — the World panel's Hands switch, `world.vr({hands})`,
     // off by default. Read from the DOCUMENT here rather than from
-    // `vrworld::resolve` because the row is latched by the session at creation
-    // and cannot be overridden while one runs (`Row::sessionFixed`), so there
-    // is no session value to fold in yet.
+    // `vrworld::resolve`, because the row is latched by the session at creation
+    // and `vr.locomotion` cannot move it (`Row::sessionFixed`).
     //
     // `vr.begin({hands:true})` overrides it for ONE session — a measurement and
-    // a suite's opt-in, like `hiddenAreaMask` above — and writes nothing.
+    // a suite's opt-in, like `hiddenAreaMask` above — and writes nothing to the
+    // project. IT IS A SESSION OVERRIDE IN THE ORDINARY SENSE and is registered
+    // as one BELOW, once the session exists (`vrworld::override`): the first cut
+    // wrote only this config, so `vr.state().hands.enabled` said true while
+    // `vr.locomotion()` — which resolves the row through the table — said false
+    // and listed nothing as overridden. One truth, through the mechanism every
+    // other row already uses, and `release()` drops it with the session.
+    //
+    // AND THE VALUE IS TYPE-CHECKED BY THE TABLE'S OWN RULE, never coerced: a
+    // Flag takes true or false, so `hands:"off"` is refused rather than read as
+    // true (which is exactly what `QVariant::toBool()` would have done).
     if (const iris::ScenePtr doc = viewport->getScene()) cfg.hands = doc->vrHands;
-    if (options.contains(QStringLiteral("hands")))
-        cfg.hands = options.value(QStringLiteral("hands")).toBool();
+    bool handsAsked = false, handsWanted = false;
+    if (options.contains(QStringLiteral("hands"))) {
+        const vrworld::Row *row = vrworld::row(QStringLiteral("hands"));
+        double value = 0.0;
+        QString why;
+        if (!row || !vrworld::validate(*row, options.value(QStringLiteral("hands")), value, why))
+            return fail(why.isEmpty() ? QStringLiteral("hands must be true or false") : why);
+        handsAsked = true;
+        handsWanted = value != 0.0;
+        cfg.hands = handsWanted;
+    }
     // THE MIRROR VIEW IS NAMED BEFORE THE SESSION EXISTS (the engine keeps the
     // wish and applies it on begin), and only when one was ASKED for: with
     // `mirror: "none"` there is nothing to paint and the editor's view is left
@@ -222,6 +240,12 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // mid-flight, and overridable for this session alone by `vr.locomotion`.
     // A project switched between sessions is read by the next one.
     vrworld::adopt(viewport->getScene());
+    // ...AND `vr.begin({hands:...})` IS ONE OF THIS SESSION'S OVERRIDES
+    // (lane HANDS-SWITCH-1's fix round). Registered AFTER the adoption and
+    // after the session really began, so a refused begin leaves nothing behind:
+    // from here `vr.locomotion()` reports what the session is actually running
+    // on, `overridden` names it, and `release()` drops it like any other.
+    if (handsAsked) vrworld::override(QStringLiteral("hands"), handsWanted ? 1.0 : 0.0);
     mFrameTimer.start();
     return true;
 }

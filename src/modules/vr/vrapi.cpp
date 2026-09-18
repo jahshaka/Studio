@@ -717,6 +717,22 @@ bool VrApi::begin(const QVariantMap &options)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.begin: unknown option '%1' — known options are %2")
                             .arg(it.key(), known.join(QStringLiteral(", "))));
+    // `hands` IS TYPE-CHECKED BY THE TABLE'S OWN RULE (lane HANDS-SWITCH-1's
+    // fix round), and by that rule alone: a Flag takes true or false and
+    // nothing else. `QVariant::toBool()` would have turned "no", "off" and 1
+    // into a wearer with bare hands bound — the very coercion `world.vr`
+    // refuses — so the one validator both verbs share is called here, before
+    // anything is begun, and a wrong type is a THROW with a line number like
+    // every other malformed call.
+    if (options.contains(QStringLiteral("hands"))) {
+        const vrworld::Row *row = vrworld::row(QStringLiteral("hands"));
+        double value = 0.0;
+        QString why;
+        if (!row || !vrworld::validate(*row, options.value(QStringLiteral("hands")), value, why))
+            return fail(QStringLiteral("vr.begin: %1")
+                            .arg(why.isEmpty() ? QStringLiteral("hands must be true or false")
+                                               : why));
+    }
     Engine *e = engine();
     if (!e) return refuse(QStringLiteral("vr.begin: no engine is running in this process"));
     if (!e->vrAvailable() && QString::fromStdString(e->vrInfo().reason).isEmpty())
