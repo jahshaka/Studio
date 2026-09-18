@@ -2223,6 +2223,15 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         // record would sit in the engine's ring until the capture stopped — and
         // a run that threw, or an app that quit, would take them with it.
         FrameMonitor::instance().noteTickEnd();
+        // AND THE RENDER LOOP IS TOLD A FRAME HAPPENED (DOUBLE-FRAME-1). The
+        // driver's Live pacing is "at most one frame per display period", and
+        // its clock used to count only its OWN ticks — so a script stepping
+        // frames got a driver frame in the gap between two verbs on top of the
+        // one it had just drawn (measured: 1.35 engine frames per scripted
+        // frame AT REST, 1.48-1.58 during a scripted drag, which is the render
+        // audit's "two frames per document edit" seen from its real cause). A
+        // no-op for every run that is not Live.
+        if (mDriver) mDriver->noteExternalFrame();
     }
     // Scripted stepping is the deterministic path: editor.frame(2) must be
     // enough to take the cover down, exactly as two driver frames would.
@@ -2853,6 +2862,9 @@ void EngineSceneViewport::presentCovered(int frames)
         ++mFrameEpoch;
         mEngine->renderOneFrame();
         devicelossend::checkAfterFrame(mEngine.get());
+        // These are frames on the display too (DOUBLE-FRAME-1): the pacing
+        // clock counts every frame, not only the driver's own.
+        if (mDriver) mDriver->noteExternalFrame();
     }
     view()->setEnabled(wasEnabled);
     // A COVERED frame IS NOT A FRAME OF THE WORLD, and presentsSinceBind means
