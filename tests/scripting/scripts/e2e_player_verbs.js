@@ -88,6 +88,73 @@ assert(shot.center.r + shot.center.g + shot.center.b > 30,
        "the player rendered actual pixels, not a black frame ("
        + shot.center.r + "," + shot.center.g + "," + shot.center.b + ")");
 
+// ---- the project's HIDE FLOOR IN PLAYER setting (PLAYER-FLOOR-1) ----------
+//
+// Owner, 2026-09-18 (VR_INPUT_SPEC §16 row 6): "hide the floor in the Player"
+// is a PROJECT SETTING. A scene that stands on its own level still wants the
+// editor's checkered default floor while it is being built — it is where the
+// grid is legible and what a dropped object lands on — and does not want it in
+// the finished thing.
+//
+// THE MEASUREMENT, not a flag read: the player's shot is probed low in the
+// frame, where the default floor is, and high, where the sky is. With the
+// setting on the low probe must CHANGE (the floor is gone from the picture) and
+// the EDITOR's own shot must not move by one byte — the setting is about the
+// Player, and the mirror that draws both views is one object.
+// y 0.35 is ON the floor in this pose and y 0.05 is sky above the horizon
+// (measured row by row: with the floor the column reads 23, 40, 41, 38, 40,
+// 40, 27, 38, 27, 26 from top to bottom; with it hidden it is a uniform 24).
+var floorProbes = [{ x: 0.5, y: 0.35 }, { x: 0.5, y: 0.05 }];
+// THE PLAYER'S OWN PICTURE for the player probes, and the PLAIN readback for
+// the editor's. Two different grades on purpose: at the plain grade the default
+// floor's linear radiance and the flat sky's sit within 2/255 of each other in
+// this scene (measured — the film curve is what separates them into 40 and 24),
+// so the plain grade cannot see the difference this case is about; while for
+// the editor's "did not move by one byte" half the plain grade is the only
+// honest instrument (the scene grade carries a measured exposure).
+function floorShot(tag) {
+    return player.screenshot("floor-" + tag + ".png",
+                             { width: 160, height: 120, probes: floorProbes,
+                               grade: "scene" });
+}
+function editorFloorShot(tag) {
+    return editor.screenshot("floor-editor-" + tag + ".png", 160, 120, floorProbes);
+}
+function probeDelta(a, b, i) {
+    return Math.max(Math.abs(a.probes[i].r - b.probes[i].r),
+                    Math.abs(a.probes[i].g - b.probes[i].g),
+                    Math.abs(a.probes[i].b - b.probes[i].b));
+}
+assert(player.stop(), "stopped for the floor case");
+var floorOffPlayer = floorShot("off");
+var floorOffEditor = editorFloorShot("off");
+var settingsOff = world.settings();
+assert(settingsOff.playerHidesFloor !== undefined,
+       "the World registry carries the playerHidesFloor row");
+assert(!settingsOff.playerHidesFloor.value,
+       "...and it is OFF by default (a new project plays on its floor)");
+assert(world.override({ id: "playerHidesFloor", value: true }) !== false,
+       "world.override turns it on");
+var onRow = world.settings().playerHidesFloor;
+assert(onRow.value === true || onRow.value === 1,
+       "...and the row reads back on (" + JSON.stringify(onRow.value) + ")");
+var floorOnPlayer = floorShot("on");
+var floorOnEditor = editorFloorShot("on");
+console.log("player floor probe: off " + JSON.stringify(floorOffPlayer.probes[0]) +
+            " -> on " + JSON.stringify(floorOnPlayer.probes[0]));
+assert(probeDelta(floorOffPlayer, floorOnPlayer, 0) > 6,
+       "the PLAYER's floor pixels change when the project hides the floor (delta " +
+       probeDelta(floorOffPlayer, floorOnPlayer, 0) + ")");
+assert(probeDelta(floorOffEditor, floorOnEditor, 0) === 0 &&
+       probeDelta(floorOffEditor, floorOnEditor, 1) === 0,
+       "...and the EDITOR's own picture does not move by one byte");
+// Back off, and the player's picture comes back exactly — a hide is not a
+// delete: the floor node, its material and its physics are untouched.
+assert(world.override({ id: "playerHidesFloor", value: false }) !== false, "and off again");
+var floorBack = floorShot("back");
+assert(probeDelta(floorOffPlayer, floorBack, 0) === 0,
+       "turning it off gives the Player its floor back, byte for byte");
+
 var badOption = false;
 try { player.screenshot("x.png", { zoom: 2 }); } catch (e) { badOption = true; }
 assert(badOption, "an unknown screenshot option is REFUSED, not ignored");

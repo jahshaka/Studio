@@ -158,6 +158,106 @@ int main(int argc, char **argv)
     CHECK(shown.meshes == before.meshes && shown.materials == before.materials,
           "C: ...and the census is exactly where it was: nothing was rebuilt");
 
+    // ---- D. THE PLAYER'S HIDE LANDS ON THE NEXT SYNC, IN A SCENE THE
+    //         VERIFIER CANNOT COVER IN ONE PASS (PLAYER-FLOOR-1's fix round,
+    //         the Fable read item 1) ---------------------------------------
+    //
+    // `SceneMirror::setHideDefaultFloor` is the Player's switch for the
+    // project's "hide the default floor" setting, and it is carried out as ONE
+    // AND TERM in the node walk's effective-visibility rule. A term is only
+    // read where a node is VISITED — and a still frame runs no walk: the mirror
+    // consumes the document's change list and rotates a 32-entry VERIFIER
+    // slice. So the flip reached the renderer only when that slice happened to
+    // contain the floor: exact in the default scene (four entries, one rotation
+    // covers everything) and a 1 − 32/N lottery in any real one — a
+    // `player.screenshot` from a stopped Player missing the hide in the Mirror
+    // Room, or the on-screen Player showing the floor for up to N/32 frames
+    // after an editor shot during play.
+    //
+    // THE FIXTURE, AND WHY IT LOOKS THE WAY IT DOES (each part measured while
+    // writing this case):
+    //
+    //   * FORTY EXTRA ENTRIES, invisible, so one verifier rotation cannot cover
+    //     the map — the scene A/B/C use is smaller than a single slice, which
+    //     is why the first guard of this lane passed on the defect.
+    //   * THE VERIFIER OFF for the flip: whether the rotation reaches the floor
+    //     is exactly the accident this case must not depend on. With it off the
+    //     only route left is the CHANGE LIST, which is the contract.
+    //   * A SECOND NODE CARRYING `defaultFloor`, and the fixture's original
+    //     floor hidden through the document first. The HORIZON follows the
+    //     first default floor in the same sync (syncGroundHorizon runs every
+    //     sync and reads the switch directly) and it is a 4 km plane 5 mm under
+    //     the floor, so there is NO pixel the floor covers and the horizon does
+    //     not: the first two cuts of this case passed on the defect because the
+    //     horizon alone had carried the whole picture (measured: zero nodes
+    //     visited on the flip sync and the picture still changed), and the draw
+    //     counter could not separate them either. The term is per node
+    //     (`MeshNode::defaultFloor`, never a name), so a second such node is
+    //     the honest way to watch the term itself with no horizon in the frame.
+    for (int i = 0; i < 40; ++i) {
+        auto prop = iris::MeshNode::create();
+        prop->setName(QStringLiteral("Prop%1").arg(i));
+        prop->setMesh(":/models/ground.obj");
+        prop->setMaterial(grey);
+        prop->setVisible(false);          // in the entry map, out of every frame
+        doc->getRootNode()->addChild(prop);
+    }
+    floorNode->setVisible(false);         // ...and with it the horizon: an empty sky
+
+    auto platform = iris::MeshNode::create();
+    platform->setName("Platform");
+    platform->setMesh(":/assets/models/cube.obj");
+    platform->setMaterial(grey);
+    platform->defaultFloor = true;        // the flag the setting is about
+    platform->setLocalPos(iris::Vec3(0.0f, 0.0f, -6.0f));
+    platform->setLocalScale(iris::Vec3(2.0f, 2.0f, 2.0f));
+    doc->getRootNode()->addChild(platform);
+    cam->setLocalPos(iris::Vec3(0.0f, 1.0f, 0.0f));
+    cam->lookAt(iris::Vec3(0.0f, 0.0f, -6.0f));
+    renderN(8);
+    mirror.applyCamera(cam, view);
+    renderN(2);
+
+    const auto centreIsSky = [&]() {
+        int sky = 0, total = 0;
+        for (unsigned y = kSize / 2 - 12; y < kSize / 2 + 12; ++y)
+            for (unsigned x = kSize / 2 - 12; x < kSize / 2 + 12; ++x) {
+                ++total;
+                if (isSky(img.at(x, y))) ++sky;
+            }
+        return total ? double(sky) / double(total) : 0.0;
+    };
+    std::printf("   D: %llu entries; the platform covers the centre (%.1f%% sky there)\n",
+                (unsigned long long)mirror.mirroredNodeCount(), 100.0 * centreIsSky());
+    CHECK(centreIsSky() < 0.05, "D: the second default-floor node is in the picture");
+
+    mirror.setVerifierBudget(0);          // see the note above
+
+    // THE FLIP, with the document UNTOUCHED, and exactly ONE sync after it.
+    mirror.setHideDefaultFloor(true);
+    mirror.sync();
+    engine->renderOneFrame();
+    view->readPixels(img);
+    const double skyAfterFlip = centreIsSky();
+    std::printf("   D: one sync after setHideDefaultFloor(true): %.1f%% sky at the centre\n",
+                100.0 * skyAfterFlip);
+    CHECK(skyAfterFlip > 0.95,
+          "D: THE PLAYER'S HIDE IS IN THE VERY NEXT FRAME — a default floor leaves the picture "
+          "on the sync after the flip, not when the verifier's 32-entry slice next reaches it");
+
+    // AND BACK, one sync again: the editor states `false` before its own sync,
+    // so the same guarantee has to hold in the other direction.
+    mirror.setHideDefaultFloor(false);
+    mirror.sync();
+    engine->renderOneFrame();
+    view->readPixels(img);
+    const double skyAfterRestore = centreIsSky();
+    std::printf("   D: one sync after setHideDefaultFloor(false): %.1f%% sky at the centre\n",
+                100.0 * skyAfterRestore);
+    CHECK(skyAfterRestore < 0.05,
+          "D: ...and the editor gets it back in ITS very next frame");
+    mirror.setVerifierBudget(32);         // as it was found
+
     std::printf("\n%s\n", failures ? "FAILURES" : "all ok");
     return failures ? 1 : 0;
 }

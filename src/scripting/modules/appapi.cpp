@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include <algorithm>
 
+#include "app/notices.h"
 #include "services/services.h"
 #include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
@@ -454,6 +455,25 @@ QVector<VerbInfo> AppApi::verbs() const
           "projects under the `default_directory` preference. READ-ONLY on purpose: a setter "
           "would have to move a live database and a live asset store while they are open.",
           Needs::Document },
+        { "notices", "app.notices({id}) -> [{id, name, role, homepage, licence, path, file, present, vendored, textLength}]",
+          "THE THIRD-PARTY NOTICES THIS BINARY OWES — every vendored component that ships inside "
+          "the executable, with what it does for Jahshaka and the LICENCE TEXT read out of its own "
+          "vendored tree at build time (app/notices.json is the manifest; nothing is retyped into "
+          "this repository, so a licence in the binary cannot drift from the one in the tree). "
+          "Called with no argument it lists them in the manifest's order without the texts, which "
+          "are kilobytes each; `{id: \"assimp\"}` answers the one component AND its full `text`. "
+          "`role` is what the component does for us in one line, `licence` its short name (the "
+          "TEXT is the authority), `path` the vendored directory it was read from and `present` "
+          "whether THIS build carries it — computed when the build was configured, from whether "
+          "the component's notice was actually there and (for the crash reporter) from "
+          "DISABLE_BREAKPAD, so a component declared but not compiled in says so instead of "
+          "disappearing. `vendored` is false for the three whose source is NOT in this tree — Qt, "
+          "which is linked dynamically, and the Vulkan loader and MoltenVK, which the macOS "
+          "bundle redistributes: their licence texts live in app/notices/ with their provenance "
+          "recorded, which is the one exception to reading a notice off the code it covers. This is the same data the "
+          "About dialog's Third-party notices page shows, and the coverage of it is a test: "
+          "source.notices_coverage fails on a vendored directory the manifest does not claim.",
+          Needs::Document },
         { "mcpLogging", "app.mcpLogging({session, source}) -> {session, source, errorLog, sessionLog, sessionId}",
           "What the MCP surface writes down about itself, and where. The ERROR log is always on "
           "and holds failures only — a tool call that came back an error, a run_script's message "
@@ -832,6 +852,56 @@ QVariantList AppApi::apiProblems()
     if (!host.registry) { fail("app.apiProblems: no script registry in this session"); return {}; }
     QVariantList out;
     for (const QString &problem : host.registry->validate()) out.append(problem);
+    return out;
+}
+
+QVariantList AppApi::notices(const QVariant &which)
+{
+    // THE MANIFEST IS THE ANSWER (app/notices.h): this verb adds no list of its
+    // own, no ordering of its own and no text of its own — it serves what the
+    // build read out of the vendored trees. `id` selects one component and is
+    // the only form that carries a `text`, because ten licences are ~100 KB of
+    // JSON and a list is a list.
+    const QVariantMap options = scriptmod::normalizeJs(which).toMap();
+    const QString id = options.value(QStringLiteral("id")).toString().trimmed();
+    if (!options.isEmpty()) {
+        static const QStringList known = { "id" };
+        for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+            if (known.contains(it.key())) continue;
+            fail(QStringLiteral("app.notices: unknown key '%1' (known: id)").arg(it.key()));
+            return QVariantList();
+        }
+    }
+    QVariantList out;
+    bool found = false;
+    for (const notices::Entry &e : notices::entries()) {
+        if (!id.isEmpty() && e.id != id) continue;
+        found = true;
+        const QString body = notices::text(e.id);
+        QVariantMap row;
+        row["id"] = e.id;
+        row["name"] = e.name;
+        row["role"] = e.role;
+        row["homepage"] = e.homepage;
+        row["licence"] = e.licence;
+        row["path"] = e.path;
+        row["file"] = e.file;
+        row["present"] = e.present;
+        // IS ITS SOURCE IN THIS TREE? False for the three components that are
+        // not vendored (Qt, the Vulkan loader, MoltenVK) and whose notices
+        // therefore live in app/notices/ with their provenance.
+        row["vendored"] = e.vendored;
+        row["textLength"] = body.size();
+        if (!id.isEmpty()) row["text"] = body;
+        out.append(row);
+    }
+    if (!id.isEmpty() && !found) {
+        QStringList ids;
+        for (const notices::Entry &e : notices::entries()) ids << e.id;
+        fail(QStringLiteral("app.notices: unknown component '%1' (%2)")
+                 .arg(id, ids.join(QStringLiteral(", "))));
+        return QVariantList();
+    }
     return out;
 }
 

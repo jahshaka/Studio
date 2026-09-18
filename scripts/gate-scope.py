@@ -134,6 +134,12 @@ AREA_RULES = [
     (r"^(scenes/|app/content/|app/samples/)", ["samples", "reopen", "assets"], ["project"]),
     (r"^app/", ["ui", "theme", "app"], []),
     (r"^(CMakeLists\.txt|cmake/|tests/CMakeLists\.txt)", ["*merge-tier"], []),
+    # THE TOOL'S OWN GUARD (source.gate_scope_rules): scripts/gate-scope.* is the
+    # one path under scripts/ that a suite reads, so an edit to it selects the
+    # hygiene rows (seven display-free shell/python lints, well under a second
+    # together). Without this line an edit to the scoping tool selected NOTHING
+    # and its own guard never ran — the rule class GATE-SCOPE-2 audited.
+    (r"^scripts/gate-scope", ["hygiene"], []),
     (r"^scripts/", [], []),
 ]
 
@@ -174,9 +180,45 @@ def touched_paths(rng):
     return sorted(set(out))
 
 
+def resolve_build(arg):
+    """WHERE THE BUILD DIR IS, and the trap this function exists to close.
+
+    `ctest --show-only=json-v1` in a directory that is NOT a configured build
+    dir prints an EMPTY inventory and exits 0 (measured: the Studio repo root
+    does exactly this). Every suite name a rule produces is then filtered out
+    by `add()` — it only keeps names the inventory knows — so the selection came
+    out empty and the tool said "NOTHING to gate ... docs/scripts/data" and
+    exited 0. A SILENT EMPTY GATE, with the rationale lines above it listing
+    sixteen test dirs it had just decided to skip (ledger §620 item 5, found by
+    SQUARE-1 the hard way: `gate-scope.py <range> --build . --run` run from
+    INSIDE the build dir, where `--build .` was resolved against the repo root).
+
+    Two halves, and both are needed. This one makes `--build .` from inside the
+    build dir MEAN the build dir: the argument is tried against the CWD first
+    and then against the repo root (the documented form, `--build build-linux`
+    from the tree top), and the first candidate that actually carries a
+    CTestTestfile.cmake wins. `load_inventory` below is the other half: a build
+    dir that registers no suite is now an error instead of an empty answer.
+    """
+    cands = [arg] if os.path.isabs(arg) else [os.path.abspath(arg), os.path.join(ROOT, arg)]
+    for c in cands:
+        if os.path.isfile(os.path.join(c, "CTestTestfile.cmake")): return c
+    return cands[-1]          # nothing configured: keep the documented resolution for the error
+
+
 def load_inventory(build):
     raw = sh(f"ctest --show-only=json-v1", cwd=build)
     j = json.loads(raw)
+    if not j.get("tests"):
+        # See resolve_build: an unconfigured directory answers with an empty
+        # inventory and a zero exit status, and an empty inventory selects
+        # nothing however many rules fired.
+        sys.stderr.write(
+            f"gate-scope: {build} registers no ctest suite — that is not a configured build "
+            f"dir.\n            Point --build at one (an absolute path, a path relative to "
+            f"the repo root, or\n            '.' from inside the build dir itself). Refusing "
+            f"to scope against an empty inventory.\n")
+        sys.exit(2)
     bt = j["backtraceGraph"]; files = bt["files"]; nodes = bt["nodes"]
     inv = {}
     for t in j["tests"]:
@@ -308,7 +350,7 @@ def main():
     a = ap.parse_args()
     if a.record_times:
         record_times(a.record_times); return
-    build = a.build if os.path.isabs(a.build) else os.path.join(ROOT, a.build)
+    build = resolve_build(a.build)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
     paths = a.files if a.files else touched_paths(a.range)
@@ -431,6 +473,21 @@ def main():
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
     if nightly: print(f"\n(nightly-tier suites left out: {sorted(nightly)})")
     if not names:
+        # THE ONLY HONEST EMPTY SELECTION is a change that moved no code: docs,
+        # a spec, a data file, a scratch script. A change that DID move code
+        # cannot select nothing, because ALWAYS_ON_CODE adds the smoke pair to
+        # every code path — so an empty selection there is a defect in this
+        # tool (or an inventory that does not know the suites the rules name),
+        # and it exits non-zero rather than reading as a green gate. That is
+        # the second half of the trap resolve_build documents: the first half
+        # made `--build .` work, this one makes a wrong answer loud.
+        if code_moved:
+            sys.stderr.write(
+                "gate-scope: a code path selected NO suite — the rules fired (see the rationale "
+                "above) but\n            named nothing this build dir registers. That is a rule "
+                "or inventory defect, not\n            an empty change; refusing to report a "
+                "green empty gate.\n")
+            sys.exit(3)
         print("\nSCOPED tier: NOTHING to gate — every touched path is docs/scripts/data with no owning suite "
               "(a code path always adds app.startup_quiet + api.contract)")
         return

@@ -39,6 +39,30 @@ shipped archives written before those keys existed.
 Every exception is listed below WITH ITS REASON. An exception is a default that
 belongs to something other than a document field: a mathematical identity, a
 retired key read on its way to the bin, a node TYPE, or a sentinel.
+
+THE NO-ARGUMENT FORM (READER-DEFAULTS-2, the Fable read of READER-DEFAULTS-1,
+finding 4). `.toDouble()` with no argument IS a literal — an implicit 0, false
+or 0.0 that the LITERAL regex above cannot see, and the hazard is worse than the
+explicit form because nothing about the line looks like a decision:
+
+    scene->skyType = iris::SkyType(sceneObj.value("skyType").toInt());   # 0
+    animation->setLength(animObj["length"].toDouble());                  # 0.0
+
+Both of those were live when this half was written. The skyType one AGREED with
+the constructor by the order of an enum (SingleColor happens to be 0) and the
+animation pair did NOT: a clip whose file carries no `length` read ZERO against
+the constructor's one second, and one with no `loop` read false against the
+constructor's true.
+
+`.toString()` IS DELIBERATELY NOT COVERED, and that is a class decision rather
+than an omission: an absent string key answers the EMPTY STRING, which is what
+"absent" means for every string this reader handles (guids, asset paths, node
+and material names, an enum's spelling on its way through a `...FromName`
+parser that reports whether it understood). There is no string field in the
+document whose constructor value is a non-empty string, so the implicit "" is
+the honest reading and demanding `.toString(node->field)` everywhere would add
+noise without closing a hazard. The moment such a field exists, this paragraph
+is what has to change.
 """
 
 import re
@@ -51,6 +75,10 @@ READER = os.path.join("src", "io", "scenereader.cpp")
 LITERAL = re.compile(
     r'\.to(?:Double|Int|Bool|String|Float)\(\s*'
     r'((?:[-+]?[0-9][0-9.]*f?)|true|false|"[^"]*")\s*\)')
+
+# The NO-ARGUMENT form: an implicit 0 / false / 0.0 (READER-DEFAULTS-2). toString()
+# is not here on purpose — see the module docstring.
+NOARG = re.compile(r'\.to(?:Double|Int|Bool|Float)\(\s*\)')
 
 # The allowed literal fallbacks: a UNIQUE substring of the line, and why the
 # literal is not a document default. Anything not on this list fails.
@@ -109,6 +137,42 @@ ALLOWED = [
      'reports on'),
 ]
 
+# The allowed NO-ARGUMENT fallbacks, same shape and same rule: a unique substring
+# of the line, and why the implicit 0/false is not a second definition of a
+# document default.
+ALLOWED_NOARG = [
+    ('casc.isBool()                      ? (casc.toBool() ? 1 : 0)',
+     "the giCascades key's four historical spellings (absent / null / bool / int) "
+     "— this arm asks the JSON value what KIND it is and converts it; the "
+     "unresolved case is the -1 sentinel two lines down"),
+
+    ('scene->giCascadeSet.append(iris::Vec3(float(row.at(0).toDouble())',
+     'ARRAY DATA, not a field: a cascade row is three numbers read out of the '
+     'file, and a row with fewer than three is skipped by the guard above. '
+     'There is no "constructor value" for the second element of a row'),
+    ('float(row.at(1).toDouble())', 'the same cascade row'),
+    ('float(row.at(2).toDouble())', 'the same cascade row'),
+
+    ('mobility = nodeObj["static"].toBool() ? iris::Mobility::Static',
+     'a RETIRED key read on its way to the bin, inside its own contains() '
+     'guard: `static: true` from before Mobility existed means Static and '
+     'anything else means Movable. Never written again'),
+
+    ('auto time = keyObj["time"].toDouble();',
+     "a KEYFRAME KEY's own data. The key does not exist until addKey(val, time) "
+     "makes it from these two numbers, so there is no object to read a default "
+     "off — a key written with no time sits at 0, which is the file's statement "
+     "and not a default"),
+    ('auto val = keyObj["value"].toDouble();', "the same key's value"),
+
+    ('mat->setValue(prop->name, static_cast<float>(val.toDouble()));',
+     'a MATERIAL PROPERTY VALUE, inside `if (!values.contains(prop->name)) '
+     'continue;` — the key is present by construction and the material already '
+     'holds its own default in that Property object'),
+    ('mat->setValue(prop->name, val.toInt());', 'the same guarded material value'),
+    ('mat->setValue(prop->name, val.toBool());', 'the same guarded material value'),
+]
+
 
 def main(root):
     path = os.path.join(root, READER)
@@ -119,6 +183,7 @@ def main(root):
         lines = f.read().split("\n")
 
     used = set()
+    used_noarg = set()
     bad = []
     for number, line in enumerate(lines, 1):
         for match in LITERAL.finditer(line):
@@ -131,6 +196,17 @@ def main(root):
                 bad.append((number, match.group(1), line.strip()))
             else:
                 used.add(hit)
+        # ...and the same rule for the implicit literal (READER-DEFAULTS-2).
+        for match in NOARG.finditer(line):
+            hit = None
+            for index, (needle, _why) in enumerate(ALLOWED_NOARG):
+                if needle in line:
+                    hit = index
+                    break
+            if hit is None:
+                bad.append((number, match.group(0) + " (an implicit 0/false)", line.strip()))
+            else:
+                used_noarg.add(hit)
 
     for number, literal, text in bad:
         print("  FAIL %s:%d — a LITERAL fallback (%s):" % (READER, number, literal))
@@ -141,6 +217,7 @@ def main(root):
               "tests/document/reader_defaults.py WITH THE REASON.")
 
     stale = [ALLOWED[i][0] for i in range(len(ALLOWED)) if i not in used]
+    stale += [ALLOWED_NOARG[i][0] for i in range(len(ALLOWED_NOARG)) if i not in used_noarg]
     for needle in stale:
         print("  FAIL an ALLOWED exception no longer matches anything: %r" % needle)
         print("       The line was changed or deleted — remove the exception "
@@ -151,8 +228,9 @@ def main(root):
               "%d stale exception(s))" % (len(bad), len(stale)))
         return 1
 
-    print("  ok: every stated fallback in %s is an expression, not a literal "
-          "(%d documented exceptions, all live)" % (READER, len(ALLOWED)))
+    print("  ok: every stated fallback in %s is an expression, not a literal — "
+          "explicit and implicit alike (%d + %d documented exceptions, all live)"
+          % (READER, len(ALLOWED), len(ALLOWED_NOARG)))
     print("document.reader_defaults: PASSED")
     return 0
 

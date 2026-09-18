@@ -306,4 +306,95 @@ if (resizeViewportTo(1920, 1080)) {
     resizeViewportTo(1920, 1080);
 }
 
+// ---------------------------------------------------------------------------
+// 6. A CAPTURE IS EXACT — THE POLICY (SHOT-BAND-1, owner-sequenced 2026-09-18;
+//    ATOM-3's queued question, ledger §647).
+//
+// THE TWO FACTS THAT MAKE THE QUESTION. The LOD switch carries a 10 % HYSTERESIS
+// BAND (patch 0075, engine.lod_hysteresis): a level held against a small move
+// of the WATCHED view, so an object parked on a threshold does not flicker as
+// the camera breathes. A band is a MEMORY OF THE DIRECTION OF TRAVEL — inside
+// it the level drawn depends on where the value came from. And the band is
+// granted to a view a person watches over time and to no other: every capture
+// (a screenshot, a thumbnail, a probe face, a planar reflector, a VR eye
+// control) renders at band 0.
+//
+// THE POLICY, decided: CAPTURES ARE EXACT. A picture taken of a scene is the
+// picture the scene's own numbers ask for, not the picture the last few frames
+// of somebody's camera motion left behind — because a capture is a MEASUREMENT
+// (the pixel corpus, a thumbnail sweep, a probe) and a measurement that depends
+// on the history of a window is not one. The cost is stated rather than hidden:
+// a Scene-grade shot of an object parked INSIDE the band may draw a different
+// level from the viewport it was taken beside, by exactly the band's width.
+//
+// THE GUARD is the assertion the policy needs and the one thing a script can
+// see: the same parked bias approached from BELOW and from ABOVE must give the
+// same picture. It passes today (a capture has no band to remember with) and it
+// REDS the moment a capture is given one — `View::setLodHysteresisOffscreen`
+// left on, a per-view band field defaulted the wrong way, or a future "match
+// the viewport" idea.
+//
+// WHAT IT CANNOT SEE, measured and stated so nobody reads more into it (the
+// fix-round read, item 3): in a `--script` run there is NO on-screen view, so
+// there is no band ANYWHERE — every view is offscreen and the band is granted
+// only to a view a person watches over time (OgreView::chainDesc, and since
+// LOD-LATCH-1 the opt-in is the per-view `setLodHysteresisOffscreen` rather
+// than an environment variable). The two arms therefore agree in this run
+// because nothing held a level, not because a capture declined to. That is the
+// honest scope of a script-side guard: the band's EXISTENCE is
+// engine.lod_hysteresis's subject, which grants it to an offscreen view on
+// purpose to be able to measure it at all; this section pins the POLICY on the
+// door a user and a suite actually take, and its arms are the capture's own
+// frame (the counters are read after the shot, not off the viewport's last
+// frame before it — which was the first cut's mistake and would have been
+// vacuous even with a band in the run).
+console.log("---- 6. a capture is exact ----");
+{
+    // A bias inside the band around level 1's threshold: 4 % past it, which is
+    // what engine.lod_hysteresis parks at for the same reason (the band is
+    // 10 %, so 4 % is inside it from either side).
+    var vp6 = editor.viewportState();
+    var proj6 = 1.0 / Math.tan(0.5 * editor.camera().fov * Math.PI / 180.0);
+    var valueAtBiasOne6 = (EYE - 1.0) * 2.0 / (proj6 * vp6.height);
+    var threshold = levels[1].error / valueAtBiasOne6;
+    var park = threshold * 1.04;
+    editor.setCamera({ position: { x: 0, y: 0, z: EYE }, lookAt: { x: 0, y: 0, z: 0 } });
+
+    // ONE ARM, AND WHAT IT READS. `measure` above takes its renderStats from
+    // the VIEWPORT's last frame, before the shot — which is the wrong picture
+    // for this section and, in a --script run, a picture with no band in it at
+    // all. So the arms here read the counters AFTER the capture, where they
+    // describe the capture's own frame, and the shot's probes are the primary
+    // observable either way.
+    function bandArm(tag, approachBias) {
+        world.setLodBias(approachBias);
+        editor.frame(4);
+        world.setLodBias(park);
+        editor.frame(4);
+        var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
+        var rs = app.renderStats();          // AFTER the shot: the CAPTURE's frame
+        var probes = [];
+        for (var p = 0; p < shot.probes.length; ++p)
+            probes.push(shot.probes[p].r + "," + shot.probes[p].g + "," + shot.probes[p].b);
+        console.log("   " + tag + " (parked at " + park.toFixed(4) + " from " +
+                    approachBias.toFixed(4) + "): capture triangles " + rs.triangles +
+                    ", limb [" + probes.join(" | ") + "]");
+        return { triangles: rs.triangles, limb: probes.join("|") };
+    }
+    // FROM BELOW: pin the finest level, then step up into the band.
+    var fromBelow = bandArm("band-from-below", 0);
+    // FROM ABOVE: well past the band, then step back down into it.
+    var fromAbove = bandArm("band-from-above", threshold * 1.5);
+
+    assert(fromBelow.limb === fromAbove.limb,
+           "A CAPTURE IS EXACT: at a bias 4 % inside the switch band, a shot " +
+           "approached from below and one approached from above are the SAME " +
+           "picture — a capture has no memory of the direction of travel");
+    assert(fromBelow.triangles === fromAbove.triangles,
+           "...and the CAPTURE's own frame drew the same level both ways (" +
+           fromBelow.triangles + " triangles)");
+    world.setLodBias(0);
+    editor.frame(4);
+}
+
 console.log("ALL ATOM LOD CHECKS PASSED");

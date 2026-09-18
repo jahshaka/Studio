@@ -40,6 +40,21 @@ boxes could end up with different engine installs from the same commit.
 `qt6-websockets-dev` is its CMake-level dependency (Qt6HttpServerConfig requires
 Qt6WebSockets even though Jahshaka never opens a WebSocket).
 
+**`python3` IS REQUIRED AT CONFIGURE TIME, and a missing one FAILS the configure with a
+named error** (NOTICES-1, 2026-09-18). `cmake/Notices.cmake` builds the About dialog's
+third-party notice resources out of the vendored trees, and two of the sixteen components
+keep their notice inside a source comment rather than in a licence file of their own
+(QtAwesome's header, the WebXR controller assets' provenance document) — those ranges are
+extracted by `cmake/extract_notice.py`, because CMake's own `file(STRINGS)` mangles exactly
+the text a licence is made of (it splits on semicolons and drops non-ASCII). The error names
+the component and the alternative, so it cannot be mistaken for something else.
+
+Debian and Ubuntu carry `python3` in the base system, so this is only ever a fresh-container
+problem (`apt-get install -y python3`). Python is ALSO what four source gates are written in
+— `document.reader_defaults`, `theme.no_raw_sheets`, `source.gate_scope_rules` and
+`source.notices_coverage` — and without it those four are not registered at all; the
+configure says so with a warning that names them.
+
 ## 2. Clone
 
 ```bash

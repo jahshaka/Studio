@@ -267,7 +267,13 @@ QJsonArray McpTools::listTools() const
                                      "in every one of the three views — the whole chain at the "
                                      "exposure the on-screen view has converged on — and false "
                                      "is their \"plain\" grade, the exact ungraded readback the "
-                                     "pixel suites assert." } } } } } } } });
+                                     "pixel suites assert. THE TWO ANSWERS ARE IN DIFFERENT "
+                                     "COLOUR SPACES, measured (PLAIN-GRADE-1): true gives the "
+                                     "window's own bytes, false gives LINEAR RADIANCE — a "
+                                     "surface at radiance 0.216 reads 55/255 there and 50/255 "
+                                     "on screen — so a plain shot is not a dark picture of the "
+                                     "scene, it is a measurement. The answer's `encoding` says "
+                                     "which one you got." } } } } } } } });
 
     tools.append(QJsonObject{
         { "name", "browse_assets" },
@@ -872,6 +878,16 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
     echo["view"] = QStringLiteral("editor");
     echo["width"] = img.width();
     echo["height"] = img.height();
+    // WHICH PICTURE, IN WHICH COLOUR SPACE (PLAIN-GRADE-1): with postFx on
+    // these are the window's own bytes; with it off they are LINEAR radiance,
+    // which looks (and measures) darker than the editor for a reason that is
+    // the grade and not the scene. Said here because the reader of this tool's
+    // answer is usually a model, and "too dark" was the conclusion it drew.
+    echo["grade"] = IEditorViewport::gradeName(postFx ? IEditorViewport::ScreenshotGrade::Scene
+                                                      : IEditorViewport::ScreenshotGrade::Plain);
+    echo["encoding"] = IEditorViewport::gradeEncoding(
+        postFx ? IEditorViewport::ScreenshotGrade::Scene
+               : IEditorViewport::ScreenshotGrade::Plain);
     const QJsonObject poseItem{
         { "type", "text" },
         { "text", QStringLiteral("camera pose for this shot: %1")

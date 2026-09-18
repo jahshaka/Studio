@@ -458,7 +458,7 @@ QVector<VerbInfo> CameraApi::verbs() const
           "or below the camera points it straight up or down with its current heading kept at "
           "the top (looking down) or bottom (looking up) of the frame. Undoable.",
           Needs::Document },
-        { "screenshot", "camera.screenshot(id, path, {width?, height?, probes?, grade?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
+        { "screenshot", "camera.screenshot(id, path, {width?, height?, probes?, grade?, postFx?}) -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[...]}",
           "Renders what THIS SCENE CAMERA sees to a PNG — the AI hook of CAMERAS_SPEC \u00a75. It "
           "goes through the same throwaway OFFSCREEN view editor.screenshot uses, so the user's "
           "viewport does not move and is not disturbed: an agent can look through an avatar's "
@@ -476,7 +476,7 @@ QVector<VerbInfo> CameraApi::verbs() const
           "world's value, which is the only grade that reads a PIPPED camera's own exposure "
           "(there is no on-screen view measuring that camera, so an offscreen view a couple of "
           "frames long grades at the seed). `postFx` is the older boolean spelling and still "
-          "works: false is \"plain\", true is \"viewport\". A camera riding a SOCKET is resolved "
+          "works: false is \"plain\", true is \"viewport\". THE TWO COLOUR SPACES (PLAIN-GRADE-1, measured): the graded answers are the WINDOW'S OWN BYTES and \"plain\" is LINEAR RADIANCE, so a plain shot reads darker than the screen because it is a measurement rather than a picture; the answer's `encoding` says which of the two it is. A camera riding a SOCKET is resolved "
           "on the next synced frame, so a script that moves the rig should step editor.frame(1) "
           "before shooting.",
           Needs::Engine },
@@ -1168,6 +1168,11 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
     }
 
     const QColor center = img.pixelColor(img.width() / 2, img.height() / 2);
+    // The grade and its COLOUR SPACE, as editor.screenshot reports them
+    // (PLAIN-GRADE-1): plain is linear radiance, the graded answers are the
+    // window's own bytes.
+    out["grade"] = IEditorViewport::gradeName(grade);
+    out["encoding"] = IEditorViewport::gradeEncoding(grade);
     out["path"] = info.absoluteFilePath();
     out["width"] = img.width();
     out["height"] = img.height();

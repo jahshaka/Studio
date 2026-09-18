@@ -487,4 +487,71 @@ var refused = false;
 try { camShot({ grade: "gorgeous" }); } catch (e) { refused = true; }
 assert(refused, "an unknown grade is refused, catchably, rather than guessed at");
 
+// ---------------------------------------------------------------------------
+// PHASE H — THE COLOUR SPACE OF EACH GRADE, AND THE ARITHMETIC THAT SAYS WHICH
+// (PLAIN-GRADE-1, 2026-09-18).
+//
+// The render audit asked whether an offscreen readback is gamma-encoded like
+// the window (ON-20) and left it open; every offscreen diagnosis in this tree
+// meanwhile read "too dark" and blamed the renderer. MEASURED, twice: the plain
+// grade's bytes are LINEAR RADIANCE, the three graded answers are the WINDOW'S
+// OWN BYTES (an xwd grab of the live window at a flat #8000C0 sky read
+// (50, 0, 114) against the scene grade's (50, 0, 114)), and this engine's
+// window swapchain is not sRGB at all — the tonemapper's output IS the display
+// code. Encoding the plain readback would therefore have made it disagree with
+// the window AND with every engine-side offscreen suite.
+//
+// So the fact worth pinning is the ARITHMETIC, and a flat sky is the one
+// surface whose radiance a test knows exactly: the document decodes a picked
+// colour sRGB->linear, so #808080 is radiance 0.2159 and nothing in the scene
+// adds to a sky pixel.
+//
+//   plain  = round(255 x 0.2159) = 55        (the decode, un-encoded)
+//   scene  = the film curve of that radiance at the scene's exposure
+//
+// FAILS BEFORE: on a build whose plain readback were display-encoded, the first
+// assertion reads 124 instead of 55.
+console.log("---- phase H: the two colour spaces ----");
+world.sky("color", { color: "#808080" });
+editor.setCamera({ position: { x: 0, y: 2, z: 6 }, lookAt: { x: 0, y: 40, z: -10 } });
+settleGi("phase H");
+
+// The sky fills the frame at this pose, so the CENTRE pixel is a sky pixel.
+var skyPlain = editor.screenshot("shot-h-plain.png", W, H, [], "plain");
+var skyScene = editor.screenshot("shot-h-scene.png", W, H, [], "scene");
+assert(skyPlain.encoding === "linear" && skyPlain.grade === "plain",
+       "the plain grade reports itself as linear (" + J(skyPlain.encoding) + ")");
+assert(skyScene.encoding === "display" && skyScene.grade === "scene",
+       "the scene grade reports itself as the display space (" + J(skyScene.encoding) + ")");
+// The sRGB decode of 0x80, in the test rather than as a remembered number.
+function srgbToLinear(c) {
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+var wanted = Math.round(255 * srgbToLinear(128 / 255));
+assert(Math.abs(skyPlain.center.r - wanted) <= 1 &&
+       Math.abs(skyPlain.center.g - wanted) <= 1 &&
+       Math.abs(skyPlain.center.b - wanted) <= 1,
+       "a #808080 sky reads " + J(skyPlain.center) + " at the plain grade — the LINEAR " +
+       "radiance " + wanted + "/255, not the " + 128 + "/255 a display-encoded readback " +
+       "would give");
+// ...and the graded picture is the film curve of that radiance: a DIFFERENT
+// number, below it here (the shipped curve pulls a mid tone down), which is the
+// whole of "a plain shot is not a dark picture of the scene".
+assert(skyScene.center.r !== skyPlain.center.r,
+       "the same sky develops to " + J(skyScene.center) + " in the editor's own picture");
+// EVERY DOOR AGREES ABOUT THE SPACE IT IS IN — the fields come from one
+// function (IEditorViewport::gradeEncoding), so this is the contract that a
+// second door cannot answer differently.
+["plain", "raw", "tonemap", "scene", "viewport"].forEach(function (word) {
+    var shot = editor.screenshot("shot-h-" + word + ".png", 64, 64, [], word);
+    var expect = (word === "plain" || word === "raw") ? "linear" : "display";
+    assert(shot.encoding === expect,
+           "editor.screenshot(grade: \"" + word + "\") reports encoding " + expect);
+    assert(shot.grade === (word === "raw" ? "plain" : word),
+           "...and names its grade canonically (" + shot.grade + ")");
+});
+var camSpace = camShot({ grade: "tonemap" });
+assert(camSpace.encoding === "display" && camSpace.grade === "tonemap",
+       "camera.screenshot reports the same pair through its own door");
+
 console.log("PASS: every screenshot grade is a picture of what it says it is");

@@ -5476,6 +5476,21 @@ bool MainWindow::isPanelOpen(const QString &name) const
     return dock && !dock->isHidden();
 }
 
+bool MainWindow::raisePanel(const QString &name)
+{
+    QDockWidget *dock = panelDock(name);
+    if (!dock || dock->isHidden()) return false;   // a closed panel has no front
+    // The console's tab is bookkept by setConsoleTabVisible (it remembers the
+    // tab it interrupted), so raising it goes through that one opener for the
+    // same reason opening it does — otherwise the tab it interrupted is lost
+    // and closing the console returns to the wrong one.
+    if (dock == scriptConsoleDock) { setConsoleTabVisible(true, false); return true; }
+    dock->raise();
+    for (const auto &tab : bottomAreaTabs())
+        if (tab.second == dock) bottomFrontTab = tab.first;
+    return true;
+}
+
 void MainWindow::raiseBottomFrontTab()
 {
     for (const auto &tab : bottomAreaTabs())
