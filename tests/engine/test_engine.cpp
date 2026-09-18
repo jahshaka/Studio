@@ -3658,6 +3658,115 @@ void fog_atmosphere_colour_follows_the_sky() {
               authored.r, authored.g, authored.b);
 }
 
+
+// THE SKY'S AMBIENT IS READ BACK WITHOUT WAITING FOR THE GPU — THROUGH A DRAG
+// (render audit 2026-09-17, OGRE_NEXT.md ON-14; lane ENGINE-SMALL-A).
+//
+// THE HAZARD. `integrateSkyShFromCube` called `flushCommands()` and then mapped
+// an AsyncTextureTicket: a GPU->CPU WAIT on the UI thread, which submits
+// everything the frame had recorded so far and blocks until the copy of the sky
+// capture has executed. It ran on every sky CHANGE — so on every frame of a sun
+// drag. Measured on this box: 0.94 ms of wait plus 0.47 ms of integral per
+// change, 1.41 ms total, and the wait's share is unbounded in principle because
+// it waits for whatever else the frame had already recorded.
+//
+// THE RULE, and this case is its shape:
+//   * A LONE sky change stays SYNCHRONOUS. One wait is not the hazard, and
+//     every host, thumbnail, preview and pixel suite sees the ambient exactly
+//     when it always has — one frame after the sky.
+//   * A DRAG defers. From the second consecutive capture on, the download is
+//     issued without a flush and read at the top of the next frame, where the
+//     copy has had a whole frame of GPU time and the map returns what is
+//     already there. The ambient trails the sky by one more frame for as long
+//     as the gesture lasts, and never flickers: the previous coefficients stay
+//     valid until the new ones land.
+void sky_ambient_read_is_deferred_through_a_drag() {
+    Fixture fx;
+    View *v = fx.view("skysh-view", 64, 64, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("skysh-scene");             REQUIRE(s);
+    v->setScene(s);
+    aim(v);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    // A 1x1 grey equirect sky is a uniform environment, so band 0 IS its linear
+    // radiance — an oracle with no geometry in it.
+    const auto linearOf = [](int srgb8) {
+        const float c = float(srgb8) / 255.0f;
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    const auto greySky = [&](int srgb8) {
+        const unsigned char px[4] = { (unsigned char)srgb8, (unsigned char)srgb8,
+                                      (unsigned char)srgb8, 255 };
+        SkyDesc sky;
+        sky.mode = SkyMode::Equirectangular;
+        sky.equirect = s->createTexture(1, 1, px, true);
+        return sky;
+    };
+    const auto band0 = [&]() {
+        float sh[27] = { 0.0f };
+        if (!s->skyAmbientSh(sh)) return -1.0f;
+        return sh[0];
+    };
+
+    // (1) The first sky of a scene: synchronous, as it has to be — there is
+    //     nothing valid to lag behind, and a frame with no ambient at all is a
+    //     wrong picture.
+    REQUIRE(s->setSky(greySky(96)));
+    render(fx.e, 1);
+    const float first = band0();
+    std::printf("    first sky (sRGB 96, linear %.4f): band0 %.4f\n",
+                double(linearOf(96)), double(first));
+    CHECK_MSG(first > 0.0f && std::fabs(first - linearOf(96)) < 0.01f,
+              "THE FIRST capture answers in the frame it happened: band0 %.4f, the sky's own "
+              "linear radiance is %.4f", double(first), double(linearOf(96)));
+
+    // (2) A LONE change, after enough still frames that it is not a gesture:
+    //     synchronous too, so the ambient lands in the capture frame exactly as
+    //     it always did. This is the assertion that keeps every existing suite
+    //     and every host's timing intact.
+    render(fx.e, 6);
+    REQUIRE(s->setSky(greySky(200)));
+    render(fx.e, 1);
+    const float lone = band0();
+    std::printf("    a lone change (sRGB 200, linear %.4f): band0 %.4f after ONE frame\n",
+                double(linearOf(200)), double(lone));
+    CHECK_MSG(std::fabs(lone - linearOf(200)) < 0.02f,
+              "a LONE sky change is still read in its own frame (band0 %.4f, expected %.4f)",
+              double(lone), double(linearOf(200)));
+
+    // (3) THE DRAG: a new sky every frame, on a RISING ramp so "behind" is a
+    //     number and not an impression. From the second capture on the read is
+    //     deferred, so the frame that captures step k reads step k-1's sky.
+    const int ramp[6] = { 110, 130, 150, 170, 190, 210 };
+    int lagged = 0;
+    float lastRead = lone;
+    for (int i = 0; i < 6; ++i) {
+        REQUIRE(s->setSky(greySky(ramp[i])));
+        render(fx.e, 1);
+        const float now = band0();
+        const float want = linearOf(ramp[i]);
+        std::printf("    drag step %d (sRGB %3d, linear %.4f): band0 %.4f%s\n", i, ramp[i],
+                    double(want), double(now), now < want - 0.005f ? "  <- behind" : "");
+        CHECK_MSG(now > 0.0f, "the ambient never goes invalid during a drag (step %d)", i);
+        if (i > 0 && now < want - 0.005f) ++lagged;
+        lastRead = now;
+    }
+    CHECK_MSG(lagged >= 4,
+              "a DRAG defers its readbacks: the ambient trails the sky it is capturing on "
+              "%d of the 5 steps after the first (the flush and the wait are gone)", lagged);
+
+    // ...and it CATCHES UP the moment the gesture stops: one more frame is all
+    // the deferred read needs.
+    render(fx.e, 2);
+    const float settled = band0();
+    std::printf("    after the drag: band0 %.4f, the last sky's linear radiance is %.4f "
+                "(during the drag it read %.4f)\n",
+                double(settled), double(linearOf(210)), double(lastRead));
+    CHECK_MSG(std::fabs(settled - linearOf(210)) < 0.02f,
+              "the drag's last sky lands as soon as the gesture stops (band0 %.4f, expected "
+              "%.4f)", double(settled), double(linearOf(210)));
+}
+
 // THE SUN DISC IS NOT IN THE SKY'S OWN LIGHT (owner pick 4, and the limit of
 // what `inProbes` can reach today — round-2 review item 4).
 //
@@ -5905,6 +6014,8 @@ int main(int argc, char **argv) {
         { "refraction_bends_the_background",        refraction_bends_the_background },
         { "postfx_epic_shape_with_msaa",            postfx_epic_shape_with_msaa },
         { "sky_stays_smooth_under_the_post_chain",  sky_stays_smooth_under_the_post_chain },
+        { "sky_ambient_read_is_deferred_through_a_drag",
+                                                    sky_ambient_read_is_deferred_through_a_drag },
         { "pip_is_ignored_offscreen_unless_asked",  pip_is_ignored_offscreen_unless_asked },
         { "pip_composites_a_second_camera_into_the_rect",
                                                     pip_composites_a_second_camera_into_the_rect },
