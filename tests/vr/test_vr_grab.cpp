@@ -25,6 +25,7 @@
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "modules/vr/vrgrab.h"
+#include "jahshaka/engine/Types.h"
 #include "services/vrorigin.h"
 #include "viewport/flystep.h"
 
@@ -621,6 +622,104 @@ int main()
             vrgrab::teleportedTo(rig, low, headRot, iris::Vec3(10, 0, -20));
         CHECK(near((crouched.position + (low - rig.position)).y(), 0.9f, 1e-4f),
               "...and a crouching one arrives at 0.9 m, not stood up");
+    }
+
+    // ---- 20. BARE HANDS: WHAT A PROFILE DECIDES (stage 3, §7) -----------
+    //
+    // Three pure rules live in the engine's own header (jahshaka/engine/Types.h)
+    // because BOTH sides apply them — the session when it reads a frame, the
+    // mirror when it draws a hand — and every one of them is a threshold or a
+    // sign that can otherwise only be judged wearing a headset.
+    {
+        using namespace jahshaka::engine;
+        CHECK(vrIsHandProfile("/interaction_profiles/ext/hand_interaction_ext"),
+              "the ext hand-interaction profile is a HAND");
+        CHECK(vrIsHandProfile("/interaction_profiles/microsoft/hand_interaction"),
+              "...and so is Microsoft's (if a runtime ever binds it, it is still fingers)");
+        CHECK(!vrIsHandProfile("/interaction_profiles/oculus/touch_controller"),
+              "a Touch controller is not");
+        CHECK(!vrIsHandProfile("/interaction_profiles/khr/simple_controller"),
+              "nor is the simple controller");
+        CHECK(!vrIsHandProfile(""), "and nothing bound is not a hand either");
+
+        // THE HYSTERESIS, BOTH PAIRS, AT THEIR EXACT NUMBERS. A trigger presses
+        // at 0.5 and releases at 0.4; a PINCH presses at 0.7 and releases at
+        // 0.3, because a pinch has no detent and its value wanders while two
+        // fingertips are merely close.
+        CHECK(near(kVrTriggerPressOn, 0.5f) && near(kVrTriggerPressOff, 0.4f),
+              "a trigger's thresholds are 0.5 up and 0.4 down");
+        CHECK(near(kVrPinchPressOn, 0.7f) && near(kVrPinchPressOff, 0.3f),
+              "a pinch's thresholds are 0.7 up and 0.3 down");
+        bool latch = false;
+        CHECK(!vrPressLatched(0.69f, latch, kVrPinchPressOn, kVrPinchPressOff),
+              "a pinch at 0.69 has NOT pressed");
+        latch = vrPressLatched(0.70f, latch, kVrPinchPressOn, kVrPinchPressOff);
+        CHECK(latch, "...at 0.70 it presses");
+        latch = vrPressLatched(0.31f, latch, kVrPinchPressOn, kVrPinchPressOff);
+        CHECK(latch, "...and at 0.31 it is STILL held (the band is 0.3 to 0.7, and wide "
+                     "on purpose: a hand drifts through the middle of the range)");
+        latch = vrPressLatched(0.30f, latch, kVrPinchPressOn, kVrPinchPressOff);
+        CHECK(!latch, "...at 0.30 it lets go");
+        // The same value sequence on a TRIGGER answers differently at both
+        // ends, which is the whole reason there are two pairs.
+        bool trig = false;
+        trig = vrPressLatched(0.55f, trig, kVrTriggerPressOn, kVrTriggerPressOff);
+        CHECK(trig, "a trigger at 0.55 has pressed where a pinch would not have");
+        trig = vrPressLatched(0.45f, trig, kVrTriggerPressOn, kVrTriggerPressOff);
+        CHECK(trig, "...still held at 0.45");
+        trig = vrPressLatched(0.35f, trig, kVrTriggerPressOn, kVrTriggerPressOff);
+        CHECK(!trig, "...released at 0.35, where a pinch would still be holding");
+
+        // THE BONE TABLE. Twenty-four segments over twenty-six joints: the
+        // wrist's fan to five metacarpals, the thumb's three, four each for the
+        // other four fingers. Every index must be inside the joint set, and the
+        // palm joint (0) is deliberately in no bone.
+        CHECK(kVrHandJointCount == 26u, "a tracked hand has 26 joints (the EXT joint set)");
+        CHECK(kVrHandBoneCount == 24u, "...drawn as 24 segments");
+        int touchesPalm = 0, fromWrist = 0;
+        bool inRange = true;
+        for (unsigned b = 0; b < kVrHandBoneCount; ++b) {
+            const VrHandBone &bone = kVrHandBones[b];
+            if (bone.from >= kVrHandJointCount || bone.to >= kVrHandJointCount) inRange = false;
+            if (bone.from == 0 || bone.to == 0) ++touchesPalm;
+            if (bone.from == 1) ++fromWrist;
+        }
+        CHECK(inRange, "every bone names two joints inside the set");
+        CHECK(touchesPalm == 0, "no bone hangs off the PALM joint (it is the middle of the "
+                                "hand, not the end of anything)");
+        CHECK(fromWrist == 5, "five bones fan out of the wrist — that fan IS the palm");
+
+        // A SEGMENT'S TRANSFORM: stood at `from`, its own -Z running to `to`,
+        // scaled along Z to the distance. Asserted by rotating the unit -Z
+        // vector with the answer and comparing the far end with `to`.
+        Vec3 position, scale;
+        Quat rotation;
+        const Vec3 from(1.0f, 2.0f, 3.0f), to(1.0f, 2.3f, 3.0f);   // 30 cm straight UP
+        CHECK(vrBoneTransform(from, to, position, rotation, scale), "a 30 cm bone transforms");
+        CHECK(nearVec(iris::Vec3(position.x, position.y, position.z),
+                      iris::Vec3(1.0f, 2.0f, 3.0f)),
+              "...it stands at the near joint");
+        CHECK(near(scale.z, 0.3f) && near(scale.x, 1.0f) && near(scale.y, 1.0f),
+              "...and is scaled along Z to the bone's length, 0.3 m");
+        const iris::Quat r(rotation.w, rotation.x, rotation.y, rotation.z);
+        const iris::Vec3 tip = iris::Vec3(position.x, position.y, position.z) +
+                               r.rotatedVector(iris::Vec3(0, 0, -1)) * scale.z;
+        show("the far end of the segment", tip);
+        CHECK(nearVec(tip, iris::Vec3(to.x, to.y, to.z), 1e-4f),
+              "...so its far end lands exactly on the far joint");
+        // THE ANTIPARALLEL CASE, which is where a two-vector rotation divides
+        // by zero: a bone running along +Z, i.e. exactly away from the mesh's
+        // own -Z.
+        const Vec3 back(0, 0, 0), fwd(0, 0, 0.25f);
+        CHECK(vrBoneTransform(back, fwd, position, rotation, scale),
+              "a bone pointing exactly along +Z transforms (the antiparallel case)");
+        const iris::Quat r2(rotation.w, rotation.x, rotation.y, rotation.z);
+        const iris::Vec3 tip2 = r2.rotatedVector(iris::Vec3(0, 0, -1)) * scale.z;
+        CHECK(nearVec(tip2, iris::Vec3(0, 0, 0.25f), 1e-4f),
+              "...and it still ends on the far joint");
+        // A DEGENERATE BONE IS NOT DRAWN, rather than normalised by zero.
+        CHECK(!vrBoneTransform(from, from, position, rotation, scale),
+              "two joints in the same place are no bone at all");
     }
 
     std::printf(failures ? "vr.grab_maths: FAILED (%d)\n" : "vr.grab_maths: PASS\n", failures);

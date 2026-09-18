@@ -376,6 +376,18 @@ public:
     /// the Player runs, and cancelling it every frame re-armed it every frame
     /// and meant a throw could never be taken in the Player at all.
     bool cancelEditing();
+    /// WHAT A HAND CHANGING SHAPE MID-GESTURE COSTS (stage 3): everything that
+    /// hand was in the middle of, put back, with nothing recorded — the
+    /// focus-loss rule, applied to ONE hand. A grab or a handle drag the OTHER
+    /// hand owns is untouched: the wearer still has that hand.
+    ///
+    /// It is called from `step()` when the runtime re-binds a hand — a wearer
+    /// putting their controllers down switches that hand from
+    /// `oculus/touch_controller` to `ext/hand_interaction_ext`, and the pose
+    /// the gesture is being measured from changes from a fist to a pinch point
+    /// in one frame. Following it through would drag the held object across
+    /// the room by the difference.
+    bool cancelForHand(unsigned hand);
     /// Turn the wearer about their own head. False with no session/rig.
     bool turn(float degrees);
     /// One step of stick flight. False with no session/rig, or nothing pushed.
@@ -687,6 +699,22 @@ private:
     unsigned long long mTeleportArms = 0, mTeleports = 0, mTeleportCancels = 0;
     /// Two-hand upgrades, for the suites (a count, never a clock).
     unsigned long long mTwoHands = 0;
+    /// HOW MANY TIMES A HAND RE-BOUND under this service (a wearer picking a
+    /// controller up or putting it down: the runtime's own
+    /// XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED, arriving here as a
+    /// changed `VrHandState::profile`), and how many of those CANCELLED
+    /// something that hand was in the middle of (stage 3, VR_INPUT_SPEC §7).
+    /// Counts, never a clock.
+    unsigned long long mProfileChanges = 0, mProfileCancels = 0;
+    /// HAS THE FIRST FRAME'S PROFILE BEEN SEEDED into `mPrev`? (stage 3's fix
+    /// round, the lead's item 5.) `mPrev` starts zeroed, so a session's FIRST
+    /// bind — the runtime naming what the wearer is holding, which is not a
+    /// change of anything — read as a re-bind and was counted (and would have
+    /// cancelled a gesture, if one could exist before any hand reported).
+    /// Seeded on the first stepped frame, and only the PROFILE field: the
+    /// button edges keep their own semantics (a control already down on the
+    /// first frame is a press, as it always was).
+    bool mProfileSeeded = false;
 };
 
 #endif   // VRINTERACTION_H

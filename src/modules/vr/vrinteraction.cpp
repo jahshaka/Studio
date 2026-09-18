@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "modules/vr/vrinteraction.h"
 
+#include <cstring>
+
 #include <QObject>
 #include <QUndoStack>
 
@@ -39,6 +41,28 @@ namespace {
 
 inline iris::Quat toIris(const Quat &q) { return iris::Quat(q.w, q.x, q.y, q.z); }
 inline iris::Vec3 toIris(const Vec3 &v) { return iris::Vec3(v.x, v.y, v.z); }
+
+/// WHERE THIS HAND HOLDS THINGS — THE MANIPULATION FRAME (stage 3,
+/// VR_INPUT_SPEC §7; VrHandState::manipPose).
+///
+/// The engine decides WHICH pose that is from the profile the runtime bound —
+/// the grip for a fist round a controller, the PINCH POINT for bare fingers —
+/// so nothing here asks what the wearer is holding. This is the one place the
+/// field is read, and the fallback is the grip: a hand-built sample (a stand-in
+/// source in a suite, an injection from before this field existed) that names no
+/// manipulation frame holds by its grip, which is what every controller does.
+inline const jahshaka::engine::VrPose &manipPoseOf(const VrHandState &st)
+{
+    return st.manipPose.valid ? st.manipPose : st.grip;
+}
+inline vrgrab::Pose manipOf(const VrHandState &st)
+{
+    const jahshaka::engine::VrPose &p = manipPoseOf(st);
+    return vrgrab::Pose{ toIris(p.position), toIris(p.rotation) };
+}
+/// Is there a manipulation frame at all this frame? (A hand whose grip AND
+/// pinch both failed to locate cannot hold anything.)
+inline bool manipValid(const VrHandState &st) { return manipPoseOf(st).valid; }
 inline Vec3 toEngine(const iris::Vec3 &v) { return Vec3(v.x(), v.y(), v.z()); }
 
 /// HOW FAR A CONTROLLER'S RAY REACHES, metres. 200 is Scene::rayCast's own
@@ -161,6 +185,9 @@ void VrInteraction::begin()
 {
     mInstalled = true;
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = VrHandState();
+    // ...AND THE NEXT SESSION'S FIRST BIND IS ITS OWN FIRST BIND, not a re-bind
+    // of the last one's (item 5): the seed is per session, like `mPrev` itself.
+    mProfileSeeded = false;
     mHover = Hover();
     mTurnArmed = true;
     mMemo = PickMemo();
@@ -183,6 +210,7 @@ void VrInteraction::end()
     mMemo = PickMemo();
     mRefreshed = false;
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = VrHandState();
+    mProfileSeeded = false;
     // AN INJECTION DIES WITH THE SESSION — AND THAT IS NOW THE ENGINE'S RULE,
     // NOT THIS OBJECT'S. The Studio-local store this used to clear here (the
     // lead's §666 fix: one console injection in a real session took the
@@ -460,7 +488,7 @@ bool VrInteraction::beginGrab(unsigned hand)
     // `vr.grab({hand})` and the MCP all do the identical thing.
     if (mGesture.active) return upgradeToTwoHand(hand);
     const VrHandState st = handState(hand);
-    if (!st.valid || !st.grip.valid) return false;
+    if (!st.valid || !manipValid(st)) return false;
     // THE EDIT GATE, ASKED BEFORE THE GESTURE STARTS, not when it ends (owner,
     // ledger §423; the viewport's gizmo does exactly this): a grab writes the
     // document live, so letting it run and then dropping its undo step would
@@ -480,21 +508,32 @@ bool VrInteraction::beginGrab(unsigned hand)
     g.hand = hand;
     g.snapping = st.menuPressed;
     // NEAR OR FAR is one comparison and nothing else changes (§5.1): within
-    // arm's reach the object is in the hand and rides the GRIP pose; beyond it
-    // the object is out on the ray and rides a virtual hand at the hit, which
-    // is what lets the stick push it away and turn it.
-    const vrgrab::Pose grip{ toIris(st.grip.position), toIris(st.grip.rotation) };
+    // arm's reach the object is in the hand and rides the MANIPULATION pose
+    // (the grip in a fist, the pinch point on fingers — stage 3); beyond it the
+    // object is out on the ray and rides a virtual hand at the hit, which is
+    // what lets the stick push it away and turn it.
+    const vrgrab::Pose manip = manipOf(st);
     const vrgrab::Pose aim{ toIris(st.aim.position), toIris(st.aim.rotation) };
-    if (h.hit && h.distance > vrgrab::kArmReach) {
+    // THE ARM'S REACH IS MEASURED FROM THE HAND, NOT FROM THE RAY'S ORIGIN
+    // (stage 3). "Can I reach that?" is a question about where the wearer's
+    // hand is and where the thing is, and those are two points: the hit's
+    // distance ALONG the aim ray answered it only because a controller's aim
+    // origin sits a few centimetres from its grip. On bare hands the aim ray
+    // starts at the runtime's own pointing origin and the manipulation frame is
+    // the PINCH POINT — tens of centimetres apart when the wearer points across
+    // their body — so the two answers genuinely differ, and the physical one is
+    // the distance from the hand.
+    const float reach = h.hit ? (h.point - manip.position).length() : 0.0f;
+    if (h.hit && reach > vrgrab::kArmReach) {
         g.far = true;
         g.distance = h.distance;
         g.handStart = vrgrab::virtualFarHand(aim, g.distance);
     } else {
-        // NEAR — either the ray is on something within arm's reach, or there is
-        // no hit at all and the wearer is reaching out to take hold of what is
-        // already selected (§5.1's near-grab case). Both ride the GRIP pose.
+        // NEAR — either the thing is within arm's reach, or there is no hit at
+        // all and the wearer is reaching out to take hold of what is already
+        // selected (§5.1's near-grab case). Both ride the MANIPULATION pose.
         g.far = false;
-        g.handStart = grip;
+        g.handStart = manip;
     }
     g.handNow = g.handStart;
     for (const auto &node : targets) {
@@ -544,10 +583,11 @@ bool VrInteraction::upgradeToTwoHand(unsigned hand)
     // not by the order they pressed two buttons.
     const VrHandState left = handState(VrHandLeft);
     const VrHandState right = handState(VrHandRight);
-    if (!left.valid || !right.valid || !left.grip.valid || !right.grip.valid) return false;
-    mGesture.pair = vrgrab::twoHandStart(
-        vrgrab::Pose{ toIris(left.grip.position), toIris(left.grip.rotation) },
-        vrgrab::Pose{ toIris(right.grip.position), toIris(right.grip.rotation) });
+    if (!left.valid || !right.valid || !manipValid(left) || !manipValid(right)) return false;
+    // BOTH MANIPULATION FRAMES (stage 3): two pinch points for bare hands, two
+    // grips for controllers, one of each in mixed mode — the pair's span, axis
+    // and midpoint are all measured where the hands actually HOLD the object.
+    mGesture.pair = vrgrab::twoHandStart(manipOf(left), manipOf(right));
     // THE PAIR MUST BE A PAIR. Two hands touching have no axis and no span, and
     // dividing by that span is how a held object flies to infinity on the frame
     // somebody claps.
@@ -588,7 +628,7 @@ void VrInteraction::downgradeToOneHand(unsigned remaining)
     // hand drops back to one-hand with a fresh capture — no jump"): the hand's
     // pose NOW and the objects' poses NOW, so the next frame's rigid follow
     // starts from a zero delta.
-    const vrgrab::Pose grip{ toIris(st.grip.position), toIris(st.grip.rotation) };
+    const vrgrab::Pose manip = manipOf(st);
     const vrgrab::Pose aim{ toIris(st.aim.position), toIris(st.aim.rotation) };
     // THE HAND THAT KEEPS HOLDING MUST BE LOCATED TO BE CAPTURED FROM — IN THE
     // POSE THIS ARRANGEMENT ACTUALLY USES (the lead's read, item 6). The first
@@ -598,7 +638,7 @@ void VrInteraction::downgradeToOneHand(unsigned remaining)
     // and a FAR one with a located grip and an unlocated aim welded a
     // ten-metre object to the wrist. A near hold rides the GRIP and a far hold
     // rides the AIM, so each asks for its own.
-    const bool located = mGesture.far ? st.aim.valid : st.grip.valid;
+    const bool located = mGesture.far ? st.aim.valid : manipValid(st);
     if (!st.valid || !located) {
         mGesture.recapture = true;
         recaptureMembers();
@@ -621,7 +661,7 @@ void VrInteraction::downgradeToOneHand(unsigned remaining)
         mGesture.handStart = vrgrab::virtualFarHand(aim, d);
     } else {
         mGesture.far = false;
-        mGesture.handStart = grip;
+        mGesture.handStart = manip;
     }
     mGesture.handNow = mGesture.handStart;
     recaptureMembers();
@@ -829,9 +869,9 @@ void VrInteraction::followGesture(float seconds)
         // one-hand rule (a skipped locate is not a released trigger), and with
         // two hands it matters more: half a pair would read as an enormous
         // scale and roll on the frame one controller blinked.
-        if (!left.valid || !right.valid || !left.grip.valid || !right.grip.valid) return;
-        const vrgrab::Pose lp{ toIris(left.grip.position), toIris(left.grip.rotation) };
-        const vrgrab::Pose rp{ toIris(right.grip.position), toIris(right.grip.rotation) };
+        if (!left.valid || !right.valid || !manipValid(left) || !manipValid(right)) return;
+        const vrgrab::Pose lp = manipOf(left);
+        const vrgrab::Pose rp = manipOf(right);
         vrgrab::TwoHandDelta delta = vrgrab::twoHandDelta(mGesture.pair, lp, rp);
         // SNAP QUANTISES THE FACTOR (SnapSettings::scaleSize(), the same dial
         // the desktop scale gizmo's Ctrl uses) — the factor, never the size.
@@ -911,8 +951,8 @@ void VrInteraction::followGesture(float seconds)
             vrgrab::onePoleAlpha(seconds, vrgrab::leverTau(mGesture.distance)));
         hand = mGesture.handNow;
     } else {
-        if (!st.grip.valid) return;
-        hand = vrgrab::Pose{ toIris(st.grip.position), toIris(st.grip.rotation) };
+        if (!manipValid(st)) return;
+        hand = manipOf(st);
         mGesture.handNow = hand;
     }
 
@@ -1040,6 +1080,30 @@ bool VrInteraction::cancelEditing()
     mGesture = Gesture();
     ++mCancels;
     return true;
+}
+
+// ONE HAND'S WORTH OF CANCEL (stage 3, VR_INPUT_SPEC §7) — see the header.
+bool VrInteraction::cancelForHand(unsigned hand)
+{
+    bool any = false;
+    // A HANDLE DRAG belongs to the hand that started it.
+    if (mGizmoDrag.active && mGizmoDrag.hand == hand) any = cancelGizmoDrag() || any;
+    // A GRAB belongs to one hand, or to a PAIR — and a pair with one hand
+    // re-bound is not a pair any more. Cancelling the whole gesture (rather
+    // than dropping back to the remaining hand) is the honest answer: the
+    // object's capture frame was the pair's, the wearer's hand has physically
+    // changed shape, and a silent hand-off mid-change is how an object ends up
+    // somewhere nobody put it.
+    if (mGesture.active && (mGesture.hand == hand ||
+                            (mGesture.two && mGesture.hand2 == hand))) {
+        rewindGesture();
+        mGesture = Gesture();
+        ++mCancels;
+        any = true;
+    }
+    // AN ARMED THROW is locomotion and belongs to the hand that threw it.
+    if (mTeleport.armed && mTeleport.hand == hand) any = teleportCancel() || any;
+    return any;
 }
 
 bool VrInteraction::cancel()
@@ -1462,6 +1526,35 @@ void VrInteraction::step(float seconds)
         return;
     }
 
+    // ---- A HAND CHANGED SHAPE (stage 3, VR_INPUT_SPEC §7) ----------------
+    //
+    // WiVRn binds `ext/hand_interaction_ext` for a hand with nothing in it and
+    // `oculus/touch_controller` for one that picks a controller up, PER HAND
+    // and mid-session — the runtime's own
+    // XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED, which reaches this
+    // service as a changed `profile` on that hand's sample. It matters here
+    // because the MANIPULATION FRAME moves with it (a fist's grip becomes a
+    // pinch point, tens of centimetres away and turned differently), so a
+    // gesture followed through the change would carry the held object by the
+    // difference in one frame.
+    //
+    // THE EDGE IS READ HERE AND NOWHERE ELSE: the engine reports the profile
+    // per frame and keeps no edge of its own, and this object already holds the
+    // previous frame's samples for exactly this kind of question.
+    // THE FIRST FRAME IS NOT A CHANGE (the lead's item 5): a session's first
+    // bind is the runtime naming what the wearer is holding, and `mPrev` starts
+    // zeroed — so it read as a re-bind and was counted as one. Seeded here, and
+    // only the profile: the button edges keep their own meaning.
+    if (!mProfileSeeded) {
+        for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i].profile = hands[i].profile;
+        mProfileSeeded = true;
+    }
+    for (unsigned i = 0; i < VrHandCount; ++i) {
+        if (std::strcmp(hands[i].profile.c_str(), mPrev[i].profile.c_str()) == 0) continue;
+        ++mProfileChanges;
+        if (cancelForHand(i)) ++mProfileCancels;
+    }
+
     // IN THE PLAYER, ONLY LOCOMOTION RUNS (the Player edits nothing).
     const bool player = playerHosted();
     const unsigned dominant = dominantHand();
@@ -1743,6 +1836,10 @@ QVariantMap VrInteraction::report() const
     out[QStringLiteral("commits")] = QVariant::fromValue(qulonglong(mCommits));
     out[QStringLiteral("cancels")] = QVariant::fromValue(qulonglong(mCancels));
     out[QStringLiteral("turns")] = QVariant::fromValue(qulonglong(mTurns));
+    // A WEARER PICKING A CONTROLLER UP OR PUTTING IT DOWN (stage 3), and what
+    // it cost a gesture in flight.
+    out[QStringLiteral("profileChanges")] = QVariant::fromValue(qulonglong(mProfileChanges));
+    out[QStringLiteral("profileCancels")] = QVariant::fromValue(qulonglong(mProfileCancels));
     return out;
 }
 

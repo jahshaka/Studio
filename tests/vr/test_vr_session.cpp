@@ -1381,6 +1381,36 @@ int main() {
                           "hand %u: the aim pose is a unit orientation (|q| = %.5f)", h, q);
             }
 
+            // (c2) STAGE 3: THE PROFILE IS PER HAND, AND A CONTROLLER HOLDS BY
+            // ITS GRIP (VR_INPUT_SPEC §7). What a real runtime proves here is
+            // the plumbing: each hand carries the path the runtime bound FOR
+            // THAT HAND (the session's `profile` is only a summary of the pair),
+            // a controller's manipulation frame IS its grip pose to the bit
+            // (there is no pinch pose on any controller profile), and this
+            // runtime tracks no skeleton at all — Monado's simulated rig has no
+            // hands, which is exactly why the bare-hand LOGIC is gated through
+            // the injection route instead (scripting.e2e.vr_hands).
+            for (unsigned h = 0; h < VrHandCount; ++h) {
+                const VrHandState &in = st.input[h];
+                if (!in.valid) continue;
+                CHECK_MSG(in.profile.startsWith("/interaction_profiles/"),
+                          "hand %u: the runtime named the profile IT bound for this hand "
+                          "('%s')", h, in.profile.c_str());
+                CHECK_MSG(!vrIsHandProfile(in.profile.c_str()),
+                          "hand %u: ...and a simulated controller is not a bare hand", h);
+                if (!in.grip.valid) continue;
+                CHECK_MSG(in.manipPose.valid &&
+                              in.manipPose.position.x == in.grip.position.x &&
+                              in.manipPose.position.y == in.grip.position.y &&
+                              in.manipPose.position.z == in.grip.position.z,
+                          "hand %u: a CONTROLLER holds things at its grip, to the bit", h);
+                VrPose joints[kVrHandJointCount];
+                CHECK_MSG(engine->vrHandJoints(int(h), joints, kVrHandJointCount) == 0u &&
+                              !in.jointsTracked,
+                          "hand %u: this runtime tracks no skeleton (a simulated rig has no "
+                          "hands) and says so", h);
+            }
+
             // (d) THE REFUSAL RULE. A session whose runtime has bound a real
             // profile refuses an injection — the wearer's own hardware always
             // wins, and a smoke in a headset cannot be fooled by a stale

@@ -114,6 +114,12 @@ inline QVariantMap handState(const jahshaka::engine::VrHandState &h)
     out[QStringLiteral("valid")] = h.valid;
     out[QStringLiteral("aim")] = pose(h.aim);
     out[QStringLiteral("grip")] = pose(h.grip);
+    // WHERE THE HAND HOLDS THINGS (stage 3): the pinch point on bare fingers,
+    // the grip in a fist — the engine's choice from the bound profile, reported
+    // so a caller can see which frame a grab is being measured in.
+    out[QStringLiteral("manip")] = pose(h.manipPose);
+    out[QStringLiteral("profile")] = QString::fromStdString(h.profile);
+    out[QStringLiteral("jointsTracked")] = h.jointsTracked;
     out[QStringLiteral("select")] = double(h.select);
     out[QStringLiteral("selectPressed")] = h.selectPressed;
     out[QStringLiteral("grab")] = double(h.grab);
