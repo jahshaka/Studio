@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/qtinterop.h"
 #include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "services/vrworld.h"
 #include "services/worldmodes.h"
 
 namespace {
@@ -169,6 +170,23 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giProbeSnapSidesMin = v.toFloat(); });
     add("giProbeSnapSidesMax", [](const ScenePtr &s) { return QVariant(s->giProbeSnapSidesMax); },
         [](const ScenePtr &s, const QVariant &v) { s->giProbeSnapSidesMax = v.toFloat(); });
+
+    // ---- VR (lane VR-WORLD-1) ---------------------------------------------
+    // Generated from the VR table, exactly as the post-process parameters below
+    // are: a setting is undoable the day it is declared, and the write goes
+    // through the table's own setter — the identical function `world.vr` calls.
+    for (const vrworld::Row &vr : vrworld::rows()) {
+        const QString id = vr.id;
+        f.append({ vrworld::propsKey(id),
+                   [id](const ScenePtr &s) -> QVariant {
+                       const vrworld::Row *r = vrworld::row(id);
+                       return (r && r->get) ? QVariant(r->get(s)) : QVariant();
+                   },
+                   [id](const ScenePtr &s, const QVariant &v) {
+                       const vrworld::Row *r = vrworld::row(id);
+                       if (r && r->set) r->set(s, v.toDouble());
+                   } });
+    }
 
     // ---- Post Process: the looks stack ------------------------------------
     add("looks", [](const ScenePtr &s) { return QVariant(s->looks); },

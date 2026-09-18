@@ -217,6 +217,102 @@ set_tests_properties(ui.drag_owner PROPERTIES
 # widget: how many rows it puts on the visible surface, that the disclosure
 # hides the rest, and that every gesture writes through services/worldmodes
 # into the document instead of inventing panel state. Offscreen, no display.
+
+# ---------------------------------------------------------------------------
+# ui.vr_panel — THE WORLD PANEL'S VR SECTION (lane VR-WORLD-1, owner request
+# 2026-09-18: a place to set the project's VR settings).
+#
+# The ask is a UI one, so it is asserted on the REAL widget: one row per entry
+# of the vrworld table, at the values the PROJECT holds, each gesture writing
+# the document through the same sceneprops key `world.vr` writes and landing as
+# exactly one undo step — plus the greying rule for a row the current turn mode
+# makes meaningless. Offscreen, no display. Shares the photon panel's source
+# list: the same blade spine and the same link stubs.
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+add_executable(test_vr_panel
+    test_vr_panel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldvrpropertywidget.cpp
+    # ieditorviewport.h is listed as a SOURCE so AUTOMOC generates the moc for
+    # EditorViewportEvents: the Reflections-row case drives the panel from a
+    # HeadlessEditorViewport, which constructs one.
+    ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
+    # The row-undo spine (debt L6): every panel row's gesture and the command it
+    # becomes.
+    test_undo_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/rowundo.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/panelundo.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/scenepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/textinputwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/labelwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/filepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragvaluewidgets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/basepropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp
+    test_stubs.cpp)
+set_target_properties(test_vr_panel PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_vr_panel PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_vr_panel PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    # worldmodes.cpp reads the ENGINE's tier table (giQualityFacts, a
+    # header-only function in jahshaka/engine/Types.h) so a tier's description
+    # cannot drift from what the tier does — render audit A5. Header only; this
+    # target links no engine.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+)
+target_link_libraries(test_vr_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+# A document node is an engine node (SCENEGRAPH_SPEC D2): the headless graph.
+jah_document_graph(test_vr_panel)
+add_test(NAME ui.vr_panel COMMAND test_vr_panel
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.vr_panel PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.vr_panel)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_executable(test_photon_panel
     test_photon_panel.cpp
@@ -236,6 +332,8 @@ add_executable(test_photon_panel
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
@@ -336,6 +434,7 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldvrpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldaapropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
@@ -384,6 +483,8 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
@@ -454,6 +555,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldvrpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldaapropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
@@ -502,6 +604,8 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
@@ -577,6 +681,7 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldvrpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldaapropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
@@ -625,6 +730,8 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
@@ -709,6 +816,7 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldvrpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldaapropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
@@ -758,6 +866,8 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp

@@ -74,6 +74,7 @@ For more information see the LICENSE file
 //     focus: nothing in the Player would ever follow it.
 
 #include <functional>
+#include <memory>
 
 #include <QList>
 #include <QString>
@@ -84,7 +85,9 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
+#include "modules/vr/vrarc.h"
 #include "modules/vr/vrgrab.h"
+#include "services/vrworld.h"
 #include "viewport/flystep.h"
 
 class Gizmo;
@@ -165,10 +168,23 @@ public:
         /// found twice in this module. Absent or answering null means "no
         /// engine": the service still runs the whole document half.
         std::function<jahshaka::engine::Engine *()> engine;
-        /// The wearer's fly speed, in world units per second. The host knows
-        /// which surface's speed it is (the editor preview flies at the
-        /// editor's, the Player at the Player's).
-        std::function<float()> wearerSpeed;
+        /// THE ENGINE SCENE THE HELPERS ARE DRAWN ON — the editor viewport's
+        /// own (IEditorViewport::engineScene), which is also the scene the
+        /// Player's second View shows (PLAYER-1: one scene, two views), so a
+        /// teleport arc armed in either host is drawn in both.
+        ///
+        /// A CALLABLE, for the lifetime reason every dependency here is one:
+        /// the viewport is taken apart under a running session at shutdown, and
+        /// the arc compares what this answers against the scene it built on
+        /// before it touches a node (vrarc.h).
+        std::function<jahshaka::engine::Scene *()> engineScene;
+        /// HOW THE WEARER MOVES — the PROJECT's settings with the session's
+        /// `vr.locomotion` overrides applied (services/vrworld.h), asked once
+        /// per use rather than held, for the same lifetime reason as the
+        /// engine above: a session adopts a project when it begins and the
+        /// document it came from can be closed under this object. Absent means
+        /// the documented defaults.
+        std::function<vrworld::Settings()> locomotion;
         /// Is the PLAYER the host of the running session? Then only locomotion
         /// runs (the Player edits nothing).
         std::function<bool()> playerMode;
@@ -204,25 +220,7 @@ public:
         std::function<bool()> locomotionBlocked;
     };
 
-    enum class Turn { Snap, Smooth };
-    /// How the stick flies: along the stick hand's AIM (Unreal's VR editor; the
-    /// owner's pick) or LEVEL along the head's heading (the comfort option).
-    enum class Fly { Aim, Gaze, Level };
     enum class SelectMode { Replace, Toggle, Add };
-
-    /// SESSION OPTIONS (owner answers 2 and 3). Not persisted and not a
-    /// preference: they are set on the session, API-first, until the owner asks
-    /// for a Preferences row.
-    struct Options
-    {
-        Turn turn = Turn::Snap;
-        Fly  fly = Fly::Aim;
-        /// Right hand manipulates and the LEFT stick walks; a swap swaps both
-        /// (answer 3 — one flag, never two).
-        bool dominantRight = true;
-        float snapTurnDegrees = vrgrab::kSnapTurnDegrees;
-        float smoothTurnDegreesPerSecond = vrgrab::kSmoothTurnDegreesPerSecond;
-    };
 
     /// WHAT THE RAY IS ON.
     struct Hover
@@ -239,6 +237,14 @@ public:
     };
 
     VrInteraction() = default;
+    /// THE ARC'S NODES GO BACK (the lead's read, item 11): a VrInteraction
+    /// destroyed while its engine scene is alive used to leave twenty-one line
+    /// nodes and their mesh, materials and pool behind. It is a no-op in every
+    /// ordinary path — `end()` releases them at the session's edge and at a
+    /// script's withdrawal, so by the time anything destroys this object there
+    /// is nothing to give back, and the host's callable is never asked from a
+    /// destructor (see releaseArc).
+    ~VrInteraction();
 
     void setDeps(const Deps &deps) { mDeps = deps; }
     /// The source is NOT owned. Null means "no controller reports", which is
@@ -256,8 +262,10 @@ public:
     /// twice and turn the wearer twice per flick.
     bool injectionArmed() const;
 
-    void setOptions(const Options &options) { mOptions = options; }
-    Options options() const { return mOptions; }
+    /// THE EFFECTIVE LOCOMOTION SETTINGS this frame — the project's, with the
+    /// session's overrides (Deps::locomotion). There is no copy here: one
+    /// definition of every default, and it is the document's.
+    vrworld::Settings locomotion() const;
 
     /// A SESSION BEGAN / ENDED. Beginning arms nothing but the bookkeeping;
     /// ending CANCELS a gesture in flight (§5.5) and clears the ray.
@@ -284,15 +292,57 @@ public:
     /// ray, selecting it first) and hold it. False when refused — nothing to
     /// grab, the edit gate, or the Player.
     ///
-    /// A GRAB TAKEN BY THE OFF HAND IS RELEASABLE ONLY BY `endGrab`. The button
-    /// edges in step() run for the DOMINANT hand alone (the off hand's stick is
-    /// locomotion), so a `vr.grab({hand:"left"})` is ended by `vr.release`, by
-    /// a cancel (focus loss, session end, the Player taking over) — never by
-    /// squeezing the off hand.
+    /// EITHER HAND'S RELEASE ENDS THE GESTURE IT OWNS (the lead's read, item
+    /// 2). The off hand's squeeze edge used to be read only as "join a
+    /// two-hand hold", so a gesture that ended up on the OFF hand — the
+    /// dominant hand letting go of a two-hand hold, or a `vr.grab({hand:
+    /// "left"})` — could not be put down by a button at all: the object stayed
+    /// welded to that grip with nothing pressed, and the stick, the gizmo and
+    /// the gaze fly were all refused because a gesture was live. The off hand's
+    /// release now ends a gesture it owns as well as a pair it is half of.
     bool beginGrab(unsigned hand);
     /// What a squeeze release does: commit ONE undo macro. False when no
     /// gesture was live, or in the Player.
+    ///
+    /// ...OR, WITH BOTH HANDS ON THE OBJECT, drop back to the hand that is
+    /// still holding it — one gesture continues, nothing is committed and the
+    /// object does not move (see upgradeToTwoHand). The macro is still ONE per
+    /// gesture whatever the hand count, because the members' ORIGIN is captured
+    /// at the first squeeze and never re-captured.
     bool endGrab(unsigned hand);
+
+    // ---- TELEPORT (VR_INPUT_SPEC §6 row L4; the owner's answer 8) --------
+    //
+    // THE FLY IS STILL THE DEFAULT LOCOMOTION and this is additive: the stick
+    // that flies is the OFF hand's, the stick that throws an arc is the
+    // DOMINANT hand's, and neither was doing the other's job.
+
+    /// ARM THE ARC for a hand — what pushing the dominant thumbstick FORWARD
+    /// does. Traces the throw against the document and remembers where it would
+    /// land and whether that landing is one a person may stand on. False when
+    /// the hand is not located, or a gesture or a handle drag owns the frame.
+    bool teleportArm(unsigned hand);
+    /// TAKE THE LANDING — what letting the stick go does. False when nothing is
+    /// armed, when the landing was refused, or when there is no rig to move
+    /// (no session: Engine::setVrOrigin is a no-op without one).
+    bool teleportFire();
+    /// Put the arc away and go nowhere (`menu`, or the stick pulled back).
+    /// False when nothing was armed.
+    bool teleportCancel();
+    /// STAND THE WEARER AT A POINT ON THE GROUND, level, facing the way they
+    /// already face — what `vr.teleport({to})` does, and what teleportFire()
+    /// calls with the landing it traced. No arc and no refusal: a script that
+    /// names a place means it. False with no session/rig.
+    bool teleportTo(const iris::Vec3 &point);
+    bool teleportArmed() const { return mTeleport.armed; }
+    /// WHICH HANDS ARE HOLDING (the lead's read, item 9): false with no
+    /// gesture; `second` is the hand that joined a pair, or the same as
+    /// `primary` when only one hand is on it. A verb's refusal needs this to
+    /// tell "nothing to grab" from "that hand is already holding it".
+    bool gestureHands(unsigned *primary, unsigned *second = nullptr) const;
+    /// {armed, valid, reason, landing:{x,y,z}, normal:{...}, points, drawn,
+    ///  marker, teleports} — what `vr.teleport()` and `vr.inputState()` report.
+    QVariantMap teleportReport() const;
     // ---- THE GIZMO GESTURE (stage 2) -------------------------------------
     //
     // ONE BUTTON EACH, NO OVERLAP (the spec's design rule, §5.2): `select` on a
@@ -318,8 +368,14 @@ public:
     bool cycleGizmoMode();
 
     /// Put everything back and push nothing (focus loss, session end, a
-    /// project switch). False when no gesture was live.
+    /// project switch) — the EDITING half (a gesture, a handle drag) AND an
+    /// armed teleport arc. False when none of the three was live.
     bool cancel();
+    /// THE EDITING HALF ALONE (the lead's read, item 1). The Player's step
+    /// calls this and not `cancel()`: an armed teleport is LOCOMOTION, which
+    /// the Player runs, and cancelling it every frame re-armed it every frame
+    /// and meant a throw could never be taken in the Player at all.
+    bool cancelEditing();
     /// Turn the wearer about their own head. False with no session/rig.
     bool turn(float degrees);
     /// One step of stick flight. False with no session/rig, or nothing pushed.
@@ -354,7 +410,16 @@ private:
     struct Member
     {
         iris::SceneNodePtr node;
+        /// WHERE THIS PHASE OF THE GESTURE FOUND IT (world). Re-captured when
+        /// the hand count changes — a second hand joining, or one leaving — so
+        /// that neither transition moves the object by so much as a millimetre.
         vrgrab::Pose startGlobal;
+        /// ...and its own scale at that same moment, which is what the
+        /// two-hand factor multiplies.
+        iris::Vec3 phaseScale;
+        /// WHERE THE WHOLE GESTURE FOUND IT (local). NEVER re-captured: it is
+        /// what a cancel puts back and what the ONE undo command is written
+        /// from, so a grab that changed hands three times is still one step.
         iris::Vec3 startLocalPos, startLocalScale;
         iris::Quat startLocalRot;
     };
@@ -362,6 +427,34 @@ private:
     {
         bool active = false;
         unsigned hand = jahshaka::engine::VrHandRight;
+        /// BOTH HANDS ARE ON IT (VR_INPUT_SPEC §5.1's two-hand paragraph). The
+        /// pair is captured as LEFT then RIGHT whichever hand squeezed second,
+        /// so the axis has one sign for the life of the gesture.
+        bool two = false;
+        /// The hand that joined second — either of the pair may release, and
+        /// the other one keeps holding.
+        unsigned hand2 = jahshaka::engine::VrHandLeft;
+        vrgrab::TwoHandStart pair;
+        /// THE HAND-OFF COULD NOT BE TAKEN YET: one hand let go on a frame the
+        /// other was not reporting on, so there was no pose to capture the
+        /// remaining hand's follow from. The gesture HOLDS (it does not commit
+        /// and it does not cancel — a skipped locate is not a released
+        /// trigger) and the capture is taken on the first frame that hand
+        /// reports again. Without this the follow would start from a pose
+        /// nobody ever located, which is a jump of the object's whole distance
+        /// from the origin.
+        bool recapture = false;
+        /// WHERE A PAIR TURNS AND SCALES ABOUT, captured at the upgrade: the
+        /// point between the palms for a near hold, and — for a far one — the
+        /// VIRTUAL HAND out on the ray, which is the very point the one-hand
+        /// far gesture already rotates the object about (the lead's read, item
+        /// 7: the two arrangements pivot about ONE point, so a second hand
+        /// joining a far grab changes what the gesture can DO and not where it
+        /// happens).
+        iris::Vec3 pivot;
+        /// The factor the pair is currently applying, for the report.
+        float scale = 1.0f;
+        float rollDegrees = 0.0f;
         bool far = false;
         bool snapping = false;
         float distance = 0.0f;      ///< along the aim ray, far grabs only
@@ -369,6 +462,21 @@ private:
         vrgrab::Pose handStart;     ///< the hand as captured (grip, or virtual)
         vrgrab::Pose handNow;       ///< the filtered hand this frame
         QVector<Member> members;
+    };
+
+    /// THE ARMED THROW. Everything a frame of teleport aiming produced: the
+    /// curve as drawn, where it ends, what it ended ON, and — when the landing
+    /// is refused — why, in words a verb can hand back.
+    struct Teleport
+    {
+        bool armed = false;
+        bool valid = false;
+        bool landed = false;            ///< the arc ENDED on something
+        unsigned hand = jahshaka::engine::VrHandRight;
+        iris::Vec3 landing;
+        iris::Vec3 normal;
+        QVector<iris::Vec3> points;
+        QString reason;                 ///< empty while valid
     };
 
     struct GizmoDrag
@@ -382,6 +490,30 @@ private:
     };
 
     iris::ScenePtr scene() const;
+    /// A SECOND HAND JOINS A LIVE GESTURE (VR_INPUT_SPEC §5.1). Captures the
+    /// pair — midpoint, span, axis and both grips' orientation — and RE-CAPTURES
+    /// every member's pose and scale at that instant, which is what makes the
+    /// upgrade invisible: the new formula starts from exactly where the old one
+    /// left the object. False when the hand is the one already holding, when
+    /// both are already on it, or when either grip is not located.
+    bool upgradeToTwoHand(unsigned hand);
+    /// ...and the reverse: one hand lets go and the other keeps holding, with a
+    /// fresh one-hand capture for the same reason.
+    void downgradeToOneHand(unsigned remaining);
+    /// Re-capture every member's phase pose and scale from where they are now.
+    void recaptureMembers();
+    /// TRACE THE THROWN ARC for a hand: vrgrab's parabola, sampled, each piece
+    /// asked of the document's picker, stopping at the first thing it meets or
+    /// at the ground plane. Const because it is a READ of the document.
+    Teleport traceArc(unsigned hand, const jahshaka::engine::VrHandState &state) const;
+    /// Hand the armed arc (or nothing) to the drawer, building it on the
+    /// engine scene the host named. Does nothing at all with no scene.
+    void drawArc();
+    /// GIVE THE ARC'S NODES BACK while the scene that owns them still answers,
+    /// and merely forget them when it does not (vrarc.h's lifetime note).
+    /// Called by `end()` and by the destructor — where it is a no-op in every
+    /// ordinary path, because `end()` has already run.
+    void releaseArc();
     /// The active gizmo this frame, or null.
     Gizmo *gizmoNow() const;
     /// WHERE THE WEARER IS LOOKING FROM: the head through the rig when a
@@ -446,14 +578,49 @@ private:
     /// host said — a headless stand-in places nobody.
     bool locomotionBlocked() const;
 
+    /// THE FRAME'S LOCOMOTION SETTINGS, RESOLVED ONCE (the lead's read, item
+    /// 10). `locomotion()` asks the host, which asks the project, and a single
+    /// step() used to ask six or more times (every `dominantHand()`, every
+    /// `offHand()`, the turn block, the report) — for a value that cannot
+    /// change inside one frame. step() opens this for its own duration and
+    /// every reader inside takes the copy; outside a frame (a verb, a report)
+    /// the question still goes to the host, because there the project may
+    /// genuinely have just changed.
+    struct FrameSettings
+    {
+        explicit FrameSettings(const VrInteraction *self) : mSelf(self)
+        {
+            mSelf->mFrameLoco = mSelf->mDeps.locomotion ? mSelf->mDeps.locomotion()
+                                                        : vrworld::Settings();
+            mSelf->mFrameLocoValid = true;
+        }
+        ~FrameSettings() { mSelf->mFrameLocoValid = false; }
+        FrameSettings(const FrameSettings &) = delete;
+        FrameSettings &operator=(const FrameSettings &) = delete;
+
+    private:
+        const VrInteraction *mSelf;
+    };
+
     Deps mDeps;
-    Options mOptions;
+    mutable vrworld::Settings mFrameLoco;
+    mutable bool mFrameLocoValid = false;
     VrInputSource *mSource = nullptr;
     bool mInstalled = false;
 
     jahshaka::engine::VrHandState mPrev[jahshaka::engine::VrHandCount];
     Hover mHover;
     Gesture mGesture;
+    Teleport mTeleport;
+    /// THE ARC'S GEOMETRY IN THE WORLD, built lazily on the host's engine scene
+    /// and only once a wearer has aimed a throw (vrarc.h). Null until then, and
+    /// after a scene it was built on went away.
+    std::unique_ptr<VrArc> mArc;
+    /// THE DOMINANT STICK'S RE-ARM for the throw: the stick must come back
+    /// through the dead zone before it can arm another one, so that a wearer
+    /// who teleports and keeps the stick forward does not immediately throw
+    /// again from where they landed.
+    bool mTeleportArmable = true;
     /// The snap turn's re-arm (one flick, one turn — vrgrab::snapTurnRearmed).
     bool mTurnArmed = true;
 
@@ -516,6 +683,10 @@ private:
     unsigned long long mSelects = 0, mGrabs = 0, mCommits = 0, mCancels = 0, mTurns = 0;
     /// The gizmo's own counters: drags begun, drags committed, modes cycled.
     unsigned long long mGizmoDrags = 0, mGizmoCommits = 0, mGizmoModes = 0;
+    /// The teleport's: throws armed, throws taken, throws refused or cancelled.
+    unsigned long long mTeleportArms = 0, mTeleports = 0, mTeleportCancels = 0;
+    /// Two-hand upgrades, for the suites (a count, never a clock).
+    unsigned long long mTwoHands = 0;
 };
 
 #endif   // VRINTERACTION_H

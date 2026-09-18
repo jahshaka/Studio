@@ -22,6 +22,8 @@ add_executable(test_structural_undo
     # SunLightLinkCommand is deleted with the sky's steering).
     ${CMAKE_SOURCE_DIR}/src/commands/scenepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp)
 set_target_properties(test_structural_undo PROPERTIES
     AUTOMOC ON AUTOUIC OFF AUTORCC OFF
@@ -86,6 +88,8 @@ add_executable(test_undo_clear_cost
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
 set_target_properties(test_undo_clear_cost PROPERTIES
@@ -158,6 +162,8 @@ add_executable(test_db_batch
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
 set_target_properties(test_db_batch PROPERTIES

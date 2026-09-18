@@ -347,6 +347,16 @@ add_script_e2e(sun_light e2e_sun_light.js)
 # shadows are off standing over something it lights straight through. Plus the
 # case that is deliberately NOT an issue: a scene with no directional light.
 add_script_e2e(scene_issues e2e_scene_issues.js)
+# THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18) — the
+# World panel's VR section as a verb: `world.vr` reads and writes six document
+# fields (the fly speed in m/s, the fly direction, the turn and its step or
+# rate, the dominant hand), refuses what is not a setting, clamps what is merely
+# out of range, records ONE undo step per call and survives save/close/open
+# through the real writer and reader. It also pins THE SESSION RULE from the
+# document's side: `vr.locomotion` overrides these for one session and writes
+# nothing here. The rig actually moving is `vr.input_session`; the panel is
+# `ui.vr_panel`.
+add_script_e2e(world_vr e2e_world_vr.js)
 # vr.* WITH NO RUNTIME (SPECS/VR_SPEC.md §6) — the cheap case, and the one that
 # runs on every box in every gate: this app is launched WITHOUT --vr, so no
 # OpenXR loader is opened at all, and every verb must still answer with a
@@ -371,6 +381,17 @@ add_script_e2e(vr_input_headless e2e_vr_input_headless.js)
 # gizmo.ring_pick's and gizmo.plane_handles' ray arms, and the size rule is
 # gizmo.screen_size's — all three document-only.
 add_script_e2e(vr_gizmo e2e_vr_gizmo.js)
+# THE TELEPORT ARC, WITH NO HEADSET (VR_INPUT_SPEC §6 row L4; the owner's answer
+# 8) — the same injection route, and the whole gesture: the dominant stick
+# forward arms a thrown arc, the document's picker decides what it lands on, a
+# wall and a locked object are refused in words, a raised platform is a floor,
+# `menu` and a back-flick cancel, a held object owns that stick, a focus loss
+# puts the arc away, and every piece of the curve is a line node in the world.
+# The arithmetic under it (the parabola, the plane solve, the 45 degree slope
+# rule, the rig that arrives level at the wearer's own height) is
+# `vr.grab_maths`; the wearer ACTUALLY moving needs a rig and is
+# `vr.input_session` on Monado.
+add_script_e2e(vr_teleport e2e_vr_teleport.js)
 # THE PLAYER'S VR MODE WITH NO RUNTIME (SPECS/VR_SPEC.md §4.5, phase 3) — the
 # other everywhere case, and the owner's rule in executable form: without a
 # headset the tool is today's tool. `player.play({vr:true})` must refuse and

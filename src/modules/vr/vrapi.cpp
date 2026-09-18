@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "scripting/modules/moduleshared.h"   // quatFromJs (the one pose reader)
 #include "irisgl/mirror/scenemirror.h"
-#include "viewport/flyspeedsettings.h"
+#include "services/vrworld.h"
 #include "viewport/gizmo.h"
 #include "viewport/gizmomode.h"
 #include "viewport/flystep.h"
@@ -387,10 +387,28 @@ QVector<VerbInfo> VrApi::verbs() const
           "REFUSED (false) when there is nothing to grab, when no controller reports, while a "
           "SCRIPT owns the document (the edit gate — the ray still hovers and still selects "
           "during a run, because those are reads), and in the PLAYER, which edits nothing.\n\n"
-          "A GRAB TAKEN BY THE OFF HAND IS RELEASED ONLY BY `vr.release`. The squeeze edges "
-          "are read from the DOMINANT hand alone (the other hand's stick is locomotion), so "
-          "`vr.grab({hand:\"left\"})` is ended by the verb, or cancelled by a focus loss or "
-          "the session ending — never by squeezing that hand.",
+          "TWO HANDS ON ONE OBJECT (owner answer 7, the full version with roll): a squeeze "
+          "with the OTHER hand while something is held UPGRADES the same gesture — it does not "
+          "start a second one. The pair is then read the way a person holds a box: the span "
+          "between the palms is the SIZE (spread them to twice the distance and the object is "
+          "twice as big, uniformly), the line between them is an AXIS the object turns with, "
+          "and rolling both wrists about that line ROLLS the object by the average of the two "
+          "rolls. The midpoint's own move carries it. MENU HELD snaps the scale factor by the "
+          "editor's scale step as well as the translation and the rotation.\n\n"
+          "A light and a camera have no size, so the pair only turns and carries them — the "
+          "factor is 1 for those, even inside a mixed selection. Letting go with either hand "
+          "drops back to one hand with a FRESH capture, so nothing jumps and nothing is "
+          "committed; the object is still one undo step, written from where the FIRST squeeze "
+          "found it.\n\n"
+          "Far away, the pair scales and turns the object ABOUT ITSELF rather than about the "
+          "point between the hands: at ten metres a scale about the wearer's own midpoint "
+          "would throw the thing another ten metres away, and a thirty degree turn of the pair "
+          "would sweep it five metres sideways.\n\n"
+          "A GRAB TAKEN BY THE OFF HAND ALONE IS RELEASED ONLY BY `vr.release`. The squeeze "
+          "edges are read from the DOMINANT hand (the other hand's stick is locomotion, and "
+          "its squeeze either joins a live gesture or flies where the wearer looks), so "
+          "`vr.grab({hand:\"left\"})` with nothing already held is ended by the verb, or "
+          "cancelled by a focus loss or the session ending — never by squeezing that hand.",
           Needs::Engine },
         { "release", "vr.release({hand?}) -> bool",
           "ENDS THE GRAB AND COMMITS IT — ONE undo step for the whole gesture, whatever it "
@@ -401,33 +419,87 @@ QVector<VerbInfo> VrApi::verbs() const
           "takes focus for its own dashboard, a project is closed — is CANCELLED instead: the "
           "objects go back where they were and NOTHING is pushed. Committing half a gesture "
           "the wearer could no longer see would be worse than the snap back.\n\n"
+          "WITH BOTH HANDS ON THE OBJECT this hands it back to the one still holding it: the "
+          "gesture continues, nothing moves and nothing is committed (see `vr.grab`).\n\n"
           "False when no gesture was running, and in the PLAYER (which edits nothing).",
           Needs::Engine },
         { "locomotion",
-          "vr.locomotion({turn?, fly?, dominant?, snapTurnDegrees?, smoothTurnDegreesPerSecond?}) -> "
-          "{turn, dominant, snapTurnDegrees, smoothTurnDegreesPerSecond}",
-          "HOW THE WEARER MOVES, read with no argument and set with one (owner answers 2 and "
-          "3). SESSION OPTIONS, deliberately not a preference and not saved: they are set by "
-          "whoever starts the session until the owner has tried them in a headset.\n\n"
-          "`turn` is \"snap\" (the default — 30 degrees per flick of the stick, which is "
-          "what nearly every shipping VR tool does because a continuous turn makes a "
-          "proportion of people sick) or \"smooth\". Either way the wearer turns about their "
-          "OWN HEAD and not about the middle of their room: turning about the rig's origin "
-          "swings somebody standing at the edge of their play space sideways through a metre "
-          "of world they did not ask to travel.\n\n"
+          "vr.locomotion({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, "
+          "dominant?}) -> {flySpeed, fly, turn, snapTurnDegrees, smoothTurnDegreesPerSecond, "
+          "dominant, overridden, session}",
+          "HOW THE WEARER MOVES, read with no argument and set with one — THE SESSION'S "
+          "OVERRIDES over the PROJECT's settings (lane VR-WORLD-1). The defaults live in the "
+          "document and are set by `world.vr` or the World panel's VR section; a session adopts "
+          "them when it begins; anything set here applies for THIS SESSION ONLY and writes "
+          "nothing to the project — which is what makes it safe to try a faster fly with the "
+          "headset on. The read reports the EFFECTIVE values, `overridden` names the keys this "
+          "session changed, and `session` says whether a session has latched a project's "
+          "values (false = the live document is being read, which is what a gate injecting "
+          "input at a desktop editor sees).\n\n"
+          "`flySpeed` is metres per second; `fly` is \"aim\" (the stick hand's own ray — "
+          "Unreal's VR editor, and the default), \"gaze\" (where the wearer looks) or "
+          "\"level\" (the head's heading with the pitch thrown away, the comfort option).\n\n"
+          "`turn` is \"snap\" (the default — a step per flick of the stick, which is what "
+          "nearly every shipping VR tool does because a continuous turn makes a proportion of "
+          "people sick) or \"smooth\". Either way the wearer turns about their OWN HEAD and "
+          "not about the middle of their room: turning about the rig's origin swings somebody "
+          "standing at the edge of their play space sideways through a metre of world they did "
+          "not ask to travel.\n\n"
           "`dominant` is \"right\" (the default) or \"left\" and swaps BOTH roles at once: "
           "the dominant hand points, selects and grabs, the other hand's stick walks and "
           "turns. One flag, because two would eventually disagree.\n\n"
+          "A number that is not finite, or is zero or negative, is refused by name; a true/false "
+          "where a number belongs is refused too (it would otherwise read as 1); one outside a "
+          "row's range is clamped to it; and an unknown mode name or an unknown key is refused "
+          "with nothing applied.\n\n"
+          "AN OVERRIDE SET BEFORE A SESSION STARTS SURVIVES THE BEGIN — asking for a slower fly "
+          "and then putting the headset on is one gesture, not two — and every override dies "
+          "with the session that used it, whichever way that session ended.\n\n"
           "NOBODY IS MOVED WHILE THEY ARE STILL BEING PLACED. A session begins (and every "
           "recentre) with the host waiting for a located frame it can pair with the rig it "
           "holds, because a correction from a mismatched pair is a teleport; the stick is "
           "refused over those frames and a flick held across them is answered on the first "
           "frame after the placement lands.",
           Needs::Document },
+        { "teleport",
+          "vr.teleport({to?, hand?, arm?, cancel?}) -> bool",
+          "TELEPORT THE WEARER (SPECS/VR_INPUT_SPEC.md §6 row L4; the owner's answer 8). The "
+          "FLY is still the default way to move — this is additive, on the other stick.\n\n"
+          "THE GESTURE, as a controller makes it: push the DOMINANT thumbstick FORWARD and a "
+          "thrown arc appears from the hand (a marker fired at 10 m/s, brought down by "
+          "gravity, drawn to where it lands); let the stick go and the wearer is standing "
+          "there. The arc is GREEN where a person may stand and RED where they may not — "
+          "nothing under it, or a face steeper than 45 degrees from level, which is where "
+          "every engine puts the line between a ramp and a wall. `menu`, or a flick of the "
+          "stick backwards, puts it away.\n\n"
+          "WHY THAT BINDING: the dominant stick does nothing at all unless the wearer is "
+          "holding something (then it pushes a far grab in and out and turns it), and pushing "
+          "it forward to throw an arc is Unreal's and SteamVR's convention — the thing "
+          "somebody who has worn a headset before will try first. No new OpenXR action and no "
+          "new suggested binding: an action cannot be added after the session's sets are "
+          "attached, and the stick this rides was bound in stage 1. A profile with NO stick "
+          "(khr/simple_controller) has no teleport from the controller, exactly as it has no "
+          "grab there — the verbs below drive it instead.\n\n"
+          "THE FOUR FORMS. `{arm:true, hand?}` traces the arc and shows it (the hand defaults "
+          "to the dominant one); `{}` takes the landing the armed arc found; `{cancel:true}` "
+          "puts it away; and `{to:{x,y,z}}` stands the wearer at a point on the ground with no "
+          "arc and no slope test, which is what a script naming a place means. Read the armed "
+          "state with `vr.inputState().teleport` — armed, valid, the landing, the surface "
+          "normal, how many line segments are actually drawn, and the counts.\n\n"
+          "THE WEARER ARRIVES LEVEL AND FACING THE WAY THEY ALREADY FACE: the rig is moved, "
+          "never turned (a teleport that also spun the room is the fastest way to lose "
+          "somebody), and their own height above their floor is carried across — a person who "
+          "is standing arrives standing. It moves whoever is in the headset: the editor's VR "
+          "preview and the PLAYER alike, because moving the wearer is not an edit.\n\n"
+          "REFUSES (false) when there is no session and so no rig (Engine::setVrOrigin does "
+          "nothing without one), while a host is still placing the wearer, when nothing is "
+          "armed, and when the landing was refused.",
+          Needs::Document },
         { "interactionMode",
-          "vr.interactionMode() -> {dominant, turn, grabbing, hovering, far, snapping, "
-          "distance, nodes, source, installed, rig:{live,x,y,z,yaw}, selects, grabs, commits, "
-          "cancels, turns}",
+          "vr.interactionMode() -> {dominant, turn, snapTurnDegrees, smoothTurnDegreesPerSecond, "
+          "flySpeed, fly, grabbing, hand, hand2, twoHanded, scale, rollDegrees, hovering, far, snapping, "
+          "distance, nodes, source, installed, rig:{live,x,y,z,yaw}, gizmo:{…}, teleport:{…}, "
+          "selects, grabs, commits, cancels, turns, twoHands}",
           "WHAT THE INTERACTION IS DOING. `grabbing` and `hovering` are this moment's state; "
           "`far`, `snapping`, `distance` and `nodes` describe a gesture in flight; and the "
           "five tallies are COUNTS, monotonic for as long as the process lives — a suite "
@@ -439,6 +511,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "the `turns` count that says a flick of the stick was answered. `live` false means "
           "there is no session, and therefore no rig at all: Engine::setVrOrigin does nothing "
           "without one, so a stick pushed outside a session walks nobody and says so.\n\n"
+          "The six locomotion values are the EFFECTIVE ones — the project's (`world.vr`) with "
+          "this session's `vr.locomotion` overrides applied.\n\n"
           "`installed` is whether the interaction is stepping at all: it is installed when a "
           "session begins and removed when it ends, and in the PLAYER only locomotion runs "
           "(the Player edits nothing — no selection, no grab, no transform writes), exactly as "
@@ -840,6 +914,10 @@ QVariantMap VrApi::state()
     out[QStringLiteral("handActions")] = s.handActions;
     out[QStringLiteral("handJoints")] = s.handJoints;
     out[QStringLiteral("proxies")] = showProxies;
+    // THE TELEPORT, HERE TOO, because "where am I about to go" is a question
+    // about the session as much as about the controllers — the same map
+    // `vr.inputState().teleport` answers, from the one object that knows.
+    out[QStringLiteral("teleport")] = interaction.teleportReport();
     out[QStringLiteral("preview")] = editor.report();
     return out;
 }
@@ -887,13 +965,23 @@ void VrApi::installInteraction()
     deps.selection = moduleHost.services ? moduleHost.services->selection : nullptr;
     deps.services = moduleHost.services;
     deps.engine = [this] { return engine(); };
-    // THE WEARER'S SPEED IS THE HOST'S OWN: the editor's preview walks at the
-    // editor's fly speed (its keys already do — EditorVrPreview) and the Player
-    // at the Player's 25 u/s, which is the number playervr.cpp calls "the
-    // wearer's speed".
-    deps.wearerSpeed = [this] {
-        return FlySpeedSettings::speed(editor.isActive() ? FlySpeedSettings::Editor
-                                                         : FlySpeedSettings::Player);
+    // THE SCENE THE WEARER'S HELPERS ARE DRAWN ON (the teleport arc): the
+    // editor viewport's own engine scene, which is also the scene the Player's
+    // second View shows — one scene, two views (PLAYER-1) — so an arc armed in
+    // either host is in the wearer's eyes and in the desktop picture.
+    deps.engineScene = [this]() -> jahshaka::engine::Scene * {
+        return moduleHost.viewport ? moduleHost.viewport->engineScene() : nullptr;
+    };
+    // HOW THE WEARER MOVES IS THE PROJECT'S (lane VR-WORLD-1): the fly speed,
+    // the fly direction, the turn, its step or rate and the dominant hand are
+    // document fields (`world.vr`), adopted by a session when it begins and
+    // overridable for that session by `vr.locomotion`. Before this they were
+    // the DESKTOP camera's speed (FlySpeedSettings) and four session-only
+    // fields with defaults of their own — one wearer with two speeds, and
+    // nothing a project could carry.
+    deps.locomotion = [this] {
+        return vrworld::resolve(moduleHost.viewport ? moduleHost.viewport->getScene()
+                                                    : iris::ScenePtr());
     };
     // THE PLAYER EDITS NOTHING. With a session running that this module's
     // preview does not own, the host is the Player — so the ray, the select and
@@ -1026,6 +1114,10 @@ QVariantMap VrApi::inputState()
     out[QStringLiteral("focused")] = interaction.activeSource() ? interaction.activeSource()->focused()
                                                           : (st.state == VrState::Focused);
     out[QStringLiteral("session")] = st.active;
+    // THE ARMED THROW (§6 row L4), beside the hands that aimed it: armed,
+    // valid, the landing and its normal, the segments actually drawn, and the
+    // counts a suite brackets a gesture with.
+    out[QStringLiteral("teleport")] = interaction.teleportReport();
     return out;
 }
 
@@ -1127,6 +1219,16 @@ bool VrApi::select(const QVariantMap &options)
     return true;
 }
 
+namespace {
+
+/// THE HAND'S NAME, for a refusal that has to say which one.
+QString handName(unsigned hand)
+{
+    return hand == VrHandRight ? QStringLiteral("right") : QStringLiteral("left");
+}
+
+}   // namespace
+
 bool VrApi::grab(const QVariantMap &options)
 {
     syncInteractionSession();
@@ -1138,13 +1240,30 @@ bool VrApi::grab(const QVariantMap &options)
     bool ok = false;
     const unsigned hand = handFrom(options.value(QStringLiteral("hand")), &ok);
     if (!ok) return fail(QStringLiteral("vr.grab: hand must be \"left\" or \"right\""));
-    if (!interaction.beginGrab(hand))
-        return refuse(interaction.playerHosted()
-                          ? QStringLiteral("vr.grab: the PLAYER is hosting this session and the "
-                                           "Player edits nothing — only locomotion runs")
-                          : QStringLiteral("vr.grab: nothing to grab (no controller is "
-                                           "reporting, nothing is under the ray and nothing is "
-                                           "selected), or a script owns the document"));
+    if (!interaction.beginGrab(hand)) {
+        if (interaction.playerHosted())
+            return refuse(QStringLiteral("vr.grab: the PLAYER is hosting this session and the "
+                                         "Player edits nothing — only locomotion runs"));
+        // A THIRD MESSAGE, because the second one LIED (the lead's read, item
+        // 9): a grab refused because that hand is ALREADY holding the object —
+        // or because both hands are on it and there is no third — read
+        // "nothing to grab", which sent a reader looking at their ray and
+        // their selection for a refusal that was about neither.
+        unsigned primary = 0, second = 0;
+        if (interaction.gestureHands(&primary, &second)) {
+            if (primary == second && hand == primary)
+                return refuse(QStringLiteral("vr.grab: the %1 hand is already holding it — "
+                                             "squeeze the OTHER hand to take it with both")
+                                  .arg(handName(hand)));
+            if (primary != second)
+                return refuse(QStringLiteral("vr.grab: both hands are already on it (the %1 "
+                                             "and the %2) — there is no third hand to add")
+                                  .arg(handName(primary), handName(second)));
+        }
+        return refuse(QStringLiteral("vr.grab: nothing to grab (no controller is "
+                                     "reporting, nothing is under the ray and nothing is "
+                                     "selected), or a script owns the document"));
+    }
     return true;
 }
 
@@ -1159,87 +1278,146 @@ bool VrApi::release(const QVariantMap &options)
     bool ok = false;
     const unsigned hand = handFrom(options.value(QStringLiteral("hand")), &ok);
     if (!ok) return fail(QStringLiteral("vr.release: hand must be \"left\" or \"right\""));
-    if (!interaction.endGrab(hand))
-        return refuse(interaction.playerHosted()
-                          ? QStringLiteral("vr.release: the PLAYER is hosting this session and "
-                                           "the Player edits nothing — only locomotion runs")
-                          : QStringLiteral("vr.release: no grab is running"));
+    if (!interaction.endGrab(hand)) {
+        if (interaction.playerHosted())
+            return refuse(QStringLiteral("vr.release: the PLAYER is hosting this session and "
+                                         "the Player edits nothing — only locomotion runs"));
+        // ...AND THE SAME LIE ON THE WAY OUT (the lead's read, item 9): a
+        // release named on a hand that is not the one holding — the second
+        // `vr.release({hand:"left"})` after a two-hand hold handed the object
+        // back to the right — answered "no grab is running" while a gesture
+        // plainly was.
+        unsigned primary = 0, second = 0;
+        if (interaction.gestureHands(&primary, &second))
+            return refuse(QStringLiteral("vr.release: the %1 hand is not holding anything — the "
+                                         "%2 hand is")
+                              .arg(handName(hand), handName(primary)));
+        return refuse(QStringLiteral("vr.release: no grab is running"));
+    }
     return true;
 }
 
+// SESSION OVERRIDES OVER THE PROJECT'S SETTINGS (lane VR-WORLD-1).
+//
+// The DEFAULTS are the document's (`world.vr`, services/vrworld.h) and this
+// verb keeps only what somebody overrode, by row id — so there is exactly one
+// definition of every default and an override writes nothing to the project.
+// The keys, their spellings, their ranges and their refusals all come from the
+// same table `world.vr` and the World panel's VR section are generated from.
 QVariantMap VrApi::locomotion(const QVariantMap &options)
 {
-    static const QStringList known = { "turn", "fly", "dominant", "snapTurnDegrees",
-                                       "smoothTurnDegreesPerSecond" };
+    const QStringList known = vrworld::ids();
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
             fail(QStringLiteral("vr.locomotion: unknown key '%1' — known keys are %2")
                      .arg(it.key(), known.join(QStringLiteral(", "))));
             return QVariantMap();
         }
-    VrInteraction::Options o = interaction.options();
-    if (options.contains(QStringLiteral("turn"))) {
-        const QString turn = options.value(QStringLiteral("turn")).toString().trimmed().toLower();
-        if (turn == QLatin1String("snap")) o.turn = VrInteraction::Turn::Snap;
-        else if (turn == QLatin1String("smooth")) o.turn = VrInteraction::Turn::Smooth;
-        else {
-            fail(QStringLiteral("vr.locomotion: turn must be \"snap\" or \"smooth\", not '%1'")
-                     .arg(turn));
+    // VALIDATED BEFORE ANYTHING IS APPLIED: a call with one bad value changes
+    // nothing at all, exactly as `world.vr` refuses a whole write.
+    QVector<QPair<QString, double>> writes;
+    for (const vrworld::Row &r : vrworld::rows()) {
+        if (!options.contains(r.id)) continue;
+        double value = 0.0;
+        QString why;
+        if (!vrworld::validate(r, options.value(r.id), value, why)) {
+            fail(QStringLiteral("vr.locomotion: %1").arg(why));
             return QVariantMap();
         }
+        writes.append({ r.id, value });
     }
-    if (options.contains(QStringLiteral("fly"))) {
-        const QString fly = options.value(QStringLiteral("fly")).toString().trimmed().toLower();
-        if (fly == QLatin1String("aim")) o.fly = VrInteraction::Fly::Aim;
-        else if (fly == QLatin1String("gaze")) o.fly = VrInteraction::Fly::Gaze;
-        else if (fly == QLatin1String("level")) o.fly = VrInteraction::Fly::Level;
-        else {
-            fail(QStringLiteral("vr.locomotion: fly must be \"aim\", \"gaze\" or \"level\", not '%1'")
-                     .arg(fly));
-            return QVariantMap();
-        }
-    }
-    if (options.contains(QStringLiteral("dominant"))) {
-        const QString hand =
-            options.value(QStringLiteral("dominant")).toString().trimmed().toLower();
-        if (hand == QLatin1String("right")) o.dominantRight = true;
-        else if (hand == QLatin1String("left")) o.dominantRight = false;
-        else {
-            fail(QStringLiteral("vr.locomotion: dominant must be \"right\" or \"left\", not "
-                                "'%1'").arg(hand));
-            return QVariantMap();
-        }
-    }
-    if (options.contains(QStringLiteral("snapTurnDegrees"))) {
-        const double deg = options.value(QStringLiteral("snapTurnDegrees")).toDouble();
-        if (deg <= 0.0 || deg > 180.0) {
-            fail(QStringLiteral("vr.locomotion: snapTurnDegrees must be in (0, 180], not %1")
-                     .arg(deg));
-            return QVariantMap();
-        }
-        o.snapTurnDegrees = float(deg);
-    }
-    if (options.contains(QStringLiteral("smoothTurnDegreesPerSecond"))) {
-        const double deg = options.value(QStringLiteral("smoothTurnDegreesPerSecond")).toDouble();
-        if (deg <= 0.0 || deg > 720.0) {
-            fail(QStringLiteral("vr.locomotion: smoothTurnDegreesPerSecond must be in (0, 720], "
-                                "not %1").arg(deg));
-            return QVariantMap();
-        }
-        o.smoothTurnDegreesPerSecond = float(deg);
-    }
-    interaction.setOptions(o);
+    for (const auto &w : writes) vrworld::override(w.first, w.second);
+
+    const vrworld::Settings loco =
+        vrworld::resolve(moduleHost.viewport ? moduleHost.viewport->getScene()
+                                             : iris::ScenePtr());
     QVariantMap out;
-    out[QStringLiteral("turn")] =
-        o.turn == VrInteraction::Turn::Snap ? QStringLiteral("snap") : QStringLiteral("smooth");
-    out[QStringLiteral("fly")] =
-        o.fly == VrInteraction::Fly::Aim ? QStringLiteral("aim")
-        : o.fly == VrInteraction::Fly::Gaze ? QStringLiteral("gaze") : QStringLiteral("level");
-    out[QStringLiteral("dominant")] =
-        o.dominantRight ? QStringLiteral("right") : QStringLiteral("left");
-    out[QStringLiteral("snapTurnDegrees")] = double(o.snapTurnDegrees);
-    out[QStringLiteral("smoothTurnDegreesPerSecond")] = double(o.smoothTurnDegreesPerSecond);
+    for (const vrworld::Row &r : vrworld::rows()) out[r.id] = vrworld::valueOf(r, loco);
+    // WHERE THE DEFAULTS CAME FROM and WHAT THIS SESSION CHANGED — the honest
+    // answer to "why is it flying at 15": the project, unless it is listed here.
+    out[QStringLiteral("overridden")] = vrworld::overridden();
+    out[QStringLiteral("session")] = vrworld::adopted();
     return out;
+}
+
+bool VrApi::teleport(const QVariantMap &options)
+{
+    syncInteractionSession();
+    static const QStringList known = { "to", "hand", "arm", "cancel" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("vr.teleport: unknown key '%1' — known keys are %2")
+                            .arg(it.key(), known.join(QStringLiteral(", "))));
+    const bool arm = options.value(QStringLiteral("arm"), false).toBool();
+    const bool cancel = options.value(QStringLiteral("cancel"), false).toBool();
+    const bool named = options.contains(QStringLiteral("to"));
+    // THE FORMS ARE EXCLUSIVE, and saying so is cheaper than guessing which one
+    // a caller meant: a map with both `to` and `arm` is a script with a bug in
+    // it, and answering the wrong one silently is how that bug survives.
+    if (int(arm) + int(cancel) + int(named) > 1)
+        return fail(QStringLiteral("vr.teleport: say one of `to`, `arm` or `cancel`, not two"));
+    // INSTALLED BY A VERB WHEN THERE IS NO SESSION TO INSTALL IT — the same
+    // rule `vr.step` follows, and what makes every teleport case gateable on a
+    // box with no runtime.
+    if (!interaction.installed()) interaction.begin();
+
+    if (named) {
+        const QVariantMap to = options.value(QStringLiteral("to")).toMap();
+        static const QStringList axes = { "x", "y", "z" };
+        for (auto it = to.constBegin(); it != to.constEnd(); ++it)
+            if (!axes.contains(it.key()))
+                return fail(QStringLiteral("vr.teleport: to: unknown key '%1' — known keys are "
+                                           "x, y, z").arg(it.key()));
+        bool okX = true, okY = true, okZ = true;
+        const double x = to.value(QStringLiteral("x"), 0.0).toDouble(&okX);
+        const double y = to.value(QStringLiteral("y"), 0.0).toDouble(&okY);
+        const double z = to.value(QStringLiteral("z"), 0.0).toDouble(&okZ);
+        if (!okX || !okY || !okZ)
+            return fail(QStringLiteral("vr.teleport: to: x, y and z must be numbers"));
+        if (!interaction.teleportTo(iris::Vec3(float(x), float(y), float(z))))
+            return refuse(QStringLiteral("vr.teleport: nobody is in VR (there is no rig to "
+                                         "move without a session), or a host is still placing "
+                                         "the wearer"));
+        return true;
+    }
+    if (cancel) {
+        if (!interaction.teleportCancel())
+            return refuse(QStringLiteral("vr.teleport: no arc is armed"));
+        return true;
+    }
+    if (arm) {
+        bool ok = false;
+        const unsigned hand = handFrom(options.value(QStringLiteral("hand")), &ok);
+        // NAMING WHAT WAS PASSED, like `vr.inject` and unlike the older gesture
+        // verbs beside it: a script that said "middle" wants to read "middle"
+        // back rather than be told the two right answers.
+        if (!ok)
+            return fail(QStringLiteral("vr.teleport: hand must be \"left\" or \"right\", "
+                                       "not '%1'")
+                            .arg(options.value(QStringLiteral("hand")).toString()));
+        if (!interaction.teleportArm(hand))
+            return refuse(QStringLiteral("vr.teleport: cannot aim a throw (no controller is "
+                                         "reporting for that hand, or a grab or a handle drag "
+                                         "owns the frame)"));
+        return true;
+    }
+    // THE REPORT IS READ BEFORE THE THROW, because taking one CLEARS it: the
+    // refusal has to say which of three things went wrong, and two of them are
+    // only knowable from the arc that was armed a moment ago.
+    const QVariantMap armedNow = interaction.teleportReport();
+    if (!interaction.teleportFire()) {
+        if (!armedNow.value(QStringLiteral("armed")).toBool())
+            return refuse(QStringLiteral("vr.teleport: no arc is armed (push the dominant "
+                                         "thumbstick forward, or call "
+                                         "vr.teleport({arm:true}))"));
+        const QString reason = armedNow.value(QStringLiteral("reason")).toString();
+        return refuse(reason.isEmpty()
+                          ? QStringLiteral("vr.teleport: nobody is in VR — there is no rig to "
+                                           "move without a session")
+                          : QStringLiteral("vr.teleport: the landing was refused — %1")
+                                .arg(reason));
+    }
+    return true;
 }
 
 QVariantMap VrApi::interactionMode()

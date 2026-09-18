@@ -222,6 +222,7 @@ set(SRCS
     src/modules/publish/publishrecord.cpp
     src/modules/vr/editorvr.cpp
     src/modules/vr/vrapi.cpp
+    src/modules/vr/vrarc.cpp
     src/modules/vr/vrinteraction.cpp
     src/modules/vr/vrmodule.cpp
     src/modules/avatar/avatarmodule.cpp
@@ -322,6 +323,7 @@ set(SRCS
     src/services/sceneissues.cpp
     src/ui/controls/sceneissuebar.cpp
     src/services/looks.cpp
+    src/services/vrworld.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
     src/services/animationedits.cpp
@@ -357,6 +359,7 @@ set(SRCS
     src/ui/panels/propertywidgets/panelundo.cpp
     src/ui/panels/propertywidgets/lookstackeditor.cpp
     src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    src/ui/panels/propertywidgets/worldvrpropertywidget.cpp
     src/ui/panels/propertywidgets/camerapostfxpropertywidget.cpp
     src/ui/panels/propertywidgets/worldaapropertywidget.cpp
     src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
@@ -523,6 +526,7 @@ set(HEADERS
     src/modules/publish/publishrecord.h
     src/modules/vr/editorvr.h
     src/modules/vr/vrapi.h
+    src/modules/vr/vrarc.h
     src/modules/vr/vrgrab.h
     src/modules/vr/vrinteraction.h
     src/modules/vr/vrmodule.h
@@ -593,6 +597,7 @@ set(HEADERS
     src/services/undoservice.h
     src/services/selectionservice.h
     src/services/shortcutregistry.h
+    src/services/vrworld.h
     src/services/worldmodes.h
     src/services/scenefolders.h
     src/services/planarreflectors.h
@@ -622,6 +627,7 @@ set(HEADERS
     src/ui/panels/propertywidgets/panelundo.h
     src/ui/panels/propertywidgets/lookstackeditor.h
     src/ui/panels/propertywidgets/worldpostfxpropertywidget.h
+    src/ui/panels/propertywidgets/worldvrpropertywidget.h
     src/ui/panels/propertywidgets/camerapostfxpropertywidget.h 
     src/ui/panels/propertywidgets/worldaapropertywidget.h
     src/ui/panels/propertywidgets/worldmodespropertywidget.h
