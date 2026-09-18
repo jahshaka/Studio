@@ -570,14 +570,13 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 	assetShader->assetGuid = targetGuid;
 	assetShader->path = IrisUtils::join(project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
 
-	//auto assetData = db->fetchAssetData(targetGuid);
-    auto matObj = QJsonDocument::fromJson(sourceData).object();
-	//assetShader->setValue(QVariant::fromValue(mat));
-	assetShader->setValue(matObj);
+	// The SHADER flavour's payload is its stored DEFINITION (JSON), which is what
+	// the two shader property widgets read back. A hydrated MATERIAL never goes
+	// into an Asset variant (MATERIAL-PREVIEW-1: nothing can type-check one, and
+	// the mismatch that produced was a silent dead feature) — the three dead
+	// commented-out lines that said otherwise are gone with it.
+	assetShader->setValue(QJsonDocument::fromJson(sourceData).object());
 
-	//db->updateAssetAsset(assetGuid, QJsonDocument::fromBinaryData(fetchAsset(item->data(MODEL_GUID_ROLE).toString())).toBinaryData());
-
-	// build material from definition
 	AssetManager::addAsset(assetShader);
 	refresh();
 	return targetGuid;

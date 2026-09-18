@@ -309,6 +309,7 @@ set(SRCS
     src/services/livevideo.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
+    src/services/materialpreviewservice.cpp
     src/services/sceneeditservice.cpp
     src/services/clipboardservice.cpp
     src/services/clipboardbackend.cpp
@@ -372,7 +373,8 @@ set(SRCS
     src/services/thumbnailmanager.cpp 
     src/ui/panels/propertywidgets/fogpropertywidget.cpp 
     src/io/assetiobase.cpp 
-    src/io/materialpresetreader.cpp 
+    src/io/materialpresetreader.cpp
+    src/io/materialpresets.cpp
     src/ui/panels/timeline/keyframelabeltreewidget.cpp 
     src/viewport/keyboardstate.cpp 
     src/io/scenereader.cpp 
@@ -441,6 +443,7 @@ set(SRCS
     src/bridge/enginematerialpreviewscene.cpp
     src/bridge/enginematerialpreview.cpp
     src/ui/controls/assetviewgrid.cpp
+    src/ui/controls/assetdrag.cpp
     src/ui/controls/assetgriditem.cpp
     src/ui/controls/drawertreewidget.cpp
     src/ui/controls/videopreviewwidget.cpp

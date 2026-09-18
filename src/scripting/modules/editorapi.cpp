@@ -51,6 +51,14 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
+#include <QApplication>
+#include <QDragEnterEvent>
+#include <QDragLeaveEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <memory>
+#include "ui/controls/assetdrag.h"
 
 using namespace scriptmod;
 
@@ -739,6 +747,21 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`scene.addPrimitive(name, {position: editor.dropPointAt(x, y)})` puts a cube exactly "
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
+          Needs::Engine },
+        { "dragAsset", "editor.dragAsset(guid, x, y, {action, type}) -> bool",
+          "DRAGS AN ASSET OVER THE VIEWPORT, for real: it posts the same "
+          "QDragEnter/QDragMove/QDragLeave/QDrop events a person's drag out of an asset view "
+          "posts, carrying the same four-slot payload every asset view builds "
+          "(ui/controls/assetdrag.h). `action` is what this step of the gesture is — 'move' "
+          "(the default: hover at that pixel, which is what shows a MATERIAL's live preview on "
+          "the object under it), 'drop' (hover and release, which commits) or 'leave' (the "
+          "cursor left the viewport, which puts a previewed material back). The first call of a "
+          "gesture sends the enter event for you; 'drop' and 'leave' end it. `type` is the "
+          "ModelTypes value, and is worked out from the asset row when omitted — a RESERVED "
+          "preset guid names no row and is treated as a material, which is exactly what the "
+          "presets tray drags. This is the only way a script or an MCP client can perform the "
+          "gesture the owner performs with a mouse; everything it reaches is the viewport's own "
+          "handler, so it cannot drift from what a person gets.",
           Needs::Engine },
         { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name, locked} | null",
           "WHAT A DROP AT THIS VIEWPORT PIXEL APPLIES TO — the node a dragged MATERIAL or IMAGE "
@@ -2305,6 +2328,67 @@ QVariant EditorApi::dropTargetAt(double x, double y)
     // from "there is nothing here", and only one of them spawns an image plane.
     out.insert("locked", locked);
     return out;
+}
+
+bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVariantMap &options)
+{
+    if (!requireEngine()) return false;
+    QWidget *target = host.viewport->asWidget();
+    if (!target) return fail("editor.dragAsset: the viewport has no widget");
+
+    static const QStringList kActions{ QStringLiteral("move"), QStringLiteral("drop"),
+                                       QStringLiteral("leave") };
+    const QString action = options.value(QStringLiteral("action"),
+                                         QStringLiteral("move")).toString().toLower();
+    if (!kActions.contains(action))
+        return fail(QStringLiteral("editor.dragAsset: action must be one of %1")
+                        .arg(kActions.join(QStringLiteral(", "))));
+
+    const AssetRecord row = host.db ? host.db->fetchAsset(guid) : AssetRecord();
+    // A RESERVED PRESET GUID names no row, and is exactly what the presets tray
+    // drags — so an absent row is a MATERIAL drag, not a refusal.
+    int type = options.value(QStringLiteral("type"), -1).toInt();
+    if (type < 0)
+        type = row.guid.isEmpty() ? static_cast<int>(ModelTypes::Material) : row.type;
+
+    const QPointF pos(x, y);
+    // ONE payload builder, the one every asset view uses (ui/controls/assetdrag.h):
+    // a synthesised drag that built its own map would be testing itself.
+    auto sendEvent = [&](QEvent::Type kind) {
+        std::unique_ptr<QMimeData> mime(
+            AssetDrag::mimeFor(type, row.name, QString(), guid));
+        if (kind == QEvent::DragEnter) {
+            QDragEnterEvent event(pos.toPoint(), Qt::CopyAction, mime.get(),
+                                  Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &event);
+        } else if (kind == QEvent::DragMove) {
+            QDragMoveEvent event(pos.toPoint(), Qt::CopyAction, mime.get(),
+                                 Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &event);
+        } else if (kind == QEvent::Drop) {
+            QDropEvent event(pos, Qt::CopyAction, mime.get(),
+                             Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &event);
+        } else {
+            QDragLeaveEvent event;
+            QApplication::sendEvent(target, &event);
+        }
+    };
+
+    // A DRAG IS A SEQUENCE, and the handlers depend on having seen its start:
+    // dragEnter is what decides whether the payload is a material at all.
+    if (!mDragOpen) { sendEvent(QEvent::DragEnter); mDragOpen = true; }
+    if (action == QStringLiteral("leave")) {
+        sendEvent(QEvent::DragLeave);
+        mDragOpen = false;
+        return true;
+    }
+    sendEvent(QEvent::DragMove);
+    if (action == QStringLiteral("drop")) {
+        sendEvent(QEvent::Drop);
+        mDragOpen = false;
+    }
+    return true;
 }
 
 QVariantMap EditorApi::viewportState()

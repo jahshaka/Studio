@@ -197,6 +197,7 @@ bool ProjectService::saveProjectBlob()
     // The SAVE BLOCK (SESSION_LOG_SPEC §5) is emitted from here, not from the
     // verb: this is what project.save calls AND what the UI save path calls, so
     // one record covers both.
+    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
     QElapsedTimer clock;
     clock.start();
     // The blob-only save (SCRIPTING_SPEC §1.6.2). Unlike saveOpenScene() this
@@ -241,6 +242,7 @@ bool ProjectService::saveProjectBlob()
 
 void ProjectService::saveOpenScene()
 {
+    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
     // if the viewport isnt initialized then the scene was never opened in
     // edit mode. This also means no renderer was initialized. There's no
     // need to save (nick)
@@ -271,6 +273,7 @@ void ProjectService::saveOpenScene()
 
 void ProjectService::saveInitialScene(const QString &projectPath)
 {
+    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
     SceneWriter writer;
     auto sceneObject = writer.getSceneObject(projectPath,
                                              sceneProvider(),

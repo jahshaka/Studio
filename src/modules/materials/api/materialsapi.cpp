@@ -36,6 +36,8 @@ For more information see the LICENSE file
 #include "services/livetextures.h"
 #include "services/projectassets.h"
 #include "services/materialdefaults.h"
+#include "io/materialpresets.h"
+#include "services/materialpreviewservice.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "viewport/ieditorviewport.h"
@@ -62,20 +64,6 @@ For more information see the LICENSE file
 using namespace scriptmod;
 
 namespace {
-
-QVector<MaterialPreset> loadPresets()
-{
-    QVector<MaterialPreset> presets;
-    const QDir dir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
-    MaterialPresetReader reader;
-    const bool pbrOnly = true;   // engine viewport is the only renderer
-    for (const auto &file : dir.entryInfoList(QStringList(), QDir::Files)) {
-        auto preset = reader.readMaterialPreset(file.absoluteFilePath());
-        if (pbrOnly && preset.type.compare("PBR", Qt::CaseInsensitive) != 0) continue;
-        presets.append(preset);
-    }
-    return presets;
-}
 
 // The material.* key vocabulary, at file scope so material.set, its refusal
 // message and material.properties all read the SAME lists. They used to be
@@ -372,7 +360,7 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
 QVariantList MaterialsApi::presets()
 {
     QVariantList out;
-    for (const auto &preset : loadPresets()) {
+    for (const auto &preset : MaterialPresets::all()) {
         out.append(QVariantMap{
             { "name", preset.name },
             { "type", preset.type },
@@ -482,9 +470,32 @@ QVector<VerbInfo> MaterialApi::verbs() const
 {
     return {
         { "apply", "material.apply(nodeId, presetOrGuid) -> bool",
-          "Applies a built-in preset (by name or reserved guid) or a saved project material asset (by guid) to a node. "
+          "Applies a built-in preset (by name or reserved guid), a saved project material asset "
+          "(by guid) or a Materials-module effect graph (a Shader row's guid) to a node. "
           "A container node (an imported model's root) applies to every mesh under it, each with its own material instance. "
-          "Also registers preset applies as a project asset, like the presets panel. Undoable.",
+          "A preset apply registers ONE project material row per preset and reuses it on every "
+          "later apply of the same preset. Undoable, as one step. Ends any live "
+          "material.preview first, so the undo step captures the node's true original material.",
+          Needs::Document },
+        { "preview", "material.preview(nodeId, presetOrGuid) -> bool",
+          "Shows a material on a node WITHOUT applying it — the editor's live hover preview, which "
+          "is what a material dragged over the scene does. It takes the same three payloads "
+          "material.apply takes (a preset name or reserved guid, a project material row, a "
+          "Materials-module Shader row), resolves each into a PRIVATE instance, and puts the "
+          "node's own material back the moment the preview moves, ends or anything writes the "
+          "document. It pushes NO undo step, leaves the dirty flag alone, writes no database row, "
+          "and — deliberately — costs no GI re-solve: the scene tells the renderer that what it "
+          "is showing was never committed. Previewing a second node restores the first. False, "
+          "with no preview left running, when the payload resolves to no material, the node is "
+          "not a mesh, or the node is LOCKED (its drop would be refused, so its preview would be "
+          "a promise the release cannot keep). A save taken while a preview is up writes the "
+          "ORIGINAL material.",
+          Needs::Document },
+        { "endPreview", "material.endPreview() -> bool",
+          "Ends the live material.preview, putting the previewed node's own material back. True "
+          "when a preview was running. Harmless with none. Every path that commits the document "
+          "calls it for you — this verb exists for the caller that started a preview and changed "
+          "its mind.",
           Needs::Document },
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
@@ -615,22 +626,43 @@ bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
 
     host.services->selection->select(node);
 
-    QString name = Constants::Reserved::DefaultMaterials.value(presetOrGuid);
-    if (name.isEmpty()) name = presetOrGuid;
+    // THE ONE APPLY (MATERIAL-PREVIEW-1). This verb used to carry its own copy
+    // of the preset scan and its own fallback to the material-asset path, beside
+    // a second copy in MainWindow::applyMaterialPreset that the viewport's drop
+    // called; the two had already drifted in what they accepted.
+    if (host.services->sceneEdit->applyMaterial(presetOrGuid, node)) return true;
 
-    const auto presets = loadPresets();
-    for (const auto &preset : presets) {
-        if (preset.name.compare(name, Qt::CaseInsensitive) == 0) {
-            host.services->sceneEdit->applyMaterialPreset(preset, node);
-            return true;
-        }
-    }
+    return fail(QStringLiteral("material.apply: no preset, material asset or effect graph '%1' (materials.presets() and assets.list list them)").arg(presetOrGuid));
+}
 
-    // Not a built-in preset: a saved project material asset guid (the same
-    // fallback the viewport drop uses).
-    if (host.services->sceneEdit->applyMaterialAsset(presetOrGuid, node)) return true;
+bool MaterialApi::preview(const QString &nodeId, const QString &presetOrGuid)
+{
+    if (!host.services || !host.services->materialPreview)
+        return fail("material.preview: not available in this session");
+    auto scene = host.services->sceneEdit ? host.services->sceneEdit->scene() : iris::ScenePtr();
+    if (!scene) return fail("material.preview: no scene is open");
+    auto node = findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) return fail(QStringLiteral("material.preview: no node '%1'").arg(nodeId));
+    if (node->getSceneNodeType() != iris::SceneNodeType::Mesh)
+        return fail(QStringLiteral("material.preview: '%1' is not a mesh node").arg(nodeId));
 
-    return fail(QStringLiteral("material.apply: no preset or material asset '%1' (materials.presets() and assets.list list them)").arg(presetOrGuid));
+    if (host.services->materialPreview->begin(node, presetOrGuid)) return true;
+
+    // ONE refusal, two causes, and they are worth telling apart: a locked node
+    // will refuse the drop too, and an unresolvable payload is not a material
+    // at all.
+    if (!node->isPickable())
+        return fail(QStringLiteral("material.preview: '%1' is locked — unlock it in the hierarchy")
+                        .arg(node->getName()));
+    return fail(QStringLiteral("material.preview: no preset, material asset or effect graph '%1' (materials.presets() and assets.list list them)")
+                    .arg(presetOrGuid));
+}
+
+bool MaterialApi::endPreview()
+{
+    if (!host.services || !host.services->materialPreview)
+        return fail("material.endPreview: not available in this session");
+    return host.services->materialPreview->end();
 }
 
 bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)

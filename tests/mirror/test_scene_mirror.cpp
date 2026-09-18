@@ -1760,6 +1760,94 @@ int main(int argc, char **argv)
         }
         CHECK(mirror.giRefreshCount() == refresh0 + 1, "GI: moving a MESH does not re-solve");
 
+        // ---- A HOVER PREVIEW COSTS NO GI (MATERIAL-PREVIEW-1) --------------
+        //
+        // THE MEASUREMENT behind the decision, on the same scene and in the
+        // same process as everything above. The editor's hover preview swaps
+        // the material on the mesh under the cursor and swaps it back when the
+        // drag moves on; the document is never written and no undo step exists,
+        // so a GI re-solve charged to a hover is a re-solve for a state that
+        // will never be saved.
+        //
+        // WHAT IT REALLY COSTS, measured (and it is NOT the "two re-solves per
+        // hovered object" the audit assumed): the engine's material term is a
+        // GENERATION COUNTER bumped by OgreScene::noteMaterialChanged for a
+        // material ID whose VOXEL INPUTS changed and which a GI-visible item
+        // already wears (OgreGi.cpp giMaterialChangeEffect). A material the
+        // scene has never seen bumps nothing when it is pushed, and re-binding
+        // one the engine already knows bumps nothing either — so what a hover
+        // costs is ONE re-solve, on the first frame the previewed material
+        // reaches a GI-visible item, and zero thereafter. One is still one too
+        // many for a state nobody committed, and the arms below prove both that
+        // it happens and that the flag removes it.
+        {
+            auto previewTarget = gfloor;
+            const iris::MaterialPtr originalMat = previewTarget->getMaterial();
+
+            auto borrowed = iris::PbrMaterial::create();
+            borrowed->setBaseColor(QColor(12, 240, 33));
+            borrowed->setRoughnessFactor(0.11f);
+
+            const auto settle = [&](int frames) {
+                for (int f = 0; f < frames; ++f) {
+                    mirror.sync();
+                    mirror.applyEnvironment(view, engine.get());
+                    engine->renderOneFrame();
+                }
+            };
+
+            // ARM A: unflagged — the preview as it used to be. One hover in,
+            // one hover out.
+            const quint64 beforeA = mirror.giRefreshCount();
+            previewTarget->setMaterial(borrowed);
+            settle(20);
+            const quint64 afterHoverA = mirror.giRefreshCount();
+            previewTarget->setMaterial(originalMat);
+            settle(20);
+            const quint64 afterRestoreA = mirror.giRefreshCount();
+            std::printf("info: GI per hover, UNFLAGGED: enter +%llu, leave +%llu\n",
+                        (unsigned long long)(afterHoverA - beforeA),
+                        (unsigned long long)(afterRestoreA - afterHoverA));
+            CHECK(afterHoverA > beforeA,
+                  "GI preview (measured): an UNFLAGGED hover costs a full GI re-solve for a state "
+                  "the document never held");
+
+            // ARM B: the same gesture with the scene saying a preview is on
+            // screen. Nothing arms — and, the half that is easy to get wrong,
+            // nothing ADOPTS either, so the restore lands back on the signature
+            // the debounce already remembered and is not itself a change.
+            //
+            // A FRESH material, because arm A has already taught the engine
+            // about `borrowed`: re-using it would prove nothing.
+            auto borrowed2 = iris::PbrMaterial::create();
+            borrowed2->setBaseColor(QColor(240, 12, 200));
+            borrowed2->setRoughnessFactor(0.83f);
+
+            const quint64 beforeB = mirror.giRefreshCount();
+            ++gdoc->materialPreviewDepth;
+            previewTarget->setMaterial(borrowed2);
+            settle(20);
+            CHECK(mirror.giRefreshCount() == beforeB,
+                  "GI preview: a FLAGGED hover held past the stability window asks for NO re-solve");
+            previewTarget->setMaterial(originalMat);
+            --gdoc->materialPreviewDepth;
+            settle(20);
+            CHECK(mirror.giRefreshCount() == beforeB,
+                  "GI preview: ending the preview asks for no re-solve either (the signature never moved)");
+
+            // ...and the gate is a GATE, not a mute: an edit to a material the
+            // scene is wearing, after the preview has ended, still costs its
+            // one re-solve. (An in-place edit, which is what the material panel
+            // and `material.set` do — the path the engine's generation counter
+            // is actually keyed on.)
+            const quint64 beforeC = mirror.giRefreshCount();
+            if (auto pbr = originalMat.dynamicCast<iris::PbrMaterial>())
+                pbr->setBaseColor(QColor(200, 30, 30));
+            settle(20);
+            CHECK(mirror.giRefreshCount() == beforeC + 1,
+                  "GI preview: a COMMITTED material edit after the preview still re-solves, once");
+        }
+
         // Leave the process-wide HlmsPbs VCT binding as we found it.
         gdoc->giMode = iris::GiMode::OFF;
         mirror.sync();

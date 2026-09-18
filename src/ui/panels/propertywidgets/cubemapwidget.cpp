@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QMenu>
 #include <QTransform>
+#include "ui/controls/assetdrag.h"
 
 CubeMapWidget::CubeMapWidget(QWidget *parent) : QWidget(parent)
 {
@@ -251,7 +252,7 @@ void CubeMapButton::leaveEvent(QEvent* event)
 
 void CubeMapButton::dragEnterEvent(QDragEnterEvent* event)
 {
-	if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+	if (AssetDrag::isAssetDrag(event->mimeData())) {
 		event->acceptProposedAction();
 	}
 	else {
@@ -261,11 +262,8 @@ void CubeMapButton::dragEnterEvent(QDragEnterEvent* event)
 
 void CubeMapButton::dropEvent(QDropEvent* event)
 {
-	// http://stackoverflow.com/a/2747369/996468
-	QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
-	QDataStream stream(&encoded, QIODevice::ReadOnly);
-	QMap<int, QVariant> roleDataMap;
-	while (!stream.atEnd()) stream >> roleDataMap;
+	// ONE decoder (ui/controls/assetdrag.h).
+	const QMap<int, QVariant> roleDataMap = AssetDrag::roles(event->mimeData());
 
 	// extend getting guid to filepicker dialog...
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {

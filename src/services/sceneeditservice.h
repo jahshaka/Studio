@@ -34,7 +34,10 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QList>
 
+#include <QVector>
+
 #include "irisgl/irisglfwd.h"
+#include "data/materialpreset.h"
 #include "data/project.h"   // ModelTypes
 #include "io/sceneformat.h"
 #include "services/surfaceplacement.h"
@@ -43,9 +46,9 @@ For more information see the LICENSE file
 
 class Database;
 class IEditorViewport;
+class MaterialPreviewService;
 class UndoService;
 class SelectionService;
-class MaterialPreset;
 
 /// Options for SceneEditService::addImagePlane. Defaults are the
 /// owner-approved §8 calls (IMAGE_PLANE_SPEC): double-sided ON (a
@@ -360,12 +363,55 @@ public:
     void applyMaterialPreset(const MaterialPreset &preset);
     void applyMaterialPreset(const MaterialPreset &preset, iris::SceneNodePtr target);
 
+    /// THE ONE WAY A MATERIAL IS RESOLVED FROM WHAT THE UI CARRIES
+    /// (MATERIAL-PREVIEW-1). Everything a user can drag, double-click, script
+    /// or drop names a material with ONE string, and this is the only function
+    /// that turns that string into an `iris::Material`:
+    ///
+    ///   * a reserved preset GUID, or a preset's NAME  -> BuiltinMaterials::fromPreset
+    ///   * a project/library MATERIAL row              -> MaterialReader::parseMaterialTyped
+    ///   * a SHADER row (a Materials-module graph)     -> MaterialReader::parseShaderAsPbr
+    ///
+    /// ALWAYS A FRESH, PRIVATE INSTANCE — never a shared one. `MeshNode::setMaterial`
+    /// MUTATES the material it is handed (SKINNING_ENABLED and friends), so a
+    /// shared instance handed to two nodes is a defect waiting for a skinned
+    /// mesh. Null when the string names nothing this build can resolve, which
+    /// is what makes "is this payload a material?" answerable BEFORE a drag is
+    /// accepted rather than after it is dropped.
+    ///
+    /// It replaced three independent resolutions — the drag preview's read of a
+    /// QVariant on the AssetManager (which was silently null for two of the
+    /// three material sources, the owner's "only some materials preview" bug),
+    /// MainWindow::applyMaterialPreset's preset scan, and material.apply's own.
+    iris::MaterialPtr resolveMaterial(const QString &presetOrGuid) const;
+
+    /// THE ONE APPLY, with the target EXPLICIT. `material.apply`, the viewport
+    /// drop and the tray's double-click all land here; it dispatches on the
+    /// same three shapes resolveMaterial knows, is undoable as exactly one
+    /// macro, and ends any live hover preview before it pushes so the undo
+    /// command captures the TRUE original material. False (and nothing pushed)
+    /// when the string resolves to nothing or the target holds no meshes.
+    bool applyMaterial(const QString &presetOrGuid, iris::SceneNodePtr target);
+
+
     /// Applies a SAVED material asset (a project .material row — e.g. one the
     /// preset apply registered under Presets/) to the same target set.
     /// Dispatches on the stored materialType, so saved PBR materials come back
     /// as real PbrMaterials. Returns false when the guid has no material data
     /// or the target holds no meshes.
     bool applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target);
+
+    /// Applies a SHADER row — a Materials-module graph — as the baked
+    /// PbrMaterial it carries. Same undo shape and same use-edge bookkeeping as
+    /// applyMaterialAsset; false when the definition has no baked material
+    /// (which is the same condition resolveMaterial refuses on, so a tile that
+    /// cannot preview cannot half-apply either).
+    bool applyMaterialShader(const QString &shaderGuid, iris::SceneNodePtr target);
+
+    /// The hover-preview service, injected by the shell so every apply can end
+    /// a live preview before it pushes. Null in headless hosts — which have no
+    /// pointer to hover.
+    void setMaterialPreview(MaterialPreviewService *service) { preview = service; }
 
     /// RESETS the mesh node's material to the node's OWN default (owner,
     /// 2026-09-12; services/materialdefaults.h — the default floor is the
@@ -421,6 +467,7 @@ private:
     UndoService *undo;
     SelectionService *selection;
     IEditorViewport *viewport;
+    MaterialPreviewService *preview = nullptr;
     std::function<iris::ScenePtr()> sceneProvider;
 
 };

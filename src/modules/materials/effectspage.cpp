@@ -1610,9 +1610,9 @@ void EffectsPage::generateMaterialInProjectFromShader(QString guid)
 
 	updateMaterialThumbnail(guid, assetGuid);
 
-	MaterialReader reader;
-	reader.setProject(mProject);
-	auto material = reader.parseMaterial(matDef, dataBase);
+	// (The material was parsed here only to hydrate the AssetManager entry
+	// below it — a parse plus a texture load per call, for a payload nothing
+	// read. Deleted with it, MATERIAL-PREVIEW-1 item c.)
 
 	// Actually create the material and add shader as it's dependency
 	dataBase->createDependency(
@@ -1636,10 +1636,13 @@ void EffectsPage::generateMaterialInProjectFromShader(QString guid)
 		}
 	}
 
-	auto assetMat = new AssetMaterial;
-	assetMat->assetGuid = assetGuid;
-	assetMat->setValue(QVariant::fromValue(material));
-	AssetManager::addAsset(assetMat);
+	// NO AssetManager MATERIAL PAYLOAD (MATERIAL-PREVIEW-1 item c). The graph
+	// material used to be parked in the session registry here so the viewport's
+	// hover preview could find it — through a `QSharedPointer<PbrMaterial>` the
+	// reader (which asked for `iris::MaterialPtr`) could never read, which is
+	// why a material made in the Materials module never previewed. The preview
+	// resolves from the database now (SceneEditService::resolveMaterial), which
+	// is the same reading the drop has always committed.
 
 
 	// write material guid to graph and save graph (a final-bake trigger:
@@ -1661,9 +1664,9 @@ void EffectsPage::updateMaterialFromShader(QString guid)
 
 	materialDef["values"] = writeMaterialValuesFromShader(guid);
 	
-	MaterialReader reader;
-	reader.setProject(mProject);
-	auto material = reader.parseMaterial(materialDef, dataBase);
+	// (The material was parsed here only to hydrate the AssetManager entry
+	// below it — a parse plus a texture load per call, for a payload nothing
+	// read. Deleted with it, MATERIAL-PREVIEW-1 item c.)
 
 	if (!dataBase->checkIfDependencyExists(graphObj->materialGuid, guid)) {
 		dataBase->createDependency(
@@ -1693,10 +1696,8 @@ void EffectsPage::updateMaterialFromShader(QString guid)
 	updateMaterialThumbnail(guid, graphObj->materialGuid);
 
 
-	auto assetMat = new AssetMaterial;
-	assetMat->assetGuid = graphObj->materialGuid;
-	assetMat->setValue(QVariant::fromValue(material));
-	AssetManager::replaceAssets(graphObj->materialGuid, assetMat);
+	// The re-registration is gone with the one above it: nothing reads a
+	// material out of the session registry any more.
 
 }
 
