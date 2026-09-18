@@ -688,6 +688,10 @@ public:
         /// The chain is wanted but no view has tracked a camera yet, so there is
         /// nowhere honest to put it — `cascades` is empty for a REASON.
         bool    cascadesAwaitingCamera = false;
+        /// The arm is waiting for an albedo/emissive texture that is still
+        /// streaming (BOOTVOX-1): the build lands on the frame it arrives,
+        /// bounded at 30 deferrals.
+        bool    awaitingVoxelTextures = false;
         /// ATOM stage 1's far-field proxy, as APPLIED — whether the cascades
         /// are voxelising the baked LOD levels at all.
         bool    cascadeVoxelLod = true;

@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/vrworld.h"
+#include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/dragvaluewidgets.h"
 #include "ui/panels/propertywidgets/worldvrpropertywidget.h"
@@ -75,6 +76,14 @@ static ComboBoxWidget *comboWith(QWidget *w, const QString &label)
     return nullptr;
 }
 
+static CheckBoxWidget *boxWith(QWidget *w, const QString &label)
+{
+    for (CheckBoxWidget *b : w->findChildren<CheckBoxWidget *>())
+        for (QLabel *l : b->findChildren<QLabel *>())
+            if (labelIs(l->text(), label)) return b;
+    return nullptr;
+}
+
 static DragFloatWidget *dragWith(QWidget *w, const QString &label)
 {
     for (DragFloatWidget *d : w->findChildren<DragFloatWidget *>())
@@ -103,6 +112,10 @@ int main(int argc, char **argv)
     CHECK(scene->vrFlyMode == iris::VrFlyMode::Aim && scene->vrTurnMode == iris::VrTurnMode::Snap
               && scene->vrDominantRight,
           "...along the aim ray, snap turning, right hand dominant");
+    // BARE HANDS ARE OFF IN A NEW PROJECT (lane HANDS-SWITCH-1; the owner,
+    // 2026-09-18, joint): the wearer's controllers are the authored input until
+    // an author says otherwise, per project.
+    CHECK(!scene->vrHands, "...and bare-hand tracking is OFF (a new project is on controllers)");
 
     // THE SECTION SHOWS THE PROJECT'S VALUES, not a set of its own: the scene
     // is given values BEFORE the panel is bound to it.
@@ -112,6 +125,7 @@ int main(int argc, char **argv)
     scene->vrSnapTurnDegrees = 45.0f;
     scene->vrSmoothTurnDegreesPerSecond = 120.0f;
     scene->vrDominantRight = false;
+    scene->vrHands = true;
 
     WorldVrPropertyWidget panel;
     panel.setServices(&services);
@@ -124,10 +138,14 @@ int main(int argc, char **argv)
     {
         const auto combos = panel.findChildren<ComboBoxWidget *>();
         const auto fields = panel.findChildren<DragFloatWidget *>();
-        int enums = 0, numbers = 0;
-        for (const vrworld::Row &r : vrworld::rows())
-            (r.kind == vrworld::RowKind::Enum ? enums : numbers) += 1;
-        CHECK(combos.size() == enums && fields.size() == numbers,
+        const auto boxes = panel.findChildren<CheckBoxWidget *>();
+        int enums = 0, numbers = 0, flags = 0;
+        for (const vrworld::Row &r : vrworld::rows()) {
+            if (r.kind == vrworld::RowKind::Enum) ++enums;
+            else if (r.kind == vrworld::RowKind::Flag) ++flags;
+            else ++numbers;
+        }
+        CHECK(combos.size() == enums && fields.size() == numbers && boxes.size() == flags,
               "the section is GENERATED: one row per table entry, and nothing else");
 
         DragFloatWidget *speed = dragWith(&panel, QStringLiteral("Fly Speed"));
@@ -141,6 +159,12 @@ int main(int argc, char **argv)
         ComboBoxWidget *hand = comboWith(&panel, QStringLiteral("Dominant Hand"));
         CHECK(hand && hand->getItemData(hand->getWidget()->currentIndex()).toInt() == 0,
               "the dominant hand row shows the project's: left");
+        // THE HANDS SWITCH (lane HANDS-SWITCH-1) — a true/false is a SWITCH and
+        // not a two-item combo, which is what the theme draws for a flag
+        // everywhere else in this panel.
+        CheckBoxWidget *hands = boxWith(&panel, QStringLiteral("Hands"));
+        CHECK(hands != nullptr, "the Hands row is a switch, not a list of two words");
+        CHECK(hands && hands->getValue(), "...and it shows the project's: on");
     }
 
     // ---- 2. A ROW THAT MEANS NOTHING IN THIS MODE IS GREYED, NOT HIDDEN ----
@@ -177,6 +201,31 @@ int main(int argc, char **argv)
         CHECK(smooth && !smooth->isEnabled(), "...and the smooth rate is greyed");
     }
 
+    // ---- 3b. THE HANDS SWITCH WRITES THE DOCUMENT, AS ONE UNDO STEP -------
+    // (Lane HANDS-SWITCH-1.) The same path the combo takes — the sceneprops key
+    // `world.vr` writes — so the switch is a second CONSUMER of the verb layer
+    // and never a parallel write.
+    {
+        CheckBoxWidget *hands = boxWith(&panel, QStringLiteral("Hands"));
+        CHECK(hands != nullptr, "the Hands switch is on the blade");
+        const int before = stack.index();
+        // The user's gesture: the widget's own signal, exactly as the scrub
+        // case below drives the drag rows.
+        if (hands) { hands->setValue(false); emit hands->valueChanged(false); }
+        pump();
+        CHECK(!scene->vrHands, "switching Hands off wrote the document");
+        CHECK(stack.index() == before + 1, "...as exactly ONE undo step");
+        CHECK(stack.text(stack.index() - 1) == QStringLiteral("Set Hands"),
+              "named for the row");
+        stack.undo();
+        pump();
+        CHECK(scene->vrHands, "and undo put bare hands back");
+        CHECK(hands && hands->getValue(), "...and the SWITCH followed the document");
+        stack.redo();
+        pump();
+        CHECK(!scene->vrHands, "...and redo switched them off again");
+    }
+
     // ---- 4. A SCRUB IS LIVE, AND LANDS AS ONE STEP -------------------------
     {
         DragFloatWidget *speed = dragWith(&panel, QStringLiteral("Fly Speed"));
@@ -210,6 +259,18 @@ int main(int argc, char **argv)
         QString why;
         CHECK(r && !vrworld::validate(*r, QVariant(0.0), out, why),
               "...and the verb refuses zero for the same reason");
+        // AND A FLAG IS A FLAG (lane HANDS-SWITCH-1): the switch can only send
+        // true or false, and the verb takes only true or false — a number or a
+        // word is refused rather than coerced into one of them.
+        const vrworld::Row *h = vrworld::row(QStringLiteral("hands"));
+        CHECK(h && h->kind == vrworld::RowKind::Flag && h->sessionFixed,
+              "the hands row is a FLAG, and one a session latches at creation");
+        CHECK(h && vrworld::validate(*h, QVariant(true), out, why) && out == 1.0,
+              "...true is taken");
+        CHECK(h && !vrworld::validate(*h, QVariant(1), out, why),
+              "...and a 1 is refused: a value of the wrong type is a typo");
+        CHECK(h && !vrworld::validate(*h, QVariant(QStringLiteral("on")), out, why),
+              "...as is the word 'on'");
     }
 
     std::printf(failures ? "FAILURES: %d\n" : "all cases passed (%d failures)\n", failures);

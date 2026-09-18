@@ -17,6 +17,7 @@ For more information see the LICENSE file
 
 #include "commands/scenepropertycommand.h"
 #include "services/vrworld.h"
+#include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/dragvaluewidgets.h"
 #include "ui/panels/propertyrows.h"
@@ -48,6 +49,33 @@ void WorldVrPropertyWidget::build()
         // THE FILTER KEY IS THE UNDO KEY (PROPERTY_FILTER_SPEC §3.2): one name
         // for one setting, wherever it is reached from.
         const QString key = vrworld::propsKey(r.id);
+
+        if (r.kind == vrworld::RowKind::Flag) {
+            // A TRUE/FALSE IS A SWITCH, not a two-item combo: it is the control
+            // this theme draws for a flag everywhere else in the World panel
+            // (the Photon row, the fog rows), and a flag drawn as a list reads
+            // as a choice between two things nobody named.
+            row.flag = this->addCheckBox(r.label);
+            row.flag->setValue(r.get ? r.get(scene) != 0.0 : false);
+            row.flag->setToolTip(r.doc);
+            PropertyRows::identify(row.flag, key,
+                                   { QStringLiteral("vr"), QStringLiteral("headset"), r.id });
+            const QString id = r.id;
+            const QString label = r.label;
+            connect(row.flag, &CheckBoxWidget::valueChanged, this,
+                    [this, id, label](bool on) {
+                        if (loading || !scene) return;
+                        const QVariant before = sceneprops::get(scene, vrworld::propsKey(id));
+                        const double value = on ? 1.0 : 0.0;
+                        sceneprops::set(scene, vrworld::propsKey(id), value);
+                        panelundo::pushSceneEdit(services, scene, vrworld::propsKey(id),
+                                                 tr("Set %1").arg(label), before, QVariant(value),
+                                                 [this]() { refreshRows(); });
+                        refreshRows();
+                    });
+            rows.append(row);
+            continue;
+        }
 
         if (r.kind == vrworld::RowKind::Enum) {
             row.combo = this->addComboBox(r.label);
@@ -101,7 +129,11 @@ void WorldVrPropertyWidget::refreshRows()
         const vrworld::Row *r = vrworld::row(w.id);
         if (!r) continue;
         const double value = r->get ? r->get(scene) : 0.0;
-        if (w.combo) {
+        if (w.flag) {
+            const QSignalBlocker quiet(w.flag.get());
+            w.flag->setValue(value != 0.0);
+            w.flag->setEnabled(r->enabled ? r->enabled(scene) : true);
+        } else if (w.combo) {
             const QSignalBlocker quiet(w.combo->getWidget());
             const int index = w.combo->findData(int(qRound(value)));
             w.combo->setCurrentIndex(index >= 0 ? index : 0);

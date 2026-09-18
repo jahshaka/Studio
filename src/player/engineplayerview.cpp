@@ -233,6 +233,21 @@ bool EnginePlayerView::stepPlayerFrames(int n, float dt)
     adoptEditorScene();
     if (!mScene->attach(view())) return false;
     mScene->stepFrames(n, dt, width(), height());
+    // THESE ARE FRAMES ON THE SAME WINDOW (DOUBLE-FRAME-1, the lead's fix-round
+    // item 4). `editor.frame` routes here whenever the Player owns the screen
+    // (EditorApi::frame -> playerHasTheScreen), so a script stepping frames in
+    // play mode draws exactly as the editor's scripted loop does — and the
+    // render driver's Live pacing must count those frames too, or the loop adds
+    // one of its own in the gap after each verb on top of the one just drawn.
+    //
+    // ONCE, AFTER THE LOOP, not per frame: `EnginePlayerScene::stepFrames`
+    // renders n frames without pumping the event loop, so no tick can fire
+    // between them and the only moment that matters is the last frame's end —
+    // which is exactly what the pacing clock measures from. (The call cannot
+    // live in that TU: it is compiled into two player test targets that link
+    // the engine and Qt but nothing of the shell, which is the same reason its
+    // own loop does not drain the frame monitor.)
+    if (mDriver) mDriver->noteExternalFrame();
     return true;
 }
 

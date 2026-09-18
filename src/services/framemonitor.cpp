@@ -1476,6 +1476,29 @@ void FrameMonitor::noteTickEnd(bool rendered)
     // the frame that comes back (see the header). There is also nothing to
     // drain — no frame was rendered — but the drain timer still runs.
     if (!rendered) return;
+    // THE CAPTURE'S START TAG BELONGS ON THE FIRST FRAME AFTER IT, WHOEVER
+    // DREW IT (ENGINE-SMALL-B fix round, found by perf.capture_bundle under
+    // load). `noteTickStart` writes `host.capture_start`, and only the render
+    // DRIVER calls it — so a capture started from a live script run that then
+    // steps its own frames (`editor.frame`, which is how every MCP gesture
+    // moves the picture) waited for a driver tick to carry its tag. That was
+    // already luck; DOUBLE-FRAME-1 made the luck worse, because a script
+    // drawing at display rate is now exactly what suppresses those ticks, and
+    // the tag could fall outside the captured window ("exactly one frame is
+    // tagged host.capture_start (0)").
+    //
+    // So a SCRIPTED frame closing with the tag still owed carries it here. The
+    // value is the same `mStartWorkNs` the tick path would have used — the work
+    // the capture's own start cost — and there is no gap to carve it out of on
+    // this path, which is the honest shape: a scripted frame has no idle/UI
+    // split because nothing waited.
+    if (mTagStartFrame) {
+        if (auto eng = engine()) {
+            mTagStartFrame = false;
+            eng->noteHostStage(std::string("host.capture_start"),
+                               float(double(mStartWorkNs) / 1.0e6));
+        }
+    }
     drainAndCharge();
     mSinceTickEnd.restart();
     mBlockedNs = 0;

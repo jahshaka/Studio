@@ -1373,6 +1373,28 @@ int main() {
                       "THE SUGGESTED BINDINGS PARSE: the runtime took %u of the %u profiles "
                       "offered — no XR_ERROR_PATH_UNSUPPORTED anywhere",
                       st.bindingProfilesAccepted, st.bindingProfiles);
+            // (a2) AND BARE HANDS WERE NOT AMONG THEM (lane HANDS-SWITCH-1).
+            // This session ran on the DEFAULT `VrConfig`, which is a project on
+            // controllers: the `ext/hand_interaction_ext` block is not
+            // suggested at all, so this runtime — which advertises the
+            // extension — is asked about three profiles and not four. The ON
+            // arm needs a document and a verb, so it lives in
+            // `vr.input_session`; what is engine-level is the gate itself.
+            CHECK_MSG(!st.handsEnabled,
+                      "the session reports bare hands OFF (the default: a project on "
+                      "controllers)");
+            {
+                VrBindingBlock blocks[kVrBindingBlockMax];
+                const unsigned n = engine->vrBindingBlocks(blocks, kVrBindingBlockMax);
+                bool anyHand = false;
+                for (unsigned b = 0; b < n; ++b)
+                    if (vrIsHandProfile(blocks[b].profile.c_str()))
+                        anyHand = true;
+                CHECK_MSG(!anyHand,
+                          "...and NO bare-hand block was offered (%u blocks, none of them "
+                          "hands)", n);
+            }
+
             // (b) AND IT SAYS WHICH ONE IT BOUND.
             CHECK_MSG(st.profile.startsWith("/interaction_profiles/"),
                       "the runtime reports the profile it bound ('%s')", st.profile.c_str());

@@ -147,6 +147,26 @@ public:
     void setScriptRun(ScriptRun run) { mScriptRun = run; }
     ScriptRun scriptRun() const { return mScriptRun; }
 
+    /// A FRAME THIS LOOP DID NOT DRAW, but the display now shows (DOUBLE-FRAME-1,
+    /// 2026-09-18). The Live pacing above is "at most one frame per display
+    /// period", and it used to mean at most one of MY frames: the clock was
+    /// restarted only at the end of a driver tick, so a script that renders its
+    /// own frames — `editor.frame()`, which is how every drag, every step and
+    /// every MCP gesture moves the picture deterministically — got a driver
+    /// frame in the gap between two verbs ON TOP of the one it had just drawn.
+    /// MEASURED with `--script-live`, 60 scripted frames per arm: 81 engine
+    /// frames AT REST (1.35 per scripted frame, with no document edit at all)
+    /// and 89-95 while dragging a cube (1.48-1.58) — which is the "two frames
+    /// per document edit" the render audit recorded from an MCP-driven drag,
+    /// seen from its actual cause: the frames are not caused by the EDIT, they
+    /// are caused by the script drawing.
+    ///
+    /// So every host loop that renders outside this tick says so, and the
+    /// period is measured from the last frame ANYBODY drew. Two instructions,
+    /// unconditional: a run with no script in flight reads its `mScriptRun`
+    /// and pays nothing.
+    void noteExternalFrame() { mSinceFrameEnd.restart(); }
+
 signals:
     /// Emitted before each frame — animate here.
     void beforeFrame();
