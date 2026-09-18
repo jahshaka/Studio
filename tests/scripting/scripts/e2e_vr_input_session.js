@@ -84,7 +84,28 @@ var a = vr.available();
 console.log("vr.available: " + JSON.stringify(a));
 assert(a.available === true, "the runtime answered: " + a.runtime);
 
-assert(vr.begin({ mirror: "none" }) === true, "vr.begin() starts a session on the editor's scene");
+// BARE HANDS ARE OPT-IN SINCE HANDS-SWITCH-1 (the owner, 2026-09-18, joint):
+// a project is on controllers unless it says otherwise, so the bare-hand
+// suggested-binding block below exists only for a session that ASKED for it.
+// `hands: true` is the one-session override — the same measurement hook
+// `hiddenAreaMask` carries — and it writes nothing to the project, which is
+// what keeps case 8 at the end of this file honest about the default.
+assert(vr.begin({ mirror: "none", hands: true }) === true,
+       "vr.begin() starts a session on the editor's scene (bare hands asked for)");
+assert(vr.state().hands.enabled === true,
+       "...and the session says it was asked for them");
+// AND THE TWO REPORTS AGREE (the fix round's item 1). `vr.begin({hands:true})`
+// is a SESSION OVERRIDE like any other, so the table knows about it: the first
+// cut wrote only the session's config and `vr.locomotion()` — which resolves
+// the row through the table — still answered with the project's false while
+// `vr.state()` said true, with nothing listed as overridden.
+assert(vr.locomotion().hands === true,
+       "vr.locomotion() reports what the SESSION is running on, not the project's row");
+assert(vr.locomotion().overridden.indexOf("hands") >= 0,
+       "...and names it as this session's override: "
+       + JSON.stringify(vr.locomotion().overridden));
+assert(world.vr().hands === false,
+       "...while the PROJECT is untouched: an override writes nothing");
 
 // ---- 0a. THE BINDINGS PARSED, INCLUDING BARE HANDS ----------------------
 //
@@ -837,5 +858,105 @@ assert(near(pRigAfter.yaw, pRigBefore.yaw, 1e-3), "facing the way they already f
 assert(player.endVr() === true, "player.endVr() ends the Player's session");
 player.stop();
 assert(vr.inject("right") === true, "the injection is withdrawn");
+
+// ---- 8. BARE HANDS ARE THE PROJECT'S CHOICE, AND OFF (HANDS-SWITCH-1) ---
+//
+// THE DECISION THIS CASE PINS (the owner, 2026-09-18, joint): bare-hand work is
+// deferred until the controllers are right on the hardware, and WHICH of the
+// two a wearer gets is the AUTHOR'S choice for their project rather than the
+// runtime's for the moment. From VR-HANDS-1 (stage 3) until this lane the
+// `ext/hand_interaction_ext` block was suggested to every runtime that
+// advertised the extension — so a headset could hand a session to bare hands
+// the instant a controller was set down mid-smoke.
+//
+// What a REAL runtime proves here, and the headless suites cannot: the block is
+// genuinely not offered (Monado is asked and answers about three profiles, not
+// four), the session reports which way it went, and the same runtime takes the
+// block the moment the project asks for it.
+// THE OVERRIDE DIED WITH THE SESSION THAT MADE IT (the fix round's item 1):
+// `release()` drops it, so what follows is the project's own answer again and
+// nothing is carried over from the session at the top of this file.
+assert(vr.locomotion().overridden.indexOf("hands") < 0,
+       "the begin override died with its session: "
+       + JSON.stringify(vr.locomotion().overridden));
+assert(vr.locomotion().hands === false, "...and the locomotion is the project's row again");
+// AND THE OPTION IS TYPE-CHECKED BY THE TABLE'S RULE (the fix round's item 2):
+// a Flag takes true or false, so the words `QVariant::toBool()` would have read
+// as YES are refused by name instead of quietly binding a wearer's hands.
+var beganWrong = false;
+try { vr.begin({ mirror: "none", hands: "no" }); beganWrong = true; } catch (e) {
+    assert(String(e).indexOf("true or false") >= 0,
+           "vr.begin({hands:'no'}) is refused by name (" + e + ")");
+}
+assert(beganWrong === false, "...and no session was begun by it");
+assert(vr.state().active === false, "...the refusal left nothing running");
+
+assert(vr.begin({ mirror: "none" }) === true,
+       "a session begins on the PROJECT's own settings, with nothing overridden");
+var hOff = vr.state();
+console.log("hands off: " + JSON.stringify(hOff.bindings) + " enabled=" + hOff.hands.enabled);
+assert(hOff.hands.enabled === false,
+       "bare hands are OFF: a new project is on controllers");
+assert(hOff.bindings.offered === 3,
+       "...so THREE blocks were offered, not four — the bare-hand block was never suggested ("
+       + hOff.bindings.offered + ")");
+assert(hOff.bindings.accepted === hOff.bindings.offered,
+       "...and the runtime took every one of them (the controllers are untouched)");
+var offBlocks = hOff.bindings.profiles;
+for (var hb = 0; hb < offBlocks.length; ++hb)
+    assert(String(offBlocks[hb].profile).indexOf("hand_interaction") < 0,
+           "no bare-hand block among them: '" + offBlocks[hb].profile + "'");
+// AND AN INJECTED BARE HAND MOVES NOTHING. The injection route is how a
+// skeleton is driven on a box with no fingers, so a project on controllers must
+// not be shown a script's hand either: the engine answers no joints at all
+// while such a session is live.
+var jointA = { x: 0.30, y: 1.40, z: -0.50 };
+var jointB = { x: 0.32, y: 1.41, z: -0.52 };
+assert(vr.inject("right", { valid: true, aim: jointA, grip: jointA,
+                            profile: "hand_interaction", focused: true,
+                            joints: [jointA, jointB, jointA, jointB] }) === true,
+       "a bare hand WITH a skeleton is injected");
+editor.frame(1);
+assert(vr.step() === true, "...and the session reads it inside a frame");
+var handsOffJoints = vr.handJoints("right");
+console.log("hands off, injected skeleton: " + JSON.stringify(
+    { tracked: handsOffJoints.tracked, count: handsOffJoints.count,
+      drawn: handsOffJoints.drawn }));
+assert(handsOffJoints.count === 0 && handsOffJoints.tracked === false,
+       "NO SKELETON is reported: a project on controllers has no hands, whoever wrote them");
+assert(handsOffJoints.drawn === 0, "...and none is drawn in the wearer's eyes");
+assert(vr.inject("right") === true, "the injection is withdrawn again");
+assert(vr.end() === true, "that session ends");
+
+// ...AND THE PROJECT CAN ASK FOR THEM. The row is a document field
+// (`world.vr({hands})`, the World panel's Hands switch), read by the NEXT
+// session — which is the whole reason it cannot be changed mid-session.
+var vrRow = world.vr({ hands: true });
+assert(vrRow.hands === true, "world.vr({hands:true}) writes the project's row");
+assert(vr.begin({ mirror: "none" }) === true, "a session begins on the project that asked");
+var hOn = vr.state();
+console.log("hands on: " + JSON.stringify(hOn.bindings) + " enabled=" + hOn.hands.enabled);
+assert(hOn.hands.enabled === true, "...and it bound bare hands, from the DOCUMENT alone");
+assert(hOn.bindings.offered === 4, "FOUR blocks this time (" + hOn.bindings.offered + ")");
+var onHandBlock = null;
+var onBlocks = hOn.bindings.profiles;
+for (var hc = 0; hc < onBlocks.length; ++hc)
+    if (String(onBlocks[hc].profile).indexOf("hand_interaction") >= 0)
+        onHandBlock = onBlocks[hc];
+assert(onHandBlock !== null && onHandBlock.accepted === true,
+       "the bare-hand block is back and this runtime took it");
+assert(onHandBlock.bindings === 10,
+       "...with its ten bindings intact (" + onHandBlock.bindings + ")");
+// A SESSION CANNOT BE TOLD OTHERWISE WHILE IT RUNS, and says so out loud
+// rather than answering yes and doing nothing: the bindings are attached to
+// the session's action sets before its first frame.
+var threw = false;
+try { vr.locomotion({ hands: false }); } catch (e) {
+    threw = String(e).indexOf("fixed for the life of a session") >= 0;
+}
+assert(threw === true, "vr.locomotion({hands:false}) is REFUSED by name while a session runs");
+assert(vr.state().hands.enabled === true, "...and the running session still has its hands");
+assert(vr.end() === true, "the hands session ends");
+assert(world.vr({ hands: false }).hands === false, "the project is put back on controllers");
 
 console.log("vr.input_session: PASS");

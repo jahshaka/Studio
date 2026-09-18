@@ -336,7 +336,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "rayTracing", "world.rayTracing([\"off\"|\"auto\"|\"on\"]) -> \"off\"|\"auto\"|\"on\"",
           "HARDWARE RAY TRACING FOR THIS PROJECT, saved with the scene and travelling with it (owner, 2026-09-15). Three states, and the first thing to know is that NOTHING can force ray hardware onto a machine that has none: this row says what the project was authored for, and the renderer meets it with what the machine can do. \"off\" never traces, even where the GPU can — what a scene that must look and cost the SAME everywhere asks for. \"auto\" (the default) traces where the machine can and falls back silently everywhere else: the same file looks right on a ray-capable desktop and on a Mac, and nobody has to think about it. \"on\" means the scene was AUTHORED for rays: it renders exactly like auto — traces where it can, falls back where it cannot — and additionally raises a scene issue in the editor's error bar (\"this project expects hardware ray tracing; this machine has none\") so the author learns that this machine is not showing them what they built. On and auto therefore render the same picture; on is the one that TELLS YOU when the machine falls short. Called with no argument it reads the project's state. Any other word is refused, loudly, rather than guessed at. One undo step, and it dirties the project like any other document edit — it is NOT an application preference (it used to be one for two days: a machine-wide switch meant the same project rendered differently depending on a setting that was not in it). What the machine actually answered is world.giStatus().rayQuery — 'available' is the device's own answer, 'enabled' whether the renderer is using it — and --no-ray-query is the diagnostic switch that makes a ray-capable box render the no-rays picture for one run.",
           Needs::Document },
-        { "vr", "world.vr({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, dominant?}) -> object",
+        { "vr", "world.vr({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, dominant?, hands?}) -> object",
           "THE PROJECT'S VR SETTINGS — how a wearer MOVES in this world, saved with the scene "
           "and travelling with it (owner request 2026-09-18). Read with no argument; set with "
           "any subset. It is a document field and not an application preference for the reason "
@@ -350,6 +350,15 @@ QVector<VerbInfo> WorldApi::verbs() const
           "`smoothTurnDegreesPerSecond` the held-stick rate (90), and `dominant` is \"right\" "
           "(the default) or \"left\" — which swaps BOTH hand roles at once, the pointing hand "
           "and the walking stick.\n\n"
+          "`hands` is BARE-HAND TRACKING, true or false, and it is FALSE by default (the "
+          "owner, 2026-09-18): a session binds the wearer's own hands only when this project "
+          "says so, and the controllers are unaffected either way. With it off no "
+          "`ext/hand_interaction_ext` bindings are suggested, no hand tracker is created and "
+          "no skeleton is reported — so a wearer who sets a controller down is left holding "
+          "nothing, instead of being handed to bare hands in the middle of a session by the "
+          "runtime. A session reads it when it BEGINS: turning it on reaches the next session "
+          "and not the one already in the headset, which is also why `vr.locomotion` refuses "
+          "it (`vr.begin({hands:true})` is the one-session override).\n\n"
           "EVERY SESSION ADOPTS THESE AS ITS DEFAULTS when it begins (`vr.begin`, "
           "`player.play({vr:true})`), and `vr.locomotion` overrides any of them FOR THAT "
           "SESSION without writing a thing here — so a wearer can try a faster fly in the "
