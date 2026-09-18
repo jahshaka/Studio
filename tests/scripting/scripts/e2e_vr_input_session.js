@@ -271,6 +271,30 @@ var fastWalk = Math.sqrt((fastTo.x - fastFrom.x) * (fastTo.x - fastFrom.x)
 console.log("      walked " + fastWalk.toFixed(3) + " m — 45 frames at 1/90 s of 9 m/s is 4.5");
 assert(near(fastWalk, 4.5, 0.08),
        "THE RIG MOVED AT THE PROJECT'S SPEED: " + fastWalk.toFixed(3) + " m against 4.5");
+// AN OVERRIDE ASKED FOR BEFORE A SESSION SURVIVES THE BEGIN, and dies with the
+// session that used it (the Fable read of VR-WORLD-1, item 3): adopting a
+// project used to clear every override, so a `vr.locomotion` issued in the
+// breath before `vr.begin` was refused silently.
+assert(vr.end() === true, "the session ends again");
+assert(vr.locomotion().session === false, "...and the latch goes with it");
+vr.locomotion({ flySpeed: 6 });
+assert(near(vr.locomotion().flySpeed, 6), "an override set with NO session stands");
+assert(vr.begin({ mirror: "none" }) === true, "a third session begins");
+assert(near(vr.locomotion().flySpeed, 6),
+       "THE OVERRIDE SURVIVED THE ADOPTION — the caller's ask was not thrown away");
+assert(vr.locomotion().overridden.indexOf("flySpeed") >= 0, "...and is still listed as one");
+assert(vr.end() === true, "that session ends");
+assert(near(vr.locomotion().flySpeed, 9),
+       "...and ITS overrides died with it: back to the project's 9 m/s");
+assert(vr.begin({ mirror: "none" }) === true, "the session the rest of this file needs");
+var settled = false;
+for (var af = 0; af < 200 && !settled; ++af) {
+    editor.frame(1);
+    var as = vr.state();
+    settled = as.head.valid && as.preview.placing === false;
+}
+assert(settled === true, "the wearer is placed once more");
+
 // Back to the shipped default for everything below (the snap turn's cases read
 // the rig, not the speed, but a suite leaves its fixture as it found it).
 world.vr({ flySpeed: 15 });

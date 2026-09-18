@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include <functional>
 
 #include <QHash>
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 #include <QVariant>
@@ -95,6 +96,11 @@ struct EnumOption
 struct Row
 {
     QString id;        ///< the verb key, and the undo key's suffix ("vr.<id>")
+    /// THE DOCUMENT'S OWN KEY ("vrFlySpeed"), so the writer and the reader are
+    /// generated from this table like every other consumer — six keys spelled
+    /// by hand in two files was the one place a rename could still go half
+    /// done (the Fable read of VR-WORLD-1, item 5).
+    QString jsonKey;
     QString label;     ///< the panel row's label
     QString doc;       ///< the row's tooltip AND the verb's documentation
     RowKind kind = RowKind::Number;
@@ -127,6 +133,23 @@ QStringList ids();
 
 /// The undo / sceneprops key of a row ("vr.flySpeed").
 QString propsKey(const QString &rowId);
+
+// ---- THE FILE ------------------------------------------------------------
+//
+// ONE PAIR OF FUNCTIONS, so a row is saved and read the day it is declared and
+// neither half can name a key the other does not. Enum rows ride as their
+// stable option id ("aim", "snap", "right") and Number rows as numbers, which
+// is the house rule for everything with a name (`rayTracing`, the exposure
+// mode, the play mode).
+
+/// Writes every row into `sceneObj` (SceneWriter).
+void write(const iris::ScenePtr &scene, QJsonObject &sceneObj);
+
+/// Reads every row the object carries (SceneReader). THE READER-DEFAULTS LAW:
+/// an absent key, an unparseable number or a name this build does not know
+/// leaves the field exactly as the constructor made it; a number outside the
+/// row's range is clamped into it.
+void read(const iris::ScenePtr &scene, const QJsonObject &sceneObj);
 
 /// VALIDATES ONE VALUE THE WAY BOTH VERBS AND THE PANEL MUST.
 ///
@@ -162,14 +185,21 @@ Settings fromScene(const iris::ScenePtr &scene);
 ///     cases. `scene` may be null.
 Settings resolve(const iris::ScenePtr &scene);
 
-/// A SESSION IS BEGINNING: latch this project's values as its defaults and drop
-/// every override the previous session held. Called by the two hosts that begin
-/// one (EditorVrPreview::begin, PlayerVr::begin) — so a project switched
-/// between sessions is picked up by the next session.
+/// A SESSION IS BEGINNING: latch this project's values as its defaults. Called
+/// by the two hosts that begin one (EditorVrPreview::begin, PlayerVr::begin) —
+/// so a project switched between sessions is picked up by the next session.
+///
+/// IT KEEPS THE OVERRIDES IT FINDS: a `vr.locomotion({...})` issued before the
+/// session starts is a caller asking for something, and dropping it at begin
+/// was a silent refusal. `release()` is where a session's overrides die.
 void adopt(const iris::ScenePtr &scene);
 
 /// A SESSION HAS ENDED: unlatch (reads go back to the live document) and drop
-/// the session's overrides.
+/// the session's overrides. IDEMPOTENT, and called by whichever path notices
+/// first — a host's `end()`, or its "the session went away underneath us"
+/// branch (a script's `vr.end`, a device loss, the engine tearing a Lost
+/// session down all take the second one). A host releases only a session it
+/// OWNED: releasing somebody else's latch reverts a live wearer's speed.
 void release();
 
 /// Is a session's project latched? (What `vr.locomotion` reports as the source

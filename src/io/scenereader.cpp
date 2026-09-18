@@ -379,33 +379,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		if (iris::rayTracingModeFromName(sceneObj.value("rayTracing").toString(), rt))
 			scene->rayTracing = rt;
 	}
-	// THE PROJECT'S VR SETTINGS (lane VR-WORLD-1). Every fallback is the field
-	// itself — the constructor's value — and the two modes are tolerant in the
-	// same way the ray-tracing row above is: a key that is absent or that names
-	// a mode this build does not know leaves the default standing.
-	scene->vrFlySpeed = float(qBound(double(vrworld::row(QStringLiteral("flySpeed"))->minValue),
-	                                 sceneObj.value("vrFlySpeed")
-	                                     .toDouble(double(scene->vrFlySpeed)),
-	                                 double(vrworld::row(QStringLiteral("flySpeed"))->maxValue)));
-	{
-		iris::VrFlyMode fly = iris::VrFlyMode::Aim;
-		if (iris::vrFlyModeFromName(sceneObj.value("vrFlyMode").toString(), fly))
-			scene->vrFlyMode = fly;
-		iris::VrTurnMode turn = iris::VrTurnMode::Snap;
-		if (iris::vrTurnModeFromName(sceneObj.value("vrTurnMode").toString(), turn))
-			scene->vrTurnMode = turn;
-	}
-	scene->vrSnapTurnDegrees =
-	    float(qBound(double(vrworld::row(QStringLiteral("snapTurnDegrees"))->minValue),
-	                 sceneObj.value("vrSnapTurnDegrees").toDouble(double(scene->vrSnapTurnDegrees)),
-	                 double(vrworld::row(QStringLiteral("snapTurnDegrees"))->maxValue)));
-	scene->vrSmoothTurnDegreesPerSecond = float(qBound(
-	    double(vrworld::row(QStringLiteral("smoothTurnDegreesPerSecond"))->minValue),
-	    sceneObj.value("vrSmoothTurnDegreesPerSecond")
-	        .toDouble(double(scene->vrSmoothTurnDegreesPerSecond)),
-	    double(vrworld::row(QStringLiteral("smoothTurnDegreesPerSecond"))->maxValue)));
-	scene->vrDominantRight =
-	    sceneObj.value("vrDominantRight").toBool(scene->vrDominantRight);
+	// THE PROJECT'S VR SETTINGS (lane VR-WORLD-1), GENERATED FROM THE TABLE
+	// (services/vrworld.h) like the writer: one list of keys, one set of
+	// clamps, and the reader-defaults law inside that one function — an absent
+	// key, a number that is not one, or a mode name this build does not know
+	// leaves the CONSTRUCTOR's value standing.
+	vrworld::read(scene, sceneObj);
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
 	auto volume = sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume);
 	scene->setAmbientMusicVolume(volume);

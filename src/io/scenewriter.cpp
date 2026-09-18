@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/looks.h"
 #include "io/scenewriter.h"
 #include "io/sceneformat.h"
+#include "services/vrworld.h"
 #include "services/scenefolders.h"
 
 #include <Qt>
@@ -148,15 +149,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // must stay free of — "off" / "auto" / "on".
     sceneObj["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     // THE PROJECT'S VR SETTINGS (lane VR-WORLD-1) — how a wearer moves in THIS
-    // world, adopted by every session this project opens. The two modes ride as
-    // stable strings for the same reason the one above does; `vr.locomotion`
-    // overrides are a SESSION's and are deliberately not written here.
-    sceneObj["vrFlySpeed"] = scene->vrFlySpeed;
-    sceneObj["vrFlyMode"] = QString::fromLatin1(iris::vrFlyModeName(scene->vrFlyMode));
-    sceneObj["vrTurnMode"] = QString::fromLatin1(iris::vrTurnModeName(scene->vrTurnMode));
-    sceneObj["vrSnapTurnDegrees"] = scene->vrSnapTurnDegrees;
-    sceneObj["vrSmoothTurnDegreesPerSecond"] = scene->vrSmoothTurnDegreesPerSecond;
-    sceneObj["vrDominantRight"] = scene->vrDominantRight;
+    // world, adopted by every session this project opens. GENERATED FROM THE
+    // TABLE (services/vrworld.h), so a setting is saved the day it is declared
+    // and the reader cannot spell a key differently; the two modes and the
+    // dominant hand ride as stable strings for the same reason the row above
+    // does. `vr.locomotion` overrides are a SESSION's and are never written.
+    vrworld::write(scene, sceneObj);
     sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;

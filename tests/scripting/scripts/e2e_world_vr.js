@@ -76,6 +76,13 @@ throws(function () { world.vr({ flySpeed: "quick" }); }, "flySpeed",
        "...and a word where a number belongs");
 throws(function () { world.vr({ snapTurnDegrees: 0 }); }, "snapTurnDegrees",
        "a snap step of zero is refused");
+// A BOOLEAN IS NOT A NUMBER, and this one bites because QVariant converts it
+// happily: `flySpeed: true` used to set a wearer walking at 1 m/s (the Fable
+// read of VR-WORLD-1, item 4).
+throws(function () { world.vr({ flySpeed: true }); }, "flySpeed",
+       "true where a number belongs is refused, not read as 1");
+throws(function () { world.vr({ snapTurnDegrees: false }); }, "snapTurnDegrees",
+       "...and false is not zero either");
 throws(function () { world.vr({ turn: "spinny" }); }, "spinny",
        "an unknown turn mode is refused, never guessed");
 throws(function () { world.vr({ fly: "backwards" }); }, "backwards",
@@ -186,5 +193,19 @@ throws(function () { vr.locomotion({ nonsense: 1 }); }, "unknown key",
 before = pushes();
 vr.locomotion({ flySpeed: 12 });
 assert(pushes() === before, "a session override is NOT a document edit: no undo step");
+
+// ---- 7. THE OVERRIDES OUTLIVE NO SESSION, AND DIE WITH ONE ---------------
+// (the Fable read, item 3.) An override asked for BEFORE a session starts is a
+// caller asking for something; adopting a project used to throw it away
+// silently. There is no session in this process, so what is asserted here is
+// the half that holds everywhere: the override stands until something releases
+// it. The session half — it survives `vr.begin` and is gone after `vr.end` — is
+// `vr.input_session`, where sessions exist.
+vr.locomotion({ flySpeed: 11 });
+assert(near(vr.locomotion().flySpeed, 11), "an override with no session stands");
+world.vr({ flySpeed: 5 });
+assert(near(vr.locomotion().flySpeed, 11),
+       "...and still wins over a project edit made after it");
+assert(near(world.vr().flySpeed, 5), "while the document holds what world.vr wrote");
 
 console.log("PASS world_vr");

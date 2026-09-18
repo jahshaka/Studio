@@ -771,7 +771,9 @@ False when no gesture was running, and in the PLAYER (which edits nothing). |
 
 `dominant` is "right" (the default) or "left" and swaps BOTH roles at once: the dominant hand points, selects and grabs, the other hand's stick walks and turns. One flag, because two would eventually disagree.
 
-A number that is not finite, or is zero or negative, is refused by name; one outside a row's range is clamped to it; an unknown mode name and an unknown key are refused and nothing is applied.
+A number that is not finite, or is zero or negative, is refused by name; a true/false where a number belongs is refused too (it would otherwise read as 1); one outside a row's range is clamped to it; and an unknown mode name or an unknown key is refused with nothing applied.
+
+AN OVERRIDE SET BEFORE A SESSION STARTS SURVIVES THE BEGIN — asking for a slower fly and then putting the headset on is one gesture, not two — and every override dies with the session that used it, whichever way that session ended.
 
 NOBODY IS MOVED WHILE THEY ARE STILL BEING PLACED. A session begins (and every recentre) with the host waiting for a located frame it can pair with the rig it holds, because a correction from a mismatched pair is a teleport; the stick is refused over those frames and a flick held across them is answered on the first frame after the placement lands. |
 | `vr.interactionMode() -> {dominant, turn, snapTurnDegrees, smoothTurnDegreesPerSecond, flySpeed, fly, grabbing, hovering, far, snapping, distance, nodes, source, installed, rig:{live,x,y,z,yaw}, selects, grabs, commits, cancels, turns}` | document | WHAT THE INTERACTION IS DOING. `grabbing` and `hovering` are this moment's state; `far`, `snapping`, `distance` and `nodes` describe a gesture in flight; and the five tallies are COUNTS, monotonic for as long as the process lives — a suite brackets a gesture with them instead of timing it, which is the house rule for anything a loaded box could slow down (a wall clock measures the box, not the gesture).

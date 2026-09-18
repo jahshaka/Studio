@@ -13,6 +13,8 @@ For more information see the LICENSE file
 
 #include <cmath>
 
+#include <QtGlobal>
+
 namespace vrworld {
 
 namespace {
@@ -41,6 +43,7 @@ QVector<Row> buildRows()
     {
         Row row;
         row.id = QStringLiteral("flySpeed");
+        row.jsonKey = QStringLiteral("vrFlySpeed");
         row.label = QStringLiteral("Fly Speed");
         row.kind = RowKind::Number;
         row.minValue = 0.1;
@@ -64,6 +67,7 @@ QVector<Row> buildRows()
     {
         Row row;
         row.id = QStringLiteral("fly");
+        row.jsonKey = QStringLiteral("vrFlyMode");
         row.label = QStringLiteral("Fly Direction");
         row.kind = RowKind::Enum;
         row.options = { { QStringLiteral("aim"), QStringLiteral("Aim"),
@@ -90,6 +94,7 @@ QVector<Row> buildRows()
     {
         Row row;
         row.id = QStringLiteral("turn");
+        row.jsonKey = QStringLiteral("vrTurnMode");
         row.label = QStringLiteral("Turning");
         row.kind = RowKind::Enum;
         row.options = { { QStringLiteral("snap"), QStringLiteral("Snap"),
@@ -113,6 +118,7 @@ QVector<Row> buildRows()
     {
         Row row;
         row.id = QStringLiteral("snapTurnDegrees");
+        row.jsonKey = QStringLiteral("vrSnapTurnDegrees");
         row.label = QStringLiteral("Snap Turn");
         row.kind = RowKind::Number;
         row.minValue = 1.0;
@@ -135,6 +141,7 @@ QVector<Row> buildRows()
     {
         Row row;
         row.id = QStringLiteral("smoothTurnDegreesPerSecond");
+        row.jsonKey = QStringLiteral("vrSmoothTurnDegreesPerSecond");
         row.label = QStringLiteral("Smooth Turn Rate");
         row.kind = RowKind::Number;
         row.minValue = 1.0;
@@ -162,6 +169,7 @@ QVector<Row> buildRows()
     {
         Row row;
         row.id = QStringLiteral("dominant");
+        row.jsonKey = QStringLiteral("vrDominantHand");
         row.label = QStringLiteral("Dominant Hand");
         row.kind = RowKind::Enum;
         row.options = { { QStringLiteral("right"), QStringLiteral("Right"), 1 },
@@ -206,6 +214,41 @@ QStringList ids()
 
 QString propsKey(const QString &rowId) { return QStringLiteral("vr.") + rowId; }
 
+void write(const iris::ScenePtr &scene, QJsonObject &sceneObj)
+{
+    if (!scene) return;
+    for (const Row &r : rows()) {
+        if (!r.get || r.jsonKey.isEmpty()) continue;
+        const double v = r.get(scene);
+        // An Enum rides as its stable option id; a Number as a number.
+        if (r.kind == RowKind::Enum) sceneObj[r.jsonKey] = valueId(r, v);
+        else                         sceneObj[r.jsonKey] = v;
+    }
+}
+
+void read(const iris::ScenePtr &scene, const QJsonObject &sceneObj)
+{
+    if (!scene) return;
+    for (const Row &r : rows()) {
+        if (!r.set || r.jsonKey.isEmpty() || !sceneObj.contains(r.jsonKey)) continue;
+        const QJsonValue value = sceneObj.value(r.jsonKey);
+        if (r.kind == RowKind::Enum) {
+            // BY NAME, and a name this build does not know leaves the
+            // constructor's value standing — the tolerance `rayTracing` and the
+            // play mode carry, for the same reason: a file from a later build
+            // must open, at the default, rather than at zero.
+            const QString name = value.toString().trimmed().toLower();
+            for (const EnumOption &o : r.options)
+                if (o.id == name) { r.set(scene, double(o.value)); break; }
+            continue;
+        }
+        if (!value.isDouble()) continue;          // not a number: the default stands
+        const double v = value.toDouble();
+        if (!std::isfinite(v)) continue;
+        r.set(scene, qBound(r.minValue, v, r.maxValue));
+    }
+}
+
 bool validate(const Row &r, const QVariant &value, double &out, QString &error)
 {
     if (r.kind == RowKind::Enum) {
@@ -216,6 +259,14 @@ bool validate(const Row &r, const QVariant &value, double &out, QString &error)
         for (const EnumOption &o : r.options) known << QStringLiteral("\"%1\"").arg(o.id);
         error = QStringLiteral("%1 must be %2, not '%3'")
                     .arg(r.id, known.join(QStringLiteral(" or ")), value.toString());
+        return false;
+    }
+    // A BOOLEAN IS NOT A NUMBER (the Fable read of VR-WORLD-1, item 4).
+    // `QVariant(true).toDouble()` succeeds and yields 1, so
+    // `world.vr({flySpeed:true})` used to set a wearer walking at 1 m/s — a
+    // typo taken as a setting. Refused by name, like every other wrong type.
+    if (value.metaType().id() == QMetaType::Bool) {
+        error = QStringLiteral("%1 must be a number, not a true/false").arg(r.id);
         return false;
     }
     bool ok = false;
@@ -267,9 +318,21 @@ Settings fromScene(const iris::ScenePtr &scene)
 
 void adopt(const iris::ScenePtr &scene)
 {
+    // A SESSION BEGINS ON THE PROJECT IT FINDS — and on any override the
+    // caller has ALREADY asked for. Clearing them here (which this did until
+    // the Fable read of VR-WORLD-1, item 3) killed a `vr.locomotion({...})`
+    // issued in the breath before `vr.begin`, silently: the script asked for a
+    // slower fly and got the project's. The overrides are dropped by
+    // `release()` instead, which is the moment they stop meaning anything —
+    // one rule, at the end of the session that made them.
+    //
+    // A null scene is not reachable (both hosts have the document they began
+    // on) and would mean "adopt the shipped defaults", which is never what a
+    // caller means; it is worth a line in the log rather than a silent one.
+    if (!scene)
+        qWarning("vrworld::adopt: no scene — the session will run on the shipped defaults");
     session().defaults = fromScene(scene);
     session().latched = true;
-    session().overrides.clear();
 }
 
 void release()

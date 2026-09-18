@@ -23,6 +23,7 @@
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "modules/vr/vrgrab.h"
 #include "services/vrorigin.h"
 #include "viewport/flystep.h"
@@ -286,11 +287,12 @@ int main()
     // PROJECT's settings now (`world.vr`), so the pure functions carry no
     // default of their own and these cases state the numbers they assert.
     {
-        // The document's own defaults (iris::kDefaultVrSnapTurnDegrees /
-        // kDefaultVrSmoothTurnDegreesPerSecond), spelled here as the numbers
-        // these cases assert — this file links no document.
-        const float snapStep = 30.0f;
-        const float smoothRate = 90.0f;
+        // THE DOCUMENT'S OWN DEFAULTS, from the header that defines them
+        // (they are `inline constexpr`, so naming them costs this target
+        // nothing) — a re-literalised 30 and 90 here would be the second
+        // definition VR-WORLD-1 deleted.
+        const float snapStep = iris::kDefaultVrSnapTurnDegrees;                 // 30
+        const float smoothRate = iris::kDefaultVrSmoothTurnDegreesPerSecond;    // 90/s
         CHECK(near(vrgrab::snapTurnDegrees(1.0f, true, snapStep), 30.0f),
               "a full stick right, armed, asks for +30 in the stick's own sign (the caller negates it into the tree's right-handed yaw, so the wearer turns RIGHT)");
         CHECK(near(vrgrab::snapTurnDegrees(-0.8f, true, snapStep), -30.0f),

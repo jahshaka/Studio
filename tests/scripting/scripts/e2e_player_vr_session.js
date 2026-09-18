@@ -397,4 +397,65 @@ player.frame(10);
 assert(player.state().vr.active === false, "with no session");
 player.stop();
 
+// ---- 8. THE LOCOMOTION LATCH IS THE SESSION'S, AND ONLY ITS OWNER'S ------
+//        (the Fable read of VR-WORLD-1, items 1 and 2.)
+//
+// A session ADOPTS the project's VR settings when it begins (`world.vr`) and
+// drops them when it ends. Two ways that went wrong, both found by reading and
+// both fixed:
+//
+//   (1) a Player session ended from OUTSIDE — a script's `vr.end`, a device
+//       loss, the engine tearing a Lost session down — took PlayerVr::step's
+//       "it went away underneath us" branch, which restored the mirror and left
+//       the latch standing: `vr.locomotion()` said `session:true` with no
+//       session, and served a dead copy of a project that may have been edited
+//       since.
+//   (2) PlayerVr::end() released UNCONDITIONALLY, and it runs on EVERY Player
+//       stop once this object exists — so a plain Play/Stop dropped the latch
+//       of a live EDITOR session and reverted a wearer's speed mid-flight.
+
+// (1) ENDED FROM OUTSIDE THE HOST, which is the path that was broken: `vr.end()`
+//     does not go through PlayerVr::end() for a session the Player owns — it
+//     ends the session the plain way (VrApi::endForShutdown) and the host
+//     notices inside its next step. So the release has to live in THAT branch,
+//     and this case is the one that would not notice if it did not.
+assert(vr.locomotion().session === false, "no session, no latch, before this case");
+assert(player.play({ vr: true }) === true, "a Player VR session, once more");
+player.frame(20);
+assert(player.state().vr.active === true, "it is running");
+assert(vr.locomotion().session === true, "and it latched the project");
+world.vr({ flySpeed: 12 });
+assert(vr.locomotion().flySpeed !== 12,
+       "a project edit does not reach a running session (nothing changes under a wearer)");
+assert(vr.end() === true, "vr.end() ends it from outside the host");
+player.frame(3);                            // the host notices inside its step
+assert(player.state().vr.active === false, "the session is gone");
+assert(vr.locomotion().session === false,
+       "THE LATCH WENT WITH IT — a session ended from outside is still over");
+assert(vr.locomotion().flySpeed === 12,
+       "...so the project is read live again, edits included");
+player.stop();
+world.vr({ flySpeed: 4 });
+assert(vr.locomotion().flySpeed === 4,
+       "...and a project edit is read again at once (the latch was released)");
+
+// (2) A live EDITOR session, an override on it, and a plain Player run over the
+//     top: the run must not touch either.
+assert(vr.begin({ mirror: "none" }) === true, "an EDITOR session begins");
+assert(vr.locomotion().session === true, "it latched the project");
+vr.locomotion({ flySpeed: 7 });
+assert(vr.locomotion().flySpeed === 7, "with an override of its own");
+assert(player.play() === true, "a plain Player run starts over it");
+player.frame(10);
+assert(player.state().vr.active === false, "the run has no session of its own");
+player.stop();
+player.frame(2);
+assert(vr.locomotion().session === true,
+       "THE EDITOR'S LATCH SURVIVED THE PLAYER'S RUN — a host releases only what it owns");
+assert(vr.locomotion().flySpeed === 7, "...and the wearer's speed did not change under them");
+assert(vr.end() === true, "the editor session ends");
+assert(vr.locomotion().session === false, "...dropping the latch");
+assert(vr.locomotion().flySpeed === 4,
+       "...and its override with it: back to the project's own 4 m/s");
+
 console.log("vr.player_session: PASS");

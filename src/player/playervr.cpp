@@ -134,8 +134,16 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
 
 void PlayerVr::end()
 {
+    // WHAT THIS OBJECT OWNED, read before anything clears it. `end()` runs on
+    // EVERY Player stop (EnginePlayerView::end → endPlayerVr, and
+    // forgetView()), and this object outlives a run once a VR session has
+    // existed — so without the guard a plain Play/Stop released a latch that
+    // belonged to the EDITOR's live session and silently reverted the wearer's
+    // speed to the live document mid-flight (the Fable read of VR-WORLD-1,
+    // item 2; the editor host has carried the same guard from the start).
+    const bool owned = mOwnsSession;
     auto engine = mEngine.lock();
-    if (engine && mOwnsSession) {
+    if (engine && owned) {
         engine->setVrMirrorView(nullptr);
         if (engine->vrStatus().active) engine->endVrSession();
     }
@@ -144,8 +152,9 @@ void PlayerVr::end()
     restoreMirrorView();
     mCamera.clear();
     mDocument.clear();
-    // The session's locomotion overrides go with the session (VR-WORLD-1).
-    vrworld::release();
+    // The session's locomotion overrides go with the session (VR-WORLD-1) —
+    // with THIS session's, never with somebody else's.
+    if (owned) vrworld::release();
 }
 
 void PlayerVr::restoreMirrorView()
@@ -200,6 +209,16 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         mPlacePending = false;
         engine->setVrMirrorView(nullptr);
         restoreMirrorView();
+        // ...AND THE LOCOMOTION LATCH GOES WITH IT (the Fable read of
+        // VR-WORLD-1, item 1). This branch — not `end()` — is the one a
+        // `vr.end()` from a script, a device loss and the engine's own teardown
+        // of a Lost session all take, so a latch released only in `end()` left
+        // `vr.locomotion()` reporting `session:true` with no session and
+        // `resolve()` serving a dead copy of a project that may since have been
+        // edited. Idempotent, and the editor host does the same in its own
+        // "ended from somewhere else" branch.
+        mDocument.clear();
+        vrworld::release();
         return;
     }
     // THE FIRST EYE PICTURE IS WHAT PAYS FOR THE DESKTOP'S (see begin()): from
