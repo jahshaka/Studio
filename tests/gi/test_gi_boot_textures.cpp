@@ -28,8 +28,12 @@
 //      base build reads 2 per cascade here;
 //   2. the wait ENDS: the chain is up and bound a handful of frames later, and
 //      the texture is in it (the picture is not the untextured one);
-//   3. and the SINGLE-VOLUME arm takes the same rule (it reads the same two
-//      texture slots).
+//   3. the SINGLE-VOLUME arm takes the same rule (it reads the same two texture
+//      slots);
+//   4. and an EDIT THAT ARRIVES DURING THE WAIT is in the build when it runs,
+//      which is still one build per cascade — a deferred request is a place to
+//      lose things, and the fix round's item 1 was exactly that class (a
+//      chain-shape debt cleared before a call that then deferred).
 //
 // The wait's BOUND is not asserted — see the note where case 3 would have been:
 // the only fixture for "a texture that never arrives" takes this pin's process
@@ -52,6 +56,11 @@ static int failures = 0;
         if (cond) std::printf("ok: %s\n", msg);                                 \
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
+/// ...and the printf-shaped twin, for the cases that want the number in the line.
+#define CHECK_MSG(c, ...) do { if (!(c)) { std::printf("FAIL: "); std::printf(__VA_ARGS__); \
+                               std::printf("\n"); ++failures; } \
+                               else { std::printf("  ok: "); std::printf(__VA_ARGS__); \
+                               std::printf("\n"); } } while (0)
 
 static const unsigned kSize = 128;
 
@@ -121,7 +130,8 @@ int main()
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
 
-    if (!writePpm("boottex.ppm", 200) || !writePpm("boottex2.ppm", 60)) {
+    if (!writePpm("boottex.ppm", 200) || !writePpm("boottex2.ppm", 60) ||
+        !writePpm("boottex4.ppm", 140)) {
         std::printf("FAIL: could not write the texture fixtures\n");
         return 1;
     }
@@ -218,6 +228,59 @@ int main()
         CHECK(scene->setGlobalIllumination(down), "and it comes down again");
     }
 
+    // =====================================================================
+    // CASE 3 — AN EDIT THAT ARRIVES DURING THE WAIT IS NOT LOST
+    // =====================================================================
+    // The deferral holds a REQUEST, and a request held across frames is a place
+    // to lose things: whatever else happened while the arm waited must be in the
+    // build when it finally runs, and the build must still be ONE build. (The
+    // fix round's item 1 was this class seen from the other side — the chain's
+    // VR-column debt was cleared before a call that then deferred, so the chain
+    // stayed in the desktop's column for ever. That one needs a stereo driver
+    // view, which no public verb can make, so it is guarded in
+    // `vr.no_picture_start`; what can be proved here is that the deferral does
+    // not swallow the ordinary structural change.)
+    std::printf("\n== case 3: an edit during the wait ==\n");
+    {
+        const TextureId tex4 = scene->loadTexture("boottex4.ppm", true);
+        CHECK(tex4 != 0, "a fourth albedo is scheduled");
+        const MaterialId late = texturedCube(scene, Vec3(-6.0f, 1.0f, 0.0f),
+                                             Vec3(1.0f, 1.0f, 1.0f), tex4);
+        CHECK(late != 0, "a box wearing it, bound in the same frame");
+        CHECK(scene->setGlobalIllumination(cascadeGi()), "the cascade arm is pushed");
+        CHECK(scene->giStatus().cascades.empty(), "the arm is waiting, not built");
+        // THE EDIT, while it waits: another object, which the build has to see.
+        const NodeId during = enginetest::addTestCube(scene, Colour(0.2f, 0.9f, 0.2f), 0.0f, 0.8f);
+        CHECK(during != 0, "an object arrives while the arm is waiting");
+        enginetest::setNodePosition(scene, during, Vec3(2.0f, 1.0f, 0.0f));
+        render(e, 24);
+        const GiStatus o = scene->giStatus();
+        unsigned long long total = 0;
+        for (const auto &c : o.cascades) total += c.rebuilds;
+        std::printf("   after the wait: %zu cascades, %llu rebuilds in total, "
+                    "innermost holds %d of %d attached\n",
+                    o.cascades.size(), total, o.cascades.empty() ? -1 : o.cascades[0].items,
+                    o.cascades.empty() ? -1 : o.cascades[0].attached);
+        CHECK(!o.cascades.empty() && o.vctBound, "the chain is up");
+        // THE EDIT IS IN THE ARM: the voxeliser HOLDS it. `attached` is the set
+        // the cascade was given, which is the honest "nothing was lost" reading
+        // — `items` is the subset its own box currently reaches and moves with
+        // the camera.
+        CHECK_MSG(!o.cascades.empty() && o.cascades[0].attached >= 4,
+                  "the build HOLDS the object that arrived during the wait (attached %d, "
+                  "and the scene has four boxes and a ground by now)",
+                  o.cascades.empty() ? -1 : o.cascades[0].attached);
+        // AND THE EDIT COSTS AT MOST THE DIRTY PATH'S PRICE: the object arrived
+        // after the build was asked for, so the cascades that can see it are
+        // marked and spent one per frame — at most one extra apiece, never the
+        // whole-chain-per-frame storm a lost request would look like.
+        CHECK_MSG(total <= 2ull * (unsigned long long)o.cascades.size(),
+                  "...for at most one extra rebuild per cascade (%llu over %zu cascades)",
+                  total, o.cascades.size());
+        GiParams down; down.mode = GiMode::Off;
+        CHECK(scene->setGlobalIllumination(down), "and it comes down again");
+    }
+
     // THE BOUND IS NOT ASSERTED HERE, AND WHY (a finding, not an omission).
     // The honest fixture for "a texture that can never become ready" is a file
     // deleted under the decoder, and at this pin that ABORTS THE PROCESS: the
@@ -233,6 +296,7 @@ int main()
 
     std::remove("boottex.ppm");
     std::remove("boottex2.ppm");
+    std::remove("boottex4.ppm");
     std::printf(failures ? "\n%d FAILURE(S)\n" : "\nall gi boot-texture cases passed\n", failures);
     return failures ? 1 : 0;
 }
