@@ -136,3 +136,29 @@ add_test(NAME gizmo.plane_handles COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_pla
 set_tests_properties(gizmo.plane_handles PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "document")
 jah_no_display(gizmo.plane_handles)
+
+# gizmo.scale_lock — THE SCALE GIZMO'S PRESERVE-RATIO DRAG (SCALE-LOCK-1, the
+# owner's "a lock for the transformations" / "alternately shift drag can do
+# uniform scale"). Drives a real axis-handle drag through the calls a mouse
+# press and move make: a plain drag is one axis, the node's LOCK or Shift held
+# for the gesture scales all three by the drag's ratio, a Shift released
+# mid-drag leaves no residue, and the CENTRE handle is still the additive
+# uniform one it always was. The document half is scripting.e2e.scale_lock and
+# the panel half ui.panel_undo. Document-only, like gizmo.drag_frame: no
+# display, no GPU, no pixels.
+add_executable(test_gizmo_scale_lock test_gizmo_scale_lock.cpp test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+set_target_properties(test_gizmo_scale_lock PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_gizmo_scale_lock PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_gizmo_scale_lock PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+jah_document_graph(test_gizmo_scale_lock)
+add_test(NAME gizmo.scale_lock COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_scale_lock
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(gizmo.scale_lock PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 120 LABELS "document")
+jah_no_display(gizmo.scale_lock)

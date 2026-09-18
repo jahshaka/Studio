@@ -106,6 +106,16 @@ bool DragSpinBox::isScrubbing() const
     return scrubbing_;
 }
 
+void DragSpinBox::setShiftCoarseEnabled(bool enabled)
+{
+    shiftCoarse_ = enabled;
+}
+
+Qt::KeyboardModifiers DragSpinBox::scrubModifiers() const
+{
+    return scrubbing_ ? scrubMods_ : Qt::KeyboardModifiers(Qt::NoModifier);
+}
+
 bool DragSpinBox::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched != lineEdit())
@@ -141,8 +151,13 @@ bool DragSpinBox::eventFilter(QObject* watched, QEvent* event)
 
         double factor = 1.0;
         const auto mods = mouse->modifiers();
+        // THE GESTURE'S OWN MODIFIERS, from the event that is driving it: the
+        // reader (scrubModifiers) is what tells a panel that THIS drag is a
+        // uniform one, and a key pressed or released mid-drag lands here on the
+        // next move.
+        scrubMods_ = mods;
         if (mods & Qt::ControlModifier) factor *= kFineFactor;
-        if (mods & Qt::ShiftModifier) factor *= kCoarseFactor;
+        if (shiftCoarse_ && (mods & Qt::ShiftModifier)) factor *= kCoarseFactor;
 
         // accumulate incrementally so toggling a modifier mid-drag
         // changes the rate, not the value reached so far
@@ -208,6 +223,7 @@ void DragSpinBox::keyPressEvent(QKeyEvent* event)
 void DragSpinBox::beginScrub()
 {
     scrubbing_ = true;
+    scrubMods_ = QGuiApplication::keyboardModifiers();
     grabKeyboard(); // so Esc reaches us mid-drag
     emit scrubStarted();
 }
@@ -215,6 +231,7 @@ void DragSpinBox::beginScrub()
 void DragSpinBox::endScrub(bool cancelled)
 {
     scrubbing_ = false;
+    scrubMods_ = Qt::NoModifier;
     releaseKeyboard();
     emit scrubFinished(cancelled);
 }

@@ -379,7 +379,10 @@ void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDi
 	// move node along line
 	// do snapping here as well
 	auto diff = startAngle - hitAngle;
-	auto mods = QApplication::keyboardModifiers();
+	// The gesture's own modifiers (Gizmo::setDragModifiers, pushed by the
+	// viewport from the event driving this drag), not the live keyboard: one
+	// source per gesture, and the only one a test can drive.
+	auto mods = currentDragModifiers();
 	if (mods.testFlag(Qt::ControlModifier)) {
 		diff = Gizmo::snap(diff, SnapSettings::rotateSize());
 	}
