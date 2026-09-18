@@ -35,6 +35,9 @@ For more information see the LICENSE file
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QTimer>
+
+#include "bridge/assetthumbnail.h"
+#include "bridge/enginehost.h"
 #include <QComboBox>
 
 #include <algorithm>
@@ -2127,6 +2130,12 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 		}
 		const auto pinned = ProjectAssets::addToProject(result.assetGuid, db, project, ProjectAssets::AddKind::Direct);
 		if (!pinned.ok()) importErrors.append(pinned.error);
+		// THE SAME TAIL THE ASSETS PAGE RUNS (THUMBS-1 item 3): a model's
+		// thumbnail is a render, and this path never asked for one.
+		const int type = db ? db->fetchAsset(result.assetGuid).type : 0;
+		if (type == static_cast<int>(ModelTypes::Object)
+		    || type == static_cast<int>(ModelTypes::ParticleSystem))
+			thumbnailBacklog.append(result.assetGuid);
 	});
 	connect(importRunner, &ImportBatchRunner::finished, this, [this](bool cancelled) {
 		progressDialog->hide();
@@ -2143,9 +2152,27 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 		}
 		populateAssetTree(false);
 		updateAssetView(assetItem.selectedGuid, activeFilter);
+		// After the dialog is gone and the tree is rebuilt: the renders.
+		if (!thumbnailBacklog.isEmpty()) QTimer::singleShot(0, this, [this] { drainThumbnailBacklog(); });
 	});
 
 	importRunner->start();
+}
+
+void AssetWidget::drainThumbnailBacklog()
+{
+	if (thumbnailBacklog.isEmpty()) return;
+	const QString guid = thumbnailBacklog.takeFirst();
+	QString reason;
+	// THE ONE ROUTINE (bridge/assetthumbnail.h) — the stored blob, fitted and
+	// framed, on the one borrowed renderer. Its failures are logged by it; the
+	// tray has no surface to put a message on, and an import that succeeded
+	// must not become an error dialog because a tile is grey.
+	assetthumb::storeObject(db, project, guid, EngineHost::instance().engine(),
+	                        assetthumb::defaultSize(), &reason);
+	updateAssetView(assetItem.selectedGuid, activeFilter);
+	// ONE PER EVENT-LOOP TURN: the window keeps painting between renders.
+	if (!thumbnailBacklog.isEmpty()) QTimer::singleShot(0, this, [this] { drainThumbnailBacklog(); });
 }
 
 void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
@@ -2172,7 +2199,16 @@ void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
         }
     }
     else {
-        auto thumbnail = QPixmap::fromImage(result.thumbnail).scaledToHeight(512, Qt::SmoothTransformation);
+        const QPixmap rendered = QPixmap::fromImage(result.thumbnail);
+        if (rendered.isNull()) {
+            // The render failed and said why in the log (THUMBS-1): the export
+            // has nothing to write, and asking Qt to scale nothing only adds a
+            // second, less useful warning.
+            QMessageBox::warning(this, tr("Export Preview"),
+                                 tr("Nothing was rendered for this preview."), QMessageBox::Ok);
+            return;
+        }
+        auto thumbnail = rendered.scaledToHeight(512, Qt::SmoothTransformation);
         thumbnail.save(&buffer, "PNG");
 
         auto filePath = QFileDialog::getSaveFileName(

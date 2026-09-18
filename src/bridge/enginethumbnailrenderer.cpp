@@ -6,8 +6,11 @@
 #include "irisgl/core/color.h"
 
 #include <QColor>
+#include <QDebug>
 #include <QtMath>
 #include <cstring>
+#include <memory>
+#include <utility>
 
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
@@ -48,6 +51,98 @@ EngineThumbnailRenderer::~EngineThumbnailRenderer()
     release();
 }
 
+// ---------------------------------------------------------------------------
+// THE ONE RENDERER (THUMBS-1). See the header for what a second one cost.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+/// The instance, its borrow flag, and nothing else. Main thread only — every
+/// caller is (ThumbnailGenerator's tick, the import tails, the verbs).
+std::unique_ptr<EngineThumbnailRenderer> gShared;
+bool gLoaned = false;
+}   // namespace
+
+EngineThumbnailRenderer::Loan::Loan(Loan &&other) noexcept
+    : mRenderer(other.mRenderer), mReason(std::move(other.mReason))
+{
+    other.mRenderer = nullptr;
+}
+
+EngineThumbnailRenderer::Loan &EngineThumbnailRenderer::Loan::operator=(Loan &&other) noexcept
+{
+    if (this != &other) {
+        if (mRenderer) { mRenderer->clearSubject(); gLoaned = false; }
+        mRenderer = other.mRenderer;
+        mReason = std::move(other.mReason);
+        other.mRenderer = nullptr;
+    }
+    return *this;
+}
+
+EngineThumbnailRenderer::Loan::~Loan()
+{
+    if (!mRenderer) return;
+    // NOTHING OF THIS BORROWER'S SUBJECT REACHES THE NEXT ONE. render() already
+    // clears the mirror on the way out, but a loan that never rendered (or one
+    // whose render failed before the mirror was cleared) must not leave a
+    // document, a mesh or a material pointer behind in the engine scene.
+    mRenderer->clearSubject();
+    mRenderer = nullptr;
+    gLoaned = false;
+}
+
+EngineThumbnailRenderer::Loan
+EngineThumbnailRenderer::borrow(const std::shared_ptr<Engine> &engine, const char *who)
+{
+    const QString caller = QString::fromUtf8(who ? who : "a thumbnail");
+    if (!engine)
+        return Loan(nullptr, QStringLiteral("%1: the engine is not running").arg(caller));
+    if (gLoaned) {
+        // REFUSED BY NAME, never aliased: the renderer has one Scene, one View
+        // and one mirror, and a second render pushed into them mid-frame would
+        // draw the first caller's subject into the second caller's tile.
+        const QString why = QStringLiteral(
+            "%1: the thumbnail renderer is busy with another render").arg(caller);
+        qWarning("%s", qUtf8Printable(why));
+        return Loan(nullptr, why);
+    }
+    // A new Engine (a restart, or a second boot in one test process) means the
+    // old renderer's View and Scene belong to a dead Root: drop it first.
+    if (gShared && gShared->engine() != engine) gShared.reset();
+    if (!gShared) gShared.reset(new EngineThumbnailRenderer(engine));
+    gLoaned = true;
+    return Loan(gShared.get(), QString());
+}
+
+void EngineThumbnailRenderer::shutdown()
+{
+    if (gLoaned) {
+        // A render is on the stack above us; destroying the object under it
+        // would be the crash this class exists to stop.
+        qWarning("EngineThumbnailRenderer::shutdown: a render is in flight — not destroying it");
+        return;
+    }
+    gShared.reset();
+}
+
+bool EngineThumbnailRenderer::exists() { return gShared != nullptr; }
+
+QImage EngineThumbnailRenderer::failed(const QString &why)
+{
+    mLastFailure = why;
+    // A FAILED THUMBNAIL IS NEVER SILENT (THUMBS-1). The owner's two grey tiles
+    // had one warning between them, from Qt, about a null pixmap — the render
+    // that produced nothing said nothing at all.
+    qWarning("thumbnail: %s", qUtf8Printable(why));
+    return QImage();
+}
+
+void EngineThumbnailRenderer::clearSubject()
+{
+    if (mirror() && engine()) mirror()->setSource(nullptr);
+}
+
 Colour EngineThumbnailRenderer::backgroundColour()
 {
     // The legacy generator cleared to (25, 25, 25) — a COLOUR, so it enters the
@@ -72,19 +167,37 @@ void EngineThumbnailRenderer::releaseSubject(bool)
 bool EngineThumbnailRenderer::ensureResources(QSize size)
 {
     auto engine = this->engine();
-    if (!engine || size.width() <= 0 || size.height() <= 0) return false;
+    if (!engine) { failed(QStringLiteral("the engine is not running")); return false; }
+    if (size.width() <= 0 || size.height() <= 0) {
+        failed(QStringLiteral("a thumbnail was asked for at %1x%2")
+                   .arg(size.width()).arg(size.height()));
+        return false;
+    }
 
     if (!view()) {
         // The View must exist before the Scene (Engine.h: ORDER MATTERS), and
         // nothing else is going to make one for a thumbnail renderer: it owns
         // this one, and the base destroys it in release().
+        //
+        // THE NAME IS FIXED AND THAT IS SAFE NOW: there is one renderer per
+        // process (borrow()), so nothing else can be holding "thumbs". When
+        // this DID fail — a second instance — it failed silently, which is the
+        // defect THUMBS-1 fixed; it now says what the engine said.
         View *own = engine->createOffscreenView("thumbs", unsigned(size.width()), unsigned(size.height()),
                                                 backgroundColour());
-        if (!own) return false;
+        if (!own) {
+            failed(QStringLiteral("the offscreen view could not be created: %1")
+                       .arg(QString::fromStdString(engine->lastError())));
+            return false;
+        }
         own->setEnabled(false);
         adoptView(own);
     }
-    if (!engineScene() && !attach(view())) return false;
+    if (!engineScene() && !attach(view())) {
+        failed(QStringLiteral("the preview scene could not be created: %1")
+                   .arg(QString::fromStdString(engine->lastError())));
+        return false;
+    }
     if (view()->width() != unsigned(size.width()) || view()->height() != unsigned(size.height()))
         view()->resize(unsigned(size.width()), unsigned(size.height()));
     return true;
@@ -184,7 +297,7 @@ iris::MaterialPtr EngineThumbnailRenderer::previewMaterialForMeshData(const iris
 
 QImage EngineThumbnailRenderer::renderNode(iris::SceneNodePtr subject, QSize size)
 {
-    if (!subject) return QImage();
+    if (!subject) return failed(QStringLiteral("there is no subject node to render"));
     iris::CameraNodePtr cam;
     auto document = buildPreviewScene(cam);
     document->rootNode->addChild(subject);
@@ -198,7 +311,9 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
 {
     if (!mSphere) {
         mSphere = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
-        if (!mSphere) return QImage();
+        if (!mSphere)
+            return failed(QStringLiteral("the preview sphere (app/content/primitives/sphere.obj) "
+                                         "could not be loaded"));
     }
     auto node = iris::MeshNode::create();
     node->setMesh(mSphere);
@@ -217,7 +332,9 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
 QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNodePtr camera, QSize size)
 {
     auto engine = this->engine();
-    if (!engine || !ensureResources(size)) return QImage();
+    if (!engine) return failed(QStringLiteral("the engine is not running"));
+    if (!ensureResources(size)) return QImage();   // ensureResources said why
+    mLastFailure.clear();
 
     document->refresh();
     // Reproducible warm-up: the engine-side simulation (particles, shader
@@ -272,5 +389,11 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // Nothing leaks across requests: drop every mirrored node, mesh and material.
     mirror()->setSource(nullptr);
 
-    return ok ? toQImage(img) : QImage();
+    if (!ok) return failed(QStringLiteral("the offscreen view produced no pixels: %1")
+                               .arg(QString::fromStdString(engine->lastError())));
+    QImage result = toQImage(img);
+    if (result.isNull())
+        return failed(QStringLiteral("the rendered image was empty (%1x%2)")
+                          .arg(img.width).arg(img.height));
+    return result;
 }

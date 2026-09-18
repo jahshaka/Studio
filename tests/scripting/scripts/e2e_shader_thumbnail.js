@@ -42,7 +42,7 @@ assert(graph.save() === true, "graph.save writes the definition back to the asse
 var before = assets.thumbnail(shaderGuid);
 assert(before.empty === true, "a freshly created graph starts with no thumbnail");
 
-assert(assets.refreshThumbnail(shaderGuid) === true, "assets.refreshThumbnail accepts a shader asset");
+assert(assets.refreshThumbnail(shaderGuid).ok === true, "assets.refreshThumbnail accepts a shader asset");
 
 var after = assets.thumbnail(shaderGuid);
 console.log("stored thumbnail: " + JSON.stringify(after));

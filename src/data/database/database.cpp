@@ -2016,6 +2016,17 @@ QStringList Database::fetchLibraryAssetGuids()
     return guids;
 }
 
+QStringList Database::fetchAllAssetGuids()
+{
+    QSqlQuery query;
+    query.prepare("SELECT guid FROM assets");
+    executeAndCheckQuery(query, "FetchAllAssetGuids");
+
+    QStringList guids;
+    while (query.next()) guids << query.value(0).toString();
+    return guids;
+}
+
 QMap<QString, qint64> Database::fetchAssetFileSizes()
 {
     QSqlQuery query;

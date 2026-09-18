@@ -10,7 +10,11 @@
 #include "services/loadtimeline.h"
 #include "services/projectarchiver.h"
 #include "services/uistep.h"
+#include "services/imagematerial.h"
+#include "bridge/enginethumbnailrenderer.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 
+#include <QImage>
 #include <QTimer>
 
 #include <QCoreApplication>
@@ -441,6 +445,17 @@ bool EngineHost::start(QString &error)
                                        : QStringLiteral("false"));
         JahLog::writeHeaderBlock(QStringLiteral("=== DEVICE ==="), rows);
     }
+
+    // A MATERIAL'S TILE IS A RENDER OF THE MATERIAL (THUMBS-1 item 3). The
+    // image→material service cannot reach the engine by design (it is compiled
+    // into CPU-only suites), so the engine reaches IT, here, once the engine
+    // exists — through the one borrowed thumbnail renderer like everything else.
+    ImageMaterial::setPreviewRenderer([](const iris::PbrMaterialPtr &material) -> QImage {
+        auto engine = EngineHost::instance().engine();
+        auto loan = EngineThumbnailRenderer::borrow(engine, "the image material's thumbnail");
+        if (!loan) return QImage();
+        return loan->renderMaterial(material.staticCast<iris::Material>(), QSize(512, 512));
+    });
     return true;
 }
 
@@ -577,5 +592,11 @@ void EngineHost::shutdown()
     // iris::graph entry point also tests Ogre::Root's liveness, because the
     // Engine can outlive this call — the viewports hold their own shared_ptr.)
     iris::graph::setStagingScene(nullptr);
+    // The one thumbnail renderer holds an engine View and Scene: it must go
+    // while the Engine is still alive (THUMBS-1). ThumbnailGenerator::shutdown()
+    // does this too, for the sessions that have a main window; this call is the
+    // one that covers a --script or --mcp run, which never builds one.
+    EngineThumbnailRenderer::shutdown();
+    ImageMaterial::setPreviewRenderer(nullptr);
     mEngine.reset();
 }

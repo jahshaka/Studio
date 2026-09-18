@@ -49,7 +49,7 @@ assert(again.duration === meta.duration && again.fileSize === meta.fileSize,
        "metadata is stable across calls (persisted, not recomputed)");
 
 // ---- refreshThumbnail: the frame re-grab path is document-only ----
-assert(assets.refreshThumbnail(vid) === true, "refreshThumbnail(video) headless");
+assert(assets.refreshThumbnail(vid).ok === true, "refreshThumbnail(video) headless");
 
 // ---- drawer filing works for video like any library type ----
 var drawer = assets.createDrawer("clips");

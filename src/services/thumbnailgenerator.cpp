@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/thumbnailgenerator.h"
 
+#include <QDebug>
 #include <QJsonDocument>
 #include <QtMath>
 #include <QStandardPaths>
@@ -70,7 +71,11 @@ void ThumbnailGenerator::shutdown()
     // the main window is gone); the renderer checks anyway.
     if (tick) tick->stop();
     pending.clear();
-    engineRenderer.reset();
+    // The renderer is the PROCESS's, not this queue's (THUMBS-1). Destroying it
+    // here is still right — this runs while the Engine is alive and nothing is
+    // rendering — and EngineHost::shutdown() does it again for the sessions
+    // that never build a main window.
+    EngineThumbnailRenderer::shutdown();
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +98,14 @@ void ThumbnailGenerator::processOneEngineRequest()
         while (pending.size() > 256) pending.removeFirst();
         return;
     }
-    if (!engineRenderer) engineRenderer.reset(new EngineThumbnailRenderer(engine));
+    auto loan = EngineThumbnailRenderer::borrow(engine, "the thumbnail queue");
+    if (!loan) {
+        // Busy: another caller (an import tail, a verb) has the renderer this
+        // instant. Leave the request queued and come back on the next tick —
+        // the queue is what this class is.
+        qWarning("thumbnail queue: %s", qUtf8Printable(loan.reason()));
+        return;
+    }
     // One request per tick: never block the UI for a batch.
     const EngineRequest job = pending.takeFirst();
     ThumbnailResult result;
@@ -101,7 +113,11 @@ void ThumbnailGenerator::processOneEngineRequest()
     result.type        = job.request.type;
     result.path        = job.request.path;
     result.preview     = job.request.preview;
-    result.thumbnail   = renderEngineRequest(job.request, job.size);
+    result.thumbnail   = renderEngineRequest(*loan, job.request, job.size);
+    if (result.thumbnail.isNull())
+        qWarning("thumbnail queue: nothing was rendered for '%s' (%s)",
+                 qUtf8Printable(job.request.id.isEmpty() ? job.request.path : job.request.id),
+                 qUtf8Printable(loan->lastFailure()));
     // Deliver from the event loop, not from inside this tick: receivers may block
     // (a save dialog) and must never re-enter the renderer. The payload travels
     // BY VALUE — there are two receivers and neither may own it (see
@@ -110,7 +126,8 @@ void ThumbnailGenerator::processOneEngineRequest()
                               Qt::QueuedConnection);
 }
 
-QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, QSize size)
+QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer,
+                                               const ThumbnailRequest &request, QSize size)
 {
     if (request.type == ThumbnailRequestType::ImportedMesh) {
         // THE library node — the stored blob with the asset's fit applied
@@ -122,7 +139,7 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         if (!db) return QImage();
         auto node = libraryasset::fromLibrary(db, project, request.id);
         if (!node) return QImage();
-        return engineRenderer->renderNode(node, size);
+        return renderer.renderNode(node, size);
     }
 
     if (request.type == ThumbnailRequestType::Mesh) {
@@ -134,7 +151,7 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
             return EngineThumbnailRenderer::previewMaterialForMeshData(data);
         }, &source);
         if (!node) return QImage();
-        return engineRenderer->renderNode(node, size);
+        return renderer.renderNode(node, size);
     }
 
     if (request.type == ThumbnailRequestType::Shader) {
@@ -146,7 +163,7 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         reader.setProject(project);
         auto material = reader.parseShaderAsPbr(request.id, db);
         if (!material) return QImage();
-        return engineRenderer->renderMaterial(material, size);
+        return renderer.renderMaterial(material, size);
     }
 
     if (request.type == ThumbnailRequestType::Material) {
@@ -159,7 +176,7 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         auto material = reader.parseMaterialTyped(doc.object(), db);
         // No conversion any more (HLMS_ADOPTION P4b): the reader returns a
         // PbrMaterial, which the mirror renders natively.
-        return engineRenderer->renderMaterial(material, size);
+        return renderer.renderMaterial(material, size);
     }
     return QImage();
 }

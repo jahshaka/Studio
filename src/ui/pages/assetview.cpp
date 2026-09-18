@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/qtinterop.h"
 #include "bridge/assetthumbnail.h"
+#include "services/thumbnailrebuild.h"
 #include "bridge/enginehost.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
@@ -46,6 +47,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QInputDialog>
@@ -703,6 +706,23 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	if (!ThemeManager::classicActive())
 		viewModeButton->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
 	filterLayout->addWidget(viewModeButton);
+
+	// LIBRARY ▾ — the page's maintenance menu (THUMBS-1). It exists for one
+	// entry today: the repair pass for tiles that are already grey, because a
+	// thumbnail that failed when the asset was imported has never had a way to
+	// be redrawn except one right-click at a time.
+	auto *libraryButton = new QPushButton(tr("Library ▾"));
+	libraryButton->setCursor(Qt::PointingHandCursor);
+	auto *libraryMenu = new QMenu(this);
+	libraryMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
+	connect(libraryMenu->addAction(tr("Rebuild missing thumbnails")), &QAction::triggered, this,
+	        [this]() { rebuildMissingThumbnails(); });
+	connect(libraryButton, &QPushButton::pressed, this, [libraryButton, libraryMenu]() {
+		libraryMenu->exec(libraryButton->mapToGlobal(QPoint(0, libraryButton->height())));
+	});
+	if (!ThemeManager::classicActive())
+		libraryButton->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
+	filterLayout->addWidget(libraryButton);
 
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	filterLayout->addStretch();
@@ -1446,7 +1466,8 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
         const QString imagePath = AssetCas::resolveSource(
             QSqlDatabase::database(), AssetStorePaths::root(), guid);
         QPixmap image(imagePath);
-        assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
+        if (!image.isNull())
+            assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
         addToJahLibrary(filename, guid, true);
     }
     else if (result.jafKind == QStringLiteral("object")) {
@@ -2830,6 +2851,51 @@ void AssetView::createMaterialFromImageTile(AssetGridItem *item)
 	addLibraryTileForAsset(materialGuid);
 }
 
+void AssetView::rebuildMissingThumbnails()
+{
+	if (!db) return;
+
+	// One render per asset, the event loop turning between them: the window
+	// keeps painting and the tiles land one by one, exactly like an import
+	// batch's tails. User input is excluded so a second click on the menu
+	// cannot start a second sweep over the same rows.
+	thumbrebuild::SweepOptions options;   // missingOnly: the repair, not a redraw of everything
+	const auto result = thumbrebuild::rebuildMissing(
+	    db, project, options,
+	    [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
+
+	for (const QString &guid : result.rebuiltGuids) {
+		if (auto *tile = fastGrid->tileByGuid(guid)) {
+			QImage stored;
+			if (stored.loadFromData(db->fetchAsset(guid).thumbnail, "PNG"))
+				tile->setTile(QPixmap::fromImage(stored));
+		}
+	}
+
+	if (result.rebuilt == 0 && result.failed.isEmpty()) {
+		libraryToast()->showToast(tr("Thumbnails"),
+		                          tr("Every asset that can have a thumbnail already has one."));
+		return;
+	}
+	if (result.failed.isEmpty()) {
+		libraryToast()->showToast(tr("Thumbnails"),
+		                          tr("Rebuilt %1 of %2 thumbnails.")
+		                              .arg(result.rebuilt).arg(result.considered));
+		return;
+	}
+	// A FAILURE IS NEVER SILENT: the reasons are what the user needs to act on
+	// (no engine, a model whose bytes are gone, a shader with no baked material).
+	QStringList lines;
+	for (const auto &failure : result.failed)
+		lines << QStringLiteral("%1: %2").arg(failure.guid, failure.reason);
+	QMessageBox::warning(this, tr("Rebuild missing thumbnails"),
+	                     tr("Rebuilt %1 of %2. These could not be rebuilt:\n\n%3")
+	                         .arg(result.rebuilt)
+	                         .arg(result.rebuilt + result.failed.size())
+	                         .arg(lines.mid(0, 12).join(QStringLiteral("\n"))),
+	                     QMessageBox::Ok);
+}
+
 void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 {
 	if (!item || item->metadata.isEmpty()) return;
@@ -2898,6 +2964,18 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 		QImage strip;
 		animfile::read(sourceFile, &strip, 256, 256);
 		if (!strip.isNull()) pixmap = QPixmap::fromImage(strip);
+		break;
+	}
+	case ModelTypes::Avatar: {
+		// AN AVATAR LOOKS LIKE ITS CHARACTER (THUMBS-1). It used to fall to the
+		// default below and have its tile REPLACED by a generic file icon —
+		// the one gesture a user has for "redraw this" made the row worse.
+		const auto outcome = thumbrebuild::rebuildOne(db, project, guid);
+		if (outcome.ok) {
+			QImage stored;
+			if (stored.loadFromData(db->fetchAsset(guid).thumbnail, "PNG"))
+				pixmap = QPixmap::fromImage(stored);
+		}
 		break;
 	}
 	default:

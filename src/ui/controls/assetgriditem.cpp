@@ -34,7 +34,13 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	layout->setSpacing(0);
 	pixmap = QPixmap::fromImage(image);
 	gridImageLabel = new QLabel;
-	gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
+	// A ROW WITH NO THUMBNAIL IS A TILE, NOT A WARNING (THUMBS-1). Scaling a
+	// null pixmap printed `QPixmap::scaleHeight: Pixmap is a null pixmap` for
+	// every grey tile — the only thing the owner's log said about two failed
+	// imports, and it says nothing about the render that actually failed (the
+	// renderer says that itself now). The tile simply carries no picture.
+	if (!pixmap.isNull())
+		gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
 	gridImageLabel->setAlignment(Qt::AlignCenter);
 
 	layout->addWidget(gridImageLabel, 0, 0);
@@ -163,7 +169,9 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 
 void AssetGridItem::setTile(QPixmap pix) {
 	pixmap = pix;
-	gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
+	// Same rule as the constructor: no picture is no picture, not a warning.
+	if (pixmap.isNull()) gridImageLabel->clear();
+	else gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
 	gridImageLabel->setAlignment(Qt::AlignCenter);
 }
 

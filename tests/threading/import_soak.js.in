@@ -56,7 +56,7 @@ for (var i = 0; i < N; ++i) {
     // The thumbnail render is the half that hung. importAndPlace already did one
     // on the first sighting of each file; ask for it again so every iteration
     // pays it, dedupe or not.
-    if (!assets.refreshThumbnail(r.assetGuid))
+    if (!assets.refreshThumbnail(r.assetGuid).ok)
         fail("iteration " + i + ": refreshThumbnail(" + r.assetGuid + ") failed");
     var dt = Date.now() - t0;
     totalMs += dt;

@@ -166,7 +166,10 @@ int main(int argc, char **argv)
     primary->setScene(primaryScene);
 
     {
-        EngineThumbnailRenderer renderer(engine);
+        auto loan = EngineThumbnailRenderer::borrow(engine, "the shader-thumbnail suite");
+        CHECK(bool(loan), "the thumbnail renderer can be borrowed");
+        if (!loan) return 1;
+        EngineThumbnailRenderer &renderer = *loan;
         const QSize size(96, 96);
 
         // ---- 4. the thumbnail: the graph's colour on the sphere ----
@@ -218,6 +221,10 @@ int main(int argc, char **argv)
 
         renderer.release();
     }
+    // The renderer is the PROCESS's now (THUMBS-1): the loan above only gave it
+    // back, so it must be destroyed here — while the Engine is alive, like
+    // EngineHost::shutdown() does in the app.
+    EngineThumbnailRenderer::shutdown();
 
     engine->destroyView(primary);
     engine->destroyScene(primaryScene);

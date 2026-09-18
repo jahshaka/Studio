@@ -487,6 +487,12 @@ public:
     /// (preflight §1.6 — Effects rows ARE library tiles; any store scan that
     /// forgets filter 3 silently skips most of a real library).
     QStringList fetchLibraryAssetGuids();
+    /// Guids of EVERY asset row, whatever its view filter and whether or not
+    /// it is listed — what a maintenance sweep over the catalog has to walk
+    /// (THUMBS-1's thumbnail repair: a shader graph is an Editor-filter row
+    /// and a library model an AssetsView one, and BOTH show the user a tile).
+    /// Never a listing: nothing about this query decides what is displayed.
+    QStringList fetchAllAssetGuids();
     /// Every row of `projectGuid` filed directly under `parent` (a folder, or
     /// the project guid for the root), optionally one ModelTypes value. No
     /// row is filtered out: the editor tray's rule is services/assettray.h,
