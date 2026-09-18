@@ -196,6 +196,7 @@ public:
     int activePlanarReflectors() const override
     { return (view() && view()->scene()) ? view()->scene()->activePlanarReflectors() : 0; }
     GiStatusInfo giStatus() const override;
+    GiVoxelStatsInfo giVoxelStats(int cascade) override;
     ShadowStatusInfo shadowStatus() const override;
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;

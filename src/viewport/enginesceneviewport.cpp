@@ -2044,6 +2044,29 @@ bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
     return view()->scene()->nodePlanarReflector(id);
 }
 
+IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
+{
+    GiVoxelStatsInfo out;
+    if (!view() || !view()->scene()) return out;   // available stays false
+    const jahshaka::engine::GiVoxelStats st = view()->scene()->giVoxelStats(cascade);
+    out.available = st.available;
+    if (!st.available) return out;
+    out.cascade = st.cascade;
+    out.width = st.width; out.height = st.height; out.depth = st.depth;
+    out.format = QString::fromStdString(st.format);
+    out.formatMax = st.formatMax;
+    out.multiplier = st.multiplier;
+    out.peak = st.peak;
+    out.peakDirect = st.peakDirect;
+    out.meanLit = st.meanLit;
+    out.voxelsLit = qint64(st.voxelsLit);
+    out.voxelsAtMax = qint64(st.voxelsAtMax);
+    out.directAtMax = qint64(st.directAtMax);
+    out.voxels = qint64(st.voxels);
+    out.voxelsAboveOne = qint64(st.voxelsAboveOne);
+    return out;
+}
+
 IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
 {
     GiStatusInfo out;
