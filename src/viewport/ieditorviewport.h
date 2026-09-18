@@ -627,6 +627,9 @@ public:
         /// ATOM stage 1's far-field proxy, as APPLIED — whether the cascades
         /// are voxelising the baked LOD levels at all.
         bool    cascadeVoxelLod = true;
+        /// Which column of the tier table the chain came from — true = the VR
+        /// one, because the view driving GI is the headset's (V1-RIG item 4).
+        bool    cascadeProfileVr = false;
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;
