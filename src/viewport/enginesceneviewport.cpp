@@ -2118,6 +2118,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cascadeDeferrals    = quint64(st.cascadeDeferrals);
     out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
     out.chainSweeps          = st.chainSweeps;
+    out.chainSettles         = st.chainSettles;
     // THE RAY-QUERY TIER (PHOTON_SPEC §7 R1). A separate engine reading, not a
     // member of GiStatus: the tier is a geometry service, and GI is only its
     // first consumer.
