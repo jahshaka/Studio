@@ -224,10 +224,14 @@ assert(graph.nodes().filter(function (n) { return n.type === "PbrMaterial"; }).l
 // material. Same resolution now runs on both routes.
 var brick = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/materials_to_graph/Brick.effect");
 assert(brick.nodes >= 3, "Brick.effect loads (" + brick.nodes + " nodes)");
-assert(brick.texturesResolved >= 3,
+// TWO images, not three: the preset's SPECULAR map went with the Blinn-Phong
+// master (LEGACY-MASTER-CRUD). A specular-intensity map has no PBR input to
+// land on, so it was being resolved, copied into the user's project and
+// dropped by the bake. Diffuse and normal are what the material is made of.
+assert(brick.texturesResolved === 2,
        "its app-relative textures resolved on load: " + brick.texturesResolved);
 var brickTextures = graph.nodes().filter(function (n) { return n.type === "texture"; });
-assert(brickTextures.length >= 3, "the graph carries its texture nodes");
+assert(brickTextures.length === 2, "the graph carries its texture nodes");
 
 // ---- save + render sanity ----
 assert(project.save() === true, "project.save");
