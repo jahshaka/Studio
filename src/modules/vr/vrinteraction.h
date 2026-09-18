@@ -425,6 +425,15 @@ private:
         /// the other one keeps holding.
         unsigned hand2 = jahshaka::engine::VrHandLeft;
         vrgrab::TwoHandStart pair;
+        /// THE HAND-OFF COULD NOT BE TAKEN YET: one hand let go on a frame the
+        /// other was not reporting on, so there was no pose to capture the
+        /// remaining hand's follow from. The gesture HOLDS (it does not commit
+        /// and it does not cancel — a skipped locate is not a released
+        /// trigger) and the capture is taken on the first frame that hand
+        /// reports again. Without this the follow would start from a pose
+        /// nobody ever located, which is a jump of the object's whole distance
+        /// from the origin.
+        bool recapture = false;
         /// The factor the pair is currently applying, for the report.
         float scale = 1.0f;
         float rollDegrees = 0.0f;

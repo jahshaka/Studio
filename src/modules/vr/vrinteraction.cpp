@@ -580,6 +580,15 @@ void VrInteraction::downgradeToOneHand(unsigned remaining)
     // starts from a zero delta.
     const vrgrab::Pose grip{ toIris(st.grip.position), toIris(st.grip.rotation) };
     const vrgrab::Pose aim{ toIris(st.aim.position), toIris(st.aim.rotation) };
+    // THE HAND THAT KEEPS HOLDING MUST BE LOCATED TO BE CAPTURED FROM. If it
+    // is not (one hand let go on a frame the other blinked), the gesture holds
+    // and the capture waits for it — see Gesture::recapture.
+    if (!st.valid || (!st.grip.valid && !st.aim.valid)) {
+        mGesture.recapture = true;
+        recaptureMembers();
+        return;
+    }
+    mGesture.recapture = false;
     if (mGesture.far && st.aim.valid) {
         // THE FAR ARRANGEMENT KEEPS ITS DISTANCE: the object stays where the
         // pair left it, at whatever range that now is along the remaining
@@ -855,6 +864,14 @@ void VrInteraction::followGesture(float seconds)
     // locate is not a released trigger (VrPose's own note), and moving the
     // object to a pose nobody located would be an invented gesture.
     if (!st.valid) return;
+    // ...AND A HAND-OFF THAT COULD NOT BE TAKEN IS TAKEN NOW, on the first
+    // frame this hand reports (Gesture::recapture): the follow's frame is this
+    // pose and the objects' frame is wherever they stand, so the gesture
+    // resumes as a hold rather than as a jump.
+    if (mGesture.recapture) {
+        downgradeToOneHand(mGesture.hand);
+        if (mGesture.recapture) return;
+    }
 
     vrgrab::Pose hand;
     if (mGesture.far) {
