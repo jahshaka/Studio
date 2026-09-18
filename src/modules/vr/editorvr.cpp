@@ -105,6 +105,13 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     cfg.overrideEyeHeight = options.value(QStringLiteral("eyeHeight"), 0).toUInt();
     if (!cfg.overrideEyeWidth != !cfg.overrideEyeHeight)
         return fail(QStringLiteral("eyeWidth and eyeHeight are set together or not at all"));
+    // THE STEREO WARM-UP, OVERRIDABLE FOR A MEASUREMENT (lane VR-WARMUP-1).
+    // VrConfig's default (2 frames) is the product answer and no UI selects it;
+    // `vr.begin({warmUp:0})` is the A/B arm that shows what it buys, and the
+    // suite's own arm that proves the eye frames compile nothing only because
+    // of it.
+    if (options.contains(QStringLiteral("warmUp")))
+        cfg.warmUpFrames = qMin(options.value(QStringLiteral("warmUp")).toUInt(), 8u);
     // THE WEARER SEES THE EDITOR WORKING (owner, 2026-09-17). This is the one
     // caller that asks for the editor's furniture in the headset — the grid,
     // the light and camera icons, the selection outline, the gizmo — because

@@ -162,7 +162,7 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "begin",
           "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?, reflections?, "
-          "hiddenAreaMask?}) -> bool",
+          "hiddenAreaMask?, warmUp?}) -> bool",
           "THE EDITOR'S VR PREVIEW (SPECS/VR_SPEC.md §5 phase 4): starts the VR session on the "
           "editor's scene and returns true once it exists. From the next frame the render loop is "
           "PACED BY THE RUNTIME (xrWaitFrame), both eyes are drawn in one pass into a target two "
@@ -188,6 +188,15 @@ QVector<VerbInfo> VrApi::verbs() const
           "metre of room (1 = life size). `eyeWidth`/`eyeHeight` override the size each eye is "
           "RENDERED at, for measurement only; the runtime's swapchains keep the runtime's size, "
           "so the copy scales.\n\n"
+          "`warmUp` is HOW MANY STEREO WARM-UP FRAMES the session renders before its first "
+          "committed one (default 2, one forward and one back; 0 disables it). They are "
+          "rendered from the rig's origin through a wide frustum, with nothing submitted to "
+          "the runtime and nothing mirrored, and they exist because the first frame the runtime "
+          "asks a picture of used to build every shader and pipeline the two eyes need ON THE "
+          "FRAME THREAD: 1,179 ms cold and 89 ms warm on the Grand Showroom, which at 62.5 Hz "
+          "is 73 repeated headset frames. The desktop's own warm-up cannot pay it (instanced "
+          "stereo is a different shader for the same object) and neither can a warm cache at a "
+          "new eye size. `vr.state().warmUp` reports what it cost.\n\n"
           "REFLECTIONS IN THE HEADSET follow the PROJECT by default — the World panel's SSR "
           "row, the same row the desktop viewport renders with — and `reflections` (0 off, 1 "
           "half-resolution, 2 full) overrides it for a measurement. In a headset the row buys "
@@ -325,7 +334,8 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges, head, "
+          "frames, rendered, warmUp:{frames,ms}, ipd, mirror, worldScale, asymmetricFov, "
+          "spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
           "bindings:{offered, accepted, profiles:[{profile, bindings, accepted}]}, "
           "hiddenArea:{source, fraction:[l,r], triangles:[l,r]}, "
@@ -684,7 +694,8 @@ bool VrApi::begin(const QVariantMap &options)
                                        QStringLiteral("eyeWidth"),
                                        QStringLiteral("eyeHeight"),
                                        QStringLiteral("reflections"),
-                                       QStringLiteral("hiddenAreaMask") };
+                                       QStringLiteral("hiddenAreaMask"),
+                                       QStringLiteral("warmUp") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.begin: unknown option '%1' — known options are %2")
@@ -1062,6 +1073,12 @@ QVariantMap VrApi::state()
     out[QStringLiteral("refreshHz")] = info.refreshHz;
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(s.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(s.rendered));
+    // THE STEREO WARM-UP (lane VR-WARMUP-1): how many warm-up frames this
+    // session has rendered before its first committed one, and what they cost.
+    // A count and a measured value, like everything else here.
+    out[QStringLiteral("warmUp")] =
+        QVariantMap{ { QStringLiteral("frames"), s.warmUpFrames },
+                     { QStringLiteral("ms"), s.warmUpMs } };
     out[QStringLiteral("ipd")] = s.ipd;
     out[QStringLiteral("mirror")] = vrnames::mirror(s.mirror);
     out[QStringLiteral("worldScale")] = s.worldScale;
