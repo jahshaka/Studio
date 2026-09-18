@@ -45,11 +45,19 @@ QVector<Entry> parseManifest()
         e.licence = o.value(QStringLiteral("licence")).toString();
         e.path = o.value(QStringLiteral("path")).toString();
         e.file = o.value(QStringLiteral("file")).toString();
-        // PRESENT means "this build carries the component". Only an `optional`
-        // entry can be absent, and the build writes a note in place of its text
-        // when it is (cmake/Notices.cmake) — so the honest reading is the
-        // manifest's own flag, not a guess from the text's length.
-        e.present = !o.value(QStringLiteral("optional")).toBool();
+        // PRESENT IS THE BUILD'S OWN ANSWER, not a property of the manifest
+        // (the fix-round read, item 4): cmake/Notices.cmake writes it into the
+        // copy of the manifest that ships, from whether the component's notice
+        // file was actually there when this binary was configured and — for
+        // breakpad, the one component an option can switch off — from
+        // DISABLE_BREAKPAD. Deriving it from `optional` here was a statement
+        // about the manifest: a checkout WITH breakpad's submodule initialised
+        // still reported "not in this build", and the reverse claimed present
+        // for a component whose file had gone. Absent key (a hand-edited
+        // manifest read outside a build) = true, which is what every entry
+        // that names a file in this tree is.
+        e.present = o.value(QStringLiteral("present")).toBool(true);
+        e.vendored = o.value(QStringLiteral("vendored")).toBool(true);
         out.append(e);
     }
     return out;

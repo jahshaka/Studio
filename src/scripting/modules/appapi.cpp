@@ -455,7 +455,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "projects under the `default_directory` preference. READ-ONLY on purpose: a setter "
           "would have to move a live database and a live asset store while they are open.",
           Needs::Document },
-        { "notices", "app.notices({id}) -> [{id, name, role, homepage, licence, path, file, present, textLength}]",
+        { "notices", "app.notices({id}) -> [{id, name, role, homepage, licence, path, file, present, vendored, textLength}]",
           "THE THIRD-PARTY NOTICES THIS BINARY OWES — every vendored component that ships inside "
           "the executable, with what it does for Jahshaka and the LICENCE TEXT read out of its own "
           "vendored tree at build time (app/notices.json is the manifest; nothing is retyped into "
@@ -464,8 +464,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "are kilobytes each; `{id: \"assimp\"}` answers the one component AND its full `text`. "
           "`role` is what the component does for us in one line, `licence` its short name (the "
           "TEXT is the authority), `path` the vendored directory it was read from and `present` "
-          "whether THIS build carries it — a component declared but absent from the checkout (an "
-          "uninitialised submodule) says so instead of disappearing. This is the same data the "
+          "whether THIS build carries it — computed when the build was configured, from whether "
+          "the component's notice was actually there and (for the crash reporter) from "
+          "DISABLE_BREAKPAD, so a component declared but not compiled in says so instead of "
+          "disappearing. `vendored` is false for the three whose source is NOT in this tree — Qt, "
+          "which is linked dynamically, and the Vulkan loader and MoltenVK, which the macOS "
+          "bundle redistributes: their licence texts live in app/notices/ with their provenance "
+          "recorded, which is the one exception to reading a notice off the code it covers. This is the same data the "
           "About dialog's Third-party notices page shows, and the coverage of it is a test: "
           "source.notices_coverage fails on a vendored directory the manifest does not claim.",
           Needs::Document },
@@ -882,6 +887,10 @@ QVariantList AppApi::notices(const QVariant &which)
         row["path"] = e.path;
         row["file"] = e.file;
         row["present"] = e.present;
+        // IS ITS SOURCE IN THIS TREE? False for the three components that are
+        // not vendored (Qt, the Vulkan loader, MoltenVK) and whose notices
+        // therefore live in app/notices/ with their provenance.
+        row["vendored"] = e.vendored;
         row["textLength"] = body.size();
         if (!id.isEmpty()) row["text"] = body;
         out.append(row);

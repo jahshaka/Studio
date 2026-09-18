@@ -349,12 +349,18 @@ assert(app.waitForTextures().waitedMs === 0,
 // nobody declared would not come back at all (source.notices_coverage is the
 // other half: it fails on a vendored directory the manifest does not claim).
 var noticeList = app.notices();
-assert(noticeList.length >= 8,
-       "app.notices() lists the vendored components (" + noticeList.length + ")");
+assert(noticeList.length >= 14,
+       "app.notices() lists every component this binary ships or links (" +
+       noticeList.length + ")");
 var byId = {};
 noticeList.forEach(function (n) { byId[n.id] = n; });
+// The vendored ones, plus the three that are shipped or linked WITHOUT their
+// source being in this tree (the fix-round read, item 2: three.js and the fonts
+// were in the binary and in no entry; Qt's LGPL notice was owed by every Qt
+// binary; the macOS bundle redistributes the Vulkan loader and MoltenVK).
 ["ogre-next", "assimp", "bullet3", "zip", "qlementine", "qtawesome",
- "meshoptimizer", "webxr-input-profiles"].forEach(function (id) {
+ "meshoptimizer", "webxr-input-profiles", "threejs", "fonts-apache", "fonts-ofl",
+ "qt", "vulkan-loader", "moltenvk"].forEach(function (id) {
     assert(byId[id] !== undefined, "…including " + id);
     assert(byId[id].licence.length > 0 && byId[id].role.length > 20,
            "…with its licence name and what it does for us (" + id + ": " +
@@ -372,6 +378,22 @@ assert(one.length === 1 && one[0].text.indexOf("assimp") >= 0,
        "app.notices({id}) answers the one component AND its text");
 assert(one[0].text.length === one[0].textLength,
        "…and textLength is that text's own length");
+// `vendored` tells the two kinds apart, and the not-vendored ones are exactly
+// the three whose licence text lives in app/notices/ with its provenance.
+["threejs", "fonts-apache", "ogre-next"].forEach(function (id) {
+    assert(byId[id].vendored === true, id + " is vendored in this tree");
+});
+["qt", "vulkan-loader", "moltenvk"].forEach(function (id) {
+    assert(byId[id].vendored === false,
+           id + " is shipped or linked without its source in this tree");
+    assert(byId[id].path === "app/notices",
+           "...and its notice comes from app/notices/ (" + byId[id].path + ")");
+});
+// Qt's notice carries the LGPL's own words, which is the point of having it.
+var qtText = app.notices({ id: "qt" })[0].text;
+assert(qtText.indexOf("LESSER GENERAL PUBLIC LICENSE") > 0 &&
+       qtText.indexOf("GENERAL PUBLIC LICENSE") > 0,
+       "Qt's notice carries the LGPL-3 text it refers to, and the GPL-3 it builds on");
 // A component declared but not in this build says so rather than vanishing.
 var absent = noticeList.filter(function (n) { return n.present === false; });
 absent.forEach(function (n) {

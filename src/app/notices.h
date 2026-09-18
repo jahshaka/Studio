@@ -53,7 +53,16 @@ struct Entry
     QString licence;    ///< the short name, for the list column
     QString path;       ///< the vendored directory, repo-relative
     QString file;       ///< the notice file inside it (the manifest's own record)
-    bool present = true;   ///< false = declared but absent from this checkout
+    /// Does THIS BUILD carry the component? Computed at configure time
+    /// (cmake/Notices.cmake) from whether its notice file was there and, for
+    /// breakpad, from DISABLE_BREAKPAD — never from the manifest's shape.
+    bool present = true;
+    /// Is the component's source IN THIS TREE? False for Qt (linked
+    /// dynamically) and for the Vulkan loader and MoltenVK (redistributed
+    /// inside the macOS bundle): their licence texts live in app/notices/ with
+    /// their provenance, which is the one exception to reading a notice off the
+    /// code it covers.
+    bool vendored = true;
 };
 
 /// The manifest, in its declared order. Parsed once from the embedded resource;

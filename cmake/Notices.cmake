@@ -35,9 +35,10 @@ function(jah_generate_notices out_qrc)
 
     # The manifest travels WITH the texts: the runtime list (names, roles,
     # licences, homepages) is this same file, parsed from the resource, so there
-    # is one declaration and no C++ copy of it.
-    configure_file("${_manifest}" "${_gen}/notices.json" COPYONLY)
+    # is one declaration and no C++ copy of it. It is not copied VERBATIM,
+    # though — see `present` below.
     set(_entries "    <file alias=\"notices.json\">${_gen}/notices.json</file>\n")
+    set(_out_json "${_json}")
 
     math(EXPR _last "${_count} - 1")
     foreach(_i RANGE 0 ${_last})
@@ -51,6 +52,24 @@ function(jah_generate_notices out_qrc)
         string(JSON _lines ERROR_VARIABLE _le GET "${_json}" components ${_i} lines)
 
         set(_src "${CMAKE_SOURCE_DIR}/${_path}/${_file}")
+
+        # `present` IS THE BUILD'S OWN TRUTH, computed here and written into the
+        # copy of the manifest that ships (the fix-round read, item 4): it used
+        # to be `!optional` in the C++, which is a statement about the MANIFEST
+        # and not about the binary — a checkout with breakpad's submodule
+        # initialised still said "not in this build", and the reverse claimed
+        # present for a component whose file had gone. Two inputs: does the
+        # notice file exist, and — for breakpad, the one component a CMake
+        # option can switch off — is it actually compiled in.
+        set(_present "true")
+        if(NOT EXISTS "${_src}")
+            set(_present "false")
+        endif()
+        if(_id STREQUAL "breakpad" AND DISABLE_BREAKPAD)
+            set(_present "false")
+        endif()
+        string(JSON _out_json SET "${_out_json}" components ${_i} present "${_present}")
+
         if(NOT EXISTS "${_src}")
             if(_opt)
                 # Honest, and visible in the app: the component is declared but
@@ -111,6 +130,7 @@ function(jah_generate_notices out_qrc)
         endif()
     endforeach()
 
+    file(WRITE "${_gen}/notices.json" "${_out_json}")
     set(_qrc "${CMAKE_BINARY_DIR}/generated/notices.qrc")
     file(WRITE "${_qrc}"
          "<!DOCTYPE RCC><RCC version=\"1.0\">\n  <qresource prefix=\"/notices\">\n"

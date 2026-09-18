@@ -24,10 +24,20 @@ WHAT THIS ASSERTS, and why each half needs a command rather than a habit:
      what catches the range going stale when the file above it grows.
 
   3. NO LICENCE TEXT IS COPIED — an entry may not point at a file inside
-     `app/` or `src/` that this repository WROTE for the purpose. (The one
-     `app/` entry is a PROVENANCE document beside vendored assets, which is
-     where their upstream licence is reproduced; that is the file the assets
-     were vendored with, and it is named as an exception.)
+     `app/` or `src/` that this repository WROTE for the purpose. The
+     exceptions are listed with their reasons: the vendored WebXR assets' and
+     three.js's own notices (which live beside the code they cover, exactly
+     like a thirdparty/ directory), the fonts' two upstream licence texts, and
+     `app/notices/` — which is for the components whose source is NOT IN THIS
+     TREE AT ALL (Qt, linked dynamically; the Vulkan loader and MoltenVK,
+     redistributed inside the macOS bundle). Such an entry must carry
+     `vendored: false`, and only such an entry may read from there.
+
+  4. THE GAPS THE DIRECTORY WALK CANNOT SEE, named rather than hoped for
+     (the fix-round read, item 2, which found three.js and the fonts in the
+     binary and in no entry): `IN_TREE_VENDORED` lists vendored FILES that sit
+     next to our own code, and `NOT_IN_TREE_BUT_SHIPPED` the components this
+     binary links or redistributes without carrying their source.
 
 Run: notices_coverage.py <source-dir>
 """
@@ -53,7 +63,41 @@ ALLOWED_OUTSIDE_THIRDPARTY = {
     "app/content/vr": "the vendored WebXR controller assets' PROVENANCE document, which is "
                       "where their upstream MIT licence is reproduced in full — the file the "
                       "assets were vendored with, beside the .obj files it describes",
+    "src/export/viewer": "three.js is vendored as a single built file beside the viewer that "
+                         "uses it, with its own THREE_LICENSE next to it — the same shape as a "
+                         "thirdparty/ directory, in the place the viewer lives",
+    "app/fonts": "the UI and icon FONTS are vendored as .ttf files with the two licence texts "
+                 "their upstreams ship (Apache-2.0 and the SIL OFL)",
+    "app/notices": "THE ONE EXCEPTION, and only for a `vendored: false` entry: a component "
+                   "whose source is not in this tree at all (Qt, linked dynamically; the "
+                   "Vulkan loader and MoltenVK, redistributed inside the macOS bundle) has no "
+                   "file here to read its licence from, so the canonical text lives in "
+                   "app/notices/ with its provenance recorded in the README beside it. Checked "
+                   "below: an entry reading from here MUST carry `vendored: false`, and one "
+                   "that does may not read from anywhere else",
 }
+
+# VENDORED CODE THAT IS NOT UNDER A thirdparty/ ROOT — the gap the coverage walk
+# could not see (the fix-round read, item 2: three.js and the fonts were both in
+# the binary and in no entry). Each path must be claimed by the named entry, so
+# a future vendoring next to our own code fails here the way a submodule does.
+IN_TREE_VENDORED = {
+    "src/export/viewer/three-webgpu.iife.js": "threejs",
+    "app/fonts/Roboto-Regular.ttf": "fonts-apache",
+    "app/fonts/OpenSans-Regular.ttf": "fonts-apache",
+    "app/fonts/DroidSans.ttf": "fonts-apache",
+    "app/fonts/NotoSansUI-Regular.ttf": "fonts-apache",
+    "app/fonts/Lato-Regular.ttf": "fonts-ofl",
+    "app/fonts/fontawesome-4.7.0.ttf": "fonts-ofl",
+    "app/content/vr/meta-quest-touch-pro/left.obj": "webxr-input-profiles",
+}
+
+# COMPONENTS THIS BINARY SHIPS OR LINKS THAT ARE NOT IN THE TREE AT ALL. They
+# cannot be found by walking directories, so they are named: Qt is linked
+# dynamically and the macOS bundle redistributes the Vulkan loader and MoltenVK
+# (scripts/make-macos-bundle.sh), and all three have licences this application
+# has to show.
+NOT_IN_TREE_BUT_SHIPPED = ["qt", "vulkan-loader", "moltenvk"]
 
 LICENCE_WORDS = ("licen", "copyright", "permission is hereby granted")
 
@@ -130,6 +174,16 @@ def main(root):
                      "be read from the code it covers; add the path to "
                      "ALLOWED_OUTSIDE_THIRDPARTY in this script WITH THE REASON if it really is "
                      "vendored content." % (cid, path))
+        # ...and app/notices/ is for the NOT-vendored ones only, both ways round.
+        vendored = entry.get("vendored", True)
+        if path == "app/notices" and vendored:
+            fail("%s reads its notice from app/notices/, which is only for a component whose "
+                 "source is NOT in this tree — mark it `vendored: false` or read the licence "
+                 "from the code it covers." % cid)
+        if not vendored and path != "app/notices":
+            fail("%s is marked `vendored: false` but reads its notice from %s. A component that "
+                 "is not in this tree keeps its text in app/notices/ with its provenance."
+                 % (cid, path))
 
     # ---- 1. coverage ------------------------------------------------------
     for vendor_root in ("thirdparty", os.path.join("irisgl", "thirdparty")):
@@ -151,6 +205,28 @@ def main(root):
                  "NOT_A_COMPONENT in this script with the reason it is not a third party's "
                  "code." % rel)
 
+    # ---- 1b. the vendored code that is NOT under a thirdparty/ root -------
+    for rel, want in sorted(IN_TREE_VENDORED.items()):
+        if not os.path.exists(os.path.join(root, rel)):
+            fail("the in-tree vendored file %r is gone — remove it from IN_TREE_VENDORED in "
+                 "this script (and from the manifest if nothing else covers it)" % rel)
+            continue
+        if want not in ids:
+            fail("%s is vendored in this tree and the manifest has no '%s' entry claiming it. "
+                 "Vendored code next to our own still ships its licence." % (rel, want))
+            continue
+        claimed_dir = next((e.get("path", "") for e in components if e.get("id") == want), "")
+        if not rel.startswith(claimed_dir.rstrip("/") + "/"):
+            fail("%s is claimed by '%s', whose path is %r — the entry does not cover the file"
+                 % (rel, want, claimed_dir))
+
+    # ---- 1c. shipped or linked, and not in the tree -----------------------
+    for cid in NOT_IN_TREE_BUT_SHIPPED:
+        if cid in ids:
+            continue
+        fail("'%s' is shipped or linked by this application and the manifest has no entry for "
+             "it. It cannot be found by walking the tree — that is why it is named here." % cid)
+
     stale = [d for d in NOT_A_COMPONENT
              if not any(os.path.isdir(os.path.join(root, r, d))
                         for r in ("thirdparty", "irisgl/thirdparty"))]
@@ -161,8 +237,11 @@ def main(root):
     if failures:
         print("source.notices_coverage: FAILED (%d)" % len(failures))
         return 1
-    print("  ok: %d vendored component(s) declared, every notice file present and read from its "
-          "own tree (%d documented exclusion(s))" % (len(components), len(NOT_A_COMPONENT)))
+    print("  ok: %d component(s) declared — every notice file present, every vendored one read "
+          "from its own tree, %d in-tree vendored file(s) claimed, %d shipped-but-not-vendored "
+          "named (%d documented exclusion(s))"
+          % (len(components), len(IN_TREE_VENDORED), len(NOT_IN_TREE_BUT_SHIPPED),
+             len(NOT_A_COMPONENT)))
     print("source.notices_coverage: PASSED")
     return 0
 

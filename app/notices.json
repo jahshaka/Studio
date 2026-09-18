@@ -14,7 +14,13 @@
     "(the notice file inside it) or lines ([first, last] of a file that carries the",
     "notice in a comment). `optional: true` = a component that may be absent from a",
     "checkout (an uninitialised submodule) — the build then embeds a note saying so",
-    "instead of failing.",
+    "instead of failing. `vendored: false` = a component whose source is NOT in this",
+    "tree at all (Qt, which is linked dynamically; the Vulkan loader and MoltenVK,",
+    "which the macOS bundle redistributes): its licence text lives in app/notices/",
+    "with its provenance recorded there — the ONE exception to reading a notice off",
+    "the code it covers, because there is no code here to read it off. `present` is",
+    "NOT written here: cmake/Notices.cmake computes it per build from whether the",
+    "component is actually there (and, for breakpad, from DISABLE_BREAKPAD).",
     "",
     "COVERAGE IS A TEST, not a habit: source.notices_coverage walks thirdparty/ and",
     "irisgl/thirdparty/ and fails on a vendored directory no entry claims."
@@ -102,6 +108,63 @@
       "path": "thirdparty/breakpad/breakpad",
       "file": "LICENSE",
       "optional": true
+    },
+    {
+      "id": "threejs",
+      "name": "three.js (WebGPU build)",
+      "role": "The renderer inside every exported web viewer — the whole viewer page is this library plus src/export/viewer/viewer.js, and the build ships inside this binary as a Qt resource.",
+      "homepage": "https://threejs.org",
+      "licence": "MIT",
+      "path": "src/export/viewer",
+      "file": "THREE_LICENSE"
+    },
+    {
+      "id": "fonts-apache",
+      "name": "Droid Sans, Open Sans, Roboto and Noto",
+      "role": "The application's own UI fonts, compiled into the binary (app/fonts.qrc) and loaded by the theme.",
+      "homepage": "https://fonts.google.com",
+      "licence": "Apache-2.0",
+      "path": "app/fonts",
+      "file": "Apache License.txt"
+    },
+    {
+      "id": "fonts-ofl",
+      "name": "Lato, and the Font Awesome 4.7 icon font",
+      "role": "The theme's display font and the icon font every toolbar glyph is drawn from. QtAwesome above is the WRAPPER (MIT); the font file itself is under the SIL Open Font License and is named here because that is a different licence on a different file.",
+      "homepage": "https://fontawesome.com",
+      "licence": "OFL-1.1",
+      "path": "app/fonts",
+      "file": "LICENSE_OFL.txt"
+    },
+    {
+      "id": "qt",
+      "name": "Qt 6",
+      "role": "The application framework: every window, widget, image codec, SQL driver, network stack and the scripting engine's JavaScript runtime. Linked DYNAMICALLY against the machine's own Qt installation — not vendored, which is why its notice lives in app/notices/ with the source offer the licence requires.",
+      "homepage": "https://www.qt.io",
+      "licence": "LGPL-3.0",
+      "path": "app/notices",
+      "file": "qt-lgpl-3.0.txt",
+      "vendored": false
+    },
+    {
+      "id": "vulkan-loader",
+      "name": "Vulkan Loader (LunarG SDK)",
+      "role": "Finds and loads the machine's Vulkan driver. Used from the system on Linux; REDISTRIBUTED inside the macOS release bundle (scripts/make-macos-bundle.sh), which is what makes its notice this application's to show.",
+      "homepage": "https://github.com/KhronosGroup/Vulkan-Loader",
+      "licence": "Apache-2.0",
+      "path": "app/notices",
+      "file": "apache-2.0.txt",
+      "vendored": false
+    },
+    {
+      "id": "moltenvk",
+      "name": "MoltenVK",
+      "role": "The Vulkan-on-Metal implementation the macOS build renders through, redistributed inside the release bundle beside the loader.",
+      "homepage": "https://github.com/KhronosGroup/MoltenVK",
+      "licence": "Apache-2.0",
+      "path": "app/notices",
+      "file": "apache-2.0.txt",
+      "vendored": false
     },
     {
       "id": "webxr-input-profiles",
