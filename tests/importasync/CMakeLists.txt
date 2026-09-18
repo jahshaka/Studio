@@ -35,6 +35,8 @@ add_executable(test_import_async test_import_async.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_import_async PROPERTIES AUTOMOC ON CXX_STANDARD 17

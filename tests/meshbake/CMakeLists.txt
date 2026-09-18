@@ -34,6 +34,8 @@ add_executable(test_mesh_bake test_mesh_bake.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp)
 set_target_properties(test_mesh_bake PROPERTIES AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

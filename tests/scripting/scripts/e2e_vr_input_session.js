@@ -207,6 +207,99 @@ for (var q = 0; q < 10; ++q) leftStick(0, 0.2);
 assert(dist2(showRig("after ten dead-zone nudges"), quiet) < 1e-5,
        "a stick inside the dead zone moves the rig not at all");
 
+// ---- 1b. THE PROJECT'S FLY SPEED IS THE WEARER'S SPEED ------------------
+//         (lane VR-WORLD-1, the owner's request 2026-09-18)
+//
+// How a wearer moves is a property of the PROJECT (`world.vr`), and a session
+// ADOPTS it when it begins. Three claims, and the rig is what measures them:
+//
+//   * the running session flies at the project's number;
+//   * a document edit MID-SESSION does not move the wearer — the session runs
+//     on what it latched, because nothing may change speed under somebody
+//     wearing a headset;
+//   * `vr.locomotion` overrides it for this session, the rig moves at the
+//     overridden speed, and the DOCUMENT is not touched;
+//   * and the next session adopts the project again, override gone.
+var docSpeed = world.vr().flySpeed;
+console.log("world.vr().flySpeed = " + docSpeed);
+assert(near(vr.locomotion().flySpeed, docSpeed),
+       "the session runs at the project's fly speed (" + docSpeed + " m/s)");
+assert(vr.locomotion().session === true, "...and says a session has latched a project");
+assert(near(vr.state().preview.flySpeed, docSpeed),
+       "the editor preview's own fly (the arrow keys) is the same number");
+
+world.vr({ flySpeed: 9 });
+assert(near(vr.locomotion().flySpeed, docSpeed),
+       "a PROJECT edit mid-session leaves the running session alone — nothing changes "
+       + "speed under a wearer");
+
+var over = vr.locomotion({ flySpeed: 3 });
+assert(near(over.flySpeed, 3), "the session can be overridden to 3 m/s");
+assert(near(world.vr().flySpeed, 9), "...and the override wrote NOTHING to the document");
+leftStick(0, 0);
+var slowFrom = showRig("before 45 frames at the overridden 3 m/s");
+for (var sf = 0; sf < 45; ++sf) leftStick(0, 1);
+var slowTo = showRig("after them");
+var slowWalk = Math.sqrt((slowTo.x - slowFrom.x) * (slowTo.x - slowFrom.x)
+                         + (slowTo.z - slowFrom.z) * (slowTo.z - slowFrom.z));
+console.log("      walked " + slowWalk.toFixed(3) + " m — 45 frames at 1/90 s of 3 m/s is 1.5");
+assert(near(slowWalk, 1.5, 0.05),
+       "THE RIG MOVED AT THE SETTING'S OWN SPEED: " + slowWalk.toFixed(3) + " m against 1.5");
+leftStick(0, 0);
+
+// A NEW SESSION ADOPTS THE PROJECT AGAIN, and the override is gone with the
+// session that made it.
+assert(vr.end() === true, "the session ends");
+assert(vr.begin({ mirror: "none" }) === true, "...and a second one begins on the same scene");
+var replaced = false;
+for (var rf = 0; rf < 200 && !replaced; ++rf) {
+    editor.frame(1);
+    var rs = vr.state();
+    replaced = rs.head.valid && rs.preview.placing === false;
+}
+assert(replaced === true, "the wearer was placed again");
+var adopted = vr.locomotion();
+assert(near(adopted.flySpeed, 9),
+       "THE NEW SESSION ADOPTED THE PROJECT'S 9 m/s: " + adopted.flySpeed);
+assert(adopted.overridden.length === 0, "...and the previous session's override is gone");
+leftStick(0, 0);
+var fastFrom = showRig("before 45 frames at the project's 9 m/s");
+for (var ff = 0; ff < 45; ++ff) leftStick(0, 1);
+var fastTo = showRig("after them");
+var fastWalk = Math.sqrt((fastTo.x - fastFrom.x) * (fastTo.x - fastFrom.x)
+                         + (fastTo.z - fastFrom.z) * (fastTo.z - fastFrom.z));
+console.log("      walked " + fastWalk.toFixed(3) + " m — 45 frames at 1/90 s of 9 m/s is 4.5");
+assert(near(fastWalk, 4.5, 0.08),
+       "THE RIG MOVED AT THE PROJECT'S SPEED: " + fastWalk.toFixed(3) + " m against 4.5");
+// AN OVERRIDE ASKED FOR BEFORE A SESSION SURVIVES THE BEGIN, and dies with the
+// session that used it (the Fable read of VR-WORLD-1, item 3): adopting a
+// project used to clear every override, so a `vr.locomotion` issued in the
+// breath before `vr.begin` was refused silently.
+assert(vr.end() === true, "the session ends again");
+assert(vr.locomotion().session === false, "...and the latch goes with it");
+vr.locomotion({ flySpeed: 6 });
+assert(near(vr.locomotion().flySpeed, 6), "an override set with NO session stands");
+assert(vr.begin({ mirror: "none" }) === true, "a third session begins");
+assert(near(vr.locomotion().flySpeed, 6),
+       "THE OVERRIDE SURVIVED THE ADOPTION — the caller's ask was not thrown away");
+assert(vr.locomotion().overridden.indexOf("flySpeed") >= 0, "...and is still listed as one");
+assert(vr.end() === true, "that session ends");
+assert(near(vr.locomotion().flySpeed, 9),
+       "...and ITS overrides died with it: back to the project's 9 m/s");
+assert(vr.begin({ mirror: "none" }) === true, "the session the rest of this file needs");
+var settled = false;
+for (var af = 0; af < 200 && !settled; ++af) {
+    editor.frame(1);
+    var as = vr.state();
+    settled = as.head.valid && as.preview.placing === false;
+}
+assert(settled === true, "the wearer is placed once more");
+
+// Back to the shipped default for everything below (the snap turn's cases read
+// the rig, not the speed, but a suite leaves its fixture as it found it).
+world.vr({ flySpeed: 15 });
+leftStick(0, 0);
+
 // ---- 2. THE SNAP TURN, ABOUT THE WEARER'S HEAD --------------------------
 //
 // The room turns by exactly 30 degrees and the wearer is not teleported.

@@ -10,6 +10,8 @@ add_executable(test_engine_player test_engine_player.cpp test_stubs.cpp
     # every target that compiles the scene needs its implementation — a link
     # error otherwise, and a STALE BINARY if the gate runs without a build.
     ${CMAKE_SOURCE_DIR}/src/player/playervr.cpp
+    # ...and the project's VR settings it flies at (lane VR-WORLD-1).
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playback.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
@@ -37,6 +39,8 @@ set_tests_properties(player.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
 add_executable(test_editor_player_parity test_editor_player_parity.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/player/engineplayerscene.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playervr.cpp
+    # ...and the project's VR settings it flies at (lane VR-WORLD-1).
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playback.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp

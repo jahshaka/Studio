@@ -24,6 +24,8 @@ add_executable(test_importer_glb test_importer_glb.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     # transform-panel echo regression (the double-import scale corruption)
@@ -126,6 +128,8 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp)
 set_target_properties(test_importer_meshformats PROPERTIES AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -183,6 +187,8 @@ add_executable(test_importer_security test_importer_security.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp)
 set_target_properties(test_importer_security PROPERTIES AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -243,6 +249,8 @@ add_executable(test_importer_animation test_importer_animation.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp)
 set_target_properties(test_importer_animation PROPERTIES AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -302,6 +310,8 @@ add_executable(test_importer_materials test_importer_materials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_importer_materials PROPERTIES AUTOMOC ON CXX_STANDARD 17
@@ -359,6 +369,8 @@ add_executable(test_importer_texture_guids test_importer_texture_guids.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_importer_texture_guids PROPERTIES AUTOMOC ON CXX_STANDARD 17
@@ -418,6 +430,8 @@ add_executable(test_importer_extent test_importer_extent.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    # the project's VR settings table: the writer/reader are generated from it (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_importer_extent PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF

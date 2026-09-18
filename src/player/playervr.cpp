@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "player/playermousecontroller.h"
-#include "viewport/flyspeedsettings.h"
+#include "services/vrworld.h"
 
 using namespace jahshaka::engine;
 
@@ -33,13 +33,6 @@ QVariantMap vec(const iris::Vec3 &v)
                         { QStringLiteral("y"), double(v.y()) },
                         { QStringLiteral("z"), double(v.z()) } };
 }
-
-/// THE WEARER'S SPEED IS THE PLAYER'S OWN (player.flySpeed().speed): 25 world
-/// units per second at 1x, stepped by the same dropdown, the same wheel and the
-/// same verb the desktop player uses. Nothing VR-specific — a world is a world,
-/// and a wearer who has set their speed for the flat Player expects the same
-/// pace with the headset on.
-float flySpeed() { return FlySpeedSettings::speed(FlySpeedSettings::Player); }
 
 }   // namespace
 
@@ -130,13 +123,27 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
         mStartPos = camera->getGlobalPosition();
         mStartRot = camera->getGlobalRotation();
     }
+    // THE SESSION ADOPTS THE PROJECT'S VR SETTINGS (lane VR-WORLD-1), exactly
+    // as the editor's preview does: the fly speed and the rest are document
+    // fields (`world.vr`), latched here for the life of the session and
+    // overridable for it alone by `vr.locomotion`.
+    mDocument = document;
+    vrworld::adopt(document);
     return true;
 }
 
 void PlayerVr::end()
 {
+    // WHAT THIS OBJECT OWNED, read before anything clears it. `end()` runs on
+    // EVERY Player stop (EnginePlayerView::end → endPlayerVr, and
+    // forgetView()), and this object outlives a run once a VR session has
+    // existed — so without the guard a plain Play/Stop released a latch that
+    // belonged to the EDITOR's live session and silently reverted the wearer's
+    // speed to the live document mid-flight (the Fable read of VR-WORLD-1,
+    // item 2; the editor host has carried the same guard from the start).
+    const bool owned = mOwnsSession;
     auto engine = mEngine.lock();
-    if (engine && mOwnsSession) {
+    if (engine && owned) {
         engine->setVrMirrorView(nullptr);
         if (engine->vrStatus().active) engine->endVrSession();
     }
@@ -144,6 +151,10 @@ void PlayerVr::end()
     mPlacePending = false;
     restoreMirrorView();
     mCamera.clear();
+    mDocument.clear();
+    // The session's locomotion overrides go with the session (VR-WORLD-1) —
+    // with THIS session's, never with somebody else's.
+    if (owned) vrworld::release();
 }
 
 void PlayerVr::restoreMirrorView()
@@ -198,6 +209,16 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         mPlacePending = false;
         engine->setVrMirrorView(nullptr);
         restoreMirrorView();
+        // ...AND THE LOCOMOTION LATCH GOES WITH IT (the Fable read of
+        // VR-WORLD-1, item 1). This branch — not `end()` — is the one a
+        // `vr.end()` from a script, a device loss and the engine's own teardown
+        // of a Lost session all take, so a latch released only in `end()` left
+        // `vr.locomotion()` reporting `session:true` with no session and
+        // `resolve()` serving a dead copy of a project that may since have been
+        // edited. Idempotent, and the editor host does the same in its own
+        // "ended from somewhere else" branch.
+        mDocument.clear();
+        vrworld::release();
         return;
     }
     // THE FIRST EYE PICTURE IS WHAT PAYS FOR THE DESKTOP'S (see begin()): from
@@ -244,7 +265,7 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
     // wearer. Two things must not both move them, and the rig is the one that
     // keeps their feet on the room's floor.
     const iris::Vec3 delta = vrorigin::flyDelta(headRot, PlayerMouseController::heldFlyKeys(),
-                                                flySpeed(), vrorigin::frameSeconds(dt));
+                                                wearerSpeed(), vrorigin::frameSeconds(dt));
     if (!delta.isNull()) {
         vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
         rig.position += delta;
@@ -290,7 +311,7 @@ bool PlayerVr::move(const flystep::Keys &keys, float seconds)
     auto engine = mEngine.lock();
     const VrStatus st = engine->vrStatus();
     const iris::Vec3 delta =
-        vrorigin::flyDelta(toIris(st.headRotation), keys, flySpeed(), seconds);
+        vrorigin::flyDelta(toIris(st.headRotation), keys, wearerSpeed(), seconds);
     if (delta.isNull()) return true;    // nothing held is not a failure
     vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
     rig.position += delta;
@@ -326,8 +347,21 @@ QVariantMap PlayerVr::idleReport()
     out[QStringLiteral("origin")] = zero;
     // The same shape as the live report (vrnames::pose) — one head, one spelling.
     out[QStringLiteral("head")] = vrnames::pose(VrPose{});
-    out[QStringLiteral("flySpeed")] = double(flySpeed());
+    // NO SESSION, so no project is latched: the documented default, which is
+    // what "a player that has never been asked for a headset" can honestly say.
+    out[QStringLiteral("flySpeed")] = double(vrworld::resolve(iris::ScenePtr()).flySpeed);
     return out;
+}
+
+/// THE WEARER'S SPEED IS THE PROJECT'S (lane VR-WORLD-1): `world.vr`'s
+/// `flySpeed` in metres per second — latched when this session began — with the
+/// session's `vr.locomotion` override if it has one. The same number the
+/// editor's VR preview and the thumbstick fly at, because a wearer has ONE
+/// speed in a world however they got into it. It was the desktop Player's
+/// 25 u/s camera speed until VR had a setting of its own.
+float PlayerVr::wearerSpeed() const
+{
+    return vrworld::resolve(mDocument.lock()).flySpeed;
 }
 
 QVariantMap PlayerVr::report() const
@@ -372,6 +406,6 @@ QVariantMap PlayerVr::report() const
     // rotation and the located flag come with it.
     out[QStringLiteral("head")] =
         vrnames::pose(st.headPosition, st.headRotation, st.posesValid);
-    out[QStringLiteral("flySpeed")] = double(flySpeed());
+    out[QStringLiteral("flySpeed")] = double(wearerSpeed());
     return out;
 }

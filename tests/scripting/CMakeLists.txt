@@ -347,6 +347,16 @@ add_script_e2e(sun_light e2e_sun_light.js)
 # shadows are off standing over something it lights straight through. Plus the
 # case that is deliberately NOT an issue: a scene with no directional light.
 add_script_e2e(scene_issues e2e_scene_issues.js)
+# THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18) — the
+# World panel's VR section as a verb: `world.vr` reads and writes six document
+# fields (the fly speed in m/s, the fly direction, the turn and its step or
+# rate, the dominant hand), refuses what is not a setting, clamps what is merely
+# out of range, records ONE undo step per call and survives save/close/open
+# through the real writer and reader. It also pins THE SESSION RULE from the
+# document's side: `vr.locomotion` overrides these for one session and writes
+# nothing here. The rig actually moving is `vr.input_session`; the panel is
+# `ui.vr_panel`.
+add_script_e2e(world_vr e2e_world_vr.js)
 # vr.* WITH NO RUNTIME (SPECS/VR_SPEC.md §6) — the cheap case, and the one that
 # runs on every box in every gate: this app is launched WITHOUT --vr, so no
 # OpenXR loader is opened at all, and every verb must still answer with a
