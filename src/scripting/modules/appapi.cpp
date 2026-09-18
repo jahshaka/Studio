@@ -370,7 +370,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
-        { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, channelCacheEntries, waitTimeouts, waitWorstMs, waitBudgetMs}",
+        { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, channelCacheEntries, waitTimeouts, waitWorstMs, waitBudgetMs, waitAdvances}",
           "WHAT THE TEXTURE LOADER IS DOING (SPECS/THREADING_ADOPTION_SPEC.md P2). Since the "
           "batched-loading phase, loading a texture SCHEDULES it and the frame edge waits once "
           "for all of them, instead of the caller blocking on each texture in turn — so N "
@@ -395,7 +395,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "up on a pending set that had stopped shrinking and at least one frame was drawn "
           "without its textures. `waitWorstMs` is the longest single wait this process has "
           "performed and `waitBudgetMs` the resolved no-progress budget (JAH_TEXTURE_WAIT_MS "
-          "overrides it). All three are plain members — free to ask.",
+          "overrides it). `waitAdvances` counts the times a drain advanced the renderer's "
+          "resource bookkeeping (the staging/semaphore/delayed-block retire, and a COMMIT "
+          "every OTHER advance — a bare VaoManager::_update outside a frame arms on the first "
+          "call and commits on the second): the drain polls every millisecond but advances on "
+          "a 16 ms cadence, so this rises about once per frame's worth of waiting and not "
+          "once per poll "
+          "(JAH_TEXTURE_DRAIN_ADVANCE_MS overrides the cadence for measurement; 0 = every "
+          "poll, which is what it did before DRAIN-1). All of them are plain members — free "
+          "to ask.",
           Needs::Engine },
         { "waitForTextures", "app.waitForTextures() -> {waitedMs, loadRequests, doneStreaming}",
           "Blocks until every scheduled texture load has finished, and reports how long that "
@@ -1371,6 +1379,7 @@ QVariantMap AppApi::textureStreaming()
     out.insert("waitTimeouts", engine->textureWaitTimeouts());
     out.insert("waitWorstMs", engine->textureWaitWorstMs());
     out.insert("waitBudgetMs", engine->textureWaitBudgetMs());
+    out.insert("waitAdvances", QVariant::fromValue(qulonglong(engine->textureWaitAdvances())));
     return out;
 }
 

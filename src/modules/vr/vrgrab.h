@@ -419,6 +419,291 @@ inline float snapTurnDegrees(float stickX, bool armed, float step)
 /// Has the stick come back far enough to arm the next snap turn?
 inline bool snapTurnRearmed(float stickX) { return std::fabs(stickX) <= kStickRearm; }
 
+
+// ---- THE TWO-HAND GRAB (VR_INPUT_SPEC §5.1's two-hand paragraph; the owner's
+// ---- answer 7, "the full version with roll") -------------------------------
+//
+// WHAT TWO HANDS ADD, AND WHY IT IS A DIFFERENT FORMULA. One hand can carry an
+// object and turn it, and that is all it can do: a rigid attach has no scale in
+// it and no way to say "make this bigger" or "roll it about the line between my
+// palms". Two hands hold a thing the way a person holds a box — the SPAN
+// between the palms is the size, the LINE between them is an axis, and rolling
+// both wrists about that line rolls the box. So the gesture is read as the
+// three numbers a pair of points and a pair of orientations can carry:
+//
+//     scale       = |A| / |A0|            (the span, now over the span then)
+//     rotation    = roll(A) * minimal(A0 -> A)
+//     translation = M - M0                (the midpoint's own move)
+//
+// and the object is put through the similarity those three describe, about the
+// midpoint AT THE CAPTURE. Nothing else is invented: with the hands held still
+// the three are identity, one and zero.
+//
+// THE ROLL IS THE HALF A PAIR OF POINTS CANNOT SEE. `minimal(A0 -> A)` is the
+// SHORTEST rotation carrying the old axis onto the new one, and by construction
+// its own axis is perpendicular to both — so it contains no turn ABOUT the line
+// between the hands, and a wearer who rolls both wrists without moving either
+// palm would, with that term alone, see the object sit perfectly still. The
+// missing degree of freedom is taken from the grips themselves: each hand's
+// rotation since the capture is split into a swing and a TWIST about the
+// current axis (the standard swing-twist decomposition, below), and the average
+// of the two twists is the roll. Averaged rather than taken from one hand
+// because the gesture belongs to the pair: one wrist rolling while the other
+// holds still is half a roll, which is what a person doing it expects to see.
+//
+// WHY THE TWO TERMS CANNOT DOUBLE COUNT: the minimal rotation's axis is
+// `A0 x A`, which is perpendicular to A, so its twist about A is exactly zero.
+// The composition `roll * minimal` therefore adds the roll to a rotation that
+// has none, and a pure wrist roll (A unchanged, minimal = identity) is read as
+// roll alone.
+
+/// A PAIR OF HANDS AS CAPTURED — the frame every later frame is measured
+/// against. `hand[0]` and `hand[1]` are the LEFT and the RIGHT hand in that
+/// order at every call site (VrInteraction captures them by index), so the
+/// axis has a stable sign and a roll never flips halfway through a gesture.
+struct TwoHandStart
+{
+    Pose hand[2];
+    iris::Vec3 midpoint;
+    iris::Vec3 axis;        ///< hand[1].position - hand[0].position
+    float span = 0.0f;      ///< |axis| at the capture
+};
+
+/// WHAT THE PAIR IS DOING NOW, relative to that capture.
+struct TwoHandDelta
+{
+    iris::Vec3 midpoint;            ///< M this frame (the translation is M - M0)
+    iris::Quat rotation;            ///< roll(A) * minimal(A0 -> A)
+    float scale = 1.0f;             ///< |A| / |A0|
+    float rollDegrees = 0.0f;       ///< the roll term alone, reported for the suites
+    float span = 0.0f;              ///< |A| this frame
+};
+
+inline TwoHandStart twoHandStart(const Pose &left, const Pose &right)
+{
+    TwoHandStart out;
+    out.hand[0] = left;
+    out.hand[1] = right;
+    out.midpoint = (left.position + right.position) * 0.5f;
+    out.axis = right.position - left.position;
+    out.span = out.axis.length();
+    return out;
+}
+
+/// THE TWIST OF A ROTATION ABOUT AN AXIS, in degrees, signed by the right hand
+/// rule about `axis` — the swing-twist decomposition, which is the only honest
+/// way to ask "how much of this wrist turn was a roll about the line between my
+/// palms".
+///
+/// The vector part of a quaternion lies along its rotation axis, so projecting
+/// it onto `axis` and keeping the scalar gives the twist quaternion directly;
+/// the angle comes back through atan2 so that a half turn either way is told
+/// apart, and it is wrapped into (-180, 180] because a quaternion and its
+/// negation are the same rotation and would otherwise answer 360 degrees apart.
+inline float wrapDegrees(float degrees)
+{
+    while (degrees > 180.0f) degrees -= 360.0f;
+    while (degrees <= -180.0f) degrees += 360.0f;
+    return degrees;
+}
+
+inline float twistDegreesAbout(const iris::Quat &rotation, const iris::Vec3 &axis)
+{
+    const iris::Vec3 a = axis.isNull() ? iris::Vec3() : axis.normalized();
+    if (a.isNull()) return 0.0f;
+    const iris::Quat q = rotation.normalized();
+    const iris::Vec3 v(q.x(), q.y(), q.z());
+    const float along = iris::Vec3::dotProduct(v, a);
+    const float len = std::sqrt(q.scalar() * q.scalar() + along * along);
+    if (len < 1e-8f) return 0.0f;                  // a half turn ABOUT a perpendicular axis
+    const float degrees =
+        2.0f * std::atan2(along / len, q.scalar() / len) * 57.29577951308232f;
+    return wrapDegrees(degrees);
+}
+
+/// THE AVERAGE OF TWO ANGLES, taken on the SHORT way round: +179 and -179
+/// average to 180, not to 0. (The naive mean is the classic way a roll flips
+/// through half a turn when the two wrists straddle the wrap.)
+inline float averageDegrees(float a, float b)
+{
+    return wrapDegrees(a + wrapDegrees(b - a) * 0.5f);
+}
+
+inline TwoHandDelta twoHandDelta(const TwoHandStart &start, const Pose &left, const Pose &right)
+{
+    TwoHandDelta out;
+    out.midpoint = (left.position + right.position) * 0.5f;
+    const iris::Vec3 axis = right.position - left.position;
+    out.span = axis.length();
+    // A DEGENERATE PAIR IS A HOLD, NOT A DIVISION BY ZERO: hands that meet (or
+    // a capture taken with them together) leave the object exactly as it was.
+    if (start.span < 1e-4f || out.span < 1e-4f) {
+        out.scale = 1.0f;
+        out.rotation = iris::Quat();
+        return out;                     // the midpoint still moves: it is the translation
+    }
+    out.scale = out.span / start.span;
+    const iris::Quat minimal = iris::Quat::rotationTo(start.axis, axis).normalized();
+    // THE ROLL, from the two grips' own turns about THIS frame's axis.
+    const iris::Quat turn0 = (left.rotation * start.hand[0].rotation.conjugated()).normalized();
+    const iris::Quat turn1 = (right.rotation * start.hand[1].rotation.conjugated()).normalized();
+    out.rollDegrees = averageDegrees(twistDegreesAbout(turn0, axis),
+                                     twistDegreesAbout(turn1, axis));
+    const iris::Quat roll = iris::Quat::fromAxisAndAngle(axis.normalized(), out.rollDegrees);
+    out.rotation = (roll * minimal).normalized();
+    return out;
+}
+
+/// THE NODE UNDER A TWO-HAND GESTURE: the similarity applied about the
+/// midpoint at the capture.
+///
+///     p = M + R * (s * (p0 - M0))
+///     q = R * q0
+///
+/// Read it as one sentence: take where the object was relative to the point
+/// between the hands, scale that offset by how much the hands have spread,
+/// turn it by how the pair has turned, and hang it off where the hands are now.
+inline Pose twoHandFollow(const TwoHandStart &start, const TwoHandDelta &delta,
+                          const Pose &node0, const iris::Vec3 &pivot)
+{
+    Pose out;
+    out.rotation = (delta.rotation * node0.rotation).normalized();
+    out.position = pivot + (delta.midpoint - start.midpoint) +
+                   delta.rotation.rotatedVector((node0.position - pivot) * delta.scale);
+    return out;
+}
+
+/// THE SAME, ABOUT THE POINT BETWEEN THE HANDS — the spec's own arrangement,
+/// and what a NEAR gesture wants: the hands are ON the object, so the object
+/// scales and turns about them.
+///
+/// A FAR gesture passes a different pivot (VrInteraction does: the object's own
+/// captured position), because the hands are then nowhere near the thing they
+/// are steering — at ten metres, spreading the palms about the wearer's own
+/// midpoint would throw the object another ten metres away and a thirty degree
+/// turn of the pair would sweep it five metres sideways. The lever arm that
+/// makes a far grab twitchy (kLeverTauPerMetre) makes a far SCALE violent, and
+/// the cure is the same one every tool uses: far away, the pair is a steering
+/// wheel and the object turns and grows where it stands.
+inline Pose twoHandFollow(const TwoHandStart &start, const TwoHandDelta &delta, const Pose &node0)
+{
+    return twoHandFollow(start, delta, node0, start.midpoint);
+}
+
+/// The whole gesture in one call, for a caller that holds the four poses — the
+/// spelling VR_INPUT_SPEC names. `scaleOut` (optional) takes the uniform factor
+/// the caller must also apply to the node's own scale.
+inline Pose twoHandFollow(const Pose &left0, const Pose &right0, const Pose &left,
+                          const Pose &right, const Pose &node0, float *scaleOut = nullptr)
+{
+    const TwoHandStart start = twoHandStart(left0, right0);
+    const TwoHandDelta delta = twoHandDelta(start, left, right);
+    if (scaleOut) *scaleOut = delta.scale;
+    return twoHandFollow(start, delta, node0);
+}
+
+/// SNAP THE SCALE FACTOR (SnapSettings::scaleSize() under `menu`, §5.1). The
+/// FACTOR is quantised, not the resulting size: the modifier means "in steps of
+/// a quarter" and the object must not jump to a grid the instant it comes down.
+/// Never zero — a snapped factor below one step is one step, because a scale of
+/// nothing is a deleted object with extra steps.
+inline float snappedScale(float factor, float step)
+{
+    if (step <= 0.0f || factor <= 0.0f) return factor;
+    const float snapped = std::round(factor / step) * step;
+    return snapped < step ? step : snapped;
+}
+
+// ---- TELEPORT (VR_INPUT_SPEC §6 row L4; the owner's answer 8) --------------
+//
+// THE ARC IS A THROWN BALL, and that is the whole of it: the wearer's hand
+// throws a marker at a constant speed along the aim, gravity brings it down,
+// and where it lands is where they will stand. Every VR tool since Budget Cuts
+// draws this curve for the same two reasons — a straight ray cannot say "behind
+// that ledge" and cannot be aimed at the floor without pointing the controller
+// at your own feet, while a parabola aims itself: the wearer raises the hand
+// and the landing walks away from them, in a curve they can read at a glance.
+//
+// THE SPEED IS THE DIAL and the only one. At 10 m/s from a hand at 1.4 m, held
+// level, the marker lands 5.3 m away; at 45 degrees up it reaches 10.6 m; at
+// 45 degrees down it is 2.8 m in front of the wearer's feet. That is the range
+// a room and a landscape both want, and the shape is the same at every scale
+// because the only other number is gravity, which is 9.81 everywhere a person
+// has ever stood.
+
+inline constexpr float kTeleportSpeed = 10.0f;          ///< m/s, the throw
+inline constexpr float kTeleportGravity = 9.81f;        ///< m/s^2, down
+/// HOW LONG THE THROW MAY FLY before the arc gives up, seconds. Two seconds is
+/// a 20 m throw and a 19.6 m drop — past that the landing is a guess the wearer
+/// cannot see anyway, and the refusal ("nothing under the arc") is the honest
+/// answer.
+inline constexpr float kTeleportMaxSeconds = 2.0f;
+/// HOW MANY STRAIGHT PIECES THE CURVE IS MADE OF. Each one is a segment the
+/// document's picker is asked about, so this is a cost as much as a shape: 20
+/// pieces over 2 s is a 1 m piece at the start of a level throw, which reads as
+/// a smooth curve at arm's length and misses nothing a person can stand on.
+inline constexpr int kTeleportSegments = 20;
+/// THE STEEPEST GROUND A WEARER MAY BE PUT ON, degrees from level. 45 is the
+/// angle every engine's character controller uses: a ramp is a floor, a wall is
+/// not, and the line between them has to be somewhere.
+inline constexpr float kTeleportMaxSlopeDegrees = 45.0f;
+
+/// A POINT ON THE THROWN ARC at `seconds` after it left the hand.
+inline iris::Vec3 arcPoint(const Pose &aim, float seconds, float speed = kTeleportSpeed,
+                           float gravity = kTeleportGravity)
+{
+    const iris::Vec3 dir = aimDirection(aim.rotation);
+    return aim.position + dir * (speed * seconds) -
+           iris::Vec3(0, 1, 0) * (0.5f * gravity * seconds * seconds);
+}
+
+/// WHEN THE ARC CROSSES A HORIZONTAL PLANE, seconds, or -1 when it never does.
+///
+/// The DESCENDING crossing (the larger root): an arc thrown upward from below a
+/// plane passes it twice and the landing is the second one — you come down on
+/// the floor, you do not stand on it on the way up.
+inline float arcPlaneTime(const Pose &aim, float planeY, float speed = kTeleportSpeed,
+                          float gravity = kTeleportGravity)
+{
+    const iris::Vec3 dir = aimDirection(aim.rotation);
+    const float vy = dir.y() * speed;
+    const float dy = aim.position.y() - planeY;
+    if (gravity <= 0.0f) return vy < 0.0f ? -dy / vy : -1.0f;
+    // 0.5*g*t^2 - vy*t - dy = 0
+    const float disc = vy * vy + 2.0f * gravity * dy;
+    if (disc < 0.0f) return -1.0f;
+    const float t = (vy + std::sqrt(disc)) / gravity;
+    return t > 0.0f ? t : -1.0f;
+}
+
+/// MAY A WEARER STAND ON THIS FACE? `normal` is the surface's, pointing back
+/// at the arc that struck it; anything steeper than `maxSlopeDegrees` from the
+/// world's up is a wall.
+inline bool landingAllowed(const iris::Vec3 &normal,
+                           float maxSlopeDegrees = kTeleportMaxSlopeDegrees)
+{
+    if (normal.isNull()) return true;      // a face we cannot measure is not refused
+    const float up = normal.normalized().y();
+    return up >= std::cos(maxSlopeDegrees * 0.017453292519943295f);
+}
+
+/// THE RIG THAT PUTS THE WEARER ON A LANDING POINT, LEVEL AND FACING THE WAY
+/// THEY ALREADY FACE.
+///
+/// It is vrorigin::placedOn with the target being the wearer's own head, moved:
+/// the same head rotation in and out, so the yaw delta is zero and nothing
+/// turns (a teleport that also spun the room is the fastest way to lose
+/// somebody), and the head's HEIGHT ABOVE THE RIG'S FLOOR carried across, so a
+/// person who is standing arrives standing and a person who is crouching
+/// arrives crouching. `landing` is the point on the ground, not the eye.
+inline vrorigin::Rig teleportedTo(const vrorigin::Rig &rig, const iris::Vec3 &headPos,
+                                  const iris::Quat &headRot, const iris::Vec3 &landing)
+{
+    const iris::Vec3 target(landing.x(), landing.y() + (headPos.y() - rig.position.y()),
+                            landing.z());
+    return vrorigin::placedOn(rig, headPos, headRot, target, headRot);
+}
+
 }   // namespace vrgrab
 
 #endif   // VRGRAB_H

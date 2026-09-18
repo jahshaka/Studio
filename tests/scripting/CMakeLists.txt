@@ -381,6 +381,17 @@ add_script_e2e(vr_input_headless e2e_vr_input_headless.js)
 # gizmo.ring_pick's and gizmo.plane_handles' ray arms, and the size rule is
 # gizmo.screen_size's — all three document-only.
 add_script_e2e(vr_gizmo e2e_vr_gizmo.js)
+# THE TELEPORT ARC, WITH NO HEADSET (VR_INPUT_SPEC §6 row L4; the owner's answer
+# 8) — the same injection route, and the whole gesture: the dominant stick
+# forward arms a thrown arc, the document's picker decides what it lands on, a
+# wall and a locked object are refused in words, a raised platform is a floor,
+# `menu` and a back-flick cancel, a held object owns that stick, a focus loss
+# puts the arc away, and every piece of the curve is a line node in the world.
+# The arithmetic under it (the parabola, the plane solve, the 45 degree slope
+# rule, the rig that arrives level at the wearer's own height) is
+# `vr.grab_maths`; the wearer ACTUALLY moving needs a rig and is
+# `vr.input_session` on Monado.
+add_script_e2e(vr_teleport e2e_vr_teleport.js)
 # THE PLAYER'S VR MODE WITH NO RUNTIME (SPECS/VR_SPEC.md §4.5, phase 3) — the
 # other everywhere case, and the owner's rule in executable form: without a
 # headset the tool is today's tool. `player.play({vr:true})` must refuse and
