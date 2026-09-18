@@ -1961,6 +1961,129 @@ static void t3z_still_frame_walk(Engine *e, View *v)
     oneEvent("...and shown again", 0);
 }
 
+
+// ---------------------------------------------------------------------------
+// T3d — ONE VERTEX-ANIMATED MATERIAL COSTS ITS OWN ITEMS, NOT THE SCENE
+// (render audit 2026-09-17, OGRE_NEXT.md ON-16; lane ENGINE-SMALL-A).
+//
+// THE DEFECT. A material with a VERTEX-STAGE generated piece moves its vertices
+// every frame off the shader clock, so its casters' shadow maps are never
+// cacheable and must be re-flagged on every frame — the way Unreal excludes
+// world-position-offset materials from its shadow caches. That was implemented
+// as a SCENE-WIDE bool in runItemWalk: if any material in the scene had such a
+// piece, the still-frame gate was skipped entirely and the caster walk visited
+// EVERY item on EVERY frame, at rest, for ever. One wave material in a
+// thousand-object scene therefore undid T3z's whole statement.
+//
+// WHAT THIS ASSERTS, and the pair is the point:
+//   1. At rest, with one deforming caster among many statics, the caster walk
+//      visits ZERO items — the gate holds for the scene.
+//      FAILS BEFORE: ~30 x (items + 1) visits over the 30 frames below.
+//   2. The deforming caster's own lamp keeps re-rendering its map every frame,
+//      and only that lamp does. Without this, "zero visits" would describe a
+//      gate that had simply stopped telling the cache anything, and a waving
+//      tree would cast a frozen shadow.
+static void t3d_one_deforming_material(Engine *e, View *v)
+{
+    std::printf("-- T3d: one vertex-animated material re-flags ITS caster, not the scene\n");
+    ensureRoomForThreeLamps(e, v);
+    // T3z, which runs before this, leaves its scene bound (it is the end of its
+    // own story); a view refuses a second scene while it shows one.
+    v->setScene(nullptr);
+    CacheRoom r = buildCacheRoom(e, v, "t3d");
+    if (!r.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+
+    // The statics. Not a thousand (this is a Debug + ASan engine and every one
+    // of them is a real Item), but enough that a per-frame walk is unmistakable
+    // in the counter: the pre-fix cost is (kStatics + 4) visits per frame.
+    const int kStatics = 300;
+    for (int i = 0; i < kStatics; ++i) {
+        const NodeId n = r.scene->createNode();
+        r.scene->attachMesh(n, r.mesh, r.mat);
+        // Spread them across the floor, away from the mover's lamp, so they
+        // change no lamp's answer; a static's box is what it is.
+        const float x = float(i % 20) * 0.6f + 1.0f, z = float(i / 20) * 0.6f + 1.0f;
+        r.scene->setNodeTransform(n, Vec3(x, 0.5f, z), Quat(), Vec3(0.3f, 0.3f, 0.3f));
+    }
+
+    int p[3];
+    for (int i = 0; i < 8; ++i) frame(e, p, r);     // settle, prime the walk
+    const auto walked = [&]() { return e->shadowStatus().casterWalkItems; };
+
+    // The control: with no deforming material this is T3z's statement again,
+    // now with 300 statics in the room.
+    unsigned long long before = walked();
+    for (int i = 0; i < 10; ++i) frame(e, p, r);
+    const unsigned long long restPlain = walked() - before;
+    std::printf("    10 still frames, no deformer:      caster item visits %llu\n",
+                (unsigned long long)restPlain);
+    CHECK(restPlain == 0ull, "a still %d-item scene visits ZERO items (%llu)", kStatics + 4,
+          (unsigned long long)restPlain);
+
+    // THE DEFORMER: a second material, bound to the MOVER alone, whose vertex
+    // piece reads the shader clock. Written to disk by content name because the
+    // backend cannot disk-cache a from-memory piece (Engine::setMaterialCustomPiece).
+    PbrParams wave; wave.albedo = Colour(0.4f, 0.75f, 0.4f); wave.roughness = 0.6f;
+    const MaterialId waving = r.scene->createPbrMaterial(wave);
+    const std::string piecePath = "t3d_wave.piece_vs.glsl";
+    {
+        std::FILE *f = std::fopen(piecePath.c_str(), "wb");
+        if (!f) { std::printf("FAIL: cannot write %s\n", piecePath.c_str()); ++failures; return; }
+        const char *src = "@piece( custom_vs_preTransform )\n"
+                          "\tworldPos.xyz += float3( 0.0, passBuf.jahClock.x * 0.05, 0.0 );\n"
+                          "@end\n";
+        std::fwrite(src, 1, std::strlen(src), f);
+        std::fclose(f);
+    }
+    const bool bound =
+        r.scene->setMaterialCustomPiece(waving, piecePath, CustomPieceStage::VertexPreTransform);
+    CHECK(bound, "a vertex-stage piece binds to the second material (%s)",
+          bound ? "" : e->lastError().c_str());
+    CHECK(r.scene->attachMesh(r.mover, r.mesh, waving), "the mover takes the waving material");
+    frame(e, p, r);   // the material swap itself: one full walk, by contract
+
+    // Case 1: the gate still holds for the SCENE.
+    before = walked();
+    int moverLampPasses = 0;
+    bool onlyMoversLamp = true;
+    for (int i = 0; i < 30; ++i) {
+        r.scene->setShaderTime(float(i) * (1.0f / 60.0f));   // the clock moves; nothing else
+        frame(e, p, r);
+        moverLampPasses += (p[0] > 0 ? p[0] : 0);
+        const std::vector<int> passes(p, p + 3);
+        if (!onlyLamp(passes, 0, kPointMapPasses)) onlyMoversLamp = false;
+    }
+    const unsigned long long restDeform = walked() - before;
+    std::printf("    30 still frames, one deformer:     caster item visits %llu "
+                "(pre-fix: ~%d), lamp0 passes %d\n",
+                (unsigned long long)restDeform, 30 * (kStatics + 4), moverLampPasses);
+    CHECK(restDeform == 0ull,
+          "one deforming material does NOT take the still-frame gate out for the whole scene "
+          "(%llu item visits over 30 still frames; ON-16)", (unsigned long long)restDeform);
+
+    // Case 2: and the deformer's own lamp is still told, every frame.
+    CHECK(moverLampPasses == 30 * kPointMapPasses,
+          "the deforming caster's lamp re-renders its map on every one of the 30 frames "
+          "(%d passes, expected %d)", moverLampPasses, 30 * kPointMapPasses);
+    CHECK(onlyMoversLamp,
+          "...and ONLY that lamp does (a deformer must not dirty the whole atlas)");
+
+    // And with the piece gone it is a plain caster again: the frames go still.
+    r.scene->setMaterialCustomPiece(waving, "", CustomPieceStage::VertexPreTransform);
+    frame(e, p, r);
+    settle(e, 2);
+    before = walked();
+    for (int i = 0; i < 10; ++i) frame(e, p, r);
+    const unsigned long long afterUnbind = walked() - before;
+    std::printf("    10 still frames, piece unbound:    caster item visits %llu\n",
+                (unsigned long long)afterUnbind);
+    CHECK(afterUnbind == 0ull, "unbinding the piece leaves the scene still (%llu)",
+          (unsigned long long)afterUnbind);
+    std::remove(piecePath.c_str());
+    v->setScene(nullptr);
+    e->destroyScene(r.scene);
+}
+
 int main(int argc, char **argv)
 {
     const std::string only = argc > 1 ? argv[1] : std::string();
@@ -2031,6 +2154,7 @@ int main(int argc, char **argv)
     // T3r, T3p and T3s down with it — all of them "nothing rendered" readings
     // from a grown atlas, none of them about the caster walk).
     if (only.empty() || only == "t3z") t3z_still_frame_walk(engine.get(), v);
+    if (only.empty() || only == "t3d") t3d_one_deforming_material(engine.get(), v);
 
     engine.reset();
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
