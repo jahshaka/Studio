@@ -1188,6 +1188,111 @@ int main()
         render(e, 4);
     }
 
+
+    // =====================================================================
+    // CASE 15 — TWENTY MOVERS IN ONE PLACE ARE STILL ONE PLACE
+    // (PHOTON audit 2026-09-17, PHOTON.md F14; lane ENGINE-SMALL-A)
+    // =====================================================================
+    // THE DEFECT. The dirty-box list is capped at `kGiCascadeDirtyBoxCap` (16),
+    // and past the cap it used to collapse into "the scene changed EVERYWHERE" —
+    // on the reasoning that a scene changing in sixteen places has to be
+    // answered whole. But the commonest way to exceed the cap is not a
+    // scene-wide edit: it is SEVENTEEN OBJECTS MOVING IN ONE CORNER (a physics
+    // pile settling, an animated set, a crowd), which produce seventeen small
+    // boxes a metre apart. Answering "everywhere" marked every cascade out to
+    // the horizon, so the chain rebuilt one cascade per frame for as long as
+    // they kept moving — the exact cost the per-cascade path exists to avoid,
+    // paid for having TOO MUCH information rather than too little.
+    //
+    // WHAT THIS ASSERTS. Twenty cubes moving every frame, all of them in a place
+    // only the OUTERMOST cascade reaches (derived from the chain as it stands,
+    // like case 7's farPlace):
+    //   1. the INNER cascades are never re-voxelised — they cannot see the
+    //      movers, and with the merge in place the description still says so.
+    //      FAILS BEFORE: the cap fires on frame one, every cascade is marked,
+    //      and the scheduler spends one rebuild per frame, innermost first.
+    //   2. the outermost cascade IS re-voxelised — the movers are real and the
+    //      cascade that sees them must follow (the counterpart assertion: "no
+    //      rebuilds" would be a chain that had stopped listening).
+    //   3. AT REST IT FALLS TO ZERO: the frames after the movement stops
+    //      re-voxelise nothing at all.
+    std::printf("\n== case 15: twenty movers in one place (F14) ==\n");
+    {
+        CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the mover case");
+        render(e, 8);
+        const GiStatus base = scene->giStatus();
+        if (base.cascades.size() < 2) {
+            CHECK(false, "case 15 needs a chain of at least two cascades");
+        } else {
+            const size_t n = base.cascades.size();
+            // A PLACE ONLY THE OUTERMOST CASCADE REACHES: half way between the
+            // second-outermost cascade's edge and the outermost one's.
+            const float inner = base.cascades[n - 2u].halfSize;
+            const float outer = base.cascades[n - 1u].halfSize;
+            const Vec3 centre = base.cascades[n - 1u].centre;
+            const float x0 = centre.x + (inner + outer) * 0.5f;
+            const float z0 = centre.z;
+
+            // TWENTY of them — four more than the cap, which is the whole point.
+            std::vector<NodeId> movers;
+            for (int i = 0; i < 20; ++i) {
+                const NodeId cube = enginetest::addTestCube(scene, Colour(0.6f, 0.6f, 0.9f),
+                                                            0.0f, 0.8f);
+                enginetest::setNodePosition(scene, cube,
+                                            Vec3(x0 + float(i % 5) * 1.5f, 0.5f,
+                                                 z0 + float(i / 5) * 1.5f));
+                movers.push_back(cube);
+            }
+            render(e, 12);          // the spawn's own work drains
+
+            const auto perCascade = [&]() {
+                std::vector<unsigned long long> out;
+                for (const auto &c : scene->giStatus().cascades) out.push_back(c.rebuilds);
+                return out;
+            };
+            std::vector<unsigned long long> before = perCascade();
+            const unsigned long long fullBefore = scene->giStatus().cascadeFullRebuilds;
+
+            // THE MOVEMENT: every mover moves every frame, by more than the
+            // scan's quantisation, for 24 frames.
+            for (int f = 0; f < 24; ++f) {
+                for (size_t i = 0; i < movers.size(); ++i)
+                    enginetest::setNodePosition(scene, movers[i],
+                                                Vec3(x0 + float(i % 5) * 1.5f + 0.3f * float(f),
+                                                     0.5f, z0 + float(i / 5) * 1.5f));
+                render(e, 1);
+            }
+            std::vector<unsigned long long> during = perCascade();
+            unsigned long long innerRebuilds = 0, outerRebuilds = 0;
+            std::printf("   24 frames of 20 movers in the outermost cascade only:");
+            for (size_t i = 0; i < during.size(); ++i) {
+                const unsigned long long d = during[i] - before[i];
+                std::printf("  c%zu %llu", i, d);
+                if (i + 1u == during.size()) outerRebuilds += d; else innerRebuilds += d;
+            }
+            std::printf("  (full-chain guards %llu)\n",
+                        scene->giStatus().cascadeFullRebuilds - fullBefore);
+            CHECK(innerRebuilds == 0ull,
+                  "twenty movers past the dirty-box cap do NOT dirty the cascades that "
+                  "cannot see them (F14: the cap merges, it does not give up)");
+            CHECK(outerRebuilds > 0ull,
+                  "...while the cascade that CAN see them follows them");
+
+            // At rest: nothing at all.
+            render(e, 4);
+            before = perCascade();
+            render(e, 30);
+            during = perCascade();
+            unsigned long long atRest = 0;
+            for (size_t i = 0; i < during.size(); ++i) atRest += during[i] - before[i];
+            std::printf("   30 frames after they stop: %llu cascade rebuilds\n", atRest);
+            CHECK(atRest == 0ull, "and when they stop, the chain re-voxelises nothing");
+
+            for (NodeId m : movers) scene->removeNode(m);
+            render(e, 6);
+        }
+    }
+
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
     GiParams off; off.mode = GiMode::Off;
