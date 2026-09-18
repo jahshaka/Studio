@@ -227,9 +227,16 @@ var budget = world.giStatus().probeUpdatesPerFrame;
 assert(drag.captures <= Math.max(1, budget),
        "a dragged frame re-captures at most the renderer's per-frame budget (" +
        drag.captures + " <= " + Math.max(1, budget) + ")");
+// A MECHANISM ASSERTION, AND IT IS LABELLED ONE (the fix-round read, item 6):
+// this says the scheduler DEFERRED rather than spent, which is how the cost
+// bars above are met TODAY. An improvement that stops staling the grid under a
+// drag at all — MOVER-1's subject, the dragged Still on the mover channel —
+// would leave nothing to defer and red this line while making the picture
+// better. Whoever lands that retires this assertion (the bars and the
+// re-solve/capture contracts above are the ones that must survive it).
 assert(drag.cascadeDeferrals > 0,
        "…and the cascade scheduler DEFERRED work rather than spending it per frame (" +
-       drag.cascadeDeferrals + " deferrals)");
+       drag.cascadeDeferrals + " deferrals) — a MECHANISM assertion MOVER-1 may retire");
 
 // ---- 3. SETTLE -----------------------------------------------------------
 // The sweep the deferral owes, measured from the frame the content came to

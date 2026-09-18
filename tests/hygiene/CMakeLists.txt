@@ -73,6 +73,18 @@ jah_no_display(source.one_readfile)
 # reported "NOTHING to gate" with exit 0. See the script's header for the four
 # cases (and the one legitimate empty selection, which must stay legitimate).
 find_package(Python3 COMPONENTS Interpreter QUIET)
+# A MISSING PYTHON IS LOUD, not silent (the fix-round read, item 8): two gates
+# in this directory are python, and an `if(FOUND)` that drops them without a
+# word is a tree whose gate quietly got smaller. Named, both of them, so the
+# line says what is not being run.
+if(NOT Python3_Interpreter_FOUND)
+    message(WARNING
+        "no python3 interpreter found: the source gates source.gate_scope_rules (the scoping "
+        "tool's own guard) and source.notices_coverage (every vendored component is "
+        "acknowledged) are NOT registered in this build, and neither is "
+        "document.reader_defaults or theme.no_raw_sheets in their own directories. Install "
+        "python3 and reconfigure.")
+endif()
 if(Python3_Interpreter_FOUND)
     add_test(NAME source.gate_scope_rules
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_scope_rules.py"

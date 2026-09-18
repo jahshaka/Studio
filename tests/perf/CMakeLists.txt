@@ -102,7 +102,9 @@ set_tests_properties(perf.epic_steady_state PROPERTIES
 #   * `perf` label only — NOT `benchmark`: it has no baseline file and nothing
 #     to re-record, so it belongs in the merge tier rather than the nightly one.
 #   * TIMEOUT 600: 420 rendered frames of the Mirror Room at Epic plus the
-#     archive import, at 6x the measured cost.
+#     archive import. MEASURED at 15.8-16.3 s over five runs, so the timeout is
+#     ~37x it — the room a contended box needs, and far below the class of
+#     hang a timeout exists to end.
 configure_file(drag_mirror_room.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js @ONLY)
 set(_drag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drag_mirror_room)
@@ -143,6 +145,13 @@ set_tests_properties(perf.drag_mirror_room PROPERTIES
 # sudo — so the companion is the lane's/gate's own `dmesg` watch, and what this
 # suite contributes is the REPEATED GESTURE that makes an Xid likely enough to
 # see.
+#
+# MEASURED: 40.4 s (the archive import, 60 warm-up frames and 800 rendered
+# frames of the Showroom at Epic — the soak itself is 20.2 s of that), which is
+# why the timeout is 600 and why it is RUN_SERIAL: 800 Epic frames beside
+# sibling Vulkan suites at -j4 is the VRAM-contention class this tree has a
+# documented flake list for (CLAUDE.md), and a soak that trips it proves
+# nothing about hiding.
 configure_file(hide_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js @ONLY)
 set(_hide_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-hide_soak)
 
@@ -161,6 +170,7 @@ set_tests_properties(perf.hide_soak PROPERTIES
     ENVIRONMENT "HOME=${_hide_home};JAHSHAKA_DATA_ROOT=${_hide_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED perf_home_hide_soak
     LABELS "perf"
+    RUN_SERIAL TRUE
     TIMEOUT 600)
 
 # ---------------------------------------------------------------------------
