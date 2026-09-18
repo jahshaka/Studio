@@ -614,8 +614,8 @@ void EngineSceneViewport::pictureSegment(const iris::CameraNodePtr &cam, const Q
                                point - picture.topLeft(), segStart, segEnd);
 }
 
-// THE ONE SCENE, ON DEMAND — and NOT gated on this widget's own View any more
-// (SMOKE-FIX-1, 2026-09-18).
+// THE ONE SCENE, BUILT WHEN SOMEBODY WHO DRAWS IT ASKS — and NOT gated on this
+// widget's own View any more (SMOKE-FIX-1, 2026-09-18).
 //
 // The Player page is a second view on THIS scene (lane PLAYER-1), so a session
 // that reaches the Player without ever showing the editor — the desktop tile's
@@ -624,13 +624,22 @@ void EngineSceneViewport::pictureSegment(const iris::CameraNodePtr &cam, const Q
 // the Player's window showed the stale pixels of the page underneath. The scene
 // is what the Player needs; this widget's own on-screen View is not.
 //
+// AN EXPLICIT CALL, NEVER A GETTER (the fix round's F1). `engineScene()` and
+// `sceneMirror()` are read from per-frame paths — VrApi::pushProxies rides the
+// render driver's beforeFrame, which ticks from the shell's constructor onwards
+// — so building the scene inside them made EVERY windowed process construct the
+// editor scene, its worker pool and its SceneMirror on its first tick, editor
+// or no editor, and hammer Engine::mLastError while the Hlms did not exist yet.
+// The two callers entitled to ask are the ones that DRAW this scene without
+// being this widget: EnginePlayerView::adoptEditorScene and EditorVrPreview.
+//
 // THE PIN'S STARTUP-ORDER LAW IS STILL OBEYED, by the engine rather than by a
 // guess: `createScene` returns null before the first View exists in the process
 // (Engine.h, "ORDER MATTERS"), so asking early is safe and simply answers "not
 // yet" — which is the honest answer, and the one the Player's refusal repeats.
-// In practice a View always exists by then: the startup shader-build gate makes
-// an offscreen one (app/shaderbuildgate.cpp), and the Player's own is created
-// in its show event before the page's start().
+// In practice a View always exists by the time either caller asks: the Player's
+// own is created in its show event before the page's start(), and a VR session
+// begins from a page that has one.
 bool EngineSceneViewport::ensureEngineScene()
 {
     if (mEngineScene) return true;

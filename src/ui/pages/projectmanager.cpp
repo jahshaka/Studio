@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "ui_projectmanager.h"
 
 #include "services/apppaths.h"
+#include "app/firstrun.h"
 
 #include <chrono>
 #include <memory>
@@ -206,10 +207,18 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	// The dialog is driven by the open runner's signals (showOpenProgress) now:
 	// the open is THREADED and sliced, so it returns before the scene is up
 	// and closing the dialog here would close it over an empty editor.
-	// THE TILE IS THE ONLY ROUTE THAT CAN MEAN "PLAY" (its Play button), and it
-	// says so here, in the call, rather than leaving it on the object for
-	// somebody else's open to read (SMOKE-FIX-1).
-	loadProjectAssets(playMode ? ProjectOpenMode::Player : ProjectOpenMode::Editor);
+	// THE TILE IS THE ONLY ROUTE THAT CAN MEAN "PLAY", and it says so here, in
+	// the call, rather than leaving it on the object for somebody else's open to
+	// read (SMOKE-FIX-1). Two things can mean it: the tile's own Play button
+	// (`playMode`), and the user's standing preference for what a plain tile
+	// open does — `open_in_player`, OFF by default, which the Worlds page's
+	// Preferences row has offered for years while nothing read it (the owner
+	// asked for it to be real, 2026-09-18). A sample, an archive import, a new
+	// world and `project.openAsync` all state their own space and are untouched
+	// by it: this is the one route where "open" is a bare gesture.
+	loadProjectAssets(projectopen::tileOpenMode(
+	    playMode,
+	    SettingsManager::getDefaultManager()->getValue("open_in_player", false).toBool()));
 }
 
 QString projectBlobGuid;
@@ -224,6 +233,20 @@ int on_extract_entry(const char *filename, void *arg) {
 // keeps painting, and the catalog rows are committed back here in slices.
 // The tail that used to follow the synchronous call now lives in
 // onArchiveImportFinished; everything between the two is event-loop time.
+// A PROBLEM WITH AN IMPORT, TOLD TO WHOEVER IS THERE (SMOKE-FIX-1's fix round,
+// F5). A person gets the box they have always got; a DRIVEN run — a suite, a
+// `--script`, an MCP client, the selftest (app/firstrun.h is the one predicate)
+// — gets a log line, because a modal window in a process nobody is watching is
+// not a message, it is a hang: the run blocks on it until its own timeout kills
+// it. The machine-readable half is `project.archiveResult()`, which reports the
+// last outcome of any archiver in the process.
+void ProjectManager::reportImportProblem(const QString &title, const QString &text)
+{
+    qWarning("Jahshaka import: %s - %s", qPrintable(title), qPrintable(text));
+    if (FirstRun::isDrivenSession()) return;
+    QMessageBox::warning(this, title, text, QMessageBox::Ok);
+}
+
 void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
 {
     QString fileName;
@@ -237,8 +260,8 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     }
 
     if (archiver && archiver->isRunning()) {
-        QMessageBox::information(this, "Import Scene",
-                                 "An archive operation is already running.", QMessageBox::Ok);
+        reportImportProblem(tr("Import Scene"),
+                            tr("An archive operation is already running."));
         return;
     }
     if (!archiver) {
@@ -292,12 +315,9 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
     }
     if (!result.ok()) {
         hideOpenProgress();
-        QMessageBox::warning(
-            this,
-            "Incompatible Scene format",
-            result.error + "\nYou can extract the contents manually and recreate the scene.",
-            QMessageBox::Ok
-        );
+        reportImportProblem(
+            tr("Incompatible Scene format"),
+            result.error + tr("\nYou can extract the contents manually and recreate the scene."));
         return;
     }
 
@@ -323,6 +343,14 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         // native window unconditionally on close — the page-switch desync that
         // used to strand a ghost X window can no longer keep it mapped.
         if (progressDialog) progressDialog->setValueAndText(85, "Opening scene....");
+        // THE WORLD THAT IS LEAVING GETS CLOSED FIRST — the same line the tile
+        // path has always had above, and project.open/openAsync make for
+        // themselves (SMOKE-FIX-1's fix round, F6). Without it an import-open
+        // over an open world re-pointed `project` at the new one and the old
+        // one was simply dropped: no autosave under `auto_save`, no undo-stack
+        // reset, the user's unsaved edits gone. It has to happen BEFORE the
+        // re-point, because closeProject saves the project the pointer names.
+        if (mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));

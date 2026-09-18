@@ -50,6 +50,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
+#include "app/updatechecker.h"
 
 #include "data/constants.h"
 #include "viewport/ieditorviewport.h"
@@ -249,10 +250,17 @@ void WorldSettingsWidget::enableAutoUpdate(bool state)
 {
 	// THE AUTOMATIC-UPDATES CHECKBOX WROTE `open_in_player` (SMOKE-FIX-1's
 	// audit, a copy-paste from the row above): ticking "automatic updates"
-	// silently flipped the open-in-player preference and the update checker's
-	// own setting — `automatic_updates`, which the row READS on the way in and
-	// SoftwareUpdateDialog reads at every launch — was never written at all.
-	settings->setValue("automatic_updates", state);
+	// silently flipped the open-in-player preference, and `automatic_updates` —
+	// the key this row READS on the way in — was never written at all, so the
+	// box forgot every restart.
+	//
+	// AND THE KEY IT NOW WRITES IS STILL A DEAD PREFERENCE, exactly like
+	// `open_in_player` beside it: the update check runs UNCONDITIONALLY from
+	// main() (checkForAppUpdate), and SoftwareUpdateDialog reads
+	// `automatic_updates` only to tick its own checkbox. Two rows that promise
+	// the user a choice and decide nothing. Recorded, not wired: what they
+	// should do is the owner's call, not this lane's.
+	settings->setValue(UpdateChecker::kAutomaticChecksKey, state);
 }
 
 void WorldSettingsWidget::mouseControlChanged(const QString& value)
@@ -592,7 +600,14 @@ void WorldSettingsWidget::configureEditor()
 
 	auto showFPS = new QLabel("Show FPS :");
 	auto showViewportProjection = new QLabel("Show Viewport Projection:");
-	auto openImportedWorldsInPlayer = new QLabel("Open Imported Worlds In Player :");
+	// THE ROW SAYS WHAT IT DOES (owner, 2026-09-18: "wire up open in player").
+	// It was labelled "Open Imported Worlds In Player" and did nothing at all —
+	// no code read `open_in_player`. It now decides where a WORLD TILE's open
+	// lands (the Desktop page's double-click and its Open button), which is the
+	// only route where "open" is a plain user gesture with no space in it; an
+	// archive import, a sample and `project.openAsync` say where they land
+	// themselves and are unaffected.
+	auto openImportedWorldsInPlayer = new QLabel("Open Worlds In Player :");
 	auto autoCheckUpdates = new QLabel("Automatically Check For Updates :");
 	auto mouseControls = new QLabel("Mouse Controls :");
 
@@ -671,7 +686,12 @@ void WorldSettingsWidget::configureEditor()
 
 	fps->setChecked(settings->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
 	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
-	autoUpdates->setChecked(settings->getValue("automatic_updates", true).toBool());
+	openInPlayer->setToolTip("Open Worlds In Player | Opening a world from a tile on the Worlds "
+	                         "page puts you straight into the Player instead of the Editor. "
+	                         "Samples, imported archives and scripts are unaffected — they say "
+	                         "where they land themselves.");
+	autoUpdates->setChecked(settings->getValue(UpdateChecker::kAutomaticChecksKey,
+	                                           UpdateChecker::kAutomaticChecksDefault).toBool());
 	// COPY-PASTE DEFECT, fixed (STATS_OVERLAY_SPEC.md §1.1): the *Show
 	// Perspective Label* checkbox was initialised from "show_fps", so switching
 	// the FPS row on made this one appear checked on the next visit while its

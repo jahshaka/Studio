@@ -22,6 +22,21 @@ ok(app.columns().space === "desktop", "a --vr boot starts on the desktop");
 console.log("info: vr available = " + JSON.stringify(player.state().vr.available)
             + " (" + player.state().vr.reason + ")");
 
+// ---- the VR button, on the desktop, with nothing open -----------------------
+// (SMOKE-FIX-1's fix round, F7.) This icon is LIVE on a `--vr` boot's Desktop
+// page, and off the editor page it means "play this world in the headset".
+// There is no world: it used to open the Player page over nothing at all and
+// start it. The refusal has to come BEFORE the page moves.
+// (vr.toggle REFUSES by returning false with the reason in app.lastError — the
+// house rule for a question with two answers — rather than throwing.)
+var toggled = vr.toggle();
+var vrRefusal = String(app.lastError());
+ok(toggled === false, "with no world open, vr.toggle() refuses");
+ok(vrRefusal.indexOf("no world open") >= 0, "…and says why: " + vrRefusal);
+ok(app.columns().space === "desktop", "…and the window did not move to the Player");
+ok(player.state().vr.active === false, "…and no session started");
+ok(player.state().playing === false, "…and nothing is playing");
+
 ok(project.openSample("Matcaps") === true,
    "project.openSample('Matcaps') was accepted (" + app.lastError() + ")");
 var turns = 0;

@@ -1662,7 +1662,31 @@ file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.player_no_editor
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
          WORKING_DIRECTORY ${_home}/run)
+# JAHSHAKA_TEST_NO_EDITOR_BOOT: the PERSON's boot shape (window up, Desktop
+# page, editor page never shown) instead of the script harness's, which shows
+# the editor page before the script's first line. Without it the editor's
+# engine scene already exists and this suite proves nothing — see the script.
 set_tests_properties(scripting.e2e.player_no_editor PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# scripting.e2e.player_bounce — THE REFUSAL PATH (SMOKE-FIX-1's fix round, F3).
+#
+# The one suite that drives `EnginePlayerView::start` returning false and
+# everything that hangs off it: the bounce back to a page that draws, the
+# reason reaching `app.space()`, the play-mode undo, and the session log's
+# PLAY START / PLAY STOP staying a pair. It needs the attach to fail on a box
+# where it always succeeds, so it sets JAHSHAKA_PLAYER_TEST_NO_ATTACH=1 — the
+# script says why at length, and so does EnginePlayerScene::attach.
+configure_file(scripts/e2e_player_bounce.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_bounce
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.player_bounce PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PLAYER_TEST_NO_ATTACH=1"
     LABELS "scripting"
     TIMEOUT 300)

@@ -77,7 +77,13 @@ public:
     /// (lane PLAYER-1: there is one of each). Idempotent, cheap, and called at
     /// every edge that can precede a frame — the viewport may not have built
     /// them yet when this view is wired up.
-    void adoptEditorScene();
+    ///
+    /// `buildIfMissing` asks the viewport to BUILD that scene if nothing has
+    /// yet (IEditorViewport::ensureEngineScene) — true only on the edges that
+    /// mean this page is really being used (shown, entered, screenshotted,
+    /// stepped, worn), never at wiring time and never per frame. See the
+    /// definition for why that distinction is load-bearing.
+    void adoptEditorScene(bool buildIfMissing = false);
 
     /// Steps the player and pushes document -> engine. Called before every frame.
     void syncFrame();

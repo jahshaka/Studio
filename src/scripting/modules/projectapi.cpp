@@ -154,7 +154,10 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "so a caller waiting on an archive can always see the one it started.",
           Needs::Window },
         { "archiveResult", "project.archiveResult() -> {ok, error, canceled, path, guid, name, assets, objects}",
-          "The outcome of the most recent asynchronous archive operation in this session.",
+          "The outcome of the most recent archive operation in this PROCESS — the same reach "
+          "archiveState() has, so the import project.openSample starts (the desktop page's, not this "
+          "module's) reports here too. `ok` false with `error` set is how a failed or incompatible "
+          "archive reaches a script: a driven run never gets the message box a person would.",
           Needs::Window },
         { "cancelArchive", "project.cancelArchive() -> bool",
           "Asks an in-flight archive operation to stop. Honoured between zip/extract entries and between "
@@ -652,9 +655,17 @@ QString ProjectApi::archiveState()
 QVariantMap ProjectApi::archiveResult()
 {
     QVariantMap out;
-    ProjectArchiver *a = sessionArchiver();
-    if (!a) { out["ok"] = false; out["error"] = QStringLiteral("no archive operation has run"); return out; }
-    const ProjectArchiver::Result &r = a->result();
+    // THE PROCESS-WIDE RECORD, not this module's own archiver (SMOKE-FIX-1's
+    // fix round, F5). archiveState() already answers for every archiver in the
+    // process — it has to, because project.openSample starts the desktop PAGE's
+    // import — and an outcome nobody can read is not a failure channel: a
+    // failed or incompatible import ended in a message box and silence here.
+    if (!ProjectArchiver::haveLastResult()) {
+        out["ok"] = false;
+        out["error"] = QStringLiteral("no archive operation has run");
+        return out;
+    }
+    const ProjectArchiver::Result &r = ProjectArchiver::lastResult();
     out["ok"] = r.ok();
     out["error"] = r.error;
     out["canceled"] = r.canceled;

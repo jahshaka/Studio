@@ -19,6 +19,14 @@
 //
 // The route is the tile's Play button, as the verb it never had:
 // `project.openAsync(guid, {play:true})`.
+//
+// AND THE BOOT IS THE PERSON'S, NOT THE SCRIPT HARNESS'S. A windowed `--script`
+// run normally shows the editor page before the first line of the script, so
+// the editor's scene would already exist and this suite would prove nothing:
+// it runs with JAHSHAKA_TEST_NO_EDITOR_BOOT=1 (app/cli/scriptrunner.cpp), which
+// is the shape a person's launch has — window up, Desktop page, editor page
+// never shown. That also means there is no editor viewport to draw with until
+// something opens one, so the poll below never calls editor.frame().
 var SCENES = "@CMAKE_SOURCE_DIR@/scenes";
 
 var failures = 0;
@@ -36,17 +44,32 @@ ok(app.columns().space === "desktop",
    "still on the desktop — the editor page has never been shown (space = "
    + app.columns().space + ")");
 
+// THE SUITE ONLY MEANS SOMETHING IF THE SCENE REALLY IS NOT THERE YET. The
+// editor's engine scene is built when a page that DRAWS it asks — the editor
+// viewport being shown, the Player page being entered, a VR session beginning —
+// and by nothing else, so in a process that has shown neither page there must
+// be no engine scene of the editor's at all. (A count of engine scenes would
+// not do: the import renders thumbnails, which have scenes of their own.)
+ok(editor.viewportState().engineScene === false,
+   "the editor's engine scene does NOT exist yet — nothing has asked for it");
+
 // ---- straight into the Player ---------------------------------------------
 ok(project.openAsync(imported.guid, { play: true }) === true,
    "project.openAsync({play:true}) started (" + app.lastError() + ")");
+// A poll that lets the loop turn but draws NOTHING — there is no editor view to
+// draw with yet, which is the whole point of this boot. The install drives the
+// renderer itself at every slice boundary (OPEN-FRAMES-1), so the open
+// completes either way.
 var turns = 0;
-while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
+while (project.openState() === "opening") { app.openStats(); if (++turns > 200000) break; }
 ok(project.openState() === "idle", "the open finished (" + turns + " frames)");
 
 // If the player could not be bound the shell BOUNCES, so being here at all is
 // half the assertion; the other half is that it draws.
 ok(app.columns().space === "player",
    "the window is on the Player (space = " + app.columns().space + ")");
+ok(editor.viewportState().engineScene === true,
+   "…and it exists now: the PLAYER ASKING is what built it");
 ok(player.state().active === true, "the Player page is active");
 // player.frame returns FALSE when the view could not be attached to the
 // editor's scene — the exact state that used to present nothing, silently.

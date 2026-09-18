@@ -148,6 +148,31 @@ int main(int argc, char **argv)
     CHECK(UpdateChecker::kTransferTimeoutMs > 1000 && UpdateChecker::kTransferTimeoutMs < 30000,
           "the shipped transfer timeout is this check's own, seconds not minutes");
 
+    // ---- 4. A DEFAULT LAUNCH ASKS NOBODY ANYTHING -------------------------
+    // (Owner, 2026-09-18: "leave auto updates for when we have an update
+    // server".) The launch check used to run unconditionally, against a URL
+    // that has no server behind it, while the Preferences checkbox that claims
+    // to govern it governed nothing. This is the decision main() makes, made
+    // here with the same function and the same default: nothing is posted.
+    CHECK(UpdateChecker::kAutomaticChecksDefault == false,
+          "the shipped default for automatic update checks is OFF");
+    UpdateChecker quiet;
+    const bool postedByDefault = quiet.checkForAppUpdateIfEnabled(
+        QVariant(UpdateChecker::kAutomaticChecksDefault));
+    CHECK(!postedByDefault, "a default launch posts NO update request");
+    CHECK(!quiet.checkInFlight(), "...and has nothing in flight to leak");
+    // An ABSENT preference is the default, not "on": an invalid QVariant is
+    // what SettingsManager hands back for a key nobody has ever written.
+    CHECK(!quiet.checkForAppUpdateIfEnabled(QVariant()),
+          "an absent preference reads as OFF, like the default");
+    // And the switch really is a switch: ON posts. Against the LOOPBACK server
+    // from section 2, never the shipped URL — nothing in this suite touches the
+    // network, and the gate is the only thing under test here.
+    const bool postedWhenOn = quiet.checkForUpdateIfEnabled(
+        QVariant(true),
+        QUrl(QStringLiteral("http://127.0.0.1:%1/update/").arg(answering.serverPort())), 10000);
+    CHECK(postedWhenOn, "with the preference ON the launch check posts its request");
+
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

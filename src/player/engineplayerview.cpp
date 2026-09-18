@@ -76,9 +76,21 @@ void EnginePlayerView::setEditorViewport(IEditorViewport *viewport)
 // So this is asked again at every edge that can precede a frame (the wiring, the
 // show, the page start, a scripted step), and it is a pair of pointer writes
 // when the answer has not changed.
-void EnginePlayerView::adoptEditorScene()
+// `buildIfMissing` IS THE ASK, AND ONLY THE PAGE'S REAL EDGES MAKE IT
+// (SMOKE-FIX-1's fix round). This page draws the EDITOR'S scene, so on a
+// session that reaches the Player without ever showing the editor — the desktop
+// tile's Play button, a `--vr` boot — something here has to bring that scene
+// into existence. But this function is also called at WIRING time (the shell
+// hands the viewport over while the window is still being built) and on every
+// frame (syncFrame), and building a scene from either of those is the same
+// defect as building one from a getter: every windowed process would construct
+// the editor's scene, its worker pool and its mirror whether or not anybody
+// ever opens the editor or the Player. So the default is false, and the four
+// edges that mean "this page is being used" pass true.
+void EnginePlayerView::adoptEditorScene(bool buildIfMissing)
 {
     if (!mScene) return;
+    if (buildIfMissing && mEditorViewport) mEditorViewport->ensureEngineScene();
     mScene->setEditorScene(mEditorViewport ? mEditorViewport->engineScene() : nullptr,
                            mEditorViewport ? mEditorViewport->sceneMirror() : nullptr);
 }
@@ -99,7 +111,7 @@ void EnginePlayerView::showEvent(QShowEvent *e)
     if (!view() && mEngine)
         createView(mEngine, "player-view-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
-    adoptEditorScene();
+    adoptEditorScene(true);     // the page is being shown: build if nothing has
     // A VIEW THAT COULD NOT BE BOUND MUST NOT BE LEFT ENABLED (SMOKE-FIX-1):
     // EngineViewWidget::showEvent has just enabled it unconditionally, and an
     // enabled View with no Scene draws and presents NOTHING — the window then
@@ -114,7 +126,7 @@ bool EnginePlayerView::start(QString *why)
     // there is nothing to step, nothing to draw and nothing to put back on the
     // way out, so a refusal here leaves the player exactly as it was and the
     // shell can stay on the space the user could see (MainWindow::switchSpace).
-    adoptEditorScene();
+    adoptEditorScene(true);     // the page is being entered
     if (!view()) {
         if (why)
             *why = viewCreationError().isEmpty()
@@ -200,7 +212,7 @@ void EnginePlayerView::stopScene()      { mScene->stop(); }
 
 QImage EnginePlayerView::takePlayerScreenshot(int width, int height, int grade)
 {
-    adoptEditorScene();
+    adoptEditorScene(true);     // a script is asking the player for a picture
     // Bind the view lazily: a screenshot may be the FIRST thing a script asks
     // of the player, before the page has ever been shown (the native window is
     // created in showEvent). The engine Scene and its mirror do not need the
@@ -255,7 +267,7 @@ QVariantMap EnginePlayerView::playerCameraReport() const
 bool EnginePlayerView::stepPlayerFrames(int n, float dt)
 {
     if (!view()) return false;
-    adoptEditorScene();
+    adoptEditorScene(true);     // a script is stepping the player's own frames
     if (!mScene->attach(view())) return false;
     mScene->stepFrames(n, dt, width(), height());
     // THESE ARE FRAMES ON THE SAME WINDOW (DOUBLE-FRAME-1, the lead's fix-round
@@ -316,7 +328,7 @@ bool EnginePlayerView::canBeginPlayerVr(QString *why) const
 bool EnginePlayerView::beginPlayerVr(const QVariantMap &options, QString *error)
 {
     if (!canBeginPlayerVr(error)) return false;
-    adoptEditorScene();
+    adoptEditorScene(true);     // a VR session is beginning on this page
     if (!mScene->attach(view())) {
         if (error) *error = QStringLiteral("the player has no scene to show yet");
         return false;

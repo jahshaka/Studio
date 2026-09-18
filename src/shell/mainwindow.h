@@ -197,6 +197,14 @@ public:
     /// by app.space() so a verb's refusal carries the same sentence as the
     /// toast the user saw.
     QString lastSpaceRefusal() const { return spaceRefusal; }
+    /// THE EDITOR TOOLBAR'S CONTROLS, as state: one entry per action with its
+    /// objectName (minus the `action` prefix, lower-cased), whether it is on
+    /// screen and whether it can be used. Read by `editor.toolbar()`.
+    ///
+    /// The toolbar is a UI surface with no reading at all until now, which is
+    /// why "the Save button is hidden on every default install" (owner,
+    /// 2026-09-18) could be true for as long as it was: nothing could ask.
+    QVariantList toolbarActions() const;
     /// The ONE place the frame-stats readout is switched: F3, the View Options
     /// row, the Preferences checkbox and editor.setOverlays({stats}) all land
     /// here, and it persists `show_fps` (STATS_OVERLAY_SPEC.md §5.3).
@@ -1125,9 +1133,11 @@ private:
 	QVector<bool> widgetStates;	// use the order in the enum
 
     /// The space this window came FROM and the one it is on. BOTH initialised:
-    /// `previousSpace` is read by the fullscreen-exit path and was uninitialised
-    /// until the first switch wrote it (SMOKE-FIX-1's audit — the same class of
-    /// defect as the play-mode flag, two members down from it).
+    /// `previousSpace` is read by the Ctrl+Tab "Previous Space" shortcut (its
+    /// ONLY reader) and was uninitialised until the first switch wrote it, so
+    /// the first press of that chord in a session read a garbage space
+    /// (SMOKE-FIX-1's audit — the same class of defect as the play-mode flag,
+    /// two members down from it).
     WindowSpaces previousSpace = WindowSpaces::DESKTOP;
     WindowSpaces currentSpace = WindowSpaces::DESKTOP;
 	QPushButton *playSimBtn;

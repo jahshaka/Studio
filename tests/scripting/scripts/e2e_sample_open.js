@@ -60,7 +60,61 @@ ok(refusal.length > 0, "an unknown sample name is refused");
 ok(refusal.indexOf("No Such Sample") >= 0, "…and the refusal names it: " + refusal);
 ok(app.columns().space === "editor", "a refusal moves nothing (space = " + app.columns().space + ")");
 
-// ---- 3. the Player is still a deliberate statement -------------------------
+// ---- 3. a sample opened OVER an open world closes that world properly -------
+// (SMOKE-FIX-1's fix round, F6.) The import-open path re-pointed `project` at
+// the new world and simply dropped the old one: no autosave under `auto_save`,
+// no undo-stack reset. Both are what closeProject does, and it is now on this
+// road too — `project.openSample` is callable from any page, and its contract
+// says it behaves like project.open/openAsync.
+var firstGuid = project.current().guid;
+var addedId = scene.addPrimitive("cube", { position: { x: 3, y: 1, z: -2 } });
+ok(!!addedId, "a cube was added to the open sample");
+var namesBefore = scene.nodes().length;
+
+ok(project.openSample("Mirror Room") === true,
+   "a SECOND sample opens over the first (" + app.lastError() + ")");
+turns = 0;
+while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
+while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
+ok(project.openState() === "idle", "the second open finished");
+ok(project.current().name === "Mirror Room", "the Mirror Room is open now");
+ok(project.current().guid !== firstGuid, "…and it is a different world");
+// THE UNDO STACK BELONGS TO THE WORLD THAT LEFT. Nothing on it may name a node
+// of a project that is closed (closeProject clears it; this path skipped that).
+var u = editor.undoState();
+ok(u.canUndo === false,
+   "the undo stack was cleared with the world that left (count " + u.count + ")");
+
+// …and the edit went with it, not into the void: auto_save is on by default, so
+// reopening the first world finds the cube.
+ok(project.openAsync(firstGuid) === true, "the first world reopens");
+turns = 0;
+while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
+ok(project.current().guid === firstGuid, "…and it is the one that was edited");
+ok(scene.nodes().length === namesBefore,
+   "the edit made before the second open was SAVED with it ("
+   + scene.nodes().length + " nodes, expected " + namesBefore + ")");
+
+// ---- 4. SAVE IS ALWAYS OFFERED (owner, 2026-09-18) --------------------------
+// "Show it even with auto save, as I may want a force save." Auto-save is ON by
+// default, and the Save button's visibility used to be `!auto_save` — so on a
+// stock install the one control that writes the world down at the moment the
+// user chooses was not there at all.
+function toolbarAction(id) {
+    var bar = editor.toolbar();
+    for (var i = 0; i < bar.length; ++i) if (bar[i].id === id) return bar[i];
+    return null;
+}
+var autoSaveOn = true;   // the shipped default for `auto_save`
+var save = toolbarAction("saveScene");
+ok(!!save, "the editor toolbar has a Save control");
+ok(save && save.visible === true,
+   "…and it is VISIBLE with auto-save on (the default)");
+ok(save && save.enabled === true, "…and enabled, because a world is open");
+// …and it saves: the capability behind the button, with a world open.
+ok(project.save() === true, "the force save writes the world (" + app.lastError() + ")");
+
+// ---- 5. the Player is still a deliberate statement -------------------------
 // Entering it is the user's choice, and when they make it the page must DRAW:
 // player.frame refuses when the view could not be bound to the editor's scene,
 // so `true` here is real frames on the player's own window.

@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <optional>
 
 #include "irisgl/import/meshprewarm.h"
+#include "ui/pages/projectopenmode.h"
 
 // No assimp here: the project manager stopped parsing models when the import
 // pipeline landed (ASSET_PIPELINE_SPEC §3.2.3 — see projectmanager.cpp's
@@ -51,21 +52,6 @@ class MainWindow;
 class Project;
 
 using AssetList = QPair<QString, QString>;
-
-/// WHICH SPACE AN OPEN LANDS IN — stated by the caller that starts the open,
-/// carried down to MainWindow::openProjectAsync, and never stored as page state
-/// (SMOKE-FIX-1, 2026-09-18).
-///
-/// It used to be a member (`bool openInPlayMode`) written by ONE route — the
-/// desktop tile — and read by ALL of them, uninitialised. Every sample-browser
-/// open and every archive import therefore landed in whatever the bool happened
-/// to hold: on the owner's box and on the rig that was `true`, so opening a
-/// sample scene put the user in the Player with `=== PLAY START ===` four
-/// milliseconds ahead of `=== SCENE OPEN ===`. A route's intent is an argument.
-enum class ProjectOpenMode {
-    Editor,     ///< the normal open: the world lands in the editor
-    Player      ///< the desktop tile's Play button, and nothing else today
-};
 
 class ProjectManager : public QWidget
 {
@@ -222,6 +208,9 @@ private:
     /// the ROUTE asked for. `mode` is an argument and never a member: see
     /// ProjectOpenMode above.
     void loadProjectAssets(ProjectOpenMode mode);
+    /// An import problem, told to whoever is actually there: a box for a person,
+    /// a log line for a DRIVEN run (see the definition).
+    void reportImportProblem(const QString &title, const QString &text);
 
     // desktops (DESKTOPS_SPEC.md + DESKTOP_SLIDER_SPEC.md)
     void setupDesktopControls();
