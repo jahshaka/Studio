@@ -490,7 +490,7 @@ int main(int argc, char **argv)
     // ---- 11. A KEYSTROKE IS CHEAP -----------------------------------------
     // Rows are hidden and shown, never rebuilt. The bound is per keystroke on
     // the widest column the editor has (a mesh's Selection tab) and on the
-    // World tab's eight sections.
+    // World tab's nine sections (VR joined them in lane VR-WORLD-1).
     {
         auto typeCost = [&](Tab tab, const QString &text) {
             panel->setPropertiesFilter(tab, QString());
@@ -767,9 +767,11 @@ int main(int argc, char **argv)
     CHECK(shownRowCount(panel) == 0,
           "properties_filter: a text nothing matches leaves no ROW on screen (and says so "
           "in the counts), rather than showing everything");
-    CHECK(visibleSections(panel).size() == 8,
+    // NINE since the World panel grew its VR section (lane VR-WORLD-1): World,
+    // Sky, World Mode, Photon, Post Process, Anti-Aliasing, Shadows, VR, Fog.
+    CHECK(visibleSections(panel).size() == 9,
           QStringLiteral("properties_filter: ...while every section header stays, greyed "
-                         "and closed (%1 of 8)").arg(visibleSections(panel).size())
+                         "and closed (%1 of 9)").arg(visibleSections(panel).size())
               .toUtf8().constData());
     panel->setPropertiesFilter(Tab::World, QString());
     turn();

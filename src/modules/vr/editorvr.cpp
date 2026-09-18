@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/enginerenderdriver.h"
-#include "viewport/flyspeedsettings.h"
+#include "services/vrworld.h"
 #include "viewport/flystep.h"
 #include "viewport/ieditorviewport.h"
 
@@ -56,13 +56,6 @@ flystep::Keys keysFrom(const QStringList &held)
     }
     return keys;
 }
-
-/// THE WEARER'S SPEED IS THE EDITOR'S OWN — the same base and the same
-/// multiplier the toolbar dropdown and the wheel set for the viewport's camera.
-/// A wearer who has chosen a pace for flying their scene expects that pace with
-/// the headset on, and the Player's VR mode takes the Player's for the same
-/// reason.
-float flySpeed() { return FlySpeedSettings::speed(FlySpeedSettings::Editor); }
 
 }   // namespace
 
@@ -197,6 +190,12 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // it; a project close or an open-in-place destroys that scene. This is the
     // viewport telling us first, while everything is still alive.
     mViewport->setVrPreviewSceneClosing([this] { end(); });
+    // THE SESSION ADOPTS THE PROJECT'S VR SETTINGS (lane VR-WORLD-1): the fly
+    // speed, the fly direction, the turn and the dominant hand are document
+    // fields (`world.vr`), latched here so nothing moves under the wearer
+    // mid-flight, and overridable for this session alone by `vr.locomotion`.
+    // A project switched between sessions is read by the next one.
+    vrworld::adopt(viewport->getScene());
     mFrameTimer.start();
     return true;
 }
@@ -217,6 +216,9 @@ bool EditorVrPreview::end()
 
 void EditorVrPreview::release()
 {
+    // THE SESSION'S LOCOMOTION IS OVER: its overrides go with it and reads fall
+    // back to the live document (lane VR-WORLD-1).
+    vrworld::release();
     if (mDriver) mDriver->setVrSessionActive(false);
     // THE DESKTOP'S OWN VIEW COMES BACK if the session switched it off (the
     // Player's rule, mirrored here).
@@ -234,6 +236,16 @@ void EditorVrPreview::release()
     mViewport = nullptr;
     mViewportAlive = nullptr;
     mEngine.reset();
+}
+
+/// THE WEARER'S SPEED IS THE PROJECT'S (lane VR-WORLD-1) — `world.vr`'s
+/// `flySpeed` in metres per second, with this session's `vr.locomotion`
+/// override if it has one, so the keys and the thumbstick fly at exactly one
+/// speed. It was the desktop editor's camera speed until VR had a setting of
+/// its own.
+float EditorVrPreview::wearerSpeed() const
+{
+    return vrworld::resolve(mViewport ? mViewport->getScene() : iris::ScenePtr()).flySpeed;
 }
 
 void EditorVrPreview::applyRig(const vrorigin::Rig &rig)
@@ -308,8 +320,8 @@ void EditorVrPreview::step()
     // is the one that keeps their feet on the room's floor.
     if (!mViewport || !mViewport->flying()) return;
     const flystep::Keys keys = keysFrom(mViewport->heldFlyKeys());
-    const iris::Vec3 delta =
-        vrorigin::flyDelta(headRot, keys, flySpeed(), vrorigin::frameSeconds(wall));
+    const iris::Vec3 delta = vrorigin::flyDelta(headRot, keys, wearerSpeed(),
+                                                vrorigin::frameSeconds(wall));
     if (delta.isNull()) return;
     vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
     rig.position += delta;
@@ -333,7 +345,7 @@ bool EditorVrPreview::move(const flystep::Keys &keys, float seconds)
     // the placement's guard exists to avoid. Answered, not refused.
     if (mPlacePending) return true;
     const iris::Vec3 delta = vrorigin::flyDelta(toIris(st.headRotation), keys,
-                                                flySpeed(), seconds);
+                                                wearerSpeed(), seconds);
     if (delta.isNull()) return true;    // nothing held is not a failure
     vrorigin::Rig rig = rigOf(st);      // whatever the ENGINE holds, absorb included
     rig.position += delta;
@@ -359,6 +371,6 @@ QVariantMap EditorVrPreview::report() const
     start[QStringLiteral("yaw")] = double(vrorigin::yawDegrees(mStartRot));
     out[QStringLiteral("startPose")] = start;
     out[QStringLiteral("placing")] = mPlacePending;
-    out[QStringLiteral("flySpeed")] = double(flySpeed());
+    out[QStringLiteral("flySpeed")] = double(wearerSpeed());
     return out;
 }

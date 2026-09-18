@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/core/geometry/boundingsphere.h"
 #include <functional>
+#include "services/vrworld.h"
 #include "services/worldmodes.h"
 #include "jahshaka/engine/Types.h"
 #include "services/looks.h"
@@ -335,6 +336,30 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "rayTracing", "world.rayTracing([\"off\"|\"auto\"|\"on\"]) -> \"off\"|\"auto\"|\"on\"",
           "HARDWARE RAY TRACING FOR THIS PROJECT, saved with the scene and travelling with it (owner, 2026-09-15). Three states, and the first thing to know is that NOTHING can force ray hardware onto a machine that has none: this row says what the project was authored for, and the renderer meets it with what the machine can do. \"off\" never traces, even where the GPU can — what a scene that must look and cost the SAME everywhere asks for. \"auto\" (the default) traces where the machine can and falls back silently everywhere else: the same file looks right on a ray-capable desktop and on a Mac, and nobody has to think about it. \"on\" means the scene was AUTHORED for rays: it renders exactly like auto — traces where it can, falls back where it cannot — and additionally raises a scene issue in the editor's error bar (\"this project expects hardware ray tracing; this machine has none\") so the author learns that this machine is not showing them what they built. On and auto therefore render the same picture; on is the one that TELLS YOU when the machine falls short. Called with no argument it reads the project's state. Any other word is refused, loudly, rather than guessed at. One undo step, and it dirties the project like any other document edit — it is NOT an application preference (it used to be one for two days: a machine-wide switch meant the same project rendered differently depending on a setting that was not in it). What the machine actually answered is world.giStatus().rayQuery — 'available' is the device's own answer, 'enabled' whether the renderer is using it — and --no-ray-query is the diagnostic switch that makes a ray-capable box render the no-rays picture for one run.",
           Needs::Document },
+        { "vr", "world.vr({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, dominant?}) -> object",
+          "THE PROJECT'S VR SETTINGS — how a wearer MOVES in this world, saved with the scene "
+          "and travelling with it (owner request 2026-09-18). Read with no argument; set with "
+          "any subset. It is a document field and not an application preference for the reason "
+          "world.rayTracing is: a world authored at architectural scale is walked at a "
+          "different pace from a tabletop one, and the author who chose that pace expects it "
+          "back the next time they put the headset on — a machine-wide setting would mean the "
+          "same project moved differently on two boxes.\n\n"
+          "`flySpeed` is METRES PER SECOND (default 15; the stick's boost multiplies it), "
+          "`fly` is \"aim\" (the default), \"gaze\" or \"level\", `turn` is \"snap\" "
+          "(the default) or \"smooth\", `snapTurnDegrees` the step per flick (30), "
+          "`smoothTurnDegreesPerSecond` the held-stick rate (90), and `dominant` is \"right\" "
+          "(the default) or \"left\" — which swaps BOTH hand roles at once, the pointing hand "
+          "and the walking stick.\n\n"
+          "EVERY SESSION ADOPTS THESE AS ITS DEFAULTS when it begins (`vr.begin`, "
+          "`player.play({vr:true})`), and `vr.locomotion` overrides any of them FOR THAT "
+          "SESSION without writing a thing here — so a wearer can try a faster fly in the "
+          "headset and the project keeps what it was authored with until somebody sets it "
+          "here. A project switched between sessions is read by the next session.\n\n"
+          "A number that is not finite, or is zero or negative, is REFUSED by name; a number "
+          "outside a row's range is clamped to it (the same range the World panel's dial "
+          "covers); an unknown mode name is refused rather than guessed; an unknown KEY is "
+          "refused and nothing is written. One call is one undo step.",
+          Needs::Document },
         { "planarReflections", "world.planarReflections() -> {enabled, budget, resolution, shadows, activeActors}",
           "Reads the scene's planar-reflection settings. 'budget' is how many mirror planes may render (the resolved value: a scene that never set one follows its World Mode). 'resolution' and 'shadows' are the per-plane render-target size and whether shadows are drawn inside the reflections; both report the value in force, derived from the budget when the scene has not pinned them. 'activeActors' is how many planes ACTUALLY rendered in the last frame — planes off screen are culled — and is 0 without a live engine viewport. Individual objects become mirror planes through node.setPlanarReflector.",
           Needs::Document },
@@ -458,6 +483,10 @@ QVector<VerbInfo> WorldApi::verbs() const
           "same read).", Needs::Document },
         { "setPostFx", "world.setPostFx({exposure, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius}) -> object",
           "Alias of world.postFx — same arguments, same result.", Needs::Document },
+        { "setVr", "world.setVr({flySpeed, fly, turn, snapTurnDegrees, "
+          "smoothTurnDegreesPerSecond, dominant}) -> object",
+          "Alias of world.vr — same arguments, same result (and, called with no argument, the "
+          "same read).", Needs::Document },
     };
 }
 
@@ -1524,6 +1553,53 @@ QString WorldApi::rayTracing(const QString &mode)
                     QStringLiteral("Ray Tracing"));
     }
     return QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
+}
+
+// ---------------------------------------------------------------------------
+// THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18)
+// ---------------------------------------------------------------------------
+// GENERATED FROM THE TABLE (services/vrworld.h) and containing no setting by
+// name: the known keys, the validation, the clamps, the enum spellings and the
+// undo keys all come from the rows, which is what makes the World panel's VR
+// section and this verb the same model rather than two implementations of it.
+QVariantMap WorldApi::vr(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.vr"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        const QStringList known = vrworld::ids();
+        for (auto it = params.constBegin(); it != params.constEnd(); ++it)
+            if (!known.contains(it.key())) {
+                fail(QStringLiteral("world.vr: unknown key '%1' — known keys are %2")
+                         .arg(it.key(), known.join(QStringLiteral(", "))));
+                return out;
+            }
+        // VALIDATED BEFORE ANYTHING IS WRITTEN: a call with one bad value
+        // writes none of the good ones, so a refusal leaves the project exactly
+        // as it was (world.sky's rule, and the reason a half-applied edit can
+        // never reach the undo stack).
+        QVector<QPair<QString, double>> writes;
+        for (const vrworld::Row &r : vrworld::rows()) {
+            if (!params.contains(r.id)) continue;
+            double value = 0.0;
+            QString why;
+            if (!vrworld::validate(r, params.value(r.id), value, why)) {
+                fail(QStringLiteral("world.vr: %1").arg(why));
+                return out;
+            }
+            writes.append({ r.id, value });
+        }
+        QStringList keys;
+        for (const auto &w : writes) keys << vrworld::propsKey(w.first);
+        WorldEdit edit(scene, keys);
+        for (const auto &w : writes)
+            sceneprops::set(scene, vrworld::propsKey(w.first), w.second);
+        edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("VR Settings"));
+    }
+    const vrworld::Settings doc = vrworld::fromScene(scene);
+    for (const vrworld::Row &r : vrworld::rows()) out[r.id] = vrworld::valueOf(r, doc);
+    return out;
 }
 
 int WorldApi::antiAliasing()

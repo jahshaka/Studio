@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/skypropertywidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 #include "ui/panels/propertywidgets/worldpostfxpropertywidget.h"
+#include "ui/panels/propertywidgets/worldvrpropertywidget.h"
 #include "ui/panels/propertywidgets/camerapostfxpropertywidget.h"
 #include "ui/panels/propertywidgets/worldaapropertywidget.h"
 #include "ui/panels/propertywidgets/worldmodespropertywidget.h"
@@ -148,6 +149,13 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 		if (!sc) return;
 		if (worldModesPropView) worldModesPropView->setScene(sc);
 	});
+
+	// VR (owner request 2026-09-18): how a WEARER moves in this world — a
+	// property of the project, adopted by every session it opens. It sits after
+	// the render sections because it is not one: nothing in it changes a pixel.
+	worldVrPropView = new WorldVrPropertyWidget();
+	worldVrPropView->setPanelTitle("VR");
+	worldVrPropView->expand();
 
 	worldAaPropView = new WorldAaPropertyWidget();
 	worldAaPropView->setPanelTitle("Anti-Aliasing");
@@ -262,7 +270,7 @@ QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
     return {
         fogPropView, worldPropView, skyPropView,
         worldModesPropView, worldGiPropView, worldPostFxPropView,
-        worldAaPropView, worldShadowPropView, transformPropView,
+        worldAaPropView, worldShadowPropView, worldVrPropView, transformPropView,
         mobilityPropView,
         physicsPropView, meshPropView, lightPropView, decalPropView,
         emitterPropView, cameraPostFxPropView, shaderPropView
@@ -810,6 +818,7 @@ void SceneNodePropertiesWidget::bindScene(const QSharedPointer<iris::Scene> &sce
     worldAaPropView->setScene(scene);
     worldShadowPropView->setSceneView(sceneView);
     worldShadowPropView->setScene(scene);
+    worldVrPropView->setScene(scene);
     // The world's sky is bound here too, because the same panel may have been
     // showing a LIBRARY sky asset since the last time the world was shown (one
     // implementation, two bindings).
@@ -828,6 +837,7 @@ void SceneNodePropertiesWidget::mountWorldBlades()
     mount(worldPostFxPropView);
     mount(worldAaPropView);
     mount(worldShadowPropView);
+    mount(worldVrPropView);
     mount(fogPropView);
 }
 
@@ -1083,6 +1093,7 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     if (worldAaPropView) worldAaPropView->setServices(services);
     if (worldShadowPropView) worldShadowPropView->setServices(services);
     if (worldPostFxPropView) worldPostFxPropView->setServices(services);
+    if (worldVrPropView) worldVrPropView->setServices(services);
     if (lightPropView) lightPropView->setServices(services);
     if (meshPropView) meshPropView->setServices(services);
     if (mobilityPropView) mobilityPropView->setServices(services);

@@ -100,13 +100,12 @@ inline constexpr float kMaxGrabDistance = 500.0f;   ///< nor push it past the fa
 /// holding at ten metres).
 inline constexpr float kTurntableDegreesPerSecond = 90.0f;
 
-/// SNAP TURN: the owner's answer (§16 decision 2) is snap by default, and 30
-/// degrees is the step every shipping VR tool uses — twelve of them is a full
-/// circle, and it is small enough to aim with and large enough to be worth a
-/// flick.
-inline constexpr float kSnapTurnDegrees = 30.0f;
-/// SMOOTH TURN (a session option), degrees per second at full stick.
-inline constexpr float kSmoothTurnDegreesPerSecond = 90.0f;
+// THE SNAP STEP AND THE SMOOTH RATE ARE THE DOCUMENT'S (lane VR-WORLD-1):
+// `iris::kDefaultVrSnapTurnDegrees` / `kDefaultVrSmoothTurnDegreesPerSecond` are
+// the defaults of the project fields `world.vr` writes, and the two constants
+// that used to live here were a second definition of them. The functions below
+// therefore take the step and the rate — every caller has the effective value
+// already (services/vrworld.h).
 
 /// THE STICK'S DEAD ZONE and the RE-ARM threshold. A thumbstick at rest does
 /// not read zero (a Touch controller idles around 0.02-0.08, and a worn one
@@ -402,8 +401,7 @@ inline vrorigin::Rig turnedAboutHead(const vrorigin::Rig &rig, const iris::Vec3 
 }
 
 /// SMOOTH TURN: how far this frame's stick turns the wearer.
-inline float smoothTurnDegrees(float stickX, float seconds,
-                               float degreesPerSecond = kSmoothTurnDegreesPerSecond)
+inline float smoothTurnDegrees(float stickX, float seconds, float degreesPerSecond)
 {
     if (std::fabs(stickX) < kStickDeadZone) return 0.0f;
     return stickX * degreesPerSecond * seconds;
@@ -412,7 +410,7 @@ inline float smoothTurnDegrees(float stickX, float seconds,
 /// SNAP TURN: the step a stick crossing the dead zone asks for, or 0. The
 /// RE-ARM is the caller's (it is state, and this file holds none):
 /// `armed` false until |x| falls below kStickRearm again.
-inline float snapTurnDegrees(float stickX, bool armed, float step = kSnapTurnDegrees)
+inline float snapTurnDegrees(float stickX, bool armed, float step)
 {
     if (!armed || std::fabs(stickX) < kStickDeadZone) return 0.0f;
     return stickX > 0.0f ? step : -step;

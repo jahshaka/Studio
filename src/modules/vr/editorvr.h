@@ -117,6 +117,9 @@ public:
     QVariantMap report() const;
 
 private:
+    /// THE WEARER'S FLY SPEED, in metres per second: the PROJECT's `world.vr`
+    /// setting with this session's `vr.locomotion` override (VR-WORLD-1).
+    float wearerSpeed() const;
     void applyRig(const vrorigin::Rig &rig);
     static vrorigin::Rig rigOf(const jahshaka::engine::VrStatus &st);
     /// Arms the "put the wearer where the editor camera stands" placement for

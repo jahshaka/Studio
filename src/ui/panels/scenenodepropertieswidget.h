@@ -195,6 +195,9 @@ public:
     void setProject(Project*);
 
 	WorldGiPropertyWidget *worldGiPropView;
+	/// The World panel's VR section (lane VR-WORLD-1) — the project's own VR
+	/// settings, generated from services/vrworld.h.
+	class WorldVrPropertyWidget *worldVrPropView = nullptr;
 	class WorldPostFxPropertyWidget *worldPostFxPropView = nullptr;
 	WorldAaPropertyWidget *worldAaPropView;
 	WorldModesPropertyWidget *worldModesPropView;

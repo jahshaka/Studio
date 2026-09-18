@@ -23,6 +23,7 @@
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "modules/vr/vrgrab.h"
 #include "services/vrorigin.h"
 #include "viewport/flystep.h"
@@ -281,19 +282,29 @@ int main()
     }
 
     // ---- 11. SNAP AND SMOOTH TURN, AND THE RE-ARM ------------------------
+    //
+    // THE STEP AND THE RATE ARE PASSED (lane VR-WORLD-1): they are the
+    // PROJECT's settings now (`world.vr`), so the pure functions carry no
+    // default of their own and these cases state the numbers they assert.
     {
-        CHECK(near(vrgrab::snapTurnDegrees(1.0f, true), 30.0f),
+        // THE DOCUMENT'S OWN DEFAULTS, from the header that defines them
+        // (they are `inline constexpr`, so naming them costs this target
+        // nothing) — a re-literalised 30 and 90 here would be the second
+        // definition VR-WORLD-1 deleted.
+        const float snapStep = iris::kDefaultVrSnapTurnDegrees;                 // 30
+        const float smoothRate = iris::kDefaultVrSmoothTurnDegreesPerSecond;    // 90/s
+        CHECK(near(vrgrab::snapTurnDegrees(1.0f, true, snapStep), 30.0f),
               "a full stick right, armed, asks for +30 in the stick's own sign (the caller negates it into the tree's right-handed yaw, so the wearer turns RIGHT)");
-        CHECK(near(vrgrab::snapTurnDegrees(-0.8f, true), -30.0f),
+        CHECK(near(vrgrab::snapTurnDegrees(-0.8f, true, snapStep), -30.0f),
               "...and left for -30, whatever the deflection past the dead zone");
-        CHECK(near(vrgrab::snapTurnDegrees(1.0f, false), 0.0f),
+        CHECK(near(vrgrab::snapTurnDegrees(1.0f, false, snapStep), 0.0f),
               "a stick held over from the last turn asks for nothing (one flick, one turn)");
-        CHECK(near(vrgrab::snapTurnDegrees(0.3f, true), 0.0f), "inside the dead zone: nothing");
+        CHECK(near(vrgrab::snapTurnDegrees(0.3f, true, snapStep), 0.0f), "inside the dead zone: nothing");
         CHECK(!vrgrab::snapTurnRearmed(0.6f), "a stick still pushed does not re-arm");
         CHECK(vrgrab::snapTurnRearmed(0.1f), "...and one returned near centre does");
-        CHECK(near(vrgrab::smoothTurnDegrees(1.0f, 0.25f), 22.5f),
+        CHECK(near(vrgrab::smoothTurnDegrees(1.0f, 0.25f, smoothRate), 22.5f),
               "smooth turn: a quarter second of full stick is 22.5 degrees");
-        CHECK(near(vrgrab::smoothTurnDegrees(0.2f, 0.25f), 0.0f),
+        CHECK(near(vrgrab::smoothTurnDegrees(0.2f, 0.25f, smoothRate), 0.0f),
               "...with the same dead zone");
     }
 

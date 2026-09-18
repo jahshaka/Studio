@@ -168,8 +168,16 @@ private:
     void applyRig(const vrorigin::Rig &rig);
     /// Puts the mirror view back the way it was found.
     void restoreMirrorView();
+    /// THE WEARER'S FLY SPEED in metres per second — the PROJECT's `world.vr`
+    /// setting (latched at begin) with this session's `vr.locomotion` override
+    /// (VR-WORLD-1).
+    float wearerSpeed() const;
 
     std::weak_ptr<jahshaka::engine::Engine> mEngine;
+    /// The DOCUMENT this session was begun on — weak, because a project close
+    /// destroys it under a session (the lifetime class VR-4-FIX found twice).
+    /// Read for the project's VR settings; null between sessions.
+    iris::SceneWPtr mDocument;
     std::function<void()> mRestoreView;
     /// The Player's on-screen View, borrowed. Null once it has been restored.
     jahshaka::engine::View *mMirrorView = nullptr;

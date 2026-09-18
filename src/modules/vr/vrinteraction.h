@@ -87,6 +87,7 @@ For more information see the LICENSE file
 #include "jahshaka/engine/Engine.h"
 #include "modules/vr/vrarc.h"
 #include "modules/vr/vrgrab.h"
+#include "services/vrworld.h"
 #include "viewport/flystep.h"
 
 class Gizmo;
@@ -177,10 +178,13 @@ public:
         /// the arc compares what this answers against the scene it built on
         /// before it touches a node (vrarc.h).
         std::function<jahshaka::engine::Scene *()> engineScene;
-        /// The wearer's fly speed, in world units per second. The host knows
-        /// which surface's speed it is (the editor preview flies at the
-        /// editor's, the Player at the Player's).
-        std::function<float()> wearerSpeed;
+        /// HOW THE WEARER MOVES — the PROJECT's settings with the session's
+        /// `vr.locomotion` overrides applied (services/vrworld.h), asked once
+        /// per use rather than held, for the same lifetime reason as the
+        /// engine above: a session adopts a project when it begins and the
+        /// document it came from can be closed under this object. Absent means
+        /// the documented defaults.
+        std::function<vrworld::Settings()> locomotion;
         /// Is the PLAYER the host of the running session? Then only locomotion
         /// runs (the Player edits nothing).
         std::function<bool()> playerMode;
@@ -216,25 +220,7 @@ public:
         std::function<bool()> locomotionBlocked;
     };
 
-    enum class Turn { Snap, Smooth };
-    /// How the stick flies: along the stick hand's AIM (Unreal's VR editor; the
-    /// owner's pick) or LEVEL along the head's heading (the comfort option).
-    enum class Fly { Aim, Gaze, Level };
     enum class SelectMode { Replace, Toggle, Add };
-
-    /// SESSION OPTIONS (owner answers 2 and 3). Not persisted and not a
-    /// preference: they are set on the session, API-first, until the owner asks
-    /// for a Preferences row.
-    struct Options
-    {
-        Turn turn = Turn::Snap;
-        Fly  fly = Fly::Aim;
-        /// Right hand manipulates and the LEFT stick walks; a swap swaps both
-        /// (answer 3 — one flag, never two).
-        bool dominantRight = true;
-        float snapTurnDegrees = vrgrab::kSnapTurnDegrees;
-        float smoothTurnDegreesPerSecond = vrgrab::kSmoothTurnDegreesPerSecond;
-    };
 
     /// WHAT THE RAY IS ON.
     struct Hover
@@ -268,8 +254,10 @@ public:
     /// twice and turn the wearer twice per flick.
     bool injectionArmed() const;
 
-    void setOptions(const Options &options) { mOptions = options; }
-    Options options() const { return mOptions; }
+    /// THE EFFECTIVE LOCOMOTION SETTINGS this frame — the project's, with the
+    /// session's overrides (Deps::locomotion). There is no copy here: one
+    /// definition of every default, and it is the document's.
+    vrworld::Settings locomotion() const;
 
     /// A SESSION BEGAN / ENDED. Beginning arms nothing but the bookkeeping;
     /// ending CANCELS a gesture in flight (§5.5) and clears the ray.
@@ -556,7 +544,6 @@ private:
     bool locomotionBlocked() const;
 
     Deps mDeps;
-    Options mOptions;
     VrInputSource *mSource = nullptr;
     bool mInstalled = false;
 

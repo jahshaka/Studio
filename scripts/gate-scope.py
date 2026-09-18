@@ -104,6 +104,12 @@ AREA_RULES = [
     (r"^src/services/(project|sceneopen|apppaths|sessionheader|sessionmarkers|jahlog|loadtimeline|perfsampler|framepacing|mainthread|engineerror|ogresamples|shutdown)",
      ["services", "app", "apppaths", "log", "perf", "shutdown", "openasync", "hygiene", "threading"],
      ["app", "project"]),
+    # THE PROJECT'S VR SETTINGS TABLE (VR-WORLD-1): the panel section, both VR
+    # verbs, the undo rows and the file's own keys are generated from it, so a
+    # vrworld-only edit has to gate the VR suites and the panel's — the generic
+    # services rule below reaches neither (the Fable read, item 7).
+    (r"^src/services/vrworld", ["vr", "player", "ui", "document", "services", "reopen"],
+     ["vr", "world", "player"]),
     (r"^src/services/", ["services", "*headless-scripts"], []),
     (r"^src/(data|io|commands)/", ["document", "commands", "reopen", "export", "samples", "assetpaths",
                                    "assetmigrate", "services", "*headless-scripts"], ["project", "scene", "node"]),

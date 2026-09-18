@@ -60,6 +60,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "services/vrworld.h"
 #include "services/worldmodes.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -378,6 +379,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		if (iris::rayTracingModeFromName(sceneObj.value("rayTracing").toString(), rt))
 			scene->rayTracing = rt;
 	}
+	// THE PROJECT'S VR SETTINGS (lane VR-WORLD-1), GENERATED FROM THE TABLE
+	// (services/vrworld.h) like the writer: one list of keys, one set of
+	// clamps, and the reader-defaults law inside that one function — an absent
+	// key, a number that is not one, or a mode name this build does not know
+	// leaves the CONSTRUCTOR's value standing.
+	vrworld::read(scene, sceneObj);
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
 	auto volume = sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume);
 	scene->setAmbientMusicVolume(volume);
