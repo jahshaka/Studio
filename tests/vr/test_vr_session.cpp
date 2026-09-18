@@ -393,10 +393,30 @@ int main() {
         }
         int worst = 0;
         const size_t diff = differingBytes(l.px, r.px, &worst);
-        CHECK_MSG(diff == 0u,
-                  "AT worldScale 0 THE TWO EYES ARE BYTE-IDENTICAL: %zu of %zu bytes differ, "
-                  "worst %d/255 — both halves rendered, through per-eye matrices that agree "
-                  "when the eyes do, into exactly half the target each",
+        // AT MOST ONE CODE, AND THE ONE CODE IS THE DITHER (lane DITHER-1, and
+        // this is the ONLY assertion in the tree its arrival moved).
+        //
+        // This read "byte-identical" until the final grade started dithering
+        // its 8-bit write. The dither is keyed on the pixel's position in the
+        // TARGET, and a stereo target carries the two eyes side by side, so the
+        // same world pixel sits at two different x coordinates and takes two
+        // different offsets — measured: 35,139 of 307,200 bytes differ, every
+        // one of them by exactly 1/255. THE ASSERTION'S PURPOSE IS UNCHANGED
+        // and its bar is not vague: a half that did not render, a half rendered
+        // through the other eye's matrix, or a viewport that is not exactly
+        // half the target differ by tens or hundreds of codes, and one code is
+        // exactly the bound the dither is built to. (Making the dither
+        // stereo-CONSISTENT instead — keying it on the coordinate within the
+        // eye — is possible and was weighed: it needs a per-view uniform on a
+        // process-global material, and it buys only the worldScale-0 case,
+        // since in any real session the two eyes see different pictures
+        // anyway. Half a code of independent per-eye noise is far below the
+        // amplitude at which stereo-inconsistent noise matters.)
+        CHECK_MSG(worst <= 1,
+                  "AT worldScale 0 THE TWO EYES AGREE TO WITHIN THE DITHER'S ONE CODE: "
+                  "%zu of %zu bytes differ, worst %d/255 — both halves rendered, through "
+                  "per-eye matrices that agree when the eyes do, into exactly half the "
+                  "target each",
                   diff, l.px.size(), worst);
         engine->endVrSession();
         CHECK(!engine->vrStatus().active);
