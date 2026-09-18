@@ -469,24 +469,34 @@ QVector<VerbInfo> EditorApi::verbs() const
           "4.9 ms a pick cost.",
           Needs::Window },
         { "selectionCost", "editor.selectionCost({reset?}) -> {selections, primaryChanges, "
-                           "mounts, mountsSkipped, totalMs, perSelectionMs, viewport, properties, "
-                           "hierarchy, timeline, mount}",
+                           "mountsCharged, mountsSkipped, totalMs, perSelectionMs, viewport, "
+                           "properties, hierarchy, timeline, setViewport, setHierarchy, mount}",
           "WHAT A SELECTION CHANGE COSTS, PER CONSUMER — the number behind \"a controller "
           "trigger press costs more than a frame\" (SELECT-COST-1: `vr.select()` measured "
           "16-17 ms per call, independent of scene size, and a desktop click pays exactly the "
-          "same). A selection fans out to four consumers — the viewport's outline and gizmo, "
-          "the Properties column, the outliner's current row, the timeline's subject — and "
-          "raises a fifth cost, the Properties column's DEFERRED mount, which lands in a later "
-          "turn and is therefore invisible to a stopwatch around the call. Each is its own "
+          "same). A selection fans out to SIX consumers, because a replace-select raises both "
+          "of the selection service's signals: four on the PRIMARY — the viewport's outline "
+          "and gizmo, the Properties column, the outliner's current row, the timeline's "
+          "subject — and two on the SET, which every single pick runs as well (`setViewport` "
+          "is the viewport's selected set and its gizmo group, `setHierarchy` the outliner's "
+          "selected rows). Plus a seventh cost, the Properties column's DEFERRED mount, which "
+          "lands in a later turn and is therefore invisible to a stopwatch around the call. "
+          "Each is its own "
           "block of {ms, lastMs, maxMs, calls}: `ms` is the total wall time charged to that "
           "consumer since the process started (or since the last reset), `lastMs` the most "
           "recent charge, `maxMs` the worst single one. `selections` counts the fan-outs and "
           "`primaryChanges` how many of them really changed the selected node. A re-selection "
           "is NOT skipped — three callers re-select the node they already have precisely to "
           "refresh the panels after changing the document under them — it is merely cheap: the "
-          "column re-points the blades it has instead of showing them again. `mounts` is the "
-          "column's own mount count and `mountsSkipped` the owed mounts a burst never had to "
-          "pay (sixty-four selections in one event-loop turn are one mount). `perSelectionMs` is totalMs divided "
+          "column re-points the blades it has instead of showing them again. `mountsCharged` is "
+          "how many column mounts the `mount` bucket holds and `mountsSkipped` the owed mounts "
+          "a burst never had to pay (sixty-four selections in one event-loop turn are one "
+          "mount). EVERY mount is charged to that bucket, including the ones no selection "
+          "raised — a scene open, a tab switch, a question that settles an owed mount — so a "
+          "`perSelectionMs` read against a whole process history is diluted by them: bracket "
+          "the action with `{reset: true}` and the number is your selections' alone. That is "
+          "also why this count is a different window from `editor.propertiesStats().mounts`, "
+          "which is the column's own count for the life of the process. `perSelectionMs` is totalMs divided "
           "by `selections` — the headline: a selection change must fit inside a frame. "
           "`{reset: true}` zeroes every counter AFTER building the answer, so a script can "
           "bracket an action. READING THIS COSTS NOTHING AND SETTLES NOTHING (no owed mount is "
@@ -1929,16 +1939,22 @@ QVariantMap EditorApi::selectionCost(const QVariantMap &options)
     const quint64 selections = selcost::selections();
     out["selections"]     = QVariant::fromValue(qulonglong(selections));
     out["primaryChanges"] = QVariant::fromValue(qulonglong(selcost::primaryChanges()));
-    out["mounts"]         = QVariant::fromValue(qulonglong(selcost::bucket(selcost::Mount).calls));
+    // `mountsCharged`, not `mounts`: this is the mounts the bucket holds SINCE
+    // THE LAST RESET, a different window from `editor.propertiesStats().mounts`
+    // (the column's own count for the life of the process). Two keys called
+    // `mounts` that disagree after a reset would be a trap.
+    out["mountsCharged"]  = QVariant::fromValue(qulonglong(selcost::bucket(selcost::Mount).calls));
     out["mountsSkipped"]  = QVariant::fromValue(qulonglong(selcost::mountsSkipped()));
     const double total = selcost::totalMs();
     out["totalMs"]        = total;
     out["perSelectionMs"] = selections ? total / double(selections) : 0.0;
-    out["viewport"]   = selectionCostBucket(selcost::Viewport);
-    out["properties"] = selectionCostBucket(selcost::Properties);
-    out["hierarchy"]  = selectionCostBucket(selcost::Hierarchy);
-    out["timeline"]   = selectionCostBucket(selcost::Timeline);
-    out["mount"]      = selectionCostBucket(selcost::Mount);
+    out["viewport"]     = selectionCostBucket(selcost::Viewport);
+    out["properties"]   = selectionCostBucket(selcost::Properties);
+    out["hierarchy"]    = selectionCostBucket(selcost::Hierarchy);
+    out["timeline"]     = selectionCostBucket(selcost::Timeline);
+    out["setViewport"]  = selectionCostBucket(selcost::SetViewport);
+    out["setHierarchy"] = selectionCostBucket(selcost::SetHierarchy);
+    out["mount"]        = selectionCostBucket(selcost::Mount);
 
     if (options.value(QStringLiteral("reset"), false).toBool()) selcost::reset();
     return out;

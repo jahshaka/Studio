@@ -150,14 +150,20 @@ int main(int argc, char **argv)
     // QFocusFrame::setWidget() caches the frame's parent by walking up to the
     // enclosing scroll area's viewport (SH_FocusFrame_AboveWidget, which this
     // style turns on). Qt refreshes that choice when the WIDGET's own parent
-    // changes but not when an INTERMEDIATE ANCESTOR is reparented — and
-    // SceneNodePropertiesWidget::clearLayout() does exactly that: it reuses the
-    // property blades and orphans them with setParent(nullptr) instead of
-    // deleting them. Before the 2026-09-08 fix in the (now vendored) filter,
-    // the frame stayed behind in the viewport and QFocusFramePrivate::updateSize()
-    // mapped coordinates across two unrelated widget trees on every geometry
-    // change: "QWidget::mapTo(): parent must be in parent hierarchy",
-    // 164,651 times in one 13-minute session.
+    // changes but not when an INTERMEDIATE ANCESTOR is reparented — which is
+    // what the properties column used to do on every selection: its
+    // clearLayout() reused the property blades and orphaned them with
+    // setParent(nullptr) instead of deleting them. Before the 2026-09-08 fix in
+    // the (now vendored) filter, the frame stayed behind in the viewport and
+    // QFocusFramePrivate::updateSize() mapped coordinates across two unrelated
+    // widget trees on every geometry change: "QWidget::mapTo(): parent must be
+    // in parent hierarchy", 164,651 times in one 13-minute session.
+    //
+    // THE COLUMN NO LONGER DOES IT (that is what made it cheap: the blades are
+    // permanent children and a mount moves only the layout — SELECT-COST-1
+    // retired clearLayout() altogether), so the orphaning below is done BY HAND
+    // here. The subject is the vendored filter's robustness, not the panel: any
+    // widget tree may reparent an ancestor, and the style has to survive it.
     {
         settings->settings->remove(ThemeManager::settingsKey());
         ThemeManager::applyAtStartup(app);
@@ -226,8 +232,8 @@ int main(int argc, char **argv)
                     ++mapToWarnings;
             });
 
-        // Orphan the blade exactly the way clearLayout() does, then make the
-        // detached subtree do geometry work.
+        // Orphan the blade the way the properties column used to (see above),
+        // then make the detached subtree do geometry work.
         content->layout()->removeWidget(blade);
         blade->setParent(nullptr);
         settle();

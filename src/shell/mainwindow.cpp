@@ -2415,10 +2415,19 @@ void MainWindow::applySelectionToUi(iris::SceneNodePtr sceneNode)
 // viewport (outline, gizmo group, focus/orbit/floor). The properties panel and
 // the timeline stay on the primary — multi-edit is out of scope for v1
 // (EDITOR_MULTISELECT_SPEC §4).
+//
+// THIS RUNS ON EVERY SINGLE PICK TOO, which is why its two calls are charged
+// like the four above (SELECT-COST-1's second read): `SelectionService::select`
+// emits selectionChanged AND selectionSetChanged, so a plain click, a verb and
+// a `vr.select` all write the viewport and the outliner twice — once with the
+// primary, once with the set of one. `editor.selectionCost()` would otherwise
+// call four consumers "the whole cost as the user pays it".
 void MainWindow::applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes)
 {
-    if (sceneView) sceneView->setSelectedSet(nodes);
-    if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes);
+    { selcost::Scope s(selcost::SetViewport);
+      if (sceneView) sceneView->setSelectedSet(nodes); }
+    { selcost::Scope s(selcost::SetHierarchy);
+      if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes); }
 }
 
 void MainWindow::addPlane()

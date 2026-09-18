@@ -33,11 +33,18 @@ For more information see the LICENSE file
 //   deleting it — a live widget tree, with its focus frames, its filters and
 //   its property listeners, leaked per click for the whole session.
 //
+// (`clearLayout()` itself no longer exists: SELECT-COST-1 retired it with the
+// take-everything-off shape it belonged to — a mount moves only the blades
+// that differ now, applyMountDiff. The two defects above are still what these
+// assertions pin, because the property they protect is the same one.)
+//
 // So the assertions are: per-switch wall time stays FLAT (the last 50 switches
 // cost no more than 1.5x the first 50), the population of live widgets and
-// focus frames does not grow across 200 switches, and a switch sends ZERO
+// focus frames does not grow across 200 switches, a switch sends ZERO
 // QEvent::ParentChange to the widgets it reuses — which is also, exactly, why
-// the focus frames stop being re-derived.
+// the focus frames stop being re-derived — and, since SELECT-COST-1, a pick
+// fits inside a 90 Hz FRAME in absolute milliseconds at 16, 1,000 and 10,000
+// nodes, attaching no blades at all when the set has not changed.
 //
 // The real SceneNodePropertiesWidget, the real property blades, the real
 // Qlementine style (without it there are no focus frames and no amplifier at
@@ -882,16 +889,21 @@ int main(int argc, char **argv)
     // suite. The nodes are plain empties added to the root: they cost the
     // panel nothing to have, which is the point.
     //
-    // Both arms ALSO run with the column OFF SCREEN, because that is the other
-    // half of the rule (a column nobody can see builds nothing) and it is the
-    // arrangement a headset is in: the wearer sees the scene, not the dock.
+    // The 10k arm is then repeated with the column OFF SCREEN, because that is
+    // the other half of the rule (a column nobody can see builds nothing) and
+    // it is the arrangement a headset is in: the wearer sees the scene, not the
+    // dock. That half is counted in MOUNTS, not milliseconds — see it below.
     {
+        // 200 picks per reading, not 40: the independence check below divides
+        // one median by another, and on a loaded box a 40-sample median of a
+        // sub-millisecond quantity moves enough for that ratio to be noise
+        // measuring noise. 200 picks cost ~70 ms at the measured 0.35 ms.
         auto medianPick = [&](const iris::SceneNodePtr &a, const iris::SceneNodePtr &b) {
             panel->setSceneNode(a);
             panel->flushPendingMount();
             QVector<double> each;
             QElapsedTimer t;
-            for (int i = 0; i < 40; ++i) {
+            for (int i = 0; i < 200; ++i) {
                 t.start();
                 panel->setSceneNode(i % 2 ? b : a);
                 panel->flushPendingMount();
@@ -916,15 +928,9 @@ int main(int argc, char **argv)
         const double at1k = medianPick(nodes[0], nodes[1]);
         const int n10k = grow(10000);
         const double at10k = medianPick(nodes[0], nodes[1]);
-        scroll->hide();                       // the dock closes: nobody is looking
-        turn();
-        const double at10kHidden = medianPick(nodes[0], nodes[1]);
-        scroll->show();
-        turn();
 
-        std::printf("  PICK BY SCENE SIZE: %d nodes %.2f ms, %d nodes %.2f ms, %d nodes %.2f ms "
-                    "(off screen %.2f ms)\n",
-                    int(nodes.size()) + 1, base, n1k, at1k, n10k, at10k, at10kHidden);
+        std::printf("  PICK BY SCENE SIZE: %d nodes %.2f ms, %d nodes %.2f ms, %d nodes %.2f ms\n",
+                    int(nodes.size()) + 1, base, n1k, at1k, n10k, at10k);
         CHECK(at1k <= kFrameMs90 && at10k <= kFrameMs90,
               QStringLiteral("size: a pick fits inside a 90 Hz frame at 1k (%1 ms) and 10k (%2 ms) "
                              "nodes").arg(at1k, 0, 'f', 2).arg(at10k, 0, 'f', 2).toUtf8().constData());
@@ -935,10 +941,36 @@ int main(int argc, char **argv)
               QStringLiteral("size: ...and it does not grow with the scene (%1 ms at 10k vs %2 ms "
                              "at %3 nodes)").arg(at10k, 0, 'f', 2).arg(base, 0, 'f', 2)
                   .arg(int(nodes.size()) + 1).toUtf8().constData());
-        CHECK(at10kHidden <= at10k + 0.5,
-              QStringLiteral("size: ...and a column nobody can see costs no more than one that "
-                             "is on screen (%1 ms vs %2 ms)").arg(at10kHidden, 0, 'f', 2)
-                  .arg(at10k, 0, 'f', 2).toUtf8().constData());
+
+        // ...AND A COLUMN NOBODY CAN SEE BUILDS NOTHING, AT THIS SIZE TOO —
+        // measured the way the rule actually works, which `flushPendingMount()`
+        // cannot show: a flush mounts unconditionally (that is its job — a
+        // question always gets a true answer), and the deferral lives in
+        // scheduleMount()'s `if (!onScreen()) return`. So this arm drives
+        // exactly what a user does — select, let the turn end — and counts
+        // MOUNTS rather than milliseconds, which is a fact about the code and
+        // not about the box.
+        {
+            scroll->hide();                   // the dock closes: nobody is looking
+            turn();
+            const int before = panel->mountCount();
+            QElapsedTimer t; t.start();
+            for (int i = 0; i < 40; ++i) { panel->setSceneNode(nodes[i % 2]); turn(); }
+            const double hiddenMs = t.elapsed() / 40.0;
+            const int mountedHidden = panel->mountCount() - before;
+            scroll->show();                   // ...and it opens again
+            turn();
+            const int mountedOnShow = panel->mountCount() - before;
+            std::printf("  OFF SCREEN at %d nodes: 40 picks cost %.2f ms each (turn included), "
+                        "%d mounts; showing the dock -> %d\n",
+                        n10k, hiddenMs, mountedHidden, mountedOnShow);
+            CHECK(mountedHidden == 0,
+                  QStringLiteral("size: 40 picks at 10k nodes with the column off screen build "
+                                 "NOTHING (%1 mounts)").arg(mountedHidden).toUtf8().constData());
+            CHECK(mountedOnShow == 1,
+                  QStringLiteral("size: ...and opening the dock builds it once, for the last "
+                                 "selection (%1)").arg(mountedOnShow).toUtf8().constData());
+        }
     }
 
     // PIXELS. Hiding blades instead of orphaning them is a LIFETIME change, and

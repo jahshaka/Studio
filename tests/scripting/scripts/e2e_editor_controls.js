@@ -1038,12 +1038,24 @@ assert(cost.selections === 20 && cost.primaryChanges === 20,
     + cost.selections + "/" + cost.primaryChanges + ")");
 assert(typeof cost.viewport.ms === "number" && typeof cost.properties.ms === "number"
     && typeof cost.hierarchy.ms === "number" && typeof cost.timeline.ms === "number"
+    && typeof cost.setViewport.ms === "number" && typeof cost.setHierarchy.ms === "number"
     && typeof cost.mount.ms === "number",
     "editor.selectionCost() reports every consumer separately");
+// THE SET FAN-OUT RUNS ON EVERY SINGLE PICK — a replace-select raises both of
+// the service's signals — so its two consumers are charged as many times as
+// the primary's, and a total that omitted them would not be the whole cost.
+assert(cost.setViewport.calls === cost.selections
+    && cost.setHierarchy.calls === cost.selections,
+    "the SET fan-out is charged on every pick too (" + cost.setViewport.calls + "/"
+    + cost.setHierarchy.calls + " of " + cost.selections + ")");
+assert(cost.totalMs >= cost.setViewport.ms + cost.setHierarchy.ms,
+    "...and totalMs includes them");
 // THE BOUND IS A FRAME: 1000/90 = 11.11 ms, so 11.0. Measured on the
-// development box at 1k and 10k nodes: 0.45-0.50 ms per selection with the
-// dock open (it was 6.9-7.5 before this lane, of which 5.2 was re-showing
-// blades that had not changed and 1.7 three synchronous timeline repaints).
+// development box at 1k and 10k nodes, all six consumers plus the mount:
+// 0.61-0.76 ms per selection with the docks open (it was 6.96-7.52 before this
+// lane, of which 5.2 was re-showing blades that had not changed and 1.7 three
+// synchronous timeline repaints; the two SET consumers, untouched by that
+// work, are 0.011 ms of the total).
 assert(cost.perSelectionMs < 11.0,
     "a selection change fits inside a 90 Hz frame (" + cost.perSelectionMs.toFixed(2) + " ms)");
 // ...and the column re-points the blades it already has rather than showing

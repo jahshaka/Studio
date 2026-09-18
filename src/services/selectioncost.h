@@ -18,13 +18,16 @@ For more information see the LICENSE file
 // cost 16-17 ms per call, INDEPENDENT OF SCENE SIZE — at 90 Hz a controller
 // trigger press costs more than a frame, and a desktop click pays the same.
 // "Inside the selection machinery" was as far as that measurement went, and
-// four consumers share that machinery (MainWindow::applySelectionToUi):
-// the viewport's outline and gizmo, the Properties column, the outliner's
-// current row and the timeline's subject — plus the Properties column's
+// SIX consumers share that machinery: four on the PRIMARY fan-out
+// (MainWindow::applySelectionToUi — the viewport's outline and gizmo, the
+// Properties column, the outliner's current row, the timeline's subject) and
+// two on the SET fan-out (applySelectionSetToUi — the viewport's selected set
+// and the outliner's selected rows), which runs on every single pick as well,
+// because a replace-select emits both signals. Plus the Properties column's
 // DEFERRED mount (ADD-1), which lands in the turn after the selection and is
 // therefore invisible to a timer wrapped around the call.
 //
-// So the cost is accounted here, exclusively, per consumer, always on: five
+// So the cost is accounted here, exclusively, per consumer, always on: six
 // buckets of wall time plus the counts that tell a reading apart from a
 // coincidence (how many selections were made, how many of them actually
 // changed the primary, how many mounts they cost). A QElapsedTimer start/stop
@@ -49,14 +52,23 @@ For more information see the LICENSE file
 
 namespace selcost {
 
-/// The consumers of a selection change, in the order applySelectionToUi runs
-/// them, with the Properties column's deferred mount last (it is charged in a
-/// later turn, which is the whole reason it needs its own bucket).
+/// The consumers of a selection change, in the order the shell runs them, with
+/// the Properties column's deferred mount last (it is charged in a later turn,
+/// which is the whole reason it needs its own bucket).
+///
+/// SIX, NOT FOUR: `SelectionService::select` raises selectionChanged AND
+/// selectionSetChanged, so EVERY single pick — a click, a verb, a `vr.select`
+/// — also runs the shell's SET fan-out (`applySelectionSetToUi`), which is a
+/// second write to the viewport and to the outliner. Leaving those two out
+/// made `totalMs` a claim about "the whole cost" that was missing two
+/// consumers of every click.
 enum Stage {
-    Viewport = 0,       ///< outline, gizmo, gizmo group
+    Viewport = 0,       ///< outline, gizmo, gizmo group (the PRIMARY fan-out)
     Properties,         ///< SceneNodePropertiesWidget::setSceneNode — the debt, not the mount
     Hierarchy,          ///< the outliner's current row
     Timeline,           ///< the animation widget's subject
+    SetViewport,        ///< the viewport's selected SET (outline union, gizmo group)
+    SetHierarchy,       ///< the outliner's selected ROWS
     Mount,              ///< SceneNodePropertiesWidget::mountNow — the deferred column build
     StageCount
 };
@@ -76,7 +88,7 @@ struct State
     Bucket  buckets[StageCount];
     quint64 selections = 0;     ///< applySelectionToUi calls
     quint64 primaryChanges = 0; ///< ...of which actually changed the primary node
-    quint64 mountsSkipped = 0;  ///< owed mounts a coalesce or a no-op selection saved
+    quint64 mountsSkipped = 0;  ///< owed mounts a coalesce saved (see noteMountSkipped)
 };
 
 /// The one instance (editgate's rationale: an inline function's local static is
@@ -122,8 +134,10 @@ inline void noteSelection(bool primaryChanged)
     if (primaryChanged) ++detail::state().primaryChanges;
 }
 
-/// An owed column mount that never had to happen: the same node re-selected,
-/// or a burst of selections coalesced into one mount.
+/// An owed column mount a COALESCE saved: the debt was already owed when this
+/// selection raised it again, so the turn will pay it once (sixty-four
+/// selections in one turn are one mount). There is no same-node skip — a
+/// re-selection re-points the blades, deliberately (see applySelectionToUi).
 inline void noteMountSkipped() { ++detail::state().mountsSkipped; }
 
 inline const Bucket &bucket(Stage stage)
