@@ -160,7 +160,9 @@ QVector<VerbInfo> VrApi::verbs() const
           "\"what is this runtime\" are two questions a caller asks at different times, and a "
           "tool schema reads better with both.",
           Needs::Engine },
-        { "begin", "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?, reflections?}) -> bool",
+        { "begin",
+          "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?, reflections?, "
+          "hiddenAreaMask?}) -> bool",
           "THE EDITOR'S VR PREVIEW (SPECS/VR_SPEC.md §5 phase 4): starts the VR session on the "
           "editor's scene and returns true once it exists. From the next frame the render loop is "
           "PACED BY THE RUNTIME (xrWaitFrame), both eyes are drawn in one pass into a target two "
@@ -192,6 +194,12 @@ QVector<VerbInfo> VrApi::verbs() const
           "RAY-TRACED reflections per eye rather than the desktop's screen-space march, which a "
           "target holding two eyes side by side cannot carry: a ray is traced in the world from "
           "the eye that owns its pixel, a screen march would walk into the other eye.\n\n"
+          "`hiddenAreaMask` is FOR A MEASUREMENT ONLY and defaults to true: the corners of each "
+          "eye that the headset's lenses never show are masked out at the near plane so nothing "
+          "behind them is shaded (`vr.state().hiddenArea`). There is no user row for it and there "
+          "will not be one — nobody can see the pixels it removes — but the saving cannot be "
+          "measured without a control arm in the same process at the same pose, which is what "
+          "false is for.\n\n"
           "REFUSES (false, with app.lastError set) rather than throwing when VR is unavailable, "
           "when a session is already running, or when there is no scene yet.",
           Needs::Engine },
@@ -320,6 +328,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
           "bindings:{offered, accepted, profiles:[{profile, bindings, accepted}]}, "
+          "hiddenArea:{source, fraction:[l,r], triangles:[l,r]}, "
           "handActions, handJoints, proxies, preview}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
@@ -360,7 +369,17 @@ QVector<VerbInfo> VrApi::verbs() const
           "`fromInjection` is true for a sample vr.inject wrote. `inputFocused` is the "
           "SESSION's input focus — one bit, because a runtime takes focus away for the whole "
           "application and never for one hand — and a gesture in flight is cancelled on a "
-          "false, never committed.",
+          "false, never committed.\n\n"
+          "`hiddenArea` is THE EYE'S OWN MASK (lane HAM-1): the corners a headset's lenses "
+          "never show, taken from the runtime's own geometry "
+          "(XR_KHR_visibility_mask) and drawn depth-only at the near plane so nothing behind "
+          "them is ever shaded. `source` is \"runtime\", \"off\" (nothing asked for it) or "
+          "\"none\" (the runtime has no mask to give — which is every runtime without the "
+          "extension, and not an error); `fraction` is how much of each eye it covers, "
+          "measured on that geometry in the eye's own clip rectangle, and `triangles` how "
+          "many triangles that was. The fraction is the HEADSET'S number, not ours — a "
+          "simulated HMD and a Quest Pro mask different shapes — so a frame-time saving "
+          "measured on one machine cannot be read on another without it.",
           Needs::Engine },
 
         // ---- STAGE 1: THE CONTROLLERS (SPECS/VR_INPUT_SPEC.md) ------------
@@ -664,7 +683,8 @@ bool VrApi::begin(const QVariantMap &options)
                                        QStringLiteral("worldScale"),
                                        QStringLiteral("eyeWidth"),
                                        QStringLiteral("eyeHeight"),
-                                       QStringLiteral("reflections") };
+                                       QStringLiteral("reflections"),
+                                       QStringLiteral("hiddenAreaMask") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.begin: unknown option '%1' — known options are %2")
@@ -1047,6 +1067,21 @@ QVariantMap VrApi::state()
     out[QStringLiteral("worldScale")] = s.worldScale;
     out[QStringLiteral("asymmetricFov")] = s.asymmetricFov;
     out[QStringLiteral("spaceChanges")] = QVariant::fromValue(qulonglong(s.spaceChanges));
+    // THE HIDDEN-AREA MESH (lane HAM-1). The runtime's own answer, per eye:
+    // where the shape came from, how much of each eye it covers and how many
+    // triangles that was. It is reported rather than merely applied because the
+    // FRACTION is the headset's, not ours — a Quest Pro and a simulated HMD
+    // mask different amounts, so a saving measured on one cannot be read on the
+    // other without this number beside it.
+    {
+        QVariantMap ham;
+        ham[QStringLiteral("source")] = QString::fromStdString(s.hiddenAreaSource);
+        ham[QStringLiteral("fraction")] = QVariantList{ QVariant(s.hiddenAreaFraction[0]),
+                                                        QVariant(s.hiddenAreaFraction[1]) };
+        ham[QStringLiteral("triangles")] = QVariantList{ QVariant(s.hiddenAreaTriangles[0]),
+                                                         QVariant(s.hiddenAreaTriangles[1]) };
+        out[QStringLiteral("hiddenArea")] = ham;
+    }
     // THE POSES (phase 4). WORLD space, the rig applied — the only frame a
     // caller can reason in — and each one reports its own validity rather than
     // a shared flag: the head latches, a hand does not (VrPose's note).
