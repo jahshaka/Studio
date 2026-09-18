@@ -75,21 +75,26 @@ bool MaterialPreviewService::begin(const iris::SceneNodePtr &node, const QString
     // two of the viewport's old early-outs cleared the preview state WITHOUT
     // putting the material back, which left the borrowed material on the mesh
     // with no undo step and no record anywhere that it was ever there.
-    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) { end(); return false; }
+    // `restore`, not `end`: the GESTURE is still running (the cursor is over the
+    // sky, or over a light's icon), so its resolve cache stays warm for the
+    // moment the cursor finds an object again.
+    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) { restore(); return false; }
 
     // A LOCKED NODE GETS NO PREVIEW (owner, 2026-09-15): the drop will refuse
     // it by name, and a preview on a node that will refuse is a promise the
     // release cannot keep.
-    if (!node->isPickable()) { end(); return false; }
+    if (!node->isPickable()) { restore(); return false; }
 
-    if (!canPreview(presetOrGuid)) { end(); return false; }
+    if (!canPreview(presetOrGuid)) { restore(); return false; }
 
     auto meshNode = node.staticCast<iris::MeshNode>();
     if (active() && mNode == meshNode && mSource == presetOrGuid) return true;
 
     // Moving to a different node (or a different payload on the same one):
-    // the previous node gets its own material back first, always.
-    end();
+    // the previous node gets its own material back first, always. `restore`,
+    // not `end`: the resolve cache belongs to the GESTURE, and a drag crossing
+    // twenty objects must not re-parse the material twenty times.
+    restore();
 
     mNode = meshNode;
     mOriginal = meshNode->getMaterial();
@@ -102,6 +107,20 @@ bool MaterialPreviewService::begin(const iris::SceneNodePtr &node, const QString
 
 bool MaterialPreviewService::end()
 {
+    const bool was = restore();
+    // THE CACHE DIES WITH THE GESTURE, and that is not an optimisation detail:
+    // a material EDITED between two drags (the Materials module re-bakes its
+    // graph, the panel changes a colour) must be shown as it is now, not as it
+    // was when it was last dragged. `end` is what every gesture end calls —
+    // drop, drag-leave, cancel, a save, an undo push, a close — so the cache
+    // cannot outlive one.
+    mResolvedSource.clear();
+    mResolved.reset();
+    return was;
+}
+
+bool MaterialPreviewService::restore()
+{
     if (!active()) { mScene.reset(); return false; }
 
     // THE EXACT ORIGINAL POINTER, not a re-resolution of it: the node may have
@@ -113,9 +132,6 @@ bool MaterialPreviewService::end()
     mSource.clear();
     markScene(false);
     mScene.reset();
-    // The resolve cache deliberately SURVIVES: a drag that leaves one object
-    // and enters the next ends and begins, and re-parsing the same material
-    // for every object crossed is the cost this cache exists to remove.
     return true;
 }
 

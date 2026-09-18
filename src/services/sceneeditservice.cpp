@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QPixmap>
 #include <QTemporaryDir>
 #include <QSqlDatabase>
@@ -1396,12 +1397,16 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
 
     // A TEMP FILE, NOT THE PROJECT FOLDER. `matgen.material` was written into
     // the user's project directory on every single preset apply and left there
-    // — a file no reader has ever opened (the thumbnail request below is its
-    // one consumer, and it wants any readable path). It goes to the temp dir
-    // now, under a name unique to the row, so two applies cannot race.
+    // — a file no reader has ever opened. Its ONE consumer is the thumbnail
+    // request below, which reads it on its own schedule and only wants a
+    // readable path, so it cannot be deleted here (the same assumption
+    // createMaterialFromNode's temp file makes). Named for the PRESET, so the
+    // set of these is bounded by the number of shipped presets rather than
+    // growing by one per apply — /tmp is RAM on this box.
+    QString safeName = preset.name;
+    safeName.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]")), QStringLiteral("_"));
     const QString thumbSource =
-        QDir(QDir::tempPath()).filePath(QStringLiteral("jah-matgen-%1.material")
-                                            .arg(freshRow ? GUIDManager::generateGUID() : guid));
+        QDir(QDir::tempPath()).filePath(QStringLiteral("jah-matgen-%1.material").arg(safeName));
     QFile jsonFile(thumbSource);
     jsonFile.open(QFile::WriteOnly);
     jsonFile.write(QJsonDocument(material).toJson());

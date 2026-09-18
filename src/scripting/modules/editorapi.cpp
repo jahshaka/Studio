@@ -2376,8 +2376,19 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
     };
 
     // A DRAG IS A SEQUENCE, and the handlers depend on having seen its start:
-    // dragEnter is what decides whether the payload is a material at all.
-    if (!mDragOpen) { sendEvent(QEvent::DragEnter); mDragOpen = true; }
+    // dragEnter is what decides whether the payload is a material at all and
+    // remembers it for the moves that follow. So a call carrying a DIFFERENT
+    // asset is a different gesture — it ends the open one and enters afresh,
+    // rather than moving the old payload to a new pixel.
+    if (mDragOpen && mDragGuid != guid) {
+        sendEvent(QEvent::DragLeave);
+        mDragOpen = false;
+    }
+    if (!mDragOpen) {
+        sendEvent(QEvent::DragEnter);
+        mDragOpen = true;
+        mDragGuid = guid;
+    }
     if (action == QStringLiteral("leave")) {
         sendEvent(QEvent::DragLeave);
         mDragOpen = false;

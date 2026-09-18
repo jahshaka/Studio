@@ -83,8 +83,10 @@ public:
     /// The verb's shape: the node named by GUID in the open scene.
     bool begin(const QString &nodeGuid, const QString &presetOrGuid);
 
-    /// Puts the original material back. True when a preview was running.
-    /// Safe — and free — with none.
+    /// ENDS THE GESTURE: puts the original material back and drops the
+    /// per-gesture resolve cache, so a material edited between two drags is
+    /// shown as it is now. True when a preview was running. Safe — and free —
+    /// with none.
     bool end();
 
     bool active() const { return !mNode.isNull(); }
@@ -103,6 +105,12 @@ public:
     bool canPreview(const QString &presetOrGuid);
 
 private:
+    /// The restore half of `end`, WITHOUT dropping the resolve cache: what
+    /// `begin` does when the hover moves from one object to the next inside one
+    /// gesture. Never called from outside — a caller that means "the gesture is
+    /// over" means `end`.
+    bool restore();
+
     /// Raises/lowers the scene's preview flag, which is what keeps the GI
     /// debounce out of a state that will never be committed.
     void markScene(bool on);

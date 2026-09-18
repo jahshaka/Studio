@@ -145,6 +145,7 @@ private:
     /// A synthesised drag GESTURE is in progress (editor.dragAsset): the enter
     /// event is sent once, at the start, exactly as a real drag does it.
     bool mDragOpen = false;
+    QString mDragGuid;
 };
 
 #endif // SCRIPTING_EDITORAPI_H
