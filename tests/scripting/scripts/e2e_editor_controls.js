@@ -1012,8 +1012,57 @@ assert(pickAfter.refills - pickBase.refills === 10 && pickAfter.rebuilds === pic
     "...and every one of them REFILLED the material rows rather than rebuilding them ("
     + (pickAfter.refills - pickBase.refills) + " refills, "
     + (pickAfter.rebuilds - pickBase.rebuilds) + " rebuilds)");
+// ---- WHAT A SELECTION COSTS, PER CONSUMER (SELECT-COST-1) -------------------
+// `vr.select()` measured 16-17 ms per call, independent of scene size, and a
+// desktop click paid exactly the same: at 90 Hz a controller trigger press cost
+// MORE THAN A FRAME. A selection fans out to four consumers (the viewport's
+// outline and gizmo, the Properties column, the outliner's row, the timeline's
+// subject) and raises a fifth cost, the column's deferred mount — and this is
+// the only place all five are measured together, because only the app has them.
+editor.select(pickA);
+editor.properties({ tab: "selection" });        // settle anything owed
+var costBase = editor.selectionCost({ reset: true });
+assert(costBase.selections === 0 && costBase.totalMs === 0,
+    "editor.selectionCost({reset:true}) zeroes the counters");
+// pickB first: the selection standing before the loop is pickA, so every one
+// of the twenty really moves the primary.
+for (var ci = 0; ci < 20; ci++) editor.select(ci % 2 ? pickA : pickB);
+editor.properties({ tab: "selection" });        // the last mount lands
+var cost = editor.selectionCost();
+assert(cost.selections === 20 && cost.primaryChanges === 20,
+    "twenty picks are twenty selections, every one of them a real change ("
+    + cost.selections + "/" + cost.primaryChanges + ")");
+assert(typeof cost.viewport.ms === "number" && typeof cost.properties.ms === "number"
+    && typeof cost.hierarchy.ms === "number" && typeof cost.timeline.ms === "number"
+    && typeof cost.mount.ms === "number",
+    "editor.selectionCost() reports every consumer separately");
+// THE BOUND IS A FRAME: 1000/90 = 11.11 ms, so 11.0. Measured on the
+// development box at 1k and 10k nodes: 0.45-0.50 ms per selection with the
+// dock open (it was 6.9-7.5 before this lane, of which 5.2 was re-showing
+// blades that had not changed and 1.7 three synchronous timeline repaints).
+assert(cost.perSelectionMs < 11.0,
+    "a selection change fits inside a 90 Hz frame (" + cost.perSelectionMs.toFixed(2) + " ms)");
+// ...and the column re-points the blades it already has rather than showing
+// them again: the structural half of the same claim, machine-independent.
+assert(editor.propertiesStats().attached === 0,
+    "a pick between two meshes attaches NO blades ("
+    + editor.propertiesStats().attached + ")");
+// RE-SELECTING THE SAME NODE is not a change, and the counter says so.
+editor.selectionCost({ reset: true });
+for (var si = 0; si < 5; si++) editor.select(pickA);
+var same = editor.selectionCost();
+// The standing selection here is pickA (the loop ended on it), so the FIRST of
+// these five is not a change either.
+assert(same.selections === 5 && same.primaryChanges === 0,
+    "re-selecting the same node is not a primary change (" + same.primaryChanges
+    + " of " + same.selections + ")");
+var costKeyRefused = false;
+try { editor.selectionCost({ nope: 1 }); } catch (e) { costKeyRefused = true; }
+assert(costKeyRefused, "editor.selectionCost refuses an unknown key");
+
 for (var ri = 0; ri < burst.length; ri++) node.remove(burst[ri]);
 
 console.log("editor_controls: fly speed, post-fx params, screenshot grades, the "
-          + "new-scene defaults, the drop point, the drop TARGET and the "
-          + "properties tabs and the column mount/refill counters verified");
+          + "new-scene defaults, the drop point, the drop TARGET, the "
+          + "properties tabs and the column mount/refill counters and the "
+          + "per-consumer selection cost verified");

@@ -855,6 +855,11 @@ private:
     unsigned openSliceBoundaryFrameCount = 0;
 
     void applySelectionToUi(iris::SceneNodePtr sceneNode);
+    /// The primary this fan-out last applied — for the honest "did the
+    /// selection really change" count behind `editor.selectionCost()`. Weak:
+    /// it is an identity, never dereferenced, and a deleted node must not be
+    /// kept alive (or confused with a new one at the same address).
+    QWeakPointer<iris::SceneNode> lastAppliedSelection;
     void applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes);
     /// The widget fan-out for a selection change (viewport, properties,
     /// hierarchy, timeline) — driven by SelectionService::selectionChanged.

@@ -66,6 +66,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -790,37 +791,154 @@ int main(int argc, char **argv)
         for (int i = 0; i < 3; ++i) turn();
     }
 
-    // ---- THE TWO PICK NUMBERS (ADD-1) -------------------------------------
+    // ---- WHAT A PICK COSTS, AND THE BOUND IT HAS TO FIT IN ----------------
     //
-    // Reported, not asserted in milliseconds (this box is shared): the cost of
-    // the two pick shapes the panel has, because they are different kinds of
-    // work. A SAME-TYPE pick (mesh -> mesh) can reuse every row it has; a
-    // TYPE-CHANGE pick (mesh -> light) has to mount a different blade set.
+    // THE TWO PICK SHAPES (ADD-1). A SAME-TYPE pick (mesh -> mesh) can reuse
+    // every row it has; a TYPE-CHANGE pick (mesh -> light) has to show a
+    // different blade set. Both are measured; both are bounded.
+    //
+    // THE BOUND IS A FRAME (SELECT-COST-1, 2026-09-18). `vr.select()` measured
+    // 16-17 ms per call and a desktop click paid the same, so a controller
+    // trigger press cost MORE THAN A FRAME at 90 Hz — which is the number this
+    // has to fit inside: 1000/90 = 11.11 ms. The bound below is 11.0 ms, the
+    // frame, and it is the product requirement rather than a fit to this box:
+    // the measured medians over five runs on the development box (load average
+    // 6-8.5, two other lanes live) are 0.32-0.39 ms same-type and 1.56-3.57 ms
+    // type-change, worst single switch 5.23 ms — 28x and 3.1x of headroom at
+    // the worst reading, 7x at the typical one. A red here means a pick got
+    // slow OUTRIGHT, which is what this lane found: before it, the same
+    // measurement read 4.72 ms mean / 6.64 worst for a same-type pick and the
+    // select+settle+paint turn cost 11.04 ms — one whole 90 Hz frame for a
+    // click.
+    //
+    // AND A STRUCTURAL ONE BESIDE IT, because a millisecond bound on a shared
+    // box can only ever be generous: a same-type pick must ATTACH NO BLADES.
+    // The 4.2 ms it used to cost was `addWidget` + `show()` on five blades that
+    // had just been taken off the layout and hidden — a full layout, style
+    // polish and focus-frame pass per blade, for a set that had not changed.
+    // The column moves only what differs now (applyMountDiff), so this number
+    // is 0 for a pick between two meshes whatever the machine is doing.
+    const double kFrameMs90 = 11.0;
     {
         auto pickCost = [&](const iris::SceneNodePtr &a, const iris::SceneNodePtr &b) {
             panel->setSceneNode(a);
             panel->flushPendingMount();
             QElapsedTimer t;
             double worst = 0, sum = 0;
+            QVector<double> each;
             const int n = 40;
             for (int i = 0; i < n; ++i) {
                 t.start();
                 panel->setSceneNode(i % 2 ? b : a);
                 panel->flushPendingMount();
                 const double ms = t.nsecsElapsed() / 1e6;
+                each.append(ms);
                 sum += ms;
                 worst = qMax(worst, ms);
             }
-            return QPair<double, double>(sum / n, worst);
+            std::sort(each.begin(), each.end());
+            return std::array<double, 3>{ sum / n, worst, each[each.size() / 2] };
         };
         const auto sameType = pickCost(nodes[0], nodes[1]);      // mesh -> mesh
         const auto typeChange = pickCost(nodes[0], nodes[5]);    // mesh -> light
-        std::printf("  PICK COST: same-type (mesh->mesh) %.2f ms mean / %.2f worst; "
-                    "type-change (mesh->light) %.2f ms mean / %.2f worst\n",
-                    sameType.first, sameType.second, typeChange.first, typeChange.second);
-        CHECK(sameType.first >= 0.0 && typeChange.first >= 0.0,
-              "pick: both pick shapes are measured and reported");
+        std::printf("  PICK COST: same-type (mesh->mesh) %.2f ms mean / %.2f median / %.2f worst; "
+                    "type-change (mesh->light) %.2f ms mean / %.2f median / %.2f worst\n",
+                    sameType[0], sameType[2], sameType[1],
+                    typeChange[0], typeChange[2], typeChange[1]);
+        CHECK(sameType[2] <= kFrameMs90,
+              QStringLiteral("pick: a same-type pick fits inside a 90 Hz frame (%1 ms median, "
+                             "bound %2)").arg(sameType[2], 0, 'f', 2)
+                  .arg(kFrameMs90, 0, 'f', 1).toUtf8().constData());
+        CHECK(typeChange[2] <= kFrameMs90,
+              QStringLiteral("pick: a type-change pick fits inside a 90 Hz frame (%1 ms median, "
+                             "bound %2)").arg(typeChange[2], 0, 'f', 2)
+                  .arg(kFrameMs90, 0, 'f', 1).toUtf8().constData());
+
+        // THE STRUCTURAL HALF: nothing is re-shown when nothing changed.
+        panel->setSceneNode(nodes[0]);
+        panel->flushPendingMount();
+        panel->setSceneNode(nodes[1]);              // another mesh
+        panel->flushPendingMount();
+        const int attachedSameType = panel->propertiesStats().attached;
+        panel->setSceneNode(nodes[5]);              // a light: the set really changes
+        panel->flushPendingMount();
+        const int attachedTypeChange = panel->propertiesStats().attached;
+        std::printf("  blades attached by a pick: same-type %d, type-change %d\n",
+                    attachedSameType, attachedTypeChange);
+        CHECK(attachedSameType == 0,
+              QStringLiteral("pick: a same-type pick attaches NO blades — it re-points the ones "
+                             "already up (%1)").arg(attachedSameType).toUtf8().constData());
+        CHECK(attachedTypeChange > 0,
+              "pick: ...and a type-change pick does attach the blades that differ");
         turn();
+    }
+
+    // ---- THE SAME PICK IN A 1,000- AND A 10,000-NODE SCENE -----------------
+    //
+    // The 16-17 ms was INDEPENDENT OF SCENE SIZE (VR-INPUT-1S measured it at
+    // 1k, 5k and 10k), because this column's work is per SELECTION, not per
+    // node — and that independence is a property worth pinning: a pick that
+    // starts walking the document would show up here and nowhere else in this
+    // suite. The nodes are plain empties added to the root: they cost the
+    // panel nothing to have, which is the point.
+    //
+    // Both arms ALSO run with the column OFF SCREEN, because that is the other
+    // half of the rule (a column nobody can see builds nothing) and it is the
+    // arrangement a headset is in: the wearer sees the scene, not the dock.
+    {
+        auto medianPick = [&](const iris::SceneNodePtr &a, const iris::SceneNodePtr &b) {
+            panel->setSceneNode(a);
+            panel->flushPendingMount();
+            QVector<double> each;
+            QElapsedTimer t;
+            for (int i = 0; i < 40; ++i) {
+                t.start();
+                panel->setSceneNode(i % 2 ? b : a);
+                panel->flushPendingMount();
+                each.append(t.nsecsElapsed() / 1e6);
+            }
+            std::sort(each.begin(), each.end());
+            return each[each.size() / 2];
+        };
+        auto grow = [&](int to) {
+            int have = scene->getRootNode()->children().size();
+            while (have < to) {
+                auto n = iris::SceneNode::create();
+                n->setName(QStringLiteral("filler%1").arg(have));
+                scene->getRootNode()->addChild(n);
+                ++have;
+            }
+            return have;
+        };
+
+        const double base = medianPick(nodes[0], nodes[1]);
+        const int n1k = grow(1000);
+        const double at1k = medianPick(nodes[0], nodes[1]);
+        const int n10k = grow(10000);
+        const double at10k = medianPick(nodes[0], nodes[1]);
+        scroll->hide();                       // the dock closes: nobody is looking
+        turn();
+        const double at10kHidden = medianPick(nodes[0], nodes[1]);
+        scroll->show();
+        turn();
+
+        std::printf("  PICK BY SCENE SIZE: %d nodes %.2f ms, %d nodes %.2f ms, %d nodes %.2f ms "
+                    "(off screen %.2f ms)\n",
+                    int(nodes.size()) + 1, base, n1k, at1k, n10k, at10k, at10kHidden);
+        CHECK(at1k <= kFrameMs90 && at10k <= kFrameMs90,
+              QStringLiteral("size: a pick fits inside a 90 Hz frame at 1k (%1 ms) and 10k (%2 ms) "
+                             "nodes").arg(at1k, 0, 'f', 2).arg(at10k, 0, 'f', 2).toUtf8().constData());
+        // INDEPENDENCE, as a shape: 3x of the small-scene median (or 1 ms,
+        // whichever is larger — a sub-millisecond baseline is all timer noise
+        // on a loaded box) rather than a second millisecond budget.
+        CHECK(at10k <= qMax(1.0, 3.0 * base),
+              QStringLiteral("size: ...and it does not grow with the scene (%1 ms at 10k vs %2 ms "
+                             "at %3 nodes)").arg(at10k, 0, 'f', 2).arg(base, 0, 'f', 2)
+                  .arg(int(nodes.size()) + 1).toUtf8().constData());
+        CHECK(at10kHidden <= at10k + 0.5,
+              QStringLiteral("size: ...and a column nobody can see costs no more than one that "
+                             "is on screen (%1 ms vs %2 ms)").arg(at10kHidden, 0, 'f', 2)
+                  .arg(at10k, 0, 'f', 2).toUtf8().constData());
     }
 
     // PIXELS. Hiding blades instead of orphaning them is a LIFETIME change, and
