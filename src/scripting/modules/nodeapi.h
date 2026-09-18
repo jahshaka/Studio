@@ -72,6 +72,12 @@ public:
     /// finished (mirror -> Scene::setNodeCastShadow -> Item::setCastShadows).
     Q_INVOKABLE bool setCastShadow(const QString &id, bool enabled);
     Q_INVOKABLE bool castShadow(const QString &id);
+    /// PRESERVE THE SCALE RATIO (SCALE-LOCK-1) — the transform panel's lock
+    /// icon as a verb. The flag lives on the node (iris::SceneNode::scaleLock)
+    /// and the arithmetic in iris::scalelock::apply — the one definition the
+    /// verb, the panel field and the gizmo handle all mean by "scale X to 2".
+    Q_INVOKABLE bool setScaleLock(const QString &id, bool locked);
+    Q_INVOKABLE bool scaleLock(const QString &id);
     Q_INVOKABLE bool planarReflector(const QString &id);
     Q_INVOKABLE bool setLightMask(const QString &id, const QVariant &channels);
     Q_INVOKABLE QVariant lightMask(const QString &id);

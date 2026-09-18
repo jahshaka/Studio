@@ -183,6 +183,7 @@ For more information see the LICENSE file
 #include "viewport/flyspeedsettings.h"
 #include "services/subscriber.h"
 #include "services/undoservice.h"
+#include "services/selectioncost.h"
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
@@ -2386,20 +2387,47 @@ iris::SceneNodePtr MainWindow::selectedSceneNode() const
 // and the mesh cache (~3 ms per add, not 44).
 void MainWindow::applySelectionToUi(iris::SceneNodePtr sceneNode)
 {
-    sceneView->setSelectedNode(sceneNode);
-    this->sceneNodePropertiesWidget->setSceneNode(sceneNode);
-    this->sceneHierarchyWidget->setSelectedNode(sceneNode);
-    animationWidget->setSceneNode(sceneNode);
+    // WHAT THIS COSTS, PER CONSUMER (SELECT-COST-1, 2026-09-18): `vr.select()`
+    // measured 16-17 ms per call and a desktop click paid the same, which at
+    // 90 Hz is more than a frame for a trigger press. The four calls below are
+    // charged separately — plus the Properties column's DEFERRED mount, which
+    // lands in a later turn and no timer around this function can see — and
+    // `editor.selectionCost()` reads them back.
+    //
+    // A RE-SELECTION IS NOT A NO-OP HERE, deliberately: three callers
+    // re-select the node they already have precisely to REFRESH the panels
+    // after changing the document under them (ReparentSceneNodeCommand's
+    // undo and redo, material.apply), and the service's own contract says a
+    // replace always re-emits. What makes it cheap is that the consumers
+    // themselves build nothing when nothing changed — the column re-points
+    // its blades (0.26 ms) instead of re-showing them — so the counter below
+    // records honestly how many of these fan-outs really moved the primary.
+    const bool primaryChanged = lastAppliedSelection.toStrongRef() != sceneNode;
+    lastAppliedSelection = sceneNode.toWeakRef();
+    selcost::noteSelection(primaryChanged);
+    { selcost::Scope s(selcost::Viewport);   sceneView->setSelectedNode(sceneNode); }
+    { selcost::Scope s(selcost::Properties); this->sceneNodePropertiesWidget->setSceneNode(sceneNode); }
+    { selcost::Scope s(selcost::Hierarchy);  this->sceneHierarchyWidget->setSelectedNode(sceneNode); }
+    { selcost::Scope s(selcost::Timeline);   animationWidget->setSceneNode(sceneNode); }
 }
 
 // The consumers that understand a SET: the outliner's selected rows and the
 // viewport (outline, gizmo group, focus/orbit/floor). The properties panel and
 // the timeline stay on the primary — multi-edit is out of scope for v1
 // (EDITOR_MULTISELECT_SPEC §4).
+//
+// THIS RUNS ON EVERY SINGLE PICK TOO, which is why its two calls are charged
+// like the four above (SELECT-COST-1's second read): `SelectionService::select`
+// emits selectionChanged AND selectionSetChanged, so a plain click, a verb and
+// a `vr.select` all write the viewport and the outliner twice — once with the
+// primary, once with the set of one. `editor.selectionCost()` would otherwise
+// call four consumers "the whole cost as the user pays it".
 void MainWindow::applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes)
 {
-    if (sceneView) sceneView->setSelectedSet(nodes);
-    if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes);
+    { selcost::Scope s(selcost::SetViewport);
+      if (sceneView) sceneView->setSelectedSet(nodes); }
+    { selcost::Scope s(selcost::SetHierarchy);
+      if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes); }
 }
 
 void MainWindow::addPlane()
@@ -5392,6 +5420,7 @@ QVariantMap MainWindow::propertiesStats() const
     out[QStringLiteral("pending")] = s.pending;
     out[QStringLiteral("deferredHidden")] = s.deferredHidden;
     out[QStringLiteral("visible")] = s.visible;
+    out[QStringLiteral("attached")] = s.attached;
     return out;
 }
 

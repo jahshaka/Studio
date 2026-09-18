@@ -161,9 +161,16 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     //ui->timeline->setSceneNode(node);
     ui->keylabelView->setSceneNode(node);
 
-    keyFrameWidget->repaint();
-    curveWidget->repaint();
-    ui->keylabelView->repaint();
+    // UPDATE, NOT REPAINT (SELECT-COST-1, 2026-09-18). `repaint()` paints the
+    // widget SYNCHRONOUSLY, right here, three times per selection — 1.7 of the
+    // 8 ms a pick cost at 1k nodes, and every one of those paints is thrown
+    // away by the paint the event-loop turn does anyway. `update()` posts one
+    // paint per widget, coalesced, and paints nothing at all while the
+    // timeline is not on screen (a bottom tab behind Assets or Console, which
+    // is how the editor opens).
+    keyFrameWidget->update();
+    curveWidget->update();
+    ui->keylabelView->update();
     this->node = node;
 
     if (!!node) {

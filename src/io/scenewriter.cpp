@@ -400,6 +400,12 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["attached"] = sceneNode->isAttached();
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
     sceneNodeObj["pickable"] = sceneNode->isPickable();
+    // PRESERVE THE SCALE RATIO (SCALE-LOCK-1). Written on EVERY node, like
+    // `pickable` above and unlike the write-only-when-true flags below: the
+    // pair "absent" / "false" then has exactly one meaning for a flag that
+    // changes what an edit to one channel does, and a reader that finds the key
+    // missing (every scene saved before today) takes the constructor's false.
+    sceneNodeObj["scaleLock"] = sceneNode->getScaleLock();
     sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
     // ROTATION, ONCE, AS A QUATERNION (format v2 — src/io/sceneformat.h).
     //

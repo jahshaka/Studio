@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 
 
+#include "services/selectioncost.h"
 #include "services/services.h"
 #include "services/playbackservice.h"
 
@@ -212,7 +213,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     // SELECTION COST (perf regression, owner session 2026-09-08: 1 fps and
     // 2-7 s UI stalls after an hour). Every blade above is a PERMANENT child of
     // this panel from here on, and selection only ever changes which of them
-    // the layout holds — see clearLayout() for why that matters. Adopting them
+    // the layout holds — see applyMountDiff() for why that matters. Adopting them
     // here is the one and only reparent each of them will ever see, and it
     // happens before any of them has painted, i.e. before the style has
     // attached a single focus frame.
@@ -270,7 +271,7 @@ QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
 
 /// Makes a blade a permanent, hidden child. Hidden EXPLICITLY, so that adding
 /// it to the layout later does not show it by accident and — more importantly —
-/// so that Qt's layout machinery leaves its visibility to mount()/clearLayout().
+/// so that Qt's layout machinery leaves its visibility to applyMountDiff().
 void SceneNodePropertiesWidget::adoptBlade(QWidget *blade)
 {
     if (!blade) return;
@@ -278,19 +279,75 @@ void SceneNodePropertiesWidget::adoptBlade(QWidget *blade)
     blade->hide();
 }
 
-/// Puts an already-adopted blade on screen. The ONLY two things a selection
-/// change does to a blade are this and its inverse in clearLayout(); neither
-/// touches the parent, so neither sends a single QEvent::ParentChange.
+/// NAMES an already-adopted blade as part of the set this mount wants, in
+/// order. It does not touch the layout — applyMountDiff() does, once, for the
+/// blades that really changed — and nothing here or there touches a blade's
+/// PARENT, so a selection change still sends not one QEvent::ParentChange.
+///
+/// WHY NAMING RATHER THAN MOVING (SELECT-COST-1, 2026-09-18). A mesh pick cost
+/// 4.9 ms in mountNow at 1k nodes and 4.2 of them were the `addWidget` +
+/// `show()` this used to do — on five blades the mount had just taken off the
+/// layout and hidden, every one of them re-running the layout, the style
+/// polish and (under Qlementine) the focus-frame filters of a subtree hundreds
+/// of rows deep. And the set was usually IDENTICAL: a mesh after a mesh wants
+/// the same five blades pointed at another node. The binds that carry the new
+/// node's values cost 0.26 ms; the re-showing was the other 94%.
 void SceneNodePropertiesWidget::mount(QWidget *blade)
 {
     if (!blade) return;
     Q_ASSERT(blade->parentWidget() == this);
-    widgetPropertyLayout->addWidget(blade);
-    blade->show();
-    // WHAT THIS TAB IS SHOWING, for the filter: the tab's own blade list, so a
-    // filter applies to exactly the rows on screen and the other tab's rows are
-    // never touched (the two boxes are independent by construction).
-    mountedBlades[int(currentTab)].append(QPointer<QWidget>(blade));
+    wantedBlades.append(blade);
+}
+
+/// Makes the layout hold exactly `wantedBlades`, in order, touching only what
+/// differs. The blades the two lists share as a PREFIX stay exactly as they
+/// are (no take, no add, no hide, no show); everything after the first
+/// difference is taken off and hidden, and the wanted tail is added and shown.
+///
+/// Order matters — the column reads top to bottom — so this is a prefix diff
+/// and not a set difference: a blade that changes POSITION is re-added, which
+/// is what a tab switch or a node of another type does.
+void SceneNodePropertiesWidget::applyMountDiff()
+{
+    QVBoxLayout *layout = widgetPropertyLayout;
+    if (!layout) return;
+
+    int keep = 0;
+    while (keep < wantedBlades.size() && keep < layout->count()
+           && layout->itemAt(keep)->widget() == wantedBlades[keep])
+        ++keep;
+
+    // Everything after the common prefix, INCLUDING the trailing stretch (a
+    // spacer item, not a widget), which is re-added below.
+    //
+    // HIDDEN, NEVER setParent(nullptr) — the rule the retired clearLayout()
+    // carried, and the reason it exists (owner session 2026-09-08: 1 fps and
+    // 2-7 s UI stalls after an hour, every watchdog backtrace inside
+    // WidgetWithFocusFrameEventFilter::refreshFocusFrame). Detaching a live
+    // blade sends QEvent::ParentChange to it and to every focusable descendant
+    // Qlementine watches, each answering with a QFocusFrame re-derivation and
+    // a re-install of its filters along the whole chain — dozens of times,
+    // twice, per click — and leaves the frames stranded in a hierarchy their
+    // widget has left ("QWidget::mapTo(): parent must be in parent
+    // hierarchy", 164,651 warnings in 13 minutes). The blades are this panel's
+    // permanent children; a selection only decides which of them the layout
+    // holds. `ui.selection_cost` asserts the zero.
+    while (layout->count() > keep) {
+        QLayoutItem *item = layout->takeAt(keep);
+        if (QWidget *w = item->widget()) w->hide();
+        delete item;
+    }
+
+    lastAttached = wantedBlades.size() - keep;
+    for (int i = keep; i < wantedBlades.size(); ++i) {
+        layout->addWidget(wantedBlades[i]);
+        wantedBlades[i]->show();
+    }
+
+    QVector<QPointer<QWidget>> &mounted = mountedBlades[int(currentTab)];
+    mounted.clear();
+    mounted.reserve(wantedBlades.size());
+    for (QWidget *blade : std::as_const(wantedBlades)) mounted.append(QPointer<QWidget>(blade));
 }
 
 // THE SCENE CHANGED — including to NOTHING.
@@ -398,6 +455,11 @@ QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
 // "not built" to anyone who asks — including during a script run.
 void SceneNodePropertiesWidget::applyTab()
 {
+    // AN OWED MOUNT THAT IS OWED AGAIN IS A MOUNT SAVED — an undo of a
+    // sixty-four-object macro selects sixty-four times in one turn and the
+    // column is built once. Counted for `editor.selectionCost().mountsSkipped`
+    // so the coalescing is a number and not a claim.
+    if (mountOwed) selcost::noteMountSkipped();
     mountOwed = true;
     scheduleMount();
 }
@@ -503,10 +565,15 @@ void SceneNodePropertiesWidget::showEvent(QShowEvent *event)
 
 void SceneNodePropertiesWidget::mountNow()
 {
+    selcost::Scope costScope(selcost::Mount);
     ++mounts;                       // see mountCount()
     widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
-    clearLayout(this->layout());
-    mountedBlades[int(currentTab)].clear();
+    // WHAT THE COLUMN WANTS IS COLLECTED FIRST and the layout is moved once,
+    // by difference (mount() / applyMountDiff). The old shape — take every
+    // blade off here, add them all back below — paid a full layout + polish +
+    // focus-frame pass per blade on every pick, for a set that had usually not
+    // changed at all (SELECT-COST-1).
+    wantedBlades.clear();
 
     if (currentTab == Tab::World) {
         const auto sc = worldScene();
@@ -523,6 +590,7 @@ void SceneNodePropertiesWidget::mountNow()
         mountSelectionBlades();
     }
 
+    applyMountDiff();
     widgetPropertyLayout->addStretch();
     // THE FILTER IS RE-APPLIED ON EVERY MOUNT, before this returns: a pick, an
     // undo, a tab switch and a scene open all land with the box's text still in
@@ -572,6 +640,7 @@ SceneNodePropertiesWidget::Stats SceneNodePropertiesWidget::propertiesStats() co
     out.pending = mountOwed;
     out.deferredHidden = mountOwed && !onScreen();
     out.visible = onScreen();
+    out.attached = lastAttached;
     return out;
 }
 
@@ -748,7 +817,8 @@ void SceneNodePropertiesWidget::bindScene(const QSharedPointer<iris::Scene> &sce
 }
 
 // THE CHEAP HALF: the blades are permanent children and already bound, so a
-// mount is a layout move and a show (see clearLayout).
+// mount is a layout move and a show, and only for the blades that CHANGED
+// (see applyMountDiff).
 void SceneNodePropertiesWidget::mountWorldBlades()
 {
     mount(worldPropView);
@@ -821,7 +891,7 @@ void SceneNodePropertiesWidget::mountSelectionBlades()
             case iris::SceneNodeType::Mesh: {
                 // THE LEAK behind the session-long slowdown: this panel was
                 // built fresh for EVERY mesh selection and the old one was
-                // handed to clearLayout(), which orphaned it with
+                // handed to the old clearLayout(), which orphaned it with
                 // setParent(nullptr) — a live, parentless widget tree that
                 // nothing ever deleted. An hour of clicking around left
                 // hundreds of them (and their focus frames, their event
@@ -1089,46 +1159,3 @@ void SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets(QStringList 
 	}
 }
 
-/**
- * Takes every blade back off the layout, WITHOUT reparenting any of them.
- *
- * THE PERF REGRESSION (owner session 2026-09-08 — 1 fps, 2-7 s UI stalls after
- * an hour of use; watchdog backtraces all in
- * WidgetWithFocusFrameEventFilter::refreshFocusFrame under this function):
- * this used to call `widget->setParent(nullptr)` on each blade, i.e. it
- * DETACHED a live widget subtree on every single selection change and
- * re-attached it a few lines later in setSceneNode(). Each of those two
- * reparents sends a QEvent::ParentChange to the blade, and Qlementine installs
- * one WidgetWithFocusFrameEventFilter per focusable descendant, every one of
- * which watches its ancestors — so ONE selection change fired the ancestor
- * handler dozens of times, twice, and each firing re-derived and re-parented a
- * QFocusFrame and re-installed its event filters along the whole chain. It also
- * left the frames stranded in a hierarchy their widget had left, which is the
- * "QWidget::mapTo(): parent must be in parent hierarchy" flood (164,651
- * warnings in 13 minutes) the qlementine fork was pulled in to fix.
- *
- * Hiding instead of orphaning is the honest shape: the blades are this panel's
- * permanent children (adopted in the constructor / at first use), a selection
- * change only decides which of them the layout holds, and the widget hierarchy
- * never changes at all. Zero ParentChange events, zero focus-frame work, no
- * growth.
- *
- * @param layout
- */
-void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
-{
-    if (layout == nullptr) return;
-
-    while (auto item = layout->takeAt(0)) {
-        if (auto widget = item->widget()) {
-            // NOT setParent(nullptr) — see above. Explicitly hidden, so the
-            // next mount() has to show it deliberately.
-            widget->hide();
-        }
-
-        if (auto childLayout = item->layout()) this->clearLayout(childLayout);
-        delete item;
-    }
-
-    //delete layout;
-}

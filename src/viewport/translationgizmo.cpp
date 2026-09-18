@@ -525,9 +525,12 @@ void TranslationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 vie
 	// do snapping here as well
 	auto diff = slidingPos - hitPos;
 
-	// apply snapping (relative snapping). ONE QUESTION FOR BOTH HOSTS
-	// (Gizmo::snapHeld): Ctrl at the desk, `menu` held in the headset.
-	if (snapHeld()) {
+	// apply snapping (relative snapping)
+	// The gesture's own modifiers (Gizmo::setDragModifiers, pushed by the
+	// viewport from the event driving this drag), not the live keyboard: one
+	// source per gesture, and the only one a test can drive.
+	auto mods = currentDragModifiers();
+	if (mods.testFlag(Qt::ControlModifier)) {
 		if (draggedHandle->isPlane()) {
 			// A PLANE DRAG SNAPS ON BOTH OF ITS AXES (GIZMO-1 item 3), which is
 			// what "snap as the arrows do" means for two degrees of freedom:

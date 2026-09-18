@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 
+#include <functional>
+
 namespace iris
 {
     class SceneNode;
@@ -24,6 +26,7 @@ namespace iris
 
 class DragSpinBox;
 class QPushButton;
+class QToolButton;
 
 struct StudioServices;
 
@@ -57,6 +60,9 @@ protected slots:
     void yScaleChanged(double value);
     void zScaleChanged(double value);
 
+    /// The lock icon beside the Scale label (SCALE-LOCK-1).
+    void onScaleLockToggled(bool locked);
+
     void onResetBtnClicked();
 
     // a scrub (click-drag on a field) becomes ONE undoable change:
@@ -81,11 +87,36 @@ private:
     iris::Quat rotationMemo;
     bool rotationMemoValid = false;
 
-    // builds one horizontal row: title label left, X/Y/Z fields side by side
+    // builds one horizontal row: title label left, X/Y/Z fields side by side.
+    // `withLock` puts the scale-ratio lock button INSIDE the title cell, which
+    // is why the cell is a fixed-width widget rather than a bare label: the
+    // label gives up the width the icon needs and the three fields keep the
+    // exact geometry they have on every other row (SCALE-LOCK-1 — "no box
+    // narrows").
     void addRow(class QGridLayout* grid, int row, const QString& title,
                 DragSpinBox*& x, DragSpinBox*& y, DragSpinBox*& z,
-                double perPixelStep);
+                double perPixelStep, bool withLock = false);
     DragSpinBox* createField(const QString& objectName, double perPixelStep);
+
+    /// EVERY WRITE THIS PANEL MAKES, and the undo step a TYPED one earns.
+    /// `box` is the field the value came from: while it is scrubbing nothing is
+    /// recorded (onScrubFinished records the whole gesture as one step);
+    /// otherwise the transform is snapshotted, `write` runs, and if the
+    /// document moved the step is pushed — the same TransformSceneNodeCommand,
+    /// pushed the same way (rewind, then push) so it captures the pre-edit
+    /// SCENE_STATIC classification.
+    void writeTransform(DragSpinBox *box,
+                        const std::function<void(const QSharedPointer<iris::SceneNode> &)> &write);
+
+    /// ONE SCALE CHANNEL, written the one way the whole app writes one
+    /// (iris::scalelock::apply): the node's lock, or Shift held during THIS
+    /// scrub, makes it uniform. `axis` is 0/1/2 = x/y/z.
+    void scaleChannelChanged(int axis, DragSpinBox* box, double value);
+    /// Puts the node's scale back into the three fields without writing back
+    /// (the other two channels move when a locked edit scales them).
+    void refreshScaleFields();
+    /// Puts the lock icon's checked state back in step with the document.
+    void refreshLockButton();
 
     StudioServices *services = nullptr;
     QSharedPointer<iris::SceneNode> sceneNode;
@@ -98,6 +129,12 @@ private:
     DragSpinBox* xrot; DragSpinBox* yrot; DragSpinBox* zrot;
     DragSpinBox* xscale; DragSpinBox* yscale; DragSpinBox* zscale;
     QPushButton* resetBtn;
+    /// The preserve-ratio lock, to the right of the "Scale" label and before
+    /// the three fields (SCALE-LOCK-1).
+    QToolButton* scaleLockBtn = nullptr;
+    /// True while refreshLockButton is driving the button, so the toggled
+    /// signal it emits is not read as a user's click.
+    bool refreshingLock = false;
     /// FIT TO SIZE: the node subtree's measured world size in metres (read-only).
     class QLabel* sizeLabel = nullptr;
 

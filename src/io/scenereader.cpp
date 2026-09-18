@@ -1000,6 +1000,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // the same node.
     sceneNode->setAttached(nodeObj["attached"].toBool(sceneNode->isAttached()));
     sceneNode->setPickable(nodeObj["pickable"].toBool(sceneNode->isPickable()));
+    sceneNode->setScaleLock(nodeObj["scaleLock"].toBool(sceneNode->getScaleLock()));
     // Absent = the ctor's false: the writer only emits the key when the flag is on.
     sceneNode->setPlanarReflector(
         nodeObj["planarReflector"].toBool(sceneNode->getPlanarReflector()));

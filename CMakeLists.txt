@@ -614,7 +614,6 @@ set(HEADERS
     src/viewport/previeworbit.h
     src/viewport/cameracontrollerbase.h 
     src/ui/panels/presets/skypresets.h 
-    src/ui/panels/propertywidgets/transformpropertywidget.h 
     src/ui/panels/propertywidgets/lightpropertywidget.h 
     src/ui/panels/propertywidgets/decalpropertywidget.h 
     src/ui/panels/propertywidgets/materialpropertywidget.h 

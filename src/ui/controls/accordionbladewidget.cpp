@@ -192,7 +192,7 @@ void AccordianBladeWidget::drainLayout(QLayout *layout)
             // ON TOP OF the new ones. That is the "garbled Properties rows"
             // shape (debt A5b): it needs a repaint inside the window, which a
             // page switch or a dock resize provides. SceneNodePropertiesWidget::
-            // clearLayout has hidden its blades for the same reason since the
+            // the properties column has hidden its blades for the same reason since the
             // selection-cost fix; this is the row-level twin of it.
             widget->hide();
             // OUT OF THE REGISTRY AT RETIREMENT, not at destruction (§6.2): a

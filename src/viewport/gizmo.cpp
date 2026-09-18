@@ -23,7 +23,6 @@ For more information see the LICENSE file
 #include "services/editgate.h"
 #include "services/undoservice.h"
 #include "commands/transformscenenodecommand.h"
-#include <QApplication>
 #include <QUndoStack>
 
 
@@ -178,15 +177,6 @@ void Gizmo::resolvePickRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &v
 	rayPos = vrPickData.rayPos;
 	rayDir = vrPickData.rayDir;
 	if (!vrPickData.viewDir.isNull()) viewDir = vrPickData.viewDir;
-}
-
-// THE SNAP MODIFIER, ASKED ONCE. The desk's Ctrl and the headset's held `menu`
-// mean the same thing, so they are one question; the three drags call this and
-// none of them reads the keyboard itself any more.
-bool Gizmo::snapHeld() const
-{
-	if (snapHeldExternally) return true;
-	return QApplication::keyboardModifiers().testFlag(Qt::ControlModifier);
 }
 
 // A CANCELLED GESTURE IS NOT A TRANSFORM (VR_INPUT_SPEC §5.4). The subclass

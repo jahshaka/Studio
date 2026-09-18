@@ -114,6 +114,24 @@ set_tests_properties(scripting.e2e.mobility PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# THE SCALE-RATIO LOCK (SCALE-LOCK-1, the owner's "a lock for the
+# transformations"): node.setScaleLock / node.scaleLock, the reflected
+# `scaleLock` row, node.transform's one-channel rule and its `scaleUniform`
+# override, the three degenerate cases (a zero channel has no ratio, a negative
+# ratio mirrors, the same value is a no-op), the flag travelling with a
+# duplicate, and the save/close/open round trip through the real writer and
+# reader. The panel and gizmo halves are ui.panel_undo and gizmo.scale_lock.
+# Document verbs only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scale_lock)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.scale_lock
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scale_lock.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.scale_lock PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 add_script_e2e(undo_macro e2e_undo_macro.js)
 # SCENEGRAPH_SPEC §3 step 4: the v2 scene format's fragment pair
 # (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,

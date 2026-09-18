@@ -1140,6 +1140,10 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
                     }
                 }
             }
+            // The gesture's modifiers, from the event driving it (SCALE-LOCK-1;
+            // gizmo.h's setDragModifiers): Shift on a scale axis handle means
+            // "scale all three by this drag's ratio".
+            mGizmo->setDragModifiers(e->modifiers());
             mGizmo->startDragging(rayPos, rayDir, viewDir);
         } else if (e->modifiers() & Qt::AltModifier) {
             // Alt+LMB anywhere BUT the gizmo orbits around THE POINT UNDER THE
@@ -1195,6 +1199,9 @@ void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
         if (mVertexSnapHeld && mGizmo == mTranslateGizmo && snapDragToVertexUnderCursor())
             return;
         iris::Vec3 rayPos, rayDir, viewDir;
+        // Per move, so a modifier pressed or released mid-drag takes effect for
+        // the remainder of the gesture (SCALE-LOCK-1).
+        mGizmo->setDragModifiers(e->modifiers());
         if (mouseRay(rayPos, rayDir, viewDir)) mGizmo->drag(rayPos, rayDir, viewDir);
         return;
     }

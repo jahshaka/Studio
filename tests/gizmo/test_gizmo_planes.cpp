@@ -452,8 +452,8 @@ int main(int argc, char **argv)
             gizmo.endDragging();
         }
 
-        // THE MODIFIER SNAPS IT — the same Gizmo::snapHeld the desk's Ctrl
-        // sets, which in a headset is `menu` held (owner answer 10). Asserted
+        // THE MODIFIER SNAPS IT — the same Gizmo::setDragModifiers door the
+        // desk's Ctrl comes through, which in a headset is `menu` held (owner answer 10). Asserted
         // on the gizmo because that is where the snap happens; the BUTTON that
         // sets it is asserted in scripting.e2e.vr_gizmo.
         {
@@ -472,7 +472,7 @@ int main(int argc, char **argv)
             const Plane &plane = kPlanes[2];                      // xz, the ground square
             const iris::Vec3 grabPoint = squareGrab(plane, scale);
             const Gizmo::RayPickScope raySpace(&gizmo);
-            gizmo.setSnapHeld(true);
+            gizmo.setDragModifiers(Qt::ControlModifier);
             gizmo.startDragging(eye, (grabPoint - eye).normalized(), pick.viewDir);
             const iris::Vec3 target = plane.u * 2.37f + plane.v * 1.62f;
             gizmo.drag(eye, (target - eye).normalized(), pick.viewDir);
@@ -487,7 +487,7 @@ int main(int argc, char **argv)
                       std::fabs(v / grid - std::round(v / grid)) < 1e-3f,
                   "with the modifier held, a ray-driven plane drag lands on the snap grid on BOTH "
                   "of its axes");
-            gizmo.setSnapHeld(false);
+            gizmo.setDragModifiers(Qt::NoModifier);
             gizmo.endDragging();
         }
 

@@ -31,6 +31,8 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    # SCALE-LOCK-1: the transform panel records its lock toggle with this.
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp

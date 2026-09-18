@@ -490,7 +490,7 @@ void VrInteraction::armGizmo(unsigned hand, bool armed)
     Gizmo *g = gizmoNow();
     if (mArmedGizmo && mArmedGizmo != g) {
         mArmedGizmo->setVrPick(GizmoVrPick());
-        mArmedGizmo->setSnapHeld(false);
+        mArmedGizmo->setDragModifiers(Qt::NoModifier);
         mArmedGizmo = nullptr;
     }
     if (!g) return;
@@ -516,7 +516,7 @@ void VrInteraction::armGizmo(unsigned hand, bool armed)
     }
     g->setVrPick(pick);
     mArmedGizmo = pick.valid ? g : nullptr;
-    if (!pick.valid) g->setSnapHeld(false);
+    if (!pick.valid) g->setDragModifiers(Qt::NoModifier);
 }
 
 bool VrInteraction::beginGizmoDrag(unsigned hand)
@@ -547,7 +547,7 @@ bool VrInteraction::beginGizmoDrag(unsigned hand)
     // (enginesceneviewport.cpp: "letting it run only to drop its undo step
     // would move the object and then snap it back").
     if (editgate::refuse()) return false;
-    g->setSnapHeld(st.menuPressed);
+    g->setDragModifiers(st.menuPressed ? Qt::KeyboardModifiers(Qt::ControlModifier) : Qt::KeyboardModifiers(Qt::NoModifier));
     g->startDragging(origin, direction, forward);
     if (!g->isDragging()) return false;        // the handle let go of it again
     mGizmoDrag.active = true;
@@ -572,7 +572,7 @@ bool VrInteraction::endGizmoDrag(unsigned hand)
     // here — a second undo shape for VR is exactly how the two hosts would come
     // to disagree about what one gesture costs.
     g->endDragging();
-    g->setSnapHeld(false);
+    g->setDragModifiers(Qt::NoModifier);
     ++mGizmoCommits;
     haptic(dragHand, kTickAmplitude, kTickSeconds);
     return true;
@@ -585,7 +585,7 @@ bool VrInteraction::cancelGizmoDrag()
     mGizmoDrag = GizmoDrag();
     if (!g) return false;
     g->cancelDragging();
-    g->setSnapHeld(false);
+    g->setDragModifiers(Qt::NoModifier);
     ++mCancels;
     return true;
 }
@@ -934,10 +934,11 @@ void VrInteraction::step(float seconds)
 
         if (mGizmoDrag.active) {
             // MENU HELD SNAPS A HANDLE DRAG TOO — the same modifier, asked per
-            // frame, answered by the same Gizmo::snapHeld the mouse asks.
+            // frame, pushed through the same Gizmo::setDragModifiers door the
+            // viewport's mouse events use (Ctrl at the desk).
             if (Gizmo *g = mGizmoDrag.gizmo) {
                 const VrHandState st = handState(mGizmoDrag.hand);
-                g->setSnapHeld(st.menuPressed);
+                g->setDragModifiers(st.menuPressed ? Qt::KeyboardModifiers(Qt::ControlModifier) : Qt::KeyboardModifiers(Qt::NoModifier));
                 if (st.menuPressed) mMenuConsumed = true;
                 iris::Vec3 origin, direction, eye, forward;
                 if (ray(st, origin, direction) && eyePose(mGizmoDrag.hand, eye, forward)) {

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <cmath>
 
 #include "scripting/modules/moduleshared.h"
+#include "services/selectioncost.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/simulationclock.h"
@@ -439,7 +440,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "that exist for the current selection.",
           Needs::Window },
         { "propertiesStats", "editor.propertiesStats() -> {mounts, refills, rebuilds, rows, "
-                             "pending, deferredHidden, visible}",
+                             "pending, deferredHidden, visible, attached}",
           "WHAT THE PROPERTIES COLUMN HAS COST — the numbers behind \"how expensive is a "
           "pick\" and \"how expensive is an add\", so a perf claim about either can be made "
           "from the editor rather than from a stopwatch (ADD-1, 2026-09-15). `mounts` counts "
@@ -460,8 +461,47 @@ QVector<VerbInfo> EditorApi::verbs() const
           "arranged that way used to rebuild itself for every selection, for nobody "
           "(TABS-HIDDEN-1). READING THIS BUILDS "
           "NOTHING: unlike `editor.properties`, it never settles an owed mount, because a "
-          "measurement must not change what it measures.",
+          "measurement must not change what it measures. `attached` is how many blades the "
+          "LAST mount actually put on the layout and showed: a mount moves only the blades "
+          "that changed, so picking another mesh reports 0 (the same five blades, pointed at "
+          "the new node) and picking a light after a mesh reports the tail that differs. It "
+          "was five per pick before SELECT-COST-1, and those five re-shows were 4.2 of the "
+          "4.9 ms a pick cost.",
           Needs::Window },
+        { "selectionCost", "editor.selectionCost({reset?}) -> {selections, primaryChanges, "
+                           "mountsCharged, mountsSkipped, totalMs, perSelectionMs, viewport, "
+                           "properties, hierarchy, timeline, setViewport, setHierarchy, mount}",
+          "WHAT A SELECTION CHANGE COSTS, PER CONSUMER — the number behind \"a controller "
+          "trigger press costs more than a frame\" (SELECT-COST-1: `vr.select()` measured "
+          "16-17 ms per call, independent of scene size, and a desktop click pays exactly the "
+          "same). A selection fans out to SIX consumers, because a replace-select raises both "
+          "of the selection service's signals: four on the PRIMARY — the viewport's outline "
+          "and gizmo, the Properties column, the outliner's current row, the timeline's "
+          "subject — and two on the SET, which every single pick runs as well (`setViewport` "
+          "is the viewport's selected set and its gizmo group, `setHierarchy` the outliner's "
+          "selected rows). Plus a seventh cost, the Properties column's DEFERRED mount, which "
+          "lands in a later turn and is therefore invisible to a stopwatch around the call. "
+          "Each is its own "
+          "block of {ms, lastMs, maxMs, calls}: `ms` is the total wall time charged to that "
+          "consumer since the process started (or since the last reset), `lastMs` the most "
+          "recent charge, `maxMs` the worst single one. `selections` counts the fan-outs and "
+          "`primaryChanges` how many of them really changed the selected node. A re-selection "
+          "is NOT skipped — three callers re-select the node they already have precisely to "
+          "refresh the panels after changing the document under them — it is merely cheap: the "
+          "column re-points the blades it has instead of showing them again. `mountsCharged` is "
+          "how many column mounts the `mount` bucket holds and `mountsSkipped` the owed mounts "
+          "a burst never had to pay (sixty-four selections in one event-loop turn are one "
+          "mount). EVERY mount is charged to that bucket, including the ones no selection "
+          "raised — a scene open, a tab switch, a question that settles an owed mount — so a "
+          "`perSelectionMs` read against a whole process history is diluted by them: bracket "
+          "the action with `{reset: true}` and the number is your selections' alone. That is "
+          "also why this count is a different window from `editor.propertiesStats().mounts`, "
+          "which is the column's own count for the life of the process. `perSelectionMs` is totalMs divided "
+          "by `selections` — the headline: a selection change must fit inside a frame. "
+          "`{reset: true}` zeroes every counter AFTER building the answer, so a script can "
+          "bracket an action. READING THIS COSTS NOTHING AND SETTLES NOTHING (no owed mount is "
+          "flushed): a measurement must not change what it measures.",
+          Needs::Document },
         { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
           "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
           "`translate` in world units — which is also the ground grid's spacing — `rotate` in "
@@ -1867,6 +1907,56 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
     out["open"] = host.mainWindow->isPanelOpen(name);
     out["current"] = MainWindow::isFrontTab(host.mainWindow->panelDock(name));
     out["tabbed"] = host.mainWindow->trayTabs().contains(name);
+    return out;
+}
+
+namespace {
+
+QVariantMap selectionCostBucket(selcost::Stage stage)
+{
+    const selcost::Bucket &b = selcost::bucket(stage);
+    QVariantMap out;
+    out["ms"]     = b.ms;
+    out["lastMs"] = b.lastMs;
+    out["maxMs"]  = b.maxMs;
+    out["calls"]  = QVariant::fromValue(qulonglong(b.calls));
+    return out;
+}
+
+} // namespace
+
+QVariantMap EditorApi::selectionCost(const QVariantMap &options)
+{
+    for (auto it = options.cbegin(); it != options.cend(); ++it) {
+        if (it.key() != QLatin1String("reset")) {
+            fail(QStringLiteral("editor.selectionCost: unknown key '%1' — the only key is "
+                                "'reset'").arg(it.key()));
+            return QVariantMap();
+        }
+    }
+
+    QVariantMap out;
+    const quint64 selections = selcost::selections();
+    out["selections"]     = QVariant::fromValue(qulonglong(selections));
+    out["primaryChanges"] = QVariant::fromValue(qulonglong(selcost::primaryChanges()));
+    // `mountsCharged`, not `mounts`: this is the mounts the bucket holds SINCE
+    // THE LAST RESET, a different window from `editor.propertiesStats().mounts`
+    // (the column's own count for the life of the process). Two keys called
+    // `mounts` that disagree after a reset would be a trap.
+    out["mountsCharged"]  = QVariant::fromValue(qulonglong(selcost::bucket(selcost::Mount).calls));
+    out["mountsSkipped"]  = QVariant::fromValue(qulonglong(selcost::mountsSkipped()));
+    const double total = selcost::totalMs();
+    out["totalMs"]        = total;
+    out["perSelectionMs"] = selections ? total / double(selections) : 0.0;
+    out["viewport"]     = selectionCostBucket(selcost::Viewport);
+    out["properties"]   = selectionCostBucket(selcost::Properties);
+    out["hierarchy"]    = selectionCostBucket(selcost::Hierarchy);
+    out["timeline"]     = selectionCostBucket(selcost::Timeline);
+    out["setViewport"]  = selectionCostBucket(selcost::SetViewport);
+    out["setHierarchy"] = selectionCostBucket(selcost::SetHierarchy);
+    out["mount"]        = selectionCostBucket(selcost::Mount);
+
+    if (options.value(QStringLiteral("reset"), false).toBool()) selcost::reset();
     return out;
 }
 

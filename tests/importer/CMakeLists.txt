@@ -33,6 +33,8 @@ add_executable(test_importer_glb test_importer_glb.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    # SCALE-LOCK-1: the transform panel records its lock toggle with this.
+    ${CMAKE_SOURCE_DIR}/src/commands/nodeeditcommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp)
 set_target_properties(test_importer_glb PROPERTIES AUTOMOC ON CXX_STANDARD 17

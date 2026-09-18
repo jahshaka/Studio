@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "viewport/scalegizmo.h"
 
+#include "irisgl/document/scenegraph/scalelock.h"
+
 #include "irisgl/core/math/intersectionhelper.h"
 #include "irisgl/core/math/mathhelper.h"
 #include "irisgl/core/irisutils.h"
@@ -24,8 +26,6 @@ For more information see the LICENSE file
 #include "viewport/gizmomeshes.h"
 #include "commands/transformscenenodecommand.h"
 #include "irisgl/core/math/mathhelper.h"
-#include "ui/panels/scenenodepropertieswidget.h"
-#include "ui/panels/propertywidgets/transformpropertywidget.h"
 
 #include "viewport/snapsettings.h"
 #define CENTER_CIRCLE_RADIUS (0.015f)
@@ -234,23 +234,31 @@ void ScaleGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 	// move node along line
 	// do snapping here as well
 	iris::Vec3 diff = slidingPos - hitPos;
-	// ONE QUESTION FOR BOTH HOSTS (Gizmo::snapHeld): Ctrl at the desk, `menu`
-	// held in the headset (owner answer 10).
-	if (snapHeld()) {
+	// ONE SOURCE OF MODIFIERS IN A DRAG (SCALE-LOCK-1 round 2): the ones the
+	// viewport hands us from the event driving this gesture, for Ctrl's snap as
+	// well as Shift's uniform. Reading the live keyboard here and the gesture
+	// there would let the two disagree — and only one of them can be driven by
+	// a test.
+	auto mods = currentDragModifiers();
+	if (mods.testFlag(Qt::ControlModifier)) {
 		float length = diff.length();
 		float snapLength = Gizmo::snap(length, SnapSettings::scaleSize());
 		diff = diff.normalized() * snapLength;
 	}
 
+	// PRESERVE THE RATIO ON AN AXIS HANDLE (SCALE-LOCK-1): the node's own lock,
+	// or Shift held for this gesture. The CENTRE handle is untouched — it has
+	// always been the uniform one, and it is uniform in the additive sense the
+	// drag maths give it (the same length onto all three), which is a different
+	// gesture and not one this lane changes.
+	const bool uniformAxis =
+		draggedHandle->axis != GizmoAxis::Center &&
+		(selectedNode->getScaleLock() || currentDragModifiers().testFlag(Qt::ShiftModifier));
+
 	switch (draggedHandle->axis)
 	{
 	case GizmoAxis::Center: {
 		float length = diff.length();
-
-		// determine whether or not to invert scale
-		//iris::Vec3 curDir = (slidingPos - nodeStartPos).normalized();
-		//length = iris::Vec3::dotProduct(curDir, hitDir) > 0 ? length : -length;
-
 		diff = iris::Vec3(length, length, length);
 		handleVisualScale = iris::Vec3(
 			qAbs(qBound(-2.0f, 1.0f + length *0.1f, 2.0f)),
@@ -272,7 +280,21 @@ void ScaleGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 		break;
 	}
 
-	selectedNode->setLocalScale(startScale + diff);
+	if (uniformAxis) {
+		// THE RATIO IS TAKEN AGAINST THE SCALE AT DRAG START, not against the
+		// last frame's: the handle's own value is startScale + diff at every
+		// tick, so a ratio measured from the start is stable, is exactly what
+		// the panel's fields would compute for the same end value, and cannot
+		// compound per frame. Zero and negative channels follow the documented
+		// rules in iris::scalelock (a channel that was 0 has no ratio; a
+		// negative one keeps its sign).
+		const int axis = draggedHandle->axis == GizmoAxis::X ? 0
+		               : draggedHandle->axis == GizmoAxis::Y ? 1 : 2;
+		selectedNode->setLocalScale(iris::scalelock::apply(
+			startScale, axis, startScale[axis] + diff[axis], true));
+	} else {
+		selectedNode->setLocalScale(startScale + diff);
+	}
 	// The rest of the selection follows the primary's delta (one place,
 	// EDITOR_MULTISELECT_SPEC §2.4); a no-op when nothing else is selected.
 	applyGroupDelta();
@@ -291,8 +313,17 @@ bool ScaleGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 	return false;
 }
 
-// returns hit position of the hit handle
-ScaleHandle* ScaleGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPos)
+// The handle under the ray, and where on it the ray landed.
+//
+// THE DISTANCE IS THE CANDIDATE'S (found by the lead's review of SCALE-LOCK-1):
+// this measured `hitPos` — the caller's OUT parameter, which still held
+// whatever the caller passed in and then the previous winner's hit — instead of
+// `hit`, the point just computed. After the first hit, dist == closestDistance
+// exactly, so `<` was false for every later candidate and the FIRST handle in
+// construction order (X, then Y, then Z) always won a contested ray, however
+// much nearer another one was. The centre still takes precedence over all: it
+// is drawn on top of the three axes' shared origin.
+ScaleHandle* ScaleGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPosOut)
 {
 	ScaleHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
@@ -300,12 +331,12 @@ ScaleHandle* ScaleGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris
 	for (auto i = 0; i< handles.size(); i++)
 	{
 		if (handles[i]->isHit(rayPos, rayDir)) {
-			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);// bad, move hitPos to ref variable
-			auto dist = hitPos.distanceToPoint(rayPos);
+			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);
+			auto dist = hit.distanceToPoint(rayPos);
 			if (dist < closestDistance) {
 				closestHandle = handles[i];
 				closestDistance = dist;
-				hitPos = hit;
+				hitPosOut = hit;
 
 				// center takes precedence over all
 				if (closestHandle->axis == GizmoAxis::Center)

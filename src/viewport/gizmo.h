@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QList>
 #include <QPointF>
 #include <QString>
+#include <Qt>
 #include <QVector>
 #include "irisgl/irisglfwd.h"
 
@@ -234,11 +235,6 @@ protected:
 	/// The unit THIS call measures in. Pixel unless a caller says otherwise —
 	/// the desktop's presses, drags and screenshots are untouched by stage 2.
 	GizmoPickSpace pickSpaceNow = GizmoPickSpace::Pixel;
-	/// THE MODIFIER FROM A HOST WITH NO KEYBOARD (`menu` held, owner answer
-	/// 10). The three drags ask snapHeld(), which is this OR the Ctrl key —
-	/// one question, so a wearer and a mouse cannot mean different things by
-	/// "snap".
-	bool snapHeldExternally = false;
 	/// A GESTURE THAT LOST ITS INPUT IS NOT A TRANSFORM (VR_INPUT_SPEC §5.4:
 	/// focus loss cancels). Set for the length of cancelDragging() and read by
 	/// createUndoAction, which then puts everything back and pushes NOTHING —
@@ -270,6 +266,8 @@ protected:
 	QVector<MemberStart> groupStart;
 	iris::Vec3 pivotStartPos, pivotStartScale;
 	iris::Quat pivotStartRot;
+	/// The modifiers the current gesture is driven with (setDragModifiers).
+	Qt::KeyboardModifiers dragModifiers = Qt::NoModifier;
 
 	/// Snapshots every member's start transform (called by setInitialTransform,
 	/// which every subclass's startDragging already calls).
@@ -362,11 +360,11 @@ public:
 		GizmoPickSpace previous;
 	};
 
-	/// IS THE SNAP MODIFIER DOWN? Ctrl on the desk, `menu` held in the headset
-	/// (owner answer 10) — the three drags ask this and never the keyboard
-	/// directly, so the two hosts cannot disagree about snapping.
-	void setSnapHeld(bool held) { snapHeldExternally = held; }
-	bool snapHeld() const;
+	// THE SNAP MODIFIER IN THE HEADSET is `menu` held (owner answer 10), and it
+	// reaches the drags by the SAME door the desk's Ctrl does: the host pushes
+	// setDragModifiers(Qt::ControlModifier) while `menu` is down and NoModifier
+	// otherwise (SCALE-LOCK-1's one-source rule; the VR-GIZMO-1 merge folded the
+	// lane's separate snapHeld() into it).
 
 	/// PUT EVERYTHING BACK AND RECORD NOTHING (VR_INPUT_SPEC §5.4). The drag
 	/// ends exactly as endDragging() ends it — the subclass's own bookkeeping,
@@ -434,6 +432,19 @@ public:
 	// the transform is calculated based on the transform's space (local or global)
 	virtual iris::Mat4 getTransform();
 	virtual bool isHit(iris::Vec3 rayPos, iris::Vec3 rayDir);
+
+	// ---- THE GESTURE'S MODIFIERS (SCALE-LOCK-1) --------------------------
+	//
+	// The viewport hands the gizmo the modifiers carried by the very mouse
+	// event that is driving the drag, on the press and on every move, for the
+	// same reason DragSpinBox reads them off its own events: a key pressed or
+	// released mid-drag then takes effect for the remainder of the gesture, and
+	// a test can drive a modified drag without a keyboard (QApplication::
+	// keyboardModifiers() reads the real one and cannot be synthesised).
+	// Today only the scale gizmo reads it — Shift = scale all three axes by
+	// this drag's ratio.
+	void setDragModifiers(Qt::KeyboardModifiers mods) { dragModifiers = mods; }
+	Qt::KeyboardModifiers currentDragModifiers() const { return dragModifiers; }
 
 	virtual bool isDragging() = 0;
 	virtual void startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) = 0;
