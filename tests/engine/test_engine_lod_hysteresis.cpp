@@ -44,14 +44,16 @@
 //   3. THE BAND IS BOUNDED: a bias genuinely past it switches, and the way back
 //      to the finest level is exact.
 //
-// THE OFFSCREEN LATCH. A band is only ever given to a view a person watches
+// THE OFFSCREEN OPT-IN. A band is only ever given to a view a person watches
 // over time (OgreView::chainDesc), and `View::readPixels` refuses an on-screen
 // view — its target is a swapchain. So the one kind of view whose pixels a test
-// can read is the one kind that has no band, and `JAHSHAKA_LOD_HYSTERESIS_OFFSCREEN`
-// exists for this suite: it grants the band to offscreen views too. It is set
-// here, before Engine::create, and nothing else in the tree sets it — which is
-// also why every thumbnail, preview, screenshot and pixel suite keeps taking
-// the exact level its own value asks for.
+// can read is the one kind that has no band, and
+// `View::setLodHysteresisOffscreen(true)` exists for this suite: it grants the
+// band to THIS view, right after it is created (LOD-LATCH-1, 2026-09-18 — it
+// used to be the process-wide env latch JAHSHAKA_LOD_HYSTERESIS_OFFSCREEN, now
+// deleted). Nothing else in the tree asks for it — which is why every
+// thumbnail, preview, screenshot and pixel suite keeps taking the exact level
+// its own value asks for.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -176,10 +178,6 @@ static size_t differingInside(const Image &a, const Image &b,
 
 int main()
 {
-    // See the file header: the band is a watched view's, and only an offscreen
-    // view's pixels can be read. One latch, set before the engine exists.
-    setenv("JAHSHAKA_LOD_HYSTERESIS_OFFSCREEN", "1", 1);
-
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -191,6 +189,9 @@ int main()
     gEngine = engine.get();
 
     gView = gEngine->createOffscreenView("lodband", kSize, kSize, Colour(0.02f, 0.02f, 0.03f));
+    // See the file header: the band is a watched view's, and only an offscreen
+    // view's pixels can be read. This view asks for it, and nothing else does.
+    if (gView) gView->setLodHysteresisOffscreen(true);
     Scene *scene = gEngine->createScene("lodband");
     if (!gView || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     gView->setScene(scene);
