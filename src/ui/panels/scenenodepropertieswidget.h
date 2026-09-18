@@ -88,10 +88,10 @@ public:
     Tab propertiesTab() const { return currentTab; }
     /// Raise a tab. The tab decides WHICH BLADES THE ONE LAYOUT HOLDS — there
     /// is no second page widget and no reparenting, so the selection-cost law
-    /// (blades are permanent children, see clearLayout) is untouched.
+    /// (blades are permanent children, see applyMountDiff) is untouched.
     void setPropertiesTab(Tab tab);
     /// HOW MANY TIMES THE COLUMN HAS BEEN (RE)MOUNTED — every applyTab, i.e.
-    /// every clearLayout + mount of a blade set. It is here because "how much
+    /// every mount of a blade set. It is here because "how much
     /// work does one pick cost" is an assertion the cost suites have to be able
     /// to make: a pick that crossed tabs used to mount TWICE (F2, second reader
     /// 2026-09-15) and nothing about that was visible from outside. Read by
@@ -123,6 +123,7 @@ public:
         bool pending = false;
         bool deferredHidden = false;
         bool visible = false;
+        int attached = 0;
     };
     Stats propertiesStats() const;
     /// The rows the named tab has MOUNTED, counted without building anything:
@@ -221,18 +222,21 @@ private:
 
 	StudioServices *services = nullptr;
 	Project *project = nullptr;
-    void clearLayout(QLayout*);
 
     /// The blades this panel owns permanently (everything built in the
     /// constructor). SELECTION COST, 2026-09-08: a selection change moves
     /// blades in and out of the LAYOUT and never in and out of the widget
-    /// HIERARCHY — see clearLayout()'s comment for the regression that shape
+    /// HIERARCHY — see applyMountDiff()'s comment for the regression that shape
     /// fixes.
     QVector<QWidget *> bladeWidgets() const;
     /// Makes a blade a permanent hidden child of this panel. Called once per
     /// blade, ever.
     void adoptBlade(QWidget *blade);
-    /// Adds an adopted blade to the layout and shows it.
+    /// NAMES a blade as part of the set this mount wants, in order. It does
+    /// NOT touch the layout: mountNow() collects the whole wanted list and
+    /// then applies the DIFFERENCE against what is already mounted
+    /// (applyMountDiff), because taking every blade off the layout and showing
+    /// it again was 4.2 of the 4.9 ms a pick cost (SELECT-COST-1).
     void mount(QWidget *blade);
 
 private:
@@ -252,7 +256,7 @@ private:
     void watchDock();
     /// The dock watchDock() last installed the filter on.
     QPointer<class QDockWidget> watchedDock;
-    /// The mount itself — clearLayout, the tab's blade set, the filter. Never
+    /// The mount itself — the tab's blade set, the layout diff, the filter. Never
     /// called directly by a selection: applyTab() coalesces the calls and this
     /// runs once per turn.
     void mountNow();
@@ -271,6 +275,9 @@ private:
     void invalidateWorldBinding() { worldBoundScene.clear(); }
     void mountWorldBlades();
     void mountSelectionBlades();
+    /// Makes the layout hold exactly `wantedBlades`, in order, moving only
+    /// what differs from what it holds now (see mount()).
+    void applyMountDiff();
     /// The scene the World tab binds to, whatever is selected.
     QSharedPointer<iris::Scene> worldScene() const;
 
@@ -301,6 +308,14 @@ private:
     /// blades are mounted. Paid at that tab's next applyTab.
     bool restorePending[2] = { false, false };
     QVector<QPointer<QWidget>> mountedBlades[2];
+    /// The set the mount in progress has asked for, in order (mount() appends;
+    /// applyMountDiff consumes). A member rather than a local because every
+    /// blade branch calls mount() through several frames of call stack.
+    QVector<QWidget *> wantedBlades;
+    /// How many blades the last mount actually attached to the layout and
+    /// showed — zero when the set did not change, which is the whole point.
+    /// Reported by `editor.propertiesStats().attached`.
+    int lastAttached = 0;
 
     /// See mountCount().
     int mounts = 0;
