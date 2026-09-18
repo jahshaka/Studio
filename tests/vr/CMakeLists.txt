@@ -244,6 +244,48 @@ set_tests_properties(vr.input_session PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
 
+# ---------------------------------------------------------------------------
+# vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
+# SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
+#
+# Split in two like perf.capture_bundle, and for the same reason: the app
+# RECORDS (vr_frame_budget.js drives a session at the Quest Pro's eye size and
+# writes two capture bundles) and a reader JUDGES what it wrote, because the
+# scripting engine has no file access. The reader prints the budget lines the
+# ledger wants and asserts only the rig-independent one — no frame over three
+# times the run's own median. Its header says why a red against 11.1 ms on an
+# Xvfb rig with free clocks would be a red about the rig.
+set(_vr_budget_home "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-home")
+set(JAH_VR_BUDGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/vr-budget-bundles")
+set(JAH_VR_BUDGET_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vr_frame_budget.js.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js" @ONLY)
+
+add_executable(test_vr_frame_budget "${CMAKE_CURRENT_SOURCE_DIR}/test_vr_frame_budget.cpp")
+set_target_properties(test_vr_frame_budget PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_vr_frame_budget PRIVATE Qt6::Core)
+
+add_test(NAME vr.frame_budget
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_budget.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js"
+                 "$<TARGET_FILE:test_vr_frame_budget>" "${JAH_VR_BUDGET_DIR}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.frame_budget PROPERTIES
+    LABELS "scripting"
+    # It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and
+    # imports Showroom 2 on the way, on a rig whose present copy is 10-27 ms a
+    # frame: this is the longest VR suite there is.
+    TIMEOUT 900
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    # JAHSHAKA_PERF_ROOT is what lets the script's `out` land in the suite's own
+    # scratch: a capture's `out` is confined to the capture root, and the
+    # default root is under the user's home.
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_budget_home};JAHSHAKA_DATA_ROOT=${_vr_budget_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${JAH_VR_BUDGET_DIR}")
+
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600

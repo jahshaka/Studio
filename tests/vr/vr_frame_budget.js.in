@@ -1,0 +1,85 @@
+// The APP half of vr.frame_budget (lane V1-RIG item 5, PHOTON_SPEC §11 item 8 /
+// the ledger's "the 90 Hz bar's rig arms"). It RECORDS; test_vr_frame_budget.cpp
+// reads what it wrote and judges it — the scripting engine has no file access.
+//
+// WHAT IT RENDERS, and why in this shape. Two scenes in ONE session-per-arm at
+// the QUEST PRO'S EYE SIZE (2160x2376 per eye, so a 4320x2376 stereo target,
+// 10.26 Mpx — five times a desktop 1080p), at Medium, the tier the headset is
+// expected to run: the DEFAULT scene, which is the floor of what a frame can
+// cost, and SHOWROOM 2, which is the shipped scene that costs the most. Each
+// arm settles first — a suite that measures the UI thread in the first seconds
+// of a process is measuring the shader/PSO compile storm and not its subject
+// (CLAUDE.md) — and then records a fixed number of STEPPED frames, never a wall
+// clock (the engine has no wall clock; a settle in seconds measures nothing).
+//
+// IT ASSERTS NO BUDGET, and the C++ half explains why: on this rig the Xvfb
+// present copy adds 10-27 ms to every frame and the GPU sits at whatever clock
+// nobody locked, so a red against 11.1 ms would be a red about the rig. The
+// budget is a REPORT line; the assertion is a HITCH DETECTOR, which is
+// rig-independent because it is a ratio.
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function log(m) { console.log("VRBUDGET " + m); }
+
+// The bundles go into the CAPTURE ROOT, which the suite points at its own
+// scratch directory through JAHSHAKA_PERF_ROOT: `out` is confined to that root
+// by design (a capture creates directories and truncates files in whatever it
+// is pointed at), so the path here is a RELATIVE name inside it.
+var SHOWROOM = "@JAH_VR_BUDGET_SHOWROOM@";
+var EYE_W = 2160, EYE_H = 2376;
+var SETTLE = 240, RECORD = 200;
+
+var avail = vr.available();
+assert(avail.available === true, "a runtime is here: " + JSON.stringify(avail));
+// THE RUNTIME'S HIDDEN-AREA MESH, reported (item 3): Monado's simulated HMD
+// offers no visibility mask at all, so the suite RECORDS what this runtime
+// offers rather than asserting a saving the rig cannot produce.
+log("runtime " + avail.runtime + " visibilityMask=" + avail.visibilityMask +
+    " recommended eye " + avail.eyeSize[0] + "x" + avail.eyeSize[1] + " at " + avail.refreshHz + " Hz");
+
+function arm(label) {
+    world.photon({ enabled: true, tier: "medium" });
+    editor.frame(60);
+    var ok = vr.begin({ eyeWidth: EYE_W, eyeHeight: EYE_H });
+    assert(ok === true, label + ": vr.begin -> " + ok + " (" + app.lastError() + ")");
+    var s = vr.state();
+    assert(s.eyeSize[0] === EYE_W && s.eyeSize[1] === EYE_H,
+           label + ": the eyes render at " + s.eyeSize[0] + "x" + s.eyeSize[1]);
+    // THE CHAIN IS THE VR COLUMN of the tier table while a session drives GI
+    // (V1-RIG item 4) — the thing being measured is the headset's chain, so the
+    // suite says which chain that is rather than assuming.
+    editor.frame(SETTLE);
+    var gi = world.giStatus();
+    assert(gi.cascadeProfileVr === true, label + ": the chain is the VR column");
+    log(label + " chain " + gi.cascades.length + " cascades: " +
+        gi.cascades.map(function (c) { return c.halfSize + "/" + c.resolution + "@" + c.step; }).join(" "));
+    log(label + " ifdBound=" + gi.ifdBound + " ifdProbes=" + gi.ifdProbes);
+
+    var cap = perf.capture({ seconds: 900, out: label, label: label });
+    assert(cap.started === true, label + ": perf.capture started");
+    editor.frame(RECORD);
+    var p = perf.stop();
+    assert(p.stopped === true && p.frames > RECORD / 2,
+           label + ": " + p.frames + " frames recorded into " + p.path);
+    log(label + " bundle " + p.path + " frames " + p.frames);
+    vr.end();
+    editor.frame(30);
+}
+
+// ---- ARM 1: the default scene -------------------------------------------
+var guid = project.create("VR frame budget " + Date.now());
+assert(guid.length > 10, "project.create -> " + guid);
+arm("default");
+
+// ---- ARM 2: Showroom 2, the most expensive shipped scene ----------------
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid && imported.guid.length > 10,
+       "importArchive(Showroom 2) -> " + (imported ? imported.guid : "null"));
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+assert(scene.nodes().length >= 5,
+       "Showroom 2 opened with its content (" + scene.nodes().length + " nodes)");
+arm("showroom");
+
+log("done");
