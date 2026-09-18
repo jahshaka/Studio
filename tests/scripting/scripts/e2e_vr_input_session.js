@@ -429,6 +429,93 @@ var vAfter = vr.interactionMode().rig;
 assert(dist2(vAfter, vBefore) > 0.5, "and the rig went with it ("
        + dist2(vAfter, vBefore).toFixed(3) + " m)");
 
+// ---- 5b. THE TELEPORT MOVES THE WEARER (VR_INPUT_SPEC §6 row L4) --------
+//
+// THE HALF `scripting.e2e.vr_teleport` CANNOT ASSERT, for its own stated
+// reason: with no session there is no rig, so that suite proves the arc, the
+// landing, the refusals and the DRAWING and then asserts the refusal. Here
+// there is a rig, so the wearer actually arrives — and the two claims that
+// matter are the ones only a rig can show: they arrive OVER the landing point,
+// and they arrive FACING THE WAY THEY ALREADY FACED (a teleport that also spun
+// the room is the fastest way to make somebody sick).
+//
+// The arithmetic is `vr.grab_maths`'s teleportedTo; the binding is the DOMINANT
+// stick pushed forward, which with the injected route is one sample.
+/// ONE FRAME WITH THE DOMINANT (right) HAND aiming a throw. Three metres out in
+// x so the arc is nowhere near the cube this file added at the origin.
+function rightThrow(stickY) {
+    var pose = { x: 3, y: 1.4, z: 0 };
+    var wrote = vr.inject("right", { valid: true, aim: pose, grip: pose,
+                                     select: 0, grab: 0, menuPressed: false,
+                                     stick: { x: 0, y: stickY } });
+    editor.frame(1);
+    assert(wrote === true && vr.step() === true,
+           "one frame with the dominant stick at y = " + stickY);
+}
+
+rightThrow(1);
+var arc = vr.inputState().teleport;
+console.log("the armed arc, in a live session: " + JSON.stringify(arc));
+assert(arc.armed === true, "the dominant stick forward arms the arc in a live session");
+assert(arc.landed === true && arc.valid === true, "it lands on the floor plane, standably");
+assert(near(arc.landing.x, 3, 1e-3) && near(arc.landing.y, 0, 1e-3)
+       && near(arc.landing.z, -5.3425, 5e-3),
+       "at the level throw's own 5.343 m: (3, 0, -5.343)");
+// THE DRAWING, WHICH ONLY A LIVE SCENE CAN SHOW: every piece of the curve is a
+// line node in the world, on both helper channels (the eyes and the desktop
+// editor's picture, and no capture), with the landing ring at the end.
+assert(arc.drawn === arc.points - 1 && arc.drawn >= 2,
+       "and every piece of the curve is drawn in the world (" + arc.drawn + " line nodes)");
+assert(arc.marker === true, "with the landing ring standing on the landing");
+
+var rigBefore = vr.interactionMode().rig;
+var headBefore = vr.state().head;
+var eyeHeight = headBefore.y - rigBefore.y;
+console.log("      before the throw: rig (" + rigBefore.x.toFixed(2) + ", "
+            + rigBefore.y.toFixed(2) + ", " + rigBefore.z.toFixed(2) + ") yaw "
+            + rigBefore.yaw.toFixed(2) + ", the head " + eyeHeight.toFixed(3)
+            + " m above its floor");
+rightThrow(0);
+var arcAfter = vr.inputState().teleport;
+var rigAfter = vr.interactionMode().rig;
+// ONE RENDERED FRAME BEFORE THE HEAD IS BELIEVED, and it is the session's own
+// rule rather than a settle: `vrStatus().headPosition` is filled by
+// `xrLocateViews` INSIDE the frame, so the head a host reads between frames is
+// the one the last frame located — the rig has already moved, the head has not
+// yet been re-composed through it. (Measured here: the rig read (3.15, 0.00,
+// -5.31) immediately and the head still read its pre-teleport (1.08, 5.03,
+// 10.15).) Counting a frame, never waiting a clock.
+editor.frame(1);
+var headAfter = vr.state().head;
+console.log("      after it: rig (" + rigAfter.x.toFixed(2) + ", " + rigAfter.y.toFixed(2)
+            + ", " + rigAfter.z.toFixed(2) + ") yaw " + rigAfter.yaw.toFixed(2)
+            + ", the head at (" + headAfter.x.toFixed(2) + ", " + headAfter.y.toFixed(2)
+            + ", " + headAfter.z.toFixed(2) + ")");
+assert(arcAfter.armed === false, "letting the stick go took the landing");
+assert(arcAfter.drawn === 0 && arcAfter.marker === false,
+       "...and took the curve out of the world");
+assert(arcAfter.teleports === 1, "one teleport happened");
+assert(near(headAfter.x, arc.landing.x, 0.02) && near(headAfter.z, arc.landing.z, 0.02),
+       "THE WEARER IS STANDING ON THE LANDING POINT: the head is over (3, -5.343)");
+assert(near(headAfter.y, arc.landing.y + eyeHeight, 0.02),
+       "at the same height above their floor as before (" + eyeHeight.toFixed(3) + " m)");
+assert(near(rigAfter.yaw, rigBefore.yaw, 1e-3),
+       "and facing exactly the way they already faced — a teleport does not turn anybody");
+
+// AND THE VERB DOES THE SAME THING, to a named place (no arc, no slope test —
+// a script that says where means it).
+assert(vr.teleport({ to: { x: -4, y: 0, z: 7 } }) === true,
+       "vr.teleport({to}) stands the wearer at a named point");
+editor.frame(1);                        // ...and the frame that re-locates the head
+var headNamed = vr.state().head;
+assert(near(headNamed.x, -4, 0.02) && near(headNamed.z, 7, 0.02),
+       "...and the head is over it: (" + headNamed.x.toFixed(2) + ", "
+       + headNamed.z.toFixed(2) + ")");
+assert(near(vr.interactionMode().rig.yaw, rigBefore.yaw, 1e-3), "still facing the same way");
+assert(vr.inputState().teleport.teleports === 2, "two teleports, counted");
+assert(vr.inject("right") === true, "the aiming hand is withdrawn");
+editor.frame(1);
+
 // ---- 6. ENDING THE SESSION REMOVES THE INTERACTION ----------------------
 assert(vr.end() === true, "vr.end() ends the session");
 editor.frame(2);

@@ -78,6 +78,15 @@ public:
     Q_INVOKABLE bool grab(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool release(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap locomotion(const QVariantMap &options = QVariantMap());
+    /// TELEPORT (VR_INPUT_SPEC §6 row L4; the owner's answer 8) — one verb over
+    /// the four things a throw can be asked to do, because they are four states
+    /// of ONE gesture and the controller drives them through the same
+    /// operations: `{arm:true, hand?}` traces and shows the arc,
+    /// `{}` takes the landing it found, `{cancel:true}` puts it away, and
+    /// `{to:{x,y,z}}` stands the wearer at a named point with no arc and no
+    /// refusal (what a script means when it names a place). The READ is
+    /// `vr.inputState().teleport`.
+    Q_INVOKABLE bool teleport(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap interactionMode();
     /// THE WEARER'S GIZMO (VR_INPUT_SPEC §5.2, phase 4b stage 2) — a READ: the
     /// mode, the handle under the aim ray, whether a handle is being dragged,

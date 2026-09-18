@@ -351,6 +351,249 @@ int main()
               "...and a square-gated diagonal is clamped to 1, never 1.41");
     }
 
+
+    // ---- 12. TWO HANDS: THE SPAN IS THE SIZE -----------------------------
+    //
+    // Hands 0.5 m apart about (0,1,0), object one metre in front of the
+    // midpoint. Spread the palms to a metre and everything about the object
+    // doubles AWAY FROM THE MIDPOINT: the offset (0,0,1) becomes (0,0,2), so
+    // the object stands at (0,1,2), and the factor handed back is exactly 2.
+    {
+        const vrgrab::Pose l0{ iris::Vec3(-0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r0{ iris::Vec3(0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose l1{ iris::Vec3(-0.5f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r1{ iris::Vec3(0.5f, 1, 0), iris::Quat() };
+        const vrgrab::Pose node0{ iris::Vec3(0, 1, 1), iris::Quat() };
+        float scale = 0.0f;
+        const vrgrab::Pose out = vrgrab::twoHandFollow(l0, r0, l1, r1, node0, &scale);
+        show("the object after the palms spread 0.5 -> 1.0 m", out.position);
+        CHECK(near(scale, 2.0f), "the span's ratio IS the scale: 1.0 / 0.5 = 2");
+        CHECK(nearVec(out.position, iris::Vec3(0, 1, 2)),
+              "...and it scales about the midpoint AT THE CAPTURE: (0,1,1) -> (0,1,2)");
+        CHECK(near(vrorigin::yawDegrees(out.rotation), 0.0f, 1e-2f),
+              "a pure spread does not turn it at all");
+        // A HOLD IS A HOLD: the identity case, which is what a wearer standing
+        // still with both hands on something must see.
+        float hold = 0.0f;
+        const vrgrab::Pose still = vrgrab::twoHandFollow(l0, r0, l0, r0, node0, &hold);
+        CHECK(near(hold, 1.0f, 1e-6f) && nearVec(still.position, node0.position, 1e-5f),
+              "hands that have not moved leave it exactly where it was, at scale 1");
+    }
+
+    // ---- 13. TWO HANDS: THE MIDPOINT CARRIES IT --------------------------
+    {
+        const vrgrab::Pose l0{ iris::Vec3(-0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r0{ iris::Vec3(0.25f, 1, 0), iris::Quat() };
+        // Both palms 40 cm to the right and 10 cm up, span unchanged.
+        const vrgrab::Pose l1{ iris::Vec3(0.15f, 1.1f, 0), iris::Quat() };
+        const vrgrab::Pose r1{ iris::Vec3(0.65f, 1.1f, 0), iris::Quat() };
+        const vrgrab::Pose node0{ iris::Vec3(0, 1, 1), iris::Quat() };
+        float scale = 0.0f;
+        const vrgrab::Pose out = vrgrab::twoHandFollow(l0, r0, l1, r1, node0, &scale);
+        show("the object after the pair moved (0.4, 0.1, 0)", out.position);
+        CHECK(near(scale, 1.0f, 1e-5f), "a pure translation of the pair is no scale");
+        CHECK(nearVec(out.position, iris::Vec3(0.4f, 1.1f, 1)),
+              "the translation is the MIDPOINT'S own move: M - M0");
+    }
+
+    // ---- 14. TWO HANDS: THE AXIS' MINIMAL ROTATION -----------------------
+    //
+    // The pair starts side by side along +X and ends fore-and-aft along -Z
+    // (left hand forward). The minimal rotation carrying +X onto -Z is +90
+    // degrees about +Y, under which the object's offset (0,0,1) goes to
+    // (1,0,0) — so an object one metre in FRONT of the hands ends one metre to
+    // their LEFT, having travelled round the midpoint rather than turned in
+    // place.
+    {
+        const vrgrab::Pose l0{ iris::Vec3(-0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r0{ iris::Vec3(0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose l1{ iris::Vec3(0, 1, 0.25f), iris::Quat() };
+        const vrgrab::Pose r1{ iris::Vec3(0, 1, -0.25f), iris::Quat() };
+        const vrgrab::Pose node0{ iris::Vec3(0, 1, 1), iris::Quat() };
+        float scale = 0.0f;
+        const vrgrab::Pose out = vrgrab::twoHandFollow(l0, r0, l1, r1, node0, &scale);
+        show("the object after the pair turned 90 degrees", out.position);
+        CHECK(near(scale, 1.0f, 1e-5f), "turning the pair is not a scale");
+        CHECK(nearVec(out.position, iris::Vec3(1, 1, 0)),
+              "the axis' 90 degree turn swings it round the midpoint: (0,0,1) -> (1,0,0)");
+        CHECK(near(vrorigin::yawDegrees(out.rotation), 90.0f, 1e-2f),
+              "...and turns the object itself by the same 90 degrees");
+        // AND THE ROTATION IS THE MINIMAL ONE: no roll came out of a gesture
+        // in which neither wrist rolled.
+        const vrgrab::TwoHandStart start = vrgrab::twoHandStart(l0, r0);
+        const vrgrab::TwoHandDelta d = vrgrab::twoHandDelta(start, l1, r1);
+        CHECK(near(d.rollDegrees, 0.0f, 1e-3f),
+              "a pair that turned without rolling reports zero roll");
+    }
+
+    // ---- 15. TWO HANDS: THE ROLL (owner answer 7, "with roll") -----------
+    //
+    // THE HALF A PAIR OF POINTS CANNOT SEE. Both palms stay exactly where they
+    // are and both wrists roll 30 degrees about the line between them (+X), so
+    // the span, the midpoint and the axis are all unchanged and the minimal
+    // rotation is the identity. The object must roll 30 degrees about +X
+    // THROUGH THE MIDPOINT: its offset (0,0,1) goes to (0,-sin30, cos30).
+    {
+        const vrgrab::Pose l0{ iris::Vec3(-0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r0{ iris::Vec3(0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose l1{ iris::Vec3(-0.25f, 1, 0), pitch(30.0f) };
+        const vrgrab::Pose r1{ iris::Vec3(0.25f, 1, 0), pitch(30.0f) };
+        const vrgrab::Pose node0{ iris::Vec3(0, 1, 1), iris::Quat() };
+        const vrgrab::TwoHandStart start = vrgrab::twoHandStart(l0, r0);
+        const vrgrab::TwoHandDelta d = vrgrab::twoHandDelta(start, l1, r1);
+        std::printf("      the pair's roll = %.3f degrees\n", double(d.rollDegrees));
+        CHECK(near(d.rollDegrees, 30.0f, 1e-2f),
+              "both wrists rolled 30 degrees about the axis -> the pair's roll is 30");
+        const vrgrab::Pose out = vrgrab::twoHandFollow(start, d, node0);
+        show("the object after a 30 degree roll of the pair", out.position);
+        CHECK(nearVec(out.position, iris::Vec3(0, 1.0f - 0.5f, 0.8660254f)),
+              "...and the object rolls about the midpoint: (0,0,1) -> (0,-0.5,0.866)");
+        // ONE WRIST ROLLING IS HALF A ROLL — the gesture belongs to the pair.
+        const vrgrab::TwoHandDelta halfRoll =
+            vrgrab::twoHandDelta(start, l0, vrgrab::Pose{ r0.position, pitch(30.0f) });
+        CHECK(near(halfRoll.rollDegrees, 15.0f, 1e-2f),
+              "one wrist rolling 30 with the other still is a 15 degree roll (the average)");
+        // THE AVERAGE IS TAKEN THE SHORT WAY ROUND: +179 and -179 are 180
+        // apart from zero, not zero.
+        CHECK(near(vrgrab::averageDegrees(179.0f, -179.0f), 180.0f, 1e-3f),
+              "averageDegrees(+179, -179) is 180, not 0 (the wrap)");
+        CHECK(near(vrgrab::twistDegreesAbout(pitch(30.0f), iris::Vec3(1, 0, 0)), 30.0f, 1e-3f),
+              "twistDegreesAbout reads a 30 degree turn about its own axis as 30");
+        CHECK(near(vrgrab::twistDegreesAbout(pitch(30.0f), iris::Vec3(0, 1, 0)), 0.0f, 1e-3f),
+              "...and reads no twist at all about a perpendicular one");
+    }
+
+    // ---- 16. TWO HANDS: THE FAR PIVOT AND THE SNAPPED FACTOR -------------
+    {
+        const vrgrab::Pose l0{ iris::Vec3(-0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r0{ iris::Vec3(0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose l1{ iris::Vec3(-0.5f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r1{ iris::Vec3(0.5f, 1, 0), iris::Quat() };
+        // TEN METRES AWAY. About the hands' own midpoint a doubling would
+        // throw it to twenty metres; about its own place it grows where it
+        // stands and only the midpoint's move carries it (which is zero here).
+        const vrgrab::Pose node0{ iris::Vec3(0, 1, -10), iris::Quat() };
+        const vrgrab::TwoHandStart start = vrgrab::twoHandStart(l0, r0);
+        const vrgrab::TwoHandDelta d = vrgrab::twoHandDelta(start, l1, r1);
+        const vrgrab::Pose about0 = vrgrab::twoHandFollow(start, d, node0);
+        const vrgrab::Pose aboutSelf =
+            vrgrab::twoHandFollow(start, d, node0, node0.position);
+        show("a 10 m object doubled about the HANDS", about0.position);
+        show("...and about ITSELF", aboutSelf.position);
+        CHECK(nearVec(about0.position, iris::Vec3(0, 1, -20)),
+              "about the hands, doubling a 10 m object moves it to 20 m (the lever)");
+        CHECK(nearVec(aboutSelf.position, node0.position, 1e-5f),
+              "about its own place it does not move at all — the far arrangement");
+        // THE SNAP QUANTISES THE FACTOR, and never to nothing.
+        CHECK(near(vrgrab::snappedScale(2.13f, 0.25f), 2.25f),
+              "a factor of 2.13 snaps to 2.25 at a quarter step");
+        CHECK(near(vrgrab::snappedScale(0.02f, 0.25f), 0.25f),
+              "...and a factor below one step is ONE step, never zero");
+        CHECK(near(vrgrab::snappedScale(2.13f, 0.0f), 2.13f), "step 0 is no snap");
+    }
+
+    // ---- 17. TWO HANDS: THE HAND-OFF DOES NOT MOVE IT --------------------
+    //
+    // THE ASSERTION BEHIND "no jump" (§5.1). A gesture runs on two hands, one
+    // lets go, and the remaining hand's rigid follow is RE-CAPTURED from the
+    // object exactly where the pair left it. The first frame after the hand-off
+    // must therefore be a bit-for-bit hold — which is what this computes: the
+    // pair's answer becomes the new node0, the remaining hand's pose becomes
+    // the new hand0, and rigidFollow of an unmoved hand is the identity.
+    {
+        const vrgrab::Pose l0{ iris::Vec3(-0.25f, 1, 0), iris::Quat() };
+        const vrgrab::Pose r0{ iris::Vec3(0.25f, 1, 0), yaw(10.0f) };
+        const vrgrab::Pose l1{ iris::Vec3(-0.4f, 1.2f, -0.1f), pitch(12.0f) };
+        const vrgrab::Pose r1{ iris::Vec3(0.55f, 1.05f, 0.2f), yaw(25.0f) };
+        const vrgrab::Pose node0{ iris::Vec3(0, 1, 1), yaw(-30.0f) };
+        const vrgrab::Pose afterPair = vrgrab::twoHandFollow(l0, r0, l1, r1, node0);
+        // The left hand lets go; the right keeps holding, re-captured NOW.
+        const vrgrab::Pose held = vrgrab::rigidFollow(r1, r1, afterPair);
+        CHECK(nearVec(held.position, afterPair.position, 1e-5f),
+              "the frame after one hand lets go is a bit-for-bit hold (no jump)");
+        // ...and the hand then moves 10 cm, carrying it 10 cm, from THERE.
+        const vrgrab::Pose r2{ r1.position + iris::Vec3(0, 0.1f, 0), r1.rotation };
+        const vrgrab::Pose moved = vrgrab::rigidFollow(r1, r2, afterPair);
+        CHECK(nearVec(moved.position, afterPair.position + iris::Vec3(0, 0.1f, 0), 1e-5f),
+              "...and the one-hand follow carries on from where the pair left it");
+    }
+
+    // ---- 18. THE TELEPORT ARC: A THROWN MARKER ---------------------------
+    //
+    // THE HAND AT 1.4 M, HELD LEVEL, 10 m/s. Gravity brings the throw down to
+    // the floor in sqrt(2*1.4/9.81) = 0.5343 s, by which time it has flown
+    // 5.343 m along the aim — which is the number a wearer is judging when they
+    // point at the floor in front of them.
+    {
+        const vrgrab::Pose aim{ iris::Vec3(0, 1.4f, 0), iris::Quat() };   // down -Z
+        CHECK(nearVec(vrgrab::arcPoint(aim, 0.0f), aim.position, 1e-6f),
+              "the arc starts at the hand");
+        const float t = vrgrab::arcPlaneTime(aim, 0.0f);
+        std::printf("      a level throw reaches the floor at t = %.4f s\n", double(t));
+        CHECK(near(t, 0.53425f, 1e-4f), "a level throw from 1.4 m reaches y=0 at 0.5343 s");
+        const iris::Vec3 landing = vrgrab::arcPoint(aim, t);
+        show("the landing of a level throw", landing);
+        CHECK(near(landing.y(), 0.0f, 1e-3f), "...on the plane, to the millimetre");
+        CHECK(near(landing.z(), -5.3425f, 1e-3f), "...5.343 m along the aim");
+        // AIMED UP 45 DEGREES it reaches further, and the root taken is the
+        // DESCENDING one: an arc thrown upward crosses y=0 once, coming down.
+        const vrgrab::Pose up{ iris::Vec3(0, 1.4f, 0), pitch(45.0f) };
+        const float tUp = vrgrab::arcPlaneTime(up, 0.0f);
+        const iris::Vec3 far = vrgrab::arcPoint(up, tUp);
+        show("the landing of a 45 degree throw", far);
+        CHECK(tUp > t, "aimed up, the throw stays in the air longer");
+        CHECK(near(far.y(), 0.0f, 1e-3f), "...and still lands on the plane");
+        CHECK(near(far.z(), -11.44f, 0.01f), "...11.44 m away (v^2 sin(2*45)/g + the height)");
+        // AIMED AT THE SKY it never comes down inside the plane's own solve
+        // only when there is no plane below: from BELOW a plane with no upward
+        // speed there is no crossing at all.
+        const vrgrab::Pose down{ iris::Vec3(0, 1.4f, 0), pitch(-80.0f) };
+        CHECK(vrgrab::arcPlaneTime(down, 0.0f) > 0.0f, "aimed steeply down it lands at once");
+        CHECK(vrgrab::arcPlaneTime(aim, 5.0f) < 0.0f,
+              "a floor ABOVE a level throw is never reached (-1, not a guess)");
+    }
+
+    // ---- 19. THE LANDING'S SLOPE, AND THE RIG THAT ARRIVES ---------------
+    {
+        CHECK(vrgrab::landingAllowed(iris::Vec3(0, 1, 0)), "level ground is standable");
+        CHECK(!vrgrab::landingAllowed(iris::Vec3(1, 0, 0)), "a vertical wall is not");
+        // 44 degrees is a ramp and 46 is a wall — the line is 45 (every
+        // engine's character controller uses it).
+        const float c44 = std::cos(44.0f * 3.14159265f / 180.0f);
+        const float s44 = std::sin(44.0f * 3.14159265f / 180.0f);
+        CHECK(vrgrab::landingAllowed(iris::Vec3(s44, c44, 0)), "a 44 degree ramp is standable");
+        const float c46 = std::cos(46.0f * 3.14159265f / 180.0f);
+        const float s46 = std::sin(46.0f * 3.14159265f / 180.0f);
+        CHECK(!vrgrab::landingAllowed(iris::Vec3(s46, c46, 0)), "a 46 degree face is not");
+        CHECK(vrgrab::landingAllowed(iris::Vec3()),
+              "a face whose normal we could not measure is NOT refused");
+
+        // THE ARRIVAL. The wearer's room is at the origin, their head is 1.7 m
+        // up and half a metre to the right of it, and they teleport to
+        // (10, 0, -20). They must arrive standing on that point, facing exactly
+        // the way they already faced: the rig moves by the head's own offset,
+        // the yaw does not move at all, and the head ends over the landing.
+        vrorigin::Rig rig;
+        rig.position = iris::Vec3(0, 0, 0);
+        rig.yaw = 33.0f;
+        const iris::Vec3 head(0.5f, 1.7f, -1.0f);
+        const iris::Quat headRot = yaw(33.0f);
+        const vrorigin::Rig out =
+            vrgrab::teleportedTo(rig, head, headRot, iris::Vec3(10, 0, -20));
+        show("the rig after a teleport to (10, 0, -20)", out.position);
+        CHECK(near(out.yaw, rig.yaw, 1e-4f), "a teleport does not turn the wearer");
+        const iris::Vec3 newHead = out.position + (head - rig.position);
+        show("...and the head then stands at", newHead);
+        CHECK(nearVec(newHead, iris::Vec3(10, 1.7f, -20), 1e-4f),
+              "the head ends over the landing point, at the same height above the floor");
+        // A CROUCHING WEARER ARRIVES CROUCHING (the height is carried, not set).
+        const iris::Vec3 low(0.5f, 0.9f, -1.0f);
+        const vrorigin::Rig crouched =
+            vrgrab::teleportedTo(rig, low, headRot, iris::Vec3(10, 0, -20));
+        CHECK(near((crouched.position + (low - rig.position)).y(), 0.9f, 1e-4f),
+              "...and a crouching one arrives at 0.9 m, not stood up");
+    }
+
     std::printf(failures ? "vr.grab_maths: FAILED (%d)\n" : "vr.grab_maths: PASS\n", failures);
     return failures ? 1 : 0;
 }

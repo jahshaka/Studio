@@ -83,6 +83,25 @@ function clickSelect(o) {
     sendHand(down);
 }
 
+/// BOTH HANDS IN ONE FRAME. `vr.inject` REPLACES a hand's whole sample and
+/// leaves it standing until the next call, so a two-hand frame is two
+/// injections and then ONE step — the step last, or the interaction would run a
+/// frame on half a pair (which is exactly what it is written to survive: a hand
+/// that did not report holds the object still).
+function sendPair(l, r) {
+    var mk = function (o) {
+        var pose = { x: o.x, y: o.y, z: o.z, yaw: o.yaw || 0, pitch: o.pitch || 0 };
+        return { valid: true, aim: pose, grip: pose, select: o.select || 0,
+                 grab: o.grab || 0, menuPressed: !!o.menu,
+                 stick: { x: o.stickX || 0, y: o.stickY || 0 }, focused: true };
+    };
+    assert(vr.inject("left", mk(l)) === true && vr.inject("right", mk(r)) === true
+           && vr.step() === true,
+           "one two-hand frame: left (" + l.x + ", " + l.y + ", " + l.z + ")"
+           + (l.grab ? " grab" : "") + ", right (" + r.x + ", " + r.y + ", " + r.z + ")"
+           + (r.grab ? " grab" : "") + (r.menu || l.menu ? " menu" : ""));
+}
+
 project.create("vr input " + Date.now());
 
 // TWO CUBES, at known places, and the ray comes at them down -Z from in front
@@ -430,6 +449,190 @@ assert(vr.release() === true, "vr.release() commits");
 assert(editor.undoState().pushes === pushes + 1, "...one undo step, like a squeeze");
 assert(vr.release() === false, "a second release refuses");
 
+
+// ---- 9b. TWO HANDS ON ONE OBJECT (owner answer 7, with roll) -----------
+//
+// THE UPGRADE, NOT A SECOND GESTURE. A squeeze with the other hand while
+// something is held is read as "put my other hand on it": the SAME gesture
+// continues, the pair is captured, and the object does not move by so much as a
+// millimetre on the frame the count changes — which is the whole of the "no
+// jump" rule and the reason both transitions re-capture instead of computing a
+// correction. The arithmetic under all of it is `vr.grab_maths` (the span as
+// the scale, the axis' minimal rotation, the wrists' average roll, the
+// hand-off's bit-for-bit hold); what this asserts is that the gesture, the
+// document and the undo stack agree with it.
+
+node.transform(cubeA, { position: { x: 0, y: 1, z: 0 }, scale: { x: 1, y: 1, z: 1 } });
+editor.frame(1);
+editor.selectNone();
+pushes = editor.undoState().pushes;
+
+// The right hand takes hold at 0.7 m — inside arm's reach, so a NEAR grab and
+// the object rides the grips, which is what a two-hand gesture is made of.
+sendHand({ x: 0.25, y: 1, z: 1.7 });
+sendHand({ x: 0.25, y: 1, z: 1.7, grab: 1 });
+assert(vr.interactionMode().grabbing === true, "the right hand has it");
+assert(vr.interactionMode().far === false, "...as a near grab");
+
+// THE LEFT HAND JOINS. Hands at x = -0.25 and +0.25: a 0.5 m span about
+// (0, 1, 1.7).
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 1 });
+var two = vr.interactionMode();
+console.log("two-handed: " + JSON.stringify({ two: two.twoHanded, scale: two.scale,
+                                              roll: two.rollDegrees, nodes: two.nodes,
+                                              count: two.twoHands }));
+assert(two.twoHanded === true, "the off hand's squeeze UPGRADED the gesture");
+assert(two.grabbing === true, "...it is still ONE gesture");
+assert(two.twoHands === 1, "and the upgrade was counted once");
+assert(near(two.scale, 1.0, 1e-5), "the pair starts at scale 1");
+showPos("cube A on the frame the second hand arrived", cubeA);
+var atUpgrade = posOf(cubeA);
+assert(near(atUpgrade.x, 0, 1e-4) && near(atUpgrade.y, 1, 1e-4) && near(atUpgrade.z, 0, 1e-4),
+       "and the object did not move at all when the hand count changed");
+
+// SPREAD THE PALMS TO A METRE: the span doubles, so the object doubles in size
+// and its offset from the midpoint AT THE CAPTURE doubles with it — it was
+// 1.7 m in front of the hands, so it goes to 3.4 m in front of them.
+sendPair({ x: -0.5, y: 1, z: 1.7, grab: 1 }, { x: 0.5, y: 1, z: 1.7, grab: 1 });
+var spread = vr.interactionMode();
+var sized = node.transform(cubeA);
+console.log("      after the spread: scale " + spread.scale.toFixed(4) + ", the node's own "
+            + JSON.stringify(sized.scale) + " at " + JSON.stringify(sized.position));
+assert(near(spread.scale, 2.0, 1e-3), "0.5 m of span became 1.0 m: the factor is 2");
+assert(near(sized.scale.x, 2, 1e-3) && near(sized.scale.y, 2, 1e-3)
+       && near(sized.scale.z, 2, 1e-3),
+       "the object is twice the size, UNIFORMLY (a pair of hands cannot say 'wider only')");
+assert(near(sized.position.z, -1.7, 2e-3),
+       "...and it scaled about the midpoint at the capture: 1.7 m in front became 3.4 m "
+       + "(z = -1.7)");
+assert(near(sized.position.x, 0, 1e-3) && near(sized.position.y, 1, 1e-3),
+       "on the axis of the spread it stayed put (the midpoint did not move)");
+
+// BACK TO ONE: the same span again is the same size again — the factor is
+// measured against the CAPTURE, never accumulated, so a gesture that returns
+// returns exactly.
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 1 });
+assert(near(node.transform(cubeA).scale.x, 1, 1e-3),
+       "bringing the palms back to 0.5 m brings the size back to 1 exactly");
+assert(near(posOf(cubeA).z, 0, 2e-3), "...and the object back to where it was");
+
+// THE ROLL — the half a pair of POINTS cannot see (owner answer 7's "full
+// version"). Neither palm moves, so the span, the midpoint and the axis are
+// all unchanged and the minimal rotation is the identity; both wrists roll 30
+// degrees about the line between them (+X, i.e. a pitch of the grips), and the
+// object must roll 30 degrees about that line THROUGH the midpoint.
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 1, pitch: 30 },
+         { x: 0.25, y: 1, z: 1.7, grab: 1, pitch: 30 });
+var rolled = vr.interactionMode();
+var rt = node.transform(cubeA);
+console.log("      after the 30 degree roll: roll " + rolled.rollDegrees.toFixed(3)
+            + " degrees, the node at " + JSON.stringify(rt.position) + " rotation "
+            + JSON.stringify(rt.rotation));
+assert(near(rolled.rollDegrees, 30.0, 0.05),
+       "both wrists rolling 30 degrees about the axis IS a 30 degree roll of the pair");
+assert(near(rt.rotation.x, 30.0, 0.1), "the object rolled 30 degrees about that axis");
+// The offset (0,0,-1.7) rolled about +X by 30 degrees: y' = -z sin30 = 0.85,
+// z' = z cos30 = -1.4722, off the midpoint (0, 1, 1.7).
+assert(near(rt.position.y, 1.85, 5e-3) && near(rt.position.z, 0.2278, 5e-3),
+       "...about the MIDPOINT, not about itself: (0,1,0) -> (0,1.85,0.228)");
+assert(near(rolled.scale, 1.0, 1e-3), "a roll is not a scale");
+
+// ONE WRIST IS HALF A ROLL: the gesture belongs to the pair.
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 1 },
+         { x: 0.25, y: 1, z: 1.7, grab: 1, pitch: 30 });
+assert(near(vr.interactionMode().rollDegrees, 15.0, 0.05),
+       "one wrist rolled 30 with the other still is a 15 degree roll (the average)");
+
+// MENU HELD SNAPS THE FACTOR by the editor's SCALE step — the factor, never
+// the resulting size.
+assert(near(editor.setSnapSize({ scale: 0.5 }).scale, 0.5),
+       "the editor's scale snap is 0.5 for this case");
+// A 20 % spread (0.5 -> 0.6 m) is a factor of 1.2, which on a half step is 1.
+sendPair({ x: -0.3, y: 1, z: 1.7, grab: 1, menu: true },
+         { x: 0.3, y: 1, z: 1.7, grab: 1, menu: true });
+var snapped = vr.interactionMode();
+console.log("      with menu held, a 1.2 factor reads " + snapped.scale.toFixed(4));
+assert(snapped.snapping === true, "menu held snaps a two-hand gesture too");
+assert(near(snapped.scale, 1.0, 1e-3), "a factor of 1.2 on a 0.5 step snaps to 1.0");
+assert(near(node.transform(cubeA).scale.x, 1, 1e-3), "so the object's size does not budge");
+// ...and a 60 % spread is 1.6, which snaps to 1.5.
+sendPair({ x: -0.4, y: 1, z: 1.7, grab: 1, menu: true },
+         { x: 0.4, y: 1, z: 1.7, grab: 1, menu: true });
+assert(near(vr.interactionMode().scale, 1.5, 1e-3),
+       "a factor of 1.6 snaps to 1.5 — one whole step, in the factor");
+editor.setSnapSize({ scale: 0.25 });
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 1 }, { x: 0.25, y: 1, z: 1.7, grab: 1 });
+
+// ONE HAND LETS GO: the gesture CONTINUES on the other, from exactly where the
+// pair left the object, and NOTHING is committed.
+var before = posOf(cubeA);
+var commits = vr.interactionMode().commits;
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 0 }, { x: 0.25, y: 1, z: 1.7, grab: 1 });
+var one = vr.interactionMode();
+assert(one.twoHanded === false, "the left hand let go: back to one hand");
+assert(one.grabbing === true, "...and the gesture is still live");
+assert(one.commits === commits, "nothing was committed by a hand-off");
+var afterHandoff = posOf(cubeA);
+assert(near(afterHandoff.x, before.x, 1e-4) && near(afterHandoff.y, before.y, 1e-4)
+       && near(afterHandoff.z, before.z, 1e-4),
+       "and the object did not move on the hand-off either (a FRESH capture, no correction)");
+assert(editor.undoState().pushes === pushes,
+       "no undo step yet — the gesture has not ended");
+
+// THE REMAINING HAND CARRIES ON: 20 cm up is 20 cm up, from where the pair
+// left it.
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 0 }, { x: 0.25, y: 1.2, z: 1.7, grab: 1 });
+assert(near(posOf(cubeA).y, afterHandoff.y + 0.2, 2e-3),
+       "the one-hand follow carries on from there: a 20 cm lift is a 20 cm lift");
+
+// AND THE WHOLE THING IS ONE UNDO STEP — captured at the FIRST squeeze,
+// whatever happened to the hand count in between.
+sendPair({ x: -0.25, y: 1, z: 1.7, grab: 0 }, { x: 0.25, y: 1.2, z: 1.7, grab: 0 });
+assert(vr.interactionMode().grabbing === false, "the last hand let go: the gesture is over");
+assert(editor.undoState().pushes === pushes + 1,
+       "ONE undo step for a gesture that changed hands twice and scaled and rolled");
+
+// THE VERB DOES THE SAME THING (API-first): `vr.grab({hand})` on a live
+// gesture upgrades it, and `vr.release({hand})` hands it back.
+node.transform(cubeA, { position: { x: 0, y: 1, z: 0 }, scale: { x: 1, y: 1, z: 1 } });
+editor.frame(1);
+sendPair({ x: -0.25, y: 1, z: 1.7 }, { x: 0.25, y: 1, z: 1.7 });
+assert(vr.grab({ hand: "right" }) === true, "vr.grab takes hold with the right hand");
+assert(vr.grab({ hand: "left" }) === true, "...and vr.grab with the LEFT hand upgrades it");
+assert(vr.interactionMode().twoHanded === true, "the verb's gesture is two-handed");
+assert(vr.release({ hand: "left" }) === true, "vr.release with the left hand hands it back");
+assert(vr.interactionMode().twoHanded === false
+       && vr.interactionMode().grabbing === true, "...and the right hand still has it");
+assert(vr.release({ hand: "right" }) === true, "the right hand's release commits");
+assert(vr.interactionMode().grabbing === false, "and the gesture is over");
+
+// A LIGHT HAS NO SIZE (§5.1): the pair turns and carries it, and the factor is
+// 1 for it — even in a mixed selection.
+var lamp = scene.addLight("Point");
+node.transform(lamp, { position: { x: 0, y: 1, z: 0 } });
+editor.frame(1);
+editor.select(lamp);
+sendPair({ x: -0.25, y: 1, z: 1.7 }, { x: 0.25, y: 1, z: 1.7 });
+assert(vr.grab({ hand: "right" }) === true, "a squeeze takes hold of the lamp");
+assert(vr.grab({ hand: "left" }) === true, "...with both hands");
+sendPair({ x: -0.5, y: 1, z: 1.7, grab: 1 }, { x: 0.5, y: 1, z: 1.7, grab: 1 });
+var lampT = node.transform(lamp);
+console.log("      the lamp after a doubling spread: scale " + JSON.stringify(lampT.scale)
+            + " at " + JSON.stringify(lampT.position));
+assert(near(lampT.scale.x, 1, 1e-3), "the lamp is NOT resized — a light has no size");
+assert(near(lampT.position.z, 0, 2e-3),
+       "...and it is not thrown away from the midpoint either (the factor is 1 for it)");
+sendPair({ x: -0.5, y: 1, z: 1.7, grab: 0 }, { x: 0.5, y: 1, z: 1.7, grab: 0 });
+node.remove(lamp);
+editor.selectNone();
+
+// AND THE OFF HAND IS WITHDRAWN. An empty state is the "stop injecting"
+// spelling, and it matters to the cases below: with the LEFT hand still
+// reporting, swapping the dominant hand would find it aimed at a cube and the
+// hover would answer for a hand this section put there.
+assert(vr.inject("left") === true && vr.step() === true, "the left hand is withdrawn");
+assert(vr.inputState().hands[0].valid === false, "...and reports nothing again");
+
 // ---- 10. LOCOMOTION: THE OPTIONS, AND THE REFUSAL WITH NO RIG ----------
 
 var loco = vr.locomotion();
@@ -476,6 +679,12 @@ throws(function () { vr.step({ frames: 0 }); }, "frames",
 throws(function () { vr.select({ mode: "sideways" }); }, "sideways",
        "an unknown select mode throws");
 throws(function () { vr.grab({ nosuch: 1 }); }, "nosuch", "an unknown grab key throws");
+throws(function () { vr.teleport({ nosuch: 1 }); }, "nosuch",
+       "an unknown teleport key throws, naming it");
+throws(function () { vr.teleport({ to: { x: 0, q: 1 } }); }, "q",
+       "...and an unknown key inside `to` throws too");
+throws(function () { vr.teleport({ to: { x: 0 }, arm: true }); }, "not two",
+       "and saying two of the forms at once is refused rather than guessed");
 throws(function () { vr.locomotion({ turn: "spinny" }); }, "spinny",
        "an unknown turn mode throws");
 throws(function () { vr.locomotion({ snapTurnDegrees: 0 }); }, "snapTurnDegrees",
