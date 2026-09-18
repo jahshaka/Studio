@@ -104,6 +104,7 @@ public:
     Q_INVOKABLE QVariant dropPointAt(double x, double y);
     Q_INVOKABLE QVariant dropTargetAt(double x, double y);
     Q_INVOKABLE QVariantMap viewportState();
+    Q_INVOKABLE QVariantList toolbar();
     Q_INVOKABLE QVariantMap mirrorStats();
     /// THE SCENE-ERROR AREA (services/sceneissues.h). Document verbs: the store
     /// is a document-side model, so a --headless run can raise, list, clear and

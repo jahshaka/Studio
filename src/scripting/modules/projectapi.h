@@ -36,7 +36,10 @@ public:
 
     Q_INVOKABLE QString create(const QString &name);
     Q_INVOKABLE bool open(const QString &guidOrName);
-    Q_INVOKABLE bool openAsync(const QString &guidOrName);
+    Q_INVOKABLE bool openAsync(const QString &guidOrName,
+                               const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE bool openSample(const QString &name);
+    Q_INVOKABLE QStringList samples();
     Q_INVOKABLE QString openState();
     Q_INVOKABLE bool save();
     Q_INVOKABLE bool close();

@@ -32,6 +32,7 @@
 #include <cmath>
 
 #include "data/project.h"
+#include "ui/pages/projectopenmode.h"
 #include "ui/controls/itemgridwidget.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -202,6 +203,31 @@ int main(int argc, char **argv)
     }
 
     StyleSheet::setClassicThemeActive(false);
+
+    // ---- WHERE A TILE'S OPEN LANDS (owner, 2026-09-18: "wire up open in
+    // player") --------------------------------------------------------------
+    // The tile's Play control always means the Player; a PLAIN open (a
+    // double-click, the Open entry in its menu) follows the user's standing
+    // `open_in_player` preference — OFF by default, and read by nothing at all
+    // until now. The rule is ONE function so the desktop page, this suite and
+    // any future caller cannot hold different answers
+    // (src/ui/pages/projectopenmode.h).
+    //
+    // WHAT THIS DOES NOT COVER, said plainly: the click-to-space round trip. A
+    // desktop tile has no verb — it is the one open route a script cannot drive
+    // — so the preference's effect end to end is a hand check until that hole
+    // is closed.
+    {
+        using projectopen::tileOpenMode;
+        CHECK(tileOpenMode(false, false) == ProjectOpenMode::Editor,
+              "a plain tile open with 'open in player' OFF lands in the editor");
+        CHECK(tileOpenMode(false, true) == ProjectOpenMode::Player,
+              "a plain tile open with 'open in player' ON lands in the player");
+        CHECK(tileOpenMode(true, false) == ProjectOpenMode::Player,
+              "the tile's Play button always means the player");
+        CHECK(tileOpenMode(true, true) == ProjectOpenMode::Player,
+              "...and the preference cannot take that away");
+    }
 
     if (failures) std::printf("project tile: %d FAILURES\n", failures);
     else          std::printf("project tile: all checks passed\n");

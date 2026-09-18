@@ -93,7 +93,21 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
     window.show();
     app.processEvents();
 
-    if (!headless) {
+    // A WINDOWED SCRIPT RUN SHOWS THE EDITOR PAGE, so a script has a live
+    // viewport from its first line — and that is a difference from the boot a
+    // PERSON gets, which lands on the Desktop page and shows the editor only
+    // when they go there. `JAHSHAKA_TEST_NO_EDITOR_BOOT=1` asks for the
+    // person's shape (SMOKE-FIX-1's fix round, F3's sibling): the window is up
+    // on the desktop, the engine is running, and NOTHING has shown the editor
+    // page — which is the only state in which "the Player page is what built
+    // the editor's engine scene" can be observed at all, and the state the
+    // owner's `--vr` smoke was actually in. A run that asks for it gets no
+    // editor viewport until it opens one, so `editor.frame()` and everything
+    // else that needs the editor's window refuses until then: only a suite
+    // whose subject IS that boot should ask.
+    const bool noEditorBoot = qEnvironmentVariableIntValue("JAHSHAKA_TEST_NO_EDITOR_BOOT") > 0;
+    const bool editorBoot = !headless && !noEditorBoot;
+    if (editorBoot) {
         QString why;
         if (!window.beginEngineSelftest(why)) {
             std::fprintf(stderr, "script: %s\n", qPrintable(why));
@@ -129,7 +143,7 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
             rc = qBound(0, result.value.toInt(), 255);
     }
 
-    if (!headless) window.endEngineSelftest();
+    if (editorBoot) window.endEngineSelftest();   // symmetrical with the begin above
     return finalizeAppExit(rc);
 }
 

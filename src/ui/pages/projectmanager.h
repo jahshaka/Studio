@@ -20,7 +20,10 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QWidget>
 
+#include <optional>
+
 #include "irisgl/import/meshprewarm.h"
+#include "ui/pages/projectopenmode.h"
 
 // No assimp here: the project manager stopped parsing models when the import
 // pipeline landed (ASSET_PIPELINE_SPEC §3.2.3 — see projectmanager.cpp's
@@ -128,6 +131,26 @@ public slots:
     // public for the scripting API (app.desktop(n))
     void switchDesktop(int desktop);
 
+public:
+    /// THE SAMPLE BROWSER'S OPEN, AS A VERB (API-first, SCRIPTING_SPEC §2.3 —
+    /// `project.openSample(name)`). `name` is the sample's base name, which is
+    /// also its archive's file name, in either shipped set: the Jahshaka
+    /// samples (scenes/<name>.zip) or our ports of Ogre's (scenes/ogre/<name>.zip,
+    /// matched on the catalog's base name OR its display title). The dialog's
+    /// tiles call this too, so the browser and a script take the same road.
+    ///
+    /// Imports the archive if the library has never seen it and then opens it
+    /// IN THE EDITOR — a sample is something to look at and edit; the Player is
+    /// a separate statement (`app.space("player")`, the tile's Play button).
+    /// Returns false with `why` filled when there is no such sample.
+    bool openSampleByName(const QString &name, QString *why = nullptr);
+    /// The one route behind every sample tile and openSampleByName: import the
+    /// archive and open the world it carries in the editor.
+    bool openSampleArchive(const QString &archivePath, QString *why = nullptr);
+    /// Every sample this tree ships, by base name (both tabs) — what
+    /// openSampleByName resolves against, and what its refusal lists.
+    static QStringList sampleNames();
+
 protected slots:
     void openSampleProject(QListWidgetItem*);
     void newProject();
@@ -173,7 +196,6 @@ protected slots:
 
 private:
     friend DynamicGrid;     // is this going to be a problem?
-    bool openInPlayMode;
 
 signals:
     void fileToCreate(const QString &name, const QString &path);
@@ -182,7 +204,13 @@ signals:
     void closeProject();
 
 private:
-    void loadProjectAssets();
+    /// Hands the pointed-at project to the shell's threaded open, in the space
+    /// the ROUTE asked for. `mode` is an argument and never a member: see
+    /// ProjectOpenMode above.
+    void loadProjectAssets(ProjectOpenMode mode);
+    /// An import problem, told to whoever is actually there: a box for a person,
+    /// a log line for a DRIVEN run (see the definition).
+    void reportImportProblem(const QString &title, const QString &text);
 
     // desktops (DESKTOPS_SPEC.md + DESKTOP_SLIDER_SPEC.md)
     void setupDesktopControls();
@@ -215,10 +243,11 @@ private:
 	/// first use and parented here; its destructor joins the worker, and
 	/// ProjectArchiver::shutdownArchives cancels it at close.
 	ProjectArchiver *archiver = nullptr;
-	bool mImportShouldOpen = false;
-
-    bool isNewProject;
-    bool isMainWindowActive;
+	/// WHAT THE IN-FLIGHT IMPORT SHOULD DO WHEN IT FINISHES: open the imported
+	/// world in this space, or — absent — just add its tile to the desktop.
+	/// Written by importProjectFromFile at EVERY call, which is the whole point
+	/// of it being an optional rather than a pair of bools.
+	std::optional<ProjectOpenMode> mImportOpenMode;
 
     DynamicGrid *dynamicGrid;
     QDialog sampleDialog;

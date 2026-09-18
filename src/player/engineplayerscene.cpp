@@ -47,8 +47,33 @@ void EnginePlayerScene::setEditorScene(Scene *scene, SceneMirror *mirror)
     if (mView && mScene) attach(mView);
 }
 
+/// THE PAGE THAT CANNOT BIND, ON A BOX WHERE IT ALWAYS CAN
+/// (`JAHSHAKA_PLAYER_TEST_NO_ATTACH=1`, SMOKE-FIX-1's fix round, F3).
+///
+/// WHY A HOOK AT ALL — the same reasoning as the VR lanes' hooks in
+/// OgreVrSession.cpp. The refusal path this lane added (a Player page that
+/// cannot be bound to the editor's scene refuses, says why, and the window
+/// bounces back) is now UNREACHABLE by construction: ensureEngineScene builds
+/// the scene for whoever asks, and the only states left that could refuse are
+/// an engine with no View at all and a failed view creation — neither of which a
+/// suite can produce without breaking the process it needs in order to observe
+/// the result. Making the attach answer what a broken one would answer is the
+/// only way to test the refusal, the toast's reason reaching `app.space()`, the
+/// PlayMode undo and the PLAY START/STOP pairing.
+///
+/// It overrides nothing else: read once per process (this is a pure "what if",
+/// not a lifecycle), and unset — every ordinary run, every gate that does not
+/// ask for it — it is one getenv and a compare on a path that runs at a page
+/// switch, not per frame.
+static bool playerTestNoAttach()
+{
+    static const bool no = qEnvironmentVariableIntValue("JAHSHAKA_PLAYER_TEST_NO_ATTACH") > 0;
+    return no;
+}
+
 bool EnginePlayerScene::attach(View *view)
 {
+    if (playerTestNoAttach()) return false;
     auto engine = mEngine.lock();
     if (!engine || !view || !mScene) return false;
     // IDEMPOTENT AND CHEAP: syncFrame calls this on every frame the page is up,

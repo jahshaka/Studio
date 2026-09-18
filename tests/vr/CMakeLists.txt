@@ -348,6 +348,27 @@ set_tests_properties(vr.frame_budget PROPERTIES
     # default root is under the user's home.
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_budget_home};JAHSHAKA_DATA_ROOT=${_vr_budget_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${JAH_VR_BUDGET_DIR}")
 
+# ---------------------------------------------------------------------------
+# vr.sample_open — THE `--vr` BOOT'S PAGES (lane SMOKE-FIX-1, 2026-09-18).
+#
+# The owner smoked push #50 on a `--vr` build and reported both halves of this
+# lane there: every sample-browser open landing in the Player, and the Player's
+# window then showing the Desktop page's pixels. The desktop twin is
+# scripting.e2e.sample_open; this is the same route on the boot that reported
+# it. No session is begun — the subject is the boot, not the headset.
+set(_vr_sample_home "${CMAKE_CURRENT_BINARY_DIR}/vr-sample-open-home")
+add_test(NAME vr.sample_open
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.sample_open PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_sample_home};JAHSHAKA_DATA_ROOT=${_vr_sample_home}/.local/share/Jahshaka")
+
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600

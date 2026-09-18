@@ -97,12 +97,22 @@ void UndoService::redo()
 
 void UndoService::clear()
 {
-    // Clearing inside an open macro corrupts QUndoStack's macro accounting
+    // Clearing inside an OPEN macro corrupts QUndoStack's macro accounting
     // ("endMacro(): no matching beginMacro()"); a script run stays one undo
     // step instead, which is the scripting contract anyway. The project verbs
     // END the run's entry before closing or switching projects, so a scripted
     // close really does clear (CLOSE-2 item 2).
-    if (mMacroArmed) return;
+    //
+    // OPEN, NOT MERELY ARMED (SMOKE-FIX-1's fix round). The run's macro is
+    // armed for the whole run and OPENED only by its first push, and an armed,
+    // empty macro holds nothing: QUndoStack is perfectly willing to clear under
+    // one, and there is no entry to lose. Testing `mMacroArmed` here made every
+    // close that lands while a run is in progress but has recorded nothing yet
+    // a NO-OP — which is exactly the shape of an ASYNCHRONOUS close (the
+    // import-open path: the verb ends the run's entry, re-arms, and the close
+    // happens when the archive finishes), so a world's commands survived the
+    // world. The run still ends up as one entry either way.
+    if (mMacroOpen) return;
     mStack->clear();
     // Every command that just died appended its asset-row cleanup instead of
     // writing it (CLOSE-1). One transaction for the lot, here, where the

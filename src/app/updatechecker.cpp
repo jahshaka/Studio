@@ -21,8 +21,31 @@ For more information see the LICENSE file
 #include <QNetworkRequest>
 #include <QUrl>
 
+const char *UpdateChecker::kAutomaticChecksKey = "automatic_updates";
+
 UpdateChecker::UpdateChecker()
 {
+}
+
+bool UpdateChecker::checkForAppUpdateIfEnabled(const QVariant &storedPreference)
+{
+	// NOTHING LEAVES THE MACHINE UNLESS THE USER ASKED (owner, 2026-09-18).
+	// An absent preference is the default, and the default is OFF: an invalid
+	// QVariant converts to false, so "never set" and "set to off" answer the
+	// same — which is what a caller passing kAutomaticChecksDefault means.
+	return checkForUpdateIfEnabled(
+	    storedPreference, QUrl(Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION));
+}
+
+bool UpdateChecker::checkForUpdateIfEnabled(const QVariant &storedPreference, const QUrl &url,
+                                            int transferTimeoutMs)
+{
+	// An absent preference is the default, and the default is OFF: an invalid
+	// QVariant converts to false, so "never set" and "set to off" answer the
+	// same — which is what a caller passing kAutomaticChecksDefault means.
+	if (!storedPreference.toBool()) return false;
+	checkForUpdate(url, transferTimeoutMs);
+	return checkInFlight();
 }
 
 void UpdateChecker::checkForAppUpdate()

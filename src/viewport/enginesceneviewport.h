@@ -55,9 +55,15 @@ public:
     void setScene(iris::ScenePtr scene) override;
     iris::ScenePtr getScene() override { return mScene; }
     /// The ONE engine scene and the ONE mirror (IEditorViewport's note): the
-    /// Player page draws through these, as a second view.
+    /// Player page draws through these, as a second view. BOTH ARE PURE READS —
+    /// null until something has asked for the scene to be BUILT, which is
+    /// ensureEngineScene() and nothing else. They are read per frame.
     jahshaka::engine::Scene *engineScene() override { return mEngineScene; }
     SceneMirror *sceneMirror() override { return mMirror.get(); }
+    /// IEditorViewport: build the one scene now if it does not exist, for a
+    /// caller that draws it and cannot wait for this widget's show event (the
+    /// Player page, the editor's VR preview). See the definition.
+    bool ensureEngineScene() override;
     float measuredExposureScale() const override {
         return view() ? view()->measuredExposureScale() : 0.0f;
     }
@@ -334,7 +340,9 @@ protected:
     void viewRecreated() override;
 
 private:
-    bool ensureEngineScene();
+    /// Binds this widget's View to the scene, with the view-side state that
+    /// belongs to the editor's own picture (shadows, the VR helper channel).
+    void bindViewToScene();
     void setActiveGizmo(Gizmo *g);
 
     /// The ONE grid push (visibility, plane, spacing, floor offset, colours)
