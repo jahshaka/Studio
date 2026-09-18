@@ -59,6 +59,10 @@ public:
     Q_INVOKABLE bool inject(const QVariant &hand, const QVariantMap &state = QVariantMap());
     Q_INVOKABLE bool haptic(const QVariant &hand, double amplitude = 1.0,
                             double seconds = 0.05);
+    /// THE WEARER'S OWN HAND (stage 3): what the runtime reports for it and
+    /// what is drawn for it — {hand, tracked, count, joints:[...], drawn,
+    /// bones, profile}.
+    Q_INVOKABLE QVariantMap handJoints(const QVariant &hand);
 
     // ---- STAGE 1: THE CONTROLLERS' INTERACTION (VR_INPUT_SPEC §2.4) -------
     //

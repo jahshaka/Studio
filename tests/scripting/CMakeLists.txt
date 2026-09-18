@@ -372,6 +372,17 @@ add_script_e2e(vr_verbs e2e_vr_verbs.js)
 # makes all of it gateable on a box with no runtime at all; the arithmetic under
 # it is `vr.grab_maths` and the rig half is `vr.input_session`.
 add_script_e2e(vr_input_headless e2e_vr_input_headless.js)
+# BARE HANDS, WITH NO HEADSET AND NO HANDS (VR_INPUT_SPEC §7, phase 4b stage
+# 3) — the same injection route, and the rules only a HAND can exercise: the
+# profile is per hand, a grab follows the PINCH POINT rather than the palm
+# (asserted by moving the two independently, which no controller can do),
+# arm's reach is measured from the hand instead of along the aim ray, the
+# 26-joint skeleton round-trips through `vr.inject`/`vr.handJoints`, and a
+# hand RE-BOUND mid-gesture (a wearer picking a controller up) cancels that
+# gesture and records nothing. The pinch hysteresis is `vr.grab_maths`, the
+# DRAWING is `mirror.vr_proxies`, and the bindings parsing against a real
+# runtime is `vr.input_session`.
+add_script_e2e(vr_hands e2e_vr_hands_headless.js)
 # THE EDITOR'S GIZMO IN THE WEARER'S HANDS (VR_INPUT_SPEC §5.2, phase 4b stage
 # 2) — the same injection route, and the same claim: the gizmo a controller
 # drags is the gizmo the mouse drags. A press on a handle drags it and leaves

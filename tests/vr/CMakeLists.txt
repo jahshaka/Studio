@@ -36,7 +36,14 @@ set_target_properties(test_vr_grab PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_include_directories(test_vr_grab PRIVATE
-    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    # ...AND THE ENGINE'S PUBLIC HEADERS (stage 3): the bare-hand rules a
+    # session and a drawer BOTH apply — the profile test, the two press
+    # hysteresis bands, the bone table and a bone's transform — live in
+    # jahshaka/engine/Types.h, which is header-only maths with no Ogre, no
+    # Qt and nothing to link. Asserting them here keeps this suite what it
+    # is: the one VR test that runs on a box with no VR stack at all.
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
 target_link_libraries(test_vr_grab PRIVATE IrisGL Qt6::Gui)
 add_test(NAME vr.grab_maths COMMAND ${CMAKE_BINARY_DIR}/bin/test_vr_grab
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

@@ -86,6 +86,30 @@ assert(a.available === true, "the runtime answered: " + a.runtime);
 
 assert(vr.begin({ mirror: "none" }) === true, "vr.begin() starts a session on the editor's scene");
 
+// ---- 0a. THE BINDINGS PARSED, INCLUDING BARE HANDS ----------------------
+//
+// WHAT THIS RUNTIME CAN AND CANNOT PROVE (stage 3, VR_INPUT_SPEC §7). Monado
+// advertises XR_EXT_hand_interaction and the `ext/hand_interaction_ext` profile
+// but has NO HANDS at all on its simulated rig (`hand_tracking_supported =
+// false`, and its simulated controllers report no buttons) — so what a real
+// runtime proves here is the half that cannot be faked: every suggested-binding
+// block the engine offers PARSES and is ACCEPTED, the session survives being
+// offered them, and a pinch/grasp/aim-activate path the registry does not have
+// would fail the whole block loudly rather than silently costing the wearer
+// their hands. The pinch thresholds, the manipulation frame's feel and the
+// skeleton's look are the owner's headset's to judge; the LOGIC is
+// `scripting.e2e.vr_hands` and `vr.grab_maths`.
+var bind = vr.state().bindings;
+console.log("suggested binding blocks: " + JSON.stringify(bind)
+            + " handActions=" + vr.state().handActions);
+assert(bind.offered >= 4, "four profiles were offered (simple, touch, WMR, bare hands): "
+       + bind.offered);
+assert(bind.accepted === bind.offered,
+       "...and this runtime ACCEPTED every one of them — a refused block would mean a path "
+       + "the registry does not have (" + bind.accepted + " of " + bind.offered + ")");
+assert(vr.state().handActions === true,
+       "the action set is attached, so the controller route is live");
+
 // ---- 0. NOBODY IS WALKED WHILE THEY ARE STILL BEING PLACED --------------
 //
 // THE FIX FOR THE FABLE READ'S (a). A session begins with the host owing the

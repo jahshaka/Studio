@@ -147,6 +147,12 @@ int main(int argc, char **argv)
     st.hands[VrHandRight].valid = true;
     st.hands[VrHandRight].position = Vec3{ 0.35f, 0.9f, -1.8f };
     st.hands[VrHandRight].rotation = Quat{ 0.0f, 0.0f, 0.0f, 1.0f };
+    // WHICH MODEL A HAND WEARS IS THAT HAND'S OWN PROFILE'S ANSWER SINCE STAGE
+    // 3 (VR_INPUT_SPEC §7): a wearer can hold a controller in one hand and
+    // nothing in the other (WiVRn binds per hand), so the drawer asks the HAND
+    // and `VrStatus::profile` is only the session's summary. The fixture leaves
+    // both hands' profiles EMPTY here, which is a wearer holding two
+    // controllers the runtime has not named — the wand, exactly as before.
 
     // ---- A. the desk sees them -------------------------------------------
     mirror.setVrProxies(true, st);
@@ -329,7 +335,12 @@ int main(int argc, char **argv)
         VrStatus near = st;
         near.hands[VrHandLeft].position = Vec3{ -0.20f, 1.10f, -0.55f };
         near.hands[VrHandRight].position = Vec3{ 0.20f, 1.10f, -0.55f };
-        near.profile = "/interaction_profiles/khr/simple_controller";
+        const auto bothProfiles = [](VrStatus &v, const char *path) {
+            v.input[VrHandLeft].profile = path;
+            v.input[VrHandRight].profile = path;
+            v.profile = path;   // the session's summary, derived from the pair
+        };
+        bothProfiles(near, "/interaction_profiles/khr/simple_controller");
         mirror.setVrProxies(true, near);
         renderN(3);
         const std::vector<unsigned char> wands = img.rgba;
@@ -338,7 +349,7 @@ int main(int argc, char **argv)
         // is compiled into this suite (see its CMakeLists), so what is asserted
         // below is the resource path the shipped editor reads and not a copy of
         // it in the source tree.
-        near.profile = "/interaction_profiles/oculus/touch_controller";
+        bothProfiles(near, "/interaction_profiles/oculus/touch_controller");
         mirror.setVrProxies(true, near);
         renderN(3);
         const size_t modelMoved = differing(img.rgba, wands);
@@ -381,7 +392,7 @@ int main(int argc, char **argv)
 
         // ...AND THE WAND IS THE ANSWER FOR EVERY OTHER PROFILE, including
         // none at all: we do not know what that controller looks like.
-        near.profile = "/interaction_profiles/microsoft/motion_controller";
+        bothProfiles(near, "/interaction_profiles/microsoft/motion_controller");
         mirror.setVrProxies(true, near);
         renderN(3);
         CHECK(differing(img.rgba, wands) == 0u,
@@ -393,7 +404,7 @@ int main(int argc, char **argv)
         // of each other and the fixture is nearly symmetric, so "the models
         // swapped between the hands" could read as the same picture even when
         // the swap worked. A cone cannot.
-        near.profile = "/interaction_profiles/oculus/touch_controller";
+        bothProfiles(near, "/interaction_profiles/oculus/touch_controller");
         mirror.setVrProxies(true, near);
         renderN(3);
         const std::vector<unsigned char> touchModels = img.rgba;
@@ -413,6 +424,24 @@ int main(int argc, char **argv)
         renderN(3);
         CHECK(differing(img.rgba, touchModels) == 0u,
               "H: ...and the vendored pair comes back byte for byte");
+
+        // ...AND THE TWO HANDS ARE ASKED SEPARATELY (stage 3). A wearer with a
+        // controller in the right hand and nothing in the left is a real WiVRn
+        // session, and it used to be undrawable: the model came off the
+        // session's ONE summary string, so both hands wore whatever the summary
+        // said. The right hand keeps its Touch model here and the left, whose
+        // profile is now a HAND, draws no controller at all — its own drawing is
+        // its skeleton (case K).
+        VrStatus mixed = near;
+        mixed.input[VrHandLeft].profile = "/interaction_profiles/ext/hand_interaction_ext";
+        mirror.setVrProxies(true, mixed);
+        renderN(3);
+        const size_t oneWandGone = differing(img.rgba, touchModels);
+        std::printf("   one hand bare, one holding a Touch: %zu bytes differ from two "
+                    "models\n", oneWandGone);
+        CHECK(oneWandGone > 500u,
+              "H: A MIXED PAIR IS DRAWN PER HAND — the bare hand loses its controller while "
+              "the other keeps its model (the profile is the HAND's, not the session's)");
         mirror.setVrProxies(true, st);
         renderN(3);
     }
@@ -533,6 +562,159 @@ int main(int argc, char **argv)
         renderN(3);
         CHECK(differing(img.rgba, withProxies) == 0u,
               "J: ...and with the switch back on the picture is the two wands again");
+    }
+
+    // ---- K. THE WEARER'S BARE HANDS (VR_INPUT_SPEC §7, phase 4b stage 3) -
+    //
+    // A hand holding nothing is drawn as its own SKELETON: twenty-four segments
+    // between the twenty-six joints XR_EXT_hand_tracking reports, on the same
+    // two helper channels as the wands (in every VR eye, in the desk's picture,
+    // in no capture and in no user's screenshot). ONE unit line mesh in the
+    // whole scene carries all forty-eight of them — each node is stood at one
+    // joint, turned onto the next and scaled to the distance — so a hand that
+    // moves every frame rebuilds no geometry at all.
+    //
+    // NO RUNTIME CAN DRIVE THIS ANYWHERE IN THE PROJECT BUT THE OWNER'S QUEST:
+    // Monado's simulated rig has no hands at all. So the joints arrive here as
+    // DATA, exactly as the poses do, which is the same reason this suite needs
+    // no headset.
+    {
+        // A HAND AT ARM'S LENGTH, where 2 cm bones are pixels rather than
+        // rounding: the palm in front of the camera, the wrist below it and
+        // five fingers fanned out. Built as a real hand so that a failure
+        // prints something a person can read.
+        const auto buildHand = [](float cx, std::vector<VrPose> &out) {
+            out.assign(kVrHandJointCount, VrPose());
+            const float y = 1.10f, z = -0.50f;
+            out[0].valid = true; out[0].position = Vec3{ cx, y, z };            // palm
+            out[1].valid = true; out[1].position = Vec3{ cx, y - 0.05f, z + 0.05f };  // wrist
+            unsigned j = 2u;
+            const float dx[5] = { -0.035f, -0.015f, 0.005f, 0.025f, 0.045f };
+            const unsigned n[5] = { 4u, 5u, 5u, 5u, 5u };   // the thumb has no intermediate
+            for (unsigned f = 0; f < 5u && j < kVrHandJointCount; ++f) {
+                for (unsigned k = 0; k < n[f] && j < kVrHandJointCount; ++k, ++j) {
+                    out[j].valid = true;
+                    out[j].position = Vec3{ cx + dx[f], y + 0.025f * float(k),
+                                            z - 0.025f * float(k) };
+                }
+            }
+        };
+        std::vector<VrPose> left, right;
+        buildHand(-0.09f, left);
+        buildHand(0.09f, right);
+
+        // BOTH HANDS BARE: no controller in either, and a skeleton for each.
+        VrStatus bare = st;
+        bare.input[VrHandLeft].profile = "/interaction_profiles/ext/hand_interaction_ext";
+        bare.input[VrHandRight].profile = "/interaction_profiles/ext/hand_interaction_ext";
+        bare.input[VrHandLeft].jointsTracked = true;
+        bare.input[VrHandRight].jointsTracked = true;
+        bare.hands[VrHandLeft].position = left[0].position;
+        bare.hands[VrHandRight].position = right[0].position;
+        mirror.setVrHandJoints(VrHandLeft, left.data(), unsigned(left.size()));
+        mirror.setVrHandJoints(VrHandRight, right.data(), unsigned(right.size()));
+        mirror.setVrProxies(true, bare);
+        renderN(3);
+        const std::vector<unsigned char> hands = img.rgba;
+        const size_t handPixels = differing(hands, quiet);
+        std::printf("   two bare hands: %zu of %zu bytes moved from the no-session picture\n",
+                    handPixels, quiet.size());
+        CHECK(handPixels > 200u,
+              "K: THE WEARER SEES THEIR OWN HANDS — twenty-four segments per hand, drawn from "
+              "the joints the runtime located");
+        CHECK(mirror.vrHandBonesShown(VrHandLeft) == kVrHandBoneCount &&
+                  mirror.vrHandBonesShown(VrHandRight) == kVrHandBoneCount,
+              "K: ...all 24 bones of each, because every joint located");
+
+        // THE SAME TWO CHANNELS AS THE WANDS, node by node. A hand in a probe
+        // capture or in a user's screenshot would be the one helper in the tree
+        // that pretends to be content.
+        {
+            NodeId bones[kVrHandBoneCount] = {};
+            const unsigned count = mirror.vrHandBoneNodes(VrHandRight, bones, kVrHandBoneCount);
+            bool channels = count == kVrHandBoneCount;
+            for (unsigned b = 0; b < count; ++b)
+                channels = channels && bones[b] && target->nodeHelper(bones[b]) &&
+                           target->nodeVrHelper(bones[b]);
+            CHECK(channels,
+                  "K: every bone is on BOTH helper channels — in the desk's picture and in "
+                  "every VR eye, in no probe capture and in no user's screenshot");
+            // ONE MESH FOR ALL OF THEM (the geometry claim): the segments are
+            // transforms of a single unit line, so a moving hand allocates
+            // nothing. Asserted through the scene's own mesh count rather than
+            // by inspection.
+            NodeId leftBones[kVrHandBoneCount] = {};
+            mirror.vrHandBoneNodes(VrHandLeft, leftBones, kVrHandBoneCount);
+            bool distinct = true;
+            for (unsigned b = 0; b < count; ++b)
+                for (unsigned c = 0; c < count; ++c)
+                    if (bones[b] == leftBones[c]) distinct = false;
+            CHECK(distinct, "K: ...and the two hands' bones are different NODES (one mesh, "
+                            "forty-eight nodes)");
+        }
+
+        // A JOINT THE RUNTIME LOST TAKES ITS OWN BONES WITH IT, and nothing
+        // else: a half-occluded hand really does report some joints and not
+        // others, and a segment drawn to a joint nobody located would run to
+        // wherever it was last seen.
+        std::vector<VrPose> partial = right;
+        partial[25].valid = false;   // the little finger's tip
+        mirror.setVrHandJoints(VrHandRight, partial.data(), unsigned(partial.size()));
+        renderN(2);
+        CHECK(mirror.vrHandBonesShown(VrHandRight) == kVrHandBoneCount - 1u,
+              "K: a joint that did not locate takes its ONE bone out of the picture (23 of 24)");
+        mirror.setVrHandJoints(VrHandRight, right.data(), unsigned(right.size()));
+        renderN(2);
+        CHECK(differing(img.rgba, hands) == 0u, "K: ...and comes back byte for byte");
+
+        // THE TWO DRAWINGS ARE ALTERNATIVES. A hand that picks a controller up
+        // stops drawing fingers even while the runtime goes on reporting them
+        // (some runtimes synthesise joints for a hand holding a thing): two
+        // hands' worth of furniture in one hand's place is worse than either.
+        {
+            VrStatus held = bare;
+            held.input[VrHandRight].profile = "/interaction_profiles/oculus/touch_controller";
+            mirror.setVrProxies(true, held);
+            renderN(3);
+            CHECK(mirror.vrHandBonesShown(VrHandRight) == 0u,
+                  "K: A HAND HOLDING A CONTROLLER DRAWS NO FINGERS — the controller is its "
+                  "drawing, and the two are never both");
+            CHECK(mirror.vrHandBonesShown(VrHandLeft) == kVrHandBoneCount,
+                  "K: ...and the other hand, still bare, keeps its own");
+        }
+
+        // AND A BARE HAND IS A HAND MARKER: `vr.proxies(false)` takes the
+        // skeleton away with the wands (the ray, which is the pointing tool
+        // rather than a marker, is case J's).
+        mirror.setVrProxies(false, bare);
+        renderN(3);
+        CHECK(mirror.vrHandBonesShown(VrHandLeft) == 0u &&
+                  mirror.vrHandBonesShown(VrHandRight) == 0u,
+              "K: `vr.proxies(false)` takes the wearer's hands down too — a skeleton IS the "
+              "marker for a hand holding nothing");
+        {
+            // ...AND UNREGISTERS THEM, which is what stops the running session
+            // (the other writer, inside its own frame) putting back what the
+            // host just took away.
+            NodeId none[kVrHandBoneCount] = {};
+            CHECK(target->vrHandBoneNodes(VrHandLeft, none, kVrHandBoneCount) == 0u,
+                  "K: ...and the scene no longer knows of them, so the session cannot place "
+                  "one (the asymmetry rule: it may hide a marker, never show one)");
+        }
+        mirror.setVrProxies(true, bare);
+        renderN(3);
+        CHECK(differing(img.rgba, hands) == 0u,
+              "K: ...switched back on, the hands are the same picture byte for byte");
+
+        // AND THEY LEAVE WITH THE SESSION.
+        mirror.setVrHandJoints(VrHandLeft, nullptr, 0u);
+        mirror.setVrHandJoints(VrHandRight, nullptr, 0u);
+        mirror.setVrProxies(true, st);
+        renderN(3);
+        CHECK(mirror.vrHandBonesShown(VrHandLeft) == 0u,
+              "K: a hand with no skeleton this frame draws none");
+        CHECK(differing(img.rgba, withProxies) == 0u,
+              "K: ...and the picture is the two wands again, byte for byte");
     }
 
     // ---- ...and the proxies go when the session does ----------------------
