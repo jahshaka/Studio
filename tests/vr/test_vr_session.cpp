@@ -367,6 +367,43 @@ int main() {
                         "separate them (an asymmetric per-eye projection is unexercised "
                         "until a real headset)\n");
 
+        // ===================================================================
+        // THE TWO EYES AT worldScale 0, AND WHY THIS ARM IS RUN TWICE.
+        //
+        // It asserted BYTE-IDENTITY until the final grade started dithering
+        // its 8-bit write (lane DITHER-1). The dither is keyed on the pixel's
+        // position in the TARGET, and a stereo target carries the two eyes
+        // side by side, so the same world pixel sits at two different x
+        // coordinates and takes two different offsets — 35,000-odd of 307,200
+        // bytes, every one of them by exactly 1/255.
+        //
+        // THE BYTE-IDENTITY IS NOT GIVEN UP FOR THAT: it is what catches a
+        // half-pixel viewport error and a slightly wrong eye matrix over a
+        // smooth scene, and a one-code tolerance would wave both through. So
+        // ctest runs this binary TWICE — `vr.session` as it ships, and
+        // `vr.session_undithered` with JAHSHAKA_NO_DITHER=1 — and the arm
+        // asserts the strong thing in the second.
+        //
+        // IT HAS TO BE A SECOND PROCESS, and that is a FINDING rather than a
+        // preference: the session's View is not one the engine's frame loop
+        // drives, so chain::ViewGlobalsListener is never armed for it and the
+        // eye picture receives NO per-view push — not this switch, not
+        // exposure, not the bloom threshold. Measured here: flipping
+        // PostFxDesc::ditherOff on the session's View mid-session changes the
+        // eye picture by zero bytes, while the same switch forced from the
+        // environment before the session begins changes 35,000. Recorded for
+        // the VR-grade lane; hdr.dither exercises the in-process hook on an
+        // ordinary view, where it works.
+        //
+        // AND THE TARGET-KEYED PATTERN IS KEPT ON PURPOSE. An eye-keyed
+        // pattern — the same noise in both eyes — has ZERO DISPARITY, and a
+        // stereo pair fuses zero disparity into a surface at infinity: the
+        // noise would read as a fixed veil hanging in front of the world,
+        // head-locked. Independent noise in the two eyes has nothing to fuse,
+        // so the visual system averages it away binocularly, which is what
+        // half a code of it should do.
+        // ===================================================================
+        const bool undithered = std::getenv("JAHSHAKA_NO_DITHER") != nullptr;
         REQUIRE(vrView->readPixels(zeroImg));
         Half l, r;
         REQUIRE(splitEyes(zeroImg, l, r));
@@ -393,11 +430,20 @@ int main() {
         }
         int worst = 0;
         const size_t diff = differingBytes(l.px, r.px, &worst);
-        CHECK_MSG(diff == 0u,
-                  "AT worldScale 0 THE TWO EYES ARE BYTE-IDENTICAL: %zu of %zu bytes differ, "
-                  "worst %d/255 — both halves rendered, through per-eye matrices that agree "
-                  "when the eyes do, into exactly half the target each",
-                  diff, l.px.size(), worst);
+        if (undithered) {
+            CHECK_MSG(diff == 0u,
+                      "AT worldScale 0, UNDITHERED, THE TWO EYES ARE BYTE-IDENTICAL: %zu of "
+                      "%zu bytes differ, worst %d/255 — both halves rendered, through per-eye "
+                      "matrices that agree when the eyes do, into exactly half the target each",
+                      diff, l.px.size(), worst);
+        } else {
+            CHECK_MSG(worst <= 1,
+                      "AT worldScale 0 THE TWO EYES DIFFER BY THE DITHER AND NOTHING ELSE: "
+                      "%zu of %zu bytes differ, worst %d/255 (the strong form — byte-identity "
+                      "— is asserted by vr.session_undithered, the same binary with the "
+                      "dither off)",
+                      diff, l.px.size(), worst);
+        }
         engine->endVrSession();
         CHECK(!engine->vrStatus().active);
         CHECK(engine->vrView() == nullptr);
