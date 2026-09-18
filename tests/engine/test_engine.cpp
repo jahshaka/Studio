@@ -1613,6 +1613,119 @@ void cubemap_sky_faces_match_directions() {
     CHECK(near(centre(img), kBlue));
 }
 
+
+// A CUBEMAP SKY DRAGGED: THE CAPTURE CUBE IS DESTROYED WHILE ITS READBACK IS
+// STILL IN THE COPY ENCODER (lane ENGINE-SMALL-A fix round, the lead's read of
+// SKY-SH-1 / audit ON-14).
+//
+// THE PATH THIS COVERS, and it is the one lifetime in the deferred read that is
+// not obvious. For every sky but a cubemap (and but an explicit
+// `reflectionFaces`), the capture cube is handed to buildReflectionCubemapFrom
+// and freed by applyPendingIbl at the top of the NEXT frame. For a CUBEMAP sky
+// the cube is scratch — its own faces are already the environment — so
+// applyPendingSkyCapture destroys it IMMEDIATELY after integrateSkyShFromCube,
+// in the same frame, which under the deferred read means destroying a texture
+// whose `vkCmdCopyImageToBuffer` is sitting in an open copy encoder that nobody
+// has submitted yet.
+//
+// The pin handles exactly this: `VulkanQueue::notifyTextureDestroyed` finds the
+// texture in `mCopyDownloadTextures` and FLUSHES the encoder (submits, does not
+// wait), and the VkImage itself dies through `delayed_vkDestroyImage` under the
+// frame multiplier (patch 0067's window). Reading the pin is not the same as
+// running it, so:
+//
+//   * two cubemap skies of DIFFERENT uniform brightness on consecutive frames
+//     (the second capture is therefore the deferred one), then the ambient read
+//     a few frames later must be the SECOND sky's radiance — not the first's,
+//     and not the recycled contents of a destroyed allocation, which is the
+//     failure mode the AsyncTextureTicket rules in this file's sky code warn
+//     about;
+//   * and the engine must still be rendering, with nothing in lastError().
+void cubemap_sky_drag_survives_the_cube_dying_under_the_readback() {
+    Fixture fx;
+    View *v = fx.view("cubedrag-view", 48, 48, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("cubedrag-scene");             REQUIRE(s);
+    v->setScene(s);
+    aim(v);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    const auto linearOf = [](int srgb8) {
+        const float c = float(srgb8) / 255.0f;
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    // Six identical faces = a uniform environment, so SH band 0 is its linear
+    // radiance and the assertion needs no geometry.
+    const auto greyCube = [&](int srgb8, TextureId out[6]) {
+        for (int i = 0; i < 6; ++i) {
+            std::vector<unsigned char> px(8 * 8 * 4);
+            for (int p = 0; p < 64; ++p) {
+                px[p * 4 + 0] = (unsigned char)srgb8;
+                px[p * 4 + 1] = (unsigned char)srgb8;
+                px[p * 4 + 2] = (unsigned char)srgb8;
+                px[p * 4 + 3] = 255;
+            }
+            out[i] = s->createTexture(8, 8, px.data(), true);
+            if (!out[i]) return false;
+        }
+        return true;
+    };
+    const auto band0 = [&]() {
+        float sh[27] = { 0.0f };
+        if (!s->skyAmbientSh(sh)) return -1.0f;
+        return sh[0];
+    };
+
+    TextureId dim[6], bright[6];
+    REQUIRE(greyCube(96, dim));
+    REQUIRE(greyCube(200, bright));
+    // `lastError` is the ENGINE's and it is sticky: whatever an earlier case in
+    // this process left there is not this case's business. The assertion below
+    // is "no NEW error", which is the honest form of it.
+    const std::string errorBefore = fx.e->lastError();
+
+    // The FIRST cubemap sky: synchronous read, cube destroyed in the same frame
+    // (this is how it has always worked, and the control for the numbers below).
+    CHECK_MSG(s->setSky(cubemapSkyDesc(dim)), "%s", fx.e->lastError().c_str());
+    render(fx.e, 1);
+    const float first = band0();
+    std::printf("    cubemap sky 1 (sRGB 96, linear %.4f): band0 %.4f\n",
+                double(linearOf(96)), double(first));
+    CHECK_MSG(first > 0.0f && std::fabs(first - linearOf(96)) < 0.02f,
+              "the first cubemap sky's ambient is its own radiance (band0 %.4f, expected %.4f)",
+              double(first), double(linearOf(96)));
+
+    // THE SECOND, on the very next frame: a gesture, so the read is DEFERRED —
+    // and the cube it is reading is destroyed before this frame is submitted.
+    CHECK_MSG(s->setSky(cubemapSkyDesc(bright)), "%s", fx.e->lastError().c_str());
+    render(fx.e, 1);
+    const float duringDrag = band0();
+    render(fx.e, 3);
+    const float landed = band0();
+    std::printf("    cubemap sky 2 (sRGB 200, linear %.4f): band0 %.4f in the capture frame, "
+                "%.4f after three more\n",
+                double(linearOf(200)), double(duringDrag), double(landed));
+    CHECK_MSG(std::fabs(duringDrag - first) < 1e-6f,
+              "the capture frame still reads the first sky (the deferred read, as designed)");
+    CHECK_MSG(std::fabs(landed - linearOf(200)) < 0.02f,
+              "THE DEFERRED READ OF A CUBE THAT DIED IN ITS CAPTURE FRAME RETURNS THE RIGHT "
+              "BYTES (band0 %.4f, expected %.4f — the first sky was %.4f and a recycled "
+              "allocation would be neither)",
+              double(landed), double(linearOf(200)), double(first));
+
+    // ...and the engine is still rendering, with nothing to report.
+    Image img;
+    REQUIRE(v->readPixels(img));
+    const Px k = corner(img);
+    std::printf("    and the frame still draws: corner %d %d %d, lastError '%s'\n",
+                k.r, k.g, k.b, fx.e->lastError().c_str());
+    CHECK_MSG(k.r > 100 && k.g > 100 && k.b > 100,
+              "the second cubemap sky is what the background shows (%d %d %d)", k.r, k.g, k.b);
+    CHECK_MSG(fx.e->lastError() == errorBefore,
+              "no NEW engine error was raised by the drag: '%s' (was '%s')",
+              fx.e->lastError().c_str(), errorBefore.c_str());
+    CHECK(s->setSky(SkyDesc()));
+}
+
 void mesh_from_buffers_renders() {
     Fixture fx;
     View *v = fx.view("mesh-view", 96, 96, kBlue); REQUIRE(v);
@@ -3656,6 +3769,115 @@ void fog_atmosphere_colour_follows_the_sky() {
               "leaving the analytic sky puts the fog back on the AUTHORED colour "
               "(%d %d %d vs %d %d %d)", afterLeaving.r, afterLeaving.g, afterLeaving.b,
               authored.r, authored.g, authored.b);
+}
+
+
+// THE SKY'S AMBIENT IS READ BACK WITHOUT WAITING FOR THE GPU — THROUGH A DRAG
+// (render audit 2026-09-17, OGRE_NEXT.md ON-14; lane ENGINE-SMALL-A).
+//
+// THE HAZARD. `integrateSkyShFromCube` called `flushCommands()` and then mapped
+// an AsyncTextureTicket: a GPU->CPU WAIT on the UI thread, which submits
+// everything the frame had recorded so far and blocks until the copy of the sky
+// capture has executed. It ran on every sky CHANGE — so on every frame of a sun
+// drag. Measured on this box: 0.94 ms of wait plus 0.47 ms of integral per
+// change, 1.41 ms total, and the wait's share is unbounded in principle because
+// it waits for whatever else the frame had already recorded.
+//
+// THE RULE, and this case is its shape:
+//   * A LONE sky change stays SYNCHRONOUS. One wait is not the hazard, and
+//     every host, thumbnail, preview and pixel suite sees the ambient exactly
+//     when it always has — one frame after the sky.
+//   * A DRAG defers. From the second consecutive capture on, the download is
+//     issued without a flush and read at the top of the next frame, where the
+//     copy has had a whole frame of GPU time and the map returns what is
+//     already there. The ambient trails the sky by one more frame for as long
+//     as the gesture lasts, and never flickers: the previous coefficients stay
+//     valid until the new ones land.
+void sky_ambient_read_is_deferred_through_a_drag() {
+    Fixture fx;
+    View *v = fx.view("skysh-view", 64, 64, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("skysh-scene");             REQUIRE(s);
+    v->setScene(s);
+    aim(v);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    // A 1x1 grey equirect sky is a uniform environment, so band 0 IS its linear
+    // radiance — an oracle with no geometry in it.
+    const auto linearOf = [](int srgb8) {
+        const float c = float(srgb8) / 255.0f;
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    const auto greySky = [&](int srgb8) {
+        const unsigned char px[4] = { (unsigned char)srgb8, (unsigned char)srgb8,
+                                      (unsigned char)srgb8, 255 };
+        SkyDesc sky;
+        sky.mode = SkyMode::Equirectangular;
+        sky.equirect = s->createTexture(1, 1, px, true);
+        return sky;
+    };
+    const auto band0 = [&]() {
+        float sh[27] = { 0.0f };
+        if (!s->skyAmbientSh(sh)) return -1.0f;
+        return sh[0];
+    };
+
+    // (1) The first sky of a scene: synchronous, as it has to be — there is
+    //     nothing valid to lag behind, and a frame with no ambient at all is a
+    //     wrong picture.
+    REQUIRE(s->setSky(greySky(96)));
+    render(fx.e, 1);
+    const float first = band0();
+    std::printf("    first sky (sRGB 96, linear %.4f): band0 %.4f\n",
+                double(linearOf(96)), double(first));
+    CHECK_MSG(first > 0.0f && std::fabs(first - linearOf(96)) < 0.01f,
+              "THE FIRST capture answers in the frame it happened: band0 %.4f, the sky's own "
+              "linear radiance is %.4f", double(first), double(linearOf(96)));
+
+    // (2) A LONE change, after enough still frames that it is not a gesture:
+    //     synchronous too, so the ambient lands in the capture frame exactly as
+    //     it always did. This is the assertion that keeps every existing suite
+    //     and every host's timing intact.
+    render(fx.e, 6);
+    REQUIRE(s->setSky(greySky(200)));
+    render(fx.e, 1);
+    const float lone = band0();
+    std::printf("    a lone change (sRGB 200, linear %.4f): band0 %.4f after ONE frame\n",
+                double(linearOf(200)), double(lone));
+    CHECK_MSG(std::fabs(lone - linearOf(200)) < 0.02f,
+              "a LONE sky change is still read in its own frame (band0 %.4f, expected %.4f)",
+              double(lone), double(linearOf(200)));
+
+    // (3) THE DRAG: a new sky every frame, on a RISING ramp so "behind" is a
+    //     number and not an impression. From the second capture on the read is
+    //     deferred, so the frame that captures step k reads step k-1's sky.
+    const int ramp[6] = { 110, 130, 150, 170, 190, 210 };
+    int lagged = 0;
+    float lastRead = lone;
+    for (int i = 0; i < 6; ++i) {
+        REQUIRE(s->setSky(greySky(ramp[i])));
+        render(fx.e, 1);
+        const float now = band0();
+        const float want = linearOf(ramp[i]);
+        std::printf("    drag step %d (sRGB %3d, linear %.4f): band0 %.4f%s\n", i, ramp[i],
+                    double(want), double(now), now < want - 0.005f ? "  <- behind" : "");
+        CHECK_MSG(now > 0.0f, "the ambient never goes invalid during a drag (step %d)", i);
+        if (i > 0 && now < want - 0.005f) ++lagged;
+        lastRead = now;
+    }
+    CHECK_MSG(lagged >= 4,
+              "a DRAG defers its readbacks: the ambient trails the sky it is capturing on "
+              "%d of the 5 steps after the first (the flush and the wait are gone)", lagged);
+
+    // ...and it CATCHES UP the moment the gesture stops: one more frame is all
+    // the deferred read needs.
+    render(fx.e, 2);
+    const float settled = band0();
+    std::printf("    after the drag: band0 %.4f, the last sky's linear radiance is %.4f "
+                "(during the drag it read %.4f)\n",
+                double(settled), double(linearOf(210)), double(lastRead));
+    CHECK_MSG(std::fabs(settled - linearOf(210)) < 0.02f,
+              "the drag's last sky lands as soon as the gesture stops (band0 %.4f, expected "
+              "%.4f)", double(settled), double(linearOf(210)));
 }
 
 // THE SUN DISC IS NOT IN THE SKY'S OWN LIGHT (owner pick 4, and the limit of
@@ -5842,6 +6064,8 @@ int main(int argc, char **argv) {
         { "ambient_sh_lights_world_axes",           ambient_sh_lights_world_axes },
         { "equirect_sky_fills_the_background",      equirect_sky_fills_the_background },
         { "cubemap_sky_faces_match_directions",     cubemap_sky_faces_match_directions },
+        { "cubemap_sky_drag_survives_the_cube_dying_under_the_readback",
+                                                    cubemap_sky_drag_survives_the_cube_dying_under_the_readback },
         { "rough_metal_reflects_across_cube_faces", rough_metal_reflects_across_cube_faces },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
@@ -5905,6 +6129,8 @@ int main(int argc, char **argv) {
         { "refraction_bends_the_background",        refraction_bends_the_background },
         { "postfx_epic_shape_with_msaa",            postfx_epic_shape_with_msaa },
         { "sky_stays_smooth_under_the_post_chain",  sky_stays_smooth_under_the_post_chain },
+        { "sky_ambient_read_is_deferred_through_a_drag",
+                                                    sky_ambient_read_is_deferred_through_a_drag },
         { "pip_is_ignored_offscreen_unless_asked",  pip_is_ignored_offscreen_unless_asked },
         { "pip_composites_a_second_camera_into_the_rect",
                                                     pip_composites_a_second_camera_into_the_rect },

@@ -23,6 +23,18 @@
 //      just as unusable, only noisily so.
 //   4. The budget was honoured: the worst single wait is near it, not orders of
 //      magnitude past it.
+//   5. THE DRAIN ADVANCED THE RENDERER'S BOOKKEEPING ON A CADENCE, not on the
+//      poll (lane ENGINE-SMALL-A / DRAIN-1, audit ON-17). The loop polls the
+//      texture manager every millisecond; `VaoManager::_update()` — which
+//      commits a command buffer WITH A FENCE at the top of the call whenever
+//      the previous one left the fence unflushed (the pin's issue #433),
+//      advances the descriptor pools and resets the BarrierSolver — used to run
+//      on every one of those polls. Measured on this very run: 512 advances
+//      over a 585 ms stuck drain before, 34 after, with the drain's duration
+//      and verdict unchanged (a healthy load never spins at all — the 20-import
+//      soak's whole process advances ONCE). The assertion is the cadence, not a
+//      count: one advance per 16 ms of waiting, plus slack for the first
+//      iteration and the poll's own jitter.
 //
 // The budget is passed in as 300 ms (see the CMake entry) to keep the suite
 // short; the shipped default is 8 s.
@@ -52,5 +64,24 @@ if (afterMore.waitTimeouts !== afterFirst.waitTimeouts)
 if (afterMore.waitWorstMs < 200 || afterMore.waitWorstMs > 5000)
     fail("worst wait " + afterMore.waitWorstMs + " ms is not the 300 ms budget");
 
+// THE ADVANCE CADENCE (case 5). The drain waited waitWorstMs, so at one advance
+// per 16 ms it owes about waitWorstMs/16 of them; before DRAIN-1 it owed one per
+// MILLISECOND, which on this run was 512. `+ 8` is the slack for the first
+// iteration (which always advances) and the poll's jitter. `>= 1` proves the
+// drain still advances at all — and an advance is half of a commit rather than
+// a commit: a bare `VaoManager::_update` outside a frame ARMS on the first call
+// and COMMITS on the second, so a waiting drain's advances are what carry the
+// texture manager's recorded work to the GPU one cadence at a time.
+var owed = Math.ceil(afterMore.waitWorstMs / 16.0) + 8;
+if (afterMore.waitAdvances < 1)
+    fail("the drain never advanced the renderer's resource bookkeeping (waitAdvances=" +
+         afterMore.waitAdvances + ") — a drain that never advances never commits, and can " +
+         "wait for work that was never submitted");
+if (afterMore.waitAdvances > owed)
+    fail("the drain advanced " + afterMore.waitAdvances + " times over " +
+         afterMore.waitWorstMs + " ms of waiting, more than the " + owed +
+         " a 16 ms cadence owes — it is advancing per POLL again (an empty command buffer " +
+         "and a fence per millisecond; audit ON-17 / DRAIN-1)");
+
 JSON.stringify({ waitTimeouts: afterMore.waitTimeouts, waitWorstMs: afterMore.waitWorstMs,
-                 waitBudgetMs: afterMore.waitBudgetMs });
+                 waitBudgetMs: afterMore.waitBudgetMs, waitAdvances: afterMore.waitAdvances });
