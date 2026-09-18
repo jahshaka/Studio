@@ -427,6 +427,19 @@ private:
     MainWindow *mMainWindow = nullptr;
     StudioServices *mServices = nullptr;      // undo + scene-edit for Alt+drag / snap-to-floor
     bool mAltDragMacroOpen = false;           // duplicate+move rides one undo macro
+    /// IS THE GIZMO DRAG THIS VIEWPORT'S? (VR phase 4b stage 2.)
+    ///
+    /// There is ONE gizmo object per mode in the process and two hosts can
+    /// reach it: this widget's mouse, and the wearer's controller through
+    /// VrInteraction. Before this flag both handlers keyed on `Gizmo::
+    /// isDragging()` alone, so a mouse MOVE over the viewport during a VR
+    /// handle drag drove that drag with the desk's pixel ray (and overwrote its
+    /// modifiers), and any stray click ENDED it — a second createUndoAction for
+    /// one gesture. The rule is ownership: a drag belongs to whoever started
+    /// it, this host drives and ends only its own, and the press refuses to
+    /// take one somebody else is holding (VrInteraction::beginGizmoDrag refuses
+    /// the mirror case).
+    bool mMouseDrag = false;
     bool mVertexSnapHeld = false;             // V held: translate drags snap to vertices
     QWidget *mHierarchyDragSource = nullptr;   // drags from the hierarchy tree are reparents, not spawns
     Database *mDatabase = nullptr;

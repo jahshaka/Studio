@@ -70,6 +70,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "viewport/freecamerapolicy.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmoray.h"
 #include "viewport/gizmomeshes.h"
 #include "viewport/rotationgizmo.h"
 
@@ -855,6 +856,317 @@ int main(int argc, char **argv)
         CHECK(fresh.ringNameAtPixel(QPointF(100, 100), d).isEmpty() && d < 0.0f,
               "a gizmo that has never been shown in a viewport picks nothing (the document-only "
               "stand-ins)");
+    }
+
+    // ---- THE RAY ARM: THE SAME PICK WITH NO PIXEL (VR phase 4b stage 2) ----
+    //
+    // In a headset there is no cursor, no camera and no widget: the pointer is
+    // the controller's aim RAY and the rings are picked as ANGLES at its origin
+    // (gizmoray.h, RotationGizmo::ringAtRay). What is asserted here is that the
+    // ANSWER is the same answer — every drawn ring is reachable from every
+    // direction, the tolerance is the desktop's own constant converted once,
+    // and the drag angle behind it is the same well-conditioned quantity.
+    {
+        std::printf("\n-- the ray arm (VR stage 2): the rings picked as angles --\n");
+        node->setLocalRot(iris::Quat());
+        node->setLocalPos(iris::Vec3(0, 0, 0));
+        node->update(0.0f);
+
+        // THE TWO NUMBERS, AND THEY ARE VR'S OWN (gizmoray.h's note): the
+        // tolerance is the POINTER's precision — 0.6 degrees, about 6 mm at
+        // arm's length — and not a pixel constant converted through some eye's
+        // field of view, which is what the first draft of this lane did and
+        // what made the gizmo three times too big. The tie band is the desk's
+        // own proportion of its tolerance (2 px of 7), because ranking two
+        // handles under one pointer is a different question from reach.
+        const float tolRad = gizmoray::toleranceRadians();
+        std::printf("   tolerance %.4f deg (%.6f rad), tie band %.4f deg; the gizmo's half-extent "
+                    "is %.1f deg, so the target is %.1f %% of it\n",
+                    double(gizmoray::degreesOf(tolRad)), double(tolRad),
+                    double(gizmoray::kVrPickTieDeg), double(gizmoray::kVrGizmoHalfAngleDeg),
+                    double(100.0f * gizmoray::kVrPickToleranceDeg / gizmoray::kVrGizmoHalfAngleDeg));
+        CHECK(std::fabs(gizmoray::degreesOf(tolRad) - 0.6f) < 0.001f,
+              "the VR pick tolerance is the POINTER's own 0.6 degrees, not a pixel conversion");
+        CHECK(std::fabs(gizmoray::degreesOf(gizmoray::tieRadians()) - 0.1714f) < 0.001f,
+              "...and the tie band is the desktop's 2-of-7 proportion of it: 0.1714 degrees");
+
+        // THE SIZE RULE: a CONSTANT ANGULAR size, i.e. proportional to the
+        // distance from the eye. Asserted as the ratio, at two distances a
+        // factor of ten apart.
+        {
+            const float s1 = gizmoray::vrGizmoScale(1.0f);
+            const float s10 = gizmoray::vrGizmoScale(10.0f);
+            const float want = std::tan(float(qDegreesToRadians(gizmoray::kVrGizmoHalfAngleDeg))) /
+                               GizmoMeshes::kTranslateReach;
+            std::printf("   size rule: %.4f at 1 m, %.4f at 10 m (ratio %.6f)\n",
+                        double(s1), double(s10), double(s10 / s1));
+            CHECK(std::fabs(s1 - want) < 1e-4f,
+                  "the VR size rule is tan(halfAngle) / kTranslateReach per metre — an ANGLE at "
+                  "the eye, with no field of view in it");
+            CHECK(std::fabs(s10 / s1 - 10.0f) < 1e-4f,
+                  "...so the gizmo subtends the SAME ANGLE at every distance (the owner's "
+                  "decision 5: a fixed angular size)");
+        }
+
+        // The eyes: the same six directions the pixel arm uses, as places to
+        // stand rather than as cameras — including three that put two rings
+        // exactly edge-on to the pointer.
+        struct Eye { const char *name; iris::Vec3 at; };
+        const Eye kEyes[] = {
+            { "front (Z face-on, X and Y edge-on)", iris::Vec3(0, 0, 4) },
+            { "top   (Y face-on, X and Z edge-on)", iris::Vec3(0, 4, 0.001f) },
+            { "right (X face-on, Y and Z edge-on)", iris::Vec3(4, 0, 0) },
+            { "iso",                                iris::Vec3(2.3f, 2.3f, 2.3f) },
+            { "near",                               iris::Vec3(0.6f, 0.4f, 0.9f) },
+        };
+
+        for (const Eye &e : kEyes) {
+            GizmoVrPick pick;
+            pick.valid = true;
+            pick.eye = e.at;
+            pick.rayPos = e.at;
+            pick.viewDir = (iris::Vec3(0, 0, 0) - e.at).normalized();
+            pick.rayDir = pick.viewDir;
+            gizmo.setVrPick(pick);
+            const float scale = gizmo.getGizmoScale();
+            const float radius = GizmoMeshes::kRotationHandleScale * scale;
+
+            int hitAnywhere = 0, tested = 0;
+            int perRing[3] = { 0, 0, 0 };
+            int testedRing[3] = { 0, 0, 0 };
+            for (int r = 0; r < 3; ++r) {
+                // The DRAWN arc, from the rule (as the pixel arm does it).
+                const iris::Vec3 toEye = (e.at - iris::Vec3(0, 0, 0)).normalized();
+                float arcCentreDeg = 0.0f;
+                const float arcHalfDeg = drawnArc(kRings[r].u, kRings[r].v, toEye, 0.02f, arcCentreDeg);
+                for (int i = 0; i < 48; ++i) {
+                    const float deg = float(360.0 * i / 48);
+                    if (std::fabs(angleDelta(deg, arcCentreDeg)) > arcHalfDeg - 5.0f) continue;
+                    const float a = float(qDegreesToRadians(deg));
+                    const iris::Vec3 p =
+                        (kRings[r].u * std::cos(a) + kRings[r].v * std::sin(a)) * radius;
+                    iris::Vec3 dir = (p - e.at);
+                    if (dir.lengthSquared() < 1e-9f) continue;
+                    dir.normalize();
+                    ++tested;
+                    ++testedRing[r];
+                    float distRad = -1.0f;
+                    RotationHandle *hit = gizmo.ringAtRay(e.at, dir, distRad);
+                    if (hit) {
+                        ++hitAnywhere;
+                        if (hit->axisName() == QLatin1String(kRings[r].name)) ++perRing[r];
+                    }
+                }
+            }
+            std::printf("   %-38s: %d of %d aimed points hit a ring (x %d/%d, y %d/%d, z %d/%d)\n",
+                        e.name, hitAnywhere, tested, perRing[0], testedRing[0], perRing[1],
+                        testedRing[1], perRing[2], testedRing[2]);
+            CHECK(tested > 30 && hitAnywhere == tested,
+                  "every point of every DRAWN ring is hit by the aim ray that points at it");
+            CHECK(perRing[0] * 4 >= testedRing[0] && perRing[1] * 4 >= testedRing[1] &&
+                      perRing[2] * 4 >= testedRing[2],
+                  "...and no ring is ever dead: each one wins a healthy run of its own points, "
+                  "edge-on to the pointer included");
+
+            // AWAY FROM EVERYTHING IS NOTHING. A ray from the same eye, turned
+            // 20 degrees off the gizmo, hits no ring at all.
+            {
+                const iris::Vec3 side = iris::Vec3::crossProduct(pick.viewDir, iris::Vec3(0, 1, 0))
+                                            .normalized();
+                const float t = float(qDegreesToRadians(20.0));
+                const iris::Vec3 off = (pick.viewDir * std::cos(t) + side * std::sin(t)).normalized();
+                float d = -1.0f;
+                CHECK(gizmo.ringAtRay(e.at, off, d) == nullptr,
+                      "a ray 20 degrees off the gizmo picks nothing");
+            }
+        }
+
+        // ---- THE TOLERANCE IS THE TOLERANCE --------------------------------
+        //
+        // Aim at a point on the Z ring, then turn the ray off it by half the
+        // tolerance and by twice it: the first still takes the ring, the second
+        // does not. Measured in the plane of the ring's own radius so the miss
+        // is across the circle, not along it.
+        {
+            GizmoVrPick pick;
+            pick.valid = true;
+            pick.eye = iris::Vec3(0, 0, 4);
+            pick.rayPos = pick.eye;
+            pick.viewDir = iris::Vec3(0, 0, -1);
+            pick.rayDir = pick.viewDir;
+            gizmo.setVrPick(pick);
+            const float radius = GizmoMeshes::kRotationHandleScale * gizmo.getGizmoScale();
+            // A POINT AT 45 DEGREES AROUND THE Z RING, not on an axis: the
+            // three rings CROSS on the axes (the +X point of the Z ring is also
+            // on the Y ring, and a ray aimed at it from straight in front lies
+            // in the Y ring's own plane and cuts that circle), so an axis point
+            // has no "off the ring" direction at all. At 45 degrees the other
+            // two rings are ~3.9 degrees away and the only thing near the aim
+            // is the ring being measured.
+            const float k = radius * 0.70710678f;
+            const iris::Vec3 on(k, k, 0);
+            const iris::Vec3 radial = iris::Vec3(1, 1, 0).normalized();
+            const iris::Vec3 aim = (on - pick.eye).normalized();
+            const auto turned = [&](float radiansOff) {
+                // MOVE THE AIM ALONG THE RING'S OWN RADIUS — outward for a
+                // positive offset, inward for a negative one. Rotating a
+                // direction about cross(d, r) carries it towards r, so this is
+                // a miss ACROSS the circle and never a slide along it (the
+                // slide cost this suite a round: a turn about the tangent left
+                // the ray 0.0014 rad from the ring and "two tolerances off"
+                // read as a hit).
+                const iris::Vec3 axis = iris::Vec3::crossProduct(aim, radial).normalized();
+                return iris::Quat::fromAxisAndAngle(axis, float(qRadiansToDegrees(radiansOff)))
+                    .rotatedVector(aim)
+                    .normalized();
+            };
+            float d0 = -1.0f, dIn = -1.0f, dOut = -1.0f;
+            const bool onIt = gizmo.ringAtRay(pick.rayPos, aim, d0) != nullptr;
+            const bool inside = gizmo.ringAtRay(pick.rayPos, turned(-tolRad * 0.5f), dIn) != nullptr;
+            const bool outside = gizmo.ringAtRay(pick.rayPos, turned(-tolRad * 2.0f), dOut) != nullptr;
+            std::printf("   aimed at the Z ring at 45 deg: %.5f rad; half a tolerance inside: "
+                        "%.5f; two tolerances inside: %.5f\n", double(d0), double(dIn), double(dOut));
+            CHECK(onIt && d0 < tolRad * 0.25f, "a ray aimed AT a ring is on it (near zero angle)");
+            CHECK(inside, "half a tolerance off it still takes the ring");
+            CHECK(!outside && dOut > tolRad, "two tolerances off it does not");
+
+            // ...AND THE RINGS' OWN ANGULAR SIZES, since they are what the
+            // tolerance has to live between: the three axis rings and the outer
+            // screen ring, measured from this eye.
+            {
+                const float eyeDist = pick.eye.length();
+                const float axisDeg = gizmoray::degreesOf(std::atan(radius / eyeDist));
+                const float screenDeg = gizmoray::degreesOf(
+                    std::atan(GizmoMeshes::kScreenRingRadius * radius / eyeDist));
+                std::printf("   the axis rings sit at %.2f degrees and the screen ring at %.2f "
+                            "(%.2f apart; the tolerance is %.2f)\n", double(axisDeg),
+                            double(screenDeg), double(screenDeg - axisDeg),
+                            double(gizmoray::kVrPickToleranceDeg));
+                CHECK(screenDeg - axisDeg > gizmoray::kVrPickToleranceDeg,
+                      "the outer screen ring stands more than a tolerance clear of the axis "
+                      "rings, so the two are separable by aim alone");
+            }
+        }
+
+        // ---- THE DRAG ANGLE, FROM A RAY ------------------------------------
+        //
+        // The quantity a drag differences must be well conditioned for a ray as
+        // it is for a cursor: defined everywhere the ring is a handle, finite,
+        // and moving steadily and in ONE direction as the aim travels round the
+        // circle — a jump or a reversal mid-drag is what the desktop's old
+        // plane intersection did and is the thing this construction exists to
+        // avoid.
+        //
+        // WHAT IS *NOT* ASSERTED, and why: an axis ring's angle does not
+        // reproduce the circle's own parameter over a whole turn, and it never
+        // did on the desk either — the ray is resolved against the handle's
+        // near hemisphere (rotationgizmo.cpp's getHitAngle), so the FAR half of
+        // the circle answers with the near-side point it passes through. That
+        // half is not drawn and not pickable (the camera-facing arc), so the
+        // quantity is asked exactly where it is defined: on the drawn arc.
+        // The SCREEN ring has no far half — it faces the pointer — and does
+        // wind exactly once, which is asserted as such.
+        {
+            GizmoVrPick pick;
+            pick.valid = true;
+            pick.eye = iris::Vec3(1.5f, 1.2f, 2.6f);
+            pick.rayPos = pick.eye;
+            pick.viewDir = (iris::Vec3(0, 0, 0) - pick.eye).normalized();
+            pick.rayDir = pick.viewDir;
+            gizmo.setVrPick(pick);
+            const Gizmo::RayPickScope raySpace(&gizmo);
+            const float scale = gizmo.getGizmoScale();
+            const iris::Vec3 toEye = pick.eye.normalized();
+            for (int which = 0; which < 4; ++which) {
+                const GizmoAxis axis = which == 0 ? GizmoAxis::X
+                                     : which == 1 ? GizmoAxis::Y
+                                     : which == 2 ? GizmoAxis::Z
+                                                  : GizmoAxis::Screen;
+                RotationHandle probe(&gizmo, axis);
+                probe.screenAxis = pick.viewDir;
+                const float radius = probe.ringRadius * probe.handleScale * scale;
+                iris::Vec3 u, v, n;
+                probe.ringBasis(n, u, v);
+                float arcCentreDeg = 0.0f, arcHalfDeg = 180.0f;
+                if (axis == GizmoAxis::Screen) {
+                    // the screen ring's own frame, as ringFrame builds it
+                    const iris::Quat facing =
+                        iris::Quat::rotationTo(iris::Vec3(0, 0, 1), -pick.viewDir.normalized());
+                    u = facing.rotatedVector(u);
+                    v = facing.rotatedVector(v);
+                } else {
+                    arcHalfDeg = drawnArc(u, v, toEye, 0.02f, arcCentreDeg);
+                }
+                float previous = 0.0f, swing = 0.0f, biggestStep = 0.0f;
+                int answered = 0, reversals = 0;
+                float lastStep = 0.0f;
+                // WALKED ALONG THE ARC, in its own order — an arc that spans
+                // the wrap at 0 degrees (they usually do: the centre is
+                // wherever the eye is) is not a contiguous run of a 0..360
+                // sweep, and sampling it that way makes the WALK jump, not the
+                // function (it cost this suite a round: a 131-degree "step"
+                // that was the sample order and nothing else).
+                //
+                // ...AND OVER THE ARC'S INTERIOR. An axis ring's angle is
+                // resolved against the handle's SPHERE, and outside that
+                // sphere's silhouette — the outer few degrees of a span that
+                // reaches past it — the construction falls back to the ray's
+                // closest approach and the value saturates instead of
+                // tracking. That is the desktop's own behaviour at the
+                // silhouette, unchanged by this lane, and the two meet exactly
+                // where they meet; the quantity a drag differences is asked
+                // where it is defined. Measured: dead linear at 3.60 degrees
+                // per 3.60-degree step over the interior, turning over in the
+                // last ~4 samples of the span.
+                const int steps = 48;
+                const float halfSpan = (arcHalfDeg - 5.0f) * (axis == GizmoAxis::Screen ? 1.0f : 0.7f);
+                for (int i = 0; i <= steps; ++i) {
+                    const float deg = arcCentreDeg - halfSpan + 2.0f * halfSpan * i / steps;
+                    const float a = float(qDegreesToRadians(deg));
+                    const iris::Vec3 p = (u * std::cos(a) + v * std::sin(a)) * radius;
+                    const iris::Vec3 dir = (p - pick.eye).normalized();
+                    float angle = 0.0f;
+                    if (!probe.getHitAngle(pick.rayPos, dir, angle)) continue;
+                    if (!std::isfinite(angle)) { answered = -1; break; }
+                    if (answered > 0) {
+                        const float step = angleDelta(angle, previous);
+                        swing += step;
+                        biggestStep = std::max(biggestStep, std::fabs(step));
+                        // A REVERSAL THAT MATTERS: the two ends of the arc
+                        // wobble by hundredths of a degree (the sphere fold's
+                        // own rounding), and calling that a direction change
+                        // would measure the float and not the construction.
+                        if (std::fabs(step) > 0.2f) {
+                            if (lastStep != 0.0f && step * lastStep < 0.0f) ++reversals;
+                            lastStep = step;
+                        }
+                    }
+                    previous = angle;
+                    if (answered >= 0) ++answered;
+                }
+                std::printf("   %-7s ring: %d points of the drawn arc answered; total swing "
+                            "%.1f deg, biggest step %.1f deg, %d reversals\n",
+                            probe.axisName().toLatin1().constData(), answered, double(swing),
+                            double(biggestStep), reversals);
+                if (axis == GizmoAxis::Screen) {
+                    // The walk stops 5 degrees short of each end of the span
+                    // (the same margin the axis rings' walk uses), so a full
+                    // turn is 350 degrees of it.
+                    CHECK(answered > 40 && std::fabs(swing) > 340.0f && std::fabs(swing) < 375.0f,
+                          "the SCREEN ring's drag angle, derived in the ring's own frame with no "
+                          "screen at all, winds exactly once around it");
+                } else {
+                    CHECK(answered > 40 && std::fabs(swing) > 90.0f && biggestStep < 5.0f &&
+                              reversals == 0,
+                          "an axis ring's drag angle from a RAY is finite over the drawn arc and "
+                          "travels steadily in one direction (no jump, no reversal)");
+                }
+            }
+        }
+
+        // ...and the pointer put back, so nothing below inherits it.
+        gizmo.setVrPick(GizmoVrPick());
+        CHECK(!gizmo.vrPickArmed(), "disarming hands the gizmo back to the desktop camera");
     }
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,

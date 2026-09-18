@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"   // quatFromJs (the one pose reader)
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/flyspeedsettings.h"
+#include "viewport/gizmo.h"
+#include "viewport/gizmomode.h"
 #include "viewport/flystep.h"
 #include "services/playerservice.h"
 #include "services/services.h"
@@ -441,6 +443,39 @@ QVector<VerbInfo> VrApi::verbs() const
           "session begins and removed when it ends, and in the PLAYER only locomotion runs "
           "(the Player edits nothing — no selection, no grab, no transform writes), exactly as "
           "the desktop Player shows no editor furniture.",
+          Needs::Document },
+        { "gizmo",
+          "vr.gizmo() -> {present, mode, armed, dragging, handle, scale, halfAngleDegrees, "
+          "toleranceDegrees, eye:{x,y,z}, drags, commits, modes}",
+          "THE EDITOR'S GIZMO IN THE WEARER'S HANDS (VR phase 4b stage 2). It is the SAME "
+          "gizmo the mouse drags — the same handles, the same frozen drag frame, the same "
+          "group delta and the same ONE undo entry per drag — pointed at with the dominant "
+          "hand's aim ray instead of a cursor. A trigger press with the ray on a handle drags "
+          "that handle (a press anywhere else selects, exactly as on the desk, where the "
+          "gizmo's hit test also runs first); `menu` HELD snaps it to the grid; a SHORT press "
+          "of `menu` cycles translate -> rotate -> scale through editor.setGizmoMode, so the "
+          "toolbar follows.\n\n"
+          "`handle` is what the ray is on right now (\"x\", \"xy\", \"screen\", "
+          "\"center\", ...) or empty — A PRESS'S ANSWER, without pressing, which is why it "
+          "carries the same refusals a press does: it is empty in the Player (which edits "
+          "nothing), while the DESK is holding the same gizmo (a drag belongs to whoever "
+          "started it), and while a script owns the document (the edit gate). With nothing "
+          "selected there is no gizmo to be on at all.\n\n"
+          "THE TWO NUMBERS ARE VR'S OWN, not the desktop's converted (which is what made the "
+          "first cut three times too big). `halfAngleDegrees` is the angle the translate "
+          "gizmo's arrows subtend at the wearer's eye — 8 degrees, roughly a fist at arm's "
+          "length — and `scale` is the world size that produces it at the current distance, so "
+          "the handles are the same apparent size standing over an object as across the room "
+          "and do not change with the headset's field of view. `toleranceDegrees` is how far "
+          "off a handle the ray may be and still take it: 0.6 degrees, the POINTER's own "
+          "precision (a controller's ray wanders a few tenths of a degree in a steady hand), "
+          "about 6 mm at arm's length. One constant each, in src/viewport/gizmoray.h.\n\n"
+          "`armed` is whether a pointer is driving the gizmo at all. While one is, the gizmo "
+          "is sized for the wearer on BOTH surfaces: there is one gizmo object in the process "
+          "and it has one size, and the desk goes on drawing and dragging that same object "
+          "(its picture and its pick therefore never disagree). The counters are COUNTS, "
+          "monotonic for the life of the process, which is what a suite brackets a gesture "
+          "with.",
           Needs::Document },
     };
 }
@@ -883,6 +918,24 @@ void VrApi::installInteraction()
         if (player && player->isVrActive()) return player->isVrPlacing();
         return false;
     };
+    // ---- THE GIZMO (VR_INPUT_SPEC §5.2, stage 2) -------------------------
+    //
+    // THE VIEWPORT'S OWN GIZMO, and its own mode setter. Nothing is duplicated
+    // for VR: the wearer points at the object the editor is already drawing.
+    deps.gizmo = [this]() -> Gizmo * {
+        return moduleHost.viewport ? moduleHost.viewport->activeGizmo() : nullptr;
+    };
+    deps.gizmoMode = [this] {
+        return moduleHost.viewport ? moduleHost.viewport->gizmoMode() : QString();
+    };
+    // ...THROUGH THE ONE ROUTE (viewport/gizmomode.h), which is exactly what
+    // `editor.setGizmoMode` calls: the shell's slot when there is a shell, so
+    // the TOOLBAR follows a mode cycled from the headset as it follows the
+    // W/E/R keys, and straight to the viewport when there is none. This used to
+    // re-spell the three slot names here, which is two copies of one route.
+    deps.setGizmoMode = [this](const QString &mode) {
+        gizmomode::apply(moduleHost.shellWidget, moduleHost.viewport, mode);
+    };
     interaction.setDeps(deps);
     engineInput.setEngine(engine());
     interaction.setSource(&engineInput);
@@ -1008,6 +1061,20 @@ bool VrApi::step(const QVariantMap &options)
     // interaction is nevertheless the real one.
     if (!interaction.installed()) interaction.begin();
     for (int i = 0; i < frames; ++i) interaction.step(float(seconds));
+    // ...AND IT LETS GO WHEN THE HANDS DO (the lead's fix round, item 7). With
+    // no session there is no lifecycle edge to end the interaction on: a script
+    // that injected a hand, stepped, and withdrew it with `vr.inject(hand)`
+    // left the last armed state standing — and the gizmo with it, sized for a
+    // wearer who is not there, for the life of the process. `end()` is the same
+    // call the session edge makes: it cancels a gesture in flight, disarms the
+    // gizmo and clears the ray. A worn session is untouched (this path only
+    // runs when there is none).
+    if (!interactionSessionActive) {
+        bool anyHand = false;
+        for (unsigned i = 0; i < VrHandCount; ++i)
+            if (interaction.handState(i).valid) { anyHand = true; break; }
+        if (!anyHand && interaction.installed()) interaction.end();
+    }
     return true;
 }
 
@@ -1179,4 +1246,10 @@ QVariantMap VrApi::interactionMode()
 {
     syncInteractionSession();
     return interaction.report();
+}
+
+QVariantMap VrApi::gizmo()
+{
+    syncInteractionSession();
+    return interaction.gizmoReport();
 }

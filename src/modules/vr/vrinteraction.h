@@ -87,6 +87,7 @@ For more information see the LICENSE file
 #include "modules/vr/vrgrab.h"
 #include "viewport/flystep.h"
 
+class Gizmo;
 class SelectionService;
 struct StudioServices;
 
@@ -171,6 +172,23 @@ public:
         /// Is the PLAYER the host of the running session? Then only locomotion
         /// runs (the Player edits nothing).
         std::function<bool()> playerMode;
+        // ---- THE GIZMO (VR_INPUT_SPEC §5.2, phase 4b stage 2) -----------
+        //
+        // THE EDITOR'S OWN GIZMO, not a second one. There is exactly one gizmo
+        // object per mode in the process — the viewport's — and the wearer
+        // drives THAT: the same handles, the same frozen drag frame, the same
+        // group delta, the same one-undo-step-per-drag. A VR copy would be a
+        // second implementation of every one of those, and the two would drift.
+        /// The active gizmo (IEditorViewport::activeGizmo), or null — no
+        /// viewport, no selection, or a host that has no gizmos at all.
+        std::function<Gizmo *()> gizmo;
+        /// The mode as the verb surface spells it: "translate"|"rotate"|"scale".
+        std::function<QString()> gizmoMode;
+        /// ...and the setter, which MUST be `editor.setGizmoMode`'s own route
+        /// (the shell's slot when there is a shell), so that the toolbar
+        /// follows a mode cycled from the headset exactly as it follows W/E/R.
+        std::function<void(const QString &)> setGizmoMode;
+
         /// MAY THE WEARER BE MOVED AT ALL THIS FRAME?
         ///
         /// A host PLACES the wearer when a session begins and at every recentre
@@ -275,6 +293,30 @@ public:
     /// What a squeeze release does: commit ONE undo macro. False when no
     /// gesture was live, or in the Player.
     bool endGrab(unsigned hand);
+    // ---- THE GIZMO GESTURE (stage 2) -------------------------------------
+    //
+    // ONE BUTTON EACH, NO OVERLAP (the spec's design rule, §5.2): `select` on a
+    // HANDLE drags that handle, `grab` anywhere is stage 1's direct gesture. A
+    // `select` press that is not on a handle is a selection, exactly as before,
+    // and the desktop's own precedence is the same one — the gizmo hit test
+    // runs FIRST on a press (enginesceneviewport.cpp).
+
+    /// What a trigger press on a handle does. False when there is no gizmo, no
+    /// selection, no handle under the ray, a gesture already running, the edit
+    /// gate, or the Player.
+    bool beginGizmoDrag(unsigned hand);
+    /// What its release does: ONE undo entry, through Gizmo::createUndoAction —
+    /// the mouse drag's own shape, not a copy of it. False when none was live.
+    bool endGizmoDrag(unsigned hand);
+    /// Put the handle's drag back and record nothing (focus loss, session end,
+    /// the Player taking over) — Gizmo::cancelDragging. False when none was live.
+    bool cancelGizmoDrag();
+    /// translate -> rotate -> scale -> translate, through Deps::setGizmoMode
+    /// (i.e. through `editor.setGizmoMode`'s route). What a SHORT press of
+    /// `menu` does; refused while any gesture is running. False when there is
+    /// no setter or the mode did not change.
+    bool cycleGizmoMode();
+
     /// Put everything back and push nothing (focus loss, session end, a
     /// project switch). False when no gesture was live.
     bool cancel();
@@ -301,6 +343,12 @@ public:
     QString sourceName() const;
     /// {dominant, turn, grabbing, hovering, source, snapping, far, distance}
     QVariantMap report() const;
+    /// WHAT THE WEARER'S GIZMO IS DOING (`vr.gizmo()`): {armed, mode, handle,
+    /// dragging, scale, toleranceDegrees, eye, drags, commits}. `handle` is the
+    /// name of the handle under the aim ray RIGHT NOW — the answer a press
+    /// would act on, asked without synthesizing one.
+    QVariantMap gizmoReport() const;
+    bool gizmoDragging() const { return mGizmoDrag.active; }
 
 private:
     struct Member
@@ -323,7 +371,28 @@ private:
         QVector<Member> members;
     };
 
+    struct GizmoDrag
+    {
+        bool active = false;
+        unsigned hand = jahshaka::engine::VrHandRight;
+        /// The gizmo the drag is on — held so a release ends the drag on the
+        /// same object even if the MODE changed under it (it cannot today, the
+        /// cycle refuses mid-drag, but a dangling drag would be silent).
+        Gizmo *gizmo = nullptr;
+    };
+
     iris::ScenePtr scene() const;
+    /// The active gizmo this frame, or null.
+    Gizmo *gizmoNow() const;
+    /// WHERE THE WEARER IS LOOKING FROM: the head through the rig when a
+    /// session reports one, and the AIMING HAND itself when none does — which
+    /// is the honest answer on a box with no runtime (the injection route), and
+    /// makes the size rule and the view direction testable with no headset.
+    bool eyePose(unsigned hand, iris::Vec3 &eye, iris::Vec3 &forward) const;
+    /// Hands the active gizmo this frame's pointer (Gizmo::setVrPick): the
+    /// wearer's aim, their eye and the fov the size rule uses. Disarms the one
+    /// armed before when the mode changed or the wearer stopped driving it.
+    void armGizmo(unsigned hand, bool armed);
     /// The aim ray of a hand, or false when it is not located.
     bool ray(const jahshaka::engine::VrHandState &state, iris::Vec3 &origin,
              iris::Vec3 &direction) const;
@@ -388,6 +457,30 @@ private:
     /// The snap turn's re-arm (one flick, one turn — vrgrab::snapTurnRearmed).
     bool mTurnArmed = true;
 
+    // ---- THE GIZMO (stage 2) ---------------------------------------------
+    GizmoDrag mGizmoDrag;
+    /// The gizmo this object last armed, so it can disarm exactly that one.
+    Gizmo *mArmedGizmo = nullptr;
+    /// THE `menu` BUTTON'S TWO MEANINGS, told apart by HOW LONG (owner answer
+    /// 10 + the mode cycle): a SHORT press cycles the gizmo mode, a HELD one is
+    /// the modifier (toggle-select, snap). A press that was used as a modifier
+    /// — a toggle-select, a snapping gesture frame — cannot also cycle when it
+    /// comes up.
+    ///
+    /// WHAT THE CLOCK IS, exactly (the lead's fix round, item 6). It is the sum
+    /// of the DURATIONS step() is charged, and those durations are not the same
+    /// thing on the two routes: a SCRIPTED step charges the nominal frame
+    /// (1/90 s), so a press of N injected frames lasts exactly N/90 s whatever
+    /// the box is doing — but a WORN session is stepped by the render driver,
+    /// which charges the wall time of the frame just gone, CLAMPED by
+    /// vrorigin::frameSeconds (1/15 s). So in a headset this is real time,
+    /// quantised by the frame rate and bounded per frame against a UI-thread
+    /// block; at 90 Hz the threshold is ~23 frames and at 30 Hz ~8. Saying
+    /// "never a wall clock" of both routes, as this comment used to, was wrong
+    /// about the one a person actually presses.
+    float mMenuHeldSeconds = 0.0f;
+    bool mMenuConsumed = false;
+
     /// THE FRAME'S PICK, REMEMBERED (see pick()). Mutable because picking is a
     /// READ of the document: `hover()`, `select()` and `beginGrab()` are all
     /// const-correct about the scene and none of them should have to be a
@@ -421,6 +514,8 @@ private:
     mutable bool mRefreshed = false;
     /// Counts, for the suites: every number a COUNT, never a wall clock.
     unsigned long long mSelects = 0, mGrabs = 0, mCommits = 0, mCancels = 0, mTurns = 0;
+    /// The gizmo's own counters: drags begun, drags committed, modes cycled.
+    unsigned long long mGizmoDrags = 0, mGizmoCommits = 0, mGizmoModes = 0;
 };
 
 #endif   // VRINTERACTION_H

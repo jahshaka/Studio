@@ -66,6 +66,8 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "viewport/freecamerapolicy.h"
 #include "viewport/gizmo.h"
+#include "viewport/gizmomeshes.h"
+#include "viewport/gizmoray.h"
 #include "viewport/rotationgizmo.h"
 #include "viewport/scalegizmo.h"
 #include "viewport/translationgizmo.h"
@@ -364,6 +366,158 @@ int main(int argc, char **argv)
         CHECK(wrong / fixed > 1.3f,
               "and the defect it fixes was worth 1.3x or more in the shipped Showroom");
         translate.clearSelectedNode();
+    }
+
+    // ---- THE VR ARM: A CONSTANT ANGULAR SIZE (phase 4b stage 2) -----------
+    //
+    // The eyes have no document camera and no frame to be a fraction of, so the
+    // VR rule is an ANGLE and nothing else: the translate gizmo's arrows
+    // subtend gizmoray::kVrGizmoHalfAngleDeg at the wearer's eye, at every
+    // distance and in every headset (the owner's decision 5, "fixed angular
+    // size"; gizmoray.h's note on why the desk's fraction-of-the-frame rule is
+    // the wrong shape here — carried over, it made the gizmo 24 degrees and
+    // growing with the eye's fov).
+    //
+    // WHAT IS ASSERTED: the scale really is gizmoray::vrGizmoScale, the
+    // measured half-extent of the DRAWN gizmo is the constant it is calibrated
+    // to (8 degrees for the arrows, and what the other two gizmos' own reaches
+    // make of it), the number does not move with distance, and the desk's own
+    // per-frame sizing stands down while a wearer is driving it.
+    {
+        std::printf("\n-- the VR arm: a constant ANGULAR size --\n");
+        node->setLocalPos(iris::Vec3(0, 0, 0));
+        node->update(0.0f);
+
+        const float kVrDistances[] = { 0.5f, 2.0f, 10.0f };
+        for (const Entry &entry : kGizmos) {
+            entry.g->setSelectedNode(node);
+            std::vector<float> subtended;
+            for (float d : kVrDistances) {
+                const iris::Vec3 eye = iris::Vec3(0.6f, 0.5f, 0.62f).normalized() * d;
+                GizmoVrPick pick;
+                pick.valid = true;
+                pick.eye = eye;
+                pick.rayPos = eye;
+                pick.viewDir = (iris::Vec3(0, 0, 0) - eye).normalized();
+                pick.rayDir = pick.viewDir;
+                entry.g->setVrPick(pick);
+                const float expected = gizmoray::vrGizmoScale(d);
+                if (std::fabs(entry.g->getGizmoScale() - expected) > 1e-3f) {
+                    std::printf("FAIL: %s at %.1f m: scale %.4f, expected %.4f\n", entry.name,
+                                double(d), double(entry.g->getGizmoScale()), double(expected));
+                    ++failures;
+                }
+                // THE ANGLE THE DRAWN GIZMO ACTUALLY SUBTENDS, measured off its
+                // own draw items: the largest angle between the view direction
+                // and the direction to any vertex it would render.
+                float widest = 0.0f;
+                for (const GizmoDrawItem &it : entry.g->drawItems(eye, pick.rayDir, pick.viewDir)) {
+                    std::vector<float> pos;
+                    if (!meshPositions(it.mesh.data(), pos)) continue;
+                    for (size_t v = 0; v + 2 < pos.size(); v += 3) {
+                        const iris::Vec3 world =
+                            it.transform * iris::Vec3(pos[v], pos[v + 1], pos[v + 2]);
+                        const iris::Vec3 to = world - eye;
+                        if (to.lengthSquared() < 1e-12f) continue;
+                        widest = std::max(widest, gizmoray::angleBetween(pick.viewDir, to));
+                    }
+                }
+                subtended.push_back(gizmoray::degreesOf(widest));
+            }
+            std::printf("   %-9s subtends %.2f / %.2f / %.2f degrees at 0.5 / 2 / 10 m "
+                        "(spread %.2f %%)\n", entry.name, double(subtended[0]),
+                        double(subtended[1]), double(subtended[2]),
+                        double(spreadPercent(subtended)));
+            CHECK(spreadPercent(subtended) < 1.0f,
+                  "the VR gizmo subtends the SAME ANGLE at every distance (within 1 %)");
+            // THE CALIBRATION ITSELF, for the translate gizmo, in the terms the
+            // rule is written in: its arrows REACH kTranslateReach of the
+            // scale, and that reach is d * tan(kVrGizmoHalfAngleDeg) — exactly,
+            // at every distance. (The rotation and scale gizmos reach 0.073 of
+            // the scale against the arrows' 0.095, so they come out
+            // proportionally smaller: 6.27 and 5.93 degrees, measured above and
+            // not pinned to a second constant that would have to be kept in
+            // step with gizmomeshes.h by hand.)
+            //
+            // THE MEASURED half-extent is 7.45 and not 8.00 because the farthest
+            // VERTEX is not perpendicular to the view axis from a 3/4 eye — the
+            // +X arrow leans towards it — which is a fact about where this
+            // suite stands, not about the rule.
+            if (QLatin1String(entry.name) == QLatin1String("translate")) {
+                entry.g->setVrPick(GizmoVrPick());
+                GizmoVrPick one;
+                one.valid = true;
+                one.eye = iris::Vec3(0, 0, 2);
+                one.rayPos = one.eye;
+                one.viewDir = iris::Vec3(0, 0, -1);
+                one.rayDir = one.viewDir;
+                entry.g->setVrPick(one);
+                const float reach = GizmoMeshes::kTranslateReach * entry.g->getGizmoScale();
+                const float want = 2.0f * std::tan(qDegreesToRadians(gizmoray::kVrGizmoHalfAngleDeg));
+                std::printf("   the arrows reach %.4f m at 2 m; 2 * tan(%.1f deg) = %.4f\n",
+                            double(reach), double(gizmoray::kVrGizmoHalfAngleDeg), double(want));
+                CHECK(std::fabs(reach - want) < 1e-4f,
+                      "the translate gizmo's arrows reach EXACTLY the angle the VR constant names "
+                      "(gizmoray::kVrGizmoHalfAngleDeg), by construction of the rule");
+                CHECK(std::fabs(subtended[1] - gizmoray::kVrGizmoHalfAngleDeg) < 1.0f,
+                      "...and the drawn gizmo measures within a degree of it from a 3/4 eye");
+            }
+            entry.g->setVrPick(GizmoVrPick());
+            entry.g->clearSelectedNode();
+        }
+
+        // TWO RULES, ON PURPOSE — and the difference is the point (the lead's
+        // fix round, item 2). The desk's gizmo is a constant fraction of a
+        // WINDOW on a desk; the wearer's is a constant angle in their vision.
+        // Evaluating the desktop rule at a 90-degree eye — which is what the
+        // first draft of this lane did — gives a gizmo three times the size,
+        // and one that would grow again on a wider headset.
+        {
+            translate.setSelectedNode(node);
+            cam->angle = 90.0f;
+            cam->setAspectRatio(16.0f / 9.0f);
+            cam->setLocalPos(iris::Vec3(0, 0, 3));
+            cam->lookAt(iris::Vec3(0, 0, 0));
+            cam->update(0.0f);
+            cam->updateCameraMatrices();
+            translate.updateSize(cam);
+            const float deskAt90 = translate.getGizmoScale();
+            GizmoVrPick pick;
+            pick.valid = true;
+            pick.eye = iris::Vec3(0, 0, 3);
+            pick.rayPos = pick.eye;
+            pick.viewDir = iris::Vec3(0, 0, -1);
+            pick.rayDir = pick.viewDir;
+            translate.setVrPick(pick);
+            const float wearer = translate.getGizmoScale();
+            std::printf("   at 3 m: the DESK's rule read at a 90-degree eye gives %.4f, the "
+                        "wearer's gives %.4f (%.2fx)\n", double(deskAt90), double(wearer),
+                        double(deskAt90 / wearer));
+            CHECK(std::fabs(wearer - gizmoray::vrGizmoScale(3.0f)) < 1e-4f,
+                  "the VR size is the VR rule's own number, with no camera and no fov in it");
+            CHECK(deskAt90 > wearer * 2.5f,
+                  "...and the frame-fraction rule read at an eye really is the several-times-too-"
+                  "big gizmo this replaced");
+
+            // ...AND THE DESK STANDS DOWN WHILE A WEARER IS DRIVING. There is
+            // one gizmo object and one scale; the viewport calls updateSize
+            // every frame, and while a VR pick is armed those calls must not
+            // take the wearer's size away (VR_INPUT_SPEC §5.2 — the gizmo would
+            // otherwise flip between two sizes at frame rate, and its hit radii
+            // with it).
+            cam->setLocalPos(iris::Vec3(0, 0, 12));
+            cam->lookAt(iris::Vec3(0, 0, 0));
+            cam->update(0.0f);
+            cam->updateCameraMatrices();
+            translate.updateSize(cam);
+            CHECK(std::fabs(translate.getGizmoScale() - wearer) < 1e-4f,
+                  "the desktop's own per-frame sizing stands down while a VR pick is armed");
+            translate.setVrPick(GizmoVrPick());
+            translate.updateSize(cam);
+            CHECK(std::fabs(translate.getGizmoScale() - wearer) > 1e-3f,
+                  "...and takes it straight back the moment the wearer stops driving it");
+            translate.clearSelectedNode();
+        }
     }
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,

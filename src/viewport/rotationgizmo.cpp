@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/rotationgizmo.h"
-#include <QApplication>
+#include "viewport/gizmoray.h"
 
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/core/math/intersectionhelper.h"
@@ -214,6 +214,74 @@ bool RotationHandle::screenDistance(const QPointF& cursor, float& distancePx, fl
 	return true;
 }
 
+// THE RING AGAINST A RAY, IN ANGLES (VR_INPUT_SPEC §5.2, stage 2).
+//
+// Line for line the same walk as screenDistance above, with one substitution:
+// where that projects each sample of the drawn circle to a PIXEL and measures
+// the cursor's distance from the chain of segments, this takes the DIRECTION
+// from the ray's origin to each sample and measures the angle from the ray to
+// the chain of great-circle arcs (gizmoray::angleToArc). Everything else — the
+// radius, the ring's own frame and basis, the camera-facing span, the sample
+// density — is read from the same members by the same expressions, so the
+// circle measured here IS the circle drawn, exactly as on the desk.
+//
+// Why the ray and not "the eye": the wearer points with a controller, and a
+// handle is grabbed by where the POINTER is, not by what the projection of the
+// scene onto an eye looks like. The two agree on the desk because there the
+// pointer's ray passes through the eye.
+bool RotationHandle::rayDistance(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
+                                 float &distanceRad, float &facing) const
+{
+	distanceRad = -1.0f;
+	facing = 0.0f;
+	if (rayDir.lengthSquared() < 1e-12f) return false;
+	const iris::Vec3 d = rayDir.normalized();
+
+	const float radius = ringRadius * handleScale * gizmo->getGizmoScale();
+	if (!(radius > 0.0f)) return false;
+
+	const iris::Mat4 t = ringFrame();
+	const iris::Vec3 centre = t.column(3).toVector3D();
+	iris::Vec3 u, v, n;
+	ringBasis(n, u, v);
+	const auto toWorldDir = [&t](const iris::Vec3 &dir) {
+		return (t * iris::Vec4(dir, 0)).toVector3D().normalized();
+	};
+	n = toWorldDir(n);
+	u = toWorldDir(u) * radius;
+	v = toWorldDir(v) * radius;
+
+	// EDGE-ON AGAINST THE POINTER (the brief's rule): 1 when the ring faces the
+	// ray, 0 when the ray lies in its plane.
+	facing = std::fabs(iris::Vec3::dotProduct(n, d));
+
+	const float span = qBound(float(M_PI), 2.0f * arcHalf, float(2.0 * M_PI));
+	const bool whole = span >= float(2.0 * M_PI) - 1e-4f;
+	const int samples = qMax(2, int(std::lround(kRingSamples * span / (2.0 * M_PI))));
+	float best = -1.0f;
+	iris::Vec3 first, prev;
+	bool havePrev = false;
+	for (int i = 0; i < samples; ++i) {
+		const float a = arcCentre - span * 0.5f + span * i / (whole ? samples : (samples - 1));
+		iris::Vec3 to = centre + u * qCos(a) + v * qSin(a) - rayPos;
+		if (to.lengthSquared() < 1e-12f) { havePrev = false; continue; }  // the origin itself
+		to.normalize();
+		if (!havePrev) first = to;
+		const float ang = havePrev ? gizmoray::angleToArc(d, prev, to)
+		                           : gizmoray::angleBetween(d, to);
+		if (best < 0.0f || ang < best) best = ang;
+		prev = to;
+		havePrev = true;
+	}
+	if (whole && havePrev) {          // close the loop (a face-on ring only)
+		const float ang = gizmoray::angleToArc(d, prev, first);
+		if (best < 0.0f || ang < best) best = ang;
+	}
+	if (best < 0.0f) return false;
+	distanceRad = best;
+	return true;
+}
+
 bool RotationHandle::getHitAngle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& angle)
 {
 	// THE SCREEN RING'S ANGLE IS A SCREEN ANGLE (GIZMO-1 item 2). There is no
@@ -225,6 +293,33 @@ bool RotationHandle::getHitAngle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& an
 	// the cursor made — which about an axis pointing back at the eye is exactly
 	// the turn the user watched.
 	if (axis == GizmoAxis::Screen) {
+		// THE SAME ANGLE WITH NO SCREEN (stage 2). The ring's own frame already
+		// has its +Z pointing back at the eye (ringFrame), so its circle is the
+		// XY circle of that frame and the angle around it is the quantity the
+		// drag differences — derived from the RAY exactly as an axis ring's is
+		// below, and with the same sign convention (negated, so that
+		// startAngle - hitAngle is the turn the wearer made). A constant roll
+		// of that frame about the view axis cancels in the difference, which is
+		// why no screen-space construction is needed at all.
+		if (gizmo->rayPicking()) {
+			iris::Mat4 frame = ringFrame();
+			const float s = handleScale * gizmo->getGizmoScale();
+			if (!(s > 0.0f)) return false;
+			frame.scale(s);
+			const iris::Mat4 worldToRing = frame.inverted();
+			const iris::Vec3 o = worldToRing * rayPos;
+			iris::Vec3 dir = (worldToRing * iris::Vec4(rayDir, 0)).toVector3D();
+			if (dir.lengthSquared() < 1e-12f) return false;
+			dir.normalize();
+			const float along = -iris::Vec3::dotProduct(o, dir);
+			iris::Vec3 point = o + dir * along;
+			const float h = point.length();
+			if (h < ringRadius && along > 0.0f)
+				point = o + dir * (along - std::sqrt(ringRadius * ringRadius - h * h));
+			if (point.x() * point.x() + point.y() * point.y() < 1e-10f) return false;
+			angle = -float(qRadiansToDegrees(qAtan2(point.y(), point.x())));
+			return true;
+		}
 		const iris::Vec3 centre = gizmo->getTransform().column(3).toVector3D();
 		QPointF centrePx, cursorPx;
 		if (!gizmo->projectToPixel(centre, centrePx)) return false;
@@ -504,6 +599,57 @@ QString RotationGizmo::ringNameAtPixel(const QPointF& cursor, float& distancePx)
 	return handle ? handle->axisName() : QString();
 }
 
+// THE PICK IN ANGLES (stage 2). The pixel path's ranking, unchanged in every
+// detail — nearest ring wins, a tie inside the band goes to the ring that faces
+// the pointer more, the outer screen ring only wins when it is clearly nearer —
+// measured with the POINTER's own tolerance (gizmoray::kVrPickToleranceDeg, 0.6
+// degrees, and a tie band of 0.171) rather than with a pixel constant converted
+// through some eye's field of view. There is deliberately no separate "is it
+// edge-on" refusal here, exactly as there is none in the pixel path: an edge-on
+// ring projects to a line and is still a handle.
+RotationHandle* RotationGizmo::ringAtRay(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
+                                         float& distanceRad)
+{
+	distanceRad = -1.0f;
+	if (!selectedNode) return nullptr;
+	refreshFrame();
+	const float tolerance = rayTolerance();
+	const float tie = rayTieTolerance();
+
+	RotationHandle* nearest = nullptr;
+	float nearestDist = -1.0f, nearestFacing = -1.0f;
+	for (auto i = 0; i < 3; i++) {
+		float d = -1.0f, facing = 0.0f;
+		if (!handles[i]->rayDistance(rayPos, rayDir, d, facing)) continue;
+		const bool closer = nearest == nullptr || d < nearestDist - tie;
+		const bool tied   = nearest != nullptr && std::fabs(d - nearestDist) <= tie;
+		if (closer || (tied && facing > nearestFacing)) {
+			nearest = handles[i];
+			nearestDist = d;
+			nearestFacing = facing;
+		}
+	}
+	{
+		float d = -1.0f, facing = 0.0f;
+		if (handles[kScreenHandle]->rayDistance(rayPos, rayDir, d, facing) &&
+		    (nearest == nullptr || nearestDist > tolerance || d < nearestDist - tie)) {
+			nearest = handles[kScreenHandle];
+			nearestDist = d;
+			nearestFacing = facing;
+		}
+	}
+	if (!nearest) return nullptr;
+	distanceRad = nearestDist;                      // reported hit or miss
+	return nearestDist <= tolerance ? nearest : nullptr;
+}
+
+QString RotationGizmo::handleNameAt(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3)
+{
+	float angle = 0.0f;
+	auto* handle = getHitHandle(rayPos, rayDir, angle);
+	return handle ? handle->axisName() : QString();
+}
+
 bool RotationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 {
 	float hitAngle = 0.0f;
@@ -513,6 +659,15 @@ bool RotationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 RotationHandle* RotationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& hitAngle)
 {
 	refreshFrame();
+	// NO PIXEL TO PROJECT INTO (stage 2): the wearer's pointer is measured in
+	// angles instead. One question, two units — and the handle that comes back
+	// is dragged by exactly the same code either way.
+	if (rayPicking()) {
+		float distanceRad = -1.0f;
+		auto* handle = ringAtRay(rayPos, rayDir, distanceRad);
+		if (handle) handle->getHitAngle(rayPos, rayDir, hitAngle);
+		return handle;
+	}
 	QPointF cursor;
 	if (!rayPixel(rayPos, rayDir, trans.column(3).toVector3D(), cursor)) return nullptr;
 	float distancePx = -1.0f;
@@ -535,13 +690,26 @@ void RotationGizmo::refreshFrame()
 	// through — the SAME camera drawItems is handed a view direction for — and
 	// it freezes with everything else, so the outer ring cannot slide under the
 	// cursor mid-drag either.
+	// THE DIRECTION THE RINGS ARE CUT AND TURNED FOR: the wearer's, when one is
+	// driving this gizmo (stage 2), and the desktop camera's otherwise. It is
+	// the same "one gizmo, one picture" rule the size follows — with a headset
+	// on, the arcs the desk draws are the arcs the wearer sees, and the screen
+	// ring faces the head rather than the monitor.
 	const GizmoPickView &view = pickView();
-	if (view.isValid()) {
-		handles[kScreenHandle]->screenAxis =
-			view.camera->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+	iris::Vec3 look;
+	// IN VR, ALONG THE LINE OF SIGHT TO THE GIZMO (Gizmo::vrLookDirection's
+	// note): the eye's own forward is the desktop's rule and is wrong at a
+	// wearer's field of view for anything they are not looking straight at.
+	if (vrPickArmed()) {
+		if (!vrLookDirection(trans.column(3).toVector3D(), look)) look = iris::Vec3();
+	}
+	else if (view.isValid())
+		look = view.camera->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1)).normalized();
+	if (!look.isNull()) {
+		handles[kScreenHandle]->screenAxis = look;
 		// ...and the camera-facing half of each axis ring, from the same
-		// camera, frozen by the same early return above (GIZMO-3 item 1).
-		updateRingArcs(-handles[kScreenHandle]->screenAxis);
+		// direction, frozen by the same early return above (GIZMO-3 item 1).
+		updateRingArcs(-look);
 	}
 }
 
@@ -612,6 +780,12 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 {
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
+	// THE WEARER'S AIM IS THE HIGHLIGHT (stage 2): with a VR pick armed the
+	// host's mouse ray is replaced by the controller's, and the hit test below
+	// is asked in angles — so the handle lit up in the headset is the handle a
+	// press would take, and the desk sees the same one.
+	resolvePickRay(rayPos, rayDir, viewDir);
+	const RayPickScope raySpace(vrPickArmed() ? this : nullptr);
 	refreshFrame();
 	// The screen ring's axis normally comes from the pick view (refreshFrame).
 	// A caller that draws without ever picking — an overlay test, a stand-in

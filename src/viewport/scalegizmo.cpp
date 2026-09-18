@@ -14,7 +14,6 @@ For more information see the LICENSE file
 #include "viewport/scalegizmo.h"
 
 #include "irisgl/document/scenegraph/scalelock.h"
-#include <QApplication>
 
 #include "irisgl/core/math/intersectionhelper.h"
 #include "irisgl/core/math/mathhelper.h"
@@ -349,10 +348,29 @@ ScaleHandle* ScaleGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris
 	return closestHandle;
 }
 
+QString ScaleGizmo::handleNameAt(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
+{
+	iris::Vec3 hit;
+	auto* handle = getHitHandle(rayPos, rayDir, viewDir, hit);
+	if (!handle) return QString();
+	switch (handle->axis) {
+	case GizmoAxis::Center: return QStringLiteral("center");
+	case GizmoAxis::X:      return QStringLiteral("x");
+	case GizmoAxis::Y:      return QStringLiteral("y");
+	case GizmoAxis::Z:      return QStringLiteral("z");
+	default:                return QString();
+	}
+}
+
 QVector<GizmoDrawItem> ScaleGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
+	// THE WEARER'S AIM IS THE HIGHLIGHT (VR_INPUT_SPEC §5.2, stage 2) — see
+	// RotationGizmo::drawItems. The scale gizmo needs no second PICK path: its
+	// axis boxes and its centre are 3D geometry a controller's ray meets
+	// exactly as a mouse ray does.
+	resolvePickRay(rayPos, rayDir, viewDir);
 	const QColor highlight(255, 255, 0);
 	if (dragging) {
 		for (int i = 0; i < handles.size(); i++) {

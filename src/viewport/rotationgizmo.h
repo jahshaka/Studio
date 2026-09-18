@@ -131,6 +131,19 @@ public:
 	/// projects nowhere (entirely behind the eye).
 	bool screenDistance(const QPointF& cursor, float& distancePx, float& facing) const;
 
+	/// HOW FAR THE AIM RAY IS FROM THIS RING, AS AN ANGLE AT ITS ORIGIN — the
+	/// VR twin of screenDistance (VR_INPUT_SPEC §5.2, stage 2). The ring is
+	/// walked exactly as it is DRAWN (the same circle, the same camera-facing
+	/// span) and the answer is the smallest angle between the ray's direction
+	/// and the directions to that curve: the pixel path's question in the only
+	/// unit a controller and a drawn handle share.
+	///
+	/// `facing` is |cos| between the ring's axis and the RAY — the edge-on rule
+	/// evaluated against the pointer rather than against a camera, because in a
+	/// headset the pointer is not the eye. False when the ring has no radius.
+	bool rayDistance(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
+	                 float &distanceRad, float &facing) const;
+
 	/// The angle of the cursor AROUND this ring, in degrees — the quantity the
 	/// drag differences. Well conditioned at every camera angle: the ray is
 	/// resolved against the handle's SPHERE (the near hemisphere, falling back
@@ -219,6 +232,14 @@ public:
 	RotationHandle* ringAtPixel(const QPointF& cursor, float& distancePx);
 	/// The same answer as a name: "x" | "y" | "z" | "screen", or an empty string.
 	QString ringNameAtPixel(const QPointF& cursor, float& distancePx);
+	/// THE SAME PICK, IN ANGLES (stage 2): the nearest ring to the aim RAY, with
+	/// the tolerance and the tie band converted from the desktop's pixels by
+	/// gizmoray::toleranceRadians. The ranking rules are the pixel path's, to
+	/// the letter — nearest wins, a tie goes to the ring that faces the pointer
+	/// more, and the outer screen ring loses every tie.
+	RotationHandle* ringAtRay(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
+	                          float& distanceRad);
+	QString handleNameAt(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) override;
 
 	iris::Mat4 getTransform() override;
 	void setTransformSpace(GizmoTransformSpace transformSpace) override;

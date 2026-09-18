@@ -85,8 +85,22 @@ class TranslationHandle : public GizmoHandle
 	bool planeDistance(const QPointF& cursor, float& distancePx,
 	                   bool* onAxisBand = nullptr) const;
 	/// True while this plane handle is worth drawing and clicking — the
-	/// edge-on rule, read from the pick view's camera.
+	/// edge-on rule, read from the pick view's camera, or — while a wearer is
+	/// driving the gizmo (VR_INPUT_SPEC §5.2, stage 2) — from their VIEW
+	/// direction, which is what they would see the square as.
 	bool planeFacesCamera() const;
+	/// THE SQUARE AGAINST A RAY, IN ANGLES (stage 2) — planeDistance's twin:
+	/// the four corners taken as DIRECTIONS from the ray's origin, zero inside
+	/// the spherical quad they span and the angle to the nearest edge outside
+	/// (gizmoray::angleToQuad). `onAxisBand` is the same carve-out for the two
+	/// inner sides (the arrow shafts), measured in the same unit.
+	///
+	/// A PLANE SEEN EDGE-ON BY THE POINTER IS NOT A HANDLE: the rule is the
+	/// desktop's kPlaneEdgeOnDegrees, evaluated against the RAY here, because a
+	/// square the controller is pointing along the plane of is a lottery to hit
+	/// and a grazing intersection to drag — the very reason the rule exists.
+	bool rayDistance(const iris::Vec3 &rayPos, const iris::Vec3 &rayDir,
+	                 float &distanceRad, bool *onAxisBand = nullptr) const;
 };
 
 class TranslationGizmo : public Gizmo
@@ -125,6 +139,7 @@ public:
 	/// nearest one — the translate gizmo's half of `editor.gizmoHitTest`.
 	/// "xy" | "yz" | "xz", or an empty string when none is within tolerance.
 	QString planeNameAtPixel(const QPointF& cursor, float& distancePx);
+	QString handleNameAt(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) override;
 public:
 	QVector<GizmoDrawItem> drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) override;
 };

@@ -362,6 +362,15 @@ add_script_e2e(vr_verbs e2e_vr_verbs.js)
 # makes all of it gateable on a box with no runtime at all; the arithmetic under
 # it is `vr.grab_maths` and the rig half is `vr.input_session`.
 add_script_e2e(vr_input_headless e2e_vr_input_headless.js)
+# THE EDITOR'S GIZMO IN THE WEARER'S HANDS (VR_INPUT_SPEC §5.2, phase 4b stage
+# 2) — the same injection route, and the same claim: the gizmo a controller
+# drags is the gizmo the mouse drags. A press on a handle drags it and leaves
+# the selection alone, a press off it selects; `menu` held snaps; a SHORT press
+# of `menu` cycles the mode through editor.setGizmoMode; every drag is ONE undo
+# entry and a cancelled one is none. The pick geometry under it is
+# gizmo.ring_pick's and gizmo.plane_handles' ray arms, and the size rule is
+# gizmo.screen_size's — all three document-only.
+add_script_e2e(vr_gizmo e2e_vr_gizmo.js)
 # THE PLAYER'S VR MODE WITH NO RUNTIME (SPECS/VR_SPEC.md §4.5, phase 3) — the
 # other everywhere case, and the owner's rule in executable form: without a
 # headset the tool is today's tool. `player.play({vr:true})` must refuse and
