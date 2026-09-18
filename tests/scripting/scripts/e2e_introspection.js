@@ -340,4 +340,71 @@ assert(streaming.multiLoadThreads === 0,
 assert(app.waitForTextures().waitedMs === 0,
        "app.waitForTextures() returns immediately with nothing to wait for");
 
+// ---- app.notices (NOTICES-1) ---------------------------------------------
+//
+// THE LICENCES THIS BINARY OWES, through the verb the About page shows. The
+// texts are read out of the vendored trees when the app is built
+// (cmake/Notices.cmake), so this asserts the READING worked — a manifest entry
+// whose file moved would come back here as an empty text, and a component
+// nobody declared would not come back at all (source.notices_coverage is the
+// other half: it fails on a vendored directory the manifest does not claim).
+var noticeList = app.notices();
+assert(noticeList.length >= 14,
+       "app.notices() lists every component this binary ships or links (" +
+       noticeList.length + ")");
+var byId = {};
+noticeList.forEach(function (n) { byId[n.id] = n; });
+// The vendored ones, plus the three that are shipped or linked WITHOUT their
+// source being in this tree (the fix-round read, item 2: three.js and the fonts
+// were in the binary and in no entry; Qt's LGPL notice was owed by every Qt
+// binary; the macOS bundle redistributes the Vulkan loader and MoltenVK).
+["ogre-next", "assimp", "bullet3", "zip", "qlementine", "qtawesome",
+ "meshoptimizer", "webxr-input-profiles", "threejs", "fonts-apache", "fonts-ofl",
+ "qt", "vulkan-loader", "moltenvk"].forEach(function (id) {
+    assert(byId[id] !== undefined, "…including " + id);
+    assert(byId[id].licence.length > 0 && byId[id].role.length > 20,
+           "…with its licence name and what it does for us (" + id + ": " +
+           byId[id].licence + ")");
+    assert(byId[id].textLength > 100,
+           "…and a licence TEXT of real length read from " + byId[id].path + "/" +
+           byId[id].file + " (" + byId[id].textLength + " bytes)");
+    assert(byId[id].present === true, "…present in this build (" + id + ")");
+});
+// The list carries no texts (ten licences are ~100 KB of JSON); one id does.
+assert(noticeList[0].text === undefined,
+       "the LIST omits the texts, which are kilobytes each");
+var one = app.notices({ id: "assimp" });
+assert(one.length === 1 && one[0].text.indexOf("assimp") >= 0,
+       "app.notices({id}) answers the one component AND its text");
+assert(one[0].text.length === one[0].textLength,
+       "…and textLength is that text's own length");
+// `vendored` tells the two kinds apart, and the not-vendored ones are exactly
+// the three whose licence text lives in app/notices/ with its provenance.
+["threejs", "fonts-apache", "ogre-next"].forEach(function (id) {
+    assert(byId[id].vendored === true, id + " is vendored in this tree");
+});
+["qt", "vulkan-loader", "moltenvk"].forEach(function (id) {
+    assert(byId[id].vendored === false,
+           id + " is shipped or linked without its source in this tree");
+    assert(byId[id].path === "app/notices",
+           "...and its notice comes from app/notices/ (" + byId[id].path + ")");
+});
+// Qt's notice carries the LGPL's own words, which is the point of having it.
+var qtText = app.notices({ id: "qt" })[0].text;
+assert(qtText.indexOf("LESSER GENERAL PUBLIC LICENSE") > 0 &&
+       qtText.indexOf("GENERAL PUBLIC LICENSE") > 0,
+       "Qt's notice carries the LGPL-3 text it refers to, and the GPL-3 it builds on");
+// A component declared but not in this build says so rather than vanishing.
+var absent = noticeList.filter(function (n) { return n.present === false; });
+absent.forEach(function (n) {
+    assert(n.textLength > 0,
+           n.id + " is declared but absent from this build, and says so in place of its text");
+});
+var unknownNotice = false;
+try { app.notices({ id: "not-a-component" }); } catch (e) { unknownNotice = true; }
+assert(unknownNotice, "an unknown component id is refused with the list of ids");
+var unknownNoticeKey = false;
+try { app.notices({ ids: "assimp" }); } catch (e) { unknownNoticeKey = true; }
+assert(unknownNoticeKey, "an unknown key is refused, not ignored");
+
 console.log("PASS: scripting.e2e.introspection");

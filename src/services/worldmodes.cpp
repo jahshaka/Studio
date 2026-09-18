@@ -458,6 +458,40 @@ QVector<Row> buildRows()
         out.append(r);
     }
 
+    {
+        // HIDE THE DEFAULT FLOOR IN THE PLAYER (owner, 2026-09-18,
+        // VR_INPUT_SPEC §16 row 6: "hide the floor in the Player" — a PROJECT
+        // SETTING). A TierSpace::None row, for the reason Exposure Mode gives
+        // one file above: no quality tier may write it. It is not a scalability
+        // question at all — it is a statement about the finished thing, and a
+        // mode switch that silently put somebody's editor floor back into their
+        // Player would be the same defect as a mode switch that regraded their
+        // picture.
+        //
+        // IN THE "Rendering" GROUP rather than a new "Player" section, and that
+        // is a deliberate small choice: the World tab's sections are counted by
+        // ui.properties_filter and a section for one boolean is a worse answer
+        // than a row among the other scene-wide switches.
+        Row r;
+        r.id = QStringLiteral("playerHidesFloor");
+        r.label = QStringLiteral("Hide Floor in Player");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Bool;
+        r.tierSpace = TierSpace::None;
+        r.cost = QStringLiteral("Leaves the app's own checkered default floor — and the horizon "
+                                "plane that extends it — OUT of the Player, while the editor "
+                                "keeps it. For a scene that stands on its own level, terrain or "
+                                "nothing at all: the default floor is where the grid is legible "
+                                "and what a dropped object lands on while you build, and it is "
+                                "not part of the finished thing. It hides nothing you authored "
+                                "and deletes nothing: the floor is still in the outliner, with "
+                                "its material and its physics, and it comes back the moment the "
+                                "Player stops. Costs nothing either way.");
+        r.get = [](const iris::ScenePtr &s) { return s->playerHidesFloor ? 1 : 0; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->playerHidesFloor = v != 0; };
+        out.append(r);
+    }
+
     // ---- Shadows -----------------------------------------------------------
     {
         Row r;

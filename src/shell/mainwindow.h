@@ -350,6 +350,15 @@ public:
     bool setPanelOpen(const QString &name, bool open);
     /// Whether that panel is open (it may still be behind another tab).
     bool isPanelOpen(const QString &name) const;
+    /// BRINGS AN OPEN PANEL TO THE FRONT OF ITS TAB GROUP (`editor.panel`'s
+    /// `raise`, lane STUDIO-SMALL-A; the gap SELECT-COST-1 found). Opening a
+    /// panel already raises it, so this is the gesture for a panel that is
+    /// OPEN but tabbed BEHIND another — the one thing a script could not do.
+    /// A closed panel cannot be in front: raising one is a no-op (false), and
+    /// `{open: true, raise: true}` is how a caller says "open it and show it".
+    /// Also records the bottom group's front tab, so the next page switch
+    /// brings back what the caller asked for rather than what it interrupted.
+    bool raisePanel(const QString &name);
     /// That panel's dock, or null.
     QDockWidget *panelDock(const QString &name) const;
     /// THE RIGHT COLUMN'S TAB ("world" | "selection", PROPERTY_FILTER_SPEC §2).

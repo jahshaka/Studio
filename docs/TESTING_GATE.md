@@ -11,7 +11,7 @@ carries the rules.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$" -E "^gi\.ddgi_raster$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`); `--timeout 120` is the default for rows that set none. (The trailing `-E "^gi\.ddgi_raster$"` now excludes NOTHING — that suite was deleted with the irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD — and is kept only so this command stays byte-identical to the one quoted in `CLAUDE.md`; drop both when that copy is next revised.) **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`); `--timeout 120` is the default for rows that set none. (The trailing `-E "^gi\.ddgi_raster$"` this command used to carry is GONE, 2026-09-18: that suite was deleted with the irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD, so the regex excluded nothing. `CLAUDE.md`'s copy of the command still carries it and is the lead's to trim — the two differ by a filter that matches no suite, which changes no selection.) **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
 | **PUSH** | the MERGE tier + the `--engine-selftest` sha256 (the moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, the rigperf bench, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under `glibc's built-in malloc checks + MALLOC_PERTURB_ (the real checker is an opt-in — it aborts under the NVIDIA GLX library)`; ~110 s, RUN_SERIAL, labelled `benchmark` because that label IS the nightly marker the MERGE/PUSH commands exclude — read one failure as "run it again", three as a regression of the open's slice-boundary drive) — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box, and whenever a batch touched the open path, the scene teardown or the engine's resource handling | the lead |
 
@@ -110,16 +110,44 @@ not a gate.
 
 ## 5. Why the full gate cost 25 minutes, and what the cleanup changed
 
-**CURRENT COUNTS (2026-09-13, the last three PUSH-tier gates — ledger §211/§214/§219):
-368 suites REGISTERED, 364 of them RUN in the MERGE/PUSH tier (the four excluded are
-the two `benchmark`/`shadercache-attack` labels, all nightly), in
-488-680 s at -j4.** The spread is load, not content: 488 s on a quiet box (push #24,
-353/353 — one suite has been added since), 672 s with a sibling lane compiling at -j10
-beside it (push #26, 354/354), 680 s on push #25, whose two reds — open.responsive and
-archive.responsive — were the documented UI-thread contention class and 3/3 solo green,
-i.e. 354/354 effective. Zero retries on #24, #26, #27, #29 and #30 (508-579 s quiet, 674 s beside RR2 + two lanes); 362/358 since ENGINE-6 (push #29), 363/359 since ENGINE-7 (push #31, 497 s quiet, zero retries), 364/360 since P0 (push #32, 498 s, zero retries), 366/362 since the Ogre-samples ports (push #33, 603 s, one solo retry), 368/364 since the smoke batch (push #34, 521 s, zero retries; #35 529 s, zero retries — the ASan cache attack 572 → 184 s after SHADERCACHE-2). Re-count with `ctest -N` and
-`ctest -N -LE "^(benchmark|shadercache-attack)$" -E "^gi\.ddgi_raster$"` rather than
-trusting any number written here; suites are added most weeks.
+**CURRENT COUNTS (2026-09-18, the last three PUSH-tier gates — ledger §680, §689, §707):
+455 suites REGISTERED, 451 of them RUN in the MERGE/PUSH tier, in 930-1,028 s at -j4.**
+The FOUR the tier excludes are exactly the two labels' members, all nightly —
+`open.crash_soak` and `shadercache.container_asan` (`shadercache-attack`),
+`scenegraph.benchmark` and `rigperf.benchmark` (`benchmark`). The `-E "^gi\.ddgi_raster$"` that used to ride
+the tier's command line is GONE from it (this lane, 2026-09-18): that suite left with the
+irradiance field's raster probe source (FIELD-RASTER-CRUD, 2026-09-17), so the regex
+excluded nothing and the count is the labels' four alone. A tier command that filters a
+suite nobody can name is how a stale exclusion survives a year. Measured in a lane worktree at
+Studio `c8c3dfe8a` on 2026-09-18: 457 registered, 453 in the tier — two suites above push
+#46's numbers, which is the normal weekly drift and the reason to re-count rather than
+read. The three gates, with what was running beside each —
+the spread is LOAD, not content:
+
+| Push | Suites | Wall at -j4 | Retries | What else was on the box |
+|---|---|---|---|---|
+| #44 (2026-09-17 23:5x) | 443/443 | 930 s | zero | one lane's build |
+| #45 (2026-09-18 01:3x) | 446/446 | 994 s | zero | two lanes (a scoped gate + a build; load 16 → 8) |
+| #46 (2026-09-18 04:0x) | 451/451 (455 registered) | 1,028 s | zero | a sibling -j2 gate + two app instances |
+
+So the band to plan with is **~1,000 s (16-17 min) for the PUSH tier at -j4 with lanes
+live, and the MERGE tier is THE SAME SET** — the two tiers have had identical selections
+since the 2026-09-10 cleanup (§4b), so "the MERGE tier" and "the PUSH tier" differ only in
+WHEN they run and in the selftest-hash check the push one carries. A quiet box is faster
+(the older 488-680 s readings below were measured on a tree with 90 fewer suites); nothing
+in this range is a regression, and none of these three needed a single retry — which is
+the number worth watching, because a tier whose reds are all flakes is not a gate.
+
+HISTORY, kept because the counts move most weeks: 368 registered / 364 run in 488-680 s at
+-j4 (2026-09-13, pushes §211/§214/§219), 353/353 at 488 s quiet on push #24, 354/354 at
+672 s with a sibling lane compiling at -j10 (#26), 680 s on #25 (two reds, both the
+documented UI-thread contention class, 3/3 solo green); zero retries on #24, #26, #27, #29
+and #30 (508-579 s quiet, 674 s beside RR2 + two lanes); 362/358 since ENGINE-6 (#29),
+363/359 since ENGINE-7 (#31, 497 s quiet), 364/360 since P0 (#32, 498 s), 366/362 since the
+Ogre-samples ports (#33, 603 s, one solo retry), 368/364 since the smoke batch (#34, 521 s;
+#35 529 s — the ASan cache attack 572 → 184 s after SHADERCACHE-2). Re-count with `ctest -N`
+and `ctest -N -LE "^(benchmark|shadercache-attack)$"` rather than
+trusting any number written here.
 
 **The earlier measurement, kept for the shape of the cost (2026-09-10, main tree at
 8cb9af75): 327 suites, 572 s at -j4.** The remaining floor is a ~112 s serial tail at the end of the run (the RUN_SERIAL

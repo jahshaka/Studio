@@ -364,6 +364,38 @@ public:
     /// USER pressing Screenshot wants the picture they are looking at. So the
     /// plain picture is an EXPLICIT opt-in whose name says what it is, and the
     /// user's door asks for `Scene`.
+    /// WHAT COLOUR SPACE EACH GRADE'S BYTES ARE IN — MEASURED, not assumed
+    /// (PLAIN-GRADE-1, 2026-09-18; the render audit's ON-20 asked the question
+    /// and left it open). The measurement, on the rig at 1920x1080 with a flat
+    /// sky the user picked as #808080 (the document decodes a picked colour
+    /// sRGB->linear, so the sky's radiance is 0.2159):
+    ///
+    ///   plain    55/255 = 0.2157 — THE LINEAR RADIANCE, un-encoded.
+    ///   tonemap  50/255, scene 50/255, viewport 50/255 — the film curve's
+    ///            output (Hable at the shipped constants, /f(11.2), then the
+    ///            (x-0.5)*1.25+0.61 grade tail: 0.2159 x 1.3646 exposure
+    ///            -> 0.1946 -> 50, to the byte).
+    ///   THE WINDOW  (0x200011 grabbed with xwd while the same scene was on
+    ///            screen) 50/255 — and with the sky at #8000C0 the window read
+    ///            (50, 0, 114) against the scene grade's (50, 0, 114), THE SAME
+    ///            BYTES.
+    ///
+    /// So: THE THREE GRADED ANSWERS ARE WHAT THE WINDOW SHOWS, bit for bit, and
+    /// PLAIN IS NOT — Plain is one colour space away from the picture, by its
+    /// own contract ("no post-processing at all"), and that difference is the
+    /// whole reason every offscreen diagnosis in this tree has read "too dark".
+    /// It is NOT a missing sRGB encode on the offscreen target: this engine's
+    /// window swapchain is not sRGB either (the `gamma` parameter is passed on
+    /// the non-Vulkan branch only, OgreEngine.cpp), HlmsPbs in this pin sets
+    /// `hw_gamma_write` unconditionally so the shader never encodes, and the
+    /// tonemapper's output IS the display code (which is why EXPOSURE-1's
+    /// anchor solves to an output of exactly 0.18 for an 18 % card). Encoding
+    /// the plain readback would therefore make it disagree with the window and
+    /// with every engine-side offscreen suite at once.
+    ///
+    /// READ A PLAIN VALUE AS RADIANCE, then. `gradeEncoding()` below reports
+    /// this per grade and every screenshot verb returns it beside the pixels,
+    /// so a reader is told which of the two spaces it is holding.
     enum class ScreenshotGrade {
         /// NO POST-PROCESSING AT ALL: 1x MSAA, linear radiance clipped to 8
         /// bits, the same pixels on every machine and in every frame. THIS IS
@@ -371,6 +403,13 @@ public:
         /// it is the default of `editor.screenshot` / `player.screenshot` for
         /// that reason. Script word "plain" (and "raw", the spelling the suites
         /// were written with; both mean this and always will).
+        ///
+        /// ITS BYTES ARE LINEAR RADIANCE (see the block above, measured): a
+        /// floor at radiance 0.192 reads 49/255 here and NOT the 122/255 the
+        /// same radiance would be as a display code. That is the contract, not
+        /// a defect — it is what makes this grade an exactly reproducible
+        /// measuring instrument — but it is also why a plain shot always looks
+        /// darker than the editor: it is not a picture of the editor.
         Plain,
         /// THE THUMBNAIL PICTURE: the deterministic filmic grade and nothing
         /// else — no bloom, no AO, no SMAA, no SSR, exposure a constant
@@ -424,6 +463,28 @@ public:
     }
     /// The four words, for a verb's own error message and its docs.
     static QString gradeWords() { return QStringLiteral("plain | raw | tonemap | scene | viewport"); }
+
+    /// THE GRADE'S SCRIPT WORD, for a verb's answer (the canonical spelling:
+    /// "raw" and `false` both report "plain").
+    static QString gradeName(ScreenshotGrade grade) {
+        switch (grade) {
+        case ScreenshotGrade::Tonemap:  return QStringLiteral("tonemap");
+        case ScreenshotGrade::Scene:    return QStringLiteral("scene");
+        case ScreenshotGrade::Viewport: return QStringLiteral("viewport");
+        case ScreenshotGrade::Plain:    break;
+        }
+        return QStringLiteral("plain");
+    }
+    /// THE COLOUR SPACE OF THAT GRADE'S BYTES — "linear" or "display" (the
+    /// enum's own measurement block above says how this was established, and
+    /// that the display answer is the window's bytes exactly). Every screenshot
+    /// verb returns it beside the pixels, because a number read in the wrong
+    /// space is the one reading nobody notices is wrong: 0.2159 radiance is
+    /// 55/255 here and 50/255 on screen, and neither is "too dark".
+    static QString gradeEncoding(ScreenshotGrade grade) {
+        return grade == ScreenshotGrade::Plain ? QStringLiteral("linear")
+                                               : QStringLiteral("display");
+    }
 
     /// The ACHIEVED anti-aliasing (MSAA) sample count of the viewport's render
     /// target — the driver may clamp what scene->antiAliasing requested. Only

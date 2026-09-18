@@ -121,7 +121,7 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "player's on-screen view is created by its show event, and answering true while "
           "drawing nothing would be the worse answer. player.screenshot needs no view.",
           Needs::Engine },
-        { "screenshot", "player.screenshot(path, {width?, height?, probes?, grade?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
+        { "screenshot", "player.screenshot(path, {width?, height?, probes?, grade?, postFx?}) -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[...]}",
           "What the PLAYER sees, written to `path` as a PNG. Rendered through a throwaway "
           "offscreen view over the scene and the document's SCENE CAMERA, with the editor's "
           "furniture masked out (the grid, the wires and icons, the gizmo, the selection shell) "
@@ -129,7 +129,7 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "with an argument: the player looks through a different camera and hides different "
           "things. Works before the Player page has ever been shown. `probes` are "
           "the same 5x5 averages editor.screenshot returns, in normalized 0..1 image coordinates; "
-          "`grade` develops the shot exactly as editor.screenshot does — \"plain\" (also \"raw\"; the default: no post-processing at all, the neutral exactly-reproducible readback the pixel suites assert), \"tonemap\" (the thumbnail picture: the deterministic filmic grade only, so a bright scene does not clip to white), \"scene\" (the player's own picture: the whole post chain as the world has it, at the exposure the on-screen player view has converged on) or \"viewport\" (the whole chain with its own adaptive exposure re-seeded from the scene's value). `postFx` is the older boolean spelling of plain/viewport and still works.",
+          "`grade` develops the shot exactly as editor.screenshot does — \"plain\" (also \"raw\"; the default: no post-processing at all, the neutral exactly-reproducible readback the pixel suites assert), \"tonemap\" (the thumbnail picture: the deterministic filmic grade only, so a bright scene does not clip to white), \"scene\" (the player's own picture: the whole post chain as the world has it, at the exposure the on-screen player view has converged on) or \"viewport\" (the whole chain with its own adaptive exposure re-seeded from the scene's value). `postFx` is the older boolean spelling of plain/viewport and still works. THE TWO COLOUR SPACES (PLAIN-GRADE-1, measured): the graded answers are the WINDOW'S OWN BYTES and \"plain\" is LINEAR RADIANCE — a plain shot reads darker than the screen because it is a measurement, not a picture — and the answer's `encoding` says which one it is (\"linear\" or \"display\").",
           Needs::Engine },
     };
 }
@@ -302,6 +302,14 @@ QVariantMap PlayerApi::screenshot(const QString &path, const QVariantMap &option
     }
 
     const QColor center = img.pixelColor(img.width() / 2, img.height() / 2);
+    // WHICH PICTURE THESE PIXELS ARE, AND IN WHICH COLOUR SPACE
+    // (PLAIN-GRADE-1). The plain grade's bytes are LINEAR RADIANCE and the
+    // three graded answers are the window's own bytes, measured — a number
+    // read in the wrong space is the reading nobody notices is wrong, so the
+    // answer says which space it is in rather than leaving it to the caller
+    // to remember what the default grade was.
+    out["grade"] = IEditorViewport::gradeName(grade);
+    out["encoding"] = IEditorViewport::gradeEncoding(grade);
     out["path"] = info.absoluteFilePath();
     out["width"] = img.width();
     out["height"] = img.height();

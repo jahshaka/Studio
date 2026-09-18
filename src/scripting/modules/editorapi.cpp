@@ -387,7 +387,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "line. Called with no argument it reads, "
           "like editor.trayState().",
           Needs::Window },
-        { "panel", "editor.panel({name, open}) -> {name, open, current, tabbed}",
+        { "panel", "editor.panel({name, open, raise}) -> {name, open, current, tabbed}",
           "OPENS OR CLOSES AN EDITOR PANEL — \"hierarchy\", \"properties\", \"presets\", "
           "\"assets\", \"timeline\" or \"console\" — which is exactly what the Toggle "
           "Widgets dialog's buttons and a panel's own title-bar X do, through the same "
@@ -396,7 +396,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "back AND to the front of its tab bar. Called with a name alone it reads. `current` "
           "is whether it is the tab in front of the bottom area's one tab bar (Assets | "
           "Timeline | Console) — an open panel behind another tab is `open: true, current: "
-          "false`, which app.docks() reports for every panel at once.",
+          "false`, which app.docks() reports for every panel at once. `raise: true` brings an "
+          "ALREADY-OPEN panel to the FRONT of its tab group — the one gesture a script had "
+          "no way to make (a tabbed dock could be opened and closed but not brought forward, "
+          "lane SELECT-COST-1's finding). It is separate from `open` because opening already "
+          "raises: `{name, raise: true}` is \"show me the one that is open behind another "
+          "tab\", `{name, open: true, raise: true}` is \"open it and show it\", and raising a "
+          "CLOSED panel does nothing (a closed panel has no front) and reads back `open: "
+          "false, current: false` rather than opening it behind the caller's back. Within one "
+          "call `open` is applied first, then `raise`, and both are idempotent; `current` in "
+          "the answer is the read-back of the raise.",
           Needs::Window },
         { "propertiesTab", "editor.propertiesTab({tab}) -> {tab}",
           "THE RIGHT COLUMN'S TAB — \"world\" or \"selection\" (PROPERTY_FILTER_SPEC §2). The "
@@ -743,14 +752,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "that spawns an image plane for a dropped picture. Same pixels as editor.dropPointAt, "
           "which answers WHERE the same drop would place a new object.",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
           "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
           "\"plain\" (also spelled \"raw\", or false) is NO POST-PROCESSING AT ALL — 1x MSAA, linear radiance clipped to 8 bits, the same pixels on every machine and in every frame. This is the picture the pixel suites assert and what this verb has always returned. IT CARRIES NO SCREEN-SPACE REFLECTIONS, NO AMBIENT OCCLUSION, NO BLOOM, NO SMAA AND NO TONEMAP, BY DESIGN, and that is worth knowing before using this verb to diagnose a picture: two plain shots taken with reflections on and off are bit-identical, which says nothing about the renderer (a 2026-09-15 diagnosis read exactly that as \"screenshots have lost SSR\"). Ask for \"scene\" when the question is about what the user sees. "
           "\"tonemap\" is the THUMBNAIL picture: the deterministic filmic grade only (the scene's exposure as a constant; no bloom, no ambient occlusion, no SMAA, no reflections), so a bright scene does not clip to white and a sweep of hundreds stays cheap. "
           "\"scene\" is THE EDITOR'S OWN PICTURE and what the Screenshot button in the editor takes: the scene's WHOLE post chain exactly as the world has it — global illumination, screen-space reflections, ambient occlusion, bloom, SMAA, the looks stack, HDR and the tonemap — at this camera's pose and lens, graded at the exposure the on-screen viewport has currently converged on (carried across as a constant, so the shot is repeatable). A world with HDR switched off photographs ungraded, like the viewport. "
           "\"viewport\" (or true) is the same whole chain but with the chain's OWN adaptive exposure re-seeded from the scene's (or the driving camera's) exposure value; an offscreen view lives about two frames and cannot converge, so it grades at that seed. It exists for camera.screenshot, where there is no on-screen view measuring the camera in question — for the editor camera prefer \"scene\". "
-          "The editor's own Screenshot action uses \"scene\"; project preview tiles and asset thumbnails use \"tonemap\".",
+          "The editor's own Screenshot action uses \"scene\"; project preview tiles and asset thumbnails use \"tonemap\". "
+          "THE TWO COLOUR SPACES, MEASURED (PLAIN-GRADE-1, 2026-09-18): the graded answers (\"tonemap\", \"scene\", \"viewport\") are THE WINDOW'S OWN BYTES — a flat sky picked as #8000C0 reads (50, 0, 114) in a \"scene\" shot and (50, 0, 114) in an xwd grab of the live window, the same bytes — while \"plain\" is LINEAR RADIANCE: the same sky reads (55, 0, 134), which is the sRGB decode of the colour the user picked. So a plain shot is not a dark picture of the scene, it is a MEASUREMENT in a different space, and that — not a missing sRGB encode — is why every offscreen diagnosis in this tree has read \"too dark\" (this engine's window swapchain is not sRGB either; the tonemapper's output IS the display code). The answer reports `grade` and `encoding` (\"linear\" or \"display\") so a reader is told which space it is holding. "
+          ,
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
           "Opens a nested undo macro inside the script's run (finer-grained grouping).",
@@ -1879,7 +1890,7 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
              "no panels)");
         return QVariantMap();
     }
-    static const QStringList known = { "name", "open" };
+    static const QStringList known = { "name", "open", "raise" };
     for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
         if (known.contains(it.key())) continue;
         fail(QStringLiteral("editor.panel: unknown key '%1' (known: %2)")
@@ -1894,6 +1905,11 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
     }
     if (change.contains("open"))
         host.mainWindow->setPanelOpen(name, change.value("open").toBool());
+    // ...then the raise, so `{open: true, raise: true}` in one call means what
+    // it reads like. `open: true` raises by itself; this is for the panel that
+    // is already open behind another tab.
+    if (change.value("raise").toBool())
+        host.mainWindow->raisePanel(name);
     QVariantMap out;
     out["name"] = name;
     out["open"] = host.mainWindow->isPanelOpen(name);
@@ -2485,6 +2501,14 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
     }
 
     const QColor center = img.pixelColor(img.width() / 2, img.height() / 2);
+    // WHICH PICTURE THESE PIXELS ARE, AND IN WHICH COLOUR SPACE
+    // (PLAIN-GRADE-1). The plain grade's bytes are LINEAR RADIANCE and the
+    // three graded answers are the window's own bytes, measured — a number
+    // read in the wrong space is the reading nobody notices is wrong, so the
+    // answer says which space it is in rather than leaving it to the caller
+    // to remember what the default grade was.
+    out["grade"] = IEditorViewport::gradeName(mode);
+    out["encoding"] = IEditorViewport::gradeEncoding(mode);
     out["path"] = info.absoluteFilePath();
     out["width"] = img.width();
     out["height"] = img.height();

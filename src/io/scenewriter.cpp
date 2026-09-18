@@ -221,6 +221,9 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["refractionsMode"] = scene->refractionsMode;
     sceneObj["distortionMode"] = scene->distortionMode;
     sceneObj["distortionStrength"] = scene->distortionStrength;
+    // THE PLAYER'S FLOOR (PLAYER-FLOOR-1): a project setting, written like
+    // every other World row so it travels with the scene.
+    sceneObj["playerHidesFloor"] = scene->playerHidesFloor;
     // The looks stack (POST_LOOKS_SPEC §4.1) — an ORDERED array, and the order
     // is the frame order. Written normalised (known ids, one instance each,
     // every parameter present and clamped) so a hand-edited file and a file

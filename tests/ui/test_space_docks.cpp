@@ -264,6 +264,44 @@ int main(int argc, char **argv)
             CHECK(reopened.value("open").toBool() && reopened.value("current").toBool(),
                   "asking for the Timeline again brings it back AND to the front");
 
+            // `raise` BRINGS AN OPEN PANEL FORWARD (PANEL-RAISE-1). Opening a
+            // panel raises it, so the gesture that was missing is the one for a
+            // panel that is OPEN and tabbed BEHIND another: a script could open
+            // and close a dock but not bring it to the front (SELECT-COST-1's
+            // finding). FAILS BEFORE: `raise` was an unknown key and the verb
+            // refused the whole call.
+            mcp.runScript(QStringLiteral("editor.tray({tab: 'assets'})"));
+            settle(mcp);
+            const QJsonObject behind = readObject(mcp,
+                QStringLiteral("editor.panel({name: 'timeline'})"));
+            CHECK(behind.value("open").toBool() && !behind.value("current").toBool(),
+                  "with Assets in front the open Timeline reads open-but-not-current");
+            const QJsonObject raised = readObject(mcp,
+                QStringLiteral("editor.panel({name: 'timeline', raise: true})"));
+            CHECK(raised.value("open").toBool() && raised.value("current").toBool(),
+                  "editor.panel({raise: true}) brings the open Timeline to the front");
+            CHECK(readDocks(mcp).isCurrent("animationDock"),
+                  "…and app.docks() agrees the Timeline is the front tab");
+            // …and it is the TAB that moved, not the panel's open state: the
+            // Assets panel beside it is still open, merely behind.
+            const QJsonObject assetsBehind = readObject(mcp,
+                QStringLiteral("editor.panel({name: 'assets'})"));
+            CHECK(assetsBehind.value("open").toBool() && !assetsBehind.value("current").toBool(),
+                  "…while the Assets panel is still open, behind it");
+            // RAISING A CLOSED PANEL DOES NOTHING — it does not open it behind
+            // the caller's back, and it says so.
+            mcp.runScript(QStringLiteral("editor.panel({name: 'presets', open: false})"));
+            settle(mcp);
+            const QJsonObject raisedClosed = readObject(mcp,
+                QStringLiteral("editor.panel({name: 'presets', raise: true})"));
+            CHECK(!raisedClosed.value("open").toBool() && !raisedClosed.value("current").toBool(),
+                  "raising a CLOSED panel leaves it closed (a closed panel has no front)");
+            mcp.runScript(QStringLiteral("editor.panel({name: 'presets', open: true})"));
+            settle(mcp);
+            // …and back to the Timeline in front for what follows.
+            mcp.runScript(QStringLiteral("editor.tray({tab: 'timeline'})"));
+            settle(mcp);
+
             // THE CONSOLE IS THE THIRD TAB.
             const QJsonObject withConsole = readObject(mcp,
                 QStringLiteral("editor.tray({console: true})"));
