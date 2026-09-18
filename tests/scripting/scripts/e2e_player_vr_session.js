@@ -256,11 +256,24 @@ assert(!near(headB.x, headA.x, 1e-4) || !near(headB.z, headA.z, 1e-4),
 // has not moved with the wearer.
 
 vr.move({ forward: true, seconds: 3.0 });     // walk well away
+// THE HEAD IS COMPOSED INSIDE A FRAME, so it is one frame behind the rig the
+// verb just moved: read without a pump this measured where the wearer was
+// BEFORE the walk (lane VR-WORLD-1 — the bound below used to pass on that stale
+// pose because the number happened to clear it).
+player.frame(3);
 var walked = player.state().vr.head;
 var awayFrom = Math.sqrt(Math.pow(walked.x - cam0.position.x, 2) +
                          Math.pow(walked.z - cam0.position.z, 2));
-console.log("walked " + awayFrom.toFixed(2) + " m from where the run began");
-assert(awayFrom > 10.0, "the wearer is well away from the start (" + awayFrom.toFixed(2) + " m)");
+console.log("walked " + awayFrom.toFixed(2) + " m from where the run began (3 s at "
+            + speed + " m/s)");
+// THE BOUND IS THE SPEED'S, not a number: the wearer's fly speed is the
+// PROJECT's setting now (`world.vr`, lane VR-WORLD-1) and a suite that hard-codes
+// a distance is asserting a default rather than the walk. Three seconds of
+// forward is 3*speed from wherever they stood, and they stood a few metres from
+// the start, so two seconds' worth is a floor with room in it.
+assert(awayFrom > speed * 2.0,
+       "the wearer is well away from the start (" + awayFrom.toFixed(2) + " m, floor "
+       + (speed * 2.0).toFixed(2) + ")");
 var tRecenter = Date.now();                       // the recentre's OWN gap (lead, second read)
 assert(player.vrRecenter() === true, "player.vrRecenter() is accepted");
 // A MOVE ARRIVING IN THE GAP IS ANSWERED BY THE TELEPORT, NOT ADDED TO IT
