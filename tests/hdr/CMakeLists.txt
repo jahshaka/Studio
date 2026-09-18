@@ -62,10 +62,12 @@ endif()
 
 # THE GRADE'S 8-BIT WRITE IS DITHERED (lane DITHER-1, ogre-patch 0079). A
 # gradient fixture under one point light, rendered twice in ONE process — with
-# the dither and with JAHSHAKA_NO_DITHER — so every arm is measured against the
-# same binary's undithered picture and the discrimination is real. See the file
-# header for the defect (the owner's "rippling in the ground plane") and for
-# what each of the five arms would catch.
+# the dither and without it, through PostFxDesc::ditherOff — so every arm is
+# measured against the same binary's undithered picture and the discrimination
+# is real. See the file header for the defect (the owner's "rippling in the
+# ground plane") and for what each arm would catch; the last one is not about
+# the dither at all but about the LDR buffer SMAA works on, which was losing 73
+# of the 256 display codes on its own.
 jahshaka_hdr_test(test_hdr_dither test_hdr_dither.cpp)
 target_link_libraries(test_hdr_dither PRIVATE JahshakaEngine)
 add_test(NAME hdr.dither COMMAND test_hdr_dither

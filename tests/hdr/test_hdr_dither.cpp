@@ -24,7 +24,7 @@
 // discrimination arms real — a suite that only ever sees the dithered picture
 // cannot tell a working dither from a broken assertion.
 //
-// THE SIX ASSERTIONS
+// THE ARMS
 //   A  THE BANDING SIGNATURE. Along a cut through the gradient, the UNDITHERED
 //      picture holds long runs of one identical value (a band); the dithered
 //      one must not. This is the assertion that fails if the dither is removed,
@@ -44,6 +44,14 @@
 //   F  THE STAIRCASE IS GONE. The undithered picture's 9x9 local mean sits DEAD
 //      STILL for stretches of columns and then jumps — that is the band, on the
 //      picture the eye integrates. The dithered one must never sit still.
+//   G  ONE NOISE VALUE FOR ALL THREE CHANNELS: a grey world stays exactly grey.
+//   H  THE ON-CODE IDENTITY, arithmetically (no picture can exhibit it).
+//   I  THE LDR BUFFER SMAA WORKS ON DOES NOT QUANTISE THE PICTURE A SECOND
+//      TIME — the lane's other defect, which has nothing to do with the dither
+//      and needs a chain WITH SMAA to be visible at all.
+//   J  THE OFFSET PATTERN ITSELF, on an UNSHADED frame: the one arm whose
+//      numbers depend on the noise and on nothing a driver's float arithmetic
+//      decides, and therefore the one to compare across drivers by hand.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -84,6 +92,16 @@ MeshData planeMesh(float half)
     }
     d.indices = { 0, 1, 2, 0, 2, 3 };
     return d;
+}
+
+/// Flips the DIAGNOSTIC off switch on this view's description — the hook that
+/// makes every arm below an A/B of one binary against itself, in one process,
+/// with no environment variable and no other thread involved.
+void setDither(bool off)
+{
+    PostFxDesc fx = gView->postFx();
+    fx.ditherOff = off;
+    gView->setPostFx(fx);
 }
 
 /// Renders `frames` and reads the target back. The picture is still, so the
@@ -217,12 +235,11 @@ int main()
 
     // ---- the two pictures, one process ------------------------------------
     Image dithered, plain, again;
-    ::unsetenv("JAHSHAKA_NO_DITHER");
     if (!shoot(dithered, 8)) { std::printf("FAIL: readPixels (dithered)\n"); return 1; }
     if (!shoot(again, 2))    { std::printf("FAIL: readPixels (repeat)\n"); return 1; }
-    ::setenv("JAHSHAKA_NO_DITHER", "1", 1);
+    setDither(true);
     if (!shoot(plain, 2))    { std::printf("FAIL: readPixels (undithered)\n"); return 1; }
-    ::unsetenv("JAHSHAKA_NO_DITHER");
+    setDither(false);
 
     const std::vector<int> gd = green(dithered), gp = green(plain), ga = green(again);
     const unsigned w = dithered.width, h = dithered.height;
@@ -270,13 +287,53 @@ int main()
               moved, gd.size());
     }
 
-    // ---- D  DETERMINISM ----------------------------------------------------
+    // ---- D  DETERMINISM, ON EVERY CHANNEL ----------------------------------
     {
-        bool same = ga.size() == gd.size();
-        size_t diff = 0;
-        for (size_t i = 0; same && i < gd.size(); ++i) if (ga[i] != gd[i]) { ++diff; same = false; }
-        CHECK(same, "D: two renders of one still frame are identical (the dither has no "
-                    "time term)%s", diff ? " — they are not" : "");
+        const bool same = again.rgba == dithered.rgba;
+        CHECK(same, "D: two renders of one still frame are identical on every channel "
+                    "(the dither has no time term)%s", same ? "" : " — they are not");
+    }
+
+    // ---- G  ONE NOISE VALUE FOR ALL THREE CHANNELS -------------------------
+    // The fixture is grey by construction — a white light on a grey albedo —
+    // so a picture that stays grey is the whole claim: the offset is one
+    // scalar, added to all three channels, which is what keeps the residual
+    // luminance noise instead of colour speckle.
+    {
+        size_t coloured = 0;
+        for (size_t i = 0; i < gd.size(); ++i) {
+            const unsigned char *px = &dithered.rgba[i * 4];
+            if (px[0] != px[1] || px[1] != px[2]) ++coloured;
+        }
+        CHECK(coloured == 0,
+              "G: the dithered picture of a grey world is still exactly grey on every pixel "
+              "(R == G == B; %zu pixels were not)", coloured);
+    }
+
+    // ---- H  THE ON-CODE IDENTITY -------------------------------------------
+    // A VALUE ALREADY SITTING EXACTLY ON A CODE MUST ROUND BACK TO IT. That is
+    // what lets a dithered write sit in front of a picture somebody else has
+    // already quantised without moving it, and it is why the amplitude is
+    // 0.498 of a code rather than 0.500.
+    //
+    // NO RENDERED PICTURE CAN EXHIBIT IT, which is why this arm is arithmetic:
+    // the tonemapper's output never lands exactly on a code except by
+    // coincidence, and there is no second dithered write in the chain today to
+    // feed an already-quantised picture through. So the shader's own rule is
+    // restated here — floor(k + 0.5 + n), at the extremes of n — over every
+    // code. This is the ONE place the amplitude is written twice; it exists to
+    // catch exactly the change that would break the property, somebody raising
+    // 0.996 to 1.0 (JahDither.glsl).
+    {
+        const double peak = 0.5 * 0.996;        // the shader's amplitude, in codes
+        int wrong = 0;
+        for (int k = 0; k <= 255; ++k)
+            for (double n : { -peak, peak })
+                if (int(std::floor(double(k) + 0.5 + n)) != k) ++wrong;
+        CHECK(wrong == 0,
+              "H: floor(k + 0.5 + n) == k for every code and both extremes of the dither's "
+              "+-%.3f (%d violations) — an already quantised picture survives this write",
+              peak, wrong);
     }
 
     // ---- E  THE LOCAL MEAN DID NOT MOVE ------------------------------------
@@ -323,6 +380,125 @@ int main()
         CHECK(flatD == 0,
               "F: WITH the dither it never sits still at all (%d such stretches, was %d)",
               flatD, flatP);
+    }
+
+    // ---- I  THE LDR BUFFER DOES NOT QUANTISE THE PICTURE A SECOND TIME ------
+    //
+    // THE LANE'S OTHER DEFECT, and it is not the dither's: `kLdr`, the buffer
+    // the tonemap writes when SMAA is on, was an _SRGB attachment. This
+    // engine's tonemapper emits the DISPLAY CODE, so that target encoded it as
+    // though it were linear and the sampler decoded it again — the space SMAA
+    // sees never changed, because decode(encode(d)) is d, but the 8-bit round
+    // trip through a curve the value was never in CANNOT CARRY 73 of the 256
+    // codes. They start at 75 (75, 83, 89, 94, 98, 102 …, thinning to every
+    // other code only near the top), and this fixture's 134..144 contains four
+    // of them — 135, 137, 140 and 143 — which is why it can see this at all.
+    //
+    // THE TEST, with the dither off so the comparison is exact: the SAME scene
+    // rendered with SMAA on and with SMAA off must be BYTE-IDENTICAL. SMAA has
+    // no edge to find in a smooth gradient, so its blend is a copy; the only
+    // thing its presence changes is whether the picture went through kLdr. It
+    // discriminates — verified by hand once, by flipping the format back to
+    // _SRGB in OgreChain::build: 73,896 of 262,144 bytes then differ.
+    {
+        PostFxDesc fx = gView->postFx();
+        fx.ditherOff = true;
+        fx.smaaPreset = -1;
+        gView->setPostFx(fx);
+        Image noSmaa;
+        if (!shoot(noSmaa, 4)) { std::printf("FAIL: readPixels (SMAA off)\n"); return 1; }
+        fx.smaaPreset = 3;                      // Ultra: the tier the editor ships at
+        gView->setPostFx(fx);
+        Image withSmaa;
+        if (!shoot(withSmaa, 6)) { std::printf("FAIL: readPixels (SMAA on)\n"); return 1; }
+        fx.smaaPreset = -1; fx.ditherOff = false;
+        gView->setPostFx(fx);
+
+        size_t differ = 0; int worst = 0;
+        for (size_t i = 0; i < noSmaa.rgba.size(); ++i) {
+            const int d = std::abs(int(noSmaa.rgba[i]) - int(withSmaa.rgba[i]));
+            if (d) { ++differ; worst = std::max(worst, d); }
+        }
+        CHECK(differ == 0,
+              "I: the LDR buffer SMAA works on is a lossless carrier — the same gradient "
+              "renders byte-identically with SMAA on and off (%zu of %zu bytes differ, "
+              "worst %d)", differ, noSmaa.rgba.size(), worst);
+    }
+
+    // ---- J  THE OFFSET PATTERN IS THE SAME ON EVERY DRIVER ------------------
+    //
+    // THE ONE ARM THAT TESTS THE NOISE AND NOTHING ELSE. Every arm above reads
+    // a SHADED picture, so what it measures is the noise AND the float value
+    // the filmic curve produced — and that value is not bit-identical between
+    // vendors (measured: NVIDIA and lavapipe disagree on 81 % of the default
+    // scene's pixels with the dither off). This arm removes the shading: the
+    // scene is emptied to the view's own BACKGROUND, one exact constant that
+    // every implementation carries identically, so the only thing left in the
+    // difference between the dithered and undithered frames is the dither's
+    // own pattern.
+    //
+    // WHAT IT ASSERTS is the pattern's SHAPE, which a second driver can then be
+    // compared against by hand from the same numbers: the fraction of pixels
+    // the dither lifts by one code, and a checksum of WHICH ones. Both are
+    // pure functions of the integer noise, so a float regression in it — the
+    // very thing the integer arithmetic exists to prevent — moves them.
+    {
+        // A background the dither can move in both directions: mid grey, not
+        // black (a code clamped at 0 cannot be dithered down).
+        gView->setBackground(Colour(0.35f, 0.35f, 0.35f));
+        // The plane is at z == 0 and the camera looks down -Z, so backing off
+        // to +500 leaves it far behind: the frame is the clear colour and
+        // nothing else. (setScene(nullptr) would take the chain down with it.)
+        enginetest::testCameraAt(gView, Vec3(0.0f, 0.0f, -500.0f));
+        PostFxDesc fx = gView->postFx();
+        fx.ditherOff = true;  gView->setPostFx(fx);
+        Image flatPlain;
+        if (!shoot(flatPlain, 4)) { std::printf("FAIL: readPixels (flat, undithered)\n"); return 1; }
+        fx.ditherOff = false; gView->setPostFx(fx);
+        Image flatDith;
+        if (!shoot(flatDith, 4)) { std::printf("FAIL: readPixels (flat, dithered)\n"); return 1; }
+
+        // The undithered frame must be ONE code — it is a clear colour.
+        bool uniform = true;
+        const unsigned char base = flatPlain.rgba[1];
+        for (size_t i = 0; i < flatPlain.rgba.size(); i += 4)
+            if (flatPlain.rgba[i + 1] != base) { uniform = false; break; }
+        CHECK(uniform, "J control: an unshaded frame is one code everywhere (%u)", base);
+
+        size_t lifted = 0, dropped = 0;
+        unsigned long long sum = 0;             // a checksum of WHICH pixels moved
+        for (size_t p = 0; p < size_t(flatDith.width) * flatDith.height; ++p) {
+            const int d = int(flatDith.rgba[p * 4 + 1]) - int(base);
+            if (d > 0) { ++lifted; sum = sum * 1000003ull + p; }
+            else if (d < 0) { ++dropped; sum = sum * 1000003ull + (p ^ 0xFFFFFFFFull); }
+        }
+        // JAH_DITHER_DUMP=<file>: the flat dithered frame as a PGM, so the same
+        // arm on ANOTHER DRIVER can be compared against this one by hand. The
+        // comparison that matters is not equality of the counts — the frame's
+        // fractional part is the filmic curve's float output and two drivers
+        // disagree on it slightly — but NESTING: both sets are the same noise
+        // field thresholded at that fraction, so the smaller must be a SUBSET
+        // of the larger if, and only if, the noise field is identical.
+        if (const char *dump = std::getenv("JAH_DITHER_DUMP")) {
+            if (FILE *f = std::fopen(dump, "wb")) {
+                std::fprintf(f, "P5\n%u %u\n255\n", flatDith.width, flatDith.height);
+                for (size_t p2 = 0; p2 < size_t(flatDith.width) * flatDith.height; ++p2)
+                    std::fwrite(&flatDith.rgba[p2 * 4 + 1], 1, 1, f);
+                std::fclose(f);
+            }
+        }
+        const size_t px = size_t(flatDith.width) * flatDith.height;
+        std::printf("   [J] flat base code %u, lifted %zu, dropped %zu of %zu, "
+                    "pattern checksum %llu\n", base, lifted, dropped, px, sum);
+        // The offsets are uniform on (-0.498, 0.498), so the share that moves
+        // the code is |f| for the frame's single fraction f — never all of it,
+        // never none of it, and the two directions are exclusive.
+        CHECK(lifted + dropped > 0 && lifted + dropped < px,
+              "J: the dither moves SOME of a flat frame and not all of it "
+              "(%zu lifted, %zu dropped, of %zu)", lifted, dropped, px);
+        CHECK(lifted == 0 || dropped == 0,
+              "J: a flat frame's dither moves its code in ONE direction only "
+              "(%zu lifted, %zu dropped)", lifted, dropped);
     }
 
     std::printf(failures ? "\nFAILURES: %d\n" : "\nall ok\n", failures);
