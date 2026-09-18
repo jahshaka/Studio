@@ -333,7 +333,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// thing a frame-stepping test must not have. Off suspends the tick for the
 	// run's duration; Live paces it to one frame per display period (round 2,
 	// H1 — unpaced, the loop and the script alternate one frame per verb).
-	scriptHost->scriptRunState = [](ScriptRunState state) {
+	scriptHost->scriptRunState = [this](ScriptRunState state) {
+		// A preview the run's own verb started ends with the run (F3 of
+		// MATERIAL-PREVIEW-1's read) — before the driver lookup, which a
+		// document-only session fails.
+		if (state == ScriptRunState::None && materialPreviewService
+		    && materialPreviewService->verbOwned())
+			materialPreviewService->end();
 		EngineRenderDriver *driver = EngineHost::instance().driver();
 		if (!driver) return;
 		switch (state) {
@@ -2678,30 +2684,6 @@ void MainWindow::deleteNode()
 bool MainWindow::deleteSceneNode(iris::SceneNodePtr node)
 {
     return sceneEditService->deleteNode(node);
-}
-
-void MainWindow::dragEnterEvent(QDragEnterEvent *event)
-{
-    event->acceptProposedAction();
-}
-
-void MainWindow::dragMoveEvent(QDragMoveEvent *event)
-{
-    event->acceptProposedAction();
-}
-
-/**
- * @brief accepts model files dropped into scene
- * currently only .obj files are supported
- */
-void MainWindow::dropEvent(QDropEvent* event)
-{
-
-}
-
-void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
-{
-    event->accept();
 }
 
 void MainWindow::updateCurrentSceneThumbnail()

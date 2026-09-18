@@ -88,6 +88,12 @@ bool MaterialPreviewService::begin(const iris::SceneNodePtr &node, const QString
     if (!canPreview(presetOrGuid)) { restore(); return false; }
 
     auto meshNode = node.staticCast<iris::MeshNode>();
+    // A MESH WEARING NO MATERIAL GETS NO PREVIEW (code review, F8): the mirror
+    // draws it in the default surface so it is hoverable, but MeshNode::
+    // setMaterial dereferences what it is handed, and "put the original back"
+    // would hand it null. `material.set` refuses the same node for the same
+    // reason; the drop still applies, as it always did.
+    if (!meshNode->getMaterial()) { restore(); return false; }
     if (active() && mNode == meshNode && mSource == presetOrGuid) return true;
 
     // Moving to a different node (or a different payload on the same one):
@@ -128,6 +134,7 @@ bool MaterialPreviewService::restore()
     // model's, an in-place edit's).
     mNode->setMaterial(mOriginal);
     mNode.reset();
+    mVerbOwned = false;
     mOriginal.reset();
     mSource.clear();
     markScene(false);

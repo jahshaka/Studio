@@ -1762,24 +1762,29 @@ int main(int argc, char **argv)
 
         // ---- A HOVER PREVIEW COSTS NO GI (MATERIAL-PREVIEW-1) --------------
         //
-        // THE MEASUREMENT behind the decision, on the same scene and in the
-        // same process as everything above. The editor's hover preview swaps
-        // the material on the mesh under the cursor and swaps it back when the
-        // drag moves on; the document is never written and no undo step exists,
-        // so a GI re-solve charged to a hover is a re-solve for a state that
-        // will never be saved.
+        // The editor's hover preview swaps the material on the mesh under the
+        // cursor and swaps it back when the drag moves on; the document is never
+        // written and no undo step exists, so a GI re-solve charged to a hover
+        // would be a re-solve for a state that will never be saved.
         //
-        // WHAT IT REALLY COSTS, measured (and it is NOT the "two re-solves per
-        // hovered object" the audit assumed): the engine's material term is a
-        // GENERATION COUNTER bumped by OgreScene::noteMaterialChanged for a
-        // material ID whose VOXEL INPUTS changed and which a GI-visible item
-        // already wears (OgreGi.cpp giMaterialChangeEffect). A material the
-        // scene has never seen bumps nothing when it is pushed, and re-binding
-        // one the engine already knows bumps nothing either — so what a hover
-        // costs is ONE re-solve, on the first frame the previewed material
-        // reaches a GI-visible item, and zero thereafter. One is still one too
-        // many for a state nobody committed, and the arms below prove both that
-        // it happens and that the flag removes it.
+        // WHAT IT REALLY COSTS, MEASURED BY THE LEAD (2026-09-19, ledger 804) —
+        // and it is neither the audit's "two re-solves per hovered object" nor
+        // the lane's first "one on entry": it is ZERO, flagged or not. The lane's
+        // +1 was the PREVIOUS section's pending settle (the moved mesh) firing
+        // inside this arm's frames: every arm below DRAINS first, because a
+        // counter read across a section boundary measures the last section's
+        // debt. The engine's material term is a generation counter bumped by
+        // OgreScene::noteMaterialChanged for a material ID whose voxel inputs
+        // changed WHILE a GI-visible item wears it; an item that starts wearing
+        // a DIFFERENT id bumps nothing.
+        //
+        // That is a DEFECT, not a saving (MATERIAL-SWAP-GI-1, queued): a
+        // COMMITTED material swap leaves the voxels carrying the old albedo
+        // until something else refreshes. When that lane makes a swap reach the
+        // generation, arm A below turns red — on purpose: that is the moment
+        // Scene::materialPreviewDepth starts to matter, and the lane owns the
+        // flag's falling edge. Until then arm B proves only that the flag does
+        // no harm, and arm C that it is a gate and not a mute.
         {
             auto previewTarget = gfloor;
             const iris::MaterialPtr originalMat = previewTarget->getMaterial();
@@ -1795,9 +1800,17 @@ int main(int argc, char **argv)
                     engine->renderOneFrame();
                 }
             };
+            // Read until the counter stops moving: two still windows in a row.
+            const auto drain = [&]() {
+                for (int round = 0; round < 8; ++round) {
+                    const quint64 before = mirror.giRefreshCount();
+                    settle(40);
+                    if (mirror.giRefreshCount() == before) return;
+                }
+            };
 
-            // ARM A: unflagged — the preview as it used to be. One hover in,
-            // one hover out.
+            // ARM A: unflagged. One hover in, one hover out.
+            drain();
             const quint64 beforeA = mirror.giRefreshCount();
             previewTarget->setMaterial(borrowed);
             settle(20);
@@ -1808,9 +1821,9 @@ int main(int argc, char **argv)
             std::printf("info: GI per hover, UNFLAGGED: enter +%llu, leave +%llu\n",
                         (unsigned long long)(afterHoverA - beforeA),
                         (unsigned long long)(afterRestoreA - afterHoverA));
-            CHECK(afterHoverA > beforeA,
-                  "GI preview (measured): an UNFLAGGED hover costs a full GI re-solve for a state "
-                  "the document never held");
+            CHECK(afterRestoreA == beforeA,
+                  "GI preview (measured): a material SWAP does not reach the GI generation today — "
+                  "when MATERIAL-SWAP-GI-1 fixes that this reads red, and the preview flag takes over");
 
             // ARM B: the same gesture with the scene saying a preview is on
             // screen. Nothing arms — and, the half that is easy to get wrong,
@@ -1823,6 +1836,7 @@ int main(int argc, char **argv)
             borrowed2->setBaseColor(QColor(240, 12, 200));
             borrowed2->setRoughnessFactor(0.83f);
 
+            drain();
             const quint64 beforeB = mirror.giRefreshCount();
             ++gdoc->materialPreviewDepth;
             previewTarget->setMaterial(borrowed2);
@@ -1840,6 +1854,7 @@ int main(int argc, char **argv)
             // one re-solve. (An in-place edit, which is what the material panel
             // and `material.set` do — the path the engine's generation counter
             // is actually keyed on.)
+            drain();
             const quint64 beforeC = mirror.giRefreshCount();
             if (auto pbr = originalMat.dynamicCast<iris::PbrMaterial>())
                 pbr->setBaseColor(QColor(200, 30, 30));

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
+#include "services/apppaths.h"
 
 #include "irisgl/document/assets/mesh.h"
 
@@ -1306,6 +1307,10 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
 
 void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, iris::SceneNodePtr target)
 {
+    // A preview ends BEFORE a command is BUILT, not at its push: the command's
+    // constructor is what captures "the original" (the read of the code review,
+    // F1 — UndoService's pre-push hook runs after that and is only the backstop).
+    if (preview) preview->end();
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return;
@@ -1402,11 +1407,17 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
     // readable path, so it cannot be deleted here (the same assumption
     // createMaterialFromNode's temp file makes). Named for the PRESET, so the
     // set of these is bounded by the number of shipped presets rather than
-    // growing by one per apply — /tmp is RAM on this box.
+    // growing by one per apply. UNDER THIS RUN'S DATA ROOT, not the system temp
+    // dir (code review, F6): the file carries this root's pinned store paths
+    // and is read a turn later, so one shared /tmp name let two instances —
+    // two worktrees, two ctest slots — read each other's. (The real end of
+    // this file is a thumbnail request that reads the ROW; after THUMBS-1.)
     QString safeName = preset.name;
     safeName.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_-]")), QStringLiteral("_"));
+    const QDir matgenDir(QDir(AppPaths::dataRoot()).filePath(QStringLiteral("matgen")));
+    QDir().mkpath(matgenDir.path());
     const QString thumbSource =
-        QDir(QDir::tempPath()).filePath(QStringLiteral("jah-matgen-%1.material").arg(safeName));
+        matgenDir.filePath(QStringLiteral("%1.material").arg(safeName));
     QFile jsonFile(thumbSource);
     jsonFile.open(QFile::WriteOnly);
     jsonFile.write(QJsonDocument(material).toJson());
@@ -1474,6 +1485,10 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, 
 
 bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target)
 {
+    // A preview ends BEFORE a command is BUILT, not at its push: the command's
+    // constructor is what captures "the original" (the read of the code review,
+    // F1 — UndoService's pre-push hook runs after that and is only the backstop).
+    if (preview) preview->end();
     if (editgate::refuse()) return false;       // the edit gate, as in deleteNodes
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
@@ -1532,6 +1547,10 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
 
 bool SceneEditService::applyMaterialShader(const QString &shaderGuid, iris::SceneNodePtr target)
 {
+    // A preview ends BEFORE a command is BUILT, not at its push: the command's
+    // constructor is what captures "the original" (the read of the code review,
+    // F1 — UndoService's pre-push hook runs after that and is only the backstop).
+    if (preview) preview->end();
     if (editgate::refuse()) return false;
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
@@ -1580,6 +1599,10 @@ bool SceneEditService::applyMaterialShader(const QString &shaderGuid, iris::Scen
 
 bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
 {
+    // A preview ends BEFORE a command is BUILT, not at its push: the command's
+    // constructor is what captures "the original" (the read of the code review,
+    // F1 — UndoService's pre-push hook runs after that and is only the backstop).
+    if (preview) preview->end();
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
     // The edit gate (round 2, item 10), before the work: this verb PINS the
     // default material's textures into the project database on its way to the

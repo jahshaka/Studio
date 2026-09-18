@@ -215,4 +215,23 @@ var rows3 = presetRows();
 assert(rows3 === 1,
        "STILL one row after three applies (got " + rows3 + ") — the row is reused, not minted");
 
+// ------------------- A WRITE UNDER A LIVE PREVIEW LANDS ON THE NODE'S OWN MATERIAL
+//
+// (The code read of this lane, F1.) `material.set` reads the node's material
+// BEFORE it builds its command, so with a preview still up it bound to the
+// BORROWED instance: the undo service's hook then ended the preview, the
+// command wrote onto a material the node no longer wore, and the verb answered
+// true having changed nothing. The mutators end the preview first now.
+var setTarget = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: -3 } });
+assert(material.preview(setTarget, imageMatGuid) === true, "a preview is up on the write's target");
+assert(material.set(setTarget, { roughness: 0.2 }) === true, "material.set under a live preview");
+assert(material.endPreview() === false, "the write ENDED the preview (nothing left to end)");
+assert(near(material.get(setTarget).roughness, 0.2),
+       "the write landed on the node's OWN material (got " + material.get(setTarget).roughness + ")");
+
+// A preview the verb started is left RUNNING on purpose: the host ends it when
+// this run ends (MaterialPreviewService::markVerbOwned, F3), which the drag
+// suite's follow-up run observes — a script cannot see past its own end.
+assert(material.preview(setTarget, presetGuid) === true, "a preview left up at the end of the run");
+
 console.log("scripting.e2e.material_preview OK");

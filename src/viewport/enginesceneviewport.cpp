@@ -1018,13 +1018,19 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // successful; the document never held the material, so it vanished on
         // reopen. `applyMaterial` ends the preview itself before it pushes, so
         // the undo step captures the TRUE original.
+        // (A mesh wearing NO material gets no preview — the service refuses it —
+        // but it takes the drop: the node under the cursor, which is what the
+        // preview's node is whenever there is one.)
         const iris::SceneNodePtr target =
-            preview && preview->active() ? preview->node() : iris::SceneNodePtr();
-        if (target && mServices && mServices->sceneEdit) {
+            preview && preview->active() ? iris::SceneNodePtr(preview->node()) : under;
+        // The preview ends BEFORE anything reads the node — the selection mounts
+        // a Properties panel on it (code review, F10).
+        if (preview) preview->end();
+        if (target && target->getSceneNodeType() == iris::SceneNodeType::Mesh
+            && mServices && mServices->sceneEdit) {
             if (mMainWindow) mMainWindow->sceneNodeSelected(target);
             mServices->sceneEdit->applyMaterial(source, target);
         }
-        if (preview) preview->end();
         mDragMaterialSource.clear();
     } else if (type == static_cast<int>(ModelTypes::Texture)) {
         // IMAGE_PLANE_SPEC §2: on a mesh the image retextures it; on empty

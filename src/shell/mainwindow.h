@@ -587,10 +587,6 @@ private:
     /// the state it does not own and puts the chrome back.
     void changeEvent(QEvent *event) override;
 
-    void dragEnterEvent(QDragEnterEvent* event) override;
-    void dragMoveEvent(QDragMoveEvent* event) override;
-    void dropEvent(QDropEvent* event) override;
-    void dragLeaveEvent(QDragLeaveEvent* event) override;
 
     void updateCurrentSceneThumbnail();
 

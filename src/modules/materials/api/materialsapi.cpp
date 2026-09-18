@@ -646,7 +646,11 @@ bool MaterialApi::preview(const QString &nodeId, const QString &presetOrGuid)
     if (node->getSceneNodeType() != iris::SceneNodeType::Mesh)
         return fail(QStringLiteral("material.preview: '%1' is not a mesh node").arg(nodeId));
 
-    if (host.services->materialPreview->begin(node, presetOrGuid)) return true;
+    if (host.services->materialPreview->begin(node, presetOrGuid)) {
+        // Ends with the run that started it (MaterialPreviewService::markVerbOwned).
+        host.services->materialPreview->markVerbOwned();
+        return true;
+    }
 
     // ONE refusal, two causes, and they are worth telling apart: a locked node
     // will refuse the drop too, and an unresolvable payload is not a material
@@ -667,6 +671,10 @@ bool MaterialApi::endPreview()
 
 bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
 {
+    // A preview ends before this verb READS the node's material: bound to the
+    // borrowed instance, the command below would write onto a material the
+    // node stops wearing the moment it is pushed (code review, F1).
+    if (host.services && host.services->materialPreview) host.services->materialPreview->end();
     auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.set"));
     if (!meshNode) return false;
     auto material = meshNode->getMaterial();

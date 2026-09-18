@@ -110,7 +110,6 @@ int main(int argc, char **argv)
     // Where each cube IS on screen, asked of the viewport rather than guessed:
     // editor.dropTargetAt is the same pick the drop takes.
     const QString probe = runValue(mcp, QStringLiteral(R"JS((function () {
-        var w = app.columns ? 0 : 0;
         var found = {};
         for (var y = 200; y < 900 && (!found.a || !found.b); y += 20) {
             for (var x = 200; x < 1700; x += 20) {

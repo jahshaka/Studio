@@ -2354,13 +2354,17 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
     const QPointF pos(x, y);
     // ONE payload builder, the one every asset view uses (ui/controls/assetdrag.h):
     // a synthesised drag that built its own map would be testing itself.
-    auto sendEvent = [&](QEvent::Type kind) {
+    // Returns what the widget ANSWERED: Qt never delivers a move or a drop to
+    // a widget that ignored the enter, and neither may this (code review, F7).
+    auto sendEvent = [&](QEvent::Type kind) -> bool {
         std::unique_ptr<QMimeData> mime(
             AssetDrag::mimeFor(type, row.name, QString(), guid));
         if (kind == QEvent::DragEnter) {
             QDragEnterEvent event(pos.toPoint(), Qt::CopyAction, mime.get(),
                                   Qt::LeftButton, Qt::NoModifier);
+            event.ignore();
             QApplication::sendEvent(target, &event);
+            return event.isAccepted();
         } else if (kind == QEvent::DragMove) {
             QDragMoveEvent event(pos.toPoint(), Qt::CopyAction, mime.get(),
                                  Qt::LeftButton, Qt::NoModifier);
@@ -2373,6 +2377,7 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
             QDragLeaveEvent event;
             QApplication::sendEvent(target, &event);
         }
+        return true;
     };
 
     // A DRAG IS A SEQUENCE, and the handlers depend on having seen its start:
@@ -2385,19 +2390,26 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
         mDragOpen = false;
     }
     if (!mDragOpen) {
-        sendEvent(QEvent::DragEnter);
+        if (!sendEvent(QEvent::DragEnter)) {
+            // REFUSED AT THE DOOR, as a person's drag would be: nothing follows,
+            // and the answer says so.
+            mDragGuid.clear();
+            return refuse(QStringLiteral("editor.dragAsset: the viewport refused '%1' (not something it can take a drop of)").arg(guid));
+        }
         mDragOpen = true;
         mDragGuid = guid;
     }
     if (action == QStringLiteral("leave")) {
         sendEvent(QEvent::DragLeave);
         mDragOpen = false;
+        mDragGuid.clear();
         return true;
     }
     sendEvent(QEvent::DragMove);
     if (action == QStringLiteral("drop")) {
         sendEvent(QEvent::Drop);
         mDragOpen = false;
+        mDragGuid.clear();
     }
     return true;
 }

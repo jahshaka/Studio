@@ -90,6 +90,17 @@ public:
     bool end();
 
     bool active() const { return !mNode.isNull(); }
+
+    /// A PREVIEW STARTED BY THE VERB LIVES NO LONGER THAN THE RUN THAT STARTED IT
+    /// (code review, F3). A drag has a leave and a drop; `material.preview` has
+    /// only the script's good manners, and a run that throws, times out or
+    /// simply forgets would leave a borrowed material on screen for every
+    /// live-document reader (the web export, a copy, a screenshot) to take for
+    /// the truth. The verb marks its preview; the host ends a marked one when
+    /// the run ends. The synthesised drag (`editor.dragAsset`) is NOT marked:
+    /// its gesture may span runs, and it ends the way a person's does.
+    void markVerbOwned() { mVerbOwned = active(); }
+    bool verbOwned() const { return mVerbOwned && active(); }
     /// The node the preview is on — the DROP TARGET, which is the node under
     /// the cursor and never the selection. Null when no preview is running.
     iris::MeshNodePtr node() const { return mNode; }
@@ -121,6 +132,7 @@ private:
     iris::MeshNodePtr mNode;
     iris::MaterialPtr mOriginal;
     iris::ScenePtr    mScene;        ///< the scene the flag was raised on
+    bool mVerbOwned = false;
     QString           mSource;
 
     // The per-gesture resolve cache (keyed on the payload string).
