@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "scripting/modules/moduleshared.h"   // quatFromJs (the one pose reader)
 #include "irisgl/mirror/scenemirror.h"
-#include "viewport/flyspeedsettings.h"
+#include "services/vrworld.h"
 #include "viewport/flystep.h"
 #include "services/playerservice.h"
 #include "services/services.h"
@@ -402,20 +402,33 @@ QVector<VerbInfo> VrApi::verbs() const
           "False when no gesture was running, and in the PLAYER (which edits nothing).",
           Needs::Engine },
         { "locomotion",
-          "vr.locomotion({turn?, fly?, dominant?, snapTurnDegrees?, smoothTurnDegreesPerSecond?}) -> "
-          "{turn, dominant, snapTurnDegrees, smoothTurnDegreesPerSecond}",
-          "HOW THE WEARER MOVES, read with no argument and set with one (owner answers 2 and "
-          "3). SESSION OPTIONS, deliberately not a preference and not saved: they are set by "
-          "whoever starts the session until the owner has tried them in a headset.\n\n"
-          "`turn` is \"snap\" (the default — 30 degrees per flick of the stick, which is "
-          "what nearly every shipping VR tool does because a continuous turn makes a "
-          "proportion of people sick) or \"smooth\". Either way the wearer turns about their "
-          "OWN HEAD and not about the middle of their room: turning about the rig's origin "
-          "swings somebody standing at the edge of their play space sideways through a metre "
-          "of world they did not ask to travel.\n\n"
+          "vr.locomotion({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, "
+          "dominant?}) -> {flySpeed, fly, turn, snapTurnDegrees, smoothTurnDegreesPerSecond, "
+          "dominant, overridden, session}",
+          "HOW THE WEARER MOVES, read with no argument and set with one — THE SESSION'S "
+          "OVERRIDES over the PROJECT's settings (lane VR-WORLD-1). The defaults live in the "
+          "document and are set by `world.vr` or the World panel's VR section; a session adopts "
+          "them when it begins; anything set here applies for THIS SESSION ONLY and writes "
+          "nothing to the project — which is what makes it safe to try a faster fly with the "
+          "headset on. The read reports the EFFECTIVE values, `overridden` names the keys this "
+          "session changed, and `session` says whether a session has latched a project's "
+          "values (false = the live document is being read, which is what a gate injecting "
+          "input at a desktop editor sees).\n\n"
+          "`flySpeed` is metres per second; `fly` is \"aim\" (the stick hand's own ray — "
+          "Unreal's VR editor, and the default), \"gaze\" (where the wearer looks) or "
+          "\"level\" (the head's heading with the pitch thrown away, the comfort option).\n\n"
+          "`turn` is \"snap\" (the default — a step per flick of the stick, which is what "
+          "nearly every shipping VR tool does because a continuous turn makes a proportion of "
+          "people sick) or \"smooth\". Either way the wearer turns about their OWN HEAD and "
+          "not about the middle of their room: turning about the rig's origin swings somebody "
+          "standing at the edge of their play space sideways through a metre of world they did "
+          "not ask to travel.\n\n"
           "`dominant` is \"right\" (the default) or \"left\" and swaps BOTH roles at once: "
           "the dominant hand points, selects and grabs, the other hand's stick walks and "
           "turns. One flag, because two would eventually disagree.\n\n"
+          "A number that is not finite, or is zero or negative, is refused by name; one outside "
+          "a row's range is clamped to it; an unknown mode name and an unknown key are refused "
+          "and nothing is applied.\n\n"
           "NOBODY IS MOVED WHILE THEY ARE STILL BEING PLACED. A session begins (and every "
           "recentre) with the host waiting for a located frame it can pair with the rig it "
           "holds, because a correction from a mismatched pair is a teleport; the stick is "
@@ -423,7 +436,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "frame after the placement lands.",
           Needs::Document },
         { "interactionMode",
-          "vr.interactionMode() -> {dominant, turn, grabbing, hovering, far, snapping, "
+          "vr.interactionMode() -> {dominant, turn, snapTurnDegrees, smoothTurnDegreesPerSecond, "
+          "flySpeed, fly, grabbing, hovering, far, snapping, "
           "distance, nodes, source, installed, rig:{live,x,y,z,yaw}, selects, grabs, commits, "
           "cancels, turns}",
           "WHAT THE INTERACTION IS DOING. `grabbing` and `hovering` are this moment's state; "
@@ -437,6 +451,8 @@ QVector<VerbInfo> VrApi::verbs() const
           "the `turns` count that says a flick of the stick was answered. `live` false means "
           "there is no session, and therefore no rig at all: Engine::setVrOrigin does nothing "
           "without one, so a stick pushed outside a session walks nobody and says so.\n\n"
+          "The six locomotion values are the EFFECTIVE ones — the project's (`world.vr`) with "
+          "this session's `vr.locomotion` overrides applied.\n\n"
           "`installed` is whether the interaction is stepping at all: it is installed when a "
           "session begins and removed when it ends, and in the PLAYER only locomotion runs "
           "(the Player edits nothing — no selection, no grab, no transform writes), exactly as "
@@ -852,13 +868,16 @@ void VrApi::installInteraction()
     deps.selection = moduleHost.services ? moduleHost.services->selection : nullptr;
     deps.services = moduleHost.services;
     deps.engine = [this] { return engine(); };
-    // THE WEARER'S SPEED IS THE HOST'S OWN: the editor's preview walks at the
-    // editor's fly speed (its keys already do — EditorVrPreview) and the Player
-    // at the Player's 25 u/s, which is the number playervr.cpp calls "the
-    // wearer's speed".
-    deps.wearerSpeed = [this] {
-        return FlySpeedSettings::speed(editor.isActive() ? FlySpeedSettings::Editor
-                                                         : FlySpeedSettings::Player);
+    // HOW THE WEARER MOVES IS THE PROJECT'S (lane VR-WORLD-1): the fly speed,
+    // the fly direction, the turn, its step or rate and the dominant hand are
+    // document fields (`world.vr`), adopted by a session when it begins and
+    // overridable for that session by `vr.locomotion`. Before this they were
+    // the DESKTOP camera's speed (FlySpeedSettings) and four session-only
+    // fields with defaults of their own — one wearer with two speeds, and
+    // nothing a project could carry.
+    deps.locomotion = [this] {
+        return vrworld::resolve(moduleHost.viewport ? moduleHost.viewport->getScene()
+                                                    : iris::ScenePtr());
     };
     // THE PLAYER EDITS NOTHING. With a session running that this module's
     // preview does not own, the host is the Player — so the ray, the select and
@@ -1100,78 +1119,46 @@ bool VrApi::release(const QVariantMap &options)
     return true;
 }
 
+// SESSION OVERRIDES OVER THE PROJECT'S SETTINGS (lane VR-WORLD-1).
+//
+// The DEFAULTS are the document's (`world.vr`, services/vrworld.h) and this
+// verb keeps only what somebody overrode, by row id — so there is exactly one
+// definition of every default and an override writes nothing to the project.
+// The keys, their spellings, their ranges and their refusals all come from the
+// same table `world.vr` and the World panel's VR section are generated from.
 QVariantMap VrApi::locomotion(const QVariantMap &options)
 {
-    static const QStringList known = { "turn", "fly", "dominant", "snapTurnDegrees",
-                                       "smoothTurnDegreesPerSecond" };
+    const QStringList known = vrworld::ids();
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key())) {
             fail(QStringLiteral("vr.locomotion: unknown key '%1' — known keys are %2")
                      .arg(it.key(), known.join(QStringLiteral(", "))));
             return QVariantMap();
         }
-    VrInteraction::Options o = interaction.options();
-    if (options.contains(QStringLiteral("turn"))) {
-        const QString turn = options.value(QStringLiteral("turn")).toString().trimmed().toLower();
-        if (turn == QLatin1String("snap")) o.turn = VrInteraction::Turn::Snap;
-        else if (turn == QLatin1String("smooth")) o.turn = VrInteraction::Turn::Smooth;
-        else {
-            fail(QStringLiteral("vr.locomotion: turn must be \"snap\" or \"smooth\", not '%1'")
-                     .arg(turn));
+    // VALIDATED BEFORE ANYTHING IS APPLIED: a call with one bad value changes
+    // nothing at all, exactly as `world.vr` refuses a whole write.
+    QVector<QPair<QString, double>> writes;
+    for (const vrworld::Row &r : vrworld::rows()) {
+        if (!options.contains(r.id)) continue;
+        double value = 0.0;
+        QString why;
+        if (!vrworld::validate(r, options.value(r.id), value, why)) {
+            fail(QStringLiteral("vr.locomotion: %1").arg(why));
             return QVariantMap();
         }
+        writes.append({ r.id, value });
     }
-    if (options.contains(QStringLiteral("fly"))) {
-        const QString fly = options.value(QStringLiteral("fly")).toString().trimmed().toLower();
-        if (fly == QLatin1String("aim")) o.fly = VrInteraction::Fly::Aim;
-        else if (fly == QLatin1String("gaze")) o.fly = VrInteraction::Fly::Gaze;
-        else if (fly == QLatin1String("level")) o.fly = VrInteraction::Fly::Level;
-        else {
-            fail(QStringLiteral("vr.locomotion: fly must be \"aim\", \"gaze\" or \"level\", not '%1'")
-                     .arg(fly));
-            return QVariantMap();
-        }
-    }
-    if (options.contains(QStringLiteral("dominant"))) {
-        const QString hand =
-            options.value(QStringLiteral("dominant")).toString().trimmed().toLower();
-        if (hand == QLatin1String("right")) o.dominantRight = true;
-        else if (hand == QLatin1String("left")) o.dominantRight = false;
-        else {
-            fail(QStringLiteral("vr.locomotion: dominant must be \"right\" or \"left\", not "
-                                "'%1'").arg(hand));
-            return QVariantMap();
-        }
-    }
-    if (options.contains(QStringLiteral("snapTurnDegrees"))) {
-        const double deg = options.value(QStringLiteral("snapTurnDegrees")).toDouble();
-        if (deg <= 0.0 || deg > 180.0) {
-            fail(QStringLiteral("vr.locomotion: snapTurnDegrees must be in (0, 180], not %1")
-                     .arg(deg));
-            return QVariantMap();
-        }
-        o.snapTurnDegrees = float(deg);
-    }
-    if (options.contains(QStringLiteral("smoothTurnDegreesPerSecond"))) {
-        const double deg = options.value(QStringLiteral("smoothTurnDegreesPerSecond")).toDouble();
-        if (deg <= 0.0 || deg > 720.0) {
-            fail(QStringLiteral("vr.locomotion: smoothTurnDegreesPerSecond must be in (0, 720], "
-                                "not %1").arg(deg));
-            return QVariantMap();
-        }
-        o.smoothTurnDegreesPerSecond = float(deg);
-    }
-    interaction.setOptions(o);
+    for (const auto &w : writes) vrworld::override(w.first, w.second);
+
+    const vrworld::Settings loco =
+        vrworld::resolve(moduleHost.viewport ? moduleHost.viewport->getScene()
+                                             : iris::ScenePtr());
     QVariantMap out;
-    out[QStringLiteral("turn")] =
-        o.turn == VrInteraction::Turn::Snap ? QStringLiteral("snap") : QStringLiteral("smooth");
-    out[QStringLiteral("fly")] =
-        o.fly == VrInteraction::Fly::Aim ? QStringLiteral("aim")
-        : o.fly == VrInteraction::Fly::Gaze ? QStringLiteral("gaze") : QStringLiteral("level");
-    out[QStringLiteral("dominant")] =
-        o.dominantRight ? QStringLiteral("right") : QStringLiteral("left");
-    out[QStringLiteral("snapTurnDegrees")] = double(o.snapTurnDegrees);
-    out[QStringLiteral("smoothTurnDegreesPerSecond")] = double(o.smoothTurnDegreesPerSecond);
+    for (const vrworld::Row &r : vrworld::rows()) out[r.id] = vrworld::valueOf(r, loco);
+    // WHERE THE DEFAULTS CAME FROM and WHAT THIS SESSION CHANGED — the honest
+    // answer to "why is it flying at 15": the project, unless it is listed here.
+    out[QStringLiteral("overridden")] = vrworld::overridden();
+    out[QStringLiteral("session")] = vrworld::adopted();
     return out;
 }
 

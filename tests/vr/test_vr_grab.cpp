@@ -281,19 +281,28 @@ int main()
     }
 
     // ---- 11. SNAP AND SMOOTH TURN, AND THE RE-ARM ------------------------
+    //
+    // THE STEP AND THE RATE ARE PASSED (lane VR-WORLD-1): they are the
+    // PROJECT's settings now (`world.vr`), so the pure functions carry no
+    // default of their own and these cases state the numbers they assert.
     {
-        CHECK(near(vrgrab::snapTurnDegrees(1.0f, true), 30.0f),
+        // The document's own defaults (iris::kDefaultVrSnapTurnDegrees /
+        // kDefaultVrSmoothTurnDegreesPerSecond), spelled here as the numbers
+        // these cases assert — this file links no document.
+        const float snapStep = 30.0f;
+        const float smoothRate = 90.0f;
+        CHECK(near(vrgrab::snapTurnDegrees(1.0f, true, snapStep), 30.0f),
               "a full stick right, armed, asks for +30 in the stick's own sign (the caller negates it into the tree's right-handed yaw, so the wearer turns RIGHT)");
-        CHECK(near(vrgrab::snapTurnDegrees(-0.8f, true), -30.0f),
+        CHECK(near(vrgrab::snapTurnDegrees(-0.8f, true, snapStep), -30.0f),
               "...and left for -30, whatever the deflection past the dead zone");
-        CHECK(near(vrgrab::snapTurnDegrees(1.0f, false), 0.0f),
+        CHECK(near(vrgrab::snapTurnDegrees(1.0f, false, snapStep), 0.0f),
               "a stick held over from the last turn asks for nothing (one flick, one turn)");
-        CHECK(near(vrgrab::snapTurnDegrees(0.3f, true), 0.0f), "inside the dead zone: nothing");
+        CHECK(near(vrgrab::snapTurnDegrees(0.3f, true, snapStep), 0.0f), "inside the dead zone: nothing");
         CHECK(!vrgrab::snapTurnRearmed(0.6f), "a stick still pushed does not re-arm");
         CHECK(vrgrab::snapTurnRearmed(0.1f), "...and one returned near centre does");
-        CHECK(near(vrgrab::smoothTurnDegrees(1.0f, 0.25f), 22.5f),
+        CHECK(near(vrgrab::smoothTurnDegrees(1.0f, 0.25f, smoothRate), 22.5f),
               "smooth turn: a quarter second of full stick is 22.5 degrees");
-        CHECK(near(vrgrab::smoothTurnDegrees(0.2f, 0.25f), 0.0f),
+        CHECK(near(vrgrab::smoothTurnDegrees(0.2f, 0.25f, smoothRate), 0.0f),
               "...with the same dead zone");
     }
 

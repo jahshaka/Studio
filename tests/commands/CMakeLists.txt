@@ -22,6 +22,8 @@ add_executable(test_structural_undo
     # SunLightLinkCommand is deleted with the sky's steering).
     ${CMAKE_SOURCE_DIR}/src/commands/scenepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    # the VR settings table the sceneprops rows are generated from (VR-WORLD-1)
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp)
 set_target_properties(test_structural_undo PROPERTIES
     AUTOMOC ON AUTOUIC OFF AUTORCC OFF

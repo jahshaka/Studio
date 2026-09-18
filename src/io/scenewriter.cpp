@@ -147,6 +147,16 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // HARDWARE RAY TRACING (ledger §425), as the stable string the enum's ints
     // must stay free of — "off" / "auto" / "on".
     sceneObj["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
+    // THE PROJECT'S VR SETTINGS (lane VR-WORLD-1) — how a wearer moves in THIS
+    // world, adopted by every session this project opens. The two modes ride as
+    // stable strings for the same reason the one above does; `vr.locomotion`
+    // overrides are a SESSION's and are deliberately not written here.
+    sceneObj["vrFlySpeed"] = scene->vrFlySpeed;
+    sceneObj["vrFlyMode"] = QString::fromLatin1(iris::vrFlyModeName(scene->vrFlyMode));
+    sceneObj["vrTurnMode"] = QString::fromLatin1(iris::vrTurnModeName(scene->vrTurnMode));
+    sceneObj["vrSnapTurnDegrees"] = scene->vrSnapTurnDegrees;
+    sceneObj["vrSmoothTurnDegreesPerSecond"] = scene->vrSmoothTurnDegreesPerSecond;
+    sceneObj["vrDominantRight"] = scene->vrDominantRight;
     sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;

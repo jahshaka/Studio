@@ -139,14 +139,21 @@ bool VrInteraction::playerHosted() const
     return mDeps.playerMode && mDeps.playerMode();
 }
 
+/// THE PROJECT'S SETTINGS WITH THE SESSION'S OVERRIDES (VR-WORLD-1). Asked
+/// rather than stored: the defaults live in the document and nowhere else.
+vrworld::Settings VrInteraction::locomotion() const
+{
+    return mDeps.locomotion ? mDeps.locomotion() : vrworld::Settings();
+}
+
 unsigned VrInteraction::dominantHand() const
 {
-    return mOptions.dominantRight ? unsigned(VrHandRight) : unsigned(VrHandLeft);
+    return locomotion().dominantRight ? unsigned(VrHandRight) : unsigned(VrHandLeft);
 }
 
 unsigned VrInteraction::offHand() const
 {
-    return mOptions.dominantRight ? unsigned(VrHandLeft) : unsigned(VrHandRight);
+    return locomotion().dominantRight ? unsigned(VrHandLeft) : unsigned(VrHandRight);
 }
 
 VrHandState VrInteraction::handState(unsigned hand) const
@@ -635,15 +642,16 @@ bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost,
     iris::Vec3 head;
     iris::Quat headRot;
     if (!rigNow(rig, head, headRot)) return false;
-    const float speed = mDeps.wearerSpeed ? mDeps.wearerSpeed() : 0.0f;
+    const vrworld::Settings loco = locomotion();
+    const float speed = loco.flySpeed;
     if (speed <= 0.0f) return false;
     // ALONG THE HAND when the option says so and the hand is located (the
     // owner: "fly like Unreal"); level along the head's heading otherwise.
     // WHERE YOU LOOK while the left squeeze is held, or as the gaze option (the
     // owner's second ask of the night); along the hand otherwise (Aim); level
     // along the head's heading as the comfort option.
-    const bool alongGaze = gazeHeld || mOptions.fly == Fly::Gaze;
-    const bool alongAim = !alongGaze && mOptions.fly == Fly::Aim && aim && aim->valid;
+    const bool alongGaze = gazeHeld || loco.fly == iris::VrFlyMode::Gaze;
+    const bool alongAim = !alongGaze && loco.fly == iris::VrFlyMode::Aim && aim && aim->valid;
     const iris::Vec3 delta =
         alongGaze ? vrgrab::gazeFlyDelta(headRot, stickY, speed,
                                          vrorigin::frameSeconds(seconds), boost)
@@ -739,10 +747,11 @@ void VrInteraction::step(float seconds)
         // their LEFT. The sign lives HERE, at the one call site, so the pure
         // functions stay what they say and every VR title's convention holds:
         // a flick right turns the view clockwise from above.
-        if (mOptions.turn == Turn::Smooth) {
-            turn(-vrgrab::smoothTurnDegrees(o.stickX, dt, mOptions.smoothTurnDegreesPerSecond));
+        const vrworld::Settings loco = locomotion();
+        if (loco.turn == iris::VrTurnMode::Smooth) {
+            turn(-vrgrab::smoothTurnDegrees(o.stickX, dt, loco.smoothTurnDegreesPerSecond));
         } else {
-            const float deg = -vrgrab::snapTurnDegrees(o.stickX, mTurnArmed, mOptions.snapTurnDegrees);
+            const float deg = -vrgrab::snapTurnDegrees(o.stickX, mTurnArmed, loco.snapTurnDegrees);
             if (std::fabs(deg) > 1e-4f && turn(deg)) mTurnArmed = false;
             if (vrgrab::snapTurnRearmed(o.stickX)) mTurnArmed = true;
         }
@@ -754,13 +763,16 @@ void VrInteraction::step(float seconds)
 QVariantMap VrInteraction::report() const
 {
     QVariantMap out;
+    const vrworld::Settings loco = locomotion();
     out[QStringLiteral("dominant")] =
-        mOptions.dominantRight ? QStringLiteral("right") : QStringLiteral("left");
+        loco.dominantRight ? QStringLiteral("right") : QStringLiteral("left");
     out[QStringLiteral("turn")] =
-        mOptions.turn == Turn::Snap ? QStringLiteral("snap") : QStringLiteral("smooth");
-    out[QStringLiteral("snapTurnDegrees")] = double(mOptions.snapTurnDegrees);
+        loco.turn == iris::VrTurnMode::Snap ? QStringLiteral("snap") : QStringLiteral("smooth");
+    out[QStringLiteral("snapTurnDegrees")] = double(loco.snapTurnDegrees);
     out[QStringLiteral("smoothTurnDegreesPerSecond")] =
-        double(mOptions.smoothTurnDegreesPerSecond);
+        double(loco.smoothTurnDegreesPerSecond);
+    out[QStringLiteral("flySpeed")] = double(loco.flySpeed);
+    out[QStringLiteral("fly")] = QString::fromLatin1(iris::vrFlyModeName(loco.fly));
     out[QStringLiteral("installed")] = mInstalled;
     out[QStringLiteral("grabbing")] = mGesture.active;
     out[QStringLiteral("far")] = mGesture.active && mGesture.far;
