@@ -1,0 +1,168 @@
+// perf.hide_soak — HIDING AND SHOWING, TWO HUNDRED TIMES (the render audit's
+// A13 guard 4; XID-2's kernel watch is its companion).
+//
+// THE DEFECT CLASS. `node.hide` is the cheapest edit a user makes and it
+// touches the most: the mirror's effective-visibility walk, the GI caches'
+// staleness, the reflection-probe grid, the horizon plane's release, the
+// ray-traced instance list. TWO REAL DEFECTS came out of exactly this gesture:
+//
+//   * A HIDE READ AS A DEATH — `invalidateGiCachesForVisibility` bumped the
+//     destruction generation, so hiding an object threw the voxel arm away and
+//     rebuilt it from scratch (DRAG-1 item 5, "a hide is not a death"), and
+//     un-hiding the default floor rebuilt its 4 km horizon from nothing (the
+//     owner's "hiding the plane changed its size").
+//   * THE DEVICE LOST — the owner's hide sequence hung the GPU through a large
+//     transient 3D storage image created and destroyed per build (XID-2, patch
+//     0071): 16 cycles of hide/show were what it took to see it.
+//
+// Neither was catchable by a suite that hides an object ONCE. What this
+// contributes is the REPEATED gesture, at Epic, on a scene with the caches that
+// the gesture invalidates — and the growth-only assertions that say the
+// repetition left nothing behind.
+//
+// IT ASSERTS NO ABSOLUTE NUMBER (perf.epic_steady_state's charter): the later
+// cycles' counters against the earlier ones, inside one run, plus "the renderer
+// refused nothing". So it means the same thing on every machine.
+//
+// THE KERNEL-LOG HALF IS NOT HERE, and that is deliberate: a test must not
+// sudo, so `NVRM: Xid` lives with whoever runs the gate (the lane's own watch,
+// CLAUDE.md's rule that an Xid from a suite's pid is never environmental). This
+// suite's job is to make an Xid LIKELY ENOUGH TO SEE while that watch is armed.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var ZIP = "@SOURCE_DIR@/scenes/Showroom.zip";
+var DT = 1.0 / 60.0;
+var CYCLES = 200;          // the soak
+var WARM = 10;             // the cycle the growth comparison starts from
+
+app.engineErrors(true);
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10,
+       "importArchive(Showroom) -> " + (imported ? imported.guid : "null"));
+assert(project.open(imported.guid) === true, "project.open");
+var mode = world.mode({ mode: "epic" });
+assert(mode === "epic", "world.mode -> epic (got '" + mode + "')");
+
+var mirror0 = editor.mirrorStats();
+console.log("viewport: " + J(editor.viewportState()) + " mirror: " + J(mirror0));
+if (!mirror0.available) {
+    console.log("this session's viewport is a document-only stand-in — the gesture reaches no " +
+                "renderer and there is nothing to soak; skipping");
+} else {
+
+// THE SUBJECTS: every mesh the scene holds, which is what a user selecting a
+// group and pressing the eye does. Hiding ONE object is a different (and
+// weaker) gesture — the walk's parent-first AND, the probe grid's staleness and
+// the ray instance list all scale with the set.
+var subjects = [];
+var all = scene.nodes();
+for (var i = 0; i < all.length; ++i)
+    if (all[i].type === "mesh") subjects.push(all[i].id);
+assert(subjects.length >= 3,
+       "the Showroom gives the soak a set to hide (" + subjects.length + " meshes)");
+
+editor.frame(60, DT);          // warm the shaders and the caches
+app.renderStats();
+
+function reading(tag) {
+    var rs = app.renderStats();
+    var gi = world.giStatus();
+    var ms = editor.mirrorStats();
+    var r = {
+        tag: tag,
+        draws: rs.draws, batches: rs.batches, triangles: rs.triangles,
+        instances: rs.instances,
+        rebuilds: gi.rebuilds, refreshes: ms.giRefreshes, pushes: ms.giPushes,
+        nodes: ms.nodesVisited, evicted: ms.evictedNodes,
+        stale: gi.staleProbes, reason: gi.lastStaleReason
+    };
+    console.log(tag + ": " + J(r));
+    return r;
+}
+
+function hideAll(hidden) {
+    for (var s = 0; s < subjects.length; ++s)
+        node.setProperty(subjects[s], "visible", !hidden);
+}
+
+// One cycle = hide, render, show, render. Two frames per state: the first
+// carries the edit into the renderer, the second is the frame a user would see.
+function cycle() {
+    hideAll(true);
+    editor.frame(2, DT);
+    hideAll(false);
+    editor.frame(2, DT);
+}
+
+// ---- the soak ------------------------------------------------------------
+cycle();
+var early = null;
+var t0 = Date.now();
+for (var c = 0; c < CYCLES; ++c) {
+    cycle();
+    if (c === WARM) early = reading("cycle " + (c + 1));
+}
+var late = reading("cycle " + CYCLES);
+console.log("soak: " + CYCLES + " hide/show cycles in " + (Date.now() - t0) + " ms");
+
+// ---- what the repetition must have left behind: nothing ------------------
+assert(early !== null, "the early reading was taken");
+// GROWTH-ONLY, exactly equal (epic_steady_state's rule): the same scene in the
+// same state must draw the same OBJECTS however many times it has been hidden.
+// A batch, a draw call or an instance that appears per cycle is the leak class
+// this suite exists for.
+assert(late.draws === early.draws && late.batches === early.batches &&
+       late.instances === early.instances,
+       "AFTER " + (CYCLES - WARM) + " MORE HIDE/SHOW CYCLES THE FRAME DRAWS THE SAME: draws " +
+       early.draws + "/" + late.draws + ", batches " + early.batches + "/" + late.batches +
+       ", instances " + early.instances + "/" + late.instances);
+// THE TRIANGLE COUNT IS NOT IN THAT SET, and the reason is measured rather
+// than assumed: it read 179,356 at cycle 11 and 178,444 at cycle 200 of the
+// same run — 912 triangles, one object's LOD level. The Showroom's meshes carry
+// baked LOD chains and this pin keeps ONE `mCurrentMeshLod` per object while
+// every pass that updates LOD lists writes it with its OWN camera (a probe
+// face, a planar reflector, a thumbnail — OGRE_UPSTREAM_ISSUES, "one LOD state
+// per object, many cameras per scene"), so which level the counter snapshots
+// depends on which pass rendered last, and a probe capture lands on some cycles
+// and not others. A BAND, therefore, wide enough for a level and far below a
+// leak: the class this suite hunts adds whole objects, not a few hundred
+// triangles.
+var triDrift = Math.abs(late.triangles - early.triangles) / Math.max(1, early.triangles);
+console.log("triangle drift across the soak: " + (triDrift * 100).toFixed(2) + " %");
+assert(triDrift < 0.02,
+       "…and its triangle count holds within a LOD level (" + early.triangles + " -> " +
+       late.triangles + ", " + (triDrift * 100).toFixed(2) + " %)");
+// A HIDE IS NOT A DEATH (DRAG-1 item 5): the voxel arm is re-selected, never
+// rebuilt from scratch. A from-scratch build per cycle is the defect, and it is
+// the one that made the owner's hide sequence cost a whole frame.
+var rebuilds = late.rebuilds - early.rebuilds;
+console.log("from-scratch GI builds over " + (CYCLES - WARM) + " cycles: " + rebuilds);
+assert(rebuilds === 0,
+       "A HIDE IS NOT A DEATH: no from-scratch GI build in " + (CYCLES - WARM) +
+       " hide/show cycles (" + rebuilds + ")");
+// The node budget did not run away either: an eviction per cycle would mean the
+// mirror is dropping and re-adopting the scene behind the gesture.
+var evicted = late.evicted - early.evicted;
+assert(evicted === 0,
+       "the mirror evicted no node across the soak (" + evicted + ")");
+// THE DEVICE SURVIVED, and said so: the error pump is where a refusal lands
+// when the engine swallows it (a device loss would have ended the process
+// through devicelossend.h before this line).
+var errors = app.engineErrors();
+console.log("engine errors: " + J(errors));
+assert(errors.recorded === 0,
+       "the renderer recorded no errors through " + (CYCLES * 4) + " rendered frames of " +
+       "hiding and showing (" + errors.recorded + ")");
+// And the scene is left as it was found — visible.
+var allVisible = true;
+for (var v = 0; v < subjects.length; ++v)
+    if (node.property(subjects[v], "visible") !== true) allVisible = false;
+assert(allVisible, "every subject is visible again at the end of the soak");
+
+console.log("PASS: perf.hide_soak");
+}

@@ -80,6 +80,90 @@ set_tests_properties(perf.epic_steady_state PROPERTIES
     TIMEOUT 300)
 
 # ---------------------------------------------------------------------------
+# perf.drag_mirror_room — WHAT A DRAG COSTS A FRAME (the render audit's A13
+# guard 3; the owner's "5-6 fps while dragging").
+#
+# The symptom that survived two pushes was a frame falling apart while an object
+# was MOVED, and it was invisible to every gate in this tree: the picture was
+# right (so no pixel suite moved) and the document was right (so no document
+# suite moved). DRAG-1 fixed the cadence and gi.drag_cadence pins the CAPTURE
+# contract; this is the other half — a drag's frame COST against a still frame's
+# in the same run, on the shipped sample the report came from.
+#
+# Wired like perf.epic_steady_state beside it, and for the same reasons:
+#
+#   * A VIRGIN HOME through the shared freshhome fixture (the suite imports the
+#     archive itself, so a surviving HOME would make it a re-import and would
+#     carry the previous run's shader cache into the first arm's timings).
+#   * ENGINE UP (no --headless): the subject is a frame being rendered.
+#   * RUN_SERIAL, and this one is not politeness: it is the only suite here
+#     that asserts a TIMING RATIO, and a sibling Vulkan suite sharing the GPU
+#     moves the percentile it compares. Serial keeps ctest's own rows off it.
+#   * `perf` label only — NOT `benchmark`: it has no baseline file and nothing
+#     to re-record, so it belongs in the merge tier rather than the nightly one.
+#   * TIMEOUT 600: 420 rendered frames of the Mirror Room at Epic plus the
+#     archive import, at 6x the measured cost.
+configure_file(drag_mirror_room.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js @ONLY)
+set(_drag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drag_mirror_room)
+
+add_test(NAME perf.freshhome.drag_mirror_room
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_drag_home}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(perf.freshhome.drag_mirror_room PROPERTIES
+    FIXTURES_SETUP perf_home_drag_mirror_room
+    LABELS "perf")
+
+add_test(NAME perf.drag_mirror_room
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js
+         WORKING_DIRECTORY ${_drag_home}/run)
+set_tests_properties(perf.drag_mirror_room PROPERTIES
+    ENVIRONMENT "HOME=${_drag_home};JAHSHAKA_DATA_ROOT=${_drag_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED perf_home_drag_mirror_room
+    LABELS "perf"
+    RUN_SERIAL TRUE
+    TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
+# perf.hide_soak — HIDING AND SHOWING, TWO HUNDRED TIMES (the render audit's
+# A13 guard 4, with XID-2's kernel watch as its companion).
+#
+# THE DEFECT CLASS. `node.hide` is the cheapest edit a user makes and it touches
+# the most: the visibility walk, the GI caches' staleness, the probe grid, the
+# horizon's release, the ray-traced instance list. Two real defects came out of
+# exactly this gesture — a hide counted as a DEATH (invalidateGiCaches bumping
+# the destruction generation, DRAG-1 item 5) and the owner's hide sequence
+# losing the device through a transient 3D storage image (XID-2, patch 0071) —
+# and nothing repeated it enough times to catch either.
+#
+# It asserts NO ABSOLUTE NUMBER: the cycles' own counters against each other
+# (growth-only, epic_steady_state's charter) plus "the renderer refused
+# nothing". The kernel-log half cannot live inside a suite — a test must not
+# sudo — so the companion is the lane's/gate's own `dmesg` watch, and what this
+# suite contributes is the REPEATED GESTURE that makes an Xid likely enough to
+# see.
+configure_file(hide_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js @ONLY)
+set(_hide_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-hide_soak)
+
+add_test(NAME perf.freshhome.hide_soak
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_hide_home}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(perf.freshhome.hide_soak PROPERTIES
+    FIXTURES_SETUP perf_home_hide_soak
+    LABELS "perf")
+
+add_test(NAME perf.hide_soak
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js
+         WORKING_DIRECTORY ${_hide_home}/run)
+set_tests_properties(perf.hide_soak PROPERTIES
+    ENVIRONMENT "HOME=${_hide_home};JAHSHAKA_DATA_ROOT=${_hide_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED perf_home_hide_soak
+    LABELS "perf"
+    TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
 # claims — in its own comment, or by running --headless, or by building nothing
 # but a document — that it needs no X server. The claim was never enforced, so

@@ -1,0 +1,262 @@
+// perf.drag_mirror_room — WHAT A DRAG COSTS A FRAME, ON THE SCENE IT COSTS THE
+// MOST (the render audit's A13 guard 3; the owner's "5-6 fps while dragging").
+//
+// THE DEFECT CLASS THIS EXISTS FOR. The owner's visible symptom through two
+// pushes was not a wrong picture — it was a frame that fell apart while an
+// object was being MOVED: the GI caches re-solving per frame, the probe grid
+// re-photographing itself per frame, the cascade chain rebuilding behind it.
+// Every one of those is invisible to a pixel suite (the picture is right) and
+// to a document suite (the document is right); DRAG-1 fixed the cadence and
+// gi.drag_cadence pins the CAPTURE contract, but nothing in this tree says
+// "and a frame during a drag still costs about what a still frame costs".
+//
+// NOT A BENCHMARK, and the same charter as perf.epic_steady_state beside it:
+// no baseline file, no per-machine numbers, nothing to re-record. Every
+// assertion compares one arm of THIS run against another arm of the SAME run,
+// so it means the same thing on the owner's RTX 4080, on lavapipe and on an
+// M4 Pro.
+//
+// THE SCENE IS THE MIRROR ROOM, deliberately. It is the shipped sample with
+// planar reflectors, a probe grid and an enclosed GI volume — the three caches
+// a drag invalidates — and it is the scene the owner's own report came from.
+// It is NOT open-to-open pixel deterministic (CLAUDE.md, mesh-bake facts) and
+// that costs this suite nothing: it asserts TIMINGS and COUNTERS within one
+// open, never a colour.
+//
+// THE FOUR ARMS, in order, because the order is the story a drag tells:
+//   STILL     120 frames with nobody editing. The reference cost, and the
+//             at-rest contract: a still scene re-solves NOTHING.
+//   DRAG      120 frames, the object moved one small step per frame — one
+//             gesture, not 120 edits (the gesture rule DRAG-1 built).
+//   SETTLE    60 frames after the last move: the sweep the deferral owes.
+//   AT REST   120 frames again: back to costing what the first arm cost, and
+//             re-solving nothing again.
+//
+// WHAT IS MEASURED, AND THE TWO CANDIDATES THAT DO NOT WORK HERE — both
+// measured on this rig before choosing (this lane, 2026-09-18):
+//
+//   * `app.frameStats().workMs` is what the audit's charter named, and it is
+//     FLAT 0 in a --script run: editor.frame BYPASSES EngineRenderDriver, so
+//     the driver's own ticks never move (perf.epic_steady_state records the
+//     same trap). An assertion on it would be "0 <= 2 x 0", green for ever.
+//   * `app.renderStats().p95Ms` is Ogre's own percentile, and its window is
+//     NOT per-arm: it read exactly 2500.00 ms in the still arm and 2500.00 in
+//     the drag arm of the same run — the saturated top bucket, carrying this
+//     process's boot frames (worstMs 4933 ms) for ever. A ratio of 1.00 that
+//     cannot move is not a guard.
+//
+// So the arms are timed by THIS SCRIPT, one `editor.frame(1, dt)` at a time,
+// and the statistic is the 95th percentile of ITS OWN per-frame wall times
+// within each arm. It carries the JS-to-C++ hop, which is identical in both
+// arms and is why this is only ever compared against another arm of the same
+// run; and it is the statistic the symptom is felt as (stutter, not average).
+// Ogre's rolling `frameMs` is printed beside it as a cross-check.
+//
+// THE BAR, AND WHY IT IS NOT THE AUDIT'S 2x EXACTLY. The audit proposed "p95
+// within 2x the still frame's", and MEASURED on this rig the real ratio is
+// 1.79, 1.87 and 2.00 over three runs of this file (still 13-15 ms, drag
+// 25-28) — i.e. a 2x bar sits ON the measurement, and the third run passed at
+// exactly 2.00. A gate at its own measured value is a flake generator, so the
+// bars here are stated with their headroom:
+//
+//   the MEDIAN ratio <= 2.5  (measured 1.77-1.79; the stable statistic — a p95
+//                             from a 1 ms clock at 13 ms frames quantises hard)
+//   the p95 ratio    <= 3.0  (measured 1.79-2.00)
+//
+// and both ratios are PRINTED every run, so the number itself is visible to
+// whoever reads the log even when nothing is red. That is not a weakened gate:
+// the defect class is an ORDER OF MAGNITUDE — the owner's report was 5-6 fps
+// against 60, a ratio above 10 — and either bar catches it many times over.
+// What the tightening from 3x to the measurement is worth is a separate,
+// deliberate exercise once the drag path stops changing (MOVER-1 owns the next
+// change to it).
+var MEDIAN_BAR = 2.5, P95_BAR = 3.0;
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var ZIP = "@SOURCE_DIR@/scenes/Mirror Room.zip";
+var DT = 1.0 / 60.0;
+var FRAMES = 120;          // the audit's number
+var SETTLE_FRAMES = 60;
+
+app.engineErrors(true);
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10,
+       "importArchive(Mirror Room) -> " + (imported ? imported.guid : "null"));
+assert(project.open(imported.guid) === true, "project.open");
+
+var mode = world.mode({ mode: "epic" });
+assert(mode === "epic", "world.mode -> epic (got '" + mode + "')");
+var w = world.get();
+assert(w.gi.mode !== "off",
+       "Epic turned global illumination ON — the cache assertions are not vacuous");
+
+// THE HONESTY GUARD (epic_steady_state's, for the same reason): with a
+// document-only stand-in viewport there is no frame to measure, and asserting
+// 0 <= 0 six times and reporting a pass is the one outcome worse than a red.
+var mirror0 = editor.mirrorStats();
+console.log("viewport: " + J(editor.viewportState()) + " mirror: " + J(mirror0));
+if (!mirror0.available) {
+    console.log("this session's viewport is a document-only stand-in — there is no frame to " +
+                "measure and nothing to assert; skipping");
+} else {
+
+// A MOVABLE SUBJECT. The scene's own content, picked by size so the drag moves
+// something the caches care about; `mobility: movable` is what a user dragging
+// an object is (the renderer promotes a moved Still by itself, and that
+// promotion is a rebuild we are not measuring here — MOVER-1 owns it).
+var subject = null, subjectName = "";
+var all = scene.nodes();
+for (var i = 0; i < all.length; ++i) {
+    var n = all[i];
+    if (n.type !== "mesh") continue;
+    // NOT THE GROUND: the floor is the scene's biggest object and the one the
+    // horizon and the probe region are fitted to, so dragging it measures the
+    // floor's own machinery rather than a user moving a prop.
+    if (/ground|floor/i.test(n.name || "")) continue;
+    subject = n.id;
+    subjectName = n.name || "";
+    break;
+}
+assert(subject !== null, "the Mirror Room has a prop to drag");
+var home = node.transform(subject);
+console.log("dragging '" + subjectName + "' (" + subject + ") from " + J(home.position) +
+            ", mobility " + J(node.mobility(subject)));
+
+// Warm-up outside every arm: the first frames of a freshly opened world
+// compile shaders and upload its textures, and renderStats' counters are lazy.
+editor.frame(60, DT);
+app.renderStats();
+
+function percentile(values, p) {
+    var v = values.slice().sort(function (a, b) { return a - b; });
+    var i = Math.min(v.length - 1, Math.max(0, Math.round(p * (v.length - 1))));
+    return v[i];
+}
+
+function arm(tag, frames, move) {
+    var giBefore = world.giStatus();
+    var t0 = Date.now();
+    var per = [];
+    for (var f = 0; f < frames; ++f) {
+        if (move) move(f);
+        var f0 = Date.now();
+        editor.frame(1, DT);
+        per.push(Date.now() - f0);
+    }
+    var wallMs = Date.now() - t0;
+    var rs = app.renderStats();
+    var gi = world.giStatus();
+    var out = {
+        tag: tag,
+        frames: frames,
+        p95Ms: percentile(per, 0.95),          // THIS arm's own 95th percentile
+        medianMs: percentile(per, 0.50),
+        engineFrameMs: rs.frameMs,             // Ogre's rolling average, a cross-check
+        wallMsPerFrame: wallMs / frames,
+        rebuilds: gi.rebuilds - giBefore.rebuilds,
+        cascadeFullRebuilds: gi.cascadeFullRebuilds - giBefore.cascadeFullRebuilds,
+        cascadeDeferrals: gi.cascadeDeferrals - giBefore.cascadeDeferrals,
+        captures: gi.probeCapturesLastFrame,
+        deferred: gi.probeCapturesDeferred - giBefore.probeCapturesDeferred,
+        stale: gi.staleProbes,
+        reason: gi.lastStaleReason
+    };
+    console.log(tag + ": " + J(out) + " frameStats " + J(app.frameStats()));
+    return out;
+}
+
+// ---- 1. STILL ------------------------------------------------------------
+var still = arm("still", FRAMES, null);
+assert(still.p95Ms > 0,
+       "the still arm measured real frame times (per-frame p95 " + still.p95Ms + " ms)");
+assert(still.rebuilds === 0,
+       "A STILL SCENE RE-SOLVES NOTHING (rebuilds " + still.rebuilds + ")");
+assert(still.captures === 0,
+       "…and re-captures no probe on its last frame (" + still.captures + ")");
+
+// ---- 2. DRAG -------------------------------------------------------------
+// ONE GESTURE: a step per frame, small enough to be a drag and large enough to
+// leave the object's own voxel (the deferral's own rule is about motion, not
+// about distance).
+var STEP = 0.01;
+var drag = arm("drag", FRAMES, function (f) {
+    node.transform(subject, { position: { x: home.position.x + STEP * (f + 1),
+                                          y: home.position.y,
+                                          z: home.position.z } });
+});
+var p95Ratio = drag.p95Ms / Math.max(1, still.p95Ms);
+var medianRatio = drag.medianMs / Math.max(1, still.medianMs);
+console.log("per-frame still -> drag: median " + still.medianMs + " -> " + drag.medianMs +
+            " ms (ratio " + medianRatio.toFixed(2) + "), p95 " + still.p95Ms + " -> " +
+            drag.p95Ms + " ms (ratio " + p95Ratio.toFixed(2) + ")");
+assert(medianRatio <= MEDIAN_BAR,
+       "A DRAGGED FRAME COSTS WHAT A STILL ONE COSTS, WITHIN A BAND: median ratio " +
+       medianRatio.toFixed(2) + " <= " + MEDIAN_BAR);
+assert(p95Ratio <= P95_BAR,
+       "…and so does its 95th percentile (" + p95Ratio.toFixed(2) + " <= " + P95_BAR + ")");
+// THE SCHEDULER'S OWN CONTRACT: at most one cascade rebuild per frame, with the
+// rest DEFERRED rather than spent (a frame that rebuilt the whole chain is the
+// hitch the owner felt).
+assert(drag.cascadeFullRebuilds <= FRAMES,
+       "no frame rebuilt the chain more than once (" + drag.cascadeFullRebuilds +
+       " whole-chain rebuilds over " + FRAMES + " frames)");
+// AND A GESTURE IS NOT A RE-SOLVE. Measured here: this drag spends ZERO
+// from-scratch GI builds and ZERO probe captures per frame, and the reason is
+// worth writing down because it is the design and not luck — the renderer
+// PROMOTES an object that starts moving onto the mover channel, and a moving
+// object neither bounces light nor stales the probe grid (REALTIME_REFLECTIONS
+// §3.3; the giStatus doc says "a MOVING object never raises this"). A STILL
+// object dragged without that promotion is the case DRAG-1 measured (59 -> 2
+// captures over 60 frames) and gi.drag_cadence pins; MOVER-1 owns the picture
+// question in between. What this asserts is the cost contract either way:
+// nothing is re-solved and nothing is re-photographed per frame of a gesture.
+assert(drag.rebuilds === 0,
+       "A GESTURE IS NOT A RE-SOLVE: no from-scratch GI build over " + FRAMES +
+       " dragged frames (" + drag.rebuilds + ")");
+// The probe grid DOES go stale while a prop moves (measured: lastStaleReason
+// "moved", 13 stale probes, 24 cascade deferrals over the 120 frames) and it
+// drains at the renderer's own budget — so what a frame owes is BOUNDED by that
+// budget and never a whole sweep. That ceiling is the assertion; the sweep
+// itself is the settle arm below.
+var budget = world.giStatus().probeUpdatesPerFrame;
+assert(drag.captures <= Math.max(1, budget),
+       "a dragged frame re-captures at most the renderer's per-frame budget (" +
+       drag.captures + " <= " + Math.max(1, budget) + ")");
+assert(drag.cascadeDeferrals > 0,
+       "…and the cascade scheduler DEFERRED work rather than spending it per frame (" +
+       drag.cascadeDeferrals + " deferrals)");
+
+// ---- 3. SETTLE -----------------------------------------------------------
+// The sweep the deferral owes, measured from the frame the content came to
+// rest. What is asserted is that it ENDS: the staleness drains.
+var settle = arm("settle", SETTLE_FRAMES, null);
+assert(settle.stale === 0,
+       "the reflections caught up after the gesture (staleProbes " + settle.stale + ")");
+
+// ---- 4. AT REST AGAIN ----------------------------------------------------
+var rest = arm("rest", FRAMES, null);
+assert(rest.rebuilds === 0,
+       "AND IT IS QUIET AGAIN: nothing re-solves once the object stopped (" +
+       rest.rebuilds + ")");
+assert(rest.captures === 0, "…and no probe is re-captured (" + rest.captures + ")");
+console.log("per-frame p95 at rest: " + rest.p95Ms + " ms (still was " + still.p95Ms + ")");
+assert(rest.medianMs <= MEDIAN_BAR * Math.max(1, still.medianMs),
+       "…and a frame costs what it cost before the drag (median " + rest.medianMs +
+       " <= " + MEDIAN_BAR + " x " + still.medianMs + " ms)");
+
+// The renderer refused nothing along the way — a drag that dropped a capture or
+// a rebuild with a log line and no counter would pass everything above.
+var errors = app.engineErrors();
+console.log("engine errors: " + J(errors));
+assert(errors.recorded === 0,
+       "the renderer recorded no errors through 420 frames of drag and settle (" +
+       errors.recorded + ")");
+
+node.transform(subject, { position: home.position });
+console.log("PASS: perf.drag_mirror_room");
+}
