@@ -209,7 +209,12 @@ set_tests_properties(vr.no_picture_start PROPERTIES
     RUN_SERIAL TRUE
     SKIP_RETURN_CODE 77
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200")
+    # ...AND A BLINKING RUNTIME (JAHSHAKA_VR_TEST_BLINK_EVERY, lane V1-RIG fix
+    # round item 1): every 17th frame is answered "no picture" for as long as a
+    # session lives, which is the doff/dashboard CYCLE the other two hooks
+    # cannot make — the session's own View goes off and on again, over and over.
+    # The script's case 2b asserts the GI chain costs nothing across it.
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200;JAHSHAKA_VR_TEST_BLINK_EVERY=17")
 
 # ---------------------------------------------------------------------------
 # vr.input_session — LOCOMOTION AGAINST A REAL RUNTIME (stage 1,

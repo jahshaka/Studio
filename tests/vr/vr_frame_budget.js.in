@@ -12,11 +12,20 @@
 // (CLAUDE.md) — and then records a fixed number of STEPPED frames, never a wall
 // clock (the engine has no wall clock; a settle in seconds measures nothing).
 //
+// EACH SCENE IS MEASURED TWICE IN ONE SESSION: STILL and WALKING. The still
+// arm is the floor; the WALK is where the work is, and it is the arm the suite
+// is really for — a still wearer can never take a cascade-0 step, so a
+// still-only suite cannot see the class of defect this suite exists to catch
+// (the two GPU bursts of a step landing on one frame). The walk covers at least
+// two of cascade 0's 5 m steps and the script asserts it did.
+//
 // IT ASSERTS NO BUDGET, and the C++ half explains why: on this rig the Xvfb
-// present copy adds 10-27 ms to every frame and the GPU sits at whatever clock
+// present copy adds 13-21 ms to every frame and the GPU sits at whatever clock
 // nobody locked, so a red against 11.1 ms would be a red about the rig. The
-// budget is a REPORT line; the assertion is a HITCH DETECTOR, which is
-// rig-independent because it is a ratio.
+// budget and the run's own worst/median ratio are REPORT lines; what is
+// ASSERTED is STRUCTURAL — no frame paying for both halves of a step, and no
+// whole-chain rebuild inside a recorded window — because structure is the same
+// on any rig.
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
@@ -30,6 +39,10 @@ function log(m) { console.log("VRBUDGET " + m); }
 var SHOWROOM = "@JAH_VR_BUDGET_SHOWROOM@";
 var EYE_W = 2160, EYE_H = 2376;
 var SETTLE = 240, RECORD = 200;
+// 0.25 m a frame at the editor's 15 m/s fly: 160 frames is 40 m, which is eight
+// of cascade 0's 5 m steps. The assertion below asks only for two, so the arm
+// stays honest on a tier whose step is larger.
+var WALK = 160;
 
 var avail = vr.available();
 assert(avail.available === true, "a runtime is here: " + JSON.stringify(avail));
@@ -38,6 +51,24 @@ assert(avail.available === true, "a runtime is here: " + JSON.stringify(avail));
 // offers rather than asserting a saving the rig cannot produce.
 log("runtime " + avail.runtime + " visibilityMask=" + avail.visibilityMask +
     " recommended eye " + avail.eyeSize[0] + "x" + avail.eyeSize[1] + " at " + avail.refreshHz + " Hz");
+
+function cascade0Rebuilds() {
+    var g = world.giStatus();
+    return g.cascades.length ? g.cascades[0].rebuilds : 0;
+}
+
+function record(label, drive) {
+    var cap = perf.capture({ seconds: 900, out: label, label: label });
+    assert(cap.started === true, label + ": perf.capture started");
+    var c0 = cascade0Rebuilds();
+    drive();
+    var steps = cascade0Rebuilds() - c0;
+    var p = perf.stop();
+    assert(p.stopped === true && p.frames > RECORD / 2,
+           label + ": " + p.frames + " frames recorded into " + p.path);
+    log(label + " bundle " + p.path + " frames " + p.frames + " cascade0Steps " + steps);
+    return steps;
+}
 
 function arm(label) {
     world.photon({ enabled: true, tier: "medium" });
@@ -57,13 +88,24 @@ function arm(label) {
         gi.cascades.map(function (c) { return c.halfSize + "/" + c.resolution + "@" + c.step; }).join(" "));
     log(label + " ifdBound=" + gi.ifdBound + " ifdProbes=" + gi.ifdProbes);
 
-    var cap = perf.capture({ seconds: 900, out: label, label: label });
-    assert(cap.started === true, label + ": perf.capture started");
-    editor.frame(RECORD);
-    var p = perf.stop();
-    assert(p.stopped === true && p.frames > RECORD / 2,
-           label + ": " + p.frames + " frames recorded into " + p.path);
-    log(label + " bundle " + p.path + " frames " + p.frames);
+    // ---- STILL: the floor -------------------------------------------------
+    var stillSteps = record(label, function () { editor.frame(RECORD); });
+    assert(stillSteps === 0,
+           label + ": a still wearer takes no cascade-0 step (" + stillSteps + ")");
+
+    // ---- WALKING: where the work is ---------------------------------------
+    // PARK OFF A STEP PLANE FIRST. The rig starts the wearer near x = 0, which
+    // IS a plane of the re-centre lattice, and the settle's own crossings are
+    // not the subject; then settle again so the capture opens on a quiet chain.
+    for (var w = 0; w < 30; ++w) { vr.move({ right: true }); editor.frame(1); }
+    editor.frame(120);
+    var walkSteps = record(label + "-walk", function () {
+        for (var i = 0; i < WALK; ++i) { vr.move({ forward: true }); editor.frame(1); }
+    });
+    assert(walkSteps >= 2,
+           label + ": THE WALK CROSSED AT LEAST TWO CASCADE-0 STEPS (" + walkSteps +
+           ") — a still-only run cannot see a step frame at all");
+
     vr.end();
     editor.frame(30);
 }

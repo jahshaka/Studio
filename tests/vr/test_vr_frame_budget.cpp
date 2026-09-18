@@ -17,12 +17,14 @@ For more information see the LICENSE file
 // (2160x2376 per eye — 10.26 Mpx of stereo target, five times a desktop 1080p)
 // and records the monitor's per-frame rows; this reads them.
 //
-// WHAT IT REPORTS, and what it ASSERTS — the two are deliberately different.
+// WHAT IT REPORTS, and what it ASSERTS — the two are deliberately different,
+// and the split was CORRECTED on 2026-09-18 (the lead's read of the first
+// version, which asserted a ratio the defect it was written for walks through).
 //
 // THE BUDGET IS A REPORT LINE. The owner's targets are 90 Hz in a headset
 // (11.1 ms) and 60 on the desktop (16.7). This suite prints where each arm sits
 // against them and RED-LINES NEITHER, because on the gate's rig the number is
-// not the product's: the Xvfb present copy adds a constant 10-27 ms to every
+// not the product's: the Xvfb present copy adds a constant 13-21 ms to every
 // frame (CLAUDE.md's rig facts) and the GPU sits at whatever clock nobody
 // locked — measured on this lane, the identical pass read 0.46 ms in one run and
 // 10.3 in another with the clocks free. A red against 11.1 ms here would be a
@@ -30,26 +32,42 @@ For more information see the LICENSE file
 // `sudo nvidia-smi --lock-gpu-clocks`, by hand, and go in the ledger; the
 // headset half of V1 measures the real thing on the owner's Quest Pro.
 //
-// THE ASSERTION IS A HITCH DETECTOR, which is rig-independent because it is a
-// RATIO: the run's 99th percentile may not cost more than three times its own
-// median. That is the no-hitch law in the only form a loaded box can hold —
-// "these frames are unlike their neighbours" survives a slow rig, a cold cache
-// and a sibling gate, where "this frame is over 11.1 ms" does not. It is exactly
-// the class this lane found and fixed: cascade 0's rebuild and the irradiance
-// field's whole re-integration used to land on one frame and doubled it, twelve
-// frames in a hundred and sixty — 7.5 %, which p99 catches with room to spare
-// (anything recurring at 1 % of frames or more does).
+// THE RUN'S OWN WORST/MEDIAN RATIO IS ALSO ONLY A REPORT LINE, and arithmetic is
+// why. The defect this suite was written for — cascade 0's rebuild and the
+// irradiance field's whole re-integration landing on ONE frame — measured 11.7 ms
+// against a 5.8 ms quiet frame: a ratio of 2.0, which sits UNDER any 3x bar, so
+// the pre-fix engine would have passed. A percentile cannot rescue it either:
+// p99 of 180 frames is about the second worst, so a class that lands on one or
+// two frames of a window barely moves it (a 2-frame class is 1.1 % of the window
+// against p99's top 1.8 % — caught only by luck). A ratio is the wrong
+// instrument for a rare bounded burst; it sees only a hitch already several
+// times the frame.
 //
-// IT IS p99 AND NOT THE MAX, and that is a measured decision rather than a
-// softening. On this rig a SINGLE frame's first compute pass after the big
-// opaque pass absorbs a queue wait that is not work: on Showroom 2 the "HDR
-// meter clear" — a 256-bin clear with no draws, median 0.172 ms — read 21.851 ms
-// on exactly one frame of 180 while the opaque pass beside it never moved from
-// 7.2 (p50 7.217, max 7.363). Nothing did any work on that frame (0 cascade
-// rebuilds, 0 probe captures, 0 shader compiles); the rig's own present copy is
-// 17.4 ms a frame and the GPU queue has to wait for it somewhere. The MAX is
-// reported on every run, with its worst pass named, so a real one-off hitch is
-// still visible to a reader — it is just not a red.
+// WHAT IS ASSERTED IS STRUCTURAL, and structure reads the same on any rig, at
+// any clock, under any load:
+//
+//   (1) NO FRAME PAYS FOR BOTH HALVES OF A STEP — no recorded frame carries a
+//       cascade rebuild AND an `ifd.follow`. That is the invariant the fix
+//       installed (the follow owns the next frame's one GI slot), it is exactly
+//       false on the pre-fix engine, and it is a count of frames, not a cost.
+//   (2) NO WHOLE-CHAIN REBUILD INSIDE A RECORDED WINDOW — `cascadeFullRebuilds`
+//       equal in the bundle's start and end snapshots, and the arm's GI
+//       `rebuilds` count unmoved. This is the net under the driver-election
+//       defect (V1-RIG fix round item 1): a no-picture frame used to flip the
+//       GI driver and cost two from-scratch chain builds.
+//   (3) THE WALK ARM REALLY WALKED — at least two of cascade 0's steps inside
+//       the window, re-derived from the snapshots so a bundle cannot claim a
+//       walk it did not take. A STILL arm can never take one, which is why a
+//       still-only suite cannot see the class in (1) at all.
+//
+// The MAX is reported with its worst pass named and that pass's nominal cost,
+// because on this rig a single frame's first compute pass after the big opaque
+// pass absorbs a queue wait that is not work: on Showroom 2 the "HDR meter
+// clear" — a 256-bin clear with no draws, median 0.172 ms — read 21.851 ms on
+// exactly one frame of 180 while the opaque pass beside it never moved from 7.2
+// (p50 7.217, max 7.363), with 0 cascade rebuilds, 0 probe captures and 0 shader
+// compiles on that frame. A reader can tell that from a real hitch; a threshold
+// cannot.
 //
 // The frame's cost here is GPU + GI: `gpuMs` (every pass's timestamps) plus the
 // GI dispatches, which are the one GPU cost in a capture that is not inside a
@@ -101,7 +119,15 @@ struct Arm {
     double  swapMean = 0.0;
     int     rebuildFrames = 0;
     int     followFrames = 0;
+    /// FRAMES THAT PAID FOR BOTH HALVES OF A STEP — a cascade rebuild and the
+    /// field's re-placement on one frame. The invariant is that this is 0.
+    int     sharedFrames = 0;
     double  worstRebuildGpu = 0.0;
+    /// From the bundle's own start/end snapshots: what the GI arm did ACROSS the
+    /// recorded window, which the per-frame rows cannot say.
+    long long fullRebuildsDelta = -1;   // -1 = a snapshot was missing
+    long long armRebuildsDelta  = -1;
+    long long cascade0Steps     = -1;
     /// The worst frame's most expensive pass, its cost there, and what that
     /// pass costs on a median frame — so the reader can say whether the worst
     /// frame was WORK or a queue wait charged to the first pass after the
@@ -176,6 +202,8 @@ bool readArm(const QString &dir, Arm &out)
             out.worstRebuildGpu = std::max(out.worstRebuildGpu, frameGpu);
         }
         if (follow) ++out.followFrames;
+        // (1) THE STRUCTURAL INVARIANT, per frame.
+        if (follow && rebuilds > 0) ++out.sharedFrames;
         ++out.frames;
     }
     out.swapMean = out.frames ? swapSum / double(out.frames) : 0.0;
@@ -197,7 +225,37 @@ bool readArm(const QString &dir, Arm &out)
     return out.frames > 0;
 }
 
-void judge(Arm &a)
+/// The bundle's start/end snapshots, for the three things the per-frame rows
+/// cannot say: whether a WHOLE-CHAIN rebuild happened inside the window, whether
+/// the arm rebuilt its GI at all, and how many cascade-0 steps the window really
+/// contained.
+void readSnapshots(const QString &dir, Arm &out)
+{
+    const auto giOf = [&](const char *name, QJsonObject &gi) {
+        QFile f(dir + "/" + QLatin1String(name));
+        if (!f.open(QIODevice::ReadOnly)) return false;
+        gi = QJsonDocument::fromJson(f.readAll()).object()
+                 .value(QStringLiteral("gi")).toObject();
+        return !gi.isEmpty();
+    };
+    QJsonObject a, b;
+    if (!giOf("snapshot_start.json", a) || !giOf("snapshot_end.json", b)) return;
+    const auto c0 = [](const QJsonObject &gi) -> long long {
+        const QJsonArray cs = gi.value(QStringLiteral("cascades")).toArray();
+        if (cs.isEmpty()) return -1;
+        return (long long)cs.at(0).toObject().value(QStringLiteral("rebuilds")).toDouble();
+    };
+    out.fullRebuildsDelta =
+        (long long)b.value(QStringLiteral("cascadeFullRebuilds")).toDouble() -
+        (long long)a.value(QStringLiteral("cascadeFullRebuilds")).toDouble();
+    out.armRebuildsDelta =
+        (long long)b.value(QStringLiteral("rebuilds")).toDouble() -
+        (long long)a.value(QStringLiteral("rebuilds")).toDouble();
+    const long long sa = c0(a), sb = c0(b);
+    if (sa >= 0 && sb >= 0) out.cascade0Steps = sb - sa;
+}
+
+void judge(Arm &a, bool walking)
 {
     ok(a.frames >= 100,
        QStringLiteral("%1: %2 frames recorded").arg(a.name).arg(a.frames));
@@ -235,15 +293,50 @@ void judge(Arm &a)
                .arg(a.name).arg(worst, 0, 'f', 3).arg(a.worstPass)
                .arg(a.worstPassMs, 0, 'f', 3).arg(a.worstPassMedian, 0, 'f', 3));
 
-    // THE HITCH DETECTOR. A ratio, so it means the same thing on any rig.
-    // Three times the median is generous on purpose: a cascade rebuild is real,
-    // expected work and it is allowed to make a frame more expensive — what is
-    // not allowed is a CLASS of frames that stand out like dropped ones (see
-    // the header for why the statistic is p99 and not the max).
-    const double bar = 3.0 * median;
-    ok(p99 <= bar,
-       QStringLiteral("%1: p99 within 3x the median — %2 ms against %3 (max %4)")
-           .arg(a.name).arg(p99, 0, 'f', 3).arg(bar, 0, 'f', 3).arg(worst, 0, 'f', 3));
+    // THE RATIO IS A REPORT LINE (the header's arithmetic says why): the defect
+    // this suite exists for was a ratio of 2.0.
+    report(QStringLiteral("%1: worst/median %2x, p99/median %3x — a READING, not a "
+                          "verdict (the step-frame defect was 2.0x)")
+               .arg(a.name).arg(median > 0.0 ? worst / median : 0.0, 0, 'f', 2)
+               .arg(median > 0.0 ? p99 / median : 0.0, 0, 'f', 2));
+
+    // ---- THE STRUCTURAL ASSERTIONS (the header's (1)-(3)) ------------------
+    //
+    // (1) The two halves of a step never share a frame. Exactly false on the
+    //     pre-fix engine, and a count of frames rather than a cost — so it reads
+    //     the same on a loaded box, a cold cache and a free-clocked GPU.
+    ok(a.sharedFrames == 0,
+       QStringLiteral("%1: no frame paid for BOTH a cascade rebuild and the field's "
+                      "re-placement (%2 did; %3 rebuild frames, %4 follows)")
+           .arg(a.name).arg(a.sharedFrames).arg(a.rebuildFrames).arg(a.followFrames));
+
+    // (2) No whole-chain rebuild, and no GI rebuild at all, inside the window:
+    //     a wearer walking is a SCROLL and a scroll is never a from-scratch
+    //     build. (This is what the driver-election defect broke.)
+    if (a.fullRebuildsDelta < 0) {
+        ok(false, QStringLiteral("%1: the bundle carries both snapshots").arg(a.name));
+    } else {
+        ok(a.fullRebuildsDelta == 0,
+           QStringLiteral("%1: the teleport guard forced no whole-chain rebuild in the "
+                          "window (delta %2)").arg(a.name).arg(a.fullRebuildsDelta));
+        ok(a.armRebuildsDelta == 0,
+           QStringLiteral("%1: the GI arm was not rebuilt from scratch in the window "
+                          "(delta %2)").arg(a.name).arg(a.armRebuildsDelta));
+    }
+
+    // (3) The walk arm really walked; the still arm really stood still.
+    if (a.cascade0Steps < 0) {
+        ok(false, QStringLiteral("%1: the snapshots name cascade 0").arg(a.name));
+    } else if (walking) {
+        ok(a.cascade0Steps >= 2,
+           QStringLiteral("%1: THE WINDOW CONTAINED AT LEAST TWO CASCADE-0 STEPS (%2) — "
+                          "without one there is no step frame to judge")
+               .arg(a.name).arg(a.cascade0Steps));
+    } else {
+        ok(a.cascade0Steps == 0,
+           QStringLiteral("%1: a still wearer took no cascade-0 step (%2)")
+               .arg(a.name).arg(a.cascade0Steps));
+    }
 }
 
 }   // namespace
@@ -261,11 +354,16 @@ int main(int argc, char **argv)
     // The two arms the app half records, by name. A missing one is a failure and
     // not a skip: the wrapper already skipped the whole suite if there was no
     // runtime to render in.
-    for (const QString &name : { QStringLiteral("default"), QStringLiteral("showroom") }) {
+    for (const QString &name : { QStringLiteral("default"),
+                                 QStringLiteral("default-walk"),
+                                 QStringLiteral("showroom"),
+                                 QStringLiteral("showroom-walk") }) {
         Arm a;
         a.name = name;
-        if (!readArm(root + "/" + name, a)) continue;
-        judge(a);
+        const QString dir = root + "/" + name;
+        if (!readArm(dir, a)) continue;
+        readSnapshots(dir, a);
+        judge(a, name.endsWith(QStringLiteral("-walk")));
     }
     QTextStream(stdout) << (gFailures ? "FAILURES: " : "all cases passed (")
                         << gFailures << (gFailures ? "\n" : ")\n");

@@ -194,9 +194,28 @@ int main()
     }
 
     // =====================================================================
-    // CASE 2 — a walk carries it, in the frame the cascade moved
+    // CASE 2 — a walk carries it, ON THE FRAME AFTER the cascade moved
+    //
+    // THE INVARIANT HERE CHANGED ON 2026-09-18 (lane V1-RIG item 2,
+    // LATER_OPTIMISATIONS L11). It used to be "the frame the cascade moved IS
+    // the frame the field moved", one atomic piece of work. It is now
+    // "the two NEVER SHARE A FRAME": cascade 0's rebuild is 2.4-2.9 ms of GPU
+    // and the field's whole re-integration another 3.4-5.6, and at a headset's
+    // pixel count their SUM crossed the 90 Hz bar while neither half did
+    // (measured at Quest Pro size: quiet frame 5.84 ms, step frame 11.72 mean /
+    // 12.45 max against 11.1, twelve frames of a hundred and sixty — one dropped
+    // frame every five metres). So the follow is paid on the NEXT frame, out of
+    // that frame's own one GI slot, and the frame that pays it rebuilds no
+    // cascade.
+    //
+    // What it costs is one frame in which the field describes the place cascade
+    // 0 has just left — one step of staleness, never a WRONG PLACE, because the
+    // field's volume and its atlas move together and the shader reads the
+    // volume live. The settled-picture assertion below therefore moved from the
+    // rebuild frame to the FOLLOW frame, where it still holds exactly: the
+    // re-integration is whole, so nothing drifts after it.
     // =====================================================================
-    std::printf("\n== case 2: one cascade-0 step ==\n");
+    std::printf("\n== case 2: one cascade-0 step, and the follow on the frame after ==\n");
     float singleVolumeGround = 0.0f, chainGroundAtStart = 0.0f;
     {
         st = scene->giStatus();
@@ -211,7 +230,14 @@ int main()
         // cascade 0's step once and the scheduler must answer inside it.
         unsigned long long rebuildsWorstFrame = 0, prevRebuilds = 0;
         for (const auto &c : st.cascades) prevRebuilds += c.rebuilds;
-        int stepFrame = -1;
+        // CASCADE 0's OWN count and the follow count, per frame: the deferral is
+        // a statement about those two and nothing else (an outer cascade's
+        // rebuild owes no follow at all).
+        unsigned long long prevC0 = st.cascades[0].rebuilds;
+        unsigned long long prevFollows = followsBefore;
+        int stepFrame = -1;           // the frame the FIELD moved (the follow)
+        int c0Frame = -1;             // the frame CASCADE 0 rebuilt
+        int sharedFrames = 0;         // frames that did both — must stay 0
         for (int f = 1; f <= 12; ++f) {
             const float x = float(f) * step0 / 8.0f;
             view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, 6.0f),
@@ -222,41 +248,65 @@ int main()
             for (const auto &c : s.cascades) t += c.rebuilds;
             rebuildsWorstFrame = std::max(rebuildsWorstFrame, t - prevRebuilds);
             prevRebuilds = t;
-            if (stepFrame < 0 && s.ifdFollows > followsBefore) {
+            const bool c0Rebuilt = s.cascades[0].rebuilds > prevC0;
+            const bool followed  = s.ifdFollows > prevFollows;
+            prevC0 = s.cascades[0].rebuilds;
+            prevFollows = s.ifdFollows;
+            // THE STRUCTURAL INVARIANT, checked on EVERY frame of the walk and
+            // not only on the first step: the two bursts never share a frame.
+            if (c0Rebuilt && followed) ++sharedFrames;
+            if (c0Frame < 0 && c0Rebuilt) {
+                c0Frame = f;
+                std::printf("   cascade 0 rebuilt on frame %d\n", f);
+                // ...AND THE FIELD HAS NOT MOVED YET. This is the deferral,
+                // stated at the frame it happens on.
+                CHECK(!followed,
+                      "the field does NOT re-place on the frame cascade 0 rebuilt (the deferral)");
+            }
+            if (stepFrame < 0 && followed) {
                 stepFrame = f;
-                // THE FRAME THE CASCADE MOVED IS THE FRAME THE FIELD MOVED, and
-                // it is converged by the end of it: the re-place and the whole
-                // re-integration are one atomic piece of work, because the
-                // atlas describes another place until it is done.
                 CHECK(s.ifdBound, "the field stays BOUND across the step");
-                CHECK(s.ifdConverged, "...and is converged in the step's own frame");
+                CHECK(s.ifdConverged, "...and is converged in the follow's own frame");
                 const float moved = dist(centreOf(s), fieldBefore);
-                std::printf("   step at frame %d: the field's centre moved %.2f m "
+                std::printf("   the field moved on frame %d: its centre moved %.2f m "
                             "(cascade 0's step is %.2f m)\n", f, moved, step0);
                 CHECK(moved > 0.5f * step0, "THE FIELD FOLLOWED CASCADE 0");
                 CHECK(dist(centreOf(s), s.cascades[0].centre) < 0.5f * s.cascades[0].halfSize,
                       "...onto that cascade's new centre");
-                // THE PICTURE ON THE STEP FRAME IS THE SETTLED PICTURE. This is
-                // the whole-re-integration policy stated as a pixel: the atlas
-                // is re-integrated at the new placement inside the step's own
-                // frame, so nothing about the diffuse changes over the frames
-                // that follow. A progressive re-converge would show the probes
-                // of the place the camera LEFT here and drift into the right
-                // answer over the budget's frames — a wrong picture, not a
-                // late one, which is why it is not what this engine does.
+                // THE PICTURE ON THE FOLLOW FRAME IS THE SETTLED PICTURE — the
+                // whole-re-integration policy stated as a pixel. A PROGRESSIVE
+                // re-converge would show the probes of the place the camera LEFT
+                // here and drift into the right answer over the budget's frames
+                // (a wrong picture, not a late one), which is why the follow is
+                // deferred by a frame and never spread over several.
                 Image now; view->readPixels(now);
                 const float atStep = groundLum(now);
                 render(e, 10);
                 view->readPixels(now);
                 const float settled = groundLum(now);
-                std::printf("   ground on the step frame %.4f, ten frames later %.4f "
+                std::printf("   ground on the follow frame %.4f, ten frames later %.4f "
                             "(%.1f%% drift)\n", atStep, settled,
                             settled > 0.0f ? 100.0f * std::fabs(atStep - settled) / settled : 0.0f);
                 CHECK(std::fabs(atStep - settled) < 0.03f * std::max(settled, 1e-4f),
-                      "the step frame ALREADY shows the settled diffuse (no drift to watch)");
+                      "the follow frame ALREADY shows the settled diffuse (no drift to watch)");
+                // Those ten frames were rendered at one pose, outside the walk's
+                // cadence: re-sync the per-frame counters so nothing after them
+                // is read as a shared frame.
+                const GiStatus after = scene->giStatus();
+                prevC0 = after.cascades[0].rebuilds;
+                prevFollows = after.ifdFollows;
+                prevRebuilds = 0;
+                for (const auto &c : after.cascades) prevRebuilds += c.rebuilds;
             }
         }
         CHECK(stepFrame > 0, "the walk crossed a cascade-0 step at all (the test is not vacuous)");
+        CHECK(c0Frame > 0, "...and the rebuild that owed the follow was seen");
+        std::printf("   cascade 0 rebuilt on frame %d, the field followed on frame %d "
+                    "(%d frame(s) did both)\n", c0Frame, stepFrame, sharedFrames);
+        CHECK(sharedFrames == 0,
+              "NO FRAME PAID FOR BOTH A CASCADE-0 REBUILD AND THE FIELD'S RE-PLACEMENT");
+        CHECK(stepFrame == c0Frame + 1,
+              "the follow lands on the VERY NEXT frame, not later (it owns that frame's GI slot)");
         CHECK(rebuildsWorstFrame <= 1,
               "no frame paid for two cascades (the chain's budget is unbroken)");
 
