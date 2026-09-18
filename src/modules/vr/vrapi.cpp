@@ -286,7 +286,10 @@ QVector<VerbInfo> VrApi::verbs() const
           "wrist, thumb, index, middle, ring, little), which is what the wearer's own hand "
           "is drawn from — read back with `vr.handJoints(hand)`. A hand whose profile is a "
           "HAND draws its skeleton and no controller; a hand re-bound mid-gesture cancels "
-          "that gesture, exactly as a lost focus does. "
+          "that gesture, exactly as a lost focus does; and `menuPressed` on a hand profile is "
+          "REFUSED — `menu` is unbound there (aim_activate_ext is the pinch itself, so a bare "
+          "hand has no modifier in this build), and a sample that pressed it would be driving "
+          "a gesture no runtime can report. "
           "`focused` (true by default on every call that writes a hand) is the SESSION's "
           "input focus, not the hand's: the "
           "runtime takes focus away for the whole application — for its own dashboard, or when "
@@ -316,7 +319,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
           "frames, rendered, ipd, mirror, worldScale, asymmetricFov, spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
-          "bindings:{offered, accepted}, "
+          "bindings:{offered, accepted, profiles:[{profile, bindings, accepted}]}, "
           "handActions, handJoints, proxies, preview}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
@@ -348,7 +351,13 @@ QVector<VerbInfo> VrApi::verbs() const
           "(\"/interaction_profiles/oculus/touch_controller\"), empty when it has bound none, "
           "and `bindings` counts the suggested-binding blocks offered and accepted — four are "
           "offered (simple, Touch, WMR and hand interaction) and a runtime takes the ones it "
-          "knows. `fromInjection` is true for a sample vr.inject wrote. `inputFocused` is the "
+          "knows — while `bindings.profiles` names each block with how many bindings it "
+          "carried and whether the runtime took it, because \"4 of 4\" cannot tell a block "
+          "that bound every path it meant to from one that bound half (a path spelled wrong "
+          "takes that hardware's control away silently; the bare-hand block is ten — the "
+          "grip, aim and pinch poses, select and grab, per hand, and NO menu: "
+          "aim_activate_ext is the pinch itself, so a bare hand has no modifier). "
+          "`fromInjection` is true for a sample vr.inject wrote. `inputFocused` is the "
           "SESSION's input focus — one bit, because a runtime takes focus away for the whole "
           "application and never for one hand — and a gesture in flight is cancelled on a "
           "false, never committed.",
@@ -883,6 +892,20 @@ bool VrApi::inject(const QVariant &hand, const QVariantMap &state)
                         ? state.value(QStringLiteral("grabPressed")).toBool()
                         : s.grab >= 0.5f;
     s.menuPressed = state.value(QStringLiteral("menuPressed"), false).toBool();
+    // A BARE HAND HAS NO MENU BUTTON, AND AN INJECTION MAY NOT INVENT ONE
+    // (VR-HANDS-1 fix round, item 1). `menu` is unbound on the hand-interaction
+    // profile — `aim_activate_ext` IS the pinch, so binding it would make every
+    // hand select a toggle (OgreVrSession.cpp's block says why at length) — so a
+    // real hand can never report a press there, and a sample that did would be
+    // testing a gesture no runtime in this build can produce. REFUSED rather
+    // than silently dropped: a suite that thought it was driving a hand
+    // modifier should read the reason, not a green line.
+    if (s.menuPressed && vrIsHandProfile(s.profile.c_str()))
+        return fail(QStringLiteral("vr.inject: menuPressed is not a thing a bare hand can do — "
+                                   "`menu` is unbound on %1 (aim_activate_ext is the pinch "
+                                   "itself, so a hand has no modifier in this build). Inject it "
+                                   "on a controller profile, or leave it out.")
+                        .arg(QString::fromStdString(s.profile)));
     const QVariantMap stick = state.value(QStringLiteral("stick")).toMap();
     s.stickX = float(stick.value(QStringLiteral("x"), 0.0).toDouble());
     s.stickY = float(stick.value(QStringLiteral("y"), 0.0).toDouble());
@@ -1046,6 +1069,25 @@ QVariantMap VrApi::state()
     QVariantMap bindings;
     bindings[QStringLiteral("offered")] = s.bindingProfiles;
     bindings[QStringLiteral("accepted")] = s.bindingProfilesAccepted;
+    // ...AND BLOCK BY BLOCK (stage 3's fix round): which profile, how many
+    // bindings it carried and whether the runtime took it. The totals cannot
+    // tell a block that bound everything it meant to from one that bound half
+    // of them — a path spelled wrong, or an input a pin bump moved, takes that
+    // hardware's control away with the totals still reading 4 of 4 — so the
+    // COUNT is what a suite pins (the bare-hand block is twelve).
+    {
+        VrBindingBlock blocks[kVrBindingBlockMax];
+        const unsigned n = e ? e->vrBindingBlocks(blocks, kVrBindingBlockMax) : 0u;
+        QVariantList list;
+        for (unsigned b = 0; b < n; ++b) {
+            QVariantMap one;
+            one[QStringLiteral("profile")] = QString::fromStdString(blocks[b].profile);
+            one[QStringLiteral("bindings")] = blocks[b].bindings;
+            one[QStringLiteral("accepted")] = blocks[b].accepted;
+            list.append(one);
+        }
+        bindings[QStringLiteral("profiles")] = list;
+    }
     out[QStringLiteral("bindings")] = bindings;
     out[QStringLiteral("handActions")] = s.handActions;
     out[QStringLiteral("handJoints")] = s.handJoints;

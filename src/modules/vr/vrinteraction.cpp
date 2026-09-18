@@ -185,6 +185,9 @@ void VrInteraction::begin()
 {
     mInstalled = true;
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = VrHandState();
+    // ...AND THE NEXT SESSION'S FIRST BIND IS ITS OWN FIRST BIND, not a re-bind
+    // of the last one's (item 5): the seed is per session, like `mPrev` itself.
+    mProfileSeeded = false;
     mHover = Hover();
     mTurnArmed = true;
     mMemo = PickMemo();
@@ -207,6 +210,7 @@ void VrInteraction::end()
     mMemo = PickMemo();
     mRefreshed = false;
     for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i] = VrHandState();
+    mProfileSeeded = false;
     // AN INJECTION DIES WITH THE SESSION — AND THAT IS NOW THE ENGINE'S RULE,
     // NOT THIS OBJECT'S. The Studio-local store this used to clear here (the
     // lead's §666 fix: one console injection in a real session took the
@@ -1537,6 +1541,14 @@ void VrInteraction::step(float seconds)
     // THE EDGE IS READ HERE AND NOWHERE ELSE: the engine reports the profile
     // per frame and keeps no edge of its own, and this object already holds the
     // previous frame's samples for exactly this kind of question.
+    // THE FIRST FRAME IS NOT A CHANGE (the lead's item 5): a session's first
+    // bind is the runtime naming what the wearer is holding, and `mPrev` starts
+    // zeroed — so it read as a re-bind and was counted as one. Seeded here, and
+    // only the profile: the button edges keep their own meaning.
+    if (!mProfileSeeded) {
+        for (unsigned i = 0; i < VrHandCount; ++i) mPrev[i].profile = hands[i].profile;
+        mProfileSeeded = true;
+    }
     for (unsigned i = 0; i < VrHandCount; ++i) {
         if (std::strcmp(hands[i].profile.c_str(), mPrev[i].profile.c_str()) == 0) continue;
         ++mProfileChanges;

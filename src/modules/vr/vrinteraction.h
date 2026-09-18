@@ -706,6 +706,15 @@ private:
     /// something that hand was in the middle of (stage 3, VR_INPUT_SPEC §7).
     /// Counts, never a clock.
     unsigned long long mProfileChanges = 0, mProfileCancels = 0;
+    /// HAS THE FIRST FRAME'S PROFILE BEEN SEEDED into `mPrev`? (stage 3's fix
+    /// round, the lead's item 5.) `mPrev` starts zeroed, so a session's FIRST
+    /// bind — the runtime naming what the wearer is holding, which is not a
+    /// change of anything — read as a re-bind and was counted (and would have
+    /// cancelled a gesture, if one could exist before any hand reported).
+    /// Seeded on the first stepped frame, and only the PROFILE field: the
+    /// button edges keep their own semantics (a control already down on the
+    /// first frame is a press, as it always was).
+    bool mProfileSeeded = false;
 };
 
 #endif   // VRINTERACTION_H

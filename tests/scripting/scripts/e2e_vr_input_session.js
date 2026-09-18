@@ -109,6 +109,30 @@ assert(bind.accepted === bind.offered,
        + "the registry does not have (" + bind.accepted + " of " + bind.offered + ")");
 assert(vr.state().handActions === true,
        "the action set is attached, so the controller route is live");
+// ...AND BLOCK BY BLOCK, WITH ITS COUNT (the fix round's item 3). "4 of 4"
+// cannot tell a block that bound every path it meant to from one that bound
+// half of them: a path spelled wrong, or an input a pin bump moved, takes that
+// hardware's control away with the totals still green. So the bare-hand block's
+// own count is pinned here — two poses, the pinch pose, select and grab, per
+// hand = TWELVE — and it is the number that would move if a hand path ever
+// stopped resolving.
+var blocks = bind.profiles;
+console.log("per-profile blocks: " + JSON.stringify(blocks));
+assert(blocks.length === bind.offered,
+       "every offered block is reported (" + blocks.length + ")");
+var hands = null;
+for (var bi = 0; bi < blocks.length; ++bi)
+    if (String(blocks[bi].profile).indexOf("hand_interaction") >= 0) hands = blocks[bi];
+assert(hands !== null, "the bare-hand block is among them");
+assert(hands.accepted === true, "...and this runtime took it");
+assert(hands.bindings === 10,
+       "...with TEN bindings: the grip, aim and PINCH poses, select and grab, per hand — and "
+       + "NO menu (aim_activate_ext is the pinch itself), no stick, no haptic ("
+       + hands.bindings + ")");
+for (var bj = 0; bj < blocks.length; ++bj)
+    assert(blocks[bj].accepted === true && blocks[bj].bindings > 0,
+           "block '" + blocks[bj].profile + "' bound " + blocks[bj].bindings
+           + " paths and was accepted");
 
 // ---- 0. NOBODY IS WALKED WHILE THEY ARE STILL BEING PLACED --------------
 //

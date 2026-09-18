@@ -151,6 +151,35 @@ throws(function () {
 }, "unknown profile 'gloves'",
    "an unknown profile name is REFUSED, naming what was passed");
 
+// ---- 1b. A BARE HAND HAS NO MODIFIER ------------------------------------
+//
+// `aim_activate_ext` IS THE PINCH (the extension defines it as "the wearer
+// pinched at the thing they are pointing at"), so binding it as `menu` — which
+// the first cut did, because §7's table said to — made one pinch raise BOTH
+// select and the editor's modifier: every hand select would have been a TOGGLE,
+// every hand grab a snapped one, and a light pinch that crossed the runtime's
+// own bool threshold but not our 0.7 would have been a short unconsumed menu
+// tap, i.e. a gizmo-mode cycle the wearer never asked for. `menu` is therefore
+// UNBOUND on the hand profile and a bare hand has no modifier at all (a
+// modifier for fingers is a different gesture — the off hand's grasp, a dwell —
+// and a joint decision that has not been made).
+//
+// AN INJECTION MAY NOT INVENT ONE EITHER: a sample that says a bare hand
+// pressed `menu` describes something no runtime in this build can report, so it
+// is REFUSED rather than silently dropped.
+throws(function () {
+    vr.inject("right", { valid: true, aim: { x: 0, y: 1, z: 3 },
+                         profile: "hand_interaction", menuPressed: true });
+}, "menuPressed is not a thing a bare hand can do",
+   "an injected bare hand may NOT press `menu` — it is unbound on the profile");
+// ...and the same press on a CONTROLLER is ordinary.
+assert(vr.inject("right", { valid: true, aim: { x: 0, y: 1, z: 3 },
+                            profile: "touch", menuPressed: true }) === true,
+       "...while a controller's menu press is ordinary");
+assert(vr.step() === true && vr.state().input.right.menuPressed === true,
+       "...and reads back as pressed");
+assert(vr.inject("right") === true, "the hand is withdrawn again");
+
 // ---- 2. THE GRAB FOLLOWS THE PINCH POINT, NOT THE PALM ------------------
 //
 // THE CASE NO CONTROLLER CAN MAKE. On a controller the grip and the
@@ -282,6 +311,13 @@ editor.select(cube);
 var before = posOf(cube);
 var pushes0 = editor.undoState().pushes;
 var changes0 = vr.interactionMode().profileChanges;
+// A SESSION'S FIRST BIND IS NOT A CHANGE (the fix round's item 5): the runtime
+// naming what the wearer is holding is not a re-bind of anything, and the
+// previous frame's sample starts empty — so the very first profile seen is
+// SEEDED rather than counted. Every hand above this line was bound
+// `hand_interaction` or `touch` for the first time in this process, and the
+// count so far is what that seeding leaves: the REAL changes below move it.
+console.log("      profileChanges before the re-bind case: " + changes0);
 sendHand({ aim: { x: 0, y: 1, z: 3 }, grip: { x: 1, y: 1, z: 3 },
            manip: { x: 0, y: 1, z: 1.2 }, grab: 0 });
 sendHand({ aim: { x: 0, y: 1, z: 3 }, grip: { x: 1, y: 1, z: 3 },
@@ -299,7 +335,9 @@ console.log("      after the re-bind: grabbing=" + afterChange.grabbing
             + " profileCancels=" + afterChange.profileCancels);
 assert(vr.state().input.right.profile === kTouchProfile, "the hand is a controller now");
 assert(afterChange.grabbing === false, "the gesture was CANCELLED by the re-bind");
-assert(afterChange.profileChanges >= changes0 + 1, "the change was counted");
+assert(afterChange.profileChanges === changes0 + 1,
+       "the change was counted EXACTLY once (" + changes0 + " -> "
+       + afterChange.profileChanges + ")");
 assert(afterChange.profileCancels >= 1, "...and so was what it cost");
 var back = posOf(cube);
 assert(near(back.x, before.x, 1e-3) && near(back.y, before.y, 1e-3)
