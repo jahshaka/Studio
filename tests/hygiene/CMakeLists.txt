@@ -63,3 +63,20 @@ add_test(NAME source.one_readfile
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.one_readfile PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_readfile)
+
+# source.gate_scope_rules — THE SCOPING TOOL'S OWN GUARD (STUDIO-SMALL-A, the
+# gate-scope trap of ledger §620 item 5). gate-scope.py decides which suites a
+# lane runs, so its defects are invisible by construction: a wrong answer is a
+# SHORTER gate, and a shorter gate passes. `--build .` from inside the build dir
+# used to resolve against the repo root, where ctest prints an EMPTY inventory
+# and exits 0 — so every suite the rules chose was filtered out and the tool
+# reported "NOTHING to gate" with exit 0. See the script's header for the four
+# cases (and the one legitimate empty selection, which must stay legitimate).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME source.gate_scope_rules
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_scope_rules.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    jah_no_display(source.gate_scope_rules)
+endif()
