@@ -251,6 +251,57 @@ set_tests_properties(vr.input_session PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
 
+# ---------------------------------------------------------------------------
+# vr.warmup / vr.warmup_control — THE STEREO WARM-UP (lane VR-WARMUP-1;
+# SPECS/VR_SPEC.md §6, VrConfig::warmUpFrames).
+#
+# THE RULE: no frame the runtime is SHOWN compiles a shader. Before the warm-up
+# the session's first shown frame built every permutation and pipeline the two
+# eyes needed on the frame thread — 1,179 ms cold on the Grand Showroom, 920 ms
+# on the default scene, GPU idle; at 62.5 Hz, 73 repeated headset frames.
+#
+# TWO TESTS AND TWO PROCESSES, on purpose: the warmed arm asserts ZERO compiles
+# on shown frames, and the control arm (`warmUp: 0`) asserts that the same
+# measurement DOES see compiles without it — zero is also what a broken
+# instrument reports. A second session inside ONE process finds everything
+# already built (which the warmed arm asserts at its end), so the control
+# cannot share a process with it.
+#
+# Each has its own HOME and data root like every app-spawning suite, so each
+# runs with a COLD shader cache — which is the only state in which the defect
+# is visible at its full size.
+# AND EACH RUNS ON A WIPED HOME, through the fixture pattern
+# `scripting.e2e.shadow_cache_probes` established: BOTH arms only say anything
+# on a COLD shader cache. Warm, the microcode map answers every lookup and
+# nothing is compiled anywhere — the warmed arm's "zero on shown frames" would
+# pass for the wrong reason and the control's "the shown frames compile" would
+# RED for one (measured: the second run of the control on a kept home reads
+# 8 -> 8 and fails). The fixture is what makes both reproducible.
+foreach(_arm warmup warmup_control)
+    set(_vr_warm_home "${CMAKE_CURRENT_BINARY_DIR}/vr-${_arm}-home")
+    if(_arm STREQUAL "warmup")
+        set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js")
+    else()
+        set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup_control.js")
+    endif()
+    add_test(NAME vr.${_arm}.fresh_home
+             COMMAND sh -c "rm -rf '${_vr_warm_home}' && mkdir -p '${_vr_warm_home}'")
+    set_tests_properties(vr.${_arm}.fresh_home PROPERTIES
+        FIXTURES_SETUP vr${_arm}FreshHome LABELS "scripting")
+    add_test(NAME vr.${_arm}
+             COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                     "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                     "${_vr_warm_script}"
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(vr.${_arm} PROPERTIES
+        LABELS "scripting"
+        TIMEOUT 600
+        RUN_SERIAL TRUE
+        SKIP_RETURN_CODE 77
+        FIXTURES_REQUIRED vr${_arm}FreshHome
+        ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
+endforeach()
+
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
     TIMEOUT 600
