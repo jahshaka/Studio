@@ -394,7 +394,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		scene->startPlayingAmbientMusic();
 	}
 
-	scene->skyType = static_cast<iris::SkyType>(sceneObj.value("skyType").toInt());
+	// THE READER-DEFAULTS LAW, no-argument form (READER-DEFAULTS-2): a bare
+	// toInt() is an implicit 0 — it agreed with SkyType::SingleColor only by
+	// the order of the enum, which is exactly the coincidence the law exists
+	// to stop relying on.
+	scene->skyType = static_cast<iris::SkyType>(
+	    sceneObj.value("skyType").toInt(static_cast<int>(scene->skyType)));
 	QJsonObject skyDataDef = sceneObj.value("skyData").toObject();
 	for (const auto &key : skyDataDef.keys()) {
 		scene->skyData.insert(key, skyDataDef.value(key).toObject());
@@ -684,13 +689,16 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             sceneObj.value("exposureMode").toString().toLatin1().constData(), &ok);
         if (ok) scene->exposureMode = m;
         if (sceneObj.contains("exposureEv"))
-            scene->exposure = float(qBound(-16.0, sceneObj.value("exposureEv").toDouble(), 16.0));
+            scene->exposure = float(qBound(-16.0, sceneObj.value("exposureEv")
+                                              .toDouble(double(scene->exposure)), 16.0));
         if (sceneObj.contains("exposureMinEv"))
             scene->exposureMin =
-                float(qBound(-16.0, sceneObj.value("exposureMinEv").toDouble(), 16.0));
+                float(qBound(-16.0, sceneObj.value("exposureMinEv")
+                                        .toDouble(double(scene->exposureMin)), 16.0));
         if (sceneObj.contains("exposureMaxEv"))
             scene->exposureMax =
-                float(qBound(-16.0, sceneObj.value("exposureMaxEv").toDouble(), 16.0));
+                float(qBound(-16.0, sceneObj.value("exposureMaxEv")
+                                        .toDouble(double(scene->exposureMax)), 16.0));
         if (scene->exposureMax < scene->exposureMin)
             std::swap(scene->exposureMin, scene->exposureMax);
         // TOLD ONCE, NOT MIGRATED (lead review item 4). A file with the retired
@@ -714,10 +722,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         if (meterOk) scene->exposureMetering = meter;
         if (sceneObj.contains("exposureMeterLow"))
             scene->exposureMeterLowPercent =
-                float(qBound(0.0, sceneObj.value("exposureMeterLow").toDouble(), 100.0));
+                float(qBound(0.0, sceneObj.value("exposureMeterLow")
+                                      .toDouble(double(scene->exposureMeterLowPercent)), 100.0));
         if (sceneObj.contains("exposureMeterHigh"))
             scene->exposureMeterHighPercent =
-                float(qBound(0.0, sceneObj.value("exposureMeterHigh").toDouble(), 100.0));
+                float(qBound(0.0, sceneObj.value("exposureMeterHigh")
+                                      .toDouble(double(scene->exposureMeterHighPercent)), 100.0));
         if (scene->exposureMeterHighPercent < scene->exposureMeterLowPercent)
             std::swap(scene->exposureMeterLowPercent, scene->exposureMeterHighPercent);
     }
@@ -1153,7 +1163,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         sceneNode->setLocomotionComponent(loco);
     }
 
-	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
+	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool(sceneNode->isPhysicsBody);
 
 	if (sceneNode->isPhysicsBody) {
 		QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
@@ -1171,8 +1181,13 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 		phys.objectFriction = physicsDef["friction"].toDouble(phys.objectFriction);
 		phys.objectRestitution = physicsDef["bounciness"].toDouble(phys.objectRestitution);
 		sceneNode->physicsProperty.pivotPoint = readVector3(physicsDef["pivot"].toObject());
-		sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
-		sceneNode->physicsProperty.type = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
+		// ...and the two ENUMS through the same rule (READER-DEFAULTS-2): a bare
+		// toInt() is an implicit 0, which is PhysicsCollisionShape::None and
+		// PhysicsType::None by the order of those enums and by nothing else.
+		phys.shape = static_cast<iris::PhysicsCollisionShape>(
+		    physicsDef["shape"].toInt(static_cast<int>(phys.shape)));
+		phys.type = static_cast<iris::PhysicsType>(
+		    physicsDef["type"].toInt(static_cast<int>(phys.type)));
 
 		QJsonArray constraints = physicsDef["constraints"].toArray();
 		for (const auto &constraint : constraints) {
@@ -1181,7 +1196,9 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 			iris::ConstraintProperty constraintProp;
 			constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
 			constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
-			constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
+			constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(
+			    constraintObject.value("constraintType")
+			        .toInt(static_cast<int>(constraintProp.constraintType)));
 
 			sceneNode->physicsProperty.constraints.append(constraintProp);
 		}
@@ -1209,8 +1226,13 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
 
         auto name = animObj["name"].toString();
         auto animation = iris::Animation::create(name);
-        animation->setLength(animObj["length"].toDouble());
-        animation->setLooping(animObj["loop"].toBool());
+        // TWO REAL DISAGREEMENTS, found by the no-argument half of the
+        // reader-defaults lint (READER-DEFAULTS-2): a clip whose file
+        // carries no `length` read 0 against the constructor's 1 second
+        // (a clip of zero length plays nothing), and one with no `loop`
+        // read false against the constructor's true.
+        animation->setLength(float(animObj["length"].toDouble(animation->getLength())));
+        animation->setLooping(animObj["loop"].toBool(animation->getLooping()));
 
         auto propList = animObj["properties"].toArray();
         for (auto propVal : propList) {
@@ -1248,8 +1270,11 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
                     auto val = keyObj["value"].toDouble();
                     auto key = keyFrame->addKey(val, time);
 
-                    key->leftSlope = keyObj["leftSlope"].toDouble();
-                    key->rightSlope = keyObj["rightSlope"].toDouble();
+                    // The KEY exists (addKey made it), so its own slopes are
+                    // the fallback — 0/0, the straight line through the key,
+                    // stated by the class rather than by this line.
+                    key->leftSlope = float(keyObj["leftSlope"].toDouble(key->leftSlope));
+                    key->rightSlope = float(keyObj["rightSlope"].toDouble(key->rightSlope));
 
                     // SPELLING MISMATCH, fixed 2026-09-04: SceneWriter has
                     // always written "leftTangentType"/"rightTangentType" and
