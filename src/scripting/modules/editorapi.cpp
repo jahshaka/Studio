@@ -387,7 +387,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "line. Called with no argument it reads, "
           "like editor.trayState().",
           Needs::Window },
-        { "panel", "editor.panel({name, open}) -> {name, open, current, tabbed}",
+        { "panel", "editor.panel({name, open, raise}) -> {name, open, current, tabbed}",
           "OPENS OR CLOSES AN EDITOR PANEL — \"hierarchy\", \"properties\", \"presets\", "
           "\"assets\", \"timeline\" or \"console\" — which is exactly what the Toggle "
           "Widgets dialog's buttons and a panel's own title-bar X do, through the same "
@@ -396,7 +396,16 @@ QVector<VerbInfo> EditorApi::verbs() const
           "back AND to the front of its tab bar. Called with a name alone it reads. `current` "
           "is whether it is the tab in front of the bottom area's one tab bar (Assets | "
           "Timeline | Console) — an open panel behind another tab is `open: true, current: "
-          "false`, which app.docks() reports for every panel at once.",
+          "false`, which app.docks() reports for every panel at once. `raise: true` brings an "
+          "ALREADY-OPEN panel to the FRONT of its tab group — the one gesture a script had "
+          "no way to make (a tabbed dock could be opened and closed but not brought forward, "
+          "lane SELECT-COST-1's finding). It is separate from `open` because opening already "
+          "raises: `{name, raise: true}` is \"show me the one that is open behind another "
+          "tab\", `{name, open: true, raise: true}` is \"open it and show it\", and raising a "
+          "CLOSED panel does nothing (a closed panel has no front) and reads back `open: "
+          "false, current: false` rather than opening it behind the caller's back. Within one "
+          "call `open` is applied first, then `raise`, and both are idempotent; `current` in "
+          "the answer is the read-back of the raise.",
           Needs::Window },
         { "propertiesTab", "editor.propertiesTab({tab}) -> {tab}",
           "THE RIGHT COLUMN'S TAB — \"world\" or \"selection\" (PROPERTY_FILTER_SPEC §2). The "
@@ -1879,7 +1888,7 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
              "no panels)");
         return QVariantMap();
     }
-    static const QStringList known = { "name", "open" };
+    static const QStringList known = { "name", "open", "raise" };
     for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
         if (known.contains(it.key())) continue;
         fail(QStringLiteral("editor.panel: unknown key '%1' (known: %2)")
@@ -1894,6 +1903,11 @@ QVariantMap EditorApi::panel(const QVariantMap &change)
     }
     if (change.contains("open"))
         host.mainWindow->setPanelOpen(name, change.value("open").toBool());
+    // ...then the raise, so `{open: true, raise: true}` in one call means what
+    // it reads like. `open: true` raises by itself; this is for the panel that
+    // is already open behind another tab.
+    if (change.value("raise").toBool())
+        host.mainWindow->raisePanel(name);
     QVariantMap out;
     out["name"] = name;
     out["open"] = host.mainWindow->isPanelOpen(name);
