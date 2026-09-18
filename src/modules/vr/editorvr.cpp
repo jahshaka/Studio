@@ -91,10 +91,13 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // the controller smoke: "do the same for the editor — one render pipeline
     // is better for VR where 90 fps is the target; two renders offset
     // resources; a toggle for multi-user later"): the editor's own on-screen
-    // View is switched OFF on the first drawn eye frame and the mirror quad
-    // paints the eye, so the frame is the two eyes and a copy. The third
-    // render — the desktop as an independent editor camera with the wearer's
-    // markers in it, for a second person at the desk — is `mirror:"none"`.
+    // View stops drawing while the runtime is drawing eyes and the mirror quad
+    // paints the eye, so the frame is the two eyes and a copy — and it draws
+    // again the moment the runtime stops, so the wearer who lifts the headset
+    // finds a live editor rather than a still (lane MIRROR-LIVE-1; the rule is
+    // VrSession::setDesktopShowsEye's). The third render — the desktop as an
+    // independent editor camera with the wearer's markers in it, for a second
+    // person at the desk — is `mirror:"none"`.
     cfg.mirror = vrnames::mirrorFrom(options.value(QStringLiteral("mirror")).toString(),
                                      VrMirrorMode::Left);
     if (options.contains(QStringLiteral("worldScale"))) {
@@ -184,7 +187,6 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
                 break;
             }
     }
-    mMirrorViewOff = false;
     if (!engine->beginVrSession(scene, cfg)) {
         engine->setVrMirrorView(nullptr);
         return fail(QString::fromStdString(engine->lastError()));
@@ -229,11 +231,15 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // the camera controller's place, once per synced frame. Put back by
     // release().
     mViewport->setVrPreviewStep([this] { step(); });
-    // ...AND THE HEADSET COMES OFF WITH THE WORLD (VR-4-FIX finding 1). The
+    // ...AND THE HEADSET COMES OFF WITH THE WORLD — AND WITH THE PAGE
+    // (VR-4-FIX finding 1; the owner's page rule, lane MIRROR-LIVE-1). The
     // session renders the viewport's ENGINE SCENE and holds a raw pointer to
-    // it; a project close or an open-in-place destroys that scene. This is the
-    // viewport telling us first, while everything is still alive.
-    mViewport->setVrPreviewSceneClosing([this] { end(); });
+    // it; a project close or an open-in-place destroys that scene, and leaving
+    // the editor page takes the window, the mirror and the fly keys away. Both
+    // are the viewport telling us first, while everything is still alive, and
+    // both end the session by this object's own `end()` — the same path
+    // `vr.end()` takes.
+    mViewport->setVrPreviewEnds([this] { end(); });
     // THE SESSION ADOPTS THE PROJECT'S VR SETTINGS (lane VR-WORLD-1): the fly
     // speed, the fly direction, the turn and the dominant hand are document
     // fields (`world.vr`), latched here so nothing moves under the wearer
@@ -270,17 +276,17 @@ void EditorVrPreview::release()
     // back to the live document (lane VR-WORLD-1).
     vrworld::release();
     if (mDriver) mDriver->setVrSessionActive(false);
-    // THE DESKTOP'S OWN VIEW COMES BACK if the session switched it off (the
-    // Player's rule, mirrored here).
-    if (mMirrorView && mMirrorViewOff) mMirrorView->setEnabled(true);
+    // THE DESKTOP'S OWN VIEW COMES BACK BY ITSELF (lane MIRROR-LIVE-1): the
+    // engine switched it off, so the engine switches it on — on the frame the
+    // runtime stops drawing, and again when the session ends. Nothing is owed
+    // here but forgetting the pointer.
     mMirrorView = nullptr;
-    mMirrorViewOff = false;
     // NOT IF THE VIEWPORT HAS ALREADY GONE (see mViewportAlive): this runs from
     // a destructor at shutdown as well as from vr.end(), and a widget torn down
     // by the shell takes the callback with it — there is nothing left to clear.
     if (mViewport && (!mViewportIsWidget || mViewportAlive)) {
         mViewport->setVrPreviewStep(nullptr);
-        mViewport->setVrPreviewSceneClosing(nullptr);
+        mViewport->setVrPreviewEnds(nullptr);
     }
     mDriver = nullptr;
     mViewport = nullptr;
@@ -346,14 +352,6 @@ void EditorVrPreview::step()
     if (mPlacePending) {
         // NOT YET: this head was composed with a rig that is no longer the one
         // held here. Correcting from a mismatched pair is a teleport.
-        // THE DESKTOP BECOMES THE COPY on the first drawn eye frame: until the
-        // headset has drawn, the desktop keeps its own picture (VR-3b's rule —
-        // never a stale eye), then the eye's mirror replaces the editor's
-        // render and the editor View is switched off.
-        if (mMirrorView && !mMirrorViewOff && st.rendered > 0ull) {
-            mMirrorView->setEnabled(false);
-            mMirrorViewOff = true;
-        }
         if (st.rendered < mPlaceAfterRendered) return;
         applyRig(vrorigin::placedOn(rigOf(st), toIris(st.headPosition), headRot,
                                     mStartPos, mStartRot));

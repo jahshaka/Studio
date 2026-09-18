@@ -2596,32 +2596,32 @@ void EngineSceneViewport::begin()
     // SceneMirror::invalidateEnvironment.)
     if (mMirror) mMirror->invalidateEnvironment();
     if (view()) view()->setEnabled(true);
-    // THE MIRROR FOLLOWS THE PAGE (VR phase 3, lead review F9). A session begun
-    // with `vr.begin()` mirrors the headset's eye onto THIS view (phase 2's
-    // path, which the console and the MCP server still use), and a mirror is a
-    // workspace of its own over this view's target — it does not stop when the
-    // view does. Coming back, take it again.
-    if (mVrMirrorWasOurs)
-        if (auto engine = EngineHost::instance().engine())
-            if (engine->vrStatus().active) { engine->setVrMirrorView(view()); }
-    mVrMirrorWasOurs = false;
+    // (NOTHING TO TAKE BACK FROM A HEADSET. F9's hand-the-mirror-over-and-back
+    // dance is gone with lane MIRROR-LIVE-1: leaving this page ENDS the session
+    // it hosted, so no session can be mirroring onto this view while the page
+    // is away, and there is no mirror to re-take on the way in.)
     refreshOverlay();
 }
 
 void EngineSceneViewport::end()
 {
     mActive = false;
-    // ...AND IT GOES WITH THE PAGE (F9). Leaving this page with a session
-    // mirroring onto it left a workspace presenting the headset's eye into a
-    // window nobody is looking at, every frame, for the rest of the session.
-    // The mirror is the HOST's wish and this is the host saying it is no longer
-    // looking; `begin()` above says it again on the way back.
-    if (auto engine = EngineHost::instance().engine()) {
-        if (engine->vrStatus().active && engine->vrMirrorView() == view() && view()) {
-            mVrMirrorWasOurs = true;
-            engine->setVrMirrorView(nullptr);
-        }
-    }
+    // THE HEADSET COMES OFF WITH THE PAGE (the owner, 2026-09-18, joint; lane
+    // MIRROR-LIVE-1). A VR preview is hosted BY this page: its mirror paints
+    // this view, its fly keys are this viewport's, and the wearer is standing
+    // where this camera stood. Leaving the page used to keep all of that alive
+    // behind another page — a workspace presenting the headset's eye into a
+    // window nobody is looking at, every frame, for the rest of the session
+    // (F9's half-answer was to hand the mirror back and forth instead).
+    //
+    // So the session ENDS, by its owner and by exactly the path `vr.end()`
+    // takes: the desktop View, the rig, the locomotion overrides and the hands'
+    // proxies are all restored the way a manual end restores them. No toast —
+    // the person who left the page is the person who was wearing it.
+    //
+    // COPIED BEFORE IT IS CALLED, like the clearScene() call of the same hook:
+    // ending the session clears this very std::function.
+    if (const std::function<void()> ends = mVrPreviewEnds) ends();
     if (view()) view()->setEnabled(false);
 }
 
@@ -3064,7 +3064,7 @@ void EngineSceneViewport::clearScene()
     // this viewport, which is why the call is here and not in the engine
     // alone). COPIED BEFORE IT IS CALLED: ending the session clears this very
     // std::function, and a closure must not be destroyed while it runs.
-    if (const std::function<void()> closing = mVrPreviewSceneClosing) closing();
+    if (const std::function<void()> ends = mVrPreviewEnds) ends();
     // WRITE THE WORLD DOWN BEFORE IT GOES (audit F1a). This is the scene-close
     // half of the recording, and it is the half that was missing entirely:
     // recordWarmUpSet had exactly two callers, EngineHost::shutdown and the

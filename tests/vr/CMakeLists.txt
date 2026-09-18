@@ -224,6 +224,36 @@ set_tests_properties(vr.no_picture_start PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200;JAHSHAKA_VR_TEST_BLINK_EVERY=17")
 
 # ---------------------------------------------------------------------------
+# vr.mirror_live — THE DESKTOP FOLLOWS THE RUNTIME (lane MIRROR-LIVE-1; the
+# owner's finding F2 of the push-#50 smoke, SPECS/VR_SPEC.md §5 phase 4).
+#
+# The app half of the rule `vr.session` asserts on pixels: while the runtime
+# draws eyes the editor's own View draws nothing (one render pipeline) and the
+# moment it stops the desktop takes its own camera back, live — which on a real
+# headset is exactly when the wearer lifts it to look at the desk. Plus the
+# owner's page rule: leaving the page that hosts a session ends that session,
+# in both hosts.
+#
+# THE BLINK HOOK IS WHAT MAKES IT ASSERTABLE. Monado never answers "no picture"
+# in the middle of a live session, so the pump is told to (the frames are really
+# waited for, begun and ended — only the runtime's answer is replaced):
+# _BLINK_EVERY is how often, _BLINK_FRAMES how long. Twelve frames every thirty
+# is a doff; ONE frame is a reprojection hiccup, and the hysteresis that tells
+# them apart is `vr.session`'s case.
+set(_vr_mirror_home "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home")
+add_test(NAME vr.mirror_live
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_mirror_live.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.mirror_live PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
+
+# ---------------------------------------------------------------------------
 # vr.input_session — LOCOMOTION AGAINST A REAL RUNTIME (stage 1,
 # SPECS/VR_INPUT_SPEC.md §6/§10).
 #
