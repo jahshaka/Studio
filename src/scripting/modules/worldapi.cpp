@@ -336,6 +336,32 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "rayTracing", "world.rayTracing([\"off\"|\"auto\"|\"on\"]) -> \"off\"|\"auto\"|\"on\"",
           "HARDWARE RAY TRACING FOR THIS PROJECT, saved with the scene and travelling with it (owner, 2026-09-15). Three states, and the first thing to know is that NOTHING can force ray hardware onto a machine that has none: this row says what the project was authored for, and the renderer meets it with what the machine can do. \"off\" never traces, even where the GPU can — what a scene that must look and cost the SAME everywhere asks for. \"auto\" (the default) traces where the machine can and falls back silently everywhere else: the same file looks right on a ray-capable desktop and on a Mac, and nobody has to think about it. \"on\" means the scene was AUTHORED for rays: it renders exactly like auto — traces where it can, falls back where it cannot — and additionally raises a scene issue in the editor's error bar (\"this project expects hardware ray tracing; this machine has none\") so the author learns that this machine is not showing them what they built. On and auto therefore render the same picture; on is the one that TELLS YOU when the machine falls short. Called with no argument it reads the project's state. Any other word is refused, loudly, rather than guessed at. One undo step, and it dirties the project like any other document edit — it is NOT an application preference (it used to be one for two days: a machine-wide switch meant the same project rendered differently depending on a setting that was not in it). What the machine actually answered is world.giStatus().rayQuery — 'available' is the device's own answer, 'enabled' whether the renderer is using it — and --no-ray-query is the diagnostic switch that makes a ray-capable box render the no-rays picture for one run.",
           Needs::Document },
+        { "ssrMarch", "world.ssrMarch([\"checker\"|\"refined\"|\"dither\"]) -> \"checker\"|\"refined\"|\"dither\"",
+          "HOW THE SCREEN-SPACE REFLECTION MARCH DECIDES A HIT, saved with the scene (SSR-RINGS-1). "
+          "The march walks the reflected ray in FIXED STEPS of ssrMaxDistance/steps (0.26 m at Full-Res "
+          "Rays, 0.52 m at Half-Res) and asks two questions at whichever sample it happened to land on: "
+          "did I cross a surface, and how much does the depth buffer vouch for the crossing. Both answers "
+          "therefore carry the STEP'S OWN PHASE, and on a curved glossy surface that is visible as the "
+          "nested concentric crescents the Grand Showroom's spheres show — measured: the accepted hit "
+          "region covers 15.3 % of the crop at a 1.04 m step, 29.5 % at the shipped 0.26 m, 34.3 % at "
+          "0.13 m, and 58.4 % when the thickness tolerance is widened instead, so the crescents are that "
+          "region's BOUNDARY (the resolve draws it hard because a trusted hit replaces the probe's answer "
+          "outright, rather than blending with it). "
+          "\"checker\" is the shipped march, exactly, and the DEFAULT: nothing moves until a project asks. "
+          "\"refined\" makes a crossing a SIGN CHANGE — the ray was in front at the previous sample and is "
+          "behind at this one, which is a crossing whatever the phase — and then asks the thickness "
+          "question at the BISECTED crossing, within 1/32 of a step of the true one. The step stops "
+          "deciding WHETHER a ray hit and only decides how finely the ray is sampled; the reflection "
+          "covers more of the surface, which is a different picture and is why this is a choice. "
+          "\"dither\" is the MINIMAL candidate: the shipped hit rule with a 4x4 ordered phase in place of "
+          "the two-value checkerboard the march has always used. It changes what a ray SAMPLES and nothing "
+          "about what counts as a hit, so the reflection covers exactly what it covers today and only the "
+          "boundary's two-pixel stipple is spread over sixteen phases for the resolve's 3x3 gather to "
+          "average — an edge traded for a grain. "
+          "It costs nothing where the march already hits face-on and well inside the tolerance. Called "
+          "with no argument it reads. One undo step. There is no World panel row yet, deliberately: the "
+          "pictures go to the owner first.",
+          Needs::Document },
         { "vr", "world.vr({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, dominant?}) -> object",
           "THE PROJECT'S VR SETTINGS — how a wearer MOVES in this world, saved with the scene "
           "and travelling with it (owner request 2026-09-18). Read with no argument; set with "
@@ -1557,6 +1583,50 @@ QString WorldApi::rayTracing(const QString &mode)
                     QStringLiteral("Ray Tracing"));
     }
     return QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
+}
+
+// ---------------------------------------------------------------------------
+// THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1) — its own verb rather than
+// a world.postFx key or a World Mode row, and both for reasons:
+//
+//  * world.postFx is GENERATED from `postFxParams`, whose entries are
+//    continuous doubles with a range and a scrub step, and which the World >
+//    Post Process section turns into a panel row each. This is an ENUM and has
+//    no panel row yet, by the lane's own rule: the verb and its measurement
+//    come first and the row comes after the owner has picked from the pictures.
+//  * a World Mode Row would appear in the World panel the moment it is
+//    declared (WorldModesPropertyWidget walks rows() whole), and a tier has no
+//    opinion about it in any case — it is the same TierSpace::None case
+//    exposure is, not a scalability dial.
+//
+// Shaped exactly like world.rayTracing above: a name in, the resolved name out,
+// nothing guessed, one undo step.
+static const char *const kSsrMarchNames[] = { "checker", "refined", "dither" };
+
+QString WorldApi::ssrMarch(const QString &rule)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.ssrMarch"));
+    if (!scene) return QString();
+    if (!rule.trimmed().isEmpty()) {
+        // Trimmed and case-insensitive, like every other named state in this
+        // module (world.rayTracing's rule): what is forgiven is spelling, never
+        // meaning.
+        const QString want = rule.trimmed();
+        int wanted = -1;
+        for (int i = 0; i < 3; ++i)
+            if (want.compare(QLatin1String(kSsrMarchNames[i]), Qt::CaseInsensitive) == 0)
+                wanted = i;
+        if (wanted < 0) {
+            fail(QStringLiteral("world.ssrMarch: '%1' is not a rule "
+                                "(expected \"checker\", \"refined\" or \"dither\")").arg(rule));
+            return QString();
+        }
+        WorldEdit edit(scene, { QStringLiteral("ssrMarch") });
+        sceneprops::set(scene, QStringLiteral("ssrMarch"), wanted);
+        edit.commit(host.services ? host.services->undo : nullptr,
+                    QStringLiteral("SSR March"));
+    }
+    return QString::fromLatin1(kSsrMarchNames[qBound(0, scene->ssrMarch, 2)]);
 }
 
 // ---------------------------------------------------------------------------

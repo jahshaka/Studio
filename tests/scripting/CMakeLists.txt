@@ -357,6 +357,12 @@ add_script_e2e(scene_issues e2e_scene_issues.js)
 # nothing here. The rig actually moving is `vr.input_session`; the panel is
 # `ui.vr_panel`.
 add_script_e2e(world_vr e2e_world_vr.js)
+# THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1) — the document half of the
+# knob the owner picks from: three spellings, the refusals, one undo step per
+# call, save/close/open, and the two properties that make it safe to ship
+# unchosen (the default is the shipped march, and no World Mode touches it).
+# The pixels are `ssr.rings`.
+add_script_e2e(ssr_march e2e_ssr_march.js)
 # vr.* WITH NO RUNTIME (SPECS/VR_SPEC.md §6) — the cheap case, and the one that
 # runs on every box in every gate: this app is launched WITHOUT --vr, so no
 # OpenXR loader is opened at all, and every verb must still answer with a
