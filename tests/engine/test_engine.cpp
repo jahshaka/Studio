@@ -3868,16 +3868,30 @@ void sky_ambient_read_is_deferred_through_a_drag() {
               "a DRAG defers its readbacks: the ambient trails the sky it is capturing on "
               "%d of the 5 steps after the first (the flush and the wait are gone)", lagged);
 
-    // ...and it CATCHES UP the moment the gesture stops: one more frame is all
-    // the deferred read needs.
-    render(fx.e, 2);
-    const float settled = band0();
+    // ...and it CATCHES UP the moment the gesture stops. The deferred read is a
+    // frame-counter comparison on an asynchronous copy, so the frame it lands on
+    // is the GPU's business, not a number this case may assume: measured, it is
+    // frame +2 when the case runs alone and frame +3 after this binary's earlier
+    // cases (CASCADE-STEP-1 moved it there by giving those cases more cascade
+    // work, and the push tier of 2026-09-18 had it a frame late under load
+    // before that). So the case COUNTS the frames until the value stops moving,
+    // reports the count, and bounds it — "a wall-clock settle measures
+    // nothing" applied one layer up: a fixed frame budget measures the same
+    // nothing.
+    int landedOn = 0;
+    float settled = lastRead;
+    for (int k = 1; k <= 8; ++k) {
+        render(fx.e, 1);
+        settled = band0();
+        if (std::fabs(settled - linearOf(210)) < 0.02f) { landedOn = k; break; }
+    }
     std::printf("    after the drag: band0 %.4f, the last sky's linear radiance is %.4f "
-                "(during the drag it read %.4f)\n",
-                double(settled), double(linearOf(210)), double(lastRead));
-    CHECK_MSG(std::fabs(settled - linearOf(210)) < 0.02f,
-              "the drag's last sky lands as soon as the gesture stops (band0 %.4f, expected "
-              "%.4f)", double(settled), double(linearOf(210)));
+                "(during the drag it read %.4f; landed on frame +%d)\n",
+                double(settled), double(linearOf(210)), double(lastRead), landedOn);
+    CHECK_MSG(landedOn > 0 && landedOn <= 4,
+              "the drag's last sky lands within a few frames of the gesture's end (band0 "
+              "%.4f, expected %.4f, landed on frame +%d of 8)",
+              double(settled), double(linearOf(210)), landedOn);
 }
 
 // THE SUN DISC IS NOT IN THE SKY'S OWN LIGHT (owner pick 4, and the limit of
