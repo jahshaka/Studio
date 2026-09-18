@@ -730,6 +730,18 @@ app.space("player");
 assert(app.columns().space === "player", "the Player page is up");
 assert(player.play({ vr: true }) === true, "player.play({vr:true}) starts the run in VR");
 assert(player.state().vr.active === true, "the Player is hosting a session now");
+// PUMPED UNTIL THE RUNTIME HAS LOCATED A POSE, not a fixed two frames (lane
+// VR-WARMUP-1). Every session now spends its first frames on the stereo
+// warm-up (VrConfig::warmUpFrames, default 2) — rendered, submitted to nobody,
+// and BEFORE the first xrWaitFrame — so the frame on which `posesValid` first
+// turns true is two later than it used to be, and `rig.live` below (which is
+// exactly `active && posesValid`) was read one frame too early. A count with a
+// bound, like the placement loops earlier in this file: the suite waits for the
+// state it needs instead of assuming how many frames it takes to arrive.
+var pPumped = 0;
+while (pPumped < 20 && vr.state().head.valid !== true) { player.frame(1); ++pPumped; }
+console.log("the Player's session located its first pose after " + pPumped + " frames " +
+            "(warm-up " + JSON.stringify(vr.state().warmUp) + ")");
 player.frame(2);
 
 var pmode = vr.interactionMode();
