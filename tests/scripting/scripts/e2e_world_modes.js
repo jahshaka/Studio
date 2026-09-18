@@ -168,21 +168,23 @@ Object.keys(byTier).forEach(function (tn) {
             assert(Math.abs(ch[i].step - ch[i].stepCells * ch[i].cell) < 1e-4,
                    what + " row " + i + "'s step in metres is its cells times its cell");
         }
-        // THE NEAR-FIELD GUARANTEE (CASCADE-STEP-1, owner 2026-09-18): the
-        // innermost cascade guarantees a radius around the head inside which
-        // the bounce is ALWAYS read from it — halfSize - step - cell, against
-        // 0.45 of the half-size. Before the rule every tier but Low guaranteed
-        // a NEGATIVE radius: the walker reached cascade 0's own face before it
-        // re-centred and read the near metre from a 2-3x coarser cascade.
-        assert(ch[0].guaranteedRadius >= ch[0].nearFieldRadius - 1e-4,
-               what + " cascade 0 guarantees its near-field radius (" +
-               ch[0].guaranteedRadius.toFixed(3) + " >= " +
-               ch[0].nearFieldRadius.toFixed(3) + " m)");
-        // ...and no row in any column guarantees nothing at all.
+        // THE NEAR-FIELD GUARANTEE (CASCADE-STEP-1, owner 2026-09-18): a
+        // cascade covers a radius around the head — halfSize - step - cell,
+        // against 0.45 of its own half-size — inside which the near field is
+        // voxelised by IT and never by the coarser cascade behind it. Before
+        // the rule every tier but Low guaranteed a NEGATIVE radius on cascade
+        // 0: the walker reached its own face before it re-centred and the metre
+        // in front of them was built by a 2-3x coarser cascade.
+        //
+        // EVERY ROW, not only cascade 0: the rule is a property of a cascade,
+        // and a mid cascade below its own fraction becomes the chain's binding
+        // constraint (the nearest distance at which ANY hand-over can happen)
+        // however good the innermost one is.
         for (var j = 0; j < ch.length; ++j)
-            assert(ch[j].guaranteedRadius > 0,
-                   what + " row " + j + " guarantees a positive radius (" +
-                   ch[j].guaranteedRadius.toFixed(3) + " m)");
+            assert(ch[j].guaranteedRadius >= ch[j].nearFieldRadius - 1e-4,
+                   what + " row " + j + " guarantees its near-field radius (" +
+                   ch[j].guaranteedRadius.toFixed(3) + " >= " +
+                   ch[j].nearFieldRadius.toFixed(3) + " m)");
     });
 });
 // THE TWO HALVES OF THE TRANSFORM APPLY INDEPENDENTLY, which is exactly where
