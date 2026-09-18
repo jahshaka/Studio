@@ -4,7 +4,14 @@
 #
 #   1. THE SELF-TEST, under the Khronos validation layer (the environment ctest
 #      sets). Fails on the process's exit code AND on any "Validation Error" in
-#      its output — the line that caught the stale depth buffer on resize.
+#      its output — the line that caught the stale depth buffer on resize. It
+#      renders TWO POSES since 2026-09-18 (ENGINE-SMALL-B item 5) and prints a
+#      sha256 line for each; this arm requires both lines and requires them to
+#      DIFFER, which is what says the second pose's camera move took. The VALUES
+#      are not asserted here — they are the hand-taken A/B of CLAUDE.md's hash
+#      law, and a suite that pinned them would red on every deliberate pixel
+#      change in the engine — but they are printed into the gate's log, so a
+#      gate run carries both numbers.
 #   2. THE BROKEN-GROUND ARM (smoke L10 item 3). On 2026-09-11 the default
 #      scene's ground failed to load (`model :/models/ground.obj: error parsing
 #      file` in the log) and the self-test rendered a groundless scene and
@@ -37,6 +44,24 @@ if [ "$rc" -ne 0 ]; then
     exit "$rc"
 fi
 grep -m1 'engine-selftest: default scene' "$OUT/validation.log"
+
+# THE TWO POSES (ENGINE-SMALL-B item 5). Both lines must be there, and the two
+# hashes must differ: a viewport that accepted the second pose and ignored it
+# would print the same number twice, and the second observation would be a gate
+# on nothing.
+pose1=$(sed -n 's/^engine-selftest: pose 1 sha256 \([0-9a-f]*\) .*/\1/p' "$OUT/validation.log" | head -1)
+pose2=$(sed -n 's/^engine-selftest: pose 2 sha256 \([0-9a-f]*\) .*/\1/p' "$OUT/validation.log" | head -1)
+if [ -z "$pose1" ] || [ -z "$pose2" ]; then
+    echo "engine_selftest: the self-test did not report both poses' hashes (pose1='$pose1' pose2='$pose2')"
+    grep 'engine-selftest' "$OUT/validation.log" | tail -8
+    exit 1
+fi
+if [ "$pose1" = "$pose2" ]; then
+    echo "engine_selftest: the two poses hash identically ($pose1) — the camera move did not take"
+    exit 1
+fi
+echo "engine_selftest: pose 1 $pose1"
+echo "engine_selftest: pose 2 $pose2"
 
 JAHSHAKA_SELFTEST_BREAK_GROUND=1 \
     "$BIN" --engine-selftest "$OUT/selftest_broken_ground.png" > "$OUT/broken_ground.log" 2>&1

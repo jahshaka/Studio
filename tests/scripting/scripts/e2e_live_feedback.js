@@ -102,6 +102,62 @@ editor.frame(3, 1 / 60);
 var after = editor.viewportState().framesPresented;
 assert(after >= before + 3, "editor.frame(3) presented 3 frames (" + before + " -> " + after + ")");
 
+// ---- ONE SCRIPTED FRAME IS ONE FRAME (DOUBLE-FRAME-1, 2026-09-18) ----
+//
+// The live policy's promise is "at most one frame per display period", and its
+// clock used to count only the DRIVER's own frames: a script stepping frames —
+// which is how every drag, every step and every MCP gesture moves the picture
+// deterministically — got a driver frame in the gap after each of its verbs ON
+// TOP of the frame it had just drawn. Measured with --script-live before the
+// fix: 60 scripted frames cost 81 engine frames AT REST (no document edit at
+// all) and 89-95 during a scripted drag; the render audit recorded the same
+// thing from an MCP drag as "two frames per document edit", which named the
+// edit for a cost the drawing was paying. `EngineRenderDriver::noteExternalFrame`
+// restarts the pacing clock on every frame ANYBODY draws.
+//
+// THE SLACK, and why it is not zero: this asserts a RATE, and the loop below
+// leaves the UI thread free between its verbs, so a box under load can still
+// let one display period elapse inside a gap. Measured 0 of 60 on a quiet rig
+// in four arms; six is a tenth of the run and the defect this guards reads
+// twenty-one to thirty-six.
+var kSteps = 60;
+var driverBeforeSteps = app.frameStats().rendered;
+var presentedBeforeSteps = editor.viewportState().framesPresented;
+for (var f = 0; f < kSteps; ++f) editor.frame(1, 1 / 60);
+var driverDuringSteps = app.frameStats().rendered - driverBeforeSteps;
+var presentedDuringSteps = editor.viewportState().framesPresented - presentedBeforeSteps;
+console.log("stepped " + kSteps + " frames: " + presentedDuringSteps + " presented, "
+            + driverDuringSteps + " of them the driver's");
+assert(presentedDuringSteps >= kSteps,
+       "every scripted frame was drawn (" + presentedDuringSteps + " presented)");
+assert(driverDuringSteps <= kSteps / 10,
+       "A SCRIPT THAT DRAWS ITS OWN FRAMES IS NOT DRAWN TWICE — the loop added "
+       + driverDuringSteps + " frames to " + kSteps + " scripted ones");
+
+// ---- ...AND THE SAME IN PLAY MODE (the lead's fix-round item 4) ----
+//
+// `editor.frame` does not always reach the editor's viewport: while the PLAYER
+// owns the screen it routes to the player's own stepper, which draws to the
+// same window through a different path (EditorApi::frame -> playerHasTheScreen
+// -> PlayerService::stepFrames). The first version of this fix hooked only the
+// viewport's route, so a scripted or MCP-driven session in play mode kept
+// paying the extra loop frame per verb — and play mode is where a gesture
+// costs the most, because the whole scene is simulating.
+app.space("player");
+assert(player.play() === true, "the Player takes the screen");
+assert(player.playing() === true, "...and it is playing, which is what routes editor.frame to it");
+editor.frame(5, 1 / 60);
+var driverBeforePlay = app.frameStats().rendered;
+for (var pf = 0; pf < kSteps; ++pf) editor.frame(1, 1 / 60);
+var driverDuringPlay = app.frameStats().rendered - driverBeforePlay;
+console.log("stepped " + kSteps + " PLAY frames: " + driverDuringPlay + " of them the driver's");
+assert(driverDuringPlay <= kSteps / 10,
+       "A SCRIPT STEPPING PLAY FRAMES IS NOT DRAWN TWICE EITHER — the loop added "
+       + driverDuringPlay + " frames to " + kSteps + " scripted ones");
+player.stop();
+app.space("editor");
+assert(player.playing() === false, "the Player hands the screen back");
+
 // ---- still ONE undo entry, whatever thread the JS ran on ----
 var undoNow = editor.undoState();
 assert(undoNow.macroOpen === true, "the macro is still the run's own");
