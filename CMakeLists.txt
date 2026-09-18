@@ -432,6 +432,7 @@ set(SRCS
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
     src/services/thumbnailrebuild.cpp 
+    src/services/thumbnailstop.cpp 
     src/bridge/enginepreviewscene.cpp
     src/bridge/enginethumbnailrenderer.cpp 
     src/ui/dialogs/donatedialog.cpp
@@ -711,6 +712,7 @@ set(HEADERS
     src/ui/dialogs/renameprojectdialog.h 
     src/services/thumbnailgenerator.h 
     src/services/thumbnailrebuild.h 
+    src/services/thumbnailstop.h 
     src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
     src/ui/pages/importviewertail.h

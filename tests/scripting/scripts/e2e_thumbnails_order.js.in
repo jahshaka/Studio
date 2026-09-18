@@ -8,17 +8,25 @@
 //
 // THE MECHANISM, and therefore the ORDER this script runs in. The thumbnail
 // renderer named its offscreen View with a fixed string, the engine refuses a
-// duplicate View name, and a long-lived renderer was kept from the session's
-// first MATERIAL/SHADER thumbnail onward. Every temporary renderer made after
-// that — the import tail, `assets.refreshThumbnail` — then failed to create its
-// View and returned a null image, silently. So: a material thumbnail FIRST,
-// a model import SECOND. On the binary before the fix, step 3 fails.
+// duplicate View name, and ONE renderer is kept alive for the whole session by
+// ThumbnailGenerator's queue — which is reached by APPLYING A MATERIAL PRESET
+// to a node (SceneEditService::applyMaterialPreset registers the preset as a
+// project Material row and queues its thumbnail), among other gestures. Every
+// renderer built after that — the import tail, `assets.refreshThumbnail` —
+// then failed to create its View and returned a null image, silently.
+//
+// So step 1 is a PRESET APPLY (not merely a verb that renders a material: a
+// verb's renderer released its View on the way out, which is why a script that
+// only called assets.refreshThumbnail could never reproduce this). Step 2 is a
+// model import. On the binary before the fix, step 2's thumbnail comes back
+// EMPTY — measured, see the lane report.
 //
 // Also pinned here: every asset type's rebuild in ONE process (object,
 // material, shader, AVATAR — the type that had no branch at all and whose tile
-// was a one-time copy of its model's), the EDITOR TRAY's import (which never
-// asked for a model thumbnail at all), and the bulk repair for the rows that
-// are already grey.
+// was a one-time copy of its model's, plus a photometric profile), the EDITOR
+// TRAY's import (which never asked for a model thumbnail at all), the bulk
+// repair for rows that are already grey, and a row that CANNOT be rebuilt,
+// which must answer {ok:false, reason} and appear in the sweep's failed list.
 //
 // Engine up (no --headless): every assertion here is about a render.
 
@@ -30,13 +38,40 @@ function assert(cond, msg) {
 var TEXTURED = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
 var TRAY_MODEL = "@SOURCE_DIR@/tests/importer/fixtures/no_material.glb";
 var RIG = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";
+var RIG2 = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_tiny.glb";
 
 project.create("thumbnails order");
 
-// ---- 1. THE PRECONDITION: the session's first material render -------------
-// A graph asset's thumbnail is a material on the preview sphere. This is what
-// used to create the process's one long-lived renderer and poison everything
-// after it.
+// ---- 1. THE PRECONDITION: a PRESET APPLY, which is what the owner did ------
+// This is the gesture that puts a thumbnail on ThumbnailGenerator's QUEUE, and
+// the queue's renderer is the one that lived for the whole session. Nothing
+// about this step is about scripting: a preset dropped on an object from the
+// presets panel runs exactly this code.
+var cube = scene.addPrimitive("Cube");
+assert(cube && cube.length > 0, "scene.addPrimitive(Cube) -> " + cube);
+var presetName = materials.presets()[0].name;
+assert(material.apply(cube, presetName) === true,
+       "material.apply(cube, '" + presetName + "') — the presets panel's gesture");
+
+// The queue renders one request per 16 ms tick, so step the editor until the
+// project's new Material row carries a picture. THAT render is what created the
+// long-lived renderer.
+var presetGuid = "";
+var spun = 0;
+while (spun < 400 && presetGuid === "") {
+    editor.frame(1);
+    // PROJECT scope: a preset apply registers the material as a row of the OPEN
+    // PROJECT, which is not in the library listing.
+    var mats = assets.list({ scope: "project", type: "material" });
+    for (var m = 0; m < mats.length; m++)
+        if (!assets.thumbnail(mats[m].guid).empty) { presetGuid = mats[m].guid; break; }
+    ++spun;
+}
+assert(presetGuid !== "",
+       "THE QUEUE RENDERED THE PRESET'S THUMBNAIL (" + spun + " frames) — the session now holds "
+       + "the one long-lived renderer, which is the state the owner's imports met");
+
+// A shader graph too, so the verb path has rendered a material as well.
 var shaderGuid = materials.createGraph("Thumbs First");
 assert(shaderGuid.length > 10, "materials.createGraph -> " + shaderGuid);
 var master = null;
@@ -50,7 +85,7 @@ assert(graph.save() === true, "graph.save");
 assert(assets.thumbnail(shaderGuid).empty === true, "a saved graph starts with no thumbnail");
 
 var first = assets.refreshThumbnail(shaderGuid);
-assert(first.ok === true, "THE FIRST MATERIAL THUMBNAIL of the session renders: "
+assert(first.ok === true, "a material thumbnail renders with the queue's renderer alive: "
                           + JSON.stringify(first));
 assert(assets.thumbnail(shaderGuid).empty === false, "…and is stored");
 
@@ -60,10 +95,11 @@ assert(objGuid.length > 10, "assets.importFile(textured_pbr_quad.glb) -> " + obj
 
 var thumb = assets.thumbnail(objGuid);
 console.log("   model thumbnail " + JSON.stringify(thumb));
-// THE ASSERTION THAT FAILS BEFORE THE FIX: the row carried no image at all
-// because the import tail's renderer could not make its View.
-assert(thumb.empty === false, "THE MODEL IMPORT STORED A THUMBNAIL (it was null: the renderer "
-                              + "could not create its View after the material render above)");
+// THE ASSERTION THAT FAILS BEFORE THE FIX: with the queue's renderer holding
+// the name "thumbs", the import tail's own renderer could not create its View
+// and the row was stored with NO image at all.
+assert(thumb.empty === false, "THE MODEL IMPORT STORED A THUMBNAIL (before the fix: null, "
+                              + "because the queue's renderer already held the view name)");
 assert(thumb.width === 512 && thumb.height === 512, "stored at the render size");
 // NON-UNIFORM: not one flat colour. A frame of pure background would have
 // coverage 0; a frame of pure subject (or a solid fill) would have coverage 1.
@@ -115,16 +151,25 @@ assert(avatarStored.coverage > 0.02, "…with the character actually in it: " + 
 var threwOnGuid = false;
 try { assets.refreshThumbnail("no-such-guid"); } catch (e) { threwOnGuid = true; }
 assert(threwOnGuid, "a guid that names no asset still throws (a precondition, not an answer)");
-// …while a REAL asset whose thumbnail cannot be MADE answers with the reason
-// in the result instead of aborting the caller's script. A graph that has
-// never been saved carries no evaluated material to render.
-var unsaved = materials.createGraph("Never Saved");
-var unsavedResult = assets.refreshThumbnail(unsaved);
-console.log("   unsaved graph -> " + JSON.stringify(unsavedResult));
-assert(typeof unsavedResult.ok === "boolean", "the verb answers {ok, …}");
-if (unsavedResult.ok === false)
-    assert(typeof unsavedResult.reason === "string" && unsavedResult.reason.length > 0,
-           "…and a refusal carries the reason: " + unsavedResult.reason);
+// …while a REAL asset whose thumbnail cannot be MADE answers with the reason in
+// the result instead of aborting the caller's script. THE DETERMINISTIC ONE:
+// an avatar whose model row has been deleted out from under it. Its definition
+// still names that model, the model is gone, and there is nothing to draw —
+// which is a FAILURE with a reason, not a silent skip (the row is not a builtin
+// with an empty definition; see the sweep below, where it must appear in
+// `failed`).
+var orphanRig = assets.importFile(RIG2);
+assert(orphanRig.length > 10, "assets.importFile(rig2_tiny.glb) -> " + orphanRig);
+var orphanAvatar = avatar.createAsset(orphanRig, { name: "Orphan" });
+assert(orphanAvatar.length > 10, "avatar.createAsset(second rig) -> " + orphanAvatar);
+assert(assets.remove(orphanRig, { force: true }) === true,
+       "assets.remove(the avatar's model, {force:true}) — the model is gone for good");
+
+var orphanResult = assets.refreshThumbnail(orphanAvatar);
+console.log("   orphaned avatar -> " + JSON.stringify(orphanResult));
+assert(orphanResult.ok === false, "an avatar whose model is gone CANNOT be rebuilt");
+assert(typeof orphanResult.reason === "string" && orphanResult.reason.length > 0,
+       "…and the refusal carries the reason: " + orphanResult.reason);
 
 // A photometric profile is redrawn from its candela lobe — the type the verb
 // and the sweep had no branch for at all.
@@ -175,16 +220,26 @@ assert(assets.thumbnail(broken).empty === true, "…and it has NO thumbnail (a g
 
 var swept = assets.rebuildThumbnails({ missingOnly: true });
 console.log("   rebuildThumbnails -> " + JSON.stringify(swept));
+assert(swept.cancelled === false, "the sweep ran to the end");
 assert(swept.rebuilt >= 1, "assets.rebuildThumbnails repaired at least the grey row");
 assert(assets.thumbnail(broken).empty === false, "THE GREY TILE IS REPAIRED");
-assert(Array.isArray(swept.failed) || swept.failed.length !== undefined,
-       "the sweep reports its failures as a list");
+assert(swept.failed.length !== undefined, "the sweep reports its failures as a list");
 for (var f = 0; f < swept.failed.length; f++)
     console.log("   could not rebuild " + swept.failed[f].guid + ": " + swept.failed[f].reason);
 
-// Nothing is left missing after the sweep, so a second one finds nothing to do.
+// THE FAILING ROW IS REPORTED, NOT SWALLOWED: the orphaned avatar has a
+// definition and no model, so it is a failure with its reason — not one of the
+// `skipped` rows (a builtin's Object row, which stores no definition at all).
+var named = swept.failed.filter(function (x) { return x.guid === orphanAvatar; });
+assert(named.length === 1, "the avatar whose model is gone is IN the sweep's failed list");
+assert(named[0].reason.length > 0, "…with its reason: " + named[0].reason);
+
+// Nothing rebuildable is left missing, so a second sweep rebuilds nothing —
+// and still reports the same failure rather than forgetting it.
 var second = assets.rebuildThumbnails({ missingOnly: true });
 assert(second.rebuilt === 0, "a second sweep rebuilds nothing (" + JSON.stringify(second) + ")");
+assert(second.failed.length === swept.failed.length,
+       "…and reports the same failures again");
 
 // An unknown option is a refusal, not a silent no-op.
 var threw = false;

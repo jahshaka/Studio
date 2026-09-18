@@ -41,14 +41,28 @@ QImage renderObject(Database *db, Project *project, const QString &guid,
     if (noModelOut) *noModelOut = false;
     if (!db) return say(reasonOut, QStringLiteral("there is no library in this session"));
     if (guid.isEmpty()) return say(reasonOut, QStringLiteral("no asset guid was given"));
-    if (!engine)
-        return say(reasonOut, QStringLiteral("the engine is not running (a model thumbnail is a render)"));
+    // WHAT THE ROW IS comes before WHETHER WE COULD DRAW IT: a row that stores
+    // no model has nothing to draw whether or not an engine is running, and a
+    // sweep has to be able to tell those apart on a headless boot too.
     iris::SceneNodePtr node = libraryasset::fromLibrary(db, project, guid);
     if (!node) {
-        if (noModelOut) *noModelOut = true;
-        return say(reasonOut, QStringLiteral("the stored model for '%1' could not be read "
-                                             "(no blob, or a blob with no geometry)").arg(guid));
+        // WHICH KIND OF NOTHING (fix round F6). A row with an EMPTY definition
+        // never had a model — a builtin primitive's Object row (the default
+        // Ground) is a document thing, and a sweep must not report the floor of
+        // every project as broken. A row that HAS a definition and still would
+        // not load is a real failure the user needs to hear about: its stored
+        // bytes are gone, or its blob carries no geometry.
+        const bool noDefinition = db->fetchAssetData(guid).isEmpty();
+        if (noModelOut) *noModelOut = noDefinition;
+        return say(reasonOut,
+                   noDefinition
+                       ? QStringLiteral("'%1' stores no model definition (a builtin primitive's "
+                                        "row has nothing to draw)").arg(guid)
+                       : QStringLiteral("the stored model for '%1' could not be read — its bytes "
+                                        "are missing, or its blob carries no geometry").arg(guid));
     }
+    if (!engine)
+        return say(reasonOut, QStringLiteral("the engine is not running (a model thumbnail is a render)"));
 
     // THE ONE RENDERER, BORROWED (THUMBS-1). This used to CONSTRUCT one, which
     // is why an import after the session's first material thumbnail produced a

@@ -6,7 +6,9 @@
 #include "irisgl/core/color.h"
 
 #include <QColor>
+#include <QCoreApplication>
 #include <QDebug>
+#include <QThread>
 #include <QtMath>
 #include <cstring>
 #include <memory>
@@ -95,6 +97,12 @@ EngineThumbnailRenderer::Loan::~Loan()
 EngineThumbnailRenderer::Loan
 EngineThumbnailRenderer::borrow(const std::shared_ptr<Engine> &engine, const char *who)
 {
+    // MAIN THREAD ONLY, asserted (fix round F11). The Engine has one thread
+    // affinity, the instance and its borrow flag are plain globals, and every
+    // caller is on the UI thread by construction (the queue's tick, the import
+    // tails, the verbs). A borrow from anywhere else is a bug in the caller,
+    // and a silent race is the worst way to find out.
+    Q_ASSERT(!qApp || QThread::currentThread() == qApp->thread());
     const QString caller = QString::fromUtf8(who ? who : "a thumbnail");
     if (!engine)
         return Loan(nullptr, QStringLiteral("%1: the engine is not running").arg(caller));

@@ -23,10 +23,8 @@ For more information see the LICENSE file
 // cutout stays a manual option in the panel).
 
 #include <QHash>
-#include <QImage>
 #include <QString>
 #include <QStringList>
-#include <functional>
 
 #include "irisgl/irisglfwd.h"
 
@@ -36,19 +34,20 @@ class Project;
 namespace ImageMaterial
 {
 
-/// THE MATERIAL PREVIEW HOOK (THUMBS-1 item 3). A material asset's tile must be
-/// a RENDER of the material — it used to be the source IMAGE scaled to 72x72,
-/// so the one tile in a library that could not be told from another was the
-/// companion material beside its own texture, at a sixth of the size every
-/// other thumbnail is stored at.
-///
-/// It is a hook and not a call because this file is a SERVICE: it is compiled
-/// into CPU-only suites that link no engine, and "render a sphere" is the
-/// engine's. EngineHost installs it when the engine comes up and clears it at
-/// shutdown, so "when an engine exists" is the hook being set — headless keeps
-/// the image, which is the only answer available there.
-using PreviewRenderer = std::function<QImage(const iris::PbrMaterialPtr &)>;
-void setPreviewRenderer(PreviewRenderer renderer);
+// A COMPANION MATERIAL'S TILE IS A RENDER, AND IT IS NOT MADE HERE (THUMBS-1,
+// corrected in the fix round F8/F9). This function used to store the source
+// IMAGE scaled to 72x72 — a material row that looked exactly like its texture
+// row, at a sixth of the size every other thumbnail is stored at — and the
+// first fix rendered a sphere through an injected hook, right here, inline.
+// Both are wrong for the same reason: this is called from
+// `ProjectAssets::addToProject`, so dropping 100 images into a project meant
+// 100 synchronous 512x512 renders inside the commit hops, and with a HEADLESS
+// engine every one of them tried, failed and warned.
+//
+// So the image stays the stored fallback (headless-correct, instant), and the
+// RENDER is asked for afterwards by whoever made the gesture:
+// `thumbrebuild::rebuildOne(materialGuid)` for a single mint, or the tray's
+// one-per-event-loop-turn backlog for a batch.
 
 /// Resolves the texture's bytes (pin-first through the CAS; falls back to
 /// the library source, so it works in both project and store context) and

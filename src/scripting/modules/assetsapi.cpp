@@ -286,8 +286,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> {ok, reason}",
           "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, particle systems, materials, shader graphs and AVATARS render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere; an avatar renders its own character model); images re-thumbnail from the source file, videos re-grab a first-second frame, animation clips redraw their pose strip, and audio/file rows reset to their type icon (document-only). `ok` is false with `reason` naming WHY nothing was stored — a thumbnail that fails is never silent.",
           Needs::Document },
-        { "rebuildThumbnails", "assets.rebuildThumbnails({missingOnly, projectOnly, limit}) -> {considered, rebuilt, skipped, failed: [{guid, reason}]}",
-          "Rebuilds thumbnails in bulk — the repair pass for rows that are already grey. `missingOnly` (default true) takes only the rows whose stored thumbnail is absent or undecodable; false redraws every asset that has a thumbnail to draw. `projectOnly` (default false) limits it to the open project's pinned assets; `limit` (default 0 = no limit) caps how many are rebuilt. One asset per turn, yielding between them, so the window keeps painting. `skipped` counts the rows with nothing to draw at all (a builtin primitive's row — the default Ground — stores no model), which are not failures. Each asset goes through the same routine as assets.refreshThumbnail.",
+        { "rebuildThumbnails", "assets.rebuildThumbnails({missingOnly, projectOnly, limit}) -> {considered, rebuilt, skipped, cancelled, failed: [{guid, reason}]}",
+          "Rebuilds thumbnails in bulk — the repair pass for rows that are already grey. `missingOnly` (default true) takes only the rows whose stored thumbnail is absent or undecodable; false redraws every asset that has a thumbnail to draw. `projectOnly` (default false) limits it to the open project's pinned assets; `limit` (default 0 = no limit) caps how many are rebuilt. One asset per turn, yielding between them, so the window keeps painting. `skipped` counts the rows with nothing to draw at all (a builtin primitive's row — the default Ground — stores no model definition), which are not failures; a row whose stored bytes are GONE is a failure with its reason. `cancelled` is true when the sweep was stopped before it finished — the app is quitting, or the script was stopped — and whatever it had already rebuilt is stored. Each asset goes through the same routine as assets.refreshThumbnail.",
           Needs::Document },
         { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}, coverage}",
           "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions, the colour of its centre pixel (0-255) and `coverage` — the fraction of the image (0..1) that differs from the background the renderer cleared to, i.e. how much of the tile the subject fills. empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
@@ -1114,7 +1114,8 @@ QVariantMap AssetsApi::refreshThumbnail(const QString &guid)
     // services/thumbnailrebuild.h, so the bulk repair below, the Assets page's
     // menu entry and this verb cannot drift apart — and the Avatar branch this
     // verb never had is in all three at once.
-    const thumbrebuild::Outcome outcome = thumbrebuild::rebuildOne(host.db, host.project, guid);
+    const thumbrebuild::Outcome outcome =
+        thumbrebuild::rebuildOne(host.db, host.project, guid, EngineHost::instance().engine());
     out["ok"] = outcome.ok;
     if (!outcome.ok) {
         out["reason"] = outcome.reason;
@@ -1131,6 +1132,7 @@ QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
     out["considered"] = 0;
     out["rebuilt"] = 0;
     out["skipped"] = 0;
+    out["cancelled"] = false;
     out["failed"] = QVariantList();
     if (!host.db) { fail("assets: not available in this session"); return out; }
 
@@ -1151,8 +1153,14 @@ QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
     // THE YIELD (THUMBS-1 item 4): one engine render per asset, and a library
     // can hold hundreds. USER INPUT IS EXCLUDED — a click that re-entered the
     // sweep through a menu would be a second sweep over the same rows.
+    //
+    // AND IT IS STOPPABLE (fix round F1): a yield can deliver the window's
+    // close, and a script can be stopped or time out while this one verb is
+    // still rendering. ScriptEngine::stop and the app's shutdown both set the
+    // flag thumbrebuild checks per row; `cancelled` comes back in the result
+    // so a caller can tell "nothing left to do" from "we were stopped".
     const auto result = thumbrebuild::rebuildMissing(
-        host.db, host.project, sweep,
+        host.db, host.project, EngineHost::instance().engine(), sweep,
         [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
 
     QVariantList failed;
@@ -1161,6 +1169,7 @@ QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
     out["considered"] = result.considered;
     out["rebuilt"] = result.rebuilt;
     out["skipped"] = result.skipped;
+    out["cancelled"] = result.cancelled;
     out["failed"] = failed;
     return out;
 }

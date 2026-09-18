@@ -13,6 +13,9 @@ add_executable(test_script_engine test_script_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apimodule.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apiregistry.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp
+    # the one flag ScriptEngine::stop sets so a stopped script's thumbnail
+    # sweep stops too (THUMBS-1 F1) — a TU with no dependencies of its own
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
     # The worker thread + the verb bridge: the script engine IS these three
     # objects since it moved off the UI thread (SCRIPTING_LIVE_SPEC), and the
     # unit test drives its fake module through the same dispatch the app uses.

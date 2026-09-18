@@ -18,7 +18,6 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
-#include <utility>
 
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -30,13 +29,6 @@ For more information see the LICENSE file
 
 namespace ImageMaterial
 {
-namespace
-{
-PreviewRenderer gPreviewRenderer;
-}
-
-void setPreviewRenderer(PreviewRenderer renderer) { gPreviewRenderer = std::move(renderer); }
-
 iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
                                  Project *project, QString *resolvedPathOut,
                                  bool *hasAlphaOut)
@@ -120,22 +112,15 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     // stamp is written once, here, at the only place that mints one.
     blob[QStringLiteral("companionOf")] = textureGuid;
 
-    // THE TILE IS A MATERIAL, SO IT IS A RENDER OF THE MATERIAL (THUMBS-1
-    // item 3). This used to store the IMAGE, scaled to 72x72 — a material row
-    // that looked like its texture row, at a sixth of the size every other
-    // thumbnail is stored at, so the one tile in the library that could not be
-    // told from another was the material beside its own image. With an engine
-    // up it renders on the preview sphere, through the one borrowed renderer,
-    // exactly like every other material. The image stays the answer HEADLESS
-    // (there is no render to make there), which is also what keeps this
-    // function usable from a script run with no window.
+    // THE STORED FALLBACK: the image itself, at the size every other thumbnail
+    // is stored at (it used to be 72x72 — see the header for why the RENDER is
+    // not made here). `thumbrebuild::rebuildOne` on this guid replaces it with
+    // the material on the preview sphere, asked for by the gesture that minted
+    // it, off this function's critical path.
     QByteArray thumbnail;
     {
-        QImage thumb;
-        if (gPreviewRenderer) thumb = gPreviewRenderer(material);
-        if (thumb.isNull())
-            thumb = QImage(resolvedPath).scaled(512, 512, Qt::KeepAspectRatio,
-                                                Qt::SmoothTransformation);
+        QImage thumb = QImage(resolvedPath).scaled(512, 512, Qt::KeepAspectRatio,
+                                                   Qt::SmoothTransformation);
         if (!thumb.isNull()) {
             QBuffer buffer(&thumbnail);
             buffer.open(QIODevice::WriteOnly);
