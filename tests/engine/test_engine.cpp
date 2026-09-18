@@ -1613,6 +1613,119 @@ void cubemap_sky_faces_match_directions() {
     CHECK(near(centre(img), kBlue));
 }
 
+
+// A CUBEMAP SKY DRAGGED: THE CAPTURE CUBE IS DESTROYED WHILE ITS READBACK IS
+// STILL IN THE COPY ENCODER (lane ENGINE-SMALL-A fix round, the lead's read of
+// SKY-SH-1 / audit ON-14).
+//
+// THE PATH THIS COVERS, and it is the one lifetime in the deferred read that is
+// not obvious. For every sky but a cubemap (and but an explicit
+// `reflectionFaces`), the capture cube is handed to buildReflectionCubemapFrom
+// and freed by applyPendingIbl at the top of the NEXT frame. For a CUBEMAP sky
+// the cube is scratch — its own faces are already the environment — so
+// applyPendingSkyCapture destroys it IMMEDIATELY after integrateSkyShFromCube,
+// in the same frame, which under the deferred read means destroying a texture
+// whose `vkCmdCopyImageToBuffer` is sitting in an open copy encoder that nobody
+// has submitted yet.
+//
+// The pin handles exactly this: `VulkanQueue::notifyTextureDestroyed` finds the
+// texture in `mCopyDownloadTextures` and FLUSHES the encoder (submits, does not
+// wait), and the VkImage itself dies through `delayed_vkDestroyImage` under the
+// frame multiplier (patch 0067's window). Reading the pin is not the same as
+// running it, so:
+//
+//   * two cubemap skies of DIFFERENT uniform brightness on consecutive frames
+//     (the second capture is therefore the deferred one), then the ambient read
+//     a few frames later must be the SECOND sky's radiance — not the first's,
+//     and not the recycled contents of a destroyed allocation, which is the
+//     failure mode the AsyncTextureTicket rules in this file's sky code warn
+//     about;
+//   * and the engine must still be rendering, with nothing in lastError().
+void cubemap_sky_drag_survives_the_cube_dying_under_the_readback() {
+    Fixture fx;
+    View *v = fx.view("cubedrag-view", 48, 48, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("cubedrag-scene");             REQUIRE(s);
+    v->setScene(s);
+    aim(v);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    const auto linearOf = [](int srgb8) {
+        const float c = float(srgb8) / 255.0f;
+        return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+    };
+    // Six identical faces = a uniform environment, so SH band 0 is its linear
+    // radiance and the assertion needs no geometry.
+    const auto greyCube = [&](int srgb8, TextureId out[6]) {
+        for (int i = 0; i < 6; ++i) {
+            std::vector<unsigned char> px(8 * 8 * 4);
+            for (int p = 0; p < 64; ++p) {
+                px[p * 4 + 0] = (unsigned char)srgb8;
+                px[p * 4 + 1] = (unsigned char)srgb8;
+                px[p * 4 + 2] = (unsigned char)srgb8;
+                px[p * 4 + 3] = 255;
+            }
+            out[i] = s->createTexture(8, 8, px.data(), true);
+            if (!out[i]) return false;
+        }
+        return true;
+    };
+    const auto band0 = [&]() {
+        float sh[27] = { 0.0f };
+        if (!s->skyAmbientSh(sh)) return -1.0f;
+        return sh[0];
+    };
+
+    TextureId dim[6], bright[6];
+    REQUIRE(greyCube(96, dim));
+    REQUIRE(greyCube(200, bright));
+    // `lastError` is the ENGINE's and it is sticky: whatever an earlier case in
+    // this process left there is not this case's business. The assertion below
+    // is "no NEW error", which is the honest form of it.
+    const std::string errorBefore = fx.e->lastError();
+
+    // The FIRST cubemap sky: synchronous read, cube destroyed in the same frame
+    // (this is how it has always worked, and the control for the numbers below).
+    CHECK_MSG(s->setSky(cubemapSkyDesc(dim)), "%s", fx.e->lastError().c_str());
+    render(fx.e, 1);
+    const float first = band0();
+    std::printf("    cubemap sky 1 (sRGB 96, linear %.4f): band0 %.4f\n",
+                double(linearOf(96)), double(first));
+    CHECK_MSG(first > 0.0f && std::fabs(first - linearOf(96)) < 0.02f,
+              "the first cubemap sky's ambient is its own radiance (band0 %.4f, expected %.4f)",
+              double(first), double(linearOf(96)));
+
+    // THE SECOND, on the very next frame: a gesture, so the read is DEFERRED —
+    // and the cube it is reading is destroyed before this frame is submitted.
+    CHECK_MSG(s->setSky(cubemapSkyDesc(bright)), "%s", fx.e->lastError().c_str());
+    render(fx.e, 1);
+    const float duringDrag = band0();
+    render(fx.e, 3);
+    const float landed = band0();
+    std::printf("    cubemap sky 2 (sRGB 200, linear %.4f): band0 %.4f in the capture frame, "
+                "%.4f after three more\n",
+                double(linearOf(200)), double(duringDrag), double(landed));
+    CHECK_MSG(std::fabs(duringDrag - first) < 1e-6f,
+              "the capture frame still reads the first sky (the deferred read, as designed)");
+    CHECK_MSG(std::fabs(landed - linearOf(200)) < 0.02f,
+              "THE DEFERRED READ OF A CUBE THAT DIED IN ITS CAPTURE FRAME RETURNS THE RIGHT "
+              "BYTES (band0 %.4f, expected %.4f — the first sky was %.4f and a recycled "
+              "allocation would be neither)",
+              double(landed), double(linearOf(200)), double(first));
+
+    // ...and the engine is still rendering, with nothing to report.
+    Image img;
+    REQUIRE(v->readPixels(img));
+    const Px k = corner(img);
+    std::printf("    and the frame still draws: corner %d %d %d, lastError '%s'\n",
+                k.r, k.g, k.b, fx.e->lastError().c_str());
+    CHECK_MSG(k.r > 100 && k.g > 100 && k.b > 100,
+              "the second cubemap sky is what the background shows (%d %d %d)", k.r, k.g, k.b);
+    CHECK_MSG(fx.e->lastError() == errorBefore,
+              "no NEW engine error was raised by the drag: '%s' (was '%s')",
+              fx.e->lastError().c_str(), errorBefore.c_str());
+    CHECK(s->setSky(SkyDesc()));
+}
+
 void mesh_from_buffers_renders() {
     Fixture fx;
     View *v = fx.view("mesh-view", 96, 96, kBlue); REQUIRE(v);
@@ -5951,6 +6064,8 @@ int main(int argc, char **argv) {
         { "ambient_sh_lights_world_axes",           ambient_sh_lights_world_axes },
         { "equirect_sky_fills_the_background",      equirect_sky_fills_the_background },
         { "cubemap_sky_faces_match_directions",     cubemap_sky_faces_match_directions },
+        { "cubemap_sky_drag_survives_the_cube_dying_under_the_readback",
+                                                    cubemap_sky_drag_survives_the_cube_dying_under_the_readback },
         { "rough_metal_reflects_across_cube_faces", rough_metal_reflects_across_cube_faces },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },

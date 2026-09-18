@@ -67,14 +67,16 @@ if (afterMore.waitWorstMs < 200 || afterMore.waitWorstMs > 5000)
 // THE ADVANCE CADENCE (case 5). The drain waited waitWorstMs, so at one advance
 // per 16 ms it owes about waitWorstMs/16 of them; before DRAIN-1 it owed one per
 // MILLISECOND, which on this run was 512. `+ 8` is the slack for the first
-// iteration (which always advances) and the poll's jitter; `>= 1` proves the
-// drain still advances at all, which is what commits whatever the texture
-// manager recorded.
+// iteration (which always advances) and the poll's jitter. `>= 1` proves the
+// drain still advances at all — and an advance is half of a commit rather than
+// a commit: a bare `VaoManager::_update` outside a frame ARMS on the first call
+// and COMMITS on the second, so a waiting drain's advances are what carry the
+// texture manager's recorded work to the GPU one cadence at a time.
 var owed = Math.ceil(afterMore.waitWorstMs / 16.0) + 8;
 if (afterMore.waitAdvances < 1)
     fail("the drain never advanced the renderer's resource bookkeeping (waitAdvances=" +
-         afterMore.waitAdvances + ") — a drain that commits nothing can wait for work that " +
-         "was never submitted");
+         afterMore.waitAdvances + ") — a drain that never advances never commits, and can " +
+         "wait for work that was never submitted");
 if (afterMore.waitAdvances > owed)
     fail("the drain advanced " + afterMore.waitAdvances + " times over " +
          afterMore.waitWorstMs + " ms of waiting, more than the " + owed +

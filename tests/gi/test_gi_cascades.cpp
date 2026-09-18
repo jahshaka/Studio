@@ -74,6 +74,23 @@ static float groundLum(const Image &img)
     return n ? sum / float(n) : 0.0f;
 }
 
+/// A FLAT quad in the XZ plane, 1x1, centred on its origin: a Plane primitive's
+/// geometry, and the degenerate case any box metric has to survive — its world
+/// AABB has ZERO HEIGHT (case 15b).
+static MeshData flatPlaneMesh()
+{
+    MeshData d;
+    const float h = 0.5f;
+    const float pos[12] = { -h, 0.0f, -h,   h, 0.0f, -h,   h, 0.0f, h,   -h, 0.0f, h };
+    d.positions.assign(pos, pos + 12);
+    for (int i = 0; i < 4; ++i) { d.normals.push_back(0.0f); d.normals.push_back(1.0f); d.normals.push_back(0.0f); }
+    const float uv[8] = { 0, 0, 1, 0, 1, 1, 0, 1 };
+    d.uvs.assign(uv, uv + 8);
+    const unsigned idx[6] = { 0, 1, 2, 0, 2, 3 };
+    d.indices.assign(idx, idx + 6);
+    return d;
+}
+
 static GiParams cascadeGi()
 {
     GiParams gi;
@@ -1252,6 +1269,7 @@ int main()
             };
             std::vector<unsigned long long> before = perCascade();
             const unsigned long long fullBefore = scene->giStatus().cascadeFullRebuilds;
+            const long long settlesBefore = scene->giStatus().chainSettles;
 
             // THE MOVEMENT: every mover moves every frame, by more than the
             // scan's quantisation, for 24 frames.
@@ -1278,6 +1296,17 @@ int main()
             CHECK(outerRebuilds > 0ull,
                   "...while the cascade that CAN see them follows them");
 
+            // ...AND THE MERGED BOXES' REBUILDS ARE SETTLED FOR, AT REST
+            // (LAMPREST-3's incremental settle, composed with this lane's
+            // merge). A cascade rebuild injects one cascade once, over the
+            // radiance it held where it used to stand, so the chain owes an
+            // at-rest injection afterwards — paid on the first frame the
+            // rebuild queue is empty. F14's merge RAISES that debt (it turns
+            // "the whole chain, one cascade per frame, for ever" into real
+            // rebuilds of the cascade that can see the movers), so the two
+            // belong in one assertion: the debt must actually be paid once the
+            // gesture ends, not carried.
+            const long long settlesAtStop = scene->giStatus().chainSettles;
             // At rest: nothing at all.
             render(e, 4);
             before = perCascade();
@@ -1287,6 +1316,108 @@ int main()
             for (size_t i = 0; i < during.size(); ++i) atRest += during[i] - before[i];
             std::printf("   30 frames after they stop: %llu cascade rebuilds\n", atRest);
             CHECK(atRest == 0ull, "and when they stop, the chain re-voxelises nothing");
+            const long long settlesAfter = scene->giStatus().chainSettles;
+            std::printf("   chain settles: %lld before the movement, %lld at the stop, %lld "
+                        "after the rest\n", settlesBefore, settlesAtStop, settlesAfter);
+            CHECK(settlesAfter > settlesAtStop,
+                  "the rebuilds the merged dirty boxes caused ARE settled for once the "
+                  "movement stops (LAMPREST-3's post-rebuild injection, paid from the "
+                  "scheduler's own slot)");
+
+            for (NodeId m : movers) scene->removeNode(m);
+            render(e, 6);
+        }
+    }
+
+
+    // =====================================================================
+    // CASE 15b — AND THE MERGE SURVIVES FLAT BOXES
+    // (the lead's read of F14, 2026-09-18)
+    // =====================================================================
+    // THE DEFECT THE FIRST VERSION OF THE MERGE HAD. "Least enlargement" was
+    // measured as the growth of the box's VOLUME, which is what a plain R-tree
+    // uses — and this engine's boxes go FLAT: a Plane primitive's world AABB has
+    // zero height, so every coplanar box and every union of them has volume
+    // ZERO, the growth comparison is 0 against 0 for every candidate, the first
+    // entry wins every time, and a floor of moving planes coalesces into ONE
+    // SLAB spanning everything it touched. Conservative (a merged box covers
+    // what both covered, so no cascade is ever missed) but the exact opposite of
+    // the point: the dirty region ends up reaching cascades that never saw a
+    // mover. The metric is the R*-tree's MARGIN now — the sum of the extents,
+    // which no flat box makes degenerate.
+    //
+    // THE GEOMETRY IS THE ASSERTION. Ten flat movers at +X and ten at -X, all in
+    // the same plane, all outside every cascade but the outermost, twenty boxes
+    // against a cap of sixteen. Under the volume metric the two clusters merge
+    // into one slab through the MIDDLE of the chain — where the camera and
+    // cascade 0 are — and the inner cascades rebuild for movers they cannot see.
+    // Under the margin metric each cluster stays its own entry.
+    std::printf("\n== case 15b: twenty FLAT movers, two far clusters (F14 round 2) ==\n");
+    {
+        CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the flat-mover case");
+        render(e, 8);
+        const GiStatus base = scene->giStatus();
+        if (base.cascades.size() < 3) {
+            CHECK(false, "case 15b needs a chain of at least three cascades");
+        } else {
+            const size_t n = base.cascades.size();
+            const float inner = base.cascades[n - 2u].halfSize;
+            const float outer = base.cascades[n - 1u].halfSize;
+            const Vec3 centre = base.cascades[n - 1u].centre;
+            const float far = (inner + outer) * 0.5f;   // only the outermost reaches it
+
+            const MeshId plane = scene->createMesh(flatPlaneMesh());
+            PbrParams flat; flat.albedo = Colour(0.7f, 0.7f, 0.7f);
+            flat.metalness = 0.0f; flat.roughness = 0.8f;
+            const MaterialId flatMat = scene->createPbrMaterial(flat);
+            CHECK(plane && flatMat, "a flat 1x1 quad and its material");
+
+            std::vector<NodeId> movers;
+            std::vector<float> homeX, homeZ;
+            for (int side = 0; side < 2; ++side) {
+                const float sx = side == 0 ? far : -far;
+                for (int i = 0; i < 10; ++i) {
+                    const NodeId nd = scene->createNode();
+                    if (!nd || !scene->attachMesh(nd, plane, flatMat)) continue;
+                    const float x = centre.x + sx + float(i % 5) * 1.5f;
+                    const float z = centre.z + float(i / 5) * 1.5f;
+                    enginetest::setNodePosition(scene, nd, Vec3(x, 0.5f, z));
+                    movers.push_back(nd);
+                    homeX.push_back(x);
+                    homeZ.push_back(z);
+                }
+            }
+            std::printf("   twenty flat movers wanted, %zu attached\n", movers.size());
+            CHECK(movers.size() == 20u, "twenty flat movers, four more than the cap");
+            render(e, 12);          // the spawn's own work drains
+
+            const auto perCascade = [&]() {
+                std::vector<unsigned long long> out;
+                for (const auto &c : scene->giStatus().cascades) out.push_back(c.rebuilds);
+                return out;
+            };
+            std::vector<unsigned long long> before = perCascade();
+            for (int f = 0; f < 24; ++f) {
+                for (size_t i = 0; i < movers.size(); ++i)
+                    enginetest::setNodePosition(scene, movers[i],
+                                                Vec3(homeX[i] + 0.3f * float(f), 0.5f, homeZ[i]));
+                render(e, 1);
+            }
+            const std::vector<unsigned long long> during = perCascade();
+            unsigned long long innerRebuilds = 0, outerRebuilds = 0;
+            std::printf("   24 frames of 20 FLAT movers in two far clusters:");
+            for (size_t i = 0; i < during.size(); ++i) {
+                const unsigned long long d = during[i] - before[i];
+                std::printf("  c%zu %llu", i, d);
+                if (i + 1u == during.size()) outerRebuilds += d; else innerRebuilds += d;
+            }
+            std::printf("\n");
+            CHECK(innerRebuilds == 0ull,
+                  "a ZERO-HEIGHT box does not merge with a coplanar one on the other side of "
+                  "the chain: the inner cascades stay clean (the margin metric; the volume one "
+                  "merged them at zero growth and dirtied the middle)");
+            CHECK(outerRebuilds > 0ull,
+                  "...while the cascade that CAN see the flat movers follows them");
 
             for (NodeId m : movers) scene->removeNode(m);
             render(e, 6);
