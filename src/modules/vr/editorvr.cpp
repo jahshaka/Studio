@@ -140,6 +140,18 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // be askable in the same process at the same pose (the rig's own rule).
     if (options.contains(QStringLiteral("hiddenAreaMask")))
         cfg.hiddenAreaMask = options.value(QStringLiteral("hiddenAreaMask")).toBool();
+    // BARE HANDS ARE THE PROJECT'S CHOICE (lane HANDS-SWITCH-1; the owner,
+    // 2026-09-18, joint) — the World panel's Hands switch, `world.vr({hands})`,
+    // off by default. Read from the DOCUMENT here rather than from
+    // `vrworld::resolve` because the row is latched by the session at creation
+    // and cannot be overridden while one runs (`Row::sessionFixed`), so there
+    // is no session value to fold in yet.
+    //
+    // `vr.begin({hands:true})` overrides it for ONE session — a measurement and
+    // a suite's opt-in, like `hiddenAreaMask` above — and writes nothing.
+    if (const iris::ScenePtr doc = viewport->getScene()) cfg.hands = doc->vrHands;
+    if (options.contains(QStringLiteral("hands")))
+        cfg.hands = options.value(QStringLiteral("hands")).toBool();
     // THE MIRROR VIEW IS NAMED BEFORE THE SESSION EXISTS (the engine keeps the
     // wish and applies it on begin), and only when one was ASKED for: with
     // `mirror: "none"` there is nothing to paint and the editor's view is left

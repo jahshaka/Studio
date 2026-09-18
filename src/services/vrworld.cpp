@@ -186,6 +186,30 @@ QVector<Row> buildRows()
         row.write = [](Settings &s, double v) { s.dominantRight = std::lround(v) != 0; };
         r.append(row);
     }
+    {
+        Row row;
+        row.id = QStringLiteral("hands");
+        row.jsonKey = QStringLiteral("vrHands");
+        row.label = QStringLiteral("Hands");
+        row.kind = RowKind::Flag;
+        // A SESSION LATCHES IT AT CREATION and cannot be told otherwise: the
+        // suggested bindings are attached to the session's action sets before
+        // its first frame. So `vr.locomotion({hands:...})` is refused by name
+        // instead of quietly doing nothing for the life of a session.
+        row.sessionFixed = true;
+        row.doc = QStringLiteral(
+            "BARE-HAND TRACKING. Off by default: a session binds the wearer's own hands only "
+            "when this is on, and the controllers are unaffected either way. With it off a "
+            "wearer who puts a controller down is left holding nothing — which is what "
+            "\"controllers only\" has to mean — instead of being handed to bare hands "
+            "mid-session by the runtime. A session reads it when it BEGINS, so turning it on "
+            "reaches the next session and not the one in the headset.");
+        row.get = [](const iris::ScenePtr &s) { return s->vrHands ? 1.0 : 0.0; };
+        row.set = [](const iris::ScenePtr &s, double v) { s->vrHands = std::lround(v) != 0; };
+        row.read = [](const Settings &s) { return s.hands ? 1.0 : 0.0; };
+        row.write = [](Settings &s, double v) { s.hands = std::lround(v) != 0; };
+        r.append(row);
+    }
 
     return r;
 }
@@ -220,9 +244,12 @@ void write(const iris::ScenePtr &scene, QJsonObject &sceneObj)
     for (const Row &r : rows()) {
         if (!r.get || r.jsonKey.isEmpty()) continue;
         const double v = r.get(scene);
-        // An Enum rides as its stable option id; a Number as a number.
-        if (r.kind == RowKind::Enum) sceneObj[r.jsonKey] = valueId(r, v);
-        else                         sceneObj[r.jsonKey] = v;
+        // An Enum rides as its stable option id, a Flag as a JSON boolean, a
+        // Number as a number — each as the thing it is, so a file reads as what
+        // the panel shows.
+        if (r.kind == RowKind::Enum)      sceneObj[r.jsonKey] = valueId(r, v);
+        else if (r.kind == RowKind::Flag) sceneObj[r.jsonKey] = (v != 0.0);
+        else                              sceneObj[r.jsonKey] = v;
     }
 }
 
@@ -242,6 +269,14 @@ void read(const iris::ScenePtr &scene, const QJsonObject &sceneObj)
                 if (o.id == name) { r.set(scene, double(o.value)); break; }
             continue;
         }
+        if (r.kind == RowKind::Flag) {
+            // A BOOLEAN, AND NOTHING ELSE: a key carrying a number or a word
+            // leaves the constructor's value standing, exactly as an unknown
+            // enum name does. THE READER-DEFAULTS LAW is the same here — an
+            // absent key is never read as false, it is simply not read.
+            if (value.isBool()) r.set(scene, value.toBool() ? 1.0 : 0.0);
+            continue;
+        }
         if (!value.isDouble()) continue;          // not a number: the default stands
         const double v = value.toDouble();
         if (!std::isfinite(v)) continue;
@@ -251,6 +286,18 @@ void read(const iris::ScenePtr &scene, const QJsonObject &sceneObj)
 
 bool validate(const Row &r, const QVariant &value, double &out, QString &error)
 {
+    if (r.kind == RowKind::Flag) {
+        // TRUE OR FALSE, BY TYPE. `QVariant("no").toBool()` is true and
+        // `QVariant(0.3).toBool()` is true as well, so coercion here would
+        // accept almost anything and mean almost nothing.
+        if (value.metaType().id() != QMetaType::Bool) {
+            error = QStringLiteral("%1 must be true or false, not '%2'")
+                        .arg(r.id, value.toString());
+            return false;
+        }
+        out = value.toBool() ? 1.0 : 0.0;
+        return true;
+    }
     if (r.kind == RowKind::Enum) {
         const QString name = value.toString().trimmed().toLower();
         for (const EnumOption &o : r.options)
@@ -293,6 +340,8 @@ bool validate(const Row &r, const QVariant &value, double &out, QString &error)
 
 QString valueId(const Row &r, double value)
 {
+    if (r.kind == RowKind::Flag) return value != 0.0 ? QStringLiteral("true")
+                                                     : QStringLiteral("false");
     if (r.kind == RowKind::Enum) {
         const int v = int(std::lround(value));
         for (const EnumOption &o : r.options)
@@ -304,7 +353,9 @@ QString valueId(const Row &r, double value)
 QVariant valueOf(const Row &r, const Settings &s)
 {
     const double v = r.read ? r.read(s) : 0.0;
-    return r.kind == RowKind::Enum ? QVariant(valueId(r, v)) : QVariant(v);
+    if (r.kind == RowKind::Enum) return QVariant(valueId(r, v));
+    if (r.kind == RowKind::Flag) return QVariant(v != 0.0);
+    return QVariant(v);
 }
 
 Settings fromScene(const iris::ScenePtr &scene)

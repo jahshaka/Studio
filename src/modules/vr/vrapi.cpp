@@ -162,7 +162,7 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "begin",
           "vr.begin({mirror?, worldScale?, eyeWidth?, eyeHeight?, reflections?, "
-          "hiddenAreaMask?, warmUp?}) -> bool",
+          "hiddenAreaMask?, warmUp?, hands?}) -> bool",
           "THE EDITOR'S VR PREVIEW (SPECS/VR_SPEC.md §5 phase 4): starts the VR session on the "
           "editor's scene and returns true once it exists. From the next frame the render loop is "
           "PACED BY THE RUNTIME (xrWaitFrame), both eyes are drawn in one pass into a target two "
@@ -209,6 +209,16 @@ QVector<VerbInfo> VrApi::verbs() const
           "will not be one — nobody can see the pixels it removes — but the saving cannot be "
           "measured without a control arm in the same process at the same pose, which is what "
           "false is for.\n\n"
+          "BARE HANDS follow the PROJECT (the World panel's VR section, `world.vr({hands})`) "
+          "and are OFF unless it says otherwise: with them off this session suggests no "
+          "`ext/hand_interaction_ext` bindings, creates no hand tracker and reports no "
+          "skeleton, so a wearer who puts a controller down is left holding nothing rather "
+          "than being handed to bare hands mid-session by the runtime; the controllers are "
+          "unaffected either way. `hands` overrides the project's row FOR THIS SESSION ONLY "
+          "and writes nothing — it is what a suite and a measurement use, exactly like "
+          "`hiddenAreaMask`. `vr.state().hands.enabled` says which way a running session "
+          "went, and `vr.state().bindings.profiles` is where the bare-hand block is or is "
+          "not.\n\n"
           "REFUSES (false, with app.lastError set) rather than throwing when VR is unavailable, "
           "when a session is already running, or when there is no scene yet.",
           Needs::Engine },
@@ -515,7 +525,7 @@ QVector<VerbInfo> VrApi::verbs() const
         { "locomotion",
           "vr.locomotion({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, "
           "dominant?}) -> {flySpeed, fly, turn, snapTurnDegrees, smoothTurnDegreesPerSecond, "
-          "dominant, overridden, session}",
+          "dominant, hands, overridden, session}",
           "HOW THE WEARER MOVES, read with no argument and set with one — THE SESSION'S "
           "OVERRIDES over the PROJECT's settings (lane VR-WORLD-1). The defaults live in the "
           "document and are set by `world.vr` or the World panel's VR section; a session adopts "
@@ -537,6 +547,12 @@ QVector<VerbInfo> VrApi::verbs() const
           "`dominant` is \"right\" (the default) or \"left\" and swaps BOTH roles at once: "
           "the dominant hand points, selects and grabs, the other hand's stick walks and "
           "turns. One flag, because two would eventually disagree.\n\n"
+          "`hands` is REPORTED HERE AND CANNOT BE SET HERE: a session binds the wearer's bare "
+          "hands (or does not) when it is CREATED, because the suggested bindings are attached "
+          "to its action sets before its first frame and no runtime can be asked to rebind "
+          "them. Setting it is `world.vr({hands:true})` for the project, or "
+          "`vr.begin({hands:true})` for one session; asking for it here is refused by name "
+          "rather than answered with a yes that would do nothing.\n\n"
           "A number that is not finite, or is zero or negative, is refused by name; a true/false "
           "where a number belongs is refused too (it would otherwise read as 1); one outside a "
           "row's range is clamped to it; and an unknown mode name or an unknown key is refused "
@@ -695,7 +711,8 @@ bool VrApi::begin(const QVariantMap &options)
                                        QStringLiteral("eyeHeight"),
                                        QStringLiteral("reflections"),
                                        QStringLiteral("hiddenAreaMask"),
-                                       QStringLiteral("warmUp") };
+                                       QStringLiteral("warmUp"),
+                                       QStringLiteral("hands") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it)
         if (!known.contains(it.key()))
             return fail(QStringLiteral("vr.begin: unknown option '%1' — known options are %2")
@@ -1106,6 +1123,12 @@ QVariantMap VrApi::state()
     QVariantMap hands;
     hands[QStringLiteral("left")] = vrnames::pose(s.hands[VrHandLeft]);
     hands[QStringLiteral("right")] = vrnames::pose(s.hands[VrHandRight]);
+    // ...AND WHETHER BARE HANDS WERE BOUND AT ALL (lane HANDS-SWITCH-1). It
+    // sits beside the two poses because it is the question asked FIRST of a
+    // hand that reports nothing: "is this project on hands or on controllers?"
+    // It is the session's latched copy of the project's row, so it answers for
+    // the session the caller is looking at rather than for the document.
+    hands[QStringLiteral("enabled")] = s.handsEnabled;
     out[QStringLiteral("hands")] = hands;
     // THE CONTROLS (phase 4b stage 1): the two poses and every button, in the
     // one spelling vrnames owns.
@@ -1548,6 +1571,18 @@ QVariantMap VrApi::locomotion(const QVariantMap &options)
     QVector<QPair<QString, double>> writes;
     for (const vrworld::Row &r : vrworld::rows()) {
         if (!options.contains(r.id)) continue;
+        // A ROW A SESSION LATCHED AT CREATION CANNOT BE OVERRIDDEN WHILE IT
+        // RUNS (lane HANDS-SWITCH-1; `Row::sessionFixed`). The bare-hand
+        // bindings are attached to the session's action sets before its first
+        // frame and no runtime can be asked to rebind them, so accepting the
+        // override would be a verb that answered "yes" and did nothing for the
+        // life of the session. Refused by name, with what to call instead.
+        if (r.sessionFixed) {
+            fail(QStringLiteral("vr.locomotion: '%1' is fixed for the life of a session — set "
+                                "it with world.vr({%1: ...}) for the project, or "
+                                "vr.begin({%1: ...}) for one session").arg(r.id));
+            return QVariantMap();
+        }
         double value = 0.0;
         QString why;
         if (!vrworld::validate(r, options.value(r.id), value, why)) {

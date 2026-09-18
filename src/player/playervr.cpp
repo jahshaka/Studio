@@ -80,6 +80,13 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     if (options.contains(QStringLiteral("reflections")))
         cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
 
+    // AND BARE HANDS ARE THE PROJECT'S TOO (lane HANDS-SWITCH-1): the same row
+    // the editor's preview reads, so a run in the headset binds the wearer's
+    // hands exactly when the project they are playing asked for them. There is
+    // no per-call override here on purpose — the Player is the finished thing,
+    // and the measurement hook belongs on the editor's preview (`vr.begin`).
+    if (document) cfg.hands = document->vrHands;
+
     // THE MIRROR IS NAMED BEFORE THE SESSION EXISTS (Engine::setVrMirrorView
     // keeps the wish and applies it on begin), so the very first frame the
     // runtime accepts already reaches the desktop.
