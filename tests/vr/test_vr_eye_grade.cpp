@@ -121,10 +121,14 @@ int main(int argc, char **argv)
     std::printf("vr.eye_grade reader: %s\n", qPrintable(dir.absolutePath()));
 
     // WHERE THE PATCHES ARE. The runtime's window carries BOTH eyes side by
-    // side, so the left eye's quarter-height sky sits at (0.25, 0.25) of the
-    // window and at (0.5, 0.25) of our own single-eye picture. A quarter of the
-    // way down is sky in both: the wearer and the editor camera are both level,
-    // so the horizon is near the middle.
+    // side, so the left eye's patch sits at (0.25, 0.25) of the window and at
+    // (0.5, 0.25) of our own single-eye picture. A quarter of the way down is
+    // SKY in both, by different routes: the wearer's head is level (the runtime
+    // decides that) and the sky fills the upper part of that view, while the
+    // script deliberately points the EDITOR camera up at the zenith so its
+    // whole frame is sky. That asymmetry is the point — a flat colour sky is
+    // the same radiance in every direction, so two pictures looking different
+    // ways still compare the GRADE and nothing else.
     const double kEyeX = 0.50, kRuntimeX = 0.25, kY = 0.25;
     const int kHalf = 12;                 // a 25x25 patch
     const double kBytesTolerance = 2.0;   // (a)
@@ -212,6 +216,39 @@ int main(int argc, char **argv)
     for (int i = 1; i < sweep.size(); ++i) sweepClimbs = sweepClimbs && sweep[i] > sweep[i - 1];
     check(sweepClimbs,
           QStringLiteral("the exposure sweep moved the eye's own pixels (%1 arms)").arg(sweep.size()));
+
+    // ---- the mid-session grade reached the RUNTIME's own picture -----------
+    //
+    // The flat arms above are all at the default exposure, which a session
+    // could in principle have baked when it was created. This one was taken
+    // after `world.postFx({exposureEv:-2})` was called with the wearer already
+    // in there, so it is the arm that says the World panel reaches the picture
+    // the RUNTIME displays and not merely the mono control.
+    if (QFile::exists(dir.filePath(QStringLiteral("eye-sweeplow.png")))) {
+        const QImage eye = load(dir, QStringLiteral("eye-sweeplow.png"));
+        const QImage desk = load(dir, QStringLiteral("desk-sweeplow.png"));
+        const QImage rt = load(dir, QStringLiteral("runtime-sweeplow.png"));
+        check(!eye.isNull() && !desk.isNull() && !rt.isNull(),
+              QStringLiteral("the mid-session grade's three pictures opened"));
+        if (!eye.isNull() && !desk.isNull() && !rt.isNull()) {
+            const Patch pe = patchAt(eye, kEyeX, kY, kHalf);
+            const Patch pd = patchAt(desk, kEyeX, kY, kHalf);
+            const Patch pr = patchAt(rt, kRuntimeX, kY, kHalf);
+            std::printf("    mid-session (-2 EV)  eye %.1f,%.1f,%.1f  desktop %.1f,%.1f,%.1f  "
+                        "runtime %.1f,%.1f,%.1f\n",
+                        pe.r, pe.g, pe.b, pd.r, pd.g, pd.b, pr.r, pr.g, pr.b);
+            const double worst = std::max({ std::fabs(pr.r - pe.r), std::fabs(pr.g - pe.g),
+                                            std::fabs(pr.b - pe.b) });
+            check(worst <= kBytesTolerance,
+                  QStringLiteral("a grade set MID-SESSION reaches the runtime's own picture "
+                                 "(worst channel %1/255)").arg(worst, 0, 'f', 2));
+            const double le = luminance(pe), ld = luminance(pd);
+            const double stops = (le > 1e-6 && ld > 1e-6) ? std::log2(le / ld) : 0.0;
+            check(std::fabs(stops) <= kStopsTolerance,
+                  QStringLiteral("...and the eye is still graded like the desktop there "
+                                 "(%1 stops)").arg(stops, 0, 'f', 4));
+        }
+    }
 
     // ---- the realistic-sky arm: a picture, and the runtime showing it ------
     if (QFile::exists(dir.filePath(QStringLiteral("eye-realistic.png")))) {
