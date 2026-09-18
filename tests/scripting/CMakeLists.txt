@@ -363,6 +363,12 @@ add_script_e2e(world_vr e2e_world_vr.js)
 # unchosen (the default is the shipped march, and no World Mode touches it).
 # The pixels are `ssr.rings`.
 add_script_e2e(ssr_march e2e_ssr_march.js)
+# A DRAGGED STILL ON THE MOVER CHANNEL (MOVER-1) — the document half: the key,
+# its refusals, one undo step per call, save/close/open, the two giStatus
+# readings, and the two properties that make it safe to ship unchosen (the
+# default is today's behaviour and no World Mode touches it). The counters and
+# the pixels are gi.drag_mover.
+add_script_e2e(drag_mover e2e_drag_mover.js)
 # vr.* WITH NO RUNTIME (SPECS/VR_SPEC.md §6) — the cheap case, and the one that
 # runs on every box in every gate: this app is launched WITHOUT --vr, so no
 # OpenXR loader is opened at all, and every verb must still answer with a

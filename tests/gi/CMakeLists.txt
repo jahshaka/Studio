@@ -592,6 +592,30 @@ add_test(NAME gi.drag_cadence COMMAND test_gi_drag_cadence
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.drag_cadence PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# gi.drag_mover — A DRAGGED STILL ON THE MOVER CHANNEL (MOVER-1, the render
+# audit's PHOTON F3 second half). The rule is OFF by default and this suite
+# measures both arms of the same gesture in one process: with it off a drag
+# costs a re-voxelisation a frame, with it on a small constant; a single move is
+# never a gesture; the object is on the mover channel while it is dragged and
+# still world again at rest, with the DOCUMENT's own mobility untouched; and the
+# picture at rest is the same picture either way (the assertion the whole trade
+# rests on). RUN_SERIAL like every cascade suite.
+add_executable(test_gi_drag_mover test_gi_drag_mover.cpp)
+set_target_properties(test_gi_drag_mover PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_drag_mover PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_drag_mover PRIVATE JahshakaEngine)
+add_dependencies(test_gi_drag_mover JahshakaEngineMedia)
+add_test(NAME gi.drag_mover COMMAND test_gi_drag_mover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.drag_mover PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT, NOT OF ITS OWN HISTORY
 # (ogre-patch 0060). The pin binds the EXTRA CASCADES' light voxels once and
 # never again, while every cascade swaps its own on every bounce iteration, so

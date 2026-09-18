@@ -600,6 +600,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         }
         scene->giCascadeInstanceCap = qBound(
             0, sceneObj.value("giCascadeInstanceCap").toInt(scene->giCascadeInstanceCap), 1 << 20);
+        scene->giDragMoverChannel = qBound(
+            0, sceneObj.value("giDragMoverChannel").toInt(scene->giDragMoverChannel), 1);
         scene->giCascadeSet.clear();
         for (const QJsonValue &v : sceneObj.value("giCascadeSet").toArray()) {
             const QJsonArray row = v.toArray();

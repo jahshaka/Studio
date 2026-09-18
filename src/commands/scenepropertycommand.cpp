@@ -147,6 +147,8 @@ QVector<sceneprops::Field> buildFields()
     // ---- Photon (the rows the tier does NOT own) ---------------------------
     add("giCascadeInstanceCap", [](const ScenePtr &s) { return QVariant(s->giCascadeInstanceCap); },
         [](const ScenePtr &s, const QVariant &v) { s->giCascadeInstanceCap = v.toInt(); });
+    add("giDragMoverChannel", [](const ScenePtr &s) { return QVariant(s->giDragMoverChannel); },
+        [](const ScenePtr &s, const QVariant &v) { s->giDragMoverChannel = v.toInt() ? 1 : 0; });
     add("giPccGrid", [](const ScenePtr &s) { return vec(s->giPccGrid); },
         [](const ScenePtr &s, const QVariant &v) { s->giPccGrid = vec(v); });
     add("giUpdateBudget", [](const ScenePtr &s) { return QVariant(s->giUpdateBudget); },
