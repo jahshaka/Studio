@@ -1,12 +1,19 @@
-// Shader-asset thumbnails (VISUAL_PARITY_SPEC item 5): a SHADER asset is a
-// stored graph definition, and it must thumbnail as the PbrMaterial the
-// evaluator baked into it — on the same preview sphere a .material uses.
+// GRAPH-MATERIAL THUMBNAILS (VISUAL_PARITY_SPEC item 5), RE-ANCHORED ON THE
+// BUNDLE (MATERIAL_BUNDLE_SPEC phase 2).
 //
-// The seam under test is MaterialReader::parseShaderAsPbr (src/io) driving
-// EngineThumbnailRenderer::renderMaterial: definition -> material -> pixels.
-// The route it replaces built a GLSL iris::CustomMaterial through
-// material->generate(definition) — a pipeline MATERIALS_EVALUATOR phase 5
-// deleted, which is why every shader tile was a generic file icon.
+// A material made in the Materials module is ONE row whose definition is its
+// own file in the content-addressed store, with the graph as a payload of
+// that definition — so its thumbnail is a MATERIAL render like any other
+// material's, and the seam under test is
+//
+//     MaterialBundle::read -> MaterialReader::parseMaterialTyped
+//                          -> EngineThumbnailRenderer::renderMaterial
+//
+// This suite used to drive `MaterialReader::parseShaderAsPbr` over a
+// ModelTypes::Shader ROW — the module's old separate graph asset. That reader
+// and both of its minting sites (the editor browser's "Create > Shader" and
+// the `.shader` file importer) are DELETED in this phase, so the suite is
+// anchored where the app actually reads: the definition a save writes.
 //
 // Real Database on a throwaway SQLite file; offscreen engine View; no UI.
 #include <QGuiApplication>
@@ -65,39 +72,7 @@ static int maxAbsDiff(const QImage &a, const QImage &b)
     return d;
 }
 
-// A LEGACY SHADER ROW's definition: the graph plus an evaluated
-// "pbrMaterial" block. This is NOT what the app writes any more — a material
-// is a BUNDLE and its definition is a `values` object at the top level
-// (MATERIAL_BUNDLE_SPEC D-2, and `bundleDefinitionWithColour` below) — but
-// ModelTypes::Shader rows still ARRIVE, from `AssetWidget::createShader` and
-// from a `.shader` file on disk through ShaderImporter, so this shape and
-// the reader that eats it are both live and both tested. Deleting them is
-// phase 2's job, with those two minters.
-static QJsonObject definitionWithColour(double r, double g, double b)
-{
-    QJsonObject colour;
-    colour["r"] = r; colour["g"] = g; colour["b"] = b; colour["a"] = 1.0;
-
-    QJsonObject values;
-    values["baseColor"] = colour;
-    values["metallic"]  = 0.0;
-    values["roughness"] = 0.45;
-
-    QJsonObject pbr;
-    pbr["values"] = values;
-    pbr["bakedMaps"] = QJsonObject();
-
-    QJsonObject graph;                    // materialHasEffect looks for this key
-    graph["materialGuid"] = QStringLiteral("derived-material-guid");
-
-    QJsonObject definition;
-    definition["name"] = QStringLiteral("test graph");
-    definition["shadergraph"] = graph;
-    definition["pbrMaterial"] = pbr;
-    return definition;
-}
-
-// WHAT THE APP WRITES TODAY: a bundle definition. `values` at the top level,
+// WHAT THE APP WRITES: a bundle definition. `values` at the top level,
 // colours spelled the document's way (MaterialBundle::normaliseColours does
 // it at the write), read by MaterialReader::parseMaterialTyped — the ONE
 // reader every material surface uses.
@@ -134,17 +109,21 @@ int main(int argc, char **argv)
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
     db.createAllTables();
 
-    const QString shaderGuid = QStringLiteral("shader-guid-red");
-    const QJsonObject definition = definitionWithColour(0.85, 0.10, 0.10);
-    db.createAssetEntry(shaderGuid, "Red Graph", static_cast<int>(ModelTypes::Shader),
-                        QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-                        QByteArray(), QJsonDocument(definition).toJson());
-    CHECK(!db.fetchAssetData(shaderGuid).isEmpty(), "shader asset stored");
+    // The store the definitions live in — a throwaway beside the database.
+    AssetStorePaths::setRootOverride(QDir::current().filePath("bundle-store"));
+    QDir().mkpath(AssetStorePaths::root());
+
+    QString createError;
+    const QString shaderGuid = MaterialBundle::create(
+        &db, QStringLiteral("Red Graph"), bundleDefinitionWithColour(0.85, 0.10, 0.10),
+        QByteArray(), &createError);
+    CHECK(!shaderGuid.isEmpty(),
+          qPrintable(QStringLiteral("a graph material bundle was written (%1)").arg(createError)));
 
     // ---- 1. the seam: definition -> material, no engine involved ----
     MaterialReader reader;
-    auto material = reader.parseShaderAsPbr(shaderGuid, &db);
-    CHECK(!material.isNull(), "parseShaderAsPbr returns a material for an evaluated definition");
+    auto material = reader.parseMaterialTyped(MaterialBundle::read(&db, shaderGuid), &db);
+    CHECK(!material.isNull(), "a stored bundle definition reads back as a material");
     auto pbr = material.dynamicCast<iris::PbrMaterial>();
     CHECK(!pbr.isNull(), "and it is a PbrMaterial (not a CustomMaterial stand-in)");
     if (pbr) {
@@ -154,19 +133,11 @@ int main(int argc, char **argv)
               "the graph's base colour survived the conversion");
     }
 
-    // ---- 2. a pre-evaluator definition has nothing to render ----
+    // ---- 2. a guid with no definition has nothing to render ----
     {
-        QJsonObject old;                       // GLSL-era: shadergraph, no pbrMaterial
-        old["shadergraph"] = QJsonObject();
-        old["fragment_shader"] = QStringLiteral("something.frag");
-        const QString oldGuid = QStringLiteral("shader-guid-legacy");
-        db.createAssetEntry(oldGuid, "Legacy Graph", static_cast<int>(ModelTypes::Shader),
-                            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-                            QByteArray(), QJsonDocument(old).toJson());
-        CHECK(reader.parseShaderAsPbr(oldGuid, &db).isNull(),
-              "a pre-evaluator definition converts to nothing (callers show a fallback)");
-        CHECK(reader.parseShaderAsPbr(QStringLiteral("no-such-guid"), &db).isNull(),
-              "an unknown guid converts to nothing");
+        CHECK(MaterialBundle::read(&db, QStringLiteral("no-such-guid")).isEmpty(),
+              "an unknown guid has no definition (callers show a fallback)");
+        CHECK(MaterialBundle::read(&db, QString()).isEmpty(), "and so does an empty guid");
     }
 
     // ---- 3. A BAKED-MAP GRAPH READS WITH NO PROJECT OPEN -----------------
@@ -184,19 +155,19 @@ int main(int argc, char **argv)
     // and on any machine. The refusal is deleted with the thing it protected
     // against, and the same definition now converts either way.
     {
-        QJsonObject baked = definitionWithColour(0.1, 0.8, 0.1);
-        QJsonObject pbrObj = baked["pbrMaterial"].toObject();
-        QJsonObject values = pbrObj["values"].toObject();
+        QJsonObject baked = bundleDefinitionWithColour(0.1, 0.8, 0.1);
+        QJsonObject values = baked["values"].toObject();
         values["baseColorMap"] = QStringLiteral("tex-baked-member-guid");
-        pbrObj["values"] = values;
+        baked["values"] = values;
         QJsonObject maps; maps["baseColorMap"] = QStringLiteral("tex-baked-member-guid");
-        pbrObj["bakedMaps"] = maps;
-        baked["pbrMaterial"] = pbrObj;
+        QJsonObject bake; bake["maps"] = maps;
+        baked["bake"] = bake;
 
-        CHECK(!MaterialReader::shaderDefinitionAsPbr(baked, QString()).isNull(),
-              "a baked-map graph converts with NO project open (its maps are store objects)");
-        CHECK(!MaterialReader::shaderDefinitionAsPbr(baked, QDir::currentPath()).isNull(),
-              "and with one");
+        MaterialReader noProject;
+        CHECK(!noProject.parseMaterialTyped(baked, &db).isNull(),
+              "a baked-map graph material converts with NO project open (its maps are store objects)");
+        CHECK(MaterialBundle::memberGuids(baked).contains(QStringLiteral("tex-baked-member-guid")),
+              "and the bake's map is a MEMBER of the bundle, named by guid");
     }
 
     // ---- engine: the preview sphere ----
@@ -237,18 +208,15 @@ int main(int argc, char **argv)
         std::printf("    max |graph - default| = %d\n", d);
         CHECK(d > 40, "the render differs from the grey default-material fallback");
 
-        // ---- 5b. THE SHAPE THE MODULE ACTUALLY WRITES RENDERS (F1) ----
+        // ---- 5b. A SECOND BUNDLE, WRITTEN AND RENDERED THE SAME WAY (F1) ----
         //
-        // Every graph material saved in the Materials module got a BLANK TILE:
-        // the page asked the thumbnail queue for a SHADER render, that branch
-        // reads the row blob through `parseShaderAsPbr`, and that refuses any
-        // definition with no `pbrMaterial` key — which a bundle definition
-        // does not have. The module asks for a MATERIAL render of the guid
-        // now, which reads the bundle and parses it typed; this is that path,
-        // end to end, on the engine.
+        // Every graph material saved in the Materials module once got a BLANK
+        // TILE: the page asked the thumbnail queue for a SHADER render, that
+        // branch read the row blob through the deleted `parseShaderAsPbr`, and
+        // that refused any definition with no `pbrMaterial` key — which a
+        // bundle definition does not have. There is one render path now; this
+        // is it, end to end, on the engine.
         {
-            AssetStorePaths::setRootOverride(QDir::current().filePath("bundle-store"));
-            QDir().mkpath(AssetStorePaths::root());
             QString error;
             const QString bundleGuid = MaterialBundle::create(
                 &db, QStringLiteral("Bundle Green"),
@@ -274,11 +242,13 @@ int main(int argc, char **argv)
 
         // ---- 6. a second graph gives a second picture (no cached leak) ----
         {
-            const QString blueGuid = QStringLiteral("shader-guid-blue");
-            db.createAssetEntry(blueGuid, "Blue Graph", static_cast<int>(ModelTypes::Shader),
-                                QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
-                                QByteArray(), QJsonDocument(definitionWithColour(0.1, 0.1, 0.85)).toJson());
-            QImage blue = renderer.renderMaterial(reader.parseShaderAsPbr(blueGuid, &db), size);
+            QString blueError;
+            const QString blueGuid = MaterialBundle::create(
+                &db, QStringLiteral("Blue Graph"), bundleDefinitionWithColour(0.1, 0.1, 0.85),
+                QByteArray(), &blueError);
+            CHECK(!blueGuid.isEmpty(), "a second bundle was written");
+            QImage blue = renderer.renderMaterial(
+                reader.parseMaterialTyped(MaterialBundle::read(&db, blueGuid), &db), size);
             show("blue graph", blue);
             const QColor cb = centre(blue);
             CHECK(cb.blue() > cb.red() + 40 && cb.blue() > cb.green() + 40, "the second graph is blue");

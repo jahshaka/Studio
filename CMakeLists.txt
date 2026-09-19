@@ -288,6 +288,8 @@ set(SRCS
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
     src/services/materialbundle.cpp
+    src/services/materialmembers.cpp
+    src/services/assetshare.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp

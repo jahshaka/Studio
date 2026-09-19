@@ -46,7 +46,6 @@ public:
 
     void loadJafModel(QString, QString, bool, bool, bool) override {}
     void loadJafMaterial(QString, bool, bool, bool) override {}
-    void loadJafShader(QString, QMap<QString, QString> &, bool, bool, bool) override {}
     void loadJafSky(QString, bool, bool, bool) override {}
     void loadModel(QString, QString, bool, bool, bool) override {}
 

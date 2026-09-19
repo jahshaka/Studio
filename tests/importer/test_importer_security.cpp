@@ -375,12 +375,15 @@ int main(int argc, char **argv)
         AssetStorePaths::setRootOverride(root);
         AssetImportService service(&db, nullptr);
 
-        // A "shader" the size of a game. ShaderImporter reads its whole file
-        // into a QJsonDocument; the cap is what stops that.
-        const QString fat = tmp.path() + "/fat.shader";
+        // A "material" the size of a game. MaterialImporter reads its whole
+        // file into a QJsonDocument; the cap is what stops that. (It was a
+        // .shader until MATERIAL_BUNDLE_SPEC phase 2 deleted ShaderImporter
+        // with the row type it made — the cap under test is the same
+        // kMaxParsedBytes, on the importer that still exists.)
+        const QString fat = tmp.path() + "/fat.material";
         {
             QFile f(fat);
-            CHECK(f.open(QIODevice::WriteOnly), "5: the oversized .shader fixture is writable");
+            CHECK(f.open(QIODevice::WriteOnly), "5: the oversized .material fixture is writable");
             f.write("{\"name\":\"fat\"}");
             f.resize(65ll * 1024 * 1024);   // sparse
         }
@@ -388,8 +391,24 @@ int main(int argc, char **argv)
         request.sourcePath = fat;
         const ImportResult result = service.import(request);
         CHECK(!result.ok() && result.error.contains(QStringLiteral("limit")),
-              QString("5: a 65 MB .shader is refused by the size cap (%1)")
+              QString("5: a 65 MB .material is refused by the size cap (%1)")
                   .arg(result.error).toUtf8().constData());
+
+        // AND A `.shader` IS NOT A LIBRARY FILE AT ALL ANY MORE (phase 2): the
+        // refusal is earlier and by TYPE, which is the honest answer now that
+        // nothing in the app can make or read a ModelTypes::Shader row.
+        const QString shaderFile = tmp.path() + "/legacy.shader";
+        {
+            QFile f(shaderFile);
+            CHECK(f.open(QIODevice::WriteOnly), "5: a .shader fixture is writable");
+            f.write("{\"name\":\"legacy\"}");
+        }
+        ImportRequest shaderRequest;
+        shaderRequest.sourcePath = shaderFile;
+        const ImportResult shaderResult = service.import(shaderRequest);
+        CHECK(!shaderResult.ok(),
+              QString("5: a .shader file is refused outright (%1)")
+                  .arg(shaderResult.error).toUtf8().constData());
 
         AssetStorePaths::setRootOverride(QString());
         db.closeDatabase();

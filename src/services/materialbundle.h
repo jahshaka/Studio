@@ -127,6 +127,14 @@ struct WriteResult
 /// row's `asset` blob (a CACHE of the library's current definition, which is
 /// what every listing and thumbnailer reads); re-derives the membership edges;
 /// rewrites the sidecar. `project` may be null at Library scope.
+///
+/// ATOMICITY (F19): the CATALOG half — the store's file rows, the source
+/// pointer or the pin, the blob, the edges, the member pins — is one
+/// transaction. It all lands or none of it does; nothing partial is ever
+/// committed. The BYTES are written first, because they are content-addressed
+/// and a failure then leaves an object no row names, which `assets.gc`
+/// collects; the reverse (a row naming bytes that are not there) is the
+/// failure that cannot be repaired, and this function cannot produce it.
 WriteResult write(Database *db, Project *project, const QString &guid,
                   const QJsonObject &definition, Scope scope = Scope::Library);
 
@@ -142,12 +150,18 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
 /// holding a path names nothing and is skipped (`write` refuses one anyway).
 QStringList memberGuids(const QJsonObject &definition);
 
-/// Reconcile `guid`'s INTRINSIC (NULL-project) dependency edges to exactly
+/// Reconcile `guid`'s dependency edges IN ONE SCOPE to exactly
 /// `memberGuids(definition)` — the derivation that makes membership
-/// undriftable. Project-stamped edges (a node's USE of this material) are
-/// never touched. Called by `write`; exposed for the catalog rebuild, which
-/// re-derives a restored material's edges from its definition (audit G5).
-bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &definition);
+/// undriftable. With no `projectGuid` that is the INTRINSIC (NULL-project)
+/// set, the bundle's own membership; with one it is THAT PROJECT's set, which
+/// is what a project-scope (copy-on-write) definition has — the library's
+/// intrinsic edges must not move for it, and without a project set nothing
+/// could see the members of a material a project owns. Edges whose DEPENDER
+/// is somebody else (a node's USE of this material) are never touched.
+/// Called by `write`; exposed for the catalog rebuild, which re-derives a
+/// restored material's edges from its definition (audit G5).
+bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &definition,
+                    const QString &projectGuid = QString());
 
 /// The FIRST texture slot whose value is a FILE PATH rather than a guid, or an
 /// empty string when the definition is clean. `slotOut` receives the slot's

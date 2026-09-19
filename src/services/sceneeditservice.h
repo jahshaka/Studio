@@ -402,12 +402,9 @@ public:
     /// or the target holds no meshes.
     bool applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target);
 
-    /// Applies a SHADER row — a Materials-module graph — as the baked
-    /// PbrMaterial it carries. Same undo shape and same use-edge bookkeeping as
-    /// applyMaterialAsset; false when the definition has no baked material
-    /// (which is the same condition resolveMaterial refuses on, so a tile that
-    /// cannot preview cannot half-apply either).
-    bool applyMaterialShader(const QString &shaderGuid, iris::SceneNodePtr target);
+    // (applyMaterialShader is DELETED — phase 2's Deletes column. It applied a
+    // ModelTypes::Shader row, the module's old separate graph asset; there is
+    // one material row and one apply.)
 
     /// THE MATERIAL ITSELF CHANGED — RE-DRESS EVERY NODE WEARING IT
     /// (OWNER_REVIEW 9, R19 D2: "I updated the UV tiling to 10 and 10 on the

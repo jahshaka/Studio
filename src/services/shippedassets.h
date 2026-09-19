@@ -60,6 +60,12 @@ struct Pinned
     /// True when THIS call created the project's pin (the project did not pin
     /// the row before) — what an undo of the call has to take back.
     bool newlyPinned = false;
+    /// True when THIS call MINTED the library row (the bytes were not in the
+    /// store under any Texture row). False means an existing asset answered —
+    /// possibly one the user imported themselves, which is why the material
+    /// picker only stamps its member marker on a minted row (V-2: "a texture
+    /// the user imported is ALWAYS a tile").
+    bool minted = false;
     bool ok() const { return error.isEmpty() && !path.isEmpty(); }
 };
 

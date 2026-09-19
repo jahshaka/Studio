@@ -59,7 +59,10 @@ public:
 
     virtual void loadJafModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) = 0;
     virtual void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) = 0;
-    virtual void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true) = 0;
+    // (loadJafShader is DELETED — MATERIAL_BUNDLE_SPEC phase 2's Deletes
+    // column: a ModelTypes::Shader row was the module's separate graph asset,
+    // nothing can mint one and nothing reads one. A material previews through
+    // loadJafMaterial, graph payload and all.)
     virtual void loadJafSky(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) = 0;
     /// Imports a model file (not yet in the library) and previews it.
     virtual void loadModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) = 0;

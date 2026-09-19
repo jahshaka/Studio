@@ -58,8 +58,23 @@ public:
     /// changing what the material looks like — what a graph texture node wants.
     Q_INVOKABLE QString addTexture(const QString &materialGuid, const QString &pathOrGuid,
                                    const QVariantMap &options = QVariantMap());
-    /// The bundle's members: guid, name, slot, baked, used-by count, pinned.
+    /// The bundle's members: guid, name, slot/node, role, size, used-by
+    /// count, pinned, hidden. THE Members panel's data (one projection,
+    /// services/materialmembers.h).
     Q_INVOKABLE QVariantList members(const QString &materialGuid);
+    /// Members nothing references any more. DRY RUN BY DEFAULT — with no
+    /// guid the scope is the open PROJECT (pins), with one it is that
+    /// bundle's own born-inside rows (library). Bytes are never removed
+    /// here; that is `assets.gc`.
+    Q_INVOKABLE QVariantList cleanUnused(const QString &materialGuid = QString(),
+                                         const QVariantMap &options = QVariantMap());
+    /// A second Texture row over the SAME bytes, swapped into this one
+    /// material — "change this picture for this material only".
+    Q_INVOKABLE QString makeUnique(const QString &materialGuid, const QString &textureGuid);
+    /// ONE ROW, COPIED: a second library bundle on the same definition. The
+    /// drawer's Duplicate is this verb's implementation.
+    Q_INVOKABLE QString duplicate(const QString &materialGuid,
+                                  const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap loadGraph(const QString &guidOrPath);
     Q_INVOKABLE bool regenerate(const QString &shaderGuid);
     Q_INVOKABLE QString createFromImage(const QString &textureGuid,

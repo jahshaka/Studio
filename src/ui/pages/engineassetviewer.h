@@ -50,7 +50,6 @@ public:
     QJsonObject getSceneProperties() override;
     void loadJafModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
-    void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadJafSky(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     QImage takeScreenshot(int width, int height) override;
@@ -85,7 +84,6 @@ private:
     /// Database -> document, the AssetViewer::addJaf* readers.
     iris::SceneNodePtr readJafModel(const QString &path, const QString &guid);
     iris::MaterialPtr readJafMaterial(const QString &guid);
-    iris::MaterialPtr readJafShader(const QString &guid);
     void applyJafSky(const QString &guid);
     /// The mirror renders PbrMaterial and DefaultMaterial. Default.shader
     /// CustomMaterials (what the readers produce) become a DefaultMaterial with

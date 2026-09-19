@@ -81,29 +81,21 @@ Outcome rebuildAvatar(Database *db, Project *project, const QString &guid,
     return store(db, guid, QPixmap::fromImage(image));
 }
 
-Outcome rebuildMaterialOrShader(Database *db, Project *project, const QString &guid,
-                                const std::shared_ptr<Engine> &engine, bool shader)
+Outcome rebuildMaterial(Database *db, Project *project, const QString &guid,
+                        const std::shared_ptr<Engine> &engine)
 {
-    auto loan = EngineThumbnailRenderer::borrow(engine, shader ? "the shader thumbnail"
-                                                               : "the material thumbnail");
+    auto loan = EngineThumbnailRenderer::borrow(engine, "the material thumbnail");
     if (!loan) return Outcome::bad(loan.reason());
 
+    // ONE PATH (phase 2's Deletes: the `shader` arm read a ModelTypes::Shader
+    // row through parseShaderAsPbr). THE BUNDLE'S DEFINITION, pin-first
+    // (MATERIAL_BUNDLE_SPEC D-2), not the row's blob cache: a tile must show
+    // the version its project holds — and a graph material's definition is a
+    // material definition, so the graph needs no arm of its own.
     MaterialReader reader;
     reader.setProject(project);
-    iris::MaterialPtr material;
-    if (shader) {
-        material = reader.parseShaderAsPbr(guid, db);
-        if (!material)
-            return Outcome::bad(QStringLiteral(
-                "this shader carries no evaluated material (re-save the graph, or run "
-                "materials.regenerate; baked maps need an open project)"));
-    } else {
-        // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2), not
-        // the row's blob cache: a tile must show the version its project
-        // holds.
-        const auto object = MaterialBundle::read(db, guid, project);
-        material = reader.parseMaterialTyped(object, db);
-    }
+    const auto object = MaterialBundle::read(db, guid, project);
+    iris::MaterialPtr material = reader.parseMaterialTyped(object, db);
     const QImage image = loan->renderMaterial(material, QSize(512, 512));
     if (image.isNull()) return Outcome::bad(loan->lastFailure());
     return store(db, guid, QPixmap::fromImage(image));
@@ -185,12 +177,7 @@ Outcome rebuildOne(Database *db, Project *project, const QString &guid,
         return Outcome::good();
     }
     case ModelTypes::Material:
-        return rebuildMaterialOrShader(db, project, guid, engine, /*shader=*/false);
-    case ModelTypes::Shader:
-        // A shader asset is a graph definition: it thumbnails as the material
-        // the evaluator baked into it, on the same preview sphere a .material
-        // uses (VISUAL_PARITY_SPEC item 5).
-        return rebuildMaterialOrShader(db, project, guid, engine, /*shader=*/true);
+        return rebuildMaterial(db, project, guid, engine);
     case ModelTypes::Avatar:
         return rebuildAvatar(db, project, guid, engine);
     default:
@@ -206,8 +193,13 @@ bool typeHasAThumbnail(ModelTypes type)
     switch (type) {
     case ModelTypes::Texture: case ModelTypes::Music: case ModelTypes::Video:
     case ModelTypes::Animation: case ModelTypes::File: case ModelTypes::Object:
-    case ModelTypes::ParticleSystem: case ModelTypes::Material: case ModelTypes::Shader:
+    case ModelTypes::ParticleSystem: case ModelTypes::Material:
     case ModelTypes::Avatar: case ModelTypes::LightProfile:
+    // NOT ModelTypes::Shader (fix round F7). The renderer for it is deleted
+    // with the row type, so a legacy row left in an old library counted as a
+    // FAILURE on every "rebuild missing thumbnails" sweep — a permanent red
+    // in a report about rows nothing can draw. It has nothing to draw, which
+    // is exactly what this predicate is for.
         return true;
     default:
         return false;

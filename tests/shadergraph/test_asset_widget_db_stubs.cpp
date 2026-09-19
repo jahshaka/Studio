@@ -68,6 +68,14 @@ bool Database::renameAsset(const QString &, const QString &) { return false; }
 bool Database::hasDependencies(const QString &) { return false; }
 QStringList Database::hasMultipleDependers(const QString &) { return QStringList(); }
 QStringList Database::deleteFolderAndDependencies(const QString &, bool *) { return QStringList(); }
+bool Database::deleteFolder(const QString &) { return true; }
+// The project drawer's Delete is the ONE project-side remove now (phase 2:
+// the module's private 130-line delete is gone). This suite is about the
+// widget's library HANDLE, so the stub answers "nothing happened".
+#include "services/assetdelete.h"
+namespace assetdelete {
+Outcome removeFromProject(Database *, const QString &, const QString &) { return Outcome(); }
+}   // namespace assetdelete
 QStringList Database::deleteAssetAndDependencies(const QString &, bool *, bool) { return QStringList(); }
 QStringList Database::fetchAssetGUIDAndDependencies(const QString &, bool) { return QStringList(); }
 AssetRecord Database::fetchAsset(const QString &) { return AssetRecord(); }
@@ -93,7 +101,7 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &, Database *, P
 // an empty listing.
 #include "services/assettray.h"
 namespace assettray {
-QVector<AssetRecord> list(Database *db, const QString &, const QString &, int)
+QVector<AssetRecord> list(Database *db, const QString &, const QString &, int, bool)
 {
     gLastFetchChildAssetsHandle = db;
     ++gFetchChildAssetsCalls;

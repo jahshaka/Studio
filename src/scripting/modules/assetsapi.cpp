@@ -27,6 +27,8 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
+#include "services/assetshare.h"
+#include "services/materialmembers.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetgc.h"
@@ -143,10 +145,10 @@ bool importSettingsFromOptions(const QString &verb, const QVariantMap &options,
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, limit}) -> [{guid, name, type, drawer}]",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, members, limit}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
           "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); rigged: true keeps only MODEL rows whose metadata says the file carries a skeleton (the candidates avatar.createAsset accepts — refused for scope 'session', which has no metadata); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag, then rigged — and limit last, so a limited listing is the first N of the filtered set, not a sample of it. rigged is the expensive one on a library that predates the rig metadata (it backfills the block once per row it reaches), which is why it is applied last. "
-          "tray: true is THE EDITOR TRAY's listing, from the same function the tray panel calls (services/assettray.h) — EVERY ASSET THE PROJECT'S SCENE USES, ONCE (owner rules, 2026-09-11 and 2026-09-12): the root folder's rows plus the project's pinned members, where a row is dropped only when it is an import's MEMBER (its parent is another asset), a MESH row, a model or clip an AVATAR in this project is built from (the avatar is that character's tile), a scene node's OWN row (the built-in primitives, the Ground, image planes, decals, particle emitters — a node is not a library asset; what it uses is), or an image added directly whose companion material is the only thing in the project using it (the material is that image's tile). A dependency never hides anything: a texture on a material slot, the ground, a decal or a particle, a material applied to a node, all stay. With type, the same listing keeps one type. Nothing is deleted and every guid still resolves — the Assets page still browses the members. Refused for scopes 'store' and 'session': the tray is a project's listing.",
+          "tray: true is THE EDITOR TRAY's listing, from the same function the tray panel calls (services/assettray.h) — EVERY ASSET THE PROJECT'S SCENE USES, ONCE (owner rules, 2026-09-11 and 2026-09-12): the root folder's rows plus the project's pinned members, where a row is dropped only when it is an import's MEMBER (its parent is another asset), a MESH row, a model or clip an AVATAR in this project is built from (the avatar is that character's tile), a scene node's OWN row (the built-in primitives, the Ground, image planes, decals, particle emitters — a node is not a library asset; what it uses is), or an image added directly whose companion material is the only thing in the project using it (the material is that image's tile). A dependency never hides anything: a texture on a material slot, the ground, a decal or a particle, a material applied to a node, all stay. One more row is folded: a picture that arrived THROUGH a material's picker, while only materials use it — the bundle is its tile (the owner's rule V-2). `members: true` turns off that one rule and lists them, which is the 'Show member textures' switch in the panels. With type, the same listing keeps one type. Nothing is deleted and every guid still resolves — the Assets page still browses the members. Refused for scopes 'store' and 'session': the tray is a project's listing.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
@@ -309,6 +311,19 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "exportRaw", "assets.exportRaw(guid, dir, {dependencies: true, hash: true}) -> {dir, manifest, files, assets, totalBytes, warnings}",
           "Exports a store asset's files (and, by default, its dependencies' files) as loose files with their original names into dir, plus a jah.manifest.json (manifest v2: guids, types, dependency edges, sizes, sha256 content ids — hashing skippable via {hash: false}). Identical bytes are written once; assets with no stored files still get manifest entries. The unified-export front half (ASSET_PIPELINE_SPEC §3.3); .jaf export joins it in the final half.",
           Needs::Document },
+        // THE NAME. The spec asks for `assets.export`; `export` is a C++
+        // keyword, and this registry dispatches a verb STRICTLY by the
+        // invokable method's own name (scriptworker.cpp) — so the verb is
+        // `exportBundle`, beside the `exportRaw` it belongs with, and the
+        // alternative (an alias mechanism in the API core, for one name) buys
+        // nothing a reader of the docs would notice.
+        { "exportBundle", "assets.exportBundle(guid, path) -> {path, kind, assets, bytes}",
+          "Writes ONE asset and everything it is made of as a self-contained share file (a .jbundle zip: "
+          "manifest v2 plus the closure with its bytes inline). A material carries its textures and its baked "
+          "maps, so it opens on a machine that has never seen any of them — the owner's 'material bundles are "
+          "great if they are self-contained'. The version that travels is the one the OPEN PROJECT renders "
+          "with when it holds the asset, the library's otherwise. Read it back with assets.import(path).",
+          Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
           Needs::Document },
@@ -436,6 +451,10 @@ QVariantList AssetsApi::list(const QVariantMap &options)
     // project's scene uses, once. A PROJECT's listing: refused for the other
     // scopes.
     const bool trayOnly = options.value("tray", false).toBool();
+    // "SHOW MEMBER TEXTURES" (MATERIAL_BUNDLE_SPEC V-2, owner Q4): the pictures
+    // that arrived inside a material bundle fold into it by default. The same
+    // switch the panels carry, so the verb and the windows list the same rows.
+    const bool showMembers = options.value("members", false).toBool();
     const bool hasDrawer = options.contains("drawer");
     const int drawerFilter = options.value("drawer", -1).toInt();
     const int limit = options.value("limit", 0).toInt();
@@ -512,7 +531,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
             // filter keeps one type of the same listing, as the panel's filter
             // combo does — it does not sweep the editor's hidden folders).
             const QString projectGuid = host.project->getProjectGuid();
-            records = assettray::list(host.db, projectGuid, projectGuid, typeFilter);
+            records = assettray::list(host.db, projectGuid, projectGuid, typeFilter, showMembers);
         } else if (typeFilter >= 0) {
             // Folder-independent: a type-filtered project listing must see
             // assets registered in subfolders too (a preset apply files its
@@ -773,6 +792,24 @@ QString AssetsApi::import(const QString &path, const QVariantMap &options)
         fail(settingsError);
         return QString();
     }
+    // A SHARE FILE IS AN IMPORT LIKE ANY OTHER (MATERIAL_BUNDLE_SPEC Q5): one
+    // asset plus its closure, written by assets.export. It does not go through
+    // the model importers — it carries catalog ROWS, not a file to convert —
+    // so it is answered here, before the model gate below refuses its
+    // extension.
+    if (assetshare::looksLikeBundle(path)) {
+        if (!options.isEmpty()) {
+            fail("assets.import: a share file carries its own import settings; pass no options");
+            return QString();
+        }
+        const auto landed = assetshare::importBundle(host.db, host.project, path);
+        if (!landed.ok()) {
+            fail(QStringLiteral("assets.import: %1").arg(landed.error));
+            return QString();
+        }
+        return landed.guid;
+    }
+
     const auto result = host.services->assets->importMesh(path, settings);
     if (!result.ok()) {
         fail(QStringLiteral("assets.import: %1").arg(result.error));
@@ -1111,8 +1148,18 @@ bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
     // deletes an unpinned one, and {force: true} deletes either way.
     const bool keepShared = normalizeJs(options.value("keepShared", true)).toBool();
     const bool force = normalizeJs(options.value("force", false)).toBool();
+    const bool wasMaterial =
+        host.db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Material);
     const auto outcome = assetdelete::remove(host.db, guid, keepShared, force);
     if (!outcome.ok) return fail(QStringLiteral("assets.remove: %1").arg(outcome.error));
+    // A BUNDLE'S EXCLUSIVE BORN-INSIDE MEMBERS GO WITH IT (MATERIAL_BUNDLE_SPEC
+    // §4), on a real delete only: an UNLIST keeps the material alive for the
+    // projects that pin it. A picture the USER imported carries no origin
+    // stamp and stays; one anything else uses stays; one any project pins
+    // stays. `keepShared` is about the general dependency closure and cannot
+    // answer this — it would take the user's own texture too.
+    if (!outcome.unlisted && wasMaterial)
+        materialmembers::reapExclusiveMembers(host.db, guid);
     return true;
 }
 
@@ -1349,6 +1396,22 @@ QVariantMap AssetsApi::thumbnail(const QString &guid)
             }
         out["coverage"] = double(lit) / double(qMax(1, image.width() * image.height()));
     }
+    return out;
+}
+
+QVariantMap AssetsApi::exportBundle(const QString &guid, const QString &path)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    const auto written = assetshare::exportBundle(host.db, host.project, guid, path.trimmed());
+    if (!written.ok()) {
+        fail(QStringLiteral("assets.export: %1").arg(written.error));
+        return out;
+    }
+    out["path"] = written.path;
+    out["kind"] = written.kind;
+    out["assets"] = written.assets;
+    out["bytes"] = static_cast<qlonglong>(written.bytes);
     return out;
 }
 

@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "../core/graphdefinition.h"
 #include "services/shippedassets.h"
 #include "services/materialbundle.h"
+#include "services/materialmembers.h"
 #include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
 #include "io/materialpresets.h"
@@ -213,8 +214,35 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "(the image is still imported and pinned; put it on a texture node with graph.addNode('texture') "
           "+ graph.setValue).",
           Needs::Document },
-        { "members", "materials.members(guid) -> [{guid, name, slot, baked, usedBy, pinned}]",
-          "The bundle's members — the textures its definition names, including the maps a graph bake produced.",
+        { "members", "materials.members(guid) -> [{guid, name, slot, node, role, bytes, usedBy, "
+                     "pinned, member, hidden}]",
+          "The bundle's members — the textures its definition names, including the maps a graph bake produced. "
+          "`slot` is the master slot it fills and `node` the graph texture node that holds it (one or the "
+          "other); `role` is 'baked' for a map the bake produced and 'source' for a picture; `bytes` is the "
+          "stored object's size; `usedBy` counts EVERY asset and node that names it, not one project's; "
+          "`member` says it arrived through a material's picker and `hidden` that it therefore folds into the "
+          "bundle instead of standing as its own library tile (the owner's rule V-2).",
+          Needs::Document },
+        { "cleanUnused", "materials.cleanUnused(guid?, {dryRun}) -> [{guid, name, bytes, scope}]",
+          "What is no longer used, and — with {dryRun: false} — its removal. DRY RUN IS THE DEFAULT: the store's "
+          "standing law is that nothing goes without showing the list first. With a material guid the scope is "
+          "that bundle's own born-inside textures with no user and no pin, and the LIBRARY ROW goes; with no guid "
+          "it is the open project's member pins that nothing in the project uses, and only the PIN goes. BYTES "
+          "are never removed here — a superseded object waits for assets.gc, which lists before it removes too.",
+          Needs::Document },
+        { "duplicate", "materials.duplicate(guid, {name}) -> guid",
+          "Copies ONE material into a second LIBRARY bundle — the drawer's Duplicate, as a verb. The copy names "
+          "the same TEXTURES (one object, 'used by 2' — sharing is what the bundle model is for; materials."
+          "makeUnique gives one back its privacy), but it carries NO BAKED MAPS: a bake is born inside exactly "
+          "one material and is never shared, so the copy bakes its own at its next save. `name` defaults to "
+          "'<original> copy' and is numbered against the library's own material names.",
+          Needs::Document },
+        { "makeUnique", "materials.makeUnique(materialGuid, textureGuid) -> guid",
+          "Gives THIS material its own copy of a shared texture: a second Texture row over the SAME bytes (the "
+          "store is content-addressed, so this costs no disk), swapped into this material's definition "
+          "everywhere it appears — master slot, bake record and graph node. Every other material that shared the "
+          "picture keeps it and never notices. On a material the open project holds, the swap is a copy-on-write: "
+          "the library original is untouched.",
           Needs::Document },
         { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved}",
           "Opens a material bundle's GRAPH (a Material asset guid, or a .effect/.shader file path) as the current "
@@ -480,6 +508,13 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
             return QString();
         }
         textureGuid = imported.guid;
+        // THE MEMBER STAMP (V-2, owner Q4). A picture that arrived THROUGH a
+        // material's picker folds into the bundle instead of standing as its
+        // own library tile — and only a row this import MINTED gets the
+        // stamp: if the bytes were already in the library the user imported
+        // that image themselves, and their own texture is always a tile.
+        if (imported.minted)
+            materialmembers::stampMember(host.db, textureGuid, materialGuid);
     }
 
     // THE SLOT. Naming one writes it into the definition (and the membership
@@ -529,38 +564,100 @@ QVariantList MaterialsApi::members(const QString &materialGuid)
 {
     QVariantList out;
     if (!host.db) { fail("materials: not available in this session"); return out; }
-    const QJsonObject definition = MaterialBundle::read(host.db, materialGuid, host.project);
-    if (definition.isEmpty()) {
+    if (MaterialBundle::read(host.db, materialGuid, host.project).isEmpty()) {
         fail(QStringLiteral("materials.members: no material '%1'").arg(materialGuid));
         return out;
     }
-    const QJsonObject bakedMaps = definition["bake"].toObject()["maps"].toObject();
-    QHash<QString, QString> slotOf;
-    const QJsonObject values = definition["values"].toObject();
-    for (auto it = values.constBegin(); it != values.constEnd(); ++it)
-        if (MaterialBundle::textureSlots().contains(it.key()))
-            slotOf.insert(it.value().toString(), it.key());
-
-    const QString projectGuid = host.project ? host.project->getProjectGuid() : QString();
-    for (const QString &member : MaterialBundle::memberGuids(definition)) {
-        const AssetRecord row = host.db->fetchAsset(member);
-        if (row.guid.isEmpty()) continue;
-        const QString slot = slotOf.value(member);
+    // ONE PROJECTION (services/materialmembers.h): the Members panel draws
+    // exactly these rows, so the window and the verb cannot describe the
+    // bundle differently.
+    for (const materialmembers::Member &m :
+         materialmembers::describe(host.db, host.project, materialGuid)) {
         out.append(QVariantMap{
-            { "guid", member },
-            { "name", row.name },
-            { "slot", slot },
-            { "baked", !slot.isEmpty() && bakedMaps.contains(slot) },
-            // "USED BY N" IS EVERY USER, not one project's (F12).
-            // `fetchDependers` is deliberately PROJECT-scoped and answers
-            // EMPTY for an empty guid, so this always reported 0 — the one
-            // number the Members panel exists to show. `hasMultipleDependers`
-            // is the unscoped list: every material that names this texture,
-            // plus every scene node that uses it directly.
-            { "usedBy", host.db->hasMultipleDependers(member).size() },
-            { "pinned", !projectGuid.isEmpty() && host.db->isAssetPinnedBy(projectGuid, member) } });
+            { "guid", m.guid },
+            { "name", m.name },
+            { "slot", m.slot },
+            { "node", m.node },
+            { "role", m.role },
+            { "baked", m.role == QLatin1String("baked") },
+            { "bytes", static_cast<qlonglong>(m.bytes) },
+            { "usedBy", m.usedBy },
+            { "pinned", m.pinned },
+            { "member", m.member },
+            { "hidden", m.hidden } });
     }
     return out;
+}
+
+QVariantList MaterialsApi::cleanUnused(const QString &materialGuid, const QVariantMap &options)
+{
+    QVariantList out;
+    if (!host.db) { fail("materials: not available in this session"); return out; }
+    static const QStringList knownOptions = { QStringLiteral("dryRun") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.cleanUnused"), options,
+                                              knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+
+    // DRY RUN IS THE DEFAULT (the store's standing law, assetgc.h; owner Q6:
+    // "list first"). A caller has to say `{dryRun:false}` to remove anything.
+    const bool dryRun = options.value(QStringLiteral("dryRun"), true).toBool();
+    if (!materialGuid.isEmpty()
+        && MaterialBundle::read(host.db, materialGuid, host.project).isEmpty()) {
+        fail(QStringLiteral("materials.cleanUnused: no material '%1'").arg(materialGuid));
+        return out;
+    }
+
+    QString error;
+    const QVector<materialmembers::Unused> entries =
+        dryRun ? materialmembers::unused(host.db, host.project, materialGuid)
+               : materialmembers::cleanUnused(host.db, host.project, materialGuid, &error);
+    if (!error.isEmpty()) { fail(QStringLiteral("materials.cleanUnused: %1").arg(error)); return out; }
+    for (const auto &entry : entries)
+        out.append(QVariantMap{ { "guid", entry.guid },
+                                { "name", entry.name },
+                                { "bytes", static_cast<qlonglong>(entry.bytes) },
+                                { "scope", entry.scope } });
+    return out;
+}
+
+QString MaterialsApi::duplicate(const QString &materialGuid, const QVariantMap &options)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    static const QStringList knownOptions = { QStringLiteral("name") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.duplicate"), options,
+                                              knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+    QString error;
+    const QString copy = materialmembers::duplicate(host.db, host.project, materialGuid,
+                                                    options.value(QStringLiteral("name")).toString(),
+                                                    &error);
+    if (copy.isEmpty()) {
+        fail(QStringLiteral("materials.duplicate: %1").arg(error));
+        return QString();
+    }
+    auto *asset = new AssetMaterial;
+    asset->fileName = host.db->fetchAsset(copy).name;
+    asset->assetGuid = copy;
+    AssetManager::addAsset(asset);
+    return copy;
+}
+
+QString MaterialsApi::makeUnique(const QString &materialGuid, const QString &textureGuid)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    QString error;
+    const QString guid = materialmembers::makeUnique(host.db, host.project, materialGuid,
+                                                     textureGuid, &error);
+    if (guid.isEmpty()) {
+        fail(QStringLiteral("materials.makeUnique: %1").arg(error));
+        return QString();
+    }
+    // The picture on the mesh does not change (same bytes) — but the material
+    // it wears now names a different row, and the ONE apply is what keeps the
+    // scene and the definition in step.
+    if (host.services && host.services->sceneEdit)
+        host.services->sceneEdit->refreshMaterialUsers(materialGuid);
+    return guid;
 }
 
 QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)

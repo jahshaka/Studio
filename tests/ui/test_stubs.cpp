@@ -20,6 +20,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "io/scenewriter.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
@@ -76,11 +77,22 @@ iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString, Datab
 extern const char *const kStubResolvableMaterialGuid;
 extern const char *const kStubResolvableMaterialGuid = "stub-resolvable-material";
 
-iris::MaterialPtr MaterialReader::parseShaderAsPbr(const QString &guid, Database *)
+// The blade reads a material through the BUNDLE now (phase 2: parseShaderAsPbr
+// is deleted with the ModelTypes::Shader row it read). Two stubs, because the
+// pick goes through both halves: the definition read, then the typed parse.
+QJsonObject MaterialBundle::read(Database *, const QString &guid, Project *)
 {
-    if (guid == QLatin1String(kStubResolvableMaterialGuid))
-        return iris::PbrMaterial::create().staticCast<iris::Material>();
-    return iris::MaterialPtr();
+    if (guid != QLatin1String(kStubResolvableMaterialGuid)) return QJsonObject();
+    QJsonObject definition;
+    definition[QStringLiteral("materialType")] = QStringLiteral("pbr");
+    definition[QStringLiteral("values")] = QJsonObject();
+    return definition;
+}
+
+iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject definition, Database *, bool)
+{
+    if (definition.isEmpty()) return iris::MaterialPtr();
+    return iris::PbrMaterial::create().staticCast<iris::Material>();
 }
 
 void SceneWriter::writeSceneNode(QJsonObject &, iris::SceneNodePtr, bool)

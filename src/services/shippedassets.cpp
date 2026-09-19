@@ -146,6 +146,7 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
             return out;
         }
         guid = result.assetGuid;
+        out.minted = true;
     }
 
     // PLATFORM FURNITURE IS MARKED (owner, 2026-09-13: "the project asset tray

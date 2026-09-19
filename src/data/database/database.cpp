@@ -3995,7 +3995,16 @@ QString Database::fetchMeshObject(const QString &guid, const int ertype, const i
 QStringList Database::hasMultipleDependers(const QString &guid)
 {
     QSqlQuery query;
-    query.prepare("SELECT depender FROM dependencies WHERE dependee = ?");
+    // DISTINCT, because the question is "WHO uses this", not "how many edge
+    // rows name it" (fix round F3). One user can hold more than one edge to
+    // the same asset — a bundle whose definition exists at two scopes has an
+    // intrinsic (library) edge and a project-stamped one, and a preset apply
+    // writes its own — and every caller of this counts USERS: the Members
+    // panel's "used by", the V-2 fold, the delete confirmation's "shared
+    // with". Without it a texture ONE material uses read "used by 2" the
+    // moment that material was edited from a project drawer, and Make unique
+    // lit up inviting a duplicate nobody needs.
+    query.prepare("SELECT DISTINCT depender FROM dependencies WHERE dependee = ?");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "HasMultipleDependers");
 

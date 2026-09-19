@@ -1771,6 +1771,45 @@ set_tests_properties(scripting.e2e.material_bundle PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.material_share — MATERIAL_BUNDLE_SPEC phase 2 (owner Q5): ONE
+# material as a self-contained share file. Two processes for the same reason
+# the bundle pair needs two: "a library that has never seen it" is not
+# something a verb can fake.
+set(SHARE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_share.jbundle)
+configure_file(scripts/e2e_material_share.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js @ONLY)
+set(_msHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share)
+add_test(NAME scripting.e2e.material_share.fresh_home
+         COMMAND sh -c "rm -rf '${_msHome}' && mkdir -p '${_msHome}/run' && rm -f '${SHARE_PATH}'")
+set_tests_properties(scripting.e2e.material_share.fresh_home PROPERTIES
+    FIXTURES_SETUP materialShareHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_msHome}/run)
+add_test(NAME scripting.e2e.material_share
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
+         WORKING_DIRECTORY ${_msHome}/run)
+set_tests_properties(scripting.e2e.material_share PROPERTIES
+    ENVIRONMENT "HOME=${_msHome};JAHSHAKA_DATA_ROOT=${_msHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED materialShareHome
+    FIXTURES_SETUP materialShareFile
+    LABELS "scripting"
+    TIMEOUT 180)
+
+configure_file(scripts/e2e_material_share_import.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js @ONLY)
+set(_msiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share_import)
+add_test(NAME scripting.e2e.material_share_import.fresh_home
+         COMMAND sh -c "rm -rf '${_msiHome}' && mkdir -p '${_msiHome}/run'")
+set_tests_properties(scripting.e2e.material_share_import.fresh_home PROPERTIES
+    FIXTURES_SETUP materialShareImportHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_msiHome}/run)
+add_test(NAME scripting.e2e.material_share_import
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
+         WORKING_DIRECTORY ${_msiHome}/run)
+set_tests_properties(scripting.e2e.material_share_import PROPERTIES
+    ENVIRONMENT "HOME=${_msiHome};JAHSHAKA_DATA_ROOT=${_msiHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED "materialShareImportHome;materialShareFile"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # The far side: a library that has never seen the material, the image or the
 # project, and one archive.
 set(ARCHIVE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_bundle.zip)
