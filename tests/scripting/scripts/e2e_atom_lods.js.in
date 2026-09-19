@@ -194,8 +194,8 @@ world.setLodBias(0);
 editor.frame(4);
 assert(world.lodBias() === 0, "0 reads back as 0");
 var back = app.renderStats();
-assert(back.triangles === pinned.triangles,
-       "and the scene is back to its finest level, exactly (" + back.triangles + ")");
+assert(back.submittedTriangles === pinned.triangles,
+       "and the scene is back to its finest level, exactly (" + back.submittedTriangles + ")");
 
 var refused = null;
 try { world.setLodBias(-1); } catch (e) { refused = "" + e; }
