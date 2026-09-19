@@ -91,6 +91,15 @@ private:
 	std::function<bool()> mSceneOpenProbe;
 	Project *mProject = nullptr;
 public:
+	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has
+	/// no business knowing about scene nodes, so the shell hands it one
+	/// callback and the page calls it with the material's guid every time it
+	/// commits a definition; MaterialsModule wires it to the ONE apply
+	/// (SceneEditService), which is what the drop and `material.apply` use.
+	/// Until this lane an edit reached the scene only through a material
+	/// SWITCH, and only while the Projects tab happened to be current.
+	std::function<void(const QString &)> mMaterialChanged;
+
 
 	// Engine viewport mode: Studio hands in the engine-rendered Display preview
 	// (core/materialpreviewwidget.h). Docks it, un-hides the Display dock and
@@ -226,16 +235,19 @@ private:
 	void setCurrentShaderItem();
 	QByteArray fetchAsset(QString string);
 
+	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has
+	/// no business knowing about scene nodes, so the shell hands it one
+	/// callback and the page calls it with the material's guid every time it
+	/// commits a definition; MaterialsModule wires it to the ONE apply
+	/// (SceneEditService), which is what the drop and `material.apply` use.
+	/// Until this lane an edit reached the scene only through a material
+	/// SWITCH, and only while the Projects tab happened to be current.
+
     GraphNodeScene* createNewScene();
 	QListWidgetItem* selectCorrectItemFromDrop(QString guid);
 	int selectCorrectTabForItem(QString guid);
 	QList<QString> loadedShadersGUID;
 
-	void updateMaterialThumbnail(QString shaderGuid, QString materialGuid);
-	void generateMaterialInProjectFromShader(QString guid);
-	void updateMaterialFromShader(QString guid);
-	void writeMaterial(QJsonObject& matObj, QString guid);
-	QJsonObject writeMaterialValuesFromShader(QString guid);
 private:
     void configureConnections();
     void editingFinishedOnListItem();

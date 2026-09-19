@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "modules/materials/effectspage.h"
 #include "scripting/scriptengine.h"
 #include "services/projectservice.h"
+#include "services/sceneeditservice.h"
 #include "services/services.h"
 
 void MaterialsModule::initialize(ModuleHost &host)
@@ -36,6 +37,16 @@ void MaterialsModule::initialize(ModuleHost &host)
         page->setSceneOpenProbe([projectService]() { return projectService->isSceneOpen(); });
     }
     page->setProject(host.project);
+
+    // A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page
+    // commits a definition; this puts it on every mesh already wearing that
+    // material, through the ONE apply path the drop and `material.apply` use.
+    if (host.services && host.services->sceneEdit) {
+        auto *sceneEdit = host.services->sceneEdit;
+        page->mMaterialChanged = [sceneEdit](const QString &materialGuid) {
+            sceneEdit->refreshMaterialUsers(materialGuid);
+        };
+    }
 }
 
 QWidget *MaterialsModule::createPage()

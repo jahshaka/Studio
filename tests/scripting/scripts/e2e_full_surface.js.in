@@ -186,8 +186,8 @@ assert(near(after.roughness, 0.85), "roughness round-trips");
 assert(after.baseColor === "#123456", "baseColor round-trips");
 
 // ---- graph.* (the Effects module, headless) ----
-var graphGuid = materials.createGraph("Scripted Effect");
-assert(graphGuid.length > 10, "materials.createGraph -> " + graphGuid);
+var graphGuid = materials.create("Scripted Effect", { graph: true });
+assert(graphGuid.length > 10, "materials.create -> " + graphGuid);
 var gnodes = graph.nodes();
 assert(gnodes.length === 1 && gnodes[0].master && gnodes[0].type === "PbrMaterial", "new graph has a PBR master");
 assert(graph.nodeTypes().indexOf("float") >= 0, "node type registry listed");

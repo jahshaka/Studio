@@ -409,6 +409,22 @@ public:
     /// cannot preview cannot half-apply either).
     bool applyMaterialShader(const QString &shaderGuid, iris::SceneNodePtr target);
 
+    /// THE MATERIAL ITSELF CHANGED — RE-DRESS EVERY NODE WEARING IT
+    /// (OWNER_REVIEW 9, R19 D2: "I updated the UV tiling to 10 and 10 on the
+    /// project material and in the editor the material there was not
+    /// updated"). A node holds a COPY of a material's values, so editing the
+    /// asset cannot reach the scene by itself; the catalog already knows who
+    /// wears what — the Object -> Material edges every apply writes — so this
+    /// re-resolves the definition ONCE and gives each of those nodes a fresh
+    /// instance of it.
+    ///
+    /// NOT UNDOABLE, deliberately: the user's edit was to the MATERIAL, which
+    /// the Materials page's own stack owns; the scene did not change, what it
+    /// is wearing did, and putting a scene undo step on the stack for it would
+    /// make Ctrl+Z in the editor half-revert an edit made on another page.
+    /// Returns how many meshes were re-dressed.
+    int refreshMaterialUsers(const QString &materialGuid);
+
     /// The hover-preview service, injected by the shell so every apply can end
     /// a live preview before it pushes. Null in headless hosts — which have no
     /// pointer to hover.

@@ -78,6 +78,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/nodenaming.h"
 #include "services/imagematerial.h"
 #include "services/materialdefaults.h"
+#include "services/materialbundle.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
 #include "services/scenenodehelper.h"
@@ -1194,6 +1195,20 @@ namespace {
 // that container to the material paths — a mesh-only guard silently dropped
 // the apply on the floor (the "PBR materials lost on reopen" data loss: the
 // materials never entered the document, so the writer had nothing to save).
+/// The scene node with this guid, or null. (One local walk: the scripting
+/// modules' findNodeByGuid lives in their own shared header and this file may
+/// not include it.)
+iris::SceneNodePtr findSceneNodeByGuid(const iris::SceneNodePtr &node, const QString &guid)
+{
+    if (!node) return iris::SceneNodePtr();
+    if (node->getGUID() == guid) return node;
+    for (const auto &child : node->children()) {
+        auto hit = findSceneNodeByGuid(child, guid);
+        if (hit) return hit;
+    }
+    return iris::SceneNodePtr();
+}
+
 void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &out)
 {
     if (!node) return;
@@ -1233,8 +1248,11 @@ iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid)
     reader.setProject(project);
     const AssetRecord row = db->fetchAsset(presetOrGuid);
     if (row.type == static_cast<int>(ModelTypes::Material)) {
-        const QJsonObject matObject =
-            QJsonDocument::fromJson(db->fetchAssetData(presetOrGuid)).object();
+        // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2/F11):
+        // a project renders the version it was built with, not whatever the
+        // library row holds now. Falls back to the row blob for a material
+        // that has no stored definition yet.
+        const QJsonObject matObject = MaterialBundle::read(db, presetOrGuid, project);
         if (matObject.isEmpty()) return iris::MaterialPtr();
         return reader.parseMaterialTyped(matObject, db);
     }
@@ -1472,8 +1490,7 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return false;
 
-    const QJsonObject matObject =
-        QJsonDocument::fromJson(db->fetchAssetData(assetGuid)).object();
+    const QJsonObject matObject = MaterialBundle::read(db, assetGuid, project);
     if (matObject.isEmpty()) return false;
 
     MaterialReader reader;
@@ -1573,6 +1590,31 @@ bool SceneEditService::applyMaterialShader(const QString &shaderGuid, iris::Scen
 
     emit materialApplied(QStringLiteral("PBR"));
     return true;
+}
+
+int SceneEditService::refreshMaterialUsers(const QString &materialGuid)
+{
+    if (materialGuid.isEmpty() || !db) return 0;
+    auto root = scene() ? scene()->getRootNode() : iris::SceneNodePtr();
+    if (!root) return 0;
+    const QString projectGuid = project ? project->getProjectGuid() : QString();
+
+    int redressed = 0;
+    for (const QString &nodeGuid : db->fetchDependers(materialGuid, projectGuid)) {
+        auto node = findSceneNodeByGuid(root, nodeGuid);
+        if (!node) continue;
+        QList<iris::MeshNodePtr> meshes;
+        collectMeshNodes(node, meshes);
+        for (const auto &meshNode : meshes) {
+            // A FRESH INSTANCE PER MESH, as everywhere else: MeshNode::
+            // setMaterial MUTATES what it is handed.
+            auto mat = resolveMaterial(materialGuid);
+            if (!mat) continue;
+            meshNode->setMaterial(mat);
+            ++redressed;
+        }
+    }
+    return redressed;
 }
 
 bool SceneEditService::resetMaterial(iris::SceneNodePtr node)

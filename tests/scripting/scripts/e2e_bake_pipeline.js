@@ -20,8 +20,8 @@ assert(projectGuid.length > 10, "project.create");
 var folder = project.current().folder;
 
 // ---- build the graph through the verbs ----
-var shaderGuid = materials.createGraph("BakePipelineFx");
-assert(shaderGuid.length > 10, "materials.createGraph");
+var shaderGuid = materials.create("BakePipelineFx", { graph: true });
+assert(shaderGuid.length > 10, "materials.create");
 
 var masterId = null;
 graph.nodes().forEach(function (n) { if (n.master) masterId = n.id; });

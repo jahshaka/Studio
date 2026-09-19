@@ -53,6 +53,9 @@ For more information see the LICENSE file
 #include "nodes/pbrmasternode.h"
 #include "core/materialhelper.h"
 #include "core/graphbaker.h"
+#include "core/graphdefinition.h"
+#include "services/materialbundle.h"
+#include "services/projectassets.h"
 #include <QFutureWatcher>
 #include <QtConcurrent>
 #include "models/library.h"
@@ -223,14 +226,44 @@ void EffectsPage::saveShader()
 	}
 
 	QJsonDocument doc;
-	// saving is a final-bake trigger (MATERIALS_EVALUATOR_SPEC section 2):
-	// UV-varying chains land as BakedMaps/<guid>/ PNGs in the project folder
+	// SAVING IS THE DEFINITION WRITE (MATERIAL_BUNDLE_SPEC phase 1). It is
+	// still a final-bake trigger, but the maps land as MEMBER TEXTURE ROWS in
+	// the store instead of loose PNGs under `<projectFolder>/BakedMaps/`, and
+	// what is stored is the bundle definition — guids only — as the Material
+	// row's own file. `MaterialBundle::write` derives the membership edges
+	// from it and refuses any path that slipped through.
 	auto matObj = MaterialHelper::serializeWithBake(graph, currentShaderInformation.GUID);
 	doc.setObject(matObj);
 	QString data = doc.toJson();
 
 #if(EFFECT_BUILD_AS_LIB)
-    dataBase->updateAssetAsset(currentShaderInformation.GUID, doc.toJson());
+	{
+		const auto build = materials::buildDefinition(graph, currentShaderInformation.GUID,
+		                                              dataBase, mProject);
+		if (!build.ok()) {
+			irisLog("saveShader: " + build.error);
+		} else {
+			// WHOSE VERSION (the owner's model, spec 12 Q2): a material the
+			// PROJECT has taken is edited as the project's own — its pin
+			// moves, the library original does not. A library material is
+			// published to the library.
+			const bool projectOwns =
+			    mProject && !mProject->getProjectGuid().isEmpty()
+			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(),
+			                                 currentShaderInformation.GUID);
+			const auto written = MaterialBundle::write(
+			    dataBase, mProject, currentShaderInformation.GUID, build.definition,
+			    projectOwns ? MaterialBundle::Scope::Project
+			                : MaterialBundle::Scope::Library);
+			if (!written.ok) irisLog("saveShader: " + written.error);
+			// AND THE EDIT REACHES THE SCENE (R19 D2). Every mesh wearing this
+			// material is re-dressed from the definition just written, through
+			// the ONE apply the drop and the verb use. Until this lane a graph
+			// edit reached the scene only by accident — through a material
+			// SWITCH, and only while the Projects tab happened to be current.
+			else if (mMaterialChanged) mMaterialChanged(currentShaderInformation.GUID);
+		}
+	}
 	// Thumbnail: queued, never inline. The graph's baked material renders on
 	// the preview sphere through the shell's thumbnail queue (one request per
 	// tick, main thread) and lands in onShaderThumbnail — saving must not block
@@ -258,8 +291,6 @@ void EffectsPage::saveShader()
 		// here is what made every saved graph show the generic file icon).
 		tabWidget->setCurrentIndex(currentTab);
 		ListWidget::highlightNodeForInterval(2, item);
-
-		if (currentTab == (int)ShaderWorkspace::Projects) updateMaterialFromShader(currentShaderInformation.GUID);
 	}
 }
 
@@ -297,13 +328,8 @@ void EffectsPage::onShaderThumbnail(const ThumbnailResult &result)
 	if (auto item = selectCorrectItemFromDrop(result.id))
 		ListWidget::updateThumbnailImage(bytes, item);
 
-	// The derived material asset carries the same picture (it already did —
-	// it just used to copy emptiness). The graph's own "materialGuid" names it;
-	// read it straight out of the stored definition, no graph rebuild.
-	const auto definition = QJsonDocument::fromJson(dataBase->fetchAssetData(result.id)).object();
-	const QString materialGuid =
-		definition["shadergraph"].toObject()["materialGuid"].toString();
-	if (!materialGuid.isEmpty()) updateMaterialThumbnail(result.id, materialGuid);
+	// (There is no second row to copy the picture onto any more: ONE material,
+	// ONE thumbnail — spec 9 item 5.)
 }
 
 void EffectsPage::saveDefaultShader()
@@ -794,7 +820,10 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 
 	item->setData(MODEL_GUID_ROLE, assetGuid);
 	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
-	item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
+	// ONE ROW, AND IT IS A MATERIAL (MATERIAL_BUNDLE_SPEC 2.3, owner Q3: "only
+	// materials"). The graph rides its definition as a payload; no
+	// ModelTypes::Shader row is minted here any more.
+	item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Material));
 	item->setData(Qt::DisplayRole, newShader);
 
 	currentProjectShader = item;
@@ -822,17 +851,17 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 
 
 #if(EFFECT_BUILD_AS_LIB)
-
-	auto shaderDefinition = MaterialHelper::serialize(graph);
-    dataBase->createAssetEntry(QString(), assetGuid,newShader,static_cast<int>(ModelTypes::Shader), QJsonDocument(shaderDefinition).toJson(), QByteArray(), AssetViewFilter::Effects);
+	// A LIBRARY BUNDLE. It is created in the library, not in a project — the
+	// user adds it to a project when they want it there (the four-drawer rule,
+	// OWNER_REVIEW 9) — and the row is an ordinary AssetsView Material, so the
+	// Assets page and the Materials module browse ONE world.
+	dataBase->createAssetEntry(assetGuid, newShader, static_cast<int>(ModelTypes::Material),
+	                           QString(), QString(), QString(), QString(),
+	                           QByteArray(), QByteArray(), QByteArray(), QByteArray(),
+	                           AssetViewFilter::AssetsView);
 	auto assetShader = new AssetMaterial;
 	assetShader->fileName = newShader;
 	assetShader->assetGuid = assetGuid;
-	assetShader->path = IrisUtils::join(mProject->getProjectFolder(), IrisUtils::buildFileName(newShader, "shader"));
-	// the stored value is the definition itself (materialsapi.createGraph
-	// precedent) — the GLSL CustomMaterial route died in phase 5
-	assetShader->setValue(QVariant::fromValue(shaderDefinition));
-    dataBase->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
 	AssetManager::addAsset(assetShader);
 #endif
 	saveShader();
@@ -888,6 +917,10 @@ void EffectsPage::setCurrentShaderItem()
 QByteArray EffectsPage::fetchAsset(QString string)
 {
 #if(EFFECT_BUILD_AS_LIB)
+	// THE DEFINITION, not the row's blob cache (D-2): pin-first, so a material
+	// the project has taken opens at the version the project holds.
+	const QJsonObject definition = MaterialBundle::read(dataBase, string, mProject);
+	if (!definition.isEmpty()) return QJsonDocument(definition).toJson();
 	return dataBase->fetchAssetData(string);
 #else
 	// fetch file locally
@@ -1150,11 +1183,13 @@ void EffectsPage::updateAssetDock()
 {
 	effects->clear();
 #if(EFFECT_BUILD_AS_LIB)
-	//auto assets = dataBase->fetchAssets();
-	auto assets = dataBase->fetchAssetsByViewFilter(AssetViewFilter::Effects);
+	// THE TWO LIBRARY WORLDS MERGED (spec 2.4): the module lists the same
+	// library MATERIAL bundles the Assets page does — there is no private
+	// "Effects" world any more, and no ModelTypes::Shader tile.
+	auto assets = dataBase->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
 		for (const auto &asset : assets)  //dp something{
 		{
-			if (asset.projectGuid == "" && asset.type == static_cast<int>(ModelTypes::Shader)) {
+			if (asset.type == static_cast<int>(ModelTypes::Material)) {
 				 
 				auto item = new QListWidgetItem;
 				item->setText(asset.name);
@@ -1178,8 +1213,9 @@ void EffectsPage::setProject(Project *project)
 {
 	mProject = project;
 	if (assetWidget) assetWidget->project = project;
-	// the baked-map cache (BakedMaps/...) resolves against the open project
-	MaterialHelper::setProjectRoot(project ? project->getProjectFolder() : QString());
+	// An image picked inside a texture node is pinned into THIS project (and
+	// only when there is one) — MATERIAL_BUNDLE_SPEC Q1.
+	TextureManager::getSingleton()->setProject(project);
 }
 
 // ---- §3a selection bridge (graph.selectNode / selectedNode / deselect) ----
@@ -1579,193 +1615,10 @@ int EffectsPage::selectCorrectTabForItem(QString guid)
 	return 0;
 }
 
-void EffectsPage::updateMaterialThumbnail(QString shaderGuid, QString materialGuid)
-{
-	auto assetThumbnails = dataBase->fetchAssetThumbnails({ shaderGuid });
-	auto assetThumbnail = assetThumbnails[0].thumbnail;
-	dataBase->updateAssetThumbnail(materialGuid, assetThumbnail);
-}
-
-void EffectsPage::generateMaterialInProjectFromShader(QString guid)
-{
-	QJsonObject matDef; 
-	writeMaterial(matDef, guid);
-
-    QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
-	auto graphObj = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
-
-	QJsonDocument saveDoc;
-	//saveDoc.setObject(materialDef);
-	saveDoc.setObject(matDef);
-
-	QString fileName = IrisUtils::join(
-		mProject->getProjectFolder(),
-		IrisUtils::buildFileName(matDef["name"].toString(), "material")
-	);
-
-	QFile file(fileName);
-	file.open(QFile::WriteOnly);
-	file.write(saveDoc.toJson());
-	file.close();
-
-	// WRITE TO DATABASE
-	const QString assetGuid = GUIDManager::generateGUID();
-    QByteArray binaryMat = QJsonDocument(matDef).toJson();
-	dataBase->createAssetEntry(
-		assetGuid,
-		QFileInfo(fileName).fileName(),
-		static_cast<int>(ModelTypes::Material),
-		mProject->getProjectGuid(),
-		mProject->getProjectGuid(),
-		QString(),
-		QString(),
-		QByteArray(),
-		QByteArray(),
-		QByteArray(),
-		binaryMat,
-		AssetViewFilter::Editor
-	);
-
-	updateMaterialThumbnail(guid, assetGuid);
-
-	// (The material was parsed here only to hydrate the AssetManager entry
-	// below it — a parse plus a texture load per call, for a payload nothing
-	// read. Deleted with it, MATERIAL-PREVIEW-1 item c.)
-
-	// Actually create the material and add shader as it's dependency
-	dataBase->createDependency(
-		static_cast<int>(ModelTypes::Material),
-		static_cast<int>(ModelTypes::Shader),
-		assetGuid, guid,
-		mProject->getProjectGuid());
-
-	// Add all its textures as dependencies too
-	auto values = matDef["values"].toObject();
-	for (const auto& prop : graphObj->properties) {
-		if (prop->type == PropertyType::Texture) {
-			if (!values.value(prop->name).toString().isEmpty()) {
-				dataBase->createDependency(
-					static_cast<int>(ModelTypes::Material),
-					static_cast<int>(ModelTypes::Texture),
-					assetGuid, values.value(prop->name).toString(),
-					mProject->getProjectGuid()
-				);
-			}
-		}
-	}
-
-	// NO AssetManager MATERIAL PAYLOAD (MATERIAL-PREVIEW-1 item c). The graph
-	// material used to be parked in the session registry here so the viewport's
-	// hover preview could find it — through a `QSharedPointer<PbrMaterial>` the
-	// reader (which asked for `iris::MaterialPtr`) could never read, which is
-	// why a material made in the Materials module never previewed. The preview
-	// resolves from the database now (SceneEditService::resolveMaterial), which
-	// is the same reading the drop has always committed.
 
 
-	// write material guid to graph and save graph (a final-bake trigger:
-	// applying a graph as a project material must land its baked maps)
-	graphObj->materialGuid = assetGuid;
-	graph->materialGuid = assetGuid;
-	QJsonDocument doc;
-	auto graphObject = MaterialHelper::serializeWithBake(graphObj, guid);
-	doc.setObject(graphObject);
-    dataBase->updateAssetAsset(guid, doc.toJson());
-}
-
-void EffectsPage::updateMaterialFromShader(QString guid)
-{
-	bool tryas = true;
-    QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
-	auto graphObj = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
-    auto materialDef = QJsonDocument::fromJson(dataBase->fetchAssetData(graphObj->materialGuid)).object();
-
-	materialDef["values"] = writeMaterialValuesFromShader(guid);
-	
-	// (The material was parsed here only to hydrate the AssetManager entry
-	// below it — a parse plus a texture load per call, for a payload nothing
-	// read. Deleted with it, MATERIAL-PREVIEW-1 item c.)
-
-	if (!dataBase->checkIfDependencyExists(graphObj->materialGuid, guid)) {
-		dataBase->createDependency(
-			static_cast<int>(ModelTypes::Material),
-			static_cast<int>(ModelTypes::Shader),
-			graphObj->materialGuid, guid,
-			mProject->getProjectGuid());
-	}
-
-	//create dependency for textures if they dont exists
-	auto values = materialDef["values"].toObject();
-	for (const auto& prop : graphObj->properties) {
-		if (prop->type == PropertyType::Texture) {
-			if (!values.value(prop->name).toString().isEmpty()) {
-				if (!dataBase->checkIfDependencyExists(graphObj->materialGuid, values.value(prop->name).toString()))
-				{
-					dataBase->createDependency(
-						static_cast<int>(ModelTypes::Material),
-						static_cast<int>(ModelTypes::Texture),
-						graphObj->materialGuid, values.value(prop->name).toString(),
-						mProject->getProjectGuid()
-					);
-				}
-			}
-		}
-	}
-	updateMaterialThumbnail(guid, graphObj->materialGuid);
 
 
-	// The re-registration is gone with the one above it: nothing reads a
-	// material out of the session registry any more.
-
-}
-
-void EffectsPage::writeMaterial(QJsonObject& matObj, QString guid)
-{
-	auto name = dataBase->fetchAsset(guid).name;
-	matObj["name"] = name;
-	matObj["version"] = 2.0;
-	matObj["shaderGuid"] = guid;
-	matObj["values"] = writeMaterialValuesFromShader(guid);
-}
-
-QJsonObject EffectsPage::writeMaterialValuesFromShader(QString guid)
-{
-    QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
-	auto graphObj = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
-	QJsonObject valuesObj;
-	for (auto prop : graphObj->properties) {
-		if (prop->type == PropertyType::Bool) {
-			valuesObj[prop->name] = prop->getValue().toBool();
-		}
-
-		if (prop->type == PropertyType::Float) {
-			valuesObj[prop->name] = prop->getValue().toFloat();
-		}
-
-		if (prop->type == PropertyType::Color) {
-			valuesObj[prop->name] = prop->getValue().value<QColor>().name();
-		}
-
-		if (prop->type == PropertyType::Texture) {
-			auto id = prop->getValue().toString();
-			valuesObj[prop->name] = id;
-		}
-
-		if (prop->type == PropertyType::Vec2) {
-			valuesObj[prop->name] = SceneWriter::jsonVector2(iris::fromQt(prop->getValue().value<QVector2D>()));
-		}
-
-		if (prop->type == PropertyType::Vec3) {
-			valuesObj[prop->name] = SceneWriter::jsonVector3(iris::fromQt(prop->getValue().value<QVector3D>()));
-		}
-
-		if (prop->type == PropertyType::Vec4) {
-			valuesObj[prop->name] = SceneWriter::jsonVector4(iris::fromQt(prop->getValue().value<QVector4D>()));
-		}
-	}
-
-	return valuesObj;
-}
 
 void EffectsPage::configureConnections()
 {
@@ -1865,11 +1718,22 @@ void EffectsPage::configureConnections()
 
 	});
 	connect(effects, &ListWidget::addToProject, [=](QListWidgetItem *item) {
-		auto guid = assetWidget->createShader(item);
+		// ADD TO PROJECT IS A PIN, NOT A CLONE (MATERIAL_BUNDLE_SPEC 5). It
+		// used to make TWO assets out of one gesture — a cloned Shader row
+		// (copying every texture into the project folder under a guid-shaped
+		// name, outside the store) PLUS a generated Material stub with a flat
+		// `.material` file beside it — which is exactly the owner's "adding a
+		// custom material to a project lands as two parts, not a bundle". It
+		// is now the same call every other asset uses: the bundle and its
+		// closure are pinned at the version the project took.
+		const QString guid = item->data(MODEL_GUID_ROLE).toString();
+		if (guid.isEmpty() || !mProject || mProject->getProjectGuid().isEmpty()) return;
+		const auto added = ProjectAssets::addToProject(guid, dataBase, mProject,
+		                                              ProjectAssets::AddKind::Direct);
+		if (!added.ok()) { irisLog("add to project: " + added.error); return; }
+		refreshShaderGraph();
 		tabWidget->setCurrentIndex((int)ShaderWorkspace::Projects);
 		ListWidget::highlightNodeForInterval(2, selectCorrectItemFromDrop(guid));
-		loadGraph(guid);
-		generateMaterialInProjectFromShader(guid);
 	});
 
 

@@ -97,6 +97,18 @@ enum class Ownership { Project, Platform };
 Pinned pinTexture(const QString &sourcePath, const QString &displayName,
                   Database *db, Project *project, Ownership ownership);
 
+/// THE ONE IMPORT A MATERIAL'S TEXTURE PICKER CALLS (MATERIAL_BUNDLE_SPEC
+/// P-2, owner decision Q1). The same content import as pinTexture — same
+/// pipeline, same dedup by bytes — but it always makes the LIBRARY row, and
+/// pins into `project` only when one is open. That difference matters: a
+/// material authored with no project open is a perfectly ordinary library
+/// bundle, and until this lane the module answered the same gesture with a
+/// `QFile::copy` into a retired per-guid folder and a type-11 File row with
+/// no hash, no sidecar and no pin — which is why the owner's library holds
+/// four copies of one checker image.
+Pinned importTexture(const QString &sourcePath, const QString &displayName,
+                     Database *db, Project *project);
+
 /// The shipped cube-sky presets (app/content/skies/alternative/<dir>/).
 struct SkyPreset
 {

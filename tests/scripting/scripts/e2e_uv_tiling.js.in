@@ -24,8 +24,8 @@ var proj = project.create("UV Tiling " + Date.now());
 assert(proj.length > 10, "project.create");
 
 // ---- the owner's shape: ONE texture node with a UV pin -------------------
-var shaderGuid = materials.createGraph("UvTilingFx");
-assert(shaderGuid.length > 10, "materials.createGraph");
+var shaderGuid = materials.create("UvTilingFx", { graph: true });
+assert(shaderGuid.length > 10, "materials.create");
 
 var masterId = null;
 graph.nodes().forEach(function (n) { if (n.master) masterId = n.id; });

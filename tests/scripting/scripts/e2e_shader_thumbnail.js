@@ -1,11 +1,11 @@
 // scripting.e2e.shader_thumbnail — shader (graph) assets get REAL thumbnails
-// (VISUAL_PARITY_SPEC item 5). Before this, materials.createGraph + graph.save
+// (VISUAL_PARITY_SPEC item 5). Before this, materials.create + graph.save
 // stored an empty blob and assets.refreshThumbnail refused Shader rows outright
 // ("only object and material assets are supported"), so every graph tile in the
 // Assets page fell back to a generic file icon.
 //
 // The chain under test, through the real binary with the engine up:
-//   materials.createGraph -> a Vector4 wired into the master's Base Color
+//   materials.create -> a Vector4 wired into the master's Base Color
 //   -> graph.save (serialize + bake) -> assets.refreshThumbnail (renders the
 //   evaluated PbrMaterial on the preview sphere) -> assets.thumbnail reads the
 //   stored PNG back and its centre pixel is the graph's colour, not the
@@ -18,8 +18,8 @@ function assert(cond, msg) {
 
 project.create("shader_thumbnail");
 
-var shaderGuid = materials.createGraph("Lane C Red");
-assert(shaderGuid && shaderGuid.length > 10, "materials.createGraph -> " + shaderGuid);
+var shaderGuid = materials.create("Lane C Red", { graph: true });
+assert(shaderGuid && shaderGuid.length > 10, "materials.create -> " + shaderGuid);
 
 // A fresh graph is a bare PbrMaterial master; give it a colour a pixel can prove.
 var master = null;
