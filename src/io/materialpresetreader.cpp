@@ -16,20 +16,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 
-QJsonObject MaterialPresetReader::getMatPreset(const QString &filename)
-{
-    this->setAssetPath(filename);
-
-    QFile file(filename);
-    if (!file.open(QIODevice::ReadOnly))
-        qWarning("MaterialPresetReader::getMatPreset: failed to open %s", qUtf8Printable(filename));
-
-    auto data = file.readAll();
-    auto doc = QJsonDocument::fromJson(data);
-
-    return doc.object();
-}
-
 MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
 {
     this->setAssetPath(filename);
@@ -52,33 +38,14 @@ MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
 
     material.type = matObj["material_type"].toString();
 
-    auto colObj = matObj["ambientColor"].toString();
-    QColor col;
-    col.setNamedColor(colObj);
-    material.ambientColor = col;
-
-    colObj = matObj["diffuseColor"].toString();
-    col.setNamedColor(colObj);
-    material.diffuseColor = col;
-
-    auto tex = matObj["diffuseTexture"].toString("");
-    if (!tex.isEmpty()) material.diffuseTexture = getAbsolutePath(tex);
-
-    colObj = matObj["specularColor"].toString();
-    col.setNamedColor(colObj);
-    material.specularColor = col;
-    material.shininess = (float)matObj["shininess"].toDouble(0.0f);
-
-    tex = matObj["specularTexture"].toString("");
-    if (!tex.isEmpty())  material.specularTexture = getAbsolutePath(tex);
-
-    tex = matObj["normalTexture"].toString("");
-    if (!tex.isEmpty()) material.normalTexture = getAbsolutePath(tex);
-    material.normalIntensity = (float)matObj["normalIntensity"].toDouble(0.0f);
-
-    tex = matObj["reflectionTexture"].toString("");
-    if (!tex.isEmpty()) material.reflectionTexture = getAbsolutePath(tex);
-    material.reflectionInfluence = (float)matObj["reflectionInfluence"].toDouble(0.0f);
+    // (THE LEGACY BLINN FIELDS ARE NO LONGER READ — MATERIAL_BUNDLE_SPEC
+    // phase 3. ambient/diffuse/specular colours, shininess, the three legacy
+    // texture slots and the reflection pair described the pre-PBR material
+    // class, which is gone; the fourteen files that carried them are deleted,
+    // and the preset list has skipped every non-PBR file since the HLMS
+    // adoption. An old file with those keys still LOADS — every key here is
+    // optional — it simply arrives as the PBR material its remaining fields
+    // describe.)
 
     material.textureScale = (float)matObj["textureScale"].toDouble(1.0f);
 

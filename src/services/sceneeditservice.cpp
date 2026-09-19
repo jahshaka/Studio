@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
-#include "services/apppaths.h"
 
 #include "irisgl/document/assets/mesh.h"
 
@@ -35,7 +34,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
-#include <QRegularExpression>
 #include <QPixmap>
 #include <QTemporaryDir>
 #include <QSqlDatabase>

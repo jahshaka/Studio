@@ -28,7 +28,6 @@ class MaterialPresetReader : public AssetIOBase
 {
 public:
     MaterialPresetReader() = default;
-    QJsonObject getMatPreset(const QString &filename);
     MaterialPreset readMaterialPreset(QString filename);
 };
 
