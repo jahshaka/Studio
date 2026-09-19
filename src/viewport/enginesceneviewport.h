@@ -439,7 +439,18 @@ private:
     QElapsedTimer mFrameTimer;
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
-    EngineRenderDriver *mDriver = nullptr;
+    /// A QPointer, NOT a raw one, and the reason is a use-after-free this lane
+    /// tripped over (STATS-1, 2026-09-19): EngineHost::shutdown deletes the
+    /// render driver at quit step 4 of 8, and the widget tree — this widget
+    /// included — is destroyed at step 5, with ~EngineSceneViewport reaching
+    /// through cleanup() -> clearScene() -> refreshOverlay() -> presentCovered()
+    /// to `mDriver->noteExternalFrame()`. The call has always landed on freed
+    /// memory; it went unnoticed only because the method used to be one
+    /// QElapsedTimer::restart() into the corpse, which writes and returns. The
+    /// moment it touched a container it aborted the process with `double free
+    /// or corruption` at shutdown, in eleven suites at once. QPointer makes the
+    /// `if (mDriver)` guards those call sites already carry TRUE.
+    QPointer<EngineRenderDriver> mDriver;
     jahshaka::engine::Scene *mEngineScene = nullptr;
     std::unique_ptr<SceneMirror> mMirror;
     EditorViewportEvents mEvents;

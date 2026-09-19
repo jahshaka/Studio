@@ -15,6 +15,9 @@ static const double kSlowFrameMs = 100.0;
 EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject *parent)
     : QObject(parent), mEngine(engine), mTimer(new QTimer(this))
 {
+    // The clock the rolling windows are stamped from. Started before the first
+    // tick can fire, so no stamp is ever taken from an invalid timer.
+    mSinceStart.start();
     // PRECISE, because the interval now carries meaning. Qt's default coarse
     // timer is allowed to drift by 5% and to coalesce with other timers, which
     // on a 10 ms budget (a 100 Hz panel) is a whole millisecond of slack handed
@@ -119,8 +122,16 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // the interval from the panel) or to take the blocking out of the loop
         // altogether (Unlimited = vsync off).
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
-        if (anythingToDraw) { mEngine->renderOneFrame(); ++mStats.rendered; }
-        else                { ++mStats.skipped; }
+        // THE LIVE STATE, not a lifetime counter (owner review answer Q3): the
+        // tick that draws nothing no longer increments anything at all — it
+        // simply says so, and `ticks - rendered` is still there for a caller
+        // who wants the total.
+        mStats.drawing = anythingToDraw;
+        if (anythingToDraw) {
+            mEngine->renderOneFrame();
+            ++mStats.rendered;
+            mDrawn.add(nowMs());
+        }
 
         // THE GPU IS GONE: SAY SO AND END, NEVER FREEZE (lane XID-2, 2026-09-17).
         // The one render loop is the one place that can notice. After a device
@@ -176,11 +187,32 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         FrameMonitor::instance().noteTickEnd(anythingToDraw);
         if (ms >= kSlowFrameMs) {
             ++mStats.slowFrames;
+            // …and into the rolling minute, which is what the readout shows.
+            mSlow.add(nowMs());
             LoadTimeline::add(QStringLiteral("frame:slow"), ms);
             qWarning("[open-profile] slow frame: %.1f ms (shader/PSO compilation is the "
                      "usual cause on the first frame of a world)", ms);
         }
     });
+}
+
+EngineRenderDriver::Stats EngineRenderDriver::stats() const
+{
+    Stats out = mStats;
+    // THE TWO ROLLING NUMBERS ARE EVALUATED HERE, at the read, and that is the
+    // whole point of a window: a loop that stopped drawing a minute ago reports
+    // 0 fps drawn the moment somebody asks, without a tick having to come along
+    // to zero a counter.
+    const double now = nowMs();
+    out.fpsDrawn = mDrawn.perSecond(now);
+    out.slowFramesLastMinute = mSlow.count(now);
+    return out;
+}
+
+void EngineRenderDriver::noteExternalFrame()
+{
+    mSinceFrameEnd.restart();
+    mDrawn.add(nowMs());
 }
 
 void EngineRenderDriver::start()

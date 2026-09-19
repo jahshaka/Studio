@@ -32,6 +32,10 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 #include "services/framepacing.h"
+#include "services/framemonitor.h"
+#include "services/scenestats.h"
+#include "services/sceneeditservice.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "data/settingsmanager.h"
 #include "scripting/mcp/mcplog.h"
 #include "services/jahlog.h"
@@ -238,11 +242,19 @@ QVector<VerbInfo> AppApi::verbs() const
           "a zero there means the frame loop is not running, not that the renderer is happy. Pass "
           "true to clear the record after reading it.",
           Needs::Document },
-        { "frameStats", "app.frameStats() -> {running, intervalMs, ticks, rendered, skipped, workMs, worstMs, slowFrames, enabledViews}",
-          "What the ONE render loop (EngineRenderDriver) has been doing, cumulatively since the engine "
-          "started. `ticks` counts timer fires, `rendered` the ticks that actually called the engine, "
-          "`skipped` the ticks that had no enabled View to draw and therefore submitted nothing — sitting "
-          "on a page with no viewport should advance `skipped` and leave `rendered` still. `enabledViews` "
+        { "frameStats", "app.frameStats() -> {running, intervalMs, ticks, rendered, drawing, fpsDrawn, "
+                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews}",
+          "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
+          "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
+          "enabled View to draw — sitting on a page with no viewport — are `ticks - rendered`, and the "
+          "counter that used to report them (`skipped`) is GONE (owner review 2026-09-18): it was a "
+          "lifetime total climbing at ~62 a second, shown on the F3 readout where it read as dropped "
+          "frames. The LIVE answer to the same question is `drawing`, the state of the last counted "
+          "tick. `fpsDrawn` is frames ACTUALLY DRAWN in the last second — a rolling window, and it "
+          "counts frames drawn outside this loop too (a script's editor.frame, the VR pump), because "
+          "what it answers is whether the picture is moving. `slowFramesLastMinute` is the hitch count "
+          "over a rolling MINUTE, the number the readout shows; `slowFrames` is still the cumulative "
+          "one for session logs. `enabledViews` "
           "is the engine's live answer to the same question the loop asks each tick. Note the scripted "
           "stepping verb editor.frame(n) bypasses the driver entirely, so it moves none of these. "
           "`workMs` is THE HONEST PERFORMANCE NUMBER on this architecture and the reason to prefer it "
@@ -267,10 +279,25 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
+        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, draws, perPass:[{name, triangles, draws}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
+          "TWO TRIANGLE NUMBERS, and the difference between them is the point (owner review "
+          "2026-09-18). `sceneTriangles` is WHAT IS IN THE SCENE: the authored (LOD 0) triangles of "
+          "every effectively-visible mesh node, counted ONCE each on the DOCUMENT — no editor helpers "
+          "(the grid, light icons and their wires, the sun disc, the horizon plane, gizmos, outlines "
+          "live in no document), no extra passes, no HUD, and never computed by subtracting anything "
+          "from the GPU figure. A new world with the default ground reads 2,178; an Empty scene reads "
+          "0; it does not move when the camera does, which is why it is the authored level and not the "
+          "LOD actually drawn. `submittedTriangles` is the other question — what the renderer handed "
+          "the GPU last frame, EVERY pass included (the same geometry drawn again for the SSR depth "
+          "pre-pass, each shadow cascade, probe captures, one full-screen quad per post step) — and it "
+          "is the number the readout used to show unlabelled as \"triangles\". `perPass` breaks that "
+          "total down per compositor pass, and it is filled only while the render monitor is capturing "
+          "(Ctrl+F4 / perf.start): the per-pass counters cost clock reads and listeners on every "
+          "workspace, so nothing pays for them when nobody is looking, and the list is empty "
+          "otherwise. "
           "The timings come from Ogre's own FrameStats, which our render loop feeds: `fps`/`frameMs` are "
           "the rolling average, `lastMs` the latest (noisy) sample, `p95Ms`/`p99Ms` the percentiles, "
           "`bestMs`/`worstMs` the extremes. READ THE HONESTY NOTE ON app.frameStats: `fps` here measures "
@@ -1127,7 +1154,11 @@ QVariantMap AppApi::frameStats()
     out.insert("intervalMs", driver ? driver->intervalMs() : 0);
     out.insert("ticks", QVariant::fromValue(s.ticks));
     out.insert("rendered", QVariant::fromValue(s.rendered));
-    out.insert("skipped", QVariant::fromValue(s.skipped));
+    // The live state and the two ROLLING numbers that replaced the lifetime
+    // `skipped` counter (owner review 2026-09-18, answer Q3).
+    out.insert("drawing", s.drawing);
+    out.insert("fpsDrawn", s.fpsDrawn);
+    out.insert("slowFramesLastMinute", s.slowFramesLastMinute);
     out.insert("workMs", s.workMs);
     out.insert("worstMs", s.worstMs);
     out.insert("slowFrames", QVariant::fromValue(s.slowFrames));
@@ -1198,9 +1229,24 @@ QVariantMap AppApi::renderStats()
     out.insert("p99Ms", s.p99Ms);
     out.insert("bestMs", s.bestMs);
     out.insert("worstMs", s.worstMs);
+    // THE SCENE'S OWN TRIANGLES — the DOCUMENT's answer to "what is in my
+    // scene", walked here and not derived from anything below it
+    // (services/scenestats.h says exactly what it counts and why it is the
+    // authored LOD level). No project open = an honest 0.
+    const iris::ScenePtr doc = (host.services && host.services->sceneEdit)
+                                   ? host.services->sceneEdit->scene()
+                                   : iris::ScenePtr();
+    out.insert("sceneTriangles",
+               QVariant::fromValue(qulonglong(scenestats::sceneGeometry(doc).triangles)));
     out.insert("draws", QVariant::fromValue(qulonglong(s.draws)));
     out.insert("batches", QVariant::fromValue(qulonglong(s.batches)));
-    out.insert("triangles", QVariant::fromValue(qulonglong(s.triangles)));
+    // …and what the RENDERER submitted, across every pass. Renamed from
+    // `triangles`, which is what the F3 row used to call it and what the owner
+    // read as his scene's content (owner review 2026-09-18, R4a).
+    out.insert("submittedTriangles", QVariant::fromValue(qulonglong(s.triangles)));
+    // The per-pass breakdown of that total, from the render monitor's own pass
+    // rows. Empty unless a capture is recording — see the verb's doc.
+    out.insert("perPass", FrameMonitor::instance().lastFramePasses());
     out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
     out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
     out.insert("incompletePsoRequests", s.incompletePsoRequests);

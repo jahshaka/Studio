@@ -148,7 +148,7 @@ function takeSample(i) {
         wallMsPerFrame: wallMs / FRAMES_PER_SAMPLE,
         draws: geom.draws,
         batches: geom.batches,
-        triangles: geom.triangles,
+        triangles: geom.submittedTriangles,
         objects: app.engineObjects(),
         mirror: editor.mirrorStats(),
         driver: app.frameStats()

@@ -211,3 +211,28 @@ add_test(NAME services.clipboard COMMAND test_clipboard
 set_tests_properties(services.clipboard PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 jah_no_display(services.clipboard)
+
+# services.scene_stats — the three leaves behind the F3 readout and
+# app.renderStats().sceneTriangles (owner review 2026-09-18, answer Q3): the
+# DOCUMENT's own triangle census, the rolling-window counter that replaced two
+# lifetime totals, and the readout's wording.
+#
+# Real document nodes (so the headless document graph, like services.selection_set
+# — an iris::SceneNode IS an Ogre scene node since the swap), and nothing else:
+# no shell, no render driver, no display. The two window/row headers are
+# header-only on purpose so a suite this small can link them.
+add_executable(test_scene_stats test_scene_stats.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/scenestats.cpp)
+set_target_properties(test_scene_stats PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_scene_stats PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_scene_stats PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
+jah_document_graph(test_scene_stats)
+add_test(NAME services.scene_stats COMMAND test_scene_stats
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(services.scene_stats PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+jah_no_display(services.scene_stats)

@@ -2,6 +2,8 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/devicelossend.h"
+#include "viewport/statsrows.h"
+#include "services/scenestats.h"
 #include "viewport/enginesceneviewport.h"
 
 #include <QShowEvent>
@@ -2814,28 +2816,23 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             const bool haveRs = mEngine && mEngine->renderStats(rs);
             const EngineRenderDriver::Stats ds =
                 mDriver ? mDriver->stats() : EngineRenderDriver::Stats{};
-            // Row 1: the loop rate, what the frame actually cost, AND the rate
-            // that cost would allow with no cap — the presented fps half is a
-            // measurement of our own driver timer + vsync and is only honest
-            // next to the other two (owner ask, 2026-09-06: "show real fps
-            // not the capped fps"). workMs can dip near zero on an idle
-            // covered view; the potential readout saturates at 999.
-            {
-                const double potential =
-                    ds.workMs > 1.0 ? 1000.0 / ds.workMs : 999.0;
-                mStatsLines << QStringLiteral("%1 fps   %2 ms   ~%3 uncapped")
-                                   .arg(haveRs ? rs.fps : 0.0, 0, 'f', 0)
-                                   .arg(ds.workMs, 0, 'f', 1)
-                                   .arg(qMin(potential, 999.0), 0, 'f', 0);
-            }
-            // Row 2: what the renderer did with the frame.
-            mStatsLines << QStringLiteral("%1 draws   %2 tris")
-                               .arg(haveRs ? qulonglong(rs.draws) : 0ull)
-                               .arg(haveRs ? qulonglong(rs.triangles) : 0ull);
-            // Row 3: the honesty row. A loop that is skipping ticks or hitching
-            // is the thing the other two rows cannot tell you about.
-            mStatsLines << QStringLiteral("%1 skipped   %2 slow")
-                               .arg(ds.skipped).arg(ds.slowFrames);
+            // THE ROWS ARE COMPOSED BY A PURE FUNCTION (viewport/statsrows.h),
+            // so the WORDING — which is the thing the owner's review was
+            // actually about — has a unit test instead of a screenshot.
+            //
+            // The scene's own triangles come from the DOCUMENT, walked here
+            // (services/scenestats.h): never from subtracting helpers out of
+            // the GPU figure beside it. The two numbers are different
+            // measurements of different things and both are labelled.
+            statsrows::Input in;
+            in.drawing = ds.drawing;
+            in.fpsDrawn = ds.fpsDrawn;
+            in.workMs = ds.workMs;
+            in.sceneTriangles = scenestats::sceneGeometry(mScene).triangles;
+            in.submittedTriangles = haveRs ? quint64(rs.triangles) : 0;
+            in.draws = haveRs ? quint64(rs.draws) : 0;
+            in.slowFramesLastMinute = ds.slowFramesLastMinute;
+            mStatsLines = statsrows::compose(in);
         }
         for (const QString &line : mStatsLines) d.lines.push_back(line.toStdString());
     }

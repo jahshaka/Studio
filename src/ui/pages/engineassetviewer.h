@@ -13,6 +13,7 @@
 #include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QElapsedTimer>
+#include <QPointer>
 #include <QMap>
 #include <QPointF>
 #include "viewport/engineviewwidget.h"
@@ -95,7 +96,10 @@ private:
     void hideProgress();
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
-    EngineRenderDriver *mDriver = nullptr;
+    /// A QPointer: the render driver dies before the widget tree at quit
+    /// (EngineHost::shutdown step 4, widgets step 5) and this is read during
+    /// teardown — see enginesceneviewport.h for the abort it caused.
+    QPointer<EngineRenderDriver> mDriver;
     std::unique_ptr<EngineAssetScene> mScene;
     Database *mDb = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
