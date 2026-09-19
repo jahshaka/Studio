@@ -1521,3 +1521,27 @@ add_test(NAME ui.import_dialog COMMAND test_import_dialog
 set_tests_properties(ui.import_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.import_dialog)
+
+# ui.new_project_dialog — THE NEW SCENE DIALOG (owner review R1, lane
+# SMALL-UI-A): parented and centred on its parent window, an Empty scene
+# checkbox and a Browse button that both ride the answer, and wide enough for
+# the button. The verb half — project.create(name, {empty, location}) — is
+# scripting.e2e.new_scene; this is the part a verb cannot see. Widgets only.
+add_executable(test_new_project_dialog test_new_project_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/newprojectdialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_new_project_dialog PROPERTIES
+    AUTOMOC ON AUTORCC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_new_project_dialog PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_new_project_dialog PRIVATE Qt6::Widgets qlementine)
+add_test(NAME ui.new_project_dialog COMMAND test_new_project_dialog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.new_project_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.new_project_dialog)

@@ -28,3 +28,30 @@ add_test(NAME defaults.exposure_plane COMMAND test_exposure_plane
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(defaults.exposure_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 600 LABELS "mirror")
+
+# defaults.primitive_table — THE ONE PRIMITIVE TABLE as a contract (owner review
+# R6 / answer Q4, lane SMALL-UI-A). No engine and no display: the app's own
+# models.qrc is compiled in (so the suite reads the resource paths the PRODUCT
+# ships, never the source tree), the meshes go through the document's parser,
+# and the tile icons are read off the app folder exactly as the drawer reads
+# them.
+qt6_add_resources(_primitive_table_qrc ${CMAKE_SOURCE_DIR}/app/models.qrc)
+add_executable(test_primitive_table test_primitive_table.cpp ${_primitive_table_qrc}
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+# IN bin/, WITH the app: the tile icons are read through
+# IrisUtils::getAbsoluteAssetPath, which is applicationDirPath()-relative, and
+# `app/` is copied beside the app binary by its own POST_BUILD step. A suite
+# that asserts the shipped tiles exist has to stand where the product stands.
+set_target_properties(test_primitive_table PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+add_dependencies(test_primitive_table ${CMAKE_PROJECT_NAME})
+target_include_directories(test_primitive_table PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_primitive_table PRIVATE IrisGL Qt6::Gui)
+add_test(NAME defaults.primitive_table COMMAND test_primitive_table
+         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set_tests_properties(defaults.primitive_table PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
