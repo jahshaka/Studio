@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include <QSqlDatabase>
 #include "services/assetcas.h"
+#include "services/assetdelete.h"
 #include "services/assettray.h"
 #include "services/projectassets.h"
 #include "services/assetstorepaths.h"
@@ -232,171 +233,34 @@ void ShaderAssetWidget::configureConnections()
 
 void ShaderAssetWidget::deleteShader(QString guid)
 {
-	// Every branch below is a library write; with no library open there is
-	// nothing to delete (the list this menu came from is empty too).
-	if (!db || !project) return;
-	auto item = assetViewWidget->currentItem();
+	// DELETE FROM THE PROJECT DRAWER MEANS "TAKE IT OUT OF THIS PROJECT"
+	// (MATERIAL_BUNDLE_SPEC phase 2's Deletes column — the module's private
+	// asset code). What was here was 130 lines of the module's own delete: a
+	// hand-rolled dependency dialog over `deleteAssetAndDependencies`, plus a
+	// sweep that removed FILES from the project folder by display name. Every
+	// premise of it is gone — a project holds no asset files (they are pins on
+	// store objects), and the library-delete law says a row a project pins is
+	// unlisted, never deleted. It also answered the wrong question: this is the
+	// PROJECT drawer, and removing something from a project must not touch the
+	// library at all.
+	//
+	// `assetdelete::removeFromProject` is the one implementation the editor's
+	// tray Delete uses: it drops this project's pin and the pins of the members
+	// only this bundle uses (a texture two materials share keeps its pin), and
+	// reaps a row that was already unlisted and has just lost its last pin.
+	if (!db || !project || project->getProjectGuid().isEmpty()) return;
+	auto *item = assetViewWidget->currentItem();
+	if (!item) return;
 
-	// Delete folder and contents
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
-		for (const auto &files : db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-			auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
-			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
-		}
+		db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString());
+		refresh();
+		return;
 	}
-
-	// Delete asset and dependencies
-	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET) {
-		QStringList dependentAssets;
-		for (const auto &files :
-			db->fetchAssetGUIDAndDependencies(item->data(MODEL_GUID_ROLE).toString()))
-		{
-			dependentAssets.append(files);
-		}
-
-		// If a asset is single, remove it
-		// If an asset has multiple dependers, warn
-		// If an asset has dependencies that have multiple dependers, warn
-
-		QStringList otherDependers;
-		QStringList assetWithDeps;
-
-		for (const auto &asset : dependentAssets) {
-			auto dependers = db->hasMultipleDependers(asset);
-			if (dependers.count() > 1) {
-				otherDependers.append(dependers);
-				assetWithDeps.append(asset);
-			}
-		}
-
-		// Don't warn if it's a single asset, just break stuff
-		if (assetWithDeps.isEmpty()) {
-			// do a normal delete and return
-			for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-				auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
-				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
-			}
-
-			refresh();
-			return;
-		}
-
-		QListWidget *assetsToRemove = new QListWidget;
-
-		bool assetHasDependencies = db->hasDependencies(item->data(MODEL_GUID_ROLE).toString());
-
-		if (assetHasDependencies) {
-			QStringListIterator it(dependentAssets);
-			int iter = 0;
-			while (it.hasNext()) {
-				auto guid = it.next();
-				QListWidgetItem *listItem = new QListWidgetItem(db->fetchAsset(guid).name, assetsToRemove);
-				listItem->setData(Qt::UserRole, guid);
-				if (!iter || db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Mesh)) {
-					listItem->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-				}
-				if (assetWithDeps.contains(guid)) {
-					listItem->setCheckState(Qt::Unchecked);
-				}
-				else {
-					listItem->setCheckState(Qt::Checked);
-				}
-				assetsToRemove->addItem(listItem);
-				iter++;
-			}
-		}
-		else {
-			QStringListIterator it(otherDependers);
-			int iter = 0;
-			while (it.hasNext()) {
-				auto guid = it.next();
-				QListWidgetItem *listItem = new QListWidgetItem(db->fetchAsset(guid).name, assetsToRemove);
-				listItem->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-				listItem->setData(Qt::UserRole, guid);
-				assetsToRemove->addItem(listItem);
-				iter++;
-			}
-		}
-
-		QDialog dialog;
-		dialog.setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-		dialog.setWindowTitle("Dependent Assets");
-
-		QLabel *textLabel = new QLabel;
-
-		if (assetHasDependencies) {
-			textLabel->setText(
-				"The assets below will be deleted as dependencies.\n"
-				"Unticked items are being used with other assets, select them to remove them as well."
-			);
-		}
-		else {
-			textLabel->setText(
-				"The assets below are dependent on this asset.\n"
-				"If you choose to continue removing this asset, those assets will be affected."
-			);
-		}
-
-		auto layout = new QVBoxLayout;
-		dialog.setLayout(layout);
-
-		layout->addWidget(textLabel);
-		layout->addSpacing(8);
-		layout->addWidget(assetsToRemove);
-
-		auto blayout = new QHBoxLayout;
-		auto bwidget = new QWidget;
-		bwidget->setLayout(blayout);
-		QPushButton *deleteSelected = new QPushButton("Delete Selected");
-		QPushButton *cancel = new QPushButton("Cancel");
-		blayout->addStretch(1);
-		blayout->addWidget(deleteSelected);
-		blayout->addWidget(cancel);
-		layout->addWidget(bwidget);
-
-		if (!assetHasDependencies) {
-			connect(deleteSelected, &QPushButton::pressed, this, [&]() {
-				dialog.close();
-
-				for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-					auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
-					if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
-				}
-
-				//delete ui->assetView->takeItem(ui->assetView->row(item));
-				refresh();
-			});
-		}
-		else {
-			connect(deleteSelected, &QPushButton::pressed, this, [&]() {
-				dialog.close();
-
-				for (int i = 0; i < assetsToRemove->count(); ++i) {
-					QListWidgetItem *item = assetsToRemove->item(i);
-					auto itemGuid = item->data(Qt::UserRole).toString();
-
-					if (item->checkState() == Qt::Checked) {
-						db->deleteAsset(itemGuid);
-						db->deleteDependency(item->data(MODEL_GUID_ROLE).toString(), itemGuid);
-
-						auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(db->fetchAsset(itemGuid).name));
-						if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
-					}
-				}
-
-				//delete ui->assetView->takeItem(ui->assetView->row(item));
-				refresh();
-			});
-		}
-
-		connect(cancel, &QPushButton::pressed, this, [&dialog]() {
-			dialog.close();
-		});
-
-		dialog.setStyleSheet(StyleSheet::ShaderAssetConfirmDialog());
-		dialog.exec();
-	}
-	
+	const QString target = guid.isEmpty() ? item->data(MODEL_GUID_ROLE).toString() : guid;
+	if (target.isEmpty()) return;
+	assetdelete::removeFromProject(db, target, project->getProjectGuid());
+	refresh();
 }
 
 void ShaderAssetWidget::editingFinishedOnListItem(QListWidgetItem *item)
