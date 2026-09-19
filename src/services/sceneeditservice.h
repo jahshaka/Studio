@@ -109,10 +109,11 @@ public:
     void addSphere();
     void addCylinder();
     void addPyramid();
-    void addTeapot();
-    void addSponge();
-    void addSteps();
-    void addGear();
+    void addStar();
+    void addWedge();
+    void addTube();
+    void addHemisphere();
+    // (addTeapot / addSponge / addSteps / addGear: DELETED, owner review R6.)
     /// Name-dispatch over the primitives above ("Plane", "Cone", ...).
     ///
     /// `position` is where the primitive is BORN, in world space (smoke S2:

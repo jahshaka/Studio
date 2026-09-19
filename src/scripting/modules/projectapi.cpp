@@ -37,11 +37,20 @@ For more information see the LICENSE file
 QVector<VerbInfo> ProjectApi::verbs() const
 {
     return {
-        { "create", "project.create(name) -> guid",
+        { "create", "project.create(name, {empty, location}) -> guid",
           "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
           "opens it in the editor. INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
           "did up to here becomes one undo step of the project being left, whose stack is then cleared with "
-          "it, and the rest of the run records into a fresh entry in the new project.",
+          "it, and the rest of the run records into a fresh entry in the new project.\n\n"
+          "`empty: true` gives a BLANK WORLD instead of the default template. The template is a ground, the "
+          "sun (a directional light), a Sky Light and the realistic real-time sky with the sun following the "
+          "atmosphere; the blank world is the root node, the Epic world mode and the document's own defaults "
+          "— no ground, no lights at all (so nothing lights it) and no sky beyond the flat default colour. "
+          "`location` is the folder the project's own directory is created under; omitted, it is the user's "
+          "projects root (the Jahshaka documents folder, or the run's --data-root). A location that does not "
+          "exist, is not a folder or is not writable is REFUSED BY NAME — no project row is written and "
+          "nothing is left pointing at a folder that was never made. These are the New Scene dialog's two "
+          "controls: its Empty scene checkbox and its Browse button call this verb.",
           Needs::Document },
         { "open", "project.open(guidOrName) -> bool",
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
@@ -179,18 +188,37 @@ QString ProjectApi::resolveGuid(const QString &guidOrName, QString *nameOut)
     return guid;
 }
 
-QString ProjectApi::create(const QString &name)
+QString ProjectApi::create(const QString &name, const QVariantMap &options)
 {
     if (!host.mainWindow || !host.services || !host.services->project) { fail("project: not available in this session"); return QString(); }
     if (name.trimmed().isEmpty()) { fail("project.create: a non-empty name is required"); return QString(); }
+
+    // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{emtpy: true}`
+    // silently making the template is exactly the class of bug the option maps
+    // exist to prevent.
+    static const QStringList known = { QStringLiteral("empty"), QStringLiteral("location") };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (known.contains(it.key())) continue;
+        fail(QStringLiteral("project.create: unknown option '%1' (known: %2)")
+                 .arg(it.key(), known.join(QStringLiteral(", "))));
+        return QString();
+    }
+    const bool empty = options.value(QStringLiteral("empty"), false).toBool();
+    const QString location = options.value(QStringLiteral("location")).toString();
 
     // The data half (guid, current project, folder, DB row, desktop) is
     // ProjectService's; MainWindow::newProject then builds the default scene
     // and saves it, so the row never carries the empty scene blob (the crash
     // window the census flagged).
-    const QString guid = host.services->project->createProjectShell(name);
+    QString why;
+    const QString guid = host.services->project->createProjectShell(name, location, &why);
     if (guid.isEmpty()) {
-        fail("project.create: the database rejected the project row");
+        // THE SERVICE'S OWN REASON, by name: "the location '/nope' does not
+        // exist" is the answer a caller can act on, and it is the same
+        // sentence the dialog shows.
+        fail(QStringLiteral("project.create: %1")
+                 .arg(why.isEmpty() ? QStringLiteral("the database rejected the project row")
+                                    : why));
         return QString();
     }
 
@@ -198,7 +226,7 @@ QString ProjectApi::create(const QString &name)
     // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
     // stack, and that clear is a no-op while the run's macro is open.
     host.endRunUndoMacro();
-    host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder());
+    host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder(), empty);
     host.beginRunUndoMacro();
     return guid;
 }
@@ -233,6 +261,18 @@ bool ProjectApi::open(const QString &guidOrName)
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
+    }
+    // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
+    // fix round F1). A project created at a chosen location (the New Scene
+    // dialog's Browse button) records the root it lives under; if that root is
+    // gone — an unplugged drive, a folder the user moved — opening must SAY SO
+    // with the path in it, not fall back to the default root (which would open
+    // an empty world under the project's own guid and let the user save over
+    // it) and not recreate an empty folder.
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("%1: %2").arg(QStringLiteral("project.open"), whyMissing));
     }
     // The OLD project's undo history dies with the old project (CLOSE-2
     // item 2): end the run's entry so closeProject's clear() is not a no-op,
@@ -283,6 +323,18 @@ bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(play ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
         return true;
+    }
+    // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
+    // fix round F1). A project created at a chosen location (the New Scene
+    // dialog's Browse button) records the root it lives under; if that root is
+    // gone — an unplugged drive, a folder the user moved — opening must SAY SO
+    // with the path in it, not fall back to the default root (which would open
+    // an empty world under the project's own guid and let the user save over
+    // it) and not recreate an empty folder.
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("%1: %2").arg(QStringLiteral("project.openAsync"), whyMissing));
     }
     host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
@@ -399,6 +451,15 @@ bool ProjectApi::remove(const QString &guid)
     QString name;
     if (resolveGuid(guid, &name) != guid)
         return fail(QStringLiteral("project.remove: no project with guid '%1'").arg(guid));
+
+    // …and a delete cannot reach a folder on a drive that is not there: it must
+    // not quietly drop the catalog rows that name files it cannot remove
+    // (fix round F1).
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("project.remove: %1").arg(whyMissing));
+    }
 
     // Folder first (like the widget), then the DB rows — through the
     // guid-parameterised service: host.project is NOT mutated (§1.6.1).

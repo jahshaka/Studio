@@ -1733,3 +1733,16 @@ set_tests_properties(scripting.e2e.player_bounce PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PLAYER_TEST_NO_ATTACH=1"
     LABELS "scripting"
     TIMEOUT 300)
+
+# scripting.e2e.new_scene — project.create(name, {empty, location}), which IS
+# the New Scene dialog's two new controls (owner review R1 / R1b, lane
+# SMALL-UI-A). Engine up: the default template's sky is a RENDERER fact as much
+# as a document one, and the empty world has to be built by the same route.
+add_script_e2e(new_scene e2e_new_scene.js)
+
+# scripting.e2e.primitives — the ONE primitive table through the VERB (owner
+# review R6 / answer Q4). The table's own contract — the meshes, the tangents,
+# the tile icons, the old-guid mapping — is defaults.primitive_table; this is
+# "every name the drawer offers is a name the verb accepts", plus the retired
+# four refused by name, plus the Mirror Room still opening with its teapot.
+add_script_e2e(primitives e2e_primitives.js)

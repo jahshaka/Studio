@@ -186,17 +186,26 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     // If we're opening a new scene, close the old one first
     if (mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
 
-	// services/apppaths.h decides: the data root when a run forces one, the
-	// `default_directory` preference otherwise (S-extra2 — a sandboxed run must
-	// not create project folders in the user's Documents).
-	const auto projectFolder = AppPaths::projectsRoot(
-	    SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString(),
-	    Constants::PROJECT_FOLDER);
+	// WHERE THIS PROJECT ACTUALLY IS (SMALL-UI-A fix round F1). This rebuilt
+	// the path from the DEFAULT projects root, so a project created at a chosen
+	// location (the New Scene dialog's Browse button) opened pointing at a
+	// folder that does not exist — silently, with its baked maps and exports
+	// going somewhere else. ProjectService::projectFolderFor is the one
+	// resolver; the tile knows the guid and nothing else.
+	if (!projectService) return;
+	QString whyMissing;
+	if (projectService->projectLocationMissing(widget->tileData.guid, &whyMissing)) {
+		// A REFUSAL BY NAME, not a silent fall-back to the default root (which
+		// would open an empty world under the project's own guid and let the
+		// user save over it) and not an auto-created empty folder.
+		reportImportProblem(tr("Open Scene"),
+		                    tr("'%1' could not be opened: %2")
+		                        .arg(widget->tileData.name, whyMissing));
+		return;
+	}
 
-	project->setProjectPath(
-        QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
-        widget->tileData.name
-    );
+	project->setProjectPath(projectService->projectFolderFor(widget->tileData.guid),
+	                        widget->tileData.name);
 	project->setProjectGuid(widget->tileData.guid);
 
     assetGuids.clear();
@@ -307,6 +316,10 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
 {
     const ProjectArchiver::Result result = archiver ? archiver->result()
                                                     : ProjectArchiver::Result();
+    // The one place this handler may leave early without taking the progress
+    // dialog down with it is here, before it has put one up (fix round F1: the
+    // imported project's folder is resolved through ProjectService).
+    if (!projectService) { hideOpenProgress(); return; }
     if (canceled) {
         // The archiver already rolled the half-built project back — nothing to
         // clean up here.
@@ -331,9 +344,18 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
     // there later; assets never do).
     db->updateProjectDesktop(result.projectGuid, currentDesktop);
 
-    const auto defaultProjectDirectory = AppPaths::projectsRoot(
-        settings->getValue("default_directory", QString()).toString(), Constants::PROJECT_FOLDER);
-    auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(result.projectGuid);
+    // AN IMPORTED ARCHIVE LANDS ON THE DEFAULT ROOT (fix round F1, stated):
+    // the archive carries no location of its own and the import dialog asks
+    // for a FILE, not a destination, so the project records no location and
+    // this resolves to the default root — which is exactly where imports have
+    // always gone. Through the one resolver all the same, so "where is this
+    // project's folder" has a single answer everywhere.
+    //
+    // No null guard HERE on purpose: an early return in the middle of this
+    // handler strands the progress dialog on screen. The service is injected
+    // right after the page is constructed, long before an import can start, and
+    // the guard that belongs to that fact is at the top of the handler.
+    auto pDir = projectService->projectFolderFor(result.projectGuid);
     QDir().mkpath(pDir);
 
     if (mImportOpenMode) {
@@ -365,14 +387,19 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
 }
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {
-    const auto projectFolder = AppPaths::projectsRoot(
-        SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString(),
-        Constants::PROJECT_FOLDER);
-
-    project->setProjectPath(
-        QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
-        widget->tileData.name
-    );
+    // The one resolver (fix round F1): exporting a project created at a chosen
+    // location used to archive the DEFAULT root's folder of the same guid —
+    // i.e. nothing, or somebody else's leftovers.
+    if (!projectService) return;
+    QString whyMissing;
+    if (projectService->projectLocationMissing(widget->tileData.guid, &whyMissing)) {
+        reportImportProblem(tr("Export Scene"),
+                            tr("'%1' could not be exported: %2")
+                                .arg(widget->tileData.name, whyMissing));
+        return;
+    }
+    project->setProjectPath(projectService->projectFolderFor(widget->tileData.guid),
+                            widget->tileData.name);
     project->setProjectGuid(widget->tileData.guid);
 
     emit exportProject();
@@ -400,9 +427,20 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
-    const auto projectFolder = AppPaths::projectsRoot(
-        SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString(),
-        Constants::PROJECT_FOLDER);
+    if (!projectService) return;
+    // THE PROJECT'S OWN FOLDER, wherever it is (fix round F1). Built from the
+    // DEFAULT root, this deleted the rows of a located project and left its
+    // real folder on disk forever — the tile disappeared and the gigabytes
+    // stayed. A location that is not reachable refuses instead: a delete that
+    // cannot reach the files must not quietly drop the catalog rows that name
+    // them.
+    QString whyMissing;
+    if (projectService->projectLocationMissing(widget->tileData.guid, &whyMissing)) {
+        reportImportProblem(tr("Delete Scene"),
+                            tr("'%1' could not be deleted: %2")
+                                .arg(widget->tileData.name, whyMissing));
+        return;
+    }
 
     auto option = QMessageBox::question(this,
                                         "Deleting Project",
@@ -410,7 +448,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
                                         QMessageBox::Yes | QMessageBox::Cancel);
 
     if (option == QMessageBox::Yes) {
-        QDir dirToRemove(QDir(projectFolder + "/Projects").filePath(widget->tileData.guid));
+        QDir dirToRemove(projectService->projectFolderFor(widget->tileData.guid));
         if (dirToRemove.removeRecursively()) {
             // The catalog half, by the deleted project's OWN guid (read before
             // the tile goes). This used to stamp that guid onto the LIVE
@@ -771,33 +809,38 @@ void ProjectManager::openSampleProject(QListWidgetItem *item)
 
 void ProjectManager::newProject()
 {
-	NewProjectDialog dialog;
+	// THE DIALOG CALLS THE VERB'S ROUTE (API-first), and there is only one
+	// route now. What stood here was a SECOND copy of
+	// ProjectService::createProjectShell — its own guid, its own folder, its
+	// own `db->createProject` + `updateProjectDesktop` — wrapped in
+	// `if (!name.isEmpty() || !name.isNull())`, which is TRUE for the empty
+	// string (an empty QString is not a null one) and so minted a NAMELESS
+	// project whenever the name box was cleared (owner review R1, the audit's
+	// last item). Both the duplicate and the condition are gone: the service
+	// refuses an empty name by name, and it is the same refusal
+	// `project.create` reports.
+	NewProjectDialog dialog(this);
 	dialog.exec();
 
-	auto projectName = dialog.getProjectInfo().projectName;
-	auto projectPath = dialog.getProjectInfo().projectPath;
-	auto projectGuid = GUIDManager::generateGUID();
+	const ProjectInfo info = dialog.getProjectInfo();
+	if (!projectService) return;   // headless/stub host: nothing to create with
 
-	if (!projectName.isEmpty() || !projectName.isNull()) {
-		auto fullProjectPath = QDir(QDir(projectPath).filePath("Projects")).filePath(projectGuid);
-
-		project->setProjectPath(fullProjectPath, projectName);
-		project->setProjectGuid(projectGuid);
-
-		// make a dir and the default subfolders
-		QDir projectDir(fullProjectPath);
-		if (!projectDir.exists()) projectDir.mkpath(".");
-
-		// Insert an empty scene to get access to the project guid...
-		if (!db->createProject(projectGuid, projectName)) return;
-
-		// new projects belong to the desktop they were created on
-		db->updateProjectDesktop(projectGuid, currentDesktop);
-
-		emit fileToCreate(projectName, fullProjectPath);
-
-		this->hide();
+	QString why;
+	const QString projectGuid =
+	    projectService->createProjectShell(info.projectName, info.projectPath, &why);
+	if (projectGuid.isEmpty()) {
+		// A CANCELLED DIALOG IS NOT AN ERROR: it comes back with no name, which
+		// is exactly the refusal the service gives an empty one, and a person
+		// who pressed Cancel must not be told off for it.
+		if (!info.projectName.trimmed().isEmpty() && !why.isEmpty())
+			reportImportProblem(tr("Create Scene"),
+			                    tr("The scene could not be created: %1").arg(why));
+		return;
 	}
+
+	emit fileToCreate(info.projectName.trimmed(), project->getProjectFolder(), info.empty);
+
+	this->hide();
 }
 
 void ProjectManager::changePreviewSize(QString scale)

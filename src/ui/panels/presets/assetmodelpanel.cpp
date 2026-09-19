@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 
 #include "data/constants.h"
+#include "data/primitives.h"
 #include "data/materialpreset.h"
 #include "data/guidmanager.h"
 #include "io/materialpresetreader.h"
@@ -72,64 +73,25 @@ AssetModelPanel::~AssetModelPanel()
 
 void AssetModelPanel::addDefaultItems()
 {
-    defaultModels.append(DefaultModel {
-        "Plane", ":/content/primitives/plane.obj", "app/modelpresets/plane.png"
-    });
+    // THE TILES ARE THE TABLE (owner review R6, src/data/primitives.h). This
+    // was a THIRD copy of the primitive list — its own order, its own icon
+    // paths, Pyramid appended out of order, Ground absent, and the guid looked
+    // up by reverse name search through Constants::Reserved::DefaultPrimitives.
+    // A row with no guid (Ground) is not a tile: it is 100 m of floor, an Add
+    // menu entry and a verb name, not something to drag out of a drawer.
+    for (const primitives::Def &def : primitives::all()) {
+        if (!def.guid || !def.icon) continue;
 
-    defaultModels.append(DefaultModel {
-        "Cube", ":/content/primitives/cube.obj", "app/modelpresets/cube.png"
-    });
-    
-    defaultModels.append(DefaultModel {
-        "Cylinder", ":/content/primitives/cylinder.obj", "app/modelpresets/cylinder.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Sphere", ":/content/primitives/sphere.obj", "app/modelpresets/sphere.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Torus", ":/content/primitives/torus.obj", "app/modelpresets/torus.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Pyramid", ":/content/primitives/pyramid.obj", "app/modelpresets/pyramid.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Capsule", ":/content/primitives/capsule.obj", "app/modelpresets/capsule.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Cone", ":/content/primitives/cone.obj", "app/modelpresets/cone.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Gear", ":/content/primitives/gear.obj", "app/modelpresets/gear.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Steps", ":/content/primitives/steps.obj", "app/modelpresets/steps.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Teapot", ":/content/primitives/teapot.obj", "app/modelpresets/teapot.png"
-    });
-
-    defaultModels.append(DefaultModel {
-        "Sponge", ":/content/primitives/sponge.obj", "app/modelpresets/sponge.png"
-    });
-
-    for (const auto &object : defaultModels) {
         auto item = new QListWidgetItem;
-        item->setData(Qt::DisplayRole, object.objectName);
-        item->setData(Qt::UserRole, object.objectName);
+        const QString name = QString::fromLatin1(def.name);
+        item->setData(Qt::DisplayRole, name);
+        item->setData(Qt::UserRole, name);
 
         item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Object));
-        item->setData(MODEL_MESH_ROLE, object.meshPath);
-        item->setData(MODEL_GUID_ROLE, Constants::Reserved::DefaultPrimitives.key(object.objectName));
+        item->setData(MODEL_MESH_ROLE, QString::fromLatin1(def.mesh));
+        item->setData(MODEL_GUID_ROLE, QString::fromLatin1(def.guid));
 
-        item->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath(object.objectIcon)));
+        item->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath(QString::fromLatin1(def.icon))));
 
         listView->addItem(item);
     }

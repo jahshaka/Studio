@@ -48,6 +48,7 @@ namespace Ui {
 
 
 class SettingsManager;
+class ProjectService;
 class MainWindow;
 class Project;
 
@@ -64,6 +65,11 @@ public:
     /// through isOpenProjectTile().
     ProjectManager(Database *handle, Project *project, QWidget *parent = nullptr);
     ~ProjectManager();
+
+    /// The project data flows, injected by the shell right after construction
+    /// (beside ProjectService::setProjectManager, which is the other half of
+    /// the same pairing). The New Scene button's create goes through it.
+    void setProjectService(ProjectService *service) { projectService = service; }
 
 	void updateTile(const QString &id, const QByteArray &arr);
 	void addImportedTileToDesktop(const QString &guid);
@@ -198,7 +204,10 @@ private:
     friend DynamicGrid;     // is this going to be a problem?
 
 signals:
-    void fileToCreate(const QString &name, const QString &path);
+    /// `empty` = the dialog's "Empty scene" checkbox (owner review R1a). It
+    /// rides the signal rather than being read back off the dialog because the
+    /// dialog is gone by the time the shell builds the scene.
+    void fileToCreate(const QString &name, const QString &path, bool empty);
     void importProject();
     void exportProject();
     void closeProject();
@@ -236,6 +245,11 @@ private:
 
     Database *db = nullptr;
     Project *project;
+    /// THE ONE CREATE ROUTE (owner review R1). The page used to mint the guid,
+    /// make the folder and write the project row itself — a second copy of
+    /// ProjectService::createProjectShell, with its own `||` name check. Set by
+    /// the shell beside ProjectService::setProjectManager.
+    ProjectService *projectService = nullptr;
 
 	QPointer<ProgressDialog> progressDialog;
 

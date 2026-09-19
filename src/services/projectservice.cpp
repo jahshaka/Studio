@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QBuffer>
 #include <QDir>
+#include <QFileInfo>
 #include <QStandardPaths>
 
 #include "data/constants.h"
@@ -53,6 +54,38 @@ QString ProjectService::projectsRoot() const
                                   Constants::PROJECT_FOLDER);
 }
 
+namespace {
+/// THE ONE PLACE `Projects/<guid>` IS APPENDED TO A ROOT. See ProjectService's
+/// header for the seven hand-built copies of this expression it replaced and
+/// what they cost. Two callers: the resolver below, and the CREATE — which
+/// cannot ask the resolver because the row whose location it would read does
+/// not exist yet.
+QString folderUnder(const QString &root, const QString &guid)
+{
+    return QDir(QDir(root).filePath(QStringLiteral("Projects"))).filePath(guid);
+}
+}   // namespace
+
+QString ProjectService::projectFolderFor(const QString &guid) const
+{
+    const QString recorded = db ? db->projectLocation(guid).trimmed() : QString();
+    return folderUnder(recorded.isEmpty() ? projectsRoot() : recorded, guid);
+}
+
+bool ProjectService::projectLocationMissing(const QString &guid, QString *whyOut) const
+{
+    if (whyOut) whyOut->clear();
+    const QString recorded = db ? db->projectLocation(guid).trimmed() : QString();
+    // No recorded location = the default root, which is created on demand.
+    if (recorded.isEmpty()) return false;
+    if (QFileInfo(recorded).isDir()) return false;
+    if (whyOut)
+        *whyOut = QStringLiteral("this project lives at '%1', which is not there — reconnect the "
+                                 "drive or folder it is on and try again")
+                      .arg(recorded);
+    return true;
+}
+
 QString ProjectService::resolveProjectGuid(const QString &guidOrName, QString *nameOut,
                                            int *hits) const
 {
@@ -77,36 +110,75 @@ QString ProjectService::resolveProjectGuid(const QString &guidOrName, QString *n
     return found;
 }
 
-QString ProjectService::createProjectShell(const QString &name)
+QString ProjectService::createProjectShell(const QString &name, const QString &location,
+                                           QString *whyOut)
 {
     // The ProjectManager::newProject flow minus the dialog (SCRIPTING_SPEC
     // §1.1): guid, current project, folder, DB row, desktop — the caller then
     // builds the default scene and saves it, so the row never carries the
     // empty scene blob.
+    if (whyOut) whyOut->clear();
+    const auto fail = [whyOut](const QString &why) {
+        if (whyOut) *whyOut = why;
+        return QString();
+    };
+
+    if (name.trimmed().isEmpty())
+        return fail(QStringLiteral("a non-empty name is required"));
+
+    // WHERE IT LANDS. The user's projects root unless the dialog's Browse (or
+    // the verb's `location`) named somewhere else. Checked before a guid is
+    // minted or a pointer moves: a create that fails half way through leaves
+    // `project` pointing at a folder that does not exist.
+    QString root = location.trimmed();
+    if (root.isEmpty()) {
+        root = projectsRoot();
+    } else {
+        const QFileInfo info(root);
+        if (!info.exists())
+            return fail(QStringLiteral("the location '%1' does not exist").arg(root));
+        if (!info.isDir())
+            return fail(QStringLiteral("the location '%1' is not a folder").arg(root));
+        if (!info.isWritable())
+            return fail(QStringLiteral("the location '%1' is not writable").arg(root));
+        root = QDir(root).absolutePath();
+    }
+
     const QString guid = GUIDManager::generateGUID();
-    const QString fullProjectPath = QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid);
+    const QString fullProjectPath = folderUnder(root, guid);
 
     project->setProjectPath(fullProjectPath, name.trimmed());
     project->setProjectGuid(guid);
 
     QDir projectDir(fullProjectPath);
-    if (!projectDir.exists()) projectDir.mkpath(".");
+    if (!projectDir.exists() && !projectDir.mkpath("."))
+        return fail(QStringLiteral("the project folder '%1' could not be created")
+                        .arg(fullProjectPath));
 
-    if (!db->createProject(guid, name.trimmed())) return QString();
+    if (!db->createProject(guid, name.trimmed()))
+        return fail(QStringLiteral("the database rejected the project row"));
     db->updateProjectDesktop(guid, projectManager->getCurrentDesktop());
+    // AND WHERE IT WENT IS RECORDED (fix round F1). Only when the user CHOSE a
+    // root: a project on the default root stores nothing, so it follows a
+    // machine whose projects folder moves (a `default_directory` change, a
+    // --data-root run) exactly as it always did — which is the behaviour every
+    // project in the owner's library has.
+    if (!location.trimmed().isEmpty()) db->setProjectLocation(guid, root);
     return guid;
 }
 
 void ProjectService::pointAtProject(const QString &guid, const QString &name)
 {
-    project->setProjectPath(
-        QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid), name);
+    project->setProjectPath(projectFolderFor(guid), name);
     project->setProjectGuid(guid);
 }
 
 bool ProjectService::removeProject(const QString &guid)
 {
-    QDir dirToRemove(QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid));
+    // THE PROJECT'S OWN FOLDER, wherever it is (fix round F1): this rebuilt the
+    // path from the default root, so deleting a project created at a chosen
+    // location dropped its rows and left the real folder on disk forever.
+    QDir dirToRemove(projectFolderFor(guid));
     if (dirToRemove.exists() && !dirToRemove.removeRecursively()) return false;
 
     db->deleteProject(guid);

@@ -60,7 +60,8 @@ public slots:
     void addObjectToScene(QModelIndex itemIndex);
 
 private:
-    QVector<DefaultModel> defaultModels;
+    // (`defaultModels` is gone — the starter tiles come straight from
+    // src/data/primitives.h now and were never read back after being built.)
     QVector<AssetRecord> objectAssets;
 };
 

@@ -34,7 +34,7 @@ public:
     QString jsName() const override { return QStringLiteral("project"); }
     QVector<VerbInfo> verbs() const override;
 
-    Q_INVOKABLE QString create(const QString &name);
+    Q_INVOKABLE QString create(const QString &name, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool open(const QString &guidOrName);
     Q_INVOKABLE bool openAsync(const QString &guidOrName,
                                const QVariantMap &options = QVariantMap());

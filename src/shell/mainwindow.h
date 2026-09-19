@@ -619,19 +619,10 @@ public slots:
     void setupShortcuts();
 
     //scenegraph
-    void addPlane();
-    void addGround();
-    void addCapsule();
-    void addCone();
-    void addCube();
-    void addTorus();
-    void addSphere();
-    void addCylinder();
-    void addPyramid();
-    void addTeapot();
-    void addSponge();
-    void addSteps();
-    void addGear();
+    /// Adds the primitive the sender QAction names (its `data()` is the row's name
+    /// in src/data/primitives.h). It replaced thirteen one-line slots — owner
+    /// review R6; the Add > Primitive menu is built from the table.
+    void addPrimitiveFromAction();
     void addEmpty();
     void addCamera();
     void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
@@ -673,9 +664,12 @@ public slots:
 
 	void toggleDockWidgets();
     void showPreferences();
-    void newScene();
+    /// `empty` = the blank world (owner review R1b / Q1, 2026-09-18): the
+    /// New Scene dialog's "Empty scene" checkbox and `project.create`'s
+    /// `{empty: true}`. See createDefaultScene for what each of the two holds.
+    void newScene(bool empty = false);
 
-    void newProject(const QString&, const QString&);
+    void newProject(const QString&, const QString&, bool empty = false);
     /// The BLOCKING open: returns with the world open, which is the contract
     /// `project.open()` and every headless script are written against.
     ///
@@ -722,7 +716,23 @@ public slots:
     /// Takes the editor's panels down for a page that is not the editor.
     void hideEditorPanels();
 
-    iris::ScenePtr createDefaultScene();
+    /// THE NEW-SCENE TEMPLATE, and its blank twin (owner review R1b / Q1).
+    ///
+    /// `empty == false` is what a new scene has always been, plus the owner's
+    /// Q1 answer: the default ground, the sun (a directional light), the Sky
+    /// Light, shadows on, the Epic world mode — and, since 2026-09-19, the
+    /// REALISTIC real-time sky with the sun following the atmosphere (which is
+    /// LightNode::followsAtmosphere's own default, so nothing is set for it
+    /// here; the template only chooses the sky the flag then means something
+    /// under).
+    ///
+    /// `empty == true` is the blank world, and it holds EXACTLY: a root node,
+    /// the Epic world mode, and the document's own constructor defaults. No
+    /// ground, no lights (so nothing lights it — a Sky Light is a light and an
+    /// empty scene has none), and no sky beyond the document's default flat
+    /// 96-grey, which is what iris::Scene's constructor sets and what a scene
+    /// built by a script has always come up with.
+    iris::ScenePtr createDefaultScene(bool empty = false);
 
     void useFreeCamera();
     void useArcballCam();
@@ -1029,6 +1039,28 @@ private:
     QString bottomReturnTab = QStringLiteral("assets");
     /// Brings `bottomFrontTab` back to the front of the bottom area.
     void raiseBottomFrontTab();
+
+    /// THE LAUNCH TAB (owner review R7, 2026-09-18; the rule of 2026-09-15).
+    ///
+    /// EVERY SESSION OPENS ON ASSETS. Which bottom tab is in front is SESSION
+    /// state, not a preference: inside a session it follows the user and
+    /// survives space switches, fullscreen and the console's visit — but a
+    /// LAUNCH always starts on the asset browser, whatever the saved DockState
+    /// blob remembers, because that blob records where the last session HAPPENED
+    /// to stop (often the Timeline, or the Console after a Ctrl+`).
+    ///
+    /// It is a function because the blob is restored TWICE — once in the
+    /// constructor, and again from applyColumnWidthsOnce at the window's real
+    /// size (the columns come back too narrow otherwise, smoke S1) — and the
+    /// second restore silently re-applied the blob's front tab: the raise in
+    /// the constructor was undone one event-loop turn after the editor opened,
+    /// which is how the rule regressed without anybody touching it. Both
+    /// restores are followed by this call.
+    ///
+    /// It sets `bottomFrontTab` as well as raising the dock: the very next
+    /// thing applyDockVisibilityForSpace does is READ the current front tab
+    /// into that field, so a raise alone would be read straight back out again.
+    void raiseLaunchBottomTab();
 
     QTabWidget *presetsTabWidget;
 

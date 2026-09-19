@@ -55,8 +55,38 @@ public:
     /// soon as the page exists.
     void setProjectManager(ProjectManager *pm) { projectManager = pm; }
 
-    /// The user's projects root (default_directory setting or Documents).
+    /// The user's projects root (default_directory setting or Documents). The
+    /// DEFAULT — a project created through the New Scene dialog's Browse button
+    /// can live somewhere else, and projectFolderFor below is what knows.
     QString projectsRoot() const;
+
+    /// WHERE A PROJECT'S FOLDER IS — THE ONE RESOLVER (SMALL-UI-A fix round F1).
+    ///
+    /// `<location>/Projects/<guid>`, where `location` is the root recorded with
+    /// the project row and the user's projects root when that is empty (which
+    /// is every project that predates the Browse button, and every project
+    /// created without it). Never empty: it always answers where the folder
+    /// WOULD be.
+    ///
+    /// It exists because the path was hand-built from the DEFAULT root at seven
+    /// sites — the desktop tile's open, export and delete, the archive import,
+    /// pointAtProject, removeProject and the create — so a project created at a
+    /// chosen location could not be found again: after a close and reopen it
+    /// pointed at a folder that does not exist, baked maps and exports went to
+    /// the wrong place and a delete left the real folder behind. Every one of
+    /// those sites calls this now; there is no second copy of the expression.
+    QString projectFolderFor(const QString &guid) const;
+
+    /// Does this project record a location that is NOT THERE any more (an
+    /// unplugged drive, a folder the user moved)? True with `whyOut` set to a
+    /// sentence naming the path. False for every project on the default root —
+    /// the default root is created on demand and is never "missing".
+    ///
+    /// Deliberately NOT folded into projectFolderFor: an open must REFUSE by
+    /// name rather than fall back to the default root (which would silently
+    /// open an empty world under the same guid) or recreate an empty folder
+    /// (which would silently lose the user's work by making it look absent).
+    bool projectLocationMissing(const QString &guid, QString *whyOut = nullptr) const;
 
     /// Resolves a guid-or-exact-name to a project guid. Returns the guid, or
     /// empty when not found; *hits gets the number of name matches (>1 means
@@ -68,7 +98,22 @@ public:
     /// guid, current-project pointers, folder, DB row, desktop assignment.
     /// Returns the new guid, or empty when the DB rejects the row. The caller
     /// (shell or ProjectApi) follows with the new-scene UI flow.
-    QString createProjectShell(const QString &name);
+    ///
+    /// THE ONE CREATE ROUTE (owner review R1, 2026-09-18). The desktop page
+    /// carried a SECOND copy of this — guid, folder, `db->createProject`,
+    /// `updateProjectDesktop`, inline in ProjectManager::newProject — guarded
+    /// by `if (!name.isEmpty() || !name.isNull())`, a condition that is TRUE
+    /// for the empty string (it is not null) and therefore minted a nameless
+    /// project from an emptied name box. Both are gone: the page calls this.
+    ///
+    /// `location` is the folder the project's own directory is created under
+    /// (the Browse button's answer). Empty means the user's projects root —
+    /// exactly what every caller got before the argument existed. It must name
+    /// an existing, writable directory; `whyOut` says which of those it failed
+    /// when the call returns empty, so a verb can refuse BY NAME instead of
+    /// returning a bare false.
+    QString createProjectShell(const QString &name, const QString &location = QString(),
+                               QString *whyOut = nullptr);
 
     /// Points the current project at an existing project. NO preload: the
     /// open registers the session assets in its own slices, with a worker's

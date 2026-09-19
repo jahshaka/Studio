@@ -66,6 +66,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "commands/deletescenenodecommand.h"
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
+#include "data/primitives.h"
 #include "services/assethelper.h"
 #include "services/meshbakestore.h"
 #include "services/editgate.h"
@@ -161,35 +162,13 @@ void SceneEditService::addTorus()    { addPrimitive(QStringLiteral("Torus")); }
 void SceneEditService::addSphere()   { addPrimitive(QStringLiteral("Sphere")); }
 void SceneEditService::addCylinder() { addPrimitive(QStringLiteral("Cylinder")); }
 void SceneEditService::addPyramid()  { addPrimitive(QStringLiteral("Pyramid")); }
-void SceneEditService::addTeapot()   { addPrimitive(QStringLiteral("Teapot")); }
-void SceneEditService::addSponge()   { addPrimitive(QStringLiteral("Sponge")); }
-void SceneEditService::addSteps()    { addPrimitive(QStringLiteral("Steps")); }
-void SceneEditService::addGear()     { addPrimitive(QStringLiteral("Gear")); }
-
-namespace {
-/// The shipped primitives, as ONE table: the name the verb and the drop use,
-/// the bundled mesh, and the node name. It replaces a fall-through chain of
-/// thirteen `if`s that had to be edited in two places to grow an argument
-/// ("Ground" was once missing from it entirely — AI_SURFACE_AUDIT #16).
-struct PrimitiveDef { const char *name; const char *mesh; const char *nodeName; };
-const PrimitiveDef kPrimitiveDefs[] = {
-    { "Ground",   ":/models/ground.obj",                "Ground"   },
-    { "Plane",    ":/content/primitives/plane.obj",     "Plane"    },
-    { "Cone",     ":/content/primitives/cone.obj",      "Cone"     },
-    { "Cube",     ":/content/primitives/cube.obj",      "Cube"     },
-    { "Cylinder", ":/content/primitives/cylinder.obj",  "Cylinder" },
-    { "Sphere",   ":/content/primitives/sphere.obj",    "Sphere"   },
-    { "Torus",    ":/content/primitives/torus.obj",     "Torus"    },
-    // Named "Plane" from the original addCapsule() until 2026-09-17 (the
-    // extraction preserved it; the render audit's A10 caught it).
-    { "Capsule",  ":/content/primitives/capsule.obj",   "Capsule"  },
-    { "Gear",     ":/content/primitives/gear.obj",      "Gear"     },
-    { "Pyramid",  ":/content/primitives/pyramid.obj",   "Pyramid"  },
-    { "Teapot",   ":/content/primitives/teapot.obj",    "Teapot"   },
-    { "Sponge",   ":/content/primitives/sponge.obj",    "Sponge"   },
-    { "Steps",    ":/content/primitives/steps.obj",     "Steps"    },
-};
-}   // namespace
+void SceneEditService::addStar()     { addPrimitive(QStringLiteral("Star")); }
+void SceneEditService::addWedge()    { addPrimitive(QStringLiteral("Wedge")); }
+void SceneEditService::addTube()     { addPrimitive(QStringLiteral("Tube")); }
+void SceneEditService::addHemisphere() { addPrimitive(QStringLiteral("Hemisphere")); }
+// (addTeapot / addSponge / addSteps / addGear are DELETED — owner review R6:
+// PRIMITIVES ONLY. The four slots were dead in MainWindow too; nothing but
+// this line ever called them.)
 
 void SceneEditService::pinBuiltinPrimitives()
 {
@@ -202,21 +181,20 @@ void SceneEditService::pinBuiltinPrimitives()
     // worker. They are a few kilobytes each, compiled into the binary, and
     // there is a fixed number of them — the one case where holding the parse
     // is right. Registering does not parse: the first add or load does.
-    QStringList paths;
-    for (const auto &def : kPrimitiveDefs) paths << QLatin1String(def.mesh);
-    iris::Mesh::pinLoadPaths(paths);
+    iris::Mesh::pinLoadPaths(primitives::pinnedMeshPaths());
 }
 
 void SceneEditService::addPrimitive(const QString &text,
                                     const std::optional<iris::Vec3> &position,
                                     surfaceplacement::Placement placement)
 {
-    for (const auto &def : kPrimitiveDefs) {
-        if (text == QLatin1String(def.name)) {
-            addBuiltinPrimitive(QLatin1String(def.mesh), QLatin1String(def.nodeName), position,
-                                placement);
-            return;
-        }
+    // ONE TABLE (src/data/primitives.h). The node takes the row's NAME as its
+    // own — there is no separate "node name" column any more: the two were
+    // equal for every row but Capsule, where the second copy said "Plane" and
+    // had done since the original addCapsule() (the render audit's A10).
+    if (const primitives::Def *def = primitives::byName(text)) {
+        addBuiltinPrimitive(QLatin1String(def->mesh), QLatin1String(def->name), position,
+                            placement);
     }
 }
 

@@ -104,7 +104,14 @@ Database::Database()
         "    scene             BLOB,"
         "    desktop           INTEGER DEFAULT 1,"   // which desktop the tile lives on (1..4)
         "    desktop_x         REAL,"                // freeform position, normalized 0..1
-        "    desktop_y         REAL"                 // NULL = never placed (cascade assigns)
+        "    desktop_y         REAL,"                // NULL = never placed (cascade assigns)
+        // WHERE THIS PROJECT'S FOLDER LIVES — the root it was created under,
+        // NOT the folder itself (the folder is always <location>/Projects/<guid>,
+        // so the guid is never stored twice). NULL or empty means the user's
+        // projects root, which is what every project created before the New
+        // Scene dialog grew a Browse button IS (owner review R1d, SMALL-UI-A).
+        // ProjectService::projectFolderFor is the ONE thing that reads it.
+        "    location          TEXT"
         ")";
 
     thumbnailsTableSchema = 
@@ -596,6 +603,20 @@ void Database::migrateProjectsTable()
         query.prepare("ALTER TABLE projects ADD COLUMN slider_index INTEGER");
         executeAndCheckQuery(query, "MigrateProjectsAddSliderIndex");
     }
+
+    // WHERE THE PROJECT'S FOLDER LIVES (owner review R1d, SMALL-UI-A): the
+    // dialog's Browse button can put a new project anywhere, and a location
+    // that is not recorded cannot be found again — every resolver rebuilt the
+    // path from the DEFAULT root, so a restart opened a located project
+    // pointing at a folder that does not exist. Additive and guarded like the
+    // four above: an existing library gains the column in place and every row
+    // in it reads back NULL, which means "the default root" — which is where
+    // every one of them is.
+    if (!checkIfColumnExists("projects", "location")) {
+        QSqlQuery query;
+        query.prepare("ALTER TABLE projects ADD COLUMN location TEXT");
+        executeAndCheckQuery(query, "MigrateProjectsAddLocation");
+    }
 }
 
 void Database::migrateCollectionsTable()
@@ -887,6 +908,30 @@ void Database::createIndexes()
     QSqlQuery byDependee;
     byDependee.prepare("CREATE INDEX IF NOT EXISTS idx_dependencies_dependee ON dependencies (dependee)");
     executeAndCheckQuery(byDependee, "CreateDependenciesDependeeIndex");
+}
+
+// WHERE A PROJECT'S FOLDER LIVES. Empty clears the row back to "the default
+// root", which is also what every project written before the column existed
+// says. The value is the ROOT the project was created under, never the project
+// folder itself — ProjectService::projectFolderFor appends `Projects/<guid>`,
+// exactly once, in one place.
+bool Database::setProjectLocation(const QString &guid, const QString &location)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE projects SET location = :location WHERE guid = :guid");
+    query.bindValue(":location", location.isEmpty() ? QVariant() : QVariant(location));
+    query.bindValue(":guid", guid);
+    return executeAndCheckQuery(query, "SetProjectLocation");
+}
+
+QString Database::projectLocation(const QString &guid)
+{
+    QSqlQuery query;
+    query.prepare("SELECT location FROM projects WHERE guid = ?");
+    query.addBindValue(guid);
+    if (executeAndCheckQuery(query, "ProjectLocation") && query.first())
+        return query.value(0).toString();
+    return QString();
 }
 
 bool Database::createProject(
@@ -1960,7 +2005,16 @@ AssetRecord Database::fetchAsset(const QString &guid)
     // read is what every "is this mine?" caller uses. It was omitted, so
     // `fetchAsset(guid).projectGuid` was the empty string for every row in the
     // catalog — silently answering "library" for project assets.
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed FROM assets WHERE guid = ? ");
+    // ...and `asset` is selected too (SMALL-UI-A fix round F3). It was the one
+    // column of AssetRecord this read never filled, so `fetchAsset(guid).asset`
+    // was EMPTY for every row while the same field, filled by fetchAssetsByType
+    // and by the export walk, carried the real definition — a field that means
+    // two different things depending on which query built the record, silently.
+    // It cost `assets.metadata`'s companionOf read a wrong answer before it was
+    // caught. APPENDED, so every positional index below is untouched; the row
+    // already carries the thumbnail BLOB, so one more blob is not a new class
+    // of cost.
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed, asset FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     // ONE exec. This used to run executeAndCheckQuery AND `query.exec()`, so
     // every by-guid read — the most called query in the catalog — cost two
@@ -1988,6 +2042,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
             // Library visibility: fetchAsset is the BY-GUID read, so it
             // answers for unlisted rows too — it just reports which it is.
             data.listed = query.value(11).toInt() != 0;
+            data.asset = query.value(12).toByteArray();
             return data;
         }
     }
