@@ -228,6 +228,13 @@ editor.frame(30);
 assert(Math.abs(vr.state().postFx.eye.exposure - beforePlay) < 0.001,
        "and gives it back when play stops");
 scene.setActiveCamera(null);
+// ...AND THE CAMERA GOES WITH THE ARM. The editor's VR preview draws the
+// editor's FURNITURE in the eye on purpose (VrConfig::helpers — "see the editor
+// working"), and a camera node's frustum wire fans right across the view from a
+// camera standing where the wearer stands: it left a patch with a spread of 205
+// in the arms below, which compare pictures taken frames apart.
+node.remove(camId);
+editor.frame(30);
 
 // ---- (f) THE PER-FRAME CHAIN GLOBALS REALLY REACH THE EYE ------------------
 //
@@ -335,4 +342,51 @@ editor.screenshot(OUT + "/ready-realistic.png", 32, 32, [], "plain");
 editor.frame(600);
 
 assert(vr.end() === true, "the session ended");
+
+// ---- (i) THE MEASUREMENT OVERRIDE'S OWN PATH -------------------------------
+//
+// THE DEFECT THIS ARM EXISTS FOR. With `eyeWidth`/`eyeHeight` the eye is
+// rendered at a size of the caller's choosing and the swapchain stays the
+// runtime's, so the copy cannot be a copy — it SCALES. A blit CONVERTS between
+// formats, and once the swapchain became _SRGB (this lane's whole point) a blit
+// straight into it read our UNORM bytes as linear and ENCODED them on the way
+// in: a second encode, about a stop too bright, on precisely the arm whose
+// purpose is to be comparable with the product path. The scale now happens
+// between two UNORM images and the result reaches the swapchain through the
+// same raw copy, so this arm must read the same 0.00/255 every other one does.
+//
+// A SECOND SESSION IN THE SAME PROCESS, which is also the only place this suite
+// exercises one.
+//
+// AND ITS FIXTURE IS FLAT ALL THE WAY ROUND, which the arms above did not need:
+// they compare pictures taken at the same pose, while this one compares the
+// eye's own render with a window capture taken 600 frames later — and Monado's
+// simulated head SWAYS AND TURNS through those frames, so anything with
+// structure in it (the horizon, the sun disc) moves between the two and the
+// comparison measures the head instead of the copy. A flat sky with no disc is
+// the same radiance in every direction, so the head may go where it likes.
+// (The first cut of this arm sampled a patch with a spread of 205 — the rig is
+// placed on the editor camera's YAW, and this script has pointed that camera at
+// the ZENITH, where a yaw means nothing.)
+world.sky("color", { color: "#808080" });
+world.sunDisc({ visible: false });
+editor.setCamera({ position: { x: 0, y: 1.6, z: 0 }, lookAt: { x: 0, y: 1.6, z: -20 } });
+editor.frame(30);
+assert(vr.begin({ mirror: "left", eyeWidth: 640, eyeHeight: 720 }) === true,
+       "a second session starts, rendering 640x720 per eye into the runtime's own size");
+editor.frame(120);
+var over = vr.state();
+assert(over.eyeSize[0] === 640 && over.eyeSize[1] === 720,
+       "the session reports the overridden render size (" + over.eyeSize[0] + "x" +
+       over.eyeSize[1] + ")");
+assert(over.colourEncodedOnce === true, "and it is still the one-encode contract");
+comparePostFx(over.postFx, "at an overridden eye size");
+var ov = vr.eyeScreenshot(0, OUT + "/eye-override.png");
+assert(ov.width === 640 && ov.height === 720,
+       "the eye picture is the overridden size (" + ov.width + "x" + ov.height + ")");
+editor.screenshot(OUT + "/desk-override.png", ov.width, ov.height, [], "scene");
+editor.screenshot(OUT + "/ready-override.png", 32, 32, [], "plain");
+editor.frame(600);
+assert(vr.end() === true, "the second session ended");
+
 console.log("vr.eye_grade: the script's half is green; the reader judges the pictures");

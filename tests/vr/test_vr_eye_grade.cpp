@@ -250,6 +250,46 @@ int main(int argc, char **argv)
         }
     }
 
+    // ---- the measurement override's own path ------------------------------
+    //
+    // With `vr.begin({eyeWidth, eyeHeight})` the eye is SCALED into the
+    // runtime's swapchain instead of copied, and a scale is a blit — which
+    // CONVERTS. Straight into an _SRGB swapchain that is a second encode (about
+    // a stop too bright) on the one arm whose job is to be comparable with the
+    // product path; the scale now happens between two UNORM images and the raw
+    // copy does the rest, so this must read what every other arm reads.
+    if (QFile::exists(dir.filePath(QStringLiteral("eye-override.png")))) {
+        const QImage eye = load(dir, QStringLiteral("eye-override.png"));
+        const QImage rt = load(dir, QStringLiteral("runtime-override.png"));
+        check(!eye.isNull() && !rt.isNull(),
+              QStringLiteral("the overridden-size arm's pictures opened"));
+        if (!eye.isNull() && !rt.isNull()) {
+            const Patch pe = patchAt(eye, kEyeX, kY, kHalf);
+            const Patch pr = patchAt(rt, kRuntimeX, kY, kHalf);
+            std::printf("    override (%dx%d)  eye %.1f,%.1f,%.1f (spread %d)  "
+                        "runtime %.1f,%.1f,%.1f (spread %d)\n",
+                        eye.width(), eye.height(), pe.r, pe.g, pe.b, pe.spread,
+                        pr.r, pr.g, pr.b, pr.spread);
+            const double worst = std::max({ std::fabs(pr.r - pe.r), std::fabs(pr.g - pe.g),
+                                            std::fabs(pr.b - pe.b) });
+            check(pe.spread <= kFlatSpread && pr.spread <= kFlatSpread,
+                  QStringLiteral("the overridden arm's patch is flat in both pictures "
+                                 "(spreads %1 and %2) — it has to be: the eye render and "
+                                 "the window capture are 600 frames apart and the "
+                                 "simulated head moves through them")
+                      .arg(pe.spread).arg(pr.spread));
+            // The eye is SCALED here, so the tolerance is the flat arms' plus
+            // what a linear filter can do to a flat patch (nothing, in theory;
+            // 2/255 in practice is still far below a second encode's tens).
+            check(worst <= kBytesTolerance,
+                  QStringLiteral("the SCALED eye reaches the runtime with one encode "
+                                 "(worst channel %1/255; a blit into the sRGB swapchain "
+                                 "would have read %2 against our %3)")
+                      .arg(worst, 0, 'f', 2)
+                      .arg(linearToSrgbByte(pe.g / 255.0), 0, 'f', 1).arg(pe.g, 0, 'f', 1));
+        }
+    }
+
     // ---- the realistic-sky arm: a picture, and the runtime showing it ------
     if (QFile::exists(dir.filePath(QStringLiteral("eye-realistic.png")))) {
         const QImage eye = load(dir, QStringLiteral("eye-realistic.png"));
