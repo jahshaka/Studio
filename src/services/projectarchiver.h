@@ -189,7 +189,12 @@ private:
     bool stageImportObjects();
     /// Delete every temp the staging pass left — a cancelled or failed import.
     void discardStagedImports();
-    void installImportSlice();         ///< UI thread, one asset per turn
+    void installImportSlice();
+    /// Re-publish every imported MATERIAL bundle's definition from its
+    /// remapped row blob (bundles audit G1): the importer cannot rewrite a
+    /// CAS definition file, and since MATERIAL_BUNDLE_SPEC D-2 that file is
+    /// what a material MEANS.
+    void republishImportedBundles();
     void beginInstallImport();
 
     void emitProgress(int percent, const QString &text);
