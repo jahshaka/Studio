@@ -444,12 +444,25 @@ int main(int argc, char **argv)
         CHECK(!second.isEmpty() && db.fetchAsset(second).name == "Graphed copy 2",
               "8: a second copy is numbered, never a duplicate name");
 
-        // AND THE LIBRARY DELETE TAKES THE BUNDLE'S OWN MEMBERS (F6).
-        materialmembers::stampMember(&db, "tex-bake2", original);
+        // AND THE LIBRARY DELETE TAKES THE BUNDLE'S OWN MEMBERS (F6), BOTH
+        // KINDS. A PICKED picture is found by its origin stamp; a BAKED map
+        // is found by its PARENT, because a parented row appears in no
+        // library listing and the stamp walk cannot see it — which is
+        // precisely how a baked map used to outlive its material for ever.
+        materialmembers::stampMember(&db, "tex-bake2", original);   // the picked one
+        db.createAssetEntry("tex-bakedchild", "child.png",
+                            static_cast<int>(ModelTypes::Texture), original, QString(),
+                            QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
+                            QByteArray(), AssetViewFilter::AssetsView);
+        CHECK(!db.fetchAsset("tex-bakedchild").guid.isEmpty(),
+              "8: a BAKED member row, parented to the material");
+
         CHECK(assetdelete::remove(&db, original).ok, "8: the original is deleted from the library");
         materialmembers::reapExclusiveMembers(&db, original);
         CHECK(db.fetchAsset("tex-bake2").guid.isEmpty(),
-              "8: its exclusive born-inside member went with it (F6)");
+              "8: its stamped born-inside picture went with it (F6)");
+        CHECK(db.fetchAsset("tex-bakedchild").guid.isEmpty(),
+              "8: and so did its BAKED member, which no listing could have shown");
         CHECK(!db.fetchAsset("tex-mine").guid.isEmpty(),
               "8: the picture the copy still uses did NOT");
     }

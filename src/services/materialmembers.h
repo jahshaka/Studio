@@ -166,9 +166,12 @@ QString duplicate(Database *db, Project *project, const QString &materialGuid,
 /// after an UNLIST, where the bundle and its members are still live: with the
 /// row gone its born-inside members have no user left, which is exactly the
 /// set `unused` answers, so this is `cleanUnused` under the name of the
-/// gesture that needs it. A member the user imported carries no origin stamp
-/// and is never touched; one another material still uses has a depender and
-/// is never touched; one any project pins is never touched.
+/// gesture that needs it — plus the BAKED maps, which `unused` cannot see
+/// (a baked member's row is PARENTED to the material and no library listing
+/// shows a parented row) and which would otherwise outlive their material
+/// unreachable by anything. A member the user imported carries no origin
+/// stamp and is never touched; one another material still uses has a
+/// depender and is never touched; one any project pins is never touched.
 QVector<Unused> reapExclusiveMembers(Database *db, const QString &materialGuid);
 
 /// A SECOND ROW OVER THE SAME BYTES, swapped into this material's definition

@@ -239,9 +239,13 @@ int main(int argc, char **argv)
     // in any host that never handed one down.
     {
         AssetManager::clearAssetList();
-        auto *asset = new AssetShader;
+        // A MATERIAL, which is what the combo offers since phase 2 (it listed
+        // the retired ModelTypes::Shader asset before). The hazard under test
+        // — the blade's combo slot firing with a NULL library handle — is the
+        // same on either type.
+        auto *asset = new AssetMaterial;
         asset->assetGuid = QString::fromLatin1(kStubResolvableMaterialGuid);
-        asset->fileName = QStringLiteral("resolvable.shader");
+        asset->fileName = QStringLiteral("resolvable.material");
         AssetManager::addAsset(asset);
 
         auto node = iris::MeshNode::create();

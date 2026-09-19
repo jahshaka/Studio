@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSqlDatabase>
+#include <QSqlQuery>
 
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -288,9 +289,47 @@ QString duplicate(Database *db, Project *project, const QString &materialGuid,
 
 QVector<Unused> reapExclusiveMembers(Database *db, const QString &materialGuid)
 {
-    // No project: this is the LIBRARY's clean-up, and a member any project
-    // pins is refused inside `unused` whatever project happens to be open.
-    return cleanUnused(db, nullptr, materialGuid, nullptr);
+    if (!db || materialGuid.isEmpty()) return {};
+
+    // TWO KINDS OF MEMBER, and they are found two different ways.
+    //
+    // A PICKED PICTURE is an ordinary library row carrying this bundle's
+    // ORIGIN STAMP — `unused` finds it, and refuses it if anything still
+    // depends on it or any project pins it. (No project passed: this is the
+    // library's clean-up, and `unused` weighs pins whatever project is open.)
+    QVector<Unused> removed = cleanUnused(db, nullptr, materialGuid, nullptr);
+
+    // A BAKED MAP is a member by the PARENT relation (M-A: born inside
+    // exactly one material, never shared), and a parented row is invisible to
+    // every library listing — so `unused`, which walks the library's own
+    // listing, cannot see one. Deleting the material would otherwise leave
+    // its baked maps behind for ever: unreachable from any browser, owned by
+    // a row that no longer exists.
+    // The rows whose PARENT is this material, read straight: `Database`
+    // exposes no children-by-parent accessor, and `fetchAssetsFromParent`
+    // despite its name answers the DEPENDENCY closure, which is a different
+    // question (and one `unused` has already asked).
+    QStringList children;
+    {
+        QSqlQuery query(QSqlDatabase::database());
+        query.prepare(QStringLiteral("SELECT guid FROM assets WHERE parent = ? AND type = ?"));
+        query.addBindValue(materialGuid);
+        query.addBindValue(static_cast<int>(ModelTypes::Texture));
+        if (query.exec())
+            while (query.next()) children << query.value(0).toString();
+    }
+    for (const QString &child : children) {
+        if (!db->hasMultipleDependers(child).isEmpty()) continue;   // somebody uses it
+        if (!assetdelete::livePins(db, child).isEmpty()) continue;  // a project holds it
+        const AssetRecord row = db->fetchAsset(child);
+        Unused entry;
+        entry.guid = child;
+        entry.name = row.name;
+        entry.bytes = storedBytes(db, nullptr, child);
+        entry.scope = QStringLiteral("library");
+        if (assetdelete::remove(db, child).ok) removed.append(entry);
+    }
+    return removed;
 }
 
 QString makeUnique(Database *db, Project *project, const QString &materialGuid,
