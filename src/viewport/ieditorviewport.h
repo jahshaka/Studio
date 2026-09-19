@@ -128,8 +128,28 @@ public:
     ///
     /// Borrowed, never owned. The viewport destroys both at teardown, so no
     /// caller may outlive it holding these.
+    ///
+    /// PURE READS, BOTH (SMOKE-FIX-1's fix round): whoever needs the scene to
+    /// EXIST says so, once, with ensureEngineScene() below — these two are
+    /// called from per-frame paths (VrApi::pushProxies rides the driver's
+    /// beforeFrame), and a getter that builds an engine scene would build one
+    /// in every windowed process on its first tick, editor or no editor.
     virtual jahshaka::engine::Scene *engineScene() { return nullptr; }
     virtual SceneMirror *sceneMirror() { return nullptr; }
+
+    /// BUILD THE ONE SCENE NOW IF IT DOES NOT EXIST — the explicit ask, for the
+    /// two callers that are entitled to make it: the Player page as it is
+    /// entered (EnginePlayerView::adoptEditorScene, called from its show event
+    /// and from start()) and the editor's VR preview as a session begins. Both
+    /// draw THIS scene; neither can wait for the editor widget's show event,
+    /// which may never come (the desktop tile's Play button, a `--vr` boot).
+    ///
+    /// False when the engine cannot make one yet — before any View exists in
+    /// the process, which is the pin's own startup-order law answering for
+    /// itself (Engine::createScene returns null until then). The mirror is
+    /// created WITH the scene, so a true here means both reads above answer.
+    /// A stand-in viewport has no engine and says false.
+    virtual bool ensureEngineScene() { return false; }
 
     /// WHAT THE EDITOR'S ON-SCREEN VIEW HAS ACTUALLY GRADED WITH — the
     /// tonemapper's multiplier (View::measuredExposureScale), or 0 when there

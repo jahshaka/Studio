@@ -616,10 +616,36 @@ void EngineSceneViewport::pictureSegment(const iris::CameraNodePtr &cam, const Q
                                point - picture.topLeft(), segStart, segEnd);
 }
 
+// THE ONE SCENE, BUILT WHEN SOMEBODY WHO DRAWS IT ASKS — and NOT gated on this
+// widget's own View any more (SMOKE-FIX-1, 2026-09-18).
+//
+// The Player page is a second view on THIS scene (lane PLAYER-1), so a session
+// that reaches the Player without ever showing the editor — the desktop tile's
+// Play button, a `--vr` boot that starts on the Desktop page — asked for a
+// scene that did not exist and got null: EnginePlayerScene::attach refused, and
+// the Player's window showed the stale pixels of the page underneath. The scene
+// is what the Player needs; this widget's own on-screen View is not.
+//
+// AN EXPLICIT CALL, NEVER A GETTER (the fix round's F1). `engineScene()` and
+// `sceneMirror()` are read from per-frame paths — VrApi::pushProxies rides the
+// render driver's beforeFrame, which ticks from the shell's constructor onwards
+// — so building the scene inside them made EVERY windowed process construct the
+// editor scene, its worker pool and its SceneMirror on its first tick, editor
+// or no editor, and hammer Engine::mLastError while the Hlms did not exist yet.
+// The two callers entitled to ask are the ones that DRAW this scene without
+// being this widget: EnginePlayerView::adoptEditorScene and EditorVrPreview.
+//
+// THE PIN'S STARTUP-ORDER LAW IS STILL OBEYED, by the engine rather than by a
+// guess: `createScene` returns null before the first View exists in the process
+// (Engine.h, "ORDER MATTERS"), so asking early is safe and simply answers "not
+// yet" — which is the honest answer, and the one the Player's refusal repeats.
+// In practice a View always exists by the time either caller asks: the Player's
+// own is created in its show event before the page's start(), and a VR session
+// begins from a page that has one.
 bool EngineSceneViewport::ensureEngineScene()
 {
     if (mEngineScene) return true;
-    if (!mEngine || !view()) return false;
+    if (!mEngine) return false;
     // THE scene the user watches at frame rate: it gets the machine's worker
     // threads, not the engine's historical 2 (fps audit F3,
     // bridge/sceneworkerthreads.h).
@@ -628,6 +654,31 @@ bool EngineSceneViewport::ensureEngineScene()
                                         sceneworkers::count(sceneworkers::Tier::Primary));
     if (!mEngineScene) return false;
     mEngineScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
+    // The mirror before the bind: bindViewToScene drops its environment latches
+    // (see there), and on this path there is nothing to drop — but the order has
+    // to be the same one on both paths or that line reads a null.
+    mMirror.reset(new SceneMirror(mEngineScene));
+    mOverlay.reset(new GizmoOverlay(mEngineScene));
+    if (mScene) mMirror->setSource(mScene);
+    bindViewToScene();
+    return true;
+}
+
+// Binds THIS widget's View to the one scene, with the view-side state that goes
+// with it. Separate from ensureEngineScene because the two no longer happen at
+// the same moment: the scene can be born before this widget has a View at all
+// (the Player asked for it first), and the View can be born — or reborn — after
+// the scene (the show event, a native-window recreation).
+void EngineSceneViewport::bindViewToScene()
+{
+    if (!view() || !mEngineScene) return;
+    // ONLY ON A REAL BIND. Everything below is per-VIEW state that the document
+    // then owns through the mirror, and the mirror DEBOUNCES on "already
+    // pushed" — so re-asserting it on an already-bound view (this is called at
+    // every editor page entry) would turn shadows back on behind a world that
+    // has them off, with nothing to correct it. The engine refuses a second
+    // setScene on a bound View anyway (Engine.h).
+    if (view()->scene() == mEngineScene) return;
     view()->setScene(mEngineScene);
     view()->setShadows(true);           // directional PSSM; lights opt in via the document
     // THE WEARER'S OWN FURNITURE IS DRAWN AT THE DESK TOO (VR_SPEC §5 phase 4;
@@ -638,20 +689,19 @@ bool EngineSceneViewport::ensureEngineScene()
     // screenshot renders through all leave it shut, which is what keeps a
     // wearer's hands out of pictures that are not theirs.
     view()->setVrHelpersVisible(true);
-    mMirror.reset(new SceneMirror(mEngineScene));
-    mOverlay.reset(new GizmoOverlay(mEngineScene));
-    if (mScene) mMirror->setSource(mScene);
-    return true;
+    // AND THE MIRROR'S PER-VIEW LATCHES GO (the same line, for the same reason,
+    // as EnginePlayerScene::attach): part of what applyEnvironment pushes is per
+    // VIEW — the whole post chain, MSAA, the shadow flag — and the mirror
+    // debounces on "already pushed", which may be true OF THE PLAYER'S VIEW.
+    // Dropping the latches is what makes this view's chain get built at all when
+    // the Player got here first.
+    if (mMirror) mMirror->invalidateEnvironment();
 }
 
 void EngineSceneViewport::viewRecreated()
 {
     // The old View took its camera, workspace and scene binding with it.
-    if (view() && mEngineScene) {
-        view()->setScene(mEngineScene);
-        view()->setShadows(true);
-        view()->setVrHelpersVisible(true);   // ...and a recreated view keeps it
-    }
+    bindViewToScene();
     // A fresh View starts its present count at zero, so the baseline must too —
     // otherwise presentsSinceBind() reads a subtraction of a larger number and
     // the cover never comes down again.
@@ -675,7 +725,10 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
     if (!view() && mEngine)
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
+    // …and bind it, whether the scene is born here or was born earlier for the
+    // Player (ensureEngineScene returns early then, so the bind is its own call).
     ensureEngineScene();
+    bindViewToScene();
     // Becoming visible with nothing presented yet is exactly the moment the
     // stale pixels underneath would show through — and on the FIRST open there
     // was no View at all until three lines ago, so there is nothing of ours in

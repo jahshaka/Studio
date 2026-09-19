@@ -780,9 +780,16 @@ bool AppApi::space(const QString &name)
     host.mainWindow->switchSpace(space);
 
     // audit D15: the verb once reported success while the page stayed put —
-    // never claim a switch the window didn't make
-    if (host.mainWindow->getWindowSpace() != space)
-        return fail(QStringLiteral("app.space: the window refused to switch to '%1'").arg(s));
+    // never claim a switch the window didn't make. AND SAY WHY (SMOKE-FIX-1):
+    // the window records the reason it bounced, so a script's refusal carries
+    // the same sentence the user's toast does instead of a bare "refused".
+    if (host.mainWindow->getWindowSpace() != space) {
+        const QString why = host.mainWindow->lastSpaceRefusal();
+        return fail(why.isEmpty()
+                        ? QStringLiteral("app.space: the window refused to switch to '%1'").arg(s)
+                        : QStringLiteral("app.space: the window refused to switch to '%1' — %2")
+                              .arg(s, why));
+    }
     return true;
 }
 

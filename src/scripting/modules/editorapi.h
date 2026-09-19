@@ -106,6 +106,7 @@ public:
     Q_INVOKABLE bool dragAsset(const QString &guid, double x, double y,
                                const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap viewportState();
+    Q_INVOKABLE QVariantList toolbar();
     Q_INVOKABLE QVariantMap mirrorStats();
     /// THE SCENE-ERROR AREA (services/sceneissues.h). Document verbs: the store
     /// is a document-side model, so a --headless run can raise, list, clear and

@@ -41,6 +41,14 @@ using exportformat::ManifestAsset;
 using exportformat::ManifestFile;
 
 QVector<ProjectArchiver *> ProjectArchiver::sLive;
+ProjectArchiver::Result ProjectArchiver::sLastResult;
+bool ProjectArchiver::sHaveLastResult = false;
+
+void ProjectArchiver::rememberResult()
+{
+    sLastResult = mResult;
+    sHaveLastResult = true;
+}
 
 bool ProjectArchiver::anyRunning()
 {
@@ -129,6 +137,10 @@ void ProjectArchiver::finish(bool canceled)
     delete mStage;
     mStage = nullptr;
     mRunning.store(false);
+    // THE OUTCOME OUTLIVES THE ARCHIVER THAT REACHED IT (F5): the page owns the
+    // archiver behind project.openSample, so a script can only read what
+    // happened through the process-wide record.
+    rememberResult();
     if (mThreaded) emit finished(canceled);
 }
 

@@ -28,7 +28,16 @@ public:
 
     QWidget *asWidget() { return this; }
     void setScene(iris::ScenePtr scene);
-    void start();
+    /// The page is being entered: bind this view to the EDITOR'S engine scene
+    /// (the one scene, lane PLAYER-1), remember the camera, take the editor's
+    /// viewpoint and start drawing.
+    ///
+    /// FALSE MEANS NOTHING HAPPENED (SMOKE-FIX-1): there is no view, or the
+    /// editor's scene could not be had, so the player is left exactly as it was
+    /// and `why` says which — a page that cannot draw refuses instead of
+    /// showing an enabled View with no scene, which presents nothing at all and
+    /// leaves the previous page's pixels on the screen.
+    bool start(QString *why = nullptr);
     void end();
 
     // ---- IPlayerHost (verb-coverage audit F1) ----------------------------
@@ -68,7 +77,13 @@ public:
     /// (lane PLAYER-1: there is one of each). Idempotent, cheap, and called at
     /// every edge that can precede a frame — the viewport may not have built
     /// them yet when this view is wired up.
-    void adoptEditorScene();
+    ///
+    /// `buildIfMissing` asks the viewport to BUILD that scene if nothing has
+    /// yet (IEditorViewport::ensureEngineScene) — true only on the edges that
+    /// mean this page is really being used (shown, entered, screenshotted,
+    /// stepped, worn), never at wiring time and never per frame. See the
+    /// definition for why that distinction is load-bearing.
+    void adoptEditorScene(bool buildIfMissing = false);
 
     /// Steps the player and pushes document -> engine. Called before every frame.
     void syncFrame();

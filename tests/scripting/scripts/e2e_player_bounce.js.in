@@ -1,0 +1,85 @@
+// scripting.e2e.player_bounce — A PLAYER PAGE THAT CANNOT DRAW REFUSES, AND THE
+// WINDOW GOES BACK (lane SMOKE-FIX-1's fix round, F3).
+//
+// WHAT IS UNDER TEST is the refusal path the lane added and nothing else could
+// reach: `EnginePlayerView::start` returning false, `MainWindow::bounceFromPlayer`
+// (the toast, the play-mode undo, the return to a page that draws), the reason
+// reaching a script through `MainWindow::lastSpaceRefusal` → `app.space()`, and
+// the session log's PLAY START / PLAY STOP staying a PAIR across the bounce.
+//
+// THE HOOK. That path is unreachable by construction now — the editor's engine
+// scene is built for whoever asks (ensureEngineScene), so the only remaining
+// ways to fail the bind are an engine with no View at all or a failed view
+// creation, and a suite cannot produce either without breaking the process it
+// needs in order to observe the result. `JAHSHAKA_PLAYER_TEST_NO_ATTACH=1`
+// makes EnginePlayerScene::attach answer what a broken one would answer (the
+// pattern of the VR lanes' hooks in OgreVrSession.cpp), which is the only way
+// this behaviour can be a suite instead of a hand test nobody repeats.
+var SCENES = "@CMAKE_SOURCE_DIR@/scenes";
+
+var failures = 0;
+function ok(cond, msg) {
+    if (cond) { console.log("ok:   " + msg); }
+    else { console.log("FAIL: " + msg); ++failures; }
+}
+function playMarkers() {
+    var starts = 0, stops = 0;
+    var lines = log.tail(2000);
+    for (var i = 0; i < lines.length; ++i) {
+        if (lines[i].indexOf("=== PLAY START ===") >= 0) ++starts;
+        if (lines[i].indexOf("=== PLAY STOP ===") >= 0) ++stops;
+    }
+    return { starts: starts, stops: stops };
+}
+
+// ---- 1. with no world open at all ------------------------------------------
+// The Player needs something to play, and every route that offers it must say
+// so rather than opening an empty page in play mode.
+var before = playMarkers();
+var refusedEmpty = "";
+try { app.space("player"); } catch (e) { refusedEmpty = String(e); }
+ok(refusedEmpty.indexOf("needs an open project") >= 0,
+   "with no world open, app.space('player') refuses: " + refusedEmpty);
+ok(app.columns().space === "desktop", "…and the window stayed on the desktop");
+var afterEmpty = playMarkers();
+ok(afterEmpty.starts === before.starts,
+   "…and nothing entered play mode (PLAY START count unchanged at " + afterEmpty.starts + ")");
+
+// ---- 2. a world, and a Player page that cannot bind -------------------------
+var imported = project.importArchive(SCENES + "/Matcaps.zip");
+ok(!!imported && !!imported.guid, "the Matcaps sample imported");
+ok(project.openAsync(imported.guid) === true, "…and opened (editor)");
+var turns = 0;
+while (project.openState() === "opening") { editor.frame(1); if (++turns > 40000) break; }
+ok(project.openState() === "idle", "the open finished");
+ok(app.columns().space === "editor", "the editor has the screen");
+
+var beforeSwitch = playMarkers();
+var refusal = "";
+try { app.space("player"); } catch (e) { refusal = String(e); }
+
+// THE ASSERTIONS THIS SUITE EXISTS FOR.
+ok(refusal.length > 0, "app.space('player') refused rather than claiming a switch");
+ok(refusal.indexOf("editor's 3D scene") >= 0 || refusal.indexOf("3D view") >= 0,
+   "…carrying the page's OWN reason, not a bare 'refused': " + refusal);
+ok(app.columns().space === "editor",
+   "the window went back to a page that draws (space = " + app.columns().space + ")");
+ok(player.state().active === false, "the Player is not active");
+ok(editor.frame(3) === true, "the editor still draws after the bounce");
+
+var afterSwitch = playMarkers();
+ok(afterSwitch.starts === afterSwitch.stops,
+   "the session log's PLAY START / PLAY STOP are a PAIR across the bounce ("
+   + afterSwitch.starts + " starts, " + afterSwitch.stops + " stops)");
+ok(afterSwitch.starts > beforeSwitch.starts,
+   "…and the bounce really did pass through play mode (" + beforeSwitch.starts
+   + " -> " + afterSwitch.starts + ")");
+
+// ---- 3. the editor is still a working editor afterwards ---------------------
+// (The play-mode undo is what makes this true: a bounce that left PlayMode on
+// would leave the editor dressed for a run it is not having.)
+ok(scene.nodes().length > 0, "the world is still open");
+ok(app.space("editor") === true, "app.space('editor') is happy (" + app.lastError() + ")");
+
+if (failures) throw new Error(failures + " assertion(s) failed");
+console.log("player_bounce: all assertions passed");

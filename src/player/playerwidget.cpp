@@ -95,9 +95,13 @@ void PlayerWidget::setScene(iris::ScenePtr scene)
 	if (playerView) playerView->setScene(scene);
 }
 
-void PlayerWidget::begin()
+bool PlayerWidget::begin(QString *why)
 {
-	if (playerView) playerView->start();
+	if (!playerView) {
+		if (why) *why = tr("this session has no player view");
+		return false;
+	}
+	return playerView->start(why);
 }
 
 void PlayerWidget::end()
