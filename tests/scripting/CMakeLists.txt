@@ -1829,3 +1829,25 @@ set_tests_properties(scripting.e2e.material_bundle_import PROPERTIES
     FIXTURES_REQUIRED "materialBundleImportHome;materialBundleArchive"
     LABELS "scripting"
     TIMEOUT 180)
+
+# scripting.e2e.preset_apply — MATERIAL_BUNDLE_SPEC phase 3: a preset is a
+# READ-ONLY LIBRARY BUNDLE and applying one PINS it. Three applies add ZERO
+# rows after the first seeds the bundle, no "Presets" folder and no
+# matgen.material are minted, a write to a preset is refused by the WRITER,
+# and R18's Customise mints "<Preset>-1" sharing the preset's own maps.
+# Document verbs only -> --headless. A FRESH HOME, because the load-bearing
+# first assertion is that NOTHING is seeded until a preset is used.
+set(_paHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_apply)
+add_test(NAME scripting.e2e.preset_apply.fresh_home
+         COMMAND sh -c "rm -rf '${_paHome}' && mkdir -p '${_paHome}/run'")
+set_tests_properties(scripting.e2e.preset_apply.fresh_home PROPERTIES
+    FIXTURES_SETUP presetApplyHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_paHome}/run)
+add_test(NAME scripting.e2e.preset_apply
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
+         WORKING_DIRECTORY ${_paHome}/run)
+set_tests_properties(scripting.e2e.preset_apply PROPERTIES
+    ENVIRONMENT "HOME=${_paHome};JAHSHAKA_DATA_ROOT=${_paHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED presetApplyHome
+    LABELS "scripting"
+    TIMEOUT 180)

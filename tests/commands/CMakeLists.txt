@@ -192,3 +192,57 @@ add_test(NAME commands.db_batch COMMAND test_db_batch
 set_tests_properties(commands.db_batch PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
 jah_no_display(commands.db_batch)
+
+# ---------------------------------------------------------------------------
+# commands.pin_asset — MATERIAL_BUNDLE_SPEC phase 3 / the materials audit's F5:
+# an apply that PINS is an apply that UNPINS on undo.
+#
+# The pin was a bare service call after the undo macro closed, so an undone
+# apply left the material in the project's tray with its textures. This drives
+# the command against the REAL Database and the REAL content-addressed store on
+# a throwaway SQLite file — the tests/materialbundle idiom, same source list —
+# because a pin is a catalog fact and a stub could not tell the truth about it.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+add_executable(test_pin_asset test_pin_asset.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/pinassetcommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_pin_asset PROPERTIES
+    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_pin_asset PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_pin_asset PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+add_test(NAME commands.pin_asset COMMAND test_pin_asset
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(commands.pin_asset PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
+jah_no_display(commands.pin_asset)
