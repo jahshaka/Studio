@@ -798,13 +798,13 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
     row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
 
-    const QString guid = out.mainGuid;
-    out.registerSession = [material, guid]() {
-        auto *assetMat = new AssetMaterial;
-        assetMat->assetGuid = guid;
-        assetMat->setValue(QVariant::fromValue(iris::MaterialPtr(material)));
-        AssetManager::addAsset(assetMat);
-    };
+    // The session registration used to park the hydrated material in the
+    // AssetManager for the viewport's hover preview to find (this was the ONE
+    // of the five sites that stored the payload with the type the reader asked
+    // for, which is why a material made from an image was the only one that
+    // ever previewed — the owner's finding). Nothing reads it now: the preview
+    // and the drop both resolve through SceneEditService::resolveMaterial, so
+    // an import no longer hydrates a material it may never show.
     return true;
 }
 

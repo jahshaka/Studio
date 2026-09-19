@@ -67,17 +67,39 @@ void testUndoService()
     undo.redo();
     CHECK(redos == 2, "undo: redo runs it again");
 
-    // The script-macro guard: clear() must not clear while a run is in
-    // progress. There is ONE flag for that now (CLOSE-2 round 2) — the run's
-    // own macro, armed by beginScriptMacro — so the guard is exercised through
-    // the run bracket the app really uses, not through a setter that existed
-    // only to say the same thing twice.
+    // The script-macro guard: clear() must not clear while a run's macro is
+    // OPEN. There is ONE flag for "a run is in progress" (CLOSE-2 round 2) —
+    // the run's own macro, armed by beginScriptMacro — so the guard is
+    // exercised through the run bracket the app really uses, not through a
+    // setter that existed only to say the same thing twice.
+    //
+    // OPEN, NOT MERELY ARMED — this assertion MOVED (SMOKE-FIX-1's fix round,
+    // 2026-09-18, with the lead's verdict). It used to read "clear() is blocked
+    // while the script macro is open" and prove it with a macro that was ARMED
+    // and EMPTY, which is a different state: the run's macro is armed for the
+    // whole run and reaches the stack only when its first push OPENS it, and an
+    // armed, empty macro holds nothing — QUndoStack will clear under one, and
+    // there is no entry of the run's to lose. Blocking there made every close
+    // that lands while a run has recorded nothing a NO-OP, which is exactly the
+    // shape of an ASYNCHRONOUS close (the import-open path: the verb ends the
+    // run's entry, re-arms, and the close happens when the archive finishes) —
+    // so a departed world's commands survived the world. The contract is
+    // narrower and the run is still one entry either way.
     undo.beginScriptMacro("script: guard");
     CHECK(undo.isScriptMacroOpen(), "undo: arming the run macro opens the guard");
     undo.clear();
-    CHECK(stack.count() == 1, "undo: clear() is blocked while the script macro is open");
-    CHECK(undo.endScriptMacro() == false,
-          "undo: a run that recorded nothing leaves no entry (nothing was pushed since)");
+    CHECK(stack.count() == 0,
+          "undo: clear() clears under an ARMED, EMPTY run macro — nothing of the run is lost");
+
+    // …and it is blocked once the run has actually recorded something, which is
+    // when there IS an entry to corrupt (QUndoStack: "endMacro(): no matching
+    // beginMacro()").
+    undo.push(new CountingCommand(&redos, &undos));
+    CHECK(stack.count() == 1, "undo: a push inside the run opens the run's macro");
+    undo.clear();
+    CHECK(stack.count() == 1, "undo: clear() is blocked while the run's macro is OPEN");
+    CHECK(undo.endScriptMacro() == true,
+          "undo: a run that recorded something leaves its one entry");
     CHECK(!undo.isScriptMacroOpen(), "undo: ...and the guard is closed again");
     undo.clear();
     CHECK(stack.count() == 0, "undo: clear() clears once the macro closes");

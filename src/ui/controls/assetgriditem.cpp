@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "data/project.h"          // ModelTypes
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
+#include "ui/controls/assetdrag.h"
 
 // local
 AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent) : QWidget(parent) {
@@ -233,22 +234,13 @@ void AssetGridItem::startDrag()
 {
 	if (metadata.isEmpty()) return;
 
-	// The assetwidget mime (project.h roles): type at 0, name at 1, guid at 3 —
-	// the drawers tree and any existing model-data drop handler read the same
-	// payload.
-	QByteArray mdata;
-	QDataStream stream(&mdata, QIODevice::WriteOnly);
-	QMap<int, QVariant> roleDataMap;
-	roleDataMap[0] = QVariant(metadata["type"].toInt());
-	roleDataMap[1] = QVariant(metadata["name"].toString());
-	roleDataMap[2] = QVariant(QString());
-	roleDataMap[3] = QVariant(metadata["guid"].toString());
-	stream << roleDataMap;
-
+	// ONE payload builder (ui/controls/assetdrag.h) — the drawers tree and
+	// every drop handler read the same four slots back through it.
 	auto drag = new QDrag(this);
-	auto mimeData = new QMimeData;
-	mimeData->setData(QStringLiteral("application/x-qabstractitemmodeldatalist"), mdata);
-	drag->setMimeData(mimeData);
+	drag->setMimeData(AssetDrag::mimeFor(metadata["type"].toInt(),
+	                                     metadata["name"].toString(),
+	                                     QString(),
+	                                     metadata["guid"].toString()));
 	if (!pixmap.isNull()) drag->setPixmap(pixmap.scaledToHeight(64, Qt::SmoothTransformation));
 	drag->exec(Qt::MoveAction | Qt::CopyAction);
 }

@@ -98,6 +98,14 @@ public:
 
     /// Blob-only save (SCRIPTING_SPEC §1.6.2): never silently no-ops; the
     /// thumbnail refreshes only when a viewport can render one.
+    /// Run before every SCENE WRITE (all three saves below). The shell ends the
+    /// live material hover preview here: the preview borrows a mesh's material
+    /// slot without touching the document, and a save taken mid-hover would
+    /// otherwise write the BORROWED material into the project — the one state
+    /// the user never chose. A hook, like UndoService's, so this service stays
+    /// free of the preview and headless hosts leave it unset.
+    void setPreWriteHook(std::function<void()> hook) { mPreWrite = std::move(hook); }
+
     bool saveProjectBlob();
 
     /// The regular editor save: scene blob + viewport thumbnail + desktop
@@ -131,6 +139,7 @@ private:
     IEditorViewport *viewport;
     UndoService *undo;
     std::function<iris::ScenePtr()> sceneProvider;
+    std::function<void()> mPreWrite;
 };
 
 #endif // PROJECTSERVICE_H

@@ -144,6 +144,16 @@ add_script_e2e(fragments e2e_fragments.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+
+# THE LIVE HOVER PREVIEW, for every material source (MATERIAL-PREVIEW-1). The
+# owner found it working for a material made from an image and dead for the
+# tray and the Materials module; it was one QVariant static-type mismatch, and
+# nothing covered it. Drives material.preview/endPreview for four sources and
+# asserts the whole contract: restore on move, restore on end, no undo step, no
+# dirty flag, a save during a preview writes the ORIGINAL, a locked node
+# refuses, an unresolvable payload refuses, and a preset apply reuses its one
+# project row instead of minting a new one per apply.
+add_script_e2e(material_preview e2e_material_preview.js)
 # GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
 # a high oblique view (the two things the owner reported while testing push #18).
 # The document half of the floor is scripting.e2e.default_floor, which is
@@ -1670,5 +1680,56 @@ add_test(NAME scripting.e2e.atom_lods
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.atom_lods PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# THE SMOKE OF PUSH #50, AS TWO SUITES (lane SMOKE-FIX-1, 2026-09-18).
+#
+# Both scripts carry their own reasoning; in one line each:
+#   sample_open      — a sample-browser open lands in the EDITOR, through the
+#                      verb the browser's tiles call (the uninitialised
+#                      play-mode flag).
+#   player_no_editor — the Player over a process whose editor page was never
+#                      shown DRAWS, instead of enabling a View with no scene and
+#                      leaving the previous page's pixels on the screen.
+# Both are engine-up (they assert frames), so neither is --headless.
+add_script_e2e(sample_open e2e_sample_open.js)
+# 300 like the other open-and-render suites: it imports an archive and opens it.
+set_tests_properties(scripting.e2e.sample_open PROPERTIES TIMEOUT 300)
+
+configure_file(scripts/e2e_player_no_editor.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_no_editor
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
+         WORKING_DIRECTORY ${_home}/run)
+# JAHSHAKA_TEST_NO_EDITOR_BOOT: the PERSON's boot shape (window up, Desktop
+# page, editor page never shown) instead of the script harness's, which shows
+# the editor page before the script's first line. Without it the editor's
+# engine scene already exists and this suite proves nothing — see the script.
+set_tests_properties(scripting.e2e.player_no_editor PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# scripting.e2e.player_bounce — THE REFUSAL PATH (SMOKE-FIX-1's fix round, F3).
+#
+# The one suite that drives `EnginePlayerView::start` returning false and
+# everything that hangs off it: the bounce back to a page that draws, the
+# reason reaching `app.space()`, the play-mode undo, and the session log's
+# PLAY START / PLAY STOP staying a pair. It needs the attach to fail on a box
+# where it always succeeds, so it sets JAHSHAKA_PLAYER_TEST_NO_ATTACH=1 — the
+# script says why at length, and so does EnginePlayerScene::attach.
+configure_file(scripts/e2e_player_bounce.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_bounce
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.player_bounce PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PLAYER_TEST_NO_ATTACH=1"
     LABELS "scripting"
     TIMEOUT 300)

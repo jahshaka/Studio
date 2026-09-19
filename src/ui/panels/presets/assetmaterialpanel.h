@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 
 class MainWindow;
-class MaterialPreset;
+struct StudioServices;
 
 class AssetMaterialPanel : public AssetPanel
 {
@@ -35,6 +35,12 @@ public:
     void setMainWindow(MainWindow* mainWindow) {
         this->mainWindow = mainWindow;
     }
+
+    /// The service layer (§2.3's opportunistic rule). The tray applies a
+    /// material through SceneEditService::applyMaterial — the SAME call the
+    /// viewport's drop and `material.apply` make — instead of through a
+    /// MainWindow overload of its own.
+    void setServices(StudioServices *services) { this->services = services; }
 
     /// The favourites are listed HERE, not in the constructor: the panel is
     /// built before MainWindow has a database to give it, and reading the
@@ -54,15 +60,12 @@ public:
     void addFavorites();
 
     bool eventFilter(QObject *watched, QEvent *event);
-    QVector<MaterialPreset> getDefaultMaterials() {
-        return defaultMaterials;
-    }
 public slots:
     void showContextMenu(const QPoint &pos);
     void applyMaterialPreset(QListWidgetItem *item);
 
 private:
-    QVector<MaterialPreset> defaultMaterials;
+    StudioServices *services = nullptr;
     QVector<AssetRecord> objectAssets;
 };
 

@@ -24,7 +24,6 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/builtinmaterials.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "io/materialreader.h"
 #include "services/assetcas.h"
 #include "services/meshbakestore.h"
 #include "services/assethelper.h"
@@ -248,14 +247,17 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             break;
         }
         case ModelTypes::Material: {
-            const auto matObject = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
-            MaterialReader reader;
-            reader.setProject(project);
-            auto material = reader.parseMaterialTyped(matObject, db);
+            // THE MATERIAL IS NOT HYDRATED HERE ANY MORE (MATERIAL-PREVIEW-1
+            // item c). Registering the row is what the session registry is for
+            // — assets.list, the rename sweep and the delete scrub all read the
+            // guid and the name. PARSING the material and loading its textures
+            // on every project open, for every material the project owns, was
+            // work done for exactly ONE reader, the viewport's hover preview,
+            // and that reader now resolves through SceneEditService (which
+            // parses the one material a gesture actually touches, once).
             auto *asset = new AssetMaterial;
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
-            asset->setValue(QVariant::fromValue(material));
             AssetManager::addAsset(asset);
             break;
         }

@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 #include "ui/style/stylesheet.h"
+#include "ui/controls/assetdrag.h"
 
 AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
 {
@@ -239,21 +240,12 @@ bool AssetModelPanel::eventFilter(QObject *watched, QEvent *event)
 
                         if (item) {
                             auto drag = QPointer<QDrag>(new QDrag(this));
-                            auto mimeData = QPointer<QMimeData>(new QMimeData);
-
-                            QByteArray mdata;
-                            QDataStream stream(&mdata, QIODevice::WriteOnly);
-                            QMap<int, QVariant> roleDataMap;
-
-                            roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
-                            roleDataMap[1] = QVariant(item->data(Qt::UserRole).toString());
-                            roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
-                            roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
-
-                            stream << roleDataMap;
-
-                            mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
-                            drag->setMimeData(mimeData);
+                            // ONE payload builder (ui/controls/assetdrag.h).
+                            drag->setMimeData(AssetDrag::mimeFor(
+                                item->data(MODEL_TYPE_ROLE).toInt(),
+                                item->data(Qt::UserRole).toString(),
+                                item->data(MODEL_MESH_ROLE).toString(),
+                                item->data(MODEL_GUID_ROLE).toString()));
 
                             // only hide for object models
                             drag->setPixmap(item->icon().pixmap(64, 64));

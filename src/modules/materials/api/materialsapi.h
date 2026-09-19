@@ -68,6 +68,8 @@ public:
     QVector<VerbInfo> verbs() const override;
 
     Q_INVOKABLE bool apply(const QString &nodeId, const QString &presetOrGuid);
+    Q_INVOKABLE bool preview(const QString &nodeId, const QString &presetOrGuid);
+    Q_INVOKABLE bool endPreview();
     Q_INVOKABLE bool set(const QString &nodeId, const QVariantMap &values);
     Q_INVOKABLE bool reset(const QString &nodeId);
     Q_INVOKABLE bool setDetail(const QString &nodeId, int layer, const QVariantMap &values);
