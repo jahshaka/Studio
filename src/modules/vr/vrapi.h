@@ -63,6 +63,11 @@ public:
     /// what is drawn for it — {hand, tracked, count, joints:[...], drawn,
     /// bones, profile}.
     Q_INVOKABLE QVariantMap handJoints(const QVariant &hand);
+    /// ONE EYE OF THE RUNNING SESSION, WRITTEN TO A PNG (lane EYE-GRADE-1) —
+    /// the picture the wearer is looking at, rendered mono through that eye's
+    /// own pose and projection. It renders frames; it is a tool and a test
+    /// call, never a loop. @see Engine::vrEyeScreenshot.
+    Q_INVOKABLE QVariantMap eyeScreenshot(const QVariant &eye, const QString &path);
 
     // ---- STAGE 1: THE CONTROLLERS' INTERACTION (VR_INPUT_SPEC §2.4) -------
     //

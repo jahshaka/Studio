@@ -4588,6 +4588,132 @@ void object_counts_track_lifetimes() {
 // one explicit door through that — allowOffscreen — and these tests are the
 // reason it exists (the other caller is screenshot({postFx:true})).
 
+/// THE VR VIEW POLICY, AS ARITHMETIC (lane EYE-GRADE-1; jahshaka::engine::
+/// applyVrViewPolicy and stereoSafeLook, Types.h).
+///
+/// The policy decides what the person in the headset sees of the project's post
+/// chain, and until this case it had no direct test at all: it was exercised
+/// only through a live session, i.e. only on a box with an OpenXR runtime. It
+/// is pure arithmetic on a struct, so it belongs here — no device, no session,
+/// no runtime, and a failure names the field rather than a pixel.
+void vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks() {
+    // A description with EVERYTHING on, the way a project at Epic with a full
+    // looks stack reaches a view.
+    PostFxDesc world;
+    world.hdr = true;
+    world.tonemapFixed = true;
+    world.exposure = 1.25f;
+    world.exposureMin = -3.0f;
+    world.exposureMax = 3.5f;
+    world.meterPattern = ExposureMeterPattern::Spot;
+    world.meterLowPercent = 20.0f;
+    world.meterHighPercent = 80.0f;
+    world.bloom = true;
+    world.ssao = true;
+    world.smaaPreset = 2;
+    world.ssr = 1;
+    world.ssrScreenMarch = true;
+    world.refractions = true;
+    world.distortion = true;
+    world.distortionStrength = 0.75f;
+    world.hzb = true;
+    world.reflectionRoughnessCutoff = 0.55f;
+    LookDesc grade;  grade.kind = LookKind::FilmGrade;
+    grade.p[0] = 0.8f; grade.p[1] = 1.3f; grade.p[2] = 1.1f; grade.p[3] = 0.6f;
+    grade.p[4] = 0.9f; grade.p[5] = 1.0f; grade.p[6] = 1.05f;
+    LookDesc blur;   blur.kind = LookKind::RadialBlur;   blur.p[0] = 0.5f;
+    LookDesc warp;   warp.kind = LookKind::GlassWarp;    warp.p[0] = 0.4f;
+    LookDesc movie;  movie.kind = LookKind::OldMovie;    movie.p[0] = 0.3f;
+    LookDesc grey;   grey.kind = LookKind::Desaturate;   grey.p[0] = 0.7f;
+    LookDesc post;   post.kind = LookKind::Posterize;    post.p[0] = 0.6f; post.p[1] = 8.0f;
+    LookDesc sharp;  sharp.kind = LookKind::Sharpen;     sharp.p[0] = 0.5f;
+    world.looks = { grade, blur, warp, movie, grey, post, sharp };
+
+    PostFxDesc eye = world;
+    applyVrViewPolicy(eye);
+
+    // ---- what the seam takes away -----------------------------------------
+    CHECK_MSG(!eye.bloom, "bloom is dropped (one 256x256 ladder, 65-tap blurs, two eyes)");
+    CHECK_MSG(!eye.ssao, "SSAO is dropped (one projection for two eyes)");
+    CHECK_MSG(eye.smaaPreset < 0, "SMAA is dropped (its search crosses the seam)");
+    CHECK_MSG(!eye.ssrScreenMarch, "the screen-space march is dropped (it walks the target)");
+    CHECK_MSG(!eye.refractions, "refractions are dropped: the piece samples the TARGET at "
+                                "screenPosUv + offset and falls back only at the FRAME's "
+                                "edges, so a pane at an eye's nasal edge shows the other eye");
+    CHECK_MSG(!eye.distortion, "distortion is dropped for the same reason");
+    CHECK_MSG(!eye.hzb, "the depth pyramid is dropped (it would reduce across the seam)");
+    CHECK_MSG(eye.allowOffscreen, "and the pair keeps its chain: offscreen only because two "
+                                  "eyes share one texture");
+
+    // ---- what the project keeps, whole ------------------------------------
+    CHECK_MSG(eye.hdr == world.hdr && eye.tonemapFixed == world.tonemapFixed &&
+                  eye.exposure == world.exposure && eye.exposureMin == world.exposureMin &&
+                  eye.exposureMax == world.exposureMax,
+              "the exposure — mode, stops and window — is the project's, untouched");
+    CHECK_MSG(eye.meterPattern == world.meterPattern &&
+                  eye.meterLowPercent == world.meterLowPercent &&
+                  eye.meterHighPercent == world.meterHighPercent,
+              "so is the meter's pattern and its percentile clips");
+    CHECK_MSG(eye.ssr == world.ssr && eye.distortionStrength == world.distortionStrength &&
+                  eye.reflectionRoughnessCutoff == world.reflectionRoughnessCutoff,
+              "so is the reflection row and every tuning value");
+
+    // ---- the looks: kept, dropped, and the one that is edited -------------
+    CHECK_MSG(eye.looks.size() == 4u, "three of seven looks are dropped (%zu kept)",
+              eye.looks.size());
+    CHECK_MSG(eye.looks[0].kind == LookKind::FilmGrade &&
+                  eye.looks[1].kind == LookKind::Desaturate &&
+                  eye.looks[2].kind == LookKind::Posterize &&
+                  eye.looks[3].kind == LookKind::Sharpen,
+              "the pointwise looks ride, IN THE PROJECT'S ORDER; the centre-relative ones "
+              "(radial blur, glass warp, old movie) do not");
+    CHECK_MSG(eye.looks[0].p[3] == 0.0f,
+              "the film grade's VIGNETTE is zeroed — it is the one term measured from the "
+              "frame's centre, which in a two-eye target is the inner edge of both");
+    CHECK_MSG(eye.looks[0].p[0] == grade.p[0] && eye.looks[0].p[1] == grade.p[1] &&
+                  eye.looks[0].p[2] == grade.p[2] && eye.looks[0].p[4] == grade.p[4] &&
+                  eye.looks[0].p[5] == grade.p[5] && eye.looks[0].p[6] == grade.p[6],
+              "...and NOTHING else of it moves: amount, saturation, contrast and tint are "
+              "the author's");
+    CHECK_MSG(stereoSafeLook(LookKind::Desaturate) && stereoSafeLook(LookKind::Posterize) &&
+                  stereoSafeLook(LookKind::Sharpen) && stereoSafeLook(LookKind::FilmGrade) &&
+                  !stereoSafeLook(LookKind::RadialBlur) &&
+                  !stereoSafeLook(LookKind::GlassWarp) && !stereoSafeLook(LookKind::OldMovie),
+              "stereoSafeLook answers the same by kind");
+
+    // ---- the reflection override (VrConfig::ssr / vr.begin({reflections})) --
+    {
+        PostFxDesc a = world; applyVrViewPolicy(a, -1);
+        CHECK_MSG(a.ssr == world.ssr, "-1 follows the project's row (%d)", a.ssr);
+        PostFxDesc b = world; applyVrViewPolicy(b, 0);
+        CHECK_MSG(b.ssr == 0, "0 pins the row off for the session");
+        PostFxDesc c = world; applyVrViewPolicy(c, 2);
+        CHECK_MSG(c.ssr == 2, "2 pins it at full resolution");
+    }
+
+    // ---- IDEMPOTENT, which is what makes it safe in setPostFx -------------
+    // Every host push runs through it, and setStereo runs it again over a
+    // description it has already filtered: a policy that was not idempotent
+    // would edit the film grade's vignette twice (harmless) or drop a look a
+    // second time (not: the size compare behind the log line would thrash).
+    PostFxDesc twice = eye;
+    applyVrViewPolicy(twice);
+    CHECK_MSG(twice == eye, "policy(policy(x)) == policy(x)");
+
+    // ...and a description that asks for nothing is untouched but for the two
+    // fields whose DEFAULTS are not what a stereo view may have: the offscreen
+    // opt-in (no VR view ever renders a passthrough shape) and the screen-space
+    // march, which defaults to TRUE — the row that selects it is `ssr`, so the
+    // march flag rides along with a reflection row nobody has turned on yet.
+    PostFxDesc plain;
+    PostFxDesc plainEye = plain;
+    applyVrViewPolicy(plainEye);
+    plain.allowOffscreen = true;
+    plain.ssrScreenMarch = false;
+    CHECK_MSG(plainEye == plain,
+              "a bare description gains only the offscreen opt-in and loses the march");
+}
+
 /// The offscreen guarantee itself: pushing a full post-fx description at an
 /// offscreen view changes NOTHING unless it opts in.
 void postfx_is_ignored_offscreen_unless_asked() {
@@ -6132,6 +6258,8 @@ int main(int argc, char **argv) {
         { "hud_overlay_toggle_does_not_rebuild_the_workspace", hud_overlay_toggle_does_not_rebuild_the_workspace },
         { "render_stats_are_live_and_lazily_recorded", render_stats_are_live_and_lazily_recorded },
         { "object_counts_track_lifetimes",          object_counts_track_lifetimes },
+        { "vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks",
+                                                    vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks },
         { "postfx_is_ignored_offscreen_unless_asked", postfx_is_ignored_offscreen_unless_asked },
         { "hdr_tonemap_and_exposure",               hdr_tonemap_and_exposure },
         { "fixed_exposure_tonemap",                 fixed_exposure_tonemap },

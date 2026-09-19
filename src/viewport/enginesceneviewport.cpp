@@ -2087,6 +2087,20 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         framemonitor::Stage envStage("host.env");
         if (mMirror) mMirror->applySky(view());
         if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
+        // ...AND THE HEADSET'S EYES, WHICH ARE A VIEW OF THIS SCENE TOO (lane
+        // EYE-GRADE-1). The session makes its own View inside the engine, so it
+        // was the one view no mirror reached and the wearer got the renderer's
+        // defaults instead of the project's grade. It is pushed here, beside
+        // the desktop's, through the PER-VIEW half — never a second
+        // applyEnvironment, whose scene half counts GI settle frames.
+        //
+        // THE SAME DRIVING CAMERA as the desktop view, because it is the same
+        // shot: the rig is placed on the camera a render of this scene actually
+        // looks through (EditorVrPreview::begin's renderCamera rule), so a
+        // camera with its own exposure grades both pictures.
+        if (mMirror && mEngine)
+            if (jahshaka::engine::View *eyes = mEngine->vrView())
+                mMirror->applyViewEnvironment(eyes, viewCamera());
     }
     {
         framemonitor::Stage camStage("host.camera");

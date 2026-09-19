@@ -369,6 +369,48 @@ set_tests_properties(vr.frame_budget PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_budget_home};JAHSHAKA_DATA_ROOT=${_vr_budget_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${JAH_VR_BUDGET_DIR}")
 
 # ---------------------------------------------------------------------------
+# vr.eye_grade — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane
+# EYE-GRADE-1; SPECS/VR_SPEC.md §6).
+#
+# The only suite in the tree that looks at what the RUNTIME DISPLAYS. Every
+# other VR suite runs Monado with no compositor at all (XRT_COMPOSITOR_NULL),
+# which is right when the subject is the session's arithmetic and useless when
+# the subject is colour: the two defects the #50 smoke found were the eye
+# ignoring the project's grade (the session wrote its own PostFxDesc) and the
+# swapchain's colour contract being inverted (a UNORM swapchain tells an OpenXR
+# runtime our bytes are linear, so it encoded them a second time). Its runner
+# therefore starts the compositor with an X window and captures it with xwd.
+#
+# THREE PIECES, like vr.frame_budget: the app RECORDS (its own eye picture, the
+# desktop's screenshot, and the descriptions it asserts itself), the runner
+# CAPTURES the runtime's window while the script holds a picture still, and a
+# Qt reader JUDGES the files — a script cannot open a PNG.
+set(_vr_grade_home "${CMAKE_CURRENT_BINARY_DIR}/vr-eye-grade-home")
+set(JAH_EYE_GRADE_DIR "${CMAKE_CURRENT_BINARY_DIR}/vr-eye-grade-out")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/eye_grade.js.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/eye_grade.js" @ONLY)
+
+add_executable(test_vr_eye_grade "${CMAKE_CURRENT_SOURCE_DIR}/test_vr_eye_grade.cpp")
+set_target_properties(test_vr_eye_grade PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_vr_eye_grade PRIVATE Qt6::Gui)
+
+add_test(NAME vr.eye_grade
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_eye_grade.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_BINARY_DIR}/eye_grade.js"
+                 "$<TARGET_FILE:test_vr_eye_grade>" "${JAH_EYE_GRADE_DIR}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.eye_grade PROPERTIES
+    LABELS "scripting"
+    # Five arms, each settling and then rendering a ~90-frame mono control for
+    # the eye screenshot, on a rig whose present copy is 10-27 ms a frame.
+    TIMEOUT 900
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_grade_home};JAHSHAKA_DATA_ROOT=${_vr_grade_home}/.local/share/Jahshaka")
+
 # vr.sample_open — THE `--vr` BOOT'S PAGES (lane SMOKE-FIX-1, 2026-09-18).
 #
 # The owner smoked push #50 on a `--vr` build and reported both halves of this

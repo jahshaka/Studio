@@ -71,12 +71,14 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     cfg.overrideEyeHeight = options.value(QStringLiteral("eyeHeight"), 0).toUInt();
     if (!cfg.overrideEyeWidth != !cfg.overrideEyeHeight)
         return fail(QStringLiteral("eyeWidth and eyeHeight are set together or not at all"));
-    // THE REFLECTION ROW IS THE PROJECT'S (lane REFLECT-VR-1), the same row the
-    // flat Player renders with: the World panel's SSR row, passed here because
-    // the session builds its own View and no mirror reaches it. In the headset
-    // the row buys RAY-TRACED reflections rather than the screen-space march,
-    // which a stereo target cannot carry — see PostFxDesc::ssrScreenMarch.
-    if (document) cfg.ssr = document->ssrMode;
+    // THE REFLECTION ROW IS THE PROJECT'S (lane REFLECT-VR-1) AND ARRIVES BY
+    // ITSELF (lane EYE-GRADE-1): the mirror pushes the project's whole post
+    // description into the session's view every frame now, this row included,
+    // so the row is no longer copied out of the document here. What remains is
+    // the one-session OVERRIDE (`VrConfig::ssr`, -1 = follow the project), for
+    // a caller that asks for a measurement arm. In the headset the row buys
+    // RAY-TRACED reflections rather than the screen-space march, which a stereo
+    // target cannot carry — see PostFxDesc::ssrScreenMarch.
     if (options.contains(QStringLiteral("reflections")))
         cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
 
