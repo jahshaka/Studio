@@ -161,19 +161,16 @@ QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer
         return renderer.renderNode(node, size);
     }
 
-    if (request.type == ThumbnailRequestType::Shader) {
-        // The graph asset's baked material on the preview sphere. Null when the
-        // definition predates the evaluator or its baked maps have no project
-        // to resolve against — an empty QImage, never a half-textured render.
-        if (!db) return QImage();
-        MaterialReader reader;
-        reader.setProject(project);
-        auto material = reader.parseShaderAsPbr(request.id, db);
-        if (!material) return QImage();
-        return renderer.renderMaterial(material, size);
-    }
+    // (THE SHADER REQUEST TYPE'S BODY IS GONE — phase 2's Deletes. It rendered
+    // a ModelTypes::Shader row through parseShaderAsPbr; the module asks for a
+    // MATERIAL render of its one row now, and nothing else ever asked for this
+    // kind. The enumerator survives because it is a public request type, and
+    // it falls through to the material branch below, which reads a bundle
+    // definition — the right answer for every guid a caller can hold.)
+    if (request.type == ThumbnailRequestType::Shader && !db) return QImage();
 
-    if (request.type == ThumbnailRequestType::Material) {
+    if (request.type == ThumbnailRequestType::Material
+        || request.type == ThumbnailRequestType::Shader) {
         // TWO WAYS IN, ONE READING. A caller with a FILE (the save dialog's
         // ".material on disk" route) hands a path; a caller with a library ROW
         // hands the guid and nothing else, and then the definition is the
@@ -182,12 +179,12 @@ QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer
         // `thumbnailrebuild` and `SceneEditService::resolveMaterial` read.
         //
         // The guid route exists because the Materials module used to ask for
-        // a SHADER render of its own material: that branch reads the row blob
-        // through `parseShaderAsPbr`, which refuses anything with no
+        // a SHADER render of its own material: that branch read the row blob
+        // through `parseShaderAsPbr`, which refused anything with no
         // `pbrMaterial` key — a key the bundle definition does not have — so
         // every graph material saved in the module logged "nothing was
         // rendered" and kept a blank tile while the library sweep rendered
-        // the same material perfectly. One reader, here.
+        // the same material perfectly. One reader, here, for both types.
         QJsonObject definition;
         if (!request.path.isEmpty()) {
             QFile file(request.path);

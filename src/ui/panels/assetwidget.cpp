@@ -325,7 +325,6 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     assetFilterCombo->addItem("Objects", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
     assetFilterCombo->addItem("Materials", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
     assetFilterCombo->addItem("Textures", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
-    assetFilterCombo->addItem("Shaders", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
     assetFilterCombo->addItem("Particle Systems", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
     assetFilterCombo->addItem("Skies", QVariant::fromValue(static_cast<int>(ModelTypes::Sky)));
     assetFilterCombo->addItem("Audio", QVariant::fromValue(static_cast<int>(ModelTypes::Music)));
@@ -344,6 +343,25 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
     filterGroupLayout->addWidget(new QLabel("Filter Assets:"));
     filterGroupLayout->addWidget(assetFilterCombo);
+
+    // SHOW MEMBER TEXTURES (MATERIAL_BUNDLE_SPEC V-2, the owner's Q4). A
+    // picture that came in through a material's picker is part of that
+    // bundle and the bundle is its tile — this is the switch that opens the
+    // bundle up and lists them beside it. Off by default, remembered, and it
+    // turns off exactly ONE rule: everything else the tray collapses stays
+    // collapsed.
+    showMembersBox = new QCheckBox(tr("Show member textures"));
+    showMembersBox->setToolTip(tr("List the pictures that came in INSIDE a material as tiles of "
+                                  "their own. Your own imported images are always listed."));
+    showMembersBox->setChecked(
+        SettingsManager::getDefaultManager()->getValue("tray_show_members", false).toBool());
+    showMembers = showMembersBox->isChecked();
+    filterGroupLayout->addWidget(showMembersBox);
+    connect(showMembersBox, &QCheckBox::toggled, this, [this](bool on) {
+        showMembers = on;
+        SettingsManager::getDefaultManager()->setValue("tray_show_members", on);
+        updateAssetView(assetItem.selectedGuid, activeFilter);
+    });
 
     connect<void(QComboBox::*)(int)>(assetFilterCombo, &QComboBox::currentIndexChanged, this, [&](int index) {
 		activeFilter = assetFilterCombo->itemData(index).toInt();
@@ -694,7 +712,8 @@ void AssetWidget::updateAssetView(const QString &path, int filter)
         for (const auto &folder : db->fetchChildFolders(path, project->getProjectGuid())) addItem(folder);
         addCrumbs(db->fetchCrumbTrail(path, project->getProjectGuid()));
     }
-    for (const auto &asset : assettray::list(db, project->getProjectGuid(), path, filter))
+    for (const auto &asset : assettray::list(db, project->getProjectGuid(), path, filter,
+                                            showMembers))
         addItem(asset);
 
     goUpOneControl->setEnabled(false);
@@ -861,10 +880,13 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 
 	QAction *action;
 
+	// (CREATE > SHADER IS GONE — MATERIAL_BUNDLE_SPEC phase 2's Deletes, owner
+	// Q3 "only materials". It minted a ModelTypes::Shader row from
+	// app/templates/ShaderTemplate.shader, a format that predates the node
+	// graph and that the graph loader cannot reopen: the tile it made could
+	// not be edited, previewed or applied. A material is made in the Materials
+	// module — or by `materials.create` — as ONE bundle.)
 	QMenu *createMenu = menu.addMenu("Create");
-	action = new QAction(QIcon(), "Shader", this);
-	connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
-	createMenu->addAction(action);
 
     action = new QAction(QIcon(), "Sky", this);
     connect(action, SIGNAL(triggered()), this, SLOT(createSky()));
@@ -1073,9 +1095,6 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	}
 	else {
 		QMenu *createMenu = menu.addMenu("Create");
-		action = new QAction(QIcon(), "Shader", this);
-		connect(action, SIGNAL(triggered()), this, SLOT(createShader()));
-		createMenu->addAction(action);
 
         action = new QAction(QIcon(), "Sky", this);
         connect(action, SIGNAL(triggered()), this, SLOT(createSky()));
@@ -1822,76 +1841,6 @@ void AssetWidget::deleteItem()
 void AssetWidget::openAtFolder()
 {
 
-}
-
-// PHASE-2 CRUD (MATERIAL_BUNDLE_SPEC, owner Q3 "only materials"): this is the
-// LAST place in the app that MINTS a ModelTypes::Shader row — the editor asset
-// browser's "New Shader", from `app/templates/ShaderTemplate.shader`, a format
-// that predates the node graph and that the graph loader cannot reopen. The
-// Materials module stopped minting Shader rows in phase 1; this one, and the
-// `ShaderImporter` that ingests a `.shader` FILE from disk, are why the
-// Shader-reading paths (MaterialReader::parseShaderAsPbr and its callers) are
-// still reachable and are deliberately kept. Deleting this is phase 2's job,
-// with the readers.
-void AssetWidget::createShader()
-{
-	const QString newShader = "Untitled Shader";
-	QListWidgetItem *item = new QListWidgetItem;
-	item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setSizeHint(currentSize);
-	item->setTextAlignment(Qt::AlignCenter);
-	item->setIcon(QIcon(":/icons/icons8-file-72.png"));
-
-	const QString assetGuid = GUIDManager::generateGUID();
-
-	item->setData(MODEL_GUID_ROLE, assetGuid);
-	item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
-	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
-    item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
-
-	assetItem.wItem = item;
-
-	QString shaderName = newShader;
-
-	QStringList assetsInProject = db->fetchAssetNameByParent(assetItem.selectedGuid);
-
-	//// If we encounter the same file, make a duplicate...
-	int increment = 1;
-	while (assetsInProject.contains(IrisUtils::buildFileName(shaderName, "shader"))) {
-		shaderName = QString(newShader + " %1").arg(QString::number(increment++));
-	}
-
-	db->createAssetEntry(assetGuid,
-						 IrisUtils::buildFileName(shaderName, "shader"),
-						 static_cast<int>(ModelTypes::Shader),
-					     assetItem.selectedGuid,
-						 project->getProjectGuid(),
-						 QByteArray());
-
-	item->setText(shaderName);
-	ui->assetView->addItem(item);
-
-	QFile *templateShaderFile = new QFile(IrisUtils::getAbsoluteAssetPath("app/templates/ShaderTemplate.shader"));
-	templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
-	QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
-	templateShaderFile->close();
-    shaderDefinition["name"] = shaderName;
-    shaderDefinition.insert("guid", assetGuid);
-
-    auto assetShader = new AssetShader;
-    assetShader->fileName = IrisUtils::buildFileName(shaderName, "shader");
-    assetShader->assetGuid = assetGuid;
-    //assetShader->path = IrisUtils::join(project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
-    assetShader->setValue(QVariant::fromValue(shaderDefinition));
-
-    // Write to project dir, and update the path to that location
-    //QFile jsonFile(assetShader->path);
-    //jsonFile.open(QFile::WriteOnly);
-    //jsonFile.write(QJsonDocument(shaderDefinition).toJson());
-
-    db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
-
-    AssetManager::addAsset(assetShader);
 }
 
 void AssetWidget::createSky()

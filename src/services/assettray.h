@@ -43,6 +43,9 @@ For more information see the LICENSE file
 //   1. an import MEMBER: its parent is another ASSET (the Mesh row, the member
 //      Textures of a fresh import). (The `parent` column also holds a FOLDER
 //      guid for a filed asset, which is not membership.)
+//   2b. a ModelTypes::SHADER row — the module's retired separate graph asset
+//      (phase 2): nothing mints one, nothing reads one, so a tile for it
+//      could not be opened, applied or previewed;
 //   2. a MESH row, whatever its parent — a mesh is the inside of a model and
 //      never a tile of its own (older content files its Mesh rows under the
 //      project, where rule 1 cannot see them);

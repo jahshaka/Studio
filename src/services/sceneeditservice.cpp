@@ -1257,14 +1257,10 @@ iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid)
         return reader.parseMaterialTyped(matObject, db);
     }
 
-    // A SHADER row — a Materials-module graph. Its baked PbrMaterial IS the
-    // material (the GLSL route died with the evaluator's phase 5). Null when
-    // the definition predates the evaluator or its baked maps cannot be
-    // resolved, which is a REFUSAL the caller can show rather than a half
-    // material nobody asked for.
-    if (row.type == static_cast<int>(ModelTypes::Shader))
-        return reader.parseShaderAsPbr(presetOrGuid, db);
-
+    // (THE SHADER BRANCH IS GONE — MATERIAL_BUNDLE_SPEC phase 2's Deletes
+    // column. A ModelTypes::Shader row was the Materials module's separate
+    // graph asset; there is one MATERIAL row now, with the graph as a payload
+    // of its definition, and nothing in the app can mint the old kind.)
     return iris::MaterialPtr();
 }
 
@@ -1290,9 +1286,9 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
     }
 
     if (!db) return false;
-    const AssetRecord row = db->fetchAsset(presetOrGuid);
-    if (row.type == static_cast<int>(ModelTypes::Shader))
-        return applyMaterialShader(presetOrGuid, target);
+    // ONE APPLY, because there is one kind of material row (phase 2's
+    // Deletes: `applyMaterialShader`, the second dispatcher for the module's
+    // old graph asset, is gone with the rows it served).
     return applyMaterialAsset(presetOrGuid, target);
 }
 
@@ -1537,58 +1533,6 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     emit materialApplied(matObject["materialType"].toString() == "pbr"
                              ? QStringLiteral("PBR")
                              : QStringLiteral("custom"));
-    return true;
-}
-
-bool SceneEditService::applyMaterialShader(const QString &shaderGuid, iris::SceneNodePtr target)
-{
-    // A preview ends BEFORE a command is BUILT, not at its push: the command's
-    // constructor is what captures "the original" (the read of the code review,
-    // F1 — UndoService's pre-push hook runs after that and is only the backstop).
-    if (preview) preview->end();
-    if (editgate::refuse()) return false;
-    QList<iris::MeshNodePtr> meshes;
-    collectMeshNodes(target, meshes);
-    if (meshes.isEmpty()) return false;
-    if (!db) return false;
-
-    // A SHADER ROW IS A MATERIAL (the Materials module's own tile). It resolves
-    // through the SAME function the hover preview used, so a tile that previews
-    // applies and a tile that cannot preview refuses here too, by the same test
-    // — the old behaviour was to accept the drag, show nothing, and drop the
-    // gesture on the floor.
-    MaterialReader reader;
-    reader.setProject(project);
-    if (!reader.parseShaderAsPbr(shaderGuid, db)) return false;
-
-    undo->stack()->beginMacro(QObject::tr("Apply Material"));
-    for (const auto &meshNode : meshes) {
-        auto mat = reader.parseShaderAsPbr(shaderGuid, db);   // a fresh instance per mesh
-        if (!mat) continue;
-        undo->push(new ChangeMaterialCommand(meshNode, mat));
-    }
-    undo->stack()->endMacro();
-
-    // APPLYING IS A USE, exactly as in applyMaterialAsset.
-    if (project && !project->getProjectGuid().isEmpty()) {
-        const AssetRecord row = db->fetchAsset(shaderGuid);
-        const bool libraryRow = row.view_filter == AssetViewFilter::AssetsView
-                                || row.view_filter == AssetViewFilter::Effects;
-        if (libraryRow && !db->isAssetPinnedBy(project->getProjectGuid(), shaderGuid))
-            ProjectAssets::addToProject(shaderGuid, db, project, ProjectAssets::AddKind::Binding);
-        for (const auto &meshNode : meshes) {
-            db->deleteDependency(meshNode->getGUID(), shaderGuid);
-            db->createDependency(
-                static_cast<int>(ModelTypes::Object),
-                static_cast<int>(ModelTypes::Shader),
-                meshNode->getGUID(),
-                shaderGuid,
-                project->getProjectGuid()
-            );
-        }
-    }
-
-    emit materialApplied(QStringLiteral("PBR"));
     return true;
 }
 

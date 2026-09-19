@@ -138,62 +138,18 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 	if (matObject["materialType"].toString() == "pbr")
 		return parsePbrMaterial(matObject, db, loadTextures);
 
-	// Graph-backed material assets - a shaderGuid whose stored definition
-	// carries a shadergraph - load as the shader's baked PbrMaterial
-	// (MATERIALS_EVALUATOR phase 5): folded values plus BakedMaps/<guid>/
-	// textures, resolved against the open project. A definition predating the
-	// evaluator (no "pbrMaterial" object) falls through to parseMaterial's
-	// legacy-uniform conversion; materials.regenerate rebuilds it properly.
-	if (getMaterialVersion(matObject) >= 2) {
-		const auto shaderGuid = matObject["shaderGuid"].toString();
-		if (!shaderGuid.isEmpty() && db
-			&& !Constants::Reserved::BuiltinShaders.contains(shaderGuid)) {
-			const auto shaderObject = getShaderObjectFromId(shaderGuid, db);
-			if (MaterialHelper::materialHasEffect(shaderObject)) {
-				if (auto pbr = shaderDefinitionAsPbr(shaderObject,
-				                                    project ? project->getProjectFolder() : QString()))
-					return pbr;
-			}
-		}
-	}
+	// (THE SHADER-STUB BRANCH IS GONE — MATERIAL_BUNDLE_SPEC phase 2's Deletes
+	// column. It served shape S2: a Material row holding `{shaderGuid,
+	// values:{}}` and pointing at a separate ModelTypes::Shader row that held
+	// the graph. Phase 1 collapsed the three shapes into ONE row whose
+	// definition carries the graph as a payload and stamps materialType "pbr",
+	// so a graph material takes the branch above; nothing mints a stub or a
+	// Shader row any more, and the editor's last two minting sites — the asset
+	// browser's "New Shader" and the `.shader` file importer — are deleted with
+	// this branch rather than left as the reason to keep it.)
 
-	// Reserved builtins, and any legacy shader material: parseMaterial converts.
+	// Reserved builtins, and any legacy material: parseMaterial converts.
 	return parseMaterial(matObject, db, loadTextures);
-}
-
-iris::MaterialPtr MaterialReader::parseShaderAsPbr(const QString &shaderGuid, Database *db)
-{
-	if (shaderGuid.isEmpty() || !db) return iris::MaterialPtr();
-	// A reserved builtin is now a PbrMaterial PRESET, so a shader-asset preview
-	// or thumbnail of one has something real to show. Before HLMS_ADOPTION P4b
-	// this returned null for every builtin (they carry no "pbrMaterial" block)
-	// and every caller fell back to a placeholder.
-	if (BuiltinMaterials::isBuiltin(shaderGuid))
-		return BuiltinMaterials::fromBuiltin(shaderGuid, QJsonObject(), {});
-
-	const QJsonObject definition = getShaderObjectFromId(shaderGuid, db);
-	return shaderDefinitionAsPbr(definition, project ? project->getProjectFolder() : QString());
-}
-
-iris::MaterialPtr MaterialReader::shaderDefinitionAsPbr(const QJsonObject &definition,
-                                                        const QString &projectFolder)
-{
-	if (definition.isEmpty() || !definition.contains("pbrMaterial"))
-		return iris::MaterialPtr();
-
-	// (THE NO-PROJECT REFUSAL IS GONE — MATERIAL_BUNDLE_SPEC phase 1's Deletes
-	// column. A baked map used to be a project-relative "BakedMaps/<guid>/…"
-	// path, so with no project open it reached the loader as a literal
-	// relative string and this refused rather than render a half-material —
-	// which also meant a graph material could not preview in the LIBRARY. A
-	// baked map is a member TEXTURE in the store now: it resolves by guid,
-	// with or without a project, on any machine. `projectFolder` is unused
-	// here and kept only so the two callers need not change shape.)
-	Q_UNUSED(projectFolder);
-
-	auto pbr = MaterialHelper::createPbrMaterialFromDefinition(definition);
-	if (!pbr) return iris::MaterialPtr();
-	return pbr.staticCast<iris::Material>();
 }
 
 iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Database* db, bool loadTextures)

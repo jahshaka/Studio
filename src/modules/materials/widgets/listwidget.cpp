@@ -172,8 +172,12 @@ void ListWidget::customContextMenu(QPoint pos)
 
     if(shaderContextMenuAllowed){
         if(index.isValid()){
+            // THE WORDS ARE "MATERIAL", because that is what these tiles are
+            // (owner Q3: "only materials"; there is no shader/effect asset any
+            // more). Each acts on THIS ONE ROW.
             auto actionRename = new QAction("Rename");
-            auto actionExport = new QAction("Export");
+            auto actionDuplicate = new QAction("Duplicate");
+            auto actionExport = new QAction("Export material…");
             auto actionEdit = new QAction("Edit");
             auto actionDelete = new QAction("Delete");
             auto actionProject = new QAction("Add to project");
@@ -183,6 +187,9 @@ void ListWidget::customContextMenu(QPoint pos)
             });
             connect(actionExport,&QAction::triggered,[guid ,this](){
                 emit exportShader(guid);
+            });
+            connect(actionDuplicate,&QAction::triggered,[guid ,this](){
+                emit duplicateShader(guid);
             });
             connect(actionEdit,&QAction::triggered,[guid, index ,this](){
                 emit editShader(guid);
@@ -194,12 +201,12 @@ void ListWidget::customContextMenu(QPoint pos)
 				emit addToProject(this->currentItem());
 			});
 
-            menu.addActions({actionRename,actionEdit,actionExport,actionDelete});
+            menu.addActions({actionEdit,actionRename,actionDuplicate,actionExport,actionDelete});
 			if (sceneOpenProbe && sceneOpenProbe() && addToProjectMenuAllowed) menu.addAction(actionProject);
             menu.exec(this->mapToGlobal(pos));
         }else{
-            auto actionCreate = new QAction("Create Shader");
-            auto actionImport = new QAction("Import Shader");
+            auto actionCreate = new QAction("New material");
+            auto actionImport = new QAction("Import material…");
 
             connect(actionCreate,&QAction::triggered,[guid ,this](){
                 emit createShader(guid);

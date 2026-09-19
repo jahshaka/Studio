@@ -48,6 +48,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
@@ -325,12 +326,18 @@ void MaterialPropertyWidget::materialChanged(int index)
 
     MaterialReader reader;
     reader.setProject(project);
-    iris::MaterialPtr picked = BuiltinMaterials::isBuiltin(guid)
-                                   ? reader.createMaterialFromShaderGuid(guid, db)
-                                         .staticCast<iris::Material>()
-                                   : reader.parseShaderAsPbr(guid, db);
-    // A graph asset with no baked material yet (a definition predating the
-    // evaluator) must not silently blank the mesh: keep what it had.
+    // THE BUNDLE'S DEFINITION for anything that is not a builtin (phase 2's
+    // Deletes: this read a ModelTypes::Shader row through parseShaderAsPbr —
+    // the module's old separate graph asset, which nothing mints and nothing
+    // else reads). `MaterialBundle::read` is pin-first, so the combo shows the
+    // version this project renders with, and a graph material resolves through
+    // its `values` like every other material.
+    iris::MaterialPtr picked =
+        BuiltinMaterials::isBuiltin(guid)
+            ? reader.createMaterialFromShaderGuid(guid, db).staticCast<iris::Material>()
+            : reader.parseMaterialTyped(MaterialBundle::read(db, guid, project), db);
+    // A guid with no definition at all must not silently blank the mesh: keep
+    // what it had.
     if (!picked) { setupShaderSelector(); addResetRow(); setWidgetProperties(); return; }
 
     picked->setName(pickedName);

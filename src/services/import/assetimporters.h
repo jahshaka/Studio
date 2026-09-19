@@ -59,19 +59,9 @@ private:
     int mType;
 };
 
-/// .shader: a first-class library Shader row whose blob is the definition
-/// (name/guid normalized), registered in the session AssetManager.
-class ShaderImporter : public AssetImporterBase
-{
-public:
-    QString name() const override { return QStringLiteral("shader"); }
-    int version() const override { return 1; }
-    int modelType() const override;
-    bool sniff(const QString &path) const override;
-    bool convert(const ImportRequest &request, const QString &stagingDir,
-                 Database *db, Project *project, StagedAsset &out,
-                 QString *errorOut, const ImportProgressFn &progress) override;
-};
+// (ShaderImporter is DELETED — see assetimporters.cpp: a `.shader` file was
+// the module's old separate graph asset, nothing mints a ModelTypes::Shader
+// row and nothing reads one.)
 
 /// .material: a library Material row; textures the definition references
 /// that exist beside the file import as member Texture rows and the blob's

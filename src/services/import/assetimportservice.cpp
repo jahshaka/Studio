@@ -48,7 +48,6 @@ AssetImportService::AssetImportService(Database *db, Project *project)
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Texture)));
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Music)));
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Video)));
-    mImporters.append(new ShaderImporter());
     mImporters.append(new MaterialImporter());
     mImporters.append(new IesImporter());
     mImporters.append(new JafImporter());

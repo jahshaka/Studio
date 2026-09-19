@@ -24,6 +24,7 @@ class Subscriber;
 
 #include <QListWidget>
 #include <QTreeWidgetItem>
+#include <QCheckBox>
 #include <QWidget>
 #include <QFileDialog>
 #include <QLineEdit>
@@ -240,6 +241,11 @@ public:
 	AssetItem assetItem;
 
 	int activeFilter = -1;
+	/// "Show member textures" (MATERIAL_BUNDLE_SPEC V-2): off = the pictures
+	/// that arrived inside a material bundle are part of it, not tiles of
+	/// their own. Persisted as `tray_show_members`.
+	bool showMembers = false;
+	QCheckBox *showMembersBox = nullptr;
 	/// A pin change for the open project queued a repopulate (coalesced).
 	bool membershipRefreshPending = false;
 
@@ -370,7 +376,6 @@ protected slots:
     void deleteTreeFolder();
     void deleteItem();
     void openAtFolder();
-	void createShader();
     void createSky();
     void createFolder();
     void importAssetB();

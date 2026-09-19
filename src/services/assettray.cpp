@@ -186,6 +186,16 @@ QStringList hidden(Database *db, const QString &projectGuid, const QVector<Asset
         }
         // 2. a mesh is the inside of a model.
         if (isType(record, ModelTypes::Mesh)) { out.append(record.guid); continue; }
+        // 2b. a ModelTypes::SHADER row: the Materials module's old separate
+        //     graph asset (MATERIAL_BUNDLE_SPEC phase 2, owner Q3 "only
+        //     materials"). Nothing in the app can mint one any more and
+        //     nothing can read one — the readers went with the two minting
+        //     sites — so a library that predates the bundle model may still
+        //     hold such a row, and a tile for it would be a tile that cannot
+        //     be opened, applied or previewed. Not a data change: the row is
+        //     untouched and goes with the next data wipe (spec 7, no
+        //     migration is owed).
+        if (isType(record, ModelTypes::Shader)) { out.append(record.guid); continue; }
         // 3. the model and the clips an avatar in this project owns.
         if (claimed.contains(record.guid)
             && (isType(record, ModelTypes::Object) || isType(record, ModelTypes::Animation))) {

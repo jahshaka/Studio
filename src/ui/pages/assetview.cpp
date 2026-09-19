@@ -1128,11 +1128,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
                     viewer->loadJafMaterial(guid);
                     if (cached) restoreCamera();
                 }
-                else if (type == ModelTypes::Shader) {
-                    QMap<QString, QString> map;
-                    viewer->loadJafShader(guid, map);
-                    if (cached) restoreCamera();
-                }
                 else if (type == ModelTypes::Sky) {
                     viewer->loadJafSky(guid);
                 }
@@ -1220,7 +1215,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		// The other four importers the pipeline owns. They were absent here,
 		// so the only way to reach ShaderImporter/MaterialImporter/IesImporter/
 		// FileImporter from this page was drag-and-drop (deep audit 2026-09).
-		patterns << "*." + Constants::SHADER_EXT;
+		// (*.shader is GONE — phase 2's Deletes: the ShaderImporter that
+		// ingested one is deleted with the readers it fed.)
 		for (const auto &ext : Constants::MATERIAL_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::LIGHT_PROFILE_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::WHITELIST) patterns << "*." + ext;
@@ -1442,13 +1438,6 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
         viewers->setCurrentIndex(0);
         renameModelField->setText(QFileInfo(filename).baseName());
         viewer->loadJafMaterial(guid);
-        addToJahLibrary(filename, guid, true);
-    }
-    else if (result.jafKind == QStringLiteral("shader")) {
-        viewers->setCurrentIndex(0);
-        renameModelField->setText(QFileInfo(filename).baseName());
-        QMap<QString, QString> guidMap = result.guidMap;
-        viewer->loadJafShader(guid, guidMap);
         addToJahLibrary(filename, guid, true);
     }
     else if (result.jafKind == QStringLiteral("sky")) {
@@ -2945,12 +2934,6 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 		viewers->setCurrentIndex(0);
 		viewer->loadJafMaterial(guid);
 		break;
-	case ModelTypes::Shader: {
-		viewers->setCurrentIndex(0);
-		QMap<QString, QString> map;
-		viewer->loadJafShader(guid, map);
-		break;
-	}
 	case ModelTypes::Sky:
 		viewers->setCurrentIndex(0);
 		viewer->loadJafSky(guid);

@@ -97,8 +97,11 @@ For more information see the LICENSE file
 #include "core/undoredo.h"
 #include "core/texturemanager.h"
 #include <QDebug>
-#include "zip.h"
-#include "core/exporter.h"
+#include "services/assetdelete.h"
+#include "services/assetshare.h"
+#include "services/materialbundle.h"
+#include "services/materialmembers.h"
+#include "widgets/memberspanel.h"
 
 namespace materials
 {
@@ -284,6 +287,9 @@ void EffectsPage::saveShader()
 	// on a render, and the stored asset data must already be written when the
 	// request is served (the renderer re-reads it from the database).
 	requestShaderThumbnail(currentShaderInformation.GUID);
+	// A SAVE CAN CHANGE THE MEMBERS: the final bake mints its maps as member
+	// textures, and a picture picked in a texture node becomes one.
+	if (membersPanel) membersPanel->refresh();
 #else
 	// The STANDALONE build (no library): the graph goes to a file, unchanged.
 	{
@@ -435,121 +441,33 @@ QString EffectsPage::genGUID()
 
 void EffectsPage::importGraph()
 {
-    QString path = QFileDialog::getOpenFileName(this, "Choose file name","material.json","Material File (*.jaf)");
-	if (path == "") return;
-	//assetView->importJahModel(path, false); 
-	importEffect(path);
-	//importGraphFromFilePath(path);
-}
+	// IMPORT A MATERIAL = THE SHARE FILE (MATERIAL_BUNDLE_SPEC 5, owner Q5).
+	//
+	// What was here was `importEffect`: extract the zip by hand, read a
+	// one-word `.manifest`, call the legacy .jaf row importer and then
+	// QFile::copy every image in `assets/` into the RETIRED per-guid folder
+	// under the store root — outside the content-addressed store, with no
+	// hash, no sidecar and no pin. It is deleted with its exporter twin: a
+	// material arrives through `assetshare::importBundle` now, which is the
+	// import that lands a closure payload (rows, bytes, edges, pins) and the
+	// same one `assets.import` uses.
+	if (!dataBase) return;
+	const QString path = QFileDialog::getOpenFileName(this, tr("Import material"), QString(),
+	                                                  assetshare::fileFilter());
+	if (path.isEmpty()) return;
 
-void EffectsPage::importEffect(QString fileName)
-{
-	QFileInfo entryInfo(fileName);
-
-	auto assetPath = AssetStorePaths::root();
-
-	// create a temporary directory and extract our project into it
-	// we need a sure way to get the project name, so we have to extract it first and check the blob
-	QTemporaryDir temporaryDir;
-	if (temporaryDir.isValid()) {
-		zip_extract(entryInfo.absoluteFilePath().toStdString().c_str(),
-			temporaryDir.path().toStdString().c_str(),
-			Q_NULLPTR, Q_NULLPTR
-		);
-
-		QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
-
-		if (!f.exists()) {
-			QMessageBox::warning(
-				this,
-				"Incompatible Asset format",
-				"This asset was made with a deprecated version of Jahshaka\n"
-				"You can extract the contents manually and try importing as regular assets.",
-				QMessageBox::Ok
-			);
-
-			return;
-		}
-
-		if (!f.open(QFile::ReadOnly | QFile::Text)) return;
-		QTextStream in(&f);
-		const QString jafString = in.readLine();
-		f.close();
-
-		ModelTypes jafType = ModelTypes::Undefined;
-
-		if (jafString == "object") {
-			jafType = ModelTypes::Object;
-		}
-		else if (jafString == "texture") {
-			jafType = ModelTypes::Texture;
-		}
-		else if (jafString == "material") {
-			jafType = ModelTypes::Material;
-		}
-		else if (jafString == "shader") {
-			jafType = ModelTypes::Shader;
-		}
-		else if (jafString == "sky") {
-			jafType = ModelTypes::Sky;
-		}
-		else if (jafString == "particle_system") {
-			jafType = ModelTypes::ParticleSystem;
-		}
-
-		QVector<AssetRecord> records;
-
-		QMap<QString, QString> guidCompareMap;
-		QString guid = dataBase->importAsset(jafType,
-			QDir(temporaryDir.path()).filePath("asset.db"),
-			QMap<QString, QString>(),
-			guidCompareMap,
-			records,
-			AssetViewFilter::Effects,
-			mProject->getProjectGuid());
-
-		const QString assetFolder = QDir(assetPath).filePath(guid);
-		QDir().mkpath(assetFolder);
-
-		QString assetsDir = QDir(temporaryDir.path()).filePath("assets");
-		QDirIterator projectDirIterator(assetsDir, QDir::NoDotAndDotDot | QDir::Files);
-
-		QStringList fileNames;
-		while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
-
-		jafType = ModelTypes::Undefined;
-
-		QString placeHolderGuid = GUIDManager::generateGUID();
-
-		// import assets on by one and move them to folders matching their guids
-		auto assets = dataBase->fetchAssetAndAllDependencies(guid);
-		for (const auto &file : fileNames) {
-			QFileInfo fileInfo(file);
-			for (const auto &assetGuid : assets) {
-				auto record = dataBase->fetchAsset(assetGuid);
-
-				if (fileInfo.fileName() == record.name) {
-					// move asset to it's own folder
-					const QDir destFolder = QDir(IrisUtils::join(assetPath, record.guid));
-					if (destFolder.exists()) {
-						if (!destFolder.mkdir("."))
-							irisLog("Unable to create folder "+destFolder.absolutePath());
-					}
-
-					auto destPath = IrisUtils::join(assetPath, record.guid, fileInfo.fileName());
-					bool fileCopied = QFile::copy(fileInfo.absoluteFilePath(), destPath);
-					
-					if (!fileCopied)
-						irisLog("Failed to copy texture " + fileInfo.fileName());
-				}
-			}
-			/*QFileInfo fileInfo(file);
-			QString fileToCopyTo = IrisUtils::join(assetFolder, fileInfo.fileName());
-			bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);*/
-		}
+	const auto landed = assetshare::importBundle(dataBase, mProject, path);
+	if (!landed.ok()) {
+		QMessageBox::warning(this, tr("Import material"),
+		                     tr("That file could not be imported: %1").arg(landed.error));
+		return;
 	}
-
-	this->updateAssetDock();
+	refreshShaderGraph();
+	tabWidget->setCurrentIndex(static_cast<int>(
+	    mProject && !mProject->getProjectGuid().isEmpty() ? ShaderWorkspace::Projects
+	                                                      : ShaderWorkspace::MyEffects));
+	if (auto *item = selectCorrectItemFromDrop(landed.guid))
+		ListWidget::highlightNodeForInterval(2, item);
 }
 
 NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
@@ -627,61 +545,69 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	oldName = currentShaderInformation.name = currentProjectShader->data(Qt::DisplayRole).toString(); 
 	restoreGraphPositions(obj["shadergraph"].toObject());
 	restoringGraph = false;
+	// The Members panel follows the open bundle.
+	if (membersPanel) membersPanel->setMaterial(currentShaderInformation.GUID);
 	progressDialog->close();
 	progressDialog->deleteLater();
 }
 
 void EffectsPage::exportEffect(QString guid)
 {
+	// EXPORT A MATERIAL = THE SHARE FILE (owner Q5). The old body minted a
+	// SECOND Material row at export time, wrote a flat `.material` file,
+	// copied every texture by DISPLAY NAME into a temp tree and zipped it
+	// with a one-word manifest — `Exporter::exportShaderAsMaterial`, deleted
+	// with this lane. One asset, its closure, its bytes, one file.
+	if (!dataBase || guid.isEmpty()) return;
 	const QString assetName = dataBase->fetchAsset(guid).name;
+	QString path = QFileDialog::getSaveFileName(
+	    this, tr("Export material"),
+	    QStringLiteral("%1.%2").arg(QFileInfo(assetName).completeBaseName(),
+	                                QLatin1String(assetshare::extension())),
+	    assetshare::fileFilter());
+	if (path.isEmpty()) return;
+	if (QFileInfo(path).suffix().isEmpty())
+		path += QStringLiteral(".") + QLatin1String(assetshare::extension());
 
-	// get the export file path from a save dialog
-	auto filePath = QFileDialog::getSaveFileName(
-		this,
-		"Choose export path",
-		assetName,
-		"Supported Export Formats (*.jaf)"
-	);
+	const auto written = assetshare::exportBundle(dataBase, mProject, guid, path);
+	if (!written.ok())
+		QMessageBox::warning(this, tr("Export material"),
+		                     tr("That material could not be exported: %1").arg(written.error));
+}
 
-	if (filePath.isEmpty() || filePath.isNull()) return;
+void EffectsPage::duplicateShader(QString guid)
+{
+	// ONE ROW, COPIED. The copy is a LIBRARY bundle carrying the same
+	// definition — the same member guids, so the textures are shared (one
+	// object, "used by 2") rather than duplicated, which is the bundle
+	// model's whole point. Its own picture can be made private later with
+	// Make unique.
+	if (!dataBase || guid.isEmpty()) return;
+	const bool projectScope = originForItem(guid) == shaderInfo::Origin::Project;
+	const QJsonObject definition =
+	    MaterialBundle::read(dataBase, guid, projectScope ? mProject : nullptr);
+	if (definition.isEmpty()) return;
 
-	QTemporaryDir temporaryDir;
-	if (!temporaryDir.isValid()) return;
+	const QString base = dataBase->fetchAsset(guid).name;
+	QString name = tr("%1 copy").arg(base);
+	QStringList taken;
+	for (int i = 0; i < effects->count(); ++i) taken << effects->item(i)->text();
+	int n = 2;
+	while (taken.contains(name)) name = tr("%1 copy %2").arg(base).arg(n++);
 
-	const QString writePath = temporaryDir.path();
-
-	Exporter::exportShaderAsMaterial(dataBase, mProject, guid, filePath);
-	return;
-
-	//const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-
-	dataBase->createBlobFromAsset(guid, QDir(writePath).filePath("asset.db"));
-
-	QDir tempDir(writePath);
-	tempDir.mkpath("assets");
-
-	QFile manifest(QDir(writePath).filePath(".manifest"));
-	if (manifest.open(QIODevice::ReadWrite)) {
-		QTextStream stream(&manifest);
-		stream << "shader";
+	QString error;
+	const QString copy = MaterialBundle::create(dataBase, name, definition,
+	                                            dataBase->fetchAsset(guid).thumbnail, &error);
+	if (copy.isEmpty()) {
+		QMessageBox::warning(this, tr("Duplicate material"),
+		                     tr("That material could not be duplicated: %1").arg(error));
+		return;
 	}
-	manifest.close();
-
-	for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, dataBase)) {
-		// Pin world (phase 4): bytes resolve through the project pin /
-		// library source - the flat project folder holds no assets.
-		QString name;
-		const QString assetPath = AssetCas::resolvePinned(
-			QSqlDatabase::database(), AssetStorePaths::root(),
-			mProject ? mProject->getProjectGuid() : QString(), assetGuid, &name);
-		if (assetPath.isEmpty()) continue;
-		if (name.isEmpty()) name = dataBase->fetchAsset(assetGuid).name;
-		if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-		QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
-	}
-
-	// ONE zip loop (amendment 7): shared helper.
-	ZipHelper::zipDirectory(writePath, filePath);
+	refreshShaderGraph();
+	tabWidget->setCurrentIndex(static_cast<int>(ShaderWorkspace::MyEffects));
+	if (auto *item = selectCorrectItemFromDrop(copy))
+		ListWidget::highlightNodeForInterval(2, item);
+	loadGraph(copy, shaderInfo::Origin::Library);
 }
 
 void EffectsPage::restoreGraphPositions(const QJsonObject &data)
@@ -706,9 +632,27 @@ bool EffectsPage::deleteShader(QString guid)
 
 #if(EFFECT_BUILD_AS_LIB)
 
-    if(dataBase->deleteAsset(guid)){
+    // THE LIBRARY-DELETE LAW, not a bare row delete (services/assetdelete.h;
+    // owner, 2026-09-09: "deleting an asset from the LIBRARY should not delete
+    // it from a project"). A material a project pins is UNLISTED — it leaves
+    // the drawer and every project that uses it keeps opening, rendering and
+    // exporting exactly as before. `deleteAsset` skipped that law entirely and
+    // took the row out from under them.
+    //
+    // From the PROJECT drawer the gesture means the other thing: take it out
+    // of THIS project. That is `removeFromProject`, which drops the pin and
+    // the pins of the members only this bundle uses, and leaves the library
+    // alone.
+    const bool fromProject = originForItem(guid) == shaderInfo::Origin::Project
+                             && mProject && !mProject->getProjectGuid().isEmpty();
+    const auto outcome = fromProject
+                             ? assetdelete::removeFromProject(dataBase, guid,
+                                                              mProject->getProjectGuid())
+                             : assetdelete::remove(dataBase, guid);
+    if (outcome.ok) {
         holder->takeItem(holder->row(item));
         currentShaderInformation = shaderInfo();
+        if (membersPanel) membersPanel->setMaterial(QString());
         return true;
     }
 #else
@@ -786,6 +730,13 @@ void EffectsPage::configureAssetsDock()
 	auto scrollViewFx = new QScrollArea;
 	auto scrollViewAsset = new QScrollArea;
 
+	// READ-ONLY, and the absence of the menu is the statement: a preset has
+	// no Rename, no Delete and no Export, because it is not the user's row —
+	// `shaderContextMenuAllowed` stays false here (phase 3 makes presets real
+	// read-only library bundles with a Customise gesture; until then the
+	// drawer must not offer edits it cannot honour).
+	presets->shaderContextMenuAllowed = false;
+	presets->setToolTip(tr("Shipped materials — read-only. Duplicate one into Custom to change it."));
 	presets->setStyleSheet(StyleSheet::EffectsPresetsList());
 
 	CreateNewDialog::getAdditionalPresetList();
@@ -837,9 +788,27 @@ void EffectsPage::configureAssetsDock()
 	scrollViewAsset->setWidgetResizable(true);
 
 
-	tabWidget->addTab(scrollViewPreset, "Presets");
-    tabWidget->addTab(scrollViewFx, "Custom");
-    tabWidget->addTab(scrollViewAsset, "Projects");
+	// THE DRAWERS SAY WHICH IS WHICH (the four-drawer rule, OWNER_REVIEW 9 —
+	// the owner's own words: "presets (users can't edit), custom (users can
+	// edit), adding a custom to a project, and the project asset tray"). The
+	// three are not three views of one list: they are three SCOPES, and which
+	// one a tile came from decides whose version an edit writes (shaderInfo::
+	// Origin, EffectsPage::fetchAsset / saveShader). A user who cannot tell
+	// them apart cannot tell what their edit will change.
+	tabWidget->addTab(scrollViewPreset, tr("Presets"));
+	tabWidget->setTabToolTip(static_cast<int>(ShaderWorkspace::Presets),
+	                         tr("The materials the app ships. READ-ONLY — duplicate one into "
+	                            "Custom to change it."));
+	tabWidget->addTab(scrollViewFx, tr("Custom"));
+	tabWidget->setTabToolTip(static_cast<int>(ShaderWorkspace::MyEffects),
+	                         tr("Your own materials, in the LIBRARY. Editing one here changes the "
+	                            "library's version; projects keep the version they took until they "
+	                            "ask for the newer one."));
+	tabWidget->addTab(scrollViewAsset, tr("Project"));
+	tabWidget->setTabToolTip(static_cast<int>(ShaderWorkspace::Projects),
+	                         tr("The ACTIVE project's materials — the same list as the editor's "
+	                            "asset tray. Editing one here makes it this project's own and "
+	                            "never touches the library original."));
 
 	scrollViewFx->adjustSize();
 	scrollViewPreset->adjustSize();
@@ -1042,6 +1011,28 @@ void EffectsPage::configureUI()
 	addDockWidget(Qt::LeftDockWidgetArea, assetsDock, Qt::Vertical);
 	addDockWidget(Qt::RightDockWidgetArea, displayWidget, Qt::Vertical);
 	addDockWidget(Qt::LeftDockWidgetArea, materialSettingsDock, Qt::Vertical);
+
+	// THE MEMBERS PANEL (MATERIAL_BUNDLE_SPEC 6): name, slot or node, size,
+	// used by, baked or picture — plus Clean unused (which lists first) and
+	// Make unique. It reads through the same functions the verbs call
+	// (services/materialmembers.h), so the window and `materials.members`
+	// cannot describe one bundle two ways.
+	membersDock = new QDockWidget(tr("Members"));
+	membersDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+	membersPanel = new MembersPanel;
+	membersPanel->setDatabase(dataBase);
+	membersPanel->setProject(mProject);
+	membersDock->setWidget(membersPanel);
+	membersDock->setMinimumWidth(PanelMetrics::leftColumnMinWidth);
+	addDockWidget(Qt::LeftDockWidgetArea, membersDock, Qt::Vertical);
+	connect(membersPanel, &MembersPanel::membersChanged, this, [this](const QString &guid) {
+		// A member changed identity or went: the definition on disk moved, so
+		// the graph in front of the user is re-read and every mesh wearing
+		// the material re-dressed through the ONE apply.
+		if (!guid.isEmpty() && guid == currentShaderInformation.GUID)
+			loadGraph(guid, currentShaderInformation.origin);
+		if (mMaterialChanged) mMaterialChanged(guid);
+	});
 	addDockWidget(Qt::RightDockWidgetArea, propertyWidget, Qt::Vertical);
 
 	// THE COLUMNS ARE THE EDITOR'S COLUMNS (owner, 2026-09-11, smoke S1): this
@@ -1309,6 +1300,7 @@ void EffectsPage::setProject(Project *project)
 {
 	mProject = project;
 	if (assetWidget) assetWidget->project = project;
+	if (membersPanel) { membersPanel->setProject(project); membersPanel->refresh(); }
 	// An image picked inside a texture node is pinned into THIS project (and
 	// only when there is one) — MATERIAL_BUNDLE_SPEC Q1.
 	TextureManager::getSingleton()->setProject(project);
@@ -1539,6 +1531,10 @@ void EffectsPage::setAssetWidgetDatabase(Database * db)
 #if(EFFECT_BUILD_AS_LIB)
 	TextureManager::getSingleton()->setDatabase(db);
     assetWidget->setUpDatabase(db);
+	// The page's own handle is assigned in the constructor AFTER configureUI
+	// built the panels, so the Members panel is given the library here — the
+	// one place every caller passes through.
+	if (membersPanel) membersPanel->setDatabase(db);
 #endif
 }
 
@@ -1826,11 +1822,14 @@ void EffectsPage::configureConnections()
     connect(effects, &ListWidget::deleteShader, [=](QString guid){
         deleteShader(guid);
     });
+    connect(effects, &ListWidget::duplicateShader, [=](QString guid){
+        duplicateShader(guid);
+    });
     connect(effects, &ListWidget::createShader, [=](QString guid){
         createNewGraph();
     });
 	connect(effects, &ListWidget::importShader, [=](QString guid) {
-
+		importGraph();
 	});
 	connect(effects, &ListWidget::addToProject, [=](QListWidgetItem *item) {
 		// ADD TO PROJECT IS A PIN, NOT A CLONE (MATERIAL_BUNDLE_SPEC 5). It

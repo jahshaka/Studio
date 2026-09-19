@@ -464,59 +464,13 @@ bool MediaImporter::convert(const ImportRequest &request, const QString &staging
     return true;
 }
 
-// ============================ ShaderImporter ============================
-
-int ShaderImporter::modelType() const { return static_cast<int>(ModelTypes::Shader); }
-
-bool ShaderImporter::sniff(const QString &path) const
-{
-    return QFileInfo(path).suffix().toLower() == Constants::SHADER_EXT;
-}
-
-bool ShaderImporter::convert(const ImportRequest &request, const QString &stagingDir,
-                             Database *db, Project *project, StagedAsset &out,
-                             QString *errorOut, const ImportProgressFn &progress)
-{
-    Q_UNUSED(stagingDir); Q_UNUSED(db); Q_UNUSED(project); Q_UNUSED(progress);
-    const QFileInfo sourceInfo(request.sourcePath);
-
-    QFile shaderFile(request.sourcePath);
-    if (!shaderFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        if (errorOut) *errorOut = QStringLiteral("cannot read %1").arg(sourceInfo.fileName());
-        return false;
-    }
-    QJsonObject definition = QJsonDocument::fromJson(shaderFile.readAll()).object();
-    if (definition.isEmpty()) {
-        if (errorOut) *errorOut = QStringLiteral("%1 is not a shader definition").arg(sourceInfo.fileName());
-        return false;
-    }
-
-    out.mainGuid = GUIDManager::generateGUID();
-    definition["name"] = sourceInfo.baseName();
-    definition["guid"] = out.mainGuid;
-
-    out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,
-                       QStringLiteral("source"), sourceInfo.fileName() });
-
-    StagedRow row;
-    row.guid = out.mainGuid;
-    row.name = sourceInfo.baseName();
-    row.type = static_cast<int>(ModelTypes::Shader);
-    row.asset = QJsonDocument(definition).toJson();
-    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
-    out.rows.append(row);
-
-    const QString guid = out.mainGuid;
-    const QString baseName = sourceInfo.baseName();
-    out.registerSession = [definition, guid, baseName]() {
-        auto *assetShader = new AssetShader;
-        assetShader->assetGuid = guid;
-        assetShader->fileName = baseName;
-        assetShader->setValue(QVariant::fromValue(definition));
-        AssetManager::addAsset(assetShader);
-    };
-    return true;
-}
+// (ShaderImporter is DELETED — MATERIAL_BUNDLE_SPEC phase 2's Deletes column.
+// It ingested a `.shader` FILE as a ModelTypes::Shader row: the module's old
+// separate graph asset, in a format that predates the node graph. With the
+// editor's "Create > Shader" gone too, nothing in the app can mint one, and
+// the readers that served them (MaterialReader::parseShaderAsPbr and its five
+// callers) are deleted in the same lane. A material travels as a share file
+// (services/assetshare.h) or inside a project archive.)
 
 // ============================= IesImporter ================================
 

@@ -93,7 +93,7 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &, Database *, P
 // an empty listing.
 #include "services/assettray.h"
 namespace assettray {
-QVector<AssetRecord> list(Database *db, const QString &, const QString &, int)
+QVector<AssetRecord> list(Database *db, const QString &, const QString &, int, bool)
 {
     gLastFetchChildAssetsHandle = db;
     ++gFetchChildAssetsCalls;

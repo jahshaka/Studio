@@ -54,6 +54,11 @@ protected:
 signals:
     void renameShader(QString guid);
     void exportShader(QString guid);
+    /// ONE ROW, COPIED (MATERIAL_BUNDLE_SPEC 6: "New / Duplicate / Rename /
+    /// Delete act on ONE row"). Duplicate was the one of the four with no
+    /// gesture at all — a user who wanted a variant of a material had to
+    /// create an empty one and rebuild the graph by hand.
+    void duplicateShader(QString guid);
     void editShader(QString guid);
     void deleteShader(QString guid);
     void createShader(QString guid);

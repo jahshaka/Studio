@@ -47,6 +47,7 @@ namespace materials
 Q_NAMESPACE
 
 class IMaterialPreviewWidget;
+class MembersPanel;
 
 
 struct nodeListModel {
@@ -222,11 +223,17 @@ private:
 
 	void deleteMaterialFile(QString filename);
 
+	/// Import a material share file (services/assetshare.h) into the library
+	/// — the toolbar's Import and the drawer's "Import material…".
     void importGraph();
-	void importEffect(QString fileName);
 
 	NodeGraph* importGraphFromFilePath(QString filePath, bool assign = true);
+	/// Write ONE material and its closure as a share file.
 	void exportEffect(QString guid);
+	/// ONE ROW, COPIED: a second library bundle carrying the same definition
+	/// (the members are SHARED, not copied — Make unique is how a picture
+	/// becomes private to one material).
+	void duplicateShader(QString guid);
     void restoreGraphPositions(const QJsonObject& data);
     bool deleteShader(QString guid);
 
@@ -309,6 +316,11 @@ private:
 
 	ListWidget *presets;
 	ListWidget *effects;
+	/// WHAT THE OPEN MATERIAL IS MADE OF (MATERIAL_BUNDLE_SPEC 6). Lives in
+	/// the left column under Material Settings, because it is about the
+	/// material being edited, not about the graph's selected node.
+	QDockWidget *membersDock = nullptr;
+	MembersPanel *membersPanel = nullptr;
 
 	QtAwesome *fontIcons;
 	QSize defaultGridSize = QSize(70, 70);
