@@ -53,6 +53,7 @@
 #include "viewport/freecamerapolicy.h"
 #include "bridge/secondarysurfacetonemap.h"
 #include "services/editgate.h"
+#include "services/materialpreviewservice.h"
 #include "services/engineerrorpump.h"
 #include "services/framemonitor.h"
 #include "services/loadtimeline.h"
@@ -69,6 +70,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "data/settingsmanager.h"
 #include <QSettings>
+#include "ui/controls/assetdrag.h"
 
 
 
@@ -899,13 +901,35 @@ bool EngineSceneViewport::dropPointAt(const QPointF &point, iris::Vec3 *out)
 
 // ---- drag and drop from the asset panel: ported from SceneViewWidget ----------------
 
+/// ONE decoder (ui/controls/assetdrag.h) — this used to be a local copy of the
+/// same four-slot read, beside two more in the property widgets.
 static QMap<int, QVariant> dragRoleData(const QMimeData *mime)
 {
-    QByteArray encoded = mime->data("application/x-qabstractitemmodeldatalist");
-    QDataStream stream(&encoded, QIODevice::ReadOnly);
-    QMap<int, QVariant> roleDataMap;
-    while (!stream.atEnd()) stream >> roleDataMap;
-    return roleDataMap;
+    return AssetDrag::roles(mime);
+}
+
+/// A material carried by a drag: the payload string the ONE resolver
+/// understands, or empty when this drag is not a material at all.
+///
+/// A SHADER TILE IS A MATERIAL TOO (MATERIAL-PREVIEW-1). The Materials module
+/// files its graphs as Shader rows, and one of those dragged in used to be
+/// accepted by dragEnter, ignored by dragMove and dropped into nothing — a
+/// gesture that looked like it worked and did not. Both types come here and the
+/// resolver decides; a payload it cannot resolve is REFUSED, visibly, by the
+/// cursor.
+QString EngineSceneViewport::materialDragSource(const QMimeData *mime)
+{
+    const QMap<int, QVariant> role = dragRoleData(mime);
+    const int type = role.value(0).toInt();
+    if (type != static_cast<int>(ModelTypes::Material) &&
+        type != static_cast<int>(ModelTypes::Shader))
+        return QString();
+    return role.value(3).toString();
+}
+
+MaterialPreviewService *EngineSceneViewport::materialPreview() const
+{
+    return mServices ? mServices->materialPreview : nullptr;
 }
 
 void EngineSceneViewport::dragEnterEvent(QDragEnterEvent *event)
@@ -914,52 +938,47 @@ void EngineSceneViewport::dragEnterEvent(QDragEnterEvent *event)
         event->ignore();
         return;
     }
-    if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
-        event->acceptProposedAction();
+    if (!AssetDrag::isAssetDrag(event->mimeData())) return;
+
+    // THE CURSOR TELLS THE TRUTH (MATERIAL-PREVIEW-1). A material drag is
+    // accepted only when its payload RESOLVES to a material — the same call
+    // that will show it a moment later and commit it on release. Anything that
+    // does not resolve (a graph with no baked material, a row whose definition
+    // is gone) is refused here, where the cursor can say so, instead of being
+    // accepted and silently doing nothing on the drop.
+    mDragMaterialSource = materialDragSource(event->mimeData());
+    if (!mDragMaterialSource.isEmpty()) {
+        auto *preview = materialPreview();
+        if (!preview || !preview->canPreview(mDragMaterialSource)) {
+            mDragMaterialSource.clear();
+            event->ignore();
+            return;
+        }
+    }
+    event->acceptProposedAction();
 }
 
 void EngineSceneViewport::dragLeaveEvent(QDragLeaveEvent *)
 {
-    if (mDragPreviewNode) {
-        mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-        mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
-    }
+    if (auto *preview = materialPreview()) preview->end();
+    mDragMaterialSource.clear();
 }
 
 void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
 {
     const QMap<int, QVariant> role = dragRoleData(event->mimeData());
     const int type = role.value(0).toInt();
-    if (type == static_cast<int>(ModelTypes::Material)) {
-        // Hover preview: temporarily apply the dragged material to the mesh under the pointer.
-        // dropTargetAt, not pickAt: a LOCKED node is under the cursor as much
-        // as any other, and the drop has to know it is there to refuse it by
-        // name. It gets no preview, though — a preview on a node that will
-        // refuse the drop is a promise the release cannot keep.
+    if (!mDragMaterialSource.isEmpty()) {
+        // THE WHOLE HOVER PREVIEW, in one call. dropTargetAt, not pickAt: a
+        // LOCKED node is under the cursor as much as any other, and the drop
+        // has to know it is there to refuse it by name — the service refuses to
+        // preview it, and a null target ENDS the preview (which is what the two
+        // inline early-outs here used to forget to do, leaving the borrowed
+        // material on the mesh).
         bool lockedTarget = false;
         iris::SceneNodePtr node = dropTargetAt(event->position(), &lockedTarget);
         if (lockedTarget) node.reset();
-        if (node && node->getSceneNodeType() != iris::SceneNodeType::Mesh) node.reset();
-        if (mDragPreviewNode && mDragPreviewNode != node) {
-            mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-            mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
-        }
-        if (node && !mDragWasHit) {
-            mDragWasHit = true;
-            mDragPreviewNode = node;
-            auto meshNode = node.staticCast<iris::MeshNode>();
-            mDragOriginalMaterial = meshNode->getMaterial();
-            for (Asset *asset : AssetManager::getAssets()) {
-                if (asset->assetGuid == role.value(3).toString()) {
-                    // Every material asset hydrates as a MaterialPtr since
-                    // HLMS_ADOPTION P4b (the builtin presets registered by
-                    // AssetWidget::trigger used to store a CustomMaterialPtr,
-                    // which this had to accept as a second QVariant shape).
-                    auto material = asset->getValue().value<iris::MaterialPtr>();
-                    if (material) meshNode->setMaterial(material);
-                }
-            }
-        }
+        if (auto *preview = materialPreview()) preview->begin(node, mDragMaterialSource);
     } else if (type == static_cast<int>(ModelTypes::Object) || type == static_cast<int>(ModelTypes::ParticleSystem)
                || type == static_cast<int>(ModelTypes::Texture)
                || type == static_cast<int>(ModelTypes::Avatar)
@@ -994,12 +1013,8 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // over it, and the drag ENDS here — no dragLeaveEvent is coming to put
         // it back. Restore first, then refuse: a refused drop must leave the
         // document exactly as the drag found it.
-        if (mDragPreviewNode) {
-            mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-            mDragPreviewNode.reset();
-            mDragOriginalMaterial.reset();
-            mDragWasHit = false;
-        }
+        if (auto *preview = materialPreview()) preview->end();
+        mDragMaterialSource.clear();
         editgate::refuse();          // counts it and raises the run's notice
         event->ignore();
         return;
@@ -1034,7 +1049,9 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         if (mMainWindow)
             mMainWindow->assignAnimationAsset(role.value(3).toString(),
                                               pickAt(event->position(), true));
-    } else if (type == static_cast<int>(ModelTypes::Material)) {
+    } else if (!materialDragSource(event->mimeData()).isEmpty()) {
+        const QString source = materialDragSource(event->mimeData());
+        auto *preview = materialPreview();
         // The hover preview refuses a locked node, so there is no preview to
         // apply — say why, rather than dropping the gesture on the floor (the
         // owner's report: a material dragged onto the Ground did nothing at
@@ -1042,25 +1059,32 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         bool lockedTarget = false;
         const iris::SceneNodePtr under = dropTargetAt(event->position(), &lockedTarget);
         if (lockedTarget && refuseDropOnLocked(under, tr("a material"))) {
-            mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+            if (preview) preview->end();
+            mDragMaterialSource.clear();
             event->acceptProposedAction();
             return;
         }
-        if (mDragPreviewNode && mMainWindow) {
-            auto target = mDragPreviewNode;
-            // Put the original material back BEFORE the real apply: the hover
-            // preview borrowed a shared AssetManager instance, and the undoable
-            // apply must capture (and on undo restore) the true original.
-            target.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-            // Select the drop TARGET first, then apply. The old order applied
-            // the preset to whatever was selected before the drag — usually a
-            // different node, or a container the apply silently refused — while
-            // the leaked preview material made the drop LOOK successful. The
-            // document never held the material, so it vanished on reopen.
-            mMainWindow->sceneNodeSelected(target);
-            mMainWindow->applyMaterialPreset(role.value(3).toString());
+        // The drop TARGET is the node the preview was showing on — never the
+        // selection. The old order applied to whatever was selected before the
+        // drag (usually a different node, or a container the apply silently
+        // refused) while the leaked preview material made the drop LOOK
+        // successful; the document never held the material, so it vanished on
+        // reopen. `applyMaterial` ends the preview itself before it pushes, so
+        // the undo step captures the TRUE original.
+        // (A mesh wearing NO material gets no preview — the service refuses it —
+        // but it takes the drop: the node under the cursor, which is what the
+        // preview's node is whenever there is one.)
+        const iris::SceneNodePtr target =
+            preview && preview->active() ? iris::SceneNodePtr(preview->node()) : under;
+        // The preview ends BEFORE anything reads the node — the selection mounts
+        // a Properties panel on it (code review, F10).
+        if (preview) preview->end();
+        if (target && target->getSceneNodeType() == iris::SceneNodeType::Mesh
+            && mServices && mServices->sceneEdit) {
+            if (mMainWindow) mMainWindow->sceneNodeSelected(target);
+            mServices->sceneEdit->applyMaterial(source, target);
         }
-        mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+        mDragMaterialSource.clear();
     } else if (type == static_cast<int>(ModelTypes::Texture)) {
         // IMAGE_PLANE_SPEC §2: on a mesh the image retextures it; on empty
         // space it spawns an image plane at the tracked drop point.

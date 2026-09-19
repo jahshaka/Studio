@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QIODevice>
 #include <QMimeData>
+#include "ui/controls/assetdrag.h"
 
 DrawerTreeWidget::DrawerTreeWidget(QWidget *parent) : QTreeWidget(parent)
 {
@@ -37,7 +38,7 @@ int DrawerTreeWidget::drawerId(const QTreeWidgetItem *item)
 
 bool DrawerTreeWidget::isTileDrag(const QMimeData *mime) const
 {
-    return mime && mime->hasFormat(QStringLiteral("application/x-qabstractitemmodeldatalist"));
+    return AssetDrag::isAssetDrag(mime);
 }
 
 int DrawerTreeWidget::drawerDropParentId(const QPoint &pos) const
@@ -132,12 +133,7 @@ void DrawerTreeWidget::dropEvent(QDropEvent *event)
         event->setDropAction(Qt::IgnoreAction);
         event->accept();
         if (target >= 0) {
-            QByteArray mdata = event->mimeData()->data(
-                QStringLiteral("application/x-qabstractitemmodeldatalist"));
-            QDataStream stream(&mdata, QIODevice::ReadOnly);
-            QMap<int, QVariant> roleDataMap;
-            stream >> roleDataMap;
-            const QString guid = roleDataMap.value(3).toString();   // MODEL_GUID_ROLE slot
+            const QString guid = AssetDrag::guidOf(event->mimeData());
             if (!guid.isEmpty()) emit assetMoveRequested(guid, target);
         }
         return;

@@ -38,6 +38,18 @@ void UndoService::push(QUndoCommand *command)
         delete command;
         return;
     }
+    // A BORROWED MATERIAL IS NOT THE ONE AN UNDO STEP MAY CAPTURE
+    // (MATERIAL-PREVIEW-1). The hover preview lends a mesh's material slot
+    // while a material is dragged over it; a command pushed while it is live
+    // would record the BORROWED material as the state to come back to, and an
+    // undo would leave the user looking at a material they never applied. A
+    // BACKSTOP ONLY: a command captures its state in its CONSTRUCTOR, before it
+    // reaches this line, so the material mutators end the preview themselves
+    // before they build one. Here for the reason the edit gate is: this is the one function every command
+    // in the app goes through, including the ones written after this. A HOOK,
+    // like the two below it, so this class stays QObject-free and the suites
+    // that compile it alone keep linking.
+    if (mPrePush) mPrePush();
     // Stamp before mStack->push — QUndoStack runs the command's first redo()
     // inside push(), and the refresh notifications need the services then.
     if (auto studioCommand = dynamic_cast<StudioCommand *>(command))
@@ -83,6 +95,9 @@ void UndoService::undo()
     // scope and pass, exactly like every other verb.
     if (editgate::refuse()) return;
     if (!mStack->canUndo()) return;
+    // A step walked back under a live preview would be overwritten by the
+    // preview's own restore a moment later (code review, F1): end it first.
+    if (mPrePush) mPrePush();
     mStack->undo();
     if (mStackMoved) mStackMoved();
 }
@@ -91,6 +106,7 @@ void UndoService::redo()
 {
     if (editgate::refuse()) return;         // as in undo() above
     if (!mStack->canRedo()) return;
+    if (mPrePush) mPrePush();               // as in undo() above
     mStack->redo();
     if (mStackMoved) mStackMoved();
 }

@@ -141,6 +141,16 @@ add_script_e2e(fragments e2e_fragments.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+
+# THE LIVE HOVER PREVIEW, for every material source (MATERIAL-PREVIEW-1). The
+# owner found it working for a material made from an image and dead for the
+# tray and the Materials module; it was one QVariant static-type mismatch, and
+# nothing covered it. Drives material.preview/endPreview for four sources and
+# asserts the whole contract: restore on move, restore on end, no undo step, no
+# dirty flag, a save during a preview writes the ORIGINAL, a locked node
+# refuses, an unresolvable payload refuses, and a preset apply reuses its one
+# project row instead of minting a new one per apply.
+add_script_e2e(material_preview e2e_material_preview.js)
 # GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
 # a high oblique view (the two things the owner reported while testing push #18).
 # The document half of the floor is scripting.e2e.default_floor, which is

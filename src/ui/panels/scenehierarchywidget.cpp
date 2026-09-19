@@ -48,6 +48,7 @@ For more information see the LICENSE file
 #include <qcombobox.h>
 #include <QBrush>
 #include "ui/style/stylesheet.h"
+#include "ui/controls/assetdrag.h"
 
 SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
@@ -526,7 +527,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
     // never touches the hierarchy. dropHintAt() is the single place that decides
     // which, and it also feeds the drop indicator so the two read differently on
     // screen before the mouse is released.
-    static const char *kTreeMime = "application/x-qabstractitemmodeldatalist";
+    static const char *kTreeMime = AssetDrag::format();
 
     // SHIFT+PRESS: OURS, not Qt's (EDITOR_MULTISELECT_SPEC §2.2/D1 b).
     //
