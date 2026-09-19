@@ -442,7 +442,8 @@ QVector<VerbInfo> VrApi::verbs() const
           Needs::Engine },
         { "state",
           "vr.state() -> {active, state, runtime, version, space, eyeSize:[w,h], refreshHz, "
-          "frames, rendered, warmUp:{frames,ms}, ipd, mirror, worldScale, asymmetricFov, "
+          "frames, rendered, warmUp:{frames,ms}, ipd, mirror:{mode,showing}, worldScale, "
+          "asymmetricFov, "
           "spaceChanges, head, "
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
           "bindings:{offered, accepted, profiles:[{profile, bindings, accepted}]}, "
@@ -468,6 +469,15 @@ QVector<VerbInfo> VrApi::verbs() const
           "leaves nothing behind. `handActions` says the action set was attached — i.e. "
           "controllers CAN report — and `handJoints` that hand tracking supplied a pose. "
           "`preview` describes the editor's VR preview (see vr.begin).\n\n"
+          "`mirror` is the DESKTOP: `mode` is which half of the headset's picture this session "
+          "was asked to copy (\"left\", \"right\", \"both\" or \"none\") and `showing` is "
+          "what the window is painting RIGHT NOW — \"eye\" (the copy; the desktop's own View "
+          "is switched off, which is the one-render-pipeline rule) or \"own\" (its own live "
+          "camera). It goes to \"own\" within a frame of the runtime ceasing to ask for "
+          "pictures — a wearer lifting the headset, an open dashboard, a lost runtime — and "
+          "back to \"eye\" on the next drawn frame, with a few frames of hysteresis so a "
+          "single skipped frame cannot flap the screen. With `mode:\"none\"` it is always "
+          "\"own\": that session never takes the desktop at all.\n\n"
           "`input.left` / `input.right` are the CONTROLS (phase 4b stage 1; `manip`, `profile` "
           "and `jointsTracked` are stage 3's): {valid, aim, grip, "
           "select, selectPressed, grab, grabPressed, menuPressed, stick:{x,y}, stickPressed, "
@@ -1335,7 +1345,11 @@ QVariantMap VrApi::state()
     // assert it on a runtime nobody is wearing.
     out[QStringLiteral("swapchainFormat")] = QString::fromStdString(s.swapchainFormat);
     out[QStringLiteral("colourEncodedOnce")] = s.colourEncodedOnce;
-    out[QStringLiteral("mirror")] = vrnames::mirror(s.mirror);
+    // THE WISH AND THE PICTURE (lane MIRROR-LIVE-1): `{mode, showing}` —
+    // which half of the headset was asked for, and whether the desktop is
+    // showing that copy right now or has taken its own camera back because the
+    // runtime stopped drawing.
+    out[QStringLiteral("mirror")] = vrnames::mirrorState(s.mirror, s.mirrorShowing);
     out[QStringLiteral("worldScale")] = s.worldScale;
     out[QStringLiteral("asymmetricFov")] = s.asymmetricFov;
     out[QStringLiteral("spaceChanges")] = QVariant::fromValue(qulonglong(s.spaceChanges));

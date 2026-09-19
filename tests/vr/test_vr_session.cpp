@@ -33,6 +33,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -2469,6 +2470,180 @@ int main() {
             CHECK(!engine->vrStatus().active);
         }
         setFixtureSky(scene, false);
+    }
+
+    // =======================================================================
+    // THE DESKTOP FOLLOWS THE RUNTIME (lane MIRROR-LIVE-1; the owner's finding
+    // F2 of the push-#50 smoke: "in the editor the 3D view is not the same as
+    // the VR view — a static image, or its own camera").
+    // =======================================================================
+    // THE RULE UNDER TEST is VrSession::setDesktopShowsEye's, and the shape of
+    // the defect is why it needs a runtime: on a real headset `shouldRender`
+    // goes 0 exactly when the wearer LIFTS IT to look at the desk, and the
+    // mirror went on painting the last eye that had been drawn — so the desktop
+    // was a frozen still at the only moment anybody was looking at it. Monado
+    // never stops rendering; the pump's blink hook answers what WiVRn would,
+    // and lane MIRROR-LIVE-1 gave it a LENGTH so that the two halves of the
+    // rule can be told apart:
+    //
+    //   (1) while the runtime draws, the desktop IS the eye (its own View off);
+    //   (2) a ONE-FRAME blink changes nothing on the screen — the hysteresis;
+    //   (3) a STRETCH of no-picture frames hands the desktop its own camera
+    //       back, live, and the eye takes it again when the runtime returns;
+    //   (4) ten of those flips rebuild NO GI chain and leak no view;
+    //   (5) a session that ENDS leaves the desktop drawing.
+    {
+        setFixtureSky(scene, false);
+        desktop->setEnabled(true);
+        // ---- (1) THE COPY --------------------------------------------------
+        setenv("JAHSHAKA_VR_TEST_BLINK_EVERY", "20", 1);
+        setenv("JAHSHAKA_VR_TEST_BLINK_FRAMES", "1", 1);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::Left;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg),
+                                     "a session whose runtime blinks for ONE frame: %s",
+                                     engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_EVERY");
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_FRAMES");
+        if (began) {
+            engine->setVrMirrorView(desktop);
+            for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            const VrStatus drawing = engine->vrStatus();
+            CHECK_MSG(drawing.mirrorShowing == VrDesktopPicture::Eye,
+                      "THE DESKTOP IS THE EYE'S COPY while the runtime draws (rendered %llu)",
+                      drawing.rendered);
+            CHECK_MSG(!desktop->isEnabled(),
+                      "...which is ONE RENDER PIPELINE: the desktop's own View is switched "
+                      "off by the ENGINE, not by a host");
+
+            // ---- (2) A BLINK MUST NOT FLAP THE SCREEN ----------------------
+            // Twelve blinks go by in this window (one every 20 frames) and the
+            // desktop must not change picture once: two pictures alternating at
+            // the runtime's cadence is worse than either of them.
+            unsigned disagreed = 0, ownFrames = 0;
+            for (int i = 0; i < 120; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+                const bool own = engine->vrStatus().mirrorShowing == VrDesktopPicture::Own;
+                if (own) ++ownFrames;
+                // The reported answer and the View's own flag are one fact:
+                // "the desktop shows the eye" IS "its View is not drawing".
+                if (own != desktop->isEnabled()) ++disagreed;
+            }
+            CHECK_MSG(ownFrames == 0u && disagreed == 0u,
+                      "A ONE-FRAME BLINK DOES NOT FLAP THE DESKTOP: %u of 120 frames showed "
+                      "the own camera (%u disagreements between the flag and the View)",
+                      ownFrames, disagreed);
+        }
+        if (began) { engine->setVrMirrorView(nullptr); engine->endVrSession(); }
+        CHECK_MSG(desktop->isEnabled(),
+                  "(5) A SESSION THAT ENDS LEAVES THE DESKTOP DRAWING: the engine switched "
+                  "the View off, so the engine switched it back on");
+
+        // ---- (3) AND (4): A STRETCH, TEN TIMES OVER ------------------------
+        // 12 no-picture frames every 20 is a wearer lifting the headset and
+        // putting it back, over and over: the hold (kDesktopHoldFrames) is
+        // ridden out, the desktop takes its own camera back, and the eye takes
+        // it again on the next accepted frame.
+        setenv("JAHSHAKA_VR_TEST_BLINK_EVERY", "20", 1);
+        setenv("JAHSHAKA_VR_TEST_BLINK_FRAMES", "12", 1);
+        VrConfig longCfg;
+        longCfg.mirror = VrMirrorMode::Left;
+        const bool began2 = CHECK_MSG(engine->beginVrSession(scene, longCfg),
+                                      "a session whose runtime stops for twelve frames at a "
+                                      "time: %s", engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_EVERY");
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_FRAMES");
+        if (began2) {
+            engine->setVrMirrorView(desktop);
+            for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            ObjectCounts objBefore;
+            engine->objectCounts(objBefore);
+            const GiStatus giBefore = scene->giStatus();
+
+            unsigned toOwn = 0, toEye = 0, disagreements = 0;
+            double flipMs = 0.0, steadyMs = 0.0;
+            unsigned flipFrames = 0, steadyFrames = 0;
+            bool showingEye = engine->vrStatus().mirrorShowing == VrDesktopPicture::Eye;
+            // Long enough for ten whole cycles at one every 20 frames.
+            for (int i = 0; i < 400 && (toOwn < 10u || toEye < 10u); ++i) {
+                engine->advanceResources();
+                const auto t0 = std::chrono::steady_clock::now();
+                engine->renderOneFrame();
+                const double ms = std::chrono::duration<double, std::milli>(
+                                      std::chrono::steady_clock::now() - t0).count();
+                const bool eyeNow = engine->vrStatus().mirrorShowing == VrDesktopPicture::Eye;
+                if (eyeNow == desktop->isEnabled()) ++disagreements;
+                if (eyeNow != showingEye) {
+                    if (eyeNow) ++toEye; else ++toOwn;
+                    flipMs += ms; ++flipFrames;
+                    showingEye = eyeNow;
+                } else {
+                    steadyMs += ms; ++steadyFrames;
+                }
+            }
+            CHECK_MSG(toOwn >= 10u && toEye >= 10u,
+                      "A NO-PICTURE STRETCH HANDS THE DESKTOP BACK, AND THE EYE TAKES IT "
+                      "AGAIN: %u hand-overs to the own camera, %u back to the eye",
+                      toOwn, toEye);
+            CHECK_MSG(disagreements == 0u,
+                      "...and `mirrorShowing` never disagreed with the View's own enabled "
+                      "flag over %u frames (%u disagreements)",
+                      flipFrames + steadyFrames, disagreements);
+            std::printf("MIRROR flip frames %u (mean %.2f ms) vs steady %u (mean %.2f ms)\n",
+                        flipFrames, flipFrames ? flipMs / flipFrames : 0.0,
+                        steadyFrames, steadyFrames ? steadyMs / steadyFrames : 0.0);
+
+            // (4) THE CHAIN DID NOT MOVE. The GI driver is the session's View
+            // whether or not it is enabled this frame (V1-RIG item 1's rule in
+            // OgreEngine::renderOneFrame), so a desktop that takes the window
+            // back must not take the CHAIN with it — that flip cost two
+            // from-scratch cascade builds a cycle before that rule existed.
+            const GiStatus giAfter = scene->giStatus();
+            CHECK_MSG(giAfter.rebuilds == giBefore.rebuilds &&
+                          giAfter.cascadeFullRebuilds == giBefore.cascadeFullRebuilds,
+                      "TWENTY FLIPS REBUILD NO GI: from-scratch %llu -> %llu, whole-chain "
+                      "%llu -> %llu", giBefore.rebuilds, giAfter.rebuilds,
+                      giBefore.cascadeFullRebuilds, giAfter.cascadeFullRebuilds);
+            ObjectCounts objAfter;
+            engine->objectCounts(objAfter);
+            CHECK_MSG(objAfter.views == objBefore.views,
+                      "...and leak no view: %u -> %u", objBefore.views, objAfter.views);
+
+            // ---- THE DESKTOP'S OWN PICTURE IS LIVE, NOT A STILL ------------
+            // The whole point of the lane. Park the session on an OWN frame,
+            // move the desktop's camera, and its picture must follow — a mirror
+            // painting a frozen eye over it could not.
+            for (int i = 0; i < 200 &&
+                            engine->vrStatus().mirrorShowing != VrDesktopPicture::Own; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            if (CHECK_MSG(engine->vrStatus().mirrorShowing == VrDesktopPicture::Own,
+                          "parked on a frame where the desktop draws its own camera")) {
+                Image a;
+                engine->renderOneFrame();
+                REQUIRE(desktop->readPixels(a));
+                testCameraLookAt(desktop, Vec3{ -1.4f, 1.9f, 2.9f }, Vec3{ 0.0f, 1.0f, -0.6f });
+                engine->renderOneFrame();
+                Image b;
+                REQUIRE(desktop->readPixels(b));
+                CHECK_MSG(differingBytes(a.rgba, b.rgba) > 0u,
+                          "AND IT IS LIVE: the desktop's picture followed its own camera "
+                          "while the runtime was not drawing (this is the owner's F2)");
+                testCameraLookAt(desktop, Vec3{ 0.6f, 1.5f, 2.4f }, Vec3{ 0.0f, 1.3f, -0.6f });
+            }
+            engine->setVrMirrorView(nullptr);
+            engine->endVrSession();
+        }
+        CHECK(!engine->vrStatus().active);
+        CHECK_MSG(desktop->isEnabled(), "the desktop draws again after the second session");
     }
 
     // ---- a session on a dead runtime must refuse, never hang --------------

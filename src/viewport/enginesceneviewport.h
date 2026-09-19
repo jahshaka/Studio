@@ -233,8 +233,8 @@ public:
     /// The editor's VR preview (VR_SPEC §5 phase 4) — see IEditorViewport.
     void setVrPreviewStep(std::function<void()> step) override { mVrPreviewStep = std::move(step); }
     bool vrPreview() const override { return bool(mVrPreviewStep); }
-    void setVrPreviewSceneClosing(std::function<void()> closing) override
-    { mVrPreviewSceneClosing = std::move(closing); }
+    void setVrPreviewEnds(std::function<void()> ends) override
+    { mVrPreviewEnds = std::move(ends); }
     /// Bridges EngineViewWidget's own (non-virtual, and on the OTHER base) copy
     /// onto the interface — C++ does not override across hierarchies, and the
     /// shell holds an IEditorViewport*.
@@ -547,9 +547,10 @@ private:
     /// setVrPreviewStep). Installed by the VR module for the life of a session;
     /// not persisted — a session does not survive a restart.
     std::function<void()> mVrPreviewStep;
-    /// ...and "the world you are rendering is going" (finding 1), called from
-    /// clearScene() while the engine scene is still alive.
-    std::function<void()> mVrPreviewSceneClosing;
+    /// ...and "this preview cannot continue here" (finding 1; MIRROR-LIVE-1):
+    /// called from clearScene() while the engine scene is still alive, and from
+    /// end() when the page it is hosted on is left.
+    std::function<void()> mVrPreviewEnds;
     bool mShowShadowAtlas = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     /// The grid plane pushGridForView last PUSHED to the mirror (not what a
@@ -560,10 +561,6 @@ private:
     bool mGameView = false;             // G: helpers hidden; never persisted
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;
-    /// A VR session's mirror was pointed at THIS view when the page was left
-    /// (VR phase 3, F9), so begin() takes it back. The mirror is a workspace of
-    /// its own over this view's target and does not stop when the view does.
-    bool mVrMirrorWasOurs = false;
     bool mActive = false;
     unsigned mViewSerial = 0;
 };

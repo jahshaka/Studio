@@ -1035,20 +1035,30 @@ public:
     /// keys back.
     virtual void setVrPreviewStep(std::function<void()> step) { Q_UNUSED(step); }
     virtual bool vrPreview() const { return false; }
-    /// "THE WORLD I AM SHOWING IS ABOUT TO GO" (VR-4-FIX finding 1).
+    /// "THIS PREVIEW CANNOT CONTINUE HERE" — the two ways that happens
+    /// (VR-4-FIX finding 1; lane MIRROR-LIVE-1 added the second).
     ///
-    /// Called by clearScene() BEFORE the engine scene is destroyed — a project
-    /// close, and the teardown half of a project open in place. A VR session
-    /// renders that engine scene and holds a raw pointer to it, so a preview
-    /// that is still running when it is freed is a use-after-free on the next
-    /// frame; this is where the session's owner ends it, properly, with the
-    /// viewport still alive to take its fly keys back.
+    ///   * THE WORLD IS ABOUT TO GO: called by clearScene() BEFORE the engine
+    ///     scene is destroyed — a project close, and the teardown half of a
+    ///     project open in place. A VR session renders that engine scene and
+    ///     holds a raw pointer to it, so a preview still running when it is
+    ///     freed is a use-after-free on the next frame.
+    ///   * THE PAGE IS BEING LEFT: called by end(), the editor page's own
+    ///     shutdown. THE OWNER'S RULE (2026-09-18): leaving the page that hosts
+    ///     a VR session ends that session — the Player has always done it, and
+    ///     the editor's preview does it now. A preview left running behind
+    ///     another page mirrors into a window nobody is looking at and keeps
+    ///     the wearer's fly keys.
+    ///
+    /// Either way this is where the session's OWNER ends it, properly and by
+    /// exactly the path `vr.end()` takes, with the viewport still alive to take
+    /// its fly keys back.
     ///
     /// Installed beside the step above and cleared with it. The engine keeps
     /// its own belt (Engine::destroyScene ends a session bound to the scene it
     /// is destroying), so a host that never calls this cannot crash — it just
     /// ends the session less politely.
-    virtual void setVrPreviewSceneClosing(std::function<void()> closing) { Q_UNUSED(closing); }
+    virtual void setVrPreviewEnds(std::function<void()> ends) { Q_UNUSED(ends); }
     /// "A world is about to be loaded into me": raises the loading cover and
     /// PRESENTS it before returning, so it is on screen before the load blocks
     /// the thread. `title` names the world (shown under the message). A no-op

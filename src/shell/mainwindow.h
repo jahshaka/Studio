@@ -241,6 +241,8 @@ public:
     void toggleVrMode();
     /// Icon + tooltip + enabled state of the VR actions, from the live session.
     void refreshVrUi();
+    /// Says on screen why a VR toggle did not start (the reason is the verb's own).
+    void showVrRefusal(const QString &reason);
 
 	/// Views dropdown / view.* shortcuts / editor.setView verb — ONE path:
 	/// snaps the editor camera to a canonical view ("top", "bottom", "left",
