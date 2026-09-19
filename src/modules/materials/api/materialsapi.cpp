@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "../core/graphdefinition.h"
 #include "services/shippedassets.h"
 #include "services/materialbundle.h"
+#include "services/materialpresetassets.h"
 #include "services/materialmembers.h"
 #include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
@@ -268,6 +269,14 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "Materials page; applies via the drawer/graph.toMaterial). "
           "NOT undoable.",
           Needs::Document },
+        { "createFromPreset", "materials.createFromPreset(presetOrGuid, {name}) -> materialGuid",
+          "Customises a SHIPPED PRESET (R18): an editable copy of it as an ordinary library material bundle, "
+          "because a preset itself is read-only — the definition writer refuses one by name, not just the UI. "
+          "The copy names the preset's own member textures (one object, shared) and takes the name "
+          "'<Preset>-1', the suffix bumped against the material names the library already holds, unless {name} "
+          "says otherwise. With a project open it is added to the project too, so it lands in the project's "
+          "materials drawer and the editor's asset tray. NOT undoable (it is an asset, like an import).",
+          Needs::Document },
     };
 }
 
@@ -295,6 +304,29 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     // a hundred images) goes through the tray's one-per-turn backlog instead.
     thumbrebuild::rebuildOne(host.db, host.project, materialGuid, EngineHost::instance().engine());
     return materialGuid;
+}
+
+QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVariantMap &options)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    static const QStringList knownOptions = { QStringLiteral("name") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.createFromPreset"),
+                                              options, knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+
+    QString error;
+    const QString copy = MaterialPresetAssets::customise(
+        presetOrGuid, options.value(QStringLiteral("name")).toString(),
+        host.db, host.project, &error);
+    if (copy.isEmpty()) {
+        fail(QStringLiteral("materials.createFromPreset: %1").arg(error));
+        return QString();
+    }
+    auto *asset = new AssetMaterial;
+    asset->fileName = host.db->fetchAsset(copy).name;
+    asset->assetGuid = copy;
+    AssetManager::addAsset(asset);
+    return copy;
 }
 
 QString MaterialsApi::createImageGraph(const QString &textureGuid)
