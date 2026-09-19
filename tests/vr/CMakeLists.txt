@@ -141,6 +141,26 @@ set_tests_properties(vr.session PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-home")
 
+# vr.session_undithered — THE SAME BINARY WITH THE GRADE'S DITHER OFF (lane
+# DITHER-1). The worldScale-0 arm's real assertion is that the two eyes are
+# BYTE-IDENTICAL: it is what catches a half-pixel viewport error and a slightly
+# wrong eye matrix over a smooth scene, and the one-code tolerance the dithered
+# picture needs would wave both through. The switch cannot be flipped mid-run
+# for the session's View — it is not a View the engine's frame loop drives, so
+# it is never armed with a per-view push (measured in the arm's own comment) —
+# so the strong form gets its own process. Everything else the suite asserts is
+# asserted twice, which costs one VR run and is the price of keeping the bar.
+add_test(NAME vr.session_undithered
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
+                 "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session_undithered PROPERTIES
+    LABELS "engine"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home")
+
 # ---------------------------------------------------------------------------
 # vr.verbs_session — the `vr.*` verbs through the APP, against the simulated
 # runtime (VR_SPEC §6 / §4.6). The other half of scripting.e2e.vr_verbs, which

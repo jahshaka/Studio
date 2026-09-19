@@ -139,9 +139,9 @@ public:
 
 		//updateMaterialThumbnail(guid, assetGuid);
 
-		MaterialReader reader;
-		reader.setProject(project);
-		auto material = reader.parseMaterial(matDef, dataBase);
+		// (The material was parsed here only to hydrate the AssetManager entry
+		// below it — a parse plus a texture load per call, for a payload nothing
+		// read. Deleted with it, MATERIAL-PREVIEW-1 item c.)
 
 		// Actually create the material and add shader as it's dependency
 		dataBase->createDependency(
@@ -167,9 +167,9 @@ public:
 			}
 		}
 
-		auto assetMat = new AssetMaterial;
-		assetMat->assetGuid = assetGuid;
-		assetMat->setValue(QVariant::fromValue(material));
+		// (A hydrated AssetMaterial used to be built here and LEAKED — it was
+		// never added to the AssetManager, so nothing could even read it.
+		// Deleted with the four real registrations, MATERIAL-PREVIEW-1 item c.)
 
 		// write material guid to graph and save graph
 		graphObj->materialGuid = assetGuid;

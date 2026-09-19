@@ -77,13 +77,13 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "services/subscriber.h"
 #include "data/materialpreset.h"
-#include "io/materialpresetreader.h"
 #include "services/loadtimeline.h"
 #include "io/materialreader.h"
 #include "ui/style/panelmetrics.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include <QActionGroup>
+#include "ui/controls/assetdrag.h"
 
 namespace {
 // Pin-world byte resolution for the .jaf exporters (phase 4): an asset's
@@ -396,29 +396,16 @@ void AssetWidget::trigger()
     // AssetManager::clearAssetList(), so the built-in presets below register
     // exactly once per open.
 
-    LoadTimeline::Accumulate presets(QStringLiteral("panel:materialPresets"));
-    auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
-    auto files = dir.entryInfoList(QStringList(), QDir::Files);
-
-    auto reader = new MaterialPresetReader();
-
-    // needs opengl context so we have to call this after the window is shown...
-    for (const auto &file : files) {
-        auto preset = reader->readMaterialPreset(file.absoluteFilePath());
-
-        // ONE conversion (io/builtinmaterials.h), shared with SceneEditService's
-        // preset apply — this was a second, drifting copy of it, and it built a
-        // Default-shader CustomMaterial for PBR presets too.
-        auto m = BuiltinMaterials::fromPreset(preset);
-
-        auto assetMat = new AssetMaterial;
-        assetMat->fileName = preset.name;
-        assetMat->assetGuid = Constants::Reserved::DefaultMaterials.key(preset.name);
-        assetMat->setValue(QVariant::fromValue(m));
-        AssetManager::addAsset(assetMat);
-    }
-
-	presets.stop();
+    // THE BUILT-IN PRESET REGISTRATION IS GONE (MATERIAL-PREVIEW-1 item c).
+    // Every shipped preset used to be converted to a material here and parked
+    // in the AssetManager behind its reserved guid, on every project open, for
+    // ONE reader: the viewport's hover preview — which could not read it, since
+    // this loop stored a `QSharedPointer<PbrMaterial>` through `auto` while the
+    // reader asked for `iris::MaterialPtr` and Qt has no converter between
+    // them. That is the owner's "tray materials do not preview" bug in one
+    // line. Nothing resolves a material through the AssetManager any more:
+    // SceneEditService::resolveMaterial is the ONE way, and it reads the preset
+    // list (SceneEditService::presets) and the database directly.
 
 	// It's important that this gets called after a project has been loaded (iKlsR)
 	{
@@ -774,21 +761,12 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
                             if (item) {
                                 auto drag = QPointer<QDrag>(new QDrag(this));
-                                auto mimeData = QPointer<QMimeData>(new QMimeData);
-
-                                QByteArray mdata;
-                                QDataStream stream(&mdata, QIODevice::WriteOnly);
-                                QMap<int, QVariant> roleDataMap;
-
-                                roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
-                                roleDataMap[1] = QVariant(item->data(Qt::UserRole).toString());
-                                roleDataMap[2] = QVariant(item->data(MODEL_MESH_ROLE).toString());
-                                roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
-
-                                stream << roleDataMap;
-
-                                mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
-                                drag->setMimeData(mimeData);
+                                // ONE payload builder (ui/controls/assetdrag.h).
+                                drag->setMimeData(AssetDrag::mimeFor(
+                                    item->data(MODEL_TYPE_ROLE).toInt(),
+                                    item->data(Qt::UserRole).toString(),
+                                    item->data(MODEL_MESH_ROLE).toString(),
+                                    item->data(MODEL_GUID_ROLE).toString()));
 
                                 drag->setPixmap(item->icon().pixmap(64, 64));
                                 drag->exec();

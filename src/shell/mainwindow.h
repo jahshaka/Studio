@@ -99,6 +99,7 @@ class MaterialPreset;
 class AssetWidget;
 
 // services (src/services/) — the shell constructs these and delegates to them
+class MaterialPreviewService;
 struct StudioServices;
 class UndoService;
 class SelectionService;
@@ -527,8 +528,6 @@ public:
      * Applies material preset to active scene node and refreshes material property widget
      * @param preset
      */
-    void applyMaterialPreset(QString guid);
-    void applyMaterialPreset(MaterialPreset preset);
 
     void favoriteItem(QListWidgetItem *item);
     void refreshThumbnail(const QString &guid);
@@ -602,10 +601,6 @@ private:
     /// the state it does not own and puts the chrome back.
     void changeEvent(QEvent *event) override;
 
-    void dragEnterEvent(QDragEnterEvent* event) override;
-    void dragMoveEvent(QDragMoveEvent* event) override;
-    void dropEvent(QDropEvent* event) override;
-    void dragLeaveEvent(QDragLeaveEvent* event) override;
 
     void updateCurrentSceneThumbnail();
 
@@ -1182,6 +1177,9 @@ private:
     PlayerService *playerService = nullptr;
     ProjectService *projectService = nullptr;
     SceneEditService *sceneEditService = nullptr;
+    /// The material hover preview (MATERIAL-PREVIEW-1). Owned here; QObject-free,
+    /// so it is deleted by hand in the destructor.
+    MaterialPreviewService *materialPreviewService = nullptr;
     ClipboardService *clipboardService = nullptr;
     ThumbnailService *thumbnailService = nullptr;
     AssetService *assetService = nullptr;

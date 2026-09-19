@@ -19,7 +19,7 @@ For more information see the LICENSE file
 // reparent (AssetView runs Database::setCollectionParent — the cycle guard —
 // and rebuilds), and dropping an asset tile on a drawer name asks for the
 // asset to be filed there. Tile drags carry the assetwidget mime
-// ("application/x-qabstractitemmodeldatalist", guid at role 3 — project.h).
+// (ui/controls/assetdrag.h: the asset MIME, guid in AssetDrag::GuidSlot).
 //
 // Drop targets are computed from row geometry, NOT dropIndicatorPosition()
 // (whose state depends on the base view accepting the drag — owner-verified

@@ -34,6 +34,7 @@ class PlaybackService;
 class PlayerService;
 class ProjectService;
 class SceneEditService;
+class MaterialPreviewService;
 class ClipboardService;
 class ThumbnailService;
 class AssetService;
@@ -52,6 +53,11 @@ struct StudioServices
     PlayerService    *player     = nullptr;
     ProjectService   *project    = nullptr;
     SceneEditService *sceneEdit  = nullptr;
+    /// The hover preview (MATERIAL-PREVIEW-1) — a material on screen that the
+    /// document does not hold. Every path that WRITES the document ends it
+    /// first, which is why it is reachable from here and not only from the
+    /// viewport that drives it.
+    MaterialPreviewService *materialPreview = nullptr;
     /// THE clipboard (CLIPBOARD_SPEC D3 b) — one component for every space,
     /// over the system clipboard. Null in hosts with no library.
     ClipboardService *clipboard  = nullptr;

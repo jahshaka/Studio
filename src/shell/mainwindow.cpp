@@ -204,6 +204,7 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/projectarchiver.h"
 #include "services/sceneextents.h"
 #include "ui/dialogs/progressdialog.h"
+#include "services/materialpreviewservice.h"
 #include "services/sceneeditservice.h"
 #include "services/clipboardservice.h"
 #include "services/thumbnailservice.h"
@@ -341,7 +342,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// thing a frame-stepping test must not have. Off suspends the tick for the
 	// run's duration; Live paces it to one frame per display period (round 2,
 	// H1 — unpaced, the loop and the script alternate one frame per verb).
-	scriptHost->scriptRunState = [](ScriptRunState state) {
+	scriptHost->scriptRunState = [this](ScriptRunState state) {
+		// A preview the run's own verb started ends with the run (F3 of
+		// MATERIAL-PREVIEW-1's read) — before the driver lookup, which a
+		// document-only session fails.
+		if (state == ScriptRunState::None && materialPreviewService
+		    && materialPreviewService->verbOwned())
+			materialPreviewService->end();
 		EngineRenderDriver *driver = EngineHost::instance().driver();
 		if (!driver) return;
 		switch (state) {
@@ -1269,6 +1276,13 @@ void MainWindow::setupServices()
     thumbnailService = new ThumbnailService(db, project);
     assetService = new AssetService(db, project);
 
+    // THE HOVER PREVIEW (MATERIAL-PREVIEW-1). Constructed after the service
+    // that resolves and applies materials, and handed BACK to it: every apply
+    // ends a live preview before it pushes, so an undo step can never capture
+    // a material the user only hovered.
+    materialPreviewService = new MaterialPreviewService(sceneEditService);
+    sceneEditService->setMaterialPreview(materialPreviewService);
+
     services = new StudioServices;
     services->eventBus = new Subscriber(this);
     services->undo = undoService;
@@ -1277,6 +1291,7 @@ void MainWindow::setupServices()
     services->player = playerService;
     services->project = projectService;
     services->sceneEdit = sceneEditService;
+    services->materialPreview = materialPreviewService;
     services->clipboard = clipboardService;
     services->thumbnails = thumbnailService;
     services->assets = assetService;
@@ -1357,6 +1372,19 @@ void MainWindow::setupServices()
     // transaction and one fdatasync per command on the UI thread.
     undoService->setDeferredFlushHook([this]() {
         if (db) db->flushPendingAssetDeletes();
+    });
+    // THE HOVER PREVIEW ENDS BEFORE ANYTHING COMMITS (MATERIAL-PREVIEW-1).
+    // Two hooks, at the two spines: every undo push, and every scene write.
+    // Between them they cover the whole "a material on screen that the
+    // document does not hold" hazard — including the callers written after
+    // this — and the three LIFECYCLE ends (close, space switch, quit) are
+    // spelled out at their own sites, where a hook would have nothing to hang
+    // on.
+    undoService->setPrePushHook([this]() {
+        if (materialPreviewService) materialPreviewService->end();
+    });
+    projectService->setPreWriteHook([this]() {
+        if (materialPreviewService) materialPreviewService->end();
     });
     if (sceneView) { sceneView->setServices(services); sceneView->setProject(project); }
     if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
@@ -1482,6 +1510,9 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 {
 	if (currentSpace == space && !force)
 		return;
+	// The material hover preview belongs to the editor viewport's drag; leaving
+	// the space ends the gesture, so it ends the preview (MATERIAL-PREVIEW-1).
+	if (materialPreviewService) materialPreviewService->end();
 	// Every attempt starts with a clean slate: whatever refused last time is
 	// not the reason this one might (SMOKE-FIX-1).
 	spaceRefusal.clear();
@@ -2243,6 +2274,9 @@ void MainWindow::startOpenRun(bool playMode)
 
 void MainWindow::closeProject()
 {
+    // The borrowed material goes back before the scene it is borrowed from is
+    // torn down (MATERIAL-PREVIEW-1).
+    if (materialPreviewService) materialPreviewService->end();
     // AN OPEN IN FLIGHT IS DRAINED FIRST (lane OPEN-FRAMES-1, item 3), the way
     // the window-close and shutdown paths already do it (closeEvent above,
     // shutdownBackgroundWork below). Without this a queued install slice could run
@@ -2383,30 +2417,11 @@ void MainWindow::closeProject()
 	playerView->end();
 }
 
-/// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
-void MainWindow::applyMaterialPreset(QString guid)
-{
-    auto preset = Constants::Reserved::DefaultMaterials.value(guid);
-    auto defaultMats = assetMaterialPanel->getDefaultMaterials();
-    for (const auto &material : defaultMats) {
-        if (material.name == preset) {
-            applyMaterialPreset(material);
-            return;
-        }
-    }
-
-    // Not a built-in preset: a saved material asset (a project .material row,
-    // e.g. one registered under Presets/ by an earlier preset apply). This
-    // used to fall through silently — dropping a saved material onto an
-    // object applied NOTHING persistent while the drag preview made it look
-    // applied (the reopen-loses-materials report).
-    sceneEditService->applyMaterialAsset(guid, selectionService->selected());
-}
-
-void MainWindow::applyMaterialPreset(MaterialPreset preset)
-{
-    sceneEditService->applyMaterialPreset(preset);
-}
+// (MainWindow::applyMaterialPreset is GONE, both overloads — MATERIAL-PREVIEW-1.
+// It was a SECOND material dispatcher beside material.apply's, reached only by
+// the viewport's drop and the tray's double-click, and the two had already
+// drifted in what they accepted. Both callers ask
+// SceneEditService::applyMaterial now, with the target explicit.)
 
 void MainWindow::favoriteItem(QListWidgetItem *item)
 {
@@ -2790,30 +2805,6 @@ bool MainWindow::deleteSceneNode(iris::SceneNodePtr node)
     return sceneEditService->deleteNode(node);
 }
 
-void MainWindow::dragEnterEvent(QDragEnterEvent *event)
-{
-    event->acceptProposedAction();
-}
-
-void MainWindow::dragMoveEvent(QDragMoveEvent *event)
-{
-    event->acceptProposedAction();
-}
-
-/**
- * @brief accepts model files dropped into scene
- * currently only .obj files are supported
- */
-void MainWindow::dropEvent(QDropEvent* event)
-{
-
-}
-
-void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
-{
-    event->accept();
-}
-
 void MainWindow::updateCurrentSceneThumbnail()
 {
     projectService->updateCurrentSceneThumbnail();
@@ -3031,6 +3022,7 @@ void MainWindow::setupDockWidgets()
 
     assetMaterialPanel = new AssetMaterialPanel;
     assetMaterialPanel->setMainWindow(this);
+    assetMaterialPanel->setServices(services);
     assetMaterialPanel->setDatabaseHandle(db);
 
     presetsTabWidget = new QTabWidget;
@@ -5953,6 +5945,9 @@ MainWindow::~MainWindow()
     // The QObject services (selection/playback/sceneEdit) are parented to the
     // window; the plain ones are deleted here.
     delete services;
+    // Before sceneEditService (which it points at) and before the scene dies:
+    // its destructor puts any borrowed material back.
+    delete materialPreviewService;
     delete projectService;
     delete thumbnailService;
     delete assetService;
