@@ -36,6 +36,17 @@ assert(guid.length > 10, "project.create");
 // scale along and turn every colour assertion into an argument about brick.
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 
+// ...AND A STATED SKY (owner answer Q1, 2026-09-18). A new scene's sky is the
+// REALISTIC atmosphere now, which lights the cube far more evenly than the flat
+// 96-grey one these numbers were baselined against — evenly enough that at this
+// pose the LIT face lands within 3/255 of the authored green, so the
+// discriminator "a lit surface is not the raw authored colour" stops
+// discriminating. What is under test is the MATERIAL FAMILY, not the sky, so the
+// suite names the light it measures under. rgb(96,96,96) is exactly what
+// iris::Scene's constructor sets.
+world.sky("color", { color: "#606060" });
+editor.frame(3);
+
 // ---- 1. the row exists, is an enum, and reports its vocabulary ----
 var props = material.properties(cube);
 assert(props.writableKeys.indexOf("shadingModel") >= 0, "writableKeys contains 'shadingModel'");
