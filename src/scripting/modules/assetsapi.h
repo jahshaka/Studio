@@ -58,7 +58,8 @@ public:
     Q_INVOKABLE bool remove(const QString &guid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList pins(const QString &guid);
     Q_INVOKABLE bool removeFromProject(const QString &guid);
-    Q_INVOKABLE bool refreshThumbnail(const QString &guid);
+    Q_INVOKABLE QVariantMap refreshThumbnail(const QString &guid);
+    Q_INVOKABLE QVariantMap rebuildThumbnails(const QVariantMap &options = QVariantMap());
     // ---- the Assets PAGE (Needs::Window) ----
     Q_INVOKABLE bool select(const QString &guid);
     Q_INVOKABLE QString selected();

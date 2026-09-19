@@ -378,7 +378,9 @@ int main(int argc, char **argv)
             Scene *primaryScene = engine->createScene("primary");
             primary->setScene(primaryScene);
             {
-                EngineThumbnailRenderer renderer(engine);
+                auto loan = EngineThumbnailRenderer::borrow(engine, "the mesh-formats suite");
+                CHECK(bool(loan), "6: the thumbnail renderer can be borrowed");
+                EngineThumbnailRenderer &renderer = *loan;
                 const Colour bg = EngineThumbnailRenderer::backgroundColour();
                 for (const char *f : { "colored_quad.ply", "tetra_normals.stl",
                                        "tetra_zeronormals.stl" }) {
@@ -405,6 +407,9 @@ int main(int argc, char **argv)
                               .arg(f).toUtf8().constData());
                 }
             }
+            // The renderer is the process's (THUMBS-1): give it back, then
+            // destroy it while the Engine still exists.
+            EngineThumbnailRenderer::shutdown();
             engine->destroyView(primary);
             engine->destroyScene(primaryScene);
             engine.reset();

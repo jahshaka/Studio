@@ -26,9 +26,10 @@ For more information see the LICENSE file
 // The alternative, renumbering silently, would have re-pointed every saved
 // Emissive/Alpha connection one slot up with no error anywhere.
 //
-// NOTE the tail no longer lines up with SurfaceMasterNode's (Vertex
-// Offset/Extrusion sit at 7/8 here, 8/9 there). Nothing depends on the
-// alignment: the baker matches master slots by socket NAME.
+// This is the ONLY master node (LEGACY-MASTER-CRUD, 2026-09-19). The
+// Blinn-Phong "Surface Material" master is deleted; a graph saved with it is
+// converted socket by socket at load and re-saves as PBR — the table and the
+// reasoning live in NodeGraph::deserialize.
 class PbrMasterNode : public NodeModel
 {
 public:

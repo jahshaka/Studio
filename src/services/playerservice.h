@@ -114,7 +114,13 @@ public:
     /// It exists for the VR toggle, whose whole contract is "put me in the
     /// Player, in the headset" from a script, an MCP session or a button — and
     /// a module may not include mainwindow.h to do it.
-    void setSpaceActivator(const std::function<void()> &show) { mShowSpace = show; }
+    ///
+    /// THE ACTIVATOR ANSWERS (SMOKE-FIX-1's fix round): the window can REFUSE
+    /// to show the Player — no world open, or a page that cannot draw
+    /// (MainWindow::bounceFromPlayer) — and a caller that went on regardless
+    /// put the app in play mode on whatever page it actually landed on.
+    void setSpaceActivator(const std::function<bool()> &show) { mShowSpace = show; }
+    /// False when there is no activator (headless) OR the window refused.
     bool showSpace();
 
     /// Offscreen readback of the PLAYER's scene through the player's camera.
@@ -129,7 +135,7 @@ signals:
 
 private:
     IPlayerHost *mHost = nullptr;
-    std::function<void()> mShowSpace;
+    std::function<bool()> mShowSpace;
     QString mLastError;
 };
 

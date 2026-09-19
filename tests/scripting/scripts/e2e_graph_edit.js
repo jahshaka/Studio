@@ -133,6 +133,6 @@ assert(noNode, "an unknown node id is refused");
 
 // The graph still evaluates after all that surgery.
 var evaluated = graph.evaluate();
-assert(evaluated.hasPbrMaster === true, "the edited graph still evaluates");
+assert(typeof evaluated.values === "object", "the edited graph still evaluates");
 
 console.log("e2e_graph_edit: ALL OK");

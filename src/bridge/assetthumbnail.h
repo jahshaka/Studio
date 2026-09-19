@@ -45,16 +45,26 @@ namespace assetthumb
 inline QSize defaultSize() { return QSize(512, 512); }
 
 /// Renders the library node of a MODEL asset. Null image with no engine, no
-/// blob, or a blob with no geometry.
+/// blob, or a blob with no geometry — and `reasonOut`, when given, always says
+/// WHICH (THUMBS-1: a thumbnail that fails is never silent; the owner's two
+/// grey tiles were produced by a renderer that could not make its View and
+/// returned a null image without a word).
+/// `noModelOut`, when given, is set true for the one case that is not a
+/// failure of the renderer: the row stores no model at all (a builtin
+/// primitive's Object row — the default Ground — is a document thing with no
+/// blob to draw). A sweep skips those rather than reporting them broken.
 QImage renderObject(Database *db, Project *project, const QString &guid,
                     const std::shared_ptr<jahshaka::engine::Engine> &engine,
-                    QSize size = defaultSize());
+                    QSize size = defaultSize(), QString *reasonOut = nullptr,
+                    bool *noModelOut = nullptr);
 
 /// renderObject + the database write. False when nothing was rendered (the
-/// stored thumbnail is then left alone rather than blanked).
+/// stored thumbnail is then left alone rather than blanked), with the reason
+/// in `reasonOut`.
 bool storeObject(Database *db, Project *project, const QString &guid,
                  const std::shared_ptr<jahshaka::engine::Engine> &engine,
-                 QSize size = defaultSize());
+                 QSize size = defaultSize(), QString *reasonOut = nullptr,
+                 bool *noModelOut = nullptr);
 
 }   // namespace assetthumb
 

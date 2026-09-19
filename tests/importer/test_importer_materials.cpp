@@ -445,7 +445,9 @@ int main(int argc, char **argv)
             Scene *primaryScene = engine->createScene("primary");
             primary->setScene(primaryScene);
             {
-                EngineThumbnailRenderer renderer(engine);
+                auto loan = EngineThumbnailRenderer::borrow(engine, "the importer-materials suite");
+                CHECK(bool(loan), "5: the thumbnail renderer can be borrowed");
+                EngineThumbnailRenderer &renderer = *loan;
 
                 auto node = meshNodeNamed(imported, "specgloss");
                 CHECK(!node.isNull(), "5: spec-gloss subject found");
@@ -501,6 +503,9 @@ int main(int argc, char **argv)
                           "5: the unlit quad renders its texture (was a black surface)");
                 }
             }
+            // The renderer is the process's (THUMBS-1): destroyed here, while
+            // the Engine still exists.
+            EngineThumbnailRenderer::shutdown();
             engine->destroyView(primary);
             engine->destroyScene(primaryScene);
         }

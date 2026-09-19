@@ -11,6 +11,12 @@ For more information see the LICENSE file
 
 #include "modules/vr/vrapi.h"
 
+#include <QColor>
+#include <QDir>
+#include <QFileInfo>
+#include <QImage>
+#include <cstring>
+
 #include "bridge/enginehost.h"
 #include "bridge/vrnames.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -118,6 +124,98 @@ bool profileFromName(const QString &raw, VrProfileName &out, QString *error)
                                 "/interaction_profiles/... path, or one of "
                                 "hand_interaction, hands, touch, simple, wmr").arg(raw);
     return false;
+}
+
+/// A VIEW'S EFFECTIVE POST DESCRIPTION, AS A MAP (lane EYE-GRADE-1).
+///
+/// WHAT IT IS FOR: "is the headset graded like the desktop?" is a question
+/// about two DESCRIPTIONS, and pixels are a slow and noisy way to ask it. Both
+/// views report theirs here — `View::postFx()` is what the view is really
+/// carrying, the VR policy already applied — so the answer is an assertion on
+/// the fields rather than on a picture, and a difference names ITSELF.
+QVariantMap postFxMap(const View &view)
+{
+    const PostFxDesc &fx = view.postFx();
+    const auto lookName = [](LookKind k) {
+        switch (k) {
+        case LookKind::Desaturate: return QStringLiteral("desaturate");
+        case LookKind::GlassWarp:  return QStringLiteral("glassWarp");
+        case LookKind::RadialBlur: return QStringLiteral("radialBlur");
+        case LookKind::OldMovie:   return QStringLiteral("oldMovie");
+        case LookKind::Posterize:  return QStringLiteral("posterize");
+        case LookKind::Sharpen:    return QStringLiteral("sharpen");
+        case LookKind::FilmGrade:  return QStringLiteral("filmGrade");
+        case LookKind::Count:      break;
+        }
+        return QStringLiteral("unknown");
+    };
+    QVariantMap m;
+    m[QStringLiteral("hdr")] = fx.hdr;
+    // THE CHAIN'S OWN AXIS (natural log), not stops: this is the renderer's
+    // value, and comparing two views is exactly what it is here for. The
+    // document's unit is `world.postFx({exposureEv})`.
+    m[QStringLiteral("exposure")] = fx.exposure;
+    m[QStringLiteral("exposureMin")] = fx.exposureMin;
+    m[QStringLiteral("exposureMax")] = fx.exposureMax;
+    m[QStringLiteral("exposureScale")] = fx.exposureScale;
+    m[QStringLiteral("tonemapFixed")] = fx.tonemapFixed;
+    m[QStringLiteral("meterPattern")] =
+        fx.meterPattern == ExposureMeterPattern::Average        ? QStringLiteral("average")
+        : fx.meterPattern == ExposureMeterPattern::Spot         ? QStringLiteral("spot")
+                                                                : QStringLiteral("centreWeighted");
+    m[QStringLiteral("meterLowPercent")] = fx.meterLowPercent;
+    m[QStringLiteral("meterHighPercent")] = fx.meterHighPercent;
+    m[QStringLiteral("bloom")] = fx.bloom;
+    m[QStringLiteral("bloomThreshold")] = fx.bloomThreshold;
+    m[QStringLiteral("bloomKnee")] = fx.bloomKnee;
+    m[QStringLiteral("ssao")] = fx.ssao;
+    m[QStringLiteral("smaaPreset")] = fx.smaaPreset;
+    m[QStringLiteral("ssr")] = fx.ssr;
+    m[QStringLiteral("ssrScreenMarch")] = fx.ssrScreenMarch;
+    m[QStringLiteral("reflectionRoughnessCutoff")] = fx.reflectionRoughnessCutoff;
+    m[QStringLiteral("refractions")] = fx.refractions;
+    m[QStringLiteral("distortion")] = fx.distortion;
+    m[QStringLiteral("distortionStrength")] = fx.distortionStrength;
+    m[QStringLiteral("allowOffscreen")] = fx.allowOffscreen;
+    // WHERE THE AUTOMATIC EXPOSURE ACTUALLY SETTLED, as the tonemapper's own
+    // multiplier — the only field here that is a READBACK rather than a
+    // description, and the only way to compare two METERING views at all (the
+    // description says "measure it", not what was measured). 0 when there is
+    // nothing to read: no chain, or the fixed form, which measures nothing.
+    m[QStringLiteral("exposureMeasured")] = view.measuredExposureScale();
+    // ...AND WHETHER THIS VIEW'S PER-FRAME GLOBALS REACH THE FRAME AT ALL
+    // (chain::ViewGlobalsListener). Everything the meter, the auto exposure,
+    // the bloom threshold, the AO/SSR camera terms and the looks' parameters
+    // need rides that one push, immediately before this view's passes; a count
+    // that does not climb means this picture is rendering with whatever the
+    // last workspace to update left in the process-wide materials.
+    m[QStringLiteral("globalsPushes")] = QVariant::fromValue(qulonglong(view.globalsPushes()));
+    QVariantList looks;
+    for (const LookDesc &l : fx.looks) {
+        QVariantMap one;
+        one[QStringLiteral("id")] = lookName(l.kind);
+        QVariantList p;
+        for (float v : l.p) p.append(v);
+        one[QStringLiteral("p")] = p;
+        looks.append(one);
+    }
+    m[QStringLiteral("looks")] = looks;
+    return m;
+}
+
+/// THE ON-SCREEN VIEW OF THE SAME SCENE — the desktop's picture, for the
+/// comparison above. The mirror view when a host named one (it is by
+/// definition the view the desktop is showing); otherwise the first enabled
+/// on-screen view bound to the eye view's scene.
+View *desktopViewOf(Engine *e, View *eyes)
+{
+    if (!e || !eyes) return nullptr;
+    if (View *m = e->vrMirrorView()) return m;
+    std::vector<View *> views;
+    e->listViews(views);
+    for (View *v : views)
+        if (v && !v->isOffscreen() && v->scene() == eyes->scene()) return v;
+    return nullptr;
 }
 
 }   // namespace
@@ -350,6 +448,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "hands:{left,right}, input:{left,right}, inputFocused, profile, "
           "bindings:{offered, accepted, profiles:[{profile, bindings, accepted}]}, "
           "hiddenArea:{source, fraction:[l,r], triangles:[l,r]}, "
+          "swapchainFormat, colourEncodedOnce, postFx:{eye, desktop}, "
           "handActions, handJoints, proxies, preview}",
           "What the session is doing. `state` walks the runtime's own lifecycle — idle, ready, "
           "synchronized, visible, focused, stopping, lost — and `frames` counts the frames the "
@@ -409,7 +508,55 @@ QVector<VerbInfo> VrApi::verbs() const
           "measured on that geometry in the eye's own clip rectangle, and `triangles` how "
           "many triangles that was. The fraction is the HEADSET'S number, not ours — a "
           "simulated HMD and a Quest Pro mask different shapes — so a frame-time saving "
-          "measured on one machine cannot be read on another without it.",
+          "measured on one machine cannot be read on another without it.\n\n"
+          "`swapchainFormat` and `colourEncodedOnce` are THE COLOUR CONTRACT with the runtime "
+          "(lane EYE-GRADE-1). The eye target's bytes are display-encoded, so the session asks "
+          "for an sRGB swapchain format — which is what tells an OpenXR runtime exactly that, "
+          "so its decode and its display encode cancel and the picture reaching the wearer is "
+          "encoded exactly ONCE. `colourEncodedOnce` is false only on a runtime that offered "
+          "no such format: it then treats our bytes as linear and encodes them a second time, "
+          "the wearer's picture reads about a stop too bright, and the editor says so as a "
+          "scene issue as well as in the log.\n\n"
+          "`postFx` is THE GRADE, BOTH PICTURES: `postFx.eye` is the EFFECTIVE post "
+          "description the session's eye pair is rendering with and `postFx.desktop` the one "
+          "the desktop's view is rendering with, field for field in the same spelling "
+          "(`desktop` is ABSENT when no on-screen view of that scene exists — a headless run, "
+          "or a mirror pointed at nothing). They are the same description — the headset is a "
+          "view of the project's scene and is graded by the project, exposure mode and stops, "
+          "meter pattern, looks and reflection row alike — except for the VR POLICY list a "
+          "side-by-side stereo target cannot carry: `bloom` (one 256x256 blur ladder for both "
+          "eyes, 65 taps wide, so one eye's highlights would smear across the other), `ssao` "
+          "(one projection for two eyes), `smaaPreset` (its search walks up to 16 texels "
+          "across the seam), `ssrScreenMarch` (the march walks the target), `refractions` and "
+          "`distortion` (both READ the target at an offset coordinate and fall back only at "
+          "the FRAME's edges, so a refractor at an eye's nasal edge shows the other eye), "
+          "`hzb`, and the looks whose geometry is measured from the frame's centre — which in "
+          "a two-eye target is the inner edge of both. `allowOffscreen` is true in the eye "
+          "because the pair is offscreen only in the sense that two eyes share one texture. "
+          "Absent with no session. Before this the session wrote its own description by hand "
+          "and the whole World panel was inert in the headset.",
+          Needs::Engine },
+        { "eyeScreenshot",
+          "vr.eyeScreenshot(eye, path) -> {path, width, height, eye, center:{r,g,b}}",
+          "ONE EYE OF THE RUNNING SESSION, AS THE WEARER SEES IT, written to `path` as a PNG. "
+          "`eye` is 0/\"left\" or 1/\"right\".\n\n"
+          "It renders the eye MONO — at the eye's own size, through the eye's own pose and "
+          "its own projection, with the session view's chain and its measured exposure as a "
+          "CONSTANT — and reads it back once the picture stops moving (never after a fixed "
+          "frame count). So it is two things at once: the VR screenshot a user wants (\"what "
+          "did I see in there\"), and the one place the stereo path's arithmetic is checked "
+          "against the engine's ordinary one — the eyes are drawn from a hand-converted VrData "
+          "pair, this is drawn through Camera's own projection path, and a session that ever "
+          "stopped converting would produce two pictures that disagree about DEPTH.\n\n"
+          "IT RENDERS FRAMES — up to ninety of them, on the UI THREAD, so the editor is "
+          "unresponsive for as long as they take (a second or two on a rig, less on a real "
+          "GPU) and a simulated runtime's head keeps moving through them. A tool and a test "
+          "call, never something to put in a loop, and a caller comparing it with the desktop "
+          "must take the desktop's shot in the same breath. It is NOT a copy of the bytes the "
+          "runtime was handed: it is a fresh mono render of that eye's pose and projection "
+          "through the session's chain, with the session's measured exposure frozen so the "
+          "two pictures are comparable at all. Refuses with no session, before the eyes have "
+          "been located, and on an eye index that is neither 0 nor 1.",
           Needs::Engine },
 
         // ---- STAGE 1: THE CONTROLLERS (SPECS/VR_INPUT_SPEC.md) ------------
@@ -1069,6 +1216,73 @@ QVariantMap VrApi::handJoints(const QVariant &hand)
     return out;
 }
 
+// ONE EYE, AS THE WEARER SEES IT (lane EYE-GRADE-1; Engine::vrEyeScreenshot,
+// whose header is where the mono control's whole design is written out).
+//
+// THE ENGINE HAS RENDERED THIS PICTURE SINCE PHASE 2 AND NOTHING COULD ASK FOR
+// IT: the capability existed, the verb did not, so the only picture a script
+// (or the rig, or an MCP session) could take of a running session was the
+// desktop MIRROR — which is one eye's TARGET and not the eye. This verb is what
+// makes "does the headset show the project's picture" answerable at all, and
+// what `vr.eye_grade` compares against the desktop's own screenshot.
+QVariantMap VrApi::eyeScreenshot(const QVariant &eye, const QString &path)
+{
+    QVariantMap out;
+    const int index = vrnames::handFrom(eye);   // the same 0/1 + "left"/"right" reader
+    out[QStringLiteral("eye")] =
+        index == 1 ? QStringLiteral("right") : QStringLiteral("left");
+    Engine *e = engine();
+    if (!e) { fail(QStringLiteral("vr.eyeScreenshot: no engine is running in this process")); return out; }
+    if (index < 0) {
+        fail(QStringLiteral("vr.eyeScreenshot: eye must be \"left\" or \"right\" (or 0/1), "
+                            "not '%1'").arg(eye.toString()));
+        return out;
+    }
+    if (path.isEmpty()) { fail(QStringLiteral("vr.eyeScreenshot: a file path is required")); return out; }
+    Image img;
+    if (!e->vrEyeScreenshot(unsigned(index), img)) {
+        fail(QStringLiteral("vr.eyeScreenshot: %1").arg(QString::fromStdString(e->lastError())));
+        return out;
+    }
+    if (!img.width || !img.height || img.rgba.empty()) {
+        fail(QStringLiteral("vr.eyeScreenshot: the session returned no image"));
+        return out;
+    }
+    QImage result(int(img.width), int(img.height), QImage::Format_RGBA8888);
+    for (unsigned y = 0; y < img.height; ++y)
+        std::memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u],
+                    size_t(img.width) * 4u);
+    QFileInfo info(path);
+    if (!info.dir().exists()) info.dir().mkpath(QStringLiteral("."));
+    if (!result.save(path, "PNG")) {
+        fail(QStringLiteral("vr.eyeScreenshot: could not save '%1'").arg(path));
+        return out;
+    }
+    const QColor centre = result.pixelColor(result.width() / 2, result.height() / 2);
+    out[QStringLiteral("path")] = info.absoluteFilePath();
+    out[QStringLiteral("width")] = result.width();
+    out[QStringLiteral("height")] = result.height();
+    // WHICH PICTURE THESE BYTES ARE, EXACTLY (the Fable read's F7 — the first
+    // cut of this comment said "the eye target's bytes, exactly what is copied
+    // into the swapchain", and that is NOT what this verb returns). It is a
+    // MONO RE-RENDER of that eye through a throwaway offscreen view, with the
+    // session view's chain and its measured exposure frozen as a constant, read
+    // back once the picture stops moving — up to ninety frames of real time, on
+    // the calling (UI) thread, through which a simulated runtime's head keeps
+    // swaying. What it shares with the eye the wearer sees is the grade, the
+    // pose and the projection; what it does not share is the frame.
+    //
+    // THE SPACE, because a number read in the wrong one is the reading nobody
+    // notices is wrong (PLAIN-GRADE-1): these are DISPLAY-ENCODED bytes, so
+    // they compare with `editor.screenshot(..., 'scene')` and never with the
+    // plain grade's linear radiance.
+    out[QStringLiteral("center")] = QVariantMap{ { QStringLiteral("r"), centre.red() },
+                                                 { QStringLiteral("g"), centre.green() },
+                                                 { QStringLiteral("b"), centre.blue() } };
+    return out;
+}
+
+
 bool VrApi::haptic(const QVariant &hand, double amplitude, double seconds)
 {
     Engine *e = engine();
@@ -1123,6 +1337,14 @@ QVariantMap VrApi::state()
         QVariantMap{ { QStringLiteral("frames"), s.warmUpFrames },
                      { QStringLiteral("ms"), s.warmUpMs } };
     out[QStringLiteral("ipd")] = s.ipd;
+    // THE COLOUR CONTRACT (lane EYE-GRADE-1): which swapchain format the
+    // runtime gave this session, and whether the picture reaching the wearer is
+    // therefore encoded exactly once. Reported rather than only logged because
+    // it is the difference between the wearer seeing the project's picture and
+    // seeing one about a stop too bright, and because a suite must be able to
+    // assert it on a runtime nobody is wearing.
+    out[QStringLiteral("swapchainFormat")] = QString::fromStdString(s.swapchainFormat);
+    out[QStringLiteral("colourEncodedOnce")] = s.colourEncodedOnce;
     // THE WISH AND THE PICTURE (lane MIRROR-LIVE-1): `{mode, showing}` —
     // which half of the headset was asked for, and whether the desktop is
     // showing that copy right now or has taken its own camera back because the
@@ -1202,6 +1424,22 @@ QVariantMap VrApi::state()
     // `vr.inputState().teleport` answers, from the one object that knows.
     out[QStringLiteral("teleport")] = interaction.teleportReport();
     out[QStringLiteral("preview")] = editor.report();
+    // THE GRADE, BOTH PICTURES (lane EYE-GRADE-1): the EFFECTIVE post
+    // description the session's eye pair is carrying and the one the desktop's
+    // view is carrying, in the same spelling. The eye's is the project's
+    // description with the VR policy applied (`applyVrViewPolicy`, Types.h), so
+    // the two agree field for field except the policy's own short list — which
+    // is exactly what `vr.eye_grade` asserts, and what anybody debugging "the
+    // headset looks wrong" should read first.
+    if (Engine *eng = e) {
+        if (View *eyes = eng->vrView()) {
+            QVariantMap fx;
+            fx[QStringLiteral("eye")] = postFxMap(*eyes);
+            if (View *desk = desktopViewOf(eng, eyes))
+                fx[QStringLiteral("desktop")] = postFxMap(*desk);
+            out[QStringLiteral("postFx")] = fx;
+        }
+    }
     return out;
 }
 

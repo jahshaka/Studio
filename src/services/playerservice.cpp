@@ -166,7 +166,18 @@ bool PlayerService::toggleVr()
     // THE PAGE NEXT. The mirror is the Player's on-screen View and that View
     // is created by the page's show event, so a toggle from the editor has to
     // open the page before there is anything to mirror onto.
-    showSpace();
+    //
+    // AND IF THE WINDOW REFUSES THE PAGE, THE TOGGLE IS OVER (SMOKE-FIX-1's fix
+    // round, F7). The window refuses with no world open, and it bounces off a
+    // Player page that cannot draw; playing anyway started the scene on
+    // whatever page the user was actually left looking at — on a `--vr` boot
+    // the VR button on the DESKTOP page did exactly that.
+    if (!showSpace()) {
+        if (mLastError.isEmpty())
+            mLastError = QStringLiteral("there is no world open to play, or the window could "
+                                        "not show the Player page");
+        return false;
+    }
     return play(true);
 }
 
@@ -198,8 +209,7 @@ QVariantMap PlayerService::cameraReport() const
 bool PlayerService::showSpace()
 {
     if (!mShowSpace) return false;
-    mShowSpace();
-    return true;
+    return mShowSpace();
 }
 
 bool PlayerService::restart()

@@ -9,59 +9,41 @@
     "lighting": true,
     "name": "",
     "pbrMaterial": {
-        "surfaceType": "surface",
-        "unsupportedNodes": [
-        ],
+        "unsupportedNodes": [],
         "values": {
             "roughness": 0.85
         }
     },
-    "properties": [
-    ],
+    "properties": [],
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "2e700b73-e103-4fef-a9ee-de2a847790db",
-                "leftNodeId": "bf009387-a076-40e6-ae94-af38afb78fef",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "rightNodeSocketIndex": 3
-            },
-            {
-                "id": "32398c82-1b5b-4820-8aed-41efb0792580",
+                "id": "0727a269-e876-46cc-817e-093b37733396",
                 "leftNodeId": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
                 "rightNodeSocketIndex": 2
             },
             {
-                "id": "369e49ab-effb-4010-8900-2f73e05b68ce",
+                "id": "31ef6710-3737-4a0b-804a-db9f4d6cb3fd",
+                "leftNodeId": "bf009387-a076-40e6-ae94-af38afb78fef",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
+                "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "684353c6-8d73-4c99-9ccb-e941e31c8938",
                 "leftNodeId": "d36eae76-9268-4943-9fde-9ecfa2aa0a59",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
                 "rightNodeSocketIndex": 0
-            },
-            {
-                "id": "bd5d0b76-9ebc-4fb8-9585-33baf3910b84",
-                "leftNodeId": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "rightNodeSocketIndex": 1
             }
         ],
         "masternode": "fc0e39bd-23b5-4946-8d46-89505509486d",
         "materialGuid": "",
         "nodes": [
-            {
-                "id": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
-                "title": "Specular",
-                "type": "texture",
-                "value": "materials_to_graph/brick spec.jpg",
-                "x": -417.5,
-                "y": 147
-            },
             {
                 "id": "bf009387-a076-40e6-ae94-af38afb78fef",
                 "title": "normal",
@@ -72,9 +54,9 @@
             },
             {
                 "id": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
-                "title": "Float Property",
+                "title": "Roughness",
                 "type": "float",
-                "value": 0.15,
+                "value": 0.85,
                 "x": -599.5,
                 "y": 71
             },
@@ -88,26 +70,19 @@
             },
             {
                 "id": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "title": "Surface Material",
-                "type": "Material",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
                 "value": "",
                 "x": 0,
                 "y": 0
             }
         ],
         "settings": {
-            "acceptLighting": true,
             "bakeResolution": 1024,
             "blendMode": "Opaque",
-            "castShadow": true,
-            "cullMode": "Back",
-            "depthTest": true,
-            "fog": true,
-            "name": "",
-            "receiveShadow": true,
-            "renderLayer": "Opaque",
-            "zWrite": true
-        }
+            "name": ""
+        },
+        "socketLayout": 2
     },
     "type": "shadergraph",
     "uniforms": [

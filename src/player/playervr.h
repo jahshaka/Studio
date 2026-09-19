@@ -86,11 +86,13 @@ public:
     /// `iris::Scene::renderCamera` (the active-camera seam's own rule, lead
     /// review F1): with an authored shot armed, the wearer must stand where the
     /// Player's picture was, not where the free camera happens to be parked.
-    /// `document` is the SCENE THE PROJECT AUTHORED — needed for exactly one
-    /// thing here, and named rather than reached for: the reflection row the
-    /// headset renders with is the project's own World-panel row (lane
-    /// REFLECT-VR-1; @see VrConfig::ssr). Null is allowed and means the row's
-    /// default, off.
+    /// `document` is the SCENE THE PROJECT AUTHORED, named rather than reached
+    /// for. It carries the project's own VR rows into the session: the Hands
+    /// switch (`iris::Scene::vrHands`, lane HANDS-SWITCH-1) and, through
+    /// `vrworld::adopt`, the rest of the `world.vr` block. It no longer carries
+    /// the reflection row — since lane EYE-GRADE-1 the mirror pushes the whole
+    /// of the project's post description into the session's view every frame,
+    /// that row included. Null is allowed and means the defaults.
     bool begin(jahshaka::engine::Scene *scene, jahshaka::engine::View *mirrorView,
                const iris::CameraNodePtr &camera, const iris::ScenePtr &document,
                const QVariantMap &options, QString *error);

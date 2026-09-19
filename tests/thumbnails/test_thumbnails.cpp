@@ -12,6 +12,8 @@
 #include <cmath>
 #include <algorithm>
 #include <memory>
+#include <type_traits>
+#include <QtGlobal>
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/assets/mesh.h"          // MeshMaterialData
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -31,6 +33,12 @@ static bool isBackground(QColor c)
     const Colour bg = EngineThumbnailRenderer::backgroundColour();
     return std::abs(c.redF() - bg.r) < 0.04f && std::abs(c.greenF() - bg.g) < 0.04f && std::abs(c.blueF() - bg.b) < 0.04f;
 }
+// A SECOND RENDERER CANNOT BE CONSTRUCTED — as a compile-time fact, which is
+// what "one per process" has to be to stay true (THUMBS-1).
+static_assert(!std::is_constructible<EngineThumbnailRenderer,
+                                     std::shared_ptr<jahshaka::engine::Engine>>::value,
+              "EngineThumbnailRenderer must not be publicly constructible: it is borrowed");
+
 static QColor centre(const QImage &img) { return img.pixelColor(img.width() / 2, img.height() / 2); }
 static void show(const char *tag, const QImage &img)
 {
@@ -74,8 +82,29 @@ int main(int argc, char **argv)
     primary->setScene(primaryScene);
 
     {
-        EngineThumbnailRenderer renderer(engine);
+        // THE ONE RENDERER, BORROWED (THUMBS-1): the type has no public
+        // constructor any more — a second thumbnail renderer would fail to
+        // create its View and silently draw nothing.
+        auto loan = EngineThumbnailRenderer::borrow(engine, "the thumbnails suite");
+        CHECK(bool(loan), "the thumbnail renderer can be borrowed");
+        if (!loan) return 1;
+        EngineThumbnailRenderer &renderer = *loan;
         const QSize size(96, 96);
+
+        // 0. THERE IS ONE RENDERER (THUMBS-1). A second live one was the
+        // owner's grey tiles: two instances, one fixed View name, the second
+        // failing createOffscreenView and returning a null image in silence.
+        // The type has no public constructor, so a second one cannot be
+        // written at all (the static_assert at the top of main), and a second
+        // BORROW while this one is out is refused BY NAME rather than handed
+        // the same Scene, View and mirror.
+        {
+            auto second = EngineThumbnailRenderer::borrow(engine, "a second borrower");
+            CHECK(!second, "a second borrow while one is out is refused");
+            CHECK(second.reason().contains("busy"),
+                  "…and says why, naming the caller");
+            std::printf("    refusal: %s\n", qUtf8Printable(second.reason()));
+        }
 
         // 1. red cube
         QImage a = thumbnail(renderer, QColor(220, 30, 30), size); show("red cube", a);
@@ -200,6 +229,34 @@ int main(int argc, char **argv)
                   "from the raw path's 176 into the 100..160 band)");
         }
 
+        // 7b. THE OWNER'S FAILURE, MADE AUDIBLE (THUMBS-1). The renderer's View
+        // name is fixed, so a View already holding that name — which is what a
+        // SECOND renderer instance used to be — makes ensureResources fail.
+        // Before the fix that produced a null QImage and NOTHING ELSE: no log
+        // line of ours, no reason, no return value carrying one, and a grey
+        // tile for the user with a Qt null-pixmap warning as the only clue.
+        // Now the engine's own words come back through lastFailure().
+        {
+            EngineThumbnailRenderer &r = *loan;
+            // Release the renderer's resources so the next render has to make
+            // its View again — with the name taken by somebody else.
+            r.release();
+            View *squatter = engine->createOffscreenView("thumbs", 64, 64, Colour(0, 0, 0));
+            CHECK(squatter != nullptr, "a second view may hold the name 'thumbs'");
+            const QImage blocked = thumbnail(r, QColor(220, 30, 30), size);
+            CHECK(blocked.isNull(), "…and the thumbnail render then produces nothing");
+            std::printf("    reason: %s\n", qUtf8Printable(r.lastFailure()));
+            CHECK(r.lastFailure().contains("already exists"),
+                  "…and SAYS WHY, in the engine's own words (it used to say nothing at all)");
+            if (squatter) engine->destroyView(squatter);
+            // …and with the name free again it renders, so the failure was the
+            // name and nothing else.
+            const QImage recovered = thumbnail(r, QColor(220, 30, 30), size);
+            CHECK(!recovered.isNull() && !isBackground(centre(recovered)),
+                  "with the name free again the same renderer draws the subject");
+            CHECK(r.lastFailure().isEmpty(), "…and reports no failure");
+        }
+
         // 8. the primary view is untouched: still its own clear colour, nothing of the thumbs scene
         Image pimg; primary->readPixels(pimg);
         const Colour pc = pimg.at(32, 32);
@@ -207,6 +264,10 @@ int main(int argc, char **argv)
 
         renderer.release();
     }
+    // The renderer is the PROCESS's now (THUMBS-1): the loan above only gave it
+    // back, so it must be destroyed here — while the Engine is alive, like
+    // EngineHost::shutdown() does in the app.
+    EngineThumbnailRenderer::shutdown();
     engine->destroyView(primary);
     engine->destroyScene(primaryScene);
     engine.reset();

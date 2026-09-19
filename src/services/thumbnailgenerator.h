@@ -119,11 +119,13 @@ private:
     // ---- engine path ----
     struct EngineRequest { ThumbnailRequest request; QSize size; };
     void processOneEngineRequest();
-    QImage renderEngineRequest(const ThumbnailRequest &request, QSize size);
+    /// Renders one queued request on the BORROWED renderer (THUMBS-1: there is
+    /// one per process and this queue is only one of its callers).
+    QImage renderEngineRequest(EngineThumbnailRenderer &renderer,
+                               const ThumbnailRequest &request, QSize size);
 
     QList<EngineRequest> pending;
     QTimer *tick = nullptr;
-    std::unique_ptr<EngineThumbnailRenderer> engineRenderer;
 };
 
 #endif // THUMBNAILGENERATOR_H

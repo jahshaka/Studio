@@ -9,42 +9,32 @@
     "lighting": true,
     "name": "",
     "pbrMaterial": {
-        "surfaceType": "surface",
-        "unsupportedNodes": [
-        ],
+        "unsupportedNodes": [],
         "values": {
             "roughness": 0.55
         }
     },
-    "properties": [
-    ],
+    "properties": [],
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "1dd25c13-c2b4-4cef-b266-c57ee095bc6c",
+                "id": "17f7432b-7d09-48fd-bffd-b944fa3e7dc6",
                 "leftNodeId": "bf009387-a076-40e6-ae94-af38afb78fef",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
                 "rightNodeSocketIndex": 3
             },
             {
-                "id": "939d599d-0196-420c-8aef-91c796ba1eaa",
+                "id": "c0cea49d-4585-476a-b9dc-55a95f0ffa37",
                 "leftNodeId": "d36eae76-9268-4943-9fde-9ecfa2aa0a59",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
                 "rightNodeSocketIndex": 0
             },
             {
-                "id": "e004b017-68dd-447f-8f0e-c4fcbbcb1a97",
-                "leftNodeId": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "rightNodeSocketIndex": 1
-            },
-            {
-                "id": "ea93db3b-981d-4182-897f-6005372a869a",
+                "id": "d8889ca6-c181-45a8-a24a-86880de26f83",
                 "leftNodeId": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
@@ -55,14 +45,6 @@
         "materialGuid": "",
         "nodes": [
             {
-                "id": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
-                "title": "Specular",
-                "type": "texture",
-                "value": "materials_to_graph/wood spec.jpg",
-                "x": -417.5,
-                "y": 147
-            },
-            {
                 "id": "bf009387-a076-40e6-ae94-af38afb78fef",
                 "title": "normal",
                 "type": "texture",
@@ -72,9 +54,9 @@
             },
             {
                 "id": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
-                "title": "Float Property",
+                "title": "Roughness",
                 "type": "float",
-                "value": 0.45,
+                "value": 0.55,
                 "x": -599.5,
                 "y": 71
             },
@@ -88,26 +70,19 @@
             },
             {
                 "id": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "title": "Surface Material",
-                "type": "Material",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
                 "value": "",
                 "x": 0,
                 "y": 0
             }
         ],
         "settings": {
-            "acceptLighting": true,
             "bakeResolution": 1024,
             "blendMode": "Opaque",
-            "castShadow": true,
-            "cullMode": "Back",
-            "depthTest": true,
-            "fog": true,
-            "name": "",
-            "receiveShadow": true,
-            "renderLayer": "Opaque",
-            "zWrite": true
-        }
+            "name": ""
+        },
+        "socketLayout": 2
     },
     "type": "shadergraph",
     "uniforms": [

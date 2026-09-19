@@ -2016,6 +2016,24 @@ QStringList Database::fetchLibraryAssetGuids()
     return guids;
 }
 
+QVector<Database::AssetThumbnailState> Database::fetchAssetThumbnailStates(bool missingOnly)
+{
+    QSqlQuery query;
+    // `thumbnail IS NOT NULL AND length(thumbnail) > 0` is evaluated BY SQLITE:
+    // the blobs never cross into this process (THUMBS-1 fix round F2).
+    query.prepare(missingOnly
+                      ? "SELECT guid, type, 0 FROM assets "
+                        "WHERE thumbnail IS NULL OR length(thumbnail) = 0"
+                      : "SELECT guid, type, "
+                        "(thumbnail IS NOT NULL AND length(thumbnail) > 0) FROM assets");
+    executeAndCheckQuery(query, "FetchAssetThumbnailStates");
+
+    QVector<AssetThumbnailState> rows;
+    while (query.next())
+        rows.append({ query.value(0).toString(), query.value(1).toInt(), query.value(2).toBool() });
+    return rows;
+}
+
 QMap<QString, qint64> Database::fetchAssetFileSizes()
 {
     QSqlQuery query;

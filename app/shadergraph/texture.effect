@@ -9,7 +9,6 @@
     "lighting": true,
     "name": "Grass",
     "pbrMaterial": {
-        "surfaceType": "surface",
         "unsupportedNodes": [
         ],
         "values": {
@@ -22,7 +21,7 @@
     "shadergraph": {
         "connections": [
             {
-                "id": "3821a7bc-b49d-4215-8c0a-44ab4ec335e1",
+                "id": "9ece171b-5556-4537-8270-487159d6495e",
                 "leftNodeId": "189672d2-87b0-4061-b303-cdb198909845",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "7cf4d9d3-5d33-4168-9251-a92f73bf9e49",
@@ -42,26 +41,19 @@
             },
             {
                 "id": "7cf4d9d3-5d33-4168-9251-a92f73bf9e49",
-                "title": "Surface Material",
-                "type": "Material",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
                 "value": "",
                 "x": 335,
                 "y": -56
             }
         ],
         "settings": {
-            "acceptLighting": true,
             "bakeResolution": 1024,
             "blendMode": "Opaque",
-            "castShadow": true,
-            "cullMode": "Back",
-            "depthTest": true,
-            "fog": true,
-            "name": "Grass",
-            "receiveShadow": true,
-            "renderLayer": "Opaque",
-            "zWrite": true
-        }
+            "name": "Grass"
+        },
+        "socketLayout": 2
     },
     "type": "shadergraph",
     "uniforms": [

@@ -15,9 +15,9 @@ For more information see the LICENSE file
 #include "nodes/pbrmasternode.h"
 
 
-// New graphs author PBR (Option B): the default master is PbrMasterNode.
-// Legacy graphs deserialized with a SurfaceMasterNode keep working - see
-// NodeGraph::deserialize.
+// Every graph is a PBR graph: the master is PbrMasterNode, the only master
+// there is. A file saved with the deleted Blinn-Phong master converts on load
+// (NodeGraph::deserialize) and re-saves as PBR.
 ShaderGraph* ShaderGraph::createDefaultShaderGraph()
 {
 	return createPBRShaderGraph();

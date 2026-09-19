@@ -13,6 +13,9 @@ add_executable(test_script_engine test_script_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apimodule.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apiregistry.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp
+    # the one flag ScriptEngine::stop sets so a stopped script's thumbnail
+    # sweep stops too (THUMBS-1 F1) — a TU with no dependencies of its own
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
     # The worker thread + the verb bridge: the script engine IS these three
     # objects since it moved off the UI thread (SCRIPTING_LIVE_SPEC), and the
     # unit test drives its fake module through the same dispatch the app uses.
@@ -141,6 +144,16 @@ add_script_e2e(fragments e2e_fragments.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+
+# THE LIVE HOVER PREVIEW, for every material source (MATERIAL-PREVIEW-1). The
+# owner found it working for a material made from an image and dead for the
+# tray and the Materials module; it was one QVariant static-type mismatch, and
+# nothing covered it. Drives material.preview/endPreview for four sources and
+# asserts the whole contract: restore on move, restore on end, no undo step, no
+# dirty flag, a save during a preview writes the ORIGINAL, a locked node
+# refuses, an unresolvable payload refuses, and a preset apply reuses its one
+# project row instead of minting a new one per apply.
+add_script_e2e(material_preview e2e_material_preview.js)
 # GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
 # a high oblique view (the two things the owner reported while testing push #18).
 # The document half of the floor is scripting.e2e.default_floor, which is
@@ -784,6 +797,36 @@ set_tests_properties(scripting.e2e.assets_page PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 180)
+
+# scripting.e2e.thumbnails_order — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
+# A material thumbnail FIRST, a model import SECOND: the renderer named its
+# offscreen View with a fixed string and a second instance could not create it,
+# so every model imported after the session's first material/shader thumbnail
+# stored a NULL image and said nothing ("View 'thumbs' already exists" in the
+# owner's log, and a Qt null-pixmap warning where the tile should have been).
+# Also pins every type's rebuild in one process (object, material, shader,
+# AVATAR — which had no branch at all), the EDITOR TRAY's import (which never
+# asked for a model thumbnail) and the bulk repair for rows already grey.
+# Engine up (no --headless): every assertion is about a render.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_thumbnails_order.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_order)
+# A VIRGIN LIBRARY: the run counts what a sweep finds and which rows a tray
+# import added, and a home carried over from the last run answers both with
+# yesterday's assets.
+add_test(NAME scripting.e2e.thumbnails_order.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.thumbnails_order.fresh_home PROPERTIES
+    FIXTURES_SETUP thumbnailsOrderHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.thumbnails_order
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.thumbnails_order PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED thumbnailsOrderHome
+    LABELS "scripting"
+    TIMEOUT 300)
 
 # scripting.e2e.import_dialog — THE IMPORT DIALOG, DRIVEN
 # (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). ui.import_dialog pins the record the
@@ -1637,5 +1680,56 @@ add_test(NAME scripting.e2e.atom_lods
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.atom_lods PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# THE SMOKE OF PUSH #50, AS TWO SUITES (lane SMOKE-FIX-1, 2026-09-18).
+#
+# Both scripts carry their own reasoning; in one line each:
+#   sample_open      — a sample-browser open lands in the EDITOR, through the
+#                      verb the browser's tiles call (the uninitialised
+#                      play-mode flag).
+#   player_no_editor — the Player over a process whose editor page was never
+#                      shown DRAWS, instead of enabling a View with no scene and
+#                      leaving the previous page's pixels on the screen.
+# Both are engine-up (they assert frames), so neither is --headless.
+add_script_e2e(sample_open e2e_sample_open.js)
+# 300 like the other open-and-render suites: it imports an archive and opens it.
+set_tests_properties(scripting.e2e.sample_open PROPERTIES TIMEOUT 300)
+
+configure_file(scripts/e2e_player_no_editor.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_no_editor
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
+         WORKING_DIRECTORY ${_home}/run)
+# JAHSHAKA_TEST_NO_EDITOR_BOOT: the PERSON's boot shape (window up, Desktop
+# page, editor page never shown) instead of the script harness's, which shows
+# the editor page before the script's first line. Without it the editor's
+# engine scene already exists and this suite proves nothing — see the script.
+set_tests_properties(scripting.e2e.player_no_editor PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# scripting.e2e.player_bounce — THE REFUSAL PATH (SMOKE-FIX-1's fix round, F3).
+#
+# The one suite that drives `EnginePlayerView::start` returning false and
+# everything that hangs off it: the bounce back to a page that draws, the
+# reason reaching `app.space()`, the play-mode undo, and the session log's
+# PLAY START / PLAY STOP staying a pair. It needs the attach to fail on a box
+# where it always succeeds, so it sets JAHSHAKA_PLAYER_TEST_NO_ATTACH=1 — the
+# script says why at length, and so does EnginePlayerScene::attach.
+configure_file(scripts/e2e_player_bounce.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_bounce
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.player_bounce PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PLAYER_TEST_NO_ATTACH=1"
     LABELS "scripting"
     TIMEOUT 300)

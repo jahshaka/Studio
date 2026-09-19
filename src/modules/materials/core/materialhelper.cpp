@@ -110,7 +110,9 @@ QJsonObject MaterialHelper::serialize(NodeGraph* graph)
 	QJsonObject pbrObj;
 	pbrObj["values"] = evaluated.values;
 	pbrObj["unsupportedNodes"] = QJsonArray::fromStringList(evaluated.unsupportedNodes);
-	pbrObj["surfaceType"] = evaluated.hasPbrMaster ? "pbr" : "surface";
+	// ("surfaceType" is no longer written: it answered "pbr" or "surface", and
+	// with the Blinn-Phong master deleted the answer is always "pbr". Nothing
+	// in the tree ever read the key.)
 	matObj["pbrMaterial"] = pbrObj;
 
 	return matObj;

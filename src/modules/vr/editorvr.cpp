@@ -81,6 +81,13 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
                         .arg(QString::fromStdString(engine->vrInfo().reason)));
     if (engine->vrStatus().active)
         return fail(QStringLiteral("a session is already running"));
+    // THE SESSION DRAWS THE EDITOR'S SCENE, so it is entitled to ask for it to
+    // exist — a `--vr` boot that has not opened the editor page yet has no
+    // scene, and that is a page that has not been shown rather than a session
+    // that cannot run (SMOKE-FIX-1's fix round). The refusal below stands for
+    // the case the engine really cannot make one yet: before any View exists in
+    // the process (the pin's startup-order law).
+    viewport->ensureEngineScene();
     Scene *scene = viewport->engineScene();
     if (!scene) return fail(QStringLiteral("there is no scene to show yet"));
 
@@ -121,19 +128,19 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     // that is what an editor PREVIEW is for. The Player passes nothing and gets
     // VrConfig's default (none), exactly as its desktop window shows none.
     cfg.helpers = true;
-    // AND THE WEARER SEES THE REFLECTIONS THE AUTHOR SEES (lane REFLECT-VR-1).
-    // The reflection row is the PROJECT's — the World panel's SSR row, which
-    // the mirror pushes into this viewport's own view every frame — and this
-    // config is the only channel to a view the session makes for itself. A
-    // project at Low or Medium (row 0) asks for none and pays for none, exactly
-    // as its desktop viewport does.
+    // AND THE WEARER SEES THE REFLECTIONS THE AUTHOR SEES (lane REFLECT-VR-1),
+    // WITHOUT THIS HOST COPYING THE ROW (lane EYE-GRADE-1). The row is the
+    // PROJECT's — the World panel's SSR row — and the session's View is no
+    // longer the one view no mirror reaches: `applyViewEnvironment` pushes the
+    // project's whole post description into it every frame, exactly as into
+    // this viewport's own view. A project at Low or Medium (row 0) asks for
+    // none and pays for none, exactly as its desktop viewport does.
     //
     // WHAT THE HEADSET DOES WITH IT is not the desktop's screen-space march
     // (impossible in a stereo target) but the RAYS, per eye — see
-    // PostFxDesc::ssrScreenMarch. `vr.begin({reflections:n})` overrides the row
-    // for a measurement; it is deliberately not a persisted setting.
-    if (const iris::ScenePtr doc = viewport->getScene())
-        cfg.ssr = doc->ssrMode;
+    // PostFxDesc::ssrScreenMarch. `vr.begin({reflections:n})` OVERRIDES the row
+    // for one session (VrConfig::ssr, -1 = follow the project); it is
+    // deliberately not a persisted setting.
     if (options.contains(QStringLiteral("reflections")))
         cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
     // THE HIDDEN-AREA MASK (lane HAM-1), ON unless a MEASUREMENT asks for the

@@ -72,15 +72,18 @@ void GraphNodeScene::setNodeGraph(NodeGraph *graph)
 
 void GraphNodeScene::addNodeModel(NodeModel* model, bool addToGraph)
 {
-	if (model->title != "Surface Material") {
+	// THE MASTER NODE GOES STRAIGHT IN, never through the undo stack: it is
+	// the material, not an edit to it, and an undo that removed it would leave
+	// a graph that cannot bake. This used to test `title != "Surface Material"`
+	// — the deleted Blinn master's title — which meant the PBR master, titled
+	// "PBR Material", had been going onto the stack since the day it landed.
+	// Identity against the graph's master is the test that cannot go stale.
+	if (nodeGraph == nullptr || model != nodeGraph->getMasterNode()) {
 		auto addNodeCommand = new AddNodeCommand(model, this);
 		stack->push(addNodeCommand);
 	}
 	else {
-		//add surface node to the scene
-		//other nodes get added to the scene from the add node command above
-		//on AddNodeCommand, redo gets called - stupid qt
-			addNodeModel(model, model->getX(), model->getY(), addToGraph);
+		addNodeModel(model, model->getX(), model->getY(), addToGraph);
 	}
 }
 

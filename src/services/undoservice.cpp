@@ -38,6 +38,18 @@ void UndoService::push(QUndoCommand *command)
         delete command;
         return;
     }
+    // A BORROWED MATERIAL IS NOT THE ONE AN UNDO STEP MAY CAPTURE
+    // (MATERIAL-PREVIEW-1). The hover preview lends a mesh's material slot
+    // while a material is dragged over it; a command pushed while it is live
+    // would record the BORROWED material as the state to come back to, and an
+    // undo would leave the user looking at a material they never applied. A
+    // BACKSTOP ONLY: a command captures its state in its CONSTRUCTOR, before it
+    // reaches this line, so the material mutators end the preview themselves
+    // before they build one. Here for the reason the edit gate is: this is the one function every command
+    // in the app goes through, including the ones written after this. A HOOK,
+    // like the two below it, so this class stays QObject-free and the suites
+    // that compile it alone keep linking.
+    if (mPrePush) mPrePush();
     // Stamp before mStack->push — QUndoStack runs the command's first redo()
     // inside push(), and the refresh notifications need the services then.
     if (auto studioCommand = dynamic_cast<StudioCommand *>(command))
@@ -83,6 +95,9 @@ void UndoService::undo()
     // scope and pass, exactly like every other verb.
     if (editgate::refuse()) return;
     if (!mStack->canUndo()) return;
+    // A step walked back under a live preview would be overwritten by the
+    // preview's own restore a moment later (code review, F1): end it first.
+    if (mPrePush) mPrePush();
     mStack->undo();
     if (mStackMoved) mStackMoved();
 }
@@ -91,18 +106,29 @@ void UndoService::redo()
 {
     if (editgate::refuse()) return;         // as in undo() above
     if (!mStack->canRedo()) return;
+    if (mPrePush) mPrePush();               // as in undo() above
     mStack->redo();
     if (mStackMoved) mStackMoved();
 }
 
 void UndoService::clear()
 {
-    // Clearing inside an open macro corrupts QUndoStack's macro accounting
+    // Clearing inside an OPEN macro corrupts QUndoStack's macro accounting
     // ("endMacro(): no matching beginMacro()"); a script run stays one undo
     // step instead, which is the scripting contract anyway. The project verbs
     // END the run's entry before closing or switching projects, so a scripted
     // close really does clear (CLOSE-2 item 2).
-    if (mMacroArmed) return;
+    //
+    // OPEN, NOT MERELY ARMED (SMOKE-FIX-1's fix round). The run's macro is
+    // armed for the whole run and OPENED only by its first push, and an armed,
+    // empty macro holds nothing: QUndoStack is perfectly willing to clear under
+    // one, and there is no entry to lose. Testing `mMacroArmed` here made every
+    // close that lands while a run is in progress but has recorded nothing yet
+    // a NO-OP — which is exactly the shape of an ASYNCHRONOUS close (the
+    // import-open path: the verb ends the run's entry, re-arms, and the close
+    // happens when the archive finishes), so a world's commands survived the
+    // world. The run still ends up as one entry either way.
+    if (mMacroOpen) return;
     mStack->clear();
     // Every command that just died appended its asset-row cleanup instead of
     // writing it (CLOSE-1). One transaction for the lot, here, where the

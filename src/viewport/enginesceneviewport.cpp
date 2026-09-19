@@ -53,6 +53,7 @@
 #include "viewport/freecamerapolicy.h"
 #include "bridge/secondarysurfacetonemap.h"
 #include "services/editgate.h"
+#include "services/materialpreviewservice.h"
 #include "services/engineerrorpump.h"
 #include "services/framemonitor.h"
 #include "services/loadtimeline.h"
@@ -69,6 +70,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "data/settingsmanager.h"
 #include <QSettings>
+#include "ui/controls/assetdrag.h"
 
 
 
@@ -614,10 +616,36 @@ void EngineSceneViewport::pictureSegment(const iris::CameraNodePtr &cam, const Q
                                point - picture.topLeft(), segStart, segEnd);
 }
 
+// THE ONE SCENE, BUILT WHEN SOMEBODY WHO DRAWS IT ASKS — and NOT gated on this
+// widget's own View any more (SMOKE-FIX-1, 2026-09-18).
+//
+// The Player page is a second view on THIS scene (lane PLAYER-1), so a session
+// that reaches the Player without ever showing the editor — the desktop tile's
+// Play button, a `--vr` boot that starts on the Desktop page — asked for a
+// scene that did not exist and got null: EnginePlayerScene::attach refused, and
+// the Player's window showed the stale pixels of the page underneath. The scene
+// is what the Player needs; this widget's own on-screen View is not.
+//
+// AN EXPLICIT CALL, NEVER A GETTER (the fix round's F1). `engineScene()` and
+// `sceneMirror()` are read from per-frame paths — VrApi::pushProxies rides the
+// render driver's beforeFrame, which ticks from the shell's constructor onwards
+// — so building the scene inside them made EVERY windowed process construct the
+// editor scene, its worker pool and its SceneMirror on its first tick, editor
+// or no editor, and hammer Engine::mLastError while the Hlms did not exist yet.
+// The two callers entitled to ask are the ones that DRAW this scene without
+// being this widget: EnginePlayerView::adoptEditorScene and EditorVrPreview.
+//
+// THE PIN'S STARTUP-ORDER LAW IS STILL OBEYED, by the engine rather than by a
+// guess: `createScene` returns null before the first View exists in the process
+// (Engine.h, "ORDER MATTERS"), so asking early is safe and simply answers "not
+// yet" — which is the honest answer, and the one the Player's refusal repeats.
+// In practice a View always exists by the time either caller asks: the Player's
+// own is created in its show event before the page's start(), and a VR session
+// begins from a page that has one.
 bool EngineSceneViewport::ensureEngineScene()
 {
     if (mEngineScene) return true;
-    if (!mEngine || !view()) return false;
+    if (!mEngine) return false;
     // THE scene the user watches at frame rate: it gets the machine's worker
     // threads, not the engine's historical 2 (fps audit F3,
     // bridge/sceneworkerthreads.h).
@@ -626,6 +654,31 @@ bool EngineSceneViewport::ensureEngineScene()
                                         sceneworkers::count(sceneworkers::Tier::Primary));
     if (!mEngineScene) return false;
     mEngineScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
+    // The mirror before the bind: bindViewToScene drops its environment latches
+    // (see there), and on this path there is nothing to drop — but the order has
+    // to be the same one on both paths or that line reads a null.
+    mMirror.reset(new SceneMirror(mEngineScene));
+    mOverlay.reset(new GizmoOverlay(mEngineScene));
+    if (mScene) mMirror->setSource(mScene);
+    bindViewToScene();
+    return true;
+}
+
+// Binds THIS widget's View to the one scene, with the view-side state that goes
+// with it. Separate from ensureEngineScene because the two no longer happen at
+// the same moment: the scene can be born before this widget has a View at all
+// (the Player asked for it first), and the View can be born — or reborn — after
+// the scene (the show event, a native-window recreation).
+void EngineSceneViewport::bindViewToScene()
+{
+    if (!view() || !mEngineScene) return;
+    // ONLY ON A REAL BIND. Everything below is per-VIEW state that the document
+    // then owns through the mirror, and the mirror DEBOUNCES on "already
+    // pushed" — so re-asserting it on an already-bound view (this is called at
+    // every editor page entry) would turn shadows back on behind a world that
+    // has them off, with nothing to correct it. The engine refuses a second
+    // setScene on a bound View anyway (Engine.h).
+    if (view()->scene() == mEngineScene) return;
     view()->setScene(mEngineScene);
     view()->setShadows(true);           // directional PSSM; lights opt in via the document
     // THE WEARER'S OWN FURNITURE IS DRAWN AT THE DESK TOO (VR_SPEC §5 phase 4;
@@ -636,20 +689,19 @@ bool EngineSceneViewport::ensureEngineScene()
     // screenshot renders through all leave it shut, which is what keeps a
     // wearer's hands out of pictures that are not theirs.
     view()->setVrHelpersVisible(true);
-    mMirror.reset(new SceneMirror(mEngineScene));
-    mOverlay.reset(new GizmoOverlay(mEngineScene));
-    if (mScene) mMirror->setSource(mScene);
-    return true;
+    // AND THE MIRROR'S PER-VIEW LATCHES GO (the same line, for the same reason,
+    // as EnginePlayerScene::attach): part of what applyEnvironment pushes is per
+    // VIEW — the whole post chain, MSAA, the shadow flag — and the mirror
+    // debounces on "already pushed", which may be true OF THE PLAYER'S VIEW.
+    // Dropping the latches is what makes this view's chain get built at all when
+    // the Player got here first.
+    if (mMirror) mMirror->invalidateEnvironment();
 }
 
 void EngineSceneViewport::viewRecreated()
 {
     // The old View took its camera, workspace and scene binding with it.
-    if (view() && mEngineScene) {
-        view()->setScene(mEngineScene);
-        view()->setShadows(true);
-        view()->setVrHelpersVisible(true);   // ...and a recreated view keeps it
-    }
+    bindViewToScene();
     // A fresh View starts its present count at zero, so the baseline must too —
     // otherwise presentsSinceBind() reads a subtraction of a larger number and
     // the cover never comes down again.
@@ -673,7 +725,10 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
     if (!view() && mEngine)
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
+    // …and bind it, whether the scene is born here or was born earlier for the
+    // Player (ensureEngineScene returns early then, so the bind is its own call).
     ensureEngineScene();
+    bindViewToScene();
     // Becoming visible with nothing presented yet is exactly the moment the
     // stale pixels underneath would show through — and on the FIRST open there
     // was no View at all until three lines ago, so there is nothing of ours in
@@ -846,13 +901,35 @@ bool EngineSceneViewport::dropPointAt(const QPointF &point, iris::Vec3 *out)
 
 // ---- drag and drop from the asset panel: ported from SceneViewWidget ----------------
 
+/// ONE decoder (ui/controls/assetdrag.h) — this used to be a local copy of the
+/// same four-slot read, beside two more in the property widgets.
 static QMap<int, QVariant> dragRoleData(const QMimeData *mime)
 {
-    QByteArray encoded = mime->data("application/x-qabstractitemmodeldatalist");
-    QDataStream stream(&encoded, QIODevice::ReadOnly);
-    QMap<int, QVariant> roleDataMap;
-    while (!stream.atEnd()) stream >> roleDataMap;
-    return roleDataMap;
+    return AssetDrag::roles(mime);
+}
+
+/// A material carried by a drag: the payload string the ONE resolver
+/// understands, or empty when this drag is not a material at all.
+///
+/// A SHADER TILE IS A MATERIAL TOO (MATERIAL-PREVIEW-1). The Materials module
+/// files its graphs as Shader rows, and one of those dragged in used to be
+/// accepted by dragEnter, ignored by dragMove and dropped into nothing — a
+/// gesture that looked like it worked and did not. Both types come here and the
+/// resolver decides; a payload it cannot resolve is REFUSED, visibly, by the
+/// cursor.
+QString EngineSceneViewport::materialDragSource(const QMimeData *mime)
+{
+    const QMap<int, QVariant> role = dragRoleData(mime);
+    const int type = role.value(0).toInt();
+    if (type != static_cast<int>(ModelTypes::Material) &&
+        type != static_cast<int>(ModelTypes::Shader))
+        return QString();
+    return role.value(3).toString();
+}
+
+MaterialPreviewService *EngineSceneViewport::materialPreview() const
+{
+    return mServices ? mServices->materialPreview : nullptr;
 }
 
 void EngineSceneViewport::dragEnterEvent(QDragEnterEvent *event)
@@ -861,52 +938,47 @@ void EngineSceneViewport::dragEnterEvent(QDragEnterEvent *event)
         event->ignore();
         return;
     }
-    if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
-        event->acceptProposedAction();
+    if (!AssetDrag::isAssetDrag(event->mimeData())) return;
+
+    // THE CURSOR TELLS THE TRUTH (MATERIAL-PREVIEW-1). A material drag is
+    // accepted only when its payload RESOLVES to a material — the same call
+    // that will show it a moment later and commit it on release. Anything that
+    // does not resolve (a graph with no baked material, a row whose definition
+    // is gone) is refused here, where the cursor can say so, instead of being
+    // accepted and silently doing nothing on the drop.
+    mDragMaterialSource = materialDragSource(event->mimeData());
+    if (!mDragMaterialSource.isEmpty()) {
+        auto *preview = materialPreview();
+        if (!preview || !preview->canPreview(mDragMaterialSource)) {
+            mDragMaterialSource.clear();
+            event->ignore();
+            return;
+        }
+    }
+    event->acceptProposedAction();
 }
 
 void EngineSceneViewport::dragLeaveEvent(QDragLeaveEvent *)
 {
-    if (mDragPreviewNode) {
-        mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-        mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
-    }
+    if (auto *preview = materialPreview()) preview->end();
+    mDragMaterialSource.clear();
 }
 
 void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
 {
     const QMap<int, QVariant> role = dragRoleData(event->mimeData());
     const int type = role.value(0).toInt();
-    if (type == static_cast<int>(ModelTypes::Material)) {
-        // Hover preview: temporarily apply the dragged material to the mesh under the pointer.
-        // dropTargetAt, not pickAt: a LOCKED node is under the cursor as much
-        // as any other, and the drop has to know it is there to refuse it by
-        // name. It gets no preview, though — a preview on a node that will
-        // refuse the drop is a promise the release cannot keep.
+    if (!mDragMaterialSource.isEmpty()) {
+        // THE WHOLE HOVER PREVIEW, in one call. dropTargetAt, not pickAt: a
+        // LOCKED node is under the cursor as much as any other, and the drop
+        // has to know it is there to refuse it by name — the service refuses to
+        // preview it, and a null target ENDS the preview (which is what the two
+        // inline early-outs here used to forget to do, leaving the borrowed
+        // material on the mesh).
         bool lockedTarget = false;
         iris::SceneNodePtr node = dropTargetAt(event->position(), &lockedTarget);
         if (lockedTarget) node.reset();
-        if (node && node->getSceneNodeType() != iris::SceneNodeType::Mesh) node.reset();
-        if (mDragPreviewNode && mDragPreviewNode != node) {
-            mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-            mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
-        }
-        if (node && !mDragWasHit) {
-            mDragWasHit = true;
-            mDragPreviewNode = node;
-            auto meshNode = node.staticCast<iris::MeshNode>();
-            mDragOriginalMaterial = meshNode->getMaterial();
-            for (Asset *asset : AssetManager::getAssets()) {
-                if (asset->assetGuid == role.value(3).toString()) {
-                    // Every material asset hydrates as a MaterialPtr since
-                    // HLMS_ADOPTION P4b (the builtin presets registered by
-                    // AssetWidget::trigger used to store a CustomMaterialPtr,
-                    // which this had to accept as a second QVariant shape).
-                    auto material = asset->getValue().value<iris::MaterialPtr>();
-                    if (material) meshNode->setMaterial(material);
-                }
-            }
-        }
+        if (auto *preview = materialPreview()) preview->begin(node, mDragMaterialSource);
     } else if (type == static_cast<int>(ModelTypes::Object) || type == static_cast<int>(ModelTypes::ParticleSystem)
                || type == static_cast<int>(ModelTypes::Texture)
                || type == static_cast<int>(ModelTypes::Avatar)
@@ -941,12 +1013,8 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         // over it, and the drag ENDS here — no dragLeaveEvent is coming to put
         // it back. Restore first, then refuse: a refused drop must leave the
         // document exactly as the drag found it.
-        if (mDragPreviewNode) {
-            mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-            mDragPreviewNode.reset();
-            mDragOriginalMaterial.reset();
-            mDragWasHit = false;
-        }
+        if (auto *preview = materialPreview()) preview->end();
+        mDragMaterialSource.clear();
         editgate::refuse();          // counts it and raises the run's notice
         event->ignore();
         return;
@@ -981,7 +1049,9 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         if (mMainWindow)
             mMainWindow->assignAnimationAsset(role.value(3).toString(),
                                               pickAt(event->position(), true));
-    } else if (type == static_cast<int>(ModelTypes::Material)) {
+    } else if (!materialDragSource(event->mimeData()).isEmpty()) {
+        const QString source = materialDragSource(event->mimeData());
+        auto *preview = materialPreview();
         // The hover preview refuses a locked node, so there is no preview to
         // apply — say why, rather than dropping the gesture on the floor (the
         // owner's report: a material dragged onto the Ground did nothing at
@@ -989,25 +1059,32 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         bool lockedTarget = false;
         const iris::SceneNodePtr under = dropTargetAt(event->position(), &lockedTarget);
         if (lockedTarget && refuseDropOnLocked(under, tr("a material"))) {
-            mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+            if (preview) preview->end();
+            mDragMaterialSource.clear();
             event->acceptProposedAction();
             return;
         }
-        if (mDragPreviewNode && mMainWindow) {
-            auto target = mDragPreviewNode;
-            // Put the original material back BEFORE the real apply: the hover
-            // preview borrowed a shared AssetManager instance, and the undoable
-            // apply must capture (and on undo restore) the true original.
-            target.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
-            // Select the drop TARGET first, then apply. The old order applied
-            // the preset to whatever was selected before the drag — usually a
-            // different node, or a container the apply silently refused — while
-            // the leaked preview material made the drop LOOK successful. The
-            // document never held the material, so it vanished on reopen.
-            mMainWindow->sceneNodeSelected(target);
-            mMainWindow->applyMaterialPreset(role.value(3).toString());
+        // The drop TARGET is the node the preview was showing on — never the
+        // selection. The old order applied to whatever was selected before the
+        // drag (usually a different node, or a container the apply silently
+        // refused) while the leaked preview material made the drop LOOK
+        // successful; the document never held the material, so it vanished on
+        // reopen. `applyMaterial` ends the preview itself before it pushes, so
+        // the undo step captures the TRUE original.
+        // (A mesh wearing NO material gets no preview — the service refuses it —
+        // but it takes the drop: the node under the cursor, which is what the
+        // preview's node is whenever there is one.)
+        const iris::SceneNodePtr target =
+            preview && preview->active() ? iris::SceneNodePtr(preview->node()) : under;
+        // The preview ends BEFORE anything reads the node — the selection mounts
+        // a Properties panel on it (code review, F10).
+        if (preview) preview->end();
+        if (target && target->getSceneNodeType() == iris::SceneNodeType::Mesh
+            && mServices && mServices->sceneEdit) {
+            if (mMainWindow) mMainWindow->sceneNodeSelected(target);
+            mServices->sceneEdit->applyMaterial(source, target);
         }
-        mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+        mDragMaterialSource.clear();
     } else if (type == static_cast<int>(ModelTypes::Texture)) {
         // IMAGE_PLANE_SPEC §2: on a mesh the image retextures it; on empty
         // space it spawns an image plane at the tracked drop point.
@@ -2010,6 +2087,20 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         framemonitor::Stage envStage("host.env");
         if (mMirror) mMirror->applySky(view());
         if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
+        // ...AND THE HEADSET'S EYES, WHICH ARE A VIEW OF THIS SCENE TOO (lane
+        // EYE-GRADE-1). The session makes its own View inside the engine, so it
+        // was the one view no mirror reached and the wearer got the renderer's
+        // defaults instead of the project's grade. It is pushed here, beside
+        // the desktop's, through the PER-VIEW half — never a second
+        // applyEnvironment, whose scene half counts GI settle frames.
+        //
+        // THE SAME DRIVING CAMERA as the desktop view, because it is the same
+        // shot: the rig is placed on the camera a render of this scene actually
+        // looks through (EditorVrPreview::begin's renderCamera rule), so a
+        // camera with its own exposure grades both pictures.
+        if (mMirror && mEngine)
+            if (jahshaka::engine::View *eyes = mEngine->vrView())
+                mMirror->applyViewEnvironment(eyes, viewCamera());
     }
     {
         framemonitor::Stage camStage("host.camera");
