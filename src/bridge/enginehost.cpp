@@ -10,6 +10,7 @@
 #include "services/loadtimeline.h"
 #include "services/projectarchiver.h"
 #include "services/uistep.h"
+#include "bridge/enginethumbnailrenderer.h"
 
 #include <QTimer>
 
@@ -572,8 +573,16 @@ void EngineHost::shutdown()
         delete mDriver;
         mDriver = nullptr;
     }
+    // THE ONE THUMBNAIL RENDERER holds an engine View and an engine Scene, so it
+    // must go while the Engine is still alive — and BEFORE the staging scene is
+    // dropped (fix round F11), because everything here unwinds in the order it
+    // was built. ThumbnailGenerator::shutdown() normally gets there first, on
+    // the window-close path; this call is what covers a teardown that never
+    // closes a window (a --script or --mcp run quits with its window still up).
+    // Both are idempotent.
+    EngineThumbnailRenderer::shutdown();
     // The document's staging scene manager belongs to the Engine and dies with
-    // it; drop our reference to it first so nothing walks a dead manager. (Every
+    // it; drop our reference to it so nothing walks a dead manager. (Every
     // iris::graph entry point also tests Ogre::Root's liveness, because the
     // Engine can outlive this call — the viewports hold their own shared_ptr.)
     iris::graph::setStagingScene(nullptr);

@@ -13,6 +13,9 @@ add_executable(test_script_engine test_script_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apimodule.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apiregistry.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp
+    # the one flag ScriptEngine::stop sets so a stopped script's thumbnail
+    # sweep stops too (THUMBS-1 F1) — a TU with no dependencies of its own
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
     # The worker thread + the verb bridge: the script engine IS these three
     # objects since it moved off the UI thread (SCRIPTING_LIVE_SPEC), and the
     # unit test drives its fake module through the same dispatch the app uses.
@@ -794,6 +797,36 @@ set_tests_properties(scripting.e2e.assets_page PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 180)
+
+# scripting.e2e.thumbnails_order — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
+# A material thumbnail FIRST, a model import SECOND: the renderer named its
+# offscreen View with a fixed string and a second instance could not create it,
+# so every model imported after the session's first material/shader thumbnail
+# stored a NULL image and said nothing ("View 'thumbs' already exists" in the
+# owner's log, and a Qt null-pixmap warning where the tile should have been).
+# Also pins every type's rebuild in one process (object, material, shader,
+# AVATAR — which had no branch at all), the EDITOR TRAY's import (which never
+# asked for a model thumbnail) and the bulk repair for rows already grey.
+# Engine up (no --headless): every assertion is about a render.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_thumbnails_order.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_order)
+# A VIRGIN LIBRARY: the run counts what a sweep finds and which rows a tray
+# import added, and a home carried over from the last run answers both with
+# yesterday's assets.
+add_test(NAME scripting.e2e.thumbnails_order.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.thumbnails_order.fresh_home PROPERTIES
+    FIXTURES_SETUP thumbnailsOrderHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.thumbnails_order
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.thumbnails_order PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED thumbnailsOrderHome
+    LABELS "scripting"
+    TIMEOUT 300)
 
 # scripting.e2e.import_dialog — THE IMPORT DIALOG, DRIVEN
 # (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). ui.import_dialog pins the record the

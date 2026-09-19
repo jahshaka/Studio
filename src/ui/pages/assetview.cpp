@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/qtinterop.h"
 #include "bridge/assetthumbnail.h"
+#include "services/thumbnailrebuild.h"
 #include "bridge/enginehost.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
@@ -46,6 +47,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QInputDialog>
@@ -86,7 +89,6 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/assetservice.h"
 #include "services/assetstore.h"
-#include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
@@ -106,7 +108,6 @@ For more information see the LICENSE file
 #include "services/assetmetadata.h"
 #include "services/avatarassets.h"
 #include "services/audiopeaks.h"
-#include "services/videoutils.h"
 #include "ui/controls/videopreviewwidget.h"
 #include "ui/controls/waveformwidget.h"
 #include "ui/pages/previewrouter.h"
@@ -117,7 +118,6 @@ For more information see the LICENSE file
 #include "services/thumbnailgenerator.h"
 
 #include "data/guidmanager.h"
-#include "services/thumbnailmanager.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 
@@ -703,6 +703,23 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	if (!ThemeManager::classicActive())
 		viewModeButton->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
 	filterLayout->addWidget(viewModeButton);
+
+	// LIBRARY ▾ — the page's maintenance menu (THUMBS-1). It exists for one
+	// entry today: the repair pass for tiles that are already grey, because a
+	// thumbnail that failed when the asset was imported has never had a way to
+	// be redrawn except one right-click at a time.
+	auto *libraryButton = new QPushButton(tr("Library ▾"));
+	libraryButton->setCursor(Qt::PointingHandCursor);
+	auto *libraryMenu = new QMenu(this);
+	libraryMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
+	connect(libraryMenu->addAction(tr("Rebuild missing thumbnails")), &QAction::triggered, this,
+	        [this]() { rebuildMissingThumbnails(); });
+	connect(libraryButton, &QPushButton::pressed, this, [libraryButton, libraryMenu]() {
+		libraryMenu->exec(libraryButton->mapToGlobal(QPoint(0, libraryButton->height())));
+	});
+	if (!ThemeManager::classicActive())
+		libraryButton->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
+	filterLayout->addWidget(libraryButton);
 
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	filterLayout->addStretch();
@@ -1446,7 +1463,8 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
         const QString imagePath = AssetCas::resolveSource(
             QSqlDatabase::database(), AssetStorePaths::root(), guid);
         QPixmap image(imagePath);
-        assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
+        if (!image.isNull())
+            assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
         addToJahLibrary(filename, guid, true);
     }
     else if (result.jafKind == QStringLiteral("object")) {
@@ -2826,12 +2844,87 @@ void AssetView::createMaterialFromImageTile(AssetGridItem *item)
 		emit assetAddedToProject(materialGuid);
 	}
 
+	// THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1): the mint stores the
+	// image as a fallback and one gesture can afford one render.
+	thumbrebuild::rebuildOne(db, project, materialGuid, EngineHost::instance().engine());
+
 	// The library tile for the new material, same tail the import path uses.
 	addLibraryTileForAsset(materialGuid);
 }
 
+void AssetView::rebuildMissingThumbnails()
+{
+	if (!db) return;
+
+	// One render per asset, the event loop turning between them: the window
+	// keeps painting and the tiles land one by one, exactly like an import
+	// batch's tails. User input is excluded so a second click on the menu
+	// cannot start a second sweep over the same rows.
+	// The user clicked the menu, so the app is alive and this is a new intent
+	// (services/thumbnailstop.h): whatever stopped a previous sweep is cleared.
+	thumbrebuild::clearStop();
+	thumbrebuild::SweepOptions options;   // missingOnly: the repair, not a redraw of everything
+	const auto result = thumbrebuild::rebuildMissing(
+	    db, project, EngineHost::instance().engine(), options,
+	    [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
+
+	// STOPPED MEANS SILENT (fix round F1). A yield delivers the window's close:
+	// shutdownBackgroundWork has already destroyed the thumbnail renderer by the
+	// time we are back here, the page is on its way out, and a toast — let alone
+	// the modal box below — would be the "modal swallowed the quit" zombie.
+	if (result.cancelled) return;
+
+	for (const QString &guid : result.rebuiltGuids) {
+		if (auto *tile = fastGrid->tileByGuid(guid)) {
+			QImage stored;
+			if (stored.loadFromData(db->fetchAsset(guid).thumbnail, "PNG"))
+				tile->setTile(QPixmap::fromImage(stored));
+		}
+	}
+
+	if (result.rebuilt == 0 && result.failed.isEmpty()) {
+		libraryToast()->showToast(tr("Thumbnails"),
+		                          tr("Every asset that can have a thumbnail already has one."));
+		return;
+	}
+	// THE DENOMINATOR IS WHAT WAS ATTEMPTED, not what was looked at (F10):
+	// "Rebuilt 2 of 5,431" reads as a catastrophe on a healthy library.
+	const int attempted = result.rebuilt + result.failed.size();
+	if (result.failed.isEmpty()) {
+		libraryToast()->showToast(tr("Thumbnails"),
+		                          tr("Rebuilt %1 of %2 thumbnails.")
+		                              .arg(result.rebuilt).arg(attempted));
+		return;
+	}
+	// A FAILURE IS NEVER SILENT: the reasons are what the user needs to act on
+	// (no engine, a model whose bytes are gone, a shader with no baked material).
+	QStringList lines;
+	for (const auto &failure : result.failed)
+		lines << QStringLiteral("%1: %2").arg(failure.guid, failure.reason);
+	QMessageBox::warning(this, tr("Rebuild missing thumbnails"),
+	                     tr("Rebuilt %1 of %2. These could not be rebuilt:\n\n%3")
+	                         .arg(result.rebuilt)
+	                         .arg(attempted)
+	                         .arg(lines.mid(0, 12).join(QStringLiteral("\n"))),
+	                     QMessageBox::Ok);
+}
+
 void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 {
+	// ONE ROUTINE, AND THE PREVIEW IS A SIDE EFFECT (THUMBS-1 fix round F7).
+	//
+	// This used to carry its own switch: a second way to draw a material (the
+	// page's viewer screenshot instead of the preview sphere every other
+	// surface stores), no branch at all for a LightProfile or an Avatar — so
+	// "Rebuild Thumbnail", the one gesture a user has for "redraw this", threw
+	// away a photometric lobe or a character and wrote a generic FILE ICON over
+	// it — and, when nothing could be drawn, a box saying "Could not rebuild
+	// this thumbnail." with the reason dropped on the floor.
+	//
+	// Now every type goes through thumbrebuild::rebuildOne (which also STORES
+	// it, so nothing is written twice), the page still loads the matching
+	// preview because that is what the user asked to look at, and a failure
+	// shows the reason it already has.
 	if (!item || item->metadata.isEmpty()) return;
 	const QString guid = item->metadata["guid"].toString();
 	const auto record = db->fetchAsset(guid);
@@ -2839,80 +2932,69 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 
 	const QString sourceFile = AssetCas::resolveSource(
 	    QSqlDatabase::database(), AssetStorePaths::root(), guid);
+	const ModelTypes type = static_cast<ModelTypes>(record.type);
 
-	QPixmap pixmap;
-	switch (static_cast<ModelTypes>(record.type)) {
-	case ModelTypes::Texture: {
-		// straight from the source image, like the import path
-		auto thumb = ThumbnailManager::createThumbnail(sourceFile, 256, 256);
-		if (thumb && !thumb->thumb.isNull()) pixmap = QPixmap::fromImage(thumb->thumb);
-		break;
-	}
-	case ModelTypes::Music:
-		pixmap = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
-		break;
-	case ModelTypes::Video:
-		// Re-grab the first-second frame (film icon when decode fails).
-		pixmap = VideoUtils::thumbnailFor(sourceFile);
-		break;
+	// The preview pane follows the gesture: the user sees what was rebuilt.
+	switch (type) {
 	case ModelTypes::Object:
-	case ModelTypes::ParticleSystem: {
-		// THE one thumbnail routine — `assets.refreshThumbnail`'s body: the
-		// stored blob, fitted, framed. (It used to be a screenshot of this
-		// page's viewer, which is a second render of a second node.) The
-		// preview follows so the user sees what was rebuilt.
+	case ModelTypes::ParticleSystem:
 		viewers->setCurrentIndex(0);
-		const QImage shot = assetthumb::renderObject(db, project, guid,
-		                                             EngineHost::instance().engine());
-		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
 		viewer->loadJafModel(sourceFile, guid, false, true, false);
 		break;
-	}
-	case ModelTypes::Material: {
+	case ModelTypes::Material:
 		viewers->setCurrentIndex(0);
 		viewer->loadJafMaterial(guid);
-		const QImage shot = viewer->takeScreenshot(512, 512);
-		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
 		break;
-	}
 	case ModelTypes::Shader: {
 		viewers->setCurrentIndex(0);
 		QMap<QString, QString> map;
 		viewer->loadJafShader(guid, map);
-		const QImage shot = viewer->takeScreenshot(512, 512);
-		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
 		break;
 	}
-	case ModelTypes::Sky: {
+	case ModelTypes::Sky:
 		viewers->setCurrentIndex(0);
 		viewer->loadJafSky(guid);
-		const QImage shot = viewer->takeScreenshot(512, 512);
-		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
 		break;
-	}
-	case ModelTypes::Animation: {
-		// The POSE STRIP the import drew, redrawn from the stored bytes. There
-		// is nothing to render in a viewer — a clip has no geometry of its own
-		// and playing it needs a rig to play it on — so the default branch
-		// below would replace a readable thumbnail with a file icon.
-		QImage strip;
-		animfile::read(sourceFile, &strip, 256, 256);
-		if (!strip.isNull()) pixmap = QPixmap::fromImage(strip);
-		break;
-	}
 	default:
-		pixmap = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
 		break;
+	}
+
+	QPixmap pixmap;
+	QString reason;
+	if (type == ModelTypes::Sky) {
+		// THE ONE TYPE WITH NO ROUTINE OF ITS OWN: a sky asset is a picture
+		// only through this page's viewer, so the shot IS the thumbnail and
+		// this is the only branch that stores one itself.
+		const QImage shot = viewer->takeScreenshot(512, 512);
+		if (shot.isNull()) reason = tr("the sky preview produced no image");
+		else {
+			pixmap = QPixmap::fromImage(shot);
+			db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(pixmap));
+		}
+	} else {
+		const thumbrebuild::Outcome outcome =
+		    thumbrebuild::rebuildOne(db, project, guid, EngineHost::instance().engine());
+		if (!outcome.ok) reason = outcome.reason;
+		else {
+			QImage stored;
+			if (stored.loadFromData(db->fetchAsset(guid).thumbnail, "PNG"))
+				pixmap = QPixmap::fromImage(stored);
+			else reason = tr("the rebuilt thumbnail could not be read back");
+		}
 	}
 
 	if (pixmap.isNull()) {
+		// THE REASON IS THE POINT: "could not" with no because is what sent the
+		// owner looking at grey tiles with nothing to go on.
 		QMessageBox::warning(this, tr("Rebuild Thumbnail"),
-		                     tr("Could not rebuild this thumbnail."), QMessageBox::Ok);
+		                     reason.isEmpty()
+		                         ? tr("Could not rebuild this thumbnail.")
+		                         : tr("Could not rebuild this thumbnail:\n\n%1").arg(reason),
+		                     QMessageBox::Ok);
 		return;
 	}
 
-	db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(pixmap));
-	item->setTile(pixmap);   // the tile updates live
+	item->setTile(pixmap);   // the tile updates live; rebuildOne already stored it
 }
 
 void AssetView::clearLoadingTile()

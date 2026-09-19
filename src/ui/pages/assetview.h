@@ -173,6 +173,11 @@ public:
 	/// tile's thumbnail (3D types through the asset viewer screenshot path,
 	/// images via ThumbnailManager, audio/files back to their type icon).
 	void rebuildTileThumbnail(AssetGridItem *item);
+	/// Library ▾ → "Rebuild missing thumbnails": the bulk repair for rows whose
+	/// stored thumbnail is absent or undecodable — the same routine per asset
+	/// as `assets.refreshThumbnail`, run over the library one row at a time
+	/// with the event loop turning between them (THUMBS-1 item 4).
+	void rebuildMissingThumbnails();
 	/// Tile context menu → "Create Material from Image" (IMAGE_PLANE_SPEC
 	/// option B1): mints the companion PBR material asset, pins it into the
 	/// open project and adds its library tile.

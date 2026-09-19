@@ -142,7 +142,7 @@ for (var name in PRUNE) {
         var hits = assets.list({ scope: "project", type: "texture" })
             .filter(function (r) { return r.name === want; });
         if (hits.length !== 1) fail(name + ": expected one texture '" + want + "', found " + hits.length);
-        if (assets.refreshThumbnail(hits[0].guid) !== true)
+        if (assets.refreshThumbnail(hits[0].guid).ok !== true)
             fail(name + ": could not rebuild the thumbnail of " + want + ": " + app.lastError());
         log(name + ": rebuilt the thumbnail of '" + want + "'");
     });

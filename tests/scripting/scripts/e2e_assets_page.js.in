@@ -42,7 +42,7 @@ assert(thumb.coverage > 0.15, "the subject FILLS the tile: coverage " + thumb.co
 
 // Re-rendering through the verb reproduces it: the page tail, the page's
 // Rebuild Thumbnail and this verb are one routine.
-assert(assets.refreshThumbnail(guid) === true, "assets.refreshThumbnail re-renders");
+assert(assets.refreshThumbnail(guid).ok === true, "assets.refreshThumbnail re-renders");
 var again = assets.thumbnail(guid);
 assert(Math.abs(again.coverage - thumb.coverage) < 0.02
        && Math.abs(again.centre.g - thumb.centre.g) <= 8,

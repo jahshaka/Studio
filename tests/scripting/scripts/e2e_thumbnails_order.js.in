@@ -1,0 +1,256 @@
+// scripting.e2e.thumbnails_order — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
+//
+// He imported two GLB models and both got a grey tile: a null thumbnail in the
+// Assets module and a generic cone/cube icon in the editor drawer. His log said
+// two things at each import — `engine: Warning: View 'thumbs' already exists`
+// and `QPixmap::scaleHeight: Pixmap is a null pixmap` — and nothing about the
+// render that produced nothing.
+//
+// THE MECHANISM, and therefore the ORDER this script runs in. The thumbnail
+// renderer named its offscreen View with a fixed string, the engine refuses a
+// duplicate View name, and ONE renderer is kept alive for the whole session by
+// ThumbnailGenerator's queue — which is reached by APPLYING A MATERIAL PRESET
+// to a node (SceneEditService::applyMaterialPreset registers the preset as a
+// project Material row and queues its thumbnail), among other gestures. Every
+// renderer built after that — the import tail, `assets.refreshThumbnail` —
+// then failed to create its View and returned a null image, silently.
+//
+// So step 1 is a PRESET APPLY (not merely a verb that renders a material: a
+// verb's renderer released its View on the way out, which is why a script that
+// only called assets.refreshThumbnail could never reproduce this). Step 2 is a
+// model import. On the binary before the fix, step 2's thumbnail comes back
+// EMPTY — measured, see the lane report.
+//
+// Also pinned here: every asset type's rebuild in ONE process (object,
+// material, shader, AVATAR — the type that had no branch at all and whose tile
+// was a one-time copy of its model's, plus a photometric profile), the EDITOR
+// TRAY's import (which never asked for a model thumbnail at all), the bulk
+// repair for rows that are already grey, and a row that CANNOT be rebuilt,
+// which must answer {ok:false, reason} and appear in the sweep's failed list.
+//
+// Engine up (no --headless): every assertion here is about a render.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var TEXTURED = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+var TRAY_MODEL = "@SOURCE_DIR@/tests/importer/fixtures/no_material.glb";
+var RIG = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";
+var RIG2 = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_tiny.glb";
+
+project.create("thumbnails order");
+
+// ---- 1. THE PRECONDITION: a PRESET APPLY, which is what the owner did ------
+// This is the gesture that puts a thumbnail on ThumbnailGenerator's QUEUE, and
+// the queue's renderer is the one that lived for the whole session. Nothing
+// about this step is about scripting: a preset dropped on an object from the
+// presets panel runs exactly this code.
+var cube = scene.addPrimitive("Cube");
+assert(cube && cube.length > 0, "scene.addPrimitive(Cube) -> " + cube);
+var presetName = materials.presets()[0].name;
+assert(material.apply(cube, presetName) === true,
+       "material.apply(cube, '" + presetName + "') — the presets panel's gesture");
+
+// The queue renders one request per 16 ms tick, so step the editor until the
+// project's new Material row carries a picture. THAT render is what created the
+// long-lived renderer.
+var presetGuid = "";
+var spun = 0;
+while (spun < 400 && presetGuid === "") {
+    editor.frame(1);
+    // PROJECT scope: a preset apply registers the material as a row of the OPEN
+    // PROJECT, which is not in the library listing.
+    var mats = assets.list({ scope: "project", type: "material" });
+    for (var m = 0; m < mats.length; m++)
+        if (!assets.thumbnail(mats[m].guid).empty) { presetGuid = mats[m].guid; break; }
+    ++spun;
+}
+assert(presetGuid !== "",
+       "THE QUEUE RENDERED THE PRESET'S THUMBNAIL (" + spun + " frames) — the session now holds "
+       + "the one long-lived renderer, which is the state the owner's imports met");
+
+// A shader graph too, so the verb path has rendered a material as well.
+var shaderGuid = materials.createGraph("Thumbs First");
+assert(shaderGuid.length > 10, "materials.createGraph -> " + shaderGuid);
+var master = null;
+var nodes = graph.nodes();
+for (var i = 0; i < nodes.length; i++) if (nodes[i].master) master = nodes[i].id;
+assert(master !== null, "the graph has a master");
+var colour = graph.addNode("vector4");
+assert(graph.setValue(colour, { x: 0.85, y: 0.08, z: 0.08, w: 1.0 }) === true, "colour set");
+assert(graph.connect(colour, 0, master, "Base Color") === true, "wired into Base Color");
+assert(graph.save() === true, "graph.save");
+assert(assets.thumbnail(shaderGuid).empty === true, "a saved graph starts with no thumbnail");
+
+var first = assets.refreshThumbnail(shaderGuid);
+assert(first.ok === true, "a material thumbnail renders with the queue's renderer alive: "
+                          + JSON.stringify(first));
+assert(assets.thumbnail(shaderGuid).empty === false, "…and is stored");
+
+// ---- 2/3. THE IMPORT THAT USED TO COME BACK GREY --------------------------
+var objGuid = assets.importFile(TEXTURED);
+assert(objGuid.length > 10, "assets.importFile(textured_pbr_quad.glb) -> " + objGuid);
+
+var thumb = assets.thumbnail(objGuid);
+console.log("   model thumbnail " + JSON.stringify(thumb));
+// THE ASSERTION THAT FAILS BEFORE THE FIX: with the queue's renderer holding
+// the name "thumbs", the import tail's own renderer could not create its View
+// and the row was stored with NO image at all.
+assert(thumb.empty === false, "THE MODEL IMPORT STORED A THUMBNAIL (before the fix: null, "
+                              + "because the queue's renderer already held the view name)");
+assert(thumb.width === 512 && thumb.height === 512, "stored at the render size");
+// NON-UNIFORM: not one flat colour. A frame of pure background would have
+// coverage 0; a frame of pure subject (or a solid fill) would have coverage 1.
+assert(thumb.coverage > 0.15 && thumb.coverage < 0.98,
+       "the tile is a PICTURE, not one flat colour: coverage " + thumb.coverage);
+assert(thumb.centre.g > thumb.centre.r + 20 && thumb.centre.g > thumb.centre.b + 20,
+       "…and it is the model's own texture: " + JSON.stringify(thumb.centre));
+
+// ---- 4. EVERY TYPE REBUILDS, IN THE SAME PROCESS --------------------------
+// One renderer, borrowed by each in turn — the case that used to be broken for
+// everything after the first borrower.
+var again = assets.refreshThumbnail(objGuid);
+assert(again.ok === true, "assets.refreshThumbnail(object) -> " + JSON.stringify(again));
+assert(assets.thumbnail(objGuid).empty === false, "the object's tile survives the rebuild");
+
+var pngGuid = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(pngGuid.length > 10, "assets.importFile(tiny.png) -> " + pngGuid);
+var matGuid = materials.createFromImage(pngGuid);
+assert(matGuid.length > 10, "materials.createFromImage -> " + matGuid);
+var matThumb = assets.thumbnail(matGuid);
+console.log("   image-material thumbnail " + JSON.stringify(matThumb));
+// A MATERIAL'S TILE IS A RENDER OF THE MATERIAL: this row used to store the
+// source image scaled to 72x72, so the material and its texture had the same
+// tile at a sixth of everything else's size.
+assert(matThumb.empty === false, "the image material has a thumbnail");
+assert(matThumb.width === 512, "…rendered at 512, not the old 72 px image copy: "
+                               + matThumb.width);
+var matAgain = assets.refreshThumbnail(matGuid);
+assert(matAgain.ok === true, "assets.refreshThumbnail(material) -> " + JSON.stringify(matAgain));
+
+var shaderAgain = assets.refreshThumbnail(shaderGuid);
+assert(shaderAgain.ok === true, "assets.refreshThumbnail(shader) -> " + JSON.stringify(shaderAgain));
+
+// AVATARS (the branch that did not exist: an avatar's thumbnail was a one-time
+// copy of its model's, taken at create, and no verb could redraw it).
+var rigGuid = assets.importFile(RIG);
+assert(rigGuid.length > 10, "assets.importFile(rig2.glb) -> " + rigGuid);
+var avatarGuid = avatar.createAsset(rigGuid);
+assert(avatarGuid.length > 10, "avatar.createAsset -> " + avatarGuid);
+var avatarThumb = assets.refreshThumbnail(avatarGuid);
+assert(avatarThumb.ok === true, "assets.refreshThumbnail(AVATAR) -> " + JSON.stringify(avatarThumb));
+var avatarStored = assets.thumbnail(avatarGuid);
+console.log("   avatar thumbnail " + JSON.stringify(avatarStored));
+assert(avatarStored.empty === false, "the avatar's tile is a render of its character");
+assert(avatarStored.coverage > 0.02, "…with the character actually in it: " + avatarStored.coverage);
+
+// A FAILURE IS NEVER SILENT — and the two kinds stay apart: MISUSE (a guid
+// that names no asset) still throws, as every precondition does…
+var threwOnGuid = false;
+try { assets.refreshThumbnail("no-such-guid"); } catch (e) { threwOnGuid = true; }
+assert(threwOnGuid, "a guid that names no asset still throws (a precondition, not an answer)");
+// …while a REAL asset whose thumbnail cannot be MADE answers with the reason in
+// the result instead of aborting the caller's script. THE DETERMINISTIC ONE:
+// an avatar whose model row has been deleted out from under it. Its definition
+// still names that model, the model is gone, and there is nothing to draw —
+// which is a FAILURE with a reason, not a silent skip (the row is not a builtin
+// with an empty definition; see the sweep below, where it must appear in
+// `failed`).
+var orphanRig = assets.importFile(RIG2);
+assert(orphanRig.length > 10, "assets.importFile(rig2_tiny.glb) -> " + orphanRig);
+var orphanAvatar = avatar.createAsset(orphanRig, { name: "Orphan" });
+assert(orphanAvatar.length > 10, "avatar.createAsset(second rig) -> " + orphanAvatar);
+assert(assets.remove(orphanRig, { force: true }) === true,
+       "assets.remove(the avatar's model, {force:true}) — the model is gone for good");
+
+var orphanResult = assets.refreshThumbnail(orphanAvatar);
+console.log("   orphaned avatar -> " + JSON.stringify(orphanResult));
+assert(orphanResult.ok === false, "an avatar whose model is gone CANNOT be rebuilt");
+assert(typeof orphanResult.reason === "string" && orphanResult.reason.length > 0,
+       "…and the refusal carries the reason: " + orphanResult.reason);
+
+// A photometric profile is redrawn from its candela lobe — the type the verb
+// and the sweep had no branch for at all.
+var iesGuid = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/ring_profile.ies");
+assert(iesGuid.length > 10, "assets.importFile(ring_profile.ies) -> " + iesGuid);
+var iesResult = assets.refreshThumbnail(iesGuid);
+assert(iesResult.ok === true, "assets.refreshThumbnail(IES profile) -> " + JSON.stringify(iesResult));
+assert(assets.thumbnail(iesGuid).empty === false, "…and its lobe plot is stored");
+
+// ---- 5. THE EDITOR TRAY'S IMPORT ------------------------------------------
+// It ran the pipeline and pinned the row and then stopped: it never asked for
+// the render, so a model imported from the editor had a generic type icon.
+var known = {};
+var beforeList = assets.list({ type: "object" });
+for (var b = 0; b < beforeList.length; b++) known[beforeList[b].guid] = true;
+assert(editor.importAssets([TRAY_MODEL]) === true, "editor.importAssets (the TRAY path)");
+var trayGuid = "";
+var spins = 0;
+while (spins < 600 && trayGuid === "") {
+    editor.frame(1);
+    var objects = assets.list({ type: "object" });
+    for (var j = 0; j < objects.length; j++) {
+        if (!known[objects[j].guid] && !assets.thumbnail(objects[j].guid).empty) {
+            trayGuid = objects[j].guid;
+            break;
+        }
+    }
+    ++spins;
+}
+assert(trayGuid !== "", "the TRAY import stored a thumbnail too (" + spins + " frames)");
+var trayThumb = assets.thumbnail(trayGuid);
+console.log("   tray-imported thumbnail " + JSON.stringify(trayThumb));
+assert(trayThumb.coverage > 0.05 && trayThumb.coverage < 0.98,
+       "…and it is a picture of the model, not an empty frame: coverage " + trayThumb.coverage);
+
+// ---- 6. THE REPAIR PASS for rows that are already grey ---------------------
+// A freshly saved graph is a row with no thumbnail — exactly the shape of the
+// owner's grey tiles, made through a verb rather than by hand.
+var broken = materials.createGraph("Needs A Tile");
+var brokenMaster = null;
+var brokenNodes = graph.nodes();
+for (var k = 0; k < brokenNodes.length; k++) if (brokenNodes[k].master) brokenMaster = brokenNodes[k].id;
+var blue = graph.addNode("vector4");
+graph.setValue(blue, { x: 0.08, y: 0.10, z: 0.90, w: 1.0 });
+graph.connect(blue, 0, brokenMaster, "Base Color");
+assert(graph.save() === true, "a second graph saved");
+assert(assets.thumbnail(broken).empty === true, "…and it has NO thumbnail (a grey tile)");
+
+var swept = assets.rebuildThumbnails({ missingOnly: true });
+console.log("   rebuildThumbnails -> " + JSON.stringify(swept));
+assert(swept.cancelled === false, "the sweep ran to the end");
+assert(swept.rebuilt >= 1, "assets.rebuildThumbnails repaired at least the grey row");
+assert(assets.thumbnail(broken).empty === false, "THE GREY TILE IS REPAIRED");
+assert(swept.failed.length !== undefined, "the sweep reports its failures as a list");
+for (var f = 0; f < swept.failed.length; f++)
+    console.log("   could not rebuild " + swept.failed[f].guid + ": " + swept.failed[f].reason);
+
+// THE FAILING ROW IS REPORTED, NOT SWALLOWED. The orphaned avatar still carries
+// the tile it inherited at create, so `missingOnly` never looks at it — a full
+// redraw does, and there it must appear as a FAILURE with its reason, not among
+// the `skipped` rows (a builtin's Object row, which stores no definition).
+var everything = assets.rebuildThumbnails({ missingOnly: false });
+console.log("   rebuildThumbnails(all) -> " + JSON.stringify(everything));
+var named = everything.failed.filter(function (x) { return x.guid === orphanAvatar; });
+assert(named.length === 1, "the avatar whose model is gone is IN the sweep's failed list");
+assert(named[0].reason.length > 0, "…with its reason: " + named[0].reason);
+assert(everything.skipped >= 1, "…while a builtin's row with no definition is SKIPPED, not failed");
+
+// Nothing rebuildable is left missing, so a second sweep rebuilds nothing…
+var second = assets.rebuildThumbnails({ missingOnly: true });
+assert(second.rebuilt === 0, "a second sweep rebuilds nothing (" + JSON.stringify(second) + ")");
+assert(second.cancelled === false, "…and was not cancelled");
+// …and the row that cannot be rebuilt is still named, run after run: a failure
+// is not forgotten because it was reported once.
+var againAll = assets.rebuildThumbnails({ missingOnly: false });
+assert(againAll.failed.filter(function (x) { return x.guid === orphanAvatar; }).length === 1,
+       "the unrebuildable row is reported again on the next full sweep");
+
+// An unknown option is a refusal, not a silent no-op.
+var threw = false;
+try { assets.rebuildThumbnails({ nonsense: true }); } catch (e) { threw = true; }
+assert(threw, "assets.rebuildThumbnails refuses an unknown option");
+
+console.log("scripting.e2e.thumbnails_order: ALL OK");

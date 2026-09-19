@@ -55,7 +55,7 @@ assert(shot.center.g > shot.center.r + 20 && shot.center.g > shot.center.b + 20,
        "centre samples the GREEN texel region (map bound, not grey/white fallback)");
 
 // the engine thumbnail path renders the same resolved material
-assert(assets.refreshThumbnail(guid) === true, "assets.refreshThumbnail renders");
+assert(assets.refreshThumbnail(guid).ok === true, "assets.refreshThumbnail renders");
 
 // ...AND LEAVES THE EDITOR'S COPY ALONE (lane L11). The thumbnail scene loads
 // the same files, and the renderer hands both scenes the SAME texture (file

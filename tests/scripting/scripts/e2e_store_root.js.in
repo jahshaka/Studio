@@ -42,7 +42,7 @@ try {
     // ---- seed one real library asset (bytes in the store) ----
     var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
     assert(png.length > 10, "assets.importFile(png) -> " + png);
-    assert(assets.refreshThumbnail(png), "thumbnail rebuilds from the default root (bytes reachable)");
+    assert(assets.refreshThumbnail(png).ok, "thumbnail rebuilds from the default root (bytes reachable)");
 
     // ---- Move Store: copy-verify-flip ----
     var moved = "@STORE_MOVE_TARGET@";
@@ -50,7 +50,7 @@ try {
     assert(assets.storeRoot() === moved, "root flipped to " + moved);
     st = assets.storeStatus();
     assert(st.online === true, "moved root is online");
-    assert(assets.refreshThumbnail(png), "bytes reachable from the MOVED root (files travelled)");
+    assert(assets.refreshThumbnail(png).ok, "bytes reachable from the MOVED root (files travelled)");
 
     // Refuse nesting the root inside itself.
     mustThrow(function () { assets.setStoreRoot(moved + "/nested", { move: true }); },
@@ -80,12 +80,12 @@ try {
 
     // ---- back to the moved root, then reset to default ----
     assert(assets.setStoreRoot(moved, {}), "use-existing back on the real store (sanity check passes)");
-    assert(assets.refreshThumbnail(png), "bytes reachable again");
+    assert(assets.refreshThumbnail(png).ok, "bytes reachable again");
 
     assert(assets.setStoreRoot("", {}), "reset to default");
     assert(assets.storeRoot() === defaultRoot, "root is the default again");
     // Move retained the old tree, so the default root still has the files.
-    assert(assets.refreshThumbnail(png), "default root still holds the original files (move = copy, retain)");
+    assert(assets.refreshThumbnail(png).ok, "default root still holds the original files (move = copy, retain)");
 
     // ---- assets.gc: the verb exists, defaults to a dry run, and finds
     //      nothing to reap in a healthy store (deep audit 2026-09, area 6) ----
@@ -118,7 +118,7 @@ try {
     assert(swept.dryRun === false, "…and reports itself as a real run");
     assert(assetByGuid(png) !== null, "the library row survived a real sweep");
     // and the imported asset is still readable afterwards
-    assert(assets.refreshThumbnail(png), "the library asset still resolves after gc");
+    assert(assets.refreshThumbnail(png).ok, "the library asset still resolves after gc");
 
     console.log("store_root e2e: all checks passed");
 }

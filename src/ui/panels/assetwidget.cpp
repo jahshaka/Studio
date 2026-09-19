@@ -35,6 +35,9 @@ For more information see the LICENSE file
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QTimer>
+
+#include "bridge/enginehost.h"
+#include "services/thumbnailrebuild.h"
 #include <QComboBox>
 
 #include <algorithm>
@@ -1229,6 +1232,10 @@ void AssetWidget::createMaterialFromImage()
     if (project && !project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(materialGuid, db, project, ProjectAssets::AddKind::Direct);
 
+    // THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1): the mint stores the
+    // image as a fallback and one gesture can afford one render.
+    thumbrebuild::rebuildOne(db, project, materialGuid, EngineHost::instance().engine());
+
     updateAssetView(assetItem.selectedGuid);
 }
 
@@ -1990,6 +1997,13 @@ bool AssetWidget::importFiles(const QStringList &files)
 bool AssetWidget::shutdownImports(int msTimeout)
 {
 	if (progressDialog) progressDialog->close();
+	// THE THUMBNAIL BACKLOG GOES WITH THEM (fix round F9). A pending
+	// single-shot would run after MainWindow::shutdownBackgroundWork has
+	// destroyed the thumbnail renderer and RE-CREATE it, on a window that is
+	// already leaving — the drain re-arms itself, so one survivor is all of
+	// them. Nothing is lost: a model with no thumbnail is what "Rebuild
+	// missing thumbnails" is for.
+	thumbnailBacklog.clear();
 	if (!importRunner) return true;
 	// waitForDone pumps events, which can delete the runner (its finished
 	// handler deleteLater()s it) — hold it weakly and never touch the raw
@@ -2105,6 +2119,21 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 		}
 		const auto pinned = ProjectAssets::addToProject(result.assetGuid, db, project, ProjectAssets::AddKind::Direct);
 		if (!pinned.ok()) importErrors.append(pinned.error);
+		// THE SAME TAIL THE ASSETS PAGE RUNS (THUMBS-1 item 3): a model's
+		// thumbnail is a render, and this path never asked for one.
+		const int type = db ? db->fetchAsset(result.assetGuid).type : 0;
+		if (type == static_cast<int>(ModelTypes::Object)
+		    || type == static_cast<int>(ModelTypes::ParticleSystem))
+			thumbnailBacklog.append(result.assetGuid);
+		// …AND SO IS A COMPANION MATERIAL'S (fix round F9). Adding an image to
+		// a project mints one, and its tile is a render of the material — but
+		// a drop of a hundred images must not be a hundred synchronous renders
+		// inside the import's commit hops, so they queue here like the models.
+		for (const QString &companion : pinned.pinnedGuids) {
+			if (companion == result.assetGuid || thumbnailBacklog.contains(companion)) continue;
+			if (db && db->fetchAsset(companion).type == static_cast<int>(ModelTypes::Material))
+				thumbnailBacklog.append(companion);
+		}
 	});
 	connect(importRunner, &ImportBatchRunner::finished, this, [this](bool cancelled) {
 		progressDialog->hide();
@@ -2121,9 +2150,43 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 		}
 		populateAssetTree(false);
 		updateAssetView(assetItem.selectedGuid, activeFilter);
+		// After the dialog is gone and the tree is rebuilt: the renders.
+		if (!thumbnailBacklog.isEmpty()) QTimer::singleShot(0, this, [this] { drainThumbnailBacklog(); });
 	});
 
 	importRunner->start();
+}
+
+void AssetWidget::drainThumbnailBacklog()
+{
+	if (thumbnailBacklog.isEmpty()) return;
+	const QString guid = thumbnailBacklog.takeFirst();
+	// THE ONE ROUTINE (services/thumbnailrebuild.h): a model from its stored
+	// blob, fitted and framed; a companion material on the preview sphere —
+	// whichever this row is. Its failures are logged by it; the tray has no
+	// surface to put a message on, and an import that succeeded must not become
+	// an error dialog because a tile is grey.
+	const thumbrebuild::Outcome outcome =
+	    thumbrebuild::rebuildOne(db, project, guid, EngineHost::instance().engine());
+
+	// ONE TILE, NOT THE WHOLE TRAY (fix round F9). This used to call
+	// updateAssetView per render — a full repopulate of the panel (the tray
+	// query, every row's blob, every icon rebuilt) for one changed icon, once
+	// per imported model.
+	if (outcome.ok) {
+		QPixmap thumbnail;
+		if (thumbnail.loadFromData(db->fetchAsset(guid).thumbnail, "PNG")) {
+			for (int i = 0; i < ui->assetView->count(); ++i) {
+				QListWidgetItem *item = ui->assetView->item(i);
+				if (item->data(MODEL_GUID_ROLE).toString() == guid) {
+					item->setIcon(QIcon(thumbnail));
+					break;
+				}
+			}
+		}
+	}
+	// ONE PER EVENT-LOOP TURN: the window keeps painting between renders.
+	if (!thumbnailBacklog.isEmpty()) QTimer::singleShot(0, this, [this] { drainThumbnailBacklog(); });
 }
 
 void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
@@ -2150,7 +2213,16 @@ void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
         }
     }
     else {
-        auto thumbnail = QPixmap::fromImage(result.thumbnail).scaledToHeight(512, Qt::SmoothTransformation);
+        const QPixmap rendered = QPixmap::fromImage(result.thumbnail);
+        if (rendered.isNull()) {
+            // The render failed and said why in the log (THUMBS-1): the export
+            // has nothing to write, and asking Qt to scale nothing only adds a
+            // second, less useful warning.
+            QMessageBox::warning(this, tr("Export Preview"),
+                                 tr("Nothing was rendered for this preview."), QMessageBox::Ok);
+            return;
+        }
+        auto thumbnail = rendered.scaledToHeight(512, Qt::SmoothTransformation);
         thumbnail.save(&buffer, "PNG");
 
         auto filePath = QFileDialog::getSaveFileName(

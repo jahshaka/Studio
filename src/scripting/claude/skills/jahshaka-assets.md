@@ -124,8 +124,16 @@ var r = assets.importAndPlace("/path/to/chair.glb",
                               { position: {x: 2, y: 0, z: 0}, drawer: d });
 console.log(r.assetGuid, r.projectGuid, r.nodeId);
 
-// Fix a stale/blank thumbnail:
-assets.refreshThumbnail(guid);
+// Fix a stale/blank thumbnail — the answer is {ok, reason}, and `reason` says
+// why nothing was stored (no engine, a model whose bytes are gone, a graph with
+// no evaluated material):
+var r = assets.refreshThumbnail(guid);
+if (!r.ok) console.log(r.reason);
+
+// Repair every grey tile at once (missingOnly by default), yielding between
+// assets so the window stays alive:
+var swept = assets.rebuildThumbnails();
+console.log(swept.rebuilt + " rebuilt, " + swept.failed.length + " could not be");
 ```
 
 ## Verify

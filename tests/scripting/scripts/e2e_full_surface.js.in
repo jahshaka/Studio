@@ -172,7 +172,7 @@ assert(nodeId.length > 10, "assets.addToScene -> node " + nodeId);
 assert(node.info(nodeId).type === "mesh", "instantiated node is a mesh");
 assert(near(node.info(nodeId).position.y, 1), "drop position honoured");
 
-assert(assets.refreshThumbnail(objGuid), "assets.refreshThumbnail (engine render + DB write)");
+assert(assets.refreshThumbnail(objGuid).ok, "assets.refreshThumbnail (engine render + DB write)");
 
 // ---- materials.* / material.* ----
 var presets = materials.presets();

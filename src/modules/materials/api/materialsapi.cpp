@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "services/imagematerial.h"
 #include "services/livetextures.h"
 #include "services/projectassets.h"
+#include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
 #include "io/materialpresets.h"
 #include "services/materialpreviewservice.h"
@@ -236,6 +237,11 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     // the same path a direct image add-to-project takes for its companion.
     if (host.project && !host.project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(materialGuid, host.db, host.project, ProjectAssets::AddKind::Direct);
+    // THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1). The mint stores the
+    // image as a fallback — correct and instant, and the only answer headless;
+    // ONE gesture can afford ONE render, so ask for it here. A batch (a drop of
+    // a hundred images) goes through the tray's one-per-turn backlog instead.
+    thumbrebuild::rebuildOne(host.db, host.project, materialGuid, EngineHost::instance().engine());
     return materialGuid;
 }
 
