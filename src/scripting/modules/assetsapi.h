@@ -67,9 +67,12 @@ public:
     Q_INVOKABLE bool fly(const QVariantMap &move);
     Q_INVOKABLE QVariantMap thumbnail(const QString &guid);
     Q_INVOKABLE QVariantList dependencies(const QString &guid);
-    /// `assets.export` — ONE asset and its closure as a self-contained share
-    /// file (services/assetshare.h). Named exportBundle in C++ because
-    /// `export` is a keyword; the verb's JS name is `export`.
+    /// ONE asset and its closure as a self-contained share file
+    /// (services/assetshare.h). The verb's name IS `exportBundle`, in JS as
+    /// in C++: this registry dispatches by the invokable method's own name
+    /// and `export` is a C++ keyword, so the spec's `assets.export` cannot
+    /// exist without an alias mechanism in the API core. It sits beside
+    /// `exportRaw`, where it belongs.
     Q_INVOKABLE QVariantMap exportBundle(const QString &guid, const QString &path);
     Q_INVOKABLE QVariantMap exportRaw(const QString &guid, const QString &dir,
                                       const QVariantMap &options = QVariantMap());

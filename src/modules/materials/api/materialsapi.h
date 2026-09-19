@@ -71,6 +71,10 @@ public:
     /// A second Texture row over the SAME bytes, swapped into this one
     /// material — "change this picture for this material only".
     Q_INVOKABLE QString makeUnique(const QString &materialGuid, const QString &textureGuid);
+    /// ONE ROW, COPIED: a second library bundle on the same definition. The
+    /// drawer's Duplicate is this verb's implementation.
+    Q_INVOKABLE QString duplicate(const QString &materialGuid,
+                                  const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap loadGraph(const QString &guidOrPath);
     Q_INVOKABLE bool regenerate(const QString &shaderGuid);
     Q_INVOKABLE QString createFromImage(const QString &textureGuid,

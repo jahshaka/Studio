@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "export/exportmanifest.h"
 #include "io/clipboardformat.h"
 #include "io/ziphelper.h"
+#include "zip.h"
 #include "scripting/modules/moduleshared.h"
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
@@ -149,16 +150,31 @@ bool looksLikeBundle(const QString &path)
     if (path.isEmpty() || !QFileInfo::exists(path)) return false;
     if (QFileInfo(path).suffix().compare(QLatin1String(extension()), Qt::CaseInsensitive) == 0)
         return true;
-    // A zip that carries our manifest IS one, whatever it is called — the
-    // same tolerance every other reader in this app has for a renamed file.
-    QTemporaryDir peek;
-    if (!peek.isValid()) return false;
-    if (!ZipHelper::extract(path, peek.path())) return false;
-    if (!QFile::exists(QDir(peek.path()).filePath(payloadName()))) return false;
-    QString error;
-    const auto manifest =
-        exportformat::ExportManifest::fromFile(QDir(peek.path()).filePath(manifestName()), &error);
-    return manifest.version >= 2 && !manifest.assets.isEmpty();
+
+    // A zip that carries our two files IS one, whatever it is called — the
+    // same tolerance every other reader here has for a renamed file. IT IS
+    // READ FROM THE CENTRAL DIRECTORY, never extracted (fix round F9): this
+    // runs on EVERY `assets.import`, including one aimed at a 2 GB model, and
+    // it used to unpack whatever it was given into a QTemporaryDir — which on
+    // this box is RAM (the 2026-09-08 crash was 26 GB of scratch in tmpfs).
+    // The importers' size caps are downstream of this call and could not
+    // help. Names and sizes only: nothing is decompressed.
+    struct zip_t *zip = zip_open(path.toUtf8().constData(), 0, 'r');
+    if (!zip) return false;
+    bool haveManifest = false, havePayload = false;
+    const ssize_t total = zip_entries_total(zip);
+    for (ssize_t i = 0; i < total && !(haveManifest && havePayload); ++i) {
+        if (zip_entry_openbyindex(zip, static_cast<size_t>(i)) != 0) continue;
+        const char *name = zip_entry_name(zip);
+        if (name) {
+            const QString entry = QString::fromUtf8(name);
+            if (entry == manifestName()) haveManifest = true;
+            else if (entry == payloadName()) havePayload = true;
+        }
+        zip_entry_close(zip);
+    }
+    zip_close(zip);
+    return haveManifest && havePayload;
 }
 
 ImportResult importBundle(Database *db, Project *project, const QString &path)
@@ -204,6 +220,7 @@ ImportResult importBundle(Database *db, Project *project, const QString &path)
     result.guid = landed;
     result.imported = report.imported;
     result.known = report.known;
+    result.alreadyHad = report.known.contains(landed) && !report.imported.contains(landed);
     return result;
 }
 

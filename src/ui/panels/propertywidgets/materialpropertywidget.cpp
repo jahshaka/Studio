@@ -221,11 +221,10 @@ QString MaterialPropertyWidget::materialItemsKey() const
         key += it.key() + QLatin1Char('\x1f') + QFileInfo(it.value()).baseName()
              + QLatin1Char('\x1e');
     }
-    for (auto asset : AssetManager::getAssets()) {
-        if (!asset || asset->type != ModelTypes::Shader) continue;
-        key += asset->assetGuid + QLatin1Char('\x1f') + QFileInfo(asset->fileName).baseName()
-             + QLatin1Char('\x1e');
-    }
+    // (The session's ModelTypes::Shader entries used to be listed here too,
+    // matching the combo. Both are gone with the row type — fix round F12 —
+    // and this key must list EXACTLY what setupShaderSelector puts in the
+    // combo, or the panel rebuilds for ever or never.)
     return key;
 }
 
@@ -409,12 +408,14 @@ void MaterialPropertyWidget::setupShaderSelector()
         materialSelector->addItem(QFileInfo(it.value()).baseName(), it.key());
     }
 
-    for (auto asset : AssetManager::getAssets()) {
-        if (asset->type == ModelTypes::Shader) {
-            materialSelector->addItem(QFileInfo(asset->fileName).baseName(), asset->assetGuid);
-        }
-    }
-
+    // THE BUILTIN PRESETS ONLY (fix round F12). This listed the session's
+    // ModelTypes::Shader entries — the module's retired graph asset — and
+    // since phase 2 picking one applies a flat default instead of the graph's
+    // colours, because the reader that understood the row is deleted with the
+    // row type. Nothing hydrates such an entry any more either, so this loop
+    // found nothing; it is gone rather than left as a promise the panel
+    // cannot keep. (A material bundle is applied from the drawers and the
+    // Materials module, which read it pin-first through MaterialBundle.)
     if (material) materialSelector->setCurrentItemData(material->getGuid());
 
     connect(materialSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(materialChanged(int)));

@@ -212,7 +212,20 @@ void EffectsPage::newNodeGraph(QString *shaderName, int *templateType, QString *
 
 void EffectsPage::refreshShaderGraph()
 {
+	// BOTH DRAWERS, because both can be out of date (fix round F1/F2). This
+	// used to refresh only the PROJECT drawer, so every gesture that changes
+	// what the library holds — Duplicate, Import material…, Add to project —
+	// left the Custom list showing yesterday's rows. That is not a cosmetic
+	// staleness: `selectCorrectItemFromDrop` looks the new material up IN THE
+	// WIDGETS, so a bundle with no tile could not be opened at all, and a
+	// material just added to a project kept a Custom tile that then claimed
+	// the LIBRARY scope for an edit belonging to the project.
+	//
+	// `updateAssetDock` is one library query plus a small parse per row, and
+	// it is what makes the drawer agree with the catalog after anything —
+	// including an import made on the Assets page while this page was hidden.
 #if(EFFECT_BUILD_AS_LIB)
+	updateAssetDock();
 	assetWidget->refresh();
 #endif
 	setCurrentShaderItem();
@@ -462,6 +475,18 @@ void EffectsPage::importGraph()
 		                     tr("That file could not be imported: %1").arg(landed.error));
 		return;
 	}
+	// A MATERIAL THIS LIBRARY ALREADY HOLDS IS NOT REPLACED, and the user is
+	// told so rather than left thinking their newer file landed: the import
+	// pinned the version that is already here. Updating an asset from a share
+	// file is a decision nobody has taken (there is no merge rule, and
+	// overwriting a row other projects pin is the opposite of the pin law).
+	if (landed.alreadyHad)
+		QMessageBox::information(
+		    this, tr("Import material"),
+		    tr("'%1' is already in your library, so it was added to the project as it is — "
+		       "nothing was overwritten. Duplicate it first if you want both versions.")
+		        .arg(dataBase->fetchAsset(landed.guid).name));
+
 	refreshShaderGraph();
 	tabWidget->setCurrentIndex(static_cast<int>(
 	    mProject && !mProject->getProjectGuid().isEmpty() ? ShaderWorkspace::Projects
@@ -539,7 +564,19 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 
 	progressDialog->setValueAndText(8, "Tidying up");
 
+	// NO TILE, NO OPEN (fix round F1). Every line below reads the list item,
+	// and `selectCorrectItemFromDrop` answers null for a guid no drawer holds
+	// — which a caller can produce simply by asking before the drawers were
+	// refilled. It used to dereference it on the next line: a segfault, in the
+	// first thing a user clicks after making a material.
 	currentProjectShader = selectCorrectItemFromDrop(guid);
+	if (!currentProjectShader) {
+		irisLog("loadGraph: no drawer holds '" + guid + "' — nothing to open");
+		restoringGraph = false;
+		progressDialog->close();
+		progressDialog->deleteLater();
+		return;
+	}
 	currentShaderInformation.GUID = currentProjectShader->data(MODEL_GUID_ROLE).toString();
 	currentShaderInformation.origin = origin;
 	oldName = currentShaderInformation.name = currentProjectShader->data(Qt::DisplayRole).toString(); 
@@ -577,32 +614,21 @@ void EffectsPage::exportEffect(QString guid)
 
 void EffectsPage::duplicateShader(QString guid)
 {
-	// ONE ROW, COPIED. The copy is a LIBRARY bundle carrying the same
-	// definition — the same member guids, so the textures are shared (one
-	// object, "used by 2") rather than duplicated, which is the bundle
-	// model's whole point. Its own picture can be made private later with
-	// Make unique.
+	// THE VERB'S OWN IMPLEMENTATION (API-first, SCRIPTING_SPEC §2.3):
+	// `materials.duplicate` and this menu item call the one function, so the
+	// copy a script makes and the copy a click makes are the same copy —
+	// pictures shared, bake not inherited, name numbered against the library.
 	if (!dataBase || guid.isEmpty()) return;
-	const bool projectScope = originForItem(guid) == shaderInfo::Origin::Project;
-	const QJsonObject definition =
-	    MaterialBundle::read(dataBase, guid, projectScope ? mProject : nullptr);
-	if (definition.isEmpty()) return;
-
-	const QString base = dataBase->fetchAsset(guid).name;
-	QString name = tr("%1 copy").arg(base);
-	QStringList taken;
-	for (int i = 0; i < effects->count(); ++i) taken << effects->item(i)->text();
-	int n = 2;
-	while (taken.contains(name)) name = tr("%1 copy %2").arg(base).arg(n++);
-
 	QString error;
-	const QString copy = MaterialBundle::create(dataBase, name, definition,
-	                                            dataBase->fetchAsset(guid).thumbnail, &error);
+	const QString copy = materialmembers::duplicate(dataBase, mProject, guid, QString(), &error);
 	if (copy.isEmpty()) {
 		QMessageBox::warning(this, tr("Duplicate material"),
 		                     tr("That material could not be duplicated: %1").arg(error));
 		return;
 	}
+	// THE DRAWERS FIRST, THEN THE OPEN (fix round F1): `loadGraph` finds its
+	// tile in the widgets, so opening the copy before the Custom list is
+	// refilled used to dereference a tile that did not exist.
 	refreshShaderGraph();
 	tabWidget->setCurrentIndex(static_cast<int>(ShaderWorkspace::MyEffects));
 	if (auto *item = selectCorrectItemFromDrop(copy))
@@ -645,10 +671,21 @@ bool EffectsPage::deleteShader(QString guid)
     // alone.
     const bool fromProject = originForItem(guid) == shaderInfo::Origin::Project
                              && mProject && !mProject->getProjectGuid().isEmpty();
+    const bool wasMaterial =
+        dataBase->fetchAsset(guid).type == static_cast<int>(ModelTypes::Material);
     const auto outcome = fromProject
                              ? assetdelete::removeFromProject(dataBase, guid,
                                                               mProject->getProjectGuid())
                              : assetdelete::remove(dataBase, guid);
+    // AND THE BUNDLE'S OWN MEMBERS GO WITH IT (spec §4; fix round F6). Only
+    // on a real library delete — an UNLIST keeps the bundle alive for the
+    // projects that pin it, and `removeFromProject` is the project's
+    // business. Without this the pictures a material imported through its own
+    // picker stayed behind for ever: nothing references them, they are hidden
+    // by the V-2 fold, and with the material gone no Clean unused can reach
+    // them.
+    if (outcome.ok && !fromProject && !outcome.unlisted && wasMaterial)
+        materialmembers::reapExclusiveMembers(dataBase, guid);
     if (outcome.ok) {
         holder->takeItem(holder->row(item));
         currentShaderInformation = shaderInfo();
@@ -1116,6 +1153,7 @@ void EffectsPage::configureToolbar()
 	projectName->setStyleSheet(StyleSheet::EffectsProjectName());
 
 	connect(projectName, &QLineEdit::textEdited, [=](const QString text) {
+		if (!currentProjectShader) return;   // no material open, nothing to rename
 		currentProjectShader->setData(Qt::DisplayRole, text);
 		currentProjectShader->setData(Qt::UserRole, text);
 		newName = text;
@@ -1243,6 +1281,15 @@ bool EffectsPage::createNewGraph(bool loadNewGraph)
 
 void EffectsPage::updateAssetDock()
 {
+	// THE PAGE HOLDS A POINTER INTO THIS LIST (`currentProjectShader`), and
+	// `clear()` DELETES the items. Refilling the drawer while that pointer
+	// still names a freed item is the same class of crash as opening a
+	// material with no tile (fix round F1) — so it is dropped here and
+	// re-resolved from the GUID once the list is rebuilt, which is the only
+	// identity that survives a refill.
+	const QString openGuid = currentShaderInformation.GUID;
+	if (currentProjectShader && currentProjectShader->listWidget() == effects)
+		currentProjectShader = nullptr;
 	effects->clear();
 #if(EFFECT_BUILD_AS_LIB)
 	// THE TWO LIBRARY WORLDS MERGED (spec 2.4): the module lists the same
@@ -1292,6 +1339,8 @@ void EffectsPage::updateAssetDock()
 				effects->addToListWidget(item);
 			}
 		}
+	if (!openGuid.isEmpty() && !currentProjectShader)
+		currentProjectShader = selectCorrectItemFromDrop(openGuid);
 #endif
 }
 
@@ -1540,6 +1589,10 @@ void EffectsPage::setAssetWidgetDatabase(Database * db)
 
 void EffectsPage::renameShader()
 {
+	// No open material, no tile, nothing to rename (fix round F1's family:
+	// the page's item pointer is null whenever no material is open, and a
+	// drawer refill can clear it).
+	if (!currentProjectShader) return;
 #if(EFFECT_BUILD_AS_LIB)
 	dataBase->renameAsset(currentProjectShader->data(MODEL_GUID_ROLE).toString(), currentProjectShader->data(Qt::DisplayRole).toString());
 #else
@@ -1847,7 +1900,8 @@ void EffectsPage::configureConnections()
 		if (!added.ok()) { irisLog("add to project: " + added.error); return; }
 		refreshShaderGraph();
 		tabWidget->setCurrentIndex((int)ShaderWorkspace::Projects);
-		ListWidget::highlightNodeForInterval(2, selectCorrectItemFromDrop(guid));
+		if (auto *pinned = selectCorrectItemFromDrop(guid))
+			ListWidget::highlightNodeForInterval(2, pinned);
 		// It is the PROJECT's copy the user is now looking at.
 		loadGraph(guid, shaderInfo::Origin::Project);
 	});
@@ -1879,6 +1933,7 @@ void EffectsPage::configureConnections()
 void EffectsPage::editingFinishedOnListItem()
 {
     QListWidgetItem *item = selectCorrectItemFromDrop(pressedShaderInfo.GUID);
+    if (!item) return;   // the row this edit belonged to is no longer in a drawer
     auto oldName = pressedShaderInfo.name;
     auto newName = item->data(Qt::DisplayRole).toString();
 

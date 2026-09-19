@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
 #include "services/assetshare.h"
+#include "services/materialmembers.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetgc.h"
@@ -1147,8 +1148,18 @@ bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
     // deletes an unpinned one, and {force: true} deletes either way.
     const bool keepShared = normalizeJs(options.value("keepShared", true)).toBool();
     const bool force = normalizeJs(options.value("force", false)).toBool();
+    const bool wasMaterial =
+        host.db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Material);
     const auto outcome = assetdelete::remove(host.db, guid, keepShared, force);
     if (!outcome.ok) return fail(QStringLiteral("assets.remove: %1").arg(outcome.error));
+    // A BUNDLE'S EXCLUSIVE BORN-INSIDE MEMBERS GO WITH IT (MATERIAL_BUNDLE_SPEC
+    // §4), on a real delete only: an UNLIST keeps the material alive for the
+    // projects that pin it. A picture the USER imported carries no origin
+    // stamp and stays; one anything else uses stays; one any project pins
+    // stays. `keepShared` is about the general dependency closure and cannot
+    // answer this — it would take the user's own texture too.
+    if (!outcome.unlisted && wasMaterial)
+        materialmembers::reapExclusiveMembers(host.db, guid);
     return true;
 }
 

@@ -43,6 +43,7 @@
 #include "data/constants.h"
 #include "data/project.h"
 #include "services/assetcas.h"
+#include "services/assetdelete.h"
 #include "services/assetstorepaths.h"
 #include "services/materialbundle.h"
 #include "services/materialmembers.h"
@@ -72,6 +73,15 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
     AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, srcPath, guid,
                          QStringLiteral("source"), name, &oid, &err);
     return oid;
+}
+
+static int countWhere(const QString &sql, const QVariantList &binds = {})
+{
+    QSqlQuery q;
+    q.prepare(sql);
+    for (const auto &b : binds) q.addBindValue(b);
+    if (!q.exec()) { printf("info: query error: %s\n", qPrintable(q.lastError().text())); return -1; }
+    return q.next() ? q.value(0).toInt() : -1;
 }
 
 static int objectCount(const QString &storeRoot)
@@ -276,7 +286,14 @@ int main(int argc, char **argv)
 
     // The project paints on its texture: copy-on-write moves THIS project's
     // pin and leaves the library's row where it was.
-    const QString editedSrc = writeTempFile(scratchDir, "wood-edited.jpg", QByteArray("painted"));
+    // THE EDITED FILE KEEPS THE ASSET'S OWN NAME, as a real copy-on-write
+    // does: `ingestFile`'s asset_files key is (guid, role, NAME), so an edit
+    // staged under a different name adds a SECOND source row and moves what
+    // the LIBRARY points at — which is not what editing inside a project
+    // means.
+    QDir().mkpath(scratchDir.filePath("edit"));
+    const QString editedSrc =
+        writeTempFile(QDir(scratchDir.filePath("edit")), "wood.jpg", QByteArray("painted"));
     const QString editedOid = ProjectAssets::copyOnWrite("tex-wood", editedSrc, &db, &project, &error);
     CHECK(!editedOid.isEmpty(), "5: the project copies its texture on write");
     CHECK(AssetCas::pinnedOid(conn, "proj-1", "tex-wood") == editedOid,
@@ -309,6 +326,133 @@ int main(int argc, char **argv)
     CHECK(ProjectAssets::updatePinToLatest(planks, &db, &project), "5: update again");
     CHECK(db.isAssetPinnedBy("proj-1", "tex-mine"),
           "5: ...and the member the new version ADDS is pinned with it (G3)");
+
+    // =======================================================================
+    // 6. A PROJECT-SCOPE WRITE: EDGES ONCE, AND "USED BY" COUNTS USERS (F3)
+    // =======================================================================
+    //
+    // No suite drove a project-scope definition write before this one, and
+    // that is exactly where the double count lived: the write derives the
+    // project's own edge set while the library's intrinsic edge stays, so a
+    // texture ONE material uses had TWO rows naming it — and the Members
+    // panel said "used by 2", the tooltip said "shared with 1 other" and
+    // Make unique lit up, inviting a duplicate nobody needs.
+    {
+        // `planks` is pinned by proj-1 from section 5 and names tex-wood.
+        CHECK(db.isAssetPinnedBy("proj-1", planks), "6: the project holds the bundle");
+        QJsonObject projectEdit = MaterialBundle::read(&db, planks, &project);
+        QJsonObject editedValues = projectEdit.value("values").toObject();
+        editedValues["roughness"] = 0.9;
+        projectEdit["values"] = editedValues;
+        const auto written = MaterialBundle::write(&db, &project, planks, projectEdit,
+                                                   MaterialBundle::Scope::Project);
+        CHECK(written.ok, qPrintable(QStringLiteral("6: the project-scope save wrote (%1)")
+                                         .arg(written.error)));
+
+        // The library's intrinsic edge AND the project's own edge both exist —
+        // that is the design (the library version must not move).
+        CHECK(countWhere("SELECT COUNT(*) FROM dependencies WHERE depender = ? AND dependee = ? "
+                         "AND project_guid IS NULL", { planks, "tex-wood" }) == 1,
+              "6: the library's intrinsic edge survived the project's save");
+        CHECK(countWhere("SELECT COUNT(*) FROM dependencies WHERE depender = ? AND dependee = ? "
+                         "AND project_guid = ?", { planks, "tex-wood", "proj-1" }) == 1,
+              "6: and the project has one of its own");
+
+        // ...and the COUNT the user sees is of USERS, not of edge rows.
+        CHECK(materialmembers::usedBy(&db, "tex-wood") == 1,
+              "6: 'used by' says ONE material, not two (F3: the query is DISTINCT)");
+        const auto shown = materialmembers::describe(&db, &project, planks);
+        const auto *woodRow = findMember(shown, "tex-wood");
+        CHECK(woodRow && woodRow->usedBy == 1, "6: the Members panel's row agrees");
+    }
+
+    // =======================================================================
+    // 7. AN UNRELATED SAVE DOES NOT RESET A MEMBER'S PIN (F4)
+    // =======================================================================
+    //
+    // The twin of section 5's loss, and the more dangerous one: this runs on
+    // the graph page's 1.5 s AUTOSAVE, so an edit to the MATERIAL used to put
+    // a texture the project had copied on write back to the library's bytes,
+    // repeatedly, with nothing on screen to connect the two.
+    {
+        const QString painted = AssetCas::pinnedOid(conn, "proj-1", "tex-wood");
+        CHECK(!painted.isEmpty() && painted != AssetCas::sourceOid(conn, "tex-wood"),
+              "7: the project renders its OWN version of the texture");
+
+        QJsonObject edit = MaterialBundle::read(&db, planks, &project);
+        QJsonObject values = edit.value("values").toObject();
+        values["metallic"] = 0.5;            // nothing to do with the texture
+        edit["values"] = values;
+        CHECK(MaterialBundle::write(&db, &project, planks, edit,
+                                    MaterialBundle::Scope::Project).ok,
+              "7: an ordinary edit to the material is saved");
+        CHECK(AssetCas::pinnedOid(conn, "proj-1", "tex-wood") == painted,
+              "7: THE PAINTED TEXTURE IS STILL WHAT THE PROJECT RENDERS (F4)");
+
+        // What the loop IS for: a member with no pin yet gets one.
+        textureRow(db, "tex-fresh", "fresh.png", storeRoot,
+                   writeTempFile(scratchDir, "fresh.png", QByteArray("fresh-bytes")));
+        QJsonObject withFresh = MaterialBundle::read(&db, planks, &project);
+        QJsonObject freshValues = withFresh.value("values").toObject();
+        freshValues["emissiveMap"] = "tex-fresh";
+        withFresh["values"] = freshValues;
+        CHECK(!db.isAssetPinnedBy("proj-1", "tex-fresh"), "7: the new member is unpinned");
+        CHECK(MaterialBundle::write(&db, &project, planks, withFresh,
+                                    MaterialBundle::Scope::Project).ok,
+              "7: the save that adds it");
+        CHECK(db.isAssetPinnedBy("proj-1", "tex-fresh"),
+              "7: ...and the member the project did not hold IS pinned by that save");
+    }
+
+    // =======================================================================
+    // 8. DUPLICATE: THE PICTURES ARE SHARED, THE BAKE IS NOT (F1/F5)
+    // =======================================================================
+    {
+        // A bundle with a picked picture AND a baked map, like a saved graph.
+        textureRow(db, "tex-bake2", "bake2.png", storeRoot,
+                   writeTempFile(scratchDir, "bake2.png", QByteArray("bake2-bytes")));
+        QJsonObject bakeValues;
+        bakeValues["baseColorMap"] = "tex-mine";      // a picture
+        bakeValues["normalMap"] = "tex-bake2";        // a bake's output
+        QJsonObject maps2; maps2["normalMap"] = "tex-bake2";
+        QJsonObject bake2; bake2["maps"] = maps2;
+        QJsonObject graphed;
+        graphed["materialType"] = "pbr";
+        graphed["values"] = bakeValues;
+        graphed["bake"] = bake2;
+        const QString original = MaterialBundle::create(&db, "Graphed", graphed, QByteArray(), &error);
+        CHECK(!original.isEmpty(), "8: a bundle with a picture and a baked map");
+
+        QString dupError;
+        const QString copy = materialmembers::duplicate(&db, nullptr, original, QString(), &dupError);
+        CHECK(!copy.isEmpty(), qPrintable(QStringLiteral("8: it duplicates (%1)").arg(dupError)));
+        CHECK(db.fetchAsset(copy).name == "Graphed copy", "8: named '<original> copy'");
+
+        const QJsonObject copied = MaterialBundle::read(&db, copy, nullptr);
+        CHECK(copied.value("values").toObject().value("baseColorMap").toString() == "tex-mine",
+              "8: the PICTURE is shared — one object, two materials");
+        CHECK(materialmembers::usedBy(&db, "tex-mine") >= 2, "8: ...which is what 'used by' says");
+        CHECK(!copied.contains("bake"),
+              "8: the BAKE is NOT inherited (a baked map belongs to one material)");
+        CHECK(!copied.value("values").toObject().contains("normalMap"),
+              "8: and the slot it filled is clear, to be re-baked by the copy's own save");
+        CHECK(materialmembers::usedBy(&db, "tex-bake2") == 1,
+              "8: the original's baked map is still the original's alone");
+
+        // A second duplicate does not collide with the first's name.
+        const QString second = materialmembers::duplicate(&db, nullptr, original, QString(), &dupError);
+        CHECK(!second.isEmpty() && db.fetchAsset(second).name == "Graphed copy 2",
+              "8: a second copy is numbered, never a duplicate name");
+
+        // AND THE LIBRARY DELETE TAKES THE BUNDLE'S OWN MEMBERS (F6).
+        materialmembers::stampMember(&db, "tex-bake2", original);
+        CHECK(assetdelete::remove(&db, original).ok, "8: the original is deleted from the library");
+        materialmembers::reapExclusiveMembers(&db, original);
+        CHECK(db.fetchAsset("tex-bake2").guid.isEmpty(),
+              "8: its exclusive born-inside member went with it (F6)");
+        CHECK(!db.fetchAsset("tex-mine").guid.isEmpty(),
+              "8: the picture the copy still uses did NOT");
+    }
 
     printf(failures ? "\n%d CHECK(s) FAILED\n" : "\nall checks passed\n", failures);
     return failures ? 1 : 0;

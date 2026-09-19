@@ -252,8 +252,17 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	auto *item = assetViewWidget->currentItem();
 	if (!item) return;
 
+	// A FOLDER, TOO, IS A PROJECT-SIDE REMOVE (fix round F16). This called
+	// `deleteFolderAndDependencies`, which deletes the folder AND the library
+	// rows of everything filed in it — from the PROJECT drawer, which
+	// contradicts the one rule this function exists to keep. Each asset in
+	// the folder leaves the project by the same door a single tile takes, and
+	// then the (now empty) folder row goes.
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
-		db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString());
+		const QString folder = item->data(MODEL_GUID_ROLE).toString();
+		for (const auto &asset : db->fetchChildAssets(folder, project->getProjectGuid()))
+			assetdelete::removeFromProject(db, asset.guid, project->getProjectGuid());
+		db->deleteFolder(folder);
 		refresh();
 		return;
 	}

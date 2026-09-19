@@ -37,7 +37,9 @@ inline PreviewPage pageFor(ModelTypes type)
     case ModelTypes::Mesh:
     case ModelTypes::ParticleSystem:
     case ModelTypes::Material:
-    case ModelTypes::Shader:
+    // (ModelTypes::Shader is gone from this list with the row type — fix
+    // round F13: the page cannot preview one since its reader was deleted,
+    // and no listing offers one any more.)
     case ModelTypes::Sky:
         return PreviewPage::Viewer3D;
     case ModelTypes::Texture:

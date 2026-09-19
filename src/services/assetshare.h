@@ -89,6 +89,14 @@ struct ImportResult
     QStringList imported;    ///< the rows this import created
     QStringList known;       ///< the rows this library already had
     QString error;
+    /// TRUE when the library ALREADY held the asset the file is about, so
+    /// nothing about it changed: the import pinned the version that is here
+    /// rather than the version in the file. Said out loud because the
+    /// gesture otherwise looks like a successful update and is not one —
+    /// "update an asset I already have from a share file" is a decision
+    /// nobody has taken yet (there is no merge rule, and overwriting a row
+    /// other projects pin is the opposite of the pin law).
+    bool alreadyHad = false;
     bool ok() const { return error.isEmpty() && !guid.isEmpty(); }
 };
 

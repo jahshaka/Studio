@@ -193,8 +193,13 @@ bool typeHasAThumbnail(ModelTypes type)
     switch (type) {
     case ModelTypes::Texture: case ModelTypes::Music: case ModelTypes::Video:
     case ModelTypes::Animation: case ModelTypes::File: case ModelTypes::Object:
-    case ModelTypes::ParticleSystem: case ModelTypes::Material: case ModelTypes::Shader:
+    case ModelTypes::ParticleSystem: case ModelTypes::Material:
     case ModelTypes::Avatar: case ModelTypes::LightProfile:
+    // NOT ModelTypes::Shader (fix round F7). The renderer for it is deleted
+    // with the row type, so a legacy row left in an old library counted as a
+    // FAILURE on every "rebuild missing thumbnails" sweep — a permanent red
+    // in a report about rows nothing can draw. It has nothing to draw, which
+    // is exactly what this predicate is for.
         return true;
     default:
         return false;

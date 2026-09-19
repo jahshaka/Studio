@@ -236,6 +236,63 @@ QVector<Unused> cleanUnused(Database *db, Project *project, const QString &mater
     return removed;
 }
 
+QString duplicate(Database *db, Project *project, const QString &materialGuid,
+                  const QString &name, QString *errorOut)
+{
+    const auto fail = [errorOut](const QString &why) {
+        if (errorOut) *errorOut = why;
+        return QString();
+    };
+    if (!db) return fail(QStringLiteral("no library"));
+    const AssetRecord row = db->fetchAsset(materialGuid);
+    if (row.guid.isEmpty() || row.type != static_cast<int>(ModelTypes::Material))
+        return fail(QStringLiteral("'%1' is not a material").arg(materialGuid));
+
+    QJsonObject definition = MaterialBundle::read(db, materialGuid, project);
+    if (definition.isEmpty())
+        return fail(QStringLiteral("'%1' has no definition to copy").arg(row.name));
+
+    // THE BAKE DOES NOT COME WITH IT. A baked map's member row belongs to the
+    // ORIGINAL (its `parent`), so a copy naming it would change appearance
+    // when the original is re-baked, and neither material's Clean unused
+    // could reason about it. The slots it filled are cleared with it; the
+    // copy's own save bakes its own maps into its own member rows.
+    const QJsonObject bakedMaps = definition.value(QStringLiteral("bake")).toObject()
+                                            .value(QStringLiteral("maps")).toObject();
+    if (!bakedMaps.isEmpty()) {
+        QJsonObject values = definition.value(QStringLiteral("values")).toObject();
+        for (auto it = bakedMaps.constBegin(); it != bakedMaps.constEnd(); ++it)
+            values.remove(it.key());
+        definition[QStringLiteral("values")] = values;
+    }
+    definition.remove(QStringLiteral("bake"));
+
+    // A NAME NOBODY ELSE HAS, decided against the LIBRARY (a drawer is a view
+    // of it, and with a project open it does not even list every material).
+    QSet<QString> taken;
+    for (const auto &existing : db->fetchAssetsForAssetView())
+        if (existing.type == static_cast<int>(ModelTypes::Material)) taken.insert(existing.name);
+    QString chosen = name.trimmed().isEmpty()
+                         ? QStringLiteral("%1 copy").arg(row.name)
+                         : name.trimmed();
+    const QString base = chosen;
+    for (int n = 2; taken.contains(chosen); ++n) chosen = QStringLiteral("%1 %2").arg(base).arg(n);
+    definition[QStringLiteral("name")] = chosen;
+
+    QString error;
+    const QString copy = MaterialBundle::create(db, chosen, definition, row.thumbnail, &error);
+    if (copy.isEmpty()) return fail(error.isEmpty() ? QStringLiteral("the library refused the copy")
+                                                    : error);
+    return copy;
+}
+
+QVector<Unused> reapExclusiveMembers(Database *db, const QString &materialGuid)
+{
+    // No project: this is the LIBRARY's clean-up, and a member any project
+    // pins is refused inside `unused` whatever project happens to be open.
+    return cleanUnused(db, nullptr, materialGuid, nullptr);
+}
+
 QString makeUnique(Database *db, Project *project, const QString &materialGuid,
                    const QString &textureGuid, QString *errorOut)
 {
@@ -259,7 +316,16 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
 
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
-    const QString sourcePath = AssetCas::resolveSource(conn, root, textureGuid);
+    // THE BYTES THIS CALLER IS LOOKING AT, not the library's (fix round F16's
+    // nit): with a project open the copy must be of the version that project
+    // renders with — a texture it copied on write is precisely the case
+    // somebody reaches for "make unique" in — so the source is pin-first,
+    // exactly as `MaterialBundle::read` is. `resolvePinned` falls back to the
+    // library source when there is no pin.
+    const QString sourcePath =
+        (project && !project->getProjectGuid().isEmpty())
+            ? AssetCas::resolvePinned(conn, root, project->getProjectGuid(), textureGuid)
+            : AssetCas::resolveSource(conn, root, textureGuid);
     if (sourcePath.isEmpty())
         return fail(QStringLiteral("'%1' has no stored bytes to copy").arg(texture.name));
 
@@ -273,9 +339,18 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     props.insert(kMemberKey, true);
     props.insert(kOriginKey, materialGuid);
 
+    // A COPY IS A ROW OF ITS OWN, never a member row of somebody else (fix
+    // round F16's nit). `parent` is inherited only when it names a FOLDER —
+    // filing, which the copy should keep. When it names an ASSET the row is
+    // an import member or a BAKED map born inside another material, and
+    // copying that parent produced a row hidden from every listing
+    // (Database::memberSubquery drops it) and reachable by nothing.
+    QString parent = texture.parent;
+    if (!parent.isEmpty() && !db->fetchAsset(parent).guid.isEmpty()) parent.clear();
+
     DbBatch batch(db);
     db->createAssetEntry(newGuid, texture.name, static_cast<int>(ModelTypes::Texture),
-                         texture.parent, QString(),
+                         parent, QString(),
                          texture.license, texture.author, texture.thumbnail,
                          QJsonDocument(props).toJson(), texture.tags, QByteArray(),
                          AssetViewFilter::AssetsView);

@@ -144,6 +144,33 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
 QVector<Unused> cleanUnused(Database *db, Project *project, const QString &materialGuid,
                             QString *errorOut = nullptr);
 
+/// ONE ROW, COPIED — a second LIBRARY bundle carrying `materialGuid`'s
+/// definition (§6, "New / Duplicate / Rename / Delete act on ONE row").
+///
+/// The PICTURES are shared: the copy names the same texture guids, so there
+/// is one object and "used by 2", which is what the bundle model is for, and
+/// `makeUnique` is how one becomes private afterwards. The BAKED maps are
+/// not: a bake is born inside exactly one material (its member row's parent
+/// is that material) and is never shared, so the copy is written without one
+/// and bakes its own at its next save.
+///
+/// `name` empty = "<original> copy", with a numbered suffix against the
+/// LIBRARY's own material names — the widget's list is a view, not the
+/// answer. Reads the definition pin-first when `project` is given.
+QString duplicate(Database *db, Project *project, const QString &materialGuid,
+                  const QString &name = QString(), QString *errorOut = nullptr);
+
+/// WHAT A LIBRARY DELETE OF A BUNDLE TAKES WITH IT (spec §4: "unpinned -> the
+/// row and its EXCLUSIVE born-inside members go; user-imported textures never
+/// go with it"). Call it AFTER the material row is really deleted — never
+/// after an UNLIST, where the bundle and its members are still live: with the
+/// row gone its born-inside members have no user left, which is exactly the
+/// set `unused` answers, so this is `cleanUnused` under the name of the
+/// gesture that needs it. A member the user imported carries no origin stamp
+/// and is never touched; one another material still uses has a depender and
+/// is never touched; one any project pins is never touched.
+QVector<Unused> reapExclusiveMembers(Database *db, const QString &materialGuid);
+
 /// A SECOND ROW OVER THE SAME BYTES, swapped into this material's definition
 /// (§4, "change it for this material only"). The store gains nothing — the
 /// object is content-addressed and already there — and every other material

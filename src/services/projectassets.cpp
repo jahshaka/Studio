@@ -237,15 +237,15 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             AssetManager::addAsset(asset);
             break;
         }
-        case ModelTypes::Shader: {
-            auto *asset = new AssetShader;
-            asset->assetGuid = member;
-            asset->fileName = QFileInfo(memberRecord.name).baseName();
-            asset->setValue(QVariant::fromValue(
-                QJsonDocument::fromJson(db->fetchAssetData(member)).object()));
-            AssetManager::addAsset(asset);
-            break;
-        }
+        // ModelTypes::Shader IS NOT HYDRATED (fix round F12). It was the
+        // Materials module's separate graph asset; nothing mints one and
+        // nothing can read one since MATERIAL_BUNDLE_SPEC phase 2, so the
+        // session entry served exactly one consumer — the Material blade's
+        // combo, where picking it applied a flat default instead of the
+        // graph's colours, which is worse than not offering it. A legacy row
+        // in an old library keeps its pin and its bytes; it simply is not a
+        // thing this session can use. (No case at all, so it falls to the
+        // default below: "no session shape for this type".)
         case ModelTypes::Material: {
             // THE MATERIAL IS NOT HYDRATED HERE ANY MORE (MATERIAL-PREVIEW-1
             // item c). Registering the row is what the session registry is for

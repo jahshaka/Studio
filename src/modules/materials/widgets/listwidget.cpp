@@ -90,6 +90,10 @@ void ListWidget::updateThumbnailImage(QByteArray arr, QListWidgetItem *item)
 
 void ListWidget::highlightNodeForInterval(int seconds, QListWidgetItem * item)
 {
+	// A guid no drawer holds has no tile to flash (fix round F1's family):
+	// every line below reads the item, and the callers get theirs from
+	// `selectCorrectItemFromDrop`, which answers null by design.
+	if (!item) return;
 	anim = new QVariantAnimation;
 	anim->setStartValue(QColor(50, 148, 213, 255));
 	anim->setEndValue(QColor(50, 148, 213, 0));

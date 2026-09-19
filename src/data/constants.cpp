@@ -81,6 +81,12 @@ namespace Contants
     // ModelTypes::Avatar row. One extension, its own list, so the store
     // dispatch can find it exactly like every other typed row finds its file.
     QList<QString> AVATAR_EXTS = { "avatar" };
+	// SHADER_EXT survives as a STRING WITH NO READER (fix round F13): the
+	// `.shader` importer, the type mapping and the file-dialog pattern are
+	// all deleted with the ModelTypes::Shader row, and nothing else names the
+	// extension. It is kept only because the constant is public API-ish and
+	// its removal touches a header every TU includes; the next sweep can take
+	// it with the enumerator.
 	QString SHADER_EXT		    = "shader";
     QList<QString> MATERIAL_EXTS= { "material"};
 	QString ASSET_EXT			= "jaf";

@@ -220,9 +220,10 @@ ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
 	else if (Constants::VIDEO_EXTS.contains(fileSuffix)) {
 		return ModelTypes::Video;
 	}
-    else if (fileSuffix == Constants::SHADER_EXT) {
-        return ModelTypes::Shader;
-    }
+    // (`.shader` mapped to ModelTypes::Shader here until phase 2's CRUD —
+    // fix round F13. The importer that took one is deleted with the readers,
+    // so a `.shader` on disk is an unknown file now, and saying otherwise
+    // only produced a type nothing can handle.)
     else if (Constants::MATERIAL_EXTS.contains(fileSuffix)) {
         return ModelTypes::Material;
     }

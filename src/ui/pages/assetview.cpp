@@ -102,6 +102,7 @@ For more information see the LICENSE file
 #include "services/import/importbatchrunner.h"
 #include "ui/dialogs/toast.h"
 #include "services/assetdelete.h"
+#include "services/materialmembers.h"
 #include "services/projectassets.h"
 #include "services/imagematerial.h"
 #include "services/extentmeasure.h"
@@ -843,6 +844,13 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	QMap<int, QString> drawerNames;
 	for (const auto &coll : db->fetchCollections()) drawerNames.insert(coll.id, coll.name);
 	foreach(const AssetRecord &record, db->fetchAssetsForAssetView()) {
+		// A LEGACY ModelTypes::Shader ROW IS NOT OFFERED (fix round F12).
+		// Nothing mints one and nothing reads one since MATERIAL_BUNDLE_SPEC
+		// phase 2, so a tile for it could only be opened, previewed or
+		// applied into disappointment. The row is untouched — no migration is
+		// owed (spec §7) and it goes with the next data wipe; the editor's
+		// tray hides it by the same rule (assettray rule 2b).
+		if (record.type == static_cast<int>(ModelTypes::Shader)) continue;
 		QJsonObject object;
 		object["icon_url"] = "";
 		object["guid"] = record.guid;
@@ -857,10 +865,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 		QImage image;
 		image.loadFromData(record.thumbnail, "PNG");
-
-        if (image.isNull() && record.type == static_cast<int>(ModelTypes::Shader)) {
-            image = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
-        }
 
         auto sceneProperties = QJsonDocument::fromJson(record.properties);
 
@@ -2082,10 +2086,6 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
         db->updateAssetProperties(guid, QJsonDocument(viewer->getSceneProperties()).toJson());
 	}
 
-    if (object["type"].toInt() == static_cast<int>(ModelTypes::Shader)) {
-        thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
-    }
-
 	if (object["type"].toInt() == static_cast<int>(ModelTypes::Sky)) {
 		thumbnail = QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-sky.png"));
 	}
@@ -3040,7 +3040,14 @@ void AssetView::deleteAssetFromLibrary(AssetGridItem *item)
 
 	// keepShared false: the page has always deleted the dependency closure
 	// with the asset (each member judged by its OWN pins inside the service).
+	const bool wasMaterial = db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Material);
 	const auto outcome = assetdelete::remove(db, guid, /*keepShared*/ false, force);
+	// A BUNDLE TAKES ITS OWN BORN-INSIDE MEMBERS (spec §4; fix round F6) —
+	// the pictures it imported through its own picker, which nothing else
+	// uses and no project pins. Only on a real delete: an unlisted row is
+	// still live for the projects that pinned it.
+	if (outcome.ok && !outcome.unlisted && wasMaterial)
+		materialmembers::reapExclusiveMembers(db, guid);
 	if (!outcome.ok) {
 		QMessageBox::warning(this, tr("Delete Failed!"),
 		    tr("The library database refused the delete; the asset is still catalogued. "

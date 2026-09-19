@@ -163,6 +163,18 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
     // An edge whose DEPENDER is somebody else — a node's USE of this material
     // — is not touched by either branch: this deletes only the edges FROM this
     // material in this one scope.
+    //
+    // WHO OWNS THE EDGES *FROM* A MATERIAL, stated because two writers reach
+    // them (fix round F10). THIS function owns them, in both scopes: an edge
+    // from a material to a texture means "this material is made of that
+    // picture", and the definition is the only thing that knows. The other
+    // writer is the preset apply (`SceneEditService::applyMaterialPreset`),
+    // which writes the same project-stamped Material -> Texture rows for the
+    // material row it mints per preset; the two AGREE by construction,
+    // because it writes exactly the maps its definition names and skips an
+    // edge that already exists. If they ever disagree, the definition is
+    // right and this is the writer that says so — which is the whole reason
+    // membership is DERIVED and never authored.
     QSqlQuery del(conn);
     if (projectGuid.isEmpty()) {
         del.prepare("DELETE FROM dependencies WHERE depender = ? AND project_guid IS NULL");
@@ -362,12 +374,28 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     // carry it. The material then travels without the maps it is made of.
     // Pinning here is also what makes the closure right after a project-scope
     // save, where the intrinsic edges deliberately did not move.
+    //
+    // A MEMBER THE PROJECT ALREADY PINS IS LEFT WHERE IT IS (fix round F4 —
+    // the twin of the loss fixed in `ProjectAssets::updatePinToLatest`, and
+    // the more dangerous one, because THIS runs on the graph page's 1.5 s
+    // AUTOSAVE). `writePin` is an upsert, so re-pinning every member to the
+    // library's current oid on each save silently reset a texture the project
+    // had copied on write — the user's own painted version — and did it on an
+    // edit to the MATERIAL, which the user never connected to their texture.
+    // What this loop is FOR is the member that nothing pinned yet (a baked map
+    // minted during this very write); a member with a pin already has the
+    // version this project chose. An empty source oid never overwrites a real
+    // pin either: "empty" means a DB-only asset, and writing one over bytes is
+    // how a pinned member silently became unpinned.
     if (project && !project->getProjectGuid().isEmpty()
         && db->isAssetPinnedBy(project->getProjectGuid(), guid)) {
+        const QString projectGuid = project->getProjectGuid();
         for (const QString &member : memberGuids(stored)) {
             if (db->fetchAsset(member).guid.isEmpty()) continue;
-            AssetCas::writePin(conn, project->getProjectGuid(), member,
-                               AssetCas::sourceOid(conn, member));
+            if (!AssetCas::pinnedOid(conn, projectGuid, member).isEmpty()) continue;
+            const QString latest = AssetCas::sourceOid(conn, member);
+            if (latest.isEmpty() && db->isAssetPinnedBy(projectGuid, member)) continue;
+            AssetCas::writePin(conn, projectGuid, member, latest);
         }
     }
 

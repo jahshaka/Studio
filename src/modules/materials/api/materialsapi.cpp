@@ -230,6 +230,13 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "it is the open project's member pins that nothing in the project uses, and only the PIN goes. BYTES "
           "are never removed here — a superseded object waits for assets.gc, which lists before it removes too.",
           Needs::Document },
+        { "duplicate", "materials.duplicate(guid, {name}) -> guid",
+          "Copies ONE material into a second LIBRARY bundle — the drawer's Duplicate, as a verb. The copy names "
+          "the same TEXTURES (one object, 'used by 2' — sharing is what the bundle model is for; materials."
+          "makeUnique gives one back its privacy), but it carries NO BAKED MAPS: a bake is born inside exactly "
+          "one material and is never shared, so the copy bakes its own at its next save. `name` defaults to "
+          "'<original> copy' and is numbered against the library's own material names.",
+          Needs::Document },
         { "makeUnique", "materials.makeUnique(materialGuid, textureGuid) -> guid",
           "Gives THIS material its own copy of a shared texture: a second Texture row over the SAME bytes (the "
           "store is content-addressed, so this costs no disk), swapped into this material's definition "
@@ -611,6 +618,28 @@ QVariantList MaterialsApi::cleanUnused(const QString &materialGuid, const QVaria
                                 { "bytes", static_cast<qlonglong>(entry.bytes) },
                                 { "scope", entry.scope } });
     return out;
+}
+
+QString MaterialsApi::duplicate(const QString &materialGuid, const QVariantMap &options)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    static const QStringList knownOptions = { QStringLiteral("name") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.duplicate"), options,
+                                              knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+    QString error;
+    const QString copy = materialmembers::duplicate(host.db, host.project, materialGuid,
+                                                    options.value(QStringLiteral("name")).toString(),
+                                                    &error);
+    if (copy.isEmpty()) {
+        fail(QStringLiteral("materials.duplicate: %1").arg(error));
+        return QString();
+    }
+    auto *asset = new AssetMaterial;
+    asset->fileName = host.db->fetchAsset(copy).name;
+    asset->assetGuid = copy;
+    AssetManager::addAsset(asset);
+    return copy;
 }
 
 QString MaterialsApi::makeUnique(const QString &materialGuid, const QString &textureGuid)
