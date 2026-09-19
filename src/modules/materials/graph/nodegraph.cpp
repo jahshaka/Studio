@@ -515,6 +515,26 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 			}
 			if (rightSockIndex == 2) { // Shininess -> Roughness: gloss inverts
 				auto* source = graph->nodes.value(leftNodeId);
+				// A CONSTANT SHARED WITH ANOTHER INPUT must not be rewritten under
+				// it (the lead's read): the gloss number that also scales, say, an
+				// emission would change that too. The roughness gets a constant of
+				// its own; the shared one keeps its value and its other wires.
+				if (source && source->typeName == QLatin1String("float")) {
+					int uses = 0;
+					for (auto otherVar : conList)
+						if (otherVar.toObject()["leftNodeId"].toString() == leftNodeId) ++uses;
+					NodeModel* own = (uses > 1 && graph->library)
+					                     ? graph->library->createNode("float") : nullptr;
+					if (own) {
+						own->deserializeWidgetValue(source->serializeWidgetValue());
+						own->setX(source->getX());
+						own->setY(source->getY() + 80.0);
+						graph->addNode(own);
+						source = own;
+						leftNodeId = own->id;
+						leftSockIndex = 0;
+					}
+				}
 				if (source && source->typeName == QLatin1String("float")) {
 					// A CONSTANT converts IN PLACE. The graph then holds a
 					// roughness number the user can read and edit, which is
