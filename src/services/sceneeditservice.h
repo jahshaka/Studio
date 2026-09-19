@@ -37,7 +37,6 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "irisgl/irisglfwd.h"
-#include "data/materialpreset.h"
 #include "data/project.h"   // ModelTypes
 #include "io/sceneformat.h"
 #include "services/surfaceplacement.h"
@@ -353,16 +352,15 @@ public:
                                       int index = -1,
                                       QHash<QString, QString> *guidMapOut = nullptr);
 
-    /// Applies a material preset to the selection. The selection may be a
-    /// single mesh OR a container (an imported model roots at an Empty — the
-    /// viewport's click-selects-the-root rule hands exactly that node over):
-    /// every mesh at or under it receives its own fresh material instance.
-    /// Undoable as one "Apply Material" entry. The old mesh-only guard
-    /// silently dropped presets applied to models — the owner-reported
-    /// "PBR materials lost on reopen" data loss: they never entered the
-    /// document, so the writer had nothing to save.
-    void applyMaterialPreset(const MaterialPreset &preset);
-    void applyMaterialPreset(const MaterialPreset &preset, iris::SceneNodePtr target);
+    // (applyMaterialPreset is GONE, both overloads — MATERIAL_BUNDLE_SPEC
+    // phase 3. A preset is a READ-ONLY LIBRARY BUNDLE with its reserved guid
+    // now (MaterialPresetAssets), so applying one is applying a material
+    // asset: `applyMaterial` seeds the bundle on first use and hands it to
+    // `applyMaterialAsset`. What went with the overloads is the whole
+    // registration TAIL they carried — a project Material row per preset, an
+    // "Presets" folder, a `matgen.material` file and hand-written dependency
+    // edges — none of which undo could take back, and all of which the pin
+    // does correctly.)
 
     /// THE ONE WAY A MATERIAL IS RESOLVED FROM WHAT THE UI CARRIES
     /// (MATERIAL-PREVIEW-1). Everything a user can drag, double-click, script
@@ -370,8 +368,10 @@ public:
     /// that turns that string into an `iris::Material`:
     ///
     ///   * a reserved preset GUID, or a preset's NAME  -> BuiltinMaterials::fromPreset
+    ///     (the SHIPPED values, read with nothing written: a hover must not
+    ///     seed a library row. An apply of the same string goes through the
+    ///     seeded bundle — same conversion, same bytes, same picture.)
     ///   * a project/library MATERIAL row              -> MaterialReader::parseMaterialTyped
-    ///   * a SHADER row (a Materials-module graph)     -> MaterialReader::parseShaderAsPbr
     ///
     /// ALWAYS A FRESH, PRIVATE INSTANCE — never a shared one. `MeshNode::setMaterial`
     /// MUTATES the material it is handed (SKINNING_ENABLED and friends), so a
@@ -395,12 +395,25 @@ public:
     bool applyMaterial(const QString &presetOrGuid, iris::SceneNodePtr target);
 
 
-    /// Applies a SAVED material asset (a project .material row — e.g. one the
-    /// preset apply registered under Presets/) to the same target set.
-    /// Dispatches on the stored materialType, so saved PBR materials come back
-    /// as real PbrMaterials. Returns false when the guid has no material data
-    /// or the target holds no meshes.
+    /// Applies a SAVED material bundle (a library or project Material row,
+    /// including a seeded PRESET) to the same target set. Dispatches on the
+    /// stored materialType; pins the bundle into the open project as part of
+    /// the undo macro when the project does not hold it yet. Returns false
+    /// when the guid has no definition or the target holds no meshes.
     bool applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target);
+
+    /// "A material row was created outside this service — re-list." One
+    /// emitter for a signal the shell already listens to, so a UI gesture
+    /// that mints a row (the tray's Customise) does not have to reach into
+    /// another object's signals to say so.
+    void requestAssetViewRefresh();
+
+    /// The apply for a material that has no ROW: a shipped preset in a
+    /// session with no library to seed it into. Builds the material through
+    /// `resolveMaterial` and pushes one ChangeMaterialCommand per mesh —
+    /// nothing is pinned, nothing is written down, because there is nowhere
+    /// to write it.
+    bool applyResolvedMaterial(const QString &presetOrGuid, iris::SceneNodePtr target);
 
     // (applyMaterialShader is DELETED — phase 2's Deletes column. It applied a
     // ModelTypes::Shader row, the module's old separate graph asset; there is

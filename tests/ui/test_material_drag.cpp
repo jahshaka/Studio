@@ -179,23 +179,58 @@ int main(int argc, char **argv)
         CHECK(left == QStringLiteral("true"),
               qUtf8Printable(QStringLiteral("%1: a drag that LEAVES restores B exactly").arg(what)));
 
-        // 3 + 4. A DROP on A: one undo step, applied to the node under the
+        // 3 + 4. A DROP on A: one undo STEP, applied to the node under the
         // CURSOR (B is deliberately selected first — the old drop applied to
         // the SELECTION and the leaked preview made it look right anyway), and
         // the undo comes back to the TRUE original.
+        //
+        // WHAT THESE TWO NUMBERS EACH PROVE, said plainly (fix round F12),
+        // because one of them is much weaker than it looks.
+        //
+        // `steps` is the stack's INDEX moving by one — and the drop runs
+        // inside an MCP run_script, which is itself one undo macro, so this
+        // run would leave exactly one entry whatever the apply pushed. It is
+        // not vacuous (a gesture that left two entries, or none, would fail
+        // it, and the undo two lines below is what spends that entry) but it
+        // is NOT the proof that the apply composes its own macro.
+        //
+        // `commands` is that proof: the pushes the apply makes, against the
+        // number it owes — one ChangeMaterialCommand and one
+        // MaterialUseEdgeCommand per mesh, plus the PIN when the project did
+        // not hold the bundle yet (commands/pinassetcommand.h: the materials
+        // audit's F5, so that undoing an apply takes back the membership and
+        // the use edge it created).
+        //
+        // The index is read rather than the count because each arm UNDOES its
+        // drop before the next one, so the next push truncates the redo tail
+        // and `count` can come back unchanged.
         runOk(mcp, QStringLiteral(
             "editor.select(cubeB);"
-            "pushes0 = editor.undoState().pushes; true;"));
+            "pushes0 = editor.undoState().pushes;"
+            "index0 = editor.undoState().index;"
+            "held0 = assets.list({scope: 'project'}).filter("
+            "    function (a) { return a.guid === SRC; }).length; true;"));
         runOk(mcp, QStringLiteral(
             "editor.dragAsset(SRC, pa[0], pa[1], {action: 'drop'});"
             "editor.frame(2); true;"));
         const QString dropped = runValue(mcp, QStringLiteral(
-            "JSON.stringify({steps: editor.undoState().pushes - pushes0,"
+            "JSON.stringify({steps: editor.undoState().index - index0,"
+            " commands: editor.undoState().pushes - pushes0,"
+            " expected: held0 ? 2 : 3,"
             " a: fp(cubeA) !== plainA,"
             " b: fp(cubeB) === plainB})"));
         std::printf("info: %s drop -> %s\n", qUtf8Printable(what), qUtf8Printable(dropped));
         CHECK(dropped.contains("\"steps\":1"),
-              qUtf8Printable(QStringLiteral("%1: the drop is EXACTLY ONE undo command").arg(what)));
+              qUtf8Printable(QStringLiteral("%1: the drop is EXACTLY ONE undo step").arg(what)));
+        {
+            const QJsonObject drop = QJsonDocument::fromJson(dropped.toUtf8()).object();
+            CHECK(drop.value("commands").toInt() == drop.value("expected").toInt(),
+                  qUtf8Printable(QStringLiteral(
+                      "%1: ...made of the commands it should be — the material and the use "
+                      "edge, plus the PIN when the project did not hold the bundle (%2 of %3)")
+                          .arg(what).arg(drop.value("commands").toInt())
+                          .arg(drop.value("expected").toInt())));
+        }
         CHECK(dropped.contains("\"a\":true"),
               qUtf8Printable(QStringLiteral("%1: the drop applied to the node under the CURSOR").arg(what)));
         CHECK(dropped.contains("\"b\":true"),

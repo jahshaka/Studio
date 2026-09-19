@@ -288,6 +288,8 @@ set(SRCS
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
     src/services/materialbundle.cpp
+    src/services/materialpresetassets.cpp
+    src/services/materialpresetseeder.cpp
     src/services/materialmembers.cpp
     src/services/assetshare.cpp
     src/services/projectarchiver.cpp
@@ -416,6 +418,7 @@ set(SRCS
     src/commands/transformscenenodecommand.cpp 
     src/commands/changematerialpropertycommand.cpp
     src/commands/changematerialcommand.cpp
+    src/commands/pinassetcommand.cpp
     src/commands/resetmaterialcommand.cpp
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
@@ -699,6 +702,7 @@ set(HEADERS
     src/commands/transformscenenodecommand.h 
     src/commands/changematerialpropertycommand.h
     src/commands/changematerialcommand.h
+    src/commands/pinassetcommand.h
     src/commands/addscenenodecommand.h
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h

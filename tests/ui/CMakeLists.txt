@@ -1459,6 +1459,10 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 add_executable(test_presets_favorites
     test_presets_favorites.cpp
     test_presets_favorites_stubs.cpp
+    # AUTOMOC needs the header in the source list to emit the seeder's
+    # metaobject: the tray's Customise stands the launch seeder down, and the
+    # stub file defines its two methods (the tests/ui idiom).
+    ${CMAKE_SOURCE_DIR}/src/services/materialpresetseeder.h
     ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmodelpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmaterialpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp

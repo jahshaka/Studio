@@ -54,7 +54,11 @@ For more information see the LICENSE file
 #include "core/materialhelper.h"
 #include "core/graphbaker.h"
 #include "core/graphdefinition.h"
+#include "data/materialpreset.h"
+#include "io/materialpresets.h"
 #include "services/materialbundle.h"
+#include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/sceneissues.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
@@ -516,6 +520,32 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 
 void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 {
+	// A SHIPPED PRESET DOES NOT OPEN (phase 3). It is read-only — the
+	// definition writer refuses it by name — and it has no graph to show, so
+	// opening one would put an EMPTY editor in front of the user and refuse
+	// their first save. A preset is reachable here only from the PROJECT
+	// drawer, where a pinned one is an ordinary tile; the way to change it is
+	// Customise, which is what this says.
+	const QString shipped = MaterialBundle::shippedPresetName(guid);
+	if (!shipped.isEmpty()) {
+		// AND THE USER IS TOLD, on screen (fix round F2). A double-click on a
+		// pinned preset in the Project drawer used to log a line and do
+		// nothing at all, which reads as a dead gesture. Same channel as a
+		// refused save — the scene-issue bar, because the condition stays
+		// true until the user does the other thing — and the same sentence
+		// the definition writer refuses with.
+		irisLog("loadGraph: '" + shipped + "' is read-only");
+		SceneIssue issue;
+		issue.id = QStringLiteral("material.readonly:") + guid;
+		issue.kind = QStringLiteral("material.readonly");
+		issue.nodeName = shipped;
+		issue.message = tr("'%1' is a material the app ships, and it is read-only.").arg(shipped);
+		issue.action = tr("Right-click it in the Presets drawer and choose Customise: that makes "
+		                  "'%1-1', your own copy, and every edit works on it.").arg(shipped);
+		SceneIssues::instance().raise(issue);
+		return;
+	}
+
 	// The origin is set BEFORE the read, because `fetchAsset` reads the
 	// definition at this scope.
 	currentShaderInformation.origin = origin;
@@ -773,7 +803,10 @@ void EffectsPage::configureAssetsDock()
 	// read-only library bundles with a Customise gesture; until then the
 	// drawer must not offer edits it cannot honour).
 	presets->shaderContextMenuAllowed = false;
-	presets->setToolTip(tr("Shipped materials — read-only. Duplicate one into Custom to change it."));
+	// …but it has ONE gesture (R18): Customise, which is how a read-only
+	// preset becomes a material the user owns.
+	presets->presetContextMenuAllowed = true;
+	presets->setToolTip(tr("Shipped materials — read-only. Right-click › Customise for your own copy."));
 	presets->setStyleSheet(StyleSheet::EffectsPresetsList());
 
 	CreateNewDialog::getAdditionalPresetList();
@@ -811,6 +844,26 @@ void EffectsPage::configureAssetsDock()
 		item->setIcon(QIcon(MaterialHelper::assetPath(tile.iconPath)));
 		item->setData(MODEL_TYPE_ROLE, "presets");
 		item->icon().addPixmap(QPixmap(":/icons.shader_overlay.png"));
+		presets->addToListWidget(item);
+	}
+
+	// THE SHIPPED MATERIAL PRESETS (phase 3). They are library bundles with
+	// reserved guids now — the same tiles the editor's materials drawer
+	// shows, from the same one list (io/materialpresets.h) — so the module's
+	// Presets drawer is what its name and its tooltip always claimed: the
+	// materials the app ships, read-only, with Customise as the way out.
+	// LISTING DOES NOT SEED: the guid is reserved and known before any row
+	// exists, so the drawer costs nothing until somebody uses a preset.
+	for (const MaterialPreset &preset : MaterialPresets::all()) {
+		const QString guid = MaterialPresetAssets::guidFor(preset.name);
+		if (guid.isEmpty()) continue;
+		auto item = new QListWidgetItem;
+		item->setText(preset.name);
+		item->setSizeHint(defaultItemSize);
+		item->setTextAlignment(Qt::AlignBottom);
+		item->setIcon(QIcon(preset.icon));
+		item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Material));
+		item->setData(MODEL_GUID_ROLE, guid);
 		presets->addToListWidget(item);
 	}
 
@@ -1319,6 +1372,12 @@ void EffectsPage::updateAssetDock()
 				const bool companion = !blob.value(QStringLiteral("companionOf")).toString().isEmpty()
 				                       && !blob.contains(QStringLiteral("shadergraph"));
 				if (companion) continue;
+				// NOT A SHIPPED PRESET EITHER (phase 3): a seeded preset
+				// bundle is an ordinary library Material row, and Custom is
+				// the drawer of materials the user may EDIT. A preset lives
+				// in Presets, read-only, and its Customise copy — an
+				// ordinary guid — is what lands here.
+				if (!MaterialBundle::shippedPresetName(asset.guid).isEmpty()) continue;
 				if (mProject && !mProject->getProjectGuid().isEmpty()
 				    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), asset.guid))
 					continue;
@@ -1819,6 +1878,19 @@ void EffectsPage::configureConnections()
 			}
 		}
 	});
+	// A SHIPPED MATERIAL PRESET'S TILE DOES THE ONE THING IT CAN (fix round
+	// F2). The two loops above match GRAPH TEMPLATES by name; a preset tile
+	// matches neither, so double-clicking one was a silent no-op. A preset
+	// cannot be opened — it is read-only and has no graph — so the gesture is
+	// the same one its context menu offers: Customise, which gives the user
+	// their own copy to open.
+	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
+		const QString presetGuid =
+		    MaterialBundle::shippedPresetName(item->data(MODEL_GUID_ROLE).toString()).isEmpty()
+		        ? QString()
+		        : item->data(MODEL_GUID_ROLE).toString();
+		if (!presetGuid.isEmpty()) emit presets->customisePreset(presetGuid);
+	});
 
 	
 
@@ -1906,6 +1978,29 @@ void EffectsPage::configureConnections()
 		loadGraph(guid, shaderInfo::Origin::Project);
 	});
 
+
+	// R18 — CUSTOMISE A SHIPPED PRESET. The drawer's one gesture on a
+	// read-only tile, and it calls the SAME implementation
+	// `materials.createFromPreset` calls (the suffix rule lives there, once):
+	// an ordinary editable bundle named "<Preset>-1", pinned into the open
+	// project so the project drawer and the editor's tray show it too.
+	connect(presets, &ListWidget::customisePreset, [=](QString presetGuid) {
+		MaterialPresetSeeder::instance().finishNow();   // one importer at a time
+		QString error;
+		const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
+		                                                     dataBase, mProject, &error);
+		if (copy.isEmpty()) { irisLog("Customise: " + error); return; }
+		refreshShaderGraph();
+		// It is the user's material now: show them where it landed. In a
+		// project it is the Project drawer (Customise pins it), otherwise
+		// Custom.
+		const bool pinned = mProject && !mProject->getProjectGuid().isEmpty()
+		                    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), copy);
+		tabWidget->setCurrentIndex(static_cast<int>(pinned ? ShaderWorkspace::Projects
+		                                                   : ShaderWorkspace::MyEffects));
+		if (auto *tile = selectCorrectItemFromDrop(copy))
+			ListWidget::highlightNodeForInterval(2, tile);
+	});
 
     // change: any settings changed
     connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged,[=](MaterialSettings settings){

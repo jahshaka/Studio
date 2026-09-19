@@ -461,6 +461,62 @@ int main(int argc, char **argv)
               "10: the member the project's definition names is pinned by the project (F8)");
     }
 
+    // =======================================================================
+    // 11. A SHIPPED PRESET IS READ-ONLY IN FACT (phase 3, owner §12 Q2)
+    // =======================================================================
+    //
+    // "Defaults are read-only SAMPLES… to edit you CREATE a material or CLONE
+    // a default." A drawer that offers no edit gesture is not enough: the
+    // Materials page AUTOSAVES every 1.5 s, so a preset opened by any route
+    // at all would have been republished under the guid the whole app treats
+    // as immutable — the tray tile, the drag payload and every saved scene
+    // name it. The refusal is in the WRITER, it names the preset, and the one
+    // door past it (`writeShipped`, the seeder's) is a different function.
+    {
+        const QString presetGuid = QStringLiteral("00000000-0000-0000-0000-000000002024");
+        CHECK(MaterialBundle::shippedPresetName(presetGuid) == QLatin1String("Gold PBR"),
+              "11: a reserved guid answers the preset's NAME");
+        CHECK(MaterialBundle::shippedPresetName(QStringLiteral("not-a-preset")).isEmpty(),
+              "11: an ordinary guid is not a preset");
+
+        db.createAssetEntry(presetGuid, "Gold PBR", static_cast<int>(ModelTypes::Material),
+                            QString(), QString(), QString(), QString(), QByteArray(),
+                            QByteArray(), QByteArray(), QByteArray(),
+                            AssetViewFilter::AssetsView);
+        QJsonObject presetValues;
+        presetValues["baseColor"] = "#ffd700";
+        QJsonObject presetDef;
+        presetDef["materialType"] = "pbr";
+        presetDef["values"] = presetValues;
+
+        const auto refused = MaterialBundle::write(&db, nullptr, presetGuid, presetDef);
+        CHECK(!refused.ok, "11: the ONE writer refuses a shipped preset");
+        CHECK(refused.error.contains(QLatin1String("Gold PBR")),
+              qPrintable(QStringLiteral("11: ...and names it (%1)").arg(refused.error)));
+        CHECK(AssetCas::sourceOid(conn, presetGuid).isEmpty(),
+              "11: nothing was published by the refused write");
+
+        const auto seeded = MaterialBundle::writeShipped(&db, presetGuid, presetDef);
+        CHECK(seeded.ok, qPrintable(QStringLiteral("11: the seeder's door publishes (%1)")
+                                        .arg(seeded.error)));
+        CHECK(!AssetCas::sourceOid(conn, presetGuid).isEmpty(),
+              "11: ...and the definition is a store object like any other material's");
+        CHECK(MaterialBundle::read(&db, presetGuid).value("values").toObject()
+                  .value("baseColor").toString() == QLatin1String("#ffd700"),
+              "11: ...and reads back");
+
+        // A second ordinary write, now that the row HAS a definition, is
+        // still refused: read-only is a property of the guid, not of the
+        // row's state.
+        presetValues["baseColor"] = "#000000";
+        presetDef["values"] = presetValues;
+        CHECK(!MaterialBundle::write(&db, nullptr, presetGuid, presetDef).ok,
+              "11: a seeded preset is still refused (the guid is what is read-only)");
+        CHECK(MaterialBundle::read(&db, presetGuid).value("values").toObject()
+                  .value("baseColor").toString() == QLatin1String("#ffd700"),
+              "11: ...and the stored definition did not move");
+    }
+
     printf(failures ? "\n%d FAILURES\n" : "\nall material bundle assertions passed\n", failures);
     return failures ? 1 : 0;
 }

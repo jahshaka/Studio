@@ -59,6 +59,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 
+#include "data/constants.h"
+
 class Database;
 class Project;
 
@@ -137,6 +139,34 @@ struct WriteResult
 /// failure that cannot be repaired, and this function cannot produce it.
 WriteResult write(Database *db, Project *project, const QString &guid,
                   const QJsonObject &definition, Scope scope = Scope::Library);
+
+/// THE NAME OF THE SHIPPED PRESET `guid` reserves, or an empty string
+/// (`Constants::Reserved::DefaultMaterials`). A preset is READ-ONLY IN FACT,
+/// not by convention: `write` refuses one and names it, so no editor, verb or
+/// 1.5 s autosave can publish over a material the app ships. The owner's
+/// model (§12 Q2): "defaults are read-only SAMPLES… to edit you CREATE a
+/// material or CLONE a default" — `MaterialPresetAssets::customise` is the
+/// clone, and it makes an ordinary bundle with an ordinary guid.
+///
+/// INLINE, because the read-only law has more than one enforcement point and
+/// they must all read the same table: the definition writer below, the NAME
+/// (services/assettags.h — a rename would leave one guid with two names for
+/// ever, since every drawer labels a preset from the shipped list), and the
+/// module's "this does not open" (effectspage).
+inline QString shippedPresetName(const QString &guid)
+{
+    if (guid.isEmpty()) return QString();
+    return Constants::Reserved::DefaultMaterials.value(guid);
+}
+
+/// THE SEEDER'S DOOR, and the only writer allowed on a reserved preset guid
+/// (`MaterialPresetAssets::ensureSeeded` is its one caller). It publishes to
+/// the LIBRARY exactly as `write` does — same guard, same colour
+/// normalisation, same one transaction — so a preset bundle is stored,
+/// membership-derived and sidecar-backed like every other material; the
+/// separate name is the statement that seeding is a deliberate act rather
+/// than an exception a caller can fall into.
+WriteResult writeShipped(Database *db, const QString &guid, const QJsonObject &definition);
 
 /// Mint a LIBRARY Material row carrying `definition` and write it through
 /// `write`. `thumbnail` is the stored fallback (a render is asked for by

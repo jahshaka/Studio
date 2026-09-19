@@ -222,8 +222,18 @@ void ListWidget::customContextMenu(QPoint pos)
             menu.addActions({actionCreate, actionImport});
             menu.exec(this->mapToGlobal(pos));
         }
-    }else{
-
+    }else if (presetContextMenuAllowed && index.isValid() && !guid.isEmpty()) {
+        // THE PRESETS DRAWER (R18). One item, because one is all a read-only
+        // tile can honestly offer: the preset itself cannot be renamed,
+        // deleted or edited — the definition writer refuses a shipped guid by
+        // name — so Customise is the door, and it mints an ordinary editable
+        // bundle in the user's own drawer.
+        auto actionCustomise = new QAction(tr("Customise"));
+        connect(actionCustomise, &QAction::triggered, [guid, this]() {
+            emit customisePreset(guid);
+        });
+        menu.addAction(actionCustomise);
+        menu.exec(this->mapToGlobal(pos));
     }
 }
 

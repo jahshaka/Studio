@@ -120,26 +120,23 @@ namespace Contants
         // BuiltinShaders' 0002-0006 above; the table's are their own 4000
         // range, and primitives::canonicalGuid maps the old ones.)
 
+        // THE SHIPPED MATERIAL PRESETS, by the guid each has always had.
+        // These are LIBRARY BUNDLES now (MATERIAL_BUNDLE_SPEC phase 3,
+        // services/materialpresetassets.h): the guid is the row's, seeded
+        // the first time anybody uses the preset, and it is also what tells
+        // every writer that the row is READ-ONLY.
+        //
+        // Names must match the "name" field in app/content/materials/
+        // *-pbr.material exactly — the lookup is by name, and a miss yields
+        // an empty guid.
+        //
+        // (THE FOURTEEN LEGACY ROWS ARE GONE — guids …2000-…2013, the
+        // pre-PBR "Gold"/"Brick"/"Basic" family. Their `.material` files are
+        // deleted with them: the preset list has skipped every non-PBR file
+        // since the HLMS adoption, so they had named nothing for months.
+        // The numbers are NOT reused — a guid that meant a material once
+        // may never mean a different one.)
         QMap<QString, QString> DefaultMaterials = {
-            { "00000000-0000-0000-0000-000000002000", "Brick" },
-            { "00000000-0000-0000-0000-000000002001", "Concrete" },
-            { "00000000-0000-0000-0000-000000002002", "Grass" },
-            { "00000000-0000-0000-0000-000000002003", "Leather" },
-            { "00000000-0000-0000-0000-000000002004", "Marble" },
-            { "00000000-0000-0000-0000-000000002005", "Patchy Grass" },
-            { "00000000-0000-0000-0000-000000002006", "Sand" },
-            { "00000000-0000-0000-0000-000000002007", "Stone Wall" },
-			{ "00000000-0000-0000-0000-000000002008", "Board" },
-			{ "00000000-0000-0000-0000-000000002009", "Checker Board" },
-			{ "00000000-0000-0000-0000-000000002010", "Gold" },
-			{ "00000000-0000-0000-0000-000000002011", "Texture" },
-			{ "00000000-0000-0000-0000-000000002012", "Basic" },
-			{ "00000000-0000-0000-0000-000000002013", "Default" },
-
-			// PBR siblings of the above. Same stable-identifier convention,
-			// continuing the sequence. Names must match the "name" field in
-			// app/content/materials/*-pbr.material exactly - the panel looks the
-			// GUID up by name, and a miss yields an empty GUID.
 			{ "00000000-0000-0000-0000-000000002014", "Brick PBR" },
 			{ "00000000-0000-0000-0000-000000002015", "Concrete PBR" },
 			{ "00000000-0000-0000-0000-000000002016", "Grass PBR" },
@@ -154,8 +151,6 @@ namespace Contants
 			{ "00000000-0000-0000-0000-000000002025", "Texture PBR" },
 			{ "00000000-0000-0000-0000-000000002026", "Basic PBR" },
 			{ "00000000-0000-0000-0000-000000002027", "Default PBR" },
-			// PBR-only presets (no legacy sibling). Absent from this table they
-			// got an empty MODEL_GUID_ROLE in the drawer.
 			{ "00000000-0000-0000-0000-000000002028", "Glass PBR" },
 			{ "00000000-0000-0000-0000-000000002029", "Silver PBR" },
 			// The Grand Showroom's mirror spheres (white metal, roughness 0.03)

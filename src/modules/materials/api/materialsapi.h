@@ -79,6 +79,18 @@ public:
     Q_INVOKABLE bool regenerate(const QString &shaderGuid);
     Q_INVOKABLE QString createFromImage(const QString &textureGuid,
                                         const QVariantMap &options = QVariantMap());
+    /// The first-run seed, on demand: every shipped preset as its read-only
+    /// library bundle. Idempotent; answers how many exist afterwards.
+    Q_INVOKABLE int seedPresets();
+    /// R18 — CUSTOMISE A PRESET. A shipped preset is read-only (the writer
+    /// refuses it by name), so the way to change one is to take a copy: this
+    /// mints an ordinary, editable library bundle from the preset's own
+    /// definition, named `<Preset>-1` with the suffix bumped against the
+    /// names already there. THE SUFFIX RULE LIVES IN ONE PLACE
+    /// (MaterialPresetAssets::customiseName) and both the editor's tray and
+    /// the Materials module's Presets drawer call this verb.
+    Q_INVOKABLE QString createFromPreset(const QString &presetOrGuid,
+                                         const QVariantMap &options = QVariantMap());
 
 private:
     /// The {graph: true} branch of createFromImage (IMAGE_PLANE_SPEC B2).

@@ -112,8 +112,20 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
 /// `QFile::copy` into a retired per-guid folder and a type-11 File row with
 /// no hash, no sidecar and no pin — which is why the owner's library holds
 /// four copies of one checker image.
+/// `knownOid` — a sha256 of `sourcePath` the caller already computed on a
+/// worker (the preset seeder does). It skips the hash here, which is 19-96 ms
+/// of the UI thread per preset; wrong bytes for the oid are impossible,
+/// because the same file is what both sides read.
 Pinned importTexture(const QString &sourcePath, const QString &displayName,
-                     Database *db, Project *project);
+                     Database *db, Project *project, const QString &knownOid = QString());
+
+/// The LIBRARY Texture row whose stored bytes are `oid`, or empty. The same
+/// by-content lookup the imports above use to answer "I already have this" —
+/// exposed because the preset seeder must ask it on the UI thread BEFORE it
+/// hands a file to the import pipeline: the store dedups BYTES, but the
+/// pipeline would still mint a second Texture ROW for content the library
+/// already has under one.
+QString libraryTextureFor(const QString &oid, const QString &projectGuid = QString());
 
 /// The shipped cube-sky presets (app/content/skies/alternative/<dir>/).
 struct SkyPreset

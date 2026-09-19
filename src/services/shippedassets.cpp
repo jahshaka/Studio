@@ -48,7 +48,7 @@ namespace {
 /// user deleted from the library but a project still pins is legitimate
 /// reuse, just not the first choice), then the guid, so two equal candidates
 /// always answer the same way.
-QString libraryTextureFor(QSqlDatabase conn, const QString &oid, const QString &projectGuid)
+QString libraryTextureForOn(QSqlDatabase conn, const QString &oid, const QString &projectGuid)
 {
     QSqlQuery query(conn);
     query.prepare("SELECT AF.asset_guid FROM asset_files AF "
@@ -66,6 +66,12 @@ QString libraryTextureFor(QSqlDatabase conn, const QString &oid, const QString &
 
 } // namespace
 
+QString libraryTextureFor(const QString &oid, const QString &projectGuid)
+{
+    if (oid.isEmpty()) return QString();
+    return libraryTextureForOn(QSqlDatabase::database(), oid, projectGuid);
+}
+
 namespace {
 
 /// THE ONE CONTENT IMPORT, with the pin optional.
@@ -77,7 +83,8 @@ namespace {
 /// anything pins it. Everything else about the route is identical, because it
 /// IS the same route.
 Pinned importTextureContent(const QString &sourcePath, const QString &displayName,
-                            Database *db, Project *project, Ownership ownership, bool pin)
+                            Database *db, Project *project, Ownership ownership, bool pin,
+                            const QString &knownOid = QString())
 {
     Pinned out;
     if (sourcePath.isEmpty() || !QFileInfo(sourcePath).isFile()) {
@@ -103,13 +110,13 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
     const QString root = AssetStorePaths::root();
     const QString projectGuid = haveProject ? project->getProjectGuid() : QString();
 
-    const QString oid = AssetCas::hashFile(sourcePath);
+    const QString oid = knownOid.isEmpty() ? AssetCas::hashFile(sourcePath) : knownOid;
     if (oid.isEmpty()) {
         out.error = QStringLiteral("could not read '%1'").arg(sourcePath);
         return out;
     }
 
-    QString guid = libraryTextureFor(conn, oid, projectGuid);
+    QString guid = libraryTextureForOn(conn, oid, projectGuid);
     // A row whose object is no longer in the store (purged, a store moved
     // without its objects) cannot serve a scene; a fresh import brings the
     // bytes back under a new row rather than handing out a guid that
@@ -209,14 +216,14 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
 }
 
 Pinned importTexture(const QString &sourcePath, const QString &displayName,
-                     Database *db, Project *project)
+                     Database *db, Project *project, const QString &knownOid)
 {
     // A LIBRARY row always; PINNED as well when a project is open. That is the
     // owner's answer to spec Q1 in one call: "into the library once, a member
     // of that material, and pinned into the open project".
     const bool haveProject = db && project && !project->getProjectGuid().isEmpty();
     return importTextureContent(sourcePath, displayName, db, project,
-                                Ownership::Project, /*pin=*/haveProject);
+                                Ownership::Project, /*pin=*/haveProject, knownOid);
 }
 
 QStringList SkyPreset::faces() const

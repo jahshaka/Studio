@@ -259,18 +259,12 @@ iris::PbrMaterialPtr fromPreset(const MaterialPreset &preset)
         return mat;
     }
 
-    // The LEGACY flavour, through the one conversion. Presets store paths, not
-    // asset guids, so the texture resolver is the identity — an existence check
-    // would be wrong here (a preset naming a missing file should clear the slot
-    // the same way it always did, which setValue's loadTexture already does).
-    QJsonObject values;
-    values[QStringLiteral("diffuseColor")]   = preset.diffuseColor.name();
-    values[QStringLiteral("shininess")]      = double(preset.shininess);
-    values[QStringLiteral("normalIntensity")]= double(preset.normalIntensity);
-    values[QStringLiteral("textureScale")]   = double(preset.textureScale);
-    values[QStringLiteral("diffuseTexture")] = preset.diffuseTexture;
-    values[QStringLiteral("normalTexture")]  = preset.normalTexture;
-    applyDefaultFamily(mat, values, [](const QString &p, const QString &) { return p; });
+    // (THE LEGACY FLAVOUR IS GONE — MATERIAL_BUNDLE_SPEC phase 3's Deletes.
+    // The fourteen pre-PBR `.material` files it converted are deleted, and
+    // the preset list has skipped every non-PBR file since the HLMS adoption,
+    // so no preset of that shape can reach this function any more. A
+    // Blinn-era material inside a SCENE still converts — that is
+    // `fromLegacyValues`, which is a different door and stays.)
     return mat;
 }
 

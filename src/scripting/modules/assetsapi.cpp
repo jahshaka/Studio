@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "services/assetmigration.h"
 #include "services/assetstore.h"
 #include "services/assettags.h"
+#include "services/materialbundle.h"
 #include "services/assettray.h"
 #include "services/assetstorepaths.h"
 #include "services/meshbakestore.h"
@@ -734,6 +735,14 @@ bool AssetsApi::rename(const QString &guid, const QString &name)
                     "can be found by)");
     if (host.db->fetchAsset(guid).guid.isEmpty())
         return fail(QStringLiteral("assets.rename: no asset with guid '%1'").arg(guid));
+    // THE REFUSAL IS ENFORCED IN assettags::write (the one place both this
+    // verb and the Assets page's Update button write a name); this says WHY,
+    // in the sentence the definition writer already uses for the same law.
+    const QString shipped = MaterialBundle::shippedPresetName(guid);
+    if (!shipped.isEmpty() && wanted != shipped)
+        return fail(QStringLiteral("assets.rename: '%1' is a material the app ships and is "
+                                   "read-only - materials.createFromPreset makes your own copy, "
+                                   "and that one renames").arg(shipped));
     if (!assettags::rename(host.db, guid, wanted))
         return fail(QStringLiteral("assets.rename: the database refused the rename of '%1'")
                         .arg(guid));

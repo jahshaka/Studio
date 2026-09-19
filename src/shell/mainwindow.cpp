@@ -204,6 +204,8 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/projectarchiver.h"
 #include "services/sceneextents.h"
 #include "ui/dialogs/progressdialog.h"
+#include "app/firstrun.h"
+#include "services/materialpresetseeder.h"
 #include "services/materialpreviewservice.h"
 #include "services/sceneeditservice.h"
 #include "services/clipboardservice.h"
@@ -3030,6 +3032,27 @@ void MainWindow::setupDockWidgets()
     assetMaterialPanel->setMainWindow(this);
     assetMaterialPanel->setServices(services);
     assetMaterialPanel->setDatabaseHandle(db);
+
+    // THE SHIPPED PRESETS, SEEDED AT FIRST RUN (MATERIAL_BUNDLE_SPEC §8 phase
+    // 3). Their maps' bytes go into the store on a WORKER — a preset's maps
+    // are copied and fsynced when the store is on a different filesystem from
+    // the app tree, which is the owner's box, and an fsync belongs nowhere
+    // near the thread that draws (FSYNC-2) — and the rows follow one preset
+    // per event-loop turn, with no device wait left in them. A library that
+    // already has all eighteen starts no thread at all. Nothing waits for it:
+    // an apply that beats the seeder seeds its own preset, as it always did.
+    //
+    // ONLY FOR A PERSON (app/firstrun.h, the one "is a machine driving this?"
+    // predicate). A first run is a first run BY SOMEBODY; a driven session — a
+    // suite, a script, an MCP client, the rig — gets a library that changes
+    // only when its own verbs change it, because a background seed landing
+    // between two `assets.list` calls is a row count that moves under the
+    // caller's feet (it broke scripting.e2e.full_surface exactly that way).
+    // Those sessions have the same seed on demand: `materials.seedPresets()`,
+    // and any apply seeds the preset it needs. JAHSHAKA_SEED_PRESETS=1 forces
+    // it on for measuring the shipped path.
+    if (!FirstRun::isDrivenSession() || qEnvironmentVariableIsSet("JAHSHAKA_SEED_PRESETS"))
+        MaterialPresetSeeder::instance().start(db);
 
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");

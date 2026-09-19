@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 
 #include <QColor>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -20,6 +21,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QTemporaryDir>
 
+#include "data/constants.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
@@ -248,8 +250,30 @@ QJsonObject read(Database *db, const QString &guid, Project *project)
     return parseDefinition(db->fetchAssetData(guid));
 }
 
+namespace {
+
+/// The one publish. `allowShipped` is true for exactly one caller — the
+/// preset seeder — and false for the world; see `shippedPresetName`.
+WriteResult writeImpl(Database *db, Project *project, const QString &guid,
+                      const QJsonObject &definition, Scope scope, bool allowShipped);
+
+} // namespace
+
 WriteResult write(Database *db, Project *project, const QString &guid,
                   const QJsonObject &definition, Scope scope)
+{
+    return writeImpl(db, project, guid, definition, scope, false);
+}
+
+WriteResult writeShipped(Database *db, const QString &guid, const QJsonObject &definition)
+{
+    return writeImpl(db, nullptr, guid, definition, Scope::Library, true);
+}
+
+namespace {
+
+WriteResult writeImpl(Database *db, Project *project, const QString &guid,
+                      const QJsonObject &definition, Scope scope, bool allowShipped)
 {
     WriteResult result;
     const auto fail = [&result](const QString &message) {
@@ -259,6 +283,18 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     };
     if (!db || guid.isEmpty()) return fail(QStringLiteral("no material"));
     if (definition.isEmpty()) return fail(QStringLiteral("an empty definition"));
+
+    // A SHIPPED PRESET IS READ-ONLY IN FACT (phase 3, owner §12 Q2). The
+    // drawer says so and offers no edit gesture, but a convention the writer
+    // does not enforce is a convention an autosave breaks: the module saves
+    // every 1.5 s while a user types, and a preset opened in any way at all
+    // would have been republished under the guid the whole app treats as
+    // immutable. Refused BY NAME, so the message the module puts in the scene
+    // issue bar tells the user which material it is and what to do.
+    const QString shipped = shippedPresetName(guid);
+    if (!shipped.isEmpty() && !allowShipped)
+        return fail(QStringLiteral("'%1' is a material the app ships and is read-only - "
+                                   "Customise it to make your own copy").arg(shipped));
 
     // LOCK 3 (F3). A path in a definition is a reference that exists on one
     // machine; it is refused at the one place definitions are written, so no
@@ -290,7 +326,28 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     // means an edit that changes nothing publishes nothing new at all.
     const QByteArray bytes = QJsonDocument(stored).toJson(QJsonDocument::Compact);
 
-    QTemporaryDir staging;
+    // WHERE THE DEFINITION IS STAGED DECIDES WHETHER THIS CALL FSYNCS, and
+    // for a SHIPPED PRESET it must not (FSYNC-2's law: no durable write on
+    // the thread that draws). `AssetCas::storeObject` hardlinks when the
+    // staging file and the store share a filesystem and COPIES + FSYNCS when
+    // they do not — and the system temp dir is a different filesystem from
+    // the store on every box that matters (here /tmp is tmpfs; on the owner's
+    // the store is a USB volume). Staging inside the STORE ROOT takes the
+    // link, so publishing a preset's definition is two renames and no device
+    // wait.
+    //
+    // WHY ONLY FOR A PRESET. A link means the bytes this function wrote are
+    // not flushed, and for a material the user authored that would be a
+    // silent loss of durability: nothing can re-derive their graph. A
+    // preset's definition IS re-derivable — it is a projection of a file the
+    // app ships plus catalog rows — and `MaterialPresetAssets::ensureSeeded`
+    // re-seeds a preset whose definition reads empty, so a torn write heals
+    // itself on the next launch. That is exactly the rule FSYNC-2 wrote for
+    // the sidecar (`Durability::Derived`), applied where it actually holds.
+    const QString root = AssetStorePaths::root();
+    QTemporaryDir staging(allowShipped
+                              ? QDir(root).filePath(QStringLiteral("presetdef-XXXXXX"))
+                              : QDir::tempPath() + QStringLiteral("/jahmatdef-XXXXXX"));
     if (!staging.isValid()) return fail(QStringLiteral("no staging directory"));
     const QString tmpPath = staging.filePath(definitionFileName());
     {
@@ -300,7 +357,6 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     }
 
     QSqlDatabase conn = QSqlDatabase::database();
-    const QString root = AssetStorePaths::root();
     QString error;
     QString oid;
 
@@ -412,6 +468,8 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     result.ok = true;
     return result;
 }
+
+} // namespace
 
 QString create(Database *db, const QString &name, const QJsonObject &definition,
                const QByteArray &thumbnail, QString *errorOut)
