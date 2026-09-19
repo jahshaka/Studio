@@ -70,6 +70,26 @@ namespace MaterialBundle
 /// members the same way.
 inline constexpr int kDefinitionVersion = 3;
 
+/// WHICH MATERIALS HAVE A DEFINITION FILE TODAY — say it plainly, because the
+/// pin, the copy-on-write and the sidecar all follow from it and the answer is
+/// not yet "all of them" (spec item F9, open):
+///
+///   * A MODULE material (a node graph, or one created by `materials.create`)
+///     — YES. Every save goes through `write`, so it has a source file, a
+///     pin, per-project copy-on-write and a sidecar.
+///   * A material imported inside an archive — YES: the import re-publishes
+///     its definition through `write` (ProjectArchiver).
+///   * An IMAGE COMPANION (`ImageMaterial::createMaterialAsset`, minted when a
+///     picture is added to a project) — NO, not yet. It is still a row BLOB
+///     only, so it has no pin of its own: editing it in the library changes
+///     every project using it, and `assets.rebuildCatalog` cannot restore it.
+///     `read` falls back to the blob for exactly this kind, so everything
+///     RESOLVES; what it lacks is the versioning. It is a one-member bundle
+///     already (§9.3) and moving it is a small change — held only because the
+///     lead is deciding where it lands.
+///   * A PRESET — NO: a preset is shipped JSON with no library row at all
+///     until phase 3 seeds it as a read-only bundle.
+
 /// Every TEXTURE slot a material definition may carry, read once from
 /// `iris::PbrMaterial`'s own property list. The slot list is the MATERIAL's —
 /// a second transcription here is a place for the two to disagree, and the
@@ -134,6 +154,25 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
 /// name. Covers the definition's `values` AND a `shadergraph` payload's
 /// texture nodes, because the graph is where the owner's absolute path got in.
 QString offendingPath(const QJsonObject &definition, QString *slotOut = nullptr);
+
+/// THE DOCUMENT'S SPELLING FOR A COLOUR. The graph evaluator's working shape
+/// for a colour is `{r,g,b,a}` floats; every READER of a stored material —
+/// `MaterialReader::parsePbrMaterial`, which reads an image material's
+/// definition, a preset's and a node's copied values in the scene blob alike
+/// — expects what `SceneWriter::writeSceneNodeMaterial` writes,
+/// `QColor::name()`. Two spellings of one slot under one `materialType` is a
+/// reader choosing by luck, and `QColor` of an object-valued key is invalid,
+/// so the graph's red folded to BLACK. `write` runs this over every
+/// definition, beside the path guard and for the same reason: so that no
+/// caller can be the exception.
+///
+/// NOTE: `QColor::name()` is `#rrggbb` and DROPS ALPHA. That is the
+/// document's existing convention (SceneWriter has always written it), and a
+/// material's transparency lives in its own `alpha`/`alphaMode` rows, not in
+/// a colour's fourth channel — but a graph that drives a colour socket's
+/// alpha loses it at the store boundary, and that is a real limitation of the
+/// convention rather than of this function.
+QJsonObject normaliseColours(const QJsonObject &definition);
 
 /// True when `value` reads as a file path rather than an asset guid: it holds
 /// a path separator, or a file extension. Asset guids carry neither.

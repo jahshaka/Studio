@@ -587,8 +587,33 @@ void ProjectArchiver::republishImportedBundles()
         if (localGuid.isEmpty()) continue;
         const AssetRecord row = db->fetchAsset(localGuid);
         if (row.type != static_cast<int>(ModelTypes::Material)) continue;
-        const QJsonObject definition =
-            QJsonDocument::fromJson(db->fetchAssetData(localGuid)).object();
+
+        // THE DEFINITION THE ARCHIVE CARRIED, not the row's blob. The blob is
+        // a cache of the LIBRARY's version and a PROJECT-scope save
+        // deliberately does not move it (only the pin does), so an exported
+        // project whose material was edited inside it carried the right
+        // bytes in the object and the wrong ones in the blob — and reading
+        // the blob here published the stale definition over them. The bytes
+        // are the pinned object the slices just stored; all that is wrong
+        // with them is that they name the AUTHOR's guids, which is exactly
+        // what mGuidMap answers.
+        QString text;
+        {
+            const QString path = AssetCas::resolvePinned(QSqlDatabase::database(), mStoreRoot,
+                                                         mResult.projectGuid, localGuid);
+            QFile file(path);
+            if (!path.isEmpty() && file.open(QIODevice::ReadOnly))
+                text = QString::fromUtf8(file.readAll());
+        }
+        // No stored definition (a material minted before D-2, an image
+        // companion): the blob is all there is, and it was remapped by the
+        // importer.
+        if (text.isEmpty()) text = QString::fromUtf8(db->fetchAssetData(localGuid));
+        else
+            for (auto it = mGuidMap.constBegin(); it != mGuidMap.constEnd(); ++it)
+                text.replace(it.key(), it.value());
+
+        const QJsonObject definition = QJsonDocument::fromJson(text.toUtf8()).object();
         if (definition.isEmpty()) continue;
         // LIBRARY scope: the row's own source pointer is what must name the
         // remapped definition. The project's pin follows on the next line —

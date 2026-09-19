@@ -27,6 +27,7 @@
 #include "services/libraryassetnode.h"
 #include "io/skyassetdefinition.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "ui/dialogs/progressdialog.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
@@ -313,7 +314,10 @@ iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QS
 iris::MaterialPtr EngineAssetViewer::readJafMaterial(const QString &guid)
 {
     if (!mDb) return iris::MaterialPtr();
-    QJsonObject matObject = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
+    // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2) — not the
+    // row's blob cache, which is the LIBRARY's copy and can be a version this
+    // project does not hold.
+    QJsonObject matObject = MaterialBundle::read(mDb, guid, mProject);
     MaterialReader reader(TextureSource::GlobalAssets);
     reader.setProject(mProject);
     // Typed: a saved PBR material previews as a PbrMaterial, not a broken

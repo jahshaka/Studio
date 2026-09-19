@@ -35,13 +35,6 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &, const QString &
     return QVector<AssetRecord>();
 }
 
-// The project drawer lists the project's PINNED material bundles now
-// (MATERIAL_BUNDLE_SPEC phase 1, the four-drawer rule) — this suite is about
-// the handle the widget keeps, not the listing, so it answers empty.
-QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &)
-{
-    return QVector<AssetRecord>();
-}
 QStringList Database::fetchFolderNameByParent(const QString &) { return QStringList(); }
 QStringList Database::fetchAssetNameByParent(const QString &) { return QStringList(); }
 bool Database::createFolder(const QString &, const QString &, const QString &, const QString &,
@@ -92,3 +85,18 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &, Database *, P
 {
     return ProjectAssets::Result();
 }
+
+// THE PROJECT DRAWER IS THE TRAY'S LISTING (MATERIAL_BUNDLE_SPEC phase 1's
+// four-drawer rule: one list, two windows). This suite is about the library
+// HANDLE the widget keeps, not about what the listing contains, so the stub
+// records the handle the way the old fetchChildAssets stub did and answers
+// an empty listing.
+#include "services/assettray.h"
+namespace assettray {
+QVector<AssetRecord> list(Database *db, const QString &, const QString &, int)
+{
+    gLastFetchChildAssetsHandle = db;
+    ++gFetchChildAssetsCalls;
+    return QVector<AssetRecord>();
+}
+}   // namespace assettray

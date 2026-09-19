@@ -55,12 +55,22 @@ assert(ev.values.baseColor && ev.values.baseColor.r > 0.9, "evaluate folds the b
 
 // ---- bake ----
 var baked = graph.bake({ resolution: 64 });
-assert(baked.maps.roughnessMap && ("" + baked.maps.roughnessMap).length > 0,
-       "bake emits a roughnessMap");
-assert(("" + baked.maps.roughnessMap).indexOf(folder) !== 0,
+// THE MAP MUST NAME A FILE THAT EXISTS. "length > 0" is not an assertion:
+// with the baker's `relativePrefix` empty this reported a BARE FILENAME that
+// resolved against nothing, and an applied baked map rendered as no texture
+// at all — and the weakened check passed the whole way. The honest test with
+// the verbs we have is to put the reported path back through the ONE content
+// import: it hashes and stores the bytes, so it can only succeed if the file
+// is really there.
+var bakedPath = "" + baked.maps.roughnessMap;
+assert(bakedPath.length > 0, "bake emits a roughnessMap");
+assert(bakedPath.indexOf(folder) !== 0,
        "and NOT inside the project folder any more (nothing of a material lives outside the store)");
-assert(("" + baked.maps.roughnessMap).indexOf("roughnessMap") === 0,
-       "named for the slot it bakes, plus its content hash");
+assert(bakedPath.charAt(0) === "/", "it NAMES its file, absolutely: " + bakedPath);
+assert(bakedPath.indexOf("roughnessMap") !== -1, "named for the slot it bakes, plus its content hash");
+var provedGuid = assets.importFile(bakedPath);
+assert(provedGuid && provedGuid.length > 10,
+       "and THE FILE EXISTS — the content import read its bytes");
 assert(baked.values.roughness === 1, "roughness factor lands 1.0 beside the map");
 assert(baked.unsupported.length === 0, "nothing unsupported");
 assert(typeof baked.msElapsed === "number", "bake reports msElapsed (" + baked.msElapsed + " ms)");

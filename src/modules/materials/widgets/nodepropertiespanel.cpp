@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFileDialog>
+#include <QMessageBox>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QJsonObject>
@@ -491,7 +492,19 @@ void NodePropertiesPanel::pickTextureForNode()
 	const auto filename = QFileDialog::getOpenFileName(this, tr("Choose an image"));
 	if (filename.isEmpty()) return;
 	auto *tex = TextureManager::getSingleton()->importTexture(filename);
-	chosen(tex && !tex->guid.isEmpty() ? tex->guid : filename);
+	// AN IMPORT THAT FAILED IS A PICK THAT FAILED. This used to fall back to
+	// the PATH — and a path in a texture node makes every later save of that
+	// material refuse (the definition writer's F3 guard), with a log line as
+	// the only symptom: the user keeps working and loses the lot. Refusing
+	// the pick loses one click.
+	if (!tex || tex->guid.isEmpty()) {
+		QMessageBox::warning(this, tr("Could not import the image"),
+		                     tr("'%1' could not be brought into the library, so it was not "
+		                        "put on the node. Nothing was changed.")
+		                         .arg(QFileInfo(filename).fileName()));
+		return;
+	}
+	chosen(tex->guid);
 }
 
 void NodePropertiesPanel::writeValue(const QJsonValue& value)

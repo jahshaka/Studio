@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include <QSqlDatabase>
 #include "services/assetcas.h"
+#include "services/assettray.h"
 #include "services/projectassets.h"
 #include "services/assetstorepaths.h"
 #include <QMenu>
@@ -101,25 +102,25 @@ void ShaderAssetWidget::updateAssetView(const QString & path)
 	// No library or no project = nothing to list, and the stacked widget's
 	// "no scene open" page is what the user sees (setWidgetToBeShown decides
 	// which page that is). The truthful empty state, not a skipped refresh.
-	// THE PROJECT DRAWER SHOWS THE ACTIVE PROJECT'S MATERIALS, and nothing
-	// else (the four-drawer rule, OWNER_REVIEW 9). That is the project's
-	// PINNED material bundles — the same membership the editor's asset tray
-	// reads, so the two windows are one list and can never disagree — plus
-	// any material row the project owns outright.
+	// THE PROJECT DRAWER *IS* THE EDITOR'S ASSET TRAY, filtered to materials
+	// (the four-drawer rule, OWNER_REVIEW 9: "the project asset tray should
+	// mirror the materials project drawer" — ONE LIST, TWO WINDOWS).
+	//
+	// So it calls the function the tray calls — `assettray::list`, which is
+	// the single implementation the tray panel, its search and
+	// `assets.list({tray:true})` already share (services/assettray.h). A
+	// second query here was a second RULE: it listed pinned rows plus the
+	// folder's rows and knew nothing of the tray's collapsing (an import
+	// member, a row the editor minted rather than the user, a companion
+	// whose image is its tile), so the two windows disagreed by
+	// construction. `path` is the folder the user has navigated into — the
+	// project's own guid at the root — and the tray listing takes exactly
+	// that.
 	if (db && project && !project->getProjectGuid().isEmpty()) {
-		QStringList listed;
-		for (const auto &asset : db->fetchProjectPinnedAssets(project->getProjectGuid())) {
-			if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
-			if (listed.contains(asset.guid)) continue;
-			listed.append(asset.guid);
+		const QString folder = path.isEmpty() ? project->getProjectGuid() : path;
+		for (const auto &asset : assettray::list(db, project->getProjectGuid(), folder,
+		                                         static_cast<int>(ModelTypes::Material)))
 			addItem(asset);
-		}
-		for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(),
-		                                              static_cast<int>(ModelTypes::Material))) {
-			if (listed.contains(asset.guid)) continue;
-			listed.append(asset.guid);
-			addItem(asset);
-		}
 	}
 
 	setWidgetToBeShown();

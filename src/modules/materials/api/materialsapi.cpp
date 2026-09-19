@@ -208,20 +208,26 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "import pipeline at that moment, keyed on its CONTENT (so picking the same image twice answers the same "
           "library row — byte-identical duplicates are impossible); a guid already in the library is reused. The "
           "image is pinned into the project that holds the material. With {slot: 'baseColorMap'} it is also "
-          "written into the definition and every mesh wearing the material is re-dressed.",
+          "written into the definition and every mesh wearing the material is re-dressed — on a VALUES "
+          "material only: a GRAPH material's slots come from its graph, so a slot write there is refused "
+          "(the image is still imported and pinned; put it on a texture node with graph.addNode('texture') "
+          "+ graph.setValue).",
           Needs::Document },
         { "members", "materials.members(guid) -> [{guid, name, slot, baked, usedBy, pinned}]",
           "The bundle's members — the textures its definition names, including the maps a graph bake produced.",
           Needs::Document },
         { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved}",
-          "Opens an effect graph (a Shader asset guid, or a .effect/.shader file path) as the current graph for "
-          "graph.* verbs. Texture nodes carrying an APP-RELATIVE image name — which is how the shipped .effect "
-          "presets reference their images — are imported and connected here, exactly as the Effects page does when "
-          "it instantiates a template; texturesResolved reports how many.",
+          "Opens a material bundle's GRAPH (a Material asset guid, or a .effect/.shader file path) as the current "
+          "graph for graph.* verbs. Texture nodes carrying an APP-RELATIVE image name — which is how the shipped "
+          ".effect presets reference their images — are imported through the one content import and connected "
+          "here, exactly as the Materials page does when it instantiates a template; texturesResolved reports how "
+          "many.",
           Needs::Document },
-        { "regenerate", "materials.regenerate(shaderGuid) -> bool",
-          "Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app "
-          "upgraded' recovery) and refreshes materials in the open scene that use that cache.",
+        { "regenerate", "materials.regenerate(materialGuid) -> bool",
+          "Re-evaluates and re-bakes a stored material bundle's maps (the 'cache deleted / app upgraded' recovery) "
+          "and re-dresses every mesh in the open scene wearing it. The maps land as MEMBER TEXTURES in the "
+          "content-addressed store, named in the definition by guid — there is no project-folder BakedMaps/ tree "
+          "any more, so this works with no project open and on any machine.",
           Needs::Document },
         { "createFromImage", "materials.createFromImage(textureGuid, {graph}) -> materialGuid",
           "Creates the standard image material asset for a Texture (IMAGE_PLANE_SPEC option B1): a PBR .material "
@@ -230,7 +236,8 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "pinned into the project (bin-visible, droppable). Direct image add-to-project runs this automatically; "
           "re-creating for the same image returns a fresh asset. With {graph: true} (B2, needs an open project) "
           "it instead creates an editable Shader GRAPH asset — texture → textureSampler → PbrMaster.BaseColor — "
-          "returning the shader guid (opens in the Materials page; applies via the drawer/graph.toMaterial). "
+          "returning the new MATERIAL's guid (one row: the graph rides its definition as a payload; opens in the "
+          "Materials page; applies via the drawer/graph.toMaterial). "
           "NOT undoable.",
           Needs::Document },
     };
@@ -486,6 +493,22 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
             return QString();
         }
         QJsonObject definition = MaterialBundle::read(host.db, materialGuid, host.project);
+        // A GRAPH MATERIAL'S SLOTS BELONG TO ITS GRAPH, and writing one here
+        // would be a value the next save silently overwrites: `graph.save`
+        // rebuilds `values` from the graph, which is the whole point of a
+        // graph material. Refuse, and say where the picture goes instead —
+        // an edit that quietly disappears at the next autosave is worse than
+        // one that does not happen. (The image IS imported and pinned by the
+        // time we get here, which is what the caller asked for and what the
+        // returned guid is for: hand it to graph.setValue on a texture node.)
+        if (definition.contains(QStringLiteral("shadergraph"))) {
+            fail(QStringLiteral(
+                     "materials.addTexture: '%1' is a graph material, so its '%2' comes from "
+                     "the graph — the image was imported and pinned (%3); put it on a texture "
+                     "node with graph.addNode('texture') + graph.setValue(node, guid)")
+                     .arg(row.name, slot, textureGuid));
+            return QString();
+        }
         QJsonObject values = definition["values"].toObject();
         values[slot] = textureGuid;
         definition["values"] = values;
@@ -528,7 +551,13 @@ QVariantList MaterialsApi::members(const QString &materialGuid)
             { "name", row.name },
             { "slot", slot },
             { "baked", !slot.isEmpty() && bakedMaps.contains(slot) },
-            { "usedBy", host.db->fetchDependers(member, QString()).size() },
+            // "USED BY N" IS EVERY USER, not one project's (F12).
+            // `fetchDependers` is deliberately PROJECT-scoped and answers
+            // EMPTY for an empty guid, so this always reported 0 — the one
+            // number the Members panel exists to show. `hasMultipleDependers`
+            // is the unscoped list: every material that names this texture,
+            // plus every scene node that uses it directly.
+            { "usedBy", host.db->hasMultipleDependers(member).size() },
             { "pinned", !projectGuid.isEmpty() && host.db->isAssetPinnedBy(projectGuid, member) } });
     }
     return out;
@@ -1242,7 +1271,8 @@ QVector<VerbInfo> GraphApi::verbs() const
           Needs::Document },
         { "bake", "graph.bake({resolution?, time?}) -> {values, maps, passthrough, approximated, unsupported, animated, msElapsed}",
           "Full-quality synchronous bake of the current graph: UV-varying chains render per texel into "
-          "<project>/BakedMaps/<guid>/ PNGs (hash-cached, headless-capable - CPU only), uniform chains fold, "
+          "hash-cached PNGs in the store's own disposable derived cache (headless-capable - CPU only; graph.save "
+          "is what turns them into member textures), uniform chains fold, "
           "bare textures pass through. Map values are project-relative paths.",
           Needs::Document },
         { "toMaterial", "graph.toMaterial(nodeId) -> bool",
@@ -1610,6 +1640,15 @@ QVariantMap GraphApi::bake(const QVariantMap &options)
     opts.resolution = options.value(QStringLiteral("resolution"), 1024).toInt();
     opts.time = options.value(QStringLiteral("time"), 0.0).toDouble();
     opts.outputDir = AssetStorePaths::derivedPath(QStringLiteral("materialbake/") + guid);
+    // AND THE EMITTED VALUE MUST NAME THE FILE. `relativePrefix` is what the
+    // baker prepends to every map it reports; with it EMPTY the report is a
+    // bare "roughnessMap-<hash>.png", which resolves against nothing and
+    // renders as no texture at all. The old value was project-relative
+    // ("BakedMaps/<guid>/") and a resolver put the project folder back in
+    // front of it; there is no project folder any more, so the prefix is the
+    // absolute directory itself. A path is legitimate here — this is the
+    // BUILD side; only what is STORED must name guids.
+    opts.relativePrefix = opts.outputDir + QLatin1Char('/');
     QDir().mkpath(opts.outputDir);
 
     const auto result = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
@@ -1645,6 +1684,7 @@ bool GraphApi::toMaterial(const QString &nodeId)
         materials::GraphBaker::Options opts;
         opts.resolution = graph->settings.bakeResolution;
         opts.outputDir = AssetStorePaths::derivedPath(QStringLiteral("materialbake/") + guid);
+        opts.relativePrefix = opts.outputDir + QLatin1Char('/');   // the map must NAME its file
         QDir().mkpath(opts.outputDir);
         // The emitter first, so the baker skips what the piece owns
         // (HLMS_ADOPTION P5).

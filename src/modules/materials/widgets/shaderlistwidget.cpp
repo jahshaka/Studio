@@ -35,7 +35,14 @@ ShaderListWidget::~ShaderListWidget()
 void ShaderListWidget::dropEvent(QDropEvent * event)
 {
 
-	if(event->mimeData()->data("MODEL_TYPE_ROLE").toInt() == (int)ModelTypes::Shader)
+	// A MATERIAL BUNDLE (MATERIAL_BUNDLE_SPEC 2.3). The tiles carry
+	// ModelTypes::Material since the module stopped minting Shader rows, and
+	// this gate still named Shader — so a drop onto the project drawer was
+	// silently ignored and the add-to-project it triggers never ran. The
+	// legacy type is kept beside it because Shader rows can still ARRIVE from
+	// disk (AssetWidget::createShader, ShaderImporter — phase-2 CRUD).
+	const int droppedType = event->mimeData()->data("MODEL_TYPE_ROLE").toInt();
+	if (droppedType == (int)ModelTypes::Material || droppedType == (int)ModelTypes::Shader)
 	{
 		event->accept();
 		event->setDropAction(Qt::CopyAction);

@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/materialbundle.h"
 
+#include <QColor>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -165,6 +166,28 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
     return ok;
 }
 
+QJsonObject normaliseColours(const QJsonObject &definition)
+{
+    QJsonObject out = definition;
+    QJsonObject values = out.value(QStringLiteral("values")).toObject();
+    bool moved = false;
+    for (const QString &key : values.keys()) {
+        const QJsonValue value = values.value(key);
+        if (!value.isObject()) continue;
+        const QJsonObject rgba = value.toObject();
+        if (!rgba.contains(QStringLiteral("r"))) continue;
+        const QColor colour = QColor::fromRgbF(
+            qBound(0.0, rgba.value(QStringLiteral("r")).toDouble(), 1.0),
+            qBound(0.0, rgba.value(QStringLiteral("g")).toDouble(), 1.0),
+            qBound(0.0, rgba.value(QStringLiteral("b")).toDouble(), 1.0),
+            qBound(0.0, rgba.value(QStringLiteral("a")).toDouble(1.0), 1.0));
+        values[key] = colour.name();
+        moved = true;
+    }
+    if (moved) out[QStringLiteral("values")] = values;
+    return out;
+}
+
 QJsonObject read(Database *db, const QString &guid, Project *project)
 {
     if (!db || guid.isEmpty()) return QJsonObject();
@@ -214,11 +237,25 @@ WriteResult write(Database *db, Project *project, const QString &guid,
         return fail(QStringLiteral("'%1' holds a file path ('%2'), not an asset guid")
                         .arg(slot, path));
 
-    QJsonObject stored = definition;
+    // ONE SPELLING FOR A COLOUR, and it is the DOCUMENT's — beside the path
+    // guard, for the same reason: a definition is refused or corrected HERE
+    // so that no caller can be the exception. (The first attempt did this in
+    // the graph's definition builder, and `MaterialsApi::create` — which
+    // builds one without that function — shipped the evaluator's
+    // object-valued colours straight into the store, so a scripted graph
+    // material rendered BLACK.)
+    QJsonObject stored = normaliseColours(definition);
     stored[QStringLiteral("version")] = kDefinitionVersion;
     if (!stored.contains(QStringLiteral("materialType")))
         stored[QStringLiteral("materialType")] = QStringLiteral("pbr");
 
+    // KNOWN, RECORDED, NOT FIXED IN PHASE 1: every save publishes a new store
+    // object for the definition, and the superseded one waits for
+    // `assets.gc` like any other superseded content. On the graph page's
+    // 1.5 s autosave that is one small JSON per edit burst — the definitions
+    // measured on the fixture are 0.5-4 KB — so it is a few hundred KB over a
+    // long session, not a growth problem, and the content-addressed name
+    // means an edit that changes nothing publishes nothing new at all.
     const QByteArray bytes = QJsonDocument(stored).toJson(QJsonDocument::Compact);
 
     QTemporaryDir staging;
@@ -263,7 +300,34 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     // change.
     if (scope == Scope::Library) db->updateAssetAsset(guid, bytes);
 
-    reconcileEdges(db, guid, stored);
+    // INTRINSIC EDGES ARE THE LIBRARY'S (F7). A PROJECT-scope save is a
+    // copy-on-write: it moves THIS project's pin and must leave the library
+    // version alone in every respect — including its membership. Rewriting
+    // the NULL-project edges from a project's edited definition made the
+    // library row's closure describe a version the library does not have, so
+    // another project's add-to-project pinned the library oid and walked the
+    // edited edges: the right definition with the wrong textures.
+    //
+    // A project's own membership needs no second edge set: `addToProject`
+    // walks the closure at add time and the pins are what an archive reads,
+    // and the pins are written below.
+    if (scope == Scope::Library) reconcileEdges(db, guid, stored);
+
+    // EVERY MEMBER THE DEFINITION NAMES IS PINNED (F8). A baked map is minted
+    // during the write itself, and the ordinary order is "add the material to
+    // the project, THEN edit it" — so the member row is neither project-owned
+    // nor pinned, and the archive manifest (project rows + pins) does not
+    // carry it. The material then travels without the maps it is made of.
+    // Pinning here is also what makes the closure right after a project-scope
+    // save, where the intrinsic edges deliberately did not move.
+    if (project && !project->getProjectGuid().isEmpty()
+        && db->isAssetPinnedBy(project->getProjectGuid(), guid)) {
+        for (const QString &member : memberGuids(stored)) {
+            if (db->fetchAsset(member).guid.isEmpty()) continue;
+            AssetCas::writePin(conn, project->getProjectGuid(), member,
+                               AssetCas::sourceOid(conn, member));
+        }
+    }
 
     QString sidecarError;
     if (!AssetCas::writeSidecar(conn, root, guid, &sidecarError))

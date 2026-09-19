@@ -78,7 +78,13 @@ int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph)
 		const auto abs = assetPath(rel);
 		if (!QFileInfo::exists(abs)) continue;
 		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs);
-		if (!graphTexture) continue;
+		// AN IMPORT THAT FAILED IS NOT A RESOLUTION (the same rule as the
+		// picker's). `importTexture` answers a GraphTexture holding the PATH
+		// when the library refuses the bytes, and writing that back into the
+		// node would make every later save of this material refuse on the
+		// definition writer's path guard. The node keeps its unresolved
+		// app-relative name instead, which is what it had.
+		if (!graphTexture || graphTexture->guid.isEmpty()) continue;
 		texNode->setTextureGuid(graphTexture->guid);
 		resolved++;
 	}

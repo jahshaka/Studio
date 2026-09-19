@@ -1595,9 +1595,43 @@ bool SceneEditService::applyMaterialShader(const QString &shaderGuid, iris::Scen
 int SceneEditService::refreshMaterialUsers(const QString &materialGuid)
 {
     if (materialGuid.isEmpty() || !db) return 0;
+    // A BORROWED MATERIAL MUST NOT BE CLOBBERED (the rule its five siblings in
+    // this file already follow). A refresh landing mid-hover would replace the
+    // slot the preview lent, and the drag-leave restore would then put the
+    // PREVIOUS material back — silently undoing the refresh. Ending the
+    // preview first makes the restore a no-op.
+    if (preview) preview->end();
+
     auto root = scene() ? scene()->getRootNode() : iris::SceneNodePtr();
     if (!root) return 0;
     const QString projectGuid = project ? project->getProjectGuid() : QString();
+
+    // NOTHING CHANGED, NOTHING MOVES. This runs on the graph page's 1.5 s
+    // autosave — while the user types — and handing a mesh a fresh material
+    // POINTER is a re-attach to the mirror, which invalidates the GI caches
+    // WHOLE (every cascade re-voxelises, in and out; ledger 804-805). The
+    // content-addressed store makes the guard exact and free: a save that
+    // produced the same definition produced the same OID, so comparing the
+    // material's effective content id with the one this scene was last
+    // dressed from answers "did anything change?" with no parse and no walk.
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString oid = projectGuid.isEmpty()
+                            ? AssetCas::sourceOid(conn, materialGuid)
+                            : AssetCas::pinnedOid(conn, projectGuid, materialGuid);
+    const QString effective = oid.isEmpty() ? AssetCas::sourceOid(conn, materialGuid) : oid;
+    if (!effective.isEmpty() && mDressedFrom.value(materialGuid) == effective) return 0;
+
+    // THE DEFINITION IS READ ONCE. `resolveMaterial` is a store read plus a
+    // JSON parse plus a texture resolve per call, and it used to be called
+    // once PER MESH — ninety reads of one file to dress ninety meshes. The
+    // read happens here; the INSTANCE is still built per mesh, because
+    // `MeshNode::setMaterial` mutates what it is handed (SKINNING_ENABLED and
+    // friends), so a shared instance across two meshes is a defect waiting
+    // for a skinned one.
+    const QJsonObject definition = MaterialBundle::read(db, materialGuid, project);
+    if (definition.isEmpty()) return 0;
+    MaterialReader reader;
+    reader.setProject(project);
 
     int redressed = 0;
     for (const QString &nodeGuid : db->fetchDependers(materialGuid, projectGuid)) {
@@ -1606,14 +1640,13 @@ int SceneEditService::refreshMaterialUsers(const QString &materialGuid)
         QList<iris::MeshNodePtr> meshes;
         collectMeshNodes(node, meshes);
         for (const auto &meshNode : meshes) {
-            // A FRESH INSTANCE PER MESH, as everywhere else: MeshNode::
-            // setMaterial MUTATES what it is handed.
-            auto mat = resolveMaterial(materialGuid);
+            auto mat = reader.parseMaterialTyped(definition, db);
             if (!mat) continue;
             meshNode->setMaterial(mat);
             ++redressed;
         }
     }
+    if (!effective.isEmpty()) mDressedFrom.insert(materialGuid, effective);
     return redressed;
 }
 

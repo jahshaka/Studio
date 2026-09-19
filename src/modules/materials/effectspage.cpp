@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include "core/graphbaker.h"
 #include "core/graphdefinition.h"
 #include "services/materialbundle.h"
+#include "services/sceneissues.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
 #include <QFutureWatcher>
@@ -238,20 +239,37 @@ void EffectsPage::saveShader()
 		                                              dataBase, mProject);
 		if (!build.ok()) {
 			irisLog("saveShader: " + build.error);
+			reportSaveRefused(build.error);
 		} else {
-			// WHOSE VERSION (the owner's model, spec 12 Q2): a material the
-			// PROJECT has taken is edited as the project's own — its pin
-			// moves, the library original does not. A library material is
-			// published to the library.
+			// WHOSE VERSION (the owner's model, spec 12 Q2): the DRAWER the
+			// material was opened from decides. A Projects tile is edited as
+			// the project's own — its pin moves, the library original does
+			// not; a Custom tile publishes to the library. This used to ask
+			// "does the project pin it?", so a material the project held
+			// could never be edited as the library's, and the same guid
+			// meant two things in one window.
 			const bool projectOwns =
-			    mProject && !mProject->getProjectGuid().isEmpty()
+			    currentShaderInformation.origin == shaderInfo::Origin::Project
+			    && mProject && !mProject->getProjectGuid().isEmpty()
 			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(),
 			                                 currentShaderInformation.GUID);
 			const auto written = MaterialBundle::write(
 			    dataBase, mProject, currentShaderInformation.GUID, build.definition,
 			    projectOwns ? MaterialBundle::Scope::Project
 			                : MaterialBundle::Scope::Library);
-			if (!written.ok) irisLog("saveShader: " + written.error);
+			if (!written.ok) {
+				irisLog("saveShader: " + written.error);
+				// A REFUSED SAVE IS TOLD, not logged. This runs on the 1.5 s
+				// autosave, so a refusal the user cannot see means they keep
+				// working on a graph nothing is writing down — an hour of
+				// work lost silently, which is exactly the shape of the
+				// defect the path guard exists to prevent.
+				reportSaveRefused(written.error);
+			} else if (mSaveRefused) {
+				SceneIssues::instance().clear(QStringLiteral("material.save:")
+				                              + currentShaderInformation.GUID);
+				mSaveRefused = false;
+			}
 			// AND THE EDIT REACHES THE SCENE (R19 D2). Every mesh wearing this
 			// material is re-dressed from the definition just written, through
 			// the ONE apply the drop and the verb use. Until this lane a graph
@@ -293,29 +311,59 @@ void EffectsPage::saveShader()
 	}
 }
 
+void EffectsPage::reportSaveRefused(const QString &why)
+{
+	// The scene-issue bar, not a toast: a toast leaves, and this condition
+	// stays true until the material is fixed (services/sceneissues.h). The id
+	// is per material, so a second refused autosave of the same graph is a
+	// no-op rather than a second line.
+	mSaveRefused = true;
+	SceneIssue issue;
+	issue.id = QStringLiteral("material.save:") + currentShaderInformation.GUID;
+	issue.kind = QStringLiteral("material.save");
+	issue.nodeName = currentShaderInformation.name;
+	issue.message = tr("'%1' could not be saved: %2")
+	                    .arg(currentShaderInformation.name, why);
+	issue.action = tr("Your edits are still on screen but are NOT being written down. "
+	                  "Re-pick the image on the node the message names, then save again.");
+	SceneIssues::instance().raise(issue);
+}
+
 void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
 {
 	if (shaderGuid.isEmpty()) return;
 	auto generator = ThumbnailGenerator::getSingleton();
 	generator->setDatabase(dataBase);
-	generator->setProject(mProject);          // BakedMaps/... resolve against it
+	generator->setProject(mProject);   // the definition resolves pin-first against it
 	if (!mThumbnailConnected) {
 		connect(generator, &ThumbnailGenerator::thumbnailComplete,
 		        this, &EffectsPage::onShaderThumbnail);
 		mThumbnailConnected = true;
 	}
-	generator->requestThumbnail(ThumbnailRequestType::Shader, QString(), shaderGuid);
+	// A MATERIAL RENDER OF A MATERIAL ROW. This asked for a SHADER render, and
+	// that branch reads the row blob through `parseShaderAsPbr`, which refuses
+	// any definition with no `pbrMaterial` key — a key a bundle definition does
+	// not have. So every autosave of every graph material in this module
+	// logged "nothing was rendered", burned a queue tick and left a BLANK
+	// TILE, while the library's own sweep (thumbnailrebuild, which reads the
+	// bundle) rendered the same material perfectly. Two readers for one
+	// question; there is one now, and it is the bundle's.
+	mPendingThumbnails.insert(shaderGuid);
+	generator->requestThumbnail(ThumbnailRequestType::Material, QString(), shaderGuid);
 }
 
 void EffectsPage::onShaderThumbnail(const ThumbnailResult &result)
 {
-	// The queue is shared: only our own Shader renders are ours to store.
+	// THE QUEUE IS SHARED, and a material render is no longer ours by TYPE
+	// alone — the editor's material panel and the tray's sweep ask for the
+	// same kind. Ours are the guids we asked about.
 	// (The payload used to arrive as a ThumbnailResult* that AssetWidget's
 	// slot had already deleted by the time this one ran — a read-after-free
 	// decided by connection order, and the likely root of shader thumbnails
 	// that "sometimes" failed to save. It is a value now.)
-	if (result.type != ThumbnailRequestType::Shader) return;
+	if (result.type != ThumbnailRequestType::Material) return;
 	if (result.preview || result.thumbnail.isNull() || result.id.isEmpty()) return;
+	if (mPendingThumbnails.remove(result.id) == 0) return;
 
 	QByteArray bytes;
 	QBuffer buffer(&bytes);
@@ -523,8 +571,11 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 	return graph;
 }
 
-void EffectsPage::loadGraph(QString guid)
+void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 {
+	// The origin is set BEFORE the read, because `fetchAsset` reads the
+	// definition at this scope.
+	currentShaderInformation.origin = origin;
 	restoringGraph = true;
 	// Parented + deleted below: this used to leak one orphanable top-level
 	// window per loadGraph call.
@@ -572,6 +623,7 @@ void EffectsPage::loadGraph(QString guid)
 
 	currentProjectShader = selectCorrectItemFromDrop(guid);
 	currentShaderInformation.GUID = currentProjectShader->data(MODEL_GUID_ROLE).toString();
+	currentShaderInformation.origin = origin;
 	oldName = currentShaderInformation.name = currentProjectShader->data(Qt::DisplayRole).toString(); 
 	restoreGraphPositions(obj["shadergraph"].toObject());
 	restoringGraph = false;
@@ -847,6 +899,7 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 	
 	currentShaderInformation.GUID = assetGuid;
 	currentShaderInformation.name = newShader;
+	currentShaderInformation.origin = shaderInfo::Origin::Library;   // created in the library
 
 
 #if(EFFECT_BUILD_AS_LIB)
@@ -916,9 +969,14 @@ void EffectsPage::setCurrentShaderItem()
 QByteArray EffectsPage::fetchAsset(QString string)
 {
 #if(EFFECT_BUILD_AS_LIB)
-	// THE DEFINITION, not the row's blob cache (D-2): pin-first, so a material
-	// the project has taken opens at the version the project holds.
-	const QJsonObject definition = MaterialBundle::read(dataBase, string, mProject);
+	// THE DEFINITION AT THE SCOPE THIS MATERIAL WAS OPENED AT (D-2 + the
+	// four-drawer rule): a Projects tile reads the project's pinned version,
+	// a Custom tile reads the library original. Passing the project
+	// unconditionally made the library copy unreachable the moment any
+	// project pinned it.
+	const bool projectScope = currentShaderInformation.origin == shaderInfo::Origin::Project;
+	const QJsonObject definition =
+	    MaterialBundle::read(dataBase, string, projectScope ? mProject : nullptr);
 	if (!definition.isEmpty()) return QJsonDocument(definition).toJson();
 	return dataBase->fetchAssetData(string);
 #else
@@ -1202,7 +1260,32 @@ void EffectsPage::updateAssetDock()
 	auto assets = dataBase->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
 		for (const auto &asset : assets)  //dp something{
 		{
-			if (asset.type == static_cast<int>(ModelTypes::Material)) {
+			if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
+			// THE CUSTOM DRAWER IS THE USER'S OWN MATERIALS, once (the
+			// four-drawer rule, OWNER_REVIEW 9).
+			//
+			// NOT an image's COMPANION: adding a picture to a project mints a
+			// one-slot PBR material for it (ImageMaterial's `companionOf`
+			// stamp) so the picture has a tile — that material is the
+			// picture, it has no graph, and listing it here filled the
+			// drawer with rows the user never authored. The stamp is the
+			// identity, never the shape: a material the user built on the
+			// same image is theirs and stays.
+			//
+			// NOT a material the open project already holds, either: that one
+			// is in the PROJECT drawer, and a row in both drawers is the same
+			// guid meaning two things in one window.
+			{
+				const QJsonObject props = QJsonDocument::fromJson(asset.properties).object();
+				const QJsonObject blob = QJsonDocument::fromJson(asset.asset).object();
+				const bool companion = !blob.value(QStringLiteral("companionOf")).toString().isEmpty()
+				                       && !blob.contains(QStringLiteral("shadergraph"));
+				if (companion) continue;
+				if (mProject && !mProject->getProjectGuid().isEmpty()
+				    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), asset.guid))
+					continue;
+			}
+			{
 				 
 				auto item = new QListWidgetItem;
 				item->setText(asset.name);
@@ -1516,7 +1599,9 @@ GraphNodeScene *EffectsPage::createNewScene()
 	connect(scene, &GraphNodeScene::loadGraph, [=](QListWidgetItem *item) {
 		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
 		currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
-		loadGraph(currentShaderInformation.GUID);
+		// A tile dropped on the canvas opens at the scope of the drawer it
+		// was dragged out of (the four-drawer rule).
+		loadGraph(currentShaderInformation.GUID, originForItem(currentShaderInformation.GUID));
 	});
 
 	connect(scene, &GraphNodeScene::loadGraphFromPreset, [=](QString name) {
@@ -1612,6 +1697,17 @@ QListWidgetItem * EffectsPage::selectCorrectItemFromDrop(QString guid)
     return nullptr;
 }
 
+shaderInfo::Origin EffectsPage::originForItem(QString guid)
+{
+	// WHICH DRAWER holds this tile — the one question that decides whose copy
+	// of a material an edit belongs to (the four-drawer rule). It is asked of
+	// the WIDGETS, not of the catalog, because the catalog cannot answer it:
+	// a pinned material is one row and the drawers are two views of it.
+	return selectCorrectTabForItem(guid) == static_cast<int>(ShaderWorkspace::Projects)
+	           ? shaderInfo::Origin::Project
+	           : shaderInfo::Origin::Library;
+}
+
 int EffectsPage::selectCorrectTabForItem(QString guid)
 {
 	for (int i = 0; i < effects->count(); i++)
@@ -1636,17 +1732,23 @@ int EffectsPage::selectCorrectTabForItem(QString guid)
 void EffectsPage::configureConnections()
 {
 #if(EFFECT_BUILD_AS_LIB)
+	// THE DRAWER IS THE SCOPE (the four-drawer rule). A PROJECTS tile opens
+	// and saves the project's own copy; a CUSTOM tile opens and saves the
+	// library original — even while a project holds it, which the old
+	// "is it pinned?" inference made impossible.
 	connect(assetWidget, &ShaderAssetWidget::loadToGraph, [=](QListWidgetItem * item) {
 		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
 		currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
-		loadGraph(currentShaderInformation.GUID);
+		currentShaderInformation.origin = shaderInfo::Origin::Project;
+		loadGraph(currentShaderInformation.GUID, shaderInfo::Origin::Project);
 	});
 #endif
 
     connect(effects, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
         currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
         currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
-        loadGraph(currentShaderInformation.GUID);
+        currentShaderInformation.origin = shaderInfo::Origin::Library;
+        loadGraph(currentShaderInformation.GUID, shaderInfo::Origin::Library);
     });
 
     connect(effects, &QListWidget::itemPressed, [=](QListWidgetItem *item){
@@ -1719,7 +1821,7 @@ void EffectsPage::configureConnections()
         exportEffect(guid);
     });
     connect(effects, &ListWidget::editShader, [=](QString guid){
-        loadGraph(guid);
+        loadGraph(guid, shaderInfo::Origin::Library);   // the Custom drawer is the library's
     });
     connect(effects, &ListWidget::deleteShader, [=](QString guid){
         deleteShader(guid);
@@ -1747,6 +1849,8 @@ void EffectsPage::configureConnections()
 		refreshShaderGraph();
 		tabWidget->setCurrentIndex((int)ShaderWorkspace::Projects);
 		ListWidget::highlightNodeForInterval(2, selectCorrectItemFromDrop(guid));
+		// It is the PROJECT's copy the user is now looking at.
+		loadGraph(guid, shaderInfo::Origin::Project);
 	});
 
 
@@ -1782,23 +1886,38 @@ void EffectsPage::editingFinishedOnListItem()
 	if (oldName == newName) return;
 
 #if(EFFECT_BUILD_AS_LIB)
-    QJsonDocument doc;
-    QJsonObject obj = QJsonDocument::fromJson(fetchAsset(pressedShaderInfo.GUID)).object();
-    auto graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
-    graph->settings.name = newName;
-    auto go = graph->serialize();
-
-    auto shadergraph = obj["shadergraph"].toObject();
-    auto graphObj = shadergraph["graph"].toObject();
-    auto settings = graphObj["settings"].toObject();
-    settings["name"] = newName;
-
-    graphObj["settings"] = settings;
-    shadergraph["graph"] = graphObj;
-    obj["shadergraph"] = shadergraph;
-
-    doc.setObject(obj);
-    dataBase->updateAssetAsset(pressedShaderInfo.GUID,doc.toJson());
+    // A RENAME IS A DEFINITION WRITE (F11). It used to write the row's BLOB
+    // and the row's name and stop — so the stored DEFINITION kept the old
+    // name and the next save, which builds the definition from the graph,
+    // put the old name straight back. It also reached for
+    // `shadergraph.graph.settings`, a nesting the serializer does not write
+    // (the settings are at `shadergraph.settings`), so even the blob's copy
+    // never moved.
+    //
+    // Read at the scope this material is open at, set the name in BOTH
+    // places it lives — the definition's own `name` and the graph payload's
+    // settings — and write through the ONE writer.
+    {
+        const shaderInfo::Origin origin = originForItem(pressedShaderInfo.GUID);
+        const bool projectScope = origin == shaderInfo::Origin::Project;
+        QJsonObject definition = MaterialBundle::read(dataBase, pressedShaderInfo.GUID,
+                                                      projectScope ? mProject : nullptr);
+        if (!definition.isEmpty()) {
+            definition[QStringLiteral("name")] = newName;
+            QJsonObject shadergraph = definition[QStringLiteral("shadergraph")].toObject();
+            if (!shadergraph.isEmpty()) {
+                QJsonObject settings = shadergraph[QStringLiteral("settings")].toObject();
+                settings[QStringLiteral("name")] = newName;
+                shadergraph[QStringLiteral("settings")] = settings;
+                definition[QStringLiteral("shadergraph")] = shadergraph;
+            }
+            const auto written = MaterialBundle::write(
+                dataBase, mProject, pressedShaderInfo.GUID, definition,
+                projectScope ? MaterialBundle::Scope::Project
+                             : MaterialBundle::Scope::Library);
+            if (!written.ok) irisLog("rename: " + written.error);
+        }
+    }
     dataBase->renameAsset(pressedShaderInfo.GUID, newName);
 #else
     // get json obj from file and edit graph like above

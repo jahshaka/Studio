@@ -30,6 +30,7 @@
 //
 // Framework-free; non-zero exit on failure. Runs displayless.
 #include <QApplication>
+#include <QColor>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -323,7 +324,7 @@ int main(int argc, char **argv)
           "6: and every other member");
 
     // =======================================================================
-    // 7. THE DEFINITION IS IN THE SIDECAR (F12)
+    // 7. THE SIDECAR CARRIES THE RELATIONS, not just a parse (F12 + G5)
     // =======================================================================
     const QString sidecar = QDir(storeRoot).filePath("sidecar/" + graphyGuid + ".json");
     CHECK(QFile::exists(sidecar), "7: a material has a sidecar at last (F12)");
@@ -331,7 +332,133 @@ int main(int argc, char **argv)
         QFile f(sidecar);
         f.open(QIODevice::ReadOnly);
         const QJsonObject side = QJsonDocument::fromJson(f.readAll()).object();
-        CHECK(!side.isEmpty(), "7: the sidecar parses");
+        CHECK(side.value("formatVersion").toInt() == 2, "7: sidecar format 2 (G5)");
+        // THE PAYLOAD — a DB-only kind's meaning, which v1 carried nowhere, so
+        // a rebuilt catalog restored a material that resolved to nothing.
+        const QJsonObject blob = side.value("asset").toObject();
+        CHECK(!blob.isEmpty(), "7: the sidecar carries the `asset` blob");
+        CHECK(blob.value("values").toObject().value("baseColorMap").toString() == "tex-wood",
+              "7: and the DEFINITION rebuilds from it, members and all");
+        // THE INTRINSIC EDGES — the membership every closure walk needs.
+        const QJsonArray edges = side.value("dependencies").toArray();
+        QStringList sidecarMembers;
+        for (const auto &e : edges) sidecarMembers << e.toObject().value("dependee").toString();
+        CHECK(sidecarMembers.contains("tex-wood") && sidecarMembers.contains("tex-baked"),
+              "7: the sidecar carries the intrinsic membership edges");
+        // A MEMBER's own sidecar names its PARENT — what makes a baked map the
+        // inside of its material after a rebuild, instead of a loose tile.
+        // (A real baked member is minted with `parent` = the material by
+        // materials::bakedMemberRow; this is that row's shape.)
+        {
+            db.createAssetEntry("tex-member", "roughnessMap.png",
+                                static_cast<int>(ModelTypes::Texture),
+                                graphyGuid,          // parent = the MATERIAL
+                                QString(), QString(), QString(), QByteArray(),
+                                QByteArray(), QByteArray(), QByteArray(),
+                                AssetViewFilter::AssetsView);
+            QString oid, err;
+            AssetCas::ingestFile(conn, storeRoot, bakeSrc, "tex-member",
+                                 QStringLiteral("source"), "roughnessMap.png", &oid, &err);
+            CHECK(AssetCas::writeSidecar(conn, storeRoot, "tex-member", &err),
+                  "7: a member's sidecar is written");
+            QFile mf(QDir(storeRoot).filePath("sidecar/tex-member.json"));
+            mf.open(QIODevice::ReadOnly);
+            const QJsonObject memberSide = QJsonDocument::fromJson(mf.readAll()).object();
+            CHECK(memberSide.value("parent").toString() == graphyGuid,
+                  "7: and it names its PARENT, so a rebuild keeps it inside its material");
+        }
+    }
+
+    // =======================================================================
+    // 8b. ONE SPELLING FOR A COLOUR, AT THE WRITE (F3)
+    // =======================================================================
+    //
+    // The evaluator's shape is `{r,g,b,a}` floats; every READER of a stored
+    // material expects `QColor::name()`. Two spellings under one
+    // `materialType` is a reader choosing by luck, and QColor of an
+    // object-valued key is invalid — the graph's red folded to BLACK. The
+    // normalisation lives in `write`, beside the path guard, so that no
+    // caller can be the exception: it was in the graph's definition BUILDER
+    // first, and `MaterialsApi::create` — which does not use that builder —
+    // shipped the bad spelling straight into the store.
+    {
+        QJsonObject rgba;
+        rgba["r"] = 0.85; rgba["g"] = 0.08; rgba["b"] = 0.08; rgba["a"] = 1.0;
+        QJsonObject colourValues;
+        colourValues["baseColor"] = rgba;
+        colourValues["roughness"] = 0.3;
+        QJsonObject colourDef;
+        colourDef["materialType"] = "pbr";
+        colourDef["values"] = colourValues;
+
+        const QString redGuid = MaterialBundle::create(&db, "red", colourDef,
+                                                       QByteArray(), &createError);
+        CHECK(!redGuid.isEmpty(), "8b: a definition with an object-valued colour is accepted");
+        const QJsonObject stored = MaterialBundle::read(&db, redGuid);
+        const QJsonValue base = stored.value("values").toObject().value("baseColor");
+        CHECK(base.isString(), "8b: it reads back as a STRING, not an object");
+        CHECK(QColor(base.toString()).isValid(), "8b: and QColor can read it");
+        CHECK(QColor(base.toString()).red() > QColor(base.toString()).green() + 40,
+              "8b: with the colour intact (#rrggbb — QColor::name() drops alpha, by the "
+              "document's own convention)");
+        // Straight through `write`, not only through `create`.
+        const QJsonObject again = MaterialBundle::normaliseColours(colourDef);
+        CHECK(again.value("values").toObject().value("baseColor").isString(),
+              "8b: normaliseColours is the predicate, so any writer can be checked");
+    }
+
+    // =======================================================================
+    // 9. A PROJECT-SCOPE WRITE DOES NOT REWRITE THE LIBRARY'S MEMBERSHIP (F7)
+    // =======================================================================
+    //
+    // A project edit is a copy-on-write: this project's pin moves and the
+    // library version is untouched IN EVERY RESPECT, membership included.
+    // Rewriting the NULL-project edges from a project's edited definition
+    // made the library row's closure describe a version the library does not
+    // have — so another project's add-to-project pinned the library oid and
+    // walked the edited edges: the right definition with the wrong textures.
+    {
+        QJsonObject libValues;
+        libValues["baseColorMap"] = "tex-wood";
+        QJsonObject libDef;
+        libDef["materialType"] = "pbr";
+        libDef["values"] = libValues;
+        const QString sharedGuid = MaterialBundle::create(&db, "shared", libDef,
+                                                          QByteArray(), &createError);
+        CHECK(!sharedGuid.isEmpty(), "9: a library bundle naming tex-wood");
+        CHECK(AssetCas::writePin(conn, projectGuid, sharedGuid,
+                                 AssetCas::sourceOid(conn, sharedGuid)),
+              "9: the project takes it");
+
+        QJsonObject projValues;
+        projValues["baseColorMap"] = "tex-brick";     // the PROJECT swaps the texture
+        QJsonObject projDef = libDef;
+        projDef["values"] = projValues;
+        const auto projWrite = MaterialBundle::write(&db, &project, sharedGuid, projDef,
+                                                     MaterialBundle::Scope::Project);
+        CHECK(projWrite.ok, qPrintable(QStringLiteral("9: the project edit wrote (%1)")
+                                           .arg(projWrite.error)));
+        CHECK(countWhere("SELECT COUNT(*) FROM dependencies WHERE depender = ? AND dependee = ? "
+                         "AND project_guid IS NULL", { sharedGuid, "tex-wood" }) == 1,
+              "9: the LIBRARY's membership still names tex-wood");
+        CHECK(countWhere("SELECT COUNT(*) FROM dependencies WHERE depender = ? AND dependee = ? "
+                         "AND project_guid IS NULL", { sharedGuid, "tex-brick" }) == 0,
+              "9: and the project's swap did NOT reach it");
+        // And the project's own version is pinned and readable.
+        const QJsonObject projRead = MaterialBundle::read(&db, sharedGuid, &project);
+        CHECK(projRead.value("values").toObject().value("baseColorMap").toString() == "tex-brick",
+              "9: while the project reads its own");
+
+        // ---- 10. EVERY MEMBER THE WRITE NAMED IS PINNED (F8) -------------
+        //
+        // A baked map is minted during the write itself, and the ordinary
+        // order is "add the material to the project, THEN edit it" — so the
+        // member row was neither project-owned nor pinned, and the archive
+        // manifest (project rows + pins) did not carry it. The material
+        // travelled without the maps it is made of.
+        CHECK(AssetCas::pinnedOid(conn, projectGuid, "tex-brick")
+                  == AssetCas::sourceOid(conn, "tex-brick"),
+              "10: the member the project's definition names is pinned by the project (F8)");
     }
 
     printf(failures ? "\n%d FAILURES\n" : "\nall material bundle assertions passed\n", failures);

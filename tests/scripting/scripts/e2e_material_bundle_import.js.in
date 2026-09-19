@@ -41,10 +41,16 @@ var bundled = null;
 mats.forEach(function (g) { if (materials.members(g).length > 0) bundled = g; });
 assert(bundled !== null, "one of them has MEMBERS — the bundle is self-contained");
 
+var sawBaked = false;
 materials.members(bundled).forEach(function (m) {
     assert(("" + m.name).length > 0, "member '" + m.name + "' resolves in the fresh library");
     assert(("" + m.guid).indexOf("/") === -1, "and is named by guid, never a path");
+    if (m.baked) sawBaked = true;
 });
+// THE BAKED MAP TRAVELLED (F8). It is minted during a write, after the
+// material was added to the project, so nothing pinned it and the manifest
+// left it behind: the material arrived without the maps it is made of.
+assert(sawBaked, "the BAKED member travelled too, not just the picked image");
 
 // THE PROOF THE OWNER WOULD LOOK AT: the mesh still has its picture.
 var cube = scene.find("Cube");

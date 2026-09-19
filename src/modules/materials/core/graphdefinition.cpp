@@ -10,7 +10,6 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "graphdefinition.h"
 
-#include <QColor>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -38,6 +37,11 @@ namespace {
 /// them. The store's OWN derived cache, so the baker keeps its
 /// `<mapKey>-<hash16>.png` cache hit (a re-save that changes nothing rewrites
 /// no pixels) and `assets.gc` can reclaim the whole tree.
+/// KNOWN, RECORDED, NOT FIXED IN PHASE 1: `assets.gc` treats `derived/` as a
+/// reserved store directory and never sweeps it, so this per-material bake
+/// cache is not reclaimed when the material is deleted. It is hash-named and
+/// self-limiting (the piece cache has the same shape and the same note), and
+/// the whole tree is safe to delete by hand at any time.
 QString bakeStagingDir(const QString &materialGuid)
 {
     const QString dir = AssetStorePaths::derivedPath("materialbake/" + materialGuid);
@@ -126,7 +130,14 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
     opts.resolution = graph->settings.bakeResolution;
     opts.bakeMaps = bake;
     opts.emittedSockets = emitted.emittedSockets;
-    if (bake) opts.outputDir = bakeStagingDir(materialGuid);
+    if (bake) {
+        opts.outputDir = bakeStagingDir(materialGuid);
+        // One behaviour everywhere: the baker's reported value NAMES the file
+        // it wrote (see GraphApi::bake). This function reads them back to
+        // ingest them, so a bare name would work here by accident and mislead
+        // the next reader.
+        opts.relativePrefix = opts.outputDir + QLatin1Char('/');
+    }
     const GraphBaker::Result baked = GraphBaker::run(graph, opts,
                                                      MaterialHelper::textureResolver());
 
@@ -168,33 +179,13 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
         out.unsupportedNodes.append(QStringLiteral("%1 <- an unstored image").arg(slot));
     }
 
-    // (3) ONE ENCODING IN A STORED DEFINITION, and it is the DOCUMENT's.
-    //
-    // The evaluator's colours are `{r,g,b,a}` floats — its own working shape,
-    // handed straight to `PbrGraphEvaluator::materialFromValues` on the live
-    // preview and apply paths. But the definition is read by
-    // `MaterialReader::parsePbrMaterial`, which is what reads EVERY other
-    // material in the app (an image material's, a preset's, a node's copied
-    // values in the scene blob) and which spells a colour the way
-    // `SceneWriter::writeSceneNodeMaterial` writes it: `QColor::name()`.
-    //
-    // Two spellings of one slot under one `materialType: "pbr"` is a reader
-    // choosing by luck — and it showed as a BLACK material thumbnail, because
-    // `QColor(QString())` from an object-valued key is invalid. The
-    // evaluation shape stays inside the evaluator; what is STORED is the
-    // document's.
-    for (const QString &key : values.keys()) {
-        const QJsonValue value = values.value(key);
-        if (!value.isObject()) continue;
-        const QJsonObject rgba = value.toObject();
-        if (!rgba.contains(QStringLiteral("r"))) continue;
-        const QColor colour = QColor::fromRgbF(
-            qBound(0.0, rgba.value(QStringLiteral("r")).toDouble(), 1.0),
-            qBound(0.0, rgba.value(QStringLiteral("g")).toDouble(), 1.0),
-            qBound(0.0, rgba.value(QStringLiteral("b")).toDouble(), 1.0),
-            qBound(0.0, rgba.value(QStringLiteral("a")).toDouble(1.0), 1.0));
-        values[key] = colour.name();
-    }
+    // (3) The COLOUR SPELLING is not normalised here: `MaterialBundle::write`
+    // does it for every writer, beside the path guard. It was here first and
+    // that was wrong by this lane's own argument — `MaterialsApi::create`
+    // builds a definition without going through this function and shipped the
+    // evaluator's object-valued colours straight into the store, so a
+    // scripted graph material rendered BLACK in the commit that claimed the
+    // defect fixed. One place, and it is the one every definition passes.
 
     QJsonObject definition;
     definition[QStringLiteral("materialType")] = QStringLiteral("pbr");

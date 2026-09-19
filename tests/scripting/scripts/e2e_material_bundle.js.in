@@ -45,12 +45,33 @@ assert(libraryTypes[matGuid] === "material", "the bundle is a Material row (" + 
 assert(assets.list({ scope: "store", type: "shader" }).length === 0,
        "no ModelTypes::Shader row exists anywhere");
 
-var texGuid = materials.addTexture(matGuid, fixtures + "/tiny.png", { slot: "baseColorMap" });
+// A GRAPH MATERIAL'S PICTURE GOES ON A TEXTURE NODE. The image is imported
+// by CONTENT the moment it is named — that is the owner's "adding a texture
+// to a material would import it into the project" — and the graph is what
+// puts it on a slot. (Asking addTexture for a SLOT on a graph material is
+// REFUSED, and says so: a graph save rebuilds `values` from the graph, so a
+// slot written beside it would vanish at the next autosave.)
+var texGuid = materials.addTexture(matGuid, fixtures + "/tiny.png");
 assert(texGuid && texGuid.length > 10, "materials.addTexture(<a path from disk>) -> a library texture");
 
 // THE SAME BYTES ANSWER THE SAME ROW.
-var again = materials.addTexture(matGuid, fixtures + "/tiny.png", { slot: "normalMap" });
+var again = materials.addTexture(matGuid, fixtures + "/tiny.png");
 assert(again === texGuid, "a second pick of the same image is the SAME asset (no duplicate)");
+
+var slotRefused = false;
+try { materials.addTexture(matGuid, texGuid, { slot: "baseColorMap" }); }
+catch (e) { slotRefused = true; }
+assert(slotRefused, "a SLOT write on a graph material is refused, not silently overwritten later");
+
+var masterId = null;
+graph.nodes().forEach(function (n) { if (n.master) masterId = n.id; });
+assert(masterId !== null, "the bundle's graph has a master");
+var texNode = graph.addNode("texture");
+assert(graph.setValue(texNode, texGuid) === true, "the image goes on a texture node, by GUID");
+var sampler = graph.addNode("textureSampler");
+assert(graph.connect(texNode, 0, sampler, 0), "texture -> sampler");
+assert(graph.connect(sampler, 0, masterId, "Base Color"), "sampler -> Base Color");
+assert(graph.save() === true, "graph.save writes the definition");
 
 // ---- 2. ONE TILE ---------------------------------------------------------
 assert(assets.addToProject(matGuid) === matGuid,
@@ -77,6 +98,39 @@ var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 assert(material.apply(cube, matGuid) === true, "the bundle applies to a mesh");
 var worn = material.get(cube);
 assert(("" + worn.baseColorMap).length > 0, "the mesh wears the bundle's baseColorMap");
+
+// ---- 5b. A BAKED MAP IS A MEMBER, AND IT TRAVELS (F8) -------------------
+//
+// The order that used to lose them is exactly the ordinary one: add the
+// material to the project FIRST, then edit it. A bake mints its member row
+// during the write, so the row was neither project-owned nor pinned and the
+// archive manifest (project rows + pins) did not carry it — the material
+// travelled without the maps it is made of. Every member a write names is
+// pinned now, so this arm bakes BEFORE exporting and the far side checks it.
+var uv = graph.addNode("texCoords");
+var split = graph.addNode("splitvector");
+assert(graph.connect(uv, 0, split, 0), "texCoords -> splitvector");
+assert(graph.connect(split, 0, masterId, "Roughness"), "U -> Roughness (a varying chain: baked)");
+assert(graph.save() === true, "graph.save bakes and writes the definition");
+
+var baked = null;
+materials.members(matGuid).forEach(function (m) { if (m.baked) baked = m; });
+assert(baked !== null, "the bake produced a MEMBER of the material");
+assert(("" + baked.guid).indexOf("/") === -1, "named by guid, never a path");
+var projectNow = assets.list({ scope: "project" }).map(function (a) { return a.guid; });
+assert(projectNow.indexOf(baked.guid) >= 0,
+       "and the project pins it, so the archive manifest carries it (F8)");
+
+// The picture survived the bake: the graph, not a slot write, is what holds it.
+var wornNow = material.get(cube);
+assert(("" + wornNow.baseColorMap).length > 0,
+       "and the mesh still wears the image — a graph edit re-dressed it (R19 D2)");
+
+// ---- 5c. A NO-OP SAVE DOES NOTHING AT ALL (F5) --------------------------
+// The second save writes the same definition, so it produces the same content
+// id and the re-dress is skipped entirely — which is what keeps the 1.5 s
+// autosave off the GI caches while the user types.
+assert(graph.save() === true, "a second save of an unchanged graph still succeeds");
 
 // ---- 3. PORTABILITY: export, for the fresh-library half to import --------
 assert(project.save() === true, "project.save");
