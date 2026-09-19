@@ -454,7 +454,8 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
                   QString *errorOut)
 {
     QSqlQuery assetQuery(conn);
-    assetQuery.prepare("SELECT name, type, view_filter, collection, author, license, properties, tags, listed "
+    assetQuery.prepare("SELECT name, type, view_filter, collection, author, license, properties, tags, listed, "
+                       "parent, asset "
                        "FROM assets WHERE guid = ?");
     assetQuery.addBindValue(guid);
     if (!assetQuery.exec() || !assetQuery.next()) {
@@ -463,7 +464,14 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     }
 
     QJsonObject sidecar;
-    sidecar["formatVersion"] = 1;
+    // FORMAT 2 (bundles audit G5): a sidecar carries the asset's RELATIONS,
+    // not only its bytes. Version 1 recorded identity, organization and the
+    // file manifest and nothing else — the comment that claimed otherwise was
+    // wrong — so after `assets.rebuildCatalog` an Object had no material
+    // bindings, a bundle's members showed as loose tiles and every closure
+    // walk came back empty. A reader of a v1 sidecar simply finds the three
+    // keys below absent, which is exactly what it meant before.
+    sidecar["formatVersion"] = 2;
     sidecar["guid"] = guid;
     sidecar["name"] = assetQuery.value(0).toString();
     sidecar["type"] = assetQuery.value(1).toInt();
@@ -479,6 +487,47 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // rebuildCatalog does not resurrect an unlisted row as a library tile.
     // Absent in older sidecars — the reader defaults to listed.
     sidecar["listed"] = assetQuery.value(8).toInt() != 0;
+
+    // MEMBERSHIP (G5). `parent` is what makes a Mesh row the inside of its
+    // model and a baked map the inside of its material — the one relation
+    // both browsers hide by — and it lived in no sidecar at all.
+    const QString parent = assetQuery.value(9).toString();
+    if (!parent.isEmpty()) sidecar["parent"] = parent;
+
+    // THE DB-ONLY PAYLOAD (G5 + the material spec's F12). A Material's, a
+    // Sky's and a ParticleSystem's meaning is the `asset` blob, so a rebuild
+    // without it restores a row that resolves to nothing. A material's
+    // definition is ALSO a store object now (MATERIAL_BUNDLE_SPEC D-2) and so
+    // rides the file manifest above; the blob is its cache, and carrying it
+    // costs a few hundred bytes and closes the gap for the kinds that have no
+    // file at all.
+    {
+        const QJsonDocument blob = QJsonDocument::fromJson(assetQuery.value(10).toByteArray());
+        if (blob.isObject()) sidecar["asset"] = blob.object();
+    }
+
+    // INTRINSIC DEPENDENCY EDGES (G5): the ones with NO project stamp — a
+    // bundle's own membership, derived from its definition
+    // (MaterialBundle::reconcileEdges) and true wherever the asset goes. A
+    // project-stamped edge is that project's record of a USE and belongs to
+    // the project, not to this asset.
+    {
+        QJsonArray edges;
+        QSqlQuery depQuery(conn);
+        depQuery.prepare("SELECT dependee, dependee_type FROM dependencies "
+                         "WHERE depender = ? AND project_guid IS NULL "
+                         "ORDER BY dependee");
+        depQuery.addBindValue(guid);
+        if (depQuery.exec()) {
+            while (depQuery.next()) {
+                QJsonObject edge;
+                edge["dependee"] = depQuery.value(0).toString();
+                edge["dependeeType"] = depQuery.value(1).toInt();
+                edges.append(edge);
+            }
+        }
+        if (!edges.isEmpty()) sidecar["dependencies"] = edges;
+    }
 
     QJsonArray files;
     QSqlQuery filesQuery(conn);

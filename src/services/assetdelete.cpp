@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetstorepaths.h"
 #include "io/assetmanager.h"
+#include "services/assethelper.h"
 #include "services/imagematerial.h"
 #include "services/projectmembership.h"
 
@@ -99,12 +100,25 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         out.error = QStringLiteral("no asset with guid '%1'").arg(guid);
         return out;
     }
-    // The asset plus the closure members nothing else depends on: what
-    // addToProject pinned, minus what another pinned asset still shares.
-    QStringList members = db->fetchAssetGUIDAndDependencies(guid, true);
+    // THE WHOLE CLOSURE, judged against what is left (bundles audit G4). ADD is
+    // recursive — `AssetHelper::fetchAssetAndAllDependencies`, which pins an
+    // avatar's clips, its model, that model's mesh and its textures — and this
+    // walked ONE LEVEL, so every depth-2 member stayed pinned forever and rode
+    // every archive the project ever produced. It is the same recursive set
+    // now, and a member goes only when no depender REMAINS OUTSIDE the set
+    // being removed: a texture two pinned models share keeps its pin, and a
+    // mesh whose only depender is the model going with it does not.
+    const QStringList members = AssetHelper::fetchAssetAndAllDependencies(guid, db);
     QStringList toUnpin;
     for (const QString &member : members) {
-        if (member != guid && db->hasMultipleDependers(member).count() > 1) continue;
+        if (member == guid) { toUnpin.append(member); continue; }
+        bool heldFromOutside = false;
+        for (const QString &depender : db->hasMultipleDependers(member)) {
+            if (depender == member || members.contains(depender)) continue;
+            heldFromOutside = true;
+            break;
+        }
+        if (heldFromOutside) continue;
         toUnpin.append(member);
     }
 

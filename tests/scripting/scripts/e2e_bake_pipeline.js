@@ -1,14 +1,21 @@
 // scripting.e2e.bake_pipeline — the Materials Evaluator bake pipeline end to
 // end through the verbs (MATERIALS_EVALUATOR_SPEC sections 5-6): create a
 // graph, build a math+uniform surface via graph.*, classify with bakeInfo,
-// bake to hash-cached PNGs under <project>/BakedMaps/<guid>/, apply with
-// toMaterial (a final-bake trigger) and read the maps back off the scene
-// material, save (bakes into the stored definition), and recover with
+// bake to hash-cached PNGs, apply with toMaterial (a final-bake trigger) and
+// read the maps back off the scene material, save (which is the DEFINITION
+// write and stores the maps as MEMBERS), and recover with
 // materials.regenerate.
 //
-// .jaf export note: the exporter zips the whole project working directory
-// recursively (src/shell/mainwindow.cpp exportSceneAsZip), so asserting the
-// baked maps land INSIDE the project folder is asserting they ride the zip.
+// WHERE A BAKED MAP LIVES CHANGED (MATERIAL_BUNDLE_SPEC phase 1). It used to
+// be a loose PNG under `<projectFolder>/BakedMaps/<guid>/` named in the
+// definition by a project-RELATIVE path, and this suite asserted exactly that
+// — "the maps ride the .jaf zip because the zip is the project folder". A
+// baked map is a MEMBER TEXTURE in the content-addressed store now: named by
+// guid, pinned like any other member, carried by an archive through the
+// manifest rather than by being inside a directory, and resolvable on a
+// machine that has no such project folder at all. graph.bake is a diagnostic
+// that writes into the store's own disposable derived cache and needs no
+// project; graph.save is what makes the members.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -48,9 +55,12 @@ assert(ev.values.baseColor && ev.values.baseColor.r > 0.9, "evaluate folds the b
 
 // ---- bake ----
 var baked = graph.bake({ resolution: 64 });
-assert(baked.maps.roughnessMap && baked.maps.roughnessMap.indexOf("BakedMaps/") === 0,
-       "bake emits a project-relative roughnessMap under BakedMaps/");
-assert(baked.maps.roughnessMap.indexOf(shaderGuid) !== -1, "the map lands in the shader's own cache dir");
+assert(baked.maps.roughnessMap && ("" + baked.maps.roughnessMap).length > 0,
+       "bake emits a roughnessMap");
+assert(("" + baked.maps.roughnessMap).indexOf(folder) !== 0,
+       "and NOT inside the project folder any more (nothing of a material lives outside the store)");
+assert(("" + baked.maps.roughnessMap).indexOf("roughnessMap") === 0,
+       "named for the slot it bakes, plus its content hash");
 assert(baked.values.roughness === 1, "roughness factor lands 1.0 beside the map");
 assert(baked.unsupported.length === 0, "nothing unsupported");
 assert(typeof baked.msElapsed === "number", "bake reports msElapsed (" + baked.msElapsed + " ms)");
@@ -63,19 +73,25 @@ assert(baked2.maps.roughnessMap === baked.maps.roughnessMap, "second bake is a c
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 assert(graph.toMaterial(cube) === true, "graph.toMaterial applies to the cube");
 var mat = material.get(cube);
-assert(("" + mat.roughnessMap).indexOf(folder) === 0,
-       "scene material's roughnessMap is INSIDE the project folder (rides the .jaf zip)");
-assert(("" + mat.roughnessMap).indexOf("BakedMaps/" + shaderGuid) !== -1,
-       "scene material's roughnessMap points into BakedMaps/<shaderGuid>/");
+assert(("" + mat.roughnessMap).length > 0, "the scene material carries the baked roughnessMap");
 
-// ---- save: the stored definition bakes too ----
-assert(graph.save() === true, "graph.save (final-bake trigger)");
+// ---- save: THE DEFINITION WRITE, and the bake becomes a MEMBER ----
+assert(graph.save() === true, "graph.save (the definition write, a final-bake trigger)");
+var members = materials.members(shaderGuid);
+assert(members.length >= 1, "the material has members after the save");
+var bakedMember = null;
+members.forEach(function (m) { if (m.slot === "roughnessMap") bakedMember = m; });
+assert(bakedMember !== null, "the baked roughnessMap is a MEMBER of the material");
+assert(bakedMember.baked === true, "and it is recorded as baked");
+assert(("" + bakedMember.guid).length > 10, "named by GUID, never by a path");
 
 // ---- regenerate: the cache-recovery verb ----
 assert(materials.regenerate(shaderGuid) === true, "materials.regenerate");
-var mat2 = material.get(cube);
-assert(("" + mat2.roughnessMap).indexOf("BakedMaps/" + shaderGuid) !== -1,
-       "regenerate refreshed the applied material from the fresh bake");
+var membersAgain = materials.members(shaderGuid);
+var again = null;
+membersAgain.forEach(function (m) { if (m.slot === "roughnessMap") again = m; });
+assert(again !== null && again.guid === bakedMember.guid,
+       "a re-bake moves the member row's bytes, never its guid (a node's copied values stay valid)");
 
 project.close();
 console.log("bake pipeline e2e passed");

@@ -469,21 +469,29 @@ void NodePropertiesPanel::pickTextureForNode()
 	if (mNode == nullptr || mNode->typeName != "texture")
 		return;
 
-	auto filename = QFileDialog::getOpenFileName(this, tr("Choose an image"));
-	if (filename.isEmpty())
-		return;
+	// THE ONE PICKER (MATERIAL_BUNDLE_SPEC P-2), asked for through the page.
+	// This used to open a bare QFileDialog, so the module put a different
+	// question to the user from the editor's material panel and had no way to
+	// reuse an image the project already held — and every pick wrote around
+	// the store. The page hands us the shell's asset picker (with the owner's
+	// second way, "import one from anywhere on disk", as a button of the SAME
+	// dialog); the graph layer stays out of the shell's UI, which is the
+	// module boundary every other seam here respects.
+	const auto chosen = [this](const QString &guid) {
+		if (guid.isEmpty()) return;
+		// A GUID, ALWAYS — never a path. That is the first of the spec's three
+		// locks against an absolute AssetStore path reaching a definition (F3).
+		writeValue(QJsonValue(guid));
+		refreshFromNode();
+	};
+	if (mTexturePicker) { mTexturePicker(chosen); return; }
 
-	// DB-backed route when a project database is behind the TextureManager
-	// (same flow the old texture property rows used); plain path otherwise.
-	QString stored = filename;
-	if (TextureManager::getSingleton()->hasDatabase()) {
-		auto tex = TextureManager::getSingleton()->importTexture(filename);
-		if (tex != nullptr && !tex->guid.isEmpty())
-			stored = tex->guid;
-	}
-
-	writeValue(QJsonValue(stored));
-	refreshFromNode();
+	// No page wired one (the standalone build, a headless slice): the file
+	// dialog, still through the ONE content import.
+	const auto filename = QFileDialog::getOpenFileName(this, tr("Choose an image"));
+	if (filename.isEmpty()) return;
+	auto *tex = TextureManager::getSingleton()->importTexture(filename);
+	chosen(tex && !tex->guid.isEmpty() ? tex->guid : filename);
 }
 
 void NodePropertiesPanel::writeValue(const QJsonValue& value)

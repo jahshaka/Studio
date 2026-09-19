@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include "core/graphbaker.h"
 #include "core/graphdefinition.h"
 #include "services/materialbundle.h"
+#include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
 #include <QFutureWatcher>
 #include <QtConcurrent>
@@ -943,6 +944,20 @@ void EffectsPage::configureUI()
 	tabbedWidget = new QTabWidget;
 	graphicsView = new GraphicsView;
 	nodePropertiesPanel = new NodePropertiesPanel;
+	// THE ONE PICKER (MATERIAL_BUNDLE_SPEC P-2): the shell's asset picker, with
+	// "Import from disk…" on the same dialog, answering with a GUID. The panel
+	// asks through this so the graph layer never includes the shell's UI.
+	nodePropertiesPanel->setTexturePicker([this](std::function<void(const QString &)> chosen) {
+		auto *picker = new AssetPickerWidget(ModelTypes::Texture);
+		picker->setImportFromDisk([](const QString &path) -> QString {
+			auto *tex = TextureManager::getSingleton()->importTexture(path);
+			return tex ? tex->guid : QString();
+		});
+		QObject::connect(picker, &AssetPickerWidget::itemDoubleClicked, this,
+		                 [chosen](QListWidgetItem *item) {
+			chosen(item->data(MODEL_GUID_ROLE).toString());
+		});
+	});
 	nodeContainer = new QListWidget;
 	splitView = new QSplitter;
 	projectName = new QLineEdit;

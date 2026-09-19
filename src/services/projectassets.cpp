@@ -288,8 +288,18 @@ bool ProjectAssets::updatePinToLatest(const QString &guid, Database *db, Project
 {
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
     QSqlDatabase conn = QSqlDatabase::database();
-    return AssetCas::writePin(conn, project->getProjectGuid(), guid,
-                              sourceOidOf(conn, guid));
+    // THE WHOLE CLOSURE, not one pin (bundles audit G3). "Update from Library"
+    // used to move the asset's own pin and stop, so a project that took a
+    // newer version of a bundle kept pointing at the members the OLD version
+    // named — and a member the new version adds was pinned by nobody, which an
+    // archive then shipped without. Taking the new version means taking what
+    // it is made of; `addToProject` already computes exactly that set, so the
+    // two cannot disagree.
+    bool ok = true;
+    for (const QString &member : AssetHelper::fetchAssetAndAllDependencies(guid, db))
+        ok = AssetCas::writePin(conn, project->getProjectGuid(), member,
+                                sourceOidOf(conn, member)) && ok;
+    return ok;
 }
 
 QString ProjectAssets::copyOnWrite(const QString &guid, const QString &newContentPath,
