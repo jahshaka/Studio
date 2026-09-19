@@ -316,6 +316,10 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
 {
     const ProjectArchiver::Result result = archiver ? archiver->result()
                                                     : ProjectArchiver::Result();
+    // The one place this handler may leave early without taking the progress
+    // dialog down with it is here, before it has put one up (fix round F1: the
+    // imported project's folder is resolved through ProjectService).
+    if (!projectService) { hideOpenProgress(); return; }
     if (canceled) {
         // The archiver already rolled the half-built project back — nothing to
         // clean up here.
@@ -346,7 +350,12 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
     // this resolves to the default root — which is exactly where imports have
     // always gone. Through the one resolver all the same, so "where is this
     // project's folder" has a single answer everywhere.
-    auto pDir = mainWindow->studioServices()->project->projectFolderFor(result.projectGuid);
+    //
+    // No null guard HERE on purpose: an early return in the middle of this
+    // handler strands the progress dialog on screen. The service is injected
+    // right after the page is constructed, long before an import can start, and
+    // the guard that belongs to that fact is at the top of the handler.
+    auto pDir = projectService->projectFolderFor(result.projectGuid);
     QDir().mkpath(pDir);
 
     if (mImportOpenMode) {
