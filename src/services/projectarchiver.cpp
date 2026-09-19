@@ -551,9 +551,26 @@ void ProjectArchiver::installImportSlice()
     UiStep::Scope step("archive: install import slice");
     for (AssetCas::Staged &file : asset.files) {
         if (!AssetCas::commitStaged(conn, mStoreRoot, localGuid, file, &mResult.error)) {
-            // Same as the pre-threading behaviour: the first ingest failure
-            // ends the import, and no pin is written for a half-ingested
-            // asset.
+            // THE FIRST INGEST FAILURE ENDS THE IMPORT — AND TAKES THE
+            // HALF-BUILT PROJECT WITH IT (F21, phase 1's code review).
+            //
+            // The repair that makes an imported material MEAN anything —
+            // republishImportedBundles, which rewrites each bundle's
+            // definition into this machine's guids (audit G1) — runs on the
+            // terminal path only, and this branch returns before it. So a
+            // failure here used to leave a project the user can open whose
+            // materials name the AUTHOR's guids: tiles that resolve to
+            // nothing, with no error visible on them. There is no half-right
+            // answer to offer, and content is MISSING by definition (that is
+            // what the failure was), so the import is refused LOUDLY — the
+            // catalog rolls back exactly as a cancel rolls it back, and
+            // `error` is what the caller shows.
+            if (!mResult.projectGuid.isEmpty()) {
+                db->deleteProject(mResult.projectGuid);
+                mResult.projectGuid.clear();
+            }
+            if (mResult.error.isEmpty())
+                mResult.error = QStringLiteral("the archive's content could not be stored");
             discardStagedImports();
             if (mThreaded) finish(false);
             return;

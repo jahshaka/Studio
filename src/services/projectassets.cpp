@@ -295,10 +295,39 @@ bool ProjectAssets::updatePinToLatest(const QString &guid, Database *db, Project
     // archive then shipped without. Taking the new version means taking what
     // it is made of; `addToProject` already computes exactly that set, so the
     // two cannot disagree.
+    //
+    // BUT A MEMBER'S OWN PIN IS NOT THE ASKED-FOR THING (F20, phase 1's code
+    // review — a real data loss). Re-pinning the WHOLE closure to each
+    // member's LIBRARY oid threw away every per-project version the project
+    // had: a texture this project copied on write (ProjectAssets::copyOnWrite
+    // — the user painted on it, for this project only) silently went back to
+    // the library's copy because its material was updated. The user asked for
+    // a newer MATERIAL, not for their edited texture to be discarded. So:
+    //
+    //   * the asset itself moves to the library's current version — that IS
+    //     the gesture;
+    //   * a member with NO pin yet is pinned (the closure gap G3 named: what
+    //     the new version adds must travel);
+    //   * a member the project ALREADY pins keeps its pin, whatever it points
+    //     at. It is either the same bytes (nothing to do) or this project's
+    //     own version (not ours to throw away). Updating THAT member is its
+    //     own gesture on its own tile.
+    //
+    // And an EMPTY source oid never overwrites a real pin: an empty oid means
+    // "a DB-only asset" (assetcas.h), so writing one over a pin that names
+    // bytes is how a pinned member silently became unpinned.
+    const QString projectGuid = project->getProjectGuid();
     bool ok = true;
-    for (const QString &member : AssetHelper::fetchAssetAndAllDependencies(guid, db))
-        ok = AssetCas::writePin(conn, project->getProjectGuid(), member,
-                                sourceOidOf(conn, member)) && ok;
+    const QStringList closure = AssetHelper::fetchAssetAndAllDependencies(guid, db);
+    for (const QString &member : closure) {
+        const QString latest = sourceOidOf(conn, member);
+        const bool isSubject = (member == guid);
+        if (!isSubject && !AssetCas::pinnedOid(conn, projectGuid, member).isEmpty())
+            continue;   // the project's own version of a member stays
+        if (latest.isEmpty() && !AssetCas::pinnedOid(conn, projectGuid, member).isEmpty())
+            continue;   // never turn a real pin into "no bytes"
+        ok = AssetCas::writePin(conn, projectGuid, member, latest) && ok;
+    }
     return ok;
 }
 

@@ -127,6 +127,14 @@ struct WriteResult
 /// row's `asset` blob (a CACHE of the library's current definition, which is
 /// what every listing and thumbnailer reads); re-derives the membership edges;
 /// rewrites the sidecar. `project` may be null at Library scope.
+///
+/// ATOMICITY (F19): the CATALOG half — the store's file rows, the source
+/// pointer or the pin, the blob, the edges, the member pins — is one
+/// transaction. It all lands or none of it does; nothing partial is ever
+/// committed. The BYTES are written first, because they are content-addressed
+/// and a failure then leaves an object no row names, which `assets.gc`
+/// collects; the reverse (a row naming bytes that are not there) is the
+/// failure that cannot be repaired, and this function cannot produce it.
 WriteResult write(Database *db, Project *project, const QString &guid,
                   const QJsonObject &definition, Scope scope = Scope::Library);
 

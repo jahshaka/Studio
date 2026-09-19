@@ -19,6 +19,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "services/imagematerial.h"
+#include "services/materialmembers.h"
 
 namespace assettray {
 
@@ -137,6 +138,24 @@ bool foldedIntoCompanion(const Batch &batch, const QString &projectGuid, const Q
     return true;
 }
 
+/// Rule 6: a picture that came in THROUGH a material's picker folds into its
+/// bundle (MATERIAL_BUNDLE_SPEC V-2, owner Q4). The stamp is the origin — "it
+/// arrived inside a material" — and the fold holds only while materials are
+/// the only things using it; a scene node, a decal or an emitter that names
+/// the image makes it a tile again. A texture the USER imported carries no
+/// stamp and is never folded, which is the difference between this rule and
+/// the dependency-hiding that was tried and removed in 2026-09-12.
+bool foldedIntoBundle(Database *db, const AssetRecord &record)
+{
+    if (!isType(record, ModelTypes::Texture)) return false;
+    // The cheap half first, off the record we already hold: almost no texture
+    // carries the stamp, and only a stamped one costs a query.
+    if (!QJsonDocument::fromJson(record.properties).object()
+             .value(QStringLiteral("member")).toBool())
+        return false;
+    return materialmembers::hiddenAsMember(db, record.guid);
+}
+
 }   // namespace
 
 QStringList hidden(Database *db, const QString &projectGuid, const QVector<AssetRecord> &records)
@@ -146,7 +165,7 @@ QStringList hidden(Database *db, const QString &projectGuid, const QVector<Asset
 }
 
 QStringList hidden(Database *db, const QString &projectGuid, const QVector<AssetRecord> &records,
-                   const QVector<AssetRecord> &pinned)
+                   const QVector<AssetRecord> &pinned, bool showMembers)
 {
     QStringList out;
     if (!db) return out;
@@ -177,8 +196,13 @@ QStringList hidden(Database *db, const QString &projectGuid, const QVector<Asset
         //    own furniture (the floor's checker).
         if (isEditorOwnRow(batch, record)) { out.append(record.guid); continue; }
         // 5. an image whose tile is its companion material.
-        if (isType(record, ModelTypes::Texture) && foldedIntoCompanion(batch, projectGuid, record.guid))
+        if (isType(record, ModelTypes::Texture) && foldedIntoCompanion(batch, projectGuid, record.guid)) {
             out.append(record.guid);
+            continue;
+        }
+        // 6. a picture that arrived inside a material bundle (V-2). The
+        //    "Show member textures" switch turns exactly this rule off.
+        if (!showMembers && foldedIntoBundle(db, record)) out.append(record.guid);
     }
     return out;
 }
@@ -192,9 +216,9 @@ QVector<AssetRecord> collapse(Database *db, const QString &projectGuid,
 
 QVector<AssetRecord> collapse(Database *db, const QString &projectGuid,
                               const QVector<AssetRecord> &records,
-                              const QVector<AssetRecord> &pinned)
+                              const QVector<AssetRecord> &pinned, bool showMembers)
 {
-    const QStringList drop = hidden(db, projectGuid, records, pinned);
+    const QStringList drop = hidden(db, projectGuid, records, pinned, showMembers);
     const QSet<QString> dropSet(drop.begin(), drop.end());
     QVector<AssetRecord> out;
     out.reserve(records.size());
@@ -208,7 +232,7 @@ QVector<AssetRecord> collapse(Database *db, const QString &projectGuid,
 }
 
 QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QString &folderGuid,
-                          int typeFilter)
+                          int typeFilter, bool showMembers)
 {
     if (!db || projectGuid.isEmpty()) return {};
     const QString folder = folderGuid.isEmpty() ? projectGuid : folderGuid;
@@ -240,7 +264,7 @@ QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QStrin
             records.append(record);
         }
     }
-    return collapse(db, projectGuid, records, pinned);
+    return collapse(db, projectGuid, records, pinned, showMembers);
 }
 
 }   // namespace assettray

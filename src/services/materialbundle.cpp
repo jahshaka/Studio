@@ -271,6 +271,27 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     const QString root = AssetStorePaths::root();
     QString error;
     QString oid;
+
+    // ONE TRANSACTION FOR THE CATALOG HALF (F19, phase 1's code review).
+    // Publishing runs ingest → move the source pointer (or the pin) → blob →
+    // edges → pins, and a failure between any two of them used to COMMIT the
+    // steps before it: a definition object recorded against the asset that
+    // nothing pointed at, edges describing a version the row does not have.
+    // Every one of those writes is a catalog write, so one guard makes the
+    // publish atomic — the guard rolls back at destruction unless `commit()`
+    // is reached, and it degrades to a no-op inside somebody else's
+    // transaction (an import slice, a gesture batch), which is the correct
+    // nesting behaviour.
+    //
+    // THE GUARANTEE, stated rather than implied, because half of a publish is
+    // NOT in the database: the BYTES are content-addressed and are written to
+    // the store before the rows. A failure therefore leaves an object in the
+    // store that no row names — which is precisely what `assets.gc` collects
+    // (its dry-run-first law, assetgc.h), and precisely the harmless direction
+    // of the two. The opposite order — a row naming bytes that are not there —
+    // is the one that cannot be repaired, and this function never produces it.
+    DbTransaction tx(conn);
+
     if (!AssetCas::ingestFile(conn, root, tmpPath, guid, QStringLiteral("source"),
                               definitionFileName(), &oid, &error))
         return fail(error.isEmpty() ? QStringLiteral("the store refused the definition") : error);
@@ -329,6 +350,11 @@ WriteResult write(Database *db, Project *project, const QString &guid,
         }
     }
 
+    if (!tx.commit()) return fail(QStringLiteral("the catalog refused the definition"));
+
+    // AFTER the commit, deliberately: a sidecar is a PROJECTION of committed
+    // rows (FSYNC-2's Durability::Derived rule). Writing it inside the guard
+    // would describe rows a rollback then took away.
     QString sidecarError;
     if (!AssetCas::writeSidecar(conn, root, guid, &sidecarError))
         qWarning("MaterialBundle::write: could not refresh the sidecar for %s (%s)",
