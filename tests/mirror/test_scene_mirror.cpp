@@ -1767,24 +1767,22 @@ int main(int argc, char **argv)
         // written and no undo step exists, so a GI re-solve charged to a hover
         // would be a re-solve for a state that will never be saved.
         //
-        // WHAT IT REALLY COSTS, MEASURED BY THE LEAD (2026-09-19, ledger 804) —
-        // and it is neither the audit's "two re-solves per hovered object" nor
-        // the lane's first "one on entry": it is ZERO, flagged or not. The lane's
-        // +1 was the PREVIOUS section's pending settle (the moved mesh) firing
-        // inside this arm's frames: every arm below DRAINS first, because a
+        // WHAT IT REALLY COSTS, MEASURED (2026-09-19, ledger 804-805). The MIRROR
+        // asks for no re-solve on a hover, flagged or not: its material term is
+        // the engine's generation counter, which noteMaterialChanged bumps for a
+        // material whose voxel inputs change WHILE a GI-visible item wears it — a
+        // colour-only material swapped onto a node bumps nothing. (The lane's
+        // first "+1 on entry" was the PREVIOUS section's pending settle firing
+        // inside this arm's frames; every arm below DRAINS first, because a
         // counter read across a section boundary measures the last section's
-        // debt. The engine's material term is a generation counter bumped by
-        // OgreScene::noteMaterialChanged for a material ID whose voxel inputs
-        // changed WHILE a GI-visible item wears it; an item that starts wearing
-        // a DIFFERENT id bumps nothing.
-        //
-        // That is a DEFECT, not a saving (MATERIAL-SWAP-GI-1, queued): a
-        // COMMITTED material swap leaves the voxels carrying the old albedo
-        // until something else refreshes. When that lane makes a swap reach the
-        // generation, arm A below turns red — on purpose: that is the moment
-        // Scene::materialPreviewDepth starts to matter, and the lane owns the
-        // flag's falling edge. Until then arm B proves only that the flag does
-        // no harm, and arm C that it is a gate and not a mute.
+        // debt.) The cost that IS paid is the engine's own, and this counter
+        // cannot see it: a material-pointer change re-attaches the item and
+        // attachMesh invalidates the GI caches whole — every cascade
+        // re-voxelises, on the way in and on the way out. That, a TEXTURED
+        // preview's generation bumps, and the flag's falling edge belong to
+        // MATERIAL-SWAP-GI-1 (queued). Until then arm A records the mirror's
+        // half of the truth, arm B that the flag does no harm, and arm C that
+        // it is a gate and not a mute.
         {
             auto previewTarget = gfloor;
             const iris::MaterialPtr originalMat = previewTarget->getMaterial();
@@ -1822,8 +1820,8 @@ int main(int argc, char **argv)
                         (unsigned long long)(afterHoverA - beforeA),
                         (unsigned long long)(afterRestoreA - afterHoverA));
             CHECK(afterRestoreA == beforeA,
-                  "GI preview (measured): a material SWAP does not reach the GI generation today — "
-                  "when MATERIAL-SWAP-GI-1 fixes that this reads red, and the preview flag takes over");
+                  "GI preview (measured): a colour-only hover asks the MIRROR for no re-solve, in or out "
+                  "(the engine's own re-voxelise on re-attach is MATERIAL-SWAP-GI-1's)");
 
             // ARM B: the same gesture with the scene saying a preview is on
             // screen. Nothing arms — and, the half that is easy to get wrong,
