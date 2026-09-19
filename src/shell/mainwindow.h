@@ -619,7 +619,7 @@ public slots:
     void setupShortcuts();
 
     //scenegraph
-/// Adds the primitive the sender QAction names (its `data()` is the row's name
+    /// Adds the primitive the sender QAction names (its `data()` is the row's name
     /// in src/data/primitives.h). It replaced thirteen one-line slots — owner
     /// review R6; the Add > Primitive menu is built from the table.
     void addPrimitiveFromAction();
