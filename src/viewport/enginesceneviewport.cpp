@@ -33,6 +33,7 @@
 #include <QJsonObject>
 #include <QDir>
 #include "data/constants.h"
+#include "data/primitives.h"
 #include "bridge/enginehost.h"
 #include "shell/mainwindow.h"
 #include "data/project.h"
@@ -1024,14 +1025,17 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
     if (type == static_cast<int>(ModelTypes::ParticleSystem)) {
         emit mEvents.addDroppedParticleSystem(true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
     } else if (type == static_cast<int>(ModelTypes::Object)) {
-        if (Constants::Reserved::DefaultPrimitives.contains(role.value(3).toString())) {
+        // A PRIMITIVE TILE, by guid — OLD GUIDS INCLUDED. `primitives::byGuid`
+        // maps the pre-2026-09-19 numbering (the range that collided with
+        // BuiltinShaders') onto the current rows, so a favourite a user saved
+        // before the renumber still drops (src/data/primitives.h).
+        if (const primitives::Def *prim = primitives::byGuid(role.value(3).toString())) {
             // WITH THE DROP POINT (smoke S2). This branch was the one dropped
             // asset that carried no position — every primitive dragged into
             // the viewport landed in front of the camera instead of under the
             // cursor, while the mesh branch one line down has passed
             // mDragScenePos since the beginning.
-            emit mEvents.addPrimitive(Constants::Reserved::DefaultPrimitives.value(role.value(3).toString()),
-                                      mDragScenePos);
+            emit mEvents.addPrimitive(QString::fromLatin1(prim->name), mDragScenePos);
             return;
         }
         emit mEvents.addDroppedMesh(QDir(mProject->getProjectFolder()).filePath(role.value(2).toString()),

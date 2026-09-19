@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QBuffer>
 #include <QDir>
+#include <QFileInfo>
 #include <QStandardPaths>
 
 #include "data/constants.h"
@@ -77,22 +78,53 @@ QString ProjectService::resolveProjectGuid(const QString &guidOrName, QString *n
     return found;
 }
 
-QString ProjectService::createProjectShell(const QString &name)
+QString ProjectService::createProjectShell(const QString &name, const QString &location,
+                                           QString *whyOut)
 {
     // The ProjectManager::newProject flow minus the dialog (SCRIPTING_SPEC
     // §1.1): guid, current project, folder, DB row, desktop — the caller then
     // builds the default scene and saves it, so the row never carries the
     // empty scene blob.
+    if (whyOut) whyOut->clear();
+    const auto fail = [whyOut](const QString &why) {
+        if (whyOut) *whyOut = why;
+        return QString();
+    };
+
+    if (name.trimmed().isEmpty())
+        return fail(QStringLiteral("a non-empty name is required"));
+
+    // WHERE IT LANDS. The user's projects root unless the dialog's Browse (or
+    // the verb's `location`) named somewhere else. Checked before a guid is
+    // minted or a pointer moves: a create that fails half way through leaves
+    // `project` pointing at a folder that does not exist.
+    QString root = location.trimmed();
+    if (root.isEmpty()) {
+        root = projectsRoot();
+    } else {
+        const QFileInfo info(root);
+        if (!info.exists())
+            return fail(QStringLiteral("the location '%1' does not exist").arg(root));
+        if (!info.isDir())
+            return fail(QStringLiteral("the location '%1' is not a folder").arg(root));
+        if (!info.isWritable())
+            return fail(QStringLiteral("the location '%1' is not writable").arg(root));
+        root = QDir(root).absolutePath();
+    }
+
     const QString guid = GUIDManager::generateGUID();
-    const QString fullProjectPath = QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid);
+    const QString fullProjectPath = QDir(QDir(root).filePath("Projects")).filePath(guid);
 
     project->setProjectPath(fullProjectPath, name.trimmed());
     project->setProjectGuid(guid);
 
     QDir projectDir(fullProjectPath);
-    if (!projectDir.exists()) projectDir.mkpath(".");
+    if (!projectDir.exists() && !projectDir.mkpath("."))
+        return fail(QStringLiteral("the project folder '%1' could not be created")
+                        .arg(fullProjectPath));
 
-    if (!db->createProject(guid, name.trimmed())) return QString();
+    if (!db->createProject(guid, name.trimmed()))
+        return fail(QStringLiteral("the database rejected the project row"));
     db->updateProjectDesktop(guid, projectManager->getCurrentDesktop());
     return guid;
 }

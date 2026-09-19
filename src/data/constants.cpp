@@ -108,20 +108,11 @@ namespace Contants
             { "00000000-0000-0000-0000-000000000006", QDir(Constants::SHADER_DEFS).filePath("Matcap.shader") },
         };
 
-        QMap<QString, QString> DefaultPrimitives = {
-            { "00000000-0000-0000-0000-000000001000", "Plane" },
-            { "00000000-0000-0000-0000-000000001001", "Cone" },
-            { "00000000-0000-0000-0000-000000000002", "Cube" },
-            { "00000000-0000-0000-0000-000000000003", "Cylinder" },
-            { "00000000-0000-0000-0000-000000000004", "Sphere" },
-            { "00000000-0000-0000-0000-000000000005", "Torus" },
-            { "00000000-0000-0000-0000-000000000006", "Capsule" },
-            { "00000000-0000-0000-0000-000000000007", "Gear" },
-            { "00000000-0000-0000-0000-000000000008", "Pyramid" },
-            { "00000000-0000-0000-0000-000000000009", "Teapot" },
-            { "00000000-0000-0000-0000-000000000010", "Sponge" },
-            { "00000000-0000-0000-0000-000000000011", "Steps" },
-        };
+        // (DefaultPrimitives LIVED HERE. It is now one row per primitive in
+        // src/data/primitives.h, with the guid, the mesh and the tile icon
+        // together — owner review R6, 2026-09-18. Its guids also COLLIDED with
+        // BuiltinShaders' 0002-0006 above; the table's are their own 4000
+        // range, and primitives::canonicalGuid maps the old ones.)
 
         QMap<QString, QString> DefaultMaterials = {
             { "00000000-0000-0000-0000-000000002000", "Brick" },

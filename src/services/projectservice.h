@@ -68,7 +68,22 @@ public:
     /// guid, current-project pointers, folder, DB row, desktop assignment.
     /// Returns the new guid, or empty when the DB rejects the row. The caller
     /// (shell or ProjectApi) follows with the new-scene UI flow.
-    QString createProjectShell(const QString &name);
+    ///
+    /// THE ONE CREATE ROUTE (owner review R1, 2026-09-18). The desktop page
+    /// carried a SECOND copy of this — guid, folder, `db->createProject`,
+    /// `updateProjectDesktop`, inline in ProjectManager::newProject — guarded
+    /// by `if (!name.isEmpty() || !name.isNull())`, a condition that is TRUE
+    /// for the empty string (it is not null) and therefore minted a nameless
+    /// project from an emptied name box. Both are gone: the page calls this.
+    ///
+    /// `location` is the folder the project's own directory is created under
+    /// (the Browse button's answer). Empty means the user's projects root —
+    /// exactly what every caller got before the argument existed. It must name
+    /// an existing, writable directory; `whyOut` says which of those it failed
+    /// when the call returns empty, so a verb can refuse BY NAME instead of
+    /// returning a bare false.
+    QString createProjectShell(const QString &name, const QString &location = QString(),
+                               QString *whyOut = nullptr);
 
     /// Points the current project at an existing project. NO preload: the
     /// open registers the session assets in its own slices, with a worker's

@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "jahshaka/engine/Types.h"
 #include "data/constants.h"
+#include "data/primitives.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
 #include "services/projectassets.h"
@@ -149,6 +150,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
+          "`companionOf` is present only on a MATERIAL that 'Create material from image' minted, and names the TEXTURE it was minted for — the stamp that makes an image and its own material relatable (and that keeps the image's tile folded into the material's in the editor tray). A material the user authored on the same image carries no stamp and no key. "
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
           "MODELS also carry their SIZE, as information (services/extentmeasure.h): `extent` {x,y,z} — the model's axis-aligned size in METRES as this asset was IMPORTED, i.e. after its import settings (scale, units, rotation) were baked in, which is the size every placement of it has; and `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none), which is what the import dialog shows so a user can disagree with the file. Nothing reads these to scale anything: an asset's size is decided once, at import (assets.importSettings / assets.reimport), and every instance is placed at scale 1. (The retired fit-to-size block — fitKind/fitScale/fitReason/fitSource, and the assets.setFit verb behind it — guessed a size from an envelope on every instantiation; a stale row may still carry those keys and nothing reads them.)",
           Needs::Document },
@@ -665,6 +667,20 @@ QVariantMap AssetsApi::metadata(const QString &guid)
     // them), and is what decides which of the two a delete would do.
     out["listed"] = record.listed;
     out["pinCount"] = host.db->countAssetPins(guid);
+    // THE COMPANION STAMP (R10.4, owner review 2026-09-18). "Create material
+    // from image" mints a Material row for one Texture and stamps it
+    // `companionOf: <texture guid>` — services/imagematerial.cpp
+    // createMaterialAsset is the ONLY writer of it, and the asset tray's fold
+    // rule is the only reader. It was invisible from the verb surface, so a
+    // script (or a person asking why their image tile vanished) could not see
+    // that the two rows belong together. Reported only when it is there: a row
+    // nobody minted carries no key rather than an empty string.
+    if (!record.asset.isEmpty()) {
+        const QString companion =
+            QJsonDocument::fromJson(record.asset).object()
+                .value(QStringLiteral("companionOf")).toString();
+        if (!companion.isEmpty()) out["companionOf"] = companion;
+    }
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
     return out;
@@ -1053,7 +1069,15 @@ QVariantList AssetsApi::builtins()
         for (auto it = map.constBegin(); it != map.constEnd(); ++it)
             out.append(QVariantMap{ { "guid", it.key() }, { "name", it.value() }, { "kind", kind } });
     };
-    append(Constants::Reserved::DefaultPrimitives, "primitive");
+    // The primitives come from the ONE table (src/data/primitives.h); rows
+    // with no library guid (Ground) are not library builtins and are not
+    // listed — `scene.addPrimitive("Ground")` is how that one is reached.
+    for (const primitives::Def &def : primitives::all()) {
+        if (!def.guid) continue;
+        out.append(QVariantMap{ { "guid", QString::fromLatin1(def.guid) },
+                                { "name", QString::fromLatin1(def.name) },
+                                { "kind", QStringLiteral("primitive") } });
+    }
     append(Constants::Reserved::DefaultMaterials, "material");
     // "material", not "shader" (owner decision, 2026-09-07). The reserved
     // Default/Flat/Glass/Matcap family stopped being shaders when

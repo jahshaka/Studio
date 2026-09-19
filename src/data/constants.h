@@ -90,7 +90,7 @@ namespace Constants
     {
         // TODO - maybe move this to an external resources json file
         extern QMap<QString, QString> BuiltinShaders;
-        extern QMap<QString, QString> DefaultPrimitives;
+        // (DefaultPrimitives is gone — src/data/primitives.h, R6.)
         extern QMap<QString, QString> DefaultMaterials;
 
         extern QString SHADER_DEFAULT;

@@ -771,33 +771,38 @@ void ProjectManager::openSampleProject(QListWidgetItem *item)
 
 void ProjectManager::newProject()
 {
-	NewProjectDialog dialog;
+	// THE DIALOG CALLS THE VERB'S ROUTE (API-first), and there is only one
+	// route now. What stood here was a SECOND copy of
+	// ProjectService::createProjectShell — its own guid, its own folder, its
+	// own `db->createProject` + `updateProjectDesktop` — wrapped in
+	// `if (!name.isEmpty() || !name.isNull())`, which is TRUE for the empty
+	// string (an empty QString is not a null one) and so minted a NAMELESS
+	// project whenever the name box was cleared (owner review R1, the audit's
+	// last item). Both the duplicate and the condition are gone: the service
+	// refuses an empty name by name, and it is the same refusal
+	// `project.create` reports.
+	NewProjectDialog dialog(this);
 	dialog.exec();
 
-	auto projectName = dialog.getProjectInfo().projectName;
-	auto projectPath = dialog.getProjectInfo().projectPath;
-	auto projectGuid = GUIDManager::generateGUID();
+	const ProjectInfo info = dialog.getProjectInfo();
+	if (!projectService) return;   // headless/stub host: nothing to create with
 
-	if (!projectName.isEmpty() || !projectName.isNull()) {
-		auto fullProjectPath = QDir(QDir(projectPath).filePath("Projects")).filePath(projectGuid);
-
-		project->setProjectPath(fullProjectPath, projectName);
-		project->setProjectGuid(projectGuid);
-
-		// make a dir and the default subfolders
-		QDir projectDir(fullProjectPath);
-		if (!projectDir.exists()) projectDir.mkpath(".");
-
-		// Insert an empty scene to get access to the project guid...
-		if (!db->createProject(projectGuid, projectName)) return;
-
-		// new projects belong to the desktop they were created on
-		db->updateProjectDesktop(projectGuid, currentDesktop);
-
-		emit fileToCreate(projectName, fullProjectPath);
-
-		this->hide();
+	QString why;
+	const QString projectGuid =
+	    projectService->createProjectShell(info.projectName, info.projectPath, &why);
+	if (projectGuid.isEmpty()) {
+		// A CANCELLED DIALOG IS NOT AN ERROR: it comes back with no name, which
+		// is exactly the refusal the service gives an empty one, and a person
+		// who pressed Cancel must not be told off for it.
+		if (!info.projectName.trimmed().isEmpty() && !why.isEmpty())
+			reportImportProblem(tr("Create Scene"),
+			                    tr("The scene could not be created: %1").arg(why));
+		return;
 	}
+
+	emit fileToCreate(info.projectName.trimmed(), project->getProjectFolder(), info.empty);
+
+	this->hide();
 }
 
 void ProjectManager::changePreviewSize(QString scale)

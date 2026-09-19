@@ -578,13 +578,25 @@ iris::ScenePtr MainWindow::getScene()
     return scene;
 }
 
-iris::ScenePtr MainWindow::createDefaultScene()
+iris::ScenePtr MainWindow::createDefaultScene(bool empty)
 {
     auto scene = iris::Scene::create();
     // New scenes start on EPIC (POST_CHAIN_SPEC.md §12 decision 8, owner call).
     // Applied through the registry rather than by hardcoding the values here, so
     // the tier table stays the single place any of them is written.
     worldmodes::setMode(scene, worldmodes::Mode::Epic);
+
+    // THE EMPTY SCENE (owner review R1, "Empty scene"): a blank world, and
+    // nothing else. It stops HERE — before the ground, the two lights and the
+    // sky — so what it holds is exactly the root node, the Epic tier and
+    // iris::Scene's own constructor defaults (including its flat 96-grey sky
+    // and shadows on). It is deliberately not "the template with the ground
+    // hidden": a user who asks for empty gets a document a script would have
+    // built, which is the only definition that cannot drift.
+    if (empty) {
+        sceneNodeSelected(scene->rootNode);
+        return scene;
+    }
 
     // THE DEFAULT FLOOR (services/defaultfloor.h): the ONE factory, shared
     // with material.reset's default provider, so what a new scene stands on
@@ -628,13 +640,28 @@ iris::ScenePtr MainWindow::createDefaultScene()
     skylight->icon = iris::Texture2D::load(":/icons/light.png");
     skylight->markChanged(iris::NodeChange::Params);
 
-    // THE DEFAULT SKY AND FOG: 96 grey, not 72 (owner pick 1, SKY_LIGHT_SPEC
-    // §9.1 option ii). The old flat World ambient was 96,96,96 pushed RAW,
-    // which is 0.120 of radiance after the pi split; a 96-grey SKY decoded
-    // sRGB->linear and integrated over the hemisphere is 0.117 — the owner's
-    // ambient number becomes the sky, the Sky Light's default stays an honest
-    // 1.0, and the level the samples were authored against is preserved. The
-    // visible backdrop brightens one step, which is the whole cost.
+    // THE DEFAULT SKY IS THE REAL ONE (owner answer Q1, 2026-09-18: "the
+    // default new scene = the realistic real-time sky WITH the sun following
+    // it"). The analytic atmosphere is evaluated per pixel on the GPU
+    // (AtmosphereNpr, SKY-GPU), it takes its sun DIRECTION from the scene's
+    // sun — the directional light above, which is why the light is created
+    // first — and the Sky Light integrates it for the scene's ambient. Sun
+    // Follows Atmosphere needs no line here: LightNode::followsAtmosphere is
+    // TRUE by default, and this is the sky that makes it mean something (on a
+    // picked colour the tint is white and the row says so). Its dials are
+    // SkyRealistic::defaults(), written through the one setter so the typed
+    // fields and the JSON half cannot disagree.
+    //
+    // BOTH SELFTEST HASHES MOVE WITH THIS, by design: the self-test renders
+    // this template, and the template's backdrop and ambient are now an
+    // atmosphere instead of a flat 96-grey.
+    scene->skyType = iris::SkyType::REALISTIC;
+    scene->setSkyRealistic(iris::SkyRealistic::defaults());
+    // The picked sky COLOUR stays what it was: it is what the World panel
+    // shows the moment a user switches the sky back to Single Color, and the
+    // fog colour reads from it (96 grey — owner pick 1, SKY_LIGHT_SPEC §9.1
+    // option ii: srgb(96) decoded and integrated over the hemisphere is 0.117
+    // of radiance against the old flat path's 0.120).
     scene->skyColor = QColor(96, 96, 96);
     scene->fogColor = QColor(96, 96, 96);
     scene->shadowEnabled = true;
@@ -2596,69 +2623,16 @@ void MainWindow::applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes)
       if (sceneHierarchyWidget) sceneHierarchyWidget->setSelectedSet(nodes); }
 }
 
-void MainWindow::addPlane()
+// ONE SLOT FOR EVERY PRIMITIVE (owner review R6). Thirteen identical
+// forwarding slots stood here — one per shape, four of them (Teapot, Sponge,
+// Steps, Gear) connected to nothing at all — and every new primitive needed a
+// slot, a declaration and a hand-written menu entry. The Add menu builds itself
+// from src/data/primitives.h now and carries the row's NAME on the action.
+void MainWindow::addPrimitiveFromAction()
 {
-    sceneEditService->addPlane();
-}
-
-void MainWindow::addGround()
-{
-    sceneEditService->addGround();
-}
-
-void MainWindow::addCone()
-{
-    sceneEditService->addCone();
-}
-
-void MainWindow::addCapsule()
-{
-    sceneEditService->addCapsule();
-}
-
-void MainWindow::addCube()
-{
-    sceneEditService->addCube();
-}
-
-void MainWindow::addTorus()
-{
-    sceneEditService->addTorus();
-}
-
-void MainWindow::addSphere()
-{
-    sceneEditService->addSphere();
-}
-
-void MainWindow::addCylinder()
-{
-    sceneEditService->addCylinder();
-}
-
-void MainWindow::addPyramid()
-{
-    sceneEditService->addPyramid();
-}
-
-void MainWindow::addSponge()
-{
-    sceneEditService->addSponge();
-}
-
-void MainWindow::addTeapot()
-{
-    sceneEditService->addTeapot();
-}
-
-void MainWindow::addSteps()
-{
-    sceneEditService->addSteps();
-}
-
-void MainWindow::addGear()
-{
-    sceneEditService->addGear();
+    const QAction *action = qobject_cast<QAction *>(sender());
+    if (!action || !sceneEditService) return;
+    sceneEditService->addPrimitive(action->data().toString());
 }
 
 void MainWindow::addPointLight()
@@ -3199,7 +3173,7 @@ void MainWindow::setupDockWidgets()
     // a panel most sessions never touch — in front of the asset browser every
     // session starts in. (The restored layout below carries the user's LAST
     // front tab; it is raised again after that restore — see there.)
-    assetDock->raise();
+    raiseLaunchBottomTab();
 
     // ...and the USER's layout on top of it, if there is one. The docks belong
     // to this nested QMainWindow, so MainWindow's own restoreState (which the
@@ -3217,8 +3191,10 @@ void MainWindow::setupDockWidgets()
     // the last session ended — the Timeline, or the Console after a Ctrl+` —
     // and which tab is in front is SESSION state, not a preference: within a
     // session it still persists across space switches (SPACE-2), but a launch
-    // raises Assets over whatever the blob remembered.
-    assetDock->raise();
+    // raises Assets over whatever the blob remembered. (It regressed because
+    // the blob is restored a SECOND time from applyColumnWidthsOnce — that
+    // restore is followed by the same call now; see raiseLaunchBottomTab.)
+    raiseLaunchBottomTab();
     // A dock closed from its own title bar is a dock the user closed: the
     // Close event goes into `widgetStates` (see eventFilter), so the panel
     // stays closed across space switches and the Toggle Widgets dialog agrees.
@@ -3310,6 +3286,13 @@ void MainWindow::applyColumnWidthsOnce()
         if (restoredViewportDocks) {
             if (settings) DockState::restore(viewPort, settings->settings, kViewportDockStateKey);
             viewPort->setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);   // see setupDockWidgets
+            // AND THE LAUNCH TAB SURVIVES THE SECOND RESTORE (owner review R7).
+            // This blob carries the last session's front tab, and re-applying
+            // it here is what silently undid the constructor's raise one
+            // event-loop turn after the editor opened — the rule was written in
+            // setupDockWidgets and lost here. Before applyDockVisibilityForSpace
+            // below, which READS the front tab back into bottomFrontTab.
+            raiseLaunchBottomTab();
             // THE BLOB DOES NOT DECIDE WHICH PANELS ARE OPEN (lane SPACE-1).
             // It carries each dock's visibility, and applying it here — after
             // switchSpace(EDITOR) has just shown the panels — is what closed
@@ -4228,6 +4211,9 @@ void MainWindow::setupDesktop()
 	pmContainer = new ProjectManager(db, project, this);
 	pmContainer->mainWindow = this;
 	projectService->setProjectManager(pmContainer);
+	// ...and the other half of that pairing: the desktop's New Scene button
+	// creates through the SERVICE, not through a second copy of it (R1).
+	pmContainer->setProjectService(projectService);
 	// Preferences -> Desktop -> Slider Rows applies LIVE (re-audit F8): the
 	// page's signal reaches the desktop through the same ProjectManager entry
 	// point desktop.setSliderRows uses.
@@ -4307,7 +4293,10 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(avatarView);
 
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
-	connect(pmContainer, SIGNAL(fileToCreate(QString, QString)), SLOT(newProject(QString, QString)));
+	connect(pmContainer, &ProjectManager::fileToCreate,
+	        this, [this](const QString &name, const QString &path, bool empty) {
+		newProject(name, path, empty);
+	});
 	connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
 }
 
@@ -5659,6 +5648,19 @@ void MainWindow::raiseBottomFrontTab()
         if (tab.first == bottomFrontTab && !tab.second->isHidden()) { tab.second->raise(); return; }
 }
 
+// THE LAUNCH TAB IS ASSETS — see the header for the rule and for why this is a
+// function and not two lines at each restore.
+void MainWindow::raiseLaunchBottomTab()
+{
+    if (!assetDock) return;
+    bottomFrontTab = QStringLiteral("assets");
+    // Where the console would return to, too: a blob that recorded the console
+    // open leaves it open (the user's panel set is theirs), but closing it must
+    // land on Assets and not on whatever the last session interrupted.
+    bottomReturnTab = QStringLiteral("assets");
+    assetDock->raise();
+}
+
 // THE LAYOUT THE EDITOR LAST HAD (lane SPACE-1). Called on the way out of the
 // editor space and before immersive fullscreen hides the chrome; a no-op once
 // the docks are down, so the caller never has to think about ordering. What it
@@ -5699,9 +5701,9 @@ void MainWindow::showProjectManagerInternal()
 // not" could both be true in one session. A default-constructed EditorData IS
 // the statement of what a new scene looks like; applying it here is the same
 // operation the open path performs, with the same three settings.
-void MainWindow::newScene()
+void MainWindow::newScene(bool empty)
 {
-    auto scene = this->createDefaultScene();
+    auto scene = this->createDefaultScene(empty);
     this->setScene(scene);
     this->sceneView->resetEditorCam();
 
@@ -5823,14 +5825,14 @@ void MainWindow::refreshClaudeChatContext()
     }
 }
 
-void MainWindow::newProject(const QString &filename, const QString &projectPath)
+void MainWindow::newProject(const QString &filename, const QString &projectPath, bool empty)
 {
     if (projectService->isSceneOpen()) closeProject();
 
 	// this is to ensure the editor's context is created
 	switchSpace(WindowSpaces::EDITOR);
 
-    newScene();
+    newScene(empty);
     projectService->setSceneOpen(true);
     ui->actionClose->setDisabled(false);
 
