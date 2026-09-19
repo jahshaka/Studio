@@ -139,19 +139,39 @@ QStringList memberGuids(const QJsonObject &definition)
     return out;
 }
 
-bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &definition)
+bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &definition,
+                    const QString &projectGuid)
 {
     if (!db || guid.isEmpty()) return false;
     QSqlDatabase conn = QSqlDatabase::database();
     if (!conn.isOpen()) return false;
 
-    // INTRINSIC edges only (audit G2/G3): the ones with no project stamp. A
-    // project-stamped edge to this material is somebody's USE of it and is not
-    // ours to rewrite; a library save that rewrote those is exactly how one
-    // edge set came to serve N pinned versions.
+    // ONE EDGE SET PER SCOPE, and the scope is the one whose definition this
+    // is. With no project: the INTRINSIC edges (audit G2/G3), the ones with no
+    // stamp — a bundle's own membership is a fact about the bundle, not about
+    // whichever project happened to be open. With a project: THAT PROJECT's
+    // edges for this material, and the intrinsic set is left exactly as it is.
+    //
+    // Why the project scope needs its own set at all (phase 2): a project-scope
+    // save is a copy-on-write, so the library's version — and therefore the
+    // library's membership — must not move. But the project's version DOES
+    // have members, and with no edge at all nothing could see them: "used by"
+    // read 0 for every picture picked into a material the project owns, the
+    // V-2 fold never fired, and a closure walk over the project's rows found
+    // a material that depended on nothing.
+    //
+    // An edge whose DEPENDER is somebody else — a node's USE of this material
+    // — is not touched by either branch: this deletes only the edges FROM this
+    // material in this one scope.
     QSqlQuery del(conn);
-    del.prepare("DELETE FROM dependencies WHERE depender = ? AND project_guid IS NULL");
-    del.addBindValue(guid);
+    if (projectGuid.isEmpty()) {
+        del.prepare("DELETE FROM dependencies WHERE depender = ? AND project_guid IS NULL");
+        del.addBindValue(guid);
+    } else {
+        del.prepare("DELETE FROM dependencies WHERE depender = ? AND project_guid = ?");
+        del.addBindValue(guid);
+        del.addBindValue(projectGuid);
+    }
     if (!del.exec()) return false;
 
     bool ok = true;
@@ -160,7 +180,7 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
         // A guid the catalog does not know names nothing to depend on.
         if (record.guid.isEmpty()) continue;
         ok = db->createDependency(static_cast<int>(ModelTypes::Material),
-                                  record.type, guid, member, QString())
+                                  record.type, guid, member, projectGuid)
              && ok;
     }
     return ok;
@@ -332,7 +352,8 @@ WriteResult write(Database *db, Project *project, const QString &guid,
     // A project's own membership needs no second edge set: `addToProject`
     // walks the closure at add time and the pins are what an archive reads,
     // and the pins are written below.
-    if (scope == Scope::Library) reconcileEdges(db, guid, stored);
+    reconcileEdges(db, guid, stored,
+                   scope == Scope::Library || !project ? QString() : project->getProjectGuid());
 
     // EVERY MEMBER THE DEFINITION NAMES IS PINNED (F8). A baked map is minted
     // during the write itself, and the ordinary order is "add the material to
