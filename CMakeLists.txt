@@ -287,6 +287,7 @@ set(SRCS
     src/shell/shutdownorder.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
+    src/services/materialbundle.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
