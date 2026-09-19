@@ -78,7 +78,13 @@ int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph)
 		const auto abs = assetPath(rel);
 		if (!QFileInfo::exists(abs)) continue;
 		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs);
-		if (!graphTexture) continue;
+		// AN IMPORT THAT FAILED IS NOT A RESOLUTION (the same rule as the
+		// picker's). `importTexture` answers a GraphTexture holding the PATH
+		// when the library refuses the bytes, and writing that back into the
+		// node would make every later save of this material refuse on the
+		// definition writer's path guard. The node keeps its unresolved
+		// app-relative name instead, which is what it had.
+		if (!graphTexture || graphTexture->guid.isEmpty()) continue;
 		texNode->setTextureGuid(graphTexture->guid);
 		resolved++;
 	}
@@ -118,67 +124,16 @@ QJsonObject MaterialHelper::serialize(NodeGraph* graph)
 	return matObj;
 }
 
-QJsonObject MaterialHelper::serializeWithBake(NodeGraph* graph, const QString& bakeGuid)
-{
-	QJsonObject matObj = serialize(graph);
-	if (!graph || bakeGuid.isEmpty() || projectRoot.isEmpty())
-		return matObj;
-
-	// THE EMITTER RUNS FIRST (HLMS_ADOPTION P5), because what it takes the
-	// baker must not spend time on. Both backends are driven from the same
-	// compiled graph, and a socket lands on exactly one of them.
-	materials::PieceEmitter::Result emitted;
-	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph, textureResolver(),
-	                                                                &emitted);
-
-	materials::GraphBaker::Options opts;
-	opts.resolution = graph->settings.bakeResolution;
-	opts.outputDir = projectRoot + "/BakedMaps/" + bakeGuid;
-	opts.relativePrefix = "BakedMaps/" + bakeGuid + "/";
-	opts.emittedSockets = emitted.emittedSockets;
-	const auto baked = materials::GraphBaker::run(graph, opts, textureResolver());
-
-	QJsonObject pbrObj = matObj["pbrMaterial"].toObject();
-	pbrObj["values"] = baked.eval.values;
-	pbrObj["unsupportedNodes"] = QJsonArray::fromStringList(baked.eval.unsupportedNodes);
-	pbrObj["approximatedNodes"] = QJsonArray::fromStringList(baked.eval.approximatedNodes);
-	pbrObj["animated"] = baked.eval.animated || emitted.animated;
-	pbrObj["bakedMaps"] = baked.maps;
-	// The piece record is a FLAG plus the sockets it owns — never the machine's
-	// file paths. Pieces live in a per-USER cache, so a stored absolute path
-	// would be wrong on the next machine to open the project; the definition
-	// carries the graph, and the graph re-emits byte-identical source (and
-	// therefore the identical content-addressed name) wherever it is opened.
-	if (emitted.accepted) {
-		QJsonObject pieceObj;
-		pieceObj["emittedSockets"] = QJsonArray::fromStringList(emitted.emittedSockets);
-		pieceObj["animated"] = emitted.animated;
-		if (pieces.contains("customPiecePixel")) pieceObj["pixel"] = true;
-		if (pieces.contains("customPieceVertex")) pieceObj["vertex"] = true;
-		pbrObj["customPiece"] = pieceObj;
-	}
-	matObj["pbrMaterial"] = pbrObj;
-	return matObj;
-}
-
-QString MaterialHelper::projectRoot;
-
-void MaterialHelper::setProjectRoot(const QString& folder)
-{
-	projectRoot = folder;
-}
-
 PbrGraphEvaluator::TextureResolver MaterialHelper::textureResolver()
 {
 	return [](const QString& value) -> QString {
 		if (value.isEmpty() || QFileInfo::exists(value))
 			return value;
-		// project-relative baked-map cache paths (MATERIALS_EVALUATOR_SPEC
-		// section 1.6) resolve against the open project's folder
-		if (value.startsWith(QStringLiteral("BakedMaps/")) && !projectRoot.isEmpty()) {
-			const QString abs = projectRoot + "/" + value;
-			if (QFileInfo::exists(abs)) return abs;
-		}
+		// (The project-relative "BakedMaps/<guid>/..." branch is GONE with the
+		// project-folder bake — MATERIAL_BUNDLE_SPEC phase 1. A baked map is a
+		// member TEXTURE row in the store now, so it resolves through the CAS
+		// below like every other texture, on any machine, with or without a
+		// project open.)
 		// treat as an asset GUID already loaded by the graph's TextureManager
 		for (auto tex : TextureManager::getSingleton()->textures) {
 			if (tex->guid == value)

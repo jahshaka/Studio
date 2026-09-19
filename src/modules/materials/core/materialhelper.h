@@ -33,12 +33,13 @@ public:
 	// of unsupported inputs) - see PbrGraphEvaluator.
 	static QJsonObject serialize(NodeGraph* graph);
 
-	// serialize + a FINAL-quality per-texel bake of the UV-varying chains
-	// (MATERIALS_EVALUATOR_SPEC section 2): maps land in
-	// <projectRoot>/BakedMaps/<bakeGuid>/ at the graph's bakeResolution and
-	// "pbrMaterial" carries their project-relative paths. Falls back to the
-	// plain serialize when no project root is set or bakeGuid is empty.
-	static QJsonObject serializeWithBake(NodeGraph* graph, const QString& bakeGuid);
+	// (serializeWithBake is DELETED — MATERIAL_BUNDLE_SPEC phase 1's Deletes
+	// column. It baked into `<projectRoot>/BakedMaps/<guid>/` and wrote those
+	// project-relative paths into the definition, which is why a graph
+	// material could not be read with no project open and why its maps never
+	// travelled in an exported project. A graph becomes a definition in
+	// materials::buildDefinition now — core/graphdefinition.h — and its maps
+	// are member textures in the store.)
 
 	// Option B phase 1: the graph evaluated to the document's PBR material
 	// (which SceneMirror already mirrors into the engine). Texture-property
@@ -60,15 +61,11 @@ public:
 	static iris::PbrMaterialPtr createPbrMaterialFromDefinition(QJsonObject matObj);
 
 	// Maps a texture property's stored asset GUID to an image path via
-	// TextureManager; passes real file paths through untouched; resolves
-	// project-relative baked-map paths (BakedMaps/...) against the project
-	// root set below.
+	// TextureManager or the CAS; passes real file paths through untouched.
+	// (`projectRoot`/`setProjectRoot` went with the project-folder bake: there
+	// is no project-relative path left to resolve, so the one piece of
+	// process-wide state in this class is gone.)
 	static PbrGraphEvaluator::TextureResolver textureResolver();
-
-	// The open project's folder, for resolving BakedMaps/... cache paths.
-	// Set on project open / by the bake verb; empty when no project.
-	static void setProjectRoot(const QString& folder);
-	static QString projectRoot;
 
 	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj);
 

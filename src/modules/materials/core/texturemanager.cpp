@@ -15,6 +15,7 @@ For more information see the LICENSE file
 
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/shippedassets.h"
 
 TextureManager* TextureManager::instance = 0;
 
@@ -40,28 +41,6 @@ void TextureManager::removeTexture(GraphTexture* tex)
 	int index = textures.indexOf(tex);
 	if (index >= 0)
 		this->textures.removeAt(index);
-}
-
-void TextureManager::removeTextureByGuid(QString guid)
-{
-	for (auto tex : textures) {
-		if (tex->guid == guid) {
-			// remove from list
-			this->textures.removeAt(textures.indexOf(tex));
-			
-			// remove from db
-			database->deleteAsset(guid);
-
-			// remove from filesystem
-			auto assetFolder = AssetStorePaths::legacyFolder(guid);
-
-			if (QDir(assetFolder).exists()) {
-				QDir(assetFolder).removeRecursively();
-			}
-
-			break;
-		}
-	}
 }
 
 void TextureManager::loadUnloadedTextures()
@@ -126,29 +105,36 @@ QString TextureManager::loadTextureFromDatabase(QString guid)
 
 GraphTexture* TextureManager::importTexture(QString path)
 {
-	auto assetPath = AssetStorePaths::root();
-
-	auto texGuid = materials::EffectsPage::genGUID();
-
-	const QString assetFolder = QDir(assetPath).filePath(texGuid);
-	QDir().mkpath(assetFolder);
-
-	QFileInfo fileInfo(path);
-	QString fileToCopyTo = IrisUtils::join(assetFolder, fileInfo.fileName());
-	bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);
-
-    database->createAssetEntry(QString(),
-		texGuid,
-		fileInfo.fileName(),
-		static_cast<int>(ModelTypes::File),
-		QByteArray(),
-		QByteArray(),
-		AssetViewFilter::Effects);
-
+	// THROUGH THE ONE IMPORT PIPELINE, BY CONTENT (MATERIAL_BUNDLE_SPEC P-2,
+	// owner decision Q1). This routine used to write AROUND the store: a fresh
+	// guid, a `QFile::copy` into the RETIRED `<store>/<guid>/<name>` folder and
+	// a catalog row of type File under the Effects filter — no hash, no
+	// asset_files row, no sidecar, no dedup, no pin. It ran for every image a
+	// user picked in a texture node AND for every shipped template's images on
+	// every instantiation, which is how the owner's library came to hold four
+	// byte-identical copies of one checker.
+	//
+	// It is now the ordinary image import: a real library Texture row keyed on
+	// the bytes (so a second pick of the same image answers the SAME row —
+	// byte-identical duplicates are impossible by construction), pinned into
+	// the open project when there is one.
 	auto tex = createTexture();
-	tex->path = fileToCopyTo;
-	tex->guid = texGuid;
+	if (database == nullptr) {
+		// No library behind us (the headless slice, the standalone build): the
+		// node keeps the path, exactly as it always did there.
+		tex->path = path;
+		return tex;
+	}
 
+	const ShippedAssets::Pinned imported =
+	    ShippedAssets::importTexture(path, QFileInfo(path).fileName(), database, project);
+	if (!imported.ok()) {
+		qWarning("TextureManager::importTexture: %s", qUtf8Printable(imported.error));
+		tex->path = path;
+		return tex;
+	}
+	tex->path = imported.path;
+	tex->guid = imported.guid;
 	return tex;
 }
 

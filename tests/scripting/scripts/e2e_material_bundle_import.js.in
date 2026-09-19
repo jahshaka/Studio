@@ -1,0 +1,63 @@
+// scripting.e2e.material_bundle_import — the second half of the spec's
+// acceptance flow (MATERIAL_BUNDLE_SPEC §5, "Import on an EMPTY library").
+//
+// This process runs on a library that has NEVER seen the material, the image
+// or the project: its own HOME and its own data root, wiped before the run.
+// All it is given is the archive scripting.e2e.material_bundle exported.
+//
+// THAT IS WHAT "SELF-CONTAINED" MEANS, in the owner's words: "material bundles
+// are great if they are self-contained, makes them portable". The bundle's
+// definition and its member's bytes have to be IN the archive, because
+// nothing on this side can supply either. Before this lane the definition was
+// a mutable database blob with no sidecar (F12) and the member textures a
+// material picked were copies in a retired per-guid folder that no manifest
+// named — so a material was the one asset kind that could not travel.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+// A LIBRARY THAT HAS NEVER SEEN ANY OF THIS.
+assert(assets.list({ scope: "store" }).length === 0,
+       "the library is empty (a machine that has never seen the material)");
+
+var archive = "@ARCHIVE_PATH@";
+var imported = project.importArchive(archive);
+assert(imported && imported.guid && imported.guid.length > 10,
+       "project.importArchive -> " + imported.assets + " assets, " + imported.objects + " objects");
+assert(project.open(imported.guid) === true, "the imported project opens");
+
+var types = {};
+assets.list({ scope: "project" }).forEach(function (a) { types[a.guid] = a.type; });
+var mats = Object.keys(types).filter(function (g) { return types[g] === "material"; });
+assert(mats.length >= 1, "the material came back");
+
+// ONE TILE, still: no Shader row travelled and none was minted on the way in.
+assert(assets.list({ scope: "store", type: "shader" }).length === 0,
+       "no ModelTypes::Shader row exists on the far side either");
+
+var bundled = null;
+mats.forEach(function (g) { if (materials.members(g).length > 0) bundled = g; });
+assert(bundled !== null, "one of them has MEMBERS — the bundle is self-contained");
+
+var sawBaked = false;
+materials.members(bundled).forEach(function (m) {
+    assert(("" + m.name).length > 0, "member '" + m.name + "' resolves in the fresh library");
+    assert(("" + m.guid).indexOf("/") === -1, "and is named by guid, never a path");
+    if (m.baked) sawBaked = true;
+});
+// THE BAKED MAP TRAVELLED (F8). It is minted during a write, after the
+// material was added to the project, so nothing pinned it and the manifest
+// left it behind: the material arrived without the maps it is made of.
+assert(sawBaked, "the BAKED member travelled too, not just the picked image");
+
+// THE PROOF THE OWNER WOULD LOOK AT: the mesh still has its picture.
+var cube = scene.find("Cube");
+assert(cube && cube.length > 0, "the cube came back");
+var worn = material.get(cube);
+assert(("" + worn.baseColorMap).length > 0,
+       "the mesh wears a RESOLVED baseColorMap on a machine that never had the image");
+
+project.close();
+console.log("material_bundle_import e2e passed");

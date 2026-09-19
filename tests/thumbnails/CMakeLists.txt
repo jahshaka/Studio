@@ -55,6 +55,8 @@ add_executable(test_shader_thumbnail test_shader_thumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    # the bundle model: case 5b renders the shape the module actually writes
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp
@@ -127,6 +129,7 @@ set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 find_package(Qt6 REQUIRED COMPONENTS Gui Sql Widgets Multimedia Concurrent)
 add_executable(test_thumbnail_sweep test_thumbnail_sweep.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailrebuild.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/assetthumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp

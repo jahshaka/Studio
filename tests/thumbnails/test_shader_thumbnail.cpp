@@ -30,6 +30,9 @@
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "data/database/database.h"
 #include "io/materialreader.h"
+#include "services/assetstorepaths.h"
+#include "services/materialbundle.h"
+#include <QJsonArray>
 #include "bridge/enginethumbnailrenderer.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -62,8 +65,14 @@ static int maxAbsDiff(const QImage &a, const QImage &b)
     return d;
 }
 
-// What MaterialHelper::serializeWithBake writes for a graph whose Base Color
-// folded to a constant: the graph itself plus the evaluated "pbrMaterial".
+// A LEGACY SHADER ROW's definition: the graph plus an evaluated
+// "pbrMaterial" block. This is NOT what the app writes any more — a material
+// is a BUNDLE and its definition is a `values` object at the top level
+// (MATERIAL_BUNDLE_SPEC D-2, and `bundleDefinitionWithColour` below) — but
+// ModelTypes::Shader rows still ARRIVE, from `AssetWidget::createShader` and
+// from a `.shader` file on disk through ShaderImporter, so this shape and
+// the reader that eats it are both live and both tested. Deleting them is
+// phase 2's job, with those two minters.
 static QJsonObject definitionWithColour(double r, double g, double b)
 {
     QJsonObject colour;
@@ -85,6 +94,31 @@ static QJsonObject definitionWithColour(double r, double g, double b)
     definition["name"] = QStringLiteral("test graph");
     definition["shadergraph"] = graph;
     definition["pbrMaterial"] = pbr;
+    return definition;
+}
+
+// WHAT THE APP WRITES TODAY: a bundle definition. `values` at the top level,
+// colours spelled the document's way (MaterialBundle::normaliseColours does
+// it at the write), read by MaterialReader::parseMaterialTyped — the ONE
+// reader every material surface uses.
+static QJsonObject bundleDefinitionWithColour(double r, double g, double b)
+{
+    QJsonObject rgba;
+    rgba["r"] = r; rgba["g"] = g; rgba["b"] = b; rgba["a"] = 1.0;
+
+    QJsonObject values;
+    values["baseColor"] = rgba;          // the EVALUATOR's spelling, on purpose
+    values["metallic"]  = 0.0;
+    values["roughness"] = 0.45;
+
+    QJsonObject graph;
+    graph["nodes"] = QJsonArray();
+
+    QJsonObject definition;
+    definition["materialType"] = QStringLiteral("pbr");
+    definition["name"] = QStringLiteral("bundle graph");
+    definition["values"] = values;
+    definition["shadergraph"] = graph;   // a graph material: the payload
     return definition;
 }
 
@@ -135,21 +169,34 @@ int main(int argc, char **argv)
               "an unknown guid converts to nothing");
     }
 
-    // ---- 3. baked maps need a project root (no half-textured renders) ----
+    // ---- 3. A BAKED-MAP GRAPH READS WITH NO PROJECT OPEN -----------------
+    //
+    // It used to be REFUSED there, and the refusal was right for what a bake
+    // then was: a loose PNG under `<projectFolder>/BakedMaps/<guid>/`, named
+    // in the definition by a project-RELATIVE path, which with no project
+    // reached the loader as a literal relative string and rendered a
+    // half-textured material. That also meant a graph material could never
+    // preview in the LIBRARY.
+    //
+    // MATERIAL_BUNDLE_SPEC phase 1 removed the cause: a baked map is a MEMBER
+    // TEXTURE row in the content-addressed store, named in the definition by
+    // its guid like every other map, so it resolves with or without a project
+    // and on any machine. The refusal is deleted with the thing it protected
+    // against, and the same definition now converts either way.
     {
         QJsonObject baked = definitionWithColour(0.1, 0.8, 0.1);
         QJsonObject pbrObj = baked["pbrMaterial"].toObject();
         QJsonObject values = pbrObj["values"].toObject();
-        values["baseColorMap"] = QStringLiteral("BakedMaps/abc/baseColor.png");
+        values["baseColorMap"] = QStringLiteral("tex-baked-member-guid");
         pbrObj["values"] = values;
-        QJsonObject maps; maps["baseColorMap"] = QStringLiteral("BakedMaps/abc/baseColor.png");
+        QJsonObject maps; maps["baseColorMap"] = QStringLiteral("tex-baked-member-guid");
         pbrObj["bakedMaps"] = maps;
         baked["pbrMaterial"] = pbrObj;
 
-        CHECK(MaterialReader::shaderDefinitionAsPbr(baked, QString()).isNull(),
-              "a baked-map graph with no open project is refused (no half-textured render)");
+        CHECK(!MaterialReader::shaderDefinitionAsPbr(baked, QString()).isNull(),
+              "a baked-map graph converts with NO project open (its maps are store objects)");
         CHECK(!MaterialReader::shaderDefinitionAsPbr(baked, QDir::currentPath()).isNull(),
-              "the same graph converts once a project root exists");
+              "and with one");
     }
 
     // ---- engine: the preview sphere ----
@@ -189,6 +236,41 @@ int main(int argc, char **argv)
         const int d = maxAbsDiff(img, grey);
         std::printf("    max |graph - default| = %d\n", d);
         CHECK(d > 40, "the render differs from the grey default-material fallback");
+
+        // ---- 5b. THE SHAPE THE MODULE ACTUALLY WRITES RENDERS (F1) ----
+        //
+        // Every graph material saved in the Materials module got a BLANK TILE:
+        // the page asked the thumbnail queue for a SHADER render, that branch
+        // reads the row blob through `parseShaderAsPbr`, and that refuses any
+        // definition with no `pbrMaterial` key — which a bundle definition
+        // does not have. The module asks for a MATERIAL render of the guid
+        // now, which reads the bundle and parses it typed; this is that path,
+        // end to end, on the engine.
+        {
+            AssetStorePaths::setRootOverride(QDir::current().filePath("bundle-store"));
+            QDir().mkpath(AssetStorePaths::root());
+            QString error;
+            const QString bundleGuid = MaterialBundle::create(
+                &db, QStringLiteral("Bundle Green"),
+                bundleDefinitionWithColour(0.10, 0.85, 0.10), QByteArray(), &error);
+            CHECK(!bundleGuid.isEmpty(),
+                  qPrintable(QStringLiteral("5b: the bundle was written (%1)").arg(error)));
+
+            const QJsonObject readBack = MaterialBundle::read(&db, bundleGuid);
+            CHECK(readBack.value("values").toObject().value("baseColor").isString(),
+                  "5b: the write normalised the colour to the document's spelling");
+
+            MaterialReader bundleReader;
+            auto bundleMaterial = bundleReader.parseMaterialTyped(readBack, &db);
+            CHECK(!bundleMaterial.isNull(), "5b: a bundle definition parses typed");
+            QImage bundleImg = renderer.renderMaterial(bundleMaterial, size);
+            show("bundle graph", bundleImg);
+            const QColor bc = centre(bundleImg);
+            CHECK(!bundleImg.isNull() && !isBackground(bc),
+                  "5b: the tile is NOT blank (the module's own save used to render nothing)");
+            CHECK(bc.green() > bc.red() + 40 && bc.green() > bc.blue() + 40,
+                  "5b: and it shows the material's colour, not black");
+        }
 
         // ---- 6. a second graph gives a second picture (no cached leak) ----
         {

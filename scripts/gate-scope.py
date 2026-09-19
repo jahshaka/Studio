@@ -120,7 +120,14 @@ AREA_RULES = [
      ["editor", "camera", "input", "perf", "vr"]),
     (r"^src/(bridge|player)/", ["player", "thumbnails", "materialpreview", "assets", "avatar", "app"],
      ["player", "avatar", "materials", "assets"]),
-    (r"^src/modules/materials/", ["shadergraph", "pieces", "materialpreview", "ui"],
+    # A MATERIAL IS A BUNDLE (MATERIAL_BUNDLE_SPEC phase 1), so the module's
+    # code owns the bundle MODEL's suite, the asset suites its definition is
+    # stored through, and the thumbnails rendered from it — an edit to
+    # core/graphdefinition.cpp used to gate without the model suite at all
+    # (the GATE-SCOPE-2 lesson again).
+    (r"^src/modules/materials/", ["shadergraph", "pieces", "materialpreview", "ui",
+                                  "materialbundle", "assets", "assetdelete", "assetgc",
+                                  "assettray", "thumbnails"],
      ["materials", "material", "graph"]),
     (r"^src/modules/avatar/", ["avatar", "skeletal", "ui"], ["avatar", "anim"]),
     (r"^src/modules/vr/", ["vr", "player", "app"], ["vr", "player"]),

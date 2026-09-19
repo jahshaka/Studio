@@ -409,6 +409,43 @@ public:
     /// cannot preview cannot half-apply either).
     bool applyMaterialShader(const QString &shaderGuid, iris::SceneNodePtr target);
 
+    /// THE MATERIAL ITSELF CHANGED — RE-DRESS EVERY NODE WEARING IT
+    /// (OWNER_REVIEW 9, R19 D2: "I updated the UV tiling to 10 and 10 on the
+    /// project material and in the editor the material there was not
+    /// updated"). A node holds a COPY of a material's values, so editing the
+    /// asset cannot reach the scene by itself; the catalog already knows who
+    /// wears what — the Object -> Material edges every apply writes — so this
+    /// re-resolves the definition ONCE and gives each of those nodes a fresh
+    /// instance of it.
+    ///
+    /// NOT UNDOABLE, deliberately: the user's edit was to the MATERIAL, which
+    /// the Materials page's own stack owns; the scene did not change, what it
+    /// is wearing did, and putting a scene undo step on the stack for it would
+    /// make Ctrl+Z in the editor half-revert an edit made on another page.
+    /// Returns how many meshes were re-dressed.
+    ///
+    /// WHAT IT COSTS, AND WHY IT IS GUARDED. This runs on the graph page's
+    /// 1.5 s autosave — while the user is still typing — and giving a mesh a
+    /// fresh material POINTER is a re-attach to the mirror, which invalidates
+    /// the GI caches WHOLE (every cascade re-voxelises; ledger 804-805). So:
+    ///   * a save that produced the SAME definition produced the same
+    ///     content id, and this returns 0 immediately — no parse, no walk,
+    ///     no setMaterial. MEASURED (spikes/bundle-p1/refresh-cost.txt, 90
+    ///     primitives wearing one bundle, isolated by difference against the
+    ///     same saves with 0 of them wearing it, 5 runs an arm): the refresh
+    ///     costs 8.8 ms of CPU when the definition really moved, and the
+    ///     guarded case costs +0.6 ms over a scene with no users at all —
+    ///     the 90-mesh walk does not happen. The 8.8 ms does NOT include the
+    ///     GI re-solve the re-attach triggers, which is the larger bill;
+    ///   * the definition is read ONCE per call, not once per mesh (the read
+    ///     was 90 store reads of one file); the INSTANCE is still per mesh,
+    ///     because MeshNode::setMaterial mutates what it is handed.
+    /// The 8.8 ms is the cost of an edit that IS a change — noted rather
+    /// than hidden: a COLOUR-only edit needs no re-attach at all, and
+    /// re-dressing the existing instance in place would keep the GI caches.
+    /// That is the MATERIAL-SWAP-GI-1 lane's subject, not phase 1's.
+    int refreshMaterialUsers(const QString &materialGuid);
+
     /// The hover-preview service, injected by the shell so every apply can end
     /// a live preview before it pushes. Null in headless hosts — which have no
     /// pointer to hover.
@@ -469,6 +506,9 @@ private:
     SelectionService *selection;
     IEditorViewport *viewport;
     MaterialPreviewService *preview = nullptr;
+    /// The content id each material's meshes were last dressed from — the
+    /// "did anything actually change?" answer (see refreshMaterialUsers).
+    QHash<QString, QString> mDressedFrom;
     std::function<iris::ScenePtr()> sceneProvider;
 
 };

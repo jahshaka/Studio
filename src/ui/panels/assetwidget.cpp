@@ -1824,6 +1824,15 @@ void AssetWidget::openAtFolder()
 
 }
 
+// PHASE-2 CRUD (MATERIAL_BUNDLE_SPEC, owner Q3 "only materials"): this is the
+// LAST place in the app that MINTS a ModelTypes::Shader row — the editor asset
+// browser's "New Shader", from `app/templates/ShaderTemplate.shader`, a format
+// that predates the node graph and that the graph loader cannot reopen. The
+// Materials module stopped minting Shader rows in phase 1; this one, and the
+// `ShaderImporter` that ingests a `.shader` FILE from disk, are why the
+// Shader-reading paths (MaterialReader::parseShaderAsPbr and its callers) are
+// still reachable and are deliberately kept. Deleting this is phase 2's job,
+// with the readers.
 void AssetWidget::createShader()
 {
 	const QString newShader = "Untitled Shader";

@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "export/exportmanifest.h"
 #include "io/ziphelper.h"
 #include "services/assetcas.h"
+#include "services/materialbundle.h"
 #include "services/assetstorepaths.h"
 #include "services/uistep.h"
 
@@ -512,6 +513,22 @@ void ProjectArchiver::installImportSlice()
             db->deleteProject(mResult.projectGuid);
             mResult.projectGuid.clear();
         }
+        // EVERY IMPORTED BUNDLE'S DEFINITION IS RE-PUBLISHED (bundles audit
+        // G1, the half that bites materials). The importer mints fresh guids
+        // and rewrites them in the scene blob, the row blobs, the parents and
+        // the edges — but it cannot rewrite a CAS DEFINITION FILE, and since
+        // MATERIAL_BUNDLE_SPEC D-2 that file IS a material's meaning. So an
+        // imported bundle arrived naming members by guids that exist on the
+        // author's machine and nowhere else: the material came back and its
+        // textures did not.
+        //
+        // The row's `asset` blob DID get remapped, and it is a cache of the
+        // same definition, so the repair is to publish it again through the
+        // ONE writer — which re-stores the file under the new guid and
+        // re-derives the membership edges from it. Done once, here, after
+        // every object of the import is in the store.
+        if (mResult.error.isEmpty() && !mCanceled.load() && !mResult.projectGuid.isEmpty())
+            republishImportedBundles();
         // AND THE STAGED BYTES OF EVERY SLICE THAT WILL NEVER RUN. A published
         // object is content-addressed and harmless (the next import of the same
         // bytes reuses it); a TEMP is litter in the store's own directory, and
@@ -558,6 +575,59 @@ void ProjectArchiver::installImportSlice()
     // including the render tick (measured in the open lane). The lambda's
     // context object is `this`, so Qt drops it if the archiver dies first.
     QTimer::singleShot(1, this, [this]() { installImportSlice(); });
+}
+
+void ProjectArchiver::republishImportedBundles()
+{
+    if (!db) return;
+    Project scoped;
+    scoped.setProjectGuid(mResult.projectGuid);
+    for (const QString &archiveGuid : mGuidMap.keys()) {
+        const QString localGuid = mGuidMap.value(archiveGuid);
+        if (localGuid.isEmpty()) continue;
+        const AssetRecord row = db->fetchAsset(localGuid);
+        if (row.type != static_cast<int>(ModelTypes::Material)) continue;
+
+        // THE DEFINITION THE ARCHIVE CARRIED, not the row's blob. The blob is
+        // a cache of the LIBRARY's version and a PROJECT-scope save
+        // deliberately does not move it (only the pin does), so an exported
+        // project whose material was edited inside it carried the right
+        // bytes in the object and the wrong ones in the blob — and reading
+        // the blob here published the stale definition over them. The bytes
+        // are the pinned object the slices just stored; all that is wrong
+        // with them is that they name the AUTHOR's guids, which is exactly
+        // what mGuidMap answers.
+        QString text;
+        {
+            const QString path = AssetCas::resolvePinned(QSqlDatabase::database(), mStoreRoot,
+                                                         mResult.projectGuid, localGuid);
+            QFile file(path);
+            if (!path.isEmpty() && file.open(QIODevice::ReadOnly))
+                text = QString::fromUtf8(file.readAll());
+        }
+        // No stored definition (a material minted before D-2, an image
+        // companion): the blob is all there is, and it was remapped by the
+        // importer.
+        if (text.isEmpty()) text = QString::fromUtf8(db->fetchAssetData(localGuid));
+        else
+            for (auto it = mGuidMap.constBegin(); it != mGuidMap.constEnd(); ++it)
+                text.replace(it.key(), it.value());
+
+        const QJsonObject definition = QJsonDocument::fromJson(text.toUtf8()).object();
+        if (definition.isEmpty()) continue;
+        // LIBRARY scope: the row's own source pointer is what must name the
+        // remapped definition. The project's pin follows on the next line —
+        // the slice wrote it against the archive's object, which is the OLD
+        // definition.
+        const auto written = MaterialBundle::write(db, &scoped, localGuid, definition,
+                                                   MaterialBundle::Scope::Library);
+        if (!written.ok) {
+            qWarning("ProjectArchiver: could not republish the definition of %s (%s)",
+                     qUtf8Printable(localGuid), qUtf8Printable(written.error));
+            continue;
+        }
+        AssetCas::writePin(QSqlDatabase::database(), mResult.projectGuid, localGuid, written.oid);
+    }
 }
 
 ProjectArchiver::Result ProjectArchiver::importArchive(const QString &zipPath)

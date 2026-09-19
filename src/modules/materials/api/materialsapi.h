@@ -44,7 +44,22 @@ public:
     void setGraphModule(GraphApi *graphApi) { mGraphApi = graphApi; }
 
     Q_INVOKABLE QVariantList presets();
-    Q_INVOKABLE QString createGraph(const QString &name);
+    /// ONE mint (MATERIAL_BUNDLE_SPEC 6): a library material bundle, with a
+    /// node graph as its payload when `{graph: true}`. `materials.createGraph`
+    /// was this with the flag always on and a second ModelTypes::Shader row —
+    /// one name survives (CRUD).
+    Q_INVOKABLE QString create(const QString &name, const QVariantMap &options = QVariantMap());
+    /// THE VERB THE TEXTURE PICKER CALLS. A path from anywhere on disk is
+    /// imported by CONTENT at that moment; a guid already in the library is
+    /// reused. Either way the image becomes a MEMBER of the material (the
+    /// edge is derived from the definition) and is pinned into the project
+    /// that holds the material. `{slot: "baseColorMap"}` also writes it into
+    /// the definition; with no slot the image is imported and pinned without
+    /// changing what the material looks like — what a graph texture node wants.
+    Q_INVOKABLE QString addTexture(const QString &materialGuid, const QString &pathOrGuid,
+                                   const QVariantMap &options = QVariantMap());
+    /// The bundle's members: guid, name, slot, baked, used-by count, pinned.
+    Q_INVOKABLE QVariantList members(const QString &materialGuid);
     Q_INVOKABLE QVariantMap loadGraph(const QString &guidOrPath);
     Q_INVOKABLE bool regenerate(const QString &shaderGuid);
     Q_INVOKABLE QString createFromImage(const QString &textureGuid,

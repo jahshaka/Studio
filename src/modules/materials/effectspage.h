@@ -2,6 +2,8 @@
 
 #include <functional>
 
+#include <QSet>
+
 #include "ui/style/columnedpage.h"
 #include <QListWidget>
 #include <QVariantMap>
@@ -91,6 +93,15 @@ private:
 	std::function<bool()> mSceneOpenProbe;
 	Project *mProject = nullptr;
 public:
+	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has
+	/// no business knowing about scene nodes, so the shell hands it one
+	/// callback and the page calls it with the material's guid every time it
+	/// commits a definition; MaterialsModule wires it to the ONE apply
+	/// (SceneEditService), which is what the drop and `material.apply` use.
+	/// Until this lane an edit reached the scene only through a material
+	/// SWITCH, and only while the Projects tab happened to be current.
+	std::function<void(const QString &)> mMaterialChanged;
+
 
 	// Engine viewport mode: Studio hands in the engine-rendered Display preview
 	// (core/materialpreviewwidget.h). Docks it, un-hides the Display dock and
@@ -101,7 +112,10 @@ public:
 	void setAssetWidgetDatabase(Database *db);
 	void renameShader();
 
-	void loadGraph(QString guid);
+	/// Open a material bundle in the graph editor. `origin` is WHICH DRAWER
+	/// it came from, and therefore whose version is read and written — see
+	/// shaderInfo::Origin.
+	void loadGraph(QString guid, shaderInfo::Origin origin = shaderInfo::Origin::Library);
 	static QString genGUID();
 
 	// §3a selection bridge for the graph.selectNode/selectedNode/deselect
@@ -188,6 +202,9 @@ public:
 private:
 	
 	void saveShader();
+	/// Tell the user a save was REFUSED (F16): the graph is on screen and is
+	/// not being written down, which no log line can say loudly enough.
+	void reportSaveRefused(const QString &why);
 	void saveDefaultShader();
 
 	/// Queues the saved graph's thumbnail on the shell's ThumbnailGenerator
@@ -197,6 +214,10 @@ private:
 	void requestShaderThumbnail(const QString &shaderGuid);
 	void onShaderThumbnail(const ThumbnailResult &result);
 	bool mThumbnailConnected = false;
+	bool mSaveRefused = false;
+	/// The guids WE asked the shared thumbnail queue about (a material render
+	/// is not ours by type alone any more — see requestShaderThumbnail).
+	QSet<QString> mPendingThumbnails;
     void loadShadersFromDisk();
 
 	void deleteMaterialFile(QString filename);
@@ -226,16 +247,21 @@ private:
 	void setCurrentShaderItem();
 	QByteArray fetchAsset(QString string);
 
+	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has
+	/// no business knowing about scene nodes, so the shell hands it one
+	/// callback and the page calls it with the material's guid every time it
+	/// commits a definition; MaterialsModule wires it to the ONE apply
+	/// (SceneEditService), which is what the drop and `material.apply` use.
+	/// Until this lane an edit reached the scene only through a material
+	/// SWITCH, and only while the Projects tab happened to be current.
+
     GraphNodeScene* createNewScene();
 	QListWidgetItem* selectCorrectItemFromDrop(QString guid);
 	int selectCorrectTabForItem(QString guid);
+	/// Which DRAWER a tile lives in, as the scope an edit to it belongs to.
+	shaderInfo::Origin originForItem(QString guid);
 	QList<QString> loadedShadersGUID;
 
-	void updateMaterialThumbnail(QString shaderGuid, QString materialGuid);
-	void generateMaterialInProjectFromShader(QString guid);
-	void updateMaterialFromShader(QString guid);
-	void writeMaterial(QJsonObject& matObj, QString guid);
-	QJsonObject writeMaterialValuesFromShader(QString guid);
 private:
     void configureConnections();
     void editingFinishedOnListItem();

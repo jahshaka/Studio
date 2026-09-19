@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "services/libraryassetnode.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "bridge/enginehost.h"
 #include "bridge/enginethumbnailrenderer.h"
 #include "services/thumbnailstop.h"
@@ -173,13 +174,34 @@ QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer
     }
 
     if (request.type == ThumbnailRequestType::Material) {
-        QFile file(request.path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QImage();
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        // TWO WAYS IN, ONE READING. A caller with a FILE (the save dialog's
+        // ".material on disk" route) hands a path; a caller with a library ROW
+        // hands the guid and nothing else, and then the definition is the
+        // bundle's — its CAS `source` file, pin-first
+        // (MATERIAL_BUNDLE_SPEC D-2), which is exactly what
+        // `thumbnailrebuild` and `SceneEditService::resolveMaterial` read.
+        //
+        // The guid route exists because the Materials module used to ask for
+        // a SHADER render of its own material: that branch reads the row blob
+        // through `parseShaderAsPbr`, which refuses anything with no
+        // `pbrMaterial` key — a key the bundle definition does not have — so
+        // every graph material saved in the module logged "nothing was
+        // rendered" and kept a blank tile while the library sweep rendered
+        // the same material perfectly. One reader, here.
+        QJsonObject definition;
+        if (!request.path.isEmpty()) {
+            QFile file(request.path);
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QImage();
+            definition = QJsonDocument::fromJson(file.readAll()).object();
+        } else {
+            if (!db || request.id.isEmpty()) return QImage();
+            definition = MaterialBundle::read(db, request.id, project);
+        }
+        if (definition.isEmpty()) return QImage();
         MaterialReader reader;
         reader.setProject(project);
         // Typed: PBR material thumbnails render the real PbrMaterial.
-        auto material = reader.parseMaterialTyped(doc.object(), db);
+        auto material = reader.parseMaterialTyped(definition, db);
         // No conversion any more (HLMS_ADOPTION P4b): the reader returns a
         // PbrMaterial, which the mirror renders natively.
         return renderer.renderMaterial(material, size);

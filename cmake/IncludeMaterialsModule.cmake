@@ -20,6 +20,7 @@ set(SRCS
 	src/modules/materials/core/bakeprogram.cpp
 	src/modules/materials/core/graphbaker.cpp
 	src/modules/materials/core/materialhelper.cpp
+	src/modules/materials/core/graphdefinition.cpp
 	src/modules/materials/core/pbrgraphevaluator.cpp
 	src/modules/materials/core/pieceemitter.cpp
 	#src/modules/materials/core/project.cpp

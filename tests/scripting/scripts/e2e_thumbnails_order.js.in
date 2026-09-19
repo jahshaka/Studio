@@ -72,8 +72,8 @@ assert(presetGuid !== "",
        + "the one long-lived renderer, which is the state the owner's imports met");
 
 // A shader graph too, so the verb path has rendered a material as well.
-var shaderGuid = materials.createGraph("Thumbs First");
-assert(shaderGuid.length > 10, "materials.createGraph -> " + shaderGuid);
+var shaderGuid = materials.create("Thumbs First", { graph: true });
+assert(shaderGuid.length > 10, "materials.create -> " + shaderGuid);
 var master = null;
 var nodes = graph.nodes();
 for (var i = 0; i < nodes.length; i++) if (nodes[i].master) master = nodes[i].id;
@@ -208,7 +208,7 @@ assert(trayThumb.coverage > 0.05 && trayThumb.coverage < 0.98,
 // ---- 6. THE REPAIR PASS for rows that are already grey ---------------------
 // A freshly saved graph is a row with no thumbnail — exactly the shape of the
 // owner's grey tiles, made through a verb rather than by hand.
-var broken = materials.createGraph("Needs A Tile");
+var broken = materials.create("Needs A Tile", { graph: true });
 var brokenMaster = null;
 var brokenNodes = graph.nodes();
 for (var k = 0; k < brokenNodes.length; k++) if (brokenNodes[k].master) brokenMaster = brokenNodes[k].id;

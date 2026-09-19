@@ -1746,3 +1746,47 @@ add_script_e2e(new_scene e2e_new_scene.js)
 # "every name the drawer offers is a name the verb accepts", plus the retired
 # four refused by name, plus the Mirror Room still opening with its teapot.
 add_script_e2e(primitives e2e_primitives.js)
+
+# scripting.e2e.material_bundle — MATERIAL_BUNDLE_SPEC phase 1, the acceptance
+# flow the spec names: pick an image from disk -> ONE tile -> export -> an
+# EMPTY library -> it still resolves. Two processes, because "an empty library"
+# is not something a verb can fake: the first exports an archive from a normal
+# session, the second runs on its OWN home and data root, wiped before it
+# starts, and is given nothing but that archive.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_material_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle.js @ONLY)
+set(_mbHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_bundle)
+add_test(NAME scripting.e2e.material_bundle.fresh_home
+         COMMAND sh -c "rm -rf '${_mbHome}' && mkdir -p '${_mbHome}/run'")
+set_tests_properties(scripting.e2e.material_bundle.fresh_home PROPERTIES
+    FIXTURES_SETUP materialBundleHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_mbHome}/run)
+add_test(NAME scripting.e2e.material_bundle
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle.js --headless
+         WORKING_DIRECTORY ${_mbHome}/run)
+set_tests_properties(scripting.e2e.material_bundle PROPERTIES
+    ENVIRONMENT "HOME=${_mbHome};JAHSHAKA_DATA_ROOT=${_mbHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED materialBundleHome
+    FIXTURES_SETUP materialBundleArchive
+    LABELS "scripting"
+    TIMEOUT 180)
+
+# The far side: a library that has never seen the material, the image or the
+# project, and one archive.
+set(ARCHIVE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_bundle.zip)
+configure_file(scripts/e2e_material_bundle_import.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle_import.js @ONLY)
+set(_mbiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_bundle_import)
+add_test(NAME scripting.e2e.material_bundle_import.fresh_home
+         COMMAND sh -c "rm -rf '${_mbiHome}' && mkdir -p '${_mbiHome}/run'")
+set_tests_properties(scripting.e2e.material_bundle_import.fresh_home PROPERTIES
+    FIXTURES_SETUP materialBundleImportHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_mbiHome}/run)
+add_test(NAME scripting.e2e.material_bundle_import
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle_import.js --headless
+         WORKING_DIRECTORY ${_mbiHome}/run)
+set_tests_properties(scripting.e2e.material_bundle_import PROPERTIES
+    ENVIRONMENT "HOME=${_mbiHome};JAHSHAKA_DATA_ROOT=${_mbiHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED "materialBundleImportHome;materialBundleArchive"
+    LABELS "scripting"
+    TIMEOUT 180)

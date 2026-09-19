@@ -7,6 +7,16 @@
 struct shaderInfo {
 	QString GUID;
 	QString name;
+	/// WHICH DRAWER THIS MATERIAL WAS OPENED FROM, and therefore whose
+	/// version is being edited (MATERIAL_BUNDLE_SPEC 12 Q2, the four-drawer
+	/// rule of OWNER_REVIEW 9). SCOPE IS AN ORIGIN, NOT A LOOKUP: it used to
+	/// be inferred from "does the open project pin this guid?", which meant
+	/// that while a project held a material there was NO WAY to open or edit
+	/// the library original, and the same guid meant two different things in
+	/// one window. A Custom tile is the LIBRARY's copy; a Projects tile is
+	/// the project's.
+	enum class Origin { Library, Project };
+	Origin origin = Origin::Library;
 };
 
 class ListWidget : public QListWidget

@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include <QSqlDatabase>
 #include "services/assetcas.h"
+#include "services/assettray.h"
+#include "services/projectassets.h"
 #include "services/assetstorepaths.h"
 #include <QMenu>
 #include <QEvent>
@@ -51,7 +53,7 @@ ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()
     assetViewWidget->shaderContextMenuAllowed = true;
 	assetViewWidget->setGridSize({ 95,95 });
 	connect(assetViewWidget, &ShaderListWidget::itemDropped, [=](QListWidgetItem *item) {
-		createShader(item);
+		addDroppedToProject(item);
 	});
 	connect(assetViewWidget, &ShaderListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
 		emit loadToGraph(item);
@@ -100,8 +102,24 @@ void ShaderAssetWidget::updateAssetView(const QString & path)
 	// No library or no project = nothing to list, and the stacked widget's
 	// "no scene open" page is what the user sees (setWidgetToBeShown decides
 	// which page that is). The truthful empty state, not a skipped refresh.
-	if (db && project) {
-		for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), static_cast<int>(ModelTypes::Shader)))
+	// THE PROJECT DRAWER *IS* THE EDITOR'S ASSET TRAY, filtered to materials
+	// (the four-drawer rule, OWNER_REVIEW 9: "the project asset tray should
+	// mirror the materials project drawer" — ONE LIST, TWO WINDOWS).
+	//
+	// So it calls the function the tray calls — `assettray::list`, which is
+	// the single implementation the tray panel, its search and
+	// `assets.list({tray:true})` already share (services/assettray.h). A
+	// second query here was a second RULE: it listed pinned rows plus the
+	// folder's rows and knew nothing of the tray's collapsing (an import
+	// member, a row the editor minted rather than the user, a companion
+	// whose image is its tile), so the two windows disagreed by
+	// construction. `path` is the folder the user has navigated into — the
+	// project's own guid at the root — and the tray listing takes exactly
+	// that.
+	if (db && project && !project->getProjectGuid().isEmpty()) {
+		const QString folder = path.isEmpty() ? project->getProjectGuid() : path;
+		for (const auto &asset : assettray::list(db, project->getProjectGuid(), folder,
+		                                         static_cast<int>(ModelTypes::Material)))
 			addItem(asset);
 	}
 
@@ -434,153 +452,21 @@ void ShaderAssetWidget::createFolder()
 	updateAssetView(assetItemShader.selectedGuid);
 }
 
-void ShaderAssetWidget::createShader(QString *shaderName)
+void ShaderAssetWidget::addDroppedToProject(QListWidgetItem *item)
 {
-	if (!db || !project) return;   // a shader asset is a library row
-	QString newShader;
-	if (shaderName)	 newShader = *shaderName;
-	else   newShader = "Untitled Shader";
-	QListWidgetItem *item = new QListWidgetItem;
-	item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setSizeHint(currentSize);
-	item->setTextAlignment(Qt::AlignCenter);
-	item->setIcon(QIcon(":/icons/icons8-file-72.png"));
-
-	const QString assetGuid = GUIDManager::generateGUID();
-
-	item->setData(MODEL_GUID_ROLE, assetGuid);
-	item->setData(MODEL_PARENT_ROLE, assetItemShader.selectedGuid);
-	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);
-	item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
-	assetItemShader.wItem = item;
-
-
-	QStringList assetsInProject = db->fetchAssetNameByParent(assetItemShader.selectedGuid);
-
-	//// If we encounter the same file, make a duplicate...
-	int increment = 1;
-	while (assetsInProject.contains(IrisUtils::buildFileName(newShader, "shader"))) {
-		newShader = QString(newShader + " %1").arg(QString::number(increment++));
-	}
-
-	db->createAssetEntry(assetGuid,
-		IrisUtils::buildFileName(newShader, "shader"),
-		static_cast<int>(ModelTypes::Shader),
-		assetItemShader.selectedGuid,
-		project->getProjectGuid(),
-		QByteArray());
-
-	item->setText(newShader);
-	assetViewWidget->addItem(item);
-
-	QFile *templateShaderFile = new QFile(IrisUtils::getAbsoluteAssetPath("app/templates/ShaderTemplate.shader"));
-	templateShaderFile->open(QIODevice::ReadOnly | QIODevice::Text);
-	QJsonObject shaderDefinition = QJsonDocument::fromJson(templateShaderFile->readAll()).object();
-	templateShaderFile->close();
-	shaderDefinition["name"] = newShader;
-	shaderDefinition.insert("guid", assetGuid);
-
-	auto assetShader = new AssetMaterial;
-	assetShader->fileName = newShader;// IrisUtils::buildFileName(newShader, "material");
-	assetShader->assetGuid = assetGuid;
-	assetShader->path = IrisUtils::join(project->getProjectFolder(), IrisUtils::buildFileName(newShader, "shader"));
-	assetShader->setValue(QVariant::fromValue(shaderDefinition));
-
-    db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
-
-	AssetManager::addAsset(assetShader);
-}
-
-QString ShaderAssetWidget::createShader(QListWidgetItem * item)
-{
-	if (!db || !project) return QString();   // a shader asset is a library row
-	const QString newShader = "Untitled Shader";
-	
-	item->setSizeHint(currentSize);
-
-	const QString targetGuid = materials::EffectsPage::genGUID();
-
-	
-	assetItemShader.wItem = item;
-
-	QString shaderName = item->data(Qt::DisplayRole).toString();
-	QString sourceGuid = item->data(MODEL_GUID_ROLE).toString();
-
-	AssetRecord sourceRecord = db->fetchAsset(sourceGuid);
-	auto sourceData = db->fetchAssetData(sourceGuid);
-
-    auto doc = QJsonDocument::fromJson(sourceData);
-	auto obj = doc.object();
-	auto list = obj["properties"].toArray();
-	QString str;
-	str = doc.toJson();
-
-		for (auto prop : list) {
-			auto type = prop.toObject()["type"].toString();
-			if (type == "texture") {
-				auto value = prop.toObject()["value"].toString();
-
-				// The texture's stored bytes, by ITS guid — the CAS, not a
-				// directory walk of the retired <root>/<guid>/ view (deep
-				// audit 2026-09, area 6). The walk also happened to iterate
-				// EVERY file in the folder and register each as a separate
-				// texture; the asset has exactly one source file.
-				QString sourceName;
-				const QString sourcePath = AssetCas::resolveSource(
-				    QSqlDatabase::database(), AssetStorePaths::root(), value, &sourceName);
-				if (sourcePath.isEmpty()) continue;
-
-				const QString imgGuid = materials::EffectsPage::genGUID();
-				// find the old guid and replace with the new guid
-				str = str.replace(value, imgGuid);
-
-				// the project copy keeps the guid-as-name convention this
-				// widget has always written, with the source's extension
-				const QString suffix = QFileInfo(sourceName.isEmpty() ? sourcePath : sourceName).suffix();
-				const QString newName = suffix.isEmpty() ? value : value + '.' + suffix;
-
-				QFile::copy(sourcePath, IrisUtils::join(project->getProjectFolder(), newName));
-
-				db->createAssetEntry(project->getProjectGuid(), imgGuid, newName, static_cast<int>(ModelTypes::Texture));
-				db->createDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::Texture), targetGuid, imgGuid, project->getProjectGuid());
-			}
-		}
-
-		//update source data after editing guids - dirty
-		auto var = QVariant(str);
-		auto updatedDoc = QJsonDocument::fromJson(str.toUtf8());
-		
-
-	db->createAssetEntry(targetGuid,
-		sourceRecord.name,
-		static_cast<int>(ModelTypes::Shader),
-		project->getProjectGuid(),
-		project->getProjectGuid());
-
-	
-    db->updateAssetAsset(targetGuid, updatedDoc.toJson());
-	
-	db->updateAssetThumbnail(targetGuid, db->fetchAsset(item->data(MODEL_GUID_ROLE).toString()).thumbnail);
-
-	// todo: create new item
-	assetViewWidget->addItem(item);
-
-	auto assetShader = new AssetShader;
-	assetShader->fileName = shaderName;//  IrisUtils::buildFileName(shaderName, "material");
-	assetShader->assetGuid = targetGuid;
-	assetShader->path = IrisUtils::join(project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
-
-	// The SHADER flavour's payload is its stored DEFINITION (JSON), which is what
-	// the two shader property widgets read back. A hydrated MATERIAL never goes
-	// into an Asset variant (MATERIAL-PREVIEW-1: nothing can type-check one, and
-	// the mismatch that produced was a silent dead feature) — the three dead
-	// commented-out lines that said otherwise are gone with it.
-	assetShader->setValue(QJsonDocument::fromJson(sourceData).object());
-
-	AssetManager::addAsset(assetShader);
+	// A LIBRARY TILE DROPPED ON THE PROJECT DRAWER IS AN ADD, NOT A MINT
+	// (MATERIAL_BUNDLE_SPEC 5). This used to create a fresh ModelTypes::Shader
+	// row in the project from `app/templates/ShaderTemplate.shader` — a format
+	// that predates the graph and cannot be reopened by the graph loader, so
+	// the tile it produced was unopenable. The gesture is the same pin every
+	// other asset gets: one row, its closure pinned with it.
+	if (!db || !project || project->getProjectGuid().isEmpty() || !item) return;
+	const QString guid = item->data(MODEL_GUID_ROLE).toString();
+	if (guid.isEmpty()) return;
+	ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Direct);
 	refresh();
-	return targetGuid;
 }
+
 
 QByteArray ShaderAssetWidget::fetchAsset(QString string)
 {

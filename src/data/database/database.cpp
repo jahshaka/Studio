@@ -4243,7 +4243,15 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
         importDep.bindValue(":depender_type", dep.dependerType);
         importDep.bindValue(":dependee_type", dep.dependeeType);
-        importDep.bindValue(":project_guid", newSceneGuid);
+        // AN INTRINSIC EDGE STAYS INTRINSIC (bundles audit G2/G5). An edge
+        // with NO project stamp is a fact about the ASSET — a bundle's own
+        // membership, derived from its definition — and stamping it with the
+        // importing project on the way in handed it to `deleteProject`:
+        // delete that project later and the bundle loses its closure while
+        // its rows stay, so the next add-to-project pins a bare material and
+        // the next archive ships it without its textures.
+        if (dep.projectGuid.isEmpty()) importDep.bindValue(":project_guid", QVariant(QMetaType(QMetaType::QString)));
+        else                           importDep.bindValue(":project_guid", newSceneGuid);
         importDep.bindValue(":depender", !depender.isEmpty() ? depender : dep.depender);
         importDep.bindValue(":dependee", !dependee.isEmpty() ? dependee : dep.dependee);
         importDep.bindValue(":id", GUIDManager::generateGUID());
