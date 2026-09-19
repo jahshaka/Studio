@@ -519,6 +519,19 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 
 void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 {
+	// A SHIPPED PRESET DOES NOT OPEN (phase 3). It is read-only — the
+	// definition writer refuses it by name — and it has no graph to show, so
+	// opening one would put an EMPTY editor in front of the user and refuse
+	// their first save. A preset is reachable here only from the PROJECT
+	// drawer, where a pinned one is an ordinary tile; the way to change it is
+	// Customise, which is what this says.
+	const QString shipped = MaterialBundle::shippedPresetName(guid);
+	if (!shipped.isEmpty()) {
+		irisLog("loadGraph: '" + shipped + "' is a material the app ships and is read-only "
+		        "- Customise it (Presets drawer, right-click) to edit your own copy");
+		return;
+	}
+
 	// The origin is set BEFORE the read, because `fetchAsset` reads the
 	// definition at this scope.
 	currentShaderInformation.origin = origin;
