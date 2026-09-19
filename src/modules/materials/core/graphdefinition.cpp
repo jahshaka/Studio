@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "graphdefinition.h"
 
+#include <QColor>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -165,6 +166,34 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
         if (!MaterialBundle::looksLikePath(value)) continue;
         values.remove(slot);
         out.unsupportedNodes.append(QStringLiteral("%1 <- an unstored image").arg(slot));
+    }
+
+    // (3) ONE ENCODING IN A STORED DEFINITION, and it is the DOCUMENT's.
+    //
+    // The evaluator's colours are `{r,g,b,a}` floats — its own working shape,
+    // handed straight to `PbrGraphEvaluator::materialFromValues` on the live
+    // preview and apply paths. But the definition is read by
+    // `MaterialReader::parsePbrMaterial`, which is what reads EVERY other
+    // material in the app (an image material's, a preset's, a node's copied
+    // values in the scene blob) and which spells a colour the way
+    // `SceneWriter::writeSceneNodeMaterial` writes it: `QColor::name()`.
+    //
+    // Two spellings of one slot under one `materialType: "pbr"` is a reader
+    // choosing by luck — and it showed as a BLACK material thumbnail, because
+    // `QColor(QString())` from an object-valued key is invalid. The
+    // evaluation shape stays inside the evaluator; what is STORED is the
+    // document's.
+    for (const QString &key : values.keys()) {
+        const QJsonValue value = values.value(key);
+        if (!value.isObject()) continue;
+        const QJsonObject rgba = value.toObject();
+        if (!rgba.contains(QStringLiteral("r"))) continue;
+        const QColor colour = QColor::fromRgbF(
+            qBound(0.0, rgba.value(QStringLiteral("r")).toDouble(), 1.0),
+            qBound(0.0, rgba.value(QStringLiteral("g")).toDouble(), 1.0),
+            qBound(0.0, rgba.value(QStringLiteral("b")).toDouble(), 1.0),
+            qBound(0.0, rgba.value(QStringLiteral("a")).toDouble(1.0), 1.0));
+        values[key] = colour.name();
     }
 
     QJsonObject definition;

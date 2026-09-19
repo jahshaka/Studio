@@ -127,6 +127,7 @@ set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 find_package(Qt6 REQUIRED COMPONENTS Gui Sql Widgets Multimedia Concurrent)
 add_executable(test_thumbnail_sweep test_thumbnail_sweep.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailrebuild.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/assetthumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp

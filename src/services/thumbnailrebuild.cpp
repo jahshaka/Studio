@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "irisgl/core/irisutils.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
@@ -97,7 +98,10 @@ Outcome rebuildMaterialOrShader(Database *db, Project *project, const QString &g
                 "this shader carries no evaluated material (re-save the graph, or run "
                 "materials.regenerate; baked maps need an open project)"));
     } else {
-        const auto object = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
+        // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2), not
+        // the row's blob cache: a tile must show the version its project
+        // holds.
+        const auto object = MaterialBundle::read(db, guid, project);
         material = reader.parseMaterialTyped(object, db);
     }
     const QImage image = loan->renderMaterial(material, QSize(512, 512));
