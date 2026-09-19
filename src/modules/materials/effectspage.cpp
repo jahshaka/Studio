@@ -120,6 +120,11 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	// after the last position change, so re-opening a graph restores the
 	// arrangement without an explicit save click. serializeWithBake is
 	// hash-cached, so an unchanged graph re-saves cheaply.
+	// THE GRAPH'S AUTOSAVE. It began as a node-position debounce and is now the
+	// one hook every edit reaches (see graphInvalidated in createNewScene): a
+	// move, a connection, a deletion, a value. The name is kept because the
+	// member is referenced in three places and the behaviour is the same —
+	// "write the graph 1.5 s after the last change".
 	positionSaveTimer = new QTimer(this);
 	positionSaveTimer->setSingleShot(true);
 	positionSaveTimer->setInterval(1500);
@@ -1439,6 +1444,19 @@ GraphNodeScene *EffectsPage::createNewScene()
 		// (graphInvalidated covers connections, deletions and value edits
 		// alike), so this one debounced hook keeps the Display dock live.
 		schedulePreviewUpdate();
+		// ...AND THE EDIT IS WRITTEN DOWN (the owner, 2026-09-19: "I added a UV
+		// node and connected it to the texture, went to the editor and back and
+		// the node connection is gone; I had to toggle between materials for it
+		// to stay"). THIS SIGNAL IS EVERY REAL EDIT — a connection, a deletion,
+		// a value typed into a node — and until now the only thing that ever
+		// reached `saveShader` on its own was `nodeMoved`, the timer below. So
+		// a graph you EDITED was kept only if you also happened to DRAG a node
+		// (or rename the material, or switch to another one, which saves on the
+		// way out): the work was lost on any other exit, silently. The same
+		// debounce carries it — `serializeWithBake` is hash-cached, so an edit
+		// that changes nothing re-saves cheaply — and `restoringGraph` still
+		// guards the rebuild, so loading a graph writes nothing.
+		if (!restoringGraph && positionSaveTimer) positionSaveTimer->start();
 	});
 
 	connect(scene, &GraphNodeScene::nodeMoved, this, [this]() {
