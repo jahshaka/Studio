@@ -86,11 +86,17 @@ assert(info3.perSocket["Base Color"] === "baked", "the textures resample into ba
 
 var baked3 = graph.bake({ resolution: 64 });
 // (The map used to be a project-relative "BakedMaps/<guid>/…" path. A baked
-// map is a MEMBER TEXTURE in the store since MATERIAL_BUNDLE_SPEC phase 1;
-// the bake itself writes into the store's disposable derived cache, so what
-// it reports is the file it wrote, named for the slot plus its content hash.)
-assert(("" + baked3.maps.baseColorMap).indexOf("baseColorMap") === 0,
-       "the resample route writes a real map for the slot");
+// map is a MEMBER TEXTURE in the store since MATERIAL_BUNDLE_SPEC phase 1,
+// and graph.save is what makes the member; the BAKE writes into the store's
+// disposable derived cache and reports the absolute file it wrote. The
+// assertion is that THE FILE EXISTS — putting the reported path back through
+// the one content import, which can only succeed if it is really there.)
+var resampled = "" + baked3.maps.baseColorMap;
+assert(resampled.charAt(0) === "/", "the resample route NAMES its file: " + resampled);
+assert(resampled.indexOf("baseColorMap") !== -1, "named for the slot it bakes");
+var resampledGuid = assets.importFile(resampled);
+assert(resampledGuid && resampledGuid.length > 10,
+       "and THE FILE EXISTS — the content import read its bytes");
 assert(baked3.values.textureScale === undefined, "and lands no transform on the material");
 
 // ---- material.set takes both spellings ----------------------------------
