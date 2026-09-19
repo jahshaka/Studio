@@ -70,7 +70,18 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
 
     // services/apppaths.h: the data root when a run forces one, the
     // `default_directory` preference otherwise (S-extra2). This is the
-    // Jahshaka documents folder the owner asked for as the default.
+    // Jahshaka documents folder the owner asked for as the default, and it is
+    // what Browse opens AT (setProjectPath passes the field's current value as
+    // the file dialog's starting directory).
+    //
+    // AND CHOOSING A LOCATION HERE IS PER PROJECT (SMALL-UI-A fix round F2).
+    // This dialog never writes `default_directory` — the one writer of that
+    // preference in the whole tree is Preferences > World Settings
+    // (ui/dialogs/preferences/worldsettingswidget.cpp), which is where a user
+    // changes where their projects live FROM NOW ON. Putting one project on an
+    // external drive must not move every future project there too, and the
+    // chosen root is recorded with the project row instead
+    // (Database::setProjectLocation; ProjectService::projectFolderFor reads it).
     projectPath = AppPaths::projectsRoot(
         settingsManager->getValue("default_directory", QString()).toString(),
         Constants::PROJECT_FOLDER);

@@ -87,7 +87,70 @@ console.log("folder: " + folder);
 assert(folder.indexOf(where) === 0,
        "the project folder is under the location that was named, not under the projects root");
 
+// ---- 3b. AND IT CAN BE FOUND AGAIN (fix round F1) ---------------------------
+// WHERE IT LANDS IS NOT THE QUESTION — where it is FOUND is. The location is
+// recorded with the project row and ProjectService::projectFolderFor is the one
+// resolver; before the fix every resolver rebuilt the path from the DEFAULT
+// root, so a close and reopen pointed the whole session — baked maps, exports,
+// the thumbnail, the delete — at a folder that does not exist.
+//
+// A file inside the located folder, so the DELETE below can be checked on disk
+// and not merely in the catalog.
+var proof = folder + "/small-ui-a-proof.zip";
+assert(project.exportArchive(proof).path === proof, "an archive written INSIDE the located folder");
+
+assert(project.close() === true, "close the located project");
+assert(project.open(placed) === true, "project.open(guid) of a located project");
+var reopened = project.current();
+console.log("reopened folder: " + reopened.folder);
+assert(reopened.guid === placed, "...it is the same project");
+assert(reopened.folder.indexOf(where) === 0,
+       "...and it comes back pointing UNDER ITS OWN LOCATION, not the default projects root (" +
+       reopened.folder + ")");
+assert(reopened.folder === folder, "...at exactly the folder it was created in");
+
+// ---- 3c. a located project DELETES its own folder ---------------------------
+assert(project.close() === true, "close it again");
+assert(project.remove(placed) === true, "project.remove(located)");
+var stillListed = project.list().filter(function (p) { return p.guid === placed; });
+assert(stillListed.length === 0, "...the row is gone");
+var gone = null;
+try { project.importArchive(proof); } catch (e) { gone = String(e); }
+assert(gone !== null,
+       "...AND THE LOCATED FOLDER IS GONE WITH IT — the archive that was inside it " +
+       "cannot be read any more. Before the fix the delete removed the DEFAULT root's " +
+       "folder of the same guid (nothing) and left this one on disk forever.");
+console.log("   -> " + gone);
+
+// ---- 3d. a recorded location that is not there refuses BY NAME --------------
+// An unplugged drive, expressed with the verbs alone: the inner project's
+// location is the OUTER project's folder, so removing the outer one takes the
+// inner one's recorded root with it. Nothing about that arrangement is special
+// — it is the same state a disconnected drive leaves behind.
+var outer = project.create("New Scene Host " + Date.now());
+var outerFolder = project.current().folder;
+var inner = project.create("New Scene Orphan " + Date.now(), { location: outerFolder });
+assert(project.current().folder.indexOf(outerFolder) === 0, "the inner project lives inside it");
+assert(project.close() === true, "close");
+assert(project.remove(outer) === true, "remove the project the location was inside");
+
+var orphan = null;
+try { project.open(inner); } catch (e) { orphan = String(e); }
+assert(orphan !== null, "opening a project whose recorded location is gone is REFUSED");
+console.log("   -> " + orphan);
+assert(orphan.indexOf(outerFolder) >= 0,
+       "...by name, with the missing path in the message — never a silent fall-back to the " +
+       "default root (which would open an empty world under the project's own guid) and never " +
+       "an auto-created empty folder");
+assert(!project.current() || project.current().guid !== inner,
+       "...and the refusal did not point the session at it");
+
 // ---- 4. the refusals --------------------------------------------------------
+// A world open again first: §3d's refusal deliberately left the session with
+// none, and "a refused create leaves the project that was open exactly where it
+// was" needs one to mean anything.
+assert(project.create("New Scene Refusals " + Date.now()).length > 10,
+       "a project to be left alone by the refusals below");
 var openBefore = project.current().guid;
 
 function refused(call, what, expect) {

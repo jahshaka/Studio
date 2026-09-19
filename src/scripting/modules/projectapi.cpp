@@ -262,6 +262,18 @@ bool ProjectApi::open(const QString &guidOrName)
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
     }
+    // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
+    // fix round F1). A project created at a chosen location (the New Scene
+    // dialog's Browse button) records the root it lives under; if that root is
+    // gone — an unplugged drive, a folder the user moved — opening must SAY SO
+    // with the path in it, not fall back to the default root (which would open
+    // an empty world under the project's own guid and let the user save over
+    // it) and not recreate an empty folder.
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("%1: %2").arg(QStringLiteral("project.open"), whyMissing));
+    }
     // The OLD project's undo history dies with the old project (CLOSE-2
     // item 2): end the run's entry so closeProject's clear() is not a no-op,
     // and open a fresh one for what the script does in the new project.
@@ -311,6 +323,18 @@ bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(play ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
         return true;
+    }
+    // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
+    // fix round F1). A project created at a chosen location (the New Scene
+    // dialog's Browse button) records the root it lives under; if that root is
+    // gone — an unplugged drive, a folder the user moved — opening must SAY SO
+    // with the path in it, not fall back to the default root (which would open
+    // an empty world under the project's own guid and let the user save over
+    // it) and not recreate an empty folder.
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("%1: %2").arg(QStringLiteral("project.openAsync"), whyMissing));
     }
     host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
@@ -427,6 +451,15 @@ bool ProjectApi::remove(const QString &guid)
     QString name;
     if (resolveGuid(guid, &name) != guid)
         return fail(QStringLiteral("project.remove: no project with guid '%1'").arg(guid));
+
+    // …and a delete cannot reach a folder on a drive that is not there: it must
+    // not quietly drop the catalog rows that name files it cannot remove
+    // (fix round F1).
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("project.remove: %1").arg(whyMissing));
+    }
 
     // Folder first (like the widget), then the DB rows — through the
     // guid-parameterised service: host.project is NOT mutated (§1.6.1).

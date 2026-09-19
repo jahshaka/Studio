@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include <cstdio>
 #include <cstdlib>
 
+#include "data/constants.h"
+#include "data/settingsmanager.h"
 #include "services/apppaths.h"
 #include "ui/dialogs/newprojectdialog.h"
 
@@ -74,6 +76,8 @@ int main(int argc, char **argv)
     CHECK(dialog.createButton() != nullptr, "…and a Create button");
 
     // ---- the default location is the projects root, not an empty box -------
+    const QString preferenceBefore =
+        SettingsManager::getDefaultManager()->getValue("default_directory", QString()).toString();
     const QString defaultLocation = dialog.locationEdit()->text();
     std::printf("info: default location = %s\n", qUtf8Printable(defaultLocation));
     CHECK(!defaultLocation.isEmpty(), "the location defaults to the Jahshaka projects folder");
@@ -94,6 +98,18 @@ int main(int argc, char **argv)
           "ticking Empty scene passes through to the verb's {empty: true}");
     dialog.emptyCheck()->setChecked(false);
 
+    // ---- the default location IS the current projects root (fix round F2) --
+    // "default is in the jahshaka documents folder" (owner review R1d). It is
+    // AppPaths::projectsRoot — the `default_directory` preference, or this
+    // run's data root when one is forced — and it is also where Browse OPENS
+    // (setProjectPath hands the field's current value to the file dialog as its
+    // starting directory).
+    CHECK(defaultLocation == AppPaths::projectsRoot(
+              SettingsManager::getDefaultManager()->getValue("default_directory",
+                                                             QString()).toString(),
+              Constants::PROJECT_FOLDER),
+          "the default location is the CURRENT default projects root, not a literal");
+
     // ---- Browse sets the field --------------------------------------------
     // The button's EFFECT, without a modal file dialog: setProjectLocation is
     // the one write both take, so this drives the button's own path rather than
@@ -110,6 +126,17 @@ int main(int argc, char **argv)
     dialog.setProjectLocation(QString());
     CHECK(dialog.getProjectInfo().projectPath == chosen,
           "a cancelled Browse leaves the location exactly as it was");
+
+    // ...AND CHOOSING ONE IS PER PROJECT (fix round F2). Putting one project on
+    // an external drive must not move every FUTURE project there too, so the
+    // dialog must not write the `default_directory` preference — the one writer
+    // of it in the tree is Preferences > World Settings. The chosen root is
+    // recorded with the project row instead (Database::setProjectLocation).
+    CHECK(SettingsManager::getDefaultManager()->getValue("default_directory",
+                                                         QString()).toString() == preferenceBefore,
+          "choosing a location does NOT change the default_directory preference");
+    CHECK(AppPaths::projectsRoot(preferenceBefore, Constants::PROJECT_FOLDER) == defaultLocation,
+          "…so the next new scene still defaults to the same projects root");
 
     // ---- the name rides the answer -----------------------------------------
     dialog.nameEdit()->setText(QStringLiteral("A New World"));

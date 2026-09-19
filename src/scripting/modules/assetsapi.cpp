@@ -675,17 +675,16 @@ QVariantMap AssetsApi::metadata(const QString &guid)
     // script (or a person asking why their image tile vanished) could not see
     // that the two rows belong together. Reported only when it is there: a row
     // nobody minted carries no key rather than an empty string.
-    // (`fetchAssetData`, not `record.asset`: fetchAsset does not select the
-    // `asset` column at all, so the record's copy of it is always empty — the
-    // trap that made the first cut of this read silently answer nothing.)
-    {
-        const QByteArray definition = host.db->fetchAssetData(guid);
-        if (!definition.isEmpty()) {
-            const QString companion =
-                QJsonDocument::fromJson(definition).object()
-                    .value(QStringLiteral("companionOf")).toString();
-            if (!companion.isEmpty()) out["companionOf"] = companion;
-        }
+    // (`record.asset` is the row's definition. It was EMPTY here until the
+    // SMALL-UI-A fix round: fetchAsset was the one query that did not select
+    // the column, so the same field meant "the definition" from some readers
+    // and "" from this one. Fixed at the query; this reads the record it
+    // already has instead of asking a second time.)
+    if (!record.asset.isEmpty()) {
+        const QString companion =
+            QJsonDocument::fromJson(record.asset).object()
+                .value(QStringLiteral("companionOf")).toString();
+        if (!companion.isEmpty()) out["companionOf"] = companion;
     }
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
