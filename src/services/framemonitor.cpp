@@ -1250,6 +1250,9 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mPlannedSeconds = seconds;
     mGpuSamplesTruncated = 0;
     mEngineFramesDropped = mEngineEventsDropped = 0;
+    // A breakdown from the PREVIOUS capture must not be readable as this
+    // frame's (app.renderStats().perPass).
+    mLastPasses.clear();
     mPhase = Phase::Recording;
     // FORWARD ONLY, from this instant: the engine starts recording the frames
     // that come after this call, and there is no history behind it.
@@ -1389,6 +1392,29 @@ unsigned FrameMonitor::drainOnce()
     std::vector<FrameRecord> frames;
     moved += eng->takeFrameRecords(frames);
     for (const FrameRecord &r : frames) mBundle->writeFrame(r);
+    // THE BREAKDOWN `app.renderStats().perPass` READS (owner review
+    // 2026-09-18). The bundle is a file a lead opens later; this is the same
+    // rows, for the frame that just landed, readable NOW by the verb and the
+    // MCP tools. Only the newest record's — a list is a snapshot of one frame
+    // or it is not a breakdown of anything — and only while recording, which
+    // is the only time the engine fills them at all.
+    if (!frames.empty()) {
+        const FrameRecord &r = frames.back();
+        QVariantList rows;
+        rows.reserve(int(r.passes.size()));
+        for (const FramePass &p : r.passes) {
+            rows.append(QVariantMap{
+                { QStringLiteral("name"),
+                  QStringLiteral("%1/%2/%3")
+                      .arg(QString::fromStdString(p.workspace),
+                           QString::fromStdString(p.node),
+                           QString::fromStdString(p.pass)) },
+                { QStringLiteral("triangles"), QVariant::fromValue(qulonglong(p.triangles)) },
+                { QStringLiteral("draws"), QVariant::fromValue(qulonglong(p.draws)) },
+            });
+        }
+        mLastPasses = rows;
+    }
     std::vector<MonitorEvent> events;
     moved += eng->takeMonitorEvents(events);
     for (const MonitorEvent &e : events) mBundle->writeEvent(e);

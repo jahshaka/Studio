@@ -23,7 +23,7 @@ For more information see the LICENSE file
 // PLAY BRACKETS are the interesting one. They are driven by PlaybackService's
 // EXISTING playModeEntered/editModeEntered signals — nothing new is called from
 // the play path — and PLAY STOP carries a delta of app.frameStats across the
-// bracket: rendered, skipped, workMs, worstMs, slowFrames. That is the
+// bracket: rendered, idle ticks, workMs, worstMs, slowFrames. That is the
 // fps-decay evidence in its most usable form, because it answers "was this
 // play session worse than the last one" without anybody having to have been
 // watching.
@@ -63,7 +63,7 @@ private:
     qint64 mPlayStartMs = 0;
     bool mInPlay = false;
     // The frame-stats snapshot the bracket is measured against.
-    quint64 mRendered = 0, mSkipped = 0, mSlow = 0;
+    quint64 mRendered = 0, mTicks = 0, mSlow = 0;
     double mWorst = 0.0;
 };
 

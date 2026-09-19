@@ -56,7 +56,7 @@ void SessionMarkers::onPlayStart()
     const EngineRenderDriver::Stats s = currentFrameStats();
     mPlayStartMs = QDateTime::currentMSecsSinceEpoch();
     mRendered = s.rendered;
-    mSkipped = s.skipped;
+    mTicks = s.ticks;
     mSlow = s.slowFrames;
     mWorst = s.worstMs;
     mInPlay = true;
@@ -77,9 +77,12 @@ void SessionMarkers::onPlayStop()
     // comparison "it was fine when I opened it and slow twenty minutes later"
     // needs and has never had.
     JAH_LOG(JahLog::scene, Display,
-            QStringLiteral("=== PLAY STOP === %1 ms | rendered %2 (%3 fps avg) skipped %4 | "
+            QStringLiteral("=== PLAY STOP === %1 ms | rendered %2 (%3 fps avg) idle ticks %4 | "
                            "workMs %5 worst %6 (session worst %7) | slowFrames +%8")
-                .arg(ms).arg(rendered).arg(fps, 0, 'f', 1).arg(s.skipped - mSkipped)
+                // Ticks that drew nothing across the bracket — what `skipped`
+                // was before the counter went (owner review answer Q3).
+                .arg(ms).arg(rendered).arg(fps, 0, 'f', 1)
+                .arg((s.ticks - s.rendered) - (mTicks - mRendered))
                 .arg(s.workMs, 0, 'f', 2).arg(mWorst, 0, 'f', 1).arg(s.worstMs, 0, 'f', 1)
                 .arg(s.slowFrames - mSlow));
 }
@@ -128,10 +131,13 @@ void SessionMarkers::logQuitSummary()
     const qint64 ms = QDateTime::currentMSecsSinceEpoch() - sessionStartMs();
     const QVariantMap errors = EngineErrorPump::instance().report();
     JAH_LOG(JahLog::app, Display,
-            QStringLiteral("session: %1 min | frames rendered %2 skipped %3 slow %4 | "
+            // `ticks - rendered` is what the deleted `skipped` counter was
+            // (every counted tick either drew or did not), kept here because a
+            // session summary is exactly the place a lifetime total belongs.
+            QStringLiteral("session: %1 min | frames rendered %2 idle ticks %3 slow %4 | "
                            "worst frame %5 ms | engine errors recorded %6 suppressed %7")
                 .arg(double(ms) / 60000.0, 0, 'f', 1)
-                .arg(s.rendered).arg(s.skipped).arg(s.slowFrames)
+                .arg(s.rendered).arg(s.ticks - s.rendered).arg(s.slowFrames)
                 .arg(s.worstMs, 0, 'f', 1)
                 .arg(errors.value(QStringLiteral("recorded")).toULongLong())
                 .arg(errors.value(QStringLiteral("suppressed")).toULongLong()));

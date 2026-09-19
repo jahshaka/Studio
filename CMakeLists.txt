@@ -274,6 +274,7 @@ set(SRCS
     src/services/nodenaming.cpp
     src/services/ogresamples.cpp
     src/services/jahlog.cpp
+    src/services/scenestats.cpp
     src/services/sessionmarkers.cpp
     src/services/perfsampler.cpp
     src/services/framemonitor.cpp

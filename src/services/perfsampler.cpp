@@ -119,13 +119,17 @@ QString PerfSampler::sampleNow()
                        .arg(fs.workMs, 0, 'f', 1)
                        .arg(fs.worstMs, 0, 'f', 1)
                        .arg(fs.slowFrames);
-            line += QStringLiteral(" | draws %1 tris %2")
+            line += QStringLiteral(" | draws %1 submittedTris %2")
                         .arg(qulonglong(rs.draws))
                         .arg(qulonglong(rs.triangles));
         }
     }
 
-    line += QStringLiteral(" | rendered %1 skipped %2").arg(fs.rendered).arg(fs.skipped);
+    // `ticks - rendered` is the old `skipped` counter, which was deleted
+    // with the F3 readout that showed it (owner review 2026-09-18): a sampler
+    // line is cumulative by nature, so the number itself is still wanted here.
+    line += QStringLiteral(" | rendered %1 idleTicks %2")
+                .arg(fs.rendered).arg(fs.ticks - fs.rendered);
 
     const QVariantMap errors = EngineErrorPump::instance().report();
     line += QStringLiteral(" | engineErrors %1")
