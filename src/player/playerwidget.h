@@ -31,7 +31,10 @@ public:
 
 	void setScene(iris::ScenePtr scene);
 
-	void begin();
+	/// Enters the page (EnginePlayerView::start). FALSE with `why` filled when
+	/// the player cannot draw — nothing was started and the shell should stay
+	/// where it was (SMOKE-FIX-1).
+	bool begin(QString *why = nullptr);
 	void end();
 
 	/// The page as a VIEW over the verbs (verb-coverage audit F1): whoever

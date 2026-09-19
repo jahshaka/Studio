@@ -48,13 +48,31 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
           "the closed project's undo history goes with it, and the rest of the run records into a fresh entry.",
           Needs::Document },
-        { "openAsync", "project.openAsync(guidOrName) -> bool",
+        { "openAsync", "project.openAsync(guidOrName, {play}) -> bool",
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "
           "install runs one slice per event-loop turn (services/sceneopenrunner.h), which is what the desktop "
           "tile and the archive-import open now do. Returns as soon as the open is under way — poll "
           "project.openState() for completion. Needs a window; headless sessions get project.open's "
-          "synchronous behaviour. Inside a script it ends the run's undo entry first, like project.open.",
+          "synchronous behaviour. Inside a script it ends the run's undo entry first, like project.open.\n\n"
+          "`play` (default false) is WHICH SPACE THE OPEN LANDS IN: false the editor, true the Player — the "
+          "desktop tile's Play button, which until SMOKE-FIX-1 was the only route that could say it and said "
+          "it by leaving a flag on the page for every other route to read. It is an argument here for the "
+          "same reason.",
           Needs::Window },
+        { "openSample", "project.openSample(name) -> bool",
+          "Opens one of the samples this tree ships, by base name (\"Matcaps\", \"Showroom 2\") or by an "
+          "Ogre port's display title — THE SAMPLE BROWSER'S OWN ROUTE, which imports the archive and then "
+          "opens the imported world. The dialog's tiles call this, so a script and a double-click take the "
+          "same road. It lands in the EDITOR: a sample is something to look at and edit, and the Player is a "
+          "separate statement (app.space('player')). BOTH HALVES ARE THREADED, like the browser's, and "
+          "they run in that order: poll project.archiveState() until 'idle' (the import), then "
+          "project.openState() until 'idle' (the open), with a frame in the loop. project.samples() "
+          "lists the names.",
+          Needs::Window },
+        { "samples", "project.samples() -> [name]",
+          "The base names of every sample scene this tree ships, both sets (the Jahshaka samples and our "
+          "ports of Ogre's), sorted — what project.openSample accepts.",
+          Needs::Document },
         { "openState", "project.openState() -> 'idle' | 'opening'",
           "Whether an asynchronous open (project.openAsync, a desktop tile, an archive import) is still in "
           "flight. THE SAME PREDICATE project.openAsync refuses on, so the two can never disagree: while "
@@ -131,10 +149,15 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "way — poll project.archiveState(). Needs a window.",
           Needs::Window },
         { "archiveState", "project.archiveState() -> 'idle' | 'running'",
-          "Whether an asynchronous archive export/import is still in flight.",
+          "Whether an asynchronous archive export/import is still in flight — ANY of them, this "
+          "session's verbs and the desktop page's alike (project.openSample's import is the page's), "
+          "so a caller waiting on an archive can always see the one it started.",
           Needs::Window },
         { "archiveResult", "project.archiveResult() -> {ok, error, canceled, path, guid, name, assets, objects}",
-          "The outcome of the most recent asynchronous archive operation in this session.",
+          "The outcome of the most recent archive operation in this PROCESS — the same reach "
+          "archiveState() has, so the import project.openSample starts (the desktop page's, not this "
+          "module's) reports here too. `ok` false with `error` set is how a failed or incompatible "
+          "archive reaches a script: a driven run never gets the message box a person would.",
           Needs::Window },
         { "cancelArchive", "project.cancelArchive() -> bool",
           "Asks an in-flight archive operation to stop. Honoured between zip/extract entries and between "
@@ -231,11 +254,15 @@ bool ProjectApi::open(const QString &guidOrName)
     return true;
 }
 
-bool ProjectApi::openAsync(const QString &guidOrName)
+bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options)
 {
     if (!host.mainWindow || !host.services || !host.services->project)
         return fail("project: not available in this session");
 
+    // WHICH SPACE THIS OPEN LANDS IN, said by the caller (SMOKE-FIX-1). The
+    // desktop tile's Play button is the UI that means `play: true`, and it had
+    // no verb at all until now.
+    const bool play = options.value(QStringLiteral("play"), false).toBool();
     QString name;
     const QString guid = resolveGuid(guidOrName, &name);
     if (guid.isEmpty()) {
@@ -254,7 +281,7 @@ bool ProjectApi::openAsync(const QString &guidOrName)
                     "(project.openState() reads 'opening' until it finishes)");
 
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
-        host.mainWindow->switchSpace(WindowSpaces::EDITOR);
+        host.mainWindow->switchSpace(play ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
         return true;
     }
     host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
@@ -264,7 +291,40 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     // The open's first slices do the session registrations themselves, with
     // the worker's parsed models in hand.
     host.services->project->pointAtProject(guid, name);
-    host.mainWindow->openProjectAsync(false);
+    host.mainWindow->openProjectAsync(play);
+    host.beginRunUndoMacro();
+    return true;
+}
+
+QStringList ProjectApi::samples()
+{
+    return ProjectManager::sampleNames();
+}
+
+bool ProjectApi::openSample(const QString &name)
+{
+    if (!host.mainWindow) return fail("project.openSample: this verb needs the editor window");
+    ProjectManager *page = host.mainWindow->projectPage();
+    if (!page) return fail("project.openSample: this session has no project page");
+    if (openInFlight())
+        return fail("project.openSample: an open is already in flight "
+                    "(project.openState() reads 'opening' until it finishes)");
+    // The page's own refusal for this is a MODAL BOX, which a script run cannot
+    // answer — refuse before we get there (project.archiveState() reads
+    // 'running' until it finishes).
+    if (ProjectArchiver::anyRunning())
+        return fail("project.openSample: an archive operation is already running "
+                    "(project.archiveState() reads 'running' until it finishes)");
+    // The undo entry closes with the world that is leaving, exactly as
+    // project.open/openAsync do — the import + open that follows belongs to the
+    // sample being opened, not to the project being left.
+    QString why;
+    if (!page->openSampleByName(name, &why))
+        return fail(QStringLiteral("project.openSample: %1").arg(why));
+    // Only once the sample is really on its way: a refusal must not end the
+    // run's undo entry (project.open/openAsync end theirs on the same edge —
+    // the world that is leaving takes the run's edits with it).
+    host.endRunUndoMacro();
     host.beginRunUndoMacro();
     return true;
 }
@@ -584,16 +644,28 @@ bool ProjectApi::importArchiveAsync(const QString &path)
 
 QString ProjectApi::archiveState()
 {
-    ProjectArchiver *a = sessionArchiver();
-    return (a && a->isRunning()) ? QStringLiteral("running") : QStringLiteral("idle");
+    // ANY archive in flight, not just this module's own (SMOKE-FIX-1) — the
+    // same rule openState() follows for opens: a caller waiting for the import
+    // project.openSample started (the desktop PAGE's archiver, not the script's)
+    // has to be able to see it, or it polls an idle counter and walks straight
+    // past the work it asked for.
+    return ProjectArchiver::anyRunning() ? QStringLiteral("running") : QStringLiteral("idle");
 }
 
 QVariantMap ProjectApi::archiveResult()
 {
     QVariantMap out;
-    ProjectArchiver *a = sessionArchiver();
-    if (!a) { out["ok"] = false; out["error"] = QStringLiteral("no archive operation has run"); return out; }
-    const ProjectArchiver::Result &r = a->result();
+    // THE PROCESS-WIDE RECORD, not this module's own archiver (SMOKE-FIX-1's
+    // fix round, F5). archiveState() already answers for every archiver in the
+    // process — it has to, because project.openSample starts the desktop PAGE's
+    // import — and an outcome nobody can read is not a failure channel: a
+    // failed or incompatible import ended in a message box and silence here.
+    if (!ProjectArchiver::haveLastResult()) {
+        out["ok"] = false;
+        out["error"] = QStringLiteral("no archive operation has run");
+        return out;
+    }
+    const ProjectArchiver::Result &r = ProjectArchiver::lastResult();
     out["ok"] = r.ok();
     out["error"] = r.error;
     out["canceled"] = r.canceled;

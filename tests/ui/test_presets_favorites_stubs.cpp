@@ -28,9 +28,15 @@ AssetRecord Database::fetchAsset(const QString &) { return AssetRecord(); }
 bool Database::addFavorite(const QString &) { return false; }
 bool Database::removeFavorite(const QString &) { return false; }
 
-void MainWindow::applyMaterialPreset(MaterialPreset) {}
-
 void SceneEditService::addPrimitive(const QString &, const std::optional<iris::Vec3> &,
                                     surfaceplacement::Placement)
 {
+}
+
+// The tray's double-click asks the ONE apply (MATERIAL-PREVIEW-1). The suite
+// never double-clicks — and hands the panels no services — so the call is
+// never made; the symbol still has to resolve.
+bool SceneEditService::applyMaterial(const QString &, iris::SceneNodePtr)
+{
+    return false;
 }

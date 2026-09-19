@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QDesktopServices>
 #include "data/settingsmanager.h"
+#include "app/updatechecker.h"
 #include <QProcess>
 #include "ui/style/stylesheet.h"
 
@@ -51,11 +52,17 @@ SoftwareUpdateDialog::SoftwareUpdateDialog(QWidget *parent) : QDialog(parent), u
 		this->close();
 	});
 
-	auto updates = SettingsManager::getDefaultManager()->getValue("automatic_updates", true).toBool();
+	// ONE KEY AND ONE DEFAULT, shared with the launch check and the Preferences
+	// row (UpdateChecker::kAutomaticChecks*): this box read `true` for an absent
+	// preference while the Preferences row read it as set and the launch ignored
+	// both — three answers to one question (SMOKE-FIX-1's fix round).
+	auto updates = SettingsManager::getDefaultManager()
+	                   ->getValue(UpdateChecker::kAutomaticChecksKey,
+	                              UpdateChecker::kAutomaticChecksDefault).toBool();
 	ui->checkBox->setChecked(updates);
 
 	connect(ui->checkBox, &QCheckBox::clicked, [this](bool checked) {
-		SettingsManager::getDefaultManager()->setValue("automatic_updates", checked);
+		SettingsManager::getDefaultManager()->setValue(UpdateChecker::kAutomaticChecksKey, checked);
 	});
 }
 

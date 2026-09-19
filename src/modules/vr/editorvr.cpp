@@ -81,6 +81,13 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
                         .arg(QString::fromStdString(engine->vrInfo().reason)));
     if (engine->vrStatus().active)
         return fail(QStringLiteral("a session is already running"));
+    // THE SESSION DRAWS THE EDITOR'S SCENE, so it is entitled to ask for it to
+    // exist — a `--vr` boot that has not opened the editor page yet has no
+    // scene, and that is a page that has not been shown rather than a session
+    // that cannot run (SMOKE-FIX-1's fix round). The refusal below stands for
+    // the case the engine really cannot make one yet: before any View exists in
+    // the process (the pin's startup-order law).
+    viewport->ensureEngineScene();
     Scene *scene = viewport->engineScene();
     if (!scene) return fail(QStringLiteral("there is no scene to show yet"));
 

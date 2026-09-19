@@ -56,6 +56,11 @@ public:
     /// hook here rather than every command carrying a refresh of its own. Null
     /// in headless hosts and tests, where nothing is on screen to repaint.
     void setStackMovedHook(std::function<void()> hook) { mStackMoved = std::move(hook); }
+    /// Run before EVERY push, after the edit gate has let it through: the shell
+    /// ends the live material hover preview here, so an undo command can never
+    /// capture a material the user only hovered (MATERIAL-PREVIEW-1). Unset in
+    /// headless hosts, which have no pointer to hover with.
+    void setPrePushHook(std::function<void()> hook) { mPrePush = std::move(hook); }
     /// What to run once the stack has been emptied, to apply the database
     /// work the dying commands QUEUED instead of writing (CLOSE-1 —
     /// Database::enqueueAssetDelete). A hook rather than a Database pointer
@@ -156,6 +161,7 @@ private:
     quint64 mPushCount = 0;
     int  mSavedCount = 0;
     bool mContentRepaired = false;
+    std::function<void()> mPrePush;
     std::function<void()> mStackMoved;
     std::function<void()> mDeferredFlush;
 };

@@ -141,6 +141,26 @@ set_tests_properties(vr.session PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-home")
 
+# vr.session_undithered — THE SAME BINARY WITH THE GRADE'S DITHER OFF (lane
+# DITHER-1). The worldScale-0 arm's real assertion is that the two eyes are
+# BYTE-IDENTICAL: it is what catches a half-pixel viewport error and a slightly
+# wrong eye matrix over a smooth scene, and the one-code tolerance the dithered
+# picture needs would wave both through. The switch cannot be flipped mid-run
+# for the session's View — it is not a View the engine's frame loop drives, so
+# it is never armed with a per-view push (measured in the arm's own comment) —
+# so the strong form gets its own process. Everything else the suite asserts is
+# asserted twice, which costs one VR run and is the price of keeping the bar.
+add_test(NAME vr.session_undithered
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
+                 "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session_undithered PROPERTIES
+    LABELS "engine"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home")
+
 # ---------------------------------------------------------------------------
 # vr.verbs_session — the `vr.*` verbs through the APP, against the simulated
 # runtime (VR_SPEC §6 / §4.6). The other half of scripting.e2e.vr_verbs, which
@@ -390,6 +410,26 @@ set_tests_properties(vr.eye_grade PROPERTIES
     RUN_SERIAL TRUE
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_grade_home};JAHSHAKA_DATA_ROOT=${_vr_grade_home}/.local/share/Jahshaka")
+
+# vr.sample_open — THE `--vr` BOOT'S PAGES (lane SMOKE-FIX-1, 2026-09-18).
+#
+# The owner smoked push #50 on a `--vr` build and reported both halves of this
+# lane there: every sample-browser open landing in the Player, and the Player's
+# window then showing the Desktop page's pixels. The desktop twin is
+# scripting.e2e.sample_open; this is the same route on the boot that reported
+# it. No session is begun — the subject is the boot, not the headset.
+set(_vr_sample_home "${CMAKE_CURRENT_BINARY_DIR}/vr-sample-open-home")
+add_test(NAME vr.sample_open
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.sample_open PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_sample_home};JAHSHAKA_DATA_ROOT=${_vr_sample_home}/.local/share/Jahshaka")
 
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"

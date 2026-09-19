@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define UPDATECHECKER_H
 
 #include <QNetworkAccessManager>
+#include <QVariant>
 #include <QNetworkReply>
 #include <QObject>
 #include <QPointer>
@@ -44,7 +45,33 @@ public:
 	/// a deadline on a big download; this fetch has nothing big to download.
 	static constexpr int kTransferTimeoutMs = 15000;
 
+	/// THE SHIPPED DEFAULT for the `automatic_updates` preference: OFF (owner,
+	/// 2026-09-18 — "leave auto updates for when we have an update server").
+	///
+	/// Until there is a server to ask, a launch-time request is a network call
+	/// on every start of the editor that can only ever fail — and it was made
+	/// UNCONDITIONALLY while the Preferences checkbox that claims to govern it
+	/// governed nothing (SMOKE-FIX-1's fix round). One constant, read by the
+	/// launch, by the Preferences row and by the update dialog's own checkbox,
+	/// so the three cannot disagree about what "not set" means.
+	static constexpr bool kAutomaticChecksDefault = false;
+	static const char *kAutomaticChecksKey;      ///< "automatic_updates"
+
 	UpdateChecker();
+	/// THE LAUNCH CHECK, gated by the stored `automatic_updates` preference —
+	/// the one main() makes. `storedPreference` is what the settings hold for
+	/// kAutomaticChecksKey (pass the default for an absent key). Returns
+	/// whether a request was actually posted, which is what a test asserts on.
+	///
+	/// The gate lives HERE rather than at the call site so that "does a default
+	/// launch touch the network?" is one function with one answer, testable
+	/// without a window, a settings file or a network.
+	bool checkForAppUpdateIfEnabled(const QVariant &storedPreference);
+	/// The same gate over an explicit URL — what the suite drives against a
+	/// loopback server, so the ON path is tested without touching the network.
+	bool checkForUpdateIfEnabled(const QVariant &storedPreference, const QUrl &url,
+	                             int transferTimeoutMs = kTransferTimeoutMs);
+	/// The check itself, ungated: an explicit "check for updates now".
 	void checkForAppUpdate();
 	/// Runs one check against `url`. Asynchronous: it returns as soon as the
 	/// request is posted, so the UI thread never waits for the network.
