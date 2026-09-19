@@ -12,11 +12,20 @@ add_executable(test_pbr_evaluator
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
+    # LibraryV1 and every node family it builds: the legacy-master conversion
+    # splices a real "oneminus" node in front of Roughness when a CHAIN fed the
+    # old Shininess socket, so the loader needs the shipping registry, not a
+    # hand-made stub with three entries in it.
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp

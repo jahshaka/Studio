@@ -9,7 +9,6 @@
     "lighting": true,
     "name": "Basic",
     "pbrMaterial": {
-        "surfaceType": "surface",
         "unsupportedNodes": [
         ],
         "values": {
@@ -28,7 +27,7 @@
     "shadergraph": {
         "connections": [
             {
-                "id": "4f02bd1b-2aa4-4386-8265-3b66b07936f1",
+                "id": "b5ea2243-a399-4863-88f3-bc352db62402",
                 "leftNodeId": "af7a89a6-24f3-4351-a438-80fbd51d702d",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "50aedc23-3ef8-44c8-b362-f09a4964e554",
@@ -40,8 +39,8 @@
         "nodes": [
             {
                 "id": "50aedc23-3ef8-44c8-b362-f09a4964e554",
-                "title": "Surface Material",
-                "type": "Material",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
                 "value": "",
                 "x": 0,
                 "y": 0
@@ -60,18 +59,11 @@
             }
         ],
         "settings": {
-            "acceptLighting": true,
             "bakeResolution": 1024,
             "blendMode": "Opaque",
-            "castShadow": true,
-            "cullMode": "Back",
-            "depthTest": true,
-            "fog": true,
-            "name": "Basic",
-            "receiveShadow": true,
-            "renderLayer": "Opaque",
-            "zWrite": true
-        }
+            "name": "Basic"
+        },
+        "socketLayout": 2
     },
     "type": "shadergraph",
     "uniforms": [

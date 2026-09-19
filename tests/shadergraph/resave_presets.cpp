@@ -81,7 +81,6 @@ int main(int argc, char** argv)
     QJsonObject pbrObj;
     pbrObj["values"] = evaluated.values;
     pbrObj["unsupportedNodes"] = QJsonArray::fromStringList(evaluated.unsupportedNodes);
-    pbrObj["surfaceType"] = evaluated.hasPbrMaster ? "pbr" : "surface";
     obj["pbrMaterial"] = pbrObj;
 
     QFile out(path);

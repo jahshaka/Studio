@@ -83,6 +83,25 @@ public:
 	/// Absent from a saved graph means 1: the key did not exist then.
 	static constexpr int kSocketLayoutVersion = 2;
 
+	/// The roughness floor the LEGACY-MASTER CONVERSION lands on.
+	///
+	/// The deleted Blinn-Phong master's Shininess socket carried GLOSS, and the
+	/// inversion is `1 - gloss`, so the slider's own maximum — the value a
+	/// legacy graph is most likely to be holding — converts to roughness
+	/// EXACTLY ZERO. HlmsPbs floors roughness at 0.02, and a GGX lobe at 0.02
+	/// is a needle: its peak is 1/(pi*alpha^2), so any single texel of a
+	/// quantised normal map that happens to point at the light comes back as a
+	/// pixel-sized white spark. That is the "white dots on the brick material"
+	/// report (lane-whitedots, 2026-09-09), and it is a property of the number,
+	/// not of the map.
+	///
+	/// 0.08 is the smallest value that still reads as "polished" while dropping
+	/// that peak by (0.08/0.02)^4 = 256x against HlmsPbs' own floor. It used to
+	/// be a clamp inside the BAKER, applied invisibly on every bake forever;
+	/// now the conversion writes it into the graph ONCE as a real Roughness
+	/// value the user can see in the node and lower deliberately.
+	static constexpr double kConvertedGlossRoughnessFloor = 0.08;
+
 	void addProperty(Property* prop);
 	void removeProperty(Property* prop);
 	Property* getPropertyByName(const QString& name);

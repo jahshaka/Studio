@@ -34,38 +34,22 @@ namespace materials {
 
 // ------------------------------------------------------------ master slots
 
-QVector<MasterSlot> masterSlotsFor(const QString& masterType)
+QVector<MasterSlot> masterSlots()
 {
-	if (masterType == "PbrMaterial") {
-		return {
-			{ "Base Color", MasterSlot::ColorSlot, "baseColor", "baseColorMap" },
-			{ "Metallic", MasterSlot::FloatSlot, "metallic", "metallicMap" },
-			{ "Roughness", MasterSlot::FloatSlot, "roughness", "roughnessMap" },
-			{ "Normal", MasterSlot::NormalSlot, "", "normalMap" },
-			// NO "Occlusion" slot: HLMS_ADOPTION P2 removed the socket, the
-			// bake output and the document rows together. It used to bake a
-			// full-resolution occlusionMap PNG into the user's project that
-			// nothing on any render path ever read.
-			{ "Emissive", MasterSlot::ColorSlot, "emissiveColor", "emissiveMap" },
-			{ "Alpha", MasterSlot::FloatSlot, "alpha", "" },
-			{ "Alpha Cutoff", MasterSlot::FloatSlot, "alphaCutoff", "" },
-			{ "Vertex Offset", MasterSlot::NoTarget, "", "" },
-			{ "Vertex Extrusion", MasterSlot::NoTarget, "", "" },
-		};
-	}
-
-	// Legacy SurfaceMasterNode (typeName "Material"): approximate the
-	// Blinn-Phong sockets onto PBR keys. Specular/Ambient have no
-	// HlmsPbs-compatible target; they fall through as unsupported when fed.
+	// ONE master node, one table. The legacy Blinn-Phong master's ten
+	// approximated sockets are gone with the class (LEGACY-MASTER-CRUD,
+	// 2026-09-19): a graph authored on it is CONVERTED at load
+	// (NodeGraph::deserialize), so nothing reaches the baker but PBR.
 	return {
-		{ "Diffuse", MasterSlot::ColorSlot, "baseColor", "baseColorMap" },
-		{ "Specular", MasterSlot::NoTarget, "", "" },
-		// Shininess is a gloss value; roughness is its inverse. Values above
-		// 1 are treated as the classic 0-100 Blinn exponent range.
-		{ "Shininess", MasterSlot::FloatSlot, "roughness", "", true },
+		{ "Base Color", MasterSlot::ColorSlot, "baseColor", "baseColorMap" },
+		{ "Metallic", MasterSlot::FloatSlot, "metallic", "metallicMap" },
+		{ "Roughness", MasterSlot::FloatSlot, "roughness", "roughnessMap" },
 		{ "Normal", MasterSlot::NormalSlot, "", "normalMap" },
-		{ "Ambient", MasterSlot::NoTarget, "", "" },
-		{ "Emission", MasterSlot::ColorSlot, "emissiveColor", "emissiveMap" },
+		// NO "Occlusion" slot: HLMS_ADOPTION P2 removed the socket, the
+		// bake output and the document rows together. It used to bake a
+		// full-resolution occlusionMap PNG into the user's project that
+		// nothing on any render path ever read.
+		{ "Emissive", MasterSlot::ColorSlot, "emissiveColor", "emissiveMap" },
 		{ "Alpha", MasterSlot::FloatSlot, "alpha", "" },
 		{ "Alpha Cutoff", MasterSlot::FloatSlot, "alphaCutoff", "" },
 		{ "Vertex Offset", MasterSlot::NoTarget, "", "" },
@@ -85,17 +69,14 @@ SocketModel* findMasterInSocket(NodeModel* master, const QString& name)
 namespace {
 
 // A master input the PBR target has nowhere to put, said ONCE per process per
-// (socket, kind).
+// (socket, kind) — a Vertex Offset/Extrusion chain, a texture in a value-only
+// slot, a constant on the map-only Normal slot.
 //
-// The nine legacy presets all feed a SPECULAR MAP into a socket with no
-// HlmsPbs-compatible target (`{ "Specular", MasterSlot::NoTarget }` — a
-// specular colour map is not a PBR input, and converting one needs the
-// spec-gloss -> metal-rough fit the GLB importer does, which is a follow-up,
-// not a bake rule). It was dropped in complete silence: the texture is listed
-// in Result::eval.unsupportedNodes, which only the materials panel reads, so
-// from a script, a thumbnail or a preview dock the map simply never existed.
-// Once per key, because a bake runs on every graph edit and this is a property
-// of the GRAPH, not of the edit.
+// It is said out loud because the alternative is silence: such an input is
+// listed in Result::eval.unsupportedNodes, which only the materials panel
+// reads, so from a script, a thumbnail or a preview dock it simply never
+// existed. Once per key, because a bake runs on every graph edit and this is a
+// property of the GRAPH, not of the edit.
 void logUnsupportedOnce(const QString& socketName, const QString& what)
 {
 	static QMutex mutex;
@@ -250,12 +231,11 @@ GraphBaker::CompiledGraph GraphBaker::compile(NodeGraph* graph, BakeProgram::Tex
 	if (!master) return out;
 
 	out.hasMaster = true;
-	out.hasPbrMaster = (master->typeName == "PbrMaterial");
 	out.name = graph->settings.name;
 	out.blendMode = graph->settings.blendMode;
 	if (!resolver) resolver = [](const QString& value) { return value; };
 
-	for (const auto& slot : masterSlotsFor(master->typeName)) {
+	for (const auto& slot : masterSlots()) {
 		CompiledSlot cs;
 		cs.slot = slot;
 		auto sock = findMasterInSocket(master, slot.socketName);
@@ -357,7 +337,6 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 	timer.start();
 
 	if (!compiled.hasMaster) return out;
-	out.eval.hasPbrMaster = compiled.hasPbrMaster;
 
 	const int resolution = qBound(1, opts.resolution, 4096);
 	const bool canBake = opts.bakeMaps && !opts.outputDir.isEmpty();
@@ -435,14 +414,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 			}
 			const Value v = program.evaluate(uniformCtx);
 			if (slot.target == MasterSlot::FloatSlot) {
-				double s = v.x; // vecN -> float: leading component
-				if (slot.invertToRoughness) {
-					double gloss = s > 1.0 ? s / 100.0 : s;
-					// FLOORED: see kLegacyGlossRoughnessFloor. A legacy gloss
-					// of 1 used to land roughness 0, which is a specular
-					// singularity under any normal map.
-					s = qMax(1.0 - qBound(0.0, gloss, 1.0), kLegacyGlossRoughnessFloor);
-				}
+				const double s = v.x; // vecN -> float: leading component
 				// FloatSlots are 0-1 quantities on PbrMaterial (audit D6)
 				out.eval.values[slot.valueKey] = qBound(0.0, s, 1.0);
 			}

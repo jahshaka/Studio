@@ -18,24 +18,6 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QDebug>
 
-SurfaceMasterNode::SurfaceMasterNode()
-{
-	title = "Surface Material";
-	typeName = "Material";
-	setNodeType(NodeCategory::Input);
-	addInputSocket(new Vector3SocketModel("Diffuse","vec3(1.0,1.0,1.0)"));
-	addInputSocket(new Vector3SocketModel("Specular"));
-	addInputSocket(new FloatSocketModel("Shininess"));
-	addInputSocket(new Vector3SocketModel("Normal", "vec3(0.0, 0.0, 1.0)"));
-	addInputSocket(new Vector3SocketModel("Ambient"));
-	addInputSocket(new Vector3SocketModel("Emission"));
-	addInputSocket(new FloatSocketModel("Alpha", "1.0f"));
-	addInputSocket(new FloatSocketModel("Alpha Cutoff"));
-	addInputSocket(new Vector3SocketModel("Vertex Offset"));
-	addInputSocket(new FloatSocketModel("Vertex Extrusion"));
-}
-
-
 FloatNodeModel::FloatNodeModel() :
 	NodeModel()
 {

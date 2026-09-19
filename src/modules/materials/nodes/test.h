@@ -21,12 +21,11 @@ class QDoubleSpinBox;
 #include "ui/controls/colorpickerwidget.h"
 #endif
 
-class SurfaceMasterNode : public NodeModel
-{
-public:
-	SurfaceMasterNode();
-};
-
+// (SurfaceMasterNode — the Blinn-Phong "Surface Material" master, with
+// Diffuse/Specular/Shininess/Ambient/Emission sockets — was DELETED by
+// LEGACY-MASTER-CRUD, 2026-09-19. There is one master node, PbrMasterNode
+// ("PBR Material", nodes/pbrmasternode.h); a saved graph authored on the old
+// one is converted at load by NodeGraph::deserialize and re-saves as PBR.)
 
 class FloatNodeModel : public NodeModel
 {

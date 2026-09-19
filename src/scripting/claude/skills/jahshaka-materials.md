@@ -98,7 +98,7 @@ graph.setValue(col, { r: 0.8, g: 0.2, b: 0.1, a: 1 });
 graph.connect(col, 0, master, "Base Color"); // sockets by index or name
 
 // Evaluate the graph to concrete PBR values (CPU evaluator, GL-free):
-graph.evaluate();                  // {values, unsupported, hasPbrMaster}
+graph.evaluate();                  // {values, unsupported, approximated, animated}
 
 // Apply the evaluated result to a mesh node:
 graph.toMaterial(nodeId);

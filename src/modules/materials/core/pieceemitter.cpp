@@ -436,16 +436,6 @@ PieceEmitter::Result PieceEmitter::lower(const GraphBaker::CompiledGraph &compil
 {
 	Result result;
 	if (!compiled.hasMaster) return result;
-	if (!compiled.hasPbrMaster) {
-		// The legacy Blinn-Phong master's sockets are APPROXIMATED onto PBR
-		// keys by the baker (Shininess inverted into roughness, and so on).
-		// Lowering an approximation would put the approximation in two places.
-		result.fallbackReasons.insert(QString(),
-		                              QStringLiteral("the legacy Blinn-Phong master approximates "
-		                                             "its sockets onto PBR keys; only the PBR "
-		                                             "master emits pieces"));
-		return result;
-	}
 
 	QMap<QString, Lowered> lowered;
 	bool anyVarying = false;
