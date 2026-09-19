@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "io/materialpresets.h"
 #include "services/services.h"
 #include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/projectservice.h"
 #include "services/sceneeditservice.h"
 #include "services/jahlog.h"
@@ -240,6 +241,7 @@ void AssetMaterialPanel::showContextMenu(const QPoint &pos)
     QAction customise(tr("Customise"), this);
     if (!presetGuid.isEmpty()) {
         connect(&customise, &QAction::triggered, this, [this, presetGuid]() {
+            MaterialPresetSeeder::instance().finishNow();   // one importer at a time
             QString error;
             Project *project = services && services->project ? services->project->current()
                                                              : nullptr;

@@ -58,6 +58,7 @@ For more information see the LICENSE file
 #include "io/materialpresets.h"
 #include "services/materialbundle.h"
 #include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/sceneissues.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
@@ -527,8 +528,21 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	// Customise, which is what this says.
 	const QString shipped = MaterialBundle::shippedPresetName(guid);
 	if (!shipped.isEmpty()) {
-		irisLog("loadGraph: '" + shipped + "' is a material the app ships and is read-only "
-		        "- Customise it (Presets drawer, right-click) to edit your own copy");
+		// AND THE USER IS TOLD, on screen (fix round F2). A double-click on a
+		// pinned preset in the Project drawer used to log a line and do
+		// nothing at all, which reads as a dead gesture. Same channel as a
+		// refused save — the scene-issue bar, because the condition stays
+		// true until the user does the other thing — and the same sentence
+		// the definition writer refuses with.
+		irisLog("loadGraph: '" + shipped + "' is read-only");
+		SceneIssue issue;
+		issue.id = QStringLiteral("material.readonly:") + guid;
+		issue.kind = QStringLiteral("material.readonly");
+		issue.nodeName = shipped;
+		issue.message = tr("'%1' is a material the app ships, and it is read-only.").arg(shipped);
+		issue.action = tr("Right-click it in the Presets drawer and choose Customise: that makes "
+		                  "'%1-1', your own copy, and every edit works on it.").arg(shipped);
+		SceneIssues::instance().raise(issue);
 		return;
 	}
 
@@ -1864,6 +1878,19 @@ void EffectsPage::configureConnections()
 			}
 		}
 	});
+	// A SHIPPED MATERIAL PRESET'S TILE DOES THE ONE THING IT CAN (fix round
+	// F2). The two loops above match GRAPH TEMPLATES by name; a preset tile
+	// matches neither, so double-clicking one was a silent no-op. A preset
+	// cannot be opened — it is read-only and has no graph — so the gesture is
+	// the same one its context menu offers: Customise, which gives the user
+	// their own copy to open.
+	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
+		const QString presetGuid =
+		    MaterialBundle::shippedPresetName(item->data(MODEL_GUID_ROLE).toString()).isEmpty()
+		        ? QString()
+		        : item->data(MODEL_GUID_ROLE).toString();
+		if (!presetGuid.isEmpty()) emit presets->customisePreset(presetGuid);
+	});
 
 	
 
@@ -1958,6 +1985,7 @@ void EffectsPage::configureConnections()
 	// an ordinary editable bundle named "<Preset>-1", pinned into the open
 	// project so the project drawer and the editor's tray show it too.
 	connect(presets, &ListWidget::customisePreset, [=](QString presetGuid) {
+		MaterialPresetSeeder::instance().finishNow();   // one importer at a time
 		QString error;
 		const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
 		                                                     dataBase, mProject, &error);

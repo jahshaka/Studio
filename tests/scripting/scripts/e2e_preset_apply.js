@@ -42,9 +42,6 @@ function names(rows) {
 var proj = project.create("Preset Apply " + Date.now());
 assert(proj.length > 10, "project.create");
 
-// Nothing is seeded before it is used: a drawer lists presets from the
-// shipped list and their reserved guids, so the library is still empty here.
-assert(materialRows().length === 0, "no preset row exists before any preset is used");
 assert(materials.presets().length === 18,
        "eighteen shipped presets (the fourteen pre-PBR files are deleted) — got "
        + materials.presets().length);
@@ -52,19 +49,33 @@ materials.presets().forEach(function (p) {
     if (!p.guid || p.guid.length < 10) throw new Error("preset '" + p.name + "' has no guid");
 });
 
-// ---- 1. three applies, one row -------------------------------------------
+// ---- 1. THE FIRST-RUN SEED, then three applies that add nothing ----------
+//
+// The app seeds every shipped preset at launch (services/materialpresetseeder.h
+// — the map bytes on a worker, the rows one per event-loop turn), so the
+// library reaches a steady state of EIGHTEEN bundles, one per preset, with no
+// gesture at all. `materials.seedPresets()` is that same seed on demand: it
+// makes the count deterministic here instead of racing the launch.
+assert(materials.seedPresets() === 18, "the first-run seed: eighteen bundles");
+var seeded = materialRows();
+assert(seeded.length === 18,
+       "…and that is the whole library's material list (" + seeded.length + ")");
+assert(materials.seedPresets() === 18, "seeding again is idempotent");
+assert(materialRows().length === 18, "…and mints nothing the second time");
+
 var cube = scene.addPrimitive("Cube");
 assert(!!cube, "a cube to paint");
 
 assert(material.apply(cube, "Gold PBR") === true, "apply 1: Gold PBR");
-var afterFirst = materialRows();
-assert(afterFirst.length === 1, "the first apply SEEDED one bundle (" + afterFirst.length + ")");
-assert(afterFirst[0].guid === GOLD, "…under the preset's own reserved guid");
+assert(materialRows().length === 18,
+       "the apply MINTED NOTHING (" + materialRows().length + " rows)");
+assert(materialRows().filter(function (r) { return r.guid === GOLD; }).length === 1,
+       "…it used the preset's own reserved guid");
 
 assert(material.apply(cube, "Gold PBR") === true, "apply 2");
 assert(material.apply(cube, GOLD) === true, "apply 3 (by guid this time)");
-assert(materialRows().length === 1,
-       "THREE APPLIES, ZERO NEW ROWS (" + JSON.stringify(names(materialRows())) + ")");
+assert(materialRows().length === 18,
+       "THREE APPLIES, ZERO NEW ROWS (" + materialRows().length + ")");
 
 // …and none of the project bookkeeping the old tail minted.
 var projectRows = assets.list({ scope: "project", type: "material" });
@@ -95,11 +106,12 @@ assert(painted.baseColorMap && painted.baseColorMap.length > 0,
 // A SECOND PROJECT REUSES THE SAME BUNDLE — the preset is library content,
 // and the store is keyed on content, so nothing is imported twice.
 var texturesBefore = assets.list({ scope: "store", type: "texture" }).length;
+var rowsBefore = materialRows().length;
 var proj2 = project.create("Preset Apply Second " + Date.now());
 var cube2 = scene.addPrimitive("Cube");
 assert(material.apply(cube2, "Brick PBR") === true, "the second project applies Brick PBR");
-assert(materialRows().length === 2,
-       "still one row per PRESET, not per project (" + JSON.stringify(names(materialRows())) + ")");
+assert(materialRows().length === rowsBefore,
+       "still one row per PRESET, not per project (" + materialRows().length + ")");
 assert(assets.list({ scope: "store", type: "texture" }).length === texturesBefore,
        "and not one texture was imported a second time");
 assert(assets.list({ scope: "project", type: "material" }).length === 1,
@@ -164,16 +176,46 @@ var cube3 = scene.addPrimitive("Cube");
 var pushesBefore = editor.undoState().pushes;
 assert(material.apply(cube3, "Silver PBR") === true, "apply a preset the project does not hold");
 var afterNew = editor.undoState().pushes;
-assert(afterNew === pushesBefore + 2,
-       "an apply of a NEW bundle records TWO steps — the pin and the material ("
-       + pushesBefore + " -> " + afterNew + ")");
+assert(afterNew === pushesBefore + 3,
+       "an apply of a NEW bundle records THREE commands in its one macro — the pin, the "
+       + "material and the use edge (" + pushesBefore + " -> " + afterNew + ")");
 
 var cube4 = scene.addPrimitive("Cube");
 var pushesHeld = editor.undoState().pushes;
 assert(material.apply(cube4, "Silver PBR") === true, "apply it again, on another mesh");
-assert(editor.undoState().pushes === pushesHeld + 1,
-       "a bundle the project already holds records ONLY the material change");
+assert(editor.undoState().pushes === pushesHeld + 2,
+       "a bundle the project already holds records the material and the use edge, no pin");
 assert(editor.undoState().macroOpen === true,
        "the run's own macro is open, which is WHY the undo itself is commands.pin_asset's");
+
+// ---- 6. THE ROW IS READ-ONLY TOO, not just its definition (F4) -----------
+var renameRefused = false;
+try { assets.rename(GOLD, "Fred"); } catch (e) { renameRefused = true; console.log("   " + e.message); }
+assert(renameRefused, "a shipped preset cannot be RENAMED (one guid, two names, for ever)");
+assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === GOLD; })[0].name
+           === "Gold PBR",
+       "…and the row still carries the preset's name");
+assert(assets.setTags(GOLD, ["kitchen"]).length === 1,
+       "…while TAGGING one is still the user's own business");
+assert(assets.rename(copy1, "My Gold") === true, "the COPY renames, as any material does");
+
+// ---- 7. AN APPLY THAT CANNOT HAPPEN IMPORTS NOTHING (F6) ------------------
+//
+// The tray passes whatever is selected, so a preset double-clicked with a
+// LIGHT selected used to import the preset's maps, mint its row and pay for
+// all of it before the apply returned false. The mesh test comes first now.
+var light = scene.addLight("point");
+var texturesBeforeLight = assets.list({ scope: "store", type: "texture" }).length;
+var rowsBeforeLight = materialRows().length;
+var lightRefused = false;
+// The VERB refuses by precondition (it throws with the node named); the TRAY
+// does not — it hands SceneEditService whatever is selected — which is why
+// the mesh test also lives above the seed in the service. Either door, the
+// answer is the same: nothing is written down.
+try { material.apply(light, "Marble PBR"); } catch (e) { lightRefused = true; }
+assert(lightRefused, "applying to a LIGHT is refused");
+assert(assets.list({ scope: "store", type: "texture" }).length === texturesBeforeLight
+           && materialRows().length === rowsBeforeLight,
+       "…and imported nothing, minted nothing");
 
 console.log("preset_apply: all assertions passed");

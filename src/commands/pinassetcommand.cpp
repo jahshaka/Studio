@@ -52,3 +52,31 @@ void PinAssetCommand::undo()
     assetdelete::removeFromProject(mDb, mAssetGuid, mProjectGuid);
     mPinnedByUs = false;
 }
+
+MaterialUseEdgeCommand::MaterialUseEdgeCommand(Database *db, const QString &projectGuid,
+                                               const QString &nodeGuid,
+                                               const QString &materialGuid)
+    : QUndoCommand(QObject::tr("Material use")),
+      mDb(db), mProjectGuid(projectGuid), mNodeGuid(nodeGuid), mMaterialGuid(materialGuid)
+{
+}
+
+void MaterialUseEdgeCommand::redo()
+{
+    mWrote = false;
+    if (!mDb || mProjectGuid.isEmpty() || mNodeGuid.isEmpty() || mMaterialGuid.isEmpty()) return;
+    // Delete-then-create, as the apply always did: `createDependency` is a
+    // bare INSERT, so a second apply of the same material onto the same node
+    // would otherwise add a second identical row.
+    mDb->deleteDependency(mNodeGuid, mMaterialGuid);
+    mWrote = mDb->createDependency(static_cast<int>(ModelTypes::Object),
+                                   static_cast<int>(ModelTypes::Material),
+                                   mNodeGuid, mMaterialGuid, mProjectGuid);
+}
+
+void MaterialUseEdgeCommand::undo()
+{
+    if (!mWrote || !mDb) return;
+    mDb->deleteDependency(mNodeGuid, mMaterialGuid);
+    mWrote = false;
+}

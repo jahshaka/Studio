@@ -9,17 +9,39 @@
 // THE MECHANISM, and therefore the ORDER this script runs in. The thumbnail
 // renderer named its offscreen View with a fixed string, the engine refuses a
 // duplicate View name, and ONE renderer is kept alive for the whole session by
-// ThumbnailGenerator's queue — which is reached by APPLYING A MATERIAL PRESET
-// to a node (SceneEditService::applyMaterialPreset registers the preset as a
-// project Material row and queues its thumbnail), among other gestures. Every
-// renderer built after that — the import tail, `assets.refreshThumbnail` —
-// then failed to create its View and returned a null image, silently.
+// ThumbnailGenerator's QUEUE. Every renderer built after that — the import
+// tail, `assets.refreshThumbnail` — then failed to create its View and
+// returned a null image, silently.
 //
-// So step 1 is a PRESET APPLY (not merely a verb that renders a material: a
-// verb's renderer released its View on the way out, which is why a script that
-// only called assets.refreshThumbnail could never reproduce this). Step 2 is a
-// model import. On the binary before the fix, step 2's thumbnail comes back
-// EMPTY — measured, see the lane report.
+// So step 1 must leave the QUEUE's renderer ALIVE before anything else asks
+// for a picture (a verb's own renderer released its View on the way out,
+// which is why a script that only called assets.refreshThumbnail could never
+// reproduce this). Step 2 is a model import. On the binary before the fix,
+// step 2's thumbnail comes back EMPTY — measured, see the lane report.
+//
+// WHAT ESTABLISHES THE PRECONDITION HERE, and why it changed — said plainly,
+// because this is the one thing about this suite that is weaker than it was
+// (MATERIAL_BUNDLE_SPEC phase 3).
+//
+// It used to be a PRESET APPLY: an apply minted a project Material row per
+// preset and QUEUED a render for it, and the queue's renderer was the
+// long-lived one. A preset is a read-only library bundle now, seeded once
+// with the tile the app ships for it, so an apply queues nothing — and no
+// other gesture a SCRIPT can make puts a request on ThumbnailGenerator's
+// queue (its remaining callers are the Materials page's save and the Assets
+// page's own buttons). Leaving the old loop in place would have exited on
+// frame 0 having rendered nothing, with every assertion below measuring a
+// different session: a suite that passes while testing nothing.
+//
+// So the precondition is established by the first BORROWER. THUMBS-1's fix is
+// that there is exactly ONE renderer for the process and every caller borrows
+// it (EngineThumbnailRenderer::borrow), so "the state the owner's imports
+// met" is "the shared renderer exists and holds its view", and one verb call
+// reaches it. WHAT THIS NO LONGER PROVES: the original ORDERING defect — a
+// second renderer failing to create a View the first one already held —
+// cannot be staged from a script any more. What it still proves, and what the
+// owner's grey tiles actually were, is that EVERY borrower in one process (the
+// import tail, each type's rebuild, the sweep) comes back with a picture.
 //
 // Also pinned here: every asset type's rebuild in ONE process (object,
 // material, shader, AVATAR — the type that had no branch at all and whose tile
@@ -42,36 +64,37 @@ var RIG2 = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_tiny.glb";
 
 project.create("thumbnails order");
 
-// ---- 1. THE PRECONDITION: a PRESET APPLY, which is what the owner did ------
-// This is the gesture that puts a thumbnail on ThumbnailGenerator's QUEUE, and
-// the queue's renderer is the one that lived for the whole session. Nothing
-// about this step is about scripting: a preset dropped on an object from the
-// presets panel runs exactly this code.
+// ---- 1a. THE OWNER'S GESTURE: a PRESET APPLY -------------------------------
+// A preset dropped on an object from the presets panel runs exactly this code.
+// It PINS the preset's bundle into the project; the bundle's tile is the
+// picture the app ships for that preset, stored when it was seeded, so this
+// step asserts a tile without waiting for any render.
 var cube = scene.addPrimitive("Cube");
 assert(cube && cube.length > 0, "scene.addPrimitive(Cube) -> " + cube);
 var presetName = materials.presets()[0].name;
 assert(material.apply(cube, presetName) === true,
        "material.apply(cube, '" + presetName + "') — the presets panel's gesture");
-
-// The queue renders one request per 16 ms tick, so step the editor until the
-// project's new Material row carries a picture. THAT render is what created the
-// long-lived renderer.
 var presetGuid = "";
-var spun = 0;
-while (spun < 400 && presetGuid === "") {
-    editor.frame(1);
-    // PROJECT scope: a preset apply registers the material as a row of the OPEN
-    // PROJECT, which is not in the library listing.
-    var mats = assets.list({ scope: "project", type: "material" });
-    for (var m = 0; m < mats.length; m++)
-        if (!assets.thumbnail(mats[m].guid).empty) { presetGuid = mats[m].guid; break; }
-    ++spun;
-}
-assert(presetGuid !== "",
-       "THE QUEUE RENDERED THE PRESET'S THUMBNAIL (" + spun + " frames) — the session now holds "
-       + "the one long-lived renderer, which is the state the owner's imports met");
+var pinnedMats = assets.list({ scope: "project", type: "material" });
+for (var m = 0; m < pinnedMats.length; m++)
+    if (pinnedMats[m].name === presetName) presetGuid = pinnedMats[m].guid;
+assert(presetGuid !== "", "the apply pinned the preset's bundle into the project");
+assert(assets.thumbnail(presetGuid).empty === false,
+       "…and the seeded bundle carries the tile the app ships for it (no render was needed)");
 
-// A shader graph too, so the verb path has rendered a material as well.
+// ---- 1b. THE PRECONDITION: the shared renderer, alive and holding its view -
+// The first borrow creates the process's one renderer (THUMBS-1). Everything
+// after this line runs in the state the owner's imports met.
+var queueGuid = materials.create("Thumbs Queue", { graph: true });
+assert(queueGuid.length > 10, "materials.create -> " + queueGuid);
+assert(assets.thumbnail(queueGuid).empty === true, "a fresh graph material starts with no tile");
+var firstBorrow = assets.refreshThumbnail(queueGuid);
+assert(firstBorrow.ok === true, "the first borrow renders: " + JSON.stringify(firstBorrow));
+assert(assets.thumbnail(queueGuid).empty === false,
+       "…and stores a picture — the session now holds the one shared renderer");
+editor.frame(1);
+
+// A second graph for the verb path, which must render with that renderer alive.
 var shaderGuid = materials.create("Thumbs First", { graph: true });
 assert(shaderGuid.length > 10, "materials.create -> " + shaderGuid);
 var master = null;

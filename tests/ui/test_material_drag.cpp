@@ -184,21 +184,26 @@ int main(int argc, char **argv)
         // the SELECTION and the leaked preview made it look right anyway), and
         // the undo comes back to the TRUE original.
         //
-        // ONE STEP IS ONE STACK ENTRY, NOT ONE PUSH. This used to
-        // read `pushes`, which counts COMMANDS — and since phase 3 an apply
-        // of a bundle the project does not hold yet pushes TWO of them: the
-        // PIN (commands/pinassetcommand.h, so that undoing the apply takes
-        // back the membership it created — the materials audit's F5) and the
-        // material change, composed into ONE macro. What the user presses
-        // Ctrl+Z on is the macro; that is the claim this line is making, and
-        // `count` is the number that states it. `pushes` is asserted beside
-        // it, because "one step made of exactly the commands we expect" is
-        // stronger than either number alone.
+        // WHAT THESE TWO NUMBERS EACH PROVE, said plainly (fix round F12),
+        // because one of them is much weaker than it looks.
         //
-        // The number read is the stack's INDEX, not its count: each arm here
-        // UNDOES its drop before the next one, so the next push truncates the
-        // redo tail and `count` can come back unchanged. The index moves by
-        // exactly one entry per macro either way.
+        // `steps` is the stack's INDEX moving by one — and the drop runs
+        // inside an MCP run_script, which is itself one undo macro, so this
+        // run would leave exactly one entry whatever the apply pushed. It is
+        // not vacuous (a gesture that left two entries, or none, would fail
+        // it, and the undo two lines below is what spends that entry) but it
+        // is NOT the proof that the apply composes its own macro.
+        //
+        // `commands` is that proof: the pushes the apply makes, against the
+        // number it owes — one ChangeMaterialCommand and one
+        // MaterialUseEdgeCommand per mesh, plus the PIN when the project did
+        // not hold the bundle yet (commands/pinassetcommand.h: the materials
+        // audit's F5, so that undoing an apply takes back the membership and
+        // the use edge it created).
+        //
+        // The index is read rather than the count because each arm UNDOES its
+        // drop before the next one, so the next push truncates the redo tail
+        // and `count` can come back unchanged.
         runOk(mcp, QStringLiteral(
             "editor.select(cubeB);"
             "pushes0 = editor.undoState().pushes;"
@@ -211,7 +216,7 @@ int main(int argc, char **argv)
         const QString dropped = runValue(mcp, QStringLiteral(
             "JSON.stringify({steps: editor.undoState().index - index0,"
             " commands: editor.undoState().pushes - pushes0,"
-            " expected: held0 ? 1 : 2,"
+            " expected: held0 ? 2 : 3,"
             " a: fp(cubeA) !== plainA,"
             " b: fp(cubeB) === plainB})"));
         std::printf("info: %s drop -> %s\n", qUtf8Printable(what), qUtf8Printable(dropped));
@@ -221,8 +226,8 @@ int main(int argc, char **argv)
             const QJsonObject drop = QJsonDocument::fromJson(dropped.toUtf8()).object();
             CHECK(drop.value("commands").toInt() == drop.value("expected").toInt(),
                   qUtf8Printable(QStringLiteral(
-                      "%1: ...made of the commands it should be — the material, plus the PIN "
-                      "when the project did not hold the bundle yet (%2 of %3)")
+                      "%1: ...made of the commands it should be — the material and the use "
+                      "edge, plus the PIN when the project did not hold the bundle (%2 of %3)")
                           .arg(what).arg(drop.value("commands").toInt())
                           .arg(drop.value("expected").toInt())));
         }

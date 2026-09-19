@@ -79,6 +79,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/materialdefaults.h"
 #include "services/materialbundle.h"
 #include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
 #include "services/scenenodehelper.h"
@@ -1264,14 +1265,38 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
     // lets the mirror charge the commit — and only the commit — a GI re-solve.
     if (preview) preview->end();
 
+    // NOTHING IS IMPORTED FOR AN APPLY THAT CANNOT HAPPEN (fix round F6). The
+    // mesh-empty test and the edit gate live inside the two applies below, so
+    // seeding first meant that double-clicking a preset with a LIGHT selected
+    // — the tray passes the selection with no type check — imported three
+    // PNGs, minted a row and paid for it, and then returned false. Both
+    // questions are asked here, once, before anything is written down.
+    {
+        QList<iris::MeshNodePtr> meshes;
+        collectMeshNodes(target, meshes);
+        if (meshes.isEmpty()) return false;
+    }
+    if (editgate::refuse()) return false;
+
     // A PRESET IS A LIBRARY BUNDLE (phase 3). Seeded the first time anybody
     // uses it — with its reserved guid, its maps as member textures and its
     // definition in the store — and then applied like any other material
     // asset: a PIN and a document edit. That is what makes three applies of
     // "Gold PBR" produce ZERO new rows where they used to mint one each, and
     // what lets an undo take the membership back with the material.
+    //
+    // THE BYTES ARE USUALLY ALREADY IN THE STORE when this runs: the seeder
+    // (services/materialpresetseeder.h) puts every preset's maps there on a
+    // worker at launch, so the import here takes `AssetCas::storeObject`'s
+    // dedup branch and writes no bytes and no fsync. A drop that beats the
+    // seeder still works — it just pays for its own maps, as it did before
+    // the seeder existed.
     QString materialGuid = presetOrGuid;
     if (MaterialPresetAssets::isPreset(presetOrGuid)) {
+        // ONE IMPORTER AT A TIME (see MaterialPresetSeeder::finishNow): a
+        // drop that beats the launch seed takes the job over rather than
+        // racing it into two Texture rows for one picture.
+        MaterialPresetSeeder::instance().finishNow();
         QString error;
         materialGuid = MaterialPresetAssets::ensureSeeded(presetOrGuid, db, &error);
         if (materialGuid.isEmpty()) {
@@ -1387,24 +1412,20 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
         if (!mat) continue;
         undo->push(new ChangeMaterialCommand(meshNode, mat));
     }
-    undo->stack()->endMacro();
-
-    // The USE edges. Project bookkeeping, not a document edit — and with no
+    // THE USE EDGES, INSIDE THE MACRO AND AS COMMANDS (fix round F7). "This
+    // mesh uses that material" was written after `endMacro` and nothing took
+    // it back, so an undone apply left the catalog asserting a use that no
+    // longer existed — the same leftover as the pin, one level down. With no
     // project open there is nobody to record it for (a preset applied in the
     // startup placeholder session reaches here now that presets are ordinary
     // material assets; it renders, and nothing is written down).
     if (project && !project->getProjectGuid().isEmpty()) {
-        for (const auto &meshNode : meshes) {
-            db->deleteDependency(meshNode->getGUID(), assetGuid);
-            db->createDependency(
-                static_cast<int>(ModelTypes::Object),
-                static_cast<int>(ModelTypes::Material),
-                meshNode->getGUID(),
-                assetGuid,
-                project->getProjectGuid()
-            );
-        }
+        for (const auto &meshNode : meshes)
+            undo->push(new MaterialUseEdgeCommand(db, project->getProjectGuid(),
+                                                  meshNode->getGUID(), assetGuid));
     }
+
+    undo->stack()->endMacro();
 
     emit materialApplied(matObject["materialType"].toString() == "pbr"
                              ? QStringLiteral("PBR")

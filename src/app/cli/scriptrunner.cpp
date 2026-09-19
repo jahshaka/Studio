@@ -21,6 +21,7 @@ For more information see the LICENSE file
 
 #include "bridge/enginehost.h"
 #include "services/framemonitor.h"
+#include "services/materialpresetseeder.h"
 #include "scripting/scriptengine.h"
 #include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
@@ -55,6 +56,12 @@ int finalizeAppExit(int rc)
     // capture worth keeping. Stopping it is idempotent and a no-op when nothing
     // is running.
     FrameMonitor::instance().stop();
+
+    // THE PRESET SEED IS A WARM-UP, NEVER A REASON TO WAIT (its worker checks
+    // the flag between files). Without this the pool's 5 s join below could
+    // be spent finishing a seed nobody is waiting for — and a forced exit is
+    // how a session log loses its close bracket.
+    MaterialPresetSeeder::instance().requestAbort();
 
     // The engine borrows Qt's X display: release it before QApplication goes away.
     EngineHost::instance().shutdown();

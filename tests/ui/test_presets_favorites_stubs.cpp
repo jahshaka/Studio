@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/materialpreset.h"
 #include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/sceneeditservice.h"
 #include "shell/mainwindow.h"
 
@@ -49,6 +50,16 @@ bool SceneEditService::applyMaterial(const QString &, iris::SceneNodePtr)
 // panel-layout suite. What Customise DOES is asserted where it is
 // implemented: materials.bundle and scripting.e2e.preset_apply.
 void SceneEditService::requestAssetViewRefresh() {}
+
+// The tray's Customise stands the launch seeder down before it mints (one
+// importer at a time). This suite never opens a context menu and never starts
+// a seeder, so the singleton is a stub here like the service beside it.
+MaterialPresetSeeder &MaterialPresetSeeder::instance()
+{
+    static MaterialPresetSeeder *seeder = new MaterialPresetSeeder();
+    return *seeder;
+}
+void MaterialPresetSeeder::finishNow() {}
 
 namespace MaterialPresetAssets {
 QString guidFor(const QString &) { return QString(); }

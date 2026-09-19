@@ -62,4 +62,35 @@ private:
     bool      mPinnedByUs = false;
 };
 
+// THE OTHER HALF OF AN APPLY'S CATALOG WORK, and it is here for the same
+// reason: it has to be undoable.
+//
+// "This mesh uses that material" is a dependency row the apply writes so the
+// tray, the closure walkers and "used by N" can see it. It was written after
+// the macro closed and nothing took it back, so an undone apply left the
+// catalog saying a node wears a material it does not — which is the same
+// class of leftover as the pin, one level down.
+//
+// The redo deletes any existing edge for this (node, material) pair and
+// writes one; the undo deletes the edge it wrote and stops there. It does not
+// restore an edge to a PREVIOUS material, and that is correct rather than
+// lazy: the apply never removed one (an edge to another material survives an
+// apply today), so "before this command" is exactly "without this edge".
+class MaterialUseEdgeCommand : public QUndoCommand
+{
+public:
+    MaterialUseEdgeCommand(Database *db, const QString &projectGuid,
+                           const QString &nodeGuid, const QString &materialGuid);
+
+    void undo() override;
+    void redo() override;
+
+private:
+    Database *mDb = nullptr;
+    QString   mProjectGuid;
+    QString   mNodeGuid;
+    QString   mMaterialGuid;
+    bool      mWrote = false;
+};
+
 #endif // PINASSETCOMMAND_H

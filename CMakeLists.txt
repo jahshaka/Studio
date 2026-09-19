@@ -289,6 +289,7 @@ set(SRCS
     src/services/imagematerial.cpp
     src/services/materialbundle.cpp
     src/services/materialpresetassets.cpp
+    src/services/materialpresetseeder.cpp
     src/services/materialmembers.cpp
     src/services/assetshare.cpp
     src/services/projectarchiver.cpp

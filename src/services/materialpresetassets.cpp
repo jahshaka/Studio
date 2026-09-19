@@ -21,10 +21,12 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/materialpreset.h"
 #include "data/project.h"
+#include "services/assettags.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "io/builtinmaterials.h"
 #include "io/materialpresets.h"
 #include "io/scenewriter.h"
+#include "services/assetcas.h"
 #include "services/materialbundle.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
@@ -71,6 +73,21 @@ QVector<QPair<QString, QString>> mapFiles(const MaterialPreset &preset)
 
 } // namespace
 
+Prepared prepare(const QStringList &presetNames)
+{
+    Prepared out;
+    for (const MaterialPreset &preset : MaterialPresets::all()) {
+        if (!presetNames.isEmpty() && !presetNames.contains(preset.name)) continue;
+        out.thumbnails.insert(preset.name, thumbnailFor(preset));
+        for (const auto &slot : mapFiles(preset)) {
+            if (slot.second.isEmpty() || out.mapOids.contains(slot.second)) continue;
+            const QString oid = AssetCas::hashFile(slot.second);
+            if (!oid.isEmpty()) out.mapOids.insert(slot.second, oid);
+        }
+    }
+    return out;
+}
+
 QString guidFor(const QString &presetOrGuid)
 {
     if (presetOrGuid.isEmpty()) return QString();
@@ -92,7 +109,19 @@ bool isPreset(const QString &presetOrGuid)
     return !guidFor(presetOrGuid).isEmpty();
 }
 
-QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *errorOut)
+bool isSeeded(const QString &presetOrGuid, Database *db)
+{
+    if (!db) return false;
+    const QString guid = guidFor(presetOrGuid);
+    if (guid.isEmpty()) return false;
+    const AssetRecord row = db->fetchAsset(guid);
+    return !row.guid.isEmpty()
+           && row.type == static_cast<int>(ModelTypes::Material)
+           && !MaterialBundle::read(db, guid).isEmpty();
+}
+
+QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *errorOut,
+                          const Prepared *prepared)
 {
     const auto fail = [errorOut](const QString &why) {
         if (errorOut) *errorOut = why;
@@ -132,8 +161,12 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
         // Texture identified by its BYTES, so the same picture used by two
         // presets — and by a user who imports it themselves — is one object
         // and one row.
+        // The content id from the worker when there is one: it is the same
+        // sha256 this call would compute, and computing it here is 19-96 ms
+        // of the thread that draws (see `Prepared`).
+        const QString knownOid = prepared ? prepared->mapOids.value(slot.second) : QString();
         const ShippedAssets::Pinned pinned =
-            ShippedAssets::importTexture(slot.second, QString(), db, nullptr);
+            ShippedAssets::importTexture(slot.second, QString(), db, nullptr, knownOid);
         if (!pinned.error.isEmpty() || pinned.guid.isEmpty())
             return fail(QStringLiteral("'%1' could not import %2: %3")
                             .arg(preset.name, QFileInfo(slot.second).fileName(),
@@ -144,7 +177,8 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
     return definition;
 }
 
-QString ensureSeeded(const QString &presetOrGuid, Database *db, QString *errorOut)
+QString ensureSeeded(const QString &presetOrGuid, Database *db, QString *errorOut,
+                     const Prepared *prepared)
 {
     const auto fail = [errorOut](const QString &why) {
         if (errorOut) *errorOut = why;
@@ -156,29 +190,40 @@ QString ensureSeeded(const QString &presetOrGuid, Database *db, QString *errorOu
     if (guid.isEmpty())
         return fail(QStringLiteral("'%1' names no shipped preset").arg(presetOrGuid));
 
-    // IDEMPOTENT, and that is the whole seeding policy: a preset is immutable,
-    // so a row that exists is the answer. (A row whose definition failed to
-    // publish is repaired by the write below, because `write` is what decides
-    // whether the row has one.)
-    const AssetRecord existing = db->fetchAsset(guid);
-    if (!existing.guid.isEmpty()
-        && existing.type == static_cast<int>(ModelTypes::Material)
-        && !MaterialBundle::read(db, guid).isEmpty())
-        return guid;
-
     bool found = false;
     const MaterialPreset preset = MaterialPresets::find(presetOrGuid, &found);
     if (!found) return fail(QStringLiteral("'%1' names no shipped preset").arg(presetOrGuid));
 
+    const AssetRecord existing = db->fetchAsset(guid);
+
+    // A PRESET'S NAME IS PART OF ITS IDENTITY, so a row that drifted from it
+    // is REPAIRED here rather than left. Every drawer labels a preset from
+    // the shipped list (`MaterialPresets::all`), so a renamed row meant one
+    // guid with two names, for ever: "Fred" in the Assets page and "Gold PBR"
+    // in the Presets drawer. `assettags::write` refuses the rename at source
+    // now; this heals a library that already took one.
+    if (!existing.guid.isEmpty() && existing.name != preset.name)
+        assettags::rename(db, guid, preset.name);
+
+    // IDEMPOTENT, and that is the whole seeding policy: a preset is immutable,
+    // so a row that exists with a definition is the answer. (A row whose
+    // definition failed to publish — or was torn by a power cut, which the
+    // preset's link-staged publish deliberately allows — falls through and is
+    // re-derived by the write below.)
+    if (isSeeded(guid, db)) return guid;
+
     QString error;
-    const QJsonObject definition = definitionFor(preset, db, &error);
+    const QJsonObject definition = definitionFor(preset, db, &error, prepared);
     if (definition.isEmpty()) return fail(error);
 
+    const QByteArray tile = prepared && prepared->thumbnails.contains(preset.name)
+                                ? prepared->thumbnails.value(preset.name)
+                                : thumbnailFor(preset);
     if (existing.guid.isEmpty())
         db->createAssetEntry(guid, preset.name, static_cast<int>(ModelTypes::Material),
                              QString(),          // a library row: no parent folder
                              QString(),          // a library row: no project guid
-                             QString(), QString(), thumbnailFor(preset),
+                             QString(), QString(), tile,
                              QByteArray(), QByteArray(), QByteArray(),
                              AssetViewFilter::AssetsView);
 
@@ -209,21 +254,31 @@ int seedAll(Database *db, QString *errorOut)
     return seeded;
 }
 
-QString customiseName(Database *db, const QString &presetName)
+QString customiseName(Database *db, const QString &wanted)
 {
-    // THE SUFFIX RULE, in ONE place (R18: "Name can be presetname-1 -2 -3 if
-    // there are others"). Bumped against the LIBRARY's material names — a
-    // drawer is a view of the library, and with a project open it does not
-    // even list every material, so deciding against a drawer would hand out a
-    // name that is already taken.
+    // THE SUFFIX RULE, in ONE place and for EVERY caller (R18: "Name can be
+    // presetname-1 -2 -3 if there are others"; fix round F10: a name the
+    // caller supplied is bumped too, or two rows end up called "Gold PBR").
+    // The rule is "the name you asked for, or the first free `<name>-N`".
+    //
+    // Bumped against the LIBRARY's material names — a drawer is a view of the
+    // library, and with a project open it does not even list every material,
+    // so deciding against a drawer would hand out a name already taken —
+    // PLUS every shipped preset's name, whether or not it has been seeded
+    // yet. That last part is what makes the default case read the way R18
+    // asks: "Gold PBR" is a preset's name, so it is taken, so a Customise of
+    // Gold PBR is "Gold PBR-1" on the first press and "-2" on the next,
+    // whether or not the preset's own row exists.
     QSet<QString> taken;
     if (db)
         for (const auto &row : db->fetchAssetsForAssetView())
             if (row.type == static_cast<int>(ModelTypes::Material)) taken.insert(row.name);
+    for (const MaterialPreset &preset : MaterialPresets::all()) taken.insert(preset.name);
 
-    int n = 1;
-    QString chosen = QStringLiteral("%1-%2").arg(presetName).arg(n);
-    while (taken.contains(chosen)) chosen = QStringLiteral("%1-%2").arg(presetName).arg(++n);
+    const QString base = wanted.trimmed();
+    if (base.isEmpty()) return base;
+    QString chosen = base;
+    for (int n = 1; taken.contains(chosen); ++n) chosen = QStringLiteral("%1-%2").arg(base).arg(n);
     return chosen;
 }
 
@@ -244,8 +299,11 @@ QString customise(const QString &presetOrGuid, const QString &name,
     QJsonObject definition = definitionFor(preset, db, &error);
     if (definition.isEmpty()) return fail(error);
 
-    const QString chosen = name.trimmed().isEmpty() ? customiseName(db, preset.name)
-                                                    : name.trimmed();
+    // ONE NAMER FOR BOTH DOORS (F10): a caller-supplied name is bumped by the
+    // same rule as the default, so two Customise calls with {name: "Fred"}
+    // give "Fred" and "Fred-1" rather than two rows called "Fred".
+    const QString chosen = customiseName(db, name.trimmed().isEmpty() ? preset.name
+                                                                      : name.trimmed());
     definition[QStringLiteral("name")] = chosen;
 
     // AN ORDINARY BUNDLE, with a guid nothing calls reserved: that is what

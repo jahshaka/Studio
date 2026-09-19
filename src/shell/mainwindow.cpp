@@ -204,6 +204,7 @@ static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/projectarchiver.h"
 #include "services/sceneextents.h"
 #include "ui/dialogs/progressdialog.h"
+#include "services/materialpresetseeder.h"
 #include "services/materialpreviewservice.h"
 #include "services/sceneeditservice.h"
 #include "services/clipboardservice.h"
@@ -3030,6 +3031,16 @@ void MainWindow::setupDockWidgets()
     assetMaterialPanel->setMainWindow(this);
     assetMaterialPanel->setServices(services);
     assetMaterialPanel->setDatabaseHandle(db);
+
+    // THE SHIPPED PRESETS, SEEDED AT FIRST RUN (MATERIAL_BUNDLE_SPEC §8 phase
+    // 3). Their maps' bytes go into the store on a WORKER — a preset's maps
+    // are copied and fsynced when the store is on a different filesystem from
+    // the app tree, which is the owner's box, and an fsync belongs nowhere
+    // near the thread that draws (FSYNC-2) — and the rows follow one preset
+    // per event-loop turn, with no device wait left in them. A library that
+    // already has all eighteen starts no thread at all. Nothing waits for it:
+    // an apply that beats the seeder seeds its own preset, as it always did.
+    MaterialPresetSeeder::instance().start(db);
 
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");

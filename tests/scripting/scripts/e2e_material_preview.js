@@ -183,24 +183,25 @@ assert(material.endPreview() === false, "...and no preview was left running");
 // ONE apply path, as exactly one undo step, and the undo takes the node back to
 // its TRUE original (not to a borrowed material).
 //
-// WHAT "ONE STEP" IS MADE OF, since MATERIAL_BUNDLE_SPEC phase 3: applying a
-// bundle the project does not hold yet pushes TWO commands into the one macro
-// — the PIN (so that undoing the apply takes back the membership it created,
-// the materials audit's F5) and the material change — and applying one it
-// already holds pushes only the material change. That the MACRO is one undo
-// step is ui.material_drag's assertion, which drops outside a script macro and
-// can read the stack's count; from inside a run the honest number is `pushes`,
-// and the honest claim is that it is exactly the commands the apply owes.
+// WHAT "ONE STEP" IS MADE OF, since MATERIAL_BUNDLE_SPEC phase 3. An apply
+// pushes, into its ONE macro: the material change and the node→material USE
+// EDGE for each mesh, plus the project's PIN when this apply is what created
+// it (commands/pinassetcommand.h — the materials audit's F5: undoing an apply
+// takes back the membership and the edge it made, not just the picture). One
+// mesh here, so three commands the first time and two afterwards. That the
+// macro is ONE undo step is ui.material_drag's assertion; from inside a run
+// the honest number is `pushes`, and the honest claim is that it is exactly
+// the commands the apply owes.
 var heldBefore = assets.list({ scope: "project" }).filter(function (a) {
     return a.guid === presetGuid;
 }).length;
 var undoBefore = editor.undoState().pushes;
 assert(material.preview(cubeA, presetGuid) === true, "hover before the drop");
 assert(material.apply(cubeA, presetGuid) === true, "the drop applies");
-var expected = heldBefore ? 1 : 2;
+var expected = heldBefore ? 2 : 3;
 assert(editor.undoState().pushes === undoBefore + expected,
-       "the apply pushes exactly the commands it owes — the material"
-       + (expected === 2 ? " and the PIN of a bundle the project did not hold" : "")
+       "the apply pushes exactly the commands it owes — the material, the use edge"
+       + (expected === 3 ? " and the PIN of a bundle the project did not hold" : "")
        + " (pushes " + undoBefore + " -> " + editor.undoState().pushes + ")");
 assert(assets.list({ scope: "project" }).filter(function (a) {
            return a.guid === presetGuid;

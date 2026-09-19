@@ -59,6 +59,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 
+#include "data/constants.h"
+
 class Database;
 class Project;
 
@@ -145,7 +147,17 @@ WriteResult write(Database *db, Project *project, const QString &guid,
 /// model (§12 Q2): "defaults are read-only SAMPLES… to edit you CREATE a
 /// material or CLONE a default" — `MaterialPresetAssets::customise` is the
 /// clone, and it makes an ordinary bundle with an ordinary guid.
-QString shippedPresetName(const QString &guid);
+///
+/// INLINE, because the read-only law has more than one enforcement point and
+/// they must all read the same table: the definition writer below, the NAME
+/// (services/assettags.h — a rename would leave one guid with two names for
+/// ever, since every drawer labels a preset from the shipped list), and the
+/// module's "this does not open" (effectspage).
+inline QString shippedPresetName(const QString &guid)
+{
+    if (guid.isEmpty()) return QString();
+    return Constants::Reserved::DefaultMaterials.value(guid);
+}
 
 /// THE SEEDER'S DOOR, and the only writer allowed on a reserved preset guid
 /// (`MaterialPresetAssets::ensureSeeded` is its one caller). It publishes to

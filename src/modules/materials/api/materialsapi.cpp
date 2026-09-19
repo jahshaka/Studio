@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "services/shippedassets.h"
 #include "services/materialbundle.h"
 #include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/materialmembers.h"
 #include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
@@ -269,6 +270,15 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "Materials page; applies via the drawer/graph.toMaterial). "
           "NOT undoable.",
           Needs::Document },
+        { "seedPresets", "materials.seedPresets() -> int",
+          "Seeds every shipped preset into the library as its read-only bundle — the FIRST-RUN seed, "
+          "on demand — and answers how many exist afterwards (18). Idempotent and normally "
+          "unnecessary: the app runs this at launch, with the maps' bytes put in the store on a "
+          "worker thread so the row pass has no device wait in it (services/materialpresetseeder.h). "
+          "Call it when you need the rows to be there NOW — a script that counts material rows, or a "
+          "library whose preset rows were removed — and it will do any work the seeder has not "
+          "finished, on the calling thread.",
+          Needs::Document },
         { "createFromPreset", "materials.createFromPreset(presetOrGuid, {name}) -> materialGuid",
           "Customises a SHIPPED PRESET (R18): an editable copy of it as an ordinary library material bundle, "
           "because a preset itself is read-only — the definition writer refuses one by name, not just the UI. "
@@ -306,6 +316,19 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     return materialGuid;
 }
 
+int MaterialsApi::seedPresets()
+{
+    if (!host.db) { fail("materials: not available in this session"); return 0; }
+    // Take the job over from the launch seeder rather than racing it (one
+    // importer at a time — MaterialPresetSeeder::finishNow).
+    MaterialPresetSeeder::instance().finishNow();
+    QString error;
+    const int seeded = MaterialPresetAssets::seedAll(host.db, &error);
+    if (!error.isEmpty())
+        fail(QStringLiteral("materials.seedPresets: %1").arg(error));
+    return seeded;
+}
+
 QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVariantMap &options)
 {
     if (!host.db) { fail("materials: not available in this session"); return QString(); }
@@ -314,6 +337,7 @@ QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVaria
                                               options, knownOptions);
     if (!refusal.isEmpty()) { fail(refusal); return QString(); }
 
+    MaterialPresetSeeder::instance().finishNow();   // one importer at a time
     QString error;
     const QString copy = MaterialPresetAssets::customise(
         presetOrGuid, options.value(QStringLiteral("name")).toString(),
@@ -744,12 +768,16 @@ QVector<VerbInfo> MaterialApi::verbs() const
 {
     return {
         { "apply", "material.apply(nodeId, presetOrGuid) -> bool",
-          "Applies a built-in preset (by name or reserved guid), a saved project material asset "
-          "(by guid) or a Materials-module effect graph (a Shader row's guid) to a node. "
-          "A container node (an imported model's root) applies to every mesh under it, each with its own material instance. "
-          "A preset apply registers ONE project material row per preset and reuses it on every "
-          "later apply of the same preset. Undoable, as one step. Ends any live "
-          "material.preview first, so the undo step captures the node's true original material.",
+          "Applies a MATERIAL BUNDLE — a shipped preset (by name or by its reserved guid) or any "
+          "library/project material asset (by guid) — to a node. A container node (an imported "
+          "model's root) applies to every mesh under it, each with its own material instance. "
+          "AN APPLY MINTS NOTHING: a preset is a read-only library bundle, seeded once with its "
+          "reserved guid the first time anything uses it, and applying it PINS that bundle into "
+          "the open project and dresses the meshes — three applies of one preset add zero rows. "
+          "Undoable as ONE step, and the step carries everything the apply did: the material on "
+          "each mesh, the project's pin when this apply created it, and the node→material use "
+          "edges. Ends any live material.preview first, so the undo step captures the node's "
+          "true original material.",
           Needs::Document },
         { "preview", "material.preview(nodeId, presetOrGuid) -> bool",
           "Shows a material on a node WITHOUT applying it — the editor's live hover preview, which "
