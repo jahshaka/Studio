@@ -9,6 +9,7 @@
 // PlayerView forwards it. Syncs on EngineRenderDriver::beforeFrame and renders
 // only while the page is shown (View::setEnabled). Never includes Ogre or GL.
 #include <memory>
+#include <QPointer>
 #include "player/iplayerhost.h"
 #include "viewport/engineviewwidget.h"
 #include "irisgl/irisglfwd.h"
@@ -112,7 +113,10 @@ private:
     iris::CameraNodePtr editorViewCamera() const;
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
-    EngineRenderDriver *mDriver = nullptr;
+    /// A QPointer: the render driver dies before the widget tree at quit
+    /// (EngineHost::shutdown step 4, widgets step 5) and this is read during
+    /// teardown — see enginesceneviewport.h for the abort it caused.
+    QPointer<EngineRenderDriver> mDriver;
     std::unique_ptr<EnginePlayerScene> mScene;
     IEditorViewport *mEditorViewport = nullptr;
     iris::ScenePtr mDocument;

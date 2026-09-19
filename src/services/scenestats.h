@@ -56,8 +56,13 @@ For more information see the LICENSE file
 // `Mesh::numFaces`, the authored level-0 geometry, and the level actually
 // drawn shows up in `submittedTriangles` where a moving number belongs.
 //
-// COST: one pointer walk of the scene graph, no allocation, no engine call.
-// Read at ~5 Hz by the F3 readout and on demand by app.renderStats().
+// COST: one walk of the scene graph and no engine call. It is not free — the
+// document's `children()` builds a QList of shared pointers per node, because
+// the hierarchy lives in the engine's tree and the document holds no copy of
+// it — so it is read at ~5 Hz by the F3 readout (which is OFF by default) and
+// on demand by app.renderStats(), never per frame. If a caller ever wants it
+// per frame, the answer is to cache it against the mirror's dirty set, not to
+// walk faster.
 
 #include <QtGlobal>
 

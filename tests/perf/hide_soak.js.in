@@ -75,7 +75,7 @@ function reading(tag) {
     var ms = editor.mirrorStats();
     var r = {
         tag: tag,
-        draws: rs.draws, batches: rs.batches, triangles: rs.triangles,
+        draws: rs.draws, batches: rs.batches, triangles: rs.submittedTriangles,
         instances: rs.instances,
         rebuilds: gi.rebuilds, refreshes: ms.giRefreshes, pushes: ms.giPushes,
         nodes: ms.nodesVisited, evicted: ms.evictedNodes,
