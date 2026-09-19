@@ -744,7 +744,13 @@ void MainWindow::toggleVrMode()
     // took the user to the Player, and the preview existed only as a verb (the
     // owner, at the first controller smoke).
     if (currentSpace == WindowSpaces::EDITOR && vrModule) {
-        vrModule->toggleEditorPreview();
+        const bool was = vrModule->isEditorPreviewActive();
+        const bool on = vrModule->toggleEditorPreview();
+        // A REFUSED BEGIN IS SAID ON SCREEN (the owner's #51 smoke: "nothing
+        // happens when I click it" — the runtime had refused the session six
+        // times and the only witness was the log). The verb's own reason is in
+        // the host's error slot, where `app.lastError()` reads it.
+        if (!was && !on) showVrRefusal(scriptHost ? scriptHost->lastError : QString());
         refreshVrUi();
         return;
     }
@@ -762,10 +768,36 @@ void MainWindow::toggleVrMode()
         refreshVrUi();
         return;
     }
-    if (!playerService->toggleVr() && !playerService->lastError().isEmpty())
+    const bool wasVr = playerService->isVrActive();
+    if (!playerService->toggleVr() && !wasVr) {
         qWarning("Jahshaka VR: the toggle did not start - %s",
                  qPrintable(playerService->lastError()));
+        showVrRefusal(playerService->lastError());
+    }
     refreshVrUi();
+}
+
+void MainWindow::showVrRefusal(const QString &reason)
+{
+    // THE SENTENCE A PERSON CAN ACT ON FIRST, the runtime's own words second.
+    // One case deserves its own sentence because nothing in the reason says
+    // what to DO: the OpenXR runtime created this process's Vulkan device at
+    // boot, so a runtime connection that died afterwards — WiVRn starts a fresh
+    // streaming process every time the headset reconnects, and the one this
+    // app connected to is gone — cannot be re-made in place. Every
+    // xrCreateSession then fails XR_ERROR_RUNTIME_FAILURE for the life of the
+    // process (measured, the owner's #51 smoke).
+    const bool connectionDied = reason.contains(QLatin1String("XR_ERROR_RUNTIME_FAILURE"))
+                             || reason.contains(QLatin1String("XR_ERROR_INSTANCE_LOST"))
+                             || reason.contains(QLatin1String("XR_ERROR_RUNTIME_UNAVAILABLE"));
+    QString text = connectionDied
+        ? tr("The headset's connection changed after Jahshaka started. Put the headset on, "
+             "check it is connected, then restart Jahshaka.")
+        : tr("The headset did not start.");
+    if (!reason.isEmpty()) text += QStringLiteral("\n") + reason;
+    if (!viewErrorToast) viewErrorToast = new Toast(this);
+    viewErrorToast->setAnchor(Toast::Anchor::WindowCentre);
+    viewErrorToast->showToast(tr("VR did not start"), text);
 }
 
 void MainWindow::refreshVrUi()
