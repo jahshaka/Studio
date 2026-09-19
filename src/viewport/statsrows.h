@@ -68,8 +68,16 @@ struct Input
 };
 
 /// A count with thousands separators, in the C locale so the rows read the
-/// same on every machine and a suite can assert them.
-inline QString grouped(quint64 n) { return QLocale::c().toString(qulonglong(n)); }
+/// same on every machine and a suite can assert them. The C locale OMITS the
+/// group separator by default (QLocale::OmitGroupSeparator is part of it), and
+/// a bare "2178" is the reading this row exists to make easy — so the option is
+/// cleared rather than the locale changed.
+inline QString grouped(quint64 n)
+{
+    QLocale loc = QLocale::c();
+    loc.setNumberOptions(loc.numberOptions() & ~QLocale::OmitGroupSeparator);
+    return loc.toString(qulonglong(n));
+}
 
 /// The rows, top to bottom. Pure: same numbers in, same strings out.
 inline QStringList compose(const Input &in)
