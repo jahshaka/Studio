@@ -1599,19 +1599,18 @@ QVariantMap GraphApi::bake(const QVariantMap &options)
     QVariantMap out;
     auto graph = graphOrFail(QStringLiteral("graph.bake"));
     if (!graph) return out;
-    if (!requireProject()) return out; // baked maps land in the project folder
-
     QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
     if (guid.isEmpty()) guid = QStringLiteral("scratch");
 
-    const QString projectFolder = host.project->getProjectFolder();
-    MaterialHelper::setProjectRoot(projectFolder);
-
+    // A DIAGNOSTIC BAKE, into the store's own disposable derived cache — never
+    // into a project folder (MATERIAL_BUNDLE_SPEC phase 1: nothing of a
+    // material lives outside the store any more). It needs no project, which
+    // is the point: a library material bakes and previews with none open.
     materials::GraphBaker::Options opts;
     opts.resolution = options.value(QStringLiteral("resolution"), 1024).toInt();
     opts.time = options.value(QStringLiteral("time"), 0.0).toDouble();
-    opts.outputDir = projectFolder + QStringLiteral("/BakedMaps/") + guid;
-    opts.relativePrefix = QStringLiteral("BakedMaps/") + guid + QStringLiteral("/");
+    opts.outputDir = AssetStorePaths::derivedPath(QStringLiteral("materialbake/") + guid);
+    QDir().mkpath(opts.outputDir);
 
     const auto result = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
     out["values"] = result.eval.values.toVariantMap();
@@ -1634,28 +1633,27 @@ bool GraphApi::toMaterial(const QString &nodeId)
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh)
         return fail(QStringLiteral("graph.toMaterial: '%1' is not a mesh node").arg(nodeId));
 
-    // applying is a final-bake trigger (spec section 2): with a project open,
-    // UV-varying chains land as BakedMaps PNGs and ride the material's map keys
+    // APPLYING IS A FINAL-BAKE TRIGGER (spec section 2). The bake lands in the
+    // store's derived cache and the material is built from the PATHS it
+    // produced — this is the BUILD side of the bundle's lock 2, where paths
+    // are legitimate; only what is STORED must name guids.
     iris::PbrMaterialPtr material;
-    if (host.isProjectOpen() && host.project) {
-        MaterialHelper::setProjectRoot(host.project->getProjectFolder());
+    {
         QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
         if (guid.isEmpty()) guid = QStringLiteral("scratch");
 
         materials::GraphBaker::Options opts;
         opts.resolution = graph->settings.bakeResolution;
-        opts.outputDir = host.project->getProjectFolder() + QStringLiteral("/BakedMaps/") + guid;
-        opts.relativePrefix = QStringLiteral("BakedMaps/") + guid + QStringLiteral("/");
+        opts.outputDir = AssetStorePaths::derivedPath(QStringLiteral("materialbake/") + guid);
+        QDir().mkpath(opts.outputDir);
         // The emitter first, so the baker skips what the piece owns
-        // (HLMS_ADOPTION P5) — see MaterialHelper::serializeWithBake.
+        // (HLMS_ADOPTION P5).
         materials::PieceEmitter::Result emitted = materials::PieceEmitter::lower(
             graph, MaterialHelper::textureResolver());
         opts.emittedSockets = emitted.emittedSockets;
         const auto baked = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
         material = PbrGraphEvaluator::materialFromValues(baked.eval.values, MaterialHelper::textureResolver());
         MaterialHelper::applyEmittedPieces(graph, material);
-    } else {
-        material = MaterialHelper::createPbrMaterialFromShaderGraph(graph);
     }
     if (!material) return fail("graph.toMaterial: evaluation produced no material");
     // Stamp the SOURCE GRAPH's asset guid on the material. It costs nothing for
@@ -1813,9 +1811,20 @@ bool GraphApi::save()
     if (!graph->masterNode)
         return fail("graph.save: the graph has no master node (serialize would crash)");
 
-    // saving is a final-bake trigger (spec section 2)
-    if (host.isProjectOpen() && host.project)
-        MaterialHelper::setProjectRoot(host.project->getProjectFolder());
-    const QJsonObject definition = MaterialHelper::serializeWithBake(graph, mAssetGuid);
-    return host.db->updateAssetAsset(mAssetGuid, QJsonDocument(definition).toJson());
+    // SAVING IS THE DEFINITION WRITE (MATERIAL_BUNDLE_SPEC phase 1), and still
+    // a final-bake trigger: the maps land as MEMBER textures in the store, not
+    // as loose PNGs under the project folder, and the definition names them by
+    // guid. It works with NO project open, which the old route could not.
+    const auto build = materials::buildDefinition(graph, mAssetGuid, host.db, host.project);
+    if (!build.ok()) return fail(QStringLiteral("graph.save: %1").arg(build.error));
+    const bool projectOwns =
+        host.project && !host.project->getProjectGuid().isEmpty()
+        && host.db->isAssetPinnedBy(host.project->getProjectGuid(), mAssetGuid);
+    const auto written = MaterialBundle::write(
+        host.db, host.project, mAssetGuid, build.definition,
+        projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
+    if (!written.ok) return fail(QStringLiteral("graph.save: %1").arg(written.error));
+    if (host.services && host.services->sceneEdit)
+        host.services->sceneEdit->refreshMaterialUsers(mAssetGuid);
+    return true;
 }

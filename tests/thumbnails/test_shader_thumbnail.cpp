@@ -135,21 +135,34 @@ int main(int argc, char **argv)
               "an unknown guid converts to nothing");
     }
 
-    // ---- 3. baked maps need a project root (no half-textured renders) ----
+    // ---- 3. A BAKED-MAP GRAPH READS WITH NO PROJECT OPEN -----------------
+    //
+    // It used to be REFUSED there, and the refusal was right for what a bake
+    // then was: a loose PNG under `<projectFolder>/BakedMaps/<guid>/`, named
+    // in the definition by a project-RELATIVE path, which with no project
+    // reached the loader as a literal relative string and rendered a
+    // half-textured material. That also meant a graph material could never
+    // preview in the LIBRARY.
+    //
+    // MATERIAL_BUNDLE_SPEC phase 1 removed the cause: a baked map is a MEMBER
+    // TEXTURE row in the content-addressed store, named in the definition by
+    // its guid like every other map, so it resolves with or without a project
+    // and on any machine. The refusal is deleted with the thing it protected
+    // against, and the same definition now converts either way.
     {
         QJsonObject baked = definitionWithColour(0.1, 0.8, 0.1);
         QJsonObject pbrObj = baked["pbrMaterial"].toObject();
         QJsonObject values = pbrObj["values"].toObject();
-        values["baseColorMap"] = QStringLiteral("BakedMaps/abc/baseColor.png");
+        values["baseColorMap"] = QStringLiteral("tex-baked-member-guid");
         pbrObj["values"] = values;
-        QJsonObject maps; maps["baseColorMap"] = QStringLiteral("BakedMaps/abc/baseColor.png");
+        QJsonObject maps; maps["baseColorMap"] = QStringLiteral("tex-baked-member-guid");
         pbrObj["bakedMaps"] = maps;
         baked["pbrMaterial"] = pbrObj;
 
-        CHECK(MaterialReader::shaderDefinitionAsPbr(baked, QString()).isNull(),
-              "a baked-map graph with no open project is refused (no half-textured render)");
+        CHECK(!MaterialReader::shaderDefinitionAsPbr(baked, QString()).isNull(),
+              "a baked-map graph converts with NO project open (its maps are store objects)");
         CHECK(!MaterialReader::shaderDefinitionAsPbr(baked, QDir::currentPath()).isNull(),
-              "the same graph converts once a project root exists");
+              "and with one");
     }
 
     // ---- engine: the preview sphere ----

@@ -181,17 +181,15 @@ iris::MaterialPtr MaterialReader::shaderDefinitionAsPbr(const QJsonObject &defin
 	if (definition.isEmpty() || !definition.contains("pbrMaterial"))
 		return iris::MaterialPtr();
 
-	// BakedMaps/<guid>/*.png paths are project-relative: without a project root
-	// they would reach the loader as literal relative strings and render as an
-	// untextured half-material. Refuse instead (VISUAL_PARITY_SPEC §5.5 risk c).
-	const QJsonObject pbrObj = definition["pbrMaterial"].toObject();
-	const bool hasBakedMaps = !pbrObj["bakedMaps"].toObject().isEmpty();
-	if (hasBakedMaps && projectFolder.isEmpty()) return iris::MaterialPtr();
-
-	// MaterialHelper::projectRoot is process-wide state the resolver reads;
-	// only write it when we actually have a project, so a project-less preview
-	// never clears the open project's root.
-	if (!projectFolder.isEmpty()) MaterialHelper::setProjectRoot(projectFolder);
+	// (THE NO-PROJECT REFUSAL IS GONE — MATERIAL_BUNDLE_SPEC phase 1's Deletes
+	// column. A baked map used to be a project-relative "BakedMaps/<guid>/…"
+	// path, so with no project open it reached the loader as a literal
+	// relative string and this refused rather than render a half-material —
+	// which also meant a graph material could not preview in the LIBRARY. A
+	// baked map is a member TEXTURE in the store now: it resolves by guid,
+	// with or without a project, on any machine. `projectFolder` is unused
+	// here and kept only so the two callers need not change shape.)
+	Q_UNUSED(projectFolder);
 
 	auto pbr = MaterialHelper::createPbrMaterialFromDefinition(definition);
 	if (!pbr) return iris::MaterialPtr();

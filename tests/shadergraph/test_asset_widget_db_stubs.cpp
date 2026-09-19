@@ -35,6 +35,13 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &, const QString &
     return QVector<AssetRecord>();
 }
 
+// The project drawer lists the project's PINNED material bundles now
+// (MATERIAL_BUNDLE_SPEC phase 1, the four-drawer rule) — this suite is about
+// the handle the widget keeps, not the listing, so it answers empty.
+QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &)
+{
+    return QVector<AssetRecord>();
+}
 QStringList Database::fetchFolderNameByParent(const QString &) { return QStringList(); }
 QStringList Database::fetchAssetNameByParent(const QString &) { return QStringList(); }
 bool Database::createFolder(const QString &, const QString &, const QString &, const QString &,
@@ -76,4 +83,12 @@ QByteArray Database::fetchAssetData(const QString &) const { return QByteArray()
 QString materials::EffectsPage::genGUID()
 {
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
+}
+
+// A library tile dropped on the project drawer pins through ProjectAssets
+// (MATERIAL_BUNDLE_SPEC 5); this suite never drops one.
+#include "services/projectassets.h"
+ProjectAssets::Result ProjectAssets::addToProject(const QString &, Database *, Project *, AddKind)
+{
+    return ProjectAssets::Result();
 }

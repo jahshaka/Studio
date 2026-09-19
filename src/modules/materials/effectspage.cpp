@@ -121,8 +121,8 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 
 	// Moved nodes persist on their own (owner request): a debounced save
 	// after the last position change, so re-opening a graph restores the
-	// arrangement without an explicit save click. serializeWithBake is
-	// hash-cached, so an unchanged graph re-saves cheaply.
+	// arrangement without an explicit save click. The bake is hash-cached, so
+	// an unchanged graph re-saves cheaply.
 	// THE GRAPH'S AUTOSAVE. It began as a node-position debounce and is now the
 	// one hook every edit reaches (see graphInvalidated in createNewScene): a
 	// move, a connection, a deletion, a value. The name is kept because the
@@ -225,17 +225,12 @@ void EffectsPage::saveShader()
 		return;
 	}
 
-	QJsonDocument doc;
 	// SAVING IS THE DEFINITION WRITE (MATERIAL_BUNDLE_SPEC phase 1). It is
 	// still a final-bake trigger, but the maps land as MEMBER TEXTURE ROWS in
 	// the store instead of loose PNGs under `<projectFolder>/BakedMaps/`, and
 	// what is stored is the bundle definition — guids only — as the Material
 	// row's own file. `MaterialBundle::write` derives the membership edges
 	// from it and refuses any path that slipped through.
-	auto matObj = MaterialHelper::serializeWithBake(graph, currentShaderInformation.GUID);
-	doc.setObject(matObj);
-	QString data = doc.toJson();
-
 #if(EFFECT_BUILD_AS_LIB)
 	{
 		const auto build = materials::buildDefinition(graph, currentShaderInformation.GUID,
@@ -271,16 +266,19 @@ void EffectsPage::saveShader()
 	// request is served (the renderer re-reads it from the database).
 	requestShaderThumbnail(currentShaderInformation.GUID);
 #else
-
-	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-	if (!QDir(filePath).exists()) QDir().mkpath(filePath);
-	auto shaderFile = new QFile(filePath + obj["name"].toString());
-	if (shaderFile->open(QIODevice::ReadWrite)) {
-		shaderFile->write(doc.toJson());
-		shaderFile->close();
-	}
-	else {
-		qDebug() << "device not open";
+	// The STANDALONE build (no library): the graph goes to a file, unchanged.
+	{
+		auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
+		if (!QDir(filePath).exists()) QDir().mkpath(filePath);
+		const QJsonObject matObj = MaterialHelper::serialize(graph);
+		auto shaderFile = new QFile(filePath + matObj["name"].toString());
+		if (shaderFile->open(QIODevice::ReadWrite)) {
+			shaderFile->write(QJsonDocument(matObj).toJson());
+			shaderFile->close();
+		}
+		else {
+			qDebug() << "device not open";
+		}
 	}
 #endif
 
@@ -1489,7 +1487,7 @@ GraphNodeScene *EffectsPage::createNewScene()
 		// a graph you EDITED was kept only if you also happened to DRAG a node
 		// (or rename the material, or switch to another one, which saves on the
 		// way out): the work was lost on any other exit, silently. The same
-		// debounce carries it — `serializeWithBake` is hash-cached, so an edit
+		// debounce carries it — the bake is hash-cached, so an edit
 		// that changes nothing re-saves cheaply — and `restoringGraph` still
 		// guards the rebuild, so loading a graph writes nothing.
 		if (!restoringGraph && positionSaveTimer) positionSaveTimer->start();
