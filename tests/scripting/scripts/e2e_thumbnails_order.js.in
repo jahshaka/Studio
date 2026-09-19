@@ -227,19 +227,26 @@ assert(swept.failed.length !== undefined, "the sweep reports its failures as a l
 for (var f = 0; f < swept.failed.length; f++)
     console.log("   could not rebuild " + swept.failed[f].guid + ": " + swept.failed[f].reason);
 
-// THE FAILING ROW IS REPORTED, NOT SWALLOWED: the orphaned avatar has a
-// definition and no model, so it is a failure with its reason — not one of the
-// `skipped` rows (a builtin's Object row, which stores no definition at all).
-var named = swept.failed.filter(function (x) { return x.guid === orphanAvatar; });
+// THE FAILING ROW IS REPORTED, NOT SWALLOWED. The orphaned avatar still carries
+// the tile it inherited at create, so `missingOnly` never looks at it — a full
+// redraw does, and there it must appear as a FAILURE with its reason, not among
+// the `skipped` rows (a builtin's Object row, which stores no definition).
+var everything = assets.rebuildThumbnails({ missingOnly: false });
+console.log("   rebuildThumbnails(all) -> " + JSON.stringify(everything));
+var named = everything.failed.filter(function (x) { return x.guid === orphanAvatar; });
 assert(named.length === 1, "the avatar whose model is gone is IN the sweep's failed list");
 assert(named[0].reason.length > 0, "…with its reason: " + named[0].reason);
+assert(everything.skipped >= 1, "…while a builtin's row with no definition is SKIPPED, not failed");
 
-// Nothing rebuildable is left missing, so a second sweep rebuilds nothing —
-// and still reports the same failure rather than forgetting it.
+// Nothing rebuildable is left missing, so a second sweep rebuilds nothing…
 var second = assets.rebuildThumbnails({ missingOnly: true });
 assert(second.rebuilt === 0, "a second sweep rebuilds nothing (" + JSON.stringify(second) + ")");
-assert(second.failed.length === swept.failed.length,
-       "…and reports the same failures again");
+assert(second.cancelled === false, "…and was not cancelled");
+// …and the row that cannot be rebuilt is still named, run after run: a failure
+// is not forgotten because it was reported once.
+var againAll = assets.rebuildThumbnails({ missingOnly: false });
+assert(againAll.failed.filter(function (x) { return x.guid === orphanAvatar; }).length === 1,
+       "the unrebuildable row is reported again on the next full sweep");
 
 // An unknown option is a refusal, not a silent no-op.
 var threw = false;

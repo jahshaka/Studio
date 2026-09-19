@@ -46,14 +46,28 @@ QImage renderObject(Database *db, Project *project, const QString &guid,
     // sweep has to be able to tell those apart on a headless boot too.
     iris::SceneNodePtr node = libraryasset::fromLibrary(db, project, guid);
     if (!node) {
-        // WHICH KIND OF NOTHING (fix round F6). A row with an EMPTY definition
-        // never had a model — a builtin primitive's Object row (the default
-        // Ground) is a document thing, and a sweep must not report the floor of
-        // every project as broken. A row that HAS a definition and still would
-        // not load is a real failure the user needs to hear about: its stored
-        // bytes are gone, or its blob carries no geometry.
-        const bool noDefinition = db->fetchAssetData(guid).isEmpty();
+        // WHICH KIND OF NOTHING (fix round F6, corrected once more by the suite).
+        // THREE cases, and only the middle one is "nothing to draw":
+        //
+        //   the row is GONE     — somebody deleted the model this refers to.
+        //                         A failure, loudly: something still points at
+        //                         it (an avatar's definition, say) and the user
+        //                         is the only one who can fix that.
+        //   the row EXISTS with
+        //   an empty definition — a builtin primitive's Object row (the default
+        //                         Ground): a document thing that never had a
+        //                         model. A sweep skips those rather than
+        //                         reporting the floor of every project broken.
+        //   the row has a
+        //   definition          — and it would not load: its stored bytes are
+        //                         missing, or its blob carries no geometry. A
+        //                         failure with that reason.
+        const bool rowExists = !db->fetchAsset(guid).guid.isEmpty();
+        const bool noDefinition = rowExists && db->fetchAssetData(guid).isEmpty();
         if (noModelOut) *noModelOut = noDefinition;
+        if (!rowExists)
+            return say(reasonOut, QStringLiteral("the model '%1' is no longer in the library")
+                                      .arg(guid));
         return say(reasonOut,
                    noDefinition
                        ? QStringLiteral("'%1' stores no model definition (a builtin primitive's "
