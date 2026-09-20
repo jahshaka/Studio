@@ -425,23 +425,29 @@ int main(int argc, char **argv)
         QMap<QString, QString> guidMap;
         CHECK(db.importProject(archive, newProject, worldName, guidMap), "project imported");
 
-        const QString newObject = guidMap.value(oldObject);
-        const QString newMesh = guidMap.value(oldMesh);
-        const QString newFiled = guidMap.value(oldFiled);
-        CHECK(!newObject.isEmpty() && !newMesh.isEmpty(), "the imported rows have new guids");
-        CHECK(db.fetchAsset(newMesh).parent == newObject,
-              "a MEMBER row's parent is the importing library's own Object guid");
-        CHECK(db.fetchAsset(newObject).parent == newProject,
+        // ARCHIVE-GUIDS-1: an archive import KEEPS the rows' guids (the clipboard
+        // resolver's policy — a known guid at the same type IS the same asset; a
+        // fresh library has no collision, so nothing is renamed and the map
+        // names collisions only). What moves is the PROJECT: every root row's
+        // parent and every row's project_guid become the importing project.
+        CHECK(guidMap.value(oldObject).isEmpty() && guidMap.value(oldMesh).isEmpty() &&
+                  guidMap.value(oldFiled).isEmpty(),
+              "the imported rows keep their guids (the map names collisions only)");
+        CHECK(!db.fetchAsset(oldObject).guid.isEmpty() && !db.fetchAsset(oldMesh).guid.isEmpty(),
+              "...and the rows exist under those guids");
+        CHECK(db.fetchAsset(oldMesh).parent == oldObject,
+              "a MEMBER row's parent is still its Object (the same guid)");
+        CHECK(db.fetchAsset(oldObject).parent == newProject,
               "a root row's parent is the new project guid");
-        const QString filedParent = db.fetchAsset(newFiled).parent;
-        CHECK(!filedParent.isEmpty() && filedParent != oldFolder,
-              "a FILED row's parent is the imported folder's new guid");
+        const QString filedParent = db.fetchAsset(oldFiled).parent;
+        CHECK(filedParent == oldFolder,
+              "a FILED row's parent is the imported folder, which keeps its guid");
         QSqlQuery folderQ;
         folderQ.prepare("SELECT COUNT(*) FROM folders WHERE guid = ? AND project_guid = ?");
         folderQ.addBindValue(filedParent);
         folderQ.addBindValue(newProject);
         folderQ.exec(); folderQ.next();
-        CHECK(folderQ.value(0).toInt() == 1, "and that folder exists in the importing library");
+        CHECK(folderQ.value(0).toInt() == 1, "and that folder exists in the importing library, under the new project");
         QFile::remove(archive + ".db");
     }
 
