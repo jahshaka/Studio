@@ -1117,6 +1117,18 @@ void MainWindow::shutdownBackgroundWork()
     // (its completion hop is a no-op once cancelled).
     MeshBakeStore::cancelPendingBakes();
 
+    // THE FIRST-RUN PRESET SEED (RESET-LIBRARY-1's fix round). Its own header
+    // said "the app's shutdown calls it" and only the --script path
+    // (scriptrunner.cpp) ever did — so a window closed during the first
+    // launch's seed left a worker copying and fsyncing map files into the
+    // store while the rest of this function tore the app down around it, to be
+    // reaped by the pool wait below only if it happened to finish, and by the
+    // forced exit if it did not. It is a WARM-UP: aborting costs at most the
+    // file in flight, the next launch finishes what was skipped, and the abort
+    // reaches the runner underneath it too, which is what lets the pool wait
+    // further down do the joining.
+    MaterialPresetSeeder::instance().requestAbort();
+
     // EVERY MODULE IS TOLD TO STOP FIRST (item 2). Module workers ride the same
     // global pool the wait below joins, and shutdownModules() — where a
     // module's own abort used to live — runs AFTER that wait and after the

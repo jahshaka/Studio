@@ -41,11 +41,14 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "services/apppaths.h"
 #include "services/assetstorepaths.h"
+#include "app/firstrun.h"
+#include "services/libraryreset.h"
 #include "data/constants.h"
 #include "services/ogresamples.h"
 #include "irisgl/core/irisutils.h"
 #include <QApplication>
 #include <QDir>
+#include <QProcess>
 #include <QFileInfo>
 #include <QStyle>
 #include <QWidget>
@@ -481,6 +484,37 @@ QVector<VerbInfo> AppApi::verbs() const
           "jahsettings.ini in its historical place (applicationDirPath in a Debug build) and its "
           "projects under the `default_directory` preference. READ-ONLY on purpose: a setter "
           "would have to move a live database and a live asset store while they are open.",
+          Needs::Document },
+        { "resetLibrary", "app.resetLibrary({restart}) -> {ok, removed: {objects, sidecars, projects, thumbnails, staging}, restarted}",
+          "RESET THE LIBRARY TO A FIRST LAUNCH (owner review R10.2) — the gesture behind "
+          "Preferences > World > Clear Database, and everything that button never did. It closes "
+          "the open project WITHOUT SAVING, drops every catalog table and creates them again, "
+          "removes the CONTENTS of the asset store (objects, sidecars, derived caches, the store's "
+          "identity and its abandoned staging temps — never the store ROOT directory, which the "
+          "user may have chosen), removes every project FOLDER by the location its own row records "
+          "(a project filed on another drive included) plus anything left under the projects root, "
+          "drops the thumbnail caches, and then runs the fresh-install bootstrap: a new store "
+          "identity, and the same first-run preset seed a launch runs — which a DRIVEN session (a "
+          "suite, a script, an MCP client) does not get at launch and does not get here either "
+          "(`materials.seedPresets()` is that seed on demand). What it does NOT touch: the "
+          "settings file (preferences are not library content), the shader cache, the logs, and "
+          "anything outside the data root. `removed` counts what WAS there, measured before the "
+          "first byte went. It REFUSES while an import, the preset seed or a thumbnail rebuild is "
+          "running — each of them would otherwise finish into a library that no longer exists — "
+          "and while the asset store is OFFLINE (an unmounted drive: wiping the catalog would "
+          "orphan the whole store on it). A refusal answers an EMPTY map with the reason in "
+          "app.lastError(). `restart: true` spawns this executable again with THIS run's "
+          "arguments and working directory and quits once the spawn succeeded (`restarted` says "
+          "whether it did); it is REFUSED in a driven session — a script, a suite, an MCP client, "
+          "the rig — because the respawn would carry `--script`/`--headless` with it and each "
+          "child would reset the library and spawn another one. Without `restart` the process "
+          "carries on with an empty library, which is what a script wants, and the windows that "
+          "were already listing rows keep their stale lists until something refreshes them. What "
+          "it removes in the store is the store's OWN layout — objects, sidecars, derived caches, "
+          "store.json, the staging temps and the legacy per-guid folders — and nothing else in "
+          "that directory, because the store root is a path the user chose and may hold their own "
+          "files; the same rule under the projects root, where only folders named like a guid are "
+          "this app's. Calling it twice is a no-op with zeroes in `removed`.",
           Needs::Document },
         { "notices", "app.notices({id}) -> [{id, name, role, homepage, licence, path, file, present, vendored, textLength}]",
           "THE THIRD-PARTY NOTICES THIS BINARY OWES — every vendored component that ships inside "
@@ -959,6 +993,121 @@ QVariantMap AppApi::dataRoot()
     out["projects"] = host.services && host.services->project
                           ? host.services->project->projectsRoot()
                           : AppPaths::projectsRoot(QString(), Constants::PROJECT_FOLDER);
+    return out;
+}
+
+// RESET THE LIBRARY (owner review R10.2). The verb is the THIN half on
+// purpose: it closes the open project through the shell and — when asked —
+// restarts the process, because those are the two things a service may not do.
+// Everything that touches rows and bytes is services/libraryreset.h, which is
+// what lets the headless suite drive the whole of it and what lets the
+// Preferences button be four lines that call this verb.
+QVariantMap AppApi::resetLibrary(const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.db) { fail("app.resetLibrary: there is no library in this session"); return out; }
+
+    const bool restart = options.value(QStringLiteral("restart"), false).toBool();
+    if (restart && !host.mainWindow) {
+        fail("app.resetLibrary: {restart: true} needs the application (this session has no window "
+             "to bring back)");
+        return out;
+    }
+    // A DRIVEN SESSION IS NEVER RESTARTED, and this one is a safety rule
+    // rather than a convenience. The restart re-runs THIS process's arguments
+    // — `--script x.js` and `--headless` included — so a script that asks for
+    // it spawns a child running the same script, which resets the library and
+    // spawns another: an unbounded chain of processes, each one wiping what
+    // the last one made. (The earlier guard for this was `!host.mainWindow`,
+    // and its premise was simply false: a --headless run builds a MainWindow
+    // too — main.cpp does, it merely never shows it.) Stripping the one-shot
+    // flags would be a second answer to "what is this process for"; the
+    // refusal is the rule, and `app/firstrun.h` is the one predicate that
+    // knows (a data root forced, --script/--headless, --dump-api-docs,
+    // --mcp-port, the selftest or an offscreen QPA).
+    if (restart && FirstRun::isDrivenSession()) {
+        refuse("app.resetLibrary: a driven session — a script, a suite, an MCP client — is not "
+               "restarted; reset without restart and let whoever started this process start it "
+               "again");
+        return out;
+    }
+
+    // THE REFUSAL, TAKEN HERE AS WELL AS IN THE SERVICE, so the caller is told
+    // before anything closes: a library being written to — or one whose store
+    // is on a drive that is not there — is not a library to delete.
+    const QString why = libraryreset::refusalReason();
+    if (!why.isEmpty()) {
+        refuse(QStringLiteral("app.resetLibrary: %1").arg(why));
+        return out;
+    }
+
+    // THE OPEN PROJECT GOES FIRST, AND IT IS DISCARDED. Every row it is made
+    // of is about to be dropped, so saving it would write a scene into a
+    // catalog that is on its way out. The undo macro is ended around the close
+    // exactly as project.close does it — the history names a document that
+    // will not exist.
+    ProjectService *projects = host.services ? host.services->project : nullptr;
+    if (projects && projects->isSceneOpen() && host.mainWindow) {
+        host.endRunUndoMacro();
+        host.mainWindow->closeProject();
+        host.beginRunUndoMacro();
+    }
+
+    const QString projectsRoot =
+        projects ? projects->projectsRoot()
+                 : AppPaths::projectsRoot(SettingsManager::getDefaultManager()
+                                              ->getValue("default_directory", QString()).toString(),
+                                          Constants::PROJECT_FOLDER);
+    const auto folderFor = [projects](const QString &guid) -> QString {
+        return projects ? projects->projectFolderFor(guid) : QString();
+    };
+
+    // THE SEED IS THE CHILD'S JOB WHEN WE ARE RESTARTING (the service's
+    // `seedPresets`): started here it would run in a process that is already
+    // on its way out, and two seeders over one store is how a
+    // content-addressed library still gets two rows for one picture.
+    const libraryreset::Result result = libraryreset::reset(
+        host.db, SettingsManager::getDefaultManager(), projectsRoot, folderFor,
+        /*seedPresets*/ !restart);
+
+    out.insert(QStringLiteral("ok"), result.ok);
+    out.insert(QStringLiteral("removed"), result.removed.toMap());
+    out.insert(QStringLiteral("restarted"), false);
+    if (!result.ok) {
+        // A PARTIAL RESET IS STILL REPORTED: the catalog may already be empty,
+        // and a caller that got nothing back could not tell what happened.
+        refuse(QStringLiteral("app.resetLibrary: %1").arg(result.error));
+        return out;
+    }
+
+    if (!restart) return out;
+
+    // THE RESTART. The old button quit and THEN spawned `arguments()[0]` —
+    // whatever string the shell used to launch us, resolved against the NEW
+    // process's working directory: it comes back when the app was started by a
+    // path that still resolves from there (the owner's `./Jahshaka` does) and
+    // silently does not when it was not. This spawns applicationFilePath() (an
+    // absolute path, always) with this run's arguments and this run's working
+    // directory, and quits only once the spawn reported a pid — so the answer
+    // is the same wherever the app was launched from, and `restarted` is a
+    // FACT rather than a hope.
+    const QStringList args = QCoreApplication::arguments().mid(1);
+    qint64 pid = 0;
+    const bool spawned = QProcess::startDetached(QCoreApplication::applicationFilePath(), args,
+                                                 QDir::currentPath(), &pid);
+    out[QStringLiteral("restarted")] = spawned;
+    if (!spawned) {
+        refuse("app.resetLibrary: the library was reset but this executable could not be started "
+               "again — close and reopen Jahshaka");
+        return out;
+    }
+    // Deferred through the host's afterRun hook for the same reason app.quit()
+    // is: a plain queued close is delivered BETWEEN TWO VERBS now that a script
+    // runs off the UI thread, which would close the window underneath the run
+    // that asked for it.
+    auto close = [w = host.mainWindow]() { w->close(); };
+    if (host.afterRun) host.afterRun(close);
+    else QMetaObject::invokeMethod(host.mainWindow, close, Qt::QueuedConnection);
     return out;
 }
 

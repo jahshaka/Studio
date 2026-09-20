@@ -39,7 +39,6 @@ For more information see the LICENSE file
 #include <QStyledItemDelegate>
 #include <QButtonGroup>
 #include <QMessageBox>
-#include <QProcess>
 
 #include "services/framemonitor.h"
 #include "services/framepacing.h"
@@ -57,6 +56,8 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/projectservice.h"
+#include "scripting/modules/appapi.h"
+#include "scripting/scriptengine.h"
 #include "viewport/ieditorviewport.h"
 #include "shell/mainwindow.h"
 #include "ui/style/stylesheet.h"
@@ -937,12 +938,21 @@ void WorldSettingsWidget::rebuildShortcutsTable()
 	outer->addLayout(footer);
 }
 
+// RESET THE LIBRARY — the button, which is now a few lines over the verb
+// (`app.resetLibrary`, API-first). What it used to be: `wipeDatabase()` (the
+// TABLES only) followed by `qApp->quit()` and a detached spawn of
+// `arguments()[0]`. It left the asset store, every project folder and the
+// staging temps behind — a "cleared" library reopened onto a store full of
+// orphans — and it never created the dropped tables again, so the restarted
+// app's schema check ran against an empty database file and said so in the log
+// (the owner's push #52 run). Both halves of that are deleted here; the
+// message now says what really goes.
 void WorldSettingsWidget::configureDatabaseWidget()
 {
 	auto layout = new QGridLayout;
 	databaseWidget->setLayout(layout);
 
-	auto l1 = new QLabel("Clear Entire Database");
+	auto l1 = new QLabel("Reset Your Library");
 	auto btn = new QPushButton("Clear Database");
 
 
@@ -951,19 +961,49 @@ void WorldSettingsWidget::configureDatabaseWidget()
 	setSizePolicyForWidgets(l1);
 
 	connect(btn, &QPushButton::clicked, [=]() {
-		auto option = QMessageBox::warning(this, "Confirmation",
-			"Are you sure you wish to wipe your database?"
-			"\nJahshaka will restart and all your current data will be lost",
+		auto option = QMessageBox::warning(this, "Reset your library",
+			"This deletes EVERYTHING in your library and starts Jahshaka again as a "
+			"first launch:\n\n"
+			"  \u2022 every project, and its folder on disk\n"
+			"  \u2022 every imported model, texture, sound and video, and its stored files\n"
+			"  \u2022 every material, avatar and thumbnail\n\n"
+			"Your preferences are kept. Nothing here can be undone.\n\n"
+			"Reset the library and restart?",
 			QMessageBox::Yes | QMessageBox::No
 		);
+		if (option != QMessageBox::Yes) return;
 
-		if (option == QMessageBox::Yes) {
-			if (mainWindow && mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
-			db->wipeDatabase();
-			QMessageBox::information(this, "Restart", "Database cleared, Jahshaka will now restart!", QMessageBox::Ok);
-			qApp->quit();
-			QProcess::startDetached(qApp->arguments()[0], qApp->arguments());
+		// THE VERB, THROUGH THE SHELL-CALLER CONVENTION (ApiModule::quietly):
+		// a refusal comes back as a string for the box instead of waiting in
+		// the host's pending slot for a bridge nobody is going to run.
+		ScriptEngine *scripting = mainWindow ? mainWindow->scripting() : nullptr;
+		if (!scripting) {
+			QMessageBox::warning(this, "Reset your library",
+			                     "This session cannot reset the library.");
+			return;
 		}
+		AppApi api(scripting->scriptHost());
+		QVariantMap options;
+		options.insert(QStringLiteral("restart"), true);
+		const QVariantMap result = api.quietly([&] { return api.resetLibrary(options); });
+		if (result.value(QStringLiteral("ok")).toBool()
+		    && result.value(QStringLiteral("restarted")).toBool()) {
+			// THE PREFERENCES DIALOG IS MODAL (MainWindow shows it with exec()),
+			// so it owns a nested event loop — and the verb's window close is
+			// deferred to the next turn of whichever loop is running. Closing
+			// this dialog HERE lets the nested loop end first, so the close
+			// lands on the main one and the process really goes.
+			if (QWidget *dialog = this->window()) dialog->close();
+			return;   // the new process is already starting
+		}
+
+		// ApiModule::lastError() explicitly: AppApi has a VERB of that name
+		// (the script-facing app.lastError()) which hides the shell-caller
+		// convention's accessor.
+		const QString why = api.ApiModule::lastError();
+		QMessageBox::warning(this, "Reset your library",
+		                     why.isEmpty() ? QStringLiteral("The library could not be reset.")
+		                                   : why);
 	});
 
 	layout->addWidget(l1, 0, 0);

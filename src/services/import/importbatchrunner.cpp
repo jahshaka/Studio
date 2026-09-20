@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "services/import/importbatchrunner.h"
 
+#include <atomic>
+
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -47,10 +49,22 @@ void ImportBatchRunner::setRequests(const QVector<ImportRequest> &requests)
     mRequests = requests;
 }
 
+namespace {
+/// Every runner that is between start() and its worker's last line. See
+/// ImportBatchRunner::anyRunning().
+std::atomic<int> sActiveRunners { 0 };
+}   // namespace
+
+bool ImportBatchRunner::anyRunning()
+{
+    return sActiveRunners.load() > 0;
+}
+
 void ImportBatchRunner::start()
 {
     Q_ASSERT(!mRunning.load());
     mRunning.store(true);
+    sActiveRunners.fetch_add(1);
     // The future is KEPT (unlike the first version): waitForDone and the
     // destructor join on it so a worker can never outlive the runner.
     mFuture = QtConcurrent::run([this]() { runBatch(); });
@@ -168,6 +182,7 @@ void ImportBatchRunner::runBatch()
     // Worker-side completion FIRST (isRunning()/waitForDone read it without
     // the event loop); the signal still arrives on the UI thread, queued.
     mRunning.store(false);
+    sActiveRunners.fetch_sub(1);
     QMetaObject::invokeMethod(this, [this]() {
         emit finished(mCancelled.load());
     }, Qt::QueuedConnection);

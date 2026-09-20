@@ -180,6 +180,49 @@ var painted = material.get(brickCube);
 assert(painted.baseColorMap && painted.baseColorMap.length > 0,
        "the mesh's material carries the base colour map");
 
+// ---- 2b. A PRESET'S MAPS ARE NOT THE USER'S TILES (RESET-LIBRARY-1) -------
+//
+// Rule V-2: a picture that arrived INSIDE a material is a MEMBER of it, and
+// folds into the bundle's tile while only materials use it. The seed imported
+// its maps through the one content import and stamped nothing, so twenty
+// presets' worth of maps sat in the editor tray as if the user had imported
+// them. They carry the stamp now — `member: true` with `memberOf` naming the
+// preset they came in through (the ORIGIN never moves, so a map two presets
+// share belongs to the first one that brought it in, which is why the
+// assertion is "some shipped preset" rather than "this one").
+var presetGuids = {};
+presets.forEach(function (p) { presetGuids[p.guid] = true; });
+var stamped = 0;
+presets.forEach(function (p) {
+    materials.members(p.guid).forEach(function (m) {
+        var meta = assets.metadata(m.guid);
+        if (meta.member !== true)
+            throw new Error("preset map '" + m.name + "' (" + p.name + ") is not stamped a member");
+        if (!presetGuids[meta.memberOf])
+            throw new Error("preset map '" + m.name + "' says memberOf '" + meta.memberOf
+                            + "', which is no shipped preset");
+        ++stamped;
+    });
+});
+assert(stamped > 0, "every shipped preset's maps are members of a preset (" + stamped + " maps)");
+
+// …AND THE TRAY DOES NOT SHOW THEM. The project pins Brick PBR's three maps
+// (asserted above); the editor tray is what the user looks at, and the bundle
+// is their tile.
+var trayTextures = assets.list({ scope: "project", tray: true, type: "texture" });
+brickMembers.forEach(function (m) {
+    assert(trayTextures.filter(function (t) { return t.guid === m.guid; }).length === 0,
+           "the editor tray does not show the preset's map '" + m.name + "' as a tile");
+});
+// The switch that turns the rule off still lists them — nothing was deleted or
+// unpinned, it is a VIEW rule ("Show member textures").
+var trayWithMembers = assets.list({ scope: "project", tray: true, type: "texture",
+                                    members: true });
+brickMembers.forEach(function (m) {
+    assert(trayWithMembers.filter(function (t) { return t.guid === m.guid; }).length === 1,
+           "…and 'Show member textures' finds '" + m.name + "' again");
+});
+
 // A SECOND PROJECT REUSES THE SAME BUNDLE — the preset is library content,
 // and the store is keyed on content, so nothing is imported twice.
 var texturesBefore = assets.list({ scope: "store", type: "texture" }).length;

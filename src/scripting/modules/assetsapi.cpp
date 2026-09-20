@@ -153,6 +153,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
+          "`member` and `memberOf` are present only on a row that arrived INSIDE a material — a texture picked through a material\'s picker, or a shipped preset\'s map at the first-run seed: `member: true` is the stamp (MATERIAL_BUNDLE_SPEC V-2) and `memberOf` names the material it came in through. The stamp is what folds the picture\'s tile into the bundle\'s in the editor tray while ONLY materials use it; the moment a scene node, a decal or the user themselves uses it, it is a tile again. A texture the user imported carries neither key. "
           "`companionOf` is present only on a MATERIAL that 'Create material from image' minted, and names the TEXTURE it was minted for — the stamp that makes an image and its own material relatable (and that keeps the image's tile folded into the material's in the editor tray). A material the user authored on the same image carries no stamp and no key. "
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
           "MODELS also carry their SIZE, as information (services/extentmeasure.h): `extent` {x,y,z} — the model's axis-aligned size in METRES as this asset was IMPORTED, i.e. after its import settings (scale, units, rotation) were baked in, which is the size every placement of it has; and `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none), which is what the import dialog shows so a user can disagree with the file. Nothing reads these to scale anything: an asset's size is decided once, at import (assets.importSettings / assets.reimport), and every instance is placed at scale 1. (The retired fit-to-size block — fitKind/fitScale/fitReason/fitSource, and the assets.setFit verb behind it — guessed a size from an envelope on every instantiation; a stale row may still carry those keys and nothing reads them.)",
@@ -708,6 +709,22 @@ QVariantMap AssetsApi::metadata(const QString &guid)
             QJsonDocument::fromJson(record.asset).object()
                 .value(QStringLiteral("companionOf")).toString();
         if (!companion.isEmpty()) out["companionOf"] = companion;
+    }
+    // THE MEMBER STAMP (MATERIAL_BUNDLE_SPEC V-2), the other half of the same
+    // question and invisible from the verb surface until RESET-LIBRARY-1: a
+    // picture that arrived INSIDE a material — through the picker, or with a
+    // shipped preset's seed — carries `member: true` and `memberOf: <the
+    // material it came in through>`, and that stamp is what folds its tile
+    // into the bundle's while only materials use it. Reported only when it is
+    // there, like `companionOf`: a row the user imported themselves carries no
+    // key rather than a false.
+    {
+        const QJsonObject props = QJsonDocument::fromJson(record.properties).object();
+        if (props.value(QStringLiteral("member")).toBool()) {
+            out["member"] = true;
+            const QString origin = props.value(QStringLiteral("memberOf")).toString();
+            if (!origin.isEmpty()) out["memberOf"] = origin;
+        }
     }
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);

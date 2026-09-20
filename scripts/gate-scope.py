@@ -116,6 +116,13 @@ AREA_RULES = [
     # services rule below reaches neither (the Fable read, item 7).
     (r"^src/services/vrworld", ["vr", "player", "ui", "document", "services", "reopen"],
      ["vr", "world", "player"]),
+    # THE LIBRARY RESET (RESET-LIBRARY-1): it deletes the catalog, the store's
+    # contents and the project folders and then re-runs the fresh-install
+    # bootstrap, so its own suite, the data-root suite and the asset suites are
+    # what tell you it still leaves a first launch behind — the generic
+    # services rule below reaches none of them.
+    (r"^src/services/libraryreset", ["libraryreset", "apppaths", "assets", "services"],
+     ["app", "assets", "project"]),
     (r"^src/services/", ["services", "*headless-scripts"], []),
     (r"^src/(data|io|commands)/", ["document", "commands", "reopen", "export", "samples", "assetpaths",
                                    "assetmigrate", "services", "*headless-scripts"], ["project", "scene", "node"]),

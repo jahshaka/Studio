@@ -268,9 +268,6 @@ public:
 	static const QString SplashVersionLabel();
 	static const QString SplashShaderLabel();
 
-	// upgrader (upgrader.cpp)
-	static const QString UpgraderDialog();
-
 	// publish page (publishmodule.cpp)
 	static const QString PublishPage();
 	static const QString PublishTitle();
