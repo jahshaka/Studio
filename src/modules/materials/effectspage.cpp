@@ -92,6 +92,7 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "io/assetmanager.h"
 #include "ui/dialogs/progressdialog.h"
+#include "ui/dialogs/toast.h"
 #else
 #include <QUuid>
 #endif
@@ -365,6 +366,44 @@ void EffectsPage::reportSaveRefused(const QString &why)
 	SceneIssues::instance().raise(issue);
 }
 
+void EffectsPage::reportGraphRefused(const QString &guid, const QString &why)
+{
+	// A REFUSED OPEN IS A SCENE ISSUE, not a silent empty canvas
+	// (LEGACY-MASTER-CRUD). The page has no graph to show, and the one thing
+	// that must not happen is the user being given a blank canvas with the
+	// material's name on it and saving over their file with it. The id is per
+	// material, so re-opening the same one does not stack lines.
+	//
+	// THE NAME IS RESOLVED FROM THE GUID (fix round): `currentShaderInformation`
+	// is the material still on the canvas — the one that opened fine — so
+	// reading the name off it labelled the refusal with the WRONG material on
+	// every route.
+	const QString shipped = MaterialBundle::shippedPresetName(guid);
+	QString name = shipped;
+	if (name.isEmpty() && dataBase) name = dataBase->fetchAsset(guid).name;
+	if (name.isEmpty()) name = guid;
+
+	SceneIssue issue;
+	issue.id = QStringLiteral("material.legacy:") + guid;
+	issue.kind = QStringLiteral("material.legacy");
+	issue.nodeName = name;
+	issue.message = tr("'%1' could not be opened: %2").arg(name, why);
+	issue.action = tr("Make a new material from a preset and re-pick its images; "
+	                  "the old file is left exactly as it is.");
+	SceneIssues::instance().raise(issue);
+
+	// AND IT IS SAID WHERE THE GESTURE HAPPENED (fix round). The scene-issue
+	// bar lives in the EDITOR space and is hidden everywhere else, so a user
+	// who double-clicks a tile on the Materials page would be told nothing at
+	// all: the canvas simply would not change. The issue stays as the
+	// persistent record; this is the answer to the click.
+	if (!mRefusalToast) {
+		mRefusalToast = new Toast(this);
+		mRefusalToast->setAnchor(Toast::Anchor::WindowBottom);
+	}
+	mRefusalToast->showToast(tr("Cannot open '%1'").arg(name), why, 8000);
+}
+
 void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
 {
 	if (shaderGuid.isEmpty()) return;
@@ -512,25 +551,6 @@ void EffectsPage::importGraph()
 		ListWidget::highlightNodeForInterval(2, item);
 }
 
-NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
-{
-	QFile file(filePath);
-	file.open(QIODevice::ReadOnly | QIODevice::Text);
-	auto val = file.readAll();
-	file.close();
-	QJsonDocument d = QJsonDocument::fromJson(val);
-
-	auto obj = d.object();
-	auto graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
-
-	if (assign) {
-		this->setNodeGraph(graph);
-		schedulePreviewUpdate();
-	}
-	
-	return graph;
-}
-
 void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 {
 	// A SHIPPED PRESET OPENS — READ-ONLY (PRESET-UNIFY-1; the owner
@@ -542,15 +562,32 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	// cannot be CHANGED: the definition writer refuses its reserved guid, so
 	// the page opens it with the save stood down and says so above the canvas
 	// (setReadOnly), with Customise one button away.
+	// NOTHING ON THIS PAGE MOVES UNTIL THE GRAPH IS IN HAND (fix round, the
+	// data-loss defect). Every line below used to run FIRST: the read-only
+	// banner came down for the guid being opened, the three tile handlers had
+	// already written that guid, its name and its origin into
+	// `currentShaderInformation`, and `fetchAsset` needed the origin there to
+	// read at the right scope. A REFUSED open then left the page editing the
+	// PREVIOUS material's graph under the REFUSED material's identity with the
+	// save armed — so the next node drag, or the 1.5 s autosave on the way
+	// out, wrote the previous graph over the refused material's row through
+	// `MaterialBundle::write`. Worst case that is a shipped preset's graph
+	// landing on a user's material, because the refusal had just dropped the
+	// read-only banner that stands the save down.
+	//
+	// The cure is ordering, not a rescue: `shipped` is a pure lookup, the
+	// scope is an ARGUMENT to `fetchAsset` now, and the page's identity, its
+	// read-only state and its canvas are all written together, once, below —
+	// after the file has proved it can be opened. A refusal returns having
+	// touched nothing.
 	const QString shipped = MaterialBundle::shippedPresetName(guid);
-	setReadOnly(!shipped.isEmpty(), shipped);
 	// A stale refusal from an earlier build's behaviour, or from a save that
 	// was refused before this material was opened, must not outlive it.
 	SceneIssues::instance().clear(QStringLiteral("material.readonly:") + guid);
+	// The same for a refusal: a material that opens now must not still carry
+	// the line saying it cannot be opened.
+	SceneIssues::instance().clear(QStringLiteral("material.legacy:") + guid);
 
-	// The origin is set BEFORE the read, because `fetchAsset` reads the
-	// definition at this scope.
-	currentShaderInformation.origin = origin;
 	restoringGraph = true;
 	// Parented + deleted below: this used to leak one orphanable top-level
 	// window per loadGraph call.
@@ -564,7 +601,7 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	NodeGraph *graph;
 
 #if(EFFECT_BUILD_AS_LIB)
-    QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
+    QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid, origin)).object();
 	// A PRESET NOBODY HAS USED YET HAS NO ROW (seeding is on first USE, not on
 	// listing — services/materialpresetassets.h). Looking at one must not be
 	// what seeds it: the shipped graph is on disk, so the page reads THAT and
@@ -578,7 +615,23 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	}
 	progressDialog->setValueAndText(2, "Fetch graph");
 
-	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
+	QString refused;
+	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj, &refused);
+	// THE FILE CAN BE REFUSED (LEGACY-MASTER-CRUD): a material written on the
+	// deleted "Surface Material" master has no graph this build can draw. The
+	// user is told in the issue bar and the page keeps whatever it was
+	// showing — a blank canvas under this material's name is the one outcome
+	// that could lose their file to the next save.
+	if (graph == nullptr) {
+		// THE PAGE IS EXACTLY AS IT WAS: same graph on the canvas, same guid,
+		// same name, same origin, same read-only state, same banner. The only
+		// change is the message.
+		reportGraphRefused(guid, refused);
+		restoringGraph = false;
+		progressDialog->close();
+		progressDialog->deleteLater();
+		return;
+	}
 	// A READ-ONLY OPEN BINDS THE SHIPPED FILE AND WRITES NOTHING (fix round).
 	// Opening a preset to LOOK at it must not import its pictures into the
 	// library and pin them into the open project — a device wait each, on the
@@ -592,7 +645,9 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 		    graph, MaterialHelper::TextureBinding::PathOnly);
 	progressDialog->setValueAndText(6, "Deserialize Graph");
 
-	this->setNodeGraph(graph);
+	// THE IDENTITY AND THE CANVAS MOVE TOGETHER, and only now (fix round):
+	// whatever the page saves next belongs to the graph that is on it.
+	adoptGraph(guid, origin, shipped, graph);
 #else
 	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
 	QDirIterator it(filePath);
@@ -611,19 +666,29 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 			break;
 		}
 	}
-	graph = NodeGraph::deserialize(obj["graph"].toObject(), new LibraryV1());
-	this->setNodeGraph(graph);
+	QString refused;
+	graph = NodeGraph::deserialize(obj["graph"].toObject(), new LibraryV1(), &refused);
+	if (graph == nullptr) {
+		// As above: the page keeps the material it already had.
+		reportGraphRefused(guid, refused);
+		restoringGraph = false;
+		progressDialog->close();
+		progressDialog->deleteLater();
+		return;
+	}
+	adoptGraph(guid, origin, shipped, graph);
 	this->restoreGraphPositions(obj["graph"].toObject());
 #endif
 
 	progressDialog->setValueAndText(8, "Tidying up");
 
-	// NO TILE, NO OPEN (fix round F1). Every line below reads the list item,
-	// and `selectCorrectItemFromDrop` answers null for a guid no drawer holds
-	// — which a caller can produce simply by asking before the drawers were
-	// refilled. It used to dereference it on the next line: a segfault, in the
-	// first thing a user clicks after making a material.
-	currentProjectShader = selectCorrectItemFromDrop(guid);
+	// NO TILE, NO REST (fix round F1). `selectCorrectItemFromDrop` answers null
+	// for a guid no drawer holds — which a caller can produce simply by asking
+	// before the drawers were refilled — and the lines below used to
+	// dereference it: a segfault, in the first thing a user clicks after
+	// making a material. The page's IDENTITY no longer depends on the tile
+	// (adoptGraph took it from the arguments), so this is only about the tile
+	// work that follows.
 	if (!currentProjectShader) {
 		irisLog("loadGraph: no drawer holds '" + guid + "' — nothing to open");
 		restoringGraph = false;
@@ -631,18 +696,39 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 		progressDialog->deleteLater();
 		return;
 	}
-	currentShaderInformation.GUID = currentProjectShader->data(MODEL_GUID_ROLE).toString();
-	currentShaderInformation.origin = origin;
-	// A PRESET TILE'S LABEL IS ELIDED to fit its 90 px tile, so the NAME comes
-	// from the shipped list rather than from what the tile could draw.
-	oldName = currentShaderInformation.name =
-	    shipped.isEmpty() ? currentProjectShader->data(Qt::DisplayRole).toString() : shipped; 
 	restoreGraphPositions(obj["shadergraph"].toObject());
 	restoringGraph = false;
 	// The Members panel follows the open bundle.
 	if (membersPanel) membersPanel->setMaterial(currentShaderInformation.GUID);
 	progressDialog->close();
 	progressDialog->deleteLater();
+}
+
+void EffectsPage::adoptGraph(const QString &guid, shaderInfo::Origin origin,
+                             const QString &shippedName, NodeGraph *graph)
+{
+	// ONE PLACE WHERE THE PAGE CHANGES MATERIAL (fix round). Identity,
+	// read-only state and canvas in one step, in this order, so there is no
+	// window in which the page would save one material's graph into another
+	// material's row — which is what a refused open used to leave behind.
+	currentProjectShader = selectCorrectItemFromDrop(guid);
+	currentShaderInformation.GUID = guid;
+	currentShaderInformation.origin = origin;
+	// A PRESET TILE'S LABEL IS ELIDED to fit its 90 px tile, so the NAME comes
+	// from the shipped list rather than from what the tile could draw; with no
+	// tile at all (a guid whose drawer has not been refilled yet) the library
+	// row is the source, because the page must never carry the PREVIOUS
+	// material's name over a new one.
+	oldName = currentShaderInformation.name =
+	    !shippedName.isEmpty()
+	        ? shippedName
+	        : (currentProjectShader ? currentProjectShader->data(Qt::DisplayRole).toString()
+	                                : (dataBase ? dataBase->fetchAsset(guid).name : QString()));
+	// AFTER the graph is in hand, never before: this is what stands the save
+	// down for a shipped preset, and dropping it for a material that turned
+	// out not to open is how an edit could reach a read-only row.
+	setReadOnly(!shippedName.isEmpty(), shippedName);
+	setNodeGraph(graph);
 }
 
 void EffectsPage::setReadOnly(bool readOnly, const QString &presetName)
@@ -1046,8 +1132,18 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	const MaterialPreset shipped = MaterialPresets::find(
 	    preset.guid.isEmpty() ? preset.name : preset.guid, &found);
 	NodeGraph *graph = nullptr;
+	QString refused;
 	if (found && !shipped.graph.isEmpty())
-		graph = NodeGraph::deserialize(shipped.graph, new LibraryV1());
+		graph = NodeGraph::deserialize(shipped.graph, new LibraryV1(), &refused);
+	// A SHIPPED PRESET THAT REFUSES IS A SHIPPING DEFECT, not a user's old
+	// file (fix round), and substituting a blank canvas for it silently is how
+	// "New from Gold" would quietly make an empty material. Say it, then fall
+	// back so the gesture still produces something editable.
+	if (found && !refused.isEmpty()) {
+		irisLog("loadGraphFromTemplate: the shipped preset '" + shipped.name
+		        + "' was refused: " + refused);
+		reportGraphRefused(preset.guid.isEmpty() ? preset.name : preset.guid, refused);
+	}
 	if (!graph) {
 		// No preset (a blank new material): a master node on an empty canvas,
 		// which is exactly what `materials.create({graph:true})` builds.
@@ -1079,7 +1175,7 @@ void EffectsPage::setCurrentShaderItem()
 		currentProjectShader = selectCorrectItemFromDrop(scene->currentlyEditing->data(MODEL_GUID_ROLE).toString());
 }
 
-QByteArray EffectsPage::fetchAsset(QString string)
+QByteArray EffectsPage::fetchAsset(QString guid, shaderInfo::Origin origin)
 {
 #if(EFFECT_BUILD_AS_LIB)
 	// THE DEFINITION AT THE SCOPE THIS MATERIAL WAS OPENED AT (D-2 + the
@@ -1087,11 +1183,11 @@ QByteArray EffectsPage::fetchAsset(QString string)
 	// a Custom tile reads the library original. Passing the project
 	// unconditionally made the library copy unreachable the moment any
 	// project pinned it.
-	const bool projectScope = currentShaderInformation.origin == shaderInfo::Origin::Project;
+	const bool projectScope = origin == shaderInfo::Origin::Project;
 	const QJsonObject definition =
-	    MaterialBundle::read(dataBase, string, projectScope ? mProject : nullptr);
+	    MaterialBundle::read(dataBase, guid, projectScope ? mProject : nullptr);
 	if (!definition.isEmpty()) return QJsonDocument(definition).toJson();
-	return dataBase->fetchAssetData(string);
+	return dataBase->fetchAssetData(guid);
 #else
 	// fetch file locally
 
@@ -1794,11 +1890,14 @@ GraphNodeScene *EffectsPage::createNewScene()
 	});
 
 	connect(scene, &GraphNodeScene::loadGraph, [=](QListWidgetItem *item) {
-		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
-		currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
+		// THE HANDLER NAMES THE MATERIAL, IT DOES NOT BECOME IT (fix round):
+		// writing `currentShaderInformation` here meant a refused open left
+		// the page editing the previous graph under this guid. `loadGraph`
+		// adopts the material once it has one.
 		// A tile dropped on the canvas opens at the scope of the drawer it
 		// was dragged out of (the four-drawer rule).
-		loadGraph(currentShaderInformation.GUID, originForItem(currentShaderInformation.GUID));
+		const QString itemGuid = item->data(MODEL_GUID_ROLE).toString();
+		loadGraph(itemGuid, originForItem(itemGuid));
 	});
 
     return scene;
@@ -1933,18 +2032,14 @@ void EffectsPage::configureConnections()
 	// library original — even while a project holds it, which the old
 	// "is it pinned?" inference made impossible.
 	connect(assetWidget, &ShaderAssetWidget::loadToGraph, [=](QListWidgetItem * item) {
-		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
-		currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
-		currentShaderInformation.origin = shaderInfo::Origin::Project;
-		loadGraph(currentShaderInformation.GUID, shaderInfo::Origin::Project);
+		// The handler names the material; loadGraph adopts it (fix round).
+		loadGraph(item->data(MODEL_GUID_ROLE).toString(), shaderInfo::Origin::Project);
 	});
 #endif
 
     connect(effects, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
-        currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
-        currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
-        currentShaderInformation.origin = shaderInfo::Origin::Library;
-        loadGraph(currentShaderInformation.GUID, shaderInfo::Origin::Library);
+        // The handler names the material; loadGraph adopts it (fix round).
+        loadGraph(item->data(MODEL_GUID_ROLE).toString(), shaderInfo::Origin::Library);
     });
 
     connect(effects, &QListWidget::itemPressed, [=](QListWidgetItem *item){
@@ -1967,8 +2062,10 @@ void EffectsPage::configureConnections()
 	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
 		const QString guid = item->data(MODEL_GUID_ROLE).toString();
 		if (guid.isEmpty()) return;
-		// The tile's LABEL is elided to fit 90 px; the name is the preset's.
-		currentShaderInformation.name = MaterialBundle::shippedPresetName(guid);
+		// The tile's LABEL is elided to fit 90 px; the name is the preset's —
+		// and `adoptGraph` takes it from the shipped list itself, once the
+		// graph has loaded (fix round). Writing it here named the page after a
+		// material that might not open.
 		loadGraph(guid, shaderInfo::Origin::Library);
 	});
 
@@ -2085,7 +2182,8 @@ void EffectsPage::configureConnections()
 		// carries the preset's GRAPH now, so there is something to open —
 		// which is the point of the gesture: the user asked to edit this
 		// material, and the node editor is where they do it.
-		currentShaderInformation.name = dataBase->fetchAsset(copy).name;
+		// (The name comes from the row inside `adoptGraph`, after the graph
+		// has loaded — fix round.)
 		loadGraph(copy, pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library);
 	});
 

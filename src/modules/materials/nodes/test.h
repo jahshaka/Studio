@@ -25,7 +25,8 @@ class QDoubleSpinBox;
 // Diffuse/Specular/Shininess/Ambient/Emission sockets — was DELETED by
 // LEGACY-MASTER-CRUD, 2026-09-19. There is one master node, PbrMasterNode
 // ("PBR Material", nodes/pbrmasternode.h); a saved graph authored on the old
-// one is converted at load by NodeGraph::deserialize and re-saves as PBR.)
+// one is REFUSED by NodeGraph::deserialize with a sentence for the user —
+// the socket-by-socket conversion it had at first was deleted 2026-09-20.)
 
 class FloatNodeModel : public NodeModel
 {

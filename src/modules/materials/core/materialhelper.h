@@ -82,7 +82,11 @@ public:
 	// process-wide state in this class is gone.)
 	static PbrGraphEvaluator::TextureResolver textureResolver();
 
-	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj);
+	// The definition's graph, or NULL when this build refuses it — a material
+	// written on the deleted "Surface Material" master (LEGACY-MASTER-CRUD).
+	// `refusalReason`, when given, carries the one sentence to show the user.
+	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj,
+	                                                         QString* refusalReason = nullptr);
 
 	// (generateShader/createMaterialFromShaderGraph/generateMaterialFrom-
 	// MaterialDefinition died in MATERIALS_EVALUATOR phase 5 — the GLSL

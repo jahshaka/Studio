@@ -1289,6 +1289,23 @@ set_tests_properties(scripting.e2e.graph_edit PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# scripting.e2e.material_refusal — LEGACY-CONVERT-CRUD fix round: a material
+# that cannot be opened must change NOTHING. A loader that takes the new
+# material's identity before it has its graph leaves the app editing the
+# previous graph while saving to the refused material's row — one material
+# written over another. See the script's header.
+configure_file(scripts/e2e_material_refusal.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_refusal.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-refusal)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.material_refusal
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_refusal.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.material_refusal PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # scripting.e2e.import_settings — the import decision end to end
 # (SPECS/IMPORT_DIALOG_SPEC.md §9). The unit suite (importer.extent) pins the
 # arithmetic; this pins what the user does — import with settings, place it and
