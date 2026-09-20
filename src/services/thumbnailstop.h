@@ -42,6 +42,25 @@ bool stopRequested();
 /// script run, and the Assets page's "Rebuild missing thumbnails" action.
 void clearStop();
 
+/// IS A SWEEP IN FLIGHT? A sweep yields to the event loop between rows, so
+/// anything a yield can deliver — a verb, a button — can arrive with it on
+/// the stack, and one of those (`app.resetLibrary`) is about to delete the
+/// rows it is writing (services/libraryreset.h). The flag lives here with the
+/// stop for the same reason the stop does: the readers must not have to link
+/// the sweep. Set by `rebuildMissing` around its loop, and re-entrant safe
+/// (it is a counter).
+bool sweepRunning();
+
+/// RAII for the flag above; `rebuildMissing` is its only user.
+class SweepMark
+{
+public:
+    SweepMark();
+    ~SweepMark();
+    SweepMark(const SweepMark &) = delete;
+    SweepMark &operator=(const SweepMark &) = delete;
+};
+
 }   // namespace thumbrebuild
 
 #endif   // THUMBNAILSTOP_H

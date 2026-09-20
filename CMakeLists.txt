@@ -296,6 +296,7 @@ set(SRCS
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
     src/services/libraryassetnode.cpp
+    src/services/libraryreset.cpp
     src/bridge/assetthumbnail.cpp
     src/services/rigsignature.cpp
     src/services/animationfile.cpp
@@ -584,6 +585,7 @@ set(HEADERS
     src/services/assetimporter.h
     src/services/assetmetadata.h
     src/services/libraryassetnode.h
+    src/services/libraryreset.h
     src/bridge/assetthumbnail.h
     src/services/rigsignature.h
     src/services/animationfile.h

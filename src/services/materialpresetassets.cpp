@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "services/assetcas.h"
 #include "services/materialbundle.h"
+#include "services/materialmembers.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
 
@@ -208,6 +209,20 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
                                                             : pinned.error);
             return QString();
         }
+        // A PRESET'S MAP IS NOT ONE OF THE USER'S TILES (V-2, owner review
+        // R10.2). It arrived INSIDE a material, exactly as a picture picked
+        // through the material picker does, so it carries the same stamp and
+        // folds into the bundle while only materials use it — and becomes a
+        // tile again the moment the user puts it on a plane or picks it into
+        // a material of their own. Without this the first-run seed put
+        // twenty presets' worth of maps in the tray as if the user had
+        // imported them.
+        //
+        // ONLY A MINTED ROW IS STAMPED, which is the other half of V-2: if
+        // these bytes were already in the library under a row the USER
+        // imported, that row is theirs and a seed may not quietly hide it.
+        if (pinned.minted)
+            materialmembers::stampMember(db, pinned.guid, MaterialPresetAssets::guidFor(preset.name));
         guidForFile.insert(file, pinned.guid);
         return pinned.guid;
     };

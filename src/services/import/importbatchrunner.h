@@ -81,6 +81,14 @@ public:
     bool wasCancelled() const { return mCancelled.load(); }
     bool isRunning() const { return mRunning.load(); }
 
+    /// IS ANY IMPORT RUNNING IN THIS PROCESS? Runners are owned by whoever
+    /// drives one (the Assets page, the avatar page, the preset seeder), so
+    /// "is the library being written to right now" had no answer at all —
+    /// and `app.resetLibrary` has to have one before it deletes the store
+    /// underneath a commit (services/libraryreset.h). One process-wide
+    /// counter, moved in exactly the two places `mRunning` is.
+    static bool anyRunning();
+
     /// Shutdown-grade cancel: cancel PLUS abandon — the worker stops waiting
     /// for the UI thread (the commit hop gives up within one slice), skips
     /// the rest of the batch and exits. Queued completion lambdas that still

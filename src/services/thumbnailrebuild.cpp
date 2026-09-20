@@ -213,6 +213,11 @@ SweepResult rebuildMissing(Database *db, Project *project,
 {
     SweepResult result;
     if (!db) return result;
+    // THE SWEEP IS WRITING ROWS, and it yields between them — so anything a
+    // yield delivers can see it. `app.resetLibrary` is the one that must
+    // (services/libraryreset.h): it deletes exactly what this loop is
+    // building.
+    const SweepMark mark;
 
     // THE ROW LIST IS (guid, type) AND NOTHING ELSE (fix round F2). It used to
     // be a fetchAsset per guid, which selects `thumbnail` AND `properties` —

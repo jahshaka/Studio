@@ -279,6 +279,10 @@ add_subdirectory(shutdown)
 # The command-line parser's contract (app.cli_options, ledger 150): what the
 # app REFUSES, and why 0 is still a legal --mcp-port.
 add_subdirectory(cli)
+# app.reset_library — `app.resetLibrary()` puts the installation back to a
+# first launch (owner review R10.2): the rows, the store's contents, the
+# project folders, and the fresh-install bootstrap after them.
+add_subdirectory(libraryreset)
 add_subdirectory(ui)
 add_subdirectory(avatar)
 # The shipped sample scenes on a VIRGIN HOME, one test each — the owner's
