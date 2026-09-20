@@ -6,13 +6,15 @@
 // the Mirror Room, 32 over a 60-frame drag, 1.0-7.6 ms of CPU submission each.
 // `world.gi({dragOnMoverChannel:true})` promotes it onto the mover channel for
 // the length of the gesture instead: the cascades pay one re-voxelisation at
-// each end of the drag and nothing in between. It is OFF by default because it
-// changes the picture WHILE the object is dragged, which is the owner's call.
+// each end of the drag and nothing in between. It is ON by default since
+// 2026-09-20 (the owner's call on PICTURES-1's sheet): the picture AT REST is
+// identical either way, so what the default buys is a gesture that does not
+// re-solve the room under the hand; off stays available per project.
 //
 // This is the DOCUMENT half: the key, its refusals, its undo step, its survival
-// of save/close/open, the two readings that say what it is doing, and the two
-// properties that make it safe to ship unchosen (the default is today, and no
-// World Mode switch touches it). The PIXELS and the counters are gi.drag_mover
+// of save/close/open, the two readings that say what it is doing, and the
+// property that keeps it a project's own choice (no World Mode switch touches
+// it). The PIXELS and the counters are gi.drag_mover
 // (the engine suite) and the lane's evidence directory (the picture pairs).
 
 function assert(cond, msg) {
@@ -28,27 +30,27 @@ function throws(fn, msg) {
 var guid = project.create("Drag mover " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
 
-// ---- 1. the default is TODAY ----------------------------------------------
-assert(world.get().gi.dragOnMoverChannel === false,
-       "a new project does NOT put a dragged object on the mover channel — the shipped rule");
+// ---- 1. the default is ON ---------------------------------------------------
+assert(world.get().gi.dragOnMoverChannel === true,
+       "a new project DOES put a dragged object on the mover channel — the owner's default");
 
 // ---- 2. it is a bool, and nothing else -------------------------------------
+assert(world.gi({ dragOnMoverChannel: false }) === true, "set false — the older rule is still reachable");
+assert(world.get().gi.dragOnMoverChannel === false, "...and it reads back");
 assert(world.gi({ dragOnMoverChannel: true }) === true, "set true");
-assert(world.get().gi.dragOnMoverChannel === true, "...and it reads back");
-assert(world.gi({ dragOnMoverChannel: false }) === true, "set false");
-assert(world.get().gi.dragOnMoverChannel === false, "...and back again");
+assert(world.get().gi.dragOnMoverChannel === true, "...and back again");
 throws(function () { world.gi({ dragOnMoverChannel: "yes" }); },
        "a STRING is refused with a sentence, not coerced");
 throws(function () { world.gi({ dragOnMoverChannel: 1 }); },
        "...and so is a number");
-assert(world.get().gi.dragOnMoverChannel === false, "a refused call changed nothing");
+assert(world.get().gi.dragOnMoverChannel === true, "a refused call changed nothing");
 throws(function () { world.gi({ dragMoverChannel: true }); },
        "and a near-miss key is refused with the list of the ones that exist");
 
 // ---- 3. one call, one undo step --------------------------------------------
 function pushes() { return editor.undoState().pushes; }
 var before = pushes();
-world.gi({ dragOnMoverChannel: true });
+world.gi({ dragOnMoverChannel: false });
 assert(pushes() === before + 1, "a change records exactly ONE undo step");
 before = pushes();
 try { world.gi({ dragOnMoverChannel: "no" }); } catch (e) {}
@@ -58,12 +60,13 @@ assert(pushes() === before, "a refused call records nothing");
 project.save();
 project.close();
 project.open(guid);
-assert(world.get().gi.dragOnMoverChannel === true, "the setting survived save / close / open");
-world.gi({ dragOnMoverChannel: false });
+assert(world.get().gi.dragOnMoverChannel === false,
+       "the non-default setting survived save / close / open");
+world.gi({ dragOnMoverChannel: true });
 project.save();
 project.close();
 project.open(guid);
-assert(world.get().gi.dragOnMoverChannel === false,
+assert(world.get().gi.dragOnMoverChannel === true,
        "...and so does the default, written explicitly");
 
 // ---- 5. the two readings ---------------------------------------------------
@@ -87,7 +90,7 @@ world.mode({ mode: "epic" });
 assert(world.get().gi.dragOnMoverChannel === true, "...in either direction");
 var rowIds = world.modeTable().rows.map(function (r) { return r.id; });
 assert(rowIds.indexOf("giDragMoverChannel") < 0 && rowIds.indexOf("dragOnMoverChannel") < 0,
-       "and it is not a World Mode row (no tier column, no panel row yet)");
+       "and it is not a World Mode row (no tier column)");
 
 // ---- 7. the document's own mobility is a different question ----------------
 // The promotion is the RENDERER's transient state: nothing in the document says

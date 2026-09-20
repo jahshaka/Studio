@@ -15,9 +15,12 @@
 // suite that measures the step's grip on the footprint) and the lane's evidence
 // directory (the Showroom pairs).
 //
-// THE DEFAULT IS `checker` — the shipped march, exactly — so nothing that ships
-// moves until a project asks for something else. That is the assertion this
-// file opens with and the one that matters most.
+// THE DEFAULT IS `refined` (owner, 2026-09-20, chosen from PICTURES-1's sheet):
+// the phase leaves both answers, a crossing is a bisected sign change, and a
+// curved glossy surface draws one solid reflection instead of nested arcs.
+// `checker` — the march exactly as it shipped before that call — stays
+// selectable. That is the assertion this file opens with and the one that
+// matters most.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -38,10 +41,11 @@ var guid = project.create("SSR march " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
 
 // ---- 1. the default and the three rules ------------------------------------
-assert(world.ssrMarch() === "checker",
-       "a new project marches with `checker` — the shipped rule, so no scene moves");
+assert(world.ssrMarch() === "refined",
+       "a new project marches with `refined` — the owner's default");
+assert(world.ssrMarch("checker") === "checker", "set checker — the older march is still reachable");
+assert(world.ssrMarch() === "checker", "...and it reads back");
 assert(world.ssrMarch("refined") === "refined", "set refined");
-assert(world.ssrMarch() === "refined", "...and it reads back");
 assert(world.ssrMarch("dither") === "dither", "set dither");
 assert(world.ssrMarch("checker") === "checker", "set checker");
 assert(world.ssrMarch("  REFINED ") === "refined", "the rule is trimmed and case-insensitive");
@@ -73,7 +77,7 @@ world.ssrMarch("checker");
 project.save();
 project.close();
 project.open(guid);
-assert(world.ssrMarch() === "checker", "...and so does the default, written explicitly");
+assert(world.ssrMarch() === "checker", "...and so does the non-default rule, written explicitly");
 
 // ---- 4. the scene renders under every rule ---------------------------------
 // The rule is a UNIFORM, not a graph change: switching it must not rebuild a
@@ -88,8 +92,8 @@ assert(true, "the scene renders under every rule");
 // ---- 5. it is NOT a World Mode row, deliberately ---------------------------
 // A tier says how much a reflection may COST; this says how the march decides,
 // which no tier has an opinion about. So a mode switch must leave it alone —
-// and there is no panel row for it yet, by the lane's own rule: the pictures go
-// to the owner first.
+// and there is still no panel row for it: the choice was made on the pictures
+// and the default is the answer for everybody.
 world.ssrMarch("refined");
 world.mode({ mode: "low" });
 assert(world.ssrMarch() === "refined", "a World Mode switch does not touch the march rule");

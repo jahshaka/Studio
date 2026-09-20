@@ -1,5 +1,5 @@
 {
-    "name"                : "Board PBR",
+    "name"                : "Wood PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/wood.png",
     "graph"               : "graphs/wood-pbr.effect",
