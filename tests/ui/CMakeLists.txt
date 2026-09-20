@@ -431,6 +431,10 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
@@ -597,6 +601,10 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
@@ -724,6 +732,10 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
@@ -861,6 +873,10 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
@@ -1152,6 +1168,8 @@ add_executable(test_tree_multiselect
     test_tree_multiselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     # The outliner's clipboard rows ask the envelope codec what the payload
     # holds before offering a Paste row (CLIPBOARD_SPEC §3.1). A leaf: QJson
@@ -1203,6 +1221,8 @@ add_executable(test_tree_scroll
     test_tree_scroll.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
@@ -1251,6 +1271,8 @@ add_executable(test_tree_reselect
     test_tree_reselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
@@ -1298,6 +1320,8 @@ add_executable(test_hierarchy_root
     test_hierarchy_root.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
