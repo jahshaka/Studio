@@ -737,7 +737,10 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // THE READER-DEFAULTS LAW (document.reader_defaults): the fallback is the
     // CONSTRUCTOR'S value, so a file written before the Bloom Amount existed
     // opens at 1x — the picture it was authored with — rather than at zero.
-    scene->bloomAmount = float(sceneObj.value("bloomAmount").toDouble(scene->bloomAmount));
+    // Clamped on the way in like the ssao rows below: a hand-edited 5.0 would
+    // otherwise be 5 in the document, 2.00 in the panel and 2x in the picture
+    // (the engine and the shader clamp) — one number, three answers.
+    scene->bloomAmount = float(qBound(0.0, sceneObj.value("bloomAmount").toDouble(scene->bloomAmount), 2.0));
     scene->ssaoEnabled = sceneObj.value("ssaoEnabled").toBool(scene->ssaoEnabled);
     scene->ssaoScale = float(qBound(0.25, sceneObj.value("ssaoScale").toDouble(scene->ssaoScale), 1.0));
     scene->ssaoPower = float(qBound(0.1, sceneObj.value("ssaoPower").toDouble(scene->ssaoPower), 8.0));

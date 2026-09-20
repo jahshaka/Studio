@@ -38,10 +38,12 @@
 //      at 0 is the picture with the effect switched off, and the difference is
 //      only what you PAY.
 //   C  ONE IS THE PICTURE THIS ENGINE ALWAYS DREW. The uniform is the amount
-//      MINUS ONE and the shader multiplies by exactly 1.0 there, so the frame
-//      must be byte-identical to the same binary with the amount never pushed
-//      at all. (The --engine-selftest hash is the same claim on the whole
-//      application; this is it where it can be failed loudly.)
+//      MINUS ONE and the shader multiplies by exactly 1.0 there. What this arm
+//      can measure in one process is pushed-1 against re-pushed-1 (byte
+//      identity across a scrub away and back); the "never pushed at all" half
+//      of the claim is the --engine-selftest hash pair, taken by hand at the
+//      merge, which arm C cannot reach because the amount is pushed on the
+//      first frame of any chain that has bloom.
 //   D  THE DIAL IS LINEAR IN THE LIGHT THE BLOOM ADDS, per pixel. Display
 //      codes cannot carry that claim in either direction — the curve
 //      compresses at the top and CLAMPS at the bottom (this pin's grade puts
