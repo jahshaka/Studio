@@ -438,7 +438,16 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 
 	// ---- factor interplay for maps (engine multiplies map x factor) ----
 	auto applyMapFactorRules = [&](const QString& mapKey) {
-		if (mapKey == "metallicMap") out.eval.values["metallic"] = 1.0;
+		// THE BASE COLOUR'S FACTOR IS WHITE WHEN A MAP CARRIES THE COLOUR
+		// (PRESET-UNIFY-1). The three rules below have always neutralised the
+		// factor of a slot a map fills; baseColor was missing from the list,
+		// and its default is NOT neutral — `defaultmaterial::baseColor()` is
+		// 200/255 grey — so every graph material whose Base Color socket is a
+		// texture rendered its own picture at 0.784x, silently. It is the
+		// same statement as the others: the graph says the colour IS the
+		// map, so the tint that multiplies it is 1.
+		if (mapKey == "baseColorMap") out.eval.values["baseColor"] = colorToJson(QColor(Qt::white));
+		else if (mapKey == "metallicMap") out.eval.values["metallic"] = 1.0;
 		else if (mapKey == "roughnessMap") out.eval.values["roughness"] = 1.0;
 		else if (mapKey == "emissiveMap") {
 			out.eval.values["emissiveColor"] = colorToJson(QColor(Qt::white));

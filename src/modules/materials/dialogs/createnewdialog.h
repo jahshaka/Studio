@@ -75,13 +75,10 @@ private:
 	QPushButton * confirm;
 	QLineEdit * nameEdit;
 	QWidget* options;
-	QWidget* presets;
 	QWidget *holder;
 	QTabWidget *tabbedWidget;
 	QWidget *optionsScroll;
-	QWidget *presetsScroll;
     QWidget *optionsWidget;
-    QWidget *presetsWidget;
 	NodeGraphPreset currentInfoSelected;
 	QLabel *infoLabel;
     int num_of_widgets_per_row = 3;

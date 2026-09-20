@@ -921,6 +921,9 @@ void EffectsPage::configureAssetsDock()
 
 void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 {
+	// A NEW MATERIAL IS THE USER'S (PRESET-UNIFY-1): whatever was on the
+	// canvas, this one is editable, so the read-only banner goes.
+	setReadOnly(false);
 	QString newShader;
 	newShader = preset.title;
 

@@ -231,6 +231,28 @@ assert(copyGraph.master === "PbrMaterial", "…on the one master");
 assert(copyGraph.readOnly === false,
        "…and it is NOT read-only: the copy is the user's to edit");
 
+// CUSTOMISE AND SAVE CHANGES NOTHING ABOUT THE PICTURE. This is the assertion
+// the whole design rests on: a preset's VALUES and its GRAPH describe one
+// material, so re-deriving the copy from its graph gives back what the preset
+// applies — including the rows no graph can produce (Brick's roughness remap
+// bounds and its 4x tiling), which a save carries forward instead of deleting.
+var presetCube = scene.addPrimitive("Cube");
+var copyCube = scene.addPrimitive("Cube");
+assert(material.apply(presetCube, BRICK) === true, "the preset on one cube");
+var beforeSave = material.get(presetCube);
+materials.loadGraph(named);
+assert(graph.save() === true, "the copy re-saved from its graph, untouched");
+assert(material.apply(copyCube, named) === true, "the re-saved copy on another");
+var afterSave = material.get(copyCube);
+["baseColor", "metallic", "roughness", "roughnessLowerBound", "roughnessUpperBound",
+ "textureScale", "textureScaleV", "normalFactor", "alpha", "alphaMode",
+ "baseColorMap", "roughnessMap", "normalMap"].forEach(function (key) {
+    var a = beforeSave[key], b = afterSave[key];
+    if (typeof a === "number" ? Math.abs(a - b) > 1e-3 : String(a) !== String(b))
+        throw new Error("customise + save moved '" + key + "': " + a + " -> " + b);
+});
+assert(true, "…every row of the picture is the preset's, after a re-save from the graph");
+
 // AND THE COPY TAKES A REAL GRAPH EDIT, which is what Customise is for. The
 // preset's own graph refuses the same save, by the reserved guid.
 materials.loadGraph(named);

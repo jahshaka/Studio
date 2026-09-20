@@ -57,16 +57,12 @@ void CreateNewDialog::createViewWithOptions()
 	nameEdit = new QLineEdit;
 
 	optionsScroll = new QWidget;
-	presetsScroll = new QWidget;
 	options = new QWidget;
-	presets = new QWidget;
 	auto optionLayout = new QGridLayout;
-	auto presetLayout = new QGridLayout;
 	infoLabel = new QLabel;
 
 	//controls pading in selection window
 	optionLayout->setContentsMargins(10, 10, 10, 10);
-	presetLayout->setContentsMargins(10, 10, 10, 10);
 
 	tabbedWidget = new QTabWidget;
 	cancel = new QPushButton("Cancel");
@@ -75,11 +71,8 @@ void CreateNewDialog::createViewWithOptions()
 	confirm->setEnabled(false);
 
 	options->setLayout(optionLayout);
-	presets->setLayout(presetLayout);
 	options->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	presets->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	optionLayout->setSpacing(10);
-	presetLayout->setSpacing(10);
 
 	auto buttonHolder = new QWidget;
 	auto buttonLayout = new QHBoxLayout;
@@ -114,19 +107,18 @@ void CreateNewDialog::createViewWithOptions()
 	scrollView->setContentsMargins(0, 0, 0, 0);
 	scrollView->setStyleSheet(StyleSheet::EffectsNodeTilesScrollBar());
 
-	auto starterLabel = new QLabel("Starters");
-	auto presetLabel = new QLabel("Preset");
+	// ONE SECTION (PRESET-UNIFY-1): there were two — "Starters" (three graph
+	// templates) and "Preset" (five more), and both listed the deleted second
+	// preset family. A new material is based on one of the twenty shipped
+	// presets, and that is one list.
+	auto starterLabel = new QLabel("Based on");
 
 	starterLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	presetLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
 	starterLabel->setStyleSheet(StyleSheet::CreateNewSectionLabel());
-	presetLabel->setStyleSheet(StyleSheet::CreateNewSectionLabel());
 
 	contentLayout->addWidget(starterLabel);
 	contentLayout->addWidget(options);
-	contentLayout->addWidget(presetLabel);
-	contentLayout->addWidget(presets);
 	contentLayout->setContentsMargins(0, 0, 0, 0);
 	contentLayout->setSpacing(2);
 
@@ -170,11 +162,6 @@ void CreateNewDialog::createViewWithOptions()
 	auto spacerItem = new QWidget;
 	spacerItem->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
 	optionLayout->addWidget(spacerItem);
-
-	// (The second grid is gone with the second preset family: there is one
-	// list, so there is one section.)
-	presetLabel->hide();
-	presets->hide();
 
 	if (!btnGrp->buttons().isEmpty()) btnGrp->buttons().at(0)->setChecked(true);
 

@@ -170,7 +170,20 @@ int main(int argc, char** argv)
         CHECK(result.unsupportedNodes.isEmpty(), "graph 2: nothing unsupported");
         CHECK(result.values["baseColorMap"].toString() == texPath, "graph 2: baseColorMap path folded");
         CHECK(result.values["normalMap"].toString() == texPath, "graph 2: normalMap path folded");
-        CHECK(!result.values.contains("baseColor"), "graph 2: no constant baseColor emitted");
+        // RE-ANCHORED (PRESET-UNIFY-1), and the old assertion was the defect.
+        // It read "no constant baseColor emitted" — true, and the reason the
+        // picture was wrong: baseColor MULTIPLIES baseColorMap, and the
+        // material's default is `defaultmaterial::baseColor()` = 200/255 grey,
+        // not white. So a graph whose Base Color socket is a texture rendered
+        // its own image at 0.784x, silently, in every module material. The
+        // evaluator now neutralises that factor exactly as it has always
+        // neutralised metallic and roughness when a map fills their slot.
+        {
+            const auto tint = result.values["baseColor"].toObject();
+            CHECK(near(tint["r"].toDouble(), 1.0) && near(tint["g"].toDouble(), 1.0)
+                      && near(tint["b"].toDouble(), 1.0),
+                  "graph 2: a map on Base Color emits a WHITE tint, so the map is the colour");
+        }
 
         auto material = PbrGraphEvaluator::createMaterial(graph);
         CHECK(!!material, "graph 2: material created");
