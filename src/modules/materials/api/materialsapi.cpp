@@ -305,7 +305,9 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "twice. `scope` is 'library' or 'project' (the four-drawer rule: the project's pinned copy or the "
           "library original — two tabs if both are open); the default is 'project' when the open project pins "
           "the guid, else 'library'. A shipped preset (by name or reserved guid) opens READ-ONLY, as the drawer "
-          "does. `tab` is the tab index. Refused when no drawer holds the material.",
+          "does. `tab` is the tab index. Refused when the library holds no material of that name or "
+          "guid, and when the file cannot be opened at all (a graph written on a master this build "
+          "no longer has) — a refusal opens no tab and changes nothing on the page.",
           Needs::Document },
         { "tabs", "materials.tabs() -> [{tab, guid, name, scope, active, readOnly, dirty}]",
           "The Materials page's open tabs in bar order. `dirty` = an autosave is pending on that document (it "
