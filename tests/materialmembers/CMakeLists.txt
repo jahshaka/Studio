@@ -9,6 +9,8 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_material_members test_material_members.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialmembers.cpp
+    # the member stamp's two keys and both edits (IMPORT-INTENT-1)
+    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp

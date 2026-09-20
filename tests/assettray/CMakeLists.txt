@@ -12,6 +12,8 @@ add_executable(test_assettray test_assettray.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
     # rule 6 asks the bundle layer whether a texture folds into its material
     ${CMAKE_SOURCE_DIR}/src/services/materialmembers.cpp
+    # the member stamp's two keys and both edits (IMPORT-INTENT-1)
+    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp

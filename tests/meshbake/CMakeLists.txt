@@ -11,6 +11,8 @@ add_executable(test_mesh_bake test_mesh_bake.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
+    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
     # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
     # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp

@@ -124,6 +124,13 @@ void MaterialPresetSeeder::importMapsThenRows(const QVector<QPair<QString, QStri
         ImportRequest request;
         request.sourcePath = entry.first;
         request.typeHint = static_cast<int>(ModelTypes::Texture);
+        // THE MATERIAL ASKED, not the user (IMPORT-INTENT-1): these maps are
+        // arriving INSIDE the shipped presets, which is why the row this
+        // import mints is stamped as that preset's member a moment later
+        // (MaterialPresetAssets). A seed may never take a stamp off — and a
+        // User-intent import of the same bytes later is exactly the gesture
+        // that does.
+        request.intent = ImportRequest::Intent::Material;
         requests.append(request);
     }
     if (requests.isEmpty()) { seedNextRow(); return; }

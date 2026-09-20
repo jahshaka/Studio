@@ -28,10 +28,12 @@ For more information see the LICENSE file
 //   2. WHICH TEXTURES GET A TILE OF THEIR OWN?   `hiddenAsMember` — the
 //      owner's decision Q4, rule V-2. A texture the USER imported is always a
 //      tile. A texture that arrived THROUGH a material's picker is stamped
-//      (`stampMember`) and folds into the bundle while only materials use it;
-//      the moment anything else uses it — a scene node, a decal, an emitter,
-//      the user adding it on its own — it is a tile again, because it is then
-//      a thing of the user's.
+//      (services/memberstamp.h, which owns the stamp's two keys and both
+//      edits) and folds into the bundle while only materials use it; the
+//      moment anything else uses it — a scene node, a decal, an emitter, the
+//      user adding it on its own, the user IMPORTING it themselves
+//      (IMPORT-INTENT-1: their import takes the stamp off) — it is a tile
+//      again, because it is then a thing of the user's.
 //
 //      V-3 ("hide every texture only materials use") is NOT this rule and was
 //      rejected for a measured reason: hiding by DEPENDENCY was tried and
@@ -98,14 +100,11 @@ struct Member
 /// version), library-scope with none.
 QVector<Member> describe(Database *db, Project *project, const QString &materialGuid);
 
-/// Mark `textureGuid` as a picture that arrived INSIDE `materialGuid` (V-2).
-/// Idempotent, and it never overwrites an existing origin: a texture first
-/// picked into material A and later used by B belongs to A's clean-up, and
-/// re-stamping it would move a row the user cannot see between owners.
-bool stampMember(Database *db, const QString &textureGuid, const QString &materialGuid);
-
-/// Does this row carry the stamp?
-bool isStampedMember(Database *db, const QString &guid);
+// (THE STAMP ITSELF — `memberstamp::stamp` / `unstamp` / `isStamped` — moved
+// to services/memberstamp.h in IMPORT-INTENT-1: it is now written from both
+// ends of the same question, the material side stamping and the import spine
+// clearing, and the spine cannot link this file's bundle-layer closure. The
+// projection below is the only reader that matters.)
 
 /// V-2, as a predicate over ONE row: stamped, used, and used by materials
 /// only. False for every row the user imported themselves, for a stamped row
