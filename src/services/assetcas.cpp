@@ -226,6 +226,15 @@ void discardStaged(QVector<Staged> &files)
     }
 }
 
+bool commitStagedObject(QSqlDatabase conn, const QString &root, Staged &file, QString *errorOut)
+{
+    // The object half of commitStaged — the bytes into the store and the
+    // `files` row — with NO asset_files link (ARCHIVE-GUIDS-1: an archive's
+    // object for a row this library already holds is stored so the project
+    // can PIN it, and is never linked as a second `source` of that row).
+    return commitStaged(conn, root, QString(), file, errorOut);
+}
+
 bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
                   Staged &file, QString *errorOut)
 {
@@ -281,6 +290,7 @@ bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
         return false;
     }
 
+    if (guid.isEmpty()) return true;   // commitStagedObject: the object only
     QSqlQuery insertLink(conn);
     insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
     insertLink.addBindValue(guid);

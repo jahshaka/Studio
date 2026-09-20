@@ -352,6 +352,7 @@ bool ProjectArchiver::planImport(const QString &zipPath)
     mIngest.clear();
     mNextIngest = 0;
     mGuidMap.clear();
+    mKnownGuids.clear();
     mBlobDbBase.clear();
     // The store root, read HERE: this is the UI thread, and the staging pass
     // that uses it is not.
@@ -489,7 +490,7 @@ void ProjectArchiver::beginInstallImport()
     // Catalog rows (fresh guids; scene blob remapped inside importProject).
     const QString newProjectGuid = GUIDManager::generateGUID();
     if (!db->importProject(QDir(mStage->path()).filePath(mBlobDbBase), newProjectGuid,
-                           mResult.worldName, mGuidMap)) {
+                           mResult.worldName, mGuidMap, &mKnownGuids)) {
         mResult.error = QStringLiteral("the archive's catalog could not be imported");
         return;
     }
@@ -549,8 +550,14 @@ void ProjectArchiver::installImportSlice()
     // What the heartbeat and the watchdog print if this thread does stop
     // answering here (UiStep — the archive's blocks used to read "stage: -").
     UiStep::Scope step("archive: install import slice");
+    // A ROW THIS LIBRARY ALREADY HOLDS (ARCHIVE-GUIDS-1) keeps its own files:
+    // the archive's objects are stored so the new project can pin the version
+    // it was archived with, and are never linked as a second source of the row.
+    const bool known = mKnownGuids.contains(asset.archiveGuid);
     for (AssetCas::Staged &file : asset.files) {
-        if (!AssetCas::commitStaged(conn, mStoreRoot, localGuid, file, &mResult.error)) {
+        const bool committed = known ? AssetCas::commitStagedObject(conn, mStoreRoot, file, &mResult.error)
+                                     : AssetCas::commitStaged(conn, mStoreRoot, localGuid, file, &mResult.error);
+        if (!committed) {
             // THE FIRST INGEST FAILURE ENDS THE IMPORT — AND TAKES THE
             // HALF-BUILT PROJECT WITH IT (F21, phase 1's code review).
             //
@@ -599,9 +606,13 @@ void ProjectArchiver::republishImportedBundles()
     if (!db) return;
     Project scoped;
     scoped.setProjectGuid(mResult.projectGuid);
+    // ONLY THE COLLISION SET (ARCHIVE-GUIDS-1): a row that kept its guid needs
+    // no rewrite, and a row this library already held must never have its
+    // LIBRARY definition overwritten by the archive's — the project's pin
+    // names the archived object, which is the whole of what it needs.
     for (const QString &archiveGuid : mGuidMap.keys()) {
         const QString localGuid = mGuidMap.value(archiveGuid);
-        if (localGuid.isEmpty()) continue;
+        if (localGuid.isEmpty() || localGuid == archiveGuid) continue;
         const AssetRecord row = db->fetchAsset(localGuid);
         if (row.type != static_cast<int>(ModelTypes::Material)) continue;
 

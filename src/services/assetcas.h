@@ -132,6 +132,8 @@ void noteDeviceWait();
 /// Publish `file` (rename) and record its rows against `guid`. The DB thread.
 bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
                   Staged &file, QString *errorOut);
+/// The object half of commitStaged with no asset_files link (ARCHIVE-GUIDS-1).
+bool commitStagedObject(QSqlDatabase conn, const QString &root, Staged &file, QString *errorOut);
 
 /// Delete whatever `files` staged — a cancelled or failed batch. Any thread.
 void discardStaged(QVector<Staged> &files);

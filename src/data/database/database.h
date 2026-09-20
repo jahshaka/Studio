@@ -623,7 +623,11 @@ public:
 	DatabaseMetadataRecord getDbMetadata();
 
     // IMPORT ===============================================================================
-    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids);
+    /// ARCHIVE-GUIDS-1: `assetGuids` receives ONLY the collision remaps (a
+    /// row keeps its guid otherwise; `value(guid, guid)` reads identity), and
+    /// `knownGuids` the archive guids this library already held at the same
+    /// type — the same asset, whose row the import left alone.
+    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr);
     QString importAsset(const ModelTypes &jafType,
                         const QString &pathToDb,
                         const QMap<QString, QString> &newNames,
