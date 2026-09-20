@@ -73,6 +73,7 @@ For more information see the LICENSE file
 #include "dialogs/searchdialog.h"
 #include "widgets/listwidget.h"
 #include "data/project.h"
+#include "data/settingsmanager.h"
 #include "core/texturemanager.h"
 #include "propertywidgets/texturepropertywidget.h"
 #include "ui/pages/assetview.h"
@@ -335,6 +336,10 @@ void EffectsPage::syncTabBar()
 	// a page with nothing open has nothing to show a bar of.
 	mTabBar->setVisible(!(mDocs.size() == 1 && mDocs[0]->isAnonymous()));
 	mSyncingTabs = false;
+	// THE SET IS WRITTEN DOWN ON EVERY CHANGE (§2.7): an open, a close, an
+	// activation, a re-order. It is a handful of guids in QSettings — cheap
+	// enough to do here rather than trying to remember the four call sites.
+	persistTabs();
 }
 
 QVariantMap EffectsPage::tabInfo(MaterialDocument *doc) const
@@ -378,7 +383,16 @@ QVariantMap EffectsPage::openMaterialTab(const QString &guid, const QString &sco
 		// THE DEFAULT IS THE COPY THE USER WOULD REACH FOR: the project's, when
 		// the open project pins this material (that is the drawer it is in),
 		// the library's otherwise.
-		const bool pinned = dataBase && mProject && !mProject->getProjectGuid().isEmpty()
+		//
+		// WITH NO PROJECT OPEN IT IS ALWAYS THE LIBRARY'S, and the test for
+		// that is the scene-open probe, not the guid: `Project::getProjectGuid`
+		// is cleared by the desktop's own close gesture and by nothing else, so
+		// after a scripted `project.close()` it still names the project that
+		// left — and a material opened then would be opened, and SAVED, as a
+		// copy of a project that is not there.
+		const bool sceneOpen = mSceneOpenProbe && mSceneOpenProbe();
+		const bool pinned = sceneOpen && dataBase && mProject
+		                    && !mProject->getProjectGuid().isEmpty()
 		                    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), guid);
 		origin = pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library;
 	}
@@ -1914,6 +1928,108 @@ void EffectsPage::updateAssetDock()
 }
 
 
+QString EffectsPage::tabsKeyFor(const QString &projectGuid)
+{
+	return projectGuid.isEmpty()
+	           ? QStringLiteral("materials/tabs/library")
+	           : QStringLiteral("materials/tabs/") + projectGuid;
+}
+
+void EffectsPage::setSettings(SettingsManager *settings)
+{
+	mSettings = settings;
+	// THE LIBRARY'S SET AT BOOT (§2.7). With a project open the shell calls
+	// onProjectChanged straight after this and the project's own set wins.
+	requestTabRestore(tabsKeyFor(QString()));
+}
+
+void EffectsPage::persistTabs()
+{
+	if (!mSettings || mTabsKey.isEmpty() || mTabsRestorePending) return;
+	QJsonArray rows;
+	for (MaterialDocument *doc : mDocs) {
+		// The anonymous canvas is not a saved tab: it is what the page falls
+		// back to, and it has no material to reopen.
+		if (doc->isAnonymous()) continue;
+		QJsonObject row;
+		row[QStringLiteral("guid")] = doc->info.GUID;
+		row[QStringLiteral("scope")] = doc->info.origin == shaderInfo::Origin::Project
+		                                   ? QStringLiteral("project")
+		                                   : QStringLiteral("library");
+		rows.append(row);
+	}
+	QJsonObject set;
+	set[QStringLiteral("tabs")] = rows;
+	set[QStringLiteral("active")] = mActive;
+	mSettings->setValue(mTabsKey, QString::fromUtf8(
+	    QJsonDocument(set).toJson(QJsonDocument::Compact)));
+}
+
+void EffectsPage::requestTabRestore(const QString &key)
+{
+	mTabsKey = key;
+	mTabsRestorePending = true;
+	if (isVisible()) restoreTabs();
+}
+
+void EffectsPage::restoreTabs()
+{
+	if (!mSettings || mTabsKey.isEmpty()) { mTabsRestorePending = false; return; }
+	const QJsonObject set =
+	    QJsonDocument::fromJson(mSettings->getValue(mTabsKey, QString()).toString().toUtf8())
+	        .object();
+	const QJsonArray rows = set.value(QStringLiteral("tabs")).toArray();
+	// NO MIGRATION: an absent key is an empty set, which is the anonymous
+	// canvas the page already has.
+	for (const QJsonValue &value : rows) {
+		const QJsonObject row = value.toObject();
+		const QString guid = row.value(QStringLiteral("guid")).toString();
+		if (guid.isEmpty()) continue;
+		// A restored entry whose material no drawer holds is skipped SILENTLY:
+		// it may have been deleted, unlisted, or removed from this project
+		// since the set was written (openDocument's own no-tile rule).
+		openDocument(guid, row.value(QStringLiteral("scope")).toString()
+		                           == QLatin1String("project")
+		                       ? shaderInfo::Origin::Project
+		                       : shaderInfo::Origin::Library);
+	}
+	const int active = set.value(QStringLiteral("active")).toInt(0);
+	if (active >= 0 && active < mDocs.size()) activateTab(active);
+	mTabsRestorePending = false;
+	syncTabBar();
+	persistTabs();
+}
+
+void EffectsPage::onProjectChanged()
+{
+	// THE SHELL IS THE ONLY ONE WHO KNOWS (the spec's C2): `setProject` is
+	// called once at module init with the one live Project instance, and
+	// ProjectService is not a QObject.
+	//
+	// (1) the set the page is showing belongs to the project that is leaving.
+	persistTabs();
+	// (2) THE KEY MOVES BEFORE THE DOCUMENTS DO. Closing the project's tabs
+	// is itself a change to the tab set, and with the outgoing key still in
+	// place every one of those closes would write the shrinking set back over
+	// the set just saved — the project would reopen with its own tabs gone.
+	// Moving the key (and arming the restore, which stands `persistTabs`
+	// down) makes the closes silent.
+	const bool sceneOpen = mSceneOpenProbe && mSceneOpenProbe();
+	const QString projectGuid =
+	    (sceneOpen && mProject) ? mProject->getProjectGuid() : QString();
+	mTabsKey = tabsKeyFor(projectGuid);
+	mTabsRestorePending = true;
+	// (3) A PROJECT-SCOPE DOCUMENT GOES WITH ITS PROJECT: it is the project's
+	// own copy of a material, read and written through the project's pins, and
+	// with the project closed there is nothing behind it. Its pending autosave
+	// is flushed on the way out, while the pins are still there to write to.
+	// LIBRARY documents stay: the library is the same library.
+	for (int i = mDocs.size() - 1; i >= 0; --i)
+		if (mDocs[i]->info.origin == shaderInfo::Origin::Project) closeDocumentAt(i);
+	// (4) ...and the incoming project's set (or the library's, with none open).
+	requestTabRestore(mTabsKey);
+}
+
 void EffectsPage::setProject(Project *project)
 {
 	mProject = project;
@@ -2116,6 +2232,11 @@ int EffectsPage::graphRedoCount() const
 void EffectsPage::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
+    // THE TAB SET IS RESTORED WHEN THE PAGE IS FIRST LOOKED AT, not at boot
+    // and not on a project open: deserialising half a dozen graphs and
+    // building their canvases is real work, and a user who opens a project
+    // lands in the editor. By the time they walk to Materials it is done.
+    if (mTabsRestorePending) restoreTabs();
     if (mColumnsSized) return;
     mColumnsSized = true;
     applyColumnWidths();

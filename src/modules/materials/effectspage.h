@@ -38,6 +38,7 @@ class NodeGraph;
 class NodeLibraryItem;
 class Database;
 class Project;
+class SettingsManager;
 class TexturePropertyWidget;
 class UndoRedo;
 class AssetView;
@@ -96,6 +97,18 @@ public:
 	/// Injected by the shell: the one live Project (Phase 4: was the
 	/// Globals::project static). Forwarded to the module's asset widget.
 	void setProject(Project *project);
+	/// Injected by the shell: the app's settings, which is where the OPEN TAB
+	/// SET lives (MATERIALS_TABS_SPEC §2.7) — per project, plus one for the
+	/// library. Handing it in is also what asks for the first restore.
+	void setSettings(SettingsManager *settings);
+	/// THE PROJECT CHANGED (opened, closed, switched). Called by the shell,
+	/// because nothing else can tell this page: `setProject` is called ONCE
+	/// at module init with the one live Project instance, and ProjectService
+	/// is not a QObject and has no signals. Saves the outgoing project's tab
+	/// set, closes the documents that belonged to it (their scope is gone)
+	/// and restores the incoming one's. LIBRARY tabs stay across the switch:
+	/// the library is the same library.
+	void onProjectChanged();
 private:
 	std::function<bool()> mSceneOpenProbe;
 	Project *mProject = nullptr;
@@ -373,6 +386,11 @@ private:
 	/// Set while the bar is being rebuilt from `mDocs`, so its own
 	/// currentChanged/tabMoved do not come back as user gestures.
 	bool mSyncingTabs = false;
+	/// Where the open tab set is stored, for the project (or the library)
+	/// the page is currently showing.
+	SettingsManager *mSettings = nullptr;
+	QString mTabsKey;
+	bool mTabsRestorePending = false;
 	/// ONE node library for every graph this page opens — it is a stateless
 	/// factory registry, and a copy per open was exactly that.
 	NodeLibrary *mNodeLibrary = nullptr;
@@ -418,6 +436,20 @@ private:
 	/// The bar's tabs, labels and visibility from `mDocs`.
 	void syncTabBar();
 	QVariantMap tabInfo(MaterialDocument *doc) const;
+	/// `materials/tabs/<projectGuid>`, or `materials/tabs/library` with no
+	/// project open.
+	static QString tabsKeyFor(const QString &projectGuid);
+	/// Write the open tab set under the key it belongs to. A no-op while a
+	/// restore is pending — the page's state is not yet the saved set, and
+	/// writing it would be the restore eating itself.
+	void persistTabs();
+	/// Open the tab set stored under `mTabsKey`. An entry whose material no
+	/// drawer holds is skipped, silently: no tile, no open.
+	void restoreTabs();
+	/// Restore under `key` — now if the page is on screen, else the next
+	/// time it is shown (opening half a dozen graphs is not boot work, and
+	/// a project open usually lands the user in the editor).
+	void requestTabRestore(const QString &key);
 	int indexForRef(const QVariant &tabOrGuid) const;
 	QSplitter *splitView;
 	AssetView* assetView;

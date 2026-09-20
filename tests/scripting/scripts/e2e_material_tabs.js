@@ -115,11 +115,30 @@ assert(materials.tabs().length === 1 && tabGuids()[0] === A, "one tab left: A");
 assert(nodeCount(B) === 1, "B's stored definition lost the node — the close flushed ITS save");
 assert(nodeCount(A) === 2, "A is untouched — the edit never reached the other material");
 
-// ---- 8. closing the last tab leaves the untitled canvas ------------------
-assert(materials.closeTab(0) === true, "close the last tab");
-var left = materials.tabs();
-assert(left.length === 1 && left[0].guid === "",
-       "the page falls back to the anonymous canvas (an empty page is not a state)");
+// ---- 8. the project's own copy is a SECOND document ----------------------
+// The four-drawer rule: a library original and the project's pinned copy are
+// two things, so the same guid open at both scopes is two tabs and neither
+// one's save may touch the other.
+assert(assets.addToProject(A) === A, "assets.addToProject(A) — the pin, same guid");
+var projectTab = materials.open(A, { scope: "project" });
+assert(projectTab.scope === "project", "materials.open(A, {scope:'project'})");
+assert(materials.tabs().length === 2, "two tabs: A's library copy and the project's");
+assert(tabGuids()[0] === A && tabGuids()[1] === A, "the same guid, twice, at two scopes");
+
+// ...and it goes when the project does (§2.7), while the LIBRARY tab stays.
+assert(project.close() === true, "project.close()");
+app.space("materials");
+var afterClose = materials.tabs();
+assert(afterClose.filter(function (t) { return t.scope === "project"; }).length === 0,
+       "no project-scope tab survives the project it belonged to");
+assert(afterClose.filter(function (t) { return t.guid === A; }).length === 1,
+       "the LIBRARY tab stays across the switch — the library is the same library");
+
+// Reopening the project brings its own set back.
+assert(project.open(projectGuid) === true, "project.open (the same project)");
+app.space("materials");
+assert(materials.tabs().filter(function (t) { return t.scope === "project"; }).length === 1,
+       "the project's tab set is restored with the project");
 
 // ---- 9. refusals -----------------------------------------------------------
 var refused = false;
@@ -134,8 +153,8 @@ assert(refused, "materials.activate refuses a tab that is not there");
 // which anything ever freed before this lane (NodeGraph had no destructor at
 // all, and every open leaked one).
 function openCloseOnce() {
-    materials.open(A);
-    materials.closeTab(A);
+    materials.open(B);
+    materials.closeTab(B);
 }
 openCloseOnce();
 var rssAfterFirst = app.memoryStats().residentBytes;
@@ -145,5 +164,21 @@ var growth = (rssAfter20 - rssAfterFirst) / rssAfterFirst;
 console.log("    RSS after 1 pass: " + rssAfterFirst + ", after 21: " + rssAfter20
             + " (" + (growth * 100).toFixed(2) + "%)");
 assert(growth < 0.05, "twenty opens and closes grow the resident set by under 5%");
+
+// ---- 11. what the RELAUNCH half will read --------------------------------
+// The tab set is persisted PER PROJECT, plus one for the library, so the set
+// this run leaves behind has to be left under the key the next process will
+// read: it starts with no project open, which is the LIBRARY's key.
+assert(project.close() === true, "project.close() — the library's set is what a fresh launch reads");
+app.space("materials");
+while (materials.tabs().length > 1 || materials.tabs()[0].guid !== "")
+    materials.closeTab(0);
+materials.open(A);
+materials.open(B);
+var left = materials.tabs();
+assert(left.length === 2 && left[0].guid === A && left[1].guid === B,
+       "the run leaves A and B open, in that order");
+console.log("    left open: " + JSON.stringify(tabGuids()));
+console.log("    project: " + projectGuid);
 
 console.log("material_tabs: PASS");

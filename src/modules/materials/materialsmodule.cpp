@@ -37,6 +37,8 @@ void MaterialsModule::initialize(ModuleHost &host)
         page->setSceneOpenProbe([projectService]() { return projectService->isSceneOpen(); });
     }
     page->setProject(host.project);
+    // The open TAB SET lives in the app's settings, per project (§2.7).
+    page->setSettings(host.settings);
 
     // A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page
     // commits a definition; this puts it on every mesh already wearing that

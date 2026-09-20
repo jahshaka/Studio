@@ -1816,6 +1816,17 @@ set_tests_properties(scripting.e2e.material_tabs PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
+# ...and a SECOND process on the same home: the tab set is persisted in the
+# app's settings, and only a relaunch can prove it is read back.
+add_test(NAME scripting.e2e.material_tabs.relaunch
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs_relaunch.js
+         WORKING_DIRECTORY ${_mtHome}/run)
+set_tests_properties(scripting.e2e.material_tabs.relaunch PROPERTIES
+    ENVIRONMENT "HOME=${_mtHome};JAHSHAKA_DATA_ROOT=${_mtHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED "materialTabsHome;materialTabsSession"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 # scripting.e2e.material_bundle — MATERIAL_BUNDLE_SPEC phase 1, the acceptance
 # flow the spec names: pick an image from disk -> ONE tile -> export -> an
 # EMPTY library -> it still resolves. Two processes, because "an empty library"
