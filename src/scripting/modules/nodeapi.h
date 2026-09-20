@@ -49,6 +49,11 @@ public:
     Q_INVOKABLE bool setProperty(const QString &id, const QString &key, const QVariant &value);
     Q_INVOKABLE QVariant properties(const QString &id);
     Q_INVOKABLE QVariant info(const QString &id);
+    /// THE PARTS OF A GROUPED NODE (COMPONENTS-1, owner review R14) — the
+    /// flattened descendants an imported model's outliner row hides. One
+    /// definition, shared with the Properties column's Components section
+    /// (services/nodecomponents.h).
+    Q_INVOKABLE QVariantList components(const QString &id);
     Q_INVOKABLE QVariant boneNames(const QString &id);
     /// The AVATAR LINK on a wrapper node (AVATAR_ASSET_SPEC §6): which avatar
     /// asset this is an instance of, at which version. `undefined` for

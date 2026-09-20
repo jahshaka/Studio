@@ -281,8 +281,10 @@ protected:
     QList<qint64> knownSelection;
 
 	void setItemVisible(QTreeWidgetItem *item, bool visible);
-	void lockItemAndChildren(QTreeWidgetItem* item);
-	void releaseItemAndChildren(QTreeWidgetItem* item);
+	/// Locks or unlocks the row and everything under it, undoably — the
+	/// padlock column's one edit (see the definition). Replaces the pair of
+	/// recursive direct writes that used to do it.
+	void setItemLocked(QTreeWidgetItem* item, bool locked);
 
 	// attachment
 
@@ -304,10 +306,6 @@ private:
     QSharedPointer<iris::SceneNode> selectedNode;
     MainWindow* mainWindow;
 
-	QIcon *visibleIcon;
-	QIcon *hiddenIcon;
-	QIcon *pickableIcon;
-	QIcon *disabledIcon;
 
     /// D1(b): the owner's Shift rule, applied on the PRESS. Selects everything
     /// from the topmost currently-selected row to `clicked`, inclusive.

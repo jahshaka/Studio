@@ -413,8 +413,12 @@ jah_no_display(ui.photon_panel)
 # builds in its constructor — with the same link stubs the other panel suites
 # use for the Sql/io layer. Offscreen, no display; the document nodes need the
 # headless graph like every other document suite.
-add_executable(test_selection_cost
-    test_selection_cost.cpp
+# THE PROPERTIES-COLUMN SLICE, named once (COMPONENTS-1). Two suites compile
+# the WHOLE right column — ui.selection_cost, which measures what a pick costs,
+# and ui.components, which drives the Components section — and an eighty-line
+# source list copied twice is a list that stops agreeing with itself the first
+# time a blade is added. Both targets take this variable; neither owns it.
+set(JAH_PROPERTIES_COLUMN_SOURCES
     test_stubs.cpp
     test_selection_stubs.cpp
     # The row-undo spine (debt L6): every panel row's gesture and the command it
@@ -427,6 +431,10 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
@@ -484,6 +492,8 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    # COMPONENTS-1: the Components section pushes a click through the real
+    # selection service, so the suites link it rather than a stub of it.
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
@@ -500,6 +510,11 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+
+add_executable(test_selection_cost
+    test_selection_cost.cpp
+    ${JAH_PROPERTIES_COLUMN_SOURCES})
+
 set_target_properties(test_selection_cost PROPERTIES
     AUTOMOC ON
     AUTOUIC ON
@@ -527,6 +542,51 @@ add_test(NAME ui.selection_cost COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+
+# THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
+# this app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
+# and a tests/ui binary does not live in bin/, where the icons are staged — so
+# a suite that asserts anything about an icon would be asserting about null
+# pixmaps. Made HERE, at configure, rather than by the suite at run time: a
+# runtime call cannot replace a link that exists but dangles (a moved or
+# rebuilt bin/), and this one is re-made on every configure. The suite still
+# checks and fails loudly, because a link is not a guarantee.
+file(CREATE_LINK "${CMAKE_BINARY_DIR}/bin/app" "${CMAKE_CURRENT_BINARY_DIR}/app"
+     SYMBOLIC)
+
+# ui.components — THE COMPONENTS SECTION (owner review R14, COMPONENTS-1): the
+# parts of a grouped node, listed in the Properties column, clickable. Real
+# mouse events on the real panel under the real Qlementine style — a click
+# selects a part, Shift/Ctrl extend, a double-click frames it, a selection made
+# elsewhere moves the highlight — plus the cost law: 200 picks inside one model
+# rebuild the list zero times. The verb half is scripting.e2e.components.
+# Offscreen, no display.
+add_executable(test_components
+    test_components.cpp
+    ${JAH_PROPERTIES_COLUMN_SOURCES})
+set_target_properties(test_components PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_components PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_components PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_components
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)
+jah_document_graph(test_components)
+add_test(NAME ui.components COMMAND test_components
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.components PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+jah_no_display(ui.components)
 jah_no_display(ui.selection_cost)
 
 # ui.panel_undo — EVERY properties row is undoable, as ONE step per gesture
@@ -549,6 +609,10 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
@@ -676,6 +740,10 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
@@ -813,6 +881,10 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    # COMPONENTS-1: the column's Components section and the icons it draws.
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
@@ -1104,6 +1176,8 @@ add_executable(test_tree_multiselect
     test_tree_multiselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     # The outliner's clipboard rows ask the envelope codec what the payload
     # holds before offering a Paste row (CLIPBOARD_SPEC §3.1). A leaf: QJson
@@ -1155,6 +1229,8 @@ add_executable(test_tree_scroll
     test_tree_scroll.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
@@ -1203,6 +1279,8 @@ add_executable(test_tree_reselect
     test_tree_reselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
@@ -1250,6 +1328,8 @@ add_executable(test_hierarchy_root
     test_hierarchy_root.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    # COMPONENTS-1: the outliner's icons live in one place now.
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp

@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/core/irisutils.h"
+#include "ui/controls/nodeicons.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -103,23 +104,6 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 
     connect(ui->folderBtn, &QPushButton::clicked,
             this, &SceneHierarchyWidget::newFolderFromSelection);
-
-	// We do QIcon::Selected manually to remove an annoying default highlight for selected icons
-	visibleIcon = new QIcon;
-	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48.png"), QIcon::Normal);
-	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48.png"), QIcon::Selected);
-
-	hiddenIcon = new QIcon;
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Normal);
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Selected);
-
-    pickableIcon = new QIcon;
-    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-dim.png"), QIcon::Normal);
-    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-dim.png"), QIcon::Selected);
-
-    disabledIcon = new QIcon;
-    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Normal);
-    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Selected);
 
     ui->sceneTree->setStyleSheet(StyleSheet::SceneHierarchyTree());
 }
@@ -955,12 +939,11 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 		setItemVisible(item, !item->data(1, Qt::UserRole).toBool());
 	}
     else if (column == 2) {
-        // The edit gate (round 2, item 5): the lock IS the node's `pickable`
-        // flag, written straight onto the document with no command behind it,
-        // so the spine never sees it.
+        // THE LOCK IS THE NODE'S `pickable` FLAG, and it is an undoable edit
+        // now (COMPONENTS-1 send-back item 2) — the edit gate still refuses
+        // first, before any command is opened.
         if (editgate::refuse()) return;
-        if (item->data(2, Qt::UserRole).toBool()) lockItemAndChildren(item);
-        else releaseItemAndChildren(item);
+        setItemLocked(item, item->data(2, Qt::UserRole).toBool());
     }
 	else {
 		// ONE PATH OUT (EDITOR_MULTISELECT_SPEC §3.1). itemSelectionChanged has
@@ -1484,39 +1467,13 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
 	childTreeItem->setData(2, Qt::UserRole, QVariant::fromValue(node->isPickable()));
 
-	// ONE ICON PER NODE TYPE, built once and shared (CRUD, second reader
-	// 2026-09-15). Every row used to `new QIcon` and never delete it — one
-	// leaked QIcon per row per repopulate, and this function runs on every add,
-	// delete, reparent and folder gesture. A QIcon is implicitly shared, so a
-	// static table costs one pixmap pair per type for the process.
-	static const QHash<iris::SceneNodeType, QString> kTypeIcon = {
-		{ iris::SceneNodeType::Mesh,           QStringLiteral("app/icons/icons8-mesh-32.png") },
-		{ iris::SceneNodeType::Light,          QStringLiteral("app/icons/icons8-sun-48.png") },
-		{ iris::SceneNodeType::ParticleSystem, QStringLiteral("app/icons/icons8-snow-storm-26.png") },
-		{ iris::SceneNodeType::Empty,          QStringLiteral("app/icons/icons8-average-math-filled-50.png") },
-		{ iris::SceneNodeType::Decal,          QStringLiteral("app/icons/icons8-picture-50.png") },
-		{ iris::SceneNodeType::Camera,         QStringLiteral("app/icons/icons8-camera-48.png") },
-	};
-	// LEAKED ON PURPOSE, like the four member icons above: a QIcon holds
-	// QPixmaps, and a QPixmap destroyed after QApplication is gone (which is
-	// when a function-local static's destructor runs) is the classic Qt
-	// shutdown crash. One hash for the process, never destroyed.
-	static QHash<iris::SceneNodeType, QIcon> &icons =
-		*new QHash<iris::SceneNodeType, QIcon>;
-	const iris::SceneNodeType type = node->getSceneNodeType();
-	if (!icons.contains(type)) {
-		QIcon icon;
-		const QString path = kTypeIcon.value(type);
-		if (!path.isEmpty()) {
-			icon.addPixmap(IrisUtils::getAbsoluteAssetPath(path), QIcon::Normal);
-			icon.addPixmap(IrisUtils::getAbsoluteAssetPath(path), QIcon::Selected);
-		}
-		icons.insert(type, icon);      // a type with no icon caches the empty one
-	}
-	childTreeItem->setIcon(0, icons.value(type));
+	// ONE ICON PER NODE TYPE — the table lives in ui/controls/nodeicons.h now
+	// (COMPONENTS-1), because the Properties column's Components section draws
+	// the same rows and a second table would have been a second truth.
+	childTreeItem->setIcon(0, nodeicons::forType(node->getSceneNodeType()));
 	
-	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
-	node->isPickable() ? childTreeItem->setIcon(2, *pickableIcon) : childTreeItem->setIcon(2, *disabledIcon);
+	childTreeItem->setIcon(1, nodeicons::visibility(node->isVisible()));
+	childTreeItem->setIcon(2, nodeicons::lock(!node->isPickable()));
 
     return childTreeItem;
 }
@@ -1554,16 +1511,26 @@ void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 			const qint64 nodeId = it->data(0, Qt::UserRole).toLongLong();
 			if (nodeList.contains(nodeId) && nodeList[nodeId]) {
 				const bool own = nodeList[nodeId]->isVisible();
-				it->setIcon(1, own ? *visibleIcon : *hiddenIcon);
+				it->setIcon(1, nodeicons::visibility(own));
 				it->setData(1, Qt::UserRole, QVariant::fromValue(own));
 			}
 		} else {
-			it->setIcon(1, visible ? *visibleIcon : *hiddenIcon);
+			it->setIcon(1, nodeicons::visibility(visible));
 			it->setData(1, Qt::UserRole, QVariant::fromValue(visible));
 		}
 		for (int i = 0; i < it->childCount(); i++) paint(it->child(i));
 	};
 	paint(item);
+
+	// AND THE PROPERTIES COLUMN RE-READS THE DOCUMENT (COMPONENTS-1 send-back
+	// item 2, corrected). Pushing a command does NOT repaint the column: the
+	// undo service's stack-moved hook fires on undo() and redo() only, by
+	// design — a refresh per command would rebuild the column on every frame of
+	// a drag. So a panel showing a flag this row edits has to be told, and until
+	// the Components section arrived nothing did: the outliner repaints its own
+	// rows and the column kept whatever the last pick left. The padlock below
+	// has the same gap and the same one-line answer.
+	if (mainWindow) mainWindow->refreshPropertiesFromDocument();
 }
 
 //todo : attach physics objects
@@ -1595,40 +1562,65 @@ void SceneHierarchyWidget::detachFromParent(iris::SceneNodePtr node)
 	repopulateTree();
 }
 
-void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
+// THE PADLOCK IS AN EDIT LIKE THE EYE (COMPONENTS-1 send-back item 2).
+//
+// It used to write `setPickable` straight onto the document, row by row: not
+// undoable, and — the symptom that found it — invisible to everything that
+// re-reads the document when the undo stack moves. The Properties column's
+// Components section draws a padlock per part, and locking one in the outliner
+// left that padlock stale until the next pick, while the eye beside it updated
+// because the eye has gone through a command since the render-audit follow-up.
+//
+// So this is setItemVisible's shape, for the other flag: collect the nodes the
+// row covers (walking THROUGH folder rows, never into nodeList[0]), write them
+// through SetNodePropertyCommand under one macro — the lock cascade is one
+// undo step, not one per node — and then paint the rows from what the document
+// now says. Without an undo service (a test host, a preview) it writes
+// directly, exactly as the eye does.
+void SceneHierarchyWidget::setItemLocked(QTreeWidgetItem *item, bool locked)
 {
-    // A folder row carries no node — recurse THROUGH it, never into
-    // nodeList[0] (a null shared pointer waiting to be dereferenced).
-    if (isFolderItem(item)) {
-        for (int i = 0; i < item->childCount(); i++) lockItemAndChildren(item->child(i));
-        return;
-    }
-    qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-    item->setIcon(2, *disabledIcon);
-    nodeList[nodeId]->setPickable(false);
-    item->setData(2, Qt::UserRole, QVariant::fromValue(false));
+    QVector<iris::SceneNodePtr> nodes;
+    std::function<void(QTreeWidgetItem *)> collect = [&](QTreeWidgetItem *it) {
+        if (!isFolderItem(it)) {
+            const qint64 nodeId = it->data(0, Qt::UserRole).toLongLong();
+            if (nodeList.contains(nodeId) && nodeList[nodeId]) nodes.push_back(nodeList[nodeId]);
+        }
+        for (int i = 0; i < it->childCount(); i++) collect(it->child(i));
+    };
+    collect(item);
 
-    for (int i = 0; i < item->childCount(); i++) {
-        lockItemAndChildren(item->child(i));
+    auto *undo = (mainWindow && mainWindow->studioServices()) ? mainWindow->studioServices()->undo
+                                                             : nullptr;
+    const bool macro = undo && undo->stack() && nodes.size() > 1;
+    if (macro) undo->stack()->beginMacro(locked ? tr("Lock Objects") : tr("Unlock Objects"));
+    for (const auto &node : nodes) {
+        if (node->isPickable() == !locked) continue;
+        if (undo) undo->push(new SetNodePropertyCommand(node, QStringLiteral("pickable"),
+                                                        locked, !locked));
+        else node->setPickable(!locked);
     }
-}
+    if (macro) undo->stack()->endMacro();
 
-void SceneHierarchyWidget::releaseItemAndChildren(QTreeWidgetItem *item)
-{
-    // A folder row carries no node — recurse THROUGH it, never into
-    // nodeList[0] (a null shared pointer waiting to be dereferenced).
-    if (isFolderItem(item)) {
-        for (int i = 0; i < item->childCount(); i++) releaseItemAndChildren(item->child(i));
-        return;
-    }
-    qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-    item->setIcon(2, *pickableIcon);
-    nodeList[nodeId]->setPickable(true);
-    item->setData(2, Qt::UserRole, QVariant::fromValue(true));
+    // The row icons follow the nodes' OWN flags, like the eye's.
+    std::function<void(QTreeWidgetItem *)> paint = [&](QTreeWidgetItem *it) {
+        if (!isFolderItem(it)) {
+            const qint64 nodeId = it->data(0, Qt::UserRole).toLongLong();
+            if (nodeList.contains(nodeId) && nodeList[nodeId]) {
+                const bool pickable = nodeList[nodeId]->isPickable();
+                it->setIcon(2, nodeicons::lock(!pickable));
+                it->setData(2, Qt::UserRole, QVariant::fromValue(pickable));
+            }
+        } else {
+            it->setIcon(2, nodeicons::lock(locked));
+            it->setData(2, Qt::UserRole, QVariant::fromValue(!locked));
+        }
+        for (int i = 0; i < it->childCount(); i++) paint(it->child(i));
+    };
+    paint(item);
 
-    for (int i = 0; i < item->childCount(); i++) {
-        releaseItemAndChildren(item->child(i));
-    }
+    // See setItemVisible's tail: the column is told, because the stack-moved
+    // hook is not going to tell it.
+    if (mainWindow) mainWindow->refreshPropertiesFromDocument();
 }
 
 void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)

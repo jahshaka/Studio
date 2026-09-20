@@ -32,6 +32,8 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "data/database/database.h"
 #include "services/services.h"
+#include "services/nodecomponents.h"
+#include "services/selectionservice.h"
 #include "services/undoservice.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/assets/skeleton.h"
@@ -41,6 +43,7 @@ For more information see the LICENSE file
 #include "services/lightbindings.h"
 #include "io/sceneformat.h"
 #include <QJsonObject>
+#include <QSet>
 
 using namespace scriptmod;
 
@@ -139,6 +142,20 @@ QVector<VerbInfo> NodeApi::verbs() const
           "rendered frame produced: a bone's world position cannot be resolved between frames "
           "(Ogre resolves tag points inside the frame), so a script that moved a character and "
           "wants the rider's new world position must step a frame first.",
+          Needs::Document },
+        { "components", "node.components(id) -> [{id, name, type, depth, visible, locked, selected}]",
+          "THE PARTS OF A GROUPED NODE — the node's descendants, flattened, in document order "
+          "(a parent before its children, siblings by index), each with the `depth` it sits at "
+          "(1 for a direct child). Empty for anything with no children. An imported model is "
+          "ONE node with its meshes hanging off it and the outliner deliberately does not draw "
+          "those children (they are `attached`), so this is how a script — and the Properties "
+          "column's Components section, which reads the same list — reaches a single part to "
+          "select it, give it its own material or ask where it is. `visible` and `locked` are "
+          "the part's OWN flags (node.property(id,'visible') and the pickable flag the outliner's "
+          "padlock edits), not the inherited state; `selected` is its membership of the editor "
+          "selection right now, so a listing taken after editor.select reflects it. Read-only: "
+          "selecting a part is editor.select / editor.selectAdd, framing it is "
+          "editor.frameNode.",
           Needs::Document },
         { "boneNames", "node.boneNames(id) -> [string]",
           "The node's rig, in bone-index order (the index its vertex weights name). Empty for anything unrigged.",
@@ -1073,6 +1090,36 @@ QVariant NodeApi::info(const QString &id)
         return jsNull();
     }
     return nodeToJs(node);
+}
+
+QVariantList NodeApi::components(const QString &id)
+{
+    QVariantList out;
+    auto node = nodeOrFail(id, QStringLiteral("node.components"));
+    if (!node) return out;
+
+    // WHO IS SELECTED RIGHT NOW. Read once, into a set of guids, rather than
+    // asking the service per part: a two-hundred-part model would otherwise
+    // walk the selection list two hundred times to answer one question.
+    QSet<QString> selected;
+    if (host.services && host.services->selection)
+        for (const auto &sel : host.services->selection->selectedSet())
+            if (sel) selected.insert(sel->getGUID());
+
+    for (const nodecomponents::Part &part : nodecomponents::partsOf(node)) {
+        out.append(QVariantMap{
+            { "id", part.node->getGUID() },
+            { "name", part.node->getName() },
+            { "type", nodeTypeName(part.node->getSceneNodeType()) },
+            { "depth", part.depth },
+            // The part's OWN flags, not the inherited state — the same two the
+            // outliner's eye and padlock edit (the lock IS `pickable`).
+            { "visible", part.node->isVisible() },
+            { "locked", !part.node->isPickable() },
+            { "selected", selected.contains(part.node->getGUID()) },
+        });
+    }
+    return out;
 }
 
 // The node's OWN skeleton, not the mesh asset's: the asset carries the rig
