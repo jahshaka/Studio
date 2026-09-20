@@ -187,6 +187,39 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
     // scripted graph material rendered BLACK in the commit that claimed the
     // defect fixed. One place, and it is the one every definition passes.
 
+    // ROWS THE GRAPH DOES NOT OWN ARE NOT DELETED BY SAVING IT (PRESET-UNIFY-1).
+    // The master node has nine sockets; a PbrMaterial has more rows than that,
+    // and four of them NO graph can ever produce — the roughness remap bounds
+    // (`roughnessLowerBound`/`roughnessUpperBound`, which is how every textured
+    // preset turns a specular map into roughness), the normal factor, and the
+    // UV transform when no UV node folded one. Two more — `alpha` and
+    // `alphaMode` — the evaluator writes only when something feeds them, so a
+    // Glass material's alpha mode would vanish the first time its graph was
+    // saved. Before this, customising a preset and saving it once silently
+    // flattened all of that: the material changed under the user although they
+    // had touched nothing that describes it.
+    //
+    // So a value the evaluator DID produce always wins (the graph is the truth
+    // for everything the graph can say), and one it did not is carried forward
+    // from the definition this material already has. Texture slots are never
+    // carried: removing a texture node must clear its slot.
+    {
+        static const QStringList kNotFromAGraph = {
+            QStringLiteral("roughnessLowerBound"), QStringLiteral("roughnessUpperBound"),
+            QStringLiteral("normalFactor"),        QStringLiteral("textureScale"),
+            QStringLiteral("textureScaleV"),       QStringLiteral("textureOffset"),
+            QStringLiteral("textureRotation"),     QStringLiteral("alpha"),
+            QStringLiteral("alphaMode"),           QStringLiteral("alphaCutoff"),
+        };
+        const QJsonObject previous =
+            MaterialBundle::read(db, materialGuid, project)
+                .value(QStringLiteral("values")).toObject();
+        for (const QString &key : kNotFromAGraph) {
+            if (values.contains(key) || !previous.contains(key)) continue;
+            values[key] = previous.value(key);
+        }
+    }
+
     QJsonObject definition;
     definition[QStringLiteral("materialType")] = QStringLiteral("pbr");
     definition[QStringLiteral("name")] = graph->settings.name;

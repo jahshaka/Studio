@@ -170,8 +170,11 @@ signals:
 	// exactly one node selected -> its model; empty or multi selection -> null
 	void nodeSelected(NodeModel* model);
 	void loadGraph(QListWidgetItem *item);
-	void loadGraphFromPreset(QString name);
-	void loadGraphFromPreset2(QString name);
+	// (loadGraphFromPreset / loadGraphFromPreset2 are DELETED — PRESET-UNIFY-1.
+	// They carried a dropped GRAPH TEMPLATE's name, in two flavours because
+	// the templates lived in two folders. A preset tile is an ordinary
+	// Material tile now, so a preset dropped on the canvas takes the
+	// loadGraph branch above and opens read-only like every other one.)
 
 	// called whenever something is done that should cause the shader
 	// to be invalidated such as:

@@ -1,0 +1,72 @@
+{
+    "name": "Texture PBR",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "4ef427a4-f794-5fde-84eb-a7f54deb9ee5",
+                "leftNodeId": "d833a32d-a9c8-57f0-bfb3-529979981d77",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "6e6e486e-3b96-5722-a9ae-a29c3e3a0804",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "7b96f41d-2d29-5e60-8450-23424d2697fa",
+                "leftNodeId": "815e2248-adf8-59fc-8133-ad37d573adb4",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "6e6e486e-3b96-5722-a9ae-a29c3e3a0804",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "de84084e-7b40-51a2-b325-5b4fdea15eb6",
+                "leftNodeId": "16d087c4-9b11-51cf-8f54-b41d00630268",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "6e6e486e-3b96-5722-a9ae-a29c3e3a0804",
+                "rightNodeSocketIndex": 1
+            }
+        ],
+        "masternode": "6e6e486e-3b96-5722-a9ae-a29c3e3a0804",
+        "materialGuid": "",
+        "nodes": [
+            {
+                "id": "16d087c4-9b11-51cf-8f54-b41d00630268",
+                "title": "Metallic",
+                "type": "float",
+                "value": 0.0,
+                "x": -430.0,
+                "y": 10.0
+            },
+            {
+                "id": "6e6e486e-3b96-5722-a9ae-a29c3e3a0804",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
+                "value": "",
+                "x": 0.0,
+                "y": 0.0
+            },
+            {
+                "id": "815e2248-adf8-59fc-8133-ad37d573adb4",
+                "title": "Base Colour",
+                "type": "texture",
+                "value": "../../../shadergraph/wood.jpg",
+                "x": -430.0,
+                "y": -210.0
+            },
+            {
+                "id": "d833a32d-a9c8-57f0-bfb3-529979981d77",
+                "title": "Roughness",
+                "type": "float",
+                "value": 0.39,
+                "x": -430.0,
+                "y": 140.0
+            }
+        ],
+        "settings": {
+            "bakeResolution": 1024,
+            "blendMode": "Opaque",
+            "name": "Texture PBR"
+        },
+        "socketLayout": 2
+    },
+    "type": "shadergraph",
+    "version": 2
+}

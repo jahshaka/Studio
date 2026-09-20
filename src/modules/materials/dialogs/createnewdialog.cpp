@@ -21,6 +21,9 @@ For more information see the LICENSE file
 #include "irisgl/import/materialhelper.h"
 
 #include "../core/materialhelper.h"
+#include "data/constants.h"
+#include "data/materialpreset.h"
+#include "io/materialpresets.h"
 #include "ui/style/stylesheet.h"
 
 CreateNewDialog::CreateNewDialog(bool maximized) : QDialog()
@@ -141,8 +144,8 @@ void CreateNewDialog::createViewWithOptions()
 	int j = 0;
 
 	//set up list options
-	auto starterList = getStarterList();
-	for (auto tile : starterList) {
+	const auto tiles = presetTiles();
+	for (const auto &tile : tiles) {
 		auto item = new OptionSelection(tile);
 		optionLayout->addWidget(item, i, j);
 		j++;
@@ -159,36 +162,21 @@ void CreateNewDialog::createViewWithOptions()
 
 	}
 
-	currentInfoSelected = starterList[0];
-	infoLabel->setText(currentInfoSelected.title + " selected");
+	if (!tiles.isEmpty()) {
+		currentInfoSelected = tiles.first();
+		infoLabel->setText(currentInfoSelected.title + " selected");
+	}
 
 	auto spacerItem = new QWidget;
 	spacerItem->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
 	optionLayout->addWidget(spacerItem);
 
+	// (The second grid is gone with the second preset family: there is one
+	// list, so there is one section.)
+	presetLabel->hide();
+	presets->hide();
 
-	i = 0; j = 0;
-
-
-	for (auto tile : getPresetList()) {
-		auto item = new OptionSelection(tile);
-		presetLayout->addWidget(item, i, j);
-		j++;
-		if (j % num_of_widgets_per_row == 0) {
-			j = 0;
-			i++;
-		}
-		btnGrp->addButton(item);
-
-		connect(item, &OptionSelection::buttonSelected, [=](OptionSelection* button) {
-			currentInfoSelected = button->info;
-			infoLabel->setText(currentInfoSelected.title + " selected");
-		});
-
-
-	}
-
-	btnGrp->buttons().at(0)->setChecked(true);
+	if (!btnGrp->buttons().isEmpty()) btnGrp->buttons().at(0)->setChecked(true);
 
 	connect(cancel, &QPushButton::clicked, [=]() {
 		this->reject();
@@ -249,7 +237,8 @@ void CreateNewDialog::createViewWithoutOptions()
 	layout->addWidget(nameHolder);
 	layout->addWidget(buttonHolder);
 
-	currentInfoSelected = getStarterList().at(0);
+	const auto tiles = presetTiles();
+	if (!tiles.isEmpty()) currentInfoSelected = tiles.first();
 
 	connect(cancel, &QPushButton::clicked, [=]() {
 		this->reject();
@@ -274,124 +263,27 @@ void CreateNewDialog::createViewWithoutOptions()
 
 }
 
-QList<NodeGraphPreset> CreateNewDialog::getPresetList()
+QList<NodeGraphPreset> CreateNewDialog::presetTiles()
 {
-	QList<NodeGraphPreset> presetsList;
-	NodeGraphPreset graphPreset;
-	graphPreset.name = "Checker Board";
-	graphPreset.title = "Chacker Board";
-	graphPreset.templatePath = "checker.effect";
-	graphPreset.iconPath = "checkerThumb.png";
-	graphPreset.list.append("checker.jpg");
-	presetsList.append(graphPreset);
-	graphPreset.list.clear();
-
-	graphPreset.name = "Grass";
-	graphPreset.title = "Grass Template";
-	graphPreset.templatePath = "grass.effect";
-	graphPreset.iconPath = "grassThumb.png";
-	graphPreset.list.append("grass.jpg");
-	presetsList.append(graphPreset);
-	graphPreset.list.clear();
-
-	graphPreset.name = "Gold";
-	graphPreset.title = "Gold Template";
-	graphPreset.templatePath = "gold.effect";
-	graphPreset.iconPath = "goldThumb.png";
-	//graphPreset.list.append("assets/grass.jpg");
-	presetsList.append(graphPreset);
-	graphPreset.list.clear();
-
-	// Preset sync with the editor's materials drawer (which ships Glass PBR and
-	// Silver PBR): simple PBR graphs — colour + metallic/roughness (+ alpha for
-	// glass) into the PbrMaterial master. Thumbnails already ship with the app.
-	graphPreset.name = "Glass";
-	graphPreset.title = "Glass Template";
-	graphPreset.templatePath = "glass.effect";
-	graphPreset.iconPath = "glassThumb.png";
-	presetsList.append(graphPreset);
-	graphPreset.list.clear();
-
-	graphPreset.name = "Silver";
-	graphPreset.title = "Silver Template";
-	graphPreset.templatePath = "silver.effect";
-	graphPreset.iconPath = "silverThumb.png";
-	presetsList.append(graphPreset);
-	graphPreset.list.clear();
-
-	return presetsList;
-}
-
-QList<NodeGraphPreset> CreateNewDialog::getAdditionalPresetList()
-{
-	QList<NodeGraphPreset> presetsList;
-	NodeGraphPreset graphPreset;
-	// create constants for this
-	QString prefix(QString("materials_to_graph") + QDir::separator());
-	auto filePath = MaterialHelper::assetPath(prefix);
-	QDirIterator it(filePath);
-
-	while (it.hasNext()) {
-
-		QFile file(it.next());
-        qDebug() << file.fileName();
-
-#ifdef Q_OS_MAC
-        if (file.fileName().split('.')[2] == "effect") {
-            QFileInfo fileInfo(file.fileName().split('.')[1]);
-#else
-        if (file.fileName().split('.')[1] == "effect") {
-            QFileInfo fileInfo(file.fileName().split('.')[0]);
-#endif
-
-
-			graphPreset.name = fileInfo.fileName();
-			graphPreset.title = graphPreset.name + " Template";
-			graphPreset.templatePath = prefix + graphPreset.name + ".effect";
-			graphPreset.iconPath = prefix + graphPreset.name.toLower() + ".png";
-			// diffuse + normal only. The specular maps went with the
-			// Blinn-Phong master (LEGACY-MASTER-CRUD): a specular-intensity
-			// map is not a PBR input, so copying one into every project made
-			// from these presets imported an image nothing could ever read.
-			graphPreset.list.append(prefix + graphPreset.name.toLower() + " diff.jpg");
-			graphPreset.list.append(prefix + graphPreset.name.toLower() + " norm.png");
-
-			presetsList.append(graphPreset);
-			graphPreset.list.clear();
-		}
+	// ONE LIST (PRESET-UNIFY-1). Three functions stood here: a hand-written
+	// "presets" list of five `.effect` templates, a hand-written "starters"
+	// list of three more, and a directory walk of nine under
+	// `materials_to_graph/` — seventeen graph templates that were the SECOND
+	// preset family, shown beside the shipped material presets in the same
+	// drawer ("Brick" above "Brick PBR"). They are the same twenty presets
+	// now, read once from `app/content/materials`, and each one carries the
+	// graph a new material is based on.
+	QList<NodeGraphPreset> tiles;
+	for (const MaterialPreset &preset : MaterialPresets::all()) {
+		NodeGraphPreset tile;
+		tile.name = preset.name;
+		tile.title = preset.name;
+		tile.iconPath = preset.icon;
+		tile.guid = Constants::Reserved::DefaultMaterials.key(preset.name);
+		tiles.append(tile);
 	}
-	return presetsList;
+	return tiles;
 }
-
-QList<NodeGraphPreset> CreateNewDialog::getStarterList()
-{
-	NodeGraphPreset graphPreset;
-	QList<NodeGraphPreset> list;
-	graphPreset.name = "Default";
-	graphPreset.title = "Default Template";
-    graphPreset.templatePath = "default.effect";
-	graphPreset.iconPath = "default.png";
-	list.append(graphPreset);
-	graphPreset.list.clear();
-
-	graphPreset.name = "Basic";
-	graphPreset.title = "Basic Template";
-    graphPreset.templatePath = "basic.effect";
-	graphPreset.iconPath = "basic.png";
-	list.append(graphPreset);
-	graphPreset.list.clear();
-
-	graphPreset.name = "Texture";
-	graphPreset.title = "Texture Template";
-    graphPreset.templatePath = "texture.effect";
-	graphPreset.iconPath = "texture.png";
-    graphPreset.list.append("wood.jpg");
-	list.append(graphPreset);
-	graphPreset.list.clear();
-
-	return list;
-}
-
 
 OptionSelection::OptionSelection(NodeGraphPreset node) : QPushButton()
 {
@@ -400,8 +292,10 @@ OptionSelection::OptionSelection(NodeGraphPreset node) : QPushButton()
 	checkedIconIcon = checkedIconIcon.scaled(24, 24, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 	info = node;
 
-	if (info.iconPath == "") setIcon(QIcon(info.iconPath));
-	else setIcon(QIcon(MaterialHelper::assetPath(info.iconPath)));
+	// An ABSOLUTE path: the preset's shipped tile (PRESET-UNIFY-1). It used to
+	// be relative to the shadergraph asset folder, which only the deleted
+	// templates lived in.
+	setIcon(QIcon(info.iconPath));
 	setIconSize(QSize(120,120));
 	setCheckable(true);
 	setAutoExclusive(true);

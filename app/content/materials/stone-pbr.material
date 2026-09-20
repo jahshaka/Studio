@@ -2,6 +2,7 @@
     "name"                : "Stone Wall PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/stone.png",
+    "graph"               : "graphs/stone-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/stone/Stone_04_UV_H_CM_1_COLOR.png",
     "metallic"            : 0.0,

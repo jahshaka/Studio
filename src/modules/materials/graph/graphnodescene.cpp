@@ -540,14 +540,10 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 		}
 	}
 
-	if (event->mimeData()->data("MODEL_TYPE_ROLE").toStdString() == "presets") {
-		emit loadGraphFromPreset(event->mimeData()->text());
-	}
-
-	if (event->mimeData()->data("MODEL_TYPE_ROLE").toStdString() == "presets2") {
-		qDebug() << "preset 2";
-		emit loadGraphFromPreset2(event->mimeData()->text());
-	}
+	// (The two "presets"/"presets2" drop branches are gone with the graph
+	// templates they carried — PRESET-UNIFY-1. A preset tile carries
+	// ModelTypes::Material like every other material now, so it is handled
+	// above.)
 }
 
 void GraphNodeScene::drawBackground(QPainter * painter, const QRectF & rect)

@@ -231,11 +231,14 @@ int main(int argc, char** argv)
         // RESAMPLING its texture into a baked map — same picture at first
         // glance, permanently lower resolution. So: load them all, classify
         // every master socket, and refuse any "baked".
+        // ONE SHIPPED SET (PRESET-UNIFY-1): the graph templates that used to
+        // live beside these under app/shadergraph/ were the SECOND preset
+        // family and are deleted; every shipped preset's graph is here.
+        const QString graphDir = QString(JAHSHAKA_TEST_PRESET_DIR) + "graphs/";
         QStringList files;
-        QDirIterator it(QString(JAHSHAKA_TEST_APP_DIR), { "*.effect" }, QDir::Files,
-                        QDirIterator::Subdirectories);
+        QDirIterator it(graphDir, { "*.effect" }, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext()) files.append(it.next());
-        CHECK(files.size() >= 17, "shipped: found the preset .effect files");
+        CHECK(files.size() == 20, "shipped: found the twenty preset graphs");
 
         int baked = 0, passthrough = 0, loadedCount = 0;
         for (const auto& file : files) {
@@ -256,7 +259,9 @@ int main(int argc, char** argv)
             for (auto node : graph->getNodesByTypeName("texture")) {
                 const QString stored = node->serializeWidgetValue().toString();
                 if (stored.isEmpty()) continue;
-                const QString abs = QString(JAHSHAKA_TEST_APP_DIR) + stored;
+                // The graphs name their images relative to the PRESET file
+                // that owns them, one folder up from graphs/.
+                const QString abs = QDir::cleanPath(graphDir + stored);
                 if (QFileInfo::exists(abs))
                     static_cast<TextureNode*>(node)->setTexturePath(abs);
             }
@@ -270,7 +275,7 @@ int main(int argc, char** argv)
                 if (s.value().toString() == "passthrough") ++passthrough;
             }
         }
-        CHECK(loadedCount == files.size(), "shipped: every .effect loads");
+        CHECK(loadedCount == files.size(), "shipped: every preset graph loads");
         CHECK(baked == 0, "shipped: no preset socket resamples — Passthrough unchanged");
         CHECK(passthrough > 0, "shipped: the textured presets DO pass their images through");
     }

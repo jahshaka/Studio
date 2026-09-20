@@ -246,12 +246,15 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "picture keeps it and never notices. On a material the open project holds, the swap is a copy-on-write: "
           "the library original is untouched.",
           Needs::Document },
-        { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved}",
-          "Opens a material bundle's GRAPH (a Material asset guid, or a .effect/.shader file path) as the current "
-          "graph for graph.* verbs. Texture nodes carrying an APP-RELATIVE image name — which is how the shipped "
-          ".effect presets reference their images — are imported through the one content import and connected "
-          "here, exactly as the Materials page does when it instantiates a template; texturesResolved reports how "
-          "many.",
+        { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved, readOnly}",
+          "Opens a material bundle's GRAPH (a Material asset guid, a shipped PRESET by name or by its reserved "
+          "guid, or a .effect/.shader file path) as the current graph for graph.* verbs. EVERY SHIPPED PRESET HAS "
+          "A GRAPH and opening one costs nothing: a preset nobody has used yet has no library row, so its graph "
+          "is read from the shipped file and no row is written — looking at a preset is never what seeds it. "
+          "`readOnly` is true for a shipped preset: the definition writer refuses its reserved guid, so an edit "
+          "made to this graph cannot be saved — materials.createFromPreset makes the editable copy. Texture nodes "
+          "naming an image by FILE rather than by guid are imported through the one content import and connected "
+          "here; texturesResolved reports how many.",
           Needs::Document },
         { "regenerate", "materials.regenerate(materialGuid) -> bool",
           "Re-evaluates and re-bakes a stored material bundle's maps (the 'cache deleted / app upgraded' recovery) "
@@ -730,6 +733,22 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
             return out;
         }
         definition = QJsonDocument::fromJson(file.readAll()).object();
+    } else if (MaterialPresetAssets::isPreset(guidOrPath)) {
+        // A SHIPPED PRESET'S GRAPH, WITHOUT SEEDING IT (PRESET-UNIFY-1). Every
+        // preset is a graph now, and looking at one must not be the thing that
+        // writes its row: a preset nobody has used yet has no row at all
+        // (seeding is on first USE), so the shipped graph is read straight off
+        // disk. A preset that HAS been seeded is read from its definition
+        // instead — the same graph with its images named by the guids the
+        // library gave them.
+        assetGuid = MaterialPresetAssets::guidFor(guidOrPath);
+        const QByteArray blob = host.db ? host.db->fetchAssetData(assetGuid) : QByteArray();
+        definition = QJsonDocument::fromJson(blob).object();
+        if (!definition.contains(QStringLiteral("shadergraph"))) {
+            bool found = false;
+            const MaterialPreset preset = MaterialPresets::find(assetGuid, &found);
+            if (found) definition[QStringLiteral("shadergraph")] = preset.graph;
+        }
     } else if (host.db) {
         const QByteArray blob = host.db->fetchAssetData(guidOrPath);
         if (blob.isEmpty()) {
@@ -759,6 +778,11 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     out["nodes"] = graph->nodes.size();
     out["master"] = graph->masterNode ? graph->masterNode->typeName : QString();
     out["name"] = definition.value("name").toString();
+    // READ-ONLY IS PART OF THE ANSWER (PRESET-UNIFY-1). A shipped preset opens
+    // to be READ: the definition writer refuses its reserved guid, so a caller
+    // that edits this graph will have its save refused, and that has to be
+    // knowable before the edit rather than after it.
+    out["readOnly"] = !MaterialBundle::shippedPresetName(assetGuid).isEmpty();
     return out;
 }
 

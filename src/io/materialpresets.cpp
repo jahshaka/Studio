@@ -25,9 +25,19 @@ const QVector<MaterialPreset> &all()
         QVector<MaterialPreset> out;
         MaterialPresetReader reader;
         const QDir dir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
-        for (const auto &file : dir.entryInfoList(QStringList(), QDir::Files)) {
+        for (const auto &file : dir.entryInfoList(QStringList(QStringLiteral("*.material")),
+                                                  QDir::Files, QDir::Name)) {
             auto preset = reader.readMaterialPreset(file.absoluteFilePath());
             if (preset.type.compare(QStringLiteral("PBR"), Qt::CaseInsensitive) != 0) continue;
+            // ONE LIST, AND EVERY ENTRY IN IT IS A GRAPH (PRESET-UNIFY-1).
+            // A preset whose graph file this build does not ship would be a
+            // tile that cannot answer the one gesture the drawer offers —
+            // select and see it — so it is not listed at all, loudly.
+            if (preset.graph.isEmpty()) {
+                qWarning("MaterialPresets: '%s' has no graph and is NOT listed",
+                         qUtf8Printable(preset.name));
+                continue;
+            }
             out.append(preset);
         }
         return out;

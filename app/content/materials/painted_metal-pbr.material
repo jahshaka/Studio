@@ -1,0 +1,14 @@
+{
+    "name"                : "Painted Metal PBR",
+    "material_type"       : "PBR",
+    "icon"                : "../../materials/painted_metal.png",
+    "graph"               : "graphs/painted_metal-pbr.effect",
+    "baseColor"           : "#FFFFFF",
+    "baseColorMap"        : "presets/painted_metal/painted_metal_COLOR.jpg",
+    "metallic"            : 0.0,
+    "roughness"           : 0.35,
+    "normalMap"           : "presets/painted_metal/painted_metal_NRM.png",
+    "normalFactor"        : 1.0,
+    "emissiveIntensity"   : 0.0,
+    "textureScale"        : 2
+}

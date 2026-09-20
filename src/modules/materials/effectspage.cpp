@@ -242,6 +242,14 @@ EffectsPage::~EffectsPage()
 
 void EffectsPage::saveShader()
 {
+	// A SHIPPED PRESET IS ON SCREEN TO BE READ (PRESET-UNIFY-1). It is open
+	// because the user selected it, the definition writer refuses its
+	// reserved guid, and the 1.5 s autosave runs on every node the user drags
+	// — so without this the act of LOOKING at a preset raised a refusal in
+	// the scene-issue bar every second and a half. Nothing is written, and
+	// nothing needs to be: a preset cannot change.
+	if (mReadOnly) return;
+
 	if (currentShaderInformation.GUID == "") {
 		saveDefaultShader();
 		return;
@@ -520,31 +528,20 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 
 void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 {
-	// A SHIPPED PRESET DOES NOT OPEN (phase 3). It is read-only — the
-	// definition writer refuses it by name — and it has no graph to show, so
-	// opening one would put an EMPTY editor in front of the user and refuse
-	// their first save. A preset is reachable here only from the PROJECT
-	// drawer, where a pinned one is an ordinary tile; the way to change it is
-	// Customise, which is what this says.
+	// A SHIPPED PRESET OPENS — READ-ONLY (PRESET-UNIFY-1; the owner
+	// 2026-09-20: "if i select a preset i should see the graph, i dont see
+	// it"). It used to be REFUSED here, with a scene issue explaining that a
+	// preset has no graph to show. It has one now — every shipped preset is
+	// an authored graph, carried in its own definition — so the honest answer
+	// to "show me this material" is to show it. What stays true is that it
+	// cannot be CHANGED: the definition writer refuses its reserved guid, so
+	// the page opens it with the save stood down and says so above the canvas
+	// (setReadOnly), with Customise one button away.
 	const QString shipped = MaterialBundle::shippedPresetName(guid);
-	if (!shipped.isEmpty()) {
-		// AND THE USER IS TOLD, on screen (fix round F2). A double-click on a
-		// pinned preset in the Project drawer used to log a line and do
-		// nothing at all, which reads as a dead gesture. Same channel as a
-		// refused save — the scene-issue bar, because the condition stays
-		// true until the user does the other thing — and the same sentence
-		// the definition writer refuses with.
-		irisLog("loadGraph: '" + shipped + "' is read-only");
-		SceneIssue issue;
-		issue.id = QStringLiteral("material.readonly:") + guid;
-		issue.kind = QStringLiteral("material.readonly");
-		issue.nodeName = shipped;
-		issue.message = tr("'%1' is a material the app ships, and it is read-only.").arg(shipped);
-		issue.action = tr("Right-click it in the Presets drawer and choose Customise: that makes "
-		                  "'%1-1', your own copy, and every edit works on it.").arg(shipped);
-		SceneIssues::instance().raise(issue);
-		return;
-	}
+	setReadOnly(!shipped.isEmpty(), shipped);
+	// A stale refusal from an earlier build's behaviour, or from a save that
+	// was refused before this material was opened, must not outlive it.
+	SceneIssues::instance().clear(QStringLiteral("material.readonly:") + guid);
 
 	// The origin is set BEFORE the read, because `fetchAsset` reads the
 	// definition at this scope.
@@ -563,6 +560,17 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 
 #if(EFFECT_BUILD_AS_LIB)
     QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
+	// A PRESET NOBODY HAS USED YET HAS NO ROW (seeding is on first USE, not on
+	// listing — services/materialpresetassets.h). Looking at one must not be
+	// what seeds it: the shipped graph is on disk, so the page reads THAT and
+	// writes nothing at all. Once the preset has been applied or customised,
+	// its definition is the better source — the same graph with its images
+	// named by the guids the library gave them.
+	if (!shipped.isEmpty() && !obj.contains(QStringLiteral("shadergraph"))) {
+		bool found = false;
+		const MaterialPreset preset = MaterialPresets::find(guid, &found);
+		if (found) obj[QStringLiteral("shadergraph")] = preset.graph;
+	}
 	progressDialog->setValueAndText(2, "Fetch graph");
 
 	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
@@ -616,6 +624,19 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	if (membersPanel) membersPanel->setMaterial(currentShaderInformation.GUID);
 	progressDialog->close();
 	progressDialog->deleteLater();
+}
+
+void EffectsPage::setReadOnly(bool readOnly, const QString &presetName)
+{
+	mReadOnly = readOnly;
+	if (!mReadOnlyBanner || !mReadOnlyLabel) return;
+	if (readOnly) {
+		mReadOnlyLabel->setText(
+		    tr("'%1' is a material the app ships — read-only. This is its graph; "
+		       "Customise makes '%1-1', your own copy, and every edit works on that.")
+		        .arg(presetName));
+	}
+	mReadOnlyBanner->setVisible(readOnly);
 }
 
 void EffectsPage::exportEffect(QString guid)
@@ -806,52 +827,23 @@ void EffectsPage::configureAssetsDock()
 	// …but it has ONE gesture (R18): Customise, which is how a read-only
 	// preset becomes a material the user owns.
 	presets->presetContextMenuAllowed = true;
-	presets->setToolTip(tr("Shipped materials — read-only. Right-click › Customise for your own copy."));
+	presets->setToolTip(tr("Shipped materials — read-only. Double-click one to SEE its graph; "
+	                       "right-click › Customise for your own copy to edit."));
 	presets->setStyleSheet(StyleSheet::EffectsPresetsList());
 
-	CreateNewDialog::getAdditionalPresetList();
-
-	// get list of presets
-	for (auto tile : CreateNewDialog::getPresetList()) {
-		auto item = new QListWidgetItem;
-		item->setText(tile.name);
-		item->setSizeHint(defaultItemSize);
-		item->setTextAlignment(Qt::AlignBottom);
-		item->setIcon(QIcon(MaterialHelper::assetPath(tile.iconPath)));
-		item->setData(MODEL_TYPE_ROLE, "presets");
-		item->icon().addPixmap(QPixmap(":/icons.shader_overlay.png"));
-		presets->addToListWidget(item);
-	}
-
-	for (auto tile : CreateNewDialog::getAdditionalPresetList()) {
-		auto item = new QListWidgetItem;
-		item->setText(tile.name);
-		item->setSizeHint(defaultItemSize);
-		item->setTextAlignment(Qt::AlignBottom);
-		item->setIcon(QIcon(MaterialHelper::assetPath(tile.iconPath)));
-		item->setData(MODEL_TYPE_ROLE, "presets2");
-		item->icon().addPixmap(QPixmap(":/icons.shader_overlay.png"));
-		presets->addToListWidget(item);
-	}
-
-	// The starters too: the editor's materials drawer ships Default/Basic/
-	// Texture PBR presets, so the Presets tab offers the same set (preset sync).
-	for (auto tile : CreateNewDialog::getStarterList()) {
-		auto item = new QListWidgetItem;
-		item->setText(tile.name);
-		item->setSizeHint(defaultItemSize);
-		item->setTextAlignment(Qt::AlignBottom);
-		item->setIcon(QIcon(MaterialHelper::assetPath(tile.iconPath)));
-		item->setData(MODEL_TYPE_ROLE, "presets");
-		item->icon().addPixmap(QPixmap(":/icons.shader_overlay.png"));
-		presets->addToListWidget(item);
-	}
-
-	// THE SHIPPED MATERIAL PRESETS (phase 3). They are library bundles with
-	// reserved guids now — the same tiles the editor's materials drawer
-	// shows, from the same one list (io/materialpresets.h) — so the module's
-	// Presets drawer is what its name and its tooltip always claimed: the
-	// materials the app ships, read-only, with Customise as the way out.
+	// THE SHIPPED PRESETS — ONE LIST, TWO WINDOWS (PRESET-UNIFY-1, the owner
+	// 2026-09-20: "the old presets should be gone and we should only have the
+	// new ones, we dont need duplicates").
+	//
+	// There used to be TWO preset families in this one drawer: the graph
+	// TEMPLATES under `app/shadergraph/` (listed by three
+	// `CreateNewDialog::get*List` functions, now deleted) and the shipped
+	// material presets — so "Brick" sat beside "Brick PBR", "Gold" beside
+	// "Gold PBR", fifteen times over, one of each pair openable and the other
+	// not. They are one set now: every shipped preset carries its own authored
+	// graph (io/materialpresets.h reads both halves of one file), and this
+	// drawer and the editor's materials tray read the SAME list.
+	//
 	// LISTING DOES NOT SEED: the guid is reserved and known before any row
 	// exists, so the drawer costs nothing until somebody uses a preset.
 	for (const MaterialPreset &preset : MaterialPresets::all()) {
@@ -980,43 +972,39 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 
 void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset)
 {
-    currentShaderInformation.GUID = "";
-	NodeGraph *graph;
-	graph = importGraphFromFilePath(MaterialHelper::assetPath(preset.templatePath), false);
+	// A NEW MATERIAL IS BASED ON A PRESET (PRESET-UNIFY-1). This used to read
+	// a `.effect` TEMPLATE file from app/shadergraph/ and then import an
+	// ordered list of images into the texture PROPERTIES the pre-evaluator
+	// format carried; the templates were the second preset family and they
+	// are deleted. The graph comes from the preset itself now — the same
+	// graph the Presets drawer shows and Customise copies.
+	currentShaderInformation.GUID = "";
+	setReadOnly(false);
 
-	// Texture assignment at template instantiation (§3b, post-migration):
-	//
-	// OLD-format templates still carry graph["properties"]; the migration
-	// turned each texture property's PropertyNode into a texture node
-	// (graph->migratedPropertyNodes). Import the preset's image per texture
-	// property, in property order — exactly the pairing the old loop used —
-	// and hand the imported guid to BOTH the readable property and its
-	// migrated node.
-	int i = 0;
-	for (auto prop : graph->properties) {
-		if (prop->type != PropertyType::Texture) continue;
-		if (i >= preset.list.size()) break;
-		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(MaterialHelper::assetPath(preset.list.at(i)));
-		prop->setValue(graphTexture->guid);
-		for (auto it = graph->migratedPropertyNodes.constBegin(); it != graph->migratedPropertyNodes.constEnd(); ++it) {
-			if (it.value() != prop->id) continue;
-			if (auto texNode = dynamic_cast<TextureNode*>(graph->getNode(it.key())))
-				texNode->setTextureGuid(graphTexture->guid);
-		}
-		i++;
+	bool found = false;
+	const MaterialPreset shipped = MaterialPresets::find(
+	    preset.guid.isEmpty() ? preset.name : preset.guid, &found);
+	NodeGraph *graph = nullptr;
+	if (found && !shipped.graph.isEmpty())
+		graph = NodeGraph::deserialize(shipped.graph, new LibraryV1());
+	if (!graph) {
+		// No preset (a blank new material): a master node on an empty canvas,
+		// which is exactly what `materials.create({graph:true})` builds.
+		graph = new NodeGraph;
+		graph->setNodeLibrary(new LibraryV1());
+		auto *master = new PbrMasterNode();
+		graph->addNode(master);
+		graph->setMasterNode(master);
 	}
 
-	// NEW-format templates (re-saved through the migration) have no
-	// properties: their texture nodes carry app-relative image names
-	// ("wood.jpg", "materials_to_graph/brick diff.jpg") that resolve
-	// against the shadergraph asset folder and import on first use. Shared
-	// with materials.loadGraph since 2026-09-04 — the scripted route used to
-	// see those textures unconnected.
+	// The preset's images are shipped FILES; this material's are library
+	// assets. One import by content each, so the new material's slots name
+	// guids (a definition may never name a path — F3) and the pictures are
+	// the same objects the preset's own bundle uses.
 	MaterialHelper::resolveAppRelativeTextures(graph);
 
 	graph->settings.name = preset.name;
 	setNodeGraph(graph);
-
 }
 
 void EffectsPage::setCurrentShaderItem()
@@ -1089,7 +1077,37 @@ void EffectsPage::configureUI()
 	setDockNestingEnabled(true);
 	this->setCentralWidget(splitView);
 	splitView->setOrientation(Qt::Vertical);
-	splitView->addWidget(graphicsView);
+
+	// THE READ-ONLY BANNER (PRESET-UNIFY-1). A shipped preset opens here so
+	// the user can SEE its graph; it is read-only in fact, so the page says
+	// so above the canvas and offers the one gesture that does work rather
+	// than letting them edit into a save that will be refused. No stylesheet:
+	// a framed row of ordinary widgets reads correctly in both themes.
+	{
+		mReadOnlyBanner = new QWidget;
+		auto *bannerRow = new QHBoxLayout(mReadOnlyBanner);
+		bannerRow->setContentsMargins(8, 4, 8, 4);
+		bannerRow->setSpacing(8);
+		mReadOnlyLabel = new QLabel;
+		mReadOnlyLabel->setWordWrap(true);
+		auto *customiseButton = new QPushButton(tr("Customise"));
+		customiseButton->setToolTip(tr("Make your own editable copy of this material."));
+		connect(customiseButton, &QPushButton::clicked, this, [this]() {
+			if (!mReadOnly || currentShaderInformation.GUID.isEmpty()) return;
+			emit presets->customisePreset(currentShaderInformation.GUID);
+		});
+		bannerRow->addWidget(mReadOnlyLabel, 1);
+		bannerRow->addWidget(customiseButton, 0);
+		mReadOnlyBanner->hide();
+
+		auto *canvas = new QWidget;
+		auto *canvasColumn = new QVBoxLayout(canvas);
+		canvasColumn->setContentsMargins(0, 0, 0, 0);
+		canvasColumn->setSpacing(0);
+		canvasColumn->addWidget(mReadOnlyBanner);
+		canvasColumn->addWidget(graphicsView, 1);
+		splitView->addWidget(canvas);
+	}
 	splitView->addWidget(tabbedWidget);
 	splitView->setStretchFactor(0, 90);
 
@@ -1712,23 +1730,6 @@ GraphNodeScene *EffectsPage::createNewScene()
 		loadGraph(currentShaderInformation.GUID, originForItem(currentShaderInformation.GUID));
 	});
 
-	connect(scene, &GraphNodeScene::loadGraphFromPreset, [=](QString name) {
-		for (auto preset : CreateNewDialog::getPresetList() + CreateNewDialog::getStarterList()) {
-			if (name == preset.name) {
-				loadGraphFromTemplate(preset);
-			}
-		}
-	});
-
-
-	connect(scene, &GraphNodeScene::loadGraphFromPreset2, [=](QString name) {
-		for (auto preset : CreateNewDialog::getAdditionalPresetList()) {
-			if (name == preset.name) {
-				loadGraphFromTemplate(preset);
-			}
-		}
-	});
-
     return scene;
 }
 
@@ -1784,6 +1785,17 @@ void EffectsPage::updateEnginePreviewMaterial()
 
 QListWidgetItem * EffectsPage::selectCorrectItemFromDrop(QString guid)
 {
+	// THE PRESETS DRAWER IS A DRAWER TOO (PRESET-UNIFY-1). A shipped preset
+	// opens read-only now, and every line after the lookup in `loadGraph`
+	// reads the tile — so leaving this blind to the Presets list meant a
+	// preset's graph appeared with no name, no restored node positions and
+	// no guid for the banner's Customise button.
+	for (int i = 0; i < presets->count(); i++)
+	{
+		if (guid == presets->item(i)->data(MODEL_GUID_ROLE)) {
+			return presets->item(i);
+		}
+	}
 
 	for (int i = 0; i < effects->count(); i++)
 	{
@@ -1818,6 +1830,11 @@ shaderInfo::Origin EffectsPage::originForItem(QString guid)
 
 int EffectsPage::selectCorrectTabForItem(QString guid)
 {
+	for (int i = 0; i < presets->count(); i++)
+	{
+		if (guid == presets->item(i)->data(MODEL_GUID_ROLE))	return (int) ShaderWorkspace::Presets;
+	}
+
 	for (int i = 0; i < effects->count(); i++)
 	{
 		if (guid == effects->item(i)->data(MODEL_GUID_ROLE))	return (int) ShaderWorkspace::MyEffects;
@@ -1864,32 +1881,23 @@ void EffectsPage::configureConnections()
         pressedShaderInfo.GUID = item->data(MODEL_GUID_ROLE).toString();
     });
 
+	// SELECTING A PRESET SHOWS ITS GRAPH (PRESET-UNIFY-1, the owner
+	// 2026-09-20: "if i select a preset i should see the graph, i dont see
+	// it… we said right click a preset - customise creates a custom preset
+	// out of it, not just selecting a preset, its messy that way").
+	//
+	// There were THREE handlers on this one signal before: two matched a
+	// GRAPH TEMPLATE by name and opened it as a brand-new unsaved material,
+	// and the third turned a double-click on a shipped preset into Customise
+	// — a gesture that WROTE a row for a gesture that reads. One handler now,
+	// and it opens the preset's own graph READ-ONLY: the canvas shows exactly
+	// the material the tray applies, and nothing is written down until the
+	// user asks for their own copy.
 	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
-		for (auto preset : CreateNewDialog::getPresetList() + CreateNewDialog::getStarterList()) {
-			if (item->data(Qt::DisplayRole).toString() == preset.name) {
-				loadGraphFromTemplate(preset);
-			}
-		}
-	});
-	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
-		for (auto preset : CreateNewDialog::getAdditionalPresetList()) {
-			if (item->data(Qt::DisplayRole).toString() == preset.name) {
-				loadGraphFromTemplate(preset);
-			}
-		}
-	});
-	// A SHIPPED MATERIAL PRESET'S TILE DOES THE ONE THING IT CAN (fix round
-	// F2). The two loops above match GRAPH TEMPLATES by name; a preset tile
-	// matches neither, so double-clicking one was a silent no-op. A preset
-	// cannot be opened — it is read-only and has no graph — so the gesture is
-	// the same one its context menu offers: Customise, which gives the user
-	// their own copy to open.
-	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
-		const QString presetGuid =
-		    MaterialBundle::shippedPresetName(item->data(MODEL_GUID_ROLE).toString()).isEmpty()
-		        ? QString()
-		        : item->data(MODEL_GUID_ROLE).toString();
-		if (!presetGuid.isEmpty()) emit presets->customisePreset(presetGuid);
+		const QString guid = item->data(MODEL_GUID_ROLE).toString();
+		if (guid.isEmpty()) return;
+		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
+		loadGraph(guid, shaderInfo::Origin::Library);
 	});
 
 	
@@ -2000,6 +2008,13 @@ void EffectsPage::configureConnections()
 		                                                   : ShaderWorkspace::MyEffects));
 		if (auto *tile = selectCorrectItemFromDrop(copy))
 			ListWidget::highlightNodeForInterval(2, tile);
+		// AND IT OPENS (PRESET-UNIFY-1, the owner: "a custom preset is a new
+		// material based on the preset it was customised from"). The copy
+		// carries the preset's GRAPH now, so there is something to open —
+		// which is the point of the gesture: the user asked to edit this
+		// material, and the node editor is where they do it.
+		currentShaderInformation.name = dataBase->fetchAsset(copy).name;
+		loadGraph(copy, pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library);
 	});
 
     // change: any settings changed

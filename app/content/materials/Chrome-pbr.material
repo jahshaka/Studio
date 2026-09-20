@@ -2,6 +2,7 @@
     "name"              : "Chrome PBR",
     "material_type"     : "PBR",
     "icon"              : "../../shadergraph/silverThumb.png",
+    "graph"             : "graphs/Chrome-pbr.effect",
     "baseColor"         : "#FFFFFF",
     "metallic"          : 1.0,
     "roughness"         : 0.03,

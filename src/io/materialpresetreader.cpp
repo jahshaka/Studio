@@ -13,8 +13,48 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "data/materialpreset.h"
 
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+
+namespace {
+
+/// THE PRESET'S GRAPH, with its images named the way its map slots are.
+///
+/// A shipped graph names its textures RELATIVE to the preset file that owns
+/// it — the same spelling, and therefore the same resolution, as the
+/// `baseColorMap` row beside it. Resolving them here is what lets the seeder
+/// pair a texture NODE with the library row its map slot imported: one image,
+/// one object, one guid in both halves of the definition.
+QJsonObject readPresetGraph(const QString &graphFile, const QString &presetDir)
+{
+    QFile file(graphFile);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning("MaterialPresetReader: '%s' names a graph this build does not ship",
+                 qUtf8Printable(graphFile));
+        return QJsonObject();
+    }
+    const QJsonObject effect = QJsonDocument::fromJson(file.readAll()).object();
+    QJsonObject graph = effect.value(QStringLiteral("shadergraph")).toObject();
+    if (graph.isEmpty()) return graph;
+
+    QJsonArray nodes = graph.value(QStringLiteral("nodes")).toArray();
+    for (int i = 0; i < nodes.size(); ++i) {
+        QJsonObject node = nodes.at(i).toObject();
+        if (node.value(QStringLiteral("type")).toString() != QLatin1String("texture")) continue;
+        const QString value = node.value(QStringLiteral("value")).toString();
+        if (value.isEmpty()) continue;
+        node[QStringLiteral("value")] = QDir::cleanPath(presetDir + QLatin1Char('/') + value);
+        nodes[i] = node;
+    }
+    graph[QStringLiteral("nodes")] = nodes;
+    return graph;
+}
+
+} // namespace
 
 MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
 {
@@ -35,6 +75,14 @@ MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
 
     auto icon = matObj["icon"].toString("");
     if (!icon.isEmpty()) material.icon = getAbsolutePath(icon);
+
+    // EVERY PRESET IS A GRAPH (PRESET-UNIFY-1). One shipped set, one list, and
+    // the graph is what a user sees when they select a preset and what
+    // Customise copies into their own material.
+    const QString graphRel = matObj["graph"].toString("");
+    if (!graphRel.isEmpty())
+        material.graph = readPresetGraph(getAbsolutePath(graphRel),
+                                         QFileInfo(filename).absolutePath());
 
     material.type = matObj["material_type"].toString();
 

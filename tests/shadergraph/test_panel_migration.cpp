@@ -315,11 +315,13 @@ int main(int argc, char** argv)
     //    a master, zero property nodes, and no 'properties' on re-save
     // ------------------------------------------------------------------
     {
+        // ONE SHIPPED SET (PRESET-UNIFY-1) — see test_pbr_evaluator for the
+        // guard that a preset's graph and its authored values agree.
+        const QString graphDir = QString(JAHSHAKA_TEST_PRESET_DIR) + "graphs/";
         QStringList files;
-        QDirIterator it(QString(JAHSHAKA_TEST_APP_DIR), { "*.effect" }, QDir::Files,
-                        QDirIterator::Subdirectories);
+        QDirIterator it(graphDir, { "*.effect" }, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext()) files.append(it.next());
-        CHECK(files.size() >= 17, "shipped: found the preset .effect files");
+        CHECK(files.size() == 20, "shipped: found the twenty preset graphs");
 
         int bad = 0;
         int textured = 0;
@@ -354,17 +356,17 @@ int main(int argc, char** argv)
         }
         CHECK(bad == 0, "shipped: every preset loads with a master, no property nodes, no 'properties' on save");
         CHECK(legacyMaster == 0, "shipped: every preset's master is \"PBR Material\"");
-        CHECK(textured >= 12, "shipped: the textured presets kept their image references");
+        CHECK(textured >= 25, "shipped: the textured presets kept their image references");
 
         // the drawer-synced constants still evaluate to their known values
-        auto glass = loadEffect(QString(JAHSHAKA_TEST_APP_DIR) + "glass.effect");
+        auto glass = loadEffect(graphDir + "Glass-pbr.effect");
         if (glass) {
             auto result = PbrGraphEvaluator::evaluate(glass, nullptr);
             CHECK(near(result.values["roughness"].toDouble(), 0.05, 1e-3)
                   && near(result.values["alpha"].toDouble(), 0.3, 1e-3),
-                  "shipped: glass.effect still folds to the drawer's values after re-save");
+                  "shipped: Glass PBR's graph still folds to the drawer's values after re-save");
         } else {
-            CHECK(false, "shipped: glass.effect loads");
+            CHECK(false, "shipped: Glass PBR's graph loads");
         }
     }
 

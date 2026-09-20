@@ -11,8 +11,8 @@ function assert(cond, msg) {
 }
 
 // load a shipped preset as the current script graph
-var info = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/silver.effect");
-assert(info.nodes >= 3, "silver.effect loaded (" + info.nodes + " nodes)");
+var info = materials.loadGraph("@SOURCE_DIR@/app/content/materials/graphs/Silver-pbr.effect");
+assert(info.nodes >= 3, "Silver PBR's graph loaded (" + info.nodes + " nodes)");
 assert(info.master === "PbrMaterial", "master is PbrMaterial");
 
 var nodes = graph.nodes();
@@ -48,7 +48,7 @@ assert(graph.selectedNode() === null || graph.selectedNode() === undefined,
 
 // selection resets when another graph becomes current
 graph.selectNode(target);
-materials.loadGraph("@SOURCE_DIR@/app/shadergraph/default.effect");
+materials.loadGraph("@SOURCE_DIR@/app/content/materials/graphs/Default-pbr.effect");
 assert(graph.selectedNode() === null || graph.selectedNode() === undefined,
        "loading a new graph clears the script-side selection");
 

@@ -2,6 +2,7 @@
     "name"                : "Marble PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/marble_tile.png",
+    "graph"               : "graphs/marble_tile-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_COLOR.png",
     "metallic"            : 0.0,
