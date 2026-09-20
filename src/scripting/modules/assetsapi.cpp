@@ -334,8 +334,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "setStoreRoot", "assets.setStoreRoot(path, {move, force}) -> bool",
           "Repoints the asset store. Empty path returns to the default root. {move: true} copies the current store's contents to the new root first (verified; the old tree is retained). Without move, the target must already contain this library's store ({force: true} skips that check). Throws on failure; nothing changes on a failed call.",
           Needs::Document },
-        { "storeStatus", "assets.storeStatus() -> {root, online, missing}",
-          "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it.",
+        { "storeStatus", "assets.storeStatus() -> {root, online, missing, deviceWaits}",
+          "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it. `deviceWaits` is how many times THIS PROCESS has waited for the storage device — one per fsync the store performed: the two-phase ingest's flush, a cross-filesystem ingest's copy fallback, and the store-root move's per-file copy. A hardlinked object writes no bytes and waits for nothing, so it does not count. Counted where the wait happens, never inferred. It is monotonic and process-wide, so only differences mean anything; bracket a gesture with two reads to assert that it cost no durable write, which is how \"no fsync on the thread that draws\" (FSYNC-2) stops being a claim and becomes a test.",
           Needs::Document },
         { "importSettings", "assets.importSettings(guid) -> {name, sourceName, sourceOid, importer, importerVersion, assimp, settings, defaults}",
           "The determinism record the ONE import pipeline stamped on the asset: content id of the source, "
@@ -1506,7 +1506,14 @@ bool AssetsApi::setStoreRoot(const QString &path, const QVariantMap &options)
 
 QVariantMap AssetsApi::storeStatus()
 {
-    return AssetStoreService::status(host.db);
+    QVariantMap status = AssetStoreService::status(host.db);
+    // THE NUMBER OF TIMES THIS PROCESS HAS WAITED FOR THE DEVICE, so that "no
+    // durable write belongs on the thread that draws" (FSYNC-2) is a claim a
+    // caller can CHECK rather than infer from row counts. Monotonic; only
+    // differences mean anything.
+    status.insert(QStringLiteral("deviceWaits"),
+                  static_cast<qulonglong>(AssetCas::deviceWaits()));
+    return status;
 }
 
 namespace

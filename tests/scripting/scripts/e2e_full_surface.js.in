@@ -211,27 +211,34 @@ var reload = materials.loadGraph(graphGuid);
 assert(reload.nodes === 2, "saved graph reloads with both nodes");
 assert(near(graph.evaluate().values.roughness, 0.77), "reloaded graph folds identically");
 
-// the shipped glass preset loads through the same path
-var glass = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/glass.effect");
-assert(glass.nodes >= 3, "glass.effect loads (" + glass.nodes + " nodes)");
+// the shipped Glass preset loads through the same path — by NAME now, because
+// a preset is one shipped thing and not a file the caller has to know the path
+// of (PRESET-UNIFY-1)
+var glass = materials.loadGraph("Glass PBR");
+assert(glass.nodes >= 3, "Glass PBR's graph loads (" + glass.nodes + " nodes)");
+assert(glass.readOnly === true, "…and says it is read-only");
 assert(graph.nodes().filter(function (n) { return n.type === "PbrMaterial"; }).length === 1,
        "glass has a PBR master");
 
-// SAMPLES-AUDIT item: a shipped TEXTURED preset references its images by
-// APP-RELATIVE name ("materials_to_graph/brick diff.jpg"). The Effects page
-// resolved those when it instantiated a template; this verb did not, so the
-// scripted route saw every texture node unconnected and baked an untextured
-// material. Same resolution now runs on both routes.
-var brick = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/materials_to_graph/Brick.effect");
-assert(brick.nodes >= 3, "Brick.effect loads (" + brick.nodes + " nodes)");
-// TWO images, not three: the preset's SPECULAR map went with the Blinn-Phong
-// master (LEGACY-MASTER-CRUD). A specular-intensity map has no PBR input to
-// land on, so it was being resolved, copied into the user's project and
-// dropped by the bake. Diffuse and normal are what the material is made of.
-assert(brick.texturesResolved === 2,
-       "its app-relative textures resolved on load: " + brick.texturesResolved);
+// SAMPLES-AUDIT item: a shipped TEXTURED preset names its images by FILE, not
+// by guid. The Effects page resolved those when it instantiated a template;
+// this verb did not, so the scripted route saw every texture node unconnected
+// and baked an untextured material. Same resolution now runs on both routes.
+var brick = materials.loadGraph("Brick PBR");
+assert(brick.nodes >= 3, "Brick PBR's graph loads (" + brick.nodes + " nodes)");
+// THREE images: the colour, the roughness (the old specular map, which IS a
+// PBR input on this master) and the normal — what the preset is made of.
+assert(brick.texturesResolved === 3,
+       "its shipped textures are BOUND on load: " + brick.texturesResolved);
+// …AND NOT ONE OF THEM IMPORTED (PRESET-UNIFY-1 fix round). This is a
+// READ-ONLY open, so the graph is bound to the shipped FILES: no library row,
+// no pin into the open project, no wait for the device. Looking at a material
+// is not a write.
+assert(brick.readOnly === true, "…it is read-only");
+assert(brick.texturesImported === 0,
+       "…so NOTHING was imported for it (" + brick.texturesImported + ")");
 var brickTextures = graph.nodes().filter(function (n) { return n.type === "texture"; });
-assert(brickTextures.length === 2, "the graph carries its texture nodes");
+assert(brickTextures.length === 3, "the graph carries its texture nodes");
 
 // ---- save + render sanity ----
 assert(project.save() === true, "project.save");

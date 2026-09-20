@@ -200,6 +200,39 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
     return ok;
 }
 
+QJsonObject normaliseUv(const QJsonObject &definition)
+{
+    // ONE SPELLING FOR THE UV TRANSFORM, and it is the DOCUMENT's — the same
+    // rule as the colour above, and it was missing for the same slot shape.
+    // The evaluator's folded transform is a two-element ARRAY
+    // (`textureScale: [4, 4]`), and `MaterialReader::parsePbrMaterial` reads
+    // `textureScale` as a FLOAT row: `QJsonValue::toDouble()` of an array is
+    // ZERO, so a material saved with any non-identity tiling came back with
+    // its UV scale at 0 — one texel stretched over the whole surface. The
+    // document's rows are `textureScale`/`textureScaleV`,
+    // `textureOffsetU`/`textureOffsetV` and `textureRotation`, and that is
+    // what a definition holds.
+    QJsonObject out = definition;
+    QJsonObject values = out.value(QStringLiteral("values")).toObject();
+    const auto split = [&values](const QString &key, const QString &uKey, const QString &vKey) {
+        const QJsonValue value = values.value(key);
+        if (!value.isArray()) return false;
+        const QJsonArray pair = value.toArray();
+        const double fallback = uKey == QLatin1String("textureScale") ? 1.0 : 0.0;
+        const double u = pair.size() > 0 ? pair.at(0).toDouble(fallback) : fallback;
+        values[uKey] = u;
+        values[vKey] = pair.size() > 1 ? pair.at(1).toDouble(u) : u;
+        if (key != uKey) values.remove(key);
+        return true;
+    };
+    bool moved = split(QStringLiteral("textureScale"), QStringLiteral("textureScale"),
+                       QStringLiteral("textureScaleV"));
+    moved = split(QStringLiteral("textureOffset"), QStringLiteral("textureOffsetU"),
+                  QStringLiteral("textureOffsetV")) || moved;
+    if (moved) out[QStringLiteral("values")] = values;
+    return out;
+}
+
 QJsonObject normaliseColours(const QJsonObject &definition)
 {
     QJsonObject out = definition;
@@ -312,7 +345,7 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // builds one without that function — shipped the evaluator's
     // object-valued colours straight into the store, so a scripted graph
     // material rendered BLACK.)
-    QJsonObject stored = normaliseColours(definition);
+    QJsonObject stored = normaliseUv(normaliseColours(definition));
     stored[QStringLiteral("version")] = kDefinitionVersion;
     if (!stored.contains(QStringLiteral("materialType")))
         stored[QStringLiteral("materialType")] = QStringLiteral("pbr");
@@ -478,6 +511,20 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
         if (errorOut) *errorOut = QStringLiteral("no database");
         return QString();
     }
+    // A NEW MATERIAL MAY NOT TAKE A SHIPPED PRESET'S NAME (PRESET-UNIFY-1 fix
+    // round). A preset is reached BY NAME from a script, a drag payload and
+    // the tray, so a user material called "Gold PBR" is not a duplicate
+    // label: it is a material nothing can ever address by name, while the
+    // name goes on resolving to the preset. Refused here, at the one door
+    // every new bundle comes through, and by `assettags::write` for a rename.
+    if (!shippedPresetGuidForName(name).isEmpty()) {
+        if (errorOut)
+            *errorOut = QStringLiteral("'%1' is the name of a material the app ships — choose "
+                                       "another, or use materials.createFromPreset to customise "
+                                       "it (which names the copy '%1-1')").arg(name);
+        return QString();
+    }
+
     QJsonObject stored = definition;
     stored[QStringLiteral("name")] = name;
 

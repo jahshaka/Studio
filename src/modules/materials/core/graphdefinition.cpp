@@ -187,6 +187,67 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
     // scripted graph material rendered BLACK in the commit that claimed the
     // defect fixed. One place, and it is the one every definition passes.
 
+    // THE GRAPH IS THE TRUTH FOR EVERYTHING A GRAPH CAN SAY, and exactly
+    // THREE rows are not (PRESET-UNIFY-1, tightened in its fix round).
+    //
+    // The three: `roughnessLowerBound` / `roughnessUpperBound` — the remap
+    // that turns a specular map into roughness, which nine of the shipped
+    // presets rely on — and `normalFactor`. No master socket, no setting and
+    // no node expresses any of them, so a save that dropped them would change
+    // a material the user had not touched.
+    //
+    // NOTHING ELSE IS CARRIED, and the first draft of this block carrying
+    // more was a defect in four ways: a glass material set back to Opaque
+    // stayed glass for ever; a material once saved Translucent could never be
+    // made opaque; disconnecting the Alpha socket left the old alpha; and
+    // deleting a UV tiling node brought the LAST SAVED tiling back instead of
+    // identity. The alpha rows are the graph's because every alphaMode the
+    // material has is a blend mode now (see BlendMode), and the UV rows are
+    // the graph's whenever the graph has a texture node at all — an identity
+    // fold then means identity, and absence in a definition is the material's
+    // own default, which is what erasing a row looks like here. A graph with
+    // NO texture node cannot have folded a UV transform at all, so for that
+    // one shape the previous transform is kept rather than silently reset.
+    {
+        static const QStringList kNoGraphCanSay = {
+            QStringLiteral("roughnessLowerBound"),
+            QStringLiteral("roughnessUpperBound"),
+            QStringLiteral("normalFactor"),
+        };
+        static const QStringList kUvRows = {
+            QStringLiteral("textureScale"),   QStringLiteral("textureScaleV"),
+            QStringLiteral("textureOffsetU"), QStringLiteral("textureOffsetV"),
+            QStringLiteral("textureRotation"),
+        };
+        bool hasTextureNode = false;
+        for (auto *node : graph->nodes.values())
+            if (node && node->typeName == QLatin1String("texture")) { hasTextureNode = true; break; }
+
+        // AND THE ROWS THAT BELONG TO ONE BLEND MODE (fix round 2). A graph
+        // can NAME Refractive but has no socket for what refraction is made
+        // of, so a Refractive material saved from its graph came back at the
+        // constructor's 0.35 strength whatever the user had set. They are the
+        // same class as the roughness bounds — rows no graph can say — for
+        // exactly the mode that uses them, and for any other mode they are
+        // not carried at all, so switching OUT of Refractive drops them.
+        static const QStringList kRefractiveRows = {
+            QStringLiteral("refractionStrength"), QStringLiteral("ior"),
+            QStringLiteral("fresnelColor"),       QStringLiteral("separateFresnel"),
+            QStringLiteral("useFresnelColor"),
+        };
+        QStringList carry = kNoGraphCanSay;
+        if (!hasTextureNode) carry += kUvRows;
+        if (graph->settings.blendMode == BlendMode::Refractive) carry += kRefractiveRows;
+
+        const QJsonObject previous =
+            MaterialBundle::read(db, materialGuid, project)
+                .value(QStringLiteral("values")).toObject();
+        for (const QString &key : carry) {
+            if (values.contains(key) || !previous.contains(key)) continue;
+            values[key] = previous.value(key);
+        }
+    }
+
     QJsonObject definition;
     definition[QStringLiteral("materialType")] = QStringLiteral("pbr");
     definition[QStringLiteral("name")] = graph->settings.name;

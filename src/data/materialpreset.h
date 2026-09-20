@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define MATERIALPRESET_H
 
 #include <QColor>
+#include <QJsonObject>
 
 // A SHIPPED MATERIAL PRESET, as read from `app/content/materials/*.material`.
 //
@@ -28,6 +29,15 @@ struct MaterialPreset
     QString name;
     QString icon;
     QString type;
+
+    /// EVERY SHIPPED PRESET IS A GRAPH (PRESET-UNIFY-1, the owner 2026-09-20:
+    /// "if i select a preset i should see the graph"). The `shadergraph`
+    /// payload authored beside the preset's values in
+    /// `app/content/materials/graphs/`, its texture nodes naming their images
+    /// the way the map slots above do — an absolute path once the reader has
+    /// resolved it. Empty only for a build whose graph file is missing, which
+    /// the preset list refuses to list.
+    QJsonObject graph;
 
     float textureScale;
 

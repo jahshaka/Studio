@@ -25,6 +25,16 @@ enum class BlendMode {
 	Translucent,  // plain alpha blend — the mode formerly named "Blend" (alphaMode 2)
 	Additive,     // Final = Src + Dest (alphaMode 4)
 	Modulate,     // Final = Src × Dest (alphaMode 5)
+	// THE GRAPH CAN SAY EVERY ALPHA MODE THE MATERIAL HAS (PRESET-UNIFY-1
+	// fix round). Two of the material's seven were missing here — Glass and
+	// Refractive — and the consequence was not cosmetic: a material carrying
+	// one of them could not be described by a graph at all, so saving its
+	// graph silently turned it opaque, and the only way round that was to
+	// carry the old value forward past whatever the user had chosen, which
+	// made "set Blend Mode to Opaque" impossible to obey. The graph says it
+	// now, and nothing is carried.
+	Glass,        // the engine's glass (alphaMode 3): alpha blend that keeps specular
+	Refractive,   // (alphaMode 6): samples what is behind it, refractionStrength
 };
 
 /// A graph material's settings. EVERY FIELD HERE LANDS SOMEWHERE — that is a

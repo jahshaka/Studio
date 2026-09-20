@@ -2,6 +2,7 @@
     "name"              : "Glass PBR",
     "material_type"     : "PBR",
     "icon"              : "../../shadergraph/glassThumb.png",
+    "graph"             : "graphs/Glass-pbr.effect",
     "baseColor"         : "#EEF4F8",
     "metallic"          : 0.0,
     "roughness"         : 0.05,

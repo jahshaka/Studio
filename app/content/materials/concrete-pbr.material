@@ -2,6 +2,7 @@
     "name"                : "Concrete PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/old_painted_metal.png",
+    "graph"               : "graphs/concrete-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/concrete/Old_Painted_UV_H_CM_1_COLOR.png",
     "metallic"            : 0.0,

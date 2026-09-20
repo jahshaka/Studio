@@ -215,6 +215,13 @@ public:
 
 private:
     NodeGraph *graphOrFail(const QString &verb);
+    /// THE GRAPH, AND ONLY IF IT MAY BE EDITED (PRESET-UNIFY-1 fix round).
+    /// A graph opened from a SHIPPED PRESET is read-only in fact — the
+    /// definition writer refuses its reserved guid — so every mutating verb
+    /// asks through this rather than letting an edit land in a graph object
+    /// nothing will ever store. The canvas refuses the same gestures
+    /// (GraphNodeScene::setReadOnly); this is the same answer for a caller.
+    NodeGraph *editableGraphOrFail(const QString &verb);
 
     NodeGraph *mGraph = nullptr;
     QString mAssetGuid;

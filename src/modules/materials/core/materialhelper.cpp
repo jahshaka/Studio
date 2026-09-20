@@ -65,18 +65,41 @@ QString MaterialHelper::assetPath(QString relPath)
 #endif
 }
 
-int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph)
+int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph, TextureBinding binding)
 {
 	if (!graph) return 0;
 	int resolved = 0;
 	for (auto node : graph->nodes.values()) {
 		if (node->typeName != "texture") continue;
 		auto texNode = static_cast<TextureNode*>(node);
-		if (!texNode->getTexturePath().isEmpty()) continue;   // already resolved
-		const auto rel = texNode->getTextureGuid();
-		if (rel.isEmpty()) continue;
-		const auto abs = assetPath(rel);
-		if (!QFileInfo::exists(abs)) continue;
+		// AN IMAGE THIS GRAPH NAMES BY FILE, in either of the two spellings a
+		// shipped graph uses, and in neither case an asset yet:
+		//   * an app-relative NAME in the guid slot ("wood.jpg") — the older
+		//     `.effect` spelling, resolved against the shadergraph folder;
+		//   * an absolute PATH — a shipped PRESET's own graph, whose images
+		//     are named beside the preset file (PRESET-UNIFY-1).
+		// A node that already carries a guid is an asset and is left alone.
+		QString file;
+		if (texNode->getTextureGuid().isEmpty()) {
+			const QString path = texNode->getTexturePath();
+			if (!path.isEmpty() && QFileInfo::exists(path)) file = path;
+		} else if (texNode->getTexturePath().isEmpty()) {
+			const QString abs = assetPath(texNode->getTextureGuid());
+			if (QFileInfo::exists(abs)) file = abs;
+		}
+		if (file.isEmpty()) continue;
+		const auto abs = file;
+
+		// PATH ONLY: bind the shipped file and write nothing at all. This is
+		// what a read-only open takes — the evaluator, the baker and the
+		// preview all work from paths, so the picture is complete, and the
+		// library is untouched because the user only looked at it.
+		if (binding == TextureBinding::PathOnly) {
+			texNode->setTexturePath(abs);
+			resolved++;
+			continue;
+		}
+
 		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs);
 		// AN IMPORT THAT FAILED IS NOT A RESOLUTION (the same rule as the
 		// picker's). `importTexture` answers a GraphTexture holding the PATH
@@ -194,7 +217,9 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 	// not use.
 	if (material && pbrObj.contains("customPiece")) {
 		if (NodeGraph* graph = extractNodeGraphFromMaterialDefinition(matObj)) {
-			resolveAppRelativeTextures(graph);
+			// BUILDING a material for display is a read: PathOnly, never an
+			// import (PRESET-UNIFY-1 fix round).
+			resolveAppRelativeTextures(graph, TextureBinding::PathOnly);
 			const QJsonObject pieces =
 			    materials::PieceEmitter::emitAndStore(graph, textureResolver());
 			material->setCustomPiecePixel(pieces["customPiecePixel"].toString());

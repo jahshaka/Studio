@@ -1,0 +1,123 @@
+{
+    "name": "Brick PBR",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "0678a406-5aa6-5324-b9fe-17933c62a309",
+                "leftNodeId": "b4ff684d-0ece-5cee-a58b-9174127c3bcb",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
+                "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "08e52143-8818-5210-90c9-bd6165ea657e",
+                "leftNodeId": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "398a217e-ea8f-504e-9fe5-b82917e30b44",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "77419695-8f90-5dd7-bfc6-4335e3e2b7ac",
+                "leftNodeId": "e60faab4-710d-582c-b88c-f6f9e64615ba",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "7a0d9631-5f1b-5a7a-91aa-2a0cdbe978e9",
+                "leftNodeId": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b4ff684d-0ece-5cee-a58b-9174127c3bcb",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "b923247e-e5e2-5b8a-b5fb-1d78881268bd",
+                "leftNodeId": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "e60faab4-710d-582c-b88c-f6f9e64615ba",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "cdc099cf-9908-5b5a-9777-a4c38d3b0901",
+                "leftNodeId": "398a217e-ea8f-504e-9fe5-b82917e30b44",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "d95cbdea-8eee-5ef4-82b4-93bd5ac851d3",
+                "leftNodeId": "b04e17f0-5299-51cc-9987-eb6463ac9d67",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
+                "rightNodeSocketIndex": 1
+            }
+        ],
+        "masternode": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
+        "materialGuid": "",
+        "nodes": [
+            {
+                "id": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 4.0,
+                    "tileY": 4.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 95.0
+            },
+            {
+                "id": "398a217e-ea8f-504e-9fe5-b82917e30b44",
+                "title": "Roughness",
+                "type": "texture",
+                "value": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png",
+                "x": -430.0,
+                "y": 140.0
+            },
+            {
+                "id": "b04e17f0-5299-51cc-9987-eb6463ac9d67",
+                "title": "Metallic",
+                "type": "float",
+                "value": 0.0,
+                "x": -430.0,
+                "y": 10.0
+            },
+            {
+                "id": "b4ff684d-0ece-5cee-a58b-9174127c3bcb",
+                "title": "Normal",
+                "type": "texture",
+                "value": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
+                "x": -430.0,
+                "y": 360.0
+            },
+            {
+                "id": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
+                "value": "",
+                "x": 0.0,
+                "y": 0.0
+            },
+            {
+                "id": "e60faab4-710d-582c-b88c-f6f9e64615ba",
+                "title": "Base Colour",
+                "type": "texture",
+                "value": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
+                "x": -430.0,
+                "y": -210.0
+            }
+        ],
+        "settings": {
+            "bakeResolution": 1024,
+            "blendMode": "Opaque",
+            "name": "Brick PBR"
+        },
+        "socketLayout": 2
+    },
+    "type": "shadergraph",
+    "version": 2
+}

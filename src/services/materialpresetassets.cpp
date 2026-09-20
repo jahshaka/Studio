@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QBuffer>
 #include <QFileInfo>
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
 
@@ -71,6 +72,28 @@ QVector<QPair<QString, QString>> mapFiles(const MaterialPreset &preset)
     };
 }
 
+/// EVERY IMAGE FILE A PRESET NAMES, once, in both halves of it: the map slots
+/// and the authored graph's texture nodes (PRESET-UNIFY-1). The seeder hashes
+/// this list on its worker and `definitionFor` imports exactly it, so what the
+/// worker prepared is what the row pass needs and nothing is hashed twice on
+/// the thread that draws.
+QStringList imageFiles(const MaterialPreset &preset)
+{
+    QStringList files;
+    for (const auto &slot : mapFiles(preset)) {
+        if (slot.second.isEmpty() || files.contains(slot.second)) continue;
+        files.append(slot.second);
+    }
+    for (const QJsonValue &value : preset.graph.value(QStringLiteral("nodes")).toArray()) {
+        const QJsonObject node = value.toObject();
+        if (node.value(QStringLiteral("type")).toString() != QLatin1String("texture")) continue;
+        const QString file = node.value(QStringLiteral("value")).toString();
+        if (file.isEmpty() || files.contains(file)) continue;
+        files.append(file);
+    }
+    return files;
+}
+
 } // namespace
 
 Prepared prepare(const QStringList &presetNames)
@@ -79,10 +102,10 @@ Prepared prepare(const QStringList &presetNames)
     for (const MaterialPreset &preset : MaterialPresets::all()) {
         if (!presetNames.isEmpty() && !presetNames.contains(preset.name)) continue;
         out.thumbnails.insert(preset.name, thumbnailFor(preset));
-        for (const auto &slot : mapFiles(preset)) {
-            if (slot.second.isEmpty() || out.mapOids.contains(slot.second)) continue;
-            const QString oid = AssetCas::hashFile(slot.second);
-            if (!oid.isEmpty()) out.mapOids.insert(slot.second, oid);
+        for (const QString &file : imageFiles(preset)) {
+            if (out.mapOids.contains(file)) continue;
+            const QString oid = AssetCas::hashFile(file);
+            if (!oid.isEmpty()) out.mapOids.insert(file, oid);
         }
     }
     return out;
@@ -152,11 +175,21 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
     definition[QStringLiteral("name")] = preset.name;
 
     QJsonObject values = definition.value(QStringLiteral("values")).toObject();
-    for (const auto &slot : mapFiles(preset)) {
-        if (slot.second.isEmpty()) continue;
-        if (!QFileInfo(slot.second).isFile())
-            return fail(QStringLiteral("'%1' names a map this build does not ship (%2)")
-                            .arg(preset.name, slot.second));
+    // EVERY IMAGE THIS PRESET NAMES, IMPORTED ONCE, whichever half names it:
+    // the map slots above and the graph's texture nodes are two readings of
+    // ONE material, so they must land on one library row each or the bundle's
+    // members and the graph the user opens would disagree about what picture
+    // is on it.
+    QHash<QString, QString> guidForFile;
+    const auto importOnce = [&](const QString &file, QString *errorOut) -> QString {
+        if (file.isEmpty()) return QString();
+        if (guidForFile.contains(file)) return guidForFile.value(file);
+        if (!QFileInfo(file).isFile()) {
+            if (errorOut)
+                *errorOut = QStringLiteral("'%1' names a map this build does not ship (%2)")
+                                .arg(preset.name, file);
+            return QString();
+        }
         // THE ONE CONTENT IMPORT (P-2). The map becomes an ordinary library
         // Texture identified by its BYTES, so the same picture used by two
         // presets — and by a user who imports it themselves — is one object
@@ -164,16 +197,54 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
         // The content id from the worker when there is one: it is the same
         // sha256 this call would compute, and computing it here is 19-96 ms
         // of the thread that draws (see `Prepared`).
-        const QString knownOid = prepared ? prepared->mapOids.value(slot.second) : QString();
+        const QString knownOid = prepared ? prepared->mapOids.value(file) : QString();
         const ShippedAssets::Pinned pinned =
-            ShippedAssets::importTexture(slot.second, QString(), db, nullptr, knownOid);
-        if (!pinned.error.isEmpty() || pinned.guid.isEmpty())
-            return fail(QStringLiteral("'%1' could not import %2: %3")
-                            .arg(preset.name, QFileInfo(slot.second).fileName(),
-                                 pinned.error.isEmpty() ? QStringLiteral("no row") : pinned.error));
-        values[slot.first] = pinned.guid;
+            ShippedAssets::importTexture(file, QString(), db, nullptr, knownOid);
+        if (!pinned.error.isEmpty() || pinned.guid.isEmpty()) {
+            if (errorOut)
+                *errorOut = QStringLiteral("'%1' could not import %2: %3")
+                                .arg(preset.name, QFileInfo(file).fileName(),
+                                     pinned.error.isEmpty() ? QStringLiteral("no row")
+                                                            : pinned.error);
+            return QString();
+        }
+        guidForFile.insert(file, pinned.guid);
+        return pinned.guid;
+    };
+
+    for (const auto &slot : mapFiles(preset)) {
+        if (slot.second.isEmpty()) continue;
+        QString error;
+        const QString guid = importOnce(slot.second, &error);
+        if (guid.isEmpty()) return fail(error);
+        values[slot.first] = guid;
     }
     definition[QStringLiteral("values")] = values;
+
+    // AND THE GRAPH, NAMED BY GUID (PRESET-UNIFY-1). The preset's authored
+    // graph rides the definition exactly as a module material's does — that
+    // is what makes selecting a preset show its graph, and what makes
+    // Customise hand the user a material they can open and edit rather than
+    // an empty canvas. A definition may never name a file path (F3), and
+    // `MaterialBundle::write` scans the graph payload too, so each texture
+    // node's image goes through the same one import its map slot did.
+    QJsonObject graph = preset.graph;
+    if (!graph.isEmpty()) {
+        QJsonArray nodes = graph.value(QStringLiteral("nodes")).toArray();
+        for (int i = 0; i < nodes.size(); ++i) {
+            QJsonObject node = nodes.at(i).toObject();
+            if (node.value(QStringLiteral("type")).toString() != QLatin1String("texture"))
+                continue;
+            QString error;
+            const QString guid = importOnce(node.value(QStringLiteral("value")).toString(),
+                                            &error);
+            if (guid.isEmpty()) return fail(error);
+            node[QStringLiteral("value")] = guid;
+            nodes[i] = node;
+        }
+        graph[QStringLiteral("nodes")] = nodes;
+        definition[QStringLiteral("shadergraph")] = graph;
+    }
     return definition;
 }
 
@@ -269,16 +340,24 @@ QString customiseName(Database *db, const QString &wanted)
     // asks: "Gold PBR" is a preset's name, so it is taken, so a Customise of
     // Gold PBR is "Gold PBR-1" on the first press and "-2" on the next,
     // whether or not the preset's own row exists.
+    // CASE-INSENSITIVELY (PRESET-UNIFY-1 fix round 2). `MaterialPresets::find`
+    // matches a preset's name that way and so does the writers' refusal, so a
+    // typed "gold pbr" that passed here would be minted and then be refused
+    // — or, at the door that mints its own row, be minted and unreachable.
+    // One comparison, and it is the one the rest of the system uses.
     QSet<QString> taken;
     if (db)
         for (const auto &row : db->fetchAssetsForAssetView())
-            if (row.type == static_cast<int>(ModelTypes::Material)) taken.insert(row.name);
-    for (const MaterialPreset &preset : MaterialPresets::all()) taken.insert(preset.name);
+            if (row.type == static_cast<int>(ModelTypes::Material))
+                taken.insert(row.name.toCaseFolded());
+    for (const MaterialPreset &preset : MaterialPresets::all())
+        taken.insert(preset.name.toCaseFolded());
 
     const QString base = wanted.trimmed();
     if (base.isEmpty()) return base;
     QString chosen = base;
-    for (int n = 1; taken.contains(chosen); ++n) chosen = QStringLiteral("%1-%2").arg(base).arg(n);
+    for (int n = 1; taken.contains(chosen.toCaseFolded()); ++n)
+        chosen = QStringLiteral("%1-%2").arg(base).arg(n);
     return chosen;
 }
 
@@ -305,6 +384,18 @@ QString customise(const QString &presetOrGuid, const QString &name,
     const QString chosen = customiseName(db, name.trimmed().isEmpty() ? preset.name
                                                                       : name.trimmed());
     definition[QStringLiteral("name")] = chosen;
+    // THE GRAPH CARRIES A NAME TOO, and it is the one the module's Material
+    // Settings shows and the one `buildDefinition` writes back on every save
+    // (PRESET-UNIFY-1). Left at the preset's, "Gold PBR-1" would be called
+    // "Gold PBR" in the settings panel and would RENAME ITSELF back the first
+    // time the user saved it.
+    if (definition.contains(QStringLiteral("shadergraph"))) {
+        QJsonObject graph = definition.value(QStringLiteral("shadergraph")).toObject();
+        QJsonObject settings = graph.value(QStringLiteral("settings")).toObject();
+        settings[QStringLiteral("name")] = chosen;
+        graph[QStringLiteral("settings")] = settings;
+        definition[QStringLiteral("shadergraph")] = graph;
+    }
 
     // AN ORDINARY BUNDLE, with a guid nothing calls reserved: that is what
     // makes the copy editable where the preset is not. Its member textures

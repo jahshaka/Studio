@@ -148,6 +148,7 @@ bool copyFileAtomic(const QString &srcPath, const QString &dstPath, QString *err
         return false;
     }
     FileWrite::fsyncPath(tmpPath);
+    AssetCas::noteDeviceWait();   // the store-move's own wait counts too
     return FileWrite::atomicRename(tmpPath, dstPath, errorOut);
 }
 } // namespace

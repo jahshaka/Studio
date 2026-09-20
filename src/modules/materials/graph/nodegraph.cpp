@@ -134,7 +134,15 @@ ConnectionModel* NodeGraph::addConnection(QString leftNodeId, int leftSockIndex,
 	auto rightNode = nodes[rightNodeId];
 	auto rightSock = rightNode->inSockets[rightSockIndex];
 
-	// todo: check if socket with pair already exists
+	// AN INPUT TAKES ONE WIRE, AND THE NEW ONE REPLACES THE OLD
+	// (PRESET-UNIFY-1 fix round 2). The old wire's socket pointers were
+	// simply overwritten and its ConnectionModel LEFT IN `connections` — so
+	// it still serialized, and a graph re-wired through the verb came back
+	// with a connection into a socket that no longer believed in it. The
+	// CANVAS replaces (its in-socket press detaches the old wire before the
+	// new one lands), so the model does the same thing rather than a second
+	// thing.
+	if (rightSock->connection) removeConnection(rightSock->connection->id);
 
 	auto con = new ConnectionModel();
 	con->leftSocket = leftSock;
@@ -630,6 +638,12 @@ QJsonObject NodeGraph::serializeMaterialSettings()
 		break;
 	case BlendMode::Modulate:
 		blendType = "Modulate";
+		break;
+	case BlendMode::Glass:
+		blendType = "Glass";
+		break;
+	case BlendMode::Refractive:
+		blendType = "Refractive";
 	}
 
 	// The eight inert keys (zWrite/depthTest/fog/castShadow/receiveShadow/
@@ -652,6 +666,8 @@ MaterialSettings NodeGraph::deserializeMaterialSettings(QJsonObject obj)
 		if (mode == "blend" || mode == "translucent") return BlendMode::Translucent;
 		if (mode == "additive") return BlendMode::Additive;
 		if (mode == "modulate") return BlendMode::Modulate;
+		if (mode == "glass") return BlendMode::Glass;
+		if (mode == "refractive") return BlendMode::Refractive;
 		return BlendMode::Opaque;
 	};
 	MaterialSettings settings;

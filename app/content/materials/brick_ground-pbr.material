@@ -2,6 +2,7 @@
     "name"                : "Brick PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/brick_ground.png",
+    "graph"               : "graphs/brick_ground-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
     "metallic"            : 0.0,

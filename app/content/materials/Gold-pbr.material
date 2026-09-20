@@ -2,6 +2,7 @@
     "name"              : "Gold PBR",
     "material_type"     : "PBR",
     "icon"              : "../../shadergraph/goldThumb.png",
+    "graph"             : "graphs/Gold-pbr.effect",
     "baseColor"         : "#FFD700",
     "metallic"          : 1.0,
     "roughness"         : 0.3,

@@ -157,6 +157,11 @@ namespace Contants
 			// and the Mirror Room's panel (roughness 0.02) as presets (owner, 2026-09-17).
 			{ "00000000-0000-0000-0000-000000002030", "Chrome PBR" },
 			{ "00000000-0000-0000-0000-000000002031", "Mirror PBR" },
+			// The last two graph templates that had no tray tile, promoted to
+			// presets with the rest when the two preset families became one
+			// (PRESET-UNIFY-1, 2026-09-20).
+			{ "00000000-0000-0000-0000-000000002032", "Painted Metal PBR" },
+			{ "00000000-0000-0000-0000-000000002033", "Grass 2 PBR" },
          };
 
         QString SHADER_DEFAULT = "00000000-0000-0000-0000-000000000001";

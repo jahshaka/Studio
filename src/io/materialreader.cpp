@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/qtinterop.h"
+#include <QJsonArray>
+
 #include "io/materialreader.h"
 #include "irisgl/irisgl.h"
 #include "irisgl/document/assets/mesh.h"
@@ -157,6 +159,35 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 	auto mat    = iris::PbrMaterial::create();
 	auto values = matObject["values"].toObject();
 
+	// THE EVALUATOR'S ARRAY SPELLINGS, SPLIT BEFORE ANYTHING READS THEM
+	// (PRESET-UNIFY-1 fix round 2). `MaterialBundle::normaliseUv` does this at
+	// the one WRITER, so nothing stores them any more — but definitions
+	// written before it hold `textureScale: [u, v]` and `textureOffset:
+	// [u, v]`, and the loop below visits PROPERTIES, keyed by the document's
+	// own row names. `textureScale` at least matched a row and read as ZERO
+	// (QJsonValue::toDouble() of an array); `textureOffset` matches no row at
+	// all — the document's are `textureOffsetU`/`textureOffsetV` — so the
+	// offset was silently DROPPED on read until the material was next
+	// written. One split here, and both are the document's rows by the time
+	// anything looks.
+	{
+		const auto split = [&values](const QString &key, const QString &uKey,
+		                             const QString &vKey, double identity) {
+			const QJsonValue value = values.value(key);
+			if (!value.isArray()) return;
+			const QJsonArray pair = value.toArray();
+			const double u = pair.size() > 0 ? pair.at(0).toDouble(identity) : identity;
+			if (!values.contains(uKey) || uKey == key) values[uKey] = u;
+			if (!values.contains(vKey))
+				values[vKey] = pair.size() > 1 ? pair.at(1).toDouble(u) : u;
+			if (key != uKey) values.remove(key);
+		};
+		split(QStringLiteral("textureScale"), QStringLiteral("textureScale"),
+		      QStringLiteral("textureScaleV"), 1.0);
+		split(QStringLiteral("textureOffset"), QStringLiteral("textureOffsetU"),
+		      QStringLiteral("textureOffsetV"), 0.0);
+	}
+
 	// Drive everything through setValue so both the shader-facing field and the
 	// editor-facing Property object update (same contract as
 	// SceneReader::readPbrMaterial, which reads these out of the scene blob).
@@ -166,6 +197,9 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 
 		switch (prop->type) {
 		case iris::PropertyType::Float:
+			// (No array branch here: the split above means a Float row's value
+			// is a number by the time this loop sees it — ONE place, rather
+			// than two that can disagree about what an array means.)
 			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
 			break;
 		case iris::PropertyType::Int:

@@ -48,6 +48,8 @@
 #include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
+#include "data/guidmanager.h"
+#include "services/assettags.h"
 #include "services/materialbundle.h"
 
 static int failures = 0;
@@ -515,6 +517,49 @@ int main(int argc, char **argv)
         CHECK(MaterialBundle::read(&db, presetGuid).value("values").toObject()
                   .value("baseColor").toString() == QLatin1String("#ffd700"),
               "11: ...and the stored definition did not move");
+    }
+
+    // ---- 12. THE NAME LAWS, AT THE ONE NAME WRITER -----------------------
+    //
+    // `assettags::write` is what every rename in the app goes through — the
+    // verb, the Assets page's Update button and, since PRESET-UNIFY-1's
+    // second fix round, the Materials page's two rename doors, which used to
+    // call `Database::renameAsset` directly and so knew neither law.
+    //
+    // Two laws, and the second one is the one that was missing: a shipped
+    // preset cannot be renamed, and NOTHING ELSE MAY TAKE a shipped preset's
+    // name — because a preset is reached BY NAME (material.apply,
+    // materials.loadGraph, the drag payload), so a user's asset called
+    // "Gold PBR" is not a duplicate label, it is an asset nothing can ever
+    // address by name while the name goes on resolving to the preset.
+    {
+        const QString goldGuid = Constants::Reserved::DefaultMaterials.key("Gold PBR");
+        const QString mine = GUIDManager::generateGUID();
+        db.createAssetEntry(mine, QStringLiteral("My Material"),
+                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
+                            QByteArray(), AssetViewFilter::AssetsView);
+
+        CHECK(assettags::rename(&db, mine, QStringLiteral("Something Else")),
+              "12: an ordinary material renames");
+        CHECK(db.fetchAsset(mine).name == QLatin1String("Something Else"),
+              "12: ...and the row took it");
+
+        CHECK(!assettags::rename(&db, mine, QStringLiteral("Gold PBR")),
+              "12: nothing may take a shipped preset's NAME");
+        CHECK(!assettags::rename(&db, mine, QStringLiteral("gold pbr")),
+              "12: ...case-insensitively, which is how a preset is matched");
+        CHECK(db.fetchAsset(mine).name == QLatin1String("Something Else"),
+              "12: ...and the refused rename changed nothing");
+
+        db.createAssetEntry(goldGuid, QStringLiteral("Gold PBR"),
+                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
+                            QByteArray(), AssetViewFilter::AssetsView);
+        CHECK(!assettags::rename(&db, goldGuid, QStringLiteral("Fred")),
+              "12: and the preset itself cannot be renamed");
+        CHECK(db.fetchAsset(goldGuid).name == QLatin1String("Gold PBR"),
+              "12: ...one guid, one name");
     }
 
     printf(failures ? "\n%d FAILURES\n" : "\nall material bundle assertions passed\n", failures);

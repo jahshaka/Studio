@@ -2,6 +2,7 @@
     "name"              : "Silver PBR",
     "material_type"     : "PBR",
     "icon"              : "../../shadergraph/silverThumb.png",
+    "graph"             : "graphs/Silver-pbr.effect",
     "baseColor"         : "#F5F5F7",
     "metallic"          : 1.0,
     "roughness"         : 0.22,

@@ -8,8 +8,8 @@ function assert(cond, msg) {
     console.log("ok: " + msg);
 }
 
-var info = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/silver.effect");
-assert(info.master === "PbrMaterial", "silver.effect loaded with a PBR master");
+var info = materials.loadGraph("@SOURCE_DIR@/app/content/materials/graphs/Silver-pbr.effect");
+assert(info.master === "PbrMaterial", "Silver PBR's graph loaded with a PBR master");
 
 // default settings expose a blendMode
 var s = graph.settings();

@@ -149,7 +149,8 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	form.blend = new QComboBox;
 	// Unreal-parity blend modes; combo index == BlendMode enum value.
 	form.blend->addItems({ tr("Opaque"), tr("Masked"), tr("Translucent"),
-	                       tr("Additive"), tr("Modulate") });
+	                       tr("Additive"), tr("Modulate"), tr("Glass"),
+	                       tr("Refractive") });
 	formLayout->addRow(tr("Blend Mode"), form.blend);
 
 	form.bakeResolution = new QSpinBox;
@@ -507,8 +508,27 @@ void NodePropertiesPanel::pickTextureForNode()
 	chosen(tex->guid);
 }
 
+void NodePropertiesPanel::setReadOnly(bool readOnly)
+{
+	const bool wasReadOnly = mReadOnly;
+	mReadOnly = readOnly;
+	// Disabled is what the user sees; `writeValue`'s guard is what makes it
+	// true for an edit that arrives any other way (PRESET-UNIFY-1 fix round 2).
+	setEnabled(!readOnly);
+	// A disabled widget still takes a PROGRAMMATIC value, so a refused edit
+	// can leave the box showing a number the node does not have. Unlocking
+	// re-reads the node, so the dock never presents a value as the model's
+	// when it is not.
+	if (wasReadOnly && !readOnly) refreshFromNode();
+}
+
 void NodePropertiesPanel::writeValue(const QJsonValue& value)
 {
+	// A LOCKED GRAPH TAKES NO VALUE FROM THIS DOCK. It wrote straight into
+	// the node model — `deserializeWidgetValue` — with no guard at all, so a
+	// shipped preset's roughness could be retyped in the right-hand column
+	// while the canvas beside it refused every gesture.
+	if (mReadOnly) return;
 	if (mNode == nullptr || mUpdating)
 		return;
 

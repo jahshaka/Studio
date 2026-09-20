@@ -1,0 +1,14 @@
+{
+    "name"                : "Grass 2 PBR",
+    "material_type"       : "PBR",
+    "icon"                : "../../materials/grass2.png",
+    "graph"               : "graphs/grass2-pbr.effect",
+    "baseColor"           : "#FFFFFF",
+    "baseColorMap"        : "presets/grass2/grass2_COLOR.jpg",
+    "metallic"            : 0.0,
+    "roughness"           : 0.8,
+    "normalMap"           : "presets/grass2/grass2_NRM.png",
+    "normalFactor"        : 1.0,
+    "emissiveIntensity"   : 0.0,
+    "textureScale"        : 2
+}

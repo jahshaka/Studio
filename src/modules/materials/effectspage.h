@@ -29,6 +29,7 @@
 #include "widgets/shaderassetwidget.h"
 #endif
 
+class QLabel;
 class QMenuBar;
 class GraphNodeScene;
 class NodeGraph;
@@ -216,6 +217,19 @@ private:
 	void onShaderThumbnail(const ThumbnailResult &result);
 	bool mThumbnailConnected = false;
 	bool mSaveRefused = false;
+
+	/// THE OPEN MATERIAL IS A SHIPPED PRESET, ON SCREEN TO BE READ
+	/// (PRESET-UNIFY-1). Selecting a preset shows its graph — the owner's
+	/// first acceptance criterion — and a preset is read-only in fact: the
+	/// definition writer refuses its reserved guid. So the page must not
+	/// OFFER an edit it cannot honour: `saveShader` stands down, the autosave
+	/// timer never fires a refusal into the scene-issue bar, and the banner
+	/// above the canvas says so and offers the one gesture that works.
+	bool mReadOnly = false;
+	QWidget *mReadOnlyBanner = nullptr;
+	QLabel  *mReadOnlyLabel = nullptr;
+	/// Show or hide the banner and set `mReadOnly`.
+	void setReadOnly(bool readOnly, const QString &presetName = QString());
 	/// The guids WE asked the shared thumbnail queue about (a material render
 	/// is not ours by type alone any more — see requestShaderThumbnail).
 	QSet<QString> mPendingThumbnails;
@@ -249,8 +263,9 @@ private:
 
 	void configureStyleSheet();
 	void configureAssetsDock();
-	void createShader(NodeGraphPreset preset, bool loadNewGraph = true);
-	void loadGraphFromTemplate(NodeGraphPreset preset);
+	void createShader(NodeGraphPreset preset, bool loadNewGraph = true,
+	                  const QString &wanted = QString());
+	void loadGraphFromTemplate(NodeGraphPreset preset, const QString &name = QString());
 	void setCurrentShaderItem();
 	QByteArray fetchAsset(QString string);
 

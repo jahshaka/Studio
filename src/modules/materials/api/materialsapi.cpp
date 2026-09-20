@@ -214,7 +214,8 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "written into the definition and every mesh wearing the material is re-dressed — on a VALUES "
           "material only: a GRAPH material's slots come from its graph, so a slot write there is refused "
           "(the image is still imported and pinned; put it on a texture node with graph.addNode('texture') "
-          "+ graph.setValue).",
+          "+ graph.setValue). A SHIPPED PRESET is refused outright, before anything is imported: it is "
+          "read-only, and materials.createFromPreset makes the copy that is not.",
           Needs::Document },
         { "members", "materials.members(guid) -> [{guid, name, slot, node, role, bytes, usedBy, "
                      "pinned, member, hidden}]",
@@ -246,12 +247,20 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "picture keeps it and never notices. On a material the open project holds, the swap is a copy-on-write: "
           "the library original is untouched.",
           Needs::Document },
-        { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved}",
-          "Opens a material bundle's GRAPH (a Material asset guid, or a .effect/.shader file path) as the current "
-          "graph for graph.* verbs. Texture nodes carrying an APP-RELATIVE image name — which is how the shipped "
-          ".effect presets reference their images — are imported through the one content import and connected "
-          "here, exactly as the Materials page does when it instantiates a template; texturesResolved reports how "
-          "many.",
+        { "loadGraph",
+          "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved, "
+          "texturesImported, readOnly}",
+          "Opens a material bundle's GRAPH (a Material asset guid, a shipped PRESET by name or by its reserved "
+          "guid, or a .effect/.shader file path) as the current graph for graph.* verbs. EVERY SHIPPED PRESET HAS "
+          "A GRAPH and opening one costs nothing: a preset nobody has used yet has no library row, so its graph "
+          "is read from the shipped file and no row is written — looking at a preset is never what seeds it. "
+          "`readOnly` is true for a shipped preset: the definition writer refuses its reserved guid, so an edit "
+          "made to this graph cannot be saved — materials.createFromPreset makes the editable copy. Texture nodes "
+          "naming an image by FILE rather than by guid are imported through the one content import and connected "
+          "here; texturesResolved reports how many. A READ-ONLY open IMPORTS NOTHING — it binds the "
+          "shipped file to the node instead, so looking at a preset writes no row, pins nothing into "
+          "the open project and never waits for the device; texturesImported is 0 for one and equal "
+          "to texturesResolved otherwise.",
           Needs::Document },
         { "regenerate", "materials.regenerate(materialGuid) -> bool",
           "Re-evaluates and re-bakes a stored material bundle's maps (the 'cache deleted / app upgraded' recovery) "
@@ -272,7 +281,7 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           Needs::Document },
         { "seedPresets", "materials.seedPresets() -> int",
           "Seeds every shipped preset into the library as its read-only bundle — the FIRST-RUN seed, "
-          "on demand — and answers how many exist afterwards (18). Idempotent and normally "
+          "on demand — and answers how many exist afterwards (20). Idempotent and normally "
           "unnecessary: the app runs this at launch, with the maps' bytes put in the store on a "
           "worker thread so the row pass has no device wait in it (services/materialpresetseeder.h). "
           "Call it when you need the rows to be there NOW — a script that counts material rows, or a "
@@ -282,6 +291,9 @@ QVector<VerbInfo> MaterialsApi::verbs() const
         { "createFromPreset", "materials.createFromPreset(presetOrGuid, {name}) -> materialGuid",
           "Customises a SHIPPED PRESET (R18): an editable copy of it as an ordinary library material bundle, "
           "because a preset itself is read-only — the definition writer refuses one by name, not just the UI. "
+          "THE COPY CARRIES THE PRESET'S GRAPH, so it opens in the node editor and every edit gesture works "
+          "on it — that is what 'a custom preset is a new material based on the preset it was customised from' "
+          "means (PRESET-UNIFY-1). "
           "The copy names the preset's own member textures (one object, shared) and takes the name "
           "'<Preset>-1', the suffix bumped against the material names the library already holds, unless {name} "
           "says otherwise. With a project open it is added to the project too, so it lands in the project's "
@@ -533,6 +545,20 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         fail(QStringLiteral("materials.addTexture: '%1' is not a material").arg(materialGuid));
         return QString();
     }
+    // A SHIPPED PRESET IS READ-ONLY, AND THE ANSWER COMES BEFORE THE WORK
+    // (PRESET-UNIFY-1, the same rule as the apply's F6 test). The definition
+    // writer refuses a reserved guid at the end of this function anyway — but
+    // by then a picture from disk has been imported into the library and
+    // pinned into the project for an edit that was never going to land, which
+    // is exactly the shape of defect "nothing is imported for an apply that
+    // cannot happen" removed from the apply.
+    const QString shipped = MaterialBundle::shippedPresetName(materialGuid);
+    if (!shipped.isEmpty()) {
+        fail(QStringLiteral("materials.addTexture: '%1' is a material the app ships and is "
+                            "read-only — materials.createFromPreset('%1') makes your own copy")
+                 .arg(shipped));
+        return QString();
+    }
 
     // EITHER A GUID ALREADY IN THE LIBRARY, OR A PATH FROM ANYWHERE ON DISK —
     // and a path is IMPORTED at that moment (owner, spec 0/Q1: "adding a
@@ -730,6 +756,22 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
             return out;
         }
         definition = QJsonDocument::fromJson(file.readAll()).object();
+    } else if (MaterialPresetAssets::isPreset(guidOrPath)) {
+        // A SHIPPED PRESET'S GRAPH, WITHOUT SEEDING IT (PRESET-UNIFY-1). Every
+        // preset is a graph now, and looking at one must not be the thing that
+        // writes its row: a preset nobody has used yet has no row at all
+        // (seeding is on first USE), so the shipped graph is read straight off
+        // disk. A preset that HAS been seeded is read from its definition
+        // instead — the same graph with its images named by the guids the
+        // library gave them.
+        assetGuid = MaterialPresetAssets::guidFor(guidOrPath);
+        const QByteArray blob = host.db ? host.db->fetchAssetData(assetGuid) : QByteArray();
+        definition = QJsonDocument::fromJson(blob).object();
+        if (!definition.contains(QStringLiteral("shadergraph"))) {
+            bool found = false;
+            const MaterialPreset preset = MaterialPresets::find(assetGuid, &found);
+            if (found) definition[QStringLiteral("shadergraph")] = preset.graph;
+        }
     } else if (host.db) {
         const QByteArray blob = host.db->fetchAssetData(guidOrPath);
         if (blob.isEmpty()) {
@@ -749,16 +791,31 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     }
     // The real loader path (pixel-parity-tested): deserialize with LibraryV1.
     NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1());
-    // The same app-relative texture resolution the Effects page does when it
-    // instantiates a template (samples audit, 2026-09-04): without it a shipped
-    // .effect preset opened through this verb had every texture node
-    // unconnected, so graph.bake produced an untextured material.
-    out["texturesResolved"] = MaterialHelper::resolveAppRelativeTextures(graph);
+
+    // READ-ONLY IS PART OF THE ANSWER (PRESET-UNIFY-1). A shipped preset opens
+    // to be READ: the definition writer refuses its reserved guid, so a caller
+    // that edits this graph will have its save refused, and that has to be
+    // knowable before the edit rather than after it.
+    const bool readOnly = !MaterialBundle::shippedPresetName(assetGuid).isEmpty();
+
+    // AND A READ WRITES NOTHING (fix round). Binding a graph's file-named
+    // images through the content import is how they become library rows — and
+    // it is a device wait on the calling thread for every picture the store
+    // does not already hold, plus a pin into the open project. Doing that
+    // because somebody LOOKED at a preset is the wrong answer twice over, and
+    // it is what this verb did: opening the unseeded Brick preset imported and
+    // pinned three PNGs. A read-only open binds the shipped FILE instead;
+    // everything that draws the graph works from paths.
+    out["texturesResolved"] = MaterialHelper::resolveAppRelativeTextures(
+        graph, readOnly ? MaterialHelper::TextureBinding::PathOnly
+                        : MaterialHelper::TextureBinding::Import);
+    out["texturesImported"] = readOnly ? 0 : out["texturesResolved"];
     mGraphApi->setCurrent(graph, assetGuid);
 
     out["nodes"] = graph->nodes.size();
     out["master"] = graph->masterNode ? graph->masterNode->typeName : QString();
     out["name"] = definition.value("name").toString();
+    out["readOnly"] = readOnly;
     return out;
 }
 
@@ -1450,10 +1507,10 @@ QVector<VerbInfo> GraphApi::verbs() const
           Needs::Document },
         { "settings", "graph.settings() -> {name, blendMode, bakeResolution}",
           "The current graph's material settings; blendMode is one of "
-          "'Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate'.",
+          "'Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate' | 'Glass' | 'Refractive'.",
           Needs::Document },
         { "setBlendMode", "graph.setBlendMode(mode) -> bool",
-          "Sets the master material's blend mode ('Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate' — "
+          "Sets the master material's blend mode ('Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate' | 'Glass' | 'Refractive' — "
           "the Unreal set; 'Blend' is accepted as the legacy name for 'Translucent'). Material state only: bakes are "
           "unaffected, the evaluated material's alphaMode changes.",
           Needs::Document },
@@ -1498,6 +1555,18 @@ NodeGraph *GraphApi::graphOrFail(const QString &verb)
 {
     if (!mGraph) fail(QStringLiteral("%1: no graph is open — materials.loadGraph()/createGraph() first").arg(verb));
     return mGraph;
+}
+
+NodeGraph *GraphApi::editableGraphOrFail(const QString &verb)
+{
+    NodeGraph *graph = graphOrFail(verb);
+    if (!graph) return nullptr;
+    const QString shipped = MaterialBundle::shippedPresetName(mAssetGuid);
+    if (shipped.isEmpty()) return graph;
+    fail(QStringLiteral("%1: '%2' is a material the app ships and is read-only — "
+                        "materials.createFromPreset('%2') makes your own copy, and every edit "
+                        "works on that").arg(verb, shipped));
+    return nullptr;
 }
 
 QVariantList GraphApi::nodes()
@@ -1587,7 +1656,7 @@ bool GraphApi::removeNode(const QString &nodeId)
     // owns this node the deletion has to go through its undo stack.
     if (mEdit.removeNode && mEdit.removeNode(nodeId)) return true;
 
-    auto graph = graphOrFail(QStringLiteral("graph.removeNode"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.removeNode"));
     if (!graph) return false;
     if (!graph->nodes.contains(nodeId))
         return fail(QStringLiteral("graph.removeNode: no node '%1'").arg(nodeId));
@@ -1606,7 +1675,7 @@ bool GraphApi::disconnect(const QVariant &connection)
     if (value.typeId() == QMetaType::QString) {
         const QString id = value.toString();
         if (mEdit.removeConnection && mEdit.removeConnection(id)) return true;
-        auto graph = graphOrFail(QStringLiteral("graph.disconnect"));
+        auto graph = editableGraphOrFail(QStringLiteral("graph.disconnect"));
         if (!graph) return false;
         if (!graph->connections.contains(id))
             return fail(QStringLiteral("graph.disconnect: no connection '%1' "
@@ -1620,7 +1689,7 @@ bool GraphApi::disconnect(const QVariant &connection)
     if (value.typeId() != QMetaType::QVariantMap)
         return fail("graph.disconnect: pass a connection id or {to: nodeId, toSocket: nameOrIndex}");
     const QVariantMap m = value.toMap();
-    auto graph = graphOrFail(QStringLiteral("graph.disconnect"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.disconnect"));
     if (!graph) return false;
     const QString toId = m.value(QStringLiteral("to")).toString();
     if (!graph->nodes.contains(toId))
@@ -1666,7 +1735,7 @@ QVariantList GraphApi::nodeTypes()
 
 QString GraphApi::addNode(const QString &type)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.addNode"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.addNode"));
     if (!graph) return QString();
 
     NodeModel *node = nullptr;
@@ -1689,7 +1758,7 @@ QString GraphApi::addNode(const QString &type)
 bool GraphApi::connect(const QString &fromId, const QVariant &fromSocket,
                        const QString &toId, const QVariant &toSocket)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.connect"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.connect"));
     if (!graph) return false;
     if (!graph->nodes.contains(fromId) || !graph->nodes.contains(toId))
         return fail("graph.connect: no such node id");
@@ -1723,7 +1792,7 @@ bool GraphApi::connect(const QString &fromId, const QVariant &fromSocket,
 
 bool GraphApi::setValue(const QString &nodeId, const QVariant &value)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.setValue"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.setValue"));
     if (!graph) return false;
     if (!graph->nodes.contains(nodeId)) return fail("graph.setValue: no such node id");
     // The NodeModel interface is the public route (some overrides are private).
@@ -1784,7 +1853,7 @@ QVariantMap GraphApi::emitInfo()
 QVariantMap GraphApi::bake(const QVariantMap &options)
 {
     QVariantMap out;
-    auto graph = graphOrFail(QStringLiteral("graph.bake"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.bake"));
     if (!graph) return out;
     QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
     if (guid.isEmpty()) guid = QStringLiteral("scratch");
@@ -1912,6 +1981,8 @@ const char *blendModeName(BlendMode mode)
     case BlendMode::Translucent: return "Translucent";
     case BlendMode::Additive:    return "Additive";
     case BlendMode::Modulate:    return "Modulate";
+    case BlendMode::Glass:       return "Glass";
+    case BlendMode::Refractive:  return "Refractive";
     }
     return "Opaque";
 }
@@ -1930,7 +2001,7 @@ QVariantMap GraphApi::settings()
 
 bool GraphApi::setBlendMode(const QString &mode)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.setBlendMode"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.setBlendMode"));
     if (!graph) return false;
     const QString m = mode.trimmed().toLower();
     BlendMode want;
@@ -1939,8 +2010,11 @@ bool GraphApi::setBlendMode(const QString &mode)
     else if (m == "translucent" || m == "blend")  want = BlendMode::Translucent;
     else if (m == "additive")                     want = BlendMode::Additive;
     else if (m == "modulate")                     want = BlendMode::Modulate;
+    else if (m == "glass")                        want = BlendMode::Glass;
+    else if (m == "refractive")                   want = BlendMode::Refractive;
     else return fail(QStringLiteral("graph.setBlendMode: unknown mode '%1' "
-                     "(Opaque | Masked | Translucent | Additive | Modulate)").arg(mode));
+                     "(Opaque | Masked | Translucent | Additive | Modulate | Glass | "
+                     "Refractive)").arg(mode));
     MaterialSettings s = graph->settings;
     s.blendMode = want;
     graph->setMaterialSettings(s);
@@ -2000,7 +2074,7 @@ QVariant GraphApi::paletteTile(const QString &name)
 
 bool GraphApi::save()
 {
-    auto graph = graphOrFail(QStringLiteral("graph.save"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.save"));
     if (!graph) return false;
     if (!host.db) return fail("graph.save: not available in this session");
     if (mAssetGuid.isEmpty())

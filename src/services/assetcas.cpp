@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QUuid>
 #include <QVector>
+#include <atomic>
 
 #ifdef Q_OS_UNIX
 #include <unistd.h>   // link(2) — hardlink migration, preflight §3.3
@@ -37,6 +38,11 @@ For more information see the LICENSE file
 
 namespace AssetCas
 {
+
+namespace {
+/// See `deviceWaits()`. Relaxed: it is a counter nobody orders anything by.
+std::atomic<quint64> sDeviceWaits{0};
+} // namespace
 
 QString hashFile(const QString &path)
 {
@@ -123,6 +129,7 @@ bool storeObject(const QString &srcPath, const QString &root,
         // is deliberately NOT fsynced: losing the rename loses the object, and
         // a missing object is a re-ingest, not a corruption.
         FileWrite::fsyncPath(tmpPath);
+        noteDeviceWait();
     }
 
     return FileWrite::atomicRename(tmpPath, dstPath, errorOut);
@@ -195,7 +202,20 @@ void flushStaged(QVector<Staged> &files)
     // flushed (losing a rename loses an object, which is a re-ingest — losing
     // an object's CONTENT is a corruption, which is what this prevents).
     for (Staged &file : files)
-        if (file.copied && !file.tmpPath.isEmpty()) FileWrite::fsyncPath(file.tmpPath);
+        if (file.copied && !file.tmpPath.isEmpty()) {
+            FileWrite::fsyncPath(file.tmpPath);
+            noteDeviceWait();
+        }
+}
+
+quint64 deviceWaits()
+{
+    return sDeviceWaits.load(std::memory_order_relaxed);
+}
+
+void noteDeviceWait()
+{
+    sDeviceWaits.fetch_add(1, std::memory_order_relaxed);
 }
 
 void discardStaged(QVector<Staged> &files)
