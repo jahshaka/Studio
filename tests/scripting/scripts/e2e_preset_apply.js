@@ -75,7 +75,7 @@ assert(true, "…and not one of the seventeen graph templates survives as a seco
 //
 // The app seeds every shipped preset at launch (services/materialpresetseeder.h
 // — the map bytes on a worker, the rows one per event-loop turn), so the
-// library reaches a steady state of EIGHTEEN bundles, one per preset, with no
+// library reaches a steady state of TWENTY bundles, one per preset, with no
 // gesture at all. `materials.seedPresets()` is that same seed on demand: it
 // makes the count deterministic here instead of racing the launch.
 // ---- 1b. LOOKING AT A PRESET WRITES NOTHING (PRESET-UNIFY-1) -------------
@@ -363,24 +363,86 @@ assert(Math.abs(rowsOf(glassCopy).alpha - 1) < 1e-3,
        "…the material is OPAQUE-alpha again (" + rowsOf(glassCopy).alpha
        + ", the old 0.3 used to come back)");
 
-// (d) THE OWNER'S OWN GESTURE (R19): remove the UV tiling node and the tiling
-// goes with it, instead of the last saved one coming back.
+// (d) THE OWNER'S OWN GESTURE (R19): change the UV tiling, then REMOVE the
+// node, and the tiling goes with it instead of the last saved one coming back.
+//
+// The first version of this arm proved nothing and is worth naming: it wrote
+// `graph.setValue(uv, {x:10, y:10}) === true || true` — a tautology, and the
+// UV node reads `tileX`/`tileY`, so it set identity — then connected into an
+// OCCUPIED socket (which left the preset's own wire in the graph), printed
+// the tiling instead of asserting it, and finished by checking for the very
+// number the preset already had.
 var tiled = materials.createFromPreset("Brick PBR", { name: "Tiled Bricks" });
 materials.loadGraph(tiled);
-var tiledMaster = graph.nodes().filter(function (n) { return n.master; })[0];
-var baseTex = graph.nodes().filter(function (n) { return n.type === "texture"; })[0];
-var uv = graph.addNode("uv");
-assert(!!uv, "(d) a UV node");
-assert(graph.setValue(uv, { x: 10, y: 10 }) === true || true, "…tiling 10x10");
-assert(graph.connect(uv, 0, baseTex.id, "UV") === true, "…wired into the texture");
+var tiledUv = graph.nodes().filter(function (n) { return n.type === "uv"; })[0];
+assert(!!tiledUv, "(d) the copy carries the preset's own UV node");
+assert(graph.setValue(tiledUv.id, { tileX: 10, tileY: 10 }) === true, "…set to 10 x 10");
 assert(graph.save() === true, "…saved");
-var tiledRows = rowsOf(tiled);
-assert(graph.removeNode(uv) === true, "…now REMOVE the UV node");
+var tiled10 = rowsOf(tiled);
+console.log("   (d) after the edit: textureScale=" + tiled10.textureScale
+            + " textureScaleV=" + tiled10.textureScaleV);
+assert(Math.abs(tiled10.textureScale - 10) < 1e-3 && Math.abs(tiled10.textureScaleV - 10) < 1e-3,
+       "…and BOTH axes read 10 (" + tiled10.textureScale + ", " + tiled10.textureScaleV + ")");
+
+materials.loadGraph(tiled);
+tiledUv = graph.nodes().filter(function (n) { return n.type === "uv"; })[0];
+assert(graph.removeNode(tiledUv.id) === true, "…now REMOVE the UV node");
 assert(graph.save() === true, "…and save again");
-var afterRemoval = rowsOf(tiled);
-assert(Math.abs(afterRemoval.textureScale - 4) < 1e-3,
-       "…the tiling is the preset's own 4, not whatever the deleted node said ("
-       + tiledRows.textureScale + " -> " + afterRemoval.textureScale + ")");
+var tiledNone = rowsOf(tiled);
+console.log("   (d) after the removal: textureScale=" + tiledNone.textureScale
+            + " textureScaleV=" + tiledNone.textureScaleV);
+assert(Math.abs(tiledNone.textureScale - 1) < 1e-3 && Math.abs(tiledNone.textureScaleV - 1) < 1e-3,
+       "…the tiling is IDENTITY, not the 10 that was there a moment ago ("
+       + tiledNone.textureScale + ", " + tiledNone.textureScaleV + ")");
+
+// (e) AN INPUT TAKES ONE WIRE, AND A NEW ONE REPLACES THE OLD. The old
+// ConnectionModel used to be left in the graph — still serialized, still
+// pointing at a socket that no longer believed in it.
+materials.loadGraph(tiled);
+var replMaster = graph.nodes().filter(function (n) { return n.master; })[0];
+var wiresBefore = graph.connections().filter(function (c) {
+    return c.to === replMaster.id && c.toSocket === "Roughness";
+}).length;
+assert(wiresBefore === 1, "(e) Roughness has exactly one wire to begin with");
+var newRough = graph.addNode("float");
+assert(graph.setValue(newRough, 0.4) === true, "…a float of 0.4");
+assert(graph.connect(newRough, 0, replMaster.id, "Roughness") === true,
+       "…connected into the OCCUPIED Roughness socket");
+var wiresAfter = graph.connections().filter(function (c) {
+    return c.to === replMaster.id && c.toSocket === "Roughness";
+}).length;
+assert(wiresAfter === 1,
+       "…and it REPLACED the old wire rather than leaving it behind ("
+       + wiresBefore + " -> " + wiresAfter + ")");
+assert(graph.save() === true, "…saved");
+assert(Math.abs(rowsOf(tiled).roughness - 0.4) < 1e-3,
+       "…the material takes the new wire's value (" + rowsOf(tiled).roughness + ")");
+
+// (f) THE MODE ITSELF ROUND-TRIPS, both ways. A graph can NAME Refractive
+// (alphaMode 6) but has no socket for what refraction is MADE of —
+// refractionStrength, ior, the fresnel rows — so those ride the previous
+// definition whenever the mode is Refractive and are dropped for every other
+// mode, exactly like the roughness remap bounds. WHAT THIS ARM DOES NOT
+// ASSERT, said plainly rather than faked: no verb writes a library material's
+// scalar rows, so there is no way from a script to plant a DISTINCTIVE
+// refractionStrength and watch it survive — every reachable starting value is
+// the constructor's 0.35, which proves nothing. The carry itself is covered by
+// the code and by this arm's neighbours; what is asserted here is the half a
+// script can see.
+var refr = materials.createFromPreset("Glass PBR", { name: "Refractive Copy" });
+materials.loadGraph(refr);
+assert(graph.setBlendMode("Refractive") === true, "(f) a copy set to Refractive");
+assert(graph.save() === true, "…saved");
+var refrRows = rowsOf(refr);
+console.log("   (f) alphaMode=" + refrRows.alphaMode
+            + " refractionStrength=" + refrRows.refractionStrength);
+assert(Math.abs(refrRows.alphaMode - 6) < 0.5,
+       "…the material IS refractive (alphaMode " + refrRows.alphaMode + ")");
+assert(refrRows.refractionStrength > 0,
+       "…with a refraction strength, not a zeroed row (" + refrRows.refractionStrength + ")");
+materials.loadGraph(refr);
+graph.setBlendMode("Opaque"); graph.save();
+assert(Math.abs(rowsOf(refr).alphaMode) < 0.5, "…and it comes back out again");
 
 // ---- 4d. A NEW MATERIAL CANNOT TAKE A PRESET'S NAME ----------------------
 //
@@ -397,6 +459,14 @@ catch (e) { renameRefusedToPreset = true; }
 assert(renameRefusedToPreset, "…and so does a RENAME into one");
 assert(materials.createFromPreset("Gold PBR") !== "",
        "…while Customise, which names the copy '<Preset>-N', is how you get one");
+// …and a name that differs from a preset's only in CASE is a preset's name:
+// `MaterialPresets::find` matches case-insensitively, so the namer must too.
+var lowerCopy = materials.createFromPreset("Gold PBR", { name: "gold pbr" });
+var lowerName = assets.list({ scope: "store" }).filter(function (a) {
+    return a.guid === lowerCopy;
+})[0].name;
+assert(lowerName.toLowerCase() !== "gold pbr",
+       "…and a lowercase 'gold pbr' is bumped too (got '" + lowerName + "')");
 
 // EVERY preset has one, which is the whole rule — a tile that cannot answer
 // "show me this material" has no business in the drawer.

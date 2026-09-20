@@ -116,9 +116,18 @@ void flushStaged(QVector<Staged> &files);
 /// It exists because "no durable write belongs on the thread that draws"
 /// (FSYNC-2) is a claim somebody has to be able to CHECK, and counting rows
 /// only tells you a write happened, not that the caller waited for it.
+/// EVERY fsync the store performs is counted: the two-phase ingest's
+/// `flushStaged`, `storeObject`'s copy fallback (the branch a cross-filesystem
+/// ingest takes, where a hardlink is impossible) and the store-root MOVE's
+/// per-file copy (services/assetstore.cpp). A hardlink writes no bytes and
+/// waits for nothing, so it does not count.
+///
 /// Monotonic, process-wide, thread-safe; only differences mean anything.
 /// Reported by `assets.storeStatus()`.
 quint64 deviceWaits();
+
+/// Record one wait, for a store write that fsyncs outside this file.
+void noteDeviceWait();
 
 /// Publish `file` (rename) and record its rows against `guid`. The DB thread.
 bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,

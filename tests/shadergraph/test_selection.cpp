@@ -8,6 +8,8 @@
 //
 // No GL, no engine. QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
+#include <QGraphicsSceneMouseEvent>
+#include <QGraphicsView>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QJsonObject>
@@ -337,6 +339,138 @@ int main(int argc, char** argv)
               "inserted null");
 
         scene->setUndoRedoStack(nullptr);
+    }
+
+    // ---- A READ-ONLY SCENE (PRESET-UNIFY-1 fix round 2) ------------------
+    //
+    // A shipped preset opens on this canvas to be READ. Locking it meant
+    // refusing the scene's own verbs and making the nodes non-movable — and
+    // that left the SOCKETS live, because a socket is a child of its node and
+    // is still hit-tested. Both socket branches of the press handler write to
+    // the MODEL:
+    //
+    //   * the OUT branch starts a live wire whose release pushes
+    //     AddConnectionCommand, which mutates `nodeGraph` and then reads the
+    //     SocketConnection a locked scene refuses to make — a NULL
+    //     DEREFERENCE. Dragging a wire on a preset crashed the editor.
+    //   * the IN branch calls `nodeGraph->removeConnection` DIRECTLY, around
+    //     the guarded scene verb, so clicking a wired input detached the wire
+    //     from a material nothing will ever save.
+    //
+    // Both are asserted here against the real handler, with real sockets.
+    {
+        auto roGraph = new NodeGraph;
+        roGraph->setNodeLibrary(new LibraryV1());
+        auto roMaster = new PbrMasterNode();
+        roGraph->addNode(roMaster);
+        roGraph->setMasterNode(roMaster);
+        auto roFloat = roGraph->library->createNode("float");
+        roFloat->deserializeWidgetValue(QJsonValue(0.42));
+        roGraph->addNode(roFloat);
+        roGraph->addConnection(roFloat->id, 0, roMaster->id, 2);   // -> Roughness
+
+        auto roScene = new GraphNodeScene(nullptr);
+        auto roView = new QGraphicsView(roScene);
+        roScene->setNodeGraph(roGraph);
+        roScene->setReadOnly(true);
+
+        const int wires = roGraph->connections.count();
+        CHECK(wires == 1, "read-only: the fixture starts with one wire");
+
+        // the master's Roughness IN socket and the float's OUT socket, as the
+        // canvas sees them
+        Socket* roughIn = nullptr;
+        Socket* floatOut = nullptr;
+        for (auto item : roScene->items()) {
+            auto node = dynamic_cast<GraphNode*>(item);
+            if (!node) continue;
+            for (auto child : node->childItems()) {
+                auto sock = dynamic_cast<Socket*>(child);
+                if (!sock) continue;
+                if (node->nodeId == roMaster->id && sock->socketType == SocketType::In
+                    && !sock->connections.isEmpty())
+                    roughIn = sock;
+                if (node->nodeId == roFloat->id && sock->socketType == SocketType::Out)
+                    floatOut = sock;
+            }
+        }
+        CHECK(roughIn != nullptr && floatOut != nullptr,
+              "read-only: found the wired input and the output the canvas hit-tests");
+
+        const auto press = [&](Socket* sock) {
+            if (!sock) return;
+            QGraphicsSceneMouseEvent ev(QEvent::GraphicsSceneMousePress);
+            ev.setScenePos(sock->mapToScene(sock->boundingRect().center()));
+            ev.setButton(Qt::LeftButton);
+            ev.setButtons(Qt::LeftButton);
+            roScene->eventFilter(roScene, &ev);
+        };
+
+        // 1. the wire DRAG that used to crash: press the output, release over
+        //    the wired input. Surviving it is half the assertion; the model
+        //    being untouched is the other half.
+        press(floatOut);
+        {
+            QGraphicsSceneMouseEvent up(QEvent::GraphicsSceneMouseRelease);
+            up.setScenePos(roughIn ? roughIn->mapToScene(roughIn->boundingRect().center())
+                                   : QPointF());
+            up.setButton(Qt::LeftButton);
+            roScene->eventFilter(roScene, &up);
+        }
+        CHECK(roGraph->connections.count() == wires,
+              "read-only: a wire DRAG from an output changes nothing (and does not crash)");
+
+        // 2. the CLICK on a wired input that used to detach it from the model
+        press(roughIn);
+        CHECK(roGraph->connections.count() == wires,
+              "read-only: clicking a wired input does NOT detach it from the model");
+        CHECK(roMaster->inSockets[2]->connection != nullptr,
+              "read-only: …and the master's Roughness socket still holds its wire");
+
+        // 3. THE RIGHT-HAND DOCK wrote straight into the node model, with the
+        //    canvas beside it refusing every gesture.
+        auto roPanel = new NodePropertiesPanel;
+        roPanel->setGraph(roGraph);
+        roPanel->setScene(roScene);
+        roPanel->resize(320, 600);
+        roPanel->show();
+        roPanel->setReadOnly(true);
+        roScene->selectNodeById(roFloat->id);
+        {
+            // THE USER'S OWN GESTURE: the number box in the dock.
+            auto roBoxes = visibleBoxes<QDoubleSpinBox>(roPanel);
+            CHECK(roBoxes.size() == 1, "read-only: the dock shows the node's number box");
+            if (roBoxes.size() == 1) {
+                roBoxes[0]->setValue(0.99);
+                CHECK(near(roFloat->serializeWidgetValue().toDouble(), 0.42),
+                      "read-only: typing in the dock does NOT retype a locked node's value");
+            }
+            CHECK(!roPanel->isEnabled(),
+                  "read-only: …and the dock is disabled, so the user is told rather than ignored");
+
+            roPanel->setReadOnly(false);
+            roBoxes = visibleBoxes<QDoubleSpinBox>(roPanel);
+            if (roBoxes.size() == 1) {
+                // Unlocking re-reads the node, so the box shows what the model
+                // actually holds rather than the number it refused.
+                CHECK(near(roBoxes[0]->value(), 0.42),
+                      "…and unlocking re-reads the node, so the dock stops showing a "
+                      "value the model never took");
+                roBoxes[0]->setValue(0.77);
+                CHECK(near(roFloat->serializeWidgetValue().toDouble(), 0.77),
+                      "…and it writes again the moment the graph is the user's");
+            }
+        }
+
+        // 4. the nodes themselves: no drag, no embedded widget
+        for (auto item : roScene->items()) {
+            auto node = dynamic_cast<GraphNode*>(item);
+            if (!node || node->nodeId != roFloat->id) continue;
+            CHECK(!(node->flags() & QGraphicsItem::ItemIsMovable),
+                  "read-only: a node cannot be dragged");
+        }
+
+        delete roView;
     }
 
     if (failures == 0) std::printf("ALL OK\n");

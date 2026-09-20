@@ -340,16 +340,24 @@ QString customiseName(Database *db, const QString &wanted)
     // asks: "Gold PBR" is a preset's name, so it is taken, so a Customise of
     // Gold PBR is "Gold PBR-1" on the first press and "-2" on the next,
     // whether or not the preset's own row exists.
+    // CASE-INSENSITIVELY (PRESET-UNIFY-1 fix round 2). `MaterialPresets::find`
+    // matches a preset's name that way and so does the writers' refusal, so a
+    // typed "gold pbr" that passed here would be minted and then be refused
+    // — or, at the door that mints its own row, be minted and unreachable.
+    // One comparison, and it is the one the rest of the system uses.
     QSet<QString> taken;
     if (db)
         for (const auto &row : db->fetchAssetsForAssetView())
-            if (row.type == static_cast<int>(ModelTypes::Material)) taken.insert(row.name);
-    for (const MaterialPreset &preset : MaterialPresets::all()) taken.insert(preset.name);
+            if (row.type == static_cast<int>(ModelTypes::Material))
+                taken.insert(row.name.toCaseFolded());
+    for (const MaterialPreset &preset : MaterialPresets::all())
+        taken.insert(preset.name.toCaseFolded());
 
     const QString base = wanted.trimmed();
     if (base.isEmpty()) return base;
     QString chosen = base;
-    for (int n = 1; taken.contains(chosen); ++n) chosen = QStringLiteral("%1-%2").arg(base).arg(n);
+    for (int n = 1; taken.contains(chosen.toCaseFolded()); ++n)
+        chosen = QStringLiteral("%1-%2").arg(base).arg(n);
     return chosen;
 }
 

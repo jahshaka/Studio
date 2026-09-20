@@ -113,7 +113,10 @@ inline bool write(Database *db, const QString &guid, const QString &name,
     // a user's own material called "Gold PBR" is not a duplicate label, it is
     // a material NOTHING CAN REACH BY NAME, for ever, while the name resolves
     // to the preset instead. Case-insensitively, because that is how
-    // `MaterialPresets::find` matches.
+    // `MaterialPresets::find` matches. It applies to EVERY asset type, not
+    // only to materials, and deliberately: the drag payload and the tray
+    // resolve a reserved preset name whatever the row behind it is, so a
+    // MODEL called "Gold PBR" is just as unreachable as a material would be.
     if (shipped.isEmpty() && !name.isEmpty()
         && !MaterialBundle::shippedPresetGuidForName(name).isEmpty())
         return false;

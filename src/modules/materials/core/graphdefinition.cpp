@@ -223,8 +223,21 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
         for (auto *node : graph->nodes.values())
             if (node && node->typeName == QLatin1String("texture")) { hasTextureNode = true; break; }
 
+        // AND THE ROWS THAT BELONG TO ONE BLEND MODE (fix round 2). A graph
+        // can NAME Refractive but has no socket for what refraction is made
+        // of, so a Refractive material saved from its graph came back at the
+        // constructor's 0.35 strength whatever the user had set. They are the
+        // same class as the roughness bounds — rows no graph can say — for
+        // exactly the mode that uses them, and for any other mode they are
+        // not carried at all, so switching OUT of Refractive drops them.
+        static const QStringList kRefractiveRows = {
+            QStringLiteral("refractionStrength"), QStringLiteral("ior"),
+            QStringLiteral("fresnelColor"),       QStringLiteral("separateFresnel"),
+            QStringLiteral("useFresnelColor"),
+        };
         QStringList carry = kNoGraphCanSay;
         if (!hasTextureNode) carry += kUvRows;
+        if (graph->settings.blendMode == BlendMode::Refractive) carry += kRefractiveRows;
 
         const QJsonObject previous =
             MaterialBundle::read(db, materialGuid, project)

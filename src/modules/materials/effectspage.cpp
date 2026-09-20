@@ -56,6 +56,7 @@ For more information see the LICENSE file
 #include "core/graphdefinition.h"
 #include "data/materialpreset.h"
 #include "io/materialpresets.h"
+#include "services/assettags.h"
 #include "services/materialbundle.h"
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
@@ -647,13 +648,19 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 void EffectsPage::setReadOnly(bool readOnly, const QString &presetName)
 {
 	mReadOnly = readOnly;
-	mReadOnlyName = readOnly ? presetName : QString();
 	// THE CANVAS REFUSES EDITS, it does not merely fail to save them (fix
 	// round). Flipping a flag and a banner left the scene taking nodes,
 	// wires, drags and typed values while `saveShader` quietly returned and
 	// Customise built the copy from the SHIPPED definition — so the work went
 	// into a window that showed it and into nothing else.
 	if (scene) scene->setReadOnly(readOnly);
+	// THE DOCKS TOO. `GraphNode::setInteractive` reaches only the widgets
+	// EMBEDDED IN A NODE; the right-hand properties panel and the settings
+	// dock are separate windows onto the same model and were writing to it
+	// through `NodePropertiesPanel::writeValue`. Disabling them is both the
+	// enforcement and the thing the user can see.
+	if (nodePropertiesPanel) nodePropertiesPanel->setReadOnly(readOnly);
+	if (materialSettingsWidget) materialSettingsWidget->setEnabled(!readOnly);
 	if (!mReadOnlyBanner || !mReadOnlyLabel) return;
 	if (readOnly) {
 		mReadOnlyLabel->setText(
@@ -948,17 +955,23 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	// canvas, this one is editable, so the read-only banner goes.
 	setReadOnly(false);
 
-	// AND IT IS NOT CALLED WHAT THE PRESET IS CALLED (fix round). It took
-	// `preset.title` — a shipped preset's own name — so "New material, based
-	// on Gold PBR" made a SECOND "Gold PBR", and a preset is reached BY NAME
-	// (`material.apply(n, "Gold PBR")`, `materials.loadGraph("Gold PBR")`,
-	// the drag payload), so the user's material was unreachable by name for
-	// ever while the name went on resolving to the preset. The writer refuses
-	// that name outright now; this is where the good one comes from: what the
-	// user typed, else `<Preset>-1` by the one namer Customise uses.
-	QString newShader = wanted.trimmed();
-	if (newShader.isEmpty())
-		newShader = MaterialPresetAssets::customiseName(dataBase, preset.name);
+	// AND IT IS NOT CALLED WHAT THE PRESET IS CALLED (fix round; corrected in
+	// round 2). It took `preset.title` — a shipped preset's own name — so
+	// "New material, based on Gold PBR" made a SECOND "Gold PBR", and a
+	// preset is reached BY NAME (`material.apply(n, "Gold PBR")`,
+	// `materials.loadGraph("Gold PBR")`, the drag payload), so the user's
+	// material was unreachable by name for ever while the name went on
+	// resolving to the preset.
+	//
+	// EVERY name goes through the ONE namer, including one the user TYPED.
+	// Round 1 let a typed name through verbatim and leaned on the definition
+	// writer to refuse a preset's name — but this door does not go through
+	// `MaterialBundle::create`, it mints the row itself below, so nothing
+	// refused it and typing "Gold PBR" reproduced the very defect. The namer
+	// bumps a taken name to `<name>-1`, and "taken" includes every shipped
+	// preset's, case-insensitively.
+	QString newShader = MaterialPresetAssets::customiseName(
+	    dataBase, wanted.trimmed().isEmpty() ? preset.name : wanted.trimmed());
 
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
@@ -993,7 +1006,7 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 
 	stack->clear();
 
-	if (loadNewGraph)	loadGraphFromTemplate(preset);
+	if (loadNewGraph)	loadGraphFromTemplate(preset, newShader);
 	else				setNodeGraph(graph);
 	
 	currentShaderInformation.GUID = assetGuid;
@@ -1018,7 +1031,7 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	saveShader();
 }
 
-void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset)
+void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &name)
 {
 	// A NEW MATERIAL IS BASED ON A PRESET (PRESET-UNIFY-1). This used to read
 	// a `.effect` TEMPLATE file from app/shadergraph/ and then import an
@@ -1051,7 +1064,12 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset)
 	// the same objects the preset's own bundle uses.
 	MaterialHelper::resolveAppRelativeTextures(graph);
 
-	graph->settings.name = preset.name;
+	// THE GRAPH CARRIES THE NEW MATERIAL'S NAME, not the preset's (fix round
+	// 2, found on the rig). `buildDefinition` writes the graph's settings name
+	// into the definition on every save, so naming it after the PRESET meant a
+	// new material called "Gold PBR-1" whose stored definition said "Basic PBR"
+	// the first time it was saved — the same drift Customise had.
+	graph->settings.name = name.isEmpty() ? preset.name : name;
 	setNodeGraph(graph);
 }
 
@@ -1719,7 +1737,12 @@ void EffectsPage::renameShader()
 	// drawer refill can clear it).
 	if (!currentProjectShader) return;
 #if(EFFECT_BUILD_AS_LIB)
-	dataBase->renameAsset(currentProjectShader->data(MODEL_GUID_ROLE).toString(), currentProjectShader->data(Qt::DisplayRole).toString());
+	// THROUGH THE ONE NAME WRITER (PRESET-UNIFY-1 fix round 2), which is where
+	// both name laws live: a shipped preset cannot be renamed, and nothing
+	// else may take a shipped preset's name. `Database::renameAsset` knows
+	// neither, and this door went straight to it.
+	assettags::rename(dataBase, currentProjectShader->data(MODEL_GUID_ROLE).toString(),
+	                  currentProjectShader->data(Qt::DisplayRole).toString());
 #else
 	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
 	if (!QDir(filePath).exists()) return;
@@ -2067,7 +2090,15 @@ void EffectsPage::configureConnections()
 	});
 
     // change: any settings changed
+    //
+    // A LOCKED GRAPH TAKES NO SETTINGS EDIT EITHER (PRESET-UNIFY-1 fix round
+    // 2). The canvas was locked and these two were not, so Blend Mode on a
+    // shipped preset still flipped — and became an undoable command on a
+    // graph nothing will ever save. The docks are DISABLED in `setReadOnly`,
+    // which is what the user sees; these guards are what makes it true for a
+    // signal that arrives any other way.
     connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged,[=](MaterialSettings settings){
+		if (mReadOnly) return;
 		auto command = new MaterialSettingsChangeCommand(graph, settings, materialSettingsWidget);
 		stack->push(command);
 		nodePropertiesPanel->refreshSettings();
@@ -2076,6 +2107,7 @@ void EffectsPage::configureConnections()
 	// §3a: the panel's master/graph settings views push through the SAME
 	// undo command the left settings dock uses — one edit stack
 	connect(nodePropertiesPanel, &NodePropertiesPanel::settingsEdited, [=](MaterialSettings settings) {
+		if (mReadOnly) return;
 		auto command = new MaterialSettingsChangeCommand(graph, settings, materialSettingsWidget);
 		stack->push(command);
 		nodePropertiesPanel->refreshSettings();
@@ -2131,7 +2163,14 @@ void EffectsPage::editingFinishedOnListItem()
             if (!written.ok) irisLog("rename: " + written.error);
         }
     }
-    dataBase->renameAsset(pressedShaderInfo.GUID, newName);
+    // THROUGH THE ONE NAME WRITER (fix round 2) — see renameShader.
+    if (!assettags::rename(dataBase, pressedShaderInfo.GUID, newName)) {
+        // Refused: put the tile's label back, or the drawer would show a name
+        // the catalog does not have.
+        irisLog("rename: '" + newName + "' was refused");
+        item->setData(Qt::DisplayRole, oldName);
+        return;
+    }
 #else
     // get json obj from file and edit graph like above
 

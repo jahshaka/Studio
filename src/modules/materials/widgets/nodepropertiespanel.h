@@ -58,6 +58,10 @@ public:
 
 	// Follows the scene's nodeSelected/nodeValueChanged signals. The panel
 	// never owns the scene; call again whenever the page swaps scenes.
+	/// THE DOCK EDITS THE MODEL, so it has to know when the model is locked
+	/// (PRESET-UNIFY-1 fix round 2): disabled for the user, and `writeValue`
+	/// refuses for anything that reaches it another way.
+	void setReadOnly(bool readOnly);
 	void setScene(GraphNodeScene* scene);
 	void setGraph(NodeGraph* graph);
 
@@ -98,6 +102,7 @@ private:
 	NodeGraph* mGraph = nullptr;
 	NodeModel* mNode = nullptr;
 	bool mUpdating = false;
+	bool mReadOnly = false;
 
 	QStackedWidget* mStack = nullptr;
 

@@ -705,6 +705,23 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 	case QEvent::GraphicsSceneMousePress:
 	{
 		auto sock = getSocketAt(me->scenePos().x(), me->scenePos().y());
+		// A LOCKED CANVAS DOES NOT START A WIRE, AND DOES NOT BREAK ONE
+		// (PRESET-UNIFY-1 fix round 2). A socket is a child of its node, so
+		// making the NODE non-movable left the sockets hit-testable and both
+		// branches below live — and both write to the MODEL. The out-socket
+		// branch starts a live connection whose release pushes
+		// AddConnectionCommand, which mutates `nodeGraph` and then reads the
+		// SocketConnection the guarded `addConnection` refuses to make: a
+		// null dereference, i.e. dragging a wire on a read-only preset
+		// CRASHED the editor. The in-socket branch is worse than harmless: it
+		// calls `nodeGraph->removeConnection` directly, around the guarded
+		// scene verb, so merely clicking a wired input detached the wire from
+		// the model of a material nothing will ever save. Both die here, at
+		// the press, which is the one place that covers them and anything
+		// added beside them later.
+		if (readOnly && sock != nullptr
+		    && (me->button() == Qt::LeftButton || me->button() == Qt::RightButton))
+			return true;
 		if (sock != nullptr) {
 			if (me->button() == Qt::LeftButton) {
 

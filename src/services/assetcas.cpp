@@ -39,6 +39,11 @@ For more information see the LICENSE file
 namespace AssetCas
 {
 
+namespace {
+/// See `deviceWaits()`. Relaxed: it is a counter nobody orders anything by.
+std::atomic<quint64> sDeviceWaits{0};
+} // namespace
+
 QString hashFile(const QString &path)
 {
     QFile file(path);
@@ -124,6 +129,7 @@ bool storeObject(const QString &srcPath, const QString &root,
         // is deliberately NOT fsynced: losing the rename loses the object, and
         // a missing object is a re-ingest, not a corruption.
         FileWrite::fsyncPath(tmpPath);
+        noteDeviceWait();
     }
 
     return FileWrite::atomicRename(tmpPath, dstPath, errorOut);
@@ -189,11 +195,6 @@ bool stage(const QString &root, Staged &file)
     return true;
 }
 
-namespace {
-/// See `deviceWaits()`. Relaxed: it is a counter nobody orders anything by.
-std::atomic<quint64> sDeviceWaits{0};
-} // namespace
-
 void flushStaged(QVector<Staged> &files)
 {
     // The batch's ONE waiting point. Every copy, then nothing else: a hardlink
@@ -203,13 +204,18 @@ void flushStaged(QVector<Staged> &files)
     for (Staged &file : files)
         if (file.copied && !file.tmpPath.isEmpty()) {
             FileWrite::fsyncPath(file.tmpPath);
-            sDeviceWaits.fetch_add(1, std::memory_order_relaxed);
+            noteDeviceWait();
         }
 }
 
 quint64 deviceWaits()
 {
     return sDeviceWaits.load(std::memory_order_relaxed);
+}
+
+void noteDeviceWait()
+{
+    sDeviceWaits.fetch_add(1, std::memory_order_relaxed);
 }
 
 void discardStaged(QVector<Staged> &files)
