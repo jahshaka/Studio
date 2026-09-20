@@ -333,6 +333,19 @@ refuses(function () { world.postFx({ exposure: 1.25 }); },
 fxTuning = world.postFx({ exposureEv: 1.25, bloomThreshold: 3.0, ssaoPower: 2.5, ssaoRadius: 4 });
 assert(Math.abs(fxTuning.exposureEv - 1.25) < 0.001, "world.postFx sets the exposure");
 assert(Math.abs(fxTuning.bloomThreshold - 3.0) < 0.001, "world.postFx sets the bloom threshold");
+// THE BLOOM AMOUNT (owner review R17). A new scene is at 1 — the amount this
+// renderer has always drawn — so the row cannot regrade anybody's saved
+// picture; the range is 0 to 2 and the verb clamps to it, like every other
+// parameter in the table.
+assert(Math.abs(world.postFx().bloomAmount - 1.0) < 0.001,
+       "a new scene's bloom amount is 1x: " + world.postFx().bloomAmount);
+assert(Math.abs(world.postFx({ bloomAmount: 1.6 }).bloomAmount - 1.6) < 0.001,
+       "world.postFx sets the bloom amount");
+assert(world.postFx({ bloomAmount: 9 }).bloomAmount === 2,
+       "…and clamps it to 2x (twice the bloom is the top of the dial)");
+assert(world.postFx({ bloomAmount: -1 }).bloomAmount === 0,
+       "…and to 0, which is the bloom-off picture with the chain still standing");
+world.postFx({ bloomAmount: 1 });
 assert(Math.abs(fxTuning.ssaoPower - 2.5) < 0.001, "world.postFx sets the AO power");
 assert(world.postFx({ exposureEv: 999 }).exposureEv === 16, "out-of-range exposure clamps");
 world.postFx({ exposureEv: 1.25 });

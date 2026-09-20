@@ -168,6 +168,10 @@ QVariantMap postFxMap(const View &view)
     m[QStringLiteral("bloom")] = fx.bloom;
     m[QStringLiteral("bloomThreshold")] = fx.bloomThreshold;
     m[QStringLiteral("bloomKnee")] = fx.bloomKnee;
+    // Reported even though the VR policy turns bloom OFF in both eyes: this map
+    // exists to name a difference between two descriptions, and a field left
+    // out of it is a difference nobody can see.
+    m[QStringLiteral("bloomAmount")] = fx.bloomAmount;
     m[QStringLiteral("ssao")] = fx.ssao;
     m[QStringLiteral("smaaPreset")] = fx.smaaPreset;
     m[QStringLiteral("ssr")] = fx.ssr;
