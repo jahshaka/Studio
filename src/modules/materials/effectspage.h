@@ -41,6 +41,7 @@ class UndoRedo;
 class AssetView;
 struct ThumbnailResult;
 
+class QTabBar;
 class QTimer;
 class NodeLibrary;
 
@@ -194,6 +195,19 @@ public:
 	int graphUndoCount() const;
 	int graphRedoCount() const;
 
+	// ---- THE OPEN TABS (MATERIALS_TABS_SPEC §3) -----------------------
+	// The page half of the five `materials.*` tab verbs, which is also what
+	// the tab bar itself calls: a click and a verb are the same gesture.
+	/// Open (or activate) `guid` at `scope` — "library", "project", or empty
+	/// for the default (the project's copy when it pins the guid). Empty
+	/// when no drawer holds it.
+	QVariantMap openMaterialTab(const QString &guid, const QString &scope);
+	QVariantList materialTabs() const;
+	QVariantMap activeMaterialTab() const;
+	/// By tab INDEX (a number) or by guid (the first tab in bar order).
+	bool activateMaterialTab(const QVariant &tabOrGuid);
+	bool closeMaterialTab(const QVariant &tabOrGuid);
+
     ~EffectsPage();
 
 	QList<NodeGraphPreset> list;
@@ -322,6 +336,11 @@ private:
 	QMainWindow *displayWindow = nullptr;   // the Display dock's inner window (menus + preview)
 	QTimer *previewUpdateTimer = nullptr;   // 300ms debounce: slider drags bake once, not per pixel
 	bool restoringGraph = false;            // suppress position-saves while a graph is being (re)built
+	/// Set while a document is being put on screen. The material-settings
+	/// widget and the properties panel EMIT when they are re-bound, and
+	/// their edit signals push an undoable command — so without this, simply
+	/// showing a tab wrote a settings change onto that tab's undo stack.
+	bool mShowingDocument = false;
 
 	// ---- THE OPEN MATERIALS (MATERIALS_TABS_SPEC §2) ------------------
 	/// Every open material IN TAB ORDER, and which one is active. There is
@@ -330,6 +349,12 @@ private:
 	/// tab leaves that same canvas rather than an empty window.
 	QVector<MaterialDocument *> mDocs;
 	int mActive = -1;
+	/// The tab bar itself, at the top of the canvas column — inside the
+	/// central pane, so it adds nothing to the window's minimum width.
+	QTabBar *mTabBar = nullptr;
+	/// Set while the bar is being rebuilt from `mDocs`, so its own
+	/// currentChanged/tabMoved do not come back as user gestures.
+	bool mSyncingTabs = false;
 	/// ONE node library for every graph this page opens — it is a stateless
 	/// factory registry, and a copy per open was exactly that.
 	NodeLibrary *mNodeLibrary = nullptr;
@@ -361,6 +386,21 @@ private:
 	/// Every open document of this material takes the new name — the label,
 	/// the graph's settings, the settings dock, and a save.
 	void renameOpenDocuments(const QString &guid, const QString &newName);
+	/// A master node on an empty canvas — the page's boot graph, and what a
+	/// closed last tab leaves behind.
+	NodeGraph *newMasterGraph();
+	/// Make document `index` the one on screen.
+	bool activateTab(int index);
+	/// Close document `index`: a pending autosave is written FIRST, then the
+	/// document's graph, canvas and undo history are freed.
+	bool closeDocumentAt(int index);
+	/// The boot canvas stands aside for the first material that opens — but
+	/// only while nobody has drawn on it.
+	void dropUntouchedAnonymous(MaterialDocument *keep);
+	/// The bar's tabs, labels and visibility from `mDocs`.
+	void syncTabBar();
+	QVariantMap tabInfo(MaterialDocument *doc) const;
+	int indexForRef(const QVariant &tabOrGuid) const;
 	QSplitter *splitView;
 	AssetView* assetView;
 

@@ -108,6 +108,8 @@ For more information see the LICENSE file
 #include "services/materialmembers.h"
 #include "widgets/memberspanel.h"
 #include "modules/materials/materialdocument.h"
+#include "ui/style/themeroles.h"
+#include <QTabBar>
 
 namespace materials
 {
@@ -232,6 +234,10 @@ void EffectsPage::bindGraph(MaterialDocument *doc, NodeGraph *graph)
 void EffectsPage::showDocument(MaterialDocument *doc)
 {
 	if (!doc || !doc->scene || !doc->graph) return;
+	// A REBIND IS NOT AN EDIT: `setMaterialSettings` emits `settingsChanged`,
+	// and that signal pushes an undoable MaterialSettingsChangeCommand — so
+	// every activation would leave a command on the tab it activated.
+	mShowingDocument = true;
 	graphicsView->setScene(doc->scene);
 	graphicsView->setAcceptDrops(true);
 	materialSettingsWidget->setMaterialSettings(doc->graph->settings);
@@ -242,6 +248,162 @@ void EffectsPage::showDocument(MaterialDocument *doc)
 	if (membersPanel) membersPanel->setMaterial(doc->info.GUID);
 	refreshCurrentTile();
 	schedulePreviewUpdate();
+	mShowingDocument = false;
+}
+
+bool EffectsPage::activateTab(int index)
+{
+	if (index < 0 || index >= mDocs.size()) return false;
+	mActive = index;
+	// EVERYTHING FOLLOWS THE ACTIVE TAB (§2.2): the canvas, the material
+	// settings, the properties panel, the Members panel, the read-only banner,
+	// the preview and, through graphUndo, Ctrl+Z.
+	showDocument(mDocs[index]);
+	syncTabBar();
+	return true;
+}
+
+bool EffectsPage::closeDocumentAt(int index)
+{
+	if (index < 0 || index >= mDocs.size()) return false;
+	MaterialDocument *doc = mDocs[index];
+
+	// A PENDING AUTOSAVE IS WRITTEN FIRST (§2.3). There is no "save before
+	// closing?" question on this page because the module autosaves — so a
+	// close is a FLUSH, not a decision. A read-only document writes nothing,
+	// and neither does the anonymous one (only an explicit Save can name it).
+	if (doc->saveTimer->isActive()) {
+		doc->saveTimer->stop();
+		if (!doc->readOnly && !doc->info.GUID.isEmpty()) saveShader(doc);
+	}
+	doc->saveTimer->stop();
+
+	mDocs.removeAt(index);
+	if (mActive > index) --mActive;
+	else if (mActive == index) mActive = qMin(index, mDocs.size() - 1);
+
+	if (mDocs.isEmpty()) {
+		// AN EMPTY PAGE IS NOT A STATE THIS EDITOR HAS: closing the last tab
+		// leaves the untitled canvas the page boots on.
+		auto *fresh = newDocument();
+		mDocs.append(fresh);
+		mActive = 0;
+		bindGraph(fresh, newMasterGraph());
+	} else {
+		showDocument(mDocs[mActive]);
+	}
+	// Only now — the view is showing another document's scene, and the panels
+	// point at another document's graph.
+	delete doc;
+	syncTabBar();
+	return true;
+}
+
+void EffectsPage::dropUntouchedAnonymous(MaterialDocument *keep)
+{
+	for (int i = mDocs.size() - 1; i >= 0; --i) {
+		MaterialDocument *doc = mDocs[i];
+		if (doc == keep || !doc->isAnonymous()) continue;
+		// UNTOUCHED means nothing was drawn on it: an untitled canvas somebody
+		// HAS worked on stays open (nothing else can save it), an empty one is
+		// just the page's boot state and gets out of the way.
+		if (doc->stack && doc->stack->count() > 0) continue;
+		closeDocumentAt(i);
+	}
+}
+
+void EffectsPage::syncTabBar()
+{
+	if (!mTabBar) return;
+	mSyncingTabs = true;
+	while (mTabBar->count() > mDocs.size()) mTabBar->removeTab(mTabBar->count() - 1);
+	while (mTabBar->count() < mDocs.size()) mTabBar->addTab(QString());
+	for (int i = 0; i < mDocs.size(); ++i) {
+		MaterialDocument *doc = mDocs[i];
+		mTabBar->setTabText(i, doc->label());
+		mTabBar->setTabToolTip(
+		    i, doc->readOnly
+		           ? tr("'%1' is a material the app ships — read-only.").arg(doc->label())
+		           : doc->info.origin == shaderInfo::Origin::Project
+		                 ? tr("'%1' as THIS PROJECT holds it — editing it never touches the "
+		                      "library original.").arg(doc->info.name)
+		                 : doc->label());
+	}
+	if (mActive >= 0 && mActive < mTabBar->count()) mTabBar->setCurrentIndex(mActive);
+	// TODAY'S LOOK, BYTE FOR BYTE, while the only document is the boot canvas:
+	// a page with nothing open has nothing to show a bar of.
+	mTabBar->setVisible(!(mDocs.size() == 1 && mDocs[0]->isAnonymous()));
+	mSyncingTabs = false;
+}
+
+QVariantMap EffectsPage::tabInfo(MaterialDocument *doc) const
+{
+	QVariantMap out;
+	if (!doc) return out;
+	out["tab"] = mDocs.indexOf(doc);
+	out["guid"] = doc->info.GUID;
+	out["name"] = doc->info.name;
+	out["scope"] = doc->info.origin == shaderInfo::Origin::Project
+	                   ? QStringLiteral("project") : QStringLiteral("library");
+	out["readOnly"] = doc->readOnly;
+	// DIRTY = an autosave is pending on this document (it writes 1.5 s after
+	// the last edit, or on close).
+	out["dirty"] = doc->saveTimer && doc->saveTimer->isActive();
+	out["active"] = doc == activeDoc();
+	return out;
+}
+
+int EffectsPage::indexForRef(const QVariant &tabOrGuid) const
+{
+	// A NUMBER IS AN INDEX, a string is a guid (the first tab in bar order).
+	const int type = tabOrGuid.typeId();
+	if (type == QMetaType::Int || type == QMetaType::UInt || type == QMetaType::LongLong
+	    || type == QMetaType::ULongLong || type == QMetaType::Double
+	    || type == QMetaType::Float) {
+		return tabOrGuid.toInt();
+	}
+	const QString guid = tabOrGuid.toString();
+	for (int i = 0; i < mDocs.size(); ++i)
+		if (mDocs[i]->info.GUID == guid) return i;
+	return -1;
+}
+
+QVariantMap EffectsPage::openMaterialTab(const QString &guid, const QString &scope)
+{
+	shaderInfo::Origin origin;
+	if (scope == QLatin1String("project")) origin = shaderInfo::Origin::Project;
+	else if (scope == QLatin1String("library")) origin = shaderInfo::Origin::Library;
+	else {
+		// THE DEFAULT IS THE COPY THE USER WOULD REACH FOR: the project's, when
+		// the open project pins this material (that is the drawer it is in),
+		// the library's otherwise.
+		const bool pinned = dataBase && mProject && !mProject->getProjectGuid().isEmpty()
+		                    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), guid);
+		origin = pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library;
+	}
+	return tabInfo(openDocument(guid, origin));
+}
+
+QVariantList EffectsPage::materialTabs() const
+{
+	QVariantList out;
+	for (MaterialDocument *doc : mDocs) out.append(tabInfo(doc));
+	return out;
+}
+
+QVariantMap EffectsPage::activeMaterialTab() const
+{
+	return tabInfo(activeDoc());
+}
+
+bool EffectsPage::activateMaterialTab(const QVariant &tabOrGuid)
+{
+	return activateTab(indexForRef(tabOrGuid));
+}
+
+bool EffectsPage::closeMaterialTab(const QVariant &tabOrGuid)
+{
+	return closeDocumentAt(indexForRef(tabOrGuid));
 }
 
 void EffectsPage::documentChanged(MaterialDocument *doc)
@@ -251,22 +413,22 @@ void EffectsPage::documentChanged(MaterialDocument *doc)
 		if (membersPanel) membersPanel->setMaterial(doc->info.GUID);
 		refreshCurrentTile();
 	}
+	syncTabBar();   // the label is the document's name
 }
 
 void EffectsPage::forgetMaterial(const QString &guid)
 {
+	// THE MATERIAL IS GONE FROM THE LIBRARY, so the tabs that are it CLOSE —
+	// without a save, because the row they would write to no longer exists
+	// (MATERIALS_TABS_SPEC §2.6). Nothing else on the page changes: deleting one
+	// material never touched the others, and the unconditional reset this
+	// replaced made every delete reach for whatever was on screen.
 	if (guid.isEmpty()) return;
-	for (MaterialDocument *doc : mDocs) {
-		if (doc->info.GUID != guid) continue;
-		doc->info = shaderInfo();
-		doc->readOnly = false;
-		doc->presetName.clear();
-		doc->saveTimer->stop();
-		if (doc == activeDoc()) {
-			if (membersPanel) membersPanel->setMaterial(QString());
-			applyReadOnlyUi();
-		}
-		documentChanged(doc);
+	for (int i = mDocs.size() - 1; i >= 0; --i) {
+		if (mDocs[i]->info.GUID != guid) continue;
+		mDocs[i]->saveTimer->stop();
+		mDocs[i]->info = shaderInfo();   // no save on the way out
+		closeDocumentAt(i);
 	}
 }
 
@@ -297,7 +459,7 @@ void EffectsPage::setNodeGraph(NodeGraph *graph)
 	bindGraph(doc, graph);
 }
 
-void EffectsPage::newNodeGraph(QString *shaderName, int *templateType, QString *templateName)
+NodeGraph *EffectsPage::newMasterGraph()
 {
     auto graph = new NodeGraph;
 	graph->setNodeLibrary(mNodeLibrary ? mNodeLibrary
@@ -306,7 +468,12 @@ void EffectsPage::newNodeGraph(QString *shaderName, int *templateType, QString *
     auto masterNode = new PbrMasterNode();
     graph->addNode(masterNode);
     graph->setMasterNode(masterNode);
-    setNodeGraph(graph);
+    return graph;
+}
+
+void EffectsPage::newNodeGraph(QString *shaderName, int *templateType, QString *templateName)
+{
+    setNodeGraph(newMasterGraph());
 }
 
 void EffectsPage::refreshShaderGraph()
@@ -634,22 +801,31 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 {
 	if (guid.isEmpty()) return nullptr;
 	// NO TILE, NO OPEN (fix round F1), asked FIRST. `selectCorrectItemFromDrop`
-	// answers null for a guid no drawer holds \u2014 which a caller can produce
-	// simply by asking before the drawers were refilled \u2014 and everything below
+	// answers null for a guid no drawer holds — which a caller can produce
+	// simply by asking before the drawers were refilled — and everything below
 	// reads the tile. It used to be asked at the END, after the canvas had
 	// already been replaced with the new graph: a half-open, on top of the
 	// dereference that made it a segfault.
 	QListWidgetItem *tile = selectCorrectItemFromDrop(guid);
 	if (!tile) {
-		irisLog("loadGraph: no drawer holds '" + guid + "' \u2014 nothing to open");
+		// ...OR THE DRAWERS ARE SIMPLY OUT OF DATE. They are a VIEW of the
+		// catalog, refilled on a space switch, so a material minted a moment
+		// ago — by a verb, by an import made on another page — has no tile
+		// yet, and every UI gesture that mints one calls this itself before
+		// opening. Ask the catalog once, then take the answer.
+		refreshShaderGraph();
+		tile = selectCorrectItemFromDrop(guid);
+	}
+	if (!tile) {
+		irisLog("loadGraph: no drawer holds '" + guid + "' — nothing to open");
 		return nullptr;
 	}
 
-	// A SHIPPED PRESET OPENS \u2014 READ-ONLY (PRESET-UNIFY-1; the owner
+	// A SHIPPED PRESET OPENS — READ-ONLY (PRESET-UNIFY-1; the owner
 	// 2026-09-20: "if i select a preset i should see the graph, i dont see
 	// it"). It used to be REFUSED here, with a scene issue explaining that a
-	// preset has no graph to show. It has one now \u2014 every shipped preset is
-	// an authored graph, carried in its own definition \u2014 so the honest answer
+	// preset has no graph to show. It has one now — every shipped preset is
+	// an authored graph, carried in its own definition — so the honest answer
 	// to "show me this material" is to show it. What stays true is that it
 	// cannot be CHANGED: the definition writer refuses its reserved guid, so
 	// the page opens it with the save stood down and says so above the canvas,
@@ -659,12 +835,19 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	// was refused before this material was opened, must not outlive it.
 	SceneIssues::instance().clear(QStringLiteral("material.readonly:") + guid);
 
-	MaterialDocument *doc = activeDoc();
-	if (!doc) {
-		doc = newDocument();
-		mDocs.append(doc);
-		mActive = mDocs.size() - 1;
+	// ALREADY OPEN AT THIS SCOPE? Then this is an ACTIVATION, not a second
+	// copy: identity is (guid, origin) — the same guid at both origins is two
+	// documents (a library original and a project's pinned copy are two
+	// things by the four-drawer rule), the same guid at ONE origin is one.
+	for (int i = 0; i < mDocs.size(); ++i) {
+		if (mDocs[i]->is(guid, origin)) { activateTab(i); return mDocs[i]; }
 	}
+
+	// A TAB OF ITS OWN (MATERIALS_TABS_SPEC §2.2). This is the line the whole
+	// lane is: opening a material used to REPLACE the one on the canvas.
+	MaterialDocument *doc = newDocument();
+	mDocs.append(doc);
+	mActive = mDocs.size() - 1;
 	doc->info.GUID = guid;
 	doc->info.origin = origin;
 	// A PRESET TILE'S LABEL IS ELIDED to fit its 90 px tile, so the NAME comes
@@ -689,10 +872,10 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 #if(EFFECT_BUILD_AS_LIB)
 	obj = QJsonDocument::fromJson(fetchAsset(guid, origin)).object();
 	// A PRESET NOBODY HAS USED YET HAS NO ROW (seeding is on first USE, not on
-	// listing \u2014 services/materialpresetassets.h). Looking at one must not be
+	// listing — services/materialpresetassets.h). Looking at one must not be
 	// what seeds it: the shipped graph is on disk, so the page reads THAT and
 	// writes nothing at all. Once the preset has been applied or customised,
-	// its definition is the better source \u2014 the same graph with its images
+	// its definition is the better source — the same graph with its images
 	// named by the guids the library gave them.
 	if (!shipped.isEmpty() && !obj.contains(QStringLiteral("shadergraph"))) {
 		bool found = false;
@@ -704,7 +887,7 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
 	// A READ-ONLY OPEN BINDS THE SHIPPED FILE AND WRITES NOTHING (fix round).
 	// Opening a preset to LOOK at it must not import its pictures into the
-	// library and pin them into the open project \u2014 a device wait each, on the
+	// library and pin them into the open project — a device wait each, on the
 	// thread that draws, for a gesture that reads. Every file-named image is
 	// bound to its path here so the canvas, the evaluator and the preview all
 	// have the complete picture with no row behind it; the import happens on
@@ -744,6 +927,9 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	// The Members panel follows the open bundle.
 	if (membersPanel && doc == activeDoc()) membersPanel->setMaterial(doc->info.GUID);
 	refreshCurrentTile();
+	// The boot canvas stands aside for the first material that opens (C8).
+	dropUntouchedAnonymous(doc);
+	syncTabBar();
 	progressDialog->close();
 	progressDialog->deleteLater();
 	return doc;
@@ -771,7 +957,7 @@ void EffectsPage::applyReadOnlyUi()
 	// THE CANVAS REFUSES EDITS, it does not merely fail to save them (fix
 	// round). Flipping a flag and a banner left the scene taking nodes,
 	// wires, drags and typed values while `saveShader` quietly returned and
-	// Customise built the copy from the SHIPPED definition \u2014 so the work went
+	// Customise built the copy from the SHIPPED definition — so the work went
 	// into a window that showed it and into nothing else.
 	if (doc && doc->scene) doc->scene->setReadOnly(readOnly);
 	// THE DOCKS TOO. `GraphNode::setInteractive` reaches only the widgets
@@ -786,7 +972,7 @@ void EffectsPage::applyReadOnlyUi()
 	if (!mReadOnlyBanner || !mReadOnlyLabel) return;
 	if (readOnly) {
 		mReadOnlyLabel->setText(
-		    tr("'%1' is a material the app ships \u2014 read-only, so the canvas takes no edits. "
+		    tr("'%1' is a material the app ships — read-only, so the canvas takes no edits. "
 		       "This is its graph; Customise makes '%1-1', your own copy, and every edit "
 		       "works on that.")
 		        .arg(doc->presetName));
@@ -901,7 +1087,7 @@ bool EffectsPage::deleteShader(QString guid)
         holder->takeItem(holder->row(item));
         // ONLY THE MATERIAL THAT WENT (MATERIALS_TABS_SPEC C7). This used to
         // clear the open material's record UNCONDITIONALLY, so deleting any
-        // row in the drawer left the graph on screen with no guid \u2014 and its
+        // row in the drawer left the graph on screen with no guid — and its
         // next save went down the 'name this new material' route, modal
         // dialog and all.
         forgetMaterial(guid);
@@ -1212,7 +1398,7 @@ void EffectsPage::refreshCurrentTile()
 	// THE GUID IS THE IDENTITY, the QListWidgetItem is a view (fix round F1's
 	// family): a drawer refill deletes every item, so the active document's
 	// tile pointer is re-resolved from its guid after anything that refills a
-	// drawer. This used to ask the SCENE which tile it had last been handed \u2014
+	// drawer. This used to ask the SCENE which tile it had last been handed —
 	// a pointer the scene kept for no other reason (`currentlyEditing`, now
 	// deleted).
 	const QString guid = currentInfo().GUID;
@@ -1308,6 +1494,40 @@ void EffectsPage::configureUI()
 		auto *canvasColumn = new QVBoxLayout(canvas);
 		canvasColumn->setContentsMargins(0, 0, 0, 0);
 		canvasColumn->setSpacing(0);
+		// THE OPEN MATERIALS, AS TABS (MATERIALS_TABS_SPEC §4). It lives INSIDE
+		// the central splitter pane — above the read-only banner and the canvas
+		// — so it adds nothing to the window's minimum width (the pane's
+		// minimum is the view's; ui.window_minimum measures 1366). Configured
+		// exactly as the house strip is (ui/controls/propertiestabstrip.cpp):
+		// not expanding, eliding, scroll buttons as the last resort, no base
+		// line, and the one STYLE GETTER — never a sheet of our own.
+		mTabBar = new QTabBar;
+		mTabBar->setExpanding(false);
+		mTabBar->setElideMode(Qt::ElideRight);
+		mTabBar->setUsesScrollButtons(true);
+		mTabBar->setDrawBase(false);
+		mTabBar->setTabsClosable(true);
+		mTabBar->setMovable(true);
+		mTabBar->setStyleSheet(StyleSheet::PreferencesTabs());
+		ThemeRoles::setSurface(mTabBar, ThemeRoles::Surface::Panel);
+		mTabBar->hide();   // today's look while the boot canvas is all there is
+		connect(mTabBar, &QTabBar::currentChanged, this, [this](int index) {
+			if (mSyncingTabs) return;
+			activateTab(index);
+		});
+		connect(mTabBar, &QTabBar::tabCloseRequested, this, [this](int index) {
+			closeDocumentAt(index);
+		});
+		connect(mTabBar, &QTabBar::tabMoved, this, [this](int from, int to) {
+			if (mSyncingTabs) return;
+			if (from < 0 || from >= mDocs.size() || to < 0 || to >= mDocs.size()) return;
+			// THE BAR IS THE ORDER (§4): mDocs is kept in tab order, so a drag
+			// re-orders the documents and the saved tab set with them.
+			MaterialDocument *act = activeDoc();
+			mDocs.move(from, to);
+			mActive = mDocs.indexOf(act);
+		});
+		canvasColumn->addWidget(mTabBar);
 		canvasColumn->addWidget(mReadOnlyBanner);
 		canvasColumn->addWidget(graphicsView, 1);
 		splitView->addWidget(canvas);
@@ -1931,14 +2151,14 @@ GraphNodeScene *EffectsPage::createNewScene(MaterialDocument *doc)
 		// ...AND THE EDIT IS WRITTEN DOWN (the owner, 2026-09-19: "I added a UV
 		// node and connected it to the texture, went to the editor and back and
 		// the node connection is gone; I had to toggle between materials for it
-		// to stay"). THIS SIGNAL IS EVERY REAL EDIT \u2014 a connection, a deletion,
-		// a value typed into a node \u2014 and until now the only thing that ever
+		// to stay"). THIS SIGNAL IS EVERY REAL EDIT — a connection, a deletion,
+		// a value typed into a node — and until now the only thing that ever
 		// reached `saveShader` on its own was `nodeMoved`, the timer below. So
 		// a graph you EDITED was kept only if you also happened to DRAG a node
 		// (or rename the material, or switch to another one, which saves on the
 		// way out): the work was lost on any other exit, silently. The same
-		// debounce carries it \u2014 the bake is hash-cached, so an edit
-		// that changes nothing re-saves cheaply \u2014 and `restoringGraph` still
+		// debounce carries it — the bake is hash-cached, so an edit
+		// that changes nothing re-saves cheaply — and `restoringGraph` still
 		// guards the rebuild, so loading a graph writes nothing.
 		//
 		// THE TIMER IS THIS DOCUMENT'S: the edit lands on the material it was
@@ -1988,7 +2208,7 @@ void EffectsPage::updateEnginePreviewMaterial()
 	// the compiled BakeProgram (a pure value object - the graph's QWidgets
 	// are only touched here, on the GUI thread), latest-wins by generation.
 	//
-	// THE GENERATION IS THE DOCUMENT'S (MATERIALS_TABS_SPEC \u00a72.5): a bake
+	// THE GENERATION IS THE DOCUMENT'S (MATERIALS_TABS_SPEC §2.5): a bake
 	// started for one tab that lands after another tab is active must not
 	// paint the wrong material, and the watcher is a CHILD of the document, so
 	// closing a tab takes its in-flight bakes with it.
@@ -2258,6 +2478,7 @@ void EffectsPage::configureConnections()
     // which is what the user sees; these guards are what makes it true for a
     // signal that arrives any other way.
     connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged,[=](MaterialSettings settings){
+		if (mShowingDocument || restoringGraph) return;   // a rebind, not an edit
 		if (isReadOnly() || !activeGraph()) return;
 		auto command = new MaterialSettingsChangeCommand(activeGraph(), settings, materialSettingsWidget);
 		activeStack()->push(command);
@@ -2267,6 +2488,7 @@ void EffectsPage::configureConnections()
 	// §3a: the panel's master/graph settings views push through the SAME
 	// undo command the left settings dock uses — one edit stack
 	connect(nodePropertiesPanel, &NodePropertiesPanel::settingsEdited, [=](MaterialSettings settings) {
+		if (mShowingDocument || restoringGraph) return;   // a rebind, not an edit
 		if (isReadOnly() || !activeGraph()) return;
 		auto command = new MaterialSettingsChangeCommand(activeGraph(), settings, materialSettingsWidget);
 		activeStack()->push(command);
@@ -2343,8 +2565,8 @@ void EffectsPage::editingFinishedOnListItem()
 
 	item->setData(Qt::DisplayRole, newName);
 
-    // THE DOCUMENT THAT IS THIS MATERIAL takes the new name \u2014 not "the
-    // current one" (MATERIALS_TABS_SPEC \u00a72.6).
+    // THE DOCUMENT THAT IS THIS MATERIAL takes the new name — not "the
+    // current one" (MATERIALS_TABS_SPEC §2.6).
     renameOpenDocuments(pressedShaderInfo.GUID, newName);
 
 	pressedShaderInfo = shaderInfo();

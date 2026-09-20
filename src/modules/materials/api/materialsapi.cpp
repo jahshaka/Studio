@@ -299,7 +299,120 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "says otherwise. With a project open it is added to the project too, so it lands in the project's "
           "materials drawer and the editor's asset tray. NOT undoable (it is an asset, like an import).",
           Needs::Document },
+        { "open", "materials.open(guidOrName, {scope}) -> {tab, guid, name, scope, readOnly}",
+          "Opens a material bundle in the Materials page's node editor as a TAB and makes it the active one — "
+          "the drawer's double-click, as a verb. A material already open at that scope is activated, not opened "
+          "twice. `scope` is 'library' or 'project' (the four-drawer rule: the project's pinned copy or the "
+          "library original — two tabs if both are open); the default is 'project' when the open project pins "
+          "the guid, else 'library'. A shipped preset (by name or reserved guid) opens READ-ONLY, as the drawer "
+          "does. `tab` is the tab index. Refused when no drawer holds the material.",
+          Needs::Document },
+        { "tabs", "materials.tabs() -> [{tab, guid, name, scope, active, readOnly, dirty}]",
+          "The Materials page's open tabs in bar order. `dirty` = an autosave is pending on that document (it "
+          "writes 1.5 s after the last edit, or on close). The anonymous new-material tab reports an empty guid.",
+          Needs::Document },
+        { "activate", "materials.activate(tabOrGuid) -> bool",
+          "Makes a tab the active one (by index, or by guid — the first tab with that guid in bar order). The "
+          "canvas, the properties panel, the material settings, the Members panel, the preview and Ctrl+Z all "
+          "follow it.",
+          Needs::Document },
+        { "closeTab", "materials.closeTab(tabOrGuid) -> bool",
+          "Closes a tab. A pending autosave is written FIRST; a read-only tab writes nothing. The document's "
+          "graph, canvas and undo history are freed.",
+          Needs::Document },
+        { "activeTab", "materials.activeTab() -> {tab, guid, name, scope, readOnly, dirty} | null",
+          "The active tab, or null with no page.",
+          Needs::Document },
     };
+}
+
+// ---- the Materials page's tabs (MATERIALS_TABS_SPEC §3) ------------------
+
+bool MaterialsApi::pageOrFail(const QString &verb)
+{
+    if (mPage.tabs) return true;
+    fail(QStringLiteral("%1: no Materials page in this session").arg(verb));
+    return false;
+}
+
+QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
+{
+    const QString wanted = guidOrName.trimmed();
+    if (wanted.isEmpty()) return QString();
+    // A SHIPPED PRESET BY NAME OR BY ITS RESERVED GUID (the drawer's own two
+    // spellings, and what every other materials.* verb accepts).
+    if (MaterialPresetAssets::isPreset(wanted)) return MaterialPresetAssets::guidFor(wanted);
+    if (!host.db) return QString();
+    if (!host.db->fetchAsset(wanted).guid.isEmpty()) return wanted;
+    // ...or a library material's NAME, which is what the user calls it.
+    const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
+    for (const auto &asset : assets) {
+        if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
+        if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
+    }
+    return QString();
+}
+
+QVariantMap MaterialsApi::open(const QString &guidOrName, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!pageOrFail(QStringLiteral("materials.open"))) return out;
+    static const QStringList knownOptions = { QStringLiteral("scope") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.open"),
+                                              options, knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+    const QString scope = options.value(QStringLiteral("scope")).toString().trimmed().toLower();
+    if (!scope.isEmpty() && scope != QLatin1String("library") && scope != QLatin1String("project")) {
+        fail(QStringLiteral("materials.open: scope is 'library' or 'project', not '%1'").arg(scope));
+        return out;
+    }
+    const QString guid = resolveMaterialGuid(guidOrName);
+    if (guid.isEmpty()) {
+        fail(QStringLiteral("materials.open: no material '%1'").arg(guidOrName));
+        return out;
+    }
+    out = mPage.open(guid, scope);
+    if (out.isEmpty()) {
+        // The page's own rule: no tile, no open (a material the drawers do not
+        // hold — unlisted, or not in the project at the scope asked for).
+        fail(QStringLiteral("materials.open: no drawer holds '%1'%2")
+                 .arg(guidOrName, scope.isEmpty() ? QString()
+                                                  : QStringLiteral(" at scope '%1'").arg(scope)));
+    }
+    return out;
+}
+
+QVariantList MaterialsApi::tabs()
+{
+    if (!pageOrFail(QStringLiteral("materials.tabs"))) return QVariantList();
+    return mPage.tabs();
+}
+
+bool MaterialsApi::activate(const QVariant &tabOrGuid)
+{
+    if (!pageOrFail(QStringLiteral("materials.activate"))) return false;
+    if (!mPage.activate(tabOrGuid)) {
+        fail(QStringLiteral("materials.activate: no such tab (%1)").arg(tabOrGuid.toString()));
+        return false;
+    }
+    return true;
+}
+
+bool MaterialsApi::closeTab(const QVariant &tabOrGuid)
+{
+    if (!pageOrFail(QStringLiteral("materials.closeTab"))) return false;
+    if (!mPage.closeTab(tabOrGuid)) {
+        fail(QStringLiteral("materials.closeTab: no such tab (%1)").arg(tabOrGuid.toString()));
+        return false;
+    }
+    return true;
+}
+
+QVariant MaterialsApi::activeTab()
+{
+    if (!mPage.activeTab) return QVariant();   // no page: null, not a refusal
+    const QVariantMap info = mPage.activeTab();
+    return info.isEmpty() ? QVariant() : QVariant(info);
 }
 
 QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariantMap &options)
