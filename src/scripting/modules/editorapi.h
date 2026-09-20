@@ -103,7 +103,10 @@ public:
     Q_INVOKABLE QVariantMap warmUpShaders();
     Q_INVOKABLE QVariant dropPointAt(double x, double y);
     Q_INVOKABLE QVariant dropTargetAt(double x, double y);
+    Q_INVOKABLE bool dragAsset(const QString &guid, double x, double y,
+                               const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap viewportState();
+    Q_INVOKABLE QVariantList toolbar();
     Q_INVOKABLE QVariantMap mirrorStats();
     /// THE SCENE-ERROR AREA (services/sceneissues.h). Document verbs: the store
     /// is a document-side model, so a --headless run can raise, list, clear and
@@ -140,6 +143,10 @@ private:
                                                   const iris::SceneNodePtr &b);
 
     int mBatchDepth = 0;
+    /// A synthesised drag GESTURE is in progress (editor.dragAsset): the enter
+    /// event is sent once, at the start, exactly as a real drag does it.
+    bool mDragOpen = false;
+    QString mDragGuid;
 };
 
 #endif // SCRIPTING_EDITORAPI_H

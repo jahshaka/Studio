@@ -134,9 +134,9 @@ function measure(tag, bias) {
     var probes = [];
     for (var p = 0; p < shot.probes.length; ++p)
         probes.push(shot.probes[p].r + "," + shot.probes[p].g + "," + shot.probes[p].b);
-    console.log("   bias " + bias + ": triangles " + rs.triangles + ", draws " + rs.draws +
+    console.log("   bias " + bias + ": triangles " + rs.submittedTriangles + ", draws " + rs.draws +
                 ", limb [" + probes.join(" | ") + "] -> " + shot.path);
-    return { triangles: rs.triangles, draws: rs.draws, limb: probes.join("|") };
+    return { triangles: rs.submittedTriangles, draws: rs.draws, limb: probes.join("|") };
 }
 
 // bias 0 pins level 0. Then, for each level, the smallest bias that selects it.
@@ -194,8 +194,8 @@ world.setLodBias(0);
 editor.frame(4);
 assert(world.lodBias() === 0, "0 reads back as 0");
 var back = app.renderStats();
-assert(back.triangles === pinned.triangles,
-       "and the scene is back to its finest level, exactly (" + back.triangles + ")");
+assert(back.submittedTriangles === pinned.triangles,
+       "and the scene is back to its finest level, exactly (" + back.submittedTriangles + ")");
 
 var refused = null;
 try { world.setLodBias(-1); } catch (e) { refused = "" + e; }
@@ -250,7 +250,11 @@ function switchDistance(fov) {
     function trianglesAt(d) {
         editor.setCamera({ position: { x: 0, y: 0, z: d }, lookAt: { x: 0, y: 0, z: 0 } });
         editor.frame(2);
-        return app.renderStats().triangles;
+        // submittedTriangles: what the renderer handed the GPU, which is the
+        // number an LOD switch moves (STATS-1 renamed it from `triangles`;
+        // `sceneTriangles` is the AUTHORED count and deliberately does not
+        // move with the camera).
+        return app.renderStats().submittedTriangles;
     }
     editor.setCamera({ position: { x: 0, y: 0, z: RESET }, lookAt: { x: 0, y: 0, z: 0 }, fov: fov });
     editor.frame(4);
@@ -377,9 +381,9 @@ console.log("---- 6. a capture is exact ----");
         for (var p = 0; p < shot.probes.length; ++p)
             probes.push(shot.probes[p].r + "," + shot.probes[p].g + "," + shot.probes[p].b);
         console.log("   " + tag + " (parked at " + park.toFixed(4) + " from " +
-                    approachBias.toFixed(4) + "): capture triangles " + rs.triangles +
+                    approachBias.toFixed(4) + "): capture triangles " + rs.submittedTriangles +
                     ", limb [" + probes.join(" | ") + "]");
-        return { triangles: rs.triangles, limb: probes.join("|") };
+        return { triangles: rs.submittedTriangles, limb: probes.join("|") };
     }
     // FROM BELOW: pin the finest level, then step up into the band.
     var fromBelow = bandArm("band-from-below", 0);

@@ -27,12 +27,8 @@ For more information see the LICENSE file
 // every includer with the whole shell (audit §7.4); the panels hold a pointer.
 class MainWindow;
 
-struct DefaultModel
-{
-    QString objectName;
-    QString meshPath;
-    QString objectIcon;
-};
+// (`DefaultModel` is gone with the third copy of the primitive list it held —
+// owner review R6. The one table is src/data/primitives.h.)
 
 class FMListViewDelegate : public QStyledItemDelegate
 {

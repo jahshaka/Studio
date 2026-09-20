@@ -72,21 +72,26 @@ void GraphNodeScene::setNodeGraph(NodeGraph *graph)
 
 void GraphNodeScene::addNodeModel(NodeModel* model, bool addToGraph)
 {
-	if (model->title != "Surface Material") {
+	if (readOnly) return;
+	// THE MASTER NODE GOES STRAIGHT IN, never through the undo stack: it is
+	// the material, not an edit to it, and an undo that removed it would leave
+	// a graph that cannot bake. This used to test `title != "Surface Material"`
+	// — the deleted Blinn master's title — which meant the PBR master, titled
+	// "PBR Material", had been going onto the stack since the day it landed.
+	// Identity against the graph's master is the test that cannot go stale.
+	if (nodeGraph == nullptr || model != nodeGraph->getMasterNode()) {
 		auto addNodeCommand = new AddNodeCommand(model, this);
 		stack->push(addNodeCommand);
 	}
 	else {
-		//add surface node to the scene
-		//other nodes get added to the scene from the add node command above
-		//on AddNodeCommand, redo gets called - stupid qt
-			addNodeModel(model, model->getX(), model->getY(), addToGraph);
+		addNodeModel(model, model->getX(), model->getY(), addToGraph);
 	}
 }
 
 // add
 GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool addToGraph)
 {
+	if (readOnly) return nullptr;
 	auto nodeView = this->createNode<GraphNode>();
 	nodeView->setNodeGraph(this->nodeGraph);
 	nodeView->setModel(model);
@@ -249,6 +254,7 @@ void GraphNodeScene::addNodeFromSearchDialog(QTreeWidgetItem * item, const QPoin
 
 void GraphNodeScene::deleteSelectedNodes()
 {
+	if (readOnly) return;
 	auto items = selectedItems();
 	QList<GraphNode*> nodes;
 	auto masterNodeId = nodeGraph->getMasterNode()->id;
@@ -292,6 +298,7 @@ void GraphNodeScene::deleteSelectedNodes()
 
 bool GraphNodeScene::deleteNodeById(const QString& nodeId)
 {
+	if (readOnly) return false;
 	auto node = getNodeById(nodeId);
 	if (!node)
 		return false;
@@ -313,6 +320,7 @@ bool GraphNodeScene::deleteNodeById(const QString& nodeId)
 
 bool GraphNodeScene::deleteConnectionById(const QString& connectionId)
 {
+	if (readOnly) return false;
 	auto con = getConnection(connectionId);
 	if (!con)
 		return false;
@@ -327,6 +335,7 @@ bool GraphNodeScene::deleteConnectionById(const QString& connectionId)
 
 void GraphNodeScene::deleteNode(GraphNode* node)
 {
+	if (readOnly) return;
 	// remove in and out connections
 	auto conns = nodeGraph->getNodeConnections(node->nodeId);
 
@@ -358,6 +367,16 @@ bool GraphNodeScene::areSocketsComptible(Socket* sock1, Socket* sock2)
 	auto inSockModel = inNode->inSockets[inSock->socketIndex];
 
 	return outSockModel->canConvertTo(inSockModel);
+}
+
+void GraphNodeScene::setReadOnly(bool value)
+{
+	readOnly = value;
+	// THE NODES THEMSELVES, not only the scene's verbs: a drag is
+	// QGraphicsItem's own doing and a value typed into a node's spinbox never
+	// reaches this class at all, so both are turned off where they live.
+	for (auto *node : getNodes())
+		if (node) node->setInteractive(!readOnly);
 }
 
 void GraphNodeScene::emitGraphInvalidated()
@@ -480,6 +499,7 @@ void GraphNodeScene::copySelectedToClipboard()
 
 void GraphNodeScene::pasteFromClipboard()
 {
+	if (readOnly) return;
 	auto doc = QJsonDocument::fromJson(QApplication::clipboard()->text().toUtf8());
 	if (!doc.isObject())
 		return;
@@ -488,6 +508,7 @@ void GraphNodeScene::pasteFromClipboard()
 
 void GraphNodeScene::duplicateSelected()
 {
+	if (readOnly) return;
 	// straight through the same payload, skipping the clipboard
 	pasteSelection(this, serializeSelection(this), 30.0f);
 }
@@ -502,6 +523,7 @@ void GraphNodeScene::clearDragHighlight()
 
 void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 {
+	if (readOnly) { event->ignore(); return; }
 
 	if ("node" == event->mimeData()->data("MODEL_TYPE_ROLE").toStdString()) {
 		event->accept();
@@ -516,7 +538,14 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 			}
 	}
 
-	if (QVariant(event->mimeData()->data("MODEL_TYPE_ROLE")).toInt() == static_cast<int>(ModelTypes::Shader) ) {
+	// A MATERIAL BUNDLE opens in the graph editor (MATERIAL_BUNDLE_SPEC 2.3):
+	// the tiles carry ModelTypes::Material now, and this gate named only
+	// Shader — so dragging a material onto the canvas did nothing at all.
+	// Shader is kept beside it for rows that still arrive from disk.
+	{
+		const int droppedType = QVariant(event->mimeData()->data("MODEL_TYPE_ROLE")).toInt();
+		if (droppedType == static_cast<int>(ModelTypes::Material)
+		    || droppedType == static_cast<int>(ModelTypes::Shader)) {
 		event->accept();
 
 		QListWidgetItem *item = new QListWidgetItem;
@@ -527,16 +556,13 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 
 		emit loadGraph(item);
 		return;
+		}
 	}
 
-	if (event->mimeData()->data("MODEL_TYPE_ROLE").toStdString() == "presets") {
-		emit loadGraphFromPreset(event->mimeData()->text());
-	}
-
-	if (event->mimeData()->data("MODEL_TYPE_ROLE").toStdString() == "presets2") {
-		qDebug() << "preset 2";
-		emit loadGraphFromPreset2(event->mimeData()->text());
-	}
+	// (The two "presets"/"presets2" drop branches are gone with the graph
+	// templates they carried — PRESET-UNIFY-1. A preset tile carries
+	// ModelTypes::Material like every other material now, so it is handled
+	// above.)
 }
 
 void GraphNodeScene::drawBackground(QPainter * painter, const QRectF & rect)
@@ -610,6 +636,7 @@ void GraphNodeScene::redo()
 
 SocketConnection *GraphNodeScene::addConnection(QString leftNodeId, int leftSockIndex, QString rightNodeId, int rightSockIndex)
 {
+	if (readOnly) return nullptr;
 	auto leftNode = this->getNodeById(leftNodeId);
 	auto rightNode = this->getNodeById(rightNodeId);
 
@@ -631,6 +658,7 @@ SocketConnection *GraphNodeScene::addConnection(QString leftNodeId, int leftSock
 
 SocketConnection * GraphNodeScene::removeConnection(SocketConnection * connection, bool removeFromNodeGraph, bool emitSignal)
 {
+	if (readOnly) return nullptr;
 	// NULL-GUARDED (F2, 2026-09-06). The QString overload below hands whatever
 	// getConnection() found straight in, and getConnection answers null for any
 	// id the CANVAS does not carry — which includes every model-side id that
@@ -658,6 +686,7 @@ SocketConnection * GraphNodeScene::removeConnection(SocketConnection * connectio
 
 void GraphNodeScene::removeConnection(const QString& conId, bool removeFromNodeGraph, bool emitSignal)
 {
+	if (readOnly) return;
 	auto con = getConnection(conId);
 	removeConnection(con, removeFromNodeGraph, emitSignal);
 }
@@ -676,6 +705,23 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 	case QEvent::GraphicsSceneMousePress:
 	{
 		auto sock = getSocketAt(me->scenePos().x(), me->scenePos().y());
+		// A LOCKED CANVAS DOES NOT START A WIRE, AND DOES NOT BREAK ONE
+		// (PRESET-UNIFY-1 fix round 2). A socket is a child of its node, so
+		// making the NODE non-movable left the sockets hit-testable and both
+		// branches below live — and both write to the MODEL. The out-socket
+		// branch starts a live connection whose release pushes
+		// AddConnectionCommand, which mutates `nodeGraph` and then reads the
+		// SocketConnection the guarded `addConnection` refuses to make: a
+		// null dereference, i.e. dragging a wire on a read-only preset
+		// CRASHED the editor. The in-socket branch is worse than harmless: it
+		// calls `nodeGraph->removeConnection` directly, around the guarded
+		// scene verb, so merely clicking a wired input detached the wire from
+		// the model of a material nothing will ever save. Both die here, at
+		// the press, which is the one place that covers them and anything
+		// added beside them later.
+		if (readOnly && sock != nullptr
+		    && (me->button() == Qt::LeftButton || me->button() == Qt::RightButton))
+			return true;
 		if (sock != nullptr) {
 			if (me->button() == Qt::LeftButton) {
 

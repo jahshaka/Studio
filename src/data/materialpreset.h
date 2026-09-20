@@ -13,27 +13,31 @@ For more information see the LICENSE file
 #define MATERIALPRESET_H
 
 #include <QColor>
+#include <QJsonObject>
 
+// A SHIPPED MATERIAL PRESET, as read from `app/content/materials/*.material`.
+//
+// PBR ONLY (MATERIAL_BUNDLE_SPEC phase 3). The pre-PBR Blinn fields —
+// ambient/diffuse/specular colours, shininess, the three legacy texture slots
+// and the reflection pair — are DELETED with the fourteen `.material` files
+// that carried them: the preset list has skipped every non-PBR file since the
+// HLMS adoption, so nothing had read them for months. `type` survives because
+// the reader still reports what a file claims to be and `materials.presets()`
+// reports it to a script.
 struct MaterialPreset
 {
     QString name;
     QString icon;
     QString type;
 
-    QColor ambientColor;
-
-    QColor diffuseColor;
-    QString diffuseTexture;
-
-    QColor specularColor;
-    QString specularTexture;
-    float shininess;
-
-    QString normalTexture;
-    float normalIntensity;
-
-    QString reflectionTexture;
-    float reflectionInfluence;
+    /// EVERY SHIPPED PRESET IS A GRAPH (PRESET-UNIFY-1, the owner 2026-09-20:
+    /// "if i select a preset i should see the graph"). The `shadergraph`
+    /// payload authored beside the preset's values in
+    /// `app/content/materials/graphs/`, its texture nodes naming their images
+    /// the way the map slots above do — an absolute path once the reader has
+    /// resolved it. Empty only for a build whose graph file is missing, which
+    /// the preset list refuses to list.
+    QJsonObject graph;
 
     float textureScale;
 

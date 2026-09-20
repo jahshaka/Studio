@@ -48,8 +48,14 @@ public:
 	void addItem(const FolderRecord &folderData);
 	void addItem(const AssetRecord &assetData);
 	void createFolder();
-	void createShader(QString *shaderName = Q_NULLPTR);
-	QString createShader(QListWidgetItem *item);
+	/// A library tile dropped on this drawer: pinned into the project.
+	void addDroppedToProject(QListWidgetItem *item);
+	// (createShader(QListWidgetItem*) is DELETED — MATERIAL_BUNDLE_SPEC phase
+	// 1's Deletes column. It was the "add to project" CLONE: a second Shader
+	// row in the project plus a QFile::copy of every texture into the project
+	// folder under a guid-shaped name, outside the store, with no pin and no
+	// sidecar. Adding a material to a project is ProjectAssets::addToProject
+	// now, like every other asset — one row, pinned with its closure.)
 	QByteArray fetchAsset(QString string);
 	ShaderListWidget *assetViewWidget;
 	void updateAssetView(const QString &path);

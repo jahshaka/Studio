@@ -12,7 +12,9 @@ For more information see the LICENSE file
 #include "services/apppaths.h"
 #include "scripting/modules/assetsapi.h"
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -25,6 +27,8 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
+#include "services/assetshare.h"
+#include "services/materialmembers.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetgc.h"
@@ -32,6 +36,7 @@ For more information see the LICENSE file
 #include "services/assetmigration.h"
 #include "services/assetstore.h"
 #include "services/assettags.h"
+#include "services/materialbundle.h"
 #include "services/assettray.h"
 #include "services/assetstorepaths.h"
 #include "services/meshbakestore.h"
@@ -39,12 +44,14 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "jahshaka/engine/Types.h"
 #include "data/constants.h"
+#include "data/primitives.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
 #include "services/projectassets.h"
 #include "services/import/assetimportservice.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
+#include "services/thumbnailrebuild.h"
 #include "services/videoutils.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -139,13 +146,14 @@ bool importSettingsFromOptions(const QString &verb, const QVariantMap &options,
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, limit}) -> [{guid, name, type, drawer}]",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, members, limit}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
           "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); rigged: true keeps only MODEL rows whose metadata says the file carries a skeleton (the candidates avatar.createAsset accepts — refused for scope 'session', which has no metadata); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag, then rigged — and limit last, so a limited listing is the first N of the filtered set, not a sample of it. rigged is the expensive one on a library that predates the rig metadata (it backfills the block once per row it reaches), which is why it is applied last. "
-          "tray: true is THE EDITOR TRAY's listing, from the same function the tray panel calls (services/assettray.h) — EVERY ASSET THE PROJECT'S SCENE USES, ONCE (owner rules, 2026-09-11 and 2026-09-12): the root folder's rows plus the project's pinned members, where a row is dropped only when it is an import's MEMBER (its parent is another asset), a MESH row, a model or clip an AVATAR in this project is built from (the avatar is that character's tile), a scene node's OWN row (the built-in primitives, the Ground, image planes, decals, particle emitters — a node is not a library asset; what it uses is), or an image added directly whose companion material is the only thing in the project using it (the material is that image's tile). A dependency never hides anything: a texture on a material slot, the ground, a decal or a particle, a material applied to a node, all stay. With type, the same listing keeps one type. Nothing is deleted and every guid still resolves — the Assets page still browses the members. Refused for scopes 'store' and 'session': the tray is a project's listing.",
+          "tray: true is THE EDITOR TRAY's listing, from the same function the tray panel calls (services/assettray.h) — EVERY ASSET THE PROJECT'S SCENE USES, ONCE (owner rules, 2026-09-11 and 2026-09-12): the root folder's rows plus the project's pinned members, where a row is dropped only when it is an import's MEMBER (its parent is another asset), a MESH row, a model or clip an AVATAR in this project is built from (the avatar is that character's tile), a scene node's OWN row (the built-in primitives, the Ground, image planes, decals, particle emitters — a node is not a library asset; what it uses is), or an image added directly whose companion material is the only thing in the project using it (the material is that image's tile). A dependency never hides anything: a texture on a material slot, the ground, a decal or a particle, a material applied to a node, all stay. One more row is folded: a picture that arrived THROUGH a material's picker, while only materials use it — the bundle is its tile (the owner's rule V-2). `members: true` turns off that one rule and lists them, which is the 'Show member textures' switch in the panels. With type, the same listing keeps one type. Nothing is deleted and every guid still resolves — the Assets page still browses the members. Refused for scopes 'store' and 'session': the tray is a project's listing.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
+          "`companionOf` is present only on a MATERIAL that 'Create material from image' minted, and names the TEXTURE it was minted for — the stamp that makes an image and its own material relatable (and that keeps the image's tile folded into the material's in the editor tray). A material the user authored on the same image carries no stamp and no key. "
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
           "MODELS also carry their SIZE, as information (services/extentmeasure.h): `extent` {x,y,z} — the model's axis-aligned size in METRES as this asset was IMPORTED, i.e. after its import settings (scale, units, rotation) were baked in, which is the size every placement of it has; and `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none), which is what the import dialog shows so a user can disagree with the file. Nothing reads these to scale anything: an asset's size is decided once, at import (assets.importSettings / assets.reimport), and every instance is placed at scale 1. (The retired fit-to-size block — fitKind/fitScale/fitReason/fitSource, and the assets.setFit verb behind it — guessed a size from an envelope on every instantiation; a stale row may still carry those keys and nothing reads them.)",
           Needs::Document },
@@ -280,8 +288,11 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "No LIVE entries means the asset is used by no project, i.e. assets.remove would really delete it. "
           "Reads the catalog only — the project does not have to be open, and the asset does not have to be listed.",
           Needs::Document },
-        { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
-          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, materials and shader graphs render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
+        { "refreshThumbnail", "assets.refreshThumbnail(guid) -> {ok, reason}",
+          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, particle systems, materials, shader graphs and AVATARS render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere; an avatar renders its own character model); images re-thumbnail from the source file, videos re-grab a first-second frame, animation clips redraw their pose strip, and audio/file rows reset to their type icon (document-only). `ok` is false with `reason` naming WHY nothing was stored — a thumbnail that fails is never silent.",
+          Needs::Document },
+        { "rebuildThumbnails", "assets.rebuildThumbnails({missingOnly, projectOnly, limit}) -> {considered, rebuilt, skipped, cancelled, failed: [{guid, reason}]}",
+          "Rebuilds thumbnails in bulk — the repair pass for rows that are already grey. `missingOnly` (default true) takes only the rows whose stored thumbnail is absent or undecodable; false redraws every asset that has a thumbnail to draw. `projectOnly` (default false) limits it to the open project's pinned assets; `limit` (default 0 = no limit) caps how many are rebuilt. One asset per turn, yielding between them, so the window keeps painting. `skipped` counts the rows with nothing to draw at all (a builtin primitive's row — the default Ground — stores no model definition), which are not failures; a row whose stored bytes are GONE is a failure with its reason. `cancelled` is true when the sweep was stopped before it finished — the app is quitting, or the script was stopped — and whatever it had already rebuilt is stored. Each asset goes through the same routine as assets.refreshThumbnail.",
           Needs::Document },
         { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}, coverage}",
           "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions, the colour of its centre pixel (0-255) and `coverage` — the fraction of the image (0..1) that differs from the background the renderer cleared to, i.e. how much of the tile the subject fills. empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
@@ -301,6 +312,19 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "exportRaw", "assets.exportRaw(guid, dir, {dependencies: true, hash: true}) -> {dir, manifest, files, assets, totalBytes, warnings}",
           "Exports a store asset's files (and, by default, its dependencies' files) as loose files with their original names into dir, plus a jah.manifest.json (manifest v2: guids, types, dependency edges, sizes, sha256 content ids — hashing skippable via {hash: false}). Identical bytes are written once; assets with no stored files still get manifest entries. The unified-export front half (ASSET_PIPELINE_SPEC §3.3); .jaf export joins it in the final half.",
           Needs::Document },
+        // THE NAME. The spec asks for `assets.export`; `export` is a C++
+        // keyword, and this registry dispatches a verb STRICTLY by the
+        // invokable method's own name (scriptworker.cpp) — so the verb is
+        // `exportBundle`, beside the `exportRaw` it belongs with, and the
+        // alternative (an alias mechanism in the API core, for one name) buys
+        // nothing a reader of the docs would notice.
+        { "exportBundle", "assets.exportBundle(guid, path) -> {path, kind, assets, bytes}",
+          "Writes ONE asset and everything it is made of as a self-contained share file (a .jbundle zip: "
+          "manifest v2 plus the closure with its bytes inline). A material carries its textures and its baked "
+          "maps, so it opens on a machine that has never seen any of them — the owner's 'material bundles are "
+          "great if they are self-contained'. The version that travels is the one the OPEN PROJECT renders "
+          "with when it holds the asset, the library's otherwise. Read it back with assets.import(path).",
+          Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
           Needs::Document },
@@ -310,8 +334,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "setStoreRoot", "assets.setStoreRoot(path, {move, force}) -> bool",
           "Repoints the asset store. Empty path returns to the default root. {move: true} copies the current store's contents to the new root first (verified; the old tree is retained). Without move, the target must already contain this library's store ({force: true} skips that check). Throws on failure; nothing changes on a failed call.",
           Needs::Document },
-        { "storeStatus", "assets.storeStatus() -> {root, online, missing}",
-          "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it.",
+        { "storeStatus", "assets.storeStatus() -> {root, online, missing, deviceWaits}",
+          "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it. `deviceWaits` is how many times THIS PROCESS has waited for the storage device — one per fsync the store performed: the two-phase ingest's flush, a cross-filesystem ingest's copy fallback, and the store-root move's per-file copy. A hardlinked object writes no bytes and waits for nothing, so it does not count. Counted where the wait happens, never inferred. It is monotonic and process-wide, so only differences mean anything; bracket a gesture with two reads to assert that it cost no durable write, which is how \"no fsync on the thread that draws\" (FSYNC-2) stops being a claim and becomes a test.",
           Needs::Document },
         { "importSettings", "assets.importSettings(guid) -> {name, sourceName, sourceOid, importer, importerVersion, assimp, settings, defaults}",
           "The determinism record the ONE import pipeline stamped on the asset: content id of the source, "
@@ -428,6 +452,10 @@ QVariantList AssetsApi::list(const QVariantMap &options)
     // project's scene uses, once. A PROJECT's listing: refused for the other
     // scopes.
     const bool trayOnly = options.value("tray", false).toBool();
+    // "SHOW MEMBER TEXTURES" (MATERIAL_BUNDLE_SPEC V-2, owner Q4): the pictures
+    // that arrived inside a material bundle fold into it by default. The same
+    // switch the panels carry, so the verb and the windows list the same rows.
+    const bool showMembers = options.value("members", false).toBool();
     const bool hasDrawer = options.contains("drawer");
     const int drawerFilter = options.value("drawer", -1).toInt();
     const int limit = options.value("limit", 0).toInt();
@@ -504,7 +532,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
             // filter keeps one type of the same listing, as the panel's filter
             // combo does — it does not sweep the editor's hidden folders).
             const QString projectGuid = host.project->getProjectGuid();
-            records = assettray::list(host.db, projectGuid, projectGuid, typeFilter);
+            records = assettray::list(host.db, projectGuid, projectGuid, typeFilter, showMembers);
         } else if (typeFilter >= 0) {
             // Folder-independent: a type-filtered project listing must see
             // assets registered in subfolders too (a preset apply files its
@@ -659,6 +687,25 @@ QVariantMap AssetsApi::metadata(const QString &guid)
     // them), and is what decides which of the two a delete would do.
     out["listed"] = record.listed;
     out["pinCount"] = host.db->countAssetPins(guid);
+    // THE COMPANION STAMP (R10.4, owner review 2026-09-18). "Create material
+    // from image" mints a Material row for one Texture and stamps it
+    // `companionOf: <texture guid>` — services/imagematerial.cpp
+    // createMaterialAsset is the ONLY writer of it, and the asset tray's fold
+    // rule is the only reader. It was invisible from the verb surface, so a
+    // script (or a person asking why their image tile vanished) could not see
+    // that the two rows belong together. Reported only when it is there: a row
+    // nobody minted carries no key rather than an empty string.
+    // (`record.asset` is the row's definition. It was EMPTY here until the
+    // SMALL-UI-A fix round: fetchAsset was the one query that did not select
+    // the column, so the same field meant "the definition" from some readers
+    // and "" from this one. Fixed at the query; this reads the record it
+    // already has instead of asking a second time.)
+    if (!record.asset.isEmpty()) {
+        const QString companion =
+            QJsonDocument::fromJson(record.asset).object()
+                .value(QStringLiteral("companionOf")).toString();
+        if (!companion.isEmpty()) out["companionOf"] = companion;
+    }
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
     return out;
@@ -688,6 +735,14 @@ bool AssetsApi::rename(const QString &guid, const QString &name)
                     "can be found by)");
     if (host.db->fetchAsset(guid).guid.isEmpty())
         return fail(QStringLiteral("assets.rename: no asset with guid '%1'").arg(guid));
+    // THE REFUSAL IS ENFORCED IN assettags::write (the one place both this
+    // verb and the Assets page's Update button write a name); this says WHY,
+    // in the sentence the definition writer already uses for the same law.
+    const QString shipped = MaterialBundle::shippedPresetName(guid);
+    if (!shipped.isEmpty() && wanted != shipped)
+        return fail(QStringLiteral("assets.rename: '%1' is a material the app ships and is "
+                                   "read-only - materials.createFromPreset makes your own copy, "
+                                   "and that one renames").arg(shipped));
     if (!assettags::rename(host.db, guid, wanted))
         return fail(QStringLiteral("assets.rename: the database refused the rename of '%1'")
                         .arg(guid));
@@ -746,6 +801,24 @@ QString AssetsApi::import(const QString &path, const QVariantMap &options)
         fail(settingsError);
         return QString();
     }
+    // A SHARE FILE IS AN IMPORT LIKE ANY OTHER (MATERIAL_BUNDLE_SPEC Q5): one
+    // asset plus its closure, written by assets.export. It does not go through
+    // the model importers — it carries catalog ROWS, not a file to convert —
+    // so it is answered here, before the model gate below refuses its
+    // extension.
+    if (assetshare::looksLikeBundle(path)) {
+        if (!options.isEmpty()) {
+            fail("assets.import: a share file carries its own import settings; pass no options");
+            return QString();
+        }
+        const auto landed = assetshare::importBundle(host.db, host.project, path);
+        if (!landed.ok()) {
+            fail(QStringLiteral("assets.import: %1").arg(landed.error));
+            return QString();
+        }
+        return landed.guid;
+    }
+
     const auto result = host.services->assets->importMesh(path, settings);
     if (!result.ok()) {
         fail(QStringLiteral("assets.import: %1").arg(result.error));
@@ -1047,7 +1120,15 @@ QVariantList AssetsApi::builtins()
         for (auto it = map.constBegin(); it != map.constEnd(); ++it)
             out.append(QVariantMap{ { "guid", it.key() }, { "name", it.value() }, { "kind", kind } });
     };
-    append(Constants::Reserved::DefaultPrimitives, "primitive");
+    // The primitives come from the ONE table (src/data/primitives.h); rows
+    // with no library guid (Ground) are not library builtins and are not
+    // listed — `scene.addPrimitive("Ground")` is how that one is reached.
+    for (const primitives::Def &def : primitives::all()) {
+        if (!def.guid) continue;
+        out.append(QVariantMap{ { "guid", QString::fromLatin1(def.guid) },
+                                { "name", QString::fromLatin1(def.name) },
+                                { "kind", QStringLiteral("primitive") } });
+    }
     append(Constants::Reserved::DefaultMaterials, "material");
     // "material", not "shader" (owner decision, 2026-09-07). The reserved
     // Default/Flat/Glass/Matcap family stopped being shaders when
@@ -1076,8 +1157,18 @@ bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
     // deletes an unpinned one, and {force: true} deletes either way.
     const bool keepShared = normalizeJs(options.value("keepShared", true)).toBool();
     const bool force = normalizeJs(options.value("force", false)).toBool();
+    const bool wasMaterial =
+        host.db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Material);
     const auto outcome = assetdelete::remove(host.db, guid, keepShared, force);
     if (!outcome.ok) return fail(QStringLiteral("assets.remove: %1").arg(outcome.error));
+    // A BUNDLE'S EXCLUSIVE BORN-INSIDE MEMBERS GO WITH IT (MATERIAL_BUNDLE_SPEC
+    // §4), on a real delete only: an UNLIST keeps the material alive for the
+    // projects that pin it. A picture the USER imported carries no origin
+    // stamp and stays; one anything else uses stays; one any project pins
+    // stays. `keepShared` is about the general dependency closure and cannot
+    // answer this — it would take the user's own texture too.
+    if (!outcome.unlisted && wasMaterial)
+        materialmembers::reapExclusiveMembers(host.db, guid);
     return true;
 }
 
@@ -1091,95 +1182,81 @@ bool AssetsApi::removeFromProject(const QString &guid)
     return true;
 }
 
-bool AssetsApi::refreshThumbnail(const QString &guid)
+QVariantMap AssetsApi::refreshThumbnail(const QString &guid)
 {
-    if (!host.db) return fail("assets: not available in this session");
-
-    const auto record = host.db->fetchAsset(guid);
-    if (record.guid.isEmpty())
-        return fail(QStringLiteral("assets.refreshThumbnail: no asset with guid '%1'").arg(guid));
-
-    // Document-only types first — no engine needed (headless-safe), mirroring
-    // the tile's "Rebuild Thumbnail" action.
-    if (record.type == static_cast<int>(ModelTypes::Texture)) {
-        auto thumb = ThumbnailManager::createThumbnail(storeFileFor(guid), 256, 256);
-        if (!thumb || thumb->thumb.isNull())
-            return fail("assets.refreshThumbnail: could not read the image");
-        return host.db->updateAssetThumbnail(
-            guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(thumb->thumb)));
-    }
-    if (record.type == static_cast<int>(ModelTypes::Music)) {
-        return host.db->updateAssetThumbnail(
-            guid, AssetHelper::makeBlobFromPixmap(
-                      QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"))));
-    }
-    if (record.type == static_cast<int>(ModelTypes::Video)) {
-        // First-second frame re-grab; VideoUtils falls back to the film icon
-        // when decode fails, so this always writes something sensible.
-        const QPixmap thumb = VideoUtils::thumbnailFor(storeFileFor(guid));
-        return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(thumb));
-    }
-    if (record.type == static_cast<int>(ModelTypes::Animation)) {
-        // The POSE STRIP the import drew, redrawn — a clip file has no engine
-        // render to make (there is nothing to put the clip ON), so this is the
-        // same three projected poses, from the stored bytes. Document-only,
-        // like the image and audio rows above it.
-        QImage strip;
-        animfile::read(storeFileFor(guid), &strip, 256, 256);
-        if (strip.isNull())
-            return fail("assets.refreshThumbnail: could not read the animation");
-        return host.db->updateAssetThumbnail(
-            guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(strip)));
-    }
-    if (record.type == static_cast<int>(ModelTypes::File)) {
-        return host.db->updateAssetThumbnail(
-            guid, AssetHelper::makeBlobFromPixmap(
-                      QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"))));
+    QVariantMap out;
+    out["ok"] = false;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    // MISUSE STILL THROWS (SCRIPTING_SPEC §1.6.1): a guid that names no asset
+    // is a precondition failure, not an answer — unchanged by the new return
+    // shape, which reports why a REAL asset's thumbnail could not be made.
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("assets.refreshThumbnail: no asset with guid '%1'").arg(guid));
+        return out;
     }
 
-    if (!requireEngine()) return false;
-    auto engine = EngineHost::instance().engine();
-    if (!engine) return fail("assets.refreshThumbnail: the engine is not running");
+    // THE ONE ROUTINE (THUMBS-1). The switch that used to live here is
+    // services/thumbnailrebuild.h, so the bulk repair below, the Assets page's
+    // menu entry and this verb cannot drift apart — and the Avatar branch this
+    // verb never had is in all three at once.
+    const thumbrebuild::Outcome outcome =
+        thumbrebuild::rebuildOne(host.db, host.project, guid, EngineHost::instance().engine());
+    out["ok"] = outcome.ok;
+    if (!outcome.ok) {
+        out["reason"] = outcome.reason;
+        // A REFUSAL, not a throw: the answer IS the return value, and the
+        // reason travels in it (the caller can still read app.lastError()).
+        refuse(QStringLiteral("assets.refreshThumbnail: %1").arg(outcome.reason));
+    }
+    return out;
+}
 
-    QImage image;
-    EngineThumbnailRenderer renderer(engine);
-    if (record.type == static_cast<int>(ModelTypes::Object)
-        || record.type == static_cast<int>(ModelTypes::ParticleSystem)) {
-        // THE one model-thumbnail routine (bridge/assetthumbnail.h): ALWAYS
-        // from the blob — the session-registered import node carries texture
-        // properties into the staging directory the commit deleted, so
-        // rendering it gives the white, untextured thumbnail this verb existed
-        // to replace, which is exactly what the Assets PAGE was persisting
-        // until smoke S6. The page's import tail and its Rebuild Thumbnail run
-        // this same function now.
-        image = assetthumb::renderObject(host.db, host.project, guid, engine);
-        if (image.isNull()) return fail("assets.refreshThumbnail: could not rebuild the object");
-    } else if (record.type == static_cast<int>(ModelTypes::Material)) {
-        auto matObject = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
-        MaterialReader reader;
-        reader.setProject(host.project);
-        image = renderer.renderMaterial(reader.parseMaterialTyped(matObject, host.db), QSize(512, 512));
-    } else if (record.type == static_cast<int>(ModelTypes::Shader)) {
-        // A shader asset is a graph definition: it thumbnails as the material
-        // the evaluator baked into it, on the same preview sphere a .material
-        // uses (VISUAL_PARITY_SPEC item 5).
-        MaterialReader reader;
-        reader.setProject(host.project);
-        auto material = reader.parseShaderAsPbr(guid, host.db);
-        if (!material) {
-            renderer.release();
-            return fail("assets.refreshThumbnail: this shader carries no evaluated material "
-                        "(re-save the graph, or run materials.regenerate; baked maps need an open project)");
+QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
+{
+    QVariantMap out;
+    out["considered"] = 0;
+    out["rebuilt"] = 0;
+    out["skipped"] = 0;
+    out["cancelled"] = false;
+    out["failed"] = QVariantList();
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        static const QStringList known{ QStringLiteral("missingOnly"), QStringLiteral("projectOnly"),
+                                        QStringLiteral("limit") };
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("assets.rebuildThumbnails: unknown option '%1'").arg(it.key()));
+            return out;
         }
-        image = renderer.renderMaterial(material, QSize(512, 512));
-    } else {
-        renderer.release();
-        return fail("assets.refreshThumbnail: only object, material and shader assets are supported");
     }
-    renderer.release();
 
-    if (image.isNull()) return fail("assets.refreshThumbnail: the render produced no image");
-    return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(image)));
+    thumbrebuild::SweepOptions sweep;
+    if (options.contains("missingOnly")) sweep.missingOnly = options.value("missingOnly").toBool();
+    if (options.contains("projectOnly")) sweep.projectOnly = options.value("projectOnly").toBool();
+    if (options.contains("limit")) sweep.limit = options.value("limit").toInt();
+
+    // THE YIELD (THUMBS-1 item 4): one engine render per asset, and a library
+    // can hold hundreds. USER INPUT IS EXCLUDED — a click that re-entered the
+    // sweep through a menu would be a second sweep over the same rows.
+    //
+    // AND IT IS STOPPABLE (fix round F1): a yield can deliver the window's
+    // close, and a script can be stopped or time out while this one verb is
+    // still rendering. ScriptEngine::stop and the app's shutdown both set the
+    // flag thumbrebuild checks per row; `cancelled` comes back in the result
+    // so a caller can tell "nothing left to do" from "we were stopped".
+    const auto result = thumbrebuild::rebuildMissing(
+        host.db, host.project, EngineHost::instance().engine(), sweep,
+        [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
+
+    QVariantList failed;
+    for (const auto &f : result.failed)
+        failed.append(QVariantMap{ { "guid", f.guid }, { "reason", f.reason } });
+    out["considered"] = result.considered;
+    out["rebuilt"] = result.rebuilt;
+    out["skipped"] = result.skipped;
+    out["cancelled"] = result.cancelled;
+    out["failed"] = failed;
+    return out;
 }
 
 // ---- the Assets PAGE (smoke S4/S5/S7) --------------------------------------
@@ -1331,6 +1408,22 @@ QVariantMap AssetsApi::thumbnail(const QString &guid)
     return out;
 }
 
+QVariantMap AssetsApi::exportBundle(const QString &guid, const QString &path)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    const auto written = assetshare::exportBundle(host.db, host.project, guid, path.trimmed());
+    if (!written.ok()) {
+        fail(QStringLiteral("assets.export: %1").arg(written.error));
+        return out;
+    }
+    out["path"] = written.path;
+    out["kind"] = written.kind;
+    out["assets"] = written.assets;
+    out["bytes"] = static_cast<qlonglong>(written.bytes);
+    return out;
+}
+
 QVariantList AssetsApi::dependencies(const QString &guid)
 {
     QVariantList out;
@@ -1413,7 +1506,14 @@ bool AssetsApi::setStoreRoot(const QString &path, const QVariantMap &options)
 
 QVariantMap AssetsApi::storeStatus()
 {
-    return AssetStoreService::status(host.db);
+    QVariantMap status = AssetStoreService::status(host.db);
+    // THE NUMBER OF TIMES THIS PROCESS HAS WAITED FOR THE DEVICE, so that "no
+    // durable write belongs on the thread that draws" (FSYNC-2) is a claim a
+    // caller can CHECK rather than infer from row counts. Monotonic; only
+    // differences mean anything.
+    status.insert(QStringLiteral("deviceWaits"),
+                  static_cast<qulonglong>(AssetCas::deviceWaits()));
+    return status;
 }
 
 namespace

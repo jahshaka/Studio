@@ -64,6 +64,7 @@ private:
         QString id;
         RowPtr<ComboBoxWidget> combo;    ///< Enum rows
         RowPtr<DragFloatWidget> field;   ///< Number rows
+        RowPtr<CheckBoxWidget> flag;     ///< Flag rows (a switch)
     };
 
     QSharedPointer<iris::Scene> scene;

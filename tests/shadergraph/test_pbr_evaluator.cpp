@@ -6,22 +6,29 @@
 #include <QApplication>
 #include <QColor>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QImage>
 #include <QIcon>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QPair>
+#include <QUuid>
 #include <cmath>
 #include <cstdio>
 #include <string>
 
 #include "modules/materials/graph/nodegraph.h"
 #include "modules/materials/nodes/pbrmasternode.h"
-#include "modules/materials/nodes/test.h" // FloatNodeModel, ColorPickerNode, TextureNode, SurfaceMasterNode
+#include "modules/materials/nodes/test.h" // FloatNodeModel, ColorPickerNode, TextureNode
 #include "modules/materials/models/properties.h"
+#include "modules/materials/models/connectionmodel.h"
+#include "modules/materials/models/socketmodel.h"
 #include "modules/materials/models/library.h"
-#include "modules/materials/core/graphbaker.h"   // kLegacyGlossRoughnessFloor
+#include "modules/materials/models/libraryv1.h"
+#include "modules/materials/core/graphbaker.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
 
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -94,7 +101,8 @@ int main(int argc, char** argv)
         graph->addConnection(cutoff, 0, master, 6); // value -> Alpha Cutoff (socket layout 2)
 
         auto result = PbrGraphEvaluator::evaluate(graph);
-        CHECK(result.hasPbrMaster, "graph 1: master recognised as PbrMaterial");
+        CHECK(graph->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
+              "graph 1: master recognised as PbrMaterial");
         CHECK(result.unsupportedNodes.isEmpty(), "graph 1: nothing unsupported");
         CHECK(near(result.values["roughness"].toDouble(), 0.25), "graph 1: roughness value folded");
         CHECK(near(result.values["alphaCutoff"].toDouble(), 0.5), "graph 1: alphaCutoff folded");
@@ -164,7 +172,20 @@ int main(int argc, char** argv)
         CHECK(result.unsupportedNodes.isEmpty(), "graph 2: nothing unsupported");
         CHECK(result.values["baseColorMap"].toString() == texPath, "graph 2: baseColorMap path folded");
         CHECK(result.values["normalMap"].toString() == texPath, "graph 2: normalMap path folded");
-        CHECK(!result.values.contains("baseColor"), "graph 2: no constant baseColor emitted");
+        // RE-ANCHORED (PRESET-UNIFY-1), and the old assertion was the defect.
+        // It read "no constant baseColor emitted" — true, and the reason the
+        // picture was wrong: baseColor MULTIPLIES baseColorMap, and the
+        // material's default is `defaultmaterial::baseColor()` = 200/255 grey,
+        // not white. So a graph whose Base Color socket is a texture rendered
+        // its own image at 0.784x, silently, in every module material. The
+        // evaluator now neutralises that factor exactly as it has always
+        // neutralised metallic and roughness when a map fills their slot.
+        {
+            const auto tint = result.values["baseColor"].toObject();
+            CHECK(near(tint["r"].toDouble(), 1.0) && near(tint["g"].toDouble(), 1.0)
+                      && near(tint["b"].toDouble(), 1.0),
+                  "graph 2: a map on Base Color emits a WHITE tint, so the map is the colour");
+        }
 
         auto material = PbrGraphEvaluator::createMaterial(graph);
         CHECK(!!material, "graph 2: material created");
@@ -201,244 +222,330 @@ int main(int argc, char** argv)
         CHECK(!!material, "graph 3: material created");
     }
 
-    // ---- graph 4: legacy Surface master approximates onto PBR keys -----------
-    // color -> Diffuse (the shape of the 15 shipped presets' masters)
-    {
-        auto graph = new NodeGraph();
-        auto master = new SurfaceMasterNode();
-        graph->addNode(master);
-        graph->setMasterNode(master);
-
-        auto color = makeColor(graph, 0.2, 0.4, 0.6);
-        graph->addConnection(color, 0, master, 0); // RGBA -> Diffuse
-
-        auto result = PbrGraphEvaluator::evaluate(graph);
-        CHECK(!result.hasPbrMaster, "graph 4: legacy master recognised");
-        auto col = result.values["baseColor"].toObject();
-        CHECK(near(col["r"].toDouble(), 0.2) && near(col["g"].toDouble(), 0.4) && near(col["b"].toDouble(), 0.6),
-              "graph 4: Diffuse folded to baseColor");
-    }
-
-    // ---- graph 5: the shipped Glass/Silver preset graphs (drawer sync) -------
-    // app/shadergraph/{glass,silver}.effect are the module-side siblings of the
-    // drawer's Glass PBR / Silver PBR materials: they must deserialize through
-    // the real loader path and fold to the drawer's values.
-    {
-        auto lib = new NodeLibrary();
-        lib->addNode("float", "Float", QIcon(), NodeCategory::Constants,
-                     []() -> NodeModel * { return new FloatNodeModel(); });
-        lib->addNode("color", "Color", QIcon(), NodeCategory::Constants,
-                     []() -> NodeModel * { return new ColorPickerNode(); });
-
-        auto loadEffect = [&](const char *name) -> NodeGraph * {
-            QFile f(QString(JAHSHAKA_TEST_APP_DIR) + name);
-            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return nullptr;
-            const QJsonObject obj = QJsonDocument::fromJson(f.readAll()).object();
-            return NodeGraph::deserialize(obj["shadergraph"].toObject(), lib);
-        };
-
-        auto glass = loadEffect("glass.effect");
-        CHECK(glass && glass->getMasterNode(), "glass.effect deserializes with a master node");
-        if (glass) {
-            auto result = PbrGraphEvaluator::evaluate(glass);
-            CHECK(result.hasPbrMaster, "glass: PBR master");
-            auto col = result.values["baseColor"].toObject();
-            CHECK(near(col["r"].toDouble(), 0.933) && near(col["g"].toDouble(), 0.957) && near(col["b"].toDouble(), 0.973),
-                  "glass: base colour matches the drawer's Glass PBR");
-            CHECK(near(result.values["roughness"].toDouble(), 0.05), "glass: roughness 0.05");
-            CHECK(near(result.values["alpha"].toDouble(), 0.3), "glass: alpha 0.3");
-        }
-
-        auto silver = loadEffect("silver.effect");
-        CHECK(silver && silver->getMasterNode(), "silver.effect deserializes with a master node");
-        if (silver) {
-            auto result = PbrGraphEvaluator::evaluate(silver);
-            CHECK(result.hasPbrMaster, "silver: PBR master");
-            CHECK(near(result.values["metallic"].toDouble(), 1.0), "silver: metallic 1.0");
-            CHECK(near(result.values["roughness"].toDouble(), 0.22), "silver: roughness 0.22");
-        }
-
-        // gold.effect was the odd one out (hygiene lane, 2026-09-09): it was
-        // still authored on the LEGACY Blinn "Surface Material" master, which
-        // has no Metallic slot at all, so it baked metallic 0 with the graph's
-        // "Specular <- float" listed as an unsupported node — a rough yellow
-        // PLASTIC where the drawer offers a metal. Its colour node also carried
-        // alpha 0. Re-authored on a PbrMaterial master, the same shape as
-        // silver, so this assertion is the same assertion.
-        auto gold = loadEffect("gold.effect");
-        CHECK(gold && gold->getMasterNode(), "gold.effect deserializes with a master node");
-        if (gold) {
-            auto result = PbrGraphEvaluator::evaluate(gold);
-            CHECK(result.hasPbrMaster, "gold: PBR master (was the legacy Blinn one)");
-            CHECK(result.unsupportedNodes.isEmpty(), "gold: no unsupported nodes left");
-            CHECK(near(result.values["metallic"].toDouble(), 1.0), "gold: metallic 1.0");
-            CHECK(near(result.values["roughness"].toDouble(), 0.25), "gold: roughness 0.25");
-            auto goldCol = result.values["baseColor"].toObject();
-            CHECK(near(goldCol["r"].toDouble(), 1.0) && near(goldCol["g"].toDouble(), 0.85) &&
-                      near(goldCol["b"].toDouble(), 0.01),
-                  "gold: the authored gold hue survives the re-authoring");
-            CHECK(near(goldCol["a"].toDouble(), 1.0), "gold: ... at alpha 1 (it was 0)");
-        }
-
-        // THE STORED BLOCK AND THE GRAPH AGREE. A preset ships BOTH halves —
-        // the graph and the pre-evaluated `pbrMaterial` block the loader reads
-        // without running the evaluator — and gold's two halves disagreeing is
-        // how a re-authoring goes half-done.
-        for (const char *name : { "gold.effect", "silver.effect" }) {
-            QFile f(QString(JAHSHAKA_TEST_APP_DIR) + name);
-            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) { CHECK(false, name); continue; }
-            const QJsonObject obj = QJsonDocument::fromJson(f.readAll()).object();
-            const QJsonObject stored = obj["pbrMaterial"].toObject()["values"].toObject();
-            NodeGraph *graph = NodeGraph::deserialize(obj["shadergraph"].toObject(), lib);
-            if (!graph) { CHECK(false, name); continue; }
-            const auto evaluated = PbrGraphEvaluator::evaluate(graph);
-            bool agree = true;
-            for (auto it = stored.constBegin(); it != stored.constEnd(); ++it) {
-                const QJsonValue mine = evaluated.values.value(it.key());
-                if (it.value().isDouble() && !near(mine.toDouble(), it.value().toDouble()))
-                    agree = false;
-            }
-            CHECK(agree, (QString(name) + ": the stored pbrMaterial block matches what its "
-                                          "graph evaluates to").toUtf8().constData());
-        }
-    }
-
-    // ---- graph 6: the NINE LEGACY PRESETS and the gloss floor ---------------
+    // ---- graph 4: CONVERT-ON-LOAD (LEGACY-MASTER-CRUD) ----------------------
     //
-    // Every preset whose master is the legacy Blinn-Phong "Material" fed its
-    // Shininess socket the slider's maximum, 1.0, and `1 - gloss` turned that
-    // into roughness EXACTLY ZERO — a GGX needle that makes a single texel of
-    // a quantised normal map come back as a white spark. That is the "white
-    // dots on the brick material" report, and it was in nine shipped files.
+    // The Blinn-Phong "Surface Material" master is DELETED. A saved graph whose
+    // master type is "Material" is not approximated at bake time any more — it
+    // is CONVERTED once, when it loads, into a real PBR graph that then re-saves
+    // as PBR and that the user can see and edit.
     //
-    // Two independent things are asserted here, because either one alone would
-    // let the bug back in:
-    //   * THE FLOOR. `invertToRoughness` can no longer produce anything below
-    //     materials::kLegacyGlossRoughnessFloor, for ANY graph, including the
-    //     ones in strangers' projects that nobody can re-author.
-    //   * THE PRESETS. Each of the nine now carries a roughness somebody chose
-    //     for the material it depicts, the graph and the file's pre-evaluated
-    //     `pbrMaterial` block agree on it (they are read by different paths —
-    //     the module evaluates the graph, the drawer reads the block), and the
-    //     value is comfortably above the floor rather than sitting on it.
-    // Plus: the specular MAP each of the eight textured presets carries has no
-    // PBR target and is dropped. That is unchanged behaviour (converting one
-    // needs the spec-gloss fit the GLB importer does) — what is asserted is
-    // that the drop is REPORTED instead of silent.
+    // These cases build the legacy JSON by hand (the class they describe no
+    // longer exists to build one with) and drive the real loader.
     {
-        auto lib = new NodeLibrary();
-        lib->addNode("float", "Float", QIcon(), NodeCategory::Constants,
-                     []() -> NodeModel * { return new FloatNodeModel(); });
-        lib->addNode("color", "Color", QIcon(), NodeCategory::Constants,
-                     []() -> NodeModel * { return new ColorPickerNode(); });
-        lib->addNode("texture", "Texture", QIcon(), NodeCategory::Texture,
-                     []() -> NodeModel * { return new TextureNode(); });
-
-        // THE PRESETS' IMAGES MUST BE FINDABLE, or the test measures the wrong
-        // thing. Their texture nodes carry APP-RELATIVE names
-        // ("materials_to_graph/brick spec.jpg"); TextureNode::deserializeWidget
-        // Value only takes the path branch when QFileInfo::exists() says so,
-        // and otherwise files the string as an asset guid with no path — which
-        // is a texture socket the baker then reads as UNCONNECTED. (That is
-        // also why the shipped files' own `unsupportedNodes` blocks are empty:
-        // they were re-saved in exactly that state.) In the app
-        // MaterialHelper::resolveAppRelativeTextures resolves them against the
-        // shadergraph asset folder before anything evaluates; here, working
-        // from that folder is the same thing with no database.
-        const QString cwdBefore = QDir::currentPath();
-        QDir::setCurrent(JAHSHAKA_TEST_APP_DIR);
-
-        struct Row { const char *file; double roughness; bool specMap; };
-        const Row rows[] = {
-            { "materials_to_graph/Brick.effect",         0.85, true },
-            { "materials_to_graph/Stone.effect",         0.85, true },
-            { "materials_to_graph/Marble tile.effect",   0.35, true },
-            { "materials_to_graph/Wood.effect",          0.55, true },
-            { "materials_to_graph/Leather.effect",       0.60, true },
-            { "materials_to_graph/Painted metal.effect", 0.35, true },
-            { "materials_to_graph/sand.effect",          0.90, true },
-            { "materials_to_graph/Grass2.effect",        0.80, true },
-            { "materials_to_graph/Patchy grass.effect",  0.85, true },
-            // The ninth is not in that folder: gold's master is the same
-            // legacy one and it stored roughness 0 for the same reason.
-            { "gold.effect",                             0.25, false },
+        auto legacyGraph = [](const QJsonArray& nodes, const QJsonArray& cons) {
+            QJsonObject g;
+            g["nodes"] = nodes;
+            g["connections"] = cons;
+            g["masternode"] = QStringLiteral("m");
+            g["materialGuid"] = QString();
+            return g;
         };
+        auto node = [](const char* id, const char* type, const QJsonValue& value,
+                       const char* title = "") {
+            QJsonObject n;
+            n["id"] = id; n["type"] = type; n["value"] = value;
+            n["title"] = title; n["x"] = 0; n["y"] = 0;
+            return n;
+        };
+        auto con = [](const char* left, int leftSock, const char* right, int rightSock) {
+            QJsonObject c;
+            c["id"] = QUuid::createUuid().toString();
+            c["leftNodeId"] = left;   c["leftNodeSocketIndex"] = leftSock;
+            c["rightNodeId"] = right; c["rightNodeSocketIndex"] = rightSock;
+            return c;
+        };
+        const QJsonObject master = node("m", "Material", QString(), "Surface Material");
 
-        for (const Row &row : rows) {
-            const std::string name(row.file);
-            QFile f(QString(row.file));
-            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-                CHECK(false, (name + ": opens").c_str());
-                continue;
-            }
-            const QJsonObject obj = QJsonDocument::fromJson(f.readAll()).object();
-            auto graph = NodeGraph::deserialize(obj["shadergraph"].toObject(), lib);
-            if (!graph || !graph->getMasterNode()) {
-                CHECK(false, (name + ": deserializes with a master node").c_str());
-                continue;
-            }
-
+        // (a) a CONSTANT Shininess, the 0-1 gloss convention every shipped
+        //     preset used: roughness is its complement, in the graph, visible.
+        {
+            QJsonArray nodes { master, node("g", "float", 0.15, "Float Property") };
+            QJsonArray cons  { con("g", 0, "m", 2) };
+            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
+            CHECK(graph && graph->getMasterNode(), "convert: a legacy graph loads");
+            CHECK(graph && graph->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
+                  "convert: its master IS the PBR master");
+            CHECK(graph && graph->getMasterNode()->title == QLatin1String("PBR Material"),
+                  "convert: titled \"PBR Material\", the only master there is");
             const auto result = PbrGraphEvaluator::evaluate(graph);
-            const double r = result.values["roughness"].toDouble(-1.0);
-            char msg[320];
+            CHECK(near(float(result.values["roughness"].toDouble(-1)), 0.85f),
+                  "convert: gloss 0.15 -> Roughness 0.85 (1 - gloss)");
+            CHECK(result.unsupportedNodes.isEmpty(),
+                  "convert: nothing is reported unsupported — the socket is a real PBR one now");
+            CHECK(graph && graph->migrationNotes.size() == 1,
+                  "convert: the user gets ONE line saying what happened");
+            CHECK(graph && graph->migrationNotes.value(0).contains(QStringLiteral("PBR Material")),
+                  "convert: ... and it names the master it converted to");
+            // and it RE-SAVES as PBR, which is what stops it converting forever
+            CHECK(graph && graph->serialize()["nodes"].toArray().at(0).toObject()["type"]
+                              .toString().contains(QStringLiteral("PbrMaterial"))
+                  == (graph->serialize()["nodes"].toArray().at(0).toObject()["id"].toString() == "m"),
+                  "convert: the re-save carries the PBR master type");
+        }
 
-            std::snprintf(msg, sizeof(msg),
-                          "%s: roughness %.3f is at or above the legacy floor %.3f",
-                          row.file, r, materials::kLegacyGlossRoughnessFloor);
-            CHECK(r >= materials::kLegacyGlossRoughnessFloor - 1e-9, msg);
+        // (b) THE FLOOR. Legacy gloss 1.0 — the slider's own maximum, the value
+        //     every one of the nine presets used to carry — is 1 - 1 = roughness
+        //     ZERO, a GGX needle that sparks on any normal-mapped texel. The
+        //     conversion lands it on the floor, as a real number in the graph.
+        {
+            QJsonArray nodes { master, node("g", "float", 1.0, "Float Property") };
+            QJsonArray cons  { con("g", 0, "m", 2) };
+            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
+            const auto result = PbrGraphEvaluator::evaluate(graph);
+            CHECK(near(float(result.values["roughness"].toDouble(-1)),
+                       float(NodeGraph::kConvertedGlossRoughnessFloor), 1e-4f),
+                  "convert: legacy gloss 1.0 lands ON the floor, never on roughness 0");
+        }
 
-            std::snprintf(msg, sizeof(msg), "%s: re-authored roughness %.2f (evaluated %.3f)",
-                          row.file, row.roughness, r);
-            CHECK(near(float(r), float(row.roughness), 0.005f), msg);
+        // (c) A BLINN EXPONENT (anything above 1) is the other convention that
+        //     shared that socket. alpha = sqrt(2/(n+2)), perceptual roughness =
+        //     sqrt(alpha): n = 100 is 0.374, a polished surface. The old baker
+        //     divided by 100 and sent exactly that value to roughness 0.
+        {
+            QJsonArray nodes { master, node("g", "float", 100.0, "Float Property") };
+            QJsonArray cons  { con("g", 0, "m", 2) };
+            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
+            const auto result = PbrGraphEvaluator::evaluate(graph);
+            const double expected = std::sqrt(std::sqrt(2.0 / 102.0));
+            CHECK(near(float(result.values["roughness"].toDouble(-1)), float(expected), 1e-4f),
+                  "convert: Blinn exponent 100 -> roughness sqrt(sqrt(2/(n+2))) = 0.374");
+        }
 
-            // The file's own pre-evaluated block is what the drawer reads
-            // without ever touching the graph: the two must not drift.
-            const double stored = obj["pbrMaterial"].toObject()["values"]
-                                      .toObject()["roughness"].toDouble(-1.0);
-            std::snprintf(msg, sizeof(msg),
-                          "%s: the stored pbrMaterial block agrees (%.3f vs %.3f)",
-                          row.file, stored, r);
-            CHECK(near(float(stored), float(r), 0.005f), msg);
+        // (d) A TEXTURE-FED Shininess. That socket had no map target at all, so
+        //     a gloss map used to be dropped as unsupported; the conversion
+        //     splices a real One Minus node in front of Roughness and the map
+        //     reaches the renderer for the first time.
+        {
+            QJsonArray nodes { master, node("t", "texture", QString(texPath), "gloss") };
+            QJsonArray cons  { con("t", 0, "m", 2) };
+            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
+            CHECK(graph && graph->getNodesByTypeName("oneminus").size() == 1,
+                  "convert: a gloss MAP gets a One Minus node, in the graph, deletable");
+            const auto info = PbrGraphEvaluator::bakeInfo(graph)["perSocket"].toObject();
+            CHECK(info["Roughness"].toString() == QLatin1String("baked"),
+                  "convert: ... and Roughness bakes instead of being dropped");
+        }
 
-            if (row.specMap) {
-                bool reported = false;
-                for (const auto &u : result.unsupportedNodes)
-                    if (u.startsWith("Specular <- ")) reported = true;
-                std::snprintf(msg, sizeof(msg),
-                              "%s: the dropped specular map is REPORTED, not silent", row.file);
-                CHECK(reported, msg);
+        // (e) SPECULAR AND AMBIENT have no PBR equivalent and are dropped —
+        //     including the saturated-specular "fake metal" case, because
+        //     Metallic 1 + Base Color = the specular colour is a judgement
+        //     about the picture that a converter must not make silently. What
+        //     it must do is SAY so, which is what is asserted.
+        {
+            QJsonArray nodes { master,
+                               node("s", "color", QJsonObject{{"r",0.9},{"g",0.7},{"b",0.2},{"a",1.0}}, "Specular"),
+                               node("a", "color", QJsonObject{{"r",0.1},{"g",0.1},{"b",0.1},{"a",1.0}}, "Ambient") };
+            QJsonArray cons  { con("s", 0, "m", 1), con("a", 0, "m", 4) };
+            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
+            CHECK(graph && graph->connections.isEmpty(),
+                  "convert: the Specular and Ambient connections are dropped");
+            CHECK(graph && graph->nodes.size() == 3,
+                  "convert: ... but the nodes that fed them stay in the graph");
+            const QString note = graph ? graph->migrationNotes.value(0) : QString();
+            CHECK(note.contains(QStringLiteral("Specular")) && note.contains(QStringLiteral("Ambient")),
+                  "convert: the ONE line names both dropped inputs");
+            const auto result = PbrGraphEvaluator::evaluate(graph);
+            CHECK(near(float(result.values["metallic"].toDouble(0.0)), 0.0f),
+                  "convert: a faked-metal specular is NOT guessed into Metallic");
+        }
+
+        // (f) EVERY OTHER SOCKET moves by name, not by index: the two masters'
+        //     tails do not line up (Emission 5 -> Emissive 4, Alpha 6 -> 5).
+        {
+            QJsonArray nodes { master,
+                               node("d", "color", QJsonObject{{"r",0.2},{"g",0.4},{"b",0.6},{"a",1.0}}, "Diffuse"),
+                               node("e", "color", QJsonObject{{"r",1.0},{"g",0.0},{"b",0.0},{"a",1.0}}, "Emission"),
+                               node("al", "float", 0.4, "Alpha") };
+            QJsonArray cons  { con("d", 0, "m", 0), con("e", 0, "m", 5), con("al", 0, "m", 6) };
+            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
+            const auto result = PbrGraphEvaluator::evaluate(graph);
+            auto base = result.values["baseColor"].toObject();
+            CHECK(near(float(base["r"].toDouble()), 0.2f) && near(float(base["g"].toDouble()), 0.4f)
+                      && near(float(base["b"].toDouble()), 0.6f),
+                  "convert: Diffuse became Base Color");
+            auto emis = result.values["emissiveColor"].toObject();
+            CHECK(near(float(emis["r"].toDouble()), 1.0f) && near(float(emis["g"].toDouble()), 0.0f),
+                  "convert: Emission (socket 5) became Emissive (socket 4)");
+            CHECK(near(float(result.values["alpha"].toDouble(-1)), 0.4f),
+                  "convert: Alpha (socket 6) became Alpha (socket 5)");
+        }
+    }
+
+    // ---- the shipped presets: ONE list, and every one of them is a graph ----
+    //
+    // PRESET-UNIFY-1 (the owner, 2026-09-20: "the old presets should be gone
+    // and we should only have the new ones, we dont need duplicates"). There
+    // used to be TWO shipped families and three arms here to guard them: the
+    // `.effect` graph TEMPLATES under app/shadergraph/ (a folder guard, a
+    // per-template roughness table, and a "the stored pbrMaterial block agrees
+    // with the graph" check) and, separately, the `.material` presets the
+    // editor's tray applies. Fifteen of them were the same material twice.
+    //
+    // There is one set now: `app/content/materials/<name>.material` authors the
+    // preset's VALUES and names the graph beside it in `graphs/`. So there is
+    // one guard, and it is the one that matters — THE TWO HALVES OF EACH
+    // PRESET DESCRIBE THE SAME MATERIAL. A graph that disagrees with the
+    // values beside it is a preset that changes the moment a user customises
+    // it and saves, which is exactly the drift the old "stored block agrees"
+    // check existed to catch, asked of the pair that actually ships.
+    {
+        auto lib = new LibraryV1();
+
+        // The graphs name their images RELATIVE to the preset file that owns
+        // them — the same spelling as the map slot beside them — so
+        // evaluating one means working from the PRESET folder:
+        // TextureNode::deserializeWidgetValue takes the path branch only when
+        // QFileInfo::exists() says so, and files anything else as an asset
+        // guid with no path — a socket the baker then reads as UNCONNECTED.
+        // (In the app, MaterialHelper::resolveAppRelativeTextures imports them
+        // first; here, the current directory is the same thing with no
+        // database.)
+        const QString cwdBefore = QDir::currentPath();
+        const QString presetDir = QString(JAHSHAKA_TEST_PRESET_DIR);
+        QDir::setCurrent(presetDir);
+
+        QStringList presetFiles;
+        {
+            QDirIterator it(presetDir, { "*.material" }, QDir::Files);
+            while (it.hasNext()) presetFiles.append(it.next());
+            presetFiles.sort();
+        }
+        CHECK(presetFiles.size() == 20,
+              "shipped: twenty presets, and they are the WHOLE shipped set");
+
+        int noGraph = 0, notPbr = 0, migrated = 0, unsupported = 0, disagreed = 0;
+        int texturedSockets = 0, bakedSockets = 0;
+        for (const QString &file : presetFiles) {
+            QFile mf(file);
+            if (!mf.open(QIODevice::ReadOnly | QIODevice::Text)) { ++noGraph; continue; }
+            const QJsonObject preset = QJsonDocument::fromJson(mf.readAll()).object();
+            const QString name = preset["name"].toString();
+            const QString graphRel = preset["graph"].toString();
+            if (graphRel.isEmpty()) {
+                std::printf("      no graph: %s\n", qPrintable(name));
+                ++noGraph;
+                continue;
+            }
+            QFile gf(presetDir + graphRel);
+            if (!gf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                std::printf("      graph missing: %s\n", qPrintable(graphRel));
+                ++noGraph;
+                continue;
+            }
+            const QJsonObject effect = QJsonDocument::fromJson(gf.readAll()).object();
+            NodeGraph *graph = NodeGraph::deserialize(effect["shadergraph"].toObject(), lib);
+            if (!graph || !graph->getMasterNode()
+                || graph->getMasterNode()->typeName != QLatin1String("PbrMaterial")) {
+                std::printf("      NOT a PBR graph: %s\n", qPrintable(name));
+                ++notPbr;
+                continue;
+            }
+            if (!graph->migrationNotes.isEmpty()) {
+                std::printf("      still converts on load: %s\n", qPrintable(name));
+                ++migrated;
+            }
+            const auto result = PbrGraphEvaluator::evaluate(graph);
+            if (!result.unsupportedNodes.isEmpty()) {
+                std::printf("      unsupported in %s: %s\n", qPrintable(name),
+                            qPrintable(result.unsupportedNodes.join(", ")));
+                ++unsupported;
+            }
+
+            // THE TWO HALVES AGREE, on every row the evaluator can produce.
+            const auto say = [&](const char *key, double mine, double authored) {
+                std::printf("      %s: graph %s=%.3f but the preset authors %.3f\n",
+                            qPrintable(name), key, mine, authored);
+                ++disagreed;
+            };
+            const bool hasBaseMap = !preset["baseColorMap"].toString().isEmpty();
+            const bool hasRoughMap = !preset["roughnessMap"].toString().isEmpty();
+            if (!hasBaseMap && result.values.contains("baseColor")) {
+                QColor authored;
+                authored.setNamedColor(preset["baseColor"].toString("#FFFFFF"));
+                const auto col = result.values["baseColor"].toObject();
+                if (!near(col["r"].toDouble(), authored.redF(), 0.004)
+                    || !near(col["g"].toDouble(), authored.greenF(), 0.004)
+                    || !near(col["b"].toDouble(), authored.blueF(), 0.004))
+                    say("baseColor", col["r"].toDouble(), authored.redF());
+            }
+            if (result.values.contains("metallic")
+                && !near(result.values["metallic"].toDouble(), preset["metallic"].toDouble(0.0), 0.004))
+                say("metallic", result.values["metallic"].toDouble(), preset["metallic"].toDouble(0.0));
+            if (!hasRoughMap && result.values.contains("roughness")
+                && !near(result.values["roughness"].toDouble(), preset["roughness"].toDouble(0.5), 0.004))
+                say("roughness", result.values["roughness"].toDouble(), preset["roughness"].toDouble(0.5));
+            if (result.values.contains("alpha")
+                && !near(result.values["alpha"].toDouble(), preset["alpha"].toDouble(1.0), 0.004))
+                say("alpha", result.values["alpha"].toDouble(), preset["alpha"].toDouble(1.0));
+            // THE TILING (fix round). It was the gap this arm did not look
+            // through: a textured preset authored at 4x whose graph said
+            // nothing about tiling passed every check here and then lost the
+            // tiling the first time a customised copy was saved, because the
+            // UV rows are the GRAPH's whenever it has a texture node.
+            {
+                const double authored = preset["textureScale"].toDouble(1.0);
+                double folded = 1.0;
+                const QJsonValue scale = result.values.value("textureScale");
+                if (scale.isArray()) folded = scale.toArray().at(0).toDouble(1.0);
+                else if (scale.isDouble()) folded = scale.toDouble(1.0);
+                const bool textured = !preset["baseColorMap"].toString().isEmpty()
+                                      || !preset["roughnessMap"].toString().isEmpty()
+                                      || !preset["normalMap"].toString().isEmpty();
+                if (textured && !near(folded, authored, 0.004))
+                    say("textureScale", folded, authored);
+            }
+
+            // A MAP THE PRESET AUTHORS IS A TEXTURE NODE IN ITS GRAPH, and it
+            // PASSES THROUGH: a preset that resampled its own image into a
+            // baked map would look the same at a glance and be permanently
+            // lower resolution.
+            const auto info = PbrGraphEvaluator::bakeInfo(graph, nullptr)["perSocket"].toObject();
+            for (auto s = info.begin(); s != info.end(); ++s) {
+                if (s.value().toString() == "passthrough") ++texturedSockets;
+                if (s.value().toString() != "baked") continue;
+                std::printf("      %s: %s resamples\n", qPrintable(name), qPrintable(s.key()));
+                ++bakedSockets;
+            }
+            if (hasBaseMap && !preset["normalMap"].toString().isEmpty()
+                && graph->getNodesByTypeName("texture").size() < 2) {
+                std::printf("      %s: fewer texture nodes than authored maps\n", qPrintable(name));
+                ++disagreed;
+            }
+            // A ROUGHNESS-MAPPED PRESET WIRES ITS MAP INTO ROUGHNESS (fix
+            // round). The value check above SKIPS roughness for these nine,
+            // because the authored value is the map's factor and not a number
+            // the graph folds — so without this the nine could have lost the
+            // map entirely and the arm would still have been green, leaving
+            // `roughnessLowerBound`/`roughnessUpperBound` with nothing to
+            // remap and a specular map's pixels nowhere.
+            if (hasRoughMap) {
+                bool wired = false;
+                NodeModel *master = graph->getMasterNode();
+                SocketModel *roughIn = master && master->inSockets.size() > 2
+                                           ? master->inSockets[2] : nullptr;   // Roughness
+                for (auto *c : graph->connections.values()) {
+                    if (!c || !roughIn || c->rightSocket != roughIn) continue;
+                    if (c->leftSocket && c->leftSocket->node
+                        && c->leftSocket->node->typeName == QLatin1String("texture"))
+                        wired = true;
+                }
+                if (!wired) {
+                    std::printf("      %s: its roughness MAP is not wired into Roughness\n",
+                                qPrintable(name));
+                    ++disagreed;
+                }
             }
         }
+        CHECK(noGraph == 0, "shipped: EVERY preset names a graph, and it is there");
+        CHECK(notPbr == 0, "shipped: ... every one of them has a PbrMaterial master");
+        CHECK(migrated == 0, "shipped: ... and not one still needs converting on load");
+        CHECK(unsupported == 0, "shipped: ... nothing in them evaluates unsupported");
+        CHECK(disagreed == 0,
+              "shipped: a preset's GRAPH and its authored VALUES describe the same material");
+        CHECK(bakedSockets == 0, "shipped: no preset socket resamples — Passthrough unchanged");
+        CHECK(texturedSockets >= 30, "shipped: the textured presets DO pass their images through");
 
         QDir::setCurrent(cwdBefore);
-
-        // The floor itself, on a graph built here: legacy gloss 1.0 is the
-        // value every one of those presets used to carry.
-        {
-            auto graph = new NodeGraph();
-            auto master = new SurfaceMasterNode();
-            graph->addNode(master);
-            graph->setMasterNode(master);
-            auto gloss = makeFloat(graph, 1.0);
-            graph->addConnection(gloss, 0, master, 2);   // -> Shininess
-
-            const auto result = PbrGraphEvaluator::evaluate(graph);
-            CHECK(near(float(result.values["roughness"].toDouble(-1.0)),
-                       float(materials::kLegacyGlossRoughnessFloor), 1e-4f),
-                  "legacy gloss 1.0 lands ON the floor, never on roughness 0");
-        }
-        // ...and the rest of the curve is untouched: gloss 0.4 is still 0.6.
-        {
-            auto graph = new NodeGraph();
-            auto master = new SurfaceMasterNode();
-            graph->addNode(master);
-            graph->setMasterNode(master);
-            auto gloss = makeFloat(graph, 0.4);
-            graph->addConnection(gloss, 0, master, 2);
-            const auto result = PbrGraphEvaluator::evaluate(graph);
-            CHECK(near(float(result.values["roughness"].toDouble(-1.0)), 0.6f),
-                  "the gloss inversion above the floor is unchanged (0.4 -> 0.6)");
-        }
     }
 
     // ---- blend modes (IMAGE_PLANE_SPEC §9): MaterialSettings passes through --

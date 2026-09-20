@@ -22,6 +22,7 @@ For more information see the LICENSE file
 //     bake resolution).
 //   - nothing selected -> the graph settings view (the full settings set).
 
+#include <functional>
 #include <QWidget>
 #include <QJsonValue>
 
@@ -45,10 +46,22 @@ class NodePropertiesPanel : public QWidget
 {
 	Q_OBJECT
 public:
+
+	/// ONE PICKER FOR BOTH WINDOWS (MATERIAL_BUNDLE_SPEC P-2). The page hands
+	/// the panel the shell's asset picker: a callable that opens it and calls
+	/// `chosen` with the guid the user picked (or imported from disk). Unset
+	/// in the standalone build and in headless slices, where the panel falls
+	/// back to a file dialog routed through the same content import.
+	using TexturePicker = std::function<void(std::function<void(const QString &guid)> chosen)>;
+	void setTexturePicker(const TexturePicker &picker) { mTexturePicker = picker; }
 	explicit NodePropertiesPanel(QWidget* parent = nullptr);
 
 	// Follows the scene's nodeSelected/nodeValueChanged signals. The panel
 	// never owns the scene; call again whenever the page swaps scenes.
+	/// THE DOCK EDITS THE MODEL, so it has to know when the model is locked
+	/// (PRESET-UNIFY-1 fix round 2): disabled for the user, and `writeValue`
+	/// refuses for anything that reaches it another way.
+	void setReadOnly(bool readOnly);
 	void setScene(GraphNodeScene* scene);
 	void setGraph(NodeGraph* graph);
 
@@ -77,6 +90,7 @@ signals:
 	void settingsEdited(MaterialSettings settings);
 
 private:
+	TexturePicker mTexturePicker;
 	void buildUi();
 	QWidget* buildSettingsPage(bool compact);
 	void rebuildNodeEditors();
@@ -88,6 +102,7 @@ private:
 	NodeGraph* mGraph = nullptr;
 	NodeModel* mNode = nullptr;
 	bool mUpdating = false;
+	bool mReadOnly = false;
 
 	QStackedWidget* mStack = nullptr;
 

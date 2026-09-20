@@ -1250,6 +1250,9 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mPlannedSeconds = seconds;
     mGpuSamplesTruncated = 0;
     mEngineFramesDropped = mEngineEventsDropped = 0;
+    // A breakdown from the PREVIOUS capture must not be readable as this
+    // frame's (app.renderStats().perPass).
+    mLastPasses.clear();
     mPhase = Phase::Recording;
     // FORWARD ONLY, from this instant: the engine starts recording the frames
     // that come after this call, and there is no history behind it.
@@ -1389,6 +1392,29 @@ unsigned FrameMonitor::drainOnce()
     std::vector<FrameRecord> frames;
     moved += eng->takeFrameRecords(frames);
     for (const FrameRecord &r : frames) mBundle->writeFrame(r);
+    // THE BREAKDOWN `app.renderStats().perPass` READS (owner review
+    // 2026-09-18). The bundle is a file a lead opens later; this is the same
+    // rows, for the frame that just landed, readable NOW by the verb and the
+    // MCP tools. Only the newest record's — a list is a snapshot of one frame
+    // or it is not a breakdown of anything — and only while recording, which
+    // is the only time the engine fills them at all.
+    if (!frames.empty()) {
+        const FrameRecord &r = frames.back();
+        QVariantList rows;
+        rows.reserve(int(r.passes.size()));
+        for (const FramePass &p : r.passes) {
+            rows.append(QVariantMap{
+                { QStringLiteral("name"),
+                  QStringLiteral("%1/%2/%3")
+                      .arg(QString::fromStdString(p.workspace),
+                           QString::fromStdString(p.node),
+                           QString::fromStdString(p.pass)) },
+                { QStringLiteral("triangles"), QVariant::fromValue(qulonglong(p.triangles)) },
+                { QStringLiteral("draws"), QVariant::fromValue(qulonglong(p.draws)) },
+            });
+        }
+        mLastPasses = rows;
+    }
     std::vector<MonitorEvent> events;
     moved += eng->takeMonitorEvents(events);
     for (const MonitorEvent &e : events) mBundle->writeEvent(e);
@@ -1476,6 +1502,29 @@ void FrameMonitor::noteTickEnd(bool rendered)
     // the frame that comes back (see the header). There is also nothing to
     // drain — no frame was rendered — but the drain timer still runs.
     if (!rendered) return;
+    // THE CAPTURE'S START TAG BELONGS ON THE FIRST FRAME AFTER IT, WHOEVER
+    // DREW IT (ENGINE-SMALL-B fix round, found by perf.capture_bundle under
+    // load). `noteTickStart` writes `host.capture_start`, and only the render
+    // DRIVER calls it — so a capture started from a live script run that then
+    // steps its own frames (`editor.frame`, which is how every MCP gesture
+    // moves the picture) waited for a driver tick to carry its tag. That was
+    // already luck; DOUBLE-FRAME-1 made the luck worse, because a script
+    // drawing at display rate is now exactly what suppresses those ticks, and
+    // the tag could fall outside the captured window ("exactly one frame is
+    // tagged host.capture_start (0)").
+    //
+    // So a SCRIPTED frame closing with the tag still owed carries it here. The
+    // value is the same `mStartWorkNs` the tick path would have used — the work
+    // the capture's own start cost — and there is no gap to carve it out of on
+    // this path, which is the honest shape: a scripted frame has no idle/UI
+    // split because nothing waited.
+    if (mTagStartFrame) {
+        if (auto eng = engine()) {
+            mTagStartFrame = false;
+            eng->noteHostStage(std::string("host.capture_start"),
+                               float(double(mStartWorkNs) / 1.0e6));
+        }
+    }
     drainAndCharge();
     mSinceTickEnd.restart();
     mBlockedNs = 0;

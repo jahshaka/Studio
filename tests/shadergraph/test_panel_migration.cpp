@@ -269,8 +269,28 @@ int main(int argc, char** argv)
         CHECK(brick && brick->getNodesByTypeName("texture").size() == 3
               && brick->getNodesByTypeName("float").size() == 1,
               "fixtures: Brick's 3 texture + 1 float properties became nodes");
-        CHECK(brick && brick->connections.size() == 4,
-              "fixtures: Brick's 4 connections survive");
+        // THREE, not four: this fixture's master is the deleted Blinn-Phong one
+        // and LEGACY-MASTER-CRUD converts it on load. Diffuse/Shininess/Normal
+        // move to Base Color/Roughness/Normal; the SPECULAR map has no PBR
+        // equivalent, so its connection is dropped — and the node it fed from
+        // stays in the graph, which is why the count above is still 3.
+        CHECK(brick && brick->connections.size() == 3,
+              "fixtures: Brick converts — 3 of its 4 connections land, Specular does not");
+        CHECK(brick && brick->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
+              "fixtures: ... onto the PBR master");
+        CHECK(brick && brick->migrationNotes.size() == 1
+              && brick->migrationNotes.value(0).contains(QStringLiteral("Specular")),
+              "fixtures: ... with ONE line for the user naming the dropped Specular");
+        {
+            // The gloss constant converts IN PLACE. This fixture predates the
+            // preset re-authoring and carries the slider's MAXIMUM, 1.0 — the
+            // value whose complement is roughness exactly zero — so it lands
+            // on the floor, in the graph, where the user can see and lower it.
+            const auto evaluated = PbrGraphEvaluator::evaluate(brick, nullptr);
+            CHECK(near(evaluated.values["roughness"].toDouble(-1.0),
+                       NodeGraph::kConvertedGlossRoughnessFloor, 1e-6),
+                  "fixtures: Brick's legacy gloss 1.0 became Roughness 0.08, not 0");
+        }
         bool allLeftZero = true;
         if (brick) {
             for (auto con : brick->connections.values())
@@ -295,16 +315,28 @@ int main(int argc, char** argv)
     //    a master, zero property nodes, and no 'properties' on re-save
     // ------------------------------------------------------------------
     {
+        // ONE SHIPPED SET (PRESET-UNIFY-1) — see test_pbr_evaluator for the
+        // guard that a preset's graph and its authored values agree.
+        const QString graphDir = QString(JAHSHAKA_TEST_PRESET_DIR) + "graphs/";
         QStringList files;
-        QDirIterator it(QString(JAHSHAKA_TEST_APP_DIR), { "*.effect" }, QDir::Files,
-                        QDirIterator::Subdirectories);
+        QDirIterator it(graphDir, { "*.effect" }, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext()) files.append(it.next());
-        CHECK(files.size() >= 17, "shipped: found the preset .effect files");
+        CHECK(files.size() == 20, "shipped: found the twenty preset graphs");
 
         int bad = 0;
         int textured = 0;
+        int legacyMaster = 0;
         for (const auto& file : files) {
             auto graph = loadEffect(file);
+            // THE GUARD (LEGACY-MASTER-CRUD): every shipped template is
+            // authored on the ONE master. A legacy one re-added here is a
+            // template a UI user lands on — which is exactly how almost every
+            // starter and preset in the Create New dialog came to be Blinn.
+            if (graph && graph->getMasterNode()
+                && graph->getMasterNode()->typeName != QLatin1String("PbrMaterial")) {
+                std::printf("      NOT a PBR template: %s\n", qPrintable(file));
+                ++legacyMaster;
+            }
             if (graph == nullptr || graph->getMasterNode() == nullptr
                 || !graph->getNodesByTypeName("property").isEmpty()
                 || graph->serialize().contains("properties")) {
@@ -323,17 +355,18 @@ int main(int argc, char** argv)
             }
         }
         CHECK(bad == 0, "shipped: every preset loads with a master, no property nodes, no 'properties' on save");
-        CHECK(textured >= 12, "shipped: the textured presets kept their image references");
+        CHECK(legacyMaster == 0, "shipped: every preset's master is \"PBR Material\"");
+        CHECK(textured >= 25, "shipped: the textured presets kept their image references");
 
         // the drawer-synced constants still evaluate to their known values
-        auto glass = loadEffect(QString(JAHSHAKA_TEST_APP_DIR) + "glass.effect");
+        auto glass = loadEffect(graphDir + "Glass-pbr.effect");
         if (glass) {
             auto result = PbrGraphEvaluator::evaluate(glass, nullptr);
             CHECK(near(result.values["roughness"].toDouble(), 0.05, 1e-3)
                   && near(result.values["alpha"].toDouble(), 0.3, 1e-3),
-                  "shipped: glass.effect still folds to the drawer's values after re-save");
+                  "shipped: Glass PBR's graph still folds to the drawer's values after re-save");
         } else {
-            CHECK(false, "shipped: glass.effect loads");
+            CHECK(false, "shipped: Glass PBR's graph loads");
         }
     }
 

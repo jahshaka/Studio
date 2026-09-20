@@ -66,6 +66,13 @@ public:
 	int socketRowCount() const;
 	int socketRowsHeight();
 	void setWidget(QWidget* widget);
+
+	/// CAN THIS NODE BE TOUCHED? (PRESET-UNIFY-1 fix round — a read-only
+	/// canvas.) Two things live outside the scene's own verbs and so have to
+	/// be turned off here: the DRAG, which is QGraphicsItem's own doing, and
+	/// the node's embedded WIDGETS — a spinbox, a colour swatch, a texture
+	/// button — whose edits never pass through GraphNodeScene at all.
+	void setInteractive(bool interactive);
 	// compact value editor living in the title bar, left of the title text
 	void setHeaderWidget(QWidget* widget);
 	void calcPath();

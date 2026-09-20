@@ -90,6 +90,10 @@ void ListWidget::updateThumbnailImage(QByteArray arr, QListWidgetItem *item)
 
 void ListWidget::highlightNodeForInterval(int seconds, QListWidgetItem * item)
 {
+	// A guid no drawer holds has no tile to flash (fix round F1's family):
+	// every line below reads the item, and the callers get theirs from
+	// `selectCorrectItemFromDrop`, which answers null by design.
+	if (!item) return;
 	anim = new QVariantAnimation;
 	anim->setStartValue(QColor(50, 148, 213, 255));
 	anim->setEndValue(QColor(50, 148, 213, 0));
@@ -172,8 +176,12 @@ void ListWidget::customContextMenu(QPoint pos)
 
     if(shaderContextMenuAllowed){
         if(index.isValid()){
+            // THE WORDS ARE "MATERIAL", because that is what these tiles are
+            // (owner Q3: "only materials"; there is no shader/effect asset any
+            // more). Each acts on THIS ONE ROW.
             auto actionRename = new QAction("Rename");
-            auto actionExport = new QAction("Export");
+            auto actionDuplicate = new QAction("Duplicate");
+            auto actionExport = new QAction("Export material…");
             auto actionEdit = new QAction("Edit");
             auto actionDelete = new QAction("Delete");
             auto actionProject = new QAction("Add to project");
@@ -183,6 +191,9 @@ void ListWidget::customContextMenu(QPoint pos)
             });
             connect(actionExport,&QAction::triggered,[guid ,this](){
                 emit exportShader(guid);
+            });
+            connect(actionDuplicate,&QAction::triggered,[guid ,this](){
+                emit duplicateShader(guid);
             });
             connect(actionEdit,&QAction::triggered,[guid, index ,this](){
                 emit editShader(guid);
@@ -194,12 +205,12 @@ void ListWidget::customContextMenu(QPoint pos)
 				emit addToProject(this->currentItem());
 			});
 
-            menu.addActions({actionRename,actionEdit,actionExport,actionDelete});
+            menu.addActions({actionEdit,actionRename,actionDuplicate,actionExport,actionDelete});
 			if (sceneOpenProbe && sceneOpenProbe() && addToProjectMenuAllowed) menu.addAction(actionProject);
             menu.exec(this->mapToGlobal(pos));
         }else{
-            auto actionCreate = new QAction("Create Shader");
-            auto actionImport = new QAction("Import Shader");
+            auto actionCreate = new QAction("New material");
+            auto actionImport = new QAction("Import material…");
 
             connect(actionCreate,&QAction::triggered,[guid ,this](){
                 emit createShader(guid);
@@ -211,8 +222,18 @@ void ListWidget::customContextMenu(QPoint pos)
             menu.addActions({actionCreate, actionImport});
             menu.exec(this->mapToGlobal(pos));
         }
-    }else{
-
+    }else if (presetContextMenuAllowed && index.isValid() && !guid.isEmpty()) {
+        // THE PRESETS DRAWER (R18). One item, because one is all a read-only
+        // tile can honestly offer: the preset itself cannot be renamed,
+        // deleted or edited — the definition writer refuses a shipped guid by
+        // name — so Customise is the door, and it mints an ordinary editable
+        // bundle in the user's own drawer.
+        auto actionCustomise = new QAction(tr("Customise"));
+        connect(actionCustomise, &QAction::triggered, [guid, this]() {
+            emit customisePreset(guid);
+        });
+        menu.addAction(actionCustomise);
+        menu.exec(this->mapToGlobal(pos));
     }
 }
 

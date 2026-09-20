@@ -10,6 +10,15 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_assettray test_assettray.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assettray.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
+    # rule 6 asks the bundle layer whether a texture folds into its material
+    ${CMAKE_SOURCE_DIR}/src/services/materialmembers.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     # database.cpp's link closure (same as tests/drawers)
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp

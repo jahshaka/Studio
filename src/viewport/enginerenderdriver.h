@@ -21,6 +21,7 @@
 #include <QObject>
 #include "jahshaka/engine/Engine.h"
 #include "services/framepacing.h"
+#include "viewport/framewindows.h"
 
 class QTimer;
 
@@ -33,7 +34,31 @@ public:
     struct Stats {
         qulonglong ticks    = 0;   ///< timer fires
         qulonglong rendered = 0;   ///< ticks that called Engine::renderOneFrame
-        qulonglong skipped  = 0;   ///< ticks that had no enabled View to draw
+
+        // THE `skipped` COUNTER IS GONE (owner review 2026-09-18, answer Q3).
+        // It counted ticks with no enabled View — the app sitting on the
+        // Desktop or Assets page at ~62 ticks a second — and the F3 readout
+        // showed it as a lifetime total ("104,329 skipped"), which reads as
+        // dropped frames and is in fact the loop doing exactly the right
+        // thing. Nothing is lost: every tick is either rendered or not, so the
+        // number is `ticks - rendered` for anybody who wants it, and the LIVE
+        // half of the question — is the loop drawing right now? — is `drawing`
+        // below.
+        /// Did the last counted tick draw? The idle/drawing state of the F3
+        /// readout; false on a page with no visible viewport.
+        bool       drawing  = false;
+        /// Frames ACTUALLY DRAWN in the last second — not ticks, and not
+        /// Ogre's own rolling average. It counts frames drawn OUTSIDE this
+        /// loop too (a script's editor.frame, the VR pump), because what the
+        /// readout answers is "is the picture moving", and those frames move
+        /// it (see noteExternalFrame).
+        double     fpsDrawn = 0.0;
+        /// Frames over the 100 ms hitch threshold IN THE LAST MINUTE. A
+        /// rolling window, never a lifetime total: a live readout whose number
+        /// can only go up says nothing about now. `slowFrames` below keeps the
+        /// cumulative figure for the session log and the perf sampler, which
+        /// want exactly that.
+        int        slowFramesLastMinute = 0;
 
         // ---- how long the ticks actually TOOK (STATS_OVERLAY_SPEC §4) -------
         // THE HONEST NUMBER, and the reason this pair exists. An FPS reading on
@@ -108,7 +133,11 @@ private:
 
 public:
 
-    Stats stats() const { return mStats; }
+    /// The counters, with the two ROLLING ones evaluated at the moment of the
+    /// read (they are windows over a clock, not accumulators — see
+    /// viewport/framewindows.h), so a reader that stops reading cannot leave a
+    /// stale rate standing.
+    Stats stats() const;
 
     // ---- the script run policy (SCRIPTING_LIVE_SPEC §3.1) -----------------
     /// What a script run in flight is doing to this loop. ONE setter, called
@@ -146,6 +175,29 @@ public:
     /// no pacing code at all — frame stats, the render monitor, everything.
     void setScriptRun(ScriptRun run) { mScriptRun = run; }
     ScriptRun scriptRun() const { return mScriptRun; }
+
+    /// A FRAME THIS LOOP DID NOT DRAW, but the display now shows (DOUBLE-FRAME-1,
+    /// 2026-09-18). The Live pacing above is "at most one frame per display
+    /// period", and it used to mean at most one of MY frames: the clock was
+    /// restarted only at the end of a driver tick, so a script that renders its
+    /// own frames — `editor.frame()`, which is how every drag, every step and
+    /// every MCP gesture moves the picture deterministically — got a driver
+    /// frame in the gap between two verbs ON TOP of the one it had just drawn.
+    /// MEASURED with `--script-live`, 60 scripted frames per arm: 81 engine
+    /// frames AT REST (1.35 per scripted frame, with no document edit at all)
+    /// and 89-95 while dragging a cube (1.48-1.58) — which is the "two frames
+    /// per document edit" the render audit recorded from an MCP-driven drag,
+    /// seen from its actual cause: the frames are not caused by the EDIT, they
+    /// are caused by the script drawing.
+    ///
+    /// So every host loop that renders outside this tick says so, and the
+    /// period is measured from the last frame ANYBODY drew.
+    ///
+    /// It also STAMPS THE FRAME into the drawn-rate window (Stats::fpsDrawn):
+    /// a frame a script drew is a frame the user saw, and a readout that said
+    /// "0 fps drawn" through a scripted animation would be exactly the kind of
+    /// lie this round of the readout exists to remove.
+    void noteExternalFrame();
 
 signals:
     /// Emitted before each frame — animate here.
@@ -190,6 +242,20 @@ private:
     double  mWork[kWorkWindow] = {};
     int     mWorkNext = 0;
     int     mWorkFilled = 0;
+
+    // ---- the two ROLLING windows (owner review answer Q3) -----------------
+    /// The driver's own monotonic clock, started at construction. It is the
+    /// only clock the windows below ever see, and it is read exactly twice per
+    /// tick — the stamps have to come from one source or a rate computed from
+    /// two of them would be nonsense.
+    QElapsedTimer mSinceStart;
+    /// One stamp per frame ANYBODY drew (this loop's, and every host loop that
+    /// calls noteExternalFrame).
+    framewindows::EventWindow mDrawn{ framewindows::kDrawnRateWindowMs };
+    /// One stamp per frame over the hitch threshold.
+    framewindows::EventWindow mSlow{ framewindows::kSlowFrameWindowMs };
+    /// `mSinceStart` in ms — one call, so every stamp in one tick agrees.
+    double nowMs() const { return double(mSinceStart.nsecsElapsed()) / 1.0e6; }
 };
 
 #endif // ENGINERENDERDRIVER_H

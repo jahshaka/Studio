@@ -83,10 +83,20 @@ void AddConnectionCommand::undo()
 
 void AddConnectionCommand::redo()
 {
+	// A SCENE THAT REFUSES THE WIRE MUST NOT BE ASKED FOR ITS ID
+	// (PRESET-UNIFY-1 fix round 2). This mutated the MODEL first and then
+	// dereferenced whatever `GraphNodeScene::addConnection` answered — and a
+	// read-only scene answers nullptr. Dragging a wire on a shipped preset
+	// was a SEGV. The press is refused at source now; this is the second
+	// belt, because a command that assumes its scene will do as it is told is
+	// one refusal away from a crash whatever the reason for the refusal.
 	auto conModel = scene->nodeGraph->addConnection(leftNodeId, this->left, rightNodeId, this->right);
-	
-	
 	auto con = scene->addConnection(leftNodeId, this->left, rightNodeId, this->right);
+	if (!con || !conModel) {
+		if (conModel) scene->nodeGraph->removeConnection(conModel->id);
+		UndoRedo::redo();
+		return;
+	}
 	connectionID = con->connectionId = conModel->id; // very important!
 	
 

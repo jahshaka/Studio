@@ -24,6 +24,7 @@ class Subscriber;
 
 #include <QListWidget>
 #include <QTreeWidgetItem>
+#include <QCheckBox>
 #include <QWidget>
 #include <QFileDialog>
 #include <QLineEdit>
@@ -240,6 +241,11 @@ public:
 	AssetItem assetItem;
 
 	int activeFilter = -1;
+	/// "Show member textures" (MATERIAL_BUNDLE_SPEC V-2): off = the pictures
+	/// that arrived inside a material bundle are part of it, not tiles of
+	/// their own. Persisted as `tray_show_members`.
+	bool showMembers = false;
+	QCheckBox *showMembersBox = nullptr;
 	/// A pin change for the open project queued a repopulate (coalesced).
 	bool membershipRefreshPending = false;
 
@@ -370,7 +376,6 @@ protected slots:
     void deleteTreeFolder();
     void deleteItem();
     void openAtFolder();
-	void createShader();
     void createSky();
     void createFolder();
     void importAssetB();
@@ -399,6 +404,15 @@ private:
 	// pin + refresh back on the UI thread. One batch at a time.
 	ImportBatchRunner *importRunner = nullptr;
 	QStringList importErrors;
+	/// MODELS IMPORTED HERE STILL OWE A THUMBNAIL (THUMBS-1 item 3). The
+	/// editor tray's import ran the pipeline and pinned the row and then
+	/// stopped — it never asked for the render the Assets page's tail asks
+	/// for, so a model dragged into the TRAY got a generic type icon for
+	/// ever. Drained one per event-loop turn, like the page's tail queue, so
+	/// a batch of models never holds the UI thread.
+	QStringList thumbnailBacklog;
+	/// Renders and stores one backlog entry, then re-arms itself for the next.
+	void drainThumbnailBacklog();
 
     QString currentPath;
 

@@ -1,0 +1,72 @@
+// scripting.e2e.material_share_import — the far side of the share file
+// (MATERIAL_BUNDLE_SPEC §5, owner Q5).
+//
+// This process runs on a library that has NEVER seen the material, the
+// picture or the project that made them: its own HOME and its own data root,
+// wiped before the run. All it is given is the file
+// scripting.e2e.material_share exported.
+//
+// "material bundles are great if they are self-contained, makes them
+// portable" — the owner's words. Self-contained means the definition AND the
+// member's bytes are inside the file, because nothing on this side can
+// supply either.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+// A LIBRARY THAT HAS NEVER SEEN ANY OF THIS. Not an EMPTY one: a fresh
+// install seeds the shipped material presets and their maps at first run
+// (MATERIAL_BUNDLE_SPEC phase 3 — they are the app's own content, like the
+// default floor's tile), so what this asserts is the thing the suite is
+// actually about — nothing here came from the other machine.
+var shippedMaterials = assets.list({ scope: "store", type: "material" }).filter(function (a) {
+    return a.guid.indexOf("00000000-0000-0000-0000-00000000") === 0;
+}).length;
+assert(shippedMaterials === 0 || shippedMaterials === 20,
+       "the only materials here are the app's own shipped presets (" + shippedMaterials + ")");
+
+var proj = project.create("Share Import " + Date.now());
+assert(proj.length > 10, "a project to import into");
+
+var landed = assets.import("@SHARE_PATH@");
+assert(landed && landed.length > 10, "assets.import took the share file -> " + landed);
+
+var types = {};
+assets.list({ scope: "store" }).forEach(function (a) { types[a.guid] = a.type; });
+assert(types[landed] === "material", "what landed is a MATERIAL (" + types[landed] + ")");
+assert(assets.list({ scope: "store", type: "shader" }).length === 0,
+       "no ModelTypes::Shader row exists on this side either");
+
+// THE MEMBER TRAVELLED, bytes and all.
+var members = materials.members(landed);
+assert(members.length === 1, "the bundle still has its member: " + JSON.stringify(members));
+assert(("" + members[0].name).length > 0, "which resolves to a row in THIS library");
+assert(("" + members[0].guid).indexOf("/") === -1, "named by guid, never a path");
+assert(members[0].bytes > 0, "and its BYTES are here (" + members[0].bytes + ")");
+
+// ...and the project that imported it holds it.
+assert(members[0].pinned === true, "the importing project pins the member");
+
+// V-2 SURVIVES THE TRIP: the picture is still part of the bundle, not a tile.
+function trayGuids(opts) {
+    var o = { scope: "project", tray: true };
+    for (var k in opts) o[k] = opts[k];
+    return assets.list(o).map(function (a) { return a.guid; });
+}
+assert(trayGuids({}).indexOf(members[0].guid) === -1,
+       "the member is not a second tile here either");
+assert(trayGuids({ members: true }).indexOf(members[0].guid) >= 0,
+       "and 'Show member textures' finds it");
+
+// THE PROOF THE OWNER WOULD LOOK AT: put it on a mesh and the picture is there.
+var cube = scene.addPrimitive("Cube");
+assert(cube && cube.length > 0, "a cube");
+assert(material.apply(cube, landed) === true, "the imported material applies");
+var worn = material.get(cube);
+assert(("" + worn.baseColorMap).length > 0,
+       "the mesh wears a RESOLVED baseColorMap on a machine that never had the image");
+
+project.close();
+console.log("material_share_import e2e passed");

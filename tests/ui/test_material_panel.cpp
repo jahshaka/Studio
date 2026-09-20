@@ -757,11 +757,17 @@ static void testRefillKeepsTheRows()
 // count did not move", so a count-only guard fails every assertion below.
 static void testMaterialComboFollowsTheLibrary()
 {
+    // THE SESSION ENTRIES ARE MATERIALS (MATERIAL_BUNDLE_SPEC phase 2): a
+    // material is ONE ModelTypes::Material row and hydrates as an
+    // AssetMaterial, which is what the combo lists now. They stood for the
+    // module's separate ModelTypes::Shader asset here because that is what a
+    // graph material USED to be; the rule under test — the combo follows the
+    // library's LIST, not its item count — is untouched.
     AssetManager::clearAssetList();
-    auto *brick = new AssetShader;
+    auto *brick = new AssetMaterial;
     brick->assetGuid = QStringLiteral("mat-brick");
     brick->fileName  = QStringLiteral("Brick.material");
-    auto *chrome = new AssetShader;
+    auto *chrome = new AssetMaterial;
     chrome->assetGuid = QStringLiteral("mat-chrome");
     chrome->fileName  = QStringLiteral("Chrome.material");
     AssetManager::addAsset(brick);
@@ -800,7 +806,7 @@ static void testMaterialComboFollowsTheLibrary()
           "rename: ...with the node's own material still selected");
 
     // ---- DELETE ONE, ADD ANOTHER (the count never moves) -----------------
-    auto *velvet = new AssetShader;
+    auto *velvet = new AssetMaterial;
     velvet->assetGuid = QStringLiteral("mat-velvet");
     velvet->fileName  = QStringLiteral("Velvet.material");
     AssetManager::replaceAssets(QStringLiteral("mat-chrome"), velvet);

@@ -2,6 +2,7 @@
     "name"              : "Mirror PBR",
     "material_type"     : "PBR",
     "icon"              : "../../shadergraph/silverThumb.png",
+    "graph"             : "graphs/Mirror-pbr.effect",
     "baseColor"         : "#FFFFFF",
     "metallic"          : 1.0,
     "roughness"         : 0.02,

@@ -60,10 +60,12 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 
 #include "commands/addscenenodecommand.h"
 #include "commands/changematerialcommand.h"
+#include "commands/pinassetcommand.h"
 #include "commands/resetmaterialcommand.h"
 #include "commands/deletescenenodecommand.h"
 #include "commands/nodeeditcommand.h"
 #include "data/constants.h"
+#include "data/primitives.h"
 #include "services/assethelper.h"
 #include "services/meshbakestore.h"
 #include "services/editgate.h"
@@ -75,6 +77,9 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/nodenaming.h"
 #include "services/imagematerial.h"
 #include "services/materialdefaults.h"
+#include "services/materialbundle.h"
+#include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
 #include "services/scenenodehelper.h"
@@ -85,7 +90,9 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "io/assetmanager.h"
 #include "io/ziphelper.h"
 #include "io/materialreader.h"
+#include "io/materialpresets.h"
 #include "io/builtinmaterials.h"
+#include "services/materialpreviewservice.h"
 #include "io/scenereader.h"
 #include "io/scenewriter.h"
 #include "services/selectionservice.h"
@@ -157,35 +164,13 @@ void SceneEditService::addTorus()    { addPrimitive(QStringLiteral("Torus")); }
 void SceneEditService::addSphere()   { addPrimitive(QStringLiteral("Sphere")); }
 void SceneEditService::addCylinder() { addPrimitive(QStringLiteral("Cylinder")); }
 void SceneEditService::addPyramid()  { addPrimitive(QStringLiteral("Pyramid")); }
-void SceneEditService::addTeapot()   { addPrimitive(QStringLiteral("Teapot")); }
-void SceneEditService::addSponge()   { addPrimitive(QStringLiteral("Sponge")); }
-void SceneEditService::addSteps()    { addPrimitive(QStringLiteral("Steps")); }
-void SceneEditService::addGear()     { addPrimitive(QStringLiteral("Gear")); }
-
-namespace {
-/// The shipped primitives, as ONE table: the name the verb and the drop use,
-/// the bundled mesh, and the node name. It replaces a fall-through chain of
-/// thirteen `if`s that had to be edited in two places to grow an argument
-/// ("Ground" was once missing from it entirely — AI_SURFACE_AUDIT #16).
-struct PrimitiveDef { const char *name; const char *mesh; const char *nodeName; };
-const PrimitiveDef kPrimitiveDefs[] = {
-    { "Ground",   ":/models/ground.obj",                "Ground"   },
-    { "Plane",    ":/content/primitives/plane.obj",     "Plane"    },
-    { "Cone",     ":/content/primitives/cone.obj",      "Cone"     },
-    { "Cube",     ":/content/primitives/cube.obj",      "Cube"     },
-    { "Cylinder", ":/content/primitives/cylinder.obj",  "Cylinder" },
-    { "Sphere",   ":/content/primitives/sphere.obj",    "Sphere"   },
-    { "Torus",    ":/content/primitives/torus.obj",     "Torus"    },
-    // Named "Plane" from the original addCapsule() until 2026-09-17 (the
-    // extraction preserved it; the render audit's A10 caught it).
-    { "Capsule",  ":/content/primitives/capsule.obj",   "Capsule"  },
-    { "Gear",     ":/content/primitives/gear.obj",      "Gear"     },
-    { "Pyramid",  ":/content/primitives/pyramid.obj",   "Pyramid"  },
-    { "Teapot",   ":/content/primitives/teapot.obj",    "Teapot"   },
-    { "Sponge",   ":/content/primitives/sponge.obj",    "Sponge"   },
-    { "Steps",    ":/content/primitives/steps.obj",     "Steps"    },
-};
-}   // namespace
+void SceneEditService::addStar()     { addPrimitive(QStringLiteral("Star")); }
+void SceneEditService::addWedge()    { addPrimitive(QStringLiteral("Wedge")); }
+void SceneEditService::addTube()     { addPrimitive(QStringLiteral("Tube")); }
+void SceneEditService::addHemisphere() { addPrimitive(QStringLiteral("Hemisphere")); }
+// (addTeapot / addSponge / addSteps / addGear are DELETED — owner review R6:
+// PRIMITIVES ONLY. The four slots were dead in MainWindow too; nothing but
+// this line ever called them.)
 
 void SceneEditService::pinBuiltinPrimitives()
 {
@@ -198,21 +183,20 @@ void SceneEditService::pinBuiltinPrimitives()
     // worker. They are a few kilobytes each, compiled into the binary, and
     // there is a fixed number of them — the one case where holding the parse
     // is right. Registering does not parse: the first add or load does.
-    QStringList paths;
-    for (const auto &def : kPrimitiveDefs) paths << QLatin1String(def.mesh);
-    iris::Mesh::pinLoadPaths(paths);
+    iris::Mesh::pinLoadPaths(primitives::pinnedMeshPaths());
 }
 
 void SceneEditService::addPrimitive(const QString &text,
                                     const std::optional<iris::Vec3> &position,
                                     surfaceplacement::Placement placement)
 {
-    for (const auto &def : kPrimitiveDefs) {
-        if (text == QLatin1String(def.name)) {
-            addBuiltinPrimitive(QLatin1String(def.mesh), QLatin1String(def.nodeName), position,
-                                placement);
-            return;
-        }
+    // ONE TABLE (src/data/primitives.h). The node takes the row's NAME as its
+    // own — there is no separate "node name" column any more: the two were
+    // equal for every row but Capsule, where the second copy said "Plane" and
+    // had done since the original addCapsule() (the render audit's A10).
+    if (const primitives::Def *def = primitives::byName(text)) {
+        addBuiltinPrimitive(QLatin1String(def->mesh), QLatin1String(def->name), position,
+                            placement);
     }
 }
 
@@ -1212,6 +1196,20 @@ namespace {
 // that container to the material paths — a mesh-only guard silently dropped
 // the apply on the floor (the "PBR materials lost on reopen" data loss: the
 // materials never entered the document, so the writer had nothing to save).
+/// The scene node with this guid, or null. (One local walk: the scripting
+/// modules' findNodeByGuid lives in their own shared header and this file may
+/// not include it.)
+iris::SceneNodePtr findSceneNodeByGuid(const iris::SceneNodePtr &node, const QString &guid)
+{
+    if (!node) return iris::SceneNodePtr();
+    if (node->getGUID() == guid) return node;
+    for (const auto &child : node->children()) {
+        auto hit = findSceneNodeByGuid(child, guid);
+        if (hit) return hit;
+    }
+    return iris::SceneNodePtr();
+}
+
 void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &out)
 {
     if (!node) return;
@@ -1220,176 +1218,167 @@ void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &
     for (const auto &child : node->children()) collectMeshNodes(child, out);
 }
 
-// Builds a fresh material instance from a preset.
-//
-// ONE line since HLMS_ADOPTION P4b: both preset flavours produce a PbrMaterial,
-// and the conversion lives with every other legacy-material translation
-// (io/builtinmaterials.h) rather than in a copy here and a second copy in the
-// asset panel — which is what it was.
-iris::MaterialPtr materialFromPreset(const MaterialPreset &preset)
-{
-    return BuiltinMaterials::fromPreset(preset);
-}
-
 } // namespace
 
-void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
+iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid) const
 {
-    applyMaterialPreset(preset, selection->selected());
-}
+    if (presetOrGuid.isEmpty()) return iris::MaterialPtr();
 
-void SceneEditService::applyMaterialPreset(const MaterialPreset &shippedPreset, iris::SceneNodePtr target)
-{
-    QList<iris::MeshNodePtr> meshes;
-    collectMeshNodes(target, meshes);
-    if (meshes.isEmpty()) return;
-    if (editgate::refuse()) return;             // the edit gate, as in deleteNodes
+    bool isPreset = false;
+    const MaterialPreset preset = MaterialPresets::find(presetOrGuid, &isPreset);
+    if (isPreset) return BuiltinMaterials::fromPreset(preset);
 
-    // THE PRESET'S MAPS ARE LIBRARY TEXTURES (plan item 15c). A preset names
-    // files the app ships (app/content/materials/presets/...). Each one goes
-    // through the ONE import pipeline the first time any project uses it —
-    // identified by its bytes, so a second apply, a second project or the
-    // user importing the same image all land on the same row — and is pinned
-    // into this project; the material then holds the PINNED STORE OBJECT,
-    // which is what the scene writer's CAS lookup turns back into the guid on
-    // save. Resolved BEFORE the materials are built, so every per-mesh
-    // instance and the registered material asset agree.
-    //
-    // It used to register a bare row per file NAME, found again on the next
-    // apply by Database::fetchAssetGUIDByName, while the material itself kept
-    // pointing at the shipped file — so the writer could only recover the
-    // guid through its by-name fallback (deleted with this). With no project
-    // open the shipped files are used as they are.
-    MaterialPreset preset = shippedPreset;
-    QStringList textureGuids;
-    for (QString *slot : { &preset.diffuseTexture, &preset.normalTexture,
-                           &preset.baseColorMap, &preset.metallicMap, &preset.roughnessMap,
-                           &preset.pbrNormalMap, &preset.emissiveMap }) {
-        // A preset naming a missing file keeps the name: setValue clears the
-        // slot for it exactly as it always did.
-        if (slot->isEmpty() || !QFileInfo(*slot).isFile()) continue;
-        const ShippedAssets::Pinned pinned =
-            ShippedAssets::pinTexture(*slot, QString(), db, project,
-                                      ShippedAssets::Ownership::Project);
-        if (!pinned.error.isEmpty()) {
-            irisLog("applyMaterialPreset: '" + *slot + "' was not pinned - " + pinned.error);
-            continue;
-        }
-        *slot = pinned.path;
-        if (!pinned.guid.isEmpty() && !textureGuids.contains(pinned.guid))
-            textureGuids.append(pinned.guid);
+    if (!db) return iris::MaterialPtr();
+
+    // A MATERIAL row: its stored definition, dispatched on the materialType the
+    // writer stamps. This is the same call applyMaterialAsset makes, which is
+    // the whole point — what the hover shows and what the drop commits cannot
+    // be two different readings of one row.
+    MaterialReader reader;
+    reader.setProject(project);
+    const AssetRecord row = db->fetchAsset(presetOrGuid);
+    if (row.type == static_cast<int>(ModelTypes::Material)) {
+        // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2/F11):
+        // a project renders the version it was built with, not whatever the
+        // library row holds now. Falls back to the row blob for a material
+        // that has no stored definition yet.
+        const QJsonObject matObject = MaterialBundle::read(db, presetOrGuid, project);
+        if (matObject.isEmpty()) return iris::MaterialPtr();
+        return reader.parseMaterialTyped(matObject, db);
     }
 
-    // Each mesh gets its OWN instance: sharing one material across nodes makes
-    // a later per-node edit bleed across the whole model. One undo entry
-    // reverses the whole apply (a preset landing on a model root repaints
-    // every descendant mesh — that has to be reversible).
-    iris::MaterialPtr mat;
-    undo->stack()->beginMacro(QObject::tr("Apply Material Preset"));
+    // (THE SHADER BRANCH IS GONE — MATERIAL_BUNDLE_SPEC phase 2's Deletes
+    // column. A ModelTypes::Shader row was the Materials module's separate
+    // graph asset; there is one MATERIAL row now, with the graph as a payload
+    // of its definition, and nothing in the app can mint the old kind.)
+    return iris::MaterialPtr();
+}
+
+bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNodePtr target)
+{
+    if (presetOrGuid.isEmpty() || !target) return false;
+
+    // A BORROWED MATERIAL MUST NOT BE THE ONE THE UNDO STEP CAPTURES. The hover
+    // preview lends the mesh's slot; if it were still live here the command
+    // would record the PREVIEW as the "original" and an undo would leave the
+    // user with a material they never applied. Ending it first is also what
+    // lets the mirror charge the commit — and only the commit — a GI re-solve.
+    if (preview) preview->end();
+
+    // NOTHING IS IMPORTED FOR AN APPLY THAT CANNOT HAPPEN (fix round F6). The
+    // mesh-empty test and the edit gate live inside the two applies below, so
+    // seeding first meant that double-clicking a preset with a LIGHT selected
+    // — the tray passes the selection with no type check — imported three
+    // PNGs, minted a row and paid for it, and then returned false. Both
+    // questions are asked here, once, before anything is written down.
+    {
+        QList<iris::MeshNodePtr> meshes;
+        collectMeshNodes(target, meshes);
+        if (meshes.isEmpty()) return false;
+    }
+    if (editgate::refuse()) return false;
+
+    // A PRESET IS A LIBRARY BUNDLE (phase 3). Seeded the first time anybody
+    // uses it — with its reserved guid, its maps as member textures and its
+    // definition in the store — and then applied like any other material
+    // asset: a PIN and a document edit. That is what makes three applies of
+    // "Gold PBR" produce ZERO new rows where they used to mint one each, and
+    // what lets an undo take the membership back with the material.
+    //
+    // THE BYTES ARE USUALLY ALREADY IN THE STORE when this runs: the seeder
+    // (services/materialpresetseeder.h) puts every preset's maps there on a
+    // worker at launch, so the import here takes `AssetCas::storeObject`'s
+    // dedup branch and writes no bytes and no fsync. A drop that beats the
+    // seeder still works — it just pays for its own maps, as it did before
+    // the seeder existed.
+    QString materialGuid = presetOrGuid;
+    if (MaterialPresetAssets::isPreset(presetOrGuid)) {
+        // ONE IMPORTER AT A TIME (see MaterialPresetSeeder::finishNow): a
+        // drop that beats the launch seed takes the job over rather than
+        // racing it into two Texture rows for one picture.
+        MaterialPresetSeeder::instance().finishNow();
+        QString error;
+        materialGuid = MaterialPresetAssets::ensureSeeded(presetOrGuid, db, &error);
+        if (materialGuid.isEmpty()) {
+            // A SESSION WITH NO LIBRARY, or a preset whose maps this build
+            // does not ship: the material is still applied, from the shipped
+            // values, because refusing to paint the mesh would be the worse
+            // answer — there is simply no row to pin.
+            irisLog("applyMaterial: '" + presetOrGuid + "' was not seeded - " + error);
+            return applyResolvedMaterial(presetOrGuid, target);
+        }
+    }
+
+    if (!db) return false;
+    // ONE APPLY, because there is one kind of material row (phase 2's
+    // Deletes: `applyMaterialShader`, the second dispatcher for the module's
+    // old graph asset, is gone with the rows it served).
+    return applyMaterialAsset(materialGuid, target);
+}
+
+bool SceneEditService::applyResolvedMaterial(const QString &presetOrGuid,
+                                             iris::SceneNodePtr target)
+{
+    // THE LIBRARY-LESS FALLBACK, and the only apply that stores nothing: the
+    // material is built from what `resolveMaterial` reads and pushed per mesh.
+    // A fresh instance each, because `MeshNode::setMaterial` mutates what it
+    // is handed.
+    QList<iris::MeshNodePtr> meshes;
+    collectMeshNodes(target, meshes);
+    if (meshes.isEmpty()) return false;
+    if (editgate::refuse()) return false;
+
+    iris::MaterialPtr probe = resolveMaterial(presetOrGuid);
+    if (!probe) return false;
+
+    undo->stack()->beginMacro(QObject::tr("Apply Material"));
     for (const auto &meshNode : meshes) {
-        mat = materialFromPreset(preset);
+        auto mat = resolveMaterial(presetOrGuid);
+        if (!mat) continue;
         undo->push(new ChangeMaterialCommand(meshNode, mat));
     }
     undo->stack()->endMacro();
-
-    // The registration tail below (matgen.material, asset entry, thumbnail) is
-    // per-APPLY, not per-mesh; only the Object->Material dependency rows are
-    // per-mesh. It is PROJECT state: with no project open (the startup
-    // placeholder, a script that never created one) the material is applied
-    // and nothing is registered — this used to insert a "Presets" folder and a
-    // Material row with an EMPTY project guid into the library, and write
-    // matgen.material into the working directory (Project::createNew's folder
-    // was the CWD until plan item 15c).
-    if (!project || project->getProjectGuid().isEmpty()) {
-        emit materialApplied(preset.type);
-        return;
-    }
-
-    // The existing folder's guid, or a new folder — see addParticleSystem: the
-    // fresh-guid-either-way shape filed every preset after the first under a
-    // folder nothing owned.
-    const QString fguid = db->ensureFolder(QStringLiteral("Presets"),
-                                           project->getProjectGuid(), false);
-    if (fguid.isEmpty()) return;
-
-    QJsonObject material;
-    SceneWriter::writeSceneNodeMaterial(material, mat);
-
-    QFile jsonFile(QDir(project->getProjectFolder()).filePath("matgen.material"));
-    jsonFile.open(QFile::WriteOnly);
-    jsonFile.write(QJsonDocument(material).toJson());
-
-    QString guid = db->createAssetEntry(
-        GUIDManager::generateGUID(),
-        preset.name,
-        static_cast<int>(ModelTypes::Material),
-        fguid,
-        project->getProjectGuid(),
-        QString(),      // license
-        QString(),      // author
-        QByteArray(),   // thumbnail
-        QByteArray(),   // properties
-        QByteArray(),   // tags
-        // The material definition goes into the ASSET column. One missing
-        // argument used to shift it into `tags`, leaving every registered
-        // preset material an empty shell — un-appliable and hydrating broken.
-        QJsonDocument(material).toJson()
-    );
-
-    for (const auto &textureGuid : textureGuids) {
-        db->createDependency(
-            static_cast<int>(ModelTypes::Material),
-            static_cast<int>(ModelTypes::Texture),
-            guid,
-            textureGuid,
-            project->getProjectGuid()
-        );
-    }
-
-    ThumbnailGenerator::getSingleton()->requestThumbnail(
-        ThumbnailRequestType::Material, QDir(project->getProjectFolder()).filePath("matgen.material"), guid
-    );
-
-    emit assetViewRefreshRequested();
-
-    for (const auto &meshNode : meshes) {
-        db->createDependency(
-            static_cast<int>(ModelTypes::Object),
-            static_cast<int>(ModelTypes::Material),
-            meshNode->getGUID(),
-            guid,
-            project->getProjectGuid()
-        );
-    }
-
-    // TODO: update node's material without updating the whole ui
-    emit materialApplied(preset.type);
+    emit materialApplied(QStringLiteral("PBR"));
+    return true;
 }
+
+// (THE ROW-PER-APPLY TAIL IS GONE — MATERIAL_BUNDLE_SPEC phase 3's Deletes
+// column, the materials audit's F5.)
+//
+// Applying a preset used to mint PROJECT BOOKKEEPING: an "Presets" folder,
+// a Material row carrying a copy of the preset's values (one per preset per
+// project after PRESETS-1 — one per APPLY before it, which is why the
+// owner's library held "Gold PBR" three times), a `matgen.material` file
+// written only so a thumbnail request had a path to read, and hand-written
+// Material->Texture and Object->Material dependency rows. None of it was in
+// the undo stack, so an undone apply left every bit of it behind.
+//
+// A preset is a library bundle with a reserved guid now
+// (services/materialpresetassets.h): the definition and the membership edges
+// are the BUNDLE's, written once when it is seeded; the project's claim on
+// it is a PIN, pushed as a command inside the apply's macro; and the
+// thumbnail is the row's, rendered by the thumbnail service like every other
+// material's. `applyMaterialAsset` below is the whole apply.
+
 
 bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target)
 {
+    // A preview ends BEFORE a command is BUILT, not at its push: the command's
+    // constructor is what captures "the original" (the read of the code review,
+    // F1 — UndoService's pre-push hook runs after that and is only the backstop).
+    if (preview) preview->end();
     if (editgate::refuse()) return false;       // the edit gate, as in deleteNodes
     QList<iris::MeshNodePtr> meshes;
     collectMeshNodes(target, meshes);
     if (meshes.isEmpty()) return false;
 
-    const QJsonObject matObject =
-        QJsonDocument::fromJson(db->fetchAssetData(assetGuid)).object();
+    const QJsonObject matObject = MaterialBundle::read(db, assetGuid, project);
     if (matObject.isEmpty()) return false;
 
     MaterialReader reader;
     reader.setProject(project);
 
     undo->stack()->beginMacro(QObject::tr("Apply Material"));
-    for (const auto &meshNode : meshes) {
-        // Fresh instance per mesh; parseMaterialTyped dispatches on the stored
-        // materialType, so a saved PBR material comes back as a real
-        // PbrMaterial instead of a broken shader-less CustomMaterial.
-        auto mat = reader.parseMaterialTyped(matObject, db);
-        if (!mat) continue;
-        undo->push(new ChangeMaterialCommand(meshNode, mat));
-    }
-    undo->stack()->endMacro();
 
     // APPLYING IS A USE (lane L13): the project carries what its scene uses,
     // so a library material applied by guid is pinned in as a BINDING (a
@@ -1400,23 +1389,43 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     // made with a project open records it) that the project does not pin yet:
     // addToProject re-pins to the library's CURRENT version, which would
     // silently upgrade an older pin.
+    //
+    // AND IT IS INSIDE THE MACRO NOW, as a COMMAND (the audit's F5, phase 3).
+    // It was a bare service call after `endMacro`, so undoing an apply left
+    // the pin — the material stayed in the project's tray with its textures,
+    // and nothing the user could press took it back. Pushed FIRST so the
+    // undo unwinds it LAST: the document stops wearing the material before
+    // the project stops holding it.
     if (project && !project->getProjectGuid().isEmpty()) {
         const AssetRecord row = db->fetchAsset(assetGuid);
         const bool libraryRow = row.view_filter == AssetViewFilter::AssetsView
                                 || row.view_filter == AssetViewFilter::Effects;
         if (libraryRow && !db->isAssetPinnedBy(project->getProjectGuid(), assetGuid))
-            ProjectAssets::addToProject(assetGuid, db, project, ProjectAssets::AddKind::Binding);
+            undo->push(new PinAssetCommand(db, project, assetGuid));
     }
+
     for (const auto &meshNode : meshes) {
-        db->deleteDependency(meshNode->getGUID(), assetGuid);
-        db->createDependency(
-            static_cast<int>(ModelTypes::Object),
-            static_cast<int>(ModelTypes::Material),
-            meshNode->getGUID(),
-            assetGuid,
-            project->getProjectGuid()
-        );
+        // Fresh instance per mesh; parseMaterialTyped dispatches on the stored
+        // materialType, so a saved PBR material comes back as a real
+        // PbrMaterial instead of a broken shader-less CustomMaterial.
+        auto mat = reader.parseMaterialTyped(matObject, db);
+        if (!mat) continue;
+        undo->push(new ChangeMaterialCommand(meshNode, mat));
     }
+    // THE USE EDGES, INSIDE THE MACRO AND AS COMMANDS (fix round F7). "This
+    // mesh uses that material" was written after `endMacro` and nothing took
+    // it back, so an undone apply left the catalog asserting a use that no
+    // longer existed — the same leftover as the pin, one level down. With no
+    // project open there is nobody to record it for (a preset applied in the
+    // startup placeholder session reaches here now that presets are ordinary
+    // material assets; it renders, and nothing is written down).
+    if (project && !project->getProjectGuid().isEmpty()) {
+        for (const auto &meshNode : meshes)
+            undo->push(new MaterialUseEdgeCommand(db, project->getProjectGuid(),
+                                                  meshNode->getGUID(), assetGuid));
+    }
+
+    undo->stack()->endMacro();
 
     emit materialApplied(matObject["materialType"].toString() == "pbr"
                              ? QStringLiteral("PBR")
@@ -1424,8 +1433,75 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     return true;
 }
 
+void SceneEditService::requestAssetViewRefresh()
+{
+    emit assetViewRefreshRequested();
+}
+
+int SceneEditService::refreshMaterialUsers(const QString &materialGuid)
+{
+    if (materialGuid.isEmpty() || !db) return 0;
+    // A BORROWED MATERIAL MUST NOT BE CLOBBERED (the rule its five siblings in
+    // this file already follow). A refresh landing mid-hover would replace the
+    // slot the preview lent, and the drag-leave restore would then put the
+    // PREVIOUS material back — silently undoing the refresh. Ending the
+    // preview first makes the restore a no-op.
+    if (preview) preview->end();
+
+    auto root = scene() ? scene()->getRootNode() : iris::SceneNodePtr();
+    if (!root) return 0;
+    const QString projectGuid = project ? project->getProjectGuid() : QString();
+
+    // NOTHING CHANGED, NOTHING MOVES. This runs on the graph page's 1.5 s
+    // autosave — while the user types — and handing a mesh a fresh material
+    // POINTER is a re-attach to the mirror, which invalidates the GI caches
+    // WHOLE (every cascade re-voxelises, in and out; ledger 804-805). The
+    // content-addressed store makes the guard exact and free: a save that
+    // produced the same definition produced the same OID, so comparing the
+    // material's effective content id with the one this scene was last
+    // dressed from answers "did anything change?" with no parse and no walk.
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString oid = projectGuid.isEmpty()
+                            ? AssetCas::sourceOid(conn, materialGuid)
+                            : AssetCas::pinnedOid(conn, projectGuid, materialGuid);
+    const QString effective = oid.isEmpty() ? AssetCas::sourceOid(conn, materialGuid) : oid;
+    if (!effective.isEmpty() && mDressedFrom.value(materialGuid) == effective) return 0;
+
+    // THE DEFINITION IS READ ONCE. `resolveMaterial` is a store read plus a
+    // JSON parse plus a texture resolve per call, and it used to be called
+    // once PER MESH — ninety reads of one file to dress ninety meshes. The
+    // read happens here; the INSTANCE is still built per mesh, because
+    // `MeshNode::setMaterial` mutates what it is handed (SKINNING_ENABLED and
+    // friends), so a shared instance across two meshes is a defect waiting
+    // for a skinned one.
+    const QJsonObject definition = MaterialBundle::read(db, materialGuid, project);
+    if (definition.isEmpty()) return 0;
+    MaterialReader reader;
+    reader.setProject(project);
+
+    int redressed = 0;
+    for (const QString &nodeGuid : db->fetchDependers(materialGuid, projectGuid)) {
+        auto node = findSceneNodeByGuid(root, nodeGuid);
+        if (!node) continue;
+        QList<iris::MeshNodePtr> meshes;
+        collectMeshNodes(node, meshes);
+        for (const auto &meshNode : meshes) {
+            auto mat = reader.parseMaterialTyped(definition, db);
+            if (!mat) continue;
+            meshNode->setMaterial(mat);
+            ++redressed;
+        }
+    }
+    if (!effective.isEmpty()) mDressedFrom.insert(materialGuid, effective);
+    return redressed;
+}
+
 bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
 {
+    // A preview ends BEFORE a command is BUILT, not at its push: the command's
+    // constructor is what captures "the original" (the read of the code review,
+    // F1 — UndoService's pre-push hook runs after that and is only the backstop).
+    if (preview) preview->end();
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
     // The edit gate (round 2, item 10), before the work: this verb PINS the
     // default material's textures into the project database on its way to the
@@ -1534,10 +1610,10 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
             }
         }
 
-        auto assetMat = new AssetMaterial;
-        assetMat->assetGuid = assetGuid;
-        assetMat->setValue(QVariant::fromValue(material));
-        AssetManager::addAsset(assetMat);
+        // No AssetManager material payload (MATERIAL-PREVIEW-1 item c): the
+        // session registry carries guids and names, never hydrated materials.
+        // The one reader there ever was — the viewport's hover preview —
+        // resolves through resolveMaterial now.
 
         // it's assumed that the thumbnail rendering will
         // be finished by the time this is executed

@@ -2,6 +2,7 @@
     "name"                : "Sand PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/sand.png",
+    "graph"               : "graphs/sand-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/sand/Ground10_1_COLOR.png",
     "metallic"            : 0.0,

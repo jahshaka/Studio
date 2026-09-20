@@ -13,6 +13,9 @@ add_executable(test_script_engine test_script_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apimodule.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apiregistry.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp
+    # the one flag ScriptEngine::stop sets so a stopped script's thumbnail
+    # sweep stops too (THUMBS-1 F1) — a TU with no dependencies of its own
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
     # The worker thread + the verb bridge: the script engine IS these three
     # objects since it moved off the UI thread (SCRIPTING_LIVE_SPEC), and the
     # unit test drives its fake module through the same dispatch the app uses.
@@ -141,6 +144,16 @@ add_script_e2e(fragments e2e_fragments.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+
+# THE LIVE HOVER PREVIEW, for every material source (MATERIAL-PREVIEW-1). The
+# owner found it working for a material made from an image and dead for the
+# tray and the Materials module; it was one QVariant static-type mismatch, and
+# nothing covered it. Drives material.preview/endPreview for four sources and
+# asserts the whole contract: restore on move, restore on end, no undo step, no
+# dirty flag, a save during a preview writes the ORIGINAL, a locked node
+# refuses, an unresolvable payload refuses, and a preset apply reuses its one
+# project row instead of minting a new one per apply.
+add_script_e2e(material_preview e2e_material_preview.js)
 # GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
 # a high oblique view (the two things the owner reported while testing push #18).
 # The document half of the floor is scripting.e2e.default_floor, which is
@@ -280,6 +293,11 @@ add_script_e2e(page_gi e2e_page_gi.js)
 # sampling one" are different readings, and only the renderer knows the second.
 # The pixel half is the gi.ddgi engine suite.
 add_script_e2e(gi_ddgi e2e_gi_ddgi.js)
+# PHOTON-M3 (ogre-patch 0080): the voxel TOTAL volume is a float that holds the
+# bounce's fixed point — the direct term bounded by the ceiling, the bounced
+# total above it in a real set of voxels. Read through world.giVoxelStats: a
+# clipped voxel draws a merely dimmer picture, so only the volume can say it.
+add_script_e2e(gi_voxel_store e2e_gi_voxel_store.js)
 # PHOTON_SPEC §7 E2 (9): the irradiance field rides CASCADE 0 at EVERY TIER.
 # Engine UP for the same reason as gi_ddgi — "the tier says on" and "the shader
 # is sampling a field whose volume is cascade 0's box" are different readings —
@@ -796,6 +814,36 @@ set_tests_properties(scripting.e2e.assets_page PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 180)
+
+# scripting.e2e.thumbnails_order — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
+# A material thumbnail FIRST, a model import SECOND: the renderer named its
+# offscreen View with a fixed string and a second instance could not create it,
+# so every model imported after the session's first material/shader thumbnail
+# stored a NULL image and said nothing ("View 'thumbs' already exists" in the
+# owner's log, and a Qt null-pixmap warning where the tile should have been).
+# Also pins every type's rebuild in one process (object, material, shader,
+# AVATAR — which had no branch at all), the EDITOR TRAY's import (which never
+# asked for a model thumbnail) and the bulk repair for rows already grey.
+# Engine up (no --headless): every assertion is about a render.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_thumbnails_order.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_order)
+# A VIRGIN LIBRARY: the run counts what a sweep finds and which rows a tray
+# import added, and a home carried over from the last run answers both with
+# yesterday's assets.
+add_test(NAME scripting.e2e.thumbnails_order.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.thumbnails_order.fresh_home PROPERTIES
+    FIXTURES_SETUP thumbnailsOrderHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.thumbnails_order
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.thumbnails_order PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED thumbnailsOrderHome
+    LABELS "scripting"
+    TIMEOUT 300)
 
 # scripting.e2e.import_dialog — THE IMPORT DIALOG, DRIVEN
 # (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). ui.import_dialog pins the record the
@@ -1651,3 +1699,172 @@ set_tests_properties(scripting.e2e.atom_lods PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# THE SMOKE OF PUSH #50, AS TWO SUITES (lane SMOKE-FIX-1, 2026-09-18).
+#
+# Both scripts carry their own reasoning; in one line each:
+#   sample_open      — a sample-browser open lands in the EDITOR, through the
+#                      verb the browser's tiles call (the uninitialised
+#                      play-mode flag).
+#   player_no_editor — the Player over a process whose editor page was never
+#                      shown DRAWS, instead of enabling a View with no scene and
+#                      leaving the previous page's pixels on the screen.
+# Both are engine-up (they assert frames), so neither is --headless.
+add_script_e2e(sample_open e2e_sample_open.js)
+# 300 like the other open-and-render suites: it imports an archive and opens it.
+set_tests_properties(scripting.e2e.sample_open PROPERTIES TIMEOUT 300)
+
+configure_file(scripts/e2e_player_no_editor.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_no_editor
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
+         WORKING_DIRECTORY ${_home}/run)
+# JAHSHAKA_TEST_NO_EDITOR_BOOT: the PERSON's boot shape (window up, Desktop
+# page, editor page never shown) instead of the script harness's, which shows
+# the editor page before the script's first line. Without it the editor's
+# engine scene already exists and this suite proves nothing — see the script.
+set_tests_properties(scripting.e2e.player_no_editor PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# scripting.e2e.player_bounce — THE REFUSAL PATH (SMOKE-FIX-1's fix round, F3).
+#
+# The one suite that drives `EnginePlayerView::start` returning false and
+# everything that hangs off it: the bounce back to a page that draws, the
+# reason reaching `app.space()`, the play-mode undo, and the session log's
+# PLAY START / PLAY STOP staying a pair. It needs the attach to fail on a box
+# where it always succeeds, so it sets JAHSHAKA_PLAYER_TEST_NO_ATTACH=1 — the
+# script says why at length, and so does EnginePlayerScene::attach.
+configure_file(scripts/e2e_player_bounce.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.player_bounce
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.player_bounce PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PLAYER_TEST_NO_ATTACH=1"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# scripting.e2e.new_scene — project.create(name, {empty, location}), which IS
+# the New Scene dialog's two new controls (owner review R1 / R1b, lane
+# SMALL-UI-A). Engine up: the default template's sky is a RENDERER fact as much
+# as a document one, and the empty world has to be built by the same route.
+add_script_e2e(new_scene e2e_new_scene.js)
+
+# scripting.e2e.primitives — the ONE primitive table through the VERB (owner
+# review R6 / answer Q4). The table's own contract — the meshes, the tangents,
+# the tile icons, the old-guid mapping — is defaults.primitive_table; this is
+# "every name the drawer offers is a name the verb accepts", plus the retired
+# four refused by name, plus the Mirror Room still opening with its teapot.
+add_script_e2e(primitives e2e_primitives.js)
+
+# scripting.e2e.material_bundle — MATERIAL_BUNDLE_SPEC phase 1, the acceptance
+# flow the spec names: pick an image from disk -> ONE tile -> export -> an
+# EMPTY library -> it still resolves. Two processes, because "an empty library"
+# is not something a verb can fake: the first exports an archive from a normal
+# session, the second runs on its OWN home and data root, wiped before it
+# starts, and is given nothing but that archive.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_material_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle.js @ONLY)
+set(_mbHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_bundle)
+add_test(NAME scripting.e2e.material_bundle.fresh_home
+         COMMAND sh -c "rm -rf '${_mbHome}' && mkdir -p '${_mbHome}/run'")
+set_tests_properties(scripting.e2e.material_bundle.fresh_home PROPERTIES
+    FIXTURES_SETUP materialBundleHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_mbHome}/run)
+add_test(NAME scripting.e2e.material_bundle
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle.js --headless
+         WORKING_DIRECTORY ${_mbHome}/run)
+set_tests_properties(scripting.e2e.material_bundle PROPERTIES
+    ENVIRONMENT "HOME=${_mbHome};JAHSHAKA_DATA_ROOT=${_mbHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED materialBundleHome
+    FIXTURES_SETUP materialBundleArchive
+    LABELS "scripting"
+    TIMEOUT 180)
+
+# scripting.e2e.material_share — MATERIAL_BUNDLE_SPEC phase 2 (owner Q5): ONE
+# material as a self-contained share file. Two processes for the same reason
+# the bundle pair needs two: "a library that has never seen it" is not
+# something a verb can fake.
+set(SHARE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_share.jbundle)
+configure_file(scripts/e2e_material_share.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js @ONLY)
+set(_msHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share)
+add_test(NAME scripting.e2e.material_share.fresh_home
+         COMMAND sh -c "rm -rf '${_msHome}' && mkdir -p '${_msHome}/run' && rm -f '${SHARE_PATH}'")
+set_tests_properties(scripting.e2e.material_share.fresh_home PROPERTIES
+    FIXTURES_SETUP materialShareHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_msHome}/run)
+add_test(NAME scripting.e2e.material_share
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
+         WORKING_DIRECTORY ${_msHome}/run)
+set_tests_properties(scripting.e2e.material_share PROPERTIES
+    ENVIRONMENT "HOME=${_msHome};JAHSHAKA_DATA_ROOT=${_msHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED materialShareHome
+    FIXTURES_SETUP materialShareFile
+    LABELS "scripting"
+    TIMEOUT 180)
+
+configure_file(scripts/e2e_material_share_import.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js @ONLY)
+set(_msiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share_import)
+add_test(NAME scripting.e2e.material_share_import.fresh_home
+         COMMAND sh -c "rm -rf '${_msiHome}' && mkdir -p '${_msiHome}/run'")
+set_tests_properties(scripting.e2e.material_share_import.fresh_home PROPERTIES
+    FIXTURES_SETUP materialShareImportHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_msiHome}/run)
+add_test(NAME scripting.e2e.material_share_import
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
+         WORKING_DIRECTORY ${_msiHome}/run)
+set_tests_properties(scripting.e2e.material_share_import PROPERTIES
+    ENVIRONMENT "HOME=${_msiHome};JAHSHAKA_DATA_ROOT=${_msiHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED "materialShareImportHome;materialShareFile"
+    LABELS "scripting"
+    TIMEOUT 180)
+
+# The far side: a library that has never seen the material, the image or the
+# project, and one archive.
+set(ARCHIVE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_bundle.zip)
+configure_file(scripts/e2e_material_bundle_import.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle_import.js @ONLY)
+set(_mbiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_bundle_import)
+add_test(NAME scripting.e2e.material_bundle_import.fresh_home
+         COMMAND sh -c "rm -rf '${_mbiHome}' && mkdir -p '${_mbiHome}/run'")
+set_tests_properties(scripting.e2e.material_bundle_import.fresh_home PROPERTIES
+    FIXTURES_SETUP materialBundleImportHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_mbiHome}/run)
+add_test(NAME scripting.e2e.material_bundle_import
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle_import.js --headless
+         WORKING_DIRECTORY ${_mbiHome}/run)
+set_tests_properties(scripting.e2e.material_bundle_import PROPERTIES
+    ENVIRONMENT "HOME=${_mbiHome};JAHSHAKA_DATA_ROOT=${_mbiHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED "materialBundleImportHome;materialBundleArchive"
+    LABELS "scripting"
+    TIMEOUT 180)
+
+# scripting.e2e.preset_apply — MATERIAL_BUNDLE_SPEC phase 3: a preset is a
+# READ-ONLY LIBRARY BUNDLE and applying one PINS it. Three applies add ZERO
+# rows after the first seeds the bundle, no "Presets" folder and no
+# matgen.material are minted, a write to a preset is refused by the WRITER,
+# and R18's Customise mints "<Preset>-1" sharing the preset's own maps.
+# Document verbs only -> --headless. A FRESH HOME, because the load-bearing
+# first assertion is that NOTHING is seeded until a preset is used.
+set(_paHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_apply)
+add_test(NAME scripting.e2e.preset_apply.fresh_home
+         COMMAND sh -c "rm -rf '${_paHome}' && mkdir -p '${_paHome}/run'")
+set_tests_properties(scripting.e2e.preset_apply.fresh_home PROPERTIES
+    FIXTURES_SETUP presetApplyHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_paHome}/run)
+add_test(NAME scripting.e2e.preset_apply
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
+         WORKING_DIRECTORY ${_paHome}/run)
+set_tests_properties(scripting.e2e.preset_apply PROPERTIES
+    ENVIRONMENT "HOME=${_paHome};JAHSHAKA_DATA_ROOT=${_paHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED presetApplyHome
+    LABELS "scripting"
+    TIMEOUT 180)

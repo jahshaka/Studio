@@ -8,16 +8,17 @@
 // above — the axis views had to flip the sign by hand — and fighting with the
 // ground wherever it poked through, which is the "merges" in the report.
 //
-// WHAT IT DOES NOW. The grid is drawn 1 cm ABOVE its plane, with the depth test
-// on, so geometry standing on the floor still covers it. The sign is the whole
-// change, and the 1 cm is measured (see D below).
+// WHAT IT DID NEXT (GIZMO-2). The line grid was drawn 1 cm ABOVE its plane, with
+// the depth test on, so geometry standing on the floor still covered it.
 //
-// WHY NOT A DEPTH BIAS, which is what a coplanar helper usually wants: a
-// macroblock depth bias does NOTHING here, because Vulkan applies depth bias to
-// POLYGONS and this grid is LINE primitives. Measured on this suite: the same
-// frame, byte for byte, with mDepthBiasConstant at 0, 2, 16, 256 and 100,000,
-// and with the grid moved to its own render queue. Recorded so the next reader
-// does not spend the afternoon again.
+// GRID-2 (2026-09-20): the grid is no longer a line mesh with a lift — it is a
+// SHADER QUAD (Types.h GridDesc, OgreGrid.cpp, JahGrid_ps.glsl) that draws the
+// lines analytically from the camera ray and writes the plane's own depth with
+// a relative bias toward the camera, which Vulkan honours because the quad is a
+// polygon (the line grid could take no bias at all — measured then: the same
+// frame byte for byte at every mDepthBiasConstant). The claims below are the
+// same claims, re-measured on the quad; D changed from "the lift's knee" to "no
+// lift is needed".
 //
 // THE FIVE CLAIMS, as pixels:
 //   A. the grid's lines are drawn over a floor at its own height, WITHOUT
@@ -228,33 +229,65 @@ int main(int argc, char **argv)
           "A: the grid is drawn over a floor at its own height with no z-fighting — it keeps "
           "95 % of the pixels it has with nothing to fight");
 
-    // ---- D: the lift is at the knee of its curve ------------------------
+    // ---- D: the coplanar case needs no lift ------------------------------
     //
-    // The mirror's lift is fixed (SceneMirror::kGridFloorLift), so the sweep
-    // moves the FLOOR instead: a floor lifted by the same amount is exactly a
-    // grid lifted less. The numbers are the measurement the constant was
-    // chosen from, kept in the record for the next tuning.
+    // GRID-2: the grid is a shader quad that writes the PLANE's own depth with
+    // a relative bias toward the camera (one part in ten thousand of the
+    // distance), so a floor lying ON the plane, or the shipped ground at its
+    // +1e-4 m, draws under the grid without a lift — and a floor raised by a
+    // real amount is real geometry and covers it, as anything standing on the
+    // plane does. The sweep is kept as the record of that behaviour.
     {
-        int atLift = 0;
-        for (float lift : { 0.0f, 0.009f, 0.0095f, 0.01f }) {
+        int atZero = 0;
+        for (float lift : { 0.0f, 1e-4f, 0.02f, 0.10f }) {
             floorNode->setLocalPos(iris::Vec3(0.0f, lift - kFloorHalfThickness, 0.0f));
             render(img);
             const int n = count(img, isGrid);
-            std::printf("    floor %+.4f m (grid's effective lift %+.4f): %d grid pixels\n",
-                        double(lift), double(SceneMirror::kGridFloorLift - lift), n);
-            if (lift == 0.0f) atLift = n;
+            std::printf("    floor %+.4f m above the grid plane: %d grid pixels\n", double(lift), n);
+            if (lift == 0.0f) atZero = n;
         }
-        // ...and the shipped ground's own height, which the lift has to clear.
         floorNode->setLocalPos(iris::Vec3(0.0f, 1e-4f - kFloorHalfThickness, 0.0f));
         render(img);
         const int atShipped = count(img, isGrid);
-        std::printf("    floor at +1e-4 m (the shipped ground's height): %d grid pixels\n",
-                    atShipped);
-        CHECK(atShipped * 100 > atLift * 95,
-              "D: a floor at the shipped ground's +1e-4 m changes nothing — the lift clears it "
-              "by two orders of magnitude");
+        CHECK(atShipped * 100 > atZero * 95 && atZero * 100 > gridClear * 95,
+              "D: a floor exactly on the plane and the shipped ground at +1e-4 m both keep the "
+              "grid — the analytic depth with its relative bias needs no lift");
+        floorNode->setLocalPos(iris::Vec3(0.0f, 0.10f - kFloorHalfThickness, 0.0f));
+        render(img);
+        const int raised = count(img, isGrid);
+        CHECK(raised * 100 < gridClear * 50,
+              "D: ...while a floor raised 10 cm is geometry standing on the plane and covers "
+              "most of it");
         floorNode->setLocalPos(iris::Vec3(0.0f, -kFloorHalfThickness, 0.0f));
         render(img);
+    }
+
+    // ---- F: the lines are ONE PIXEL wide at every distance ------------
+    //
+    // GRID-2's whole point against the line mesh: a line's width is a shader
+    // constant in pixels, not a rasteriser's. Measured on a line that runs
+    // ACROSS the screen (this camera looks down the z axis, so the z-lines are
+    // horizontal on screen): the row with the most grid pixels in the near
+    // band is such a line, and its thickness is the run of grid rows through
+    // it at the frame's centre column.
+    {
+        render(img);
+        unsigned bestRow = 0, bestCount = 0;
+        for (unsigned y = img.height * 3 / 4; y < img.height; ++y) {
+            unsigned n = 0;
+            for (unsigned x = 0; x < img.width; ++x) if (isGrid(img.at(x, y))) ++n;
+            if (n > bestCount) { bestCount = n; bestRow = y; }
+        }
+        const unsigned cx = img.width / 2 + 3;      // off the vertical centre line
+        unsigned up = 0, down = 0;
+        while (bestRow > up + 1 && isGrid(img.at(cx, bestRow - up - 1))) ++up;
+        while (bestRow + down + 1 < img.height && isGrid(img.at(cx, bestRow + down + 1))) ++down;
+        const unsigned thickness = isGrid(img.at(cx, bestRow)) ? up + down + 1 : 0;
+        std::printf("    the widest near line: row %u with %u grid px; its thickness at column %u: "
+                    "%u px\n", bestRow, bestCount, cx, thickness);
+        CHECK(thickness >= 1 && thickness <= 3,
+              "F: a grid line is a pixel wide in the near field (one to three rows through an "
+              "anti-aliased edge) — the width is the shader's, not the rasteriser's");
     }
 
     // ---- B: the box covers it ----

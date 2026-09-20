@@ -108,6 +108,19 @@ function skeleton(origin) {
 
 project.create("vr hands " + Date.now());
 
+// THIS PROJECT ASKS FOR BARE HANDS (lane HANDS-SWITCH-1; the owner, 2026-09-18,
+// joint: bare hands are OFF unless the author says otherwise, per project).
+//
+// AND IT IS A DECLARATION OF INTENT RATHER THAN A SWITCH THIS FILE NEEDS, which
+// is worth saying plainly: the row is read by a SESSION when it begins
+// (`VrConfig::hands`) and this process was launched without --vr, so there is no
+// session here for it to gate. What it does assert is the row itself —
+// `world.vr` takes a boolean, writes the document and reads it back — and it
+// keeps this file honest about which mode the rules below belong to.
+assert(world.vr({ hands: true }).hands === true,
+       "the project asks for bare hands (world.vr({hands:true}))");
+assert(world.vr().hands === true, "...and reads back as one");
+
 // ONE CUBE at a known place, and the hand comes at it down -Z from in front. A
 // primitive Cube is two units across (half-extent 1, measured), so its +Z face
 // is at z = 1.

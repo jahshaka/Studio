@@ -63,10 +63,10 @@ public:
 		// (evaluated at the bake parameter t, default 0).
 		bool animated = false;
 
-		// True when the graph's master is a PbrMasterNode (typeName
-		// "PbrMaterial"); false for the legacy SurfaceMasterNode ("Material"),
-		// whose Blinn-Phong sockets are approximated onto PBR keys.
-		bool hasPbrMaster = false;
+		// (There used to be a `hasPbrMaster` flag here. There is ONE master
+		// node now — LEGACY-MASTER-CRUD, 2026-09-19 — and a graph authored on
+		// the Blinn-Phong one converts at load, so every result is PBR and the
+		// flag had exactly one value.)
 	};
 
 	static Result evaluate(NodeGraph* graph, TextureResolver resolver = {});

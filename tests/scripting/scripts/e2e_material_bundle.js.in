@@ -1,0 +1,143 @@
+// scripting.e2e.material_bundle — MATERIAL_BUNDLE_SPEC phase 1, end to end
+// through the verbs, on the real binary.
+//
+// THE ACCEPTANCE FLOW THE SPEC NAMES: pick an image from disk → ONE tile →
+// export → an EMPTY library → it still resolves.
+//
+// What each arm answers, in the owner's words:
+//
+//   1. "adding a texture to a material would import it into the project" —
+//      materials.addTexture on a PATH imports the image by CONTENT, makes it
+//      a MEMBER of the material and pins it into the project. A second add of
+//      the same bytes answers the SAME row: byte-identical duplicates are
+//      impossible now (the owner's library holds four copies of one checker
+//      because the module used to write around the store).
+//   2. "a material in the asset module should be a bundle, not a material and
+//      its textures" — ONE tile. Adding a custom material to a project pins
+//      ONE row, not the Shader-plus-Material pair it used to mint, and its
+//      member texture folds into the bundle rather than standing beside it.
+//   3. "material bundles are great if they are self-contained, makes them
+//      portable" — the closure travels: an exported archive carries the
+//      bundle, its definition and its member's bytes, and importing it into a
+//      library that has never seen either resolves every reference.
+//   4. F3, by construction: no definition may name a file path.
+//   5. R19 D2: an edit to a material reaches the meshes wearing it.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+var stamp = "" + Date.now();
+
+// ---- 1. a material, and an image picked from disk ------------------------
+var proj = project.create("Material Bundle " + stamp);
+assert(proj.length > 10, "project.create");
+
+var matGuid = materials.create("Bundled " + stamp, { graph: true });
+assert(matGuid.length > 10, "materials.create({graph:true}) -> ONE guid");
+
+// It is a LIBRARY material, and it is a MATERIAL — not a shader.
+var libraryTypes = {};
+assets.list({ scope: "store" }).forEach(function (a) { libraryTypes[a.guid] = a.type; });
+assert(libraryTypes[matGuid] === "material", "the bundle is a Material row (" + libraryTypes[matGuid] + ")");
+assert(assets.list({ scope: "store", type: "shader" }).length === 0,
+       "no ModelTypes::Shader row exists anywhere");
+
+// A GRAPH MATERIAL'S PICTURE GOES ON A TEXTURE NODE. The image is imported
+// by CONTENT the moment it is named — that is the owner's "adding a texture
+// to a material would import it into the project" — and the graph is what
+// puts it on a slot. (Asking addTexture for a SLOT on a graph material is
+// REFUSED, and says so: a graph save rebuilds `values` from the graph, so a
+// slot written beside it would vanish at the next autosave.)
+var texGuid = materials.addTexture(matGuid, fixtures + "/tiny.png");
+assert(texGuid && texGuid.length > 10, "materials.addTexture(<a path from disk>) -> a library texture");
+
+// THE SAME BYTES ANSWER THE SAME ROW.
+var again = materials.addTexture(matGuid, fixtures + "/tiny.png");
+assert(again === texGuid, "a second pick of the same image is the SAME asset (no duplicate)");
+
+var slotRefused = false;
+try { materials.addTexture(matGuid, texGuid, { slot: "baseColorMap" }); }
+catch (e) { slotRefused = true; }
+assert(slotRefused, "a SLOT write on a graph material is refused, not silently overwritten later");
+
+var masterId = null;
+graph.nodes().forEach(function (n) { if (n.master) masterId = n.id; });
+assert(masterId !== null, "the bundle's graph has a master");
+var texNode = graph.addNode("texture");
+assert(graph.setValue(texNode, texGuid) === true, "the image goes on a texture node, by GUID");
+var sampler = graph.addNode("textureSampler");
+assert(graph.connect(texNode, 0, sampler, 0), "texture -> sampler");
+assert(graph.connect(sampler, 0, masterId, "Base Color"), "sampler -> Base Color");
+assert(graph.save() === true, "graph.save writes the definition");
+
+// ---- 2. ONE TILE ---------------------------------------------------------
+assert(assets.addToProject(matGuid) === matGuid,
+       "assets.addToProject(material) -> the pin, not a clone");
+
+var members = materials.members(matGuid);
+assert(members.length >= 1, "the bundle has members");
+var memberGuids = members.map(function (m) { return m.guid; });
+assert(memberGuids.indexOf(texGuid) >= 0, "the picked image is a MEMBER of the material");
+
+// The project holds the material AND — because the closure is pinned with it
+// — its member's bytes. That is what makes the archive self-contained.
+var projectGuids = assets.list({ scope: "project" }).map(function (a) { return a.guid; });
+assert(projectGuids.indexOf(matGuid) >= 0, "the material is a project member");
+assert(projectGuids.indexOf(texGuid) >= 0, "and so is its texture (the closure was pinned)");
+
+// ---- 4. no path in the definition ---------------------------------------
+members.forEach(function (m) {
+    assert(("" + m.guid).indexOf("/") === -1, "member '" + m.name + "' is named by guid, not a path");
+});
+
+// ---- 5. an edit reaches the scene ---------------------------------------
+var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+assert(material.apply(cube, matGuid) === true, "the bundle applies to a mesh");
+var worn = material.get(cube);
+assert(("" + worn.baseColorMap).length > 0, "the mesh wears the bundle's baseColorMap");
+
+// ---- 5b. A BAKED MAP IS A MEMBER, AND IT TRAVELS (F8) -------------------
+//
+// The order that used to lose them is exactly the ordinary one: add the
+// material to the project FIRST, then edit it. A bake mints its member row
+// during the write, so the row was neither project-owned nor pinned and the
+// archive manifest (project rows + pins) did not carry it — the material
+// travelled without the maps it is made of. Every member a write names is
+// pinned now, so this arm bakes BEFORE exporting and the far side checks it.
+var uv = graph.addNode("texCoords");
+var split = graph.addNode("splitvector");
+assert(graph.connect(uv, 0, split, 0), "texCoords -> splitvector");
+assert(graph.connect(split, 0, masterId, "Roughness"), "U -> Roughness (a varying chain: baked)");
+assert(graph.save() === true, "graph.save bakes and writes the definition");
+
+var baked = null;
+materials.members(matGuid).forEach(function (m) { if (m.baked) baked = m; });
+assert(baked !== null, "the bake produced a MEMBER of the material");
+assert(("" + baked.guid).indexOf("/") === -1, "named by guid, never a path");
+var projectNow = assets.list({ scope: "project" }).map(function (a) { return a.guid; });
+assert(projectNow.indexOf(baked.guid) >= 0,
+       "and the project pins it, so the archive manifest carries it (F8)");
+
+// The picture survived the bake: the graph, not a slot write, is what holds it.
+var wornNow = material.get(cube);
+assert(("" + wornNow.baseColorMap).length > 0,
+       "and the mesh still wears the image — a graph edit re-dressed it (R19 D2)");
+
+// ---- 5c. A NO-OP SAVE DOES NOTHING AT ALL (F5) --------------------------
+// The second save writes the same definition, so it produces the same content
+// id and the re-dress is skipped entirely — which is what keeps the 1.5 s
+// autosave off the GI caches while the user types.
+assert(graph.save() === true, "a second save of an unchanged graph still succeeds");
+
+// ---- 3. PORTABILITY: export, for the fresh-library half to import --------
+assert(project.save() === true, "project.save");
+var archive = "@CMAKE_CURRENT_BINARY_DIR@/material_bundle.zip";
+var exported = project.exportArchive(archive);
+assert(exported && exported.assets > 0,
+       "project.exportArchive -> " + exported.assets + " assets, " + exported.objects + " objects");
+assert(project.close() === true, "project.close");
+
+console.log("material_bundle e2e passed");

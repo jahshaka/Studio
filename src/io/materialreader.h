@@ -70,26 +70,21 @@ public:
 	iris::PbrMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
 
 	// Dispatches on the "materialType" tag SceneWriter stamps on every saved
-	// material: "pbr" rebuilds a PbrMaterial from its own rows; a graph-backed
-	// material loads as the shader's baked PbrMaterial; anything else — a
-	// reserved builtin guid, or a legacy shader material — goes through
-	// parseMaterial's conversion. EVERY branch now yields a PbrMaterial.
+	// material: "pbr" rebuilds a PbrMaterial from its own rows (which is what
+	// a bundle definition, graph payload and all, carries); anything else — a
+	// reserved builtin guid, a legacy material — goes through parseMaterial's
+	// conversion. EVERY branch yields a PbrMaterial.
 	iris::MaterialPtr parseMaterialTyped(QJsonObject matObject, Database* handle, bool loadTextures = true);
 
-	/// A SHADER asset (a stored graph definition) as the baked PbrMaterial the
-	/// evaluator wrote into it — the one conversion every shader preview and
-	/// thumbnail goes through (VISUAL_PARITY_SPEC item 5). Null when the guid
-	/// has no stored definition, when the definition predates the evaluator
-	/// (no "pbrMaterial" block — materials.regenerate rebuilds those), or when
-	/// it carries baked maps that cannot be resolved without an open project
-	/// (a half-textured render is worse than none). The CustomMaterial-from-
-	/// GLSL route these call sites used died with the evaluator's phase 5.
-	iris::MaterialPtr parseShaderAsPbr(const QString &shaderGuid, Database* db);
-
-	/// The database-free half of parseShaderAsPbr: a stored definition plus the
-	/// project folder its BakedMaps/ paths resolve against ("" = no project).
-	static iris::MaterialPtr shaderDefinitionAsPbr(const QJsonObject &definition,
-	                                               const QString &projectFolder);
+	// (parseShaderAsPbr and shaderDefinitionAsPbr are DELETED —
+	// MATERIAL_BUNDLE_SPEC phase 2's Deletes column. They read a
+	// ModelTypes::Shader row: the separate graph asset a material used to
+	// point at. A material is ONE row now, its definition is its own file in
+	// the store and its graph is a payload of that definition, so every
+	// reader takes parseMaterialTyped/parsePbrMaterial — including a graph
+	// material's, whose `values` ARE its evaluated output. Nothing mints a
+	// Shader row any more (the two sites that still could went with these),
+	// so these had no content left to read.)
 
 	iris::PbrMaterialPtr parsePbrMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
 	/// The PbrMaterial a reserved BUILTIN guid now stands for, with the saved

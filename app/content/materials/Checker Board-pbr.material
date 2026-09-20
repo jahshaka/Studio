@@ -2,6 +2,7 @@
     "name"              : "Checker Board PBR",
     "material_type"     : "PBR",
     "icon"              : "../../shadergraph/checkerThumb.png",
+    "graph"             : "graphs/Checker Board-pbr.effect",
     "baseColor"         : "#FFFFFF",
     "baseColorMap"      : "../../shadergraph/checker.jpg",
     "metallic"          : 0.0,

@@ -97,8 +97,14 @@ AREA_RULES = [
     (r"^src/services/(shortcut|input)", ["shortcuts", "input", "app"], ["input", "editor", "app"]),
     # sceneedit/selection/undo sit under EVERY scene.add*/node.* verb, so the headless
     # scripts (~1 min at -j4) ride along as insurance the ubiquitous-module filter removes.
+    # `hygiene` rides this rule because source.one_material_resolve watches
+    # exactly these files — "there is ONE resolveMaterial and ONE apply" is a
+    # claim about sceneeditservice.cpp — and a lane that rewrote the apply
+    # path gated without it (BUNDLE-P3, the GATE-SCOPE-2 lesson again). The
+    # nine hygiene suites are display-free lints costing under a second.
     (r"^src/services/(selection|sceneedit|undo|nodenaming|outline|scenefolders|scenenodehelper)",
-     ["services", "commands", "app", "input", "*headless-scripts"], ["editor", "scene", "node"]),
+     ["services", "commands", "app", "input", "hygiene", "*headless-scripts"],
+     ["editor", "scene", "node"]),
     (r"^src/services/(looks|worldmodes|sunlink|planarreflectors|gibounds|lightbindings|iesprofile|sceneextents)",
      ["services", "looks", "planar", "lights", "gi"], ["world", "scene", "node"]),
     (r"^src/services/(project|sceneopen|apppaths|sessionheader|sessionmarkers|jahlog|loadtimeline|perfsampler|framepacing|mainthread|engineerror|ogresamples|shutdown)",
@@ -120,12 +126,23 @@ AREA_RULES = [
      ["editor", "camera", "input", "perf", "vr"]),
     (r"^src/(bridge|player)/", ["player", "thumbnails", "materialpreview", "assets", "avatar", "app"],
      ["player", "avatar", "materials", "assets"]),
-    (r"^src/modules/materials/", ["shadergraph", "pieces", "materialpreview", "ui"],
+    # A MATERIAL IS A BUNDLE (MATERIAL_BUNDLE_SPEC phase 1), so the module's
+    # code owns the bundle MODEL's suite, the asset suites its definition is
+    # stored through, and the thumbnails rendered from it — an edit to
+    # core/graphdefinition.cpp used to gate without the model suite at all
+    # (the GATE-SCOPE-2 lesson again).
+    (r"^src/modules/materials/", ["shadergraph", "pieces", "materialpreview", "ui",
+                                  "materialbundle", "assets", "assetdelete", "assetgc",
+                                  "assettray", "thumbnails"],
      ["materials", "material", "graph"]),
     (r"^src/modules/avatar/", ["avatar", "skeletal", "ui"], ["avatar", "anim"]),
     (r"^src/modules/vr/", ["vr", "player", "app"], ["vr", "player"]),
     (r"^src/(modules/publish|export)/", ["export", "ui"], ["project", "publish"]),
-    (r"^src/(ui|shell)/", ["ui", "app", "theme", "shortcuts", "desktops", "drawers"], ["editor", "app", "desktop"]),
+    # …and here because source.panel_rows_guarded and source.db_pointers_initialised
+    # read src/ui and src/shell (the panels' rows and their database pointers).
+    (r"^src/(ui|shell)/",
+     ["ui", "app", "theme", "shortcuts", "desktops", "drawers", "hygiene"],
+     ["editor", "app", "desktop"]),
     (r"^src/app/", ["app", "apppaths", "log", "shutdown", "hygiene", "threading", "api"], ["app"]),
     (r"^src/", ["*merge-tier"], []),
     # --- data, docs, build ---------------------------------------------------------------

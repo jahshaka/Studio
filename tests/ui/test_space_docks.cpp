@@ -310,8 +310,12 @@ int main(int argc, char **argv)
                   "Ctrl+`'s verb adds the Console as a THIRD tab, in front");
             CHECK(readDocks(mcp).isShown(kConsoleDock),
                   "…and app.docks() reports the console dock as open");
-            // Left OPEN, with Assets in front, for the restart in run 2.
-            mcp.runScript(QStringLiteral("editor.tray({tab: 'assets'})"));
+            // Left OPEN, with the TIMELINE in front, for the restart in run 2:
+            // that is what makes run 2's launch-tab assertion mean something
+            // (owner review R7 — "Assets needs to be the default open tab when
+            // you launch the app"). With Assets left in front here, a launch
+            // that simply restored the blob would have passed.
+            mcp.runScript(QStringLiteral("editor.tray({tab: 'timeline'})"));
             settle(mcp);
         }
 
@@ -348,7 +352,7 @@ int main(int argc, char **argv)
         std::printf("info: after F11 -> %s\n", qUtf8Printable(afterF11.detail));
         CHECK(afterF11.isCurrent("animationDock"),
               "leaving fullscreen comes back to the tab that was in front when F11 was pressed");
-        mcp.runScript(QStringLiteral("editor.tray({tab: 'assets'})"));
+        mcp.runScript(QStringLiteral("editor.tray({tab: 'timeline'})"));
         settle(mcp);
 
         // ---- quit FROM THE PLAYER: the exit that wrote "no panels" ---------
@@ -386,6 +390,29 @@ int main(int argc, char **argv)
         settle(mcp);
         expectEditorPanels(mcp, "the scripted boot, before any project or space switch");
 
+        // ---- R7: EVERY LAUNCH OPENS ON ASSETS (owner review, 2026-09-18) ----
+        // Run 1 quit with the TIMELINE in front, so the stored blob says
+        // Timeline. Which bottom tab is in front is SESSION state, not a
+        // preference: inside a session it follows the user (asserted in run 1,
+        // across space switches and F11), but a LAUNCH always starts on the
+        // asset browser. It regressed because the blob is restored TWICE — once
+        // in the constructor, and again from applyColumnWidthsOnce at the
+        // window's real size — and only the first restore was followed by the
+        // raise. THIS READING IS THE ONE THAT CAUGHT IT: the second restore
+        // happens an event-loop turn into the session, which is exactly here.
+        {
+            const DockReading boot = readDocks(mcp);
+            std::printf("info: the launch tab -> %s\n", qUtf8Printable(boot.detail));
+            CHECK(boot.isCurrent("assetDock"),
+                  "the launch opens on ASSETS, over the Timeline the blob remembered");
+            CHECK(boot.isShown("animationDock") && !boot.isCurrent("animationDock"),
+                  "…and the Timeline is still open behind it — the launch raises a tab, "
+                  "it does not close a panel");
+            const QJsonObject tray = readObject(mcp, QStringLiteral("editor.trayState()"));
+            CHECK(tray.value("tab").toString() == QLatin1String("assets"),
+                  "…and editor.trayState() agrees");
+        }
+
         mcp.runScript(QStringLiteral("project.create('SpaceDocks2')"));
         mcp.runScript(QStringLiteral("app.space('editor')"));
         settle(mcp);
@@ -403,7 +430,8 @@ int main(int argc, char **argv)
             CHECK(bottom.isShown("animationDock") && !bottom.isCurrent("animationDock"),
                   "the restart: the Timeline is still a TAB — open, behind the front one");
             CHECK(bottom.isCurrent("assetDock"),
-                  "the restart: …and the tab that was in front still is");
+                  "the restart: …and Assets is still the front tab after a space switch "
+                  "(the launch tab is not undone by the first switchSpace either)");
             CHECK(bottom.isShown(kConsoleDock),
                   "the restart: a console left open comes back as a tab");
             const QJsonObject tray = readObject(mcp, QStringLiteral("editor.trayState()"));

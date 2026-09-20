@@ -2,6 +2,7 @@
     "name"                : "Board PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/wood.png",
+    "graph"               : "graphs/wood-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/wood/wood_planks_03_1_COLOR.png",
     "metallic"            : 0.0,

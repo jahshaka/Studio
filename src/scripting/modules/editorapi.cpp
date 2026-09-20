@@ -51,6 +51,14 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
+#include <QApplication>
+#include <QDragEnterEvent>
+#include <QDragLeaveEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <memory>
+#include "ui/controls/assetdrag.h"
 
 using namespace scriptmod;
 
@@ -603,8 +611,15 @@ QVector<VerbInfo> EditorApi::verbs() const
           "many this call compiled; on a warm shader cache it is 0 and the call is nearly free. "
           "Synchronous by design: the caller holds its cover up until it returns.",
           Needs::Engine },
-        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, heldKeys, flying}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
+        { "toolbar", "editor.toolbar() -> [{id, visible, enabled, tooltip}]",
+          "THE EDITOR TOOLBAR'S CONTROLS, as state — one entry per button in the order they sit "
+          "there, `id` being the action's name (\"saveScene\", \"export\", \"translate\" …). It "
+          "exists because a toolbar had no reading at all: \"the Save button is hidden on every "
+          "default install\" was true for as long as it was because nothing could ask. Read-only; "
+          "the capabilities behind the buttons are their own verbs.",
+          Needs::Window },
+        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, engineScene, heldKeys, flying}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
           Needs::Document },
         { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
@@ -739,6 +754,21 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`scene.addPrimitive(name, {position: editor.dropPointAt(x, y)})` puts a cube exactly "
           "where dragging one there would. Null when this session's viewport has no camera (the "
           "document-only stand-ins).",
+          Needs::Engine },
+        { "dragAsset", "editor.dragAsset(guid, x, y, {action, type}) -> bool",
+          "DRAGS AN ASSET OVER THE VIEWPORT, for real: it posts the same "
+          "QDragEnter/QDragMove/QDragLeave/QDrop events a person's drag out of an asset view "
+          "posts, carrying the same four-slot payload every asset view builds "
+          "(ui/controls/assetdrag.h). `action` is what this step of the gesture is — 'move' "
+          "(the default: hover at that pixel, which is what shows a MATERIAL's live preview on "
+          "the object under it), 'drop' (hover and release, which commits) or 'leave' (the "
+          "cursor left the viewport, which puts a previewed material back). The first call of a "
+          "gesture sends the enter event for you; 'drop' and 'leave' end it. `type` is the "
+          "ModelTypes value, and is worked out from the asset row when omitted — a RESERVED "
+          "preset guid names no row and is treated as a material, which is exactly what the "
+          "presets tray drags. This is the only way a script or an MCP client can perform the "
+          "gesture the owner performs with a mouse; everything it reaches is the viewport's own "
+          "handler, so it cannot drift from what a person gets.",
           Needs::Engine },
         { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name, locked} | null",
           "WHAT A DROP AT THIS VIEWPORT PIXEL APPLIES TO — the node a dragged MATERIAL or IMAGE "
@@ -2307,6 +2337,99 @@ QVariant EditorApi::dropTargetAt(double x, double y)
     return out;
 }
 
+bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVariantMap &options)
+{
+    if (!requireEngine()) return false;
+    QWidget *target = host.viewport->asWidget();
+    if (!target) return fail("editor.dragAsset: the viewport has no widget");
+
+    static const QStringList kActions{ QStringLiteral("move"), QStringLiteral("drop"),
+                                       QStringLiteral("leave") };
+    const QString action = options.value(QStringLiteral("action"),
+                                         QStringLiteral("move")).toString().toLower();
+    if (!kActions.contains(action))
+        return fail(QStringLiteral("editor.dragAsset: action must be one of %1")
+                        .arg(kActions.join(QStringLiteral(", "))));
+
+    const AssetRecord row = host.db ? host.db->fetchAsset(guid) : AssetRecord();
+    // A RESERVED PRESET GUID names no row, and is exactly what the presets tray
+    // drags — so an absent row is a MATERIAL drag, not a refusal.
+    int type = options.value(QStringLiteral("type"), -1).toInt();
+    if (type < 0)
+        type = row.guid.isEmpty() ? static_cast<int>(ModelTypes::Material) : row.type;
+
+    const QPointF pos(x, y);
+    // ONE payload builder, the one every asset view uses (ui/controls/assetdrag.h):
+    // a synthesised drag that built its own map would be testing itself.
+    // Returns what the widget ANSWERED: Qt never delivers a move or a drop to
+    // a widget that ignored the enter, and neither may this (code review, F7).
+    auto sendEvent = [&](QEvent::Type kind) -> bool {
+        std::unique_ptr<QMimeData> mime(
+            AssetDrag::mimeFor(type, row.name, QString(), guid));
+        if (kind == QEvent::DragEnter) {
+            QDragEnterEvent event(pos.toPoint(), Qt::CopyAction, mime.get(),
+                                  Qt::LeftButton, Qt::NoModifier);
+            event.ignore();
+            QApplication::sendEvent(target, &event);
+            return event.isAccepted();
+        } else if (kind == QEvent::DragMove) {
+            QDragMoveEvent event(pos.toPoint(), Qt::CopyAction, mime.get(),
+                                 Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &event);
+        } else if (kind == QEvent::Drop) {
+            QDropEvent event(pos, Qt::CopyAction, mime.get(),
+                             Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &event);
+        } else {
+            QDragLeaveEvent event;
+            QApplication::sendEvent(target, &event);
+        }
+        return true;
+    };
+
+    // A DRAG IS A SEQUENCE, and the handlers depend on having seen its start:
+    // dragEnter is what decides whether the payload is a material at all and
+    // remembers it for the moves that follow. So a call carrying a DIFFERENT
+    // asset is a different gesture — it ends the open one and enters afresh,
+    // rather than moving the old payload to a new pixel.
+    if (mDragOpen && mDragGuid != guid) {
+        sendEvent(QEvent::DragLeave);
+        mDragOpen = false;
+    }
+    if (!mDragOpen) {
+        if (!sendEvent(QEvent::DragEnter)) {
+            // REFUSED AT THE DOOR, as a person's drag would be: nothing follows,
+            // and the answer says so.
+            mDragGuid.clear();
+            return refuse(QStringLiteral("editor.dragAsset: the viewport refused '%1' (not something it can take a drop of)").arg(guid));
+        }
+        mDragOpen = true;
+        mDragGuid = guid;
+    }
+    if (action == QStringLiteral("leave")) {
+        sendEvent(QEvent::DragLeave);
+        mDragOpen = false;
+        mDragGuid.clear();
+        return true;
+    }
+    sendEvent(QEvent::DragMove);
+    if (action == QStringLiteral("drop")) {
+        sendEvent(QEvent::Drop);
+        mDragOpen = false;
+        mDragGuid.clear();
+    }
+    return true;
+}
+
+QVariantList EditorApi::toolbar()
+{
+    if (!host.mainWindow) {
+        fail("editor.toolbar: this verb needs the editor window");
+        return QVariantList();
+    }
+    return host.mainWindow->toolbarActions();
+}
+
 QVariantMap EditorApi::viewportState()
 {
     QVariantMap out;
@@ -2316,8 +2439,16 @@ QVariantMap EditorApi::viewportState()
         out.insert("width", 0);
         out.insert("height", 0);
         out.insert("offscreen", true);
+        out.insert("engineScene", false);
         return out;
     }
+    // DOES THE ONE ENGINE SCENE EXIST YET? (SMOKE-FIX-1's fix round.) It is
+    // built when a page that DRAWS it asks — the editor viewport's show event,
+    // the Player as it is entered, a VR session beginning — and never by a
+    // getter, so "has anything asked yet" is a real, observable thing and the
+    // only reading that can tell "the Player built it" from "it was already
+    // there". A PURE read: asking this question must not answer it.
+    out.insert("engineScene", host.viewport->engineScene() != nullptr);
     out.insert("state", host.viewport->presentationState());
     out.insert("framesPresented", QVariant::fromValue(host.viewport->framesPresented()));
     // The ACTUAL render target, straight from the engine — the one number that

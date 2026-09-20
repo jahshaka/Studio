@@ -25,7 +25,22 @@ public:
 	// same file left every preset texture unconnected (samples audit,
 	// 2026-09-04). Idempotent — a node whose path already resolved is skipped.
 	// Returns the number of textures resolved.
-	static int resolveAppRelativeTextures(NodeGraph* graph);
+	//
+	// HOW A FILE-NAMED IMAGE IS BOUND, and it is a decision with a device wait
+	// on one side of it (PRESET-UNIFY-1 fix round): `Import` is the ordinary
+	// route — the one content import, a library Texture row, pinned into the
+	// open project, and therefore bytes written and an fsync on the calling
+	// thread for a picture the store does not already hold. `PathOnly` binds
+	// the shipped FILE to the node and writes NOTHING: no row, no pin, no
+	// device wait. LOOKING at a material must never be a write, so every
+	// READ-ONLY open takes PathOnly, and only a gesture that makes the user a
+	// material of their own (a new material from a preset, Customise) imports.
+	enum class TextureBinding {
+		Import,
+		PathOnly,
+	};
+	static int resolveAppRelativeTextures(NodeGraph* graph,
+	                                      TextureBinding binding = TextureBinding::Import);
 
 	// Converts a NodeGraph to the Material json format.
 	// Since Option B phase 1 the result also carries "pbrMaterial", the
@@ -33,12 +48,13 @@ public:
 	// of unsupported inputs) - see PbrGraphEvaluator.
 	static QJsonObject serialize(NodeGraph* graph);
 
-	// serialize + a FINAL-quality per-texel bake of the UV-varying chains
-	// (MATERIALS_EVALUATOR_SPEC section 2): maps land in
-	// <projectRoot>/BakedMaps/<bakeGuid>/ at the graph's bakeResolution and
-	// "pbrMaterial" carries their project-relative paths. Falls back to the
-	// plain serialize when no project root is set or bakeGuid is empty.
-	static QJsonObject serializeWithBake(NodeGraph* graph, const QString& bakeGuid);
+	// (serializeWithBake is DELETED — MATERIAL_BUNDLE_SPEC phase 1's Deletes
+	// column. It baked into `<projectRoot>/BakedMaps/<guid>/` and wrote those
+	// project-relative paths into the definition, which is why a graph
+	// material could not be read with no project open and why its maps never
+	// travelled in an exported project. A graph becomes a definition in
+	// materials::buildDefinition now — core/graphdefinition.h — and its maps
+	// are member textures in the store.)
 
 	// Option B phase 1: the graph evaluated to the document's PBR material
 	// (which SceneMirror already mirrors into the engine). Texture-property
@@ -60,15 +76,11 @@ public:
 	static iris::PbrMaterialPtr createPbrMaterialFromDefinition(QJsonObject matObj);
 
 	// Maps a texture property's stored asset GUID to an image path via
-	// TextureManager; passes real file paths through untouched; resolves
-	// project-relative baked-map paths (BakedMaps/...) against the project
-	// root set below.
+	// TextureManager or the CAS; passes real file paths through untouched.
+	// (`projectRoot`/`setProjectRoot` went with the project-folder bake: there
+	// is no project-relative path left to resolve, so the one piece of
+	// process-wide state in this class is gone.)
 	static PbrGraphEvaluator::TextureResolver textureResolver();
-
-	// The open project's folder, for resolving BakedMaps/... cache paths.
-	// Set on project open / by the bake verb; empty when no project.
-	static void setProjectRoot(const QString& folder);
-	static QString projectRoot;
 
 	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj);
 

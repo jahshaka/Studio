@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QList>
 
+#include <QVector>
+
 #include "irisgl/irisglfwd.h"
 #include "data/project.h"   // ModelTypes
 #include "io/sceneformat.h"
@@ -43,9 +45,9 @@ For more information see the LICENSE file
 
 class Database;
 class IEditorViewport;
+class MaterialPreviewService;
 class UndoService;
 class SelectionService;
-class MaterialPreset;
 
 /// Options for SceneEditService::addImagePlane. Defaults are the
 /// owner-approved §8 calls (IMAGE_PLANE_SPEC): double-sided ON (a
@@ -106,10 +108,11 @@ public:
     void addSphere();
     void addCylinder();
     void addPyramid();
-    void addTeapot();
-    void addSponge();
-    void addSteps();
-    void addGear();
+    void addStar();
+    void addWedge();
+    void addTube();
+    void addHemisphere();
+    // (addTeapot / addSponge / addSteps / addGear: DELETED, owner review R6.)
     /// Name-dispatch over the primitives above ("Plane", "Cone", ...).
     ///
     /// `position` is where the primitive is BORN, in world space (smoke S2:
@@ -349,23 +352,114 @@ public:
                                       int index = -1,
                                       QHash<QString, QString> *guidMapOut = nullptr);
 
-    /// Applies a material preset to the selection. The selection may be a
-    /// single mesh OR a container (an imported model roots at an Empty — the
-    /// viewport's click-selects-the-root rule hands exactly that node over):
-    /// every mesh at or under it receives its own fresh material instance.
-    /// Undoable as one "Apply Material" entry. The old mesh-only guard
-    /// silently dropped presets applied to models — the owner-reported
-    /// "PBR materials lost on reopen" data loss: they never entered the
-    /// document, so the writer had nothing to save.
-    void applyMaterialPreset(const MaterialPreset &preset);
-    void applyMaterialPreset(const MaterialPreset &preset, iris::SceneNodePtr target);
+    // (applyMaterialPreset is GONE, both overloads — MATERIAL_BUNDLE_SPEC
+    // phase 3. A preset is a READ-ONLY LIBRARY BUNDLE with its reserved guid
+    // now (MaterialPresetAssets), so applying one is applying a material
+    // asset: `applyMaterial` seeds the bundle on first use and hands it to
+    // `applyMaterialAsset`. What went with the overloads is the whole
+    // registration TAIL they carried — a project Material row per preset, an
+    // "Presets" folder, a `matgen.material` file and hand-written dependency
+    // edges — none of which undo could take back, and all of which the pin
+    // does correctly.)
 
-    /// Applies a SAVED material asset (a project .material row — e.g. one the
-    /// preset apply registered under Presets/) to the same target set.
-    /// Dispatches on the stored materialType, so saved PBR materials come back
-    /// as real PbrMaterials. Returns false when the guid has no material data
-    /// or the target holds no meshes.
+    /// THE ONE WAY A MATERIAL IS RESOLVED FROM WHAT THE UI CARRIES
+    /// (MATERIAL-PREVIEW-1). Everything a user can drag, double-click, script
+    /// or drop names a material with ONE string, and this is the only function
+    /// that turns that string into an `iris::Material`:
+    ///
+    ///   * a reserved preset GUID, or a preset's NAME  -> BuiltinMaterials::fromPreset
+    ///     (the SHIPPED values, read with nothing written: a hover must not
+    ///     seed a library row. An apply of the same string goes through the
+    ///     seeded bundle — same conversion, same bytes, same picture.)
+    ///   * a project/library MATERIAL row              -> MaterialReader::parseMaterialTyped
+    ///
+    /// ALWAYS A FRESH, PRIVATE INSTANCE — never a shared one. `MeshNode::setMaterial`
+    /// MUTATES the material it is handed (SKINNING_ENABLED and friends), so a
+    /// shared instance handed to two nodes is a defect waiting for a skinned
+    /// mesh. Null when the string names nothing this build can resolve, which
+    /// is what makes "is this payload a material?" answerable BEFORE a drag is
+    /// accepted rather than after it is dropped.
+    ///
+    /// It replaced three independent resolutions — the drag preview's read of a
+    /// QVariant on the AssetManager (which was silently null for two of the
+    /// three material sources, the owner's "only some materials preview" bug),
+    /// MainWindow::applyMaterialPreset's preset scan, and material.apply's own.
+    iris::MaterialPtr resolveMaterial(const QString &presetOrGuid) const;
+
+    /// THE ONE APPLY, with the target EXPLICIT. `material.apply`, the viewport
+    /// drop and the tray's double-click all land here; it dispatches on the
+    /// same three shapes resolveMaterial knows, is undoable as exactly one
+    /// macro, and ends any live hover preview before it pushes so the undo
+    /// command captures the TRUE original material. False (and nothing pushed)
+    /// when the string resolves to nothing or the target holds no meshes.
+    bool applyMaterial(const QString &presetOrGuid, iris::SceneNodePtr target);
+
+
+    /// Applies a SAVED material bundle (a library or project Material row,
+    /// including a seeded PRESET) to the same target set. Dispatches on the
+    /// stored materialType; pins the bundle into the open project as part of
+    /// the undo macro when the project does not hold it yet. Returns false
+    /// when the guid has no definition or the target holds no meshes.
     bool applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target);
+
+    /// "A material row was created outside this service — re-list." One
+    /// emitter for a signal the shell already listens to, so a UI gesture
+    /// that mints a row (the tray's Customise) does not have to reach into
+    /// another object's signals to say so.
+    void requestAssetViewRefresh();
+
+    /// The apply for a material that has no ROW: a shipped preset in a
+    /// session with no library to seed it into. Builds the material through
+    /// `resolveMaterial` and pushes one ChangeMaterialCommand per mesh —
+    /// nothing is pinned, nothing is written down, because there is nowhere
+    /// to write it.
+    bool applyResolvedMaterial(const QString &presetOrGuid, iris::SceneNodePtr target);
+
+    // (applyMaterialShader is DELETED — phase 2's Deletes column. It applied a
+    // ModelTypes::Shader row, the module's old separate graph asset; there is
+    // one material row and one apply.)
+
+    /// THE MATERIAL ITSELF CHANGED — RE-DRESS EVERY NODE WEARING IT
+    /// (OWNER_REVIEW 9, R19 D2: "I updated the UV tiling to 10 and 10 on the
+    /// project material and in the editor the material there was not
+    /// updated"). A node holds a COPY of a material's values, so editing the
+    /// asset cannot reach the scene by itself; the catalog already knows who
+    /// wears what — the Object -> Material edges every apply writes — so this
+    /// re-resolves the definition ONCE and gives each of those nodes a fresh
+    /// instance of it.
+    ///
+    /// NOT UNDOABLE, deliberately: the user's edit was to the MATERIAL, which
+    /// the Materials page's own stack owns; the scene did not change, what it
+    /// is wearing did, and putting a scene undo step on the stack for it would
+    /// make Ctrl+Z in the editor half-revert an edit made on another page.
+    /// Returns how many meshes were re-dressed.
+    ///
+    /// WHAT IT COSTS, AND WHY IT IS GUARDED. This runs on the graph page's
+    /// 1.5 s autosave — while the user is still typing — and giving a mesh a
+    /// fresh material POINTER is a re-attach to the mirror, which invalidates
+    /// the GI caches WHOLE (every cascade re-voxelises; ledger 804-805). So:
+    ///   * a save that produced the SAME definition produced the same
+    ///     content id, and this returns 0 immediately — no parse, no walk,
+    ///     no setMaterial. MEASURED (spikes/bundle-p1/refresh-cost.txt, 90
+    ///     primitives wearing one bundle, isolated by difference against the
+    ///     same saves with 0 of them wearing it, 5 runs an arm): the refresh
+    ///     costs 8.8 ms of CPU when the definition really moved, and the
+    ///     guarded case costs +0.6 ms over a scene with no users at all —
+    ///     the 90-mesh walk does not happen. The 8.8 ms does NOT include the
+    ///     GI re-solve the re-attach triggers, which is the larger bill;
+    ///   * the definition is read ONCE per call, not once per mesh (the read
+    ///     was 90 store reads of one file); the INSTANCE is still per mesh,
+    ///     because MeshNode::setMaterial mutates what it is handed.
+    /// The 8.8 ms is the cost of an edit that IS a change — noted rather
+    /// than hidden: a COLOUR-only edit needs no re-attach at all, and
+    /// re-dressing the existing instance in place would keep the GI caches.
+    /// That is the MATERIAL-SWAP-GI-1 lane's subject, not phase 1's.
+    int refreshMaterialUsers(const QString &materialGuid);
+
+    /// The hover-preview service, injected by the shell so every apply can end
+    /// a live preview before it pushes. Null in headless hosts — which have no
+    /// pointer to hover.
+    void setMaterialPreview(MaterialPreviewService *service) { preview = service; }
 
     /// RESETS the mesh node's material to the node's OWN default (owner,
     /// 2026-09-12; services/materialdefaults.h — the default floor is the
@@ -421,6 +515,10 @@ private:
     UndoService *undo;
     SelectionService *selection;
     IEditorViewport *viewport;
+    MaterialPreviewService *preview = nullptr;
+    /// The content id each material's meshes were last dressed from — the
+    /// "did anything actually change?" answer (see refreshMaterialUsers).
+    QHash<QString, QString> mDressedFrom;
     std::function<iris::ScenePtr()> sceneProvider;
 
 };

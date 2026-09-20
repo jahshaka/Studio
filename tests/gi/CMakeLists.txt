@@ -548,6 +548,26 @@ add_test(NAME gi.cascade_lod COMMAND test_gi_cascade_lod
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_lod PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# gi.material_swap — MATERIAL-SWAP-GI-1: Scene::setNodeMaterial swaps the datablock
+# on the live Item and invalidates the item's OWN box, so under the chain only
+# the cascades that contain it re-voxelise; the old path (attachMesh) rebuilds
+# every cascade and is the control. RUN_SERIAL like every cascade suite.
+add_executable(test_gi_material_swap test_gi_material_swap.cpp)
+set_target_properties(test_gi_material_swap PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_material_swap PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_material_swap PRIVATE JahshakaEngine)
+add_dependencies(test_gi_material_swap JahshakaEngineMedia)
+add_test(NAME gi.material_swap COMMAND test_gi_material_swap
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.material_swap PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # AN EDIT UNDER THE CHAIN COSTS AT MOST ONE CASCADE PER FRAME (PHOTON_SPEC §7 G1,
 # and E2's own suite row). gi.cascades is about the camera SCROLL; this is about
 # the four kinds of EDIT — geometry, material, spawn, light — each of which used
@@ -898,3 +918,26 @@ add_dependencies(test_gi_chain_face JahshakaEngineMedia)
 add_test(NAME gi.chain_face COMMAND test_gi_chain_face
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL TRUE)
+
+# gi.boot_textures — THE ARM WAITS FOR THE ALBEDO IT IS ABOUT TO VOXELISE
+# (BOOTVOX-1). The voxeliser reads a material's albedo and emissive maps, and a
+# scene that binds one and pushes its GI in the same frame used to voxelise
+# without it and then re-voxelise EVERY cascade when the pixels arrived — which
+# is what the shipped default scene did on every boot (its ground's tile.png).
+# RUN_SERIAL like every cascade suite: the chain holds four voxel volumes at
+# once and the case counts rebuilds per frame.
+add_executable(test_gi_boot_textures test_gi_boot_textures.cpp)
+set_target_properties(test_gi_boot_textures PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_boot_textures PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_boot_textures PRIVATE JahshakaEngine)
+add_dependencies(test_gi_boot_textures JahshakaEngineMedia)
+add_test(NAME gi.boot_textures COMMAND test_gi_boot_textures
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)

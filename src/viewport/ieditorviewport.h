@@ -128,8 +128,28 @@ public:
     ///
     /// Borrowed, never owned. The viewport destroys both at teardown, so no
     /// caller may outlive it holding these.
+    ///
+    /// PURE READS, BOTH (SMOKE-FIX-1's fix round): whoever needs the scene to
+    /// EXIST says so, once, with ensureEngineScene() below — these two are
+    /// called from per-frame paths (VrApi::pushProxies rides the driver's
+    /// beforeFrame), and a getter that builds an engine scene would build one
+    /// in every windowed process on its first tick, editor or no editor.
     virtual jahshaka::engine::Scene *engineScene() { return nullptr; }
     virtual SceneMirror *sceneMirror() { return nullptr; }
+
+    /// BUILD THE ONE SCENE NOW IF IT DOES NOT EXIST — the explicit ask, for the
+    /// two callers that are entitled to make it: the Player page as it is
+    /// entered (EnginePlayerView::adoptEditorScene, called from its show event
+    /// and from start()) and the editor's VR preview as a session begins. Both
+    /// draw THIS scene; neither can wait for the editor widget's show event,
+    /// which may never come (the desktop tile's Play button, a `--vr` boot).
+    ///
+    /// False when the engine cannot make one yet — before any View exists in
+    /// the process, which is the pin's own startup-order law answering for
+    /// itself (Engine::createScene returns null until then). The mirror is
+    /// created WITH the scene, so a true here means both reads above answer.
+    /// A stand-in viewport has no engine and says false.
+    virtual bool ensureEngineScene() { return false; }
 
     /// WHAT THE EDITOR'S ON-SCREEN VIEW HAS ACTUALLY GRADED WITH — the
     /// tonemapper's multiplier (View::measuredExposureScale), or 0 when there
@@ -663,6 +683,9 @@ public:
             int       resolution = 0;
             float     cell = 0.0f;
             float     step = 0.0f;
+            /// The near-field radius this cascade guarantees, in metres
+            /// (engine GiStatus::CascadeStatus::guaranteedRadius).
+            float     guaranteedRadius = 0.0f;
             QVector3D centre;
             quint64   rebuilds = 0;
             int       pending = 0;
@@ -685,6 +708,10 @@ public:
         /// The chain is wanted but no view has tracked a camera yet, so there is
         /// nowhere honest to put it — `cascades` is empty for a REASON.
         bool    cascadesAwaitingCamera = false;
+        /// The arm is waiting for an albedo/emissive texture that is still
+        /// streaming (BOOTVOX-1): the build lands on the frame it arrives,
+        /// bounded at 30 deferrals.
+        bool    awaitingVoxelTextures = false;
         /// ATOM stage 1's far-field proxy, as APPLIED — whether the cascades
         /// are voxelising the baked LOD levels at all.
         bool    cascadeVoxelLod = true;
@@ -737,6 +764,33 @@ public:
         RayQueryInfo rayQuery;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
+
+    /// WHAT THE VOXEL LIGHTING VOLUME HOLDS (PHOTON-M3) — a TEST AND TOOL
+    /// readback of one cascade's light volume, behind `world.giVoxelStats`.
+    /// The engine flushes and downloads the whole volume for it, so it is
+    /// never on a frame path; `available` false means there is no engine to
+    /// ask, no VCT arm on the scene, or no such cascade.
+    ///
+    /// Every value is in the STORE's own normalised units (scene radiance
+    /// times `multiplier`), because the question it answers is about the
+    /// STORE: does the bounce's fixed point fit in the format.
+    struct GiVoxelStatsInfo {
+        bool    available = false;
+        int     cascade = 0;
+        int     width = 0, height = 0, depth = 0;
+        QString format;            ///< the total volume's pixel format, Ogre's spelling
+        float   formatMax = 0.0f;  ///< 1.0 for a UNORM store; 0 = a float one (no ceiling)
+        float   multiplier = 0.0f; ///< k: a voxel holds k times the surface's radiance
+        float   peak = 0.0f;       ///< peak channel of the TOTAL volume
+        float   peakDirect = 0.0f; ///< ...and of the DIRECT one (<= 1/headroom by construction)
+        double  meanLit = 0.0;     ///< mean channel maximum over lit voxels
+        qint64  voxelsLit = 0;
+        qint64  voxelsAtMax = 0;   ///< on the format's top bin: on a UNORM total this IS the clip
+        qint64  directAtMax = 0;
+        qint64  voxels = 0;
+        qint64  voxelsAboveOne = 0;///< above 1.0 in store units — what an 8-bit store would clip
+    };
+    virtual GiVoxelStatsInfo giVoxelStats(int cascade) { (void)cascade; return {}; }
 
     /// WHAT THE SHADOW ATLAS IS, as opposed to what the scene asked for
     /// (SPECS/SHADOW_TOOLING_SPEC.md §7) — the same reading as giStatus() and
@@ -1012,20 +1066,30 @@ public:
     /// keys back.
     virtual void setVrPreviewStep(std::function<void()> step) { Q_UNUSED(step); }
     virtual bool vrPreview() const { return false; }
-    /// "THE WORLD I AM SHOWING IS ABOUT TO GO" (VR-4-FIX finding 1).
+    /// "THIS PREVIEW CANNOT CONTINUE HERE" — the two ways that happens
+    /// (VR-4-FIX finding 1; lane MIRROR-LIVE-1 added the second).
     ///
-    /// Called by clearScene() BEFORE the engine scene is destroyed — a project
-    /// close, and the teardown half of a project open in place. A VR session
-    /// renders that engine scene and holds a raw pointer to it, so a preview
-    /// that is still running when it is freed is a use-after-free on the next
-    /// frame; this is where the session's owner ends it, properly, with the
-    /// viewport still alive to take its fly keys back.
+    ///   * THE WORLD IS ABOUT TO GO: called by clearScene() BEFORE the engine
+    ///     scene is destroyed — a project close, and the teardown half of a
+    ///     project open in place. A VR session renders that engine scene and
+    ///     holds a raw pointer to it, so a preview still running when it is
+    ///     freed is a use-after-free on the next frame.
+    ///   * THE PAGE IS BEING LEFT: called by end(), the editor page's own
+    ///     shutdown. THE OWNER'S RULE (2026-09-18): leaving the page that hosts
+    ///     a VR session ends that session — the Player has always done it, and
+    ///     the editor's preview does it now. A preview left running behind
+    ///     another page mirrors into a window nobody is looking at and keeps
+    ///     the wearer's fly keys.
+    ///
+    /// Either way this is where the session's OWNER ends it, properly and by
+    /// exactly the path `vr.end()` takes, with the viewport still alive to take
+    /// its fly keys back.
     ///
     /// Installed beside the step above and cleared with it. The engine keeps
     /// its own belt (Engine::destroyScene ends a session bound to the scene it
     /// is destroying), so a host that never calls this cannot crash — it just
     /// ends the session less politely.
-    virtual void setVrPreviewSceneClosing(std::function<void()> closing) { Q_UNUSED(closing); }
+    virtual void setVrPreviewEnds(std::function<void()> ends) { Q_UNUSED(ends); }
     /// "A world is about to be loaded into me": raises the loading cover and
     /// PRESENTS it before returning, so it is on screen before the load blocks
     /// the thread. `title` names the world (shown under the message). A no-op

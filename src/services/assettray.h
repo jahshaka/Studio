@@ -43,6 +43,9 @@ For more information see the LICENSE file
 //   1. an import MEMBER: its parent is another ASSET (the Mesh row, the member
 //      Textures of a fresh import). (The `parent` column also holds a FOLDER
 //      guid for a filed asset, which is not membership.)
+//   2b. a ModelTypes::SHADER row — the module's retired separate graph asset
+//      (phase 2): nothing mints one, nothing reads one, so a tile for it
+//      could not be opened, applied or previewed;
 //   2. a MESH row, whatever its parent — a mesh is the inside of a model and
 //      never a tile of its own (older content files its Mesh rows under the
 //      project, where rule 1 cannot see them);
@@ -64,6 +67,14 @@ For more information see the LICENSE file
 //      by an archive — so nothing about Reset or export changes, and the
 //      marker is written only when the editor MINTS the row: the same image
 //      imported by a user is their asset and stays a tile;
+//   6. a texture that arrived THROUGH a material's picker and that only
+//      MATERIALS use — it is part of the bundle, and the bundle is its tile
+//      (MATERIAL_BUNDLE_SPEC V-2, owner Q4, phase 2). The stamp is an ORIGIN
+//      written by the picker, never "something depends on it": a texture the
+//      user imported themselves is always a tile, and a stamped one comes
+//      back the moment a scene node, a decal or an emitter uses it. The
+//      panels' "Show member textures" switch passes showMembers = true and
+//      turns off this rule alone.
 //   5. a texture added DIRECTLY whose companion material (minted for it at
 //      add time, ImageMaterial's `companionOf` stamp) is in this project and
 //      is the ONLY thing in this project that uses it — the material is that
@@ -89,7 +100,7 @@ namespace assettray {
 /// above, order preserved, each asset once. `typeFilter` > 0 keeps one
 /// ModelTypes value. Folders are not included (the panel lists them itself).
 QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QString &folderGuid,
-                          int typeFilter = -1);
+                          int typeFilter = -1, bool showMembers = false);
 
 /// The rule applied to an arbitrary listing of `projectGuid`'s rows. The
 /// overload taking `pinned` (the project's pinned members, which rule 3 needs)
@@ -98,14 +109,14 @@ QVector<AssetRecord> collapse(Database *db, const QString &projectGuid,
                               const QVector<AssetRecord> &records);
 QVector<AssetRecord> collapse(Database *db, const QString &projectGuid,
                               const QVector<AssetRecord> &records,
-                              const QVector<AssetRecord> &pinned);
+                              const QVector<AssetRecord> &pinned, bool showMembers = false);
 
 /// The guids `collapse` drops out of `records`.
 QStringList hidden(Database *db, const QString &projectGuid,
                    const QVector<AssetRecord> &records);
 QStringList hidden(Database *db, const QString &projectGuid,
                    const QVector<AssetRecord> &records,
-                   const QVector<AssetRecord> &pinned);
+                   const QVector<AssetRecord> &pinned, bool showMembers = false);
 
 }   // namespace assettray
 

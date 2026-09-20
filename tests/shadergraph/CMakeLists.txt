@@ -12,11 +12,20 @@ add_executable(test_pbr_evaluator
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
+    # LibraryV1 and every node family it builds: the legacy-master conversion
+    # splices a real "oneminus" node in front of Roughness when a CHAIN fed the
+    # old Shininess socket, so the loader needs the shipping registry, not a
+    # hand-made stub with three entries in it.
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
@@ -25,7 +34,7 @@ set_target_properties(test_pbr_evaluator PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(test_pbr_evaluator PRIVATE EFFECT_BUILD_AS_LIB
-    JAHSHAKA_TEST_APP_DIR="${CMAKE_SOURCE_DIR}/app/shadergraph/")
+    JAHSHAKA_TEST_PRESET_DIR="${CMAKE_SOURCE_DIR}/app/content/materials/")
 target_include_directories(test_pbr_evaluator PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
@@ -66,7 +75,7 @@ set_target_properties(test_node_regressions PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(test_node_regressions PRIVATE EFFECT_BUILD_AS_LIB
-    JAHSHAKA_TEST_APP_DIR="${CMAKE_SOURCE_DIR}/app/shadergraph/")
+    JAHSHAKA_TEST_PRESET_DIR="${CMAKE_SOURCE_DIR}/app/content/materials/")
 target_include_directories(test_node_regressions PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
@@ -235,7 +244,7 @@ set_target_properties(test_panel_migration PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(test_panel_migration PRIVATE EFFECT_BUILD_AS_LIB
-    JAHSHAKA_TEST_APP_DIR="${CMAKE_SOURCE_DIR}/app/shadergraph/"
+    JAHSHAKA_TEST_PRESET_DIR="${CMAKE_SOURCE_DIR}/app/content/materials/"
     JAHSHAKA_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/")
 target_include_directories(test_panel_migration PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -325,41 +334,10 @@ set_tests_properties(shadergraph.blend_verbs PROPERTIES
     LABELS "shadergraph"
     TIMEOUT 120)
 
-# One-shot §3b tool: re-saves a shipped preset through the real migration
-# (NOT a test — invoked by hand; the re-saved presets are committed).
-add_executable(resave_presets
-    resave_presets.cpp
-    test_stubs.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
-set_target_properties(resave_presets PROPERTIES
-    CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(resave_presets PRIVATE EFFECT_BUILD_AS_LIB)
-target_include_directories(resave_presets PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-   ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(resave_presets PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+# (The `resave_presets` tool is DELETED — PRESET-UNIFY-1. It was the one-shot
+# §3b migration that re-saved the shipped `.effect` TEMPLATES through the node
+# loader; those templates were the second preset family and are gone, and the
+# twenty preset graphs that replace them are authored, not migrated.)
 
 
 

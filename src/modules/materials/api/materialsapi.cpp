@@ -35,7 +35,16 @@ For more information see the LICENSE file
 #include "services/imagematerial.h"
 #include "services/livetextures.h"
 #include "services/projectassets.h"
+#include "../core/graphdefinition.h"
+#include "services/shippedassets.h"
+#include "services/materialbundle.h"
+#include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
+#include "services/materialmembers.h"
+#include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
+#include "io/materialpresets.h"
+#include "services/materialpreviewservice.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "viewport/ieditorviewport.h"
@@ -62,20 +71,6 @@ For more information see the LICENSE file
 using namespace scriptmod;
 
 namespace {
-
-QVector<MaterialPreset> loadPresets()
-{
-    QVector<MaterialPreset> presets;
-    const QDir dir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
-    MaterialPresetReader reader;
-    const bool pbrOnly = true;   // engine viewport is the only renderer
-    for (const auto &file : dir.entryInfoList(QStringList(), QDir::Files)) {
-        auto preset = reader.readMaterialPreset(file.absoluteFilePath());
-        if (pbrOnly && preset.type.compare("PBR", Qt::CaseInsensitive) != 0) continue;
-        presets.append(preset);
-    }
-    return presets;
-}
 
 // The material.* key vocabulary, at file scope so material.set, its refusal
 // message and material.properties all read the SAME lists. They used to be
@@ -204,18 +199,74 @@ QVector<VerbInfo> MaterialsApi::verbs() const
         { "presets", "materials.presets() -> [{name, type, guid}]",
           "The built-in material presets (PBR only in engine mode); guid is the reserved id when one exists.",
           Needs::Document },
-        { "createGraph", "materials.createGraph(name) -> guid",
-          "Creates a new effect-graph asset in the open project from the shader template and opens it as the current graph.",
+        { "create", "materials.create(name, {graph}) -> guid",
+          "Creates a LIBRARY material bundle: ONE Material asset whose definition is its own file in the "
+          "content-addressed store, naming its textures by guid. With {graph: true} the definition also carries a "
+          "node graph as its PAYLOAD and the graph opens as the current one for graph.* verbs — there is no "
+          "separate shader/effect asset any more, and no second row. Adding it to a project is a separate gesture "
+          "(assets.addToProject), which pins the bundle and its members at the version the project took.",
           Needs::Document },
-        { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved}",
-          "Opens an effect graph (a Shader asset guid, or a .effect/.shader file path) as the current graph for "
-          "graph.* verbs. Texture nodes carrying an APP-RELATIVE image name — which is how the shipped .effect "
-          "presets reference their images — are imported and connected here, exactly as the Effects page does when "
-          "it instantiates a template; texturesResolved reports how many.",
+        { "addTexture", "materials.addTexture(materialGuid, pathOrGuid, {slot}) -> textureGuid",
+          "Puts an image on a material as a MEMBER. A path from anywhere on disk is imported through the one "
+          "import pipeline at that moment, keyed on its CONTENT (so picking the same image twice answers the same "
+          "library row — byte-identical duplicates are impossible); a guid already in the library is reused. The "
+          "image is pinned into the project that holds the material. With {slot: 'baseColorMap'} it is also "
+          "written into the definition and every mesh wearing the material is re-dressed — on a VALUES "
+          "material only: a GRAPH material's slots come from its graph, so a slot write there is refused "
+          "(the image is still imported and pinned; put it on a texture node with graph.addNode('texture') "
+          "+ graph.setValue). A SHIPPED PRESET is refused outright, before anything is imported: it is "
+          "read-only, and materials.createFromPreset makes the copy that is not.",
           Needs::Document },
-        { "regenerate", "materials.regenerate(shaderGuid) -> bool",
-          "Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app "
-          "upgraded' recovery) and refreshes materials in the open scene that use that cache.",
+        { "members", "materials.members(guid) -> [{guid, name, slot, node, role, bytes, usedBy, "
+                     "pinned, member, hidden}]",
+          "The bundle's members — the textures its definition names, including the maps a graph bake produced. "
+          "`slot` is the master slot it fills and `node` the graph texture node that holds it (one or the "
+          "other); `role` is 'baked' for a map the bake produced and 'source' for a picture; `bytes` is the "
+          "stored object's size; `usedBy` counts EVERY asset and node that names it, not one project's; "
+          "`member` says it arrived through a material's picker and `hidden` that it therefore folds into the "
+          "bundle instead of standing as its own library tile (the owner's rule V-2).",
+          Needs::Document },
+        { "cleanUnused", "materials.cleanUnused(guid?, {dryRun}) -> [{guid, name, bytes, scope}]",
+          "What is no longer used, and — with {dryRun: false} — its removal. DRY RUN IS THE DEFAULT: the store's "
+          "standing law is that nothing goes without showing the list first. With a material guid the scope is "
+          "that bundle's own born-inside textures with no user and no pin, and the LIBRARY ROW goes; with no guid "
+          "it is the open project's member pins that nothing in the project uses, and only the PIN goes. BYTES "
+          "are never removed here — a superseded object waits for assets.gc, which lists before it removes too.",
+          Needs::Document },
+        { "duplicate", "materials.duplicate(guid, {name}) -> guid",
+          "Copies ONE material into a second LIBRARY bundle — the drawer's Duplicate, as a verb. The copy names "
+          "the same TEXTURES (one object, 'used by 2' — sharing is what the bundle model is for; materials."
+          "makeUnique gives one back its privacy), but it carries NO BAKED MAPS: a bake is born inside exactly "
+          "one material and is never shared, so the copy bakes its own at its next save. `name` defaults to "
+          "'<original> copy' and is numbered against the library's own material names.",
+          Needs::Document },
+        { "makeUnique", "materials.makeUnique(materialGuid, textureGuid) -> guid",
+          "Gives THIS material its own copy of a shared texture: a second Texture row over the SAME bytes (the "
+          "store is content-addressed, so this costs no disk), swapped into this material's definition "
+          "everywhere it appears — master slot, bake record and graph node. Every other material that shared the "
+          "picture keeps it and never notices. On a material the open project holds, the swap is a copy-on-write: "
+          "the library original is untouched.",
+          Needs::Document },
+        { "loadGraph",
+          "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved, "
+          "texturesImported, readOnly}",
+          "Opens a material bundle's GRAPH (a Material asset guid, a shipped PRESET by name or by its reserved "
+          "guid, or a .effect/.shader file path) as the current graph for graph.* verbs. EVERY SHIPPED PRESET HAS "
+          "A GRAPH and opening one costs nothing: a preset nobody has used yet has no library row, so its graph "
+          "is read from the shipped file and no row is written — looking at a preset is never what seeds it. "
+          "`readOnly` is true for a shipped preset: the definition writer refuses its reserved guid, so an edit "
+          "made to this graph cannot be saved — materials.createFromPreset makes the editable copy. Texture nodes "
+          "naming an image by FILE rather than by guid are imported through the one content import and connected "
+          "here; texturesResolved reports how many. A READ-ONLY open IMPORTS NOTHING — it binds the "
+          "shipped file to the node instead, so looking at a preset writes no row, pins nothing into "
+          "the open project and never waits for the device; texturesImported is 0 for one and equal "
+          "to texturesResolved otherwise.",
+          Needs::Document },
+        { "regenerate", "materials.regenerate(materialGuid) -> bool",
+          "Re-evaluates and re-bakes a stored material bundle's maps (the 'cache deleted / app upgraded' recovery) "
+          "and re-dresses every mesh in the open scene wearing it. The maps land as MEMBER TEXTURES in the "
+          "content-addressed store, named in the definition by guid — there is no project-folder BakedMaps/ tree "
+          "any more, so this works with no project open and on any machine.",
           Needs::Document },
         { "createFromImage", "materials.createFromImage(textureGuid, {graph}) -> materialGuid",
           "Creates the standard image material asset for a Texture (IMAGE_PLANE_SPEC option B1): a PBR .material "
@@ -224,8 +275,29 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "pinned into the project (bin-visible, droppable). Direct image add-to-project runs this automatically; "
           "re-creating for the same image returns a fresh asset. With {graph: true} (B2, needs an open project) "
           "it instead creates an editable Shader GRAPH asset — texture → textureSampler → PbrMaster.BaseColor — "
-          "returning the shader guid (opens in the Materials page; applies via the drawer/graph.toMaterial). "
+          "returning the new MATERIAL's guid (one row: the graph rides its definition as a payload; opens in the "
+          "Materials page; applies via the drawer/graph.toMaterial). "
           "NOT undoable.",
+          Needs::Document },
+        { "seedPresets", "materials.seedPresets() -> int",
+          "Seeds every shipped preset into the library as its read-only bundle — the FIRST-RUN seed, "
+          "on demand — and answers how many exist afterwards (20). Idempotent and normally "
+          "unnecessary: the app runs this at launch, with the maps' bytes put in the store on a "
+          "worker thread so the row pass has no device wait in it (services/materialpresetseeder.h). "
+          "Call it when you need the rows to be there NOW — a script that counts material rows, or a "
+          "library whose preset rows were removed — and it will do any work the seeder has not "
+          "finished, on the calling thread.",
+          Needs::Document },
+        { "createFromPreset", "materials.createFromPreset(presetOrGuid, {name}) -> materialGuid",
+          "Customises a SHIPPED PRESET (R18): an editable copy of it as an ordinary library material bundle, "
+          "because a preset itself is read-only — the definition writer refuses one by name, not just the UI. "
+          "THE COPY CARRIES THE PRESET'S GRAPH, so it opens in the node editor and every edit gesture works "
+          "on it — that is what 'a custom preset is a new material based on the preset it was customised from' "
+          "means (PRESET-UNIFY-1). "
+          "The copy names the preset's own member textures (one object, shared) and takes the name "
+          "'<Preset>-1', the suffix bumped against the material names the library already holds, unless {name} "
+          "says otherwise. With a project open it is added to the project too, so it lands in the project's "
+          "materials drawer and the editor's asset tray. NOT undoable (it is an asset, like an import).",
           Needs::Document },
     };
 }
@@ -248,15 +320,57 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     // the same path a direct image add-to-project takes for its companion.
     if (host.project && !host.project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(materialGuid, host.db, host.project, ProjectAssets::AddKind::Direct);
+    // THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1). The mint stores the
+    // image as a fallback — correct and instant, and the only answer headless;
+    // ONE gesture can afford ONE render, so ask for it here. A batch (a drop of
+    // a hundred images) goes through the tray's one-per-turn backlog instead.
+    thumbrebuild::rebuildOne(host.db, host.project, materialGuid, EngineHost::instance().engine());
     return materialGuid;
+}
+
+int MaterialsApi::seedPresets()
+{
+    if (!host.db) { fail("materials: not available in this session"); return 0; }
+    // Take the job over from the launch seeder rather than racing it (one
+    // importer at a time — MaterialPresetSeeder::finishNow).
+    MaterialPresetSeeder::instance().finishNow();
+    QString error;
+    const int seeded = MaterialPresetAssets::seedAll(host.db, &error);
+    if (!error.isEmpty())
+        fail(QStringLiteral("materials.seedPresets: %1").arg(error));
+    return seeded;
+}
+
+QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVariantMap &options)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    static const QStringList knownOptions = { QStringLiteral("name") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.createFromPreset"),
+                                              options, knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+
+    MaterialPresetSeeder::instance().finishNow();   // one importer at a time
+    QString error;
+    const QString copy = MaterialPresetAssets::customise(
+        presetOrGuid, options.value(QStringLiteral("name")).toString(),
+        host.db, host.project, &error);
+    if (copy.isEmpty()) {
+        fail(QStringLiteral("materials.createFromPreset: %1").arg(error));
+        return QString();
+    }
+    auto *asset = new AssetMaterial;
+    asset->fileName = host.db->fetchAsset(copy).name;
+    asset->assetGuid = copy;
+    AssetManager::addAsset(asset);
+    return copy;
 }
 
 QString MaterialsApi::createImageGraph(const QString &textureGuid)
 {
     // IMAGE_PLANE_SPEC option B2: the graph twin — the spec's template
-    // texture → textureSampler → PbrMaster.BaseColor as an editable Shader
-    // asset. createGraph's registration shape, plus the two nodes.
-    if (!requireProject()) return QString();
+    // texture → textureSampler → PbrMaster.BaseColor. It is a MATERIAL BUNDLE
+    // with a graph payload now, like every other graph material (spec 2.3).
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
 
     const auto record = host.db->fetchAsset(textureGuid);
     if (record.guid.isEmpty()
@@ -265,17 +379,7 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
         return QString();
     }
 
-    const QString parentFolder = host.project->getProjectGuid();
-    QString shaderName = QFileInfo(record.name).completeBaseName();
-    const QStringList existing = host.db->fetchAssetNameByParent(parentFolder);
-    int increment = 1;
-    while (existing.contains(IrisUtils::buildFileName(shaderName, "shader")))
-        shaderName = QStringLiteral("%1 %2").arg(QFileInfo(record.name).completeBaseName()).arg(increment++);
-
-    const QString assetGuid = GUIDManager::generateGUID();
-    host.db->createAssetEntry(assetGuid, IrisUtils::buildFileName(shaderName, "shader"),
-                              static_cast<int>(ModelTypes::Shader), parentFolder,
-                              host.project->getProjectGuid());
+    const QString shaderName = QFileInfo(record.name).completeBaseName();
 
     auto *lib = new LibraryV1();
     auto *graph = new NodeGraph;
@@ -295,24 +399,32 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     graph->addConnection(texNode, 0, sampler, 0);   // texture -> sampler.Texture
     graph->addConnection(sampler, 0, master, 0);    // sampler.RGBA -> Base Color
 
-    // serializeWithBake so the stored definition carries the pbrMaterial
-    // object immediately (a bare sampler chain is Passthrough — no bake
-    // files, the image itself is the map).
-    MaterialHelper::setProjectRoot(host.project->getProjectFolder());
-    QJsonObject definition = MaterialHelper::serializeWithBake(graph, assetGuid);
-    definition["name"] = shaderName;
-    definition.insert("guid", assetGuid);
-    host.db->updateAssetAsset(assetGuid, QJsonDocument(definition).toJson());
-    host.db->createDependency(static_cast<int>(ModelTypes::Shader),
-                              static_cast<int>(ModelTypes::Texture),
-                              assetGuid, textureGuid, host.project->getProjectGuid());
+    // The row first (the bake's member textures need a parent), then the
+    // definition: the bundle writer derives the Material→Texture edge from it,
+    // so nobody writes one by hand any more.
+    QJsonObject seed;
+    seed["materialType"] = "pbr";
+    seed["name"] = shaderName;
+    QString error;
+    const QString assetGuid = MaterialBundle::create(host.db, shaderName, seed,
+                                                     QByteArray(), &error);
+    if (assetGuid.isEmpty()) {
+        delete graph;
+        fail(QStringLiteral("materials.createFromImage: %1").arg(error));
+        return QString();
+    }
+    const auto build = materials::buildDefinition(graph, assetGuid, host.db, host.project);
+    if (!build.ok()) {
+        fail(QStringLiteral("materials.createFromImage: %1").arg(build.error));
+        return assetGuid;
+    }
+    const auto written = MaterialBundle::write(host.db, host.project, assetGuid,
+                                               build.definition);
+    if (!written.ok) fail(QStringLiteral("materials.createFromImage: %1").arg(written.error));
 
     auto assetShader = new AssetMaterial;
     assetShader->fileName = shaderName;
     assetShader->assetGuid = assetGuid;
-    assetShader->path = IrisUtils::join(host.project->getProjectFolder(),
-                                        IrisUtils::buildFileName(shaderName, "shader"));
-    assetShader->setValue(QVariant::fromValue(definition));
     AssetManager::addAsset(assetShader);
 
     if (mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
@@ -324,10 +436,9 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
     if (!host.db) return fail("materials: not available in this session");
     if (!requireProject()) return false;
 
-    const QByteArray blob = host.db->fetchAssetData(shaderGuid);
-    if (blob.isEmpty())
-        return fail(QStringLiteral("materials.regenerate: no shader asset '%1'").arg(shaderGuid));
-    const QJsonObject definition = QJsonDocument::fromJson(blob).object();
+    const QJsonObject definition = MaterialBundle::read(host.db, shaderGuid, host.project);
+    if (definition.isEmpty())
+        return fail(QStringLiteral("materials.regenerate: no material '%1'").arg(shaderGuid));
     if (!definition.contains("shadergraph"))
         return fail("materials.regenerate: the asset has no 'shadergraph' object");
 
@@ -335,44 +446,32 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
     if (!graph || !graph->getMasterNode())
         return fail("materials.regenerate: the graph has no master node");
 
-    MaterialHelper::setProjectRoot(host.project->getProjectFolder());
-    QJsonObject rebaked = MaterialHelper::serializeWithBake(graph, shaderGuid);
+    const auto build = materials::buildDefinition(graph, shaderGuid, host.db, host.project);
+    if (!build.ok()) return fail(QStringLiteral("materials.regenerate: %1").arg(build.error));
+    QJsonObject rebaked = build.definition;
     // keep the identity keys the stored definition carried
     if (definition.contains("name")) rebaked["name"] = definition["name"];
-    if (definition.contains("guid")) rebaked["guid"] = definition["guid"];
-    host.db->updateAssetAsset(shaderGuid, QJsonDocument(rebaked).toJson());
+    const bool projectOwns =
+        host.project && !host.project->getProjectGuid().isEmpty()
+        && host.db->isAssetPinnedBy(host.project->getProjectGuid(), shaderGuid);
+    const auto written = MaterialBundle::write(
+        host.db, host.project, shaderGuid, rebaked,
+        projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
+    if (!written.ok) return fail(QStringLiteral("materials.regenerate: %1").arg(written.error));
 
-    // refresh applied materials in the open scene: PbrMaterials whose maps
-    // point into this shader's BakedMaps cache rebuild from the fresh bake
-    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
-                                                             : iris::ScenePtr();
-    if (scene && scene->getRootNode()) {
-        const QString marker = QStringLiteral("/BakedMaps/") + shaderGuid + QStringLiteral("/");
-        std::function<void(const iris::SceneNodePtr &)> walk =
-            [&](const iris::SceneNodePtr &n) {
-                if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                    auto mesh = n.staticCast<iris::MeshNode>();
-                    if (auto pbr = mesh->getMaterial().dynamicCast<iris::PbrMaterial>()) {
-                        bool usesCache = false;
-                        for (auto it = pbr->textures.constBegin(); it != pbr->textures.constEnd(); ++it)
-                            if (it.value() && it.value()->source.contains(marker)) { usesCache = true; break; }
-                        if (usesCache) {
-                            if (auto fresh = MaterialHelper::createPbrMaterialFromDefinition(rebaked))
-                                mesh->setMaterial(fresh);
-                        }
-                    }
-                }
-                for (const auto &child : n->children()) walk(child);
-            };
-        walk(scene->getRootNode());
-    }
+    // AND THE SCENE FOLLOWS, through the ONE apply. The old walk here matched
+    // materials by a "/BakedMaps/<guid>/" substring in a texture's source
+    // path; a baked map is a store object named by its hash now, so the
+    // catalog's own Object -> Material edges are what say who wears it.
+    if (host.services && host.services->sceneEdit)
+        host.services->sceneEdit->refreshMaterialUsers(shaderGuid);
     return true;
 }
 
 QVariantList MaterialsApi::presets()
 {
     QVariantList out;
-    for (const auto &preset : loadPresets()) {
+    for (const auto &preset : MaterialPresets::all()) {
         out.append(QVariantMap{
             { "name", preset.name },
             { "type", preset.type },
@@ -381,53 +480,266 @@ QVariantList MaterialsApi::presets()
     return out;
 }
 
-QString MaterialsApi::createGraph(const QString &name)
+QString MaterialsApi::create(const QString &name, const QVariantMap &options)
 {
     if (!host.db) { fail("materials: not available in this session"); return QString(); }
-    if (!requireProject()) return QString();
-    if (name.trimmed().isEmpty()) { fail("materials.createGraph: a name is required"); return QString(); }
+    if (name.trimmed().isEmpty()) { fail("materials.create: a name is required"); return QString(); }
+    const QString materialName = name.trimmed();
 
-    // ShaderAssetWidget::createShader minus the QListWidget bookkeeping.
-    const QString parentFolder = host.project->getProjectGuid();
-    QString shaderName = name.trimmed();
-    const QStringList existing = host.db->fetchAssetNameByParent(parentFolder);
-    int increment = 1;
-    while (existing.contains(IrisUtils::buildFileName(shaderName, "shader")))
-        shaderName = QStringLiteral("%1 %2").arg(name.trimmed()).arg(increment++);
+    // A LIBRARY BUNDLE — no project needed, and nothing minted in one. Adding
+    // it to a project is a separate, explicit gesture (`assets.addToProject`),
+    // which is the four-drawer rule (OWNER_REVIEW 9).
+    NodeGraph *graph = nullptr;
+    QJsonObject definition;
+    definition["materialType"] = "pbr";
+    definition["name"] = materialName;
 
-    const QString assetGuid = GUIDManager::generateGUID();
-    host.db->createAssetEntry(assetGuid, IrisUtils::buildFileName(shaderName, "shader"),
-                              static_cast<int>(ModelTypes::Shader), parentFolder,
-                              host.project->getProjectGuid());
+    if (options.value("graph").toBool()) {
+        // A minimal graph with a PbrMaterial master — the current Effects
+        // format (the old ShaderTemplate.shader predates the graph and cannot
+        // be reopened by the graph loader; the .effect presets are the live
+        // shape).
+        graph = new NodeGraph;
+        graph->setNodeLibrary(new LibraryV1());
+        auto *master = new PbrMasterNode();
+        graph->addNode(master);
+        graph->setMasterNode(master);
+        MaterialSettings settings;
+        settings.name = materialName;
+        graph->setMaterialSettings(settings);
+        // THE GRAPH IS A PAYLOAD of the ONE Material row (spec 2.3) — there is
+        // no ModelTypes::Shader row any more.
+        definition["shadergraph"] = graph->serialize();
+        definition["values"] = PbrGraphEvaluator::evaluate(graph).values;
+    }
 
-    // A minimal graph with a PbrMaterial master — the current Effects format
-    // (the old ShaderTemplate.shader predates the graph and cannot be reopened
-    // by the graph loader; the .effect presets are the live shape).
-    auto *graph = new NodeGraph;
-    graph->setNodeLibrary(new LibraryV1());
-    auto *master = new PbrMasterNode();
-    graph->addNode(master);
-    graph->setMasterNode(master);
-    MaterialSettings settings;
-    settings.name = shaderName;
-    graph->setMaterialSettings(settings);
+    QString error;
+    const QString assetGuid = MaterialBundle::create(host.db, materialName, definition,
+                                                     QByteArray(), &error);
+    if (assetGuid.isEmpty()) {
+        delete graph;
+        fail(QStringLiteral("materials.create: %1").arg(error));
+        return QString();
+    }
 
-    QJsonObject definition = MaterialHelper::serialize(graph);
-    definition["name"] = shaderName;
-    definition.insert("guid", assetGuid);
-    host.db->updateAssetAsset(assetGuid, QJsonDocument(definition).toJson());
-
-    auto assetShader = new AssetMaterial;
-    assetShader->fileName = shaderName;
-    assetShader->assetGuid = assetGuid;
-    assetShader->path = IrisUtils::join(host.project->getProjectFolder(),
-                                        IrisUtils::buildFileName(shaderName, "shader"));
-    assetShader->setValue(QVariant::fromValue(definition));
-    AssetManager::addAsset(assetShader);
+    auto *asset = new AssetMaterial;
+    asset->fileName = materialName;
+    asset->assetGuid = assetGuid;
+    AssetManager::addAsset(asset);
 
     // Adopt the freshly built graph as the current one directly.
-    if (mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
+    if (graph && mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
     return assetGuid;
+}
+
+QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pathOrGuid,
+                                 const QVariantMap &options)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    if (materialGuid.isEmpty() || pathOrGuid.isEmpty()) {
+        fail("materials.addTexture: a material and an image are required");
+        return QString();
+    }
+    const AssetRecord row = host.db->fetchAsset(materialGuid);
+    if (row.type != static_cast<int>(ModelTypes::Material)) {
+        fail(QStringLiteral("materials.addTexture: '%1' is not a material").arg(materialGuid));
+        return QString();
+    }
+    // A SHIPPED PRESET IS READ-ONLY, AND THE ANSWER COMES BEFORE THE WORK
+    // (PRESET-UNIFY-1, the same rule as the apply's F6 test). The definition
+    // writer refuses a reserved guid at the end of this function anyway — but
+    // by then a picture from disk has been imported into the library and
+    // pinned into the project for an edit that was never going to land, which
+    // is exactly the shape of defect "nothing is imported for an apply that
+    // cannot happen" removed from the apply.
+    const QString shipped = MaterialBundle::shippedPresetName(materialGuid);
+    if (!shipped.isEmpty()) {
+        fail(QStringLiteral("materials.addTexture: '%1' is a material the app ships and is "
+                            "read-only — materials.createFromPreset('%1') makes your own copy")
+                 .arg(shipped));
+        return QString();
+    }
+
+    // EITHER A GUID ALREADY IN THE LIBRARY, OR A PATH FROM ANYWHERE ON DISK —
+    // and a path is IMPORTED at that moment (owner, spec 0/Q1: "adding a
+    // texture to a material would import it into the project"). By CONTENT, so
+    // picking the same image twice answers the same row and a duplicate is
+    // impossible.
+    QString textureGuid;
+    if (!MaterialBundle::looksLikePath(pathOrGuid)) {
+        const AssetRecord texRow = host.db->fetchAsset(pathOrGuid);
+        if (texRow.type != static_cast<int>(ModelTypes::Texture)) {
+            fail(QStringLiteral("materials.addTexture: '%1' is not a texture").arg(pathOrGuid));
+            return QString();
+        }
+        textureGuid = pathOrGuid;
+        // Already an asset: a project that holds the material should hold its
+        // member too.
+        if (host.project && !host.project->getProjectGuid().isEmpty()
+            && host.db->isAssetPinnedBy(host.project->getProjectGuid(), materialGuid)
+            && !host.db->isAssetPinnedBy(host.project->getProjectGuid(), textureGuid))
+            ProjectAssets::addToProject(textureGuid, host.db, host.project,
+                                        ProjectAssets::AddKind::Binding);
+    } else {
+        const ShippedAssets::Pinned imported = ShippedAssets::importTexture(
+            pathOrGuid, QFileInfo(pathOrGuid).fileName(), host.db, host.project);
+        if (!imported.ok() || imported.guid.isEmpty()) {
+            fail(QStringLiteral("materials.addTexture: %1").arg(
+                     imported.error.isEmpty() ? QStringLiteral("the import refused the image")
+                                              : imported.error));
+            return QString();
+        }
+        textureGuid = imported.guid;
+        // THE MEMBER STAMP (V-2, owner Q4). A picture that arrived THROUGH a
+        // material's picker folds into the bundle instead of standing as its
+        // own library tile — and only a row this import MINTED gets the
+        // stamp: if the bytes were already in the library the user imported
+        // that image themselves, and their own texture is always a tile.
+        if (imported.minted)
+            materialmembers::stampMember(host.db, textureGuid, materialGuid);
+    }
+
+    // THE SLOT. Naming one writes it into the definition (and the membership
+    // edge follows, derived); naming none imports the image and pins it as a
+    // member without changing what the material looks like — which is what a
+    // texture NODE in the graph wants.
+    const QString slot = options.value("slot").toString();
+    if (!slot.isEmpty()) {
+        if (!MaterialBundle::textureSlots().contains(slot)) {
+            fail(QStringLiteral("materials.addTexture: '%1' is not a texture slot").arg(slot));
+            return QString();
+        }
+        QJsonObject definition = MaterialBundle::read(host.db, materialGuid, host.project);
+        // A GRAPH MATERIAL'S SLOTS BELONG TO ITS GRAPH, and writing one here
+        // would be a value the next save silently overwrites: `graph.save`
+        // rebuilds `values` from the graph, which is the whole point of a
+        // graph material. Refuse, and say where the picture goes instead —
+        // an edit that quietly disappears at the next autosave is worse than
+        // one that does not happen. (The image IS imported and pinned by the
+        // time we get here, which is what the caller asked for and what the
+        // returned guid is for: hand it to graph.setValue on a texture node.)
+        if (definition.contains(QStringLiteral("shadergraph"))) {
+            fail(QStringLiteral(
+                     "materials.addTexture: '%1' is a graph material, so its '%2' comes from "
+                     "the graph — the image was imported and pinned (%3); put it on a texture "
+                     "node with graph.addNode('texture') + graph.setValue(node, guid)")
+                     .arg(row.name, slot, textureGuid));
+            return QString();
+        }
+        QJsonObject values = definition["values"].toObject();
+        values[slot] = textureGuid;
+        definition["values"] = values;
+        const bool projectOwns =
+            host.project && !host.project->getProjectGuid().isEmpty()
+            && host.db->isAssetPinnedBy(host.project->getProjectGuid(), materialGuid);
+        const auto written = MaterialBundle::write(
+            host.db, host.project, materialGuid, definition,
+            projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
+        if (!written.ok) { fail(QStringLiteral("materials.addTexture: %1").arg(written.error)); return QString(); }
+        if (host.services && host.services->sceneEdit)
+            host.services->sceneEdit->refreshMaterialUsers(materialGuid);
+    }
+    return textureGuid;
+}
+
+QVariantList MaterialsApi::members(const QString &materialGuid)
+{
+    QVariantList out;
+    if (!host.db) { fail("materials: not available in this session"); return out; }
+    if (MaterialBundle::read(host.db, materialGuid, host.project).isEmpty()) {
+        fail(QStringLiteral("materials.members: no material '%1'").arg(materialGuid));
+        return out;
+    }
+    // ONE PROJECTION (services/materialmembers.h): the Members panel draws
+    // exactly these rows, so the window and the verb cannot describe the
+    // bundle differently.
+    for (const materialmembers::Member &m :
+         materialmembers::describe(host.db, host.project, materialGuid)) {
+        out.append(QVariantMap{
+            { "guid", m.guid },
+            { "name", m.name },
+            { "slot", m.slot },
+            { "node", m.node },
+            { "role", m.role },
+            { "baked", m.role == QLatin1String("baked") },
+            { "bytes", static_cast<qlonglong>(m.bytes) },
+            { "usedBy", m.usedBy },
+            { "pinned", m.pinned },
+            { "member", m.member },
+            { "hidden", m.hidden } });
+    }
+    return out;
+}
+
+QVariantList MaterialsApi::cleanUnused(const QString &materialGuid, const QVariantMap &options)
+{
+    QVariantList out;
+    if (!host.db) { fail("materials: not available in this session"); return out; }
+    static const QStringList knownOptions = { QStringLiteral("dryRun") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.cleanUnused"), options,
+                                              knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+
+    // DRY RUN IS THE DEFAULT (the store's standing law, assetgc.h; owner Q6:
+    // "list first"). A caller has to say `{dryRun:false}` to remove anything.
+    const bool dryRun = options.value(QStringLiteral("dryRun"), true).toBool();
+    if (!materialGuid.isEmpty()
+        && MaterialBundle::read(host.db, materialGuid, host.project).isEmpty()) {
+        fail(QStringLiteral("materials.cleanUnused: no material '%1'").arg(materialGuid));
+        return out;
+    }
+
+    QString error;
+    const QVector<materialmembers::Unused> entries =
+        dryRun ? materialmembers::unused(host.db, host.project, materialGuid)
+               : materialmembers::cleanUnused(host.db, host.project, materialGuid, &error);
+    if (!error.isEmpty()) { fail(QStringLiteral("materials.cleanUnused: %1").arg(error)); return out; }
+    for (const auto &entry : entries)
+        out.append(QVariantMap{ { "guid", entry.guid },
+                                { "name", entry.name },
+                                { "bytes", static_cast<qlonglong>(entry.bytes) },
+                                { "scope", entry.scope } });
+    return out;
+}
+
+QString MaterialsApi::duplicate(const QString &materialGuid, const QVariantMap &options)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    static const QStringList knownOptions = { QStringLiteral("name") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.duplicate"), options,
+                                              knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+    QString error;
+    const QString copy = materialmembers::duplicate(host.db, host.project, materialGuid,
+                                                    options.value(QStringLiteral("name")).toString(),
+                                                    &error);
+    if (copy.isEmpty()) {
+        fail(QStringLiteral("materials.duplicate: %1").arg(error));
+        return QString();
+    }
+    auto *asset = new AssetMaterial;
+    asset->fileName = host.db->fetchAsset(copy).name;
+    asset->assetGuid = copy;
+    AssetManager::addAsset(asset);
+    return copy;
+}
+
+QString MaterialsApi::makeUnique(const QString &materialGuid, const QString &textureGuid)
+{
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+    QString error;
+    const QString guid = materialmembers::makeUnique(host.db, host.project, materialGuid,
+                                                     textureGuid, &error);
+    if (guid.isEmpty()) {
+        fail(QStringLiteral("materials.makeUnique: %1").arg(error));
+        return QString();
+    }
+    // The picture on the mesh does not change (same bytes) — but the material
+    // it wears now names a different row, and the ONE apply is what keeps the
+    // scene and the definition in step.
+    if (host.services && host.services->sceneEdit)
+        host.services->sceneEdit->refreshMaterialUsers(materialGuid);
+    return guid;
 }
 
 QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
@@ -444,6 +756,22 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
             return out;
         }
         definition = QJsonDocument::fromJson(file.readAll()).object();
+    } else if (MaterialPresetAssets::isPreset(guidOrPath)) {
+        // A SHIPPED PRESET'S GRAPH, WITHOUT SEEDING IT (PRESET-UNIFY-1). Every
+        // preset is a graph now, and looking at one must not be the thing that
+        // writes its row: a preset nobody has used yet has no row at all
+        // (seeding is on first USE), so the shipped graph is read straight off
+        // disk. A preset that HAS been seeded is read from its definition
+        // instead — the same graph with its images named by the guids the
+        // library gave them.
+        assetGuid = MaterialPresetAssets::guidFor(guidOrPath);
+        const QByteArray blob = host.db ? host.db->fetchAssetData(assetGuid) : QByteArray();
+        definition = QJsonDocument::fromJson(blob).object();
+        if (!definition.contains(QStringLiteral("shadergraph"))) {
+            bool found = false;
+            const MaterialPreset preset = MaterialPresets::find(assetGuid, &found);
+            if (found) definition[QStringLiteral("shadergraph")] = preset.graph;
+        }
     } else if (host.db) {
         const QByteArray blob = host.db->fetchAssetData(guidOrPath);
         if (blob.isEmpty()) {
@@ -463,16 +791,31 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     }
     // The real loader path (pixel-parity-tested): deserialize with LibraryV1.
     NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1());
-    // The same app-relative texture resolution the Effects page does when it
-    // instantiates a template (samples audit, 2026-09-04): without it a shipped
-    // .effect preset opened through this verb had every texture node
-    // unconnected, so graph.bake produced an untextured material.
-    out["texturesResolved"] = MaterialHelper::resolveAppRelativeTextures(graph);
+
+    // READ-ONLY IS PART OF THE ANSWER (PRESET-UNIFY-1). A shipped preset opens
+    // to be READ: the definition writer refuses its reserved guid, so a caller
+    // that edits this graph will have its save refused, and that has to be
+    // knowable before the edit rather than after it.
+    const bool readOnly = !MaterialBundle::shippedPresetName(assetGuid).isEmpty();
+
+    // AND A READ WRITES NOTHING (fix round). Binding a graph's file-named
+    // images through the content import is how they become library rows — and
+    // it is a device wait on the calling thread for every picture the store
+    // does not already hold, plus a pin into the open project. Doing that
+    // because somebody LOOKED at a preset is the wrong answer twice over, and
+    // it is what this verb did: opening the unseeded Brick preset imported and
+    // pinned three PNGs. A read-only open binds the shipped FILE instead;
+    // everything that draws the graph works from paths.
+    out["texturesResolved"] = MaterialHelper::resolveAppRelativeTextures(
+        graph, readOnly ? MaterialHelper::TextureBinding::PathOnly
+                        : MaterialHelper::TextureBinding::Import);
+    out["texturesImported"] = readOnly ? 0 : out["texturesResolved"];
     mGraphApi->setCurrent(graph, assetGuid);
 
     out["nodes"] = graph->nodes.size();
     out["master"] = graph->masterNode ? graph->masterNode->typeName : QString();
     out["name"] = definition.value("name").toString();
+    out["readOnly"] = readOnly;
     return out;
 }
 
@@ -482,9 +825,36 @@ QVector<VerbInfo> MaterialApi::verbs() const
 {
     return {
         { "apply", "material.apply(nodeId, presetOrGuid) -> bool",
-          "Applies a built-in preset (by name or reserved guid) or a saved project material asset (by guid) to a node. "
-          "A container node (an imported model's root) applies to every mesh under it, each with its own material instance. "
-          "Also registers preset applies as a project asset, like the presets panel. Undoable.",
+          "Applies a MATERIAL BUNDLE — a shipped preset (by name or by its reserved guid) or any "
+          "library/project material asset (by guid) — to a node. A container node (an imported "
+          "model's root) applies to every mesh under it, each with its own material instance. "
+          "AN APPLY MINTS NOTHING: a preset is a read-only library bundle, seeded once with its "
+          "reserved guid the first time anything uses it, and applying it PINS that bundle into "
+          "the open project and dresses the meshes — three applies of one preset add zero rows. "
+          "Undoable as ONE step, and the step carries everything the apply did: the material on "
+          "each mesh, the project's pin when this apply created it, and the node→material use "
+          "edges. Ends any live material.preview first, so the undo step captures the node's "
+          "true original material.",
+          Needs::Document },
+        { "preview", "material.preview(nodeId, presetOrGuid) -> bool",
+          "Shows a material on a node WITHOUT applying it — the editor's live hover preview, which "
+          "is what a material dragged over the scene does. It takes the same three payloads "
+          "material.apply takes (a preset name or reserved guid, a project material row, a "
+          "Materials-module Shader row), resolves each into a PRIVATE instance, and puts the "
+          "node's own material back the moment the preview moves, ends or anything writes the "
+          "document. It pushes NO undo step, leaves the dirty flag alone, writes no database row, "
+          "and — deliberately — costs no GI re-solve: the scene tells the renderer that what it "
+          "is showing was never committed. Previewing a second node restores the first. False, "
+          "with no preview left running, when the payload resolves to no material, the node is "
+          "not a mesh, or the node is LOCKED (its drop would be refused, so its preview would be "
+          "a promise the release cannot keep). A save taken while a preview is up writes the "
+          "ORIGINAL material.",
+          Needs::Document },
+        { "endPreview", "material.endPreview() -> bool",
+          "Ends the live material.preview, putting the previewed node's own material back. True "
+          "when a preview was running. Harmless with none. Every path that commits the document "
+          "calls it for you — this verb exists for the caller that started a preview and changed "
+          "its mind.",
           Needs::Document },
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, textureScale, ...}) -> bool",
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. "
@@ -615,26 +985,55 @@ bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
 
     host.services->selection->select(node);
 
-    QString name = Constants::Reserved::DefaultMaterials.value(presetOrGuid);
-    if (name.isEmpty()) name = presetOrGuid;
+    // THE ONE APPLY (MATERIAL-PREVIEW-1). This verb used to carry its own copy
+    // of the preset scan and its own fallback to the material-asset path, beside
+    // a second copy in MainWindow::applyMaterialPreset that the viewport's drop
+    // called; the two had already drifted in what they accepted.
+    if (host.services->sceneEdit->applyMaterial(presetOrGuid, node)) return true;
 
-    const auto presets = loadPresets();
-    for (const auto &preset : presets) {
-        if (preset.name.compare(name, Qt::CaseInsensitive) == 0) {
-            host.services->sceneEdit->applyMaterialPreset(preset, node);
-            return true;
-        }
+    return fail(QStringLiteral("material.apply: no preset, material asset or effect graph '%1' (materials.presets() and assets.list list them)").arg(presetOrGuid));
+}
+
+bool MaterialApi::preview(const QString &nodeId, const QString &presetOrGuid)
+{
+    if (!host.services || !host.services->materialPreview)
+        return fail("material.preview: not available in this session");
+    auto scene = host.services->sceneEdit ? host.services->sceneEdit->scene() : iris::ScenePtr();
+    if (!scene) return fail("material.preview: no scene is open");
+    auto node = findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) return fail(QStringLiteral("material.preview: no node '%1'").arg(nodeId));
+    if (node->getSceneNodeType() != iris::SceneNodeType::Mesh)
+        return fail(QStringLiteral("material.preview: '%1' is not a mesh node").arg(nodeId));
+
+    if (host.services->materialPreview->begin(node, presetOrGuid)) {
+        // Ends with the run that started it (MaterialPreviewService::markVerbOwned).
+        host.services->materialPreview->markVerbOwned();
+        return true;
     }
 
-    // Not a built-in preset: a saved project material asset guid (the same
-    // fallback the viewport drop uses).
-    if (host.services->sceneEdit->applyMaterialAsset(presetOrGuid, node)) return true;
+    // ONE refusal, two causes, and they are worth telling apart: a locked node
+    // will refuse the drop too, and an unresolvable payload is not a material
+    // at all.
+    if (!node->isPickable())
+        return fail(QStringLiteral("material.preview: '%1' is locked — unlock it in the hierarchy")
+                        .arg(node->getName()));
+    return fail(QStringLiteral("material.preview: no preset, material asset or effect graph '%1' (materials.presets() and assets.list list them)")
+                    .arg(presetOrGuid));
+}
 
-    return fail(QStringLiteral("material.apply: no preset or material asset '%1' (materials.presets() and assets.list list them)").arg(presetOrGuid));
+bool MaterialApi::endPreview()
+{
+    if (!host.services || !host.services->materialPreview)
+        return fail("material.endPreview: not available in this session");
+    return host.services->materialPreview->end();
 }
 
 bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
 {
+    // A preview ends before this verb READS the node's material: bound to the
+    // borrowed instance, the command below would write onto a material the
+    // node stops wearing the moment it is pushed (code review, F1).
+    if (host.services && host.services->materialPreview) host.services->materialPreview->end();
     auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.set"));
     if (!meshNode) return false;
     auto material = meshNode->getMaterial();
@@ -1061,7 +1460,7 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "getValue", "graph.getValue(nodeId) -> value",
           "Reads a node's value back.",
           Needs::Document },
-        { "evaluate", "graph.evaluate() -> {values, unsupported, approximated, animated, hasPbrMaster}",
+        { "evaluate", "graph.evaluate() -> {values, unsupported, approximated, animated}",
           "Folds the current graph to PBR material values (the evaluator is GL-free by design). Pure math chains fold; "
           "approximated lists nodes evaluated against the fake fragment context (worldNormal, fresnel, time at t=0, ...).",
           Needs::Document },
@@ -1086,7 +1485,8 @@ QVector<VerbInfo> GraphApi::verbs() const
           Needs::Document },
         { "bake", "graph.bake({resolution?, time?}) -> {values, maps, passthrough, approximated, unsupported, animated, msElapsed}",
           "Full-quality synchronous bake of the current graph: UV-varying chains render per texel into "
-          "<project>/BakedMaps/<guid>/ PNGs (hash-cached, headless-capable - CPU only), uniform chains fold, "
+          "hash-cached PNGs in the store's own disposable derived cache (headless-capable - CPU only; graph.save "
+          "is what turns them into member textures), uniform chains fold, "
           "bare textures pass through. Map values are project-relative paths.",
           Needs::Document },
         { "toMaterial", "graph.toMaterial(nodeId) -> bool",
@@ -1107,10 +1507,10 @@ QVector<VerbInfo> GraphApi::verbs() const
           Needs::Document },
         { "settings", "graph.settings() -> {name, blendMode, bakeResolution}",
           "The current graph's material settings; blendMode is one of "
-          "'Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate'.",
+          "'Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate' | 'Glass' | 'Refractive'.",
           Needs::Document },
         { "setBlendMode", "graph.setBlendMode(mode) -> bool",
-          "Sets the master material's blend mode ('Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate' — "
+          "Sets the master material's blend mode ('Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate' | 'Glass' | 'Refractive' — "
           "the Unreal set; 'Blend' is accepted as the legacy name for 'Translucent'). Material state only: bakes are "
           "unaffected, the evaluated material's alphaMode changes.",
           Needs::Document },
@@ -1155,6 +1555,18 @@ NodeGraph *GraphApi::graphOrFail(const QString &verb)
 {
     if (!mGraph) fail(QStringLiteral("%1: no graph is open — materials.loadGraph()/createGraph() first").arg(verb));
     return mGraph;
+}
+
+NodeGraph *GraphApi::editableGraphOrFail(const QString &verb)
+{
+    NodeGraph *graph = graphOrFail(verb);
+    if (!graph) return nullptr;
+    const QString shipped = MaterialBundle::shippedPresetName(mAssetGuid);
+    if (shipped.isEmpty()) return graph;
+    fail(QStringLiteral("%1: '%2' is a material the app ships and is read-only — "
+                        "materials.createFromPreset('%2') makes your own copy, and every edit "
+                        "works on that").arg(verb, shipped));
+    return nullptr;
 }
 
 QVariantList GraphApi::nodes()
@@ -1244,7 +1656,7 @@ bool GraphApi::removeNode(const QString &nodeId)
     // owns this node the deletion has to go through its undo stack.
     if (mEdit.removeNode && mEdit.removeNode(nodeId)) return true;
 
-    auto graph = graphOrFail(QStringLiteral("graph.removeNode"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.removeNode"));
     if (!graph) return false;
     if (!graph->nodes.contains(nodeId))
         return fail(QStringLiteral("graph.removeNode: no node '%1'").arg(nodeId));
@@ -1263,7 +1675,7 @@ bool GraphApi::disconnect(const QVariant &connection)
     if (value.typeId() == QMetaType::QString) {
         const QString id = value.toString();
         if (mEdit.removeConnection && mEdit.removeConnection(id)) return true;
-        auto graph = graphOrFail(QStringLiteral("graph.disconnect"));
+        auto graph = editableGraphOrFail(QStringLiteral("graph.disconnect"));
         if (!graph) return false;
         if (!graph->connections.contains(id))
             return fail(QStringLiteral("graph.disconnect: no connection '%1' "
@@ -1277,7 +1689,7 @@ bool GraphApi::disconnect(const QVariant &connection)
     if (value.typeId() != QMetaType::QVariantMap)
         return fail("graph.disconnect: pass a connection id or {to: nodeId, toSocket: nameOrIndex}");
     const QVariantMap m = value.toMap();
-    auto graph = graphOrFail(QStringLiteral("graph.disconnect"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.disconnect"));
     if (!graph) return false;
     const QString toId = m.value(QStringLiteral("to")).toString();
     if (!graph->nodes.contains(toId))
@@ -1314,15 +1726,16 @@ QVariantList GraphApi::nodeTypes()
     QVariantList out;
     LibraryV1 library;
     for (auto item : library.getItems()) out.append(item->name);
-    // "Material" (the legacy Blinn-Phong master) is deliberately NOT listed:
-    // addNode cannot create one, so listing it made scripts throw (audit D14).
+    // "PbrMaterial" is THE master node — the only one. ("Material", the
+    // Blinn-Phong master, is not listed because it no longer EXISTS:
+    // LEGACY-MASTER-CRUD deleted the class and converts old graphs at load.)
     out.append(QStringLiteral("PbrMaterial"));
     return out;
 }
 
 QString GraphApi::addNode(const QString &type)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.addNode"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.addNode"));
     if (!graph) return QString();
 
     NodeModel *node = nullptr;
@@ -1345,7 +1758,7 @@ QString GraphApi::addNode(const QString &type)
 bool GraphApi::connect(const QString &fromId, const QVariant &fromSocket,
                        const QString &toId, const QVariant &toSocket)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.connect"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.connect"));
     if (!graph) return false;
     if (!graph->nodes.contains(fromId) || !graph->nodes.contains(toId))
         return fail("graph.connect: no such node id");
@@ -1379,7 +1792,7 @@ bool GraphApi::connect(const QString &fromId, const QVariant &fromSocket,
 
 bool GraphApi::setValue(const QString &nodeId, const QVariant &value)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.setValue"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.setValue"));
     if (!graph) return false;
     if (!graph->nodes.contains(nodeId)) return fail("graph.setValue: no such node id");
     // The NodeModel interface is the public route (some overrides are private).
@@ -1406,7 +1819,6 @@ QVariantMap GraphApi::evaluate()
     out["unsupported"] = QVariant(result.unsupportedNodes);
     out["approximated"] = QVariant(result.approximatedNodes);
     out["animated"] = result.animated;
-    out["hasPbrMaster"] = result.hasPbrMaster;
     return out;
 }
 
@@ -1441,21 +1853,29 @@ QVariantMap GraphApi::emitInfo()
 QVariantMap GraphApi::bake(const QVariantMap &options)
 {
     QVariantMap out;
-    auto graph = graphOrFail(QStringLiteral("graph.bake"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.bake"));
     if (!graph) return out;
-    if (!requireProject()) return out; // baked maps land in the project folder
-
     QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
     if (guid.isEmpty()) guid = QStringLiteral("scratch");
 
-    const QString projectFolder = host.project->getProjectFolder();
-    MaterialHelper::setProjectRoot(projectFolder);
-
+    // A DIAGNOSTIC BAKE, into the store's own disposable derived cache — never
+    // into a project folder (MATERIAL_BUNDLE_SPEC phase 1: nothing of a
+    // material lives outside the store any more). It needs no project, which
+    // is the point: a library material bakes and previews with none open.
     materials::GraphBaker::Options opts;
     opts.resolution = options.value(QStringLiteral("resolution"), 1024).toInt();
     opts.time = options.value(QStringLiteral("time"), 0.0).toDouble();
-    opts.outputDir = projectFolder + QStringLiteral("/BakedMaps/") + guid;
-    opts.relativePrefix = QStringLiteral("BakedMaps/") + guid + QStringLiteral("/");
+    opts.outputDir = AssetStorePaths::derivedPath(QStringLiteral("materialbake/") + guid);
+    // AND THE EMITTED VALUE MUST NAME THE FILE. `relativePrefix` is what the
+    // baker prepends to every map it reports; with it EMPTY the report is a
+    // bare "roughnessMap-<hash>.png", which resolves against nothing and
+    // renders as no texture at all. The old value was project-relative
+    // ("BakedMaps/<guid>/") and a resolver put the project folder back in
+    // front of it; there is no project folder any more, so the prefix is the
+    // absolute directory itself. A path is legitimate here — this is the
+    // BUILD side; only what is STORED must name guids.
+    opts.relativePrefix = opts.outputDir + QLatin1Char('/');
+    QDir().mkpath(opts.outputDir);
 
     const auto result = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
     out["values"] = result.eval.values.toVariantMap();
@@ -1478,28 +1898,28 @@ bool GraphApi::toMaterial(const QString &nodeId)
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh)
         return fail(QStringLiteral("graph.toMaterial: '%1' is not a mesh node").arg(nodeId));
 
-    // applying is a final-bake trigger (spec section 2): with a project open,
-    // UV-varying chains land as BakedMaps PNGs and ride the material's map keys
+    // APPLYING IS A FINAL-BAKE TRIGGER (spec section 2). The bake lands in the
+    // store's derived cache and the material is built from the PATHS it
+    // produced — this is the BUILD side of the bundle's lock 2, where paths
+    // are legitimate; only what is STORED must name guids.
     iris::PbrMaterialPtr material;
-    if (host.isProjectOpen() && host.project) {
-        MaterialHelper::setProjectRoot(host.project->getProjectFolder());
+    {
         QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
         if (guid.isEmpty()) guid = QStringLiteral("scratch");
 
         materials::GraphBaker::Options opts;
         opts.resolution = graph->settings.bakeResolution;
-        opts.outputDir = host.project->getProjectFolder() + QStringLiteral("/BakedMaps/") + guid;
-        opts.relativePrefix = QStringLiteral("BakedMaps/") + guid + QStringLiteral("/");
+        opts.outputDir = AssetStorePaths::derivedPath(QStringLiteral("materialbake/") + guid);
+        opts.relativePrefix = opts.outputDir + QLatin1Char('/');   // the map must NAME its file
+        QDir().mkpath(opts.outputDir);
         // The emitter first, so the baker skips what the piece owns
-        // (HLMS_ADOPTION P5) — see MaterialHelper::serializeWithBake.
+        // (HLMS_ADOPTION P5).
         materials::PieceEmitter::Result emitted = materials::PieceEmitter::lower(
             graph, MaterialHelper::textureResolver());
         opts.emittedSockets = emitted.emittedSockets;
         const auto baked = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
         material = PbrGraphEvaluator::materialFromValues(baked.eval.values, MaterialHelper::textureResolver());
         MaterialHelper::applyEmittedPieces(graph, material);
-    } else {
-        material = MaterialHelper::createPbrMaterialFromShaderGraph(graph);
     }
     if (!material) return fail("graph.toMaterial: evaluation produced no material");
     // Stamp the SOURCE GRAPH's asset guid on the material. It costs nothing for
@@ -1561,6 +1981,8 @@ const char *blendModeName(BlendMode mode)
     case BlendMode::Translucent: return "Translucent";
     case BlendMode::Additive:    return "Additive";
     case BlendMode::Modulate:    return "Modulate";
+    case BlendMode::Glass:       return "Glass";
+    case BlendMode::Refractive:  return "Refractive";
     }
     return "Opaque";
 }
@@ -1579,7 +2001,7 @@ QVariantMap GraphApi::settings()
 
 bool GraphApi::setBlendMode(const QString &mode)
 {
-    auto graph = graphOrFail(QStringLiteral("graph.setBlendMode"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.setBlendMode"));
     if (!graph) return false;
     const QString m = mode.trimmed().toLower();
     BlendMode want;
@@ -1588,8 +2010,11 @@ bool GraphApi::setBlendMode(const QString &mode)
     else if (m == "translucent" || m == "blend")  want = BlendMode::Translucent;
     else if (m == "additive")                     want = BlendMode::Additive;
     else if (m == "modulate")                     want = BlendMode::Modulate;
+    else if (m == "glass")                        want = BlendMode::Glass;
+    else if (m == "refractive")                   want = BlendMode::Refractive;
     else return fail(QStringLiteral("graph.setBlendMode: unknown mode '%1' "
-                     "(Opaque | Masked | Translucent | Additive | Modulate)").arg(mode));
+                     "(Opaque | Masked | Translucent | Additive | Modulate | Glass | "
+                     "Refractive)").arg(mode));
     MaterialSettings s = graph->settings;
     s.blendMode = want;
     graph->setMaterialSettings(s);
@@ -1649,7 +2074,7 @@ QVariant GraphApi::paletteTile(const QString &name)
 
 bool GraphApi::save()
 {
-    auto graph = graphOrFail(QStringLiteral("graph.save"));
+    auto graph = editableGraphOrFail(QStringLiteral("graph.save"));
     if (!graph) return false;
     if (!host.db) return fail("graph.save: not available in this session");
     if (mAssetGuid.isEmpty())
@@ -1657,9 +2082,20 @@ bool GraphApi::save()
     if (!graph->masterNode)
         return fail("graph.save: the graph has no master node (serialize would crash)");
 
-    // saving is a final-bake trigger (spec section 2)
-    if (host.isProjectOpen() && host.project)
-        MaterialHelper::setProjectRoot(host.project->getProjectFolder());
-    const QJsonObject definition = MaterialHelper::serializeWithBake(graph, mAssetGuid);
-    return host.db->updateAssetAsset(mAssetGuid, QJsonDocument(definition).toJson());
+    // SAVING IS THE DEFINITION WRITE (MATERIAL_BUNDLE_SPEC phase 1), and still
+    // a final-bake trigger: the maps land as MEMBER textures in the store, not
+    // as loose PNGs under the project folder, and the definition names them by
+    // guid. It works with NO project open, which the old route could not.
+    const auto build = materials::buildDefinition(graph, mAssetGuid, host.db, host.project);
+    if (!build.ok()) return fail(QStringLiteral("graph.save: %1").arg(build.error));
+    const bool projectOwns =
+        host.project && !host.project->getProjectGuid().isEmpty()
+        && host.db->isAssetPinnedBy(host.project->getProjectGuid(), mAssetGuid);
+    const auto written = MaterialBundle::write(
+        host.db, host.project, mAssetGuid, build.definition,
+        projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
+    if (!written.ok) return fail(QStringLiteral("graph.save: %1").arg(written.error));
+    if (host.services && host.services->sceneEdit)
+        host.services->sceneEdit->refreshMaterialUsers(mAssetGuid);
+    return true;
 }

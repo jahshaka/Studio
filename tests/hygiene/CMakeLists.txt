@@ -64,6 +64,17 @@ add_test(NAME source.one_readfile
 set_tests_properties(source.one_readfile PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_readfile)
 
+# source.one_material_resolve — MATERIAL-PREVIEW-1: there is ONE way to resolve
+# a material (SceneEditService::resolveMaterial) and a hydrated material never
+# goes into an Asset's QVariant. The live hover preview was dead for two of its
+# three sources for weeks because a QVariant payload cannot be type-checked and
+# nothing about the mismatch is visible at a call site. See the script's header.
+add_test(NAME source.one_material_resolve
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_material_resolve.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_material_resolve PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_material_resolve)
+
 # source.gate_scope_rules — THE SCOPING TOOL'S OWN GUARD (STUDIO-SMALL-A, the
 # gate-scope trap of ledger §620 item 5). gate-scope.py decides which suites a
 # lane runs, so its defects are invisible by construction: a wrong answer is a

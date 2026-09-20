@@ -71,14 +71,23 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     cfg.overrideEyeHeight = options.value(QStringLiteral("eyeHeight"), 0).toUInt();
     if (!cfg.overrideEyeWidth != !cfg.overrideEyeHeight)
         return fail(QStringLiteral("eyeWidth and eyeHeight are set together or not at all"));
-    // THE REFLECTION ROW IS THE PROJECT'S (lane REFLECT-VR-1), the same row the
-    // flat Player renders with: the World panel's SSR row, passed here because
-    // the session builds its own View and no mirror reaches it. In the headset
-    // the row buys RAY-TRACED reflections rather than the screen-space march,
-    // which a stereo target cannot carry — see PostFxDesc::ssrScreenMarch.
-    if (document) cfg.ssr = document->ssrMode;
+    // THE REFLECTION ROW IS THE PROJECT'S (lane REFLECT-VR-1) AND ARRIVES BY
+    // ITSELF (lane EYE-GRADE-1): the mirror pushes the project's whole post
+    // description into the session's view every frame now, this row included,
+    // so the row is no longer copied out of the document here. What remains is
+    // the one-session OVERRIDE (`VrConfig::ssr`, -1 = follow the project), for
+    // a caller that asks for a measurement arm. In the headset the row buys
+    // RAY-TRACED reflections rather than the screen-space march, which a stereo
+    // target cannot carry — see PostFxDesc::ssrScreenMarch.
     if (options.contains(QStringLiteral("reflections")))
         cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
+
+    // AND BARE HANDS ARE THE PROJECT'S TOO (lane HANDS-SWITCH-1): the same row
+    // the editor's preview reads, so a run in the headset binds the wearer's
+    // hands exactly when the project they are playing asked for them. There is
+    // no per-call override here on purpose — the Player is the finished thing,
+    // and the measurement hook belongs on the editor's preview (`vr.begin`).
+    if (document) cfg.hands = document->vrHands;
 
     // THE MIRROR IS NAMED BEFORE THE SESSION EXISTS (Engine::setVrMirrorView
     // keeps the wish and applies it on begin), so the very first frame the
@@ -90,18 +99,14 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     }
     mOwnsSession = true;
     mMirrorView = mirrorView;
-    mMirrorViewOff = false;
-    // THE DESKTOP STOPS RENDERING THE WORLD (VR-2's F7) — BUT NOT YET
-    // (lane VR-3b, 2026-09-17, the owner's WiVRn smoke). The View keeps its
-    // workspace, its chain and its camera and simply stops executing, so the
-    // window costs the mirror's one quad instead of a second render of the
-    // scene at window size. That trade only exists once there IS a mirror
-    // picture: a runtime answers "no picture" for its first frames (WiVRn does,
-    // for as long as it takes to synchronise), and switching the desktop off
-    // before the first eye was drawn leaves the window painted by nobody —
-    // stale VRAM, which is what the owner photographed. So the switch-off waits
-    // for `status().rendered` to move (step(), below), which is the same moment
-    // the engine's mirror starts painting.
+    // THE DESKTOP STOPS RENDERING THE WORLD (VR-2's F7) — WHILE THE RUNTIME IS
+    // DRAWING, AND THE ENGINE DECIDES WHEN THAT IS (lane MIRROR-LIVE-1; the
+    // rule and its table are on VrSession::setDesktopShowsEye). The View keeps
+    // its workspace, its chain and its camera and simply stops executing, so
+    // the window costs the mirror's one quad instead of a second render of the
+    // scene at window size — and it starts executing again the moment the
+    // runtime stops asking for pictures, which is when somebody is looking at
+    // the screen rather than through the headset.
 
     // THE RIG STARTS AT THE WORLD ORIGIN AND IS PLACED AT THE FIRST LOCATED
     // POSE — never on the frame a session begins (the runtime has not reached
@@ -159,13 +164,13 @@ void PlayerVr::end()
 
 void PlayerVr::restoreMirrorView()
 {
-    // NOT `setEnabled(true)` (lead review F4). This object switched the view
-    // off; what it must be switched back TO is whatever its owner is showing by
-    // then, and a session can end while the Player page is hidden — leaving a
-    // hidden on-screen view rendering and presenting a picture nobody can see,
-    // every frame, for the rest of the run. The widget owns that answer.
-    if (mMirrorView && mMirrorViewOff && mRestoreView) mRestoreView();
-    mMirrorViewOff = false;
+    // NOT `setEnabled(true)` (lead review F4). The ENGINE puts back the flag it
+    // took (MIRROR-LIVE-1) — enabled, because that is all it can know — but
+    // what the view must be switched back TO is whatever its owner is showing
+    // by then, and a session can end while the Player page is hidden, leaving a
+    // hidden on-screen view rendering and presenting a picture nobody can see.
+    // The widget owns that answer and it is asked LAST, so it wins.
+    if (mMirrorView && mRestoreView) mRestoreView();
     mMirrorView = nullptr;
 }
 
@@ -220,15 +225,6 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         mDocument.clear();
         vrworld::release();
         return;
-    }
-    // THE FIRST EYE PICTURE IS WHAT PAYS FOR THE DESKTOP'S (see begin()): from
-    // here on the window shows the mirror, so the view that was drawing the
-    // world at window size can stop. Before it, the desktop keeps its own
-    // picture — a runtime that answers "no picture" for a hundred frames must
-    // not leave the user looking at an unpainted window.
-    if (!mMirrorViewOff && mMirrorView && st.rendered > 0ull) {
-        mMirrorView->setEnabled(false);
-        mMirrorViewOff = true;
     }
     if (camera) mCamera = camera;
     if (!st.posesValid) return;      // nothing located yet: nowhere to stand
@@ -336,7 +332,8 @@ QVariantMap PlayerVr::idleReport()
     QVariantMap out;
     out[QStringLiteral("active")] = false;
     out[QStringLiteral("state")] = vrnames::state(jahshaka::engine::VrState::Unavailable);
-    out[QStringLiteral("mirror")] = vrnames::mirror(jahshaka::engine::VrMirrorMode::None);
+    out[QStringLiteral("mirror")] = vrnames::mirrorState(
+        jahshaka::engine::VrMirrorMode::None, jahshaka::engine::VrDesktopPicture::Own);
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(0));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(0));
     out[QStringLiteral("posesValid")] = false;
@@ -376,7 +373,11 @@ QVariantMap PlayerVr::report() const
     // suite can assert it and a reader can see it.
     out[QStringLiteral("mirrorView")] =
         mMirrorView ? QString::fromStdString(mMirrorView->name()) : QString();
-    out[QStringLiteral("mirror")] = vrnames::mirror(st.mirror);
+    // THE WISH AND THE PICTURE (lane MIRROR-LIVE-1), the same `{mode,showing}`
+    // shape `vr.state().mirror` answers with: `showing` goes to "own" the
+    // moment the runtime stops asking for pictures and the Player's own View
+    // takes the window back.
+    out[QStringLiteral("mirror")] = vrnames::mirrorState(st.mirror, st.mirrorShowing);
     out[QStringLiteral("frames")] = QVariant::fromValue(qulonglong(st.frames));
     out[QStringLiteral("rendered")] = QVariant::fromValue(qulonglong(st.rendered));
     out[QStringLiteral("posesValid")] = st.posesValid;

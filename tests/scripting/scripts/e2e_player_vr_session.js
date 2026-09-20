@@ -96,7 +96,9 @@ assert(player.playing() === true, "the scene is running");
 st = player.state().vr;
 console.log("vr after begin: " + JSON.stringify(st));
 assert(st.active === true, "and the session is active");
-assert(st.mirror === "left", "the desktop shows the left eye");
+// `{mode, showing}` since lane MIRROR-LIVE-1 — the wish, and which picture is
+// on the window this moment (`showing` is "own" until the first eye is drawn).
+assert(st.mirror.mode === "left", "the desktop shows the left eye");
 assert(st.mirrorView.indexOf("player") >= 0,
        "MIRRORED ONTO THE PLAYER'S OWN VIEW: " + st.mirrorView);
 

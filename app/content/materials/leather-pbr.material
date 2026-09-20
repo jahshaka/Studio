@@ -2,6 +2,7 @@
     "name"                : "Leather PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/leather.png",
+    "graph"               : "graphs/leather-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/leather/Leather_02_UV_H_CM_1_COLOR.png",
     "metallic"            : 0.0,

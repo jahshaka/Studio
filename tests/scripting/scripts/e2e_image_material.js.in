@@ -41,6 +41,21 @@ for (var i = 0; i < afterImage.length; i++) {
 }
 assert(companion !== null, "companion material carries the Material->Texture dependency row");
 
+// ---- 1b. THE STAMP IS READABLE (owner review R10.4, 2026-09-18) ----
+// `companionOf` is what makes "this material was minted FOR that image" a fact
+// rather than a shape ("a material whose only dependee is this texture" matched
+// a material the USER built on the same image just as well). It has been
+// written since 2026-09-10 and was invisible from the verb surface until now,
+// which is why "create material from image" reads as "it retagged my image":
+// the tray folds the image's tile into its companion's and nothing could say so.
+var companionMeta = assets.metadata(companion);
+console.log("companion metadata: " + JSON.stringify({ companionOf: companionMeta.companionOf }));
+assert(companionMeta.companionOf === texGuid,
+       "assets.metadata(companion).companionOf names the image it was minted for");
+var imageMeta = assets.metadata(texGuid);
+assert(imageMeta.companionOf === undefined,
+       "...and the IMAGE itself carries no stamp (the key is absent, not empty)");
+
 // The companion is a session registration too (bin-droppable after the add).
 var session = assets.list({ scope: "session" }).map(function (a) { return a.guid; });
 assert(session.indexOf(companion) >= 0, "companion material hydrated into the session");
@@ -74,6 +89,8 @@ assert(manual.length > 10, "materials.createFromImage -> material guid");
 assert(manual !== companion, "the manual verb mints a distinct asset");
 assert(assets.dependencies(manual).indexOf(texGuid) >= 0,
        "manual material carries the dependency row too");
+assert(assets.metadata(manual).companionOf === texGuid,
+       "...and the manual verb stamps companionOf as well — one minting site, one stamp");
 var listedNow = projectMaterials().map(function (m) { return m.guid; });
 assert(listedNow.indexOf(manual) >= 0, "manual material is pinned into the project bin");
 
@@ -81,11 +98,19 @@ var thrown = false;
 try { materials.createFromImage("no-such-guid"); } catch (e) { thrown = true; }
 assert(thrown, "materials.createFromImage refuses a non-texture guid");
 
-// ---- 3b. the B2 graph twin: an editable Shader graph asset ----
+// ---- 3b. the B2 graph twin: an editable MATERIAL BUNDLE with a graph ----
+//
+// MATERIAL_BUNDLE_SPEC 2.3 / owner Q3: there is no separate shader asset any
+// more. The twin is ONE library Material row whose definition carries the
+// graph as a payload — so it is a LIBRARY material (adding it to a project is
+// a separate, explicit gesture), and no ModelTypes::Shader row exists at all.
 var shaderGuid = materials.createFromImage(texGuid, { graph: true });
-assert(shaderGuid.length > 10, "createFromImage({graph:true}) -> shader guid");
-var shaders = assets.list({ scope: "project", type: "shader" }).map(function (s) { return s.guid; });
-assert(shaders.indexOf(shaderGuid) >= 0, "graph twin registered as a project Shader asset");
+assert(shaderGuid.length > 10, "createFromImage({graph:true}) -> material guid");
+var libraryMaterials = assets.list({ scope: "store", type: "material" })
+                             .map(function (s) { return s.guid; });
+assert(libraryMaterials.indexOf(shaderGuid) >= 0, "graph twin is ONE library Material bundle");
+assert(assets.list({ scope: "store", type: "shader" }).length === 0,
+       "no ModelTypes::Shader row is minted any more");
 var loaded = materials.loadGraph(shaderGuid);
 assert(loaded.nodes === 3, "graph twin loads: master + texture + textureSampler (3 nodes)");
 assert(("" + loaded.master).length > 0, "graph twin has a master node");

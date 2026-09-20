@@ -2,6 +2,7 @@
     "name"                : "Patchy Grass PBR",
     "material_type"       : "PBR",
     "icon"                : "../../materials/patchy_grass.png",
+    "graph"               : "graphs/patchy_grass-pbr.effect",
     "baseColor"           : "#FFFFFF",
     "baseColorMap"        : "presets/patchy_grass/patchygrass_1_COLOR.png",
     "metallic"            : 0.0,

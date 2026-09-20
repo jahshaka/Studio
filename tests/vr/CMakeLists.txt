@@ -141,6 +141,26 @@ set_tests_properties(vr.session PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-home")
 
+# vr.session_undithered — THE SAME BINARY WITH THE GRADE'S DITHER OFF (lane
+# DITHER-1). The worldScale-0 arm's real assertion is that the two eyes are
+# BYTE-IDENTICAL: it is what catches a half-pixel viewport error and a slightly
+# wrong eye matrix over a smooth scene, and the one-code tolerance the dithered
+# picture needs would wave both through. The switch cannot be flipped mid-run
+# for the session's View — it is not a View the engine's frame loop drives, so
+# it is never armed with a per-view push (measured in the arm's own comment) —
+# so the strong form gets its own process. Everything else the suite asserts is
+# asserted twice, which costs one VR run and is the price of keeping the bar.
+add_test(NAME vr.session_undithered
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
+                 "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.session_undithered PROPERTIES
+    LABELS "engine"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home")
+
 # ---------------------------------------------------------------------------
 # vr.verbs_session — the `vr.*` verbs through the APP, against the simulated
 # runtime (VR_SPEC §6 / §4.6). The other half of scripting.e2e.vr_verbs, which
@@ -224,6 +244,36 @@ set_tests_properties(vr.no_picture_start PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_nopic_home};JAHSHAKA_DATA_ROOT=${_vr_nopic_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_NO_RENDER_FRAMES=40;JAHSHAKA_VR_TEST_STOP_AFTER_FRAMES=200;JAHSHAKA_VR_TEST_BLINK_EVERY=17")
 
 # ---------------------------------------------------------------------------
+# vr.mirror_live — THE DESKTOP FOLLOWS THE RUNTIME (lane MIRROR-LIVE-1; the
+# owner's finding F2 of the push-#50 smoke, SPECS/VR_SPEC.md §5 phase 4).
+#
+# The app half of the rule `vr.session` asserts on pixels: while the runtime
+# draws eyes the editor's own View draws nothing (one render pipeline) and the
+# moment it stops the desktop takes its own camera back, live — which on a real
+# headset is exactly when the wearer lifts it to look at the desk. Plus the
+# owner's page rule: leaving the page that hosts a session ends that session,
+# in both hosts.
+#
+# THE BLINK HOOK IS WHAT MAKES IT ASSERTABLE. Monado never answers "no picture"
+# in the middle of a live session, so the pump is told to (the frames are really
+# waited for, begun and ended — only the runtime's answer is replaced):
+# _BLINK_EVERY is how often, _BLINK_FRAMES how long. Twelve frames every thirty
+# is a doff; ONE frame is a reprojection hiccup, and the hysteresis that tells
+# them apart is `vr.session`'s case.
+set(_vr_mirror_home "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home")
+add_test(NAME vr.mirror_live
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_mirror_live.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.mirror_live PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_mirror_home};JAHSHAKA_DATA_ROOT=${_vr_mirror_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_BLINK_EVERY=30;JAHSHAKA_VR_TEST_BLINK_FRAMES=12")
+
+# ---------------------------------------------------------------------------
 # vr.input_session — LOCOMOTION AGAINST A REAL RUNTIME (stage 1,
 # SPECS/VR_INPUT_SPEC.md §6/§10).
 #
@@ -257,6 +307,56 @@ set_tests_properties(vr.input_session PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_input_home};JAHSHAKA_DATA_ROOT=${_vr_input_home}/.local/share/Jahshaka;JAHSHAKA_VR_TEST_INJECT=1")
 
 # ---------------------------------------------------------------------------
+# vr.warmup / vr.warmup_control — THE STEREO WARM-UP (lane VR-WARMUP-1;
+# SPECS/VR_SPEC.md §6, VrConfig::warmUpFrames).
+#
+# THE RULE: no frame the runtime is SHOWN compiles a shader. Before the warm-up
+# the session's first shown frame built every permutation and pipeline the two
+# eyes needed on the frame thread — 1,179 ms cold on the Grand Showroom, 920 ms
+# on the default scene, GPU idle; at 62.5 Hz, 73 repeated headset frames.
+#
+# TWO TESTS AND TWO PROCESSES, on purpose: the warmed arm asserts ZERO compiles
+# on shown frames, and the control arm (`warmUp: 0`) asserts that the same
+# measurement DOES see compiles without it — zero is also what a broken
+# instrument reports. A second session inside ONE process finds everything
+# already built (which the warmed arm asserts at its end), so the control
+# cannot share a process with it.
+#
+# Each has its own HOME and data root like every app-spawning suite, so each
+# runs with a COLD shader cache — which is the only state in which the defect
+# is visible at its full size.
+# AND EACH RUNS ON A WIPED HOME, through the fixture pattern
+# `scripting.e2e.shadow_cache_probes` established: BOTH arms only say anything
+# on a COLD shader cache. Warm, the microcode map answers every lookup and
+# nothing is compiled anywhere — the warmed arm's "zero on shown frames" would
+# pass for the wrong reason and the control's "the shown frames compile" would
+# RED for one (measured: the second run of the control on a kept home reads
+# 8 -> 8 and fails). The fixture is what makes both reproducible.
+foreach(_arm warmup warmup_control)
+    set(_vr_warm_home "${CMAKE_CURRENT_BINARY_DIR}/vr-${_arm}-home")
+    if(_arm STREQUAL "warmup")
+        set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js")
+    else()
+        set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup_control.js")
+    endif()
+    add_test(NAME vr.${_arm}.fresh_home
+             COMMAND sh -c "rm -rf '${_vr_warm_home}' && mkdir -p '${_vr_warm_home}'")
+    set_tests_properties(vr.${_arm}.fresh_home PROPERTIES
+        FIXTURES_SETUP vr${_arm}FreshHome LABELS "scripting")
+    add_test(NAME vr.${_arm}
+             COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                     "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                     "${_vr_warm_script}"
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(vr.${_arm} PROPERTIES
+        LABELS "scripting"
+        TIMEOUT 600
+        RUN_SERIAL TRUE
+        SKIP_RETURN_CODE 77
+        FIXTURES_REQUIRED vr${_arm}FreshHome
+        ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
+endforeach()
+
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).
 #
@@ -297,6 +397,69 @@ set_tests_properties(vr.frame_budget PROPERTIES
     # scratch: a capture's `out` is confined to the capture root, and the
     # default root is under the user's home.
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_budget_home};JAHSHAKA_DATA_ROOT=${_vr_budget_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${JAH_VR_BUDGET_DIR}")
+
+# ---------------------------------------------------------------------------
+# vr.eye_grade — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane
+# EYE-GRADE-1; SPECS/VR_SPEC.md §6).
+#
+# The only suite in the tree that looks at what the RUNTIME DISPLAYS. Every
+# other VR suite runs Monado with no compositor at all (XRT_COMPOSITOR_NULL),
+# which is right when the subject is the session's arithmetic and useless when
+# the subject is colour: the two defects the #50 smoke found were the eye
+# ignoring the project's grade (the session wrote its own PostFxDesc) and the
+# swapchain's colour contract being inverted (a UNORM swapchain tells an OpenXR
+# runtime our bytes are linear, so it encoded them a second time). Its runner
+# therefore starts the compositor with an X window and captures it with xwd.
+#
+# THREE PIECES, like vr.frame_budget: the app RECORDS (its own eye picture, the
+# desktop's screenshot, and the descriptions it asserts itself), the runner
+# CAPTURES the runtime's window while the script holds a picture still, and a
+# Qt reader JUDGES the files — a script cannot open a PNG.
+set(_vr_grade_home "${CMAKE_CURRENT_BINARY_DIR}/vr-eye-grade-home")
+set(JAH_EYE_GRADE_DIR "${CMAKE_CURRENT_BINARY_DIR}/vr-eye-grade-out")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/eye_grade.js.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/eye_grade.js" @ONLY)
+
+add_executable(test_vr_eye_grade "${CMAKE_CURRENT_SOURCE_DIR}/test_vr_eye_grade.cpp")
+set_target_properties(test_vr_eye_grade PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_vr_eye_grade PRIVATE Qt6::Gui)
+
+add_test(NAME vr.eye_grade
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_eye_grade.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_BINARY_DIR}/eye_grade.js"
+                 "$<TARGET_FILE:test_vr_eye_grade>" "${JAH_EYE_GRADE_DIR}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.eye_grade PROPERTIES
+    LABELS "scripting"
+    # Five arms, each settling and then rendering a ~90-frame mono control for
+    # the eye screenshot, on a rig whose present copy is 10-27 ms a frame.
+    TIMEOUT 900
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_grade_home};JAHSHAKA_DATA_ROOT=${_vr_grade_home}/.local/share/Jahshaka")
+
+# vr.sample_open — THE `--vr` BOOT'S PAGES (lane SMOKE-FIX-1, 2026-09-18).
+#
+# The owner smoked push #50 on a `--vr` build and reported both halves of this
+# lane there: every sample-browser open landing in the Player, and the Player's
+# window then showing the Desktop page's pixels. The desktop twin is
+# scripting.e2e.sample_open; this is the same route on the boot that reported
+# it. No session is begun — the subject is the boot, not the headset.
+set(_vr_sample_home "${CMAKE_CURRENT_BINARY_DIR}/vr-sample-open-home")
+add_test(NAME vr.sample_open
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.sample_open PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_sample_home};JAHSHAKA_DATA_ROOT=${_vr_sample_home}/.local/share/Jahshaka")
 
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"

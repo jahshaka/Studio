@@ -55,8 +55,8 @@ assert(again.triangles === objMeta.triangles && again.fileSize === objMeta.fileS
        "metadata is stable across calls (persisted, not recomputed)");
 
 // ---- refreshThumbnail: document-only types work headless now ----
-assert(assets.refreshThumbnail(png) === true, "refreshThumbnail(image) headless");
-assert(assets.refreshThumbnail(wav) === true, "refreshThumbnail(audio) headless");
+assert(assets.refreshThumbnail(png).ok === true, "refreshThumbnail(image) headless");
+assert(assets.refreshThumbnail(wav).ok === true, "refreshThumbnail(audio) headless");
 
 // ---- NAME + TAGS (2026-09-06 verb-coverage audit F3) ----
 //

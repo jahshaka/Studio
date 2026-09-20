@@ -470,6 +470,15 @@ public:
     /// where minting a fresh library row would have orphaned them all.
     bool updateAssetProject(const QString &guid, const QString &projectGuid);
 	bool updateProjectDesktop(const QString &guid, int desktop);
+
+	/// WHERE THIS PROJECT'S FOLDER LIVES — the ROOT it was created under, not
+	/// the folder itself (SMALL-UI-A, owner review R1d). Empty means the user's
+	/// projects root, which is what every project written before the column
+	/// existed says and what every project created without the New Scene
+	/// dialog's Browse button still says. ONE reader:
+	/// ProjectService::projectFolderFor.
+	bool setProjectLocation(const QString &guid, const QString &location);
+	QString projectLocation(const QString &guid);
 	bool updateProjectPosition(const QString &guid, float x, float y);
 	// slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip {row, orderIndex}
 	bool updateProjectSliderPos(const QString &guid, int row, int index);
@@ -487,6 +496,25 @@ public:
     /// (preflight §1.6 — Effects rows ARE library tiles; any store scan that
     /// forgets filter 3 silently skips most of a real library).
     QStringList fetchLibraryAssetGuids();
+    /// One catalog row as a maintenance sweep needs it: what it IS and whether
+    /// it has a picture — and not one byte more.
+    struct AssetThumbnailState
+    {
+        QString guid;
+        int type = 0;
+        bool hasThumbnail = false;
+    };
+    /// EVERY asset row, whatever its view filter and whether or not it is
+    /// listed (THUMBS-1's thumbnail repair: a shader graph is an Editor-filter
+    /// row and a library model an AssetsView one, and BOTH show the user a
+    /// tile). `missingOnly` asks SQL for the rows with no thumbnail rather
+    /// than returning every blob for the caller to test.
+    ///
+    /// Deliberately NOT fetchAsset per guid: that selects the thumbnail and
+    /// the properties blob, so walking a 10k library to decide what to redraw
+    /// would hold every PNG in the catalog in memory at once. Never a listing:
+    /// nothing about this query decides what is displayed.
+    QVector<AssetThumbnailState> fetchAssetThumbnailStates(bool missingOnly);
     /// Every row of `projectGuid` filed directly under `parent` (a folder, or
     /// the project guid for the root), optionally one ModelTypes value. No
     /// row is filtered out: the editor tray's rule is services/assettray.h,

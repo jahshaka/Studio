@@ -1760,6 +1760,119 @@ int main(int argc, char **argv)
         }
         CHECK(mirror.giRefreshCount() == refresh0 + 1, "GI: moving a MESH does not re-solve");
 
+        // ---- A HOVER PREVIEW COSTS NO GI (MATERIAL-PREVIEW-1) --------------
+        //
+        // The editor's hover preview swaps the material on the mesh under the
+        // cursor and swaps it back when the drag moves on; the document is never
+        // written and no undo step exists, so a GI re-solve charged to a hover
+        // would be a re-solve for a state that will never be saved.
+        //
+        // WHAT IT REALLY COSTS, MEASURED (2026-09-19, ledger 804-805). The MIRROR
+        // asks for no re-solve on a hover, flagged or not: its material term is
+        // the engine's generation counter, which noteMaterialChanged bumps for a
+        // material whose voxel inputs change WHILE a GI-visible item wears it — a
+        // colour-only material swapped onto a node bumps nothing. (The lane's
+        // first "+1 on entry" was the PREVIOUS section's pending settle firing
+        // inside this arm's frames; every arm below DRAINS first, because a
+        // counter read across a section boundary measures the last section's
+        // debt.) The cost that IS paid is the engine's own, and this counter
+        // could not see it: a material-pointer change RE-ATTACHED the item and
+        // attachMesh invalidated the GI caches whole — every cascade
+        // re-voxelised, on the way in and on the way out. MATERIAL-SWAP-GI-1
+        // (2026-09-20) made a material-only change an IN-PLACE SWAP
+        // (Scene::setNodeMaterial) that invalidates the item's own box; arm A
+        // asserts the mirror takes that path, gi.material_swap measures what
+        // the engine then pays. Arm B records that the flag does no harm, and
+        // arm C that it is a gate and not a mute.
+        {
+            auto previewTarget = gfloor;
+            const iris::MaterialPtr originalMat = previewTarget->getMaterial();
+
+            auto borrowed = iris::PbrMaterial::create();
+            borrowed->setBaseColor(QColor(12, 240, 33));
+            borrowed->setRoughnessFactor(0.11f);
+
+            const auto settle = [&](int frames) {
+                for (int f = 0; f < frames; ++f) {
+                    mirror.sync();
+                    mirror.applyEnvironment(view, engine.get());
+                    engine->renderOneFrame();
+                }
+            };
+            // Read until the counter stops moving: two still windows in a row.
+            const auto drain = [&]() {
+                for (int round = 0; round < 8; ++round) {
+                    const quint64 before = mirror.giRefreshCount();
+                    settle(40);
+                    if (mirror.giRefreshCount() == before) return;
+                }
+            };
+
+            // ARM A: unflagged. One hover in, one hover out.
+            drain();
+            const quint64 beforeA = mirror.giRefreshCount();
+            const quint64 swaps0 = mirror.materialSwapCount();
+            const quint64 attaches0 = mirror.meshAttachCount();
+            previewTarget->setMaterial(borrowed);
+            settle(20);
+            const quint64 afterHoverA = mirror.giRefreshCount();
+            previewTarget->setMaterial(originalMat);
+            settle(20);
+            const quint64 afterRestoreA = mirror.giRefreshCount();
+            std::printf("info: GI per hover, UNFLAGGED: enter +%llu, leave +%llu; material swaps +%llu, "
+                        "mesh re-attaches +%llu\n",
+                        (unsigned long long)(afterHoverA - beforeA),
+                        (unsigned long long)(afterRestoreA - afterHoverA),
+                        (unsigned long long)(mirror.materialSwapCount() - swaps0),
+                        (unsigned long long)(mirror.meshAttachCount() - attaches0));
+            CHECK(afterRestoreA == beforeA,
+                  "GI preview (measured): a colour-only hover asks the MIRROR for no re-solve, in or out");
+            // MATERIAL-SWAP-GI-1: the engine's half. A hover used to be two
+            // RE-ATTACHES (detach + create, the GI caches invalidated whole);
+            // it is two IN-PLACE SWAPS now — Scene::setNodeMaterial, which
+            // invalidates the item's own box (gi.material_swap measures the
+            // cascades that pays).
+            CHECK(mirror.materialSwapCount() - swaps0 == 2 && mirror.meshAttachCount() - attaches0 == 0,
+                  "GI preview: a hover in and out is two in-place material swaps and no re-attach");
+
+            // ARM B: the same gesture with the scene saying a preview is on
+            // screen. Nothing arms — and, the half that is easy to get wrong,
+            // nothing ADOPTS either, so the restore lands back on the signature
+            // the debounce already remembered and is not itself a change.
+            //
+            // A FRESH material, because arm A has already taught the engine
+            // about `borrowed`: re-using it would prove nothing.
+            auto borrowed2 = iris::PbrMaterial::create();
+            borrowed2->setBaseColor(QColor(240, 12, 200));
+            borrowed2->setRoughnessFactor(0.83f);
+
+            drain();
+            const quint64 beforeB = mirror.giRefreshCount();
+            ++gdoc->materialPreviewDepth;
+            previewTarget->setMaterial(borrowed2);
+            settle(20);
+            CHECK(mirror.giRefreshCount() == beforeB,
+                  "GI preview: a FLAGGED hover held past the stability window asks for NO re-solve");
+            previewTarget->setMaterial(originalMat);
+            --gdoc->materialPreviewDepth;
+            settle(20);
+            CHECK(mirror.giRefreshCount() == beforeB,
+                  "GI preview: ending the preview asks for no re-solve either (the signature never moved)");
+
+            // ...and the gate is a GATE, not a mute: an edit to a material the
+            // scene is wearing, after the preview has ended, still costs its
+            // one re-solve. (An in-place edit, which is what the material panel
+            // and `material.set` do — the path the engine's generation counter
+            // is actually keyed on.)
+            drain();
+            const quint64 beforeC = mirror.giRefreshCount();
+            if (auto pbr = originalMat.dynamicCast<iris::PbrMaterial>())
+                pbr->setBaseColor(QColor(200, 30, 30));
+            settle(20);
+            CHECK(mirror.giRefreshCount() == beforeC + 1,
+                  "GI preview: a COMMITTED material edit after the preview still re-solves, once");
+        }
+
         // Leave the process-wide HlmsPbs VCT binding as we found it.
         gdoc->giMode = iris::GiMode::OFF;
         mirror.sync();

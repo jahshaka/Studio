@@ -121,6 +121,21 @@ public:
     bool isRunning() const { return mRunning.load(); }
     const Result &result() const { return mResult; }
 
+    /// THE LAST OUTCOME ANY ARCHIVER IN THIS PROCESS REACHED (SMOKE-FIX-1's fix
+    /// round, F5) — the desktop page's as well as a script module's own.
+    ///
+    /// `anyRunning()` above already answers for every archiver, and it has to:
+    /// `project.openSample` starts the PAGE's import, so a caller waiting on
+    /// `project.archiveState()` is watching an object it does not own. Without
+    /// this the outcome of that wait was unreadable — `project.archiveResult()`
+    /// answered "no archive operation has run" — and a failed or incompatible
+    /// import had no channel to a script at all. Set at finish(), and by the
+    /// synchronous entry points, so the two paths agree.
+    static const Result &lastResult() { return sLastResult; }
+    /// True once any archiver in this process has finished one (lastResult is
+    /// a default-constructed Result until then, which READS as success).
+    static bool haveLastResult() { return sHaveLastResult; }
+
     /// The manifest's scene-scale block (exportformat::ManifestScene), for
     /// EXPORTS. The archiver measures nothing itself — it never sees the live
     /// document, only the database — so the caller that has the open scene
@@ -174,7 +189,12 @@ private:
     bool stageImportObjects();
     /// Delete every temp the staging pass left — a cancelled or failed import.
     void discardStagedImports();
-    void installImportSlice();         ///< UI thread, one asset per turn
+    void installImportSlice();
+    /// Re-publish every imported MATERIAL bundle's definition from its
+    /// remapped row blob (bundles audit G1): the importer cannot rewrite a
+    /// CAS definition file, and since MATERIAL_BUNDLE_SPEC D-2 that file is
+    /// what a material MEANS.
+    void republishImportedBundles();
     void beginInstallImport();
 
     void emitProgress(int percent, const QString &text);
@@ -214,6 +234,12 @@ private:
     QMap<QString, QString> mGuidMap;
 
     static QVector<ProjectArchiver *> sLive;   ///< UI thread only
+    /// The last finished outcome, process-wide (lastResult). UI thread only,
+    /// like sLive: finish() runs there on every path.
+    static Result sLastResult;
+    static bool sHaveLastResult;
+    /// One place that records it, so no exit path can forget.
+    void rememberResult();
 };
 
 #endif // PROJECTARCHIVER_H

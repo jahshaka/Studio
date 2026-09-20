@@ -38,15 +38,12 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/scenepicker.h"   // ScenePicker::pickRoot — raycast's `rootId`
+#include "data/primitives.h"
 
 using namespace scriptmod;
 
-namespace {
-const QStringList kPrimitives = {
-    "Plane", "Ground", "Cone", "Cube", "Cylinder", "Sphere", "Torus",
-    "Capsule", "Gear", "Pyramid", "Teapot", "Sponge", "Steps"
-};
-}
+// (`kPrimitives` was a FOURTH copy of the primitive list, in a fourth order.
+// The names the verb accepts are src/data/primitives.h's rows — one table.)
 
 QVector<VerbInfo> SceneApi::verbs() const
 {
@@ -84,9 +81,10 @@ QVector<VerbInfo> SceneApi::verbs() const
           "drills into the part under the cursor.",
           Needs::Document },
         { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent, count, onSurface}) -> id | [id]",
-          "Adds a built-in primitive: plane, ground, cone, cube, cylinder, sphere, torus, capsule, "
-          "gear, pyramid, teapot, sponge, steps ('ground' is the large floor plane the Add menu "
-          "offers). {count: N} adds N of them and returns an ARRAY of ids instead of one id; "
+          "Adds a built-in primitive: ground, plane, cube, sphere, hemisphere, cylinder, tube, cone, "
+          "pyramid, torus, capsule, wedge, star ('ground' is the large floor plane the Add menu "
+          "offers, and is the one row with no library tile). Gear, Sponge, Steps and the Teapot were "
+          "REMOVED on 2026-09-18 — primitives only — and asking for one of them says so by name. {count: N} adds N of them and returns an ARRAY of ids instead of one id; "
           "every copy gets the same position/rotation/scale/parent options, so move them "
           "afterwards with node.transform. `onSurface: true` reads `position` as a SURFACE rather "
           "than a pivot: the primitive is lifted so the bottom of its bounding box rests on that "
@@ -510,13 +508,20 @@ QVariant SceneApi::addPrimitive(const QString &name, const QVariantMap &options)
     if (!requireProject()) return QVariant();   // the primitive gets a DB asset row
     if (!sceneOrFail()) return QVariant();
 
-    QString normalized = name.trimmed().toLower();
-    if (!normalized.isEmpty()) normalized[0] = normalized[0].toUpper();
-    if (!kPrimitives.contains(normalized)) {
-        fail(QStringLiteral("scene.addPrimitive: unknown primitive '%1' (try: %2)")
-                 .arg(name, kPrimitives.join(", ").toLower()));
+    // ONE TABLE, and a RETIRED NAME IS REFUSED BY NAME (owner review R6). A
+    // script (or a habit) that still asks for a Gear, a Sponge, Steps or the
+    // Teapot is told what happened to it rather than being handed the generic
+    // "unknown primitive" list and left to guess whether it was a typo.
+    const primitives::Def *def = primitives::byName(name);
+    if (!def) {
+        const QString retired = primitives::retiredReason(name);
+        fail(retired.isEmpty()
+                 ? QStringLiteral("scene.addPrimitive: unknown primitive '%1' (try: %2)")
+                       .arg(name, primitives::names().join(QStringLiteral(", ")).toLower())
+                 : QStringLiteral("scene.addPrimitive: %1").arg(retired));
         return QVariant();
     }
+    const QString normalized = QString::fromLatin1(def->name);
 
     // {count} is the batch form (AI_SURFACE_AUDIT #16). One id for the default
     // and for count 1, an array from 2 up — a caller that never passes count

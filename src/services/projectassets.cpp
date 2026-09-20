@@ -24,7 +24,6 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/builtinmaterials.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "io/materialreader.h"
 #include "services/assetcas.h"
 #include "services/meshbakestore.h"
 #include "services/assethelper.h"
@@ -238,24 +237,27 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             AssetManager::addAsset(asset);
             break;
         }
-        case ModelTypes::Shader: {
-            auto *asset = new AssetShader;
-            asset->assetGuid = member;
-            asset->fileName = QFileInfo(memberRecord.name).baseName();
-            asset->setValue(QVariant::fromValue(
-                QJsonDocument::fromJson(db->fetchAssetData(member)).object()));
-            AssetManager::addAsset(asset);
-            break;
-        }
+        // ModelTypes::Shader IS NOT HYDRATED (fix round F12). It was the
+        // Materials module's separate graph asset; nothing mints one and
+        // nothing can read one since MATERIAL_BUNDLE_SPEC phase 2, so the
+        // session entry served exactly one consumer — the Material blade's
+        // combo, where picking it applied a flat default instead of the
+        // graph's colours, which is worse than not offering it. A legacy row
+        // in an old library keeps its pin and its bytes; it simply is not a
+        // thing this session can use. (No case at all, so it falls to the
+        // default below: "no session shape for this type".)
         case ModelTypes::Material: {
-            const auto matObject = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
-            MaterialReader reader;
-            reader.setProject(project);
-            auto material = reader.parseMaterialTyped(matObject, db);
+            // THE MATERIAL IS NOT HYDRATED HERE ANY MORE (MATERIAL-PREVIEW-1
+            // item c). Registering the row is what the session registry is for
+            // — assets.list, the rename sweep and the delete scrub all read the
+            // guid and the name. PARSING the material and loading its textures
+            // on every project open, for every material the project owns, was
+            // work done for exactly ONE reader, the viewport's hover preview,
+            // and that reader now resolves through SceneEditService (which
+            // parses the one material a gesture actually touches, once).
             auto *asset = new AssetMaterial;
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
-            asset->setValue(QVariant::fromValue(material));
             AssetManager::addAsset(asset);
             break;
         }
@@ -286,8 +288,47 @@ bool ProjectAssets::updatePinToLatest(const QString &guid, Database *db, Project
 {
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
     QSqlDatabase conn = QSqlDatabase::database();
-    return AssetCas::writePin(conn, project->getProjectGuid(), guid,
-                              sourceOidOf(conn, guid));
+    // THE WHOLE CLOSURE, not one pin (bundles audit G3). "Update from Library"
+    // used to move the asset's own pin and stop, so a project that took a
+    // newer version of a bundle kept pointing at the members the OLD version
+    // named — and a member the new version adds was pinned by nobody, which an
+    // archive then shipped without. Taking the new version means taking what
+    // it is made of; `addToProject` already computes exactly that set, so the
+    // two cannot disagree.
+    //
+    // BUT A MEMBER'S OWN PIN IS NOT THE ASKED-FOR THING (F20, phase 1's code
+    // review — a real data loss). Re-pinning the WHOLE closure to each
+    // member's LIBRARY oid threw away every per-project version the project
+    // had: a texture this project copied on write (ProjectAssets::copyOnWrite
+    // — the user painted on it, for this project only) silently went back to
+    // the library's copy because its material was updated. The user asked for
+    // a newer MATERIAL, not for their edited texture to be discarded. So:
+    //
+    //   * the asset itself moves to the library's current version — that IS
+    //     the gesture;
+    //   * a member with NO pin yet is pinned (the closure gap G3 named: what
+    //     the new version adds must travel);
+    //   * a member the project ALREADY pins keeps its pin, whatever it points
+    //     at. It is either the same bytes (nothing to do) or this project's
+    //     own version (not ours to throw away). Updating THAT member is its
+    //     own gesture on its own tile.
+    //
+    // And an EMPTY source oid never overwrites a real pin: an empty oid means
+    // "a DB-only asset" (assetcas.h), so writing one over a pin that names
+    // bytes is how a pinned member silently became unpinned.
+    const QString projectGuid = project->getProjectGuid();
+    bool ok = true;
+    const QStringList closure = AssetHelper::fetchAssetAndAllDependencies(guid, db);
+    for (const QString &member : closure) {
+        const QString latest = sourceOidOf(conn, member);
+        const bool isSubject = (member == guid);
+        if (!isSubject && !AssetCas::pinnedOid(conn, projectGuid, member).isEmpty())
+            continue;   // the project's own version of a member stays
+        if (latest.isEmpty() && !AssetCas::pinnedOid(conn, projectGuid, member).isEmpty())
+            continue;   // never turn a real pin into "no bytes"
+        ok = AssetCas::writePin(conn, projectGuid, member, latest) && ok;
+    }
+    return ok;
 }
 
 QString ProjectAssets::copyOnWrite(const QString &guid, const QString &newContentPath,

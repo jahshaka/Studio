@@ -45,6 +45,9 @@ public:
     /// resolved model world.gi writes. Reads with no argument.
     Q_INVOKABLE QVariantMap photon(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap giStatus();
+    /// WHAT THE VOXEL LIGHTING VOLUME HOLDS (PHOTON-M3) — a test-and-tool
+    /// readback: the engine flushes and downloads a whole cascade volume.
+    Q_INVOKABLE QVariantMap giVoxelStats(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE bool refreshGi();
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
     Q_INVOKABLE bool refreshShadows();

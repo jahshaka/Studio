@@ -1,0 +1,392 @@
+// vr.eye_grade — THE WEARER'S PICTURE IS THE PROJECT'S PICTURE (lane
+// EYE-GRADE-1; SPECS/VR_SPEC.md §6).
+//
+// WHAT THIS SUITE EXISTS FOR, in the owner's words after the #50 smoke: "the
+// headset must show the project's picture". Two defects were measured on the
+// rig and both are asserted here:
+//
+//   D2  THE EYE IGNORED THE PROJECT'S GRADE. The session wrote its own
+//       PostFxDesc by hand, so the wearer got the renderer's defaults —
+//       automatic exposure across a +/-2.5 stop window — whatever the author
+//       had chosen. Measured: world.postFx({exposureEv}) swept -2 -> +4 moved
+//       the desktop 8 -> 255 and the eye 79 -> 77.
+//   D1  THE COLOUR CONTRACT WITH THE RUNTIME WAS INVERTED. The swapchain was
+//       asked for as UNORM, which tells an OpenXR runtime "these bytes are
+//       LINEAR", so it encoded our already display-encoded picture a second
+//       time. Measured through Monado's XCB compositor: the desktop's bytes
+//       were the sRGB DECODE of what the runtime displayed (28 -> 3, 79 -> 20,
+//       95 -> 29, 99 -> 32, a red 164 -> 95).
+//
+// THE SHAPE. This script drives the session and writes the pictures; the SHELL
+// runner captures the runtime's own compositor window (xwd) while the script
+// holds a picture still; a small Qt reader then judges the files
+// (test_vr_eye_grade.cpp), because a script cannot open a PNG. The assertions
+// that are about DESCRIPTIONS rather than pixels are made here, where they read
+// best and where a failure names the field that differs.
+//
+// FRAMES, NEVER WALL TIME (the house rule): every wait is a frame count, and
+// the eye screenshot reads until the picture stops moving.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var OUT = "@JAH_EYE_GRADE_DIR@";
+
+// THE POLICY, AS A LIST (jahshaka::engine::applyVrViewPolicy, Types.h): the
+// fields a side-by-side stereo target cannot carry, and therefore the only
+// fields in which the eye's effective description may differ from the
+// desktop's. Everything else must be equal, field for field. (The list is
+// asserted field by field in test_engine's
+// `vr_view_policy_keeps_the_project_and_drops_what_a_seam_breaks`, which needs
+// no runtime; here it is the EXEMPTION list for the comparison below.)
+var POLICY = ["bloom", "ssao", "smaaPreset", "ssrScreenMarch", "refractions", "distortion",
+              "allowOffscreen", "looks"];
+
+// ...AND THE TWO FIELDS THAT ARE NOT DESCRIPTION AT ALL: `exposureMeasured` is
+// what a view's automatic exposure SETTLED on and `globalsPushes` how many
+// times its per-frame chain globals have been pushed. Both are readbacks about
+// a view's own history, so two views of one scene are expected to disagree
+// about them (and the arms below assert what each should be) — they are
+// excluded from "the same description", not exempted from scrutiny.
+var READBACK = ["exposureMeasured", "globalsPushes"];
+
+function comparePostFx(fx, what) {
+    assert(fx && fx.eye && fx.desktop, what + ": both descriptions are reported");
+    var keys = Object.keys(fx.desktop);
+    var differing = [];
+    for (var i = 0; i < keys.length; ++i) {
+        var k = keys[i];
+        if (POLICY.indexOf(k) >= 0 || READBACK.indexOf(k) >= 0) continue;
+        var a = JSON.stringify(fx.eye[k]), b = JSON.stringify(fx.desktop[k]);
+        if (a !== b) differing.push(k + " eye=" + a + " desktop=" + b);
+    }
+    assert(differing.length === 0,
+           what + ": the eye's grade equals the desktop's in every field but the VR " +
+           "policy's" + (differing.length ? " — DIFFERING: " + differing.join(", ") : ""));
+    // ...and the policy's own fields are what the policy says they are, so a
+    // future change to it cannot quietly stop applying.
+    assert(fx.eye.bloom === false, what + ": bloom is off in the eye (one blur ladder, two eyes)");
+    assert(fx.eye.ssao === false, what + ": SSAO is off in the eye (one projection, two eyes)");
+    assert(fx.eye.smaaPreset === -1, what + ": SMAA is off in the eye (its search crosses the seam)");
+    assert(fx.eye.ssrScreenMarch === false, what + ": the screen-space march is off in the eye");
+    assert(fx.eye.refractions === false && fx.eye.distortion === false,
+           what + ": refractions and distortion are off in the eye (both READ the target at " +
+           "an offset coordinate and fall back only at the frame's edges — at the seam there " +
+           "is no fallback and the other eye is what they read)");
+    assert(fx.eye.allowOffscreen === true, what + ": the eye pair keeps the post chain");
+}
+
+// ---------------------------------------------------------------------------
+project.create("vr eye grade " + Date.now());
+
+// THE FIXTURE IS A FLAT COLOUR SKY, and that is what makes every measurement
+// below pose-independent: a simulated HMD sways and rotates (CLAUDE.md), so the
+// eye and the desktop camera never look in exactly the same direction — but a
+// flat sky is the same radiance in every direction, so a patch of sky is a
+// comparison of the GRADE and of nothing else.
+//
+// MANUAL EXPOSURE is the editor's default (EXPOSURE-1) and is what the arms
+// below sweep; nothing here changes the mode.
+// FOUR LEVELS, THE DARKEST STILL ABOVE THE FLOOR: at the default grade a sky
+// below about #101010 clips to code 0, and two black patches prove only that
+// both pictures can be black. The measured answers on this rig are 7, 50, 100
+// and 139 of 255 — the range over which the filmic curve does its bending.
+var SKIES = ["#404040", "#808080", "#b3b3b3", "#d9d9d9"];
+
+// AND THE DESKTOP CAMERA LOOKS AT THE SKY, deliberately: the wearer's head is
+// LEVEL (the runtime decides that, not us) while the editor camera starts
+// looking down at the scene, so a patch taken at the same place in the two
+// pictures would compare the sky against the floor. Pointing the editor camera
+// up puts sky under both patches, which is the only way "the eye is graded like
+// the desktop" is a statement about the GRADE. It is done before the session so
+// the rig is placed from a camera that is not moving afterwards (the rig takes
+// position and yaw only, so the pitch never reaches the wearer).
+editor.setCamera({ position: { x: 0, y: 1.6, z: 0 }, lookAt: { x: 0, y: 60, z: -1 } });
+
+assert(vr.available().available === true, "the runtime answered");
+assert(vr.begin({ mirror: "left" }) === true, "the session started");
+editor.frame(120);
+var st = vr.state();
+assert(st.active === true, "the session is active");
+assert(st.rendered > 0, "the runtime has asked for " + st.rendered + " pictures");
+
+// ---- (d) THE EFFECTIVE DESCRIPTIONS ---------------------------------------
+comparePostFx(vr.state().postFx, "at the default grade");
+
+// ---- THE COLOUR CONTRACT, AS A FACT THE SESSION REPORTS --------------------
+// The pixels below prove it end to end; this proves the session KNOWS, which is
+// what the scene issue, the log line and (later) the eye dither act on. Monado
+// offers R8G8B8A8_SRGB, so the fallback must not have been taken here.
+st = vr.state();
+assert(st.swapchainFormat === "R8G8B8A8_SRGB",
+       "the swapchain is sRGB — the format that tells the runtime our bytes are already " +
+       "display-encoded (it is " + st.swapchainFormat + ")");
+assert(st.colourEncodedOnce === true,
+       "so the picture reaching the wearer is encoded exactly once");
+
+// ---- (a)/(b) THE PICTURES, ONE ARM PER SKY LEVEL --------------------------
+//
+// Each arm: set the sky, settle, take the eye's own picture and the desktop's
+// screenshot, then HOLD the picture still for the runner's window capture. The
+// marker file is what tells the runner an arm is ready — a script cannot signal
+// a shell any other way, and a screenshot is a file the script CAN write.
+for (var a = 0; a < SKIES.length; ++a) {
+    world.sky("color", { color: SKIES[a] });
+    editor.frame(90);
+    var eye = vr.eyeScreenshot(0, OUT + "/eye-" + a + ".png");
+    assert(eye.width > 0, "arm " + a + ": the left eye's own picture (" + eye.width + "x" +
+                          eye.height + ", centre " + eye.center.r + "," + eye.center.g + "," +
+                          eye.center.b + ")");
+    var desk = editor.screenshot(OUT + "/desk-" + a + ".png", eye.width, eye.height, [], "scene");
+    assert(desk.width > 0, "arm " + a + ": the desktop's own picture, same grade, same size");
+    comparePostFx(vr.state().postFx, "arm " + a);
+    // The marker, then the hold. The runner captures the runtime's compositor
+    // window during the hold; the picture does not move through it.
+    editor.screenshot(OUT + "/ready-" + a + ".png", 32, 32, [], "plain");
+    editor.frame(600);
+}
+
+// ---- (c) THE EXPOSURE SWEEP -----------------------------------------------
+//
+// The rig's own sweep, as an assertion: the eye must move with the desktop.
+// Both halves are read — the DESCRIPTION (the chain's exposure value, which is
+// what the renderer acts on) and the PICTURE (the eye's own centre byte) — so a
+// pass cannot come from a description that reaches no pixel.
+world.sky("color", { color: "#404040" });
+var EV = [-2, 0, 2];
+var chain = [], seen = [];
+for (var e = 0; e < EV.length; ++e) {
+    world.postFx({ exposureEv: EV[e] });
+    editor.frame(60);
+    var fx = vr.state().postFx;
+    comparePostFx(fx, "at exposureEv " + EV[e]);
+    chain.push(fx.eye.exposure);
+    var shot = vr.eyeScreenshot(0, OUT + "/sweep-" + e + ".png");
+    seen.push(shot.center.g);
+    if (EV[e] === 2) {
+        // THE BRIGHTEST STEP, deliberately: at -2 EV over a mid-grey sky the
+        // picture clips to code 0 and "the runtime shows what we sent" is
+        // satisfied by two blacks.
+        // THE REAL EYE PAIR, AT A GRADE SET MID-SESSION. Every other runtime
+        // capture is taken at the default exposure, which a session could in
+        // principle have baked at its creation; this one proves the picture the
+        // RUNTIME displays followed a World-panel change made while the wearer
+        // was already in there. (The eye screenshot beside it is a mono
+        // re-render through a throwaway view with its own chain — it could
+        // never have shown this by itself.)
+        vr.eyeScreenshot(0, OUT + "/eye-sweeplow.png");
+        editor.screenshot(OUT + "/desk-sweeplow.png", shot.width, shot.height, [], "scene");
+        editor.screenshot(OUT + "/ready-sweeplow.png", 32, 32, [], "plain");
+        editor.frame(600);
+    }
+    console.log("exposureEv " + EV[e] + ": chain exposure " + fx.eye.exposure.toFixed(4) +
+                " (desktop " + fx.desktop.exposure.toFixed(4) + "), eye centre green " +
+                shot.center.g);
+}
+assert(chain[0] < chain[1] && chain[1] < chain[2],
+       "the eye's chain exposure follows the World panel: " + chain.join(" < "));
+assert(seen[0] < seen[1] && seen[1] < seen[2],
+       "and so does the eye's own picture: " + seen.join(" < ") + " (before this lane it read " +
+       "79 -> 77 across a six-stop sweep)");
+
+// ---- (e) THE CAMERA THE SCENE IS RENDERED THROUGH --------------------------
+//
+// THE DEFECT THIS ARM EXISTS FOR (the Fable read's F1). The hosts hand the
+// mirror the camera THEY hold; the desktop's driving camera is resolved inside
+// the mirror through `Scene::renderCamera`, which while PLAYING answers the
+// armed ACTIVE camera. So an authored camera with its own exposure graded the
+// desktop and not the eye — and the VR rig is placed on that same camera, so
+// the wearer would have been standing exactly at the shot, looking at somebody
+// else's grade. The resolution now happens inside `applyViewEnvironment`, once,
+// for both callers.
+world.postFx({ exposureEv: 0 });
+// A FRAME BEFORE THE READING, always: `vr.state().postFx` reports what the VIEW
+// is carrying, and the document's value reaches it through the mirror's own
+// per-frame push. Reading it in the same breath as the write reports the
+// PREVIOUS grade — which is how the first cut of this arm compared +2 against
+// +2 and declared the eye had not moved.
+editor.frame(30);
+var beforePlay = vr.state().postFx.eye.exposure;
+var camId = scene.addCamera({ position: { x: 0, y: 1.6, z: 0 },
+                              settings: { exposureMode: "manual", exposure: 2 } });
+scene.setActiveCamera(camId);
+scene.playMode("camera");
+assert(editor.play() === true, "play starts, rendering through the armed camera");
+editor.frame(60);
+var played = vr.state().postFx;
+comparePostFx(played, "while playing through a +2 EV camera");
+// Two stops on the document's axis is 2*ln2 = 1.386 on the chain's.
+var moved = played.eye.exposure - beforePlay;
+assert(Math.abs(moved - 1.386) < 0.05,
+       "and the EYE took the camera's two stops (chain exposure moved " + moved.toFixed(3) +
+       ", expected 1.386): before this fix the eye kept the world's grade while the desktop " +
+       "took the camera's");
+editor.stop();
+editor.frame(30);
+assert(Math.abs(vr.state().postFx.eye.exposure - beforePlay) < 0.001,
+       "and gives it back when play stops");
+scene.setActiveCamera(null);
+// ...AND THE CAMERA GOES WITH THE ARM. The editor's VR preview draws the
+// editor's FURNITURE in the eye on purpose (VrConfig::helpers — "see the editor
+// working"), and a camera node's frustum wire fans right across the view from a
+// camera standing where the wearer stands: it left a patch with a spread of 205
+// in the arms below, which compare pictures taken frames apart.
+node.remove(camId);
+editor.frame(30);
+
+// ---- (f) THE PER-FRAME CHAIN GLOBALS REALLY REACH THE EYE ------------------
+//
+// WHAT THIS ARM SETTLES, and it was a real question (the sibling lane DITHER-1
+// measured a switch flipped mid-session moving zero bytes of the eye picture
+// and concluded the session's View gets no per-view globals at all). Most of
+// the post chain is SHAPE, and a few values are written into the graph the
+// moment a host pushes them — the fixed exposure's clear colour is, which is
+// why the manual sweep above moves the eye. But the METER's uniforms (this
+// lane's `meterEyes` among them), the automatic exposure's terms, the bloom
+// threshold, the AO and SSR camera terms and every look's parameters are
+// PROCESS-WIDE material parameters pushed once per view per frame by one
+// workspace listener. A view that never gets that push renders with whatever
+// the last workspace to update left behind.
+//
+// Counted, not inferred (`View::globalsPushes`).
+var g0 = vr.state().postFx;
+editor.frame(60);
+var g1 = vr.state().postFx;
+var eyePushes = g1.eye.globalsPushes - g0.eye.globalsPushes;
+assert(eyePushes >= 55 && eyePushes <= 65,
+       "the eye pair's chain globals are pushed once per frame (" + eyePushes + " over 60 " +
+       "frames), immediately before its own passes");
+// THE DESKTOP'S ARE NOT, and that is the mirror's design rather than a defect:
+// while a session owns the screen the editor's own View is switched OFF and its
+// mirror quad paints the eye instead (VR-3b's rule), so its workspace does not
+// update and nothing in it is pushed. It is recorded here because it is exactly
+// the shape that misleads a measurement taken on the desktop side.
+var deskPushes = g1.desktop.globalsPushes - g0.desktop.globalsPushes;
+console.log("desktop globals pushes over the same 60 frames: " + deskPushes +
+            " (its View is off while the mirror paints the eye)");
+
+// ---- (g) THE METER, WHICH ONLY AUTO EXPOSURE EXERCISES ---------------------
+//
+// Every other arm is MANUAL (the editor's default), so none of them dispatches
+// the histogram at all — and the meter is where this lane changed a shader for
+// EVERY view (`meterEyes`: the pattern is evaluated in the eye's own frame,
+// because a stereo target's centre is the pair's inner edge). The eye must
+// therefore MEASURE, and its measurement must follow the scene.
+world.sky("color", { color: "#404040" });
+world.override({ id: "exposureMode", value: "auto" });
+editor.frame(240);
+var autoDark = vr.state().postFx;
+comparePostFx(autoDark, "under automatic exposure");
+assert(autoDark.eye.tonemapFixed === false, "the eye is metering, not sitting on a constant");
+var darkScale = autoDark.eye.exposureMeasured;
+assert(darkScale > 0,
+       "the eye's meter settled somewhere real (" + darkScale.toFixed(4) + ") — the histogram " +
+       "is dispatched for the eye pair and its result reaches the eye's own tonemap");
+// ...AND IT FOLLOWS THE SCENE. A meter that answered once and froze would pass
+// the line above for ever; a four-times brighter sky must pull it down.
+world.sky("color", { color: "#b3b3b3" });
+editor.frame(240);
+var brightScale = vr.state().postFx.eye.exposureMeasured;
+assert(brightScale > 0 && brightScale < darkScale * 0.9,
+       "and it FOLLOWED a brighter sky mid-session: " + darkScale.toFixed(4) + " -> " +
+       brightScale.toFixed(4) + " (the meter's uniforms ride the per-frame push)");
+world.override({ id: "exposureMode", value: "manual" });
+world.postFx({ exposureEv: 0 });
+world.sky("color", { color: "#808080" });
+editor.frame(60);
+
+// ---- (h) THE LOOKS THAT RIDE, AND THE ONES THAT CANNOT ---------------------
+//
+// The stereo chain builds its looks stage here for the first time: the arm is
+// as much "does the session survive it" as "is the right subset kept".
+world.addLook("filmGrade", { amount: 0.8, saturation: 1.2, contrast: 1.1, vignette: 0.6 });
+world.addLook("radialBlur", { amount: 0.5 });
+world.addLook("desaturate", { amount: 0.4 });
+editor.frame(60);
+var looked = vr.state().postFx;
+comparePostFx(looked, "with a looks stack");
+var kept = looked.eye.looks.map(function (l) { return l.id; });
+assert(kept.length === 2 && kept[0] === "filmGrade" && kept[1] === "desaturate",
+       "the eye keeps the pointwise looks in the project's order and drops the radial blur " +
+       "(kept: " + kept.join(", ") + ")");
+assert(looked.eye.looks[0].p[3] === 0,
+       "...with the film grade's vignette zeroed (it is measured from the frame's centre)");
+assert(looked.desktop.looks.length === 3, "while the desktop keeps all three");
+var lookShot = vr.eyeScreenshot(0, OUT + "/eye-looks.png");
+assert(lookShot.center.r > 0 || lookShot.center.g > 0 || lookShot.center.b > 0,
+       "and the session still renders a picture through the looks stage (centre " +
+       lookShot.center.r + "," + lookShot.center.g + "," + lookShot.center.b + ")");
+world.removeLook("filmGrade");
+world.removeLook("radialBlur");
+world.removeLook("desaturate");
+editor.frame(30);
+
+// ---- THE REALISTIC-SKY ARM ------------------------------------------------
+//
+// Not a flat-patch comparison — a realistic sky is a gradient and the two
+// pictures look in different directions — but the DESCRIPTION must still agree
+// and the eye must still be a picture. It is here because the realistic sky is
+// what the owner will be wearing, and because its radiance is far above the
+// flat arms': a grade that only works on a mid-grey is not a grade.
+world.postFx({ exposureEv: 0 });
+world.sky("realistic", {});
+editor.frame(120);
+comparePostFx(vr.state().postFx, "under the realistic sky");
+var real = vr.eyeScreenshot(0, OUT + "/eye-realistic.png");
+assert(real.width > 0, "the realistic sky's eye picture (centre " + real.center.r + "," +
+                       real.center.g + "," + real.center.b + ")");
+editor.screenshot(OUT + "/desk-realistic.png", real.width, real.height, [], "scene");
+editor.screenshot(OUT + "/ready-realistic.png", 32, 32, [], "plain");
+editor.frame(600);
+
+assert(vr.end() === true, "the session ended");
+
+// ---- (i) THE MEASUREMENT OVERRIDE'S OWN PATH -------------------------------
+//
+// THE DEFECT THIS ARM EXISTS FOR. With `eyeWidth`/`eyeHeight` the eye is
+// rendered at a size of the caller's choosing and the swapchain stays the
+// runtime's, so the copy cannot be a copy — it SCALES. A blit CONVERTS between
+// formats, and once the swapchain became _SRGB (this lane's whole point) a blit
+// straight into it read our UNORM bytes as linear and ENCODED them on the way
+// in: a second encode, about a stop too bright, on precisely the arm whose
+// purpose is to be comparable with the product path. The scale now happens
+// between two UNORM images and the result reaches the swapchain through the
+// same raw copy, so this arm must read the same 0.00/255 every other one does.
+//
+// A SECOND SESSION IN THE SAME PROCESS, which is also the only place this suite
+// exercises one.
+//
+// AND ITS FIXTURE IS FLAT ALL THE WAY ROUND, which the arms above did not need:
+// they compare pictures taken at the same pose, while this one compares the
+// eye's own render with a window capture taken 600 frames later — and Monado's
+// simulated head SWAYS AND TURNS through those frames, so anything with
+// structure in it (the horizon, the sun disc) moves between the two and the
+// comparison measures the head instead of the copy. A flat sky with no disc is
+// the same radiance in every direction, so the head may go where it likes.
+// (The first cut of this arm sampled a patch with a spread of 205 — the rig is
+// placed on the editor camera's YAW, and this script has pointed that camera at
+// the ZENITH, where a yaw means nothing.)
+world.sky("color", { color: "#808080" });
+world.sunDisc({ visible: false });
+editor.setCamera({ position: { x: 0, y: 1.6, z: 0 }, lookAt: { x: 0, y: 1.6, z: -20 } });
+editor.frame(30);
+assert(vr.begin({ mirror: "left", eyeWidth: 640, eyeHeight: 720 }) === true,
+       "a second session starts, rendering 640x720 per eye into the runtime's own size");
+editor.frame(120);
+var over = vr.state();
+assert(over.eyeSize[0] === 640 && over.eyeSize[1] === 720,
+       "the session reports the overridden render size (" + over.eyeSize[0] + "x" +
+       over.eyeSize[1] + ")");
+assert(over.colourEncodedOnce === true, "and it is still the one-encode contract");
+comparePostFx(over.postFx, "at an overridden eye size");
+var ov = vr.eyeScreenshot(0, OUT + "/eye-override.png");
+assert(ov.width === 640 && ov.height === 720,
+       "the eye picture is the overridden size (" + ov.width + "x" + ov.height + ")");
+editor.screenshot(OUT + "/desk-override.png", ov.width, ov.height, [], "scene");
+editor.screenshot(OUT + "/ready-override.png", 32, 32, [], "plain");
+editor.frame(600);
+assert(vr.end() === true, "the second session ended");
+
+console.log("vr.eye_grade: the script's half is green; the reader judges the pictures");
