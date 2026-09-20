@@ -987,8 +987,15 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		options.insert(QStringLiteral("restart"), true);
 		const QVariantMap result = api.quietly([&] { return api.resetLibrary(options); });
 		if (result.value(QStringLiteral("ok")).toBool()
-		    && result.value(QStringLiteral("restarted")).toBool())
-			return;   // the window is already closing behind the new process
+		    && result.value(QStringLiteral("restarted")).toBool()) {
+			// THE PREFERENCES DIALOG IS MODAL (MainWindow shows it with exec()),
+			// so it owns a nested event loop — and the verb's window close is
+			// deferred to the next turn of whichever loop is running. Closing
+			// this dialog HERE lets the nested loop end first, so the close
+			// lands on the main one and the process really goes.
+			if (QWidget *dialog = this->window()) dialog->close();
+			return;   // the new process is already starting
+		}
 
 		// ApiModule::lastError() explicitly: AppApi has a VERB of that name
 		// (the script-facing app.lastError()) which hides the shell-caller
