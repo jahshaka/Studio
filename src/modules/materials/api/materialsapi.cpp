@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/materialmembers.h"
+#include "services/memberstamp.h"
 #include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
 #include "io/materialpresets.h"
@@ -603,7 +604,7 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         // stamp: if the bytes were already in the library the user imported
         // that image themselves, and their own texture is always a tile.
         if (imported.minted)
-            materialmembers::stampMember(host.db, textureGuid, materialGuid);
+            memberstamp::stamp(host.db, textureGuid, materialGuid);
     }
 
     // THE SLOT. Naming one writes it into the definition (and the membership

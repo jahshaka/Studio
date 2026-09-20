@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "services/assetcas.h"
 #include "services/materialbundle.h"
-#include "services/materialmembers.h"
+#include "services/memberstamp.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
 
@@ -222,7 +222,7 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
         // these bytes were already in the library under a row the USER
         // imported, that row is theirs and a seed may not quietly hide it.
         if (pinned.minted)
-            materialmembers::stampMember(db, pinned.guid, MaterialPresetAssets::guidFor(preset.name));
+            memberstamp::stamp(db, pinned.guid, MaterialPresetAssets::guidFor(preset.name));
         guidForFile.insert(file, pinned.guid);
         return pinned.guid;
     };

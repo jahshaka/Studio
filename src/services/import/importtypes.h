@@ -39,12 +39,40 @@ class QTemporaryDir;
 
 struct ImportRequest
 {
+    /// WHO ASKED FOR THIS IMPORT (IMPORT-INTENT-1, MATERIAL_BUNDLE_SPEC V-2's
+    /// F14). A property of the REQUEST, never of the pipeline: the same file,
+    /// the same importer, the same bytes — the difference is whose gesture it
+    /// was, and that decides what happens when the import lands on a row the
+    /// library already has.
+    ///
+    ///   User      — a person asked: the Assets page's import button and its
+    ///               drop pad, a drop on the editor's project panel,
+    ///               assets.import / assets.importFile / assets.importAndPlace,
+    ///               the avatar module's character import. THE DEFAULT, because
+    ///               every door a person can reach is one of these, and the
+    ///               honest answer for a new door is "the user asked".
+    ///   Material  — a MATERIAL asked: the texture picker's import
+    ///               (materials.addTexture with a path, through
+    ///               ShippedAssets::importTexture), a graph texture node's
+    ///               picker, the first-run preset seed's maps. The picture is
+    ///               coming in INSIDE a material, so it is stamped as that
+    ///               material's member and folds into the bundle's tile.
+    ///
+    /// The stamp is an ORIGIN and the user's intent outranks it: an import the
+    /// USER asked for that lands on an existing stamped row takes the stamp
+    /// off (services/memberstamp.h), so the picture is their tile from then on
+    /// — and the material keeps it as a member, because membership is the
+    /// definition's edges and never the stamp. An import a MATERIAL asked for
+    /// never clears one.
+    enum class Intent { User, Material };
+
     QString sourcePath;
     int typeHint = -1;          // ModelTypes value; -1 = sniff from the file
     int drawerId = -1;          // > 0: file the imported asset in this drawer
     QString projectGuid;        // stamps created rows (may be empty)
     QJsonObject settings;       // recorded per-import; part of the determinism key
     bool wantViewerThumbnail = false;  // UI refreshes the thumbnail after preview
+    Intent intent = Intent::User;      // see above — every user-facing door
 };
 
 /// Is this path a MODEL file — the one kind the import dialog asks about?

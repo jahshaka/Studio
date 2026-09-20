@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/imagematerial.h"
 #include "services/materialmembers.h"
+#include "services/memberstamp.h"
 
 namespace assettray {
 
@@ -150,8 +151,7 @@ bool foldedIntoBundle(Database *db, const AssetRecord &record)
     if (!isType(record, ModelTypes::Texture)) return false;
     // The cheap half first, off the record we already hold: almost no texture
     // carries the stamp, and only a stamped one costs a query.
-    if (!QJsonDocument::fromJson(record.properties).object()
-             .value(QStringLiteral("member")).toBool())
+    if (!memberstamp::isStamped(record.properties))
         return false;
     return materialmembers::hiddenAsMember(db, record.guid);
 }

@@ -12,7 +12,10 @@
 //      stamped and folds into the bundle; a texture the USER imported is
 //      always a tile; a stamped one comes back the moment anything but a
 //      material uses it. The stamp is an ORIGIN, not "something depends on
-//      it" — the dependency-hiding of 2026-09-12 is not this rule.
+//      it" — the dependency-hiding of 2026-09-12 is not this rule. And the
+//      origin is outranked by the user's intent (IMPORT-INTENT-1): their own
+//      import of the same picture takes the stamp off and the material keeps
+//      the member.
 //   3. §4 L-2 (owner Q6) — `unused` lists before anything goes, and the two
 //      scopes differ: a bundle's own born-inside row with no user and no pin
 //      goes from the LIBRARY; a member pin nothing in the project uses drops
@@ -47,6 +50,7 @@
 #include "services/assetstorepaths.h"
 #include "services/materialbundle.h"
 #include "services/materialmembers.h"
+#include "services/memberstamp.h"
 #include "services/projectassets.h"
 
 static int failures = 0;
@@ -192,8 +196,8 @@ int main(int argc, char **argv)
     // =======================================================================
     CHECK(!materialmembers::hiddenAsMember(&db, "tex-wood"),
           "2: an UNSTAMPED texture is a tile even when only materials use it (V-3 is not our rule)");
-    CHECK(materialmembers::stampMember(&db, "tex-wood", woody), "2: the picker stamps its import");
-    CHECK(materialmembers::isStampedMember(&db, "tex-wood"), "2: the stamp reads back");
+    CHECK(memberstamp::stamp(&db, "tex-wood", woody), "2: the picker stamps its import");
+    CHECK(memberstamp::isStamped(&db, "tex-wood"), "2: the stamp reads back");
     CHECK(materialmembers::hiddenAsMember(&db, "tex-wood"),
           "2: a stamped picture only materials use folds into the bundle");
     CHECK(!materialmembers::hiddenAsMember(&db, "tex-mine"),
@@ -209,6 +213,39 @@ int main(int argc, char **argv)
     db.deleteDependency("some-scene-node", "tex-wood");
     CHECK(materialmembers::hiddenAsMember(&db, "tex-wood"), "2: folded again once that use is gone");
 
+    // -----------------------------------------------------------------------
+    // 2b. THE USER'S INTENT OUTRANKS THE ORIGIN (IMPORT-INTENT-1, the bundle
+    // spec's F14). The stamp says where the picture CAME FROM; it does not own
+    // it. A user who imports that picture themselves — the import side of V-2's
+    // "a user who picks it into their own material or drops it on a plane makes
+    // it a tile again" — takes the stamp off, and the row is theirs from then
+    // on. What does NOT move: the material's definition still names it, so it
+    // is still a member of that bundle. Membership is the edges, never the
+    // stamp.
+    // -----------------------------------------------------------------------
+    CHECK(materialmembers::hiddenAsMember(&db, "tex-wood"), "2b: folded, to begin with");
+    CHECK(memberstamp::unstamp(&db, "tex-wood"),
+          "2b: the user's own import of those bytes takes the stamp off");
+    CHECK(!memberstamp::isStamped(&db, "tex-wood"), "2b: the member key is gone");
+    CHECK(memberstamp::originOf(db.fetchAsset("tex-wood").properties).isEmpty(),
+          "2b: ...and so is the origin — the reverse edit of exactly the two keys");
+    CHECK(!materialmembers::hiddenAsMember(&db, "tex-wood"),
+          "2b: so it is a TILE from now on, like any picture the user imported");
+    {
+        const auto still = materialmembers::describe(&db, nullptr, woody);
+        const auto *entry = findMember(still, "tex-wood");
+        CHECK(entry != nullptr, "2b: the material still lists it as a member");
+        CHECK(entry && !entry->member && !entry->hidden,
+              "2b: ...as an unstamped, unfolded one (membership is the definition)");
+    }
+    CHECK(memberstamp::unstamp(&db, "tex-wood"),
+          "2b: unstamping a row that carries no stamp is a no-op, not a failure");
+    // Put it back for the sections below, which are written against the
+    // picker's own state.
+    CHECK(memberstamp::stamp(&db, "tex-wood", woody), "2b: re-stamped for what follows");
+    CHECK(memberstamp::originOf(db.fetchAsset("tex-wood").properties) == woody,
+          "2b: ...origin and all");
+
     // =======================================================================
     // 3. UNUSED — LISTED FIRST, AND THE TWO SCOPES
     // =======================================================================
@@ -216,7 +253,7 @@ int main(int argc, char **argv)
     // edges went with the slot, only the origin stamp remains.
     textureRow(db, "tex-orphan", "orphan.png", storeRoot,
                writeTempFile(scratchDir, "orphan.png", QByteArray("orphan-bytes")));
-    CHECK(materialmembers::stampMember(&db, "tex-orphan", woody), "3: it was picked into woody");
+    CHECK(memberstamp::stamp(&db, "tex-orphan", woody), "3: it was picked into woody");
 
     auto listed = materialmembers::unused(&db, nullptr, woody);
     CHECK(listed.size() == 1 && listed.first().guid == "tex-orphan",
@@ -279,7 +316,7 @@ int main(int argc, char **argv)
     const QJsonObject stillShared = MaterialBundle::read(&db, planks, nullptr);
     CHECK(stillShared.value("values").toObject().value("baseColorMap").toString() == "tex-wood",
           "4: the material that SHARED the picture keeps it and never notices");
-    CHECK(materialmembers::isStampedMember(&db, mine),
+    CHECK(memberstamp::isStamped(&db, mine),
           "4: the copy is a member of the material that asked for it");
 
     // The graph node's texture too, to prove every place is rewritten.
@@ -471,7 +508,7 @@ int main(int argc, char **argv)
         // is found by its PARENT, because a parented row appears in no
         // library listing and the stamp walk cannot see it — which is
         // precisely how a baked map used to outlive its material for ever.
-        materialmembers::stampMember(&db, "tex-bake2", original);   // the picked one
+        memberstamp::stamp(&db, "tex-bake2", original);   // the picked one
         db.createAssetEntry("tex-bakedchild", "child.png",
                             static_cast<int>(ModelTypes::Texture), original, QString(),
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),

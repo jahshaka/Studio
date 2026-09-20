@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "export/rawexporter.h"
 #include "services/assetshare.h"
 #include "services/materialmembers.h"
+#include "services/memberstamp.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetgc.h"
@@ -153,7 +154,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
-          "`member` and `memberOf` are present only on a row that arrived INSIDE a material — a texture picked through a material\'s picker, or a shipped preset\'s map at the first-run seed: `member: true` is the stamp (MATERIAL_BUNDLE_SPEC V-2) and `memberOf` names the material it came in through. The stamp is what folds the picture\'s tile into the bundle\'s in the editor tray while ONLY materials use it; the moment a scene node, a decal or the user themselves uses it, it is a tile again. A texture the user imported carries neither key. "
+          "`member` and `memberOf` are present only on a row that arrived INSIDE a material — a texture picked through a material\'s picker, or a shipped preset\'s map at the first-run seed: `member: true` is the stamp (MATERIAL_BUNDLE_SPEC V-2) and `memberOf` names the material it came in through. The stamp is what folds the picture\'s tile into the bundle\'s in the editor tray while ONLY materials use it; the moment a scene node, a decal or the user themselves uses it, it is a tile again. A texture the user imported carries neither key — and an import THE USER ASKS FOR takes the stamp off a row it lands on (assets.importFile), because the stamp is an origin and their intent outranks it. "
           "`companionOf` is present only on a MATERIAL that 'Create material from image' minted, and names the TEXTURE it was minted for — the stamp that makes an image and its own material relatable (and that keeps the image's tile folded into the material's in the editor tray). A material the user authored on the same image carries no stamp and no key. "
           "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset. "
           "MODELS also carry their SIZE, as information (services/extentmeasure.h): `extent` {x,y,z} — the model's axis-aligned size in METRES as this asset was IMPORTED, i.e. after its import settings (scale, units, rotation) were baked in, which is the size every placement of it has; and `unitScale` — metres per source unit as the FILE declared it (FBX UnitScaleFactor/100, 1 for formats that declare none), which is what the import dialog shows so a user can disagree with the file. Nothing reads these to scale anything: an asset's size is decided once, at import (assets.importSettings / assets.reimport), and every instance is placed at scale 1. (The retired fit-to-size block — fitKind/fitScale/fitReason/fitSource, and the assets.setFit verb behind it — guessed a size from an envelope on every instantiation; a stale row may still carry those keys and nothing reads them.)",
@@ -190,11 +191,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "`axes` {up, forward}: the axes THE FILE uses, as signed names ('+X'..'-Z'); our convention is up '+Y', forward '-Z', which is the identity. They must be perpendicular. "
           "`rotate` [x,y,z]: a free rotation in degrees, applied after the axis fix. `translate` [x,y,z]: an origin shift in METRES, applied last. "
           "`skeleton`, `clips` (true | false | a list of clip names) and `materials` ('import' | 'none') are recorded and are part of the asset's bake key; the pipeline builds all of them today. "
-          "An unknown key or a refused value FAILS the import rather than importing at the wrong size. Read the record back with assets.importSettings(guid) and change it with assets.reimport(guid, {...}).",
+          "An unknown key or a refused value FAILS the import rather than importing at the wrong size. Read the record back with assets.importSettings(guid) and change it with assets.reimport(guid, {...}). "
+          "AN IMPORT YOU ASK FOR IS YOURS (the rule assets.importFile states in full): importing bytes the library already holds as a MATERIAL'S MEMBER texture answers with that row, unstamped, instead of a second copy. Models are never stamped, so for this verb it is the rule of the pipeline rather than a thing that happens here.",
           Needs::Document },
         { "importFile", "assets.importFile(path, drawerId?, {typeHint, units, scale, axes, rotate, translate, skeleton, clips, materials}) -> guid",
           "Imports any library-supported file (models, animation clips, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
-          "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, animation, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list.",
+          "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, animation, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list. "
+          "RE-IMPORTING A MATERIAL'S MEMBER PICTURE (MATERIAL_BUNDLE_SPEC V-2): a texture that arrived inside a material — picked through its picker, or shipped with a preset — is stamped as that bundle's member and folds into its tile, so the user never sees it on its own. Importing those exact bytes YOURSELF answers with THAT row and clears the stamp: the same guid comes back, it is a tile from then on (assets.list({scope:'store'}) and the editor tray list it), and the material keeps it as a member — membership is the material's definition, never the stamp. One picture stays one row and one stored object; nothing is copied. An import a MATERIAL asks for never clears a stamp, and a deleted-but-pinned row is still re-listed rather than duplicated.",
           Needs::Document },
         { "drawers", "assets.drawers() -> [{id, name, parent}]",
           "The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0.",
@@ -718,13 +721,10 @@ QVariantMap AssetsApi::metadata(const QString &guid)
     // into the bundle's while only materials use it. Reported only when it is
     // there, like `companionOf`: a row the user imported themselves carries no
     // key rather than a false.
-    {
-        const QJsonObject props = QJsonDocument::fromJson(record.properties).object();
-        if (props.value(QStringLiteral("member")).toBool()) {
-            out["member"] = true;
-            const QString origin = props.value(QStringLiteral("memberOf")).toString();
-            if (!origin.isEmpty()) out["memberOf"] = origin;
-        }
+    if (memberstamp::isStamped(record.properties)) {
+        out["member"] = true;
+        const QString origin = memberstamp::originOf(record.properties);
+        if (!origin.isEmpty()) out["memberOf"] = origin;
     }
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
