@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include "ui/dialogs/progressdialog.h"
 #include "data/settingsmanager.h"
 #include "services/assettags.h"
+#include <QCheckBox>
+#include "services/assettray.h"
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 
@@ -724,6 +726,24 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	filterLayout->addStretch();
+	// "SHOW MEMBER TEXTURES" (MATERIAL_BUNDLE_SPEC V-2 on the Assets page): the
+	// editor tray has folded a material's picked pictures into the bundle
+	// since phase 2; the page the owner browses most still showed every one
+	// of them as a tile of its own (the "5 + 15 tiles" after a preset seed).
+	// One rule, one function (assettray::libraryList), one switch here with
+	// the tray's wording.
+	showMembersBox = new QCheckBox(tr("Show member textures"));
+	showMembersBox->setToolTip(tr("List the pictures that came in INSIDE a material as tiles of "
+	                              "their own. Your own imported images are always listed."));
+	showMembersBox->setChecked(
+	    SettingsManager::getDefaultManager()->getValue("library_show_members", false).toBool());
+	showMembers = showMembersBox->isChecked();
+	filterLayout->addWidget(showMembersBox);
+	connect(showMembersBox, &QCheckBox::toggled, this, [this](bool on) {
+		showMembers = on;
+		SettingsManager::getDefaultManager()->setValue("library_show_members", on);
+		applyShowMembers(on);
+	});
 	filterLayout->addWidget(new QLabel("Search: "));
 	le = new QLineEdit();
 	le->setFixedWidth(256);
@@ -843,14 +863,13 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	// metadata pane showed a number. Store the actual name (§2 defect list).
 	QMap<int, QString> drawerNames;
 	for (const auto &coll : db->fetchCollections()) drawerNames.insert(coll.id, coll.name);
-	foreach(const AssetRecord &record, db->fetchAssetsForAssetView()) {
-		// A LEGACY ModelTypes::Shader ROW IS NOT OFFERED (fix round F12).
-		// Nothing mints one and nothing reads one since MATERIAL_BUNDLE_SPEC
-		// phase 2, so a tile for it could only be opened, previewed or
-		// applied into disappointment. The row is untouched — no migration is
-		// owed (spec §7) and it goes with the next data wipe; the editor's
-		// tray hides it by the same rule (assettray rule 2b).
-		if (record.type == static_cast<int>(ModelTypes::Shader)) continue;
+	// THE LIBRARY LISTING (services/assettray.h libraryList): the grid rows
+	// less a legacy Shader row (rule 2b — nothing can open one since
+	// MATERIAL_BUNDLE_SPEC phase 2; the row is untouched and goes with the
+	// next data wipe) and, unless the switch above is on, the pictures that
+	// arrived inside a material bundle (rule 6). The verb's scope 'store'
+	// reads the same function.
+	foreach(const AssetRecord &record, assettray::libraryList(db, showMembers)) {
 		QJsonObject object;
 		object["icon_url"] = "";
 		object["guid"] = record.guid;
@@ -1851,6 +1870,28 @@ void AssetView::addLibraryTileForAsset(const QString &guid)
 	fastGrid->addTo(gridItem, 0);
 	fastGrid->updateGridColumns(fastGrid->lastWidth);
 	filterFromSelection();
+}
+
+void AssetView::applyShowMembers(bool on)
+{
+	// The fold's own set, from the same rule the grid was built with: with the
+	// switch OFF these are the rows the listing drops; ON, the rows to add.
+	const QStringList folded =
+	    assettray::libraryHidden(db, db->fetchAssetsForAssetView(), /*showMembers=*/false);
+	if (on) {
+		for (const QString &guid : folded) {
+			if (fastGrid->tileByGuid(guid)) continue;
+			// A legacy Shader row is in the fold set for rule 2b and is never
+			// offered — only the bundle's pictures come back.
+			if (db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Shader)) continue;
+			addLibraryTileForAsset(guid);
+		}
+	} else {
+		for (const QString &guid : folded)
+			if (auto *tile = fastGrid->tileByGuid(guid)) fastGrid->deleteTile(tile);
+		fastGrid->updateGridColumns(fastGrid->lastWidth);
+	}
+	checkForEmptyState();
 }
 
 // ONE toast for the page, reused. Every message used to `new Toast(this)` and

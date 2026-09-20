@@ -118,6 +118,20 @@ QStringList hidden(Database *db, const QString &projectGuid,
                    const QVector<AssetRecord> &records,
                    const QVector<AssetRecord> &pinned, bool showMembers = false);
 
+/// THE LIBRARY LISTING (ASSETS-PAGE-MEMBERS-1, MATERIAL_BUNDLE_SPEC V-2 on the
+/// Assets page): the library grid's rows — Database::fetchAssetsForAssetView,
+/// which already excludes import members by the query (memberSubquery, rule
+/// 1) — collapsed by the two rules that apply with NO project: 2b (a legacy
+/// Shader row nothing can open) and 6 (a picture that arrived inside a
+/// material, while only materials use it; `showMembers` turns that one rule
+/// off — the page's "Show member textures" switch). The Assets page, the
+/// material picker's browse list and assets.list({scope:'store'}) read this,
+/// so the page and the verb cannot disagree about what is a tile.
+QVector<AssetRecord> libraryList(Database *db, bool showMembers = false);
+/// The guids `libraryList` drops out of `records` (the raw grid rows).
+QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records,
+                          bool showMembers = false);
+
 }   // namespace assettray
 
 #endif   // ASSETTRAY_H
