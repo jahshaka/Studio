@@ -376,6 +376,18 @@ QString customise(const QString &presetOrGuid, const QString &name,
     const QString chosen = customiseName(db, name.trimmed().isEmpty() ? preset.name
                                                                       : name.trimmed());
     definition[QStringLiteral("name")] = chosen;
+    // THE GRAPH CARRIES A NAME TOO, and it is the one the module's Material
+    // Settings shows and the one `buildDefinition` writes back on every save
+    // (PRESET-UNIFY-1). Left at the preset's, "Gold PBR-1" would be called
+    // "Gold PBR" in the settings panel and would RENAME ITSELF back the first
+    // time the user saved it.
+    if (definition.contains(QStringLiteral("shadergraph"))) {
+        QJsonObject graph = definition.value(QStringLiteral("shadergraph")).toObject();
+        QJsonObject settings = graph.value(QStringLiteral("settings")).toObject();
+        settings[QStringLiteral("name")] = chosen;
+        graph[QStringLiteral("settings")] = settings;
+        definition[QStringLiteral("shadergraph")] = graph;
+    }
 
     // AN ORDINARY BUNDLE, with a guid nothing calls reserved: that is what
     // makes the copy editable where the preset is not. Its member textures

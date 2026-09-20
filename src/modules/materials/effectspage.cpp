@@ -617,7 +617,10 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	}
 	currentShaderInformation.GUID = currentProjectShader->data(MODEL_GUID_ROLE).toString();
 	currentShaderInformation.origin = origin;
-	oldName = currentShaderInformation.name = currentProjectShader->data(Qt::DisplayRole).toString(); 
+	// A PRESET TILE'S LABEL IS ELIDED to fit its 90 px tile, so the NAME comes
+	// from the shipped list rather than from what the tile could draw.
+	oldName = currentShaderInformation.name =
+	    shipped.isEmpty() ? currentProjectShader->data(Qt::DisplayRole).toString() : shipped; 
 	restoreGraphPositions(obj["shadergraph"].toObject());
 	restoringGraph = false;
 	// The Members panel follows the open bundle.
@@ -846,11 +849,20 @@ void EffectsPage::configureAssetsDock()
 	//
 	// LISTING DOES NOT SEED: the guid is reserved and known before any row
 	// exists, so the drawer costs nothing until somebody uses a preset.
+	// ONE LINE PER TILE (PRESET-UNIFY-1). A 90 px tile cannot hold "Checker
+	// Board PBR", and a WRAPPED bottom-aligned label answers that by showing
+	// its SECOND line — "Board PBR" — directly above the wood preset, which
+	// is also called "Board PBR". Two tiles reading the same word is the very
+	// thing the owner called a duplicate. Wrapping off, the view elides the
+	// one line it draws; the full name is on the tooltip.
+	presets->setWordWrap(false);
 	for (const MaterialPreset &preset : MaterialPresets::all()) {
 		const QString guid = MaterialPresetAssets::guidFor(preset.name);
 		if (guid.isEmpty()) continue;
 		auto item = new QListWidgetItem;
 		item->setText(preset.name);
+		item->setToolTip(preset.name);
+		item->setData(Qt::UserRole, preset.name);
 		item->setSizeHint(defaultItemSize);
 		item->setTextAlignment(Qt::AlignBottom);
 		item->setIcon(QIcon(preset.icon));
@@ -1896,7 +1908,8 @@ void EffectsPage::configureConnections()
 	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
 		const QString guid = item->data(MODEL_GUID_ROLE).toString();
 		if (guid.isEmpty()) return;
-		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
+		// The tile's LABEL is elided to fit 90 px; the name is the preset's.
+		currentShaderInformation.name = MaterialBundle::shippedPresetName(guid);
 		loadGraph(guid, shaderInfo::Origin::Library);
 	});
 

@@ -224,6 +224,9 @@ assert(presetGraph.readOnly === true, "…read-only");
 var copyGraph = materials.loadGraph(named);
 assert(copyGraph.nodes === presetGraph.nodes,
        "the COPY carries the same graph (" + copyGraph.nodes + " nodes)");
+assert(graph.settings().name === "My Bricks",
+       "…under ITS OWN name, not the preset's (graph settings say '"
+       + graph.settings().name + "')");
 assert(copyGraph.master === "PbrMaterial", "…on the one master");
 assert(copyGraph.readOnly === false,
        "…and it is NOT read-only: the copy is the user's to edit");
