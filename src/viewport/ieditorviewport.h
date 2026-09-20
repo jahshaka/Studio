@@ -761,6 +761,33 @@ public:
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
+    /// WHAT THE VOXEL LIGHTING VOLUME HOLDS (PHOTON-M3) — a TEST AND TOOL
+    /// readback of one cascade's light volume, behind `world.giVoxelStats`.
+    /// The engine flushes and downloads the whole volume for it, so it is
+    /// never on a frame path; `available` false means there is no engine to
+    /// ask, no VCT arm on the scene, or no such cascade.
+    ///
+    /// Every value is in the STORE's own normalised units (scene radiance
+    /// times `multiplier`), because the question it answers is about the
+    /// STORE: does the bounce's fixed point fit in the format.
+    struct GiVoxelStatsInfo {
+        bool    available = false;
+        int     cascade = 0;
+        int     width = 0, height = 0, depth = 0;
+        QString format;            ///< the total volume's pixel format, Ogre's spelling
+        float   formatMax = 0.0f;  ///< 1.0 for a UNORM store; 0 = a float one (no ceiling)
+        float   multiplier = 0.0f; ///< k: a voxel holds k times the surface's radiance
+        float   peak = 0.0f;       ///< peak channel of the TOTAL volume
+        float   peakDirect = 0.0f; ///< ...and of the DIRECT one (<= 1/headroom by construction)
+        double  meanLit = 0.0;     ///< mean channel maximum over lit voxels
+        qint64  voxelsLit = 0;
+        qint64  voxelsAtMax = 0;   ///< on the format's top bin: on a UNORM total this IS the clip
+        qint64  directAtMax = 0;
+        qint64  voxels = 0;
+        qint64  voxelsAboveOne = 0;///< above 1.0 in store units — what an 8-bit store would clip
+    };
+    virtual GiVoxelStatsInfo giVoxelStats(int cascade) { (void)cascade; return {}; }
+
     /// WHAT THE SHADOW ATLAS IS, as opposed to what the scene asked for
     /// (SPECS/SHADOW_TOOLING_SPEC.md §7) — the same reading as giStatus() and
     /// for the same reason: the renderer has a FIXED number of point/spot
