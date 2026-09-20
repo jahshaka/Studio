@@ -555,8 +555,15 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
     if (!definition.contains("shadergraph"))
         return fail("materials.regenerate: the asset has no 'shadergraph' object");
 
-    NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1());
-    if (!graph || !graph->getMasterNode())
+    QString refusedGraph;
+    NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(),
+                                              new LibraryV1(), &refusedGraph);
+    if (!graph)
+        return fail(QStringLiteral("materials.regenerate: %1")
+                        .arg(refusedGraph.isEmpty()
+                                 ? QStringLiteral("the graph could not be loaded")
+                                 : refusedGraph));
+    if (!graph->getMasterNode())
         return fail("materials.regenerate: the graph has no master node");
 
     const auto build = materials::buildDefinition(graph, shaderGuid, host.db, host.project);
@@ -903,7 +910,18 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
         return out;
     }
     // The real loader path (pixel-parity-tested): deserialize with LibraryV1.
-    NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1());
+    QString refused;
+    NodeGraph *graph =
+        NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1(), &refused);
+    // A REFUSED GRAPH IS AN ERROR, NOT A CRASH (LEGACY-MASTER-CRUD): this used
+    // to dereference the result three lines down. A material written on the
+    // deleted "Surface Material" master has nothing to load.
+    if (graph == nullptr) {
+        fail(QStringLiteral("materials.loadGraph: %1")
+                 .arg(refused.isEmpty() ? QStringLiteral("the graph could not be loaded")
+                                        : refused));
+        return out;
+    }
 
     // READ-ONLY IS PART OF THE ANSWER (PRESET-UNIFY-1). A shipped preset opens
     // to be READ: the definition writer refuses its reserved guid, so a caller

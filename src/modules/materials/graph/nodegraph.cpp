@@ -17,8 +17,6 @@ For more information see the LICENSE file
 #include "../models/library.h"
 #include "../core/guidhelper.h"
 
-#include <algorithm>
-#include <cmath>
 
 #include <QJsonObject>
 #include <QJsonArray>
@@ -222,77 +220,72 @@ QJsonObject NodeGraph::serialize()
 	return graph;
 }
 
-namespace {
-
-// ---------------------------------------------------------- legacy master
-//
-// THE BLINN-PHONG MASTER IS GONE (LEGACY-MASTER-CRUD, 2026-09-19). There is
-// one master node, "PBR Material"; a saved graph whose master type is
-// "Material" is converted on load and re-saves as PBR. Nothing is owed to old
-// data beyond opening it correctly once.
-//
-// The deleted SurfaceMasterNode's inputs, in order:
-//   0 Diffuse  1 Specular  2 Shininess  3 Normal  4 Ambient
-//   5 Emission 6 Alpha     7 Alpha Cutoff  8 Vertex Offset  9 Vertex Extrusion
-// PbrMasterNode's (socket layout 2):
-//   0 Base Color  1 Metallic  2 Roughness  3 Normal  4 Emissive
-//   5 Alpha       6 Alpha Cutoff  7 Vertex Offset  8 Vertex Extrusion
-//
-// -1 = no PBR equivalent, the connection is dropped and NAMED:
-//   * SPECULAR. A Blinn specular colour/intensity is not a PBR input. Where a
-//     legacy graph used one to fake a METAL (a saturated specular over a dark
-//     diffuse) the answer is Metallic 1 with that colour as Base Color — a
-//     judgement about the picture that only a human looking at it can make, so
-//     the conversion never guesses it; it says what it dropped instead.
-//     (None of the shipped presets was that case: all nine of their specular
-//     maps measure mean saturation 0.000 over bright, coloured diffuses.)
-//   * AMBIENT. PBR has no ambient term at all — the sky lights the scene.
-constexpr int kLegacyMasterSocketCount = 10;
-constexpr int kLegacyMasterSocketTarget[kLegacyMasterSocketCount] =
-    { 0, -1, 2, 3, -1, 4, 5, 6, 7, 8 };
-
-const char* legacyMasterSocketName(int index)
+NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
+                                  QString* refusalReason)
 {
-	static const char* kNames[kLegacyMasterSocketCount] = {
-		"Diffuse", "Specular", "Shininess", "Normal", "Ambient",
-		"Emission", "Alpha", "Alpha Cutoff", "Vertex Offset", "Vertex Extrusion"
-	};
-	if (index < 0 || index >= kLegacyMasterSocketCount) return "an unknown input";
-	return kNames[index];
-}
+	if (refusalReason) refusalReason->clear();
 
-// Shininess -> Roughness. TWO CONVENTIONS shared that one socket, and which
-// one a graph meant is readable from the number itself — the legacy baker
-// already split on it (`s > 1 ? s/100 : s`), it just converted the exponent
-// branch by dividing by 100, which sends the classic n=100 to roughness 0.
-double roughnessFromLegacyShininess(double shininess)
-{
-	if (shininess > 1.0) {
-		// A BLINN/PHONG SPECULAR EXPONENT n. The GGX lobe of the same width is
-		// alpha = sqrt(2/(n+2)) (the standard exponent-to-alpha fit), and
-		// PbrMaterial's roughness is PERCEPTUAL — HlmsPbs squares it
-		// (mPerceptualRoughness) — so roughness = sqrt(alpha). n = 100 lands
-		// 0.374, a believable polished surface, where /100 landed 0.0.
-		const double alpha = std::sqrt(2.0 / (shininess + 2.0));
-		return std::max(std::sqrt(alpha), NodeGraph::kConvertedGlossRoughnessFloor);
+	// THE MASTER IS THE PBR ONE, OR THE FILE IS REFUSED (LEGACY-MASTER-CRUD,
+	// 2026-09-20). There is exactly one master node class in this build. A
+	// graph saved on the deleted Blinn-Phong "Surface Material" master used to
+	// be CONVERTED here, socket by socket, with a note telling the user what
+	// the conversion had dropped; the owner's call is that no legacy graph
+	// exists to convert — every shipped preset is an authored PBR graph and no
+	// shipped sample carries a material row at all — so the conversion is
+	// deleted rather than carried. The CRUD law: nothing is owed to old data.
+	//
+	// A MASTER THAT IS NOT NAMED AT ALL is refused by the same rule (fix
+	// round). A file with no `masternode` key, an empty one, or one naming a
+	// node that is not in the array used to load as a graph with
+	// `masterNode == nullptr`: it bakes nothing, draws as an empty canvas, and
+	// `serialize()` dereferences that null the moment anything saves it. There
+	// is no such thing as a graph without a master, so there is no such thing
+	// as loading one.
+	//
+	// Refusing costs ONE pre-pass over the node array, before a single node is
+	// built, so a refused file allocates no graph and leaves nothing behind.
+	// (The `new LibraryV1()` every CALLER hands in is still leaked on a
+	// refusal, exactly as it is leaked on every successful load — NodeGraph
+	// has no destructor. Recorded as debt, not changed here.)
+	{
+		const QString masterId = graphObj["masternode"].toString();
+		const QJsonArray nodesForMaster = graphObj["nodes"].toArray();
+		QString masterType;
+		bool found = false;
+		if (!masterId.isEmpty()) {
+			for (const auto& nodeVar : nodesForMaster) {
+				const QJsonObject nodeObj = nodeVar.toObject();
+				if (nodeObj["id"].toString() != masterId) continue;
+				masterType = nodeObj["type"].toString();
+				found = true;
+				break;
+			}
+		}
+		if (!found || masterType != QLatin1String("PbrMaterial")) {
+			if (refusalReason) {
+				if (!found)
+					*refusalReason = QStringLiteral(
+					    "This material has no master node and cannot be opened. Recreate it "
+					    "on the \"PBR Material\" node.");
+				else if (masterType == QLatin1String("Material"))
+					*refusalReason = QStringLiteral(
+					    "This material was saved with the removed \"Surface Material\" node "
+					    "and cannot be opened. Recreate it on the \"PBR Material\" node.");
+				else
+					*refusalReason = QStringLiteral(
+					    "This material's master node is of an unknown type (\"%1\") and "
+					    "cannot be opened. Recreate it on the \"PBR Material\" node.")
+					        .arg(masterType);
+			}
+			qWarning().noquote()
+			    << "NodeGraph: refused a graph whose master is"
+			    << (found ? masterType : QStringLiteral("absent"));
+			return nullptr;
+		}
 	}
-	// A 0..1 GLOSS — the convention every shipped preset used. Roughness is
-	// its complement, floored (see kConvertedGlossRoughnessFloor).
-	return std::max(1.0 - std::max(0.0, shininess),
-	                NodeGraph::kConvertedGlossRoughnessFloor);
-}
 
-} // namespace
-
-NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
-{
 	auto graph = new NodeGraph();
 	graph->setNodeLibrary(library);
-	//registerModels(graph);
-
-	// set when this file's master type is the deleted "Material" one
-	bool legacyMasterConverted = false;
-	QStringList droppedLegacySockets;
 
 	// read settings
 
@@ -327,17 +320,11 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		const bool wasUvAlias = (type == "texCoords" || type == "uvTransform");
 
 		// The master node is constructed directly, not through the library.
-		// There is exactly ONE master: "PbrMaterial". A file whose master type
-		// is "Material" is a graph authored on the deleted Blinn-Phong
-		// "Surface Material" node; it is CONVERTED, socket by socket, in the
-		// connection loop below (kLegacyMasterSocketTarget).
+		// There is exactly ONE master: "PbrMaterial" — a file written on any
+		// other was refused above.
 		NodeModel* nodeModel = nullptr;
 		if (type == "PbrMaterial") {
 			nodeModel = new PbrMasterNode();
-		}
-		else if (type == "Material") {
-			nodeModel = new PbrMasterNode();
-			legacyMasterConverted = true;
 		}
 		else {
 			//nodeModel = graph->modelFactories[type]();
@@ -438,17 +425,11 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		if (wasUvAlias && (storedTitle == QLatin1String("UV Transform")
 		                   || storedTitle == QLatin1String("Texture Coordinate")))
 			storedTitle.clear();
-		// The CONVERTED master must not keep reading "Surface Material" on its
-		// card: the node under the title is the PBR one, and a graph that says
-		// otherwise is a lie the user has to discover by clicking it. (A title
-		// the user actually typed is kept, as always.)
-		if (type == QLatin1String("Material") && storedTitle == QLatin1String("Surface Material"))
-			storedTitle.clear();
 		if (!storedTitle.isEmpty())
 			nodeModel->title = storedTitle;
 
 		graph->addNode(nodeModel);
-		if (type == "Material" || type == "PbrMaterial") {
+		if (type == "PbrMaterial") {
 			graph->setMasterNode(nodeModel);
 		}
 	}
@@ -464,10 +445,7 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 	                            ? graphObj["socketLayout"].toInt(1) : 1;
 	const QString masterId = graphObj["masternode"].toString();
 	const bool pbrMaster = graph->masterNode && graph->masterNode->typeName == "PbrMaterial";
-	// A CONVERTED legacy graph is never layout-1 PBR: its indices are the
-	// Blinn master's and are remapped below, so the Occlusion shift must not
-	// also run over them.
-	const bool migrateSockets = savedLayout < 2 && pbrMaster && !legacyMasterConverted;
+	const bool migrateSockets = savedLayout < 2 && pbrMaster;
 	constexpr int kRemovedOcclusionSocket = 4;
 
 	// read connections
@@ -509,103 +487,7 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 			continue;
 		}
 
-		// THE LEGACY MASTER'S SOCKETS -> the PBR master's (see the table above).
-		// This runs AFTER the texture-output collapse so a migrated texture
-		// feeding Shininess is already pointing at its single output when the
-		// inverter is spliced in front of it.
-		if (legacyMasterConverted && rightNodeId == masterId) {
-			const int target = (rightSockIndex >= 0 && rightSockIndex < kLegacyMasterSocketCount)
-			                       ? kLegacyMasterSocketTarget[rightSockIndex] : -1;
-			if (target < 0) {
-				const QString dropped = QString::fromLatin1(legacyMasterSocketName(rightSockIndex));
-				if (!droppedLegacySockets.contains(dropped)) droppedLegacySockets << dropped;
-				continue;
-			}
-			if (rightSockIndex == 2) { // Shininess -> Roughness: gloss inverts
-				auto* source = graph->nodes.value(leftNodeId);
-				// A CONSTANT SHARED WITH ANOTHER INPUT must not be rewritten under
-				// it (the lead's read): the gloss number that also scales, say, an
-				// emission would change that too. The roughness gets a constant of
-				// its own; the shared one keeps its value and its other wires.
-				if (source && source->typeName == QLatin1String("float")) {
-					int uses = 0;
-					for (auto otherVar : conList)
-						if (otherVar.toObject()["leftNodeId"].toString() == leftNodeId) ++uses;
-					NodeModel* own = (uses > 1 && graph->library)
-					                     ? graph->library->createNode("float") : nullptr;
-					if (own) {
-						own->deserializeWidgetValue(source->serializeWidgetValue());
-						own->setX(source->getX());
-						own->setY(source->getY() + 80.0);
-						graph->addNode(own);
-						source = own;
-						leftNodeId = own->id;
-						leftSockIndex = 0;
-					}
-				}
-				if (source && source->typeName == QLatin1String("float")) {
-					// A CONSTANT converts IN PLACE. The graph then holds a
-					// roughness number the user can read and edit, which is
-					// the point of converting instead of approximating.
-					const double shininess = source->serializeWidgetValue().toDouble();
-					source->deserializeWidgetValue(QJsonValue(roughnessFromLegacyShininess(shininess)));
-					if (source->title == QLatin1String("Float Property")
-					    || source->title == QLatin1String("Shininess"))
-						source->title = QStringLiteral("Roughness");
-				}
-				else if (source) {
-					// A CHAIN (a map, an expression) carries the inversion in a
-					// real node the user can see and delete. A legacy chain fed
-					// to Shininess used to be dropped as unsupported — that
-					// socket had no map target at all — so this is the first
-					// time one reaches the renderer.
-					NodeModel* inverter = graph->library ? graph->library->createNode("oneminus") : nullptr;
-					if (inverter == nullptr) {
-						// no library to build one: say so rather than land a
-						// gloss map on the roughness input, which is inverted
-						if (!droppedLegacySockets.contains(QStringLiteral("Shininess")))
-							droppedLegacySockets << QStringLiteral("Shininess");
-						continue;
-					}
-					// A TEXTURE NODE'S OUT 0 IS A REFERENCE, NOT A SAMPLE
-					// (bakeprogram.cpp D-2 option B1): it can only carry into a
-					// map binding, and feeding it to maths folds the whole
-					// chain to a constant, silently. Out 1 (RGBA) is the
-					// sample, which is what an inversion needs.
-					if (source->typeName == QLatin1String("texture") && leftSockIndex == 0
-					    && source->outSockets.size() > 1)
-						leftSockIndex = 1;
-					inverter->setX((source->getX() + graph->masterNode->getX()) / 2.0);
-					inverter->setY((source->getY() + graph->masterNode->getY()) / 2.0);
-					graph->addNode(inverter);
-					graph->addConnection(leftNodeId, leftSockIndex, inverter->id, 0);
-					leftNodeId = inverter->id;
-					leftSockIndex = 0;
-				}
-			}
-			rightSockIndex = target;
-		}
-
 		graph->addConnection(leftNodeId, leftSockIndex, rightNodeId, rightSockIndex);
-	}
-
-	// ONE line for the user, whatever the graph carried (bakeInfo reports the
-	// list; the log carries it for a headless run).
-	if (legacyMasterConverted) {
-		QString note = QStringLiteral(
-		    "This material was authored on the old \"Surface Material\" (Blinn-Phong) master and "
-		    "has been converted to \"PBR Material\": Diffuse became Base Color, Shininess became "
-		    "Roughness, Emission became Emissive. Metallic is 0 until you set it.");
-		if (!droppedLegacySockets.isEmpty())
-			note += QStringLiteral(" No PBR equivalent exists for %1, so %2 disconnected; the "
-			                       "nodes that fed %3 are still in the graph.")
-			            .arg(droppedLegacySockets.join(QStringLiteral(" and ")),
-			                 droppedLegacySockets.size() == 1 ? QStringLiteral("it was")
-			                                                  : QStringLiteral("they were"),
-			                 droppedLegacySockets.size() == 1 ? QStringLiteral("it")
-			                                                  : QStringLiteral("them"));
-		graph->migrationNotes << note;
-		qWarning().noquote() << "NodeGraph:" << note;
 	}
 
 		// deserialize material settings

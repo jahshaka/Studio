@@ -1,0 +1,89 @@
+// scripting.e2e.material_refusal — A MATERIAL THAT CANNOT BE OPENED CHANGES
+// NOTHING (LEGACY-CONVERT-CRUD fix round).
+//
+// The Blinn-Phong "Surface Material" master is deleted and a graph written on
+// it is REFUSED, whole: null plus one sentence. The dangerous half of that is
+// not the refusal, it is what the refusal must NOT do. A loader that has
+// already taken the new material's identity — its guid, its name, its scope,
+// its save state — and then fails to produce a graph leaves the app editing
+// the PREVIOUS material's graph while saving to the REFUSED material's row.
+// The next edit then writes one material over another: the page's 1.5 s
+// autosave, or `graph.save()` here, which is the same `MaterialBundle::write`.
+//
+// So this drives the scriptable half end to end:
+//   1. a material is made and opened; the current graph is ITS graph;
+//   2. a legacy file is opened and REFUSED, with the sentence naming the node;
+//   3. the current graph is still the first material's, unchanged;
+//   4. `graph.save()` still writes the FIRST material — the refusal did not
+//      redirect the destination — and the first material's stored graph is
+//      what comes back when it is reopened.
+//
+// The page's own half of the same invariant (the tile handlers, the read-only
+// banner) is gated by source.material_page_identity: the Materials page has no
+// test harness, and the rule there is structural — identity moves in one
+// function, which a refused load never reaches.
+//
+// Document verbs only -> --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var LEGACY = "@CMAKE_SOURCE_DIR@/tests/shadergraph/fixtures/brick_oldformat.effect";
+
+project.create("material refusal");
+
+// ---- 1. a material with a graph, opened -----------------------------------
+
+var keeper = materials.create("Keeper", { graph: true });
+assert(keeper.length > 0, "materials.create made a graph material");
+
+var opened = materials.loadGraph(keeper);
+assert(opened.nodes >= 1, "materials.loadGraph opened it (" + opened.nodes + " node(s))");
+
+// something of its own to recognise it by, saved into its row
+var tint = graph.addNode("float");
+graph.setValue(tint, 0.375);
+assert(graph.save(), "graph.save() wrote the material");
+
+var beforeNodes = graph.nodes().length;
+assert(beforeNodes >= 2, "the current graph is the material's (" + beforeNodes + " nodes)");
+
+// ---- 2. the legacy file is refused ----------------------------------------
+
+var threw = false;
+var message = "";
+try {
+    materials.loadGraph(LEGACY);
+} catch (e) {
+    threw = true;
+    message = e.message;
+}
+assert(threw, "materials.loadGraph REFUSES a graph written on the deleted master");
+assert(message.indexOf("Surface Material") >= 0,
+       "the refusal names the removed node: " + message);
+assert(message.indexOf("PBR Material") >= 0, "...and says what to use instead");
+
+// ---- 3. nothing moved -----------------------------------------------------
+
+assert(graph.nodes().length === beforeNodes,
+       "the current graph is STILL the material's, node for node");
+assert(Math.abs(graph.getValue(tint) - 0.375) < 1e-6,
+       "...with its values untouched");
+
+// ---- 4. and the save still goes where it went before ----------------------
+
+graph.setValue(tint, 0.875);
+assert(graph.save(), "graph.save() after the refusal still has a destination");
+
+var reopened = materials.loadGraph(keeper);
+assert(reopened.nodes === beforeNodes, "the material reopens with its own graph");
+var found = false;
+var nodes = graph.nodes();
+for (var i = 0; i < nodes.length; i++)
+    if (nodes[i].id === tint && Math.abs(graph.getValue(nodes[i].id) - 0.875) < 1e-6)
+        found = true;
+assert(found, "the edit landed in the FIRST material, which is where it was made");
+
+console.log("material refusal: all checks passed");

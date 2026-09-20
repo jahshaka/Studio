@@ -241,73 +241,45 @@ int main(int argc, char** argv)
 
     // ------------------------------------------------------------------
     // 2. real old-format fixtures (pre-migration snapshots of the shipped
-    //    presets)
+    //    presets): every one is written on the DELETED master, so every one
+    //    is refused
     // ------------------------------------------------------------------
-    auto loadEffect = [](const QString& path) -> NodeGraph* {
+    auto loadEffect = [](const QString& path, QString* reason = nullptr) -> NodeGraph* {
         QFile f(path);
         if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return nullptr;
         auto obj = QJsonDocument::fromJson(f.readAll()).object();
         if (!obj.contains("shadergraph")) return nullptr;
-        return NodeGraph::deserialize(obj["shadergraph"].toObject(), new LibraryV1());
+        return NodeGraph::deserialize(obj["shadergraph"].toObject(), new LibraryV1(), reason);
     };
 
     {
-        auto checker = loadEffect(QString(JAHSHAKA_TEST_FIXTURE_DIR) + "checker_oldformat.effect");
-        CHECK(checker != nullptr && checker->getMasterNode() != nullptr,
-              "fixtures: old-format checker.effect loads");
-        CHECK(checker && checker->getNodesByTypeName("property").isEmpty()
-              && checker->getNodesByTypeName("texture").size() == 1,
-              "fixtures: checker's texture property became a texture node");
-        CHECK(checker && checker->connections.size() == 1,
-              "fixtures: checker's rgba->Diffuse connection survives");
-        CHECK(checker && !checker->serialize().contains("properties"),
-              "fixtures: checker re-save drops 'properties'");
-
-        auto brick = loadEffect(QString(JAHSHAKA_TEST_FIXTURE_DIR) + "brick_oldformat.effect");
-        CHECK(brick != nullptr && brick->getMasterNode() != nullptr,
-              "fixtures: old-format Brick.effect loads");
-        CHECK(brick && brick->getNodesByTypeName("texture").size() == 3
-              && brick->getNodesByTypeName("float").size() == 1,
-              "fixtures: Brick's 3 texture + 1 float properties became nodes");
-        // THREE, not four: this fixture's master is the deleted Blinn-Phong one
-        // and LEGACY-MASTER-CRUD converts it on load. Diffuse/Shininess/Normal
-        // move to Base Color/Roughness/Normal; the SPECULAR map has no PBR
-        // equivalent, so its connection is dropped — and the node it fed from
-        // stays in the graph, which is why the count above is still 3.
-        CHECK(brick && brick->connections.size() == 3,
-              "fixtures: Brick converts — 3 of its 4 connections land, Specular does not");
-        CHECK(brick && brick->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
-              "fixtures: ... onto the PBR master");
-        CHECK(brick && brick->migrationNotes.size() == 1
-              && brick->migrationNotes.value(0).contains(QStringLiteral("Specular")),
-              "fixtures: ... with ONE line for the user naming the dropped Specular");
-        {
-            // The gloss constant converts IN PLACE. This fixture predates the
-            // preset re-authoring and carries the slider's MAXIMUM, 1.0 — the
-            // value whose complement is roughness exactly zero — so it lands
-            // on the floor, in the graph, where the user can see and lower it.
-            const auto evaluated = PbrGraphEvaluator::evaluate(brick, nullptr);
-            CHECK(near(evaluated.values["roughness"].toDouble(-1.0),
-                       NodeGraph::kConvertedGlossRoughnessFloor, 1e-6),
-                  "fixtures: Brick's legacy gloss 1.0 became Roughness 0.08, not 0");
+        // THE THREE REAL OLD-FORMAT FIXTURES ARE REFUSED (LEGACY-CONVERT-CRUD,
+        // 2026-09-20). They are genuine pre-migration snapshots of the shipped
+        // presets and every one of them is written on the deleted Blinn-Phong
+        // "Surface Material" master, so they are now exactly the evidence that
+        // a legacy file cannot be opened: null, with a sentence naming the
+        // node and what to do instead.
+        //
+        // They used to prove the §3b PropertyNode migration on real files as
+        // well. That migration is UNCHANGED and is proved in full by the
+        // synthetic section above — every property type, positions, titles,
+        // values, the texture-output collapse, the uv-feed drop, the
+        // independent copies and the round-trip — on the PBR master, which is
+        // the only master a graph can have.
+        const char* kFixtures[] = { "checker_oldformat.effect",
+                                    "brick_oldformat.effect",
+                                    "basic_oldformat.effect" };
+        int refused = 0, named = 0;
+        for (const char* name : kFixtures) {
+            QString reason;
+            auto* graph = loadEffect(QString(JAHSHAKA_TEST_FIXTURE_DIR) + name, &reason);
+            if (graph == nullptr) ++refused; else std::printf("      loaded: %s\n", name);
+            if (reason.contains(QStringLiteral("Surface Material"))
+                && reason.contains(QStringLiteral("PBR Material")))
+                ++named;
         }
-        bool allLeftZero = true;
-        if (brick) {
-            for (auto con : brick->connections.values())
-                if (con->leftSocket->node->typeName == "texture"
-                    && con->leftSocket->node->outSockets.indexOf(con->leftSocket) != 0)
-                    allLeftZero = false;
-        }
-        CHECK(allLeftZero, "fixtures: Brick's texture outputs all remap to output 0");
-
-        auto basic = loadEffect(QString(JAHSHAKA_TEST_FIXTURE_DIR) + "basic_oldformat.effect");
-        CHECK(basic != nullptr, "fixtures: old-format basic.effect loads");
-        if (basic) {
-            auto result = PbrGraphEvaluator::evaluate(basic, nullptr);
-            auto base = result.values["baseColor"].toObject();
-            CHECK(near(base["g"].toDouble(), 1.0, 1e-4) && near(base["r"].toDouble(), 0.0, 1e-4),
-                  "fixtures: basic's vec3 property still evaluates to green baseColor");
-        }
+        CHECK(refused == 3, "fixtures: all three legacy-master snapshots are REFUSED, not converted");
+        CHECK(named == 3, "fixtures: each refusal names the removed node and the one to use");
     }
 
     // ------------------------------------------------------------------
@@ -327,14 +299,16 @@ int main(int argc, char** argv)
         int textured = 0;
         int legacyMaster = 0;
         for (const auto& file : files) {
-            auto graph = loadEffect(file);
-            // THE GUARD (LEGACY-MASTER-CRUD): every shipped template is
-            // authored on the ONE master. A legacy one re-added here is a
-            // template a UI user lands on — which is exactly how almost every
-            // starter and preset in the Create New dialog came to be Blinn.
-            if (graph && graph->getMasterNode()
-                && graph->getMasterNode()->typeName != QLatin1String("PbrMaterial")) {
-                std::printf("      NOT a PBR template: %s\n", qPrintable(file));
+            QString reason;
+            auto graph = loadEffect(file, &reason);
+            // THE GUARD (LEGACY-MASTER-CRUD, sharpened by LEGACY-CONVERT-CRUD):
+            // every shipped preset is authored on the ONE master. A legacy one
+            // re-added here would now be REFUSED — a preset tile a user clicks
+            // and cannot open — so the refusal is what this counts, by its
+            // reason, and it is a shipping defect, not a user's old file.
+            if (graph == nullptr && !reason.isEmpty()) {
+                std::printf("      NOT a PBR preset: %s (%s)\n",
+                            qPrintable(file), qPrintable(reason));
                 ++legacyMaster;
             }
             if (graph == nullptr || graph->getMasterNode() == nullptr
@@ -355,7 +329,8 @@ int main(int argc, char** argv)
             }
         }
         CHECK(bad == 0, "shipped: every preset loads with a master, no property nodes, no 'properties' on save");
-        CHECK(legacyMaster == 0, "shipped: every preset's master is \"PBR Material\"");
+        CHECK(legacyMaster == 0,
+              "shipped: every preset's master is \"PBR Material\" — none is refused on load");
         CHECK(textured >= 25, "shipped: the textured presets kept their image references");
 
         // the drawer-synced constants still evaluate to their known values

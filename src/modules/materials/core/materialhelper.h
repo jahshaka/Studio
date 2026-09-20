@@ -89,7 +89,11 @@ public:
 	/// nothing ever freed one. Graphs borrow this; none owns a library.
 	static NodeLibrary* sharedNodeLibrary();
 
-	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj);
+	// The definition's graph, or NULL when this build refuses it — a material
+	// written on the deleted "Surface Material" master (LEGACY-MASTER-CRUD).
+	// `refusalReason`, when given, carries the one sentence to show the user.
+	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj,
+	                                                         QString* refusalReason = nullptr);
 
 	// (generateShader/createMaterialFromShaderGraph/generateMaterialFrom-
 	// MaterialDefinition died in MATERIALS_EVALUATOR phase 5 — the GLSL

@@ -2,6 +2,7 @@
 
 #include <functional>
 
+#include <QPointer>
 #include <QSet>
 
 #include "ui/style/columnedpage.h"
@@ -29,6 +30,7 @@
 #include "widgets/shaderassetwidget.h"
 #endif
 
+class Toast;
 class QLabel;
 class QMenuBar;
 class GraphNodeScene;
@@ -235,6 +237,19 @@ private:
 	/// Tell the user a save was REFUSED (F16): the graph is on screen and is
 	/// not being written down, which no log line can say loudly enough.
 	void reportSaveRefused(MaterialDocument *doc, const QString &why);
+	/// Tell the user this material cannot be OPENED at all (LEGACY-MASTER-CRUD):
+	/// it was written on the master node this build deleted, so there is
+	/// nothing to put on the canvas. Same route as a refused save — a scene
+	/// issue, which stays up until the condition is gone.
+	void reportGraphRefused(const QString &guid, const QString &why);
+	/// A DOCUMENT becomes this material: identity, read-only state and canvas
+	/// in one step (LEGACY-CONVERT-CRUD's fix round — see the body). Called
+	/// only once a graph has loaded; a refused open never reaches it, and with
+	/// tabs it does not even open a tab.
+	void adoptGraph(const QString &guid, shaderInfo::Origin origin,
+	                const QString &shippedName, NodeGraph *graph);
+	void adoptGraph(MaterialDocument *doc, const QString &guid, shaderInfo::Origin origin,
+	                const QString &shippedName, NodeGraph *graph);
 	void saveDefaultShader();
 
 	/// Queues the saved graph's thumbnail on the shell's ThumbnailGenerator
@@ -244,7 +259,6 @@ private:
 	void requestShaderThumbnail(const QString &shaderGuid);
 	void onShaderThumbnail(const ThumbnailResult &result);
 	bool mThumbnailConnected = false;
-	bool mSaveRefused = false;
 
 	/// THE OPEN MATERIAL IS A SHIPPED PRESET, ON SCREEN TO BE READ
 	/// (PRESET-UNIFY-1). Selecting a preset shows its graph — the owner's
@@ -255,6 +269,10 @@ private:
 	/// above the canvas says so and offers the one gesture that works.
 	QWidget *mReadOnlyBanner = nullptr;
 	QLabel  *mReadOnlyLabel = nullptr;
+	/// The page's own answer to a refused open (the scene-issue bar is the
+	/// editor space's and is hidden here). Created on first use, lives with
+	/// the page.
+	QPointer<Toast> mRefusalToast;
 	/// Mark the ACTIVE document read-only (or not) and show the banner.
 	void setReadOnly(bool readOnly, const QString &presetName = QString());
 	/// Re-assert the active document's read-only state on the SHARED
@@ -273,7 +291,6 @@ private:
 	/// — the toolbar's Import and the drawer's "Import material…".
     void importGraph();
 
-	NodeGraph* importGraphFromFilePath(QString filePath, bool assign = true);
 	/// Write ONE material and its closure as a share file.
 	void exportEffect(QString guid);
 	/// ONE ROW, COPIED: a second library bundle carrying the same definition
@@ -302,10 +319,11 @@ private:
 	/// refill, which deletes every item). Was `setCurrentShaderItem`, which
 	/// asked the SCENE which tile it had last been handed.
 	void refreshCurrentTile();
-	/// The definition, read at the scope the ORIGIN names: a Projects tile
-	/// reads the project's pinned version, a Custom tile the library
-	/// original (the four-drawer rule). It used to read the page's one
-	/// `currentShaderInformation.origin`, which is no longer a thing.
+	/// The stored definition for `guid`, read at the scope the caller names.
+	/// The ORIGIN IS AN ARGUMENT (fix round): it used to be read off
+	/// `currentShaderInformation`, which forced `loadGraph` to write the page's
+	/// identity before it knew whether the file could be opened at all — and
+	/// which is no longer a thing (it is the document's).
 	QByteArray fetchAsset(const QString &guid, shaderInfo::Origin origin);
 
 	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has

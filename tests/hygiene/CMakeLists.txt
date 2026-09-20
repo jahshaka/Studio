@@ -75,6 +75,18 @@ add_test(NAME source.one_material_resolve
 set_tests_properties(source.one_material_resolve PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_material_resolve)
 
+# source.material_page_identity — LEGACY-CONVERT-CRUD fix round: the Materials
+# page takes on a material in ONE place, after its graph has loaded. Five tile
+# handlers used to write the page's saving identity BEFORE the read, so a
+# refused graph left the page editing the previous material under the refused
+# material's guid with the save armed — the next drag wrote one material's
+# graph into another material's row. See the script's header.
+add_test(NAME source.material_page_identity
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/material_page_identity.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.material_page_identity PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.material_page_identity)
+
 # source.gate_scope_rules — THE SCOPING TOOL'S OWN GUARD (STUDIO-SMALL-A, the
 # gate-scope trap of ledger §620 item 5). gate-scope.py decides which suites a
 # lane runs, so its defects are invisible by construction: a wrong answer is a
