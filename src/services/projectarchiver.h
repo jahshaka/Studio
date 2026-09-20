@@ -74,6 +74,7 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <QSet>
 #include <atomic>
 
 #include "export/exportmanifest.h"
@@ -224,6 +225,8 @@ private:
     // path, the hash, and the temp its bytes are already flushed into, so a
     // slice is a rename and two rows).
     struct IngestAsset { QString archiveGuid; QVector<AssetCas::Staged> files; };
+    /// ARCHIVE-GUIDS-1: the archive guids this library already held at the same type.
+    QSet<QString> mKnownGuids;
     QVector<IngestAsset> mIngest;
     /// The asset store's root, read on the UI thread (AssetStorePaths::root()
     /// is the app's, not this class's) and used by both phases.

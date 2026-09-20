@@ -140,4 +140,22 @@ assert(exported && exported.assets > 0,
        "project.exportArchive -> " + exported.assets + " assets, " + exported.objects + " objects");
 assert(project.close() === true, "project.close");
 
+// ROWS KEEP THEIR GUIDS (ARCHIVE-GUIDS-1): the same archive imported back into
+// THIS library is the same material — no second row, the same guid in the new
+// project, and the app's shipped presets untouched. It used to mint a fresh
+// guid for every row (and a fresh definition file naming the fresh guids), so
+// every import doubled the library.
+var rowsBefore = assets.list({ scope: "store" }).length;
+var matsBefore = assets.list({ scope: "store", type: "material" }).length;
+var again = project.importArchive(archive);
+assert(again && again.guid && again.guid.length > 10, "the archive imports back into the same library");
+assert(project.open(again.guid) === true, "the re-imported project opens");
+var reGuids = assets.list({ scope: "project" }).map(function (a) { return a.guid; });
+assert(reGuids.indexOf(matGuid) !== -1, "ARCHIVE-GUIDS-1: the re-imported project holds the material under ITS OWN guid");
+assert(assets.list({ scope: "store", type: "material" }).length === matsBefore,
+       "ARCHIVE-GUIDS-1: no second material row (" + matsBefore + " before and after)");
+assert(assets.list({ scope: "store" }).length === rowsBefore,
+       "ARCHIVE-GUIDS-1: no library row was added at all by re-importing what it already had (" + rowsBefore + ")");
+assert(materials.members(matGuid).length > 0, "...and the material's members still resolve");
+
 console.log("material_bundle e2e passed");

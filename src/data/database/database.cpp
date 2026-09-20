@@ -4031,7 +4031,7 @@ bool Database::hasDependencies(const QString &guid)
     return query.value(0).toBool();
 }
 
-bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids)
+bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids, QSet<QString> *knownGuids)
 {
     // ScopedConnection: the connection name was already unique per call (a
     // fresh guid), which meant every project import leaked a DISTINCT
@@ -4088,8 +4088,12 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         QSqlQuery folderIds(dbe);
         folderIds.prepare("SELECT guid FROM folders");
         executeAndCheckQuery(folderIds, "selectFolderIds");
-        while (folderIds.next())
-            folderGuids.insert(folderIds.value(0).toString(), GUIDManager::generateGUID());
+        // A FOLDER KEEPS ITS GUID (ARCHIVE-GUIDS-1): a known folder is reused,
+        // an unknown one is created under the archive's own id.
+        while (folderIds.next()) {
+            const QString folderGuid = folderIds.value(0).toString();
+            folderGuids.insert(folderGuid, folderGuid);
+        }
     }
 
     // EVERY PARENT IS REMAPPED (lane L13). The `parent` column holds the
@@ -4114,14 +4118,41 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         AssetRecord data;
 
         auto guid = selectAssetQuery.value(0).toString();
-
-        auto newGuid = GUIDManager::generateGUID();
-        assetGuids.insert(guid, newGuid);
-
-        outGuids.insert(guid, newGuid);
-
+        // ROWS KEEP THEIR GUIDS (ARCHIVE-GUIDS-1; bundles audit G1, the general
+        // fix — the clipboard resolver's policy). The importer used to mint a
+        // fresh guid for every row and rewrite it by text-replace in the scene
+        // blob, the row blobs, the parents and the edges — and could not
+        // rewrite a CAS DEFINITION FILE, so an exported avatar arrived on
+        // another machine naming a model and clips that existed on the
+        // author's machine only; materials were repaired after the fact
+        // (republishImportedBundles), and a second import doubled every row.
+        //   * a guid this library does not know is INSERTED under the
+        //     archive's own id — nothing to remap;
+        //   * a KNOWN guid at the SAME type IS the same asset: no row is
+        //     inserted (its blob, parent and edges are left alone; the caller
+        //     stores the archive's objects and pins them for the new project);
+        //   * a KNOWN guid at a DIFFERENT type is a COLLISION (hand-authored
+        //     ids in practice): a fresh guid, every reference rewritten as
+        //     before — the only case left in `assetGuids`/`outGuids`, so a
+        //     caller's `map.value(guid, guid)` reads identity for the rest.
+        const int archivedType = selectAssetQuery.value(1).toInt();
+        QString newGuid = guid;
+        {
+            QSqlQuery here;
+            here.prepare("SELECT type FROM assets WHERE guid = ?");
+            here.addBindValue(guid);
+            if (here.exec() && here.next()) {
+                if (here.value(0).toInt() == archivedType) {
+                    if (knownGuids) knownGuids->insert(guid);
+                    continue;                              // the same asset, already here
+                }
+                newGuid = GUIDManager::generateGUID();     // a collision: fresh, remapped
+                assetGuids.insert(guid, newGuid);
+                outGuids.insert(guid, newGuid);
+            }
+        }
         data.guid = newGuid;
-        data.type = selectAssetQuery.value(1).toInt();
+        data.type = archivedType;
         data.name = selectAssetQuery.value(2).toString();
         data.collection = selectAssetQuery.value(3).toInt();
         data.timesUsed = selectAssetQuery.value(4).toInt();
@@ -4241,6 +4272,21 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     }
 
     for (const auto &dep : dependenciesToImport) {
+        // AN EDGE THAT IS ALREADY HERE IS NOT INSERTED TWICE (a known row's
+        // intrinsic membership arrives with every archive that carries it).
+        {
+            const QString d1 = assetGuids.value(dep.depender, dep.depender);
+            const QString d2 = assetGuids.value(dep.dependee, dep.dependee);
+            QSqlQuery have;
+            if (dep.projectGuid.isEmpty())
+                have.prepare("SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? AND project_guid IS NULL LIMIT 1");
+            else
+                have.prepare("SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? AND project_guid = ? LIMIT 1");
+            have.addBindValue(d1);
+            have.addBindValue(d2);
+            if (!dep.projectGuid.isEmpty()) have.addBindValue(newSceneGuid);
+            if (have.exec() && have.next()) continue;
+        }
         QSqlQuery importDep;
         importDep.prepare(
             "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
