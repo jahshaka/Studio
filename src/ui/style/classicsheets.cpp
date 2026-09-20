@@ -1655,16 +1655,6 @@ const QString StyleSheet::SplashShaderLabel()
 	return QString("color: rgba(255,255,255,200);");
 }
 
-const QString StyleSheet::UpgraderDialog()
-{
-	JAH_CLASSIC_ONLY
-	return QString("* { color: #EEE; }"
-		"QDialog { background: #222222; padding: 4px; }"
-		"QPushButton { background: #444; color: #EEE; border: 0; padding: 6px 10px; }"
-		"QPushButton:hover { background: #555; color: #EEE; }"
-		"QPushButton:pressed { background: #333; color: #EEE; }");
-}
-
 const QString StyleSheet::PublishPage()
 {
 	JAH_CLASSIC_ONLY

@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "services/apppaths.h"
 #include "services/assetstorepaths.h"
+#include "app/firstrun.h"
 #include "services/libraryreset.h"
 #include "data/constants.h"
 #include "services/ogresamples.h"
@@ -500,12 +501,20 @@ QVector<VerbInfo> AppApi::verbs() const
           "anything outside the data root. `removed` counts what WAS there, measured before the "
           "first byte went. It REFUSES while an import, the preset seed or a thumbnail rebuild is "
           "running — each of them would otherwise finish into a library that no longer exists — "
-          "and a refusal answers an EMPTY map with the reason in app.lastError(). `restart: true` "
-          "spawns this executable again with THIS run's arguments and working directory and quits "
-          "once the spawn succeeded (`restarted` says whether it did); without it the process "
-          "carries on with an empty library, which is what the headless suite and a script want, "
-          "and the windows that were already listing rows keep their stale lists until something "
-          "refreshes them. Calling it twice is a no-op with zeroes in `removed`.",
+          "and while the asset store is OFFLINE (an unmounted drive: wiping the catalog would "
+          "orphan the whole store on it). A refusal answers an EMPTY map with the reason in "
+          "app.lastError(). `restart: true` spawns this executable again with THIS run's "
+          "arguments and working directory and quits once the spawn succeeded (`restarted` says "
+          "whether it did); it is REFUSED in a driven session — a script, a suite, an MCP client, "
+          "the rig — because the respawn would carry `--script`/`--headless` with it and each "
+          "child would reset the library and spawn another one. Without `restart` the process "
+          "carries on with an empty library, which is what a script wants, and the windows that "
+          "were already listing rows keep their stale lists until something refreshes them. What "
+          "it removes in the store is the store's OWN layout — objects, sidecars, derived caches, "
+          "store.json, the staging temps and the legacy per-guid folders — and nothing else in "
+          "that directory, because the store root is a path the user chose and may hold their own "
+          "files; the same rule under the projects root, where only folders named like a guid are "
+          "this app's. Calling it twice is a no-op with zeroes in `removed`.",
           Needs::Document },
         { "notices", "app.notices({id}) -> [{id, name, role, homepage, licence, path, file, present, vendored, textLength}]",
           "THE THIRD-PARTY NOTICES THIS BINARY OWES — every vendored component that ships inside "
@@ -1000,17 +1009,35 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
 
     const bool restart = options.value(QStringLiteral("restart"), false).toBool();
     if (restart && !host.mainWindow) {
-        fail("app.resetLibrary: {restart: true} needs the application (a --headless run has no "
-             "process to bring back)");
+        fail("app.resetLibrary: {restart: true} needs the application (this session has no window "
+             "to bring back)");
+        return out;
+    }
+    // A DRIVEN SESSION IS NEVER RESTARTED, and this one is a safety rule
+    // rather than a convenience. The restart re-runs THIS process's arguments
+    // — `--script x.js` and `--headless` included — so a script that asks for
+    // it spawns a child running the same script, which resets the library and
+    // spawns another: an unbounded chain of processes, each one wiping what
+    // the last one made. (The earlier guard for this was `!host.mainWindow`,
+    // and its premise was simply false: a --headless run builds a MainWindow
+    // too — main.cpp does, it merely never shows it.) Stripping the one-shot
+    // flags would be a second answer to "what is this process for"; the
+    // refusal is the rule, and `app/firstrun.h` is the one predicate that
+    // knows (a data root forced, --script/--headless, --dump-api-docs,
+    // --mcp-port, the selftest or an offscreen QPA).
+    if (restart && FirstRun::isDrivenSession()) {
+        refuse("app.resetLibrary: a driven session — a script, a suite, an MCP client — is not "
+               "restarted; reset without restart and let whoever started this process start it "
+               "again");
         return out;
     }
 
     // THE REFUSAL, TAKEN HERE AS WELL AS IN THE SERVICE, so the caller is told
-    // before anything closes: a library being written to is not a library to
-    // delete.
-    const QString busy = libraryreset::busyReason();
-    if (!busy.isEmpty()) {
-        refuse(QStringLiteral("app.resetLibrary: %1 — let it finish first").arg(busy));
+    // before anything closes: a library being written to — or one whose store
+    // is on a drive that is not there — is not a library to delete.
+    const QString why = libraryreset::refusalReason();
+    if (!why.isEmpty()) {
+        refuse(QStringLiteral("app.resetLibrary: %1").arg(why));
         return out;
     }
 
@@ -1035,8 +1062,13 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
         return projects ? projects->projectFolderFor(guid) : QString();
     };
 
+    // THE SEED IS THE CHILD'S JOB WHEN WE ARE RESTARTING (the service's
+    // `seedPresets`): started here it would run in a process that is already
+    // on its way out, and two seeders over one store is how a
+    // content-addressed library still gets two rows for one picture.
     const libraryreset::Result result = libraryreset::reset(
-        host.db, SettingsManager::getDefaultManager(), projectsRoot, folderFor);
+        host.db, SettingsManager::getDefaultManager(), projectsRoot, folderFor,
+        /*seedPresets*/ !restart);
 
     out.insert(QStringLiteral("ok"), result.ok);
     out.insert(QStringLiteral("removed"), result.removed.toMap());

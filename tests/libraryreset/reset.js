@@ -49,6 +49,25 @@ assert(result.removed.projects >= 1, "…and the project folder(s)");
 assert(result.removed.staging === 1, "…and the abandoned staging temp, counted apart");
 assert(result.removed.thumbnails >= 1, "…and the stored thumbnails");
 
+// THE BUILT-INS, SEEDED AGAIN — the half of "exactly a first launch" that is
+// not an absence. A driven session seeds nothing at launch and nothing here
+// (by design), so the suite asks for the same seed a person's launch runs, on
+// both sides of the comparison: census.js does it on the fresh root, this does
+// it after the reset, and the two censuses are then a real count of shipped
+// content rather than 0 == 0.
+var seeded = materials.seedPresets();
+assert(seeded === 20, "the built-ins seed again after the reset (" + seeded + " presets)");
+
+// AND THEIR MAPS ARE MEMBERS AGAIN, not the user's tiles (V-2): the stamp is
+// written by the seed, so a reset library that forgot it would put twenty
+// presets' worth of pictures back in the tray.
+var brickMaps = materials.members("00000000-0000-0000-0000-000000002014");
+assert(brickMaps.length === 3, "a seeded preset has its three maps (" + brickMaps.length + ")");
+var stamp = assets.metadata(brickMaps[0].guid);
+assert(stamp.member === true, "…and the first one is stamped a member after the reset");
+assert(stamp.memberOf === "00000000-0000-0000-0000-000000002014",
+       "…with memberOf naming the preset it came in through (" + stamp.memberOf + ")");
+
 // THE CENSUS, in census.js's own lines.
 var store = assets.list({ scope: "store" });
 console.log("CENSUS_ASSETS=" + store.length);
@@ -79,8 +98,16 @@ assert(third.removed.objects === 0 && third.removed.sidecars === 0
        && third.removed.staging === 0,
        "…and removes nothing at all (it is already a first launch)");
 
-// ({restart: true} is NOT exercised here on purpose: it really does spawn this
-// executable again and close this one, which is not a thing a ctest row should
-// leave running. It is the Preferences button's path and was verified by hand
-// on the rig — SPECS/briefs/RESET-LIBRARY-1.md and the lane's report.)
+// {restart: true} IS REFUSED IN A DRIVEN SESSION, and this assertion is the
+// box safety one: a --script run respawns with `--script` still in its
+// arguments, so a child would run this same file, reset the library and spawn
+// another — an unbounded chain of processes each wiping what the last made.
+// The refusal is the rule (the flags are never stripped), and it is what makes
+// it safe for a ctest row to ask at all.
+var projectsBefore = project.list().length;
+var refused = app.resetLibrary({ restart: true });
+assert(Object.keys(refused).length === 0, "{restart: true} answers an empty map in a driven session");
+assert(("" + app.lastError()).indexOf("driven session") >= 0,
+       "…and says why: " + app.lastError());
+assert(project.list().length === projectsBefore, "…and nothing was reset by the refusal");
 console.log("ALL PASS");

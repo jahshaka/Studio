@@ -91,18 +91,32 @@ struct Result
 /// writes rows for assets this call is about to drop). Each of them would
 /// otherwise finish INTO a library that no longer exists, and the seed would
 /// re-create half a catalog underneath the wipe.
-QString busyReason();
+///
+/// AND THE FOURTH REASON, which is not about writers: an OFFLINE store. The
+/// root is a user-chosen path and may be an unmounted drive; wiping the
+/// catalog while the bytes are unreachable leaves the whole store orphaned on
+/// that drive with nothing left that names it.
+QString refusalReason();
 
 /// THE RESET.
 ///
 ///   1. counts what is there (the numbers above);
 ///   2. removes every project FOLDER — each one resolved through
 ///      `folderForProject`, so a project the user filed on another drive is
-///      taken by its recorded location, not by a guess — plus anything still
-///      sitting under `<projectsRoot>/Projects/`;
-///   3. removes the CONTENTS of the asset store root (objects/, sidecar/,
-///      derived/, store.json, the legacy per-guid folders and the staging
-///      temps) — never the root directory itself;
+///      taken by its recorded location, not by a guess — plus the leftovers
+///      under `<projectsRoot>/Projects/` WHOSE NAME IS A GUID. That root comes
+///      from the `default_directory` preference, which is a free-form folder
+///      picker: a user who points it at ~/Documents must not lose what they
+///      keep in ~/Documents/Projects. A folder this app did not name is not
+///      this app's to delete, and is not counted;
+///   3. removes THE STORE'S OWN LAYOUT inside the store root — `objects/`,
+///      `sidecar/`, `derived/`, `store.json`, the staging temps beside them
+///      and the legacy per-guid folders — and NOTHING ELSE in that directory.
+///      Never the root itself and never a wildcard: the root is a path the
+///      user chose (`assets/storeRoot` accepts any absolute directory, and
+///      "Use Existing Store" with force accepts any existing one), so it can
+///      be ~/Documents or the top of a memory stick, and every other file in
+///      it belongs to somebody else;
 ///   4. drops the tables (`Database::wipeDatabase`) and CREATES THEM AGAIN —
 ///      with the metadata version row `createMetadataTable` writes, which is
 ///      what the NEXT BOOT's schema check reads and what the old path left it
@@ -113,10 +127,21 @@ QString busyReason();
 ///      launch uses (a DRIVEN session — a suite, a script, an MCP client —
 ///      seeds nothing, exactly as `MainWindow` does not seed one).
 ///
+/// `seedPresets` false skips step 5's seed: the caller is about to RESTART,
+/// the child will seed at its own launch, and a seeder started in a process
+/// that is already quitting either races the shutdown join or gives the store
+/// two importers at once.
+///
+/// Nothing here follows a symlink: a project folder (or a store entry) that is
+/// itself a link is unlinked, never walked — `QDir::removeRecursively` skips
+/// links it meets inside a tree but follows one handed to it at the top, and
+/// the target of that link is by definition somebody else's data.
+///
 /// The caller closes the open project first; this function never touches a
 /// document, a window or the engine.
 Result reset(Database *db, SettingsManager *settings, const QString &projectsRoot,
-             const std::function<QString(const QString &)> &folderForProject);
+             const std::function<QString(const QString &)> &folderForProject,
+             bool seedPresets = true);
 
 }   // namespace libraryreset
 

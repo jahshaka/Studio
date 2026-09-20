@@ -17,7 +17,11 @@
 #      texture with its stored object and sidecar, a saved scene — and the
 #      files are really there;
 #   3. an abandoned staging temp is planted in the store, the shape
-#      `FileWrite::stagingTempPath` leaves behind;
+#      `FileWrite::stagingTempPath` leaves behind — AND a foreign file, a
+#      foreign folder and a foreign folder under `Projects/`, because the store
+#      root is a path the USER chose (it can be ~/Documents or the top of a USB
+#      stick) and the projects root comes from a free-form folder picker: a
+#      reset may remove only what this app put there. All three must survive;
 #   4. `app.resetLibrary()` reports what it removed, the CENSUS AFTERWARDS
 #      EQUALS THE FRESH ONE, the catalog is usable (a project and an import
 #      work on it), and a second and third call are clean no-ops;
@@ -87,6 +91,16 @@ mkdir -p "$STAGING_DIR"
 test -f "$STAGING_DIR/abandoned.png.tmp-999999-1"
 check $? "an abandoned staging temp is planted in the store"
 
+# THE USER'S OWN THINGS, in the two directories a reset walks. Named so that
+# nothing about them looks like this app's: not a guid, not a store folder.
+echo "the owner's notes" > "$ROOT/AssetStore/my-notes.txt"
+mkdir -p "$ROOT/AssetStore/Holiday Photos"
+echo "a photo" > "$ROOT/AssetStore/Holiday Photos/beach.jpg"
+mkdir -p "$ROOT/Projects/Tax Returns"
+echo "2025" > "$ROOT/Projects/Tax Returns/2025.txt"
+test -f "$ROOT/AssetStore/my-notes.txt" && test -f "$ROOT/Projects/Tax Returns/2025.txt"
+check $? "a foreign file and two foreign folders are planted (store root, projects root)"
+
 # ---- 4. THE RESET ----------------------------------------------------------
 printf 'var RESET_FIXTURE_PNG = "%s";\n' "$FIXTURE" > reset.run.js
 cat "$HERE/reset.js" >> reset.run.js
@@ -114,13 +128,22 @@ check $? "the store's objects/ is empty ($OBJECTS_AFTER file(s))"
 SIDECARS_AFTER="$(find "$ROOT/AssetStore/sidecar" -type f 2>/dev/null | wc -l)"
 [ "$SIDECARS_AFTER" = "0" ]
 check $? "…and its sidecar/ too ($SIDECARS_AFTER)"
-PROJECTS_AFTER="$(ls -A "$ROOT/Projects" 2>/dev/null | wc -l)"
+# No PROJECT folders (a guid-named directory); the user's own folder is still
+# there and is counted by the assertions below, not by this one.
+PROJECTS_AFTER="$(ls -A "$ROOT/Projects" 2>/dev/null \
+                  | grep -cE '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')"
 [ "$PROJECTS_AFTER" = "0" ]
-check $? "…and the projects root holds no folders ($PROJECTS_AFTER)"
+check $? "…and the projects root holds no project folders ($PROJECTS_AFTER)"
 test ! -d "$PROJECT_FOLDER"
 check $? "…the populated project's own folder is gone"
 test -d "$ROOT/AssetStore"
 check $? "the store ROOT still exists (a reset is not a deletion of the place)"
+test -f "$ROOT/AssetStore/my-notes.txt"
+check $? "THE USER'S OWN FILE in the store root survived the reset"
+test -f "$ROOT/AssetStore/Holiday Photos/beach.jpg"
+check $? "…and their own folder in it, with its contents"
+test -f "$ROOT/Projects/Tax Returns/2025.txt"
+check $? "…and their own folder under Projects/ (only guid-named ones are ours)"
 test -f "$ROOT/AssetStore/store.json"
 check $? "…with a store identity written again (store.json)"
 ls "$ROOT"/*.db >/dev/null 2>&1
