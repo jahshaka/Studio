@@ -198,6 +198,10 @@ void EffectsPage::setNodeGraph(NodeGraph *graph)
 
 	stack->clear(); // clears stack, later to add seperate routes for each node addition
 	this->graph = graph;
+	// THE READ-ONLY STATE IS THE PAGE'S, AND THE SCENE IS REBUILT PER GRAPH
+	// (fix round): re-assert it here or a preset's canvas would be locked
+	// only until the scene it was set on was replaced — which is every open.
+	newScene->setReadOnly(mReadOnly);
 	restoringGraph = false;
 
 	schedulePreviewUpdate();
@@ -574,6 +578,17 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	progressDialog->setValueAndText(2, "Fetch graph");
 
 	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
+	// A READ-ONLY OPEN BINDS THE SHIPPED FILE AND WRITES NOTHING (fix round).
+	// Opening a preset to LOOK at it must not import its pictures into the
+	// library and pin them into the open project — a device wait each, on the
+	// thread that draws, for a gesture that reads. Every file-named image is
+	// bound to its path here so the canvas, the evaluator and the preview all
+	// have the complete picture with no row behind it; the import happens on
+	// Customise and on New, which are the gestures that make the user a
+	// material of their own.
+	if (!shipped.isEmpty())
+		MaterialHelper::resolveAppRelativeTextures(
+		    graph, MaterialHelper::TextureBinding::PathOnly);
 	progressDialog->setValueAndText(6, "Deserialize Graph");
 
 	this->setNodeGraph(graph);
@@ -632,11 +647,19 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 void EffectsPage::setReadOnly(bool readOnly, const QString &presetName)
 {
 	mReadOnly = readOnly;
+	mReadOnlyName = readOnly ? presetName : QString();
+	// THE CANVAS REFUSES EDITS, it does not merely fail to save them (fix
+	// round). Flipping a flag and a banner left the scene taking nodes,
+	// wires, drags and typed values while `saveShader` quietly returned and
+	// Customise built the copy from the SHIPPED definition — so the work went
+	// into a window that showed it and into nothing else.
+	if (scene) scene->setReadOnly(readOnly);
 	if (!mReadOnlyBanner || !mReadOnlyLabel) return;
 	if (readOnly) {
 		mReadOnlyLabel->setText(
-		    tr("'%1' is a material the app ships — read-only. This is its graph; "
-		       "Customise makes '%1-1', your own copy, and every edit works on that.")
+		    tr("'%1' is a material the app ships — read-only, so the canvas takes no edits. "
+		       "This is its graph; Customise makes '%1-1', your own copy, and every edit "
+		       "works on that.")
 		        .arg(presetName));
 	}
 	mReadOnlyBanner->setVisible(readOnly);
@@ -919,13 +942,23 @@ void EffectsPage::configureAssetsDock()
 	updateAssetDock();
 }
 
-void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
+void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const QString &wanted)
 {
 	// A NEW MATERIAL IS THE USER'S (PRESET-UNIFY-1): whatever was on the
 	// canvas, this one is editable, so the read-only banner goes.
 	setReadOnly(false);
-	QString newShader;
-	newShader = preset.title;
+
+	// AND IT IS NOT CALLED WHAT THE PRESET IS CALLED (fix round). It took
+	// `preset.title` — a shipped preset's own name — so "New material, based
+	// on Gold PBR" made a SECOND "Gold PBR", and a preset is reached BY NAME
+	// (`material.apply(n, "Gold PBR")`, `materials.loadGraph("Gold PBR")`,
+	// the drag payload), so the user's material was unreachable by name for
+	// ever while the name went on resolving to the preset. The writer refuses
+	// that name outright now; this is where the good one comes from: what the
+	// user typed, else `<Preset>-1` by the one namer Customise uses.
+	QString newShader = wanted.trimmed();
+	if (newShader.isEmpty())
+		newShader = MaterialPresetAssets::customiseName(dataBase, preset.name);
 
 	QListWidgetItem *item = new QListWidgetItem;
 	item->setFlags(item->flags() | Qt::ItemIsEditable);
@@ -1359,7 +1392,7 @@ bool EffectsPage::createNewGraph(bool loadNewGraph)
 
 	if (node.result() == QDialog::Accepted) {
 		auto preset = node.getPreset();
-		createShader(preset, loadNewGraph);
+		createShader(preset, loadNewGraph, node.getName());
 		return true;
 	}
 	return false;

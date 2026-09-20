@@ -24,11 +24,32 @@
                 "rightNodeSocketIndex": 0
             },
             {
+                "id": "6b647142-4c2e-535f-95c1-746de1a75fe6",
+                "leftNodeId": "6c0ad12f-7cb1-5e83-b1d1-689336f893b5",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "76ae28f3-dec6-566b-91dd-0bbdce4914a5",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "a5e2156c-24a3-5728-b810-460a9873ec9b",
                 "leftNodeId": "c450931b-a852-5d7b-95f4-ab59fdae430f",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "af7aff15-adda-5fdd-b3f8-3b1158c7388b",
                 "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "ca552fa4-f915-5a0b-ba82-227b57088e0b",
+                "leftNodeId": "6c0ad12f-7cb1-5e83-b1d1-689336f893b5",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "0f7b4d06-008b-5105-bc3c-73fd66486bc4",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "f7b720ae-6f19-5f40-ab96-e1b4948a1690",
+                "leftNodeId": "6c0ad12f-7cb1-5e83-b1d1-689336f893b5",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "c450931b-a852-5d7b-95f4-ab59fdae430f",
+                "rightNodeSocketIndex": 0
             }
         ],
         "masternode": "af7aff15-adda-5fdd-b3f8-3b1158c7388b",
@@ -41,6 +62,21 @@
                 "value": "presets/stone/Stone_04_UV_H_CM_1_COLOR.png",
                 "x": -430.0,
                 "y": -210.0
+            },
+            {
+                "id": "6c0ad12f-7cb1-5e83-b1d1-689336f893b5",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 4.0,
+                    "tileY": 4.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
             },
             {
                 "id": "6d29719c-461e-53a0-bf53-de9edae2f18a",

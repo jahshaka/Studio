@@ -3,6 +3,13 @@
     "shadergraph": {
         "connections": [
             {
+                "id": "0138edee-ec45-5cad-8c16-9889f7c7f1bb",
+                "leftNodeId": "ba95d0e7-1cb5-54f1-8d26-dee857152d17",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b7eec1c7-b00b-56e1-bbee-fc7ce5bdd0c9",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "04778ba0-8ade-5e6c-95d4-e4fa3ac634d3",
                 "leftNodeId": "b7eec1c7-b00b-56e1-bbee-fc7ce5bdd0c9",
                 "leftNodeSocketIndex": 0,
@@ -24,11 +31,25 @@
                 "rightNodeSocketIndex": 0
             },
             {
+                "id": "5c1f9cc0-3d43-5850-b461-ff734bbe5748",
+                "leftNodeId": "ba95d0e7-1cb5-54f1-8d26-dee857152d17",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "245c50cf-1128-5e77-be93-ff2a97ca5d10",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "83b3d387-9438-5e1b-b064-e142ceabad75",
                 "leftNodeId": "245c50cf-1128-5e77-be93-ff2a97ca5d10",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "0674fc6f-4ffa-508a-b361-91eab7743140",
                 "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "c033396a-deed-5596-95bf-c33cfdbb58a3",
+                "leftNodeId": "ba95d0e7-1cb5-54f1-8d26-dee857152d17",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "636335ce-e3cd-50e4-bbb3-96483ef5cdad",
+                "rightNodeSocketIndex": 0
             }
         ],
         "masternode": "0674fc6f-4ffa-508a-b361-91eab7743140",
@@ -73,6 +94,21 @@
                 "value": "presets/sand/Ground10_1_SPEC.png",
                 "x": -430.0,
                 "y": 140.0
+            },
+            {
+                "id": "ba95d0e7-1cb5-54f1-8d26-dee857152d17",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 4.0,
+                    "tileY": 4.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
             }
         ],
         "settings": {

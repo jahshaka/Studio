@@ -159,6 +159,21 @@ inline QString shippedPresetName(const QString &guid)
     return Constants::Reserved::DefaultMaterials.value(guid);
 }
 
+/// THE RESERVED GUID whose preset is called `name` (case-insensitively), or an
+/// empty string. The mirror of `shippedPresetName`, and it exists because a
+/// preset is reached BY NAME from a script, a drag payload and the tray: a
+/// user's material that takes a preset's name is unreachable by that name for
+/// ever (PRESET-UNIFY-1 fix round). `assettags::write` refuses one; so does
+/// `MaterialBundle::create`.
+inline QString shippedPresetGuidForName(const QString &name)
+{
+    if (name.isEmpty()) return QString();
+    for (auto it = Constants::Reserved::DefaultMaterials.constBegin();
+         it != Constants::Reserved::DefaultMaterials.constEnd(); ++it)
+        if (it.value().compare(name, Qt::CaseInsensitive) == 0) return it.key();
+    return QString();
+}
+
 /// THE SEEDER'S DOOR, and the only writer allowed on a reserved preset guid
 /// (`MaterialPresetAssets::ensureSeeded` is its one caller). It publishes to
 /// the LIBRARY exactly as `write` does — same guard, same colour
@@ -217,6 +232,18 @@ QString offendingPath(const QJsonObject &definition, QString *slotOut = nullptr)
 /// alpha loses it at the store boundary, and that is a real limitation of the
 /// convention rather than of this function.
 QJsonObject normaliseColours(const QJsonObject &definition);
+
+/// THE DOCUMENT'S SPELLING FOR THE UV TRANSFORM, and `write` runs it beside
+/// `normaliseColours` for exactly the same reason. The graph evaluator folds
+/// a transform into two-element ARRAYS (`textureScale: [4, 4]`,
+/// `textureOffset: [u, v]`); the document has five scalar rows —
+/// `textureScale`, `textureScaleV`, `textureOffsetU`, `textureOffsetV`,
+/// `textureRotation` — and `MaterialReader::parsePbrMaterial` reads them as
+/// FLOATS, where `QJsonValue::toDouble()` of an array is ZERO. So a material
+/// saved with any non-identity tiling used to come back with its UV scale at
+/// 0: one texel stretched over the whole surface, silently. A V value the
+/// array does not carry follows U, which is the document's own default.
+QJsonObject normaliseUv(const QJsonObject &definition);
 
 /// True when `value` reads as a file path rather than an asset guid: it holds
 /// a path separator, or a file extension. Asset guids carry neither.

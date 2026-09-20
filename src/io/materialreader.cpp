@@ -166,6 +166,26 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 
 		switch (prop->type) {
 		case iris::PropertyType::Float:
+			// TOLERANT OF THE ARRAY SPELLING (PRESET-UNIFY-1 fix round). The
+			// graph evaluator folds a UV transform into `[u, v]`, and
+			// `MaterialBundle::normaliseUv` splits that into the document's
+			// scalar rows at the one writer — but definitions written before
+			// it stored the array, and `QJsonValue::toDouble()` of an array
+			// is ZERO, so those materials came back with their UV scale at 0:
+			// one texel over the whole surface. Take the first element, which
+			// is the U axis, and let `textureScaleV` follow it when the file
+			// has no row of its own.
+			if (val.isArray()) {
+				const QJsonArray pair = val.toArray();
+				const double u = pair.size() > 0 ? pair.at(0).toDouble() : 1.0;
+				mat->setValue(prop->name, static_cast<float>(u));
+				if (prop->name == QLatin1String("textureScale")
+				    && !values.contains(QStringLiteral("textureScaleV")))
+					mat->setValue(QStringLiteral("textureScaleV"),
+					              static_cast<float>(pair.size() > 1 ? pair.at(1).toDouble(u)
+					                                                 : u));
+				break;
+			}
 			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
 			break;
 		case iris::PropertyType::Int:

@@ -3,6 +3,13 @@
     "shadergraph": {
         "connections": [
             {
+                "id": "265e18a4-3e52-5129-b2a8-5ee436dd7e68",
+                "leftNodeId": "9b777e95-32e5-5d33-acb9-a878397f4dd6",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "60d93ef1-cf62-5204-82c8-b74a74515118",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "66ebe10f-7173-508c-880b-1d7379a64333",
                 "leftNodeId": "c8b4e343-0f41-57ad-b594-7fbb4838550a",
                 "leftNodeSocketIndex": 0,
@@ -42,6 +49,21 @@
                 "value": "../../shadergraph/checker.jpg",
                 "x": -430.0,
                 "y": -210.0
+            },
+            {
+                "id": "9b777e95-32e5-5d33-acb9-a878397f4dd6",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 2.0,
+                    "tileY": 2.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
             },
             {
                 "id": "c8b4e343-0f41-57ad-b594-7fbb4838550a",

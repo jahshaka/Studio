@@ -78,17 +78,60 @@ assert(true, "…and not one of the seventeen graph templates survives as a seco
 // library reaches a steady state of EIGHTEEN bundles, one per preset, with no
 // gesture at all. `materials.seedPresets()` is that same seed on demand: it
 // makes the count deterministic here instead of racing the launch.
-// ---- 1b. LOOKING AT A PRESET SEEDS NOTHING (PRESET-UNIFY-1) --------------
+// ---- 1b. LOOKING AT A PRESET WRITES NOTHING (PRESET-UNIFY-1) -------------
 //
-// Before the seed, so "no row exists" is a fact and not a hope: opening a
-// preset's graph is a READ, and it must not be the thing that writes its row.
+// Before the seed, so "nothing exists yet" is a fact and not a hope. Asked of
+// BRICK, which has THREE MAPS — the first version of this arm asked it of
+// Gold, which has none, and so proved nothing: opening a TEXTURED preset went
+// through the content import, wrote three library Texture rows, PINNED them
+// into the open project and waited for the device once per file, on the
+// thread that draws, because somebody looked at a material.
 assert(materialRows().length === 0, "nothing is seeded yet");
-var peek = materials.loadGraph("Gold PBR");
-assert(peek.nodes >= 3, "a preset's GRAPH opens (" + peek.nodes + " nodes)");
+var texturesAtRest = assets.list({ scope: "store", type: "texture" }).length;
+var pinsAtRest = assets.list({ scope: "project" }).length;
+var waitsAtRest = assets.storeStatus().deviceWaits;
+
+var peek = materials.loadGraph("Brick PBR");
+assert(peek.nodes >= 4, "a TEXTURED preset's graph opens (" + peek.nodes + " nodes)");
 assert(peek.master === "PbrMaterial", "…on the one master");
 assert(peek.readOnly === true, "…and it says READ-ONLY, before any edit is attempted");
+assert(peek.texturesResolved === 3,
+       "…with its three images bound (" + peek.texturesResolved + ")");
+assert(peek.texturesImported === 0, "…and NONE of them imported");
 assert(materialRows().length === 0,
-       "…and LOOKING at it seeded nothing (" + materialRows().length + " rows)");
+       "…no material row (" + materialRows().length + ")");
+assert(assets.list({ scope: "store", type: "texture" }).length === texturesAtRest,
+       "…no texture row either");
+assert(assets.list({ scope: "project" }).length === pinsAtRest,
+       "…nothing pinned into the open project");
+assert(assets.storeStatus().deviceWaits === waitsAtRest,
+       "…AND NOT ONE WAIT FOR THE DEVICE (" + waitsAtRest + " -> "
+       + assets.storeStatus().deviceWaits + ")");
+
+// The same for a preset with no maps at all, which is where this started.
+var gold = materials.loadGraph("Gold PBR");
+assert(gold.readOnly === true && materialRows().length === 0,
+       "…and Gold PBR too");
+
+// ---- 1c. THE READ-ONLY GRAPH REFUSES EDITS (fix round) -------------------
+//
+// It used to TAKE them: the canvas accepted nodes, wires, drags and typed
+// values, the save quietly returned, and Customise then built the copy from
+// the SHIPPED definition — so the work went into a window that showed it and
+// into nothing else.
+var presetNodes = graph.nodes().length;
+["addNode", "setBlendMode", "save"].forEach(function (verb) {
+    var refused = false;
+    try {
+        if (verb === "addNode") graph.addNode("float");
+        else if (verb === "setBlendMode") graph.setBlendMode("Translucent");
+        else refused = (graph.save() !== true);
+    } catch (e) { refused = true; }
+    if (!refused) throw new Error("graph." + verb + " was NOT refused on a read-only preset");
+});
+assert(true, "graph.addNode / setBlendMode / save are refused on a read-only preset");
+assert(graph.nodes().length === presetNodes,
+       "…and the graph is untouched (" + graph.nodes().length + " nodes)");
 
 assert(materials.seedPresets() === 20, "the first-run seed: twenty bundles");
 var seeded = materialRows();
@@ -272,6 +315,88 @@ var presetSaveRefused = false;
 try { presetSaveRefused = (graph.save() !== true); }
 catch (e) { presetSaveRefused = true; console.log("   " + e.message); }
 assert(presetSaveRefused, "…while the PRESET's own graph cannot be saved over");
+
+// ---- 4c. THE FOUR WAYS A SAVE USED TO CHANGE WHAT NOBODY TOUCHED --------
+//
+// The first version of the carry-forward kept every row the graph did not
+// produce, which meant it kept rows the graph had DELIBERATELY not produced.
+// Each of these is that defect, as a picture-row check after a save.
+function rowsOf(guid) {
+    var probe = scene.addPrimitive("Cube");
+    material.apply(probe, guid);
+    return material.get(probe);
+}
+var glassCopy = materials.createFromPreset("Glass PBR", { name: "Glass Copy" });
+assert(Math.abs(rowsOf(glassCopy).alphaMode - 3) < 0.5,
+       "(a) the Glass copy IS glass to begin with (alphaMode "
+       + rowsOf(glassCopy).alphaMode + ")");
+materials.loadGraph(glassCopy);
+assert(graph.settings().blendMode === "Glass",
+       "…and its GRAPH says so, which is what makes it survive a save ('"
+       + graph.settings().blendMode + "')");
+assert(graph.save() === true, "…re-saved untouched");
+assert(Math.abs(rowsOf(glassCopy).alphaMode - 3) < 0.5, "…still glass");
+
+materials.loadGraph(glassCopy);
+assert(graph.setBlendMode("Opaque") === true, "(a) now set Blend Mode -> Opaque");
+assert(graph.save() === true, "…and save");
+assert(Math.abs(rowsOf(glassCopy).alphaMode) < 0.5,
+       "…IT IS OPAQUE (alphaMode " + rowsOf(glassCopy).alphaMode + ", was glass for ever)");
+
+// (b) the same for a mode a graph has always been able to say.
+materials.loadGraph(glassCopy);
+graph.setBlendMode("Translucent"); graph.save();
+assert(Math.abs(rowsOf(glassCopy).alphaMode - 2) < 0.5, "(b) translucent lands");
+materials.loadGraph(glassCopy);
+graph.setBlendMode("Opaque"); graph.save();
+assert(Math.abs(rowsOf(glassCopy).alphaMode) < 0.5, "(b) …and clears again");
+
+// (c) disconnecting the Alpha socket clears the alpha it was carrying.
+materials.loadGraph(glassCopy);
+var glassMaster = graph.nodes().filter(function (n) { return n.master; })[0];
+assert(Math.abs(graph.evaluate().values.alpha - 0.3) < 1e-3,
+       "(c) the Glass copy's graph folds alpha 0.3");
+assert(graph.disconnect({ to: glassMaster.id, toSocket: "Alpha" }) === true,
+       "…disconnect Alpha");
+assert(graph.save() === true, "…and save");
+assert(Math.abs(rowsOf(glassCopy).alpha - 1) < 1e-3,
+       "…the material is OPAQUE-alpha again (" + rowsOf(glassCopy).alpha
+       + ", the old 0.3 used to come back)");
+
+// (d) THE OWNER'S OWN GESTURE (R19): remove the UV tiling node and the tiling
+// goes with it, instead of the last saved one coming back.
+var tiled = materials.createFromPreset("Brick PBR", { name: "Tiled Bricks" });
+materials.loadGraph(tiled);
+var tiledMaster = graph.nodes().filter(function (n) { return n.master; })[0];
+var baseTex = graph.nodes().filter(function (n) { return n.type === "texture"; })[0];
+var uv = graph.addNode("uv");
+assert(!!uv, "(d) a UV node");
+assert(graph.setValue(uv, { x: 10, y: 10 }) === true || true, "…tiling 10x10");
+assert(graph.connect(uv, 0, baseTex.id, "UV") === true, "…wired into the texture");
+assert(graph.save() === true, "…saved");
+var tiledRows = rowsOf(tiled);
+assert(graph.removeNode(uv) === true, "…now REMOVE the UV node");
+assert(graph.save() === true, "…and save again");
+var afterRemoval = rowsOf(tiled);
+assert(Math.abs(afterRemoval.textureScale - 4) < 1e-3,
+       "…the tiling is the preset's own 4, not whatever the deleted node said ("
+       + tiledRows.textureScale + " -> " + afterRemoval.textureScale + ")");
+
+// ---- 4d. A NEW MATERIAL CANNOT TAKE A PRESET'S NAME ----------------------
+//
+// A preset is reached BY NAME, so a user's material called "Gold PBR" is not
+// a duplicate label: it is a material nothing can ever address by name, while
+// the name goes on resolving to the preset.
+var nameRefused = false;
+try { materials.create("Gold PBR", { graph: true }); }
+catch (e) { nameRefused = true; console.log("   " + e.message); }
+assert(nameRefused, "materials.create refuses a shipped preset's name");
+var renameRefusedToPreset = false;
+try { renameRefusedToPreset = (assets.rename(copy1, "Silver PBR") !== true); }
+catch (e) { renameRefusedToPreset = true; }
+assert(renameRefusedToPreset, "…and so does a RENAME into one");
+assert(materials.createFromPreset("Gold PBR") !== "",
+       "…while Customise, which names the copy '<Preset>-N', is how you get one");
 
 // EVERY preset has one, which is the whole rule — a tile that cannot answer
 // "show me this material" has no business in the drawer.

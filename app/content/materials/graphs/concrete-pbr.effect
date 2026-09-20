@@ -10,6 +10,13 @@
                 "rightNodeSocketIndex": 1
             },
             {
+                "id": "614a500c-5cb8-5b4d-811e-5698f1afa5bf",
+                "leftNodeId": "864dd059-3655-5d17-ba8c-3bde91164f32",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "3406462b-b10e-5e71-8e89-6e9cec3f5d14",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "64d694d2-0379-59a7-b91b-8bce5851c7db",
                 "leftNodeId": "fb2756e2-0e56-5948-970d-fbb0c837ea36",
                 "leftNodeSocketIndex": 0,
@@ -22,6 +29,20 @@
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "891438be-e938-59f6-be9f-9fb893ded1cb",
                 "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "f1779467-39e2-5b77-97ff-70cf317345f6",
+                "leftNodeId": "864dd059-3655-5d17-ba8c-3bde91164f32",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "fb2756e2-0e56-5948-970d-fbb0c837ea36",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "fd19ab8e-4591-5992-8ae5-ce6b30d7d512",
+                "leftNodeId": "864dd059-3655-5d17-ba8c-3bde91164f32",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "4c6e76d2-95e4-5cd4-8e85-3f8579949c70",
+                "rightNodeSocketIndex": 0
             },
             {
                 "id": "ff64aa34-ce3f-5a65-afa8-5af72e1e5d7e",
@@ -49,6 +70,21 @@
                 "value": "presets/concrete/Old_Painted_UV_H_CM_1_NRM.png",
                 "x": -430.0,
                 "y": 360.0
+            },
+            {
+                "id": "864dd059-3655-5d17-ba8c-3bde91164f32",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 4.0,
+                    "tileY": 4.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
             },
             {
                 "id": "891438be-e938-59f6-be9f-9fb893ded1cb",

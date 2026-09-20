@@ -149,7 +149,8 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	form.blend = new QComboBox;
 	// Unreal-parity blend modes; combo index == BlendMode enum value.
 	form.blend->addItems({ tr("Opaque"), tr("Masked"), tr("Translucent"),
-	                       tr("Additive"), tr("Modulate") });
+	                       tr("Additive"), tr("Modulate"), tr("Glass"),
+	                       tr("Refractive") });
 	formLayout->addRow(tr("Blend Mode"), form.blend);
 
 	form.bakeResolution = new QSpinBox;

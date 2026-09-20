@@ -196,6 +196,13 @@ int GraphNode::socketRowsHeight()
 	return h;
 }
 
+void GraphNode::setInteractive(bool interactive)
+{
+	setFlag(QGraphicsItem::ItemIsMovable, interactive);
+	for (auto *proxy : { proxyWidget, proxyHeaderWidget, proxyPreviewWidget })
+		if (proxy && proxy->widget()) proxy->widget()->setEnabled(interactive);
+}
+
 void GraphNode::setWidget(QWidget *widget)
 {
 	// gotta do this here before adding the widget

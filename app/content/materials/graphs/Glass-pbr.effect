@@ -82,7 +82,7 @@
         ],
         "settings": {
             "bakeResolution": 1024,
-            "blendMode": "Opaque",
+            "blendMode": "Glass",
             "name": "Glass PBR"
         },
         "socketLayout": 2

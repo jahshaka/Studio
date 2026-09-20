@@ -109,6 +109,17 @@ bool stage(const QString &root, Staged &file);
 /// commitStaged of the batch.
 void flushStaged(QVector<Staged> &files);
 
+/// HOW MANY TIMES THIS PROCESS HAS WAITED FOR THE DEVICE, counted where the
+/// wait happens: one per file actually fsynced by `flushStaged` (a hardlinked
+/// object writes no bytes and waits for nothing, so it does not count).
+///
+/// It exists because "no durable write belongs on the thread that draws"
+/// (FSYNC-2) is a claim somebody has to be able to CHECK, and counting rows
+/// only tells you a write happened, not that the caller waited for it.
+/// Monotonic, process-wide, thread-safe; only differences mean anything.
+/// Reported by `assets.storeStatus()`.
+quint64 deviceWaits();
+
 /// Publish `file` (rename) and record its rows against `guid`. The DB thread.
 bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
                   Staged &file, QString *errorOut);

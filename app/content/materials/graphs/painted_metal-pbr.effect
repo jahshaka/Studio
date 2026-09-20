@@ -10,11 +10,25 @@
                 "rightNodeSocketIndex": 3
             },
             {
+                "id": "57f50769-1d3a-5ae2-8f0e-b3fa693e07e5",
+                "leftNodeId": "7353c82d-e1ab-5b8e-8fc5-a67284c6e784",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "27dd34d9-b84e-582e-ac43-578ed1ffcbbc",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "bee025e5-288d-581d-b513-387fa085ebf4",
                 "leftNodeId": "a3532203-8e7b-5763-9519-eac08cbacbc3",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "adec1c42-515e-539e-b77c-c35b5e5501e8",
                 "rightNodeSocketIndex": 1
+            },
+            {
+                "id": "d498fbd0-37c2-5a18-8082-f5641b0e6128",
+                "leftNodeId": "7353c82d-e1ab-5b8e-8fc5-a67284c6e784",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "cacadce9-0dd6-5c52-ba41-533cdca7594a",
+                "rightNodeSocketIndex": 0
             },
             {
                 "id": "e3f51a45-d5dc-504c-af5e-a7a999a3c78a",
@@ -41,6 +55,21 @@
                 "value": "presets/painted_metal/painted_metal_COLOR.jpg",
                 "x": -430.0,
                 "y": -210.0
+            },
+            {
+                "id": "7353c82d-e1ab-5b8e-8fc5-a67284c6e784",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 2.0,
+                    "tileY": 2.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
             },
             {
                 "id": "a3532203-8e7b-5763-9519-eac08cbacbc3",

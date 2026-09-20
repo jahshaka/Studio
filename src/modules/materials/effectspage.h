@@ -226,6 +226,7 @@ private:
 	/// timer never fires a refusal into the scene-issue bar, and the banner
 	/// above the canvas says so and offers the one gesture that works.
 	bool mReadOnly = false;
+	QString mReadOnlyName;
 	QWidget *mReadOnlyBanner = nullptr;
 	QLabel  *mReadOnlyLabel = nullptr;
 	/// Show or hide the banner and set `mReadOnly`.
@@ -263,7 +264,8 @@ private:
 
 	void configureStyleSheet();
 	void configureAssetsDock();
-	void createShader(NodeGraphPreset preset, bool loadNewGraph = true);
+	void createShader(NodeGraphPreset preset, bool loadNewGraph = true,
+	                  const QString &wanted = QString());
 	void loadGraphFromTemplate(NodeGraphPreset preset);
 	void setCurrentShaderItem();
 	QByteArray fetchAsset(QString string);

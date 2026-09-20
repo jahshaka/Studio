@@ -17,6 +17,13 @@
                 "rightNodeSocketIndex": 0
             },
             {
+                "id": "9af511cb-5681-532e-95fe-0d851b091aa3",
+                "leftNodeId": "9c6d5c64-2fb0-5f54-8be9-548c9854f12d",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "815e2248-adf8-59fc-8133-ad37d573adb4",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "de84084e-7b40-51a2-b325-5b4fdea15eb6",
                 "leftNodeId": "16d087c4-9b11-51cf-8f54-b41d00630268",
                 "leftNodeSocketIndex": 0,
@@ -50,6 +57,21 @@
                 "value": "../../shadergraph/wood.jpg",
                 "x": -430.0,
                 "y": -210.0
+            },
+            {
+                "id": "9c6d5c64-2fb0-5f54-8be9-548c9854f12d",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 2.0,
+                    "tileY": 2.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
             },
             {
                 "id": "d833a32d-a9c8-57f0-bfb3-529979981d77",

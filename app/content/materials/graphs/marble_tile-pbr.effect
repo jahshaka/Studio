@@ -17,11 +17,32 @@
                 "rightNodeSocketIndex": 2
             },
             {
+                "id": "aba3a5c9-62c2-5bcf-8152-f4d2412078a1",
+                "leftNodeId": "34c87e8d-f584-5c26-b700-2f519cbe61e9",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "f28ba396-c43f-5551-9f0e-b1b4ecf03fa3",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "aba7d9d5-b90d-5c61-8c9e-4e193162daac",
+                "leftNodeId": "34c87e8d-f584-5c26-b700-2f519cbe61e9",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "fb9f780f-c036-5741-ae42-087be7ed1dd7",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "bf133687-4eeb-5353-8506-b6952113be83",
                 "leftNodeId": "995a02e4-7a1d-5c5a-b723-a20be10ff352",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "cccb3beb-e096-5293-906d-bdc6ec652d1f",
                 "rightNodeSocketIndex": 1
+            },
+            {
+                "id": "d7ea1098-f304-50fd-a3d5-70e46e2cef25",
+                "leftNodeId": "34c87e8d-f584-5c26-b700-2f519cbe61e9",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "ec3cfef9-9ceb-53c6-8ca6-d58c0fb77b4e",
+                "rightNodeSocketIndex": 0
             },
             {
                 "id": "f33d2862-287f-53a0-a43b-37ea043b1b00",
@@ -34,6 +55,21 @@
         "masternode": "cccb3beb-e096-5293-906d-bdc6ec652d1f",
         "materialGuid": "",
         "nodes": [
+            {
+                "id": "34c87e8d-f584-5c26-b700-2f519cbe61e9",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 4.0,
+                    "tileY": 4.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
+            },
             {
                 "id": "995a02e4-7a1d-5c5a-b723-a20be10ff352",
                 "title": "Metallic",

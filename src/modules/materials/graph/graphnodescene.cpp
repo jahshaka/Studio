@@ -72,6 +72,7 @@ void GraphNodeScene::setNodeGraph(NodeGraph *graph)
 
 void GraphNodeScene::addNodeModel(NodeModel* model, bool addToGraph)
 {
+	if (readOnly) return;
 	// THE MASTER NODE GOES STRAIGHT IN, never through the undo stack: it is
 	// the material, not an edit to it, and an undo that removed it would leave
 	// a graph that cannot bake. This used to test `title != "Surface Material"`
@@ -90,6 +91,7 @@ void GraphNodeScene::addNodeModel(NodeModel* model, bool addToGraph)
 // add
 GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool addToGraph)
 {
+	if (readOnly) return nullptr;
 	auto nodeView = this->createNode<GraphNode>();
 	nodeView->setNodeGraph(this->nodeGraph);
 	nodeView->setModel(model);
@@ -252,6 +254,7 @@ void GraphNodeScene::addNodeFromSearchDialog(QTreeWidgetItem * item, const QPoin
 
 void GraphNodeScene::deleteSelectedNodes()
 {
+	if (readOnly) return;
 	auto items = selectedItems();
 	QList<GraphNode*> nodes;
 	auto masterNodeId = nodeGraph->getMasterNode()->id;
@@ -295,6 +298,7 @@ void GraphNodeScene::deleteSelectedNodes()
 
 bool GraphNodeScene::deleteNodeById(const QString& nodeId)
 {
+	if (readOnly) return false;
 	auto node = getNodeById(nodeId);
 	if (!node)
 		return false;
@@ -316,6 +320,7 @@ bool GraphNodeScene::deleteNodeById(const QString& nodeId)
 
 bool GraphNodeScene::deleteConnectionById(const QString& connectionId)
 {
+	if (readOnly) return false;
 	auto con = getConnection(connectionId);
 	if (!con)
 		return false;
@@ -330,6 +335,7 @@ bool GraphNodeScene::deleteConnectionById(const QString& connectionId)
 
 void GraphNodeScene::deleteNode(GraphNode* node)
 {
+	if (readOnly) return;
 	// remove in and out connections
 	auto conns = nodeGraph->getNodeConnections(node->nodeId);
 
@@ -361,6 +367,16 @@ bool GraphNodeScene::areSocketsComptible(Socket* sock1, Socket* sock2)
 	auto inSockModel = inNode->inSockets[inSock->socketIndex];
 
 	return outSockModel->canConvertTo(inSockModel);
+}
+
+void GraphNodeScene::setReadOnly(bool value)
+{
+	readOnly = value;
+	// THE NODES THEMSELVES, not only the scene's verbs: a drag is
+	// QGraphicsItem's own doing and a value typed into a node's spinbox never
+	// reaches this class at all, so both are turned off where they live.
+	for (auto *node : getNodes())
+		if (node) node->setInteractive(!readOnly);
 }
 
 void GraphNodeScene::emitGraphInvalidated()
@@ -483,6 +499,7 @@ void GraphNodeScene::copySelectedToClipboard()
 
 void GraphNodeScene::pasteFromClipboard()
 {
+	if (readOnly) return;
 	auto doc = QJsonDocument::fromJson(QApplication::clipboard()->text().toUtf8());
 	if (!doc.isObject())
 		return;
@@ -491,6 +508,7 @@ void GraphNodeScene::pasteFromClipboard()
 
 void GraphNodeScene::duplicateSelected()
 {
+	if (readOnly) return;
 	// straight through the same payload, skipping the clipboard
 	pasteSelection(this, serializeSelection(this), 30.0f);
 }
@@ -505,6 +523,7 @@ void GraphNodeScene::clearDragHighlight()
 
 void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 {
+	if (readOnly) { event->ignore(); return; }
 
 	if ("node" == event->mimeData()->data("MODEL_TYPE_ROLE").toStdString()) {
 		event->accept();
@@ -617,6 +636,7 @@ void GraphNodeScene::redo()
 
 SocketConnection *GraphNodeScene::addConnection(QString leftNodeId, int leftSockIndex, QString rightNodeId, int rightSockIndex)
 {
+	if (readOnly) return nullptr;
 	auto leftNode = this->getNodeById(leftNodeId);
 	auto rightNode = this->getNodeById(rightNodeId);
 
@@ -638,6 +658,7 @@ SocketConnection *GraphNodeScene::addConnection(QString leftNodeId, int leftSock
 
 SocketConnection * GraphNodeScene::removeConnection(SocketConnection * connection, bool removeFromNodeGraph, bool emitSignal)
 {
+	if (readOnly) return nullptr;
 	// NULL-GUARDED (F2, 2026-09-06). The QString overload below hands whatever
 	// getConnection() found straight in, and getConnection answers null for any
 	// id the CANVAS does not carry — which includes every model-side id that
@@ -665,6 +686,7 @@ SocketConnection * GraphNodeScene::removeConnection(SocketConnection * connectio
 
 void GraphNodeScene::removeConnection(const QString& conId, bool removeFromNodeGraph, bool emitSignal)
 {
+	if (readOnly) return;
 	auto con = getConnection(conId);
 	removeConnection(con, removeFromNodeGraph, emitSignal);
 }

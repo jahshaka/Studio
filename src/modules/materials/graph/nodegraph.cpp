@@ -630,6 +630,12 @@ QJsonObject NodeGraph::serializeMaterialSettings()
 		break;
 	case BlendMode::Modulate:
 		blendType = "Modulate";
+		break;
+	case BlendMode::Glass:
+		blendType = "Glass";
+		break;
+	case BlendMode::Refractive:
+		blendType = "Refractive";
 	}
 
 	// The eight inert keys (zWrite/depthTest/fog/castShadow/receiveShadow/
@@ -652,6 +658,8 @@ MaterialSettings NodeGraph::deserializeMaterialSettings(QJsonObject obj)
 		if (mode == "blend" || mode == "translucent") return BlendMode::Translucent;
 		if (mode == "additive") return BlendMode::Additive;
 		if (mode == "modulate") return BlendMode::Modulate;
+		if (mode == "glass") return BlendMode::Glass;
+		if (mode == "refractive") return BlendMode::Refractive;
 		return BlendMode::Opaque;
 	};
 	MaterialSettings settings;

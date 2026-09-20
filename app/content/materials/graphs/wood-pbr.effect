@@ -3,11 +3,32 @@
     "shadergraph": {
         "connections": [
             {
+                "id": "10ec0ea4-a502-5aeb-b423-7fa38b6549cf",
+                "leftNodeId": "0e93ad5d-c63d-5ee4-9cbc-ddc406871889",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "bcbb1caa-49c9-59fc-92f0-cdc9801629b8",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "1ed6e115-4790-5ce6-9675-2b2be431bf3c",
                 "leftNodeId": "bcbb1caa-49c9-59fc-92f0-cdc9801629b8",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "6e49b285-cd2a-5e82-8a65-a1fc1fe58edc",
                 "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "3c40b5d0-7b75-5851-a930-ab89867f429e",
+                "leftNodeId": "0e93ad5d-c63d-5ee4-9cbc-ddc406871889",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "259b5d67-20bb-55c8-917e-c9a85b01e4ac",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "3d721724-a27f-56d9-b501-1cb83f2f4b98",
+                "leftNodeId": "0e93ad5d-c63d-5ee4-9cbc-ddc406871889",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "c81db75a-70c6-53dc-ac62-8869aefb6fcb",
+                "rightNodeSocketIndex": 0
             },
             {
                 "id": "9a8ad927-a8af-57ad-b3c3-736690a88958",
@@ -34,6 +55,21 @@
         "masternode": "6e49b285-cd2a-5e82-8a65-a1fc1fe58edc",
         "materialGuid": "",
         "nodes": [
+            {
+                "id": "0e93ad5d-c63d-5ee4-9cbc-ddc406871889",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 4.0,
+                    "tileY": 4.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
+            },
             {
                 "id": "259b5d67-20bb-55c8-917e-c9a85b01e4ac",
                 "title": "Base Colour",

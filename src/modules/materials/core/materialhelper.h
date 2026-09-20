@@ -25,7 +25,22 @@ public:
 	// same file left every preset texture unconnected (samples audit,
 	// 2026-09-04). Idempotent — a node whose path already resolved is skipped.
 	// Returns the number of textures resolved.
-	static int resolveAppRelativeTextures(NodeGraph* graph);
+	//
+	// HOW A FILE-NAMED IMAGE IS BOUND, and it is a decision with a device wait
+	// on one side of it (PRESET-UNIFY-1 fix round): `Import` is the ordinary
+	// route — the one content import, a library Texture row, pinned into the
+	// open project, and therefore bytes written and an fsync on the calling
+	// thread for a picture the store does not already hold. `PathOnly` binds
+	// the shipped FILE to the node and writes NOTHING: no row, no pin, no
+	// device wait. LOOKING at a material must never be a write, so every
+	// READ-ONLY open takes PathOnly, and only a gesture that makes the user a
+	// material of their own (a new material from a preset, Customise) imports.
+	enum class TextureBinding {
+		Import,
+		PathOnly,
+	};
+	static int resolveAppRelativeTextures(NodeGraph* graph,
+	                                      TextureBinding binding = TextureBinding::Import);
 
 	// Converts a NodeGraph to the Material json format.
 	// Since Option B phase 1 the result also carries "pbrMaterial", the

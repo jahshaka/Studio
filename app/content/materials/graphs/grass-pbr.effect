@@ -3,6 +3,13 @@
     "shadergraph": {
         "connections": [
             {
+                "id": "2e8c6c93-6ce1-5994-9c69-b7be98127a80",
+                "leftNodeId": "0e8684a1-43c7-5387-a38e-ec93bc44c943",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "2d95887e-6d6d-5b58-a339-dbf55eb3ba6d",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "6c48ef49-d9f0-5906-a8c6-62c346fd7950",
                 "leftNodeId": "f5d89b8d-7959-5f9c-a4ce-33b9fc587fe9",
                 "leftNodeSocketIndex": 0,
@@ -27,6 +34,21 @@
         "masternode": "68af997f-740d-5893-ad7e-c4bf4768e5a3",
         "materialGuid": "",
         "nodes": [
+            {
+                "id": "0e8684a1-43c7-5387-a38e-ec93bc44c943",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 2.0,
+                    "tileY": 2.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
+            },
             {
                 "id": "2d95887e-6d6d-5b58-a339-dbf55eb3ba6d",
                 "title": "Base Colour",

@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QUuid>
 #include <QVector>
+#include <atomic>
 
 #ifdef Q_OS_UNIX
 #include <unistd.h>   // link(2) — hardlink migration, preflight §3.3
@@ -188,6 +189,11 @@ bool stage(const QString &root, Staged &file)
     return true;
 }
 
+namespace {
+/// See `deviceWaits()`. Relaxed: it is a counter nobody orders anything by.
+std::atomic<quint64> sDeviceWaits{0};
+} // namespace
+
 void flushStaged(QVector<Staged> &files)
 {
     // The batch's ONE waiting point. Every copy, then nothing else: a hardlink
@@ -195,7 +201,15 @@ void flushStaged(QVector<Staged> &files)
     // flushed (losing a rename loses an object, which is a re-ingest — losing
     // an object's CONTENT is a corruption, which is what this prevents).
     for (Staged &file : files)
-        if (file.copied && !file.tmpPath.isEmpty()) FileWrite::fsyncPath(file.tmpPath);
+        if (file.copied && !file.tmpPath.isEmpty()) {
+            FileWrite::fsyncPath(file.tmpPath);
+            sDeviceWaits.fetch_add(1, std::memory_order_relaxed);
+        }
+}
+
+quint64 deviceWaits()
+{
+    return sDeviceWaits.load(std::memory_order_relaxed);
 }
 
 void discardStaged(QVector<Staged> &files)

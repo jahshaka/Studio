@@ -24,6 +24,8 @@
 #include "modules/materials/nodes/pbrmasternode.h"
 #include "modules/materials/nodes/test.h" // FloatNodeModel, ColorPickerNode, TextureNode
 #include "modules/materials/models/properties.h"
+#include "modules/materials/models/connectionmodel.h"
+#include "modules/materials/models/socketmodel.h"
 #include "modules/materials/models/library.h"
 #include "modules/materials/models/libraryv1.h"
 #include "modules/materials/core/graphbaker.h"
@@ -475,6 +477,23 @@ int main(int argc, char** argv)
             if (result.values.contains("alpha")
                 && !near(result.values["alpha"].toDouble(), preset["alpha"].toDouble(1.0), 0.004))
                 say("alpha", result.values["alpha"].toDouble(), preset["alpha"].toDouble(1.0));
+            // THE TILING (fix round). It was the gap this arm did not look
+            // through: a textured preset authored at 4x whose graph said
+            // nothing about tiling passed every check here and then lost the
+            // tiling the first time a customised copy was saved, because the
+            // UV rows are the GRAPH's whenever it has a texture node.
+            {
+                const double authored = preset["textureScale"].toDouble(1.0);
+                double folded = 1.0;
+                const QJsonValue scale = result.values.value("textureScale");
+                if (scale.isArray()) folded = scale.toArray().at(0).toDouble(1.0);
+                else if (scale.isDouble()) folded = scale.toDouble(1.0);
+                const bool textured = !preset["baseColorMap"].toString().isEmpty()
+                                      || !preset["roughnessMap"].toString().isEmpty()
+                                      || !preset["normalMap"].toString().isEmpty();
+                if (textured && !near(folded, authored, 0.004))
+                    say("textureScale", folded, authored);
+            }
 
             // A MAP THE PRESET AUTHORS IS A TEXTURE NODE IN ITS GRAPH, and it
             // PASSES THROUGH: a preset that resampled its own image into a
@@ -491,6 +510,30 @@ int main(int argc, char** argv)
                 && graph->getNodesByTypeName("texture").size() < 2) {
                 std::printf("      %s: fewer texture nodes than authored maps\n", qPrintable(name));
                 ++disagreed;
+            }
+            // A ROUGHNESS-MAPPED PRESET WIRES ITS MAP INTO ROUGHNESS (fix
+            // round). The value check above SKIPS roughness for these nine,
+            // because the authored value is the map's factor and not a number
+            // the graph folds — so without this the nine could have lost the
+            // map entirely and the arm would still have been green, leaving
+            // `roughnessLowerBound`/`roughnessUpperBound` with nothing to
+            // remap and a specular map's pixels nowhere.
+            if (hasRoughMap) {
+                bool wired = false;
+                NodeModel *master = graph->getMasterNode();
+                SocketModel *roughIn = master && master->inSockets.size() > 2
+                                           ? master->inSockets[2] : nullptr;   // Roughness
+                for (auto *c : graph->connections.values()) {
+                    if (!c || !roughIn || c->rightSocket != roughIn) continue;
+                    if (c->leftSocket && c->leftSocket->node
+                        && c->leftSocket->node->typeName == QLatin1String("texture"))
+                        wired = true;
+                }
+                if (!wired) {
+                    std::printf("      %s: its roughness MAP is not wired into Roughness\n",
+                                qPrintable(name));
+                    ++disagreed;
+                }
             }
         }
         CHECK(noGraph == 0, "shipped: EVERY preset names a graph, and it is there");

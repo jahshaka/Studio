@@ -15,12 +15,6 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QButtonGroup>
 #include <QGraphicsEffect>
-#include <QStandardPaths>
-#include <QDirIterator>
-#include <QJsonDocument>
-#include "irisgl/import/materialhelper.h"
-
-#include "../core/materialhelper.h"
 #include "data/constants.h"
 #include "data/materialpreset.h"
 #include "io/materialpresets.h"
@@ -224,14 +218,26 @@ void CreateNewDialog::createViewWithoutOptions()
 	layout->addWidget(nameHolder);
 	layout->addWidget(buttonHolder);
 
-	const auto tiles = presetTiles();
-	if (!tiles.isEmpty()) currentInfoSelected = tiles.first();
+	// THE BLANK-NEW BASE IS NAMED, not "whichever preset sorts first"
+	// (PRESET-UNIFY-1 fix round). This view has no tiles — it asks only for a
+	// name — so it has to pick the base itself, and picking by list position
+	// made it depend on filename sorting: it was "Default" while the old
+	// hand-written starter list put it first, and became whatever sorted
+	// first the moment the list came from a directory. Default PBR is the
+	// app's neutral white matte surface and was that starter list's first
+	// entry, so this is the same material it always was, said out loud.
+	currentInfoSelected = presetTile(QStringLiteral("Default PBR"));
 
 	connect(cancel, &QPushButton::clicked, [=]() {
 		this->reject();
 	});
 	connect(confirm, &QPushButton::clicked, [=]() {
-		auto projectName = nameEdit->text();
+		// THE TYPED NAME IS THE ANSWER (PRESET-UNIFY-1 fix round). It used to
+		// be read into a local called `projectName` and dropped on the floor,
+		// and `getName()` answered an empty string for ever — so a new
+		// material was named after the TILE, which is a shipped preset's
+		// name, which nothing could then reach by name.
+		name = nameEdit->text().trimmed();
 		this->accept();
 		emit confirmClicked(2);
 	});
@@ -239,9 +245,10 @@ void CreateNewDialog::createViewWithoutOptions()
 	connect(nameEdit, &QLineEdit::textChanged, [=](QString text) {
 		if (text.count() > 0) 	confirm->setEnabled(true);
 		else 	confirm->setEnabled(false);
-		name = text;
-
-		currentInfoSelected.title = text;
+		name = text.trimmed();
+		// (The tile's `title` is its LABEL and is no longer overwritten with
+		// what the user typed: the two are different questions — which preset
+		// this is based on, and what the new material is called.)
 	});
 
 	connect(nameEdit, &QLineEdit::returnPressed, [=]() {
@@ -270,6 +277,17 @@ QList<NodeGraphPreset> CreateNewDialog::presetTiles()
 		tiles.append(tile);
 	}
 	return tiles;
+}
+
+NodeGraphPreset CreateNewDialog::presetTile(const QString &name)
+{
+	const auto tiles = presetTiles();
+	for (const auto &tile : tiles)
+		if (tile.name.compare(name, Qt::CaseInsensitive) == 0) return tile;
+	// A build that does not ship the named preset falls back to the first
+	// one rather than to nothing at all — an empty tile means a dialog whose
+	// Create button can never be pressed.
+	return tiles.isEmpty() ? NodeGraphPreset() : tiles.first();
 }
 
 OptionSelection::OptionSelection(NodeGraphPreset node) : QPushButton()

@@ -10,10 +10,31 @@
                 "rightNodeSocketIndex": 3
             },
             {
+                "id": "08e52143-8818-5210-90c9-bd6165ea657e",
+                "leftNodeId": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "398a217e-ea8f-504e-9fe5-b82917e30b44",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "77419695-8f90-5dd7-bfc6-4335e3e2b7ac",
                 "leftNodeId": "e60faab4-710d-582c-b88c-f6f9e64615ba",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "7a0d9631-5f1b-5a7a-91aa-2a0cdbe978e9",
+                "leftNodeId": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b4ff684d-0ece-5cee-a58b-9174127c3bcb",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "b923247e-e5e2-5b8a-b5fb-1d78881268bd",
+                "leftNodeId": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "e60faab4-710d-582c-b88c-f6f9e64615ba",
                 "rightNodeSocketIndex": 0
             },
             {
@@ -34,6 +55,21 @@
         "masternode": "ddb2ac15-81a9-57b6-8354-cdef4fa019b7",
         "materialGuid": "",
         "nodes": [
+            {
+                "id": "07e561a9-2367-5eae-bab8-5d5df29705a3",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 4.0,
+                    "tileY": 4.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
+            },
             {
                 "id": "398a217e-ea8f-504e-9fe5-b82917e30b44",
                 "title": "Roughness",

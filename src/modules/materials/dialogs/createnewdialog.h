@@ -50,8 +50,8 @@ public:
 	~CreateNewDialog();
 
 	void configureStylesheet();
+	/// WHAT THE USER TYPED, trimmed, empty when they typed nothing.
 	QString getName() { return name; }
-	QString getTemplateName() { return templateName; }
 	int getType() { return type; }
 	NodeGraphPreset getPreset() { return currentInfoSelected; }
 
@@ -64,12 +64,14 @@ public:
 	/// named seventeen `.effect` templates in two folders — are deleted with
 	/// the templates themselves.
 	static QList<NodeGraphPreset> presetTiles();
+	/// The tile for the preset NAMED, for a caller that must not depend on
+	/// list order (the blank-new dialog's base).
+	static NodeGraphPreset presetTile(const QString &name);
 
 
 private:
 	QString name;
 	int type; // presets = 1, assets =2 
-	QString templateName;
 
 	QPushButton * cancel;
 	QPushButton * confirm;

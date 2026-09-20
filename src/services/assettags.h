@@ -107,6 +107,16 @@ inline bool write(Database *db, const QString &guid, const QString &name,
     // repair passes the shipped one.
     const QString shipped = MaterialBundle::shippedPresetName(guid);
     if (!shipped.isEmpty() && !name.isEmpty() && name != shipped) return false;
+    // AND NOTHING ELSE MAY TAKE A SHIPPED PRESET'S NAME (PRESET-UNIFY-1 fix
+    // round). A preset is found BY NAME — `material.apply(n, "Gold PBR")`,
+    // `materials.loadGraph("Gold PBR")`, the drag payload, every script — so
+    // a user's own material called "Gold PBR" is not a duplicate label, it is
+    // a material NOTHING CAN REACH BY NAME, for ever, while the name resolves
+    // to the preset instead. Case-insensitively, because that is how
+    // `MaterialPresets::find` matches.
+    if (shipped.isEmpty() && !name.isEmpty()
+        && !MaterialBundle::shippedPresetGuidForName(name).isEmpty())
+        return false;
     return db->updateAssetMetadata(guid, name, serialize(tags));
 }
 

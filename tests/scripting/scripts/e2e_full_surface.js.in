@@ -229,7 +229,14 @@ assert(brick.nodes >= 3, "Brick PBR's graph loads (" + brick.nodes + " nodes)");
 // THREE images: the colour, the roughness (the old specular map, which IS a
 // PBR input on this master) and the normal — what the preset is made of.
 assert(brick.texturesResolved === 3,
-       "its shipped textures resolved on load: " + brick.texturesResolved);
+       "its shipped textures are BOUND on load: " + brick.texturesResolved);
+// …AND NOT ONE OF THEM IMPORTED (PRESET-UNIFY-1 fix round). This is a
+// READ-ONLY open, so the graph is bound to the shipped FILES: no library row,
+// no pin into the open project, no wait for the device. Looking at a material
+// is not a write.
+assert(brick.readOnly === true, "…it is read-only");
+assert(brick.texturesImported === 0,
+       "…so NOTHING was imported for it (" + brick.texturesImported + ")");
 var brickTextures = graph.nodes().filter(function (n) { return n.type === "texture"; });
 assert(brickTextures.length === 3, "the graph carries its texture nodes");
 

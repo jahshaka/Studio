@@ -10,6 +10,13 @@
                 "rightNodeSocketIndex": 3
             },
             {
+                "id": "3ac332a8-de7b-50ee-8644-fc98ddbe1571",
+                "leftNodeId": "2edfc2f4-e887-5934-b866-31e05d74b3ba",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b696bb02-ef56-5303-b63e-72422585cbd7",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "5fe36056-b0c4-5865-b889-45218562149b",
                 "leftNodeId": "4edb30a5-ad07-50d6-affe-7d919ca5e545",
                 "leftNodeSocketIndex": 0,
@@ -24,6 +31,13 @@
                 "rightNodeSocketIndex": 2
             },
             {
+                "id": "edf7c6b2-29ca-560b-adf5-c3e37dc2e578",
+                "leftNodeId": "2edfc2f4-e887-5934-b866-31e05d74b3ba",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "4edb30a5-ad07-50d6-affe-7d919ca5e545",
+                "rightNodeSocketIndex": 0
+            },
+            {
                 "id": "f27929f9-105f-5241-973b-605578651816",
                 "leftNodeId": "43ab3040-a149-504b-a448-45a00e715e98",
                 "leftNodeSocketIndex": 0,
@@ -34,6 +48,21 @@
         "masternode": "4839244d-4ddc-5529-b137-692c81492d58",
         "materialGuid": "",
         "nodes": [
+            {
+                "id": "2edfc2f4-e887-5934-b866-31e05d74b3ba",
+                "title": "UV",
+                "type": "uv",
+                "value": {
+                    "tileX": 2.0,
+                    "tileY": 2.0,
+                    "offsetX": 0.0,
+                    "offsetY": 0.0,
+                    "rotation": 0.0,
+                    "uvSet": 0
+                },
+                "x": -760.0,
+                "y": 60.0
+            },
             {
                 "id": "43ab3040-a149-504b-a448-45a00e715e98",
                 "title": "Metallic",

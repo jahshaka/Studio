@@ -59,7 +59,8 @@ MaterialSettingsWidget::MaterialSettingsWidget(QWidget *parent):
 
 
 	QStringList list;
-	list << "Opaque" << "Masked" << "Translucent" << "Additive" << "Modulate";
+	list << "Opaque" << "Masked" << "Translucent" << "Additive" << "Modulate"
+	     << "Glass" << "Refractive";
 	comboBox->addItems(list);
 
 
