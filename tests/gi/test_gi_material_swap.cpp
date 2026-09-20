@@ -14,7 +14,9 @@
 //   C. the picture takes the new material (a probe on the item changes colour);
 //   D. a swap to the material already worn is a no-op (no rebuild);
 //   E. a family crossing (Lit -> Unlit) and a node without a mesh are refused
-//      with lastError, so the mirror falls through to the re-attach.
+//      with lastError, so the mirror falls through to the re-attach;
+//   F. destroying a material no item wears rebuilds nothing (the reclaim after
+//      a swap used to cost the whole chain).
 // Needs a display (Vulkan). RUN_SERIAL: the chain holds four volumes.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -184,6 +186,22 @@ int main()
                 before.r, before.g, before.b, now.r, now.g, now.b);
     CHECK(before.r > before.g && now.g > now.r,
           "C: the probe on the near box went from red to green — the Item wears the new datablock");
+
+    // ---- F: a material nobody wears dies for free ----
+    //
+    // The mirror reclaims a node's previous material the frame after a swap;
+    // destroyMaterial used to invalidate the GI caches with no box for it, so
+    // a hover paid the whole chain twice for two datablocks that were not in
+    // the volume. A material no item wears changes no voxel.
+    {
+        PbrParams blue; blue.albedo = Colour(0.15f, 0.15f, 0.85f); blue.metalness = 0.0f; blue.roughness = 0.8f;
+        const MaterialId matSpare = scene->createPbrMaterial(blue);
+        base = settle(e, scene);
+        CHECK(matSpare && scene->destroyMaterial(matSpare), "a material worn by nothing is created and destroyed");
+        after = settle(e, scene);
+        std::printf("    after destroying an unworn material %s\n", counts(after).c_str());
+        CHECK(after == base, "F: destroying a material no item wears rebuilds nothing");
+    }
 
     // ---- E: refusals ----
     CHECK(!scene->setNodeMaterial(nearBox, matUnlit) &&
