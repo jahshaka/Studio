@@ -50,7 +50,12 @@ assert(vr.begin() === false, "a second vr.begin() refuses rather than starting t
 var st = vr.state();
 console.log("vr.state after begin: " + JSON.stringify(st));
 assert(st.active === true, "the session is active");
-assert(st.mirror === "left", "the mirror is the left eye");
+// `{mode, showing}` since lane MIRROR-LIVE-1: the WISH and what the desktop is
+// painting right now. Nothing has been drawn yet, so it is still its own.
+assert(st.mirror.mode === "left", "the mirror is the left eye");
+assert(st.mirror.showing === "own",
+       "and the desktop keeps its own picture until an eye has been drawn (" +
+       st.mirror.showing + ")");
 assert(st.eyeSize[0] > 0, "the session renders " + st.eyeSize[0] + "x" + st.eyeSize[1] + " per eye");
 
 // ---- THE EDITOR'S VR PREVIEW (phase 4) ------------------------------------
@@ -292,7 +297,7 @@ assert(second.frames >= 5, "the second session submits frames too");
 // THE DEFAULT MIRROR IS `left` FOR THE EDITOR TOO (the owner, 2026-09-17: one
 // render pipeline for VR — the desktop is a COPY of the eye, like the Player;
 // `mirror:"none"` is the third-render option for a second person at the desk).
-assert(second.mirror === "left",
+assert(second.mirror.mode === "left",
        "and it mirrors the left eye by default: the desktop is a copy, not a third camera");
 assert(vr.end() === true, "and ends");
 editor.frame(5);

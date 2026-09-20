@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QStandardItemModel>
 #include <QDragEnterEvent>
 #include "ui/style/stylesheet.h"
+#include "ui/controls/assetdrag.h"
 
 TexturePickerWidget::TexturePickerWidget(QWidget *parent) :
 	BaseWidget(parent),
@@ -57,7 +58,7 @@ QString TexturePickerWidget::getTexturePath()
 
 void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-	if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+	if (AssetDrag::isAssetDrag(event->mimeData())) {
 		event->acceptProposedAction();
 	}
 	else {
@@ -67,11 +68,8 @@ void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
 
 void TexturePickerWidget::dropEvent(QDropEvent *event)
 {
-	// http://stackoverflow.com/a/2747369/996468
-	QByteArray encoded = event->mimeData()->data("application/x-qabstractitemmodeldatalist");
-	QDataStream stream(&encoded, QIODevice::ReadOnly);
-	QMap<int, QVariant> roleDataMap;
-	while (!stream.atEnd()) stream >> roleDataMap;
+	// ONE decoder (ui/controls/assetdrag.h).
+	const QMap<int, QVariant> roleDataMap = AssetDrag::roles(event->mimeData());
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
 		textureGuid = roleDataMap.value(3).toString();

@@ -51,7 +51,7 @@ assert(/fps [0-9.]+/.test(line), "the line carries fps");
 assert(/work [0-9.]+ms/.test(line), "the line carries the honest work-per-tick figure");
 assert(/worst [0-9.]+ms/.test(line), "the line carries the worst tick");
 assert(/slow \d+/.test(line), "the line carries the slow-frame count");
-assert(/rendered \d+ skipped \d+/.test(line), "the line carries the loop's own counters");
+assert(/rendered \d+ idleTicks \d+/.test(line), "the line carries the loop's own counters");
 assert(/engineErrors \d+/.test(line), "the line carries the engine-error count");
 assert(/rss (\d+MB|n\/a)/.test(line), "the line carries resident memory, or says n/a honestly");
 assert(/since-start \d+m/.test(line), "the line says how far into the session it is");

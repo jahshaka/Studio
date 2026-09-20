@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "data/project.h"          // ModelTypes
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
+#include "ui/controls/assetdrag.h"
 
 // local
 AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent) : QWidget(parent) {
@@ -34,7 +35,13 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	layout->setSpacing(0);
 	pixmap = QPixmap::fromImage(image);
 	gridImageLabel = new QLabel;
-	gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
+	// A ROW WITH NO THUMBNAIL IS A TILE, NOT A WARNING (THUMBS-1). Scaling a
+	// null pixmap printed `QPixmap::scaleHeight: Pixmap is a null pixmap` for
+	// every grey tile — the only thing the owner's log said about two failed
+	// imports, and it says nothing about the render that actually failed (the
+	// renderer says that itself now). The tile simply carries no picture.
+	if (!pixmap.isNull())
+		gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
 	gridImageLabel->setAlignment(Qt::AlignCenter);
 
 	layout->addWidget(gridImageLabel, 0, 0);
@@ -163,7 +170,9 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 
 void AssetGridItem::setTile(QPixmap pix) {
 	pixmap = pix;
-	gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
+	// Same rule as the constructor: no picture is no picture, not a warning.
+	if (pixmap.isNull()) gridImageLabel->clear();
+	else gridImageLabel->setPixmap(pixmap.scaledToHeight(116, Qt::SmoothTransformation));
 	gridImageLabel->setAlignment(Qt::AlignCenter);
 }
 
@@ -225,22 +234,13 @@ void AssetGridItem::startDrag()
 {
 	if (metadata.isEmpty()) return;
 
-	// The assetwidget mime (project.h roles): type at 0, name at 1, guid at 3 —
-	// the drawers tree and any existing model-data drop handler read the same
-	// payload.
-	QByteArray mdata;
-	QDataStream stream(&mdata, QIODevice::WriteOnly);
-	QMap<int, QVariant> roleDataMap;
-	roleDataMap[0] = QVariant(metadata["type"].toInt());
-	roleDataMap[1] = QVariant(metadata["name"].toString());
-	roleDataMap[2] = QVariant(QString());
-	roleDataMap[3] = QVariant(metadata["guid"].toString());
-	stream << roleDataMap;
-
+	// ONE payload builder (ui/controls/assetdrag.h) — the drawers tree and
+	// every drop handler read the same four slots back through it.
 	auto drag = new QDrag(this);
-	auto mimeData = new QMimeData;
-	mimeData->setData(QStringLiteral("application/x-qabstractitemmodeldatalist"), mdata);
-	drag->setMimeData(mimeData);
+	drag->setMimeData(AssetDrag::mimeFor(metadata["type"].toInt(),
+	                                     metadata["name"].toString(),
+	                                     QString(),
+	                                     metadata["guid"].toString()));
 	if (!pixmap.isNull()) drag->setPixmap(pixmap.scaledToHeight(64, Qt::SmoothTransformation));
 	drag->exec(Qt::MoveAction | Qt::CopyAction);
 }

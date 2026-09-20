@@ -48,7 +48,7 @@ namespace {
 /// user deleted from the library but a project still pins is legitimate
 /// reuse, just not the first choice), then the guid, so two equal candidates
 /// always answer the same way.
-QString libraryTextureFor(QSqlDatabase conn, const QString &oid, const QString &projectGuid)
+QString libraryTextureForOn(QSqlDatabase conn, const QString &oid, const QString &projectGuid)
 {
     QSqlQuery query(conn);
     query.prepare("SELECT AF.asset_guid FROM asset_files AF "
@@ -66,8 +66,25 @@ QString libraryTextureFor(QSqlDatabase conn, const QString &oid, const QString &
 
 } // namespace
 
-Pinned pinTexture(const QString &sourcePath, const QString &displayName,
-                  Database *db, Project *project, Ownership ownership)
+QString libraryTextureFor(const QString &oid, const QString &projectGuid)
+{
+    if (oid.isEmpty()) return QString();
+    return libraryTextureForOn(QSqlDatabase::database(), oid, projectGuid);
+}
+
+namespace {
+
+/// THE ONE CONTENT IMPORT, with the pin optional.
+///
+/// `pin` false is the LIBRARY import a material bundle's texture picker needs
+/// (MATERIAL_BUNDLE_SPEC P-2): the image becomes a library Texture row by its
+/// CONTENT — the same row a second pick of the same bytes answers, which is
+/// what makes duplicate textures impossible — and the caller decides whether
+/// anything pins it. Everything else about the route is identical, because it
+/// IS the same route.
+Pinned importTextureContent(const QString &sourcePath, const QString &displayName,
+                            Database *db, Project *project, Ownership ownership, bool pin,
+                            const QString &knownOid = QString())
 {
     Pinned out;
     if (sourcePath.isEmpty() || !QFileInfo(sourcePath).isFile()) {
@@ -77,23 +94,29 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
     // NO PROJECT, NO PIN. The startup placeholder (Project::createNew: no guid,
     // no folder) and a scripted session that never created a project render
     // the shipped file directly — there is no project to pin into, and neither
-    // ever saves, so nothing will ever need the guid.
-    if (!db || !project || project->getProjectGuid().isEmpty()) {
+    // ever saves, so nothing will ever need the guid. A LIBRARY import (pin
+    // false) has a row to make either way and does not take this door.
+    const bool haveProject = db && project && !project->getProjectGuid().isEmpty();
+    if (pin && !haveProject) {
         out.path = sourcePath;
+        return out;
+    }
+    if (!db) {
+        out.error = QStringLiteral("no library");
         return out;
     }
 
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
-    const QString projectGuid = project->getProjectGuid();
+    const QString projectGuid = haveProject ? project->getProjectGuid() : QString();
 
-    const QString oid = AssetCas::hashFile(sourcePath);
+    const QString oid = knownOid.isEmpty() ? AssetCas::hashFile(sourcePath) : knownOid;
     if (oid.isEmpty()) {
         out.error = QStringLiteral("could not read '%1'").arg(sourcePath);
         return out;
     }
 
-    QString guid = libraryTextureFor(conn, oid, projectGuid);
+    QString guid = libraryTextureForOn(conn, oid, projectGuid);
     // A row whose object is no longer in the store (purged, a store moved
     // without its objects) cannot serve a scene; a fresh import brings the
     // bytes back under a new row rather than handing out a guid that
@@ -130,6 +153,7 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
             return out;
         }
         guid = result.assetGuid;
+        out.minted = true;
     }
 
     // PLATFORM FURNITURE IS MARKED (owner, 2026-09-13: "the project asset tray
@@ -160,23 +184,46 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
         }
     }
 
-    // A BINDING: the scene refers to the image (a material slot, an emitter,
-    // a sky face), exactly like a decal's map or a light's IES profile — so
-    // the pin and the session entry, and never a companion material.
-    out.newlyPinned = !db->isAssetPinnedBy(projectGuid, guid);
-    const ProjectAssets::Result pinned =
-        ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
-    if (!pinned.ok()) {
-        out.error = pinned.error;
-        return out;
+    if (pin) {
+        // A BINDING: the scene refers to the image (a material slot, an emitter,
+        // a sky face), exactly like a decal's map or a light's IES profile — so
+        // the pin and the session entry, and never a companion material.
+        out.newlyPinned = !db->isAssetPinnedBy(projectGuid, guid);
+        const ProjectAssets::Result pinned =
+            ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
+        if (!pinned.ok()) {
+            out.error = pinned.error;
+            return out;
+        }
+        out.path = AssetCas::resolvePinned(conn, root, projectGuid, guid);
+    } else {
+        out.path = AssetCas::resolveSource(conn, root, guid);
     }
-    out.path = AssetCas::resolvePinned(conn, root, projectGuid, guid);
     if (out.path.isEmpty()) {
         out.error = QStringLiteral("asset '%1' has no stored bytes").arg(guid);
         return out;
     }
     out.guid = guid;
     return out;
+}
+
+} // namespace
+
+Pinned pinTexture(const QString &sourcePath, const QString &displayName,
+                  Database *db, Project *project, Ownership ownership)
+{
+    return importTextureContent(sourcePath, displayName, db, project, ownership, /*pin=*/true);
+}
+
+Pinned importTexture(const QString &sourcePath, const QString &displayName,
+                     Database *db, Project *project, const QString &knownOid)
+{
+    // A LIBRARY row always; PINNED as well when a project is open. That is the
+    // owner's answer to spec Q1 in one call: "into the library once, a member
+    // of that material, and pinned into the open project".
+    const bool haveProject = db && project && !project->getProjectGuid().isEmpty();
+    return importTextureContent(sourcePath, displayName, db, project,
+                                Ownership::Project, /*pin=*/haveProject, knownOid);
 }
 
 QStringList SkyPreset::faces() const

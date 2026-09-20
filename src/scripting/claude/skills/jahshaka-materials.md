@@ -81,11 +81,22 @@ Tips that match the engine's behavior:
 The graph verbs operate on "the current graph" — create or load one first:
 
 ```js
-// New effect-graph asset in the open project (opens it as current):
-var guid = materials.createGraph("MyEffect");
+// A new material BUNDLE in the library, with a node graph as its payload
+// (opens it as the current graph). ONE row: there is no separate shader or
+// effect asset — MATERIAL_BUNDLE_SPEC 2.3.
+var guid = materials.create("MyEffect", { graph: true });
 
-// Or load an existing one (Shader asset guid, or .effect/.shader path):
+// Put it in a project when you want it there (pins the bundle AND its
+// members at the version the project takes):
+assets.addToProject(guid);
+
+// Or load an existing one (a Material asset guid, or a .effect/.shader path):
 materials.loadGraph(guid);         // -> {nodes, master}
+
+// An image on a slot, from the library or from anywhere on disk (a path is
+// imported by CONTENT at that moment and becomes a MEMBER of the material):
+materials.addTexture(guid, "/path/to/brick.png", { slot: "baseColorMap" });
+materials.members(guid);           // [{guid, name, slot, baked, usedBy, pinned}]
 
 graph.nodeTypes();                 // every creatable node type
                                    // (+ masters: PbrMaterial, Material)
@@ -98,7 +109,7 @@ graph.setValue(col, { r: 0.8, g: 0.2, b: 0.1, a: 1 });
 graph.connect(col, 0, master, "Base Color"); // sockets by index or name
 
 // Evaluate the graph to concrete PBR values (CPU evaluator, GL-free):
-graph.evaluate();                  // {values, unsupported, hasPbrMaster}
+graph.evaluate();                  // {values, unsupported, approximated, animated}
 
 // Apply the evaluated result to a mesh node:
 graph.toMaterial(nodeId);

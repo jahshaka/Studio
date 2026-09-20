@@ -9,59 +9,41 @@
     "lighting": true,
     "name": "",
     "pbrMaterial": {
-        "surfaceType": "surface",
-        "unsupportedNodes": [
-        ],
+        "unsupportedNodes": [],
         "values": {
             "roughness": 0.85
         }
     },
-    "properties": [
-    ],
+    "properties": [],
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "3f883215-3d2e-41f5-aa49-6e256c835547",
-                "leftNodeId": "bf009387-a076-40e6-ae94-af38afb78fef",
+                "id": "620a3c4c-c1b6-4c62-93d1-3226d7fa8f3f",
+                "leftNodeId": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "rightNodeSocketIndex": 3
+                "rightNodeSocketIndex": 2
             },
             {
-                "id": "4d85fa3a-7799-4a8d-91d5-6d572b91b23e",
-                "leftNodeId": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "rightNodeSocketIndex": 1
-            },
-            {
-                "id": "752cb323-a00b-47db-9c43-f61f220d9eb5",
+                "id": "a097a004-d201-4f02-a22c-9978dbbe3c43",
                 "leftNodeId": "d36eae76-9268-4943-9fde-9ecfa2aa0a59",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
                 "rightNodeSocketIndex": 0
             },
             {
-                "id": "c203f8d7-6071-4043-990a-5b540e32b17d",
-                "leftNodeId": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
+                "id": "efca7949-37ce-4267-99a5-4db93a52a930",
+                "leftNodeId": "bf009387-a076-40e6-ae94-af38afb78fef",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "rightNodeSocketIndex": 2
+                "rightNodeSocketIndex": 3
             }
         ],
         "masternode": "fc0e39bd-23b5-4946-8d46-89505509486d",
         "materialGuid": "",
         "nodes": [
-            {
-                "id": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
-                "title": "Specular",
-                "type": "texture",
-                "value": "materials_to_graph/patchy grass spec.jpg",
-                "x": -417.5,
-                "y": 147
-            },
             {
                 "id": "bf009387-a076-40e6-ae94-af38afb78fef",
                 "title": "normal",
@@ -72,9 +54,9 @@
             },
             {
                 "id": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
-                "title": "Float Property",
+                "title": "Roughness",
                 "type": "float",
-                "value": 0.15,
+                "value": 0.85,
                 "x": -599.5,
                 "y": 71
             },
@@ -88,26 +70,19 @@
             },
             {
                 "id": "fc0e39bd-23b5-4946-8d46-89505509486d",
-                "title": "Surface Material",
-                "type": "Material",
+                "title": "PBR Material",
+                "type": "PbrMaterial",
                 "value": "",
                 "x": 0,
                 "y": 0
             }
         ],
         "settings": {
-            "acceptLighting": true,
             "bakeResolution": 1024,
             "blendMode": "Opaque",
-            "castShadow": true,
-            "cullMode": "Back",
-            "depthTest": true,
-            "fog": true,
-            "name": "",
-            "receiveShadow": true,
-            "renderLayer": "Opaque",
-            "zWrite": true
-        }
+            "name": ""
+        },
+        "socketLayout": 2
     },
     "type": "shadergraph",
     "uniforms": [

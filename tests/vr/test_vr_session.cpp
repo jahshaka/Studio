@@ -33,10 +33,12 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -366,6 +368,43 @@ int main() {
                         "separate them (an asymmetric per-eye projection is unexercised "
                         "until a real headset)\n");
 
+        // ===================================================================
+        // THE TWO EYES AT worldScale 0, AND WHY THIS ARM IS RUN TWICE.
+        //
+        // It asserted BYTE-IDENTITY until the final grade started dithering
+        // its 8-bit write (lane DITHER-1). The dither is keyed on the pixel's
+        // position in the TARGET, and a stereo target carries the two eyes
+        // side by side, so the same world pixel sits at two different x
+        // coordinates and takes two different offsets — 35,000-odd of 307,200
+        // bytes, every one of them by exactly 1/255.
+        //
+        // THE BYTE-IDENTITY IS NOT GIVEN UP FOR THAT: it is what catches a
+        // half-pixel viewport error and a slightly wrong eye matrix over a
+        // smooth scene, and a one-code tolerance would wave both through. So
+        // ctest runs this binary TWICE — `vr.session` as it ships, and
+        // `vr.session_undithered` with JAHSHAKA_NO_DITHER=1 — and the arm
+        // asserts the strong thing in the second.
+        //
+        // IT HAS TO BE A SECOND PROCESS, and that is a FINDING rather than a
+        // preference: the session's View is not one the engine's frame loop
+        // drives, so chain::ViewGlobalsListener is never armed for it and the
+        // eye picture receives NO per-view push — not this switch, not
+        // exposure, not the bloom threshold. Measured here: flipping
+        // PostFxDesc::ditherOff on the session's View mid-session changes the
+        // eye picture by zero bytes, while the same switch forced from the
+        // environment before the session begins changes 35,000. Recorded for
+        // the VR-grade lane; hdr.dither exercises the in-process hook on an
+        // ordinary view, where it works.
+        //
+        // AND THE TARGET-KEYED PATTERN IS KEPT ON PURPOSE. An eye-keyed
+        // pattern — the same noise in both eyes — has ZERO DISPARITY, and a
+        // stereo pair fuses zero disparity into a surface at infinity: the
+        // noise would read as a fixed veil hanging in front of the world,
+        // head-locked. Independent noise in the two eyes has nothing to fuse,
+        // so the visual system averages it away binocularly, which is what
+        // half a code of it should do.
+        // ===================================================================
+        const bool undithered = std::getenv("JAHSHAKA_NO_DITHER") != nullptr;
         REQUIRE(vrView->readPixels(zeroImg));
         Half l, r;
         REQUIRE(splitEyes(zeroImg, l, r));
@@ -392,11 +431,20 @@ int main() {
         }
         int worst = 0;
         const size_t diff = differingBytes(l.px, r.px, &worst);
-        CHECK_MSG(diff == 0u,
-                  "AT worldScale 0 THE TWO EYES ARE BYTE-IDENTICAL: %zu of %zu bytes differ, "
-                  "worst %d/255 — both halves rendered, through per-eye matrices that agree "
-                  "when the eyes do, into exactly half the target each",
-                  diff, l.px.size(), worst);
+        if (undithered) {
+            CHECK_MSG(diff == 0u,
+                      "AT worldScale 0, UNDITHERED, THE TWO EYES ARE BYTE-IDENTICAL: %zu of "
+                      "%zu bytes differ, worst %d/255 — both halves rendered, through per-eye "
+                      "matrices that agree when the eyes do, into exactly half the target each",
+                      diff, l.px.size(), worst);
+        } else {
+            CHECK_MSG(worst <= 1,
+                      "AT worldScale 0 THE TWO EYES DIFFER BY THE DITHER AND NOTHING ELSE: "
+                      "%zu of %zu bytes differ, worst %d/255 (the strong form — byte-identity "
+                      "— is asserted by vr.session_undithered, the same binary with the "
+                      "dither off)",
+                      diff, l.px.size(), worst);
+        }
         engine->endVrSession();
         CHECK(!engine->vrStatus().active);
         CHECK(engine->vrView() == nullptr);
@@ -416,6 +464,16 @@ int main() {
         VrConfig cfg;
         cfg.mirror = VrMirrorMode::Left;
         cfg.worldScale = 1.0f;
+        // NO HIDDEN-AREA MASK IN THIS ARM (lane HAM-1), and the reason is what
+        // this case compares against: a MONO control render through a second,
+        // one-viewport view. Such a view cannot carry the mask — the mask's
+        // vertices name an eye index that only a two-viewport pass has — so an
+        // eye with masked corners and a control without them would differ by
+        // the mask's own 3 % of the picture, at 255/255, and this case's
+        // subject (the eye's PROJECTION) would be buried under it. The mask's
+        // own case, at the end of this file, asserts the corners AND that
+        // nothing else in either eye moved.
+        cfg.hiddenAreaMask = false;
         CHECK_MSG(engine->beginVrSession(scene, cfg), "beginVrSession (second): %s",
                   engine->lastError().c_str());
         REQUIRE(engine->vrStatus().active);
@@ -1362,6 +1420,28 @@ int main() {
                       "THE SUGGESTED BINDINGS PARSE: the runtime took %u of the %u profiles "
                       "offered — no XR_ERROR_PATH_UNSUPPORTED anywhere",
                       st.bindingProfilesAccepted, st.bindingProfiles);
+            // (a2) AND BARE HANDS WERE NOT AMONG THEM (lane HANDS-SWITCH-1).
+            // This session ran on the DEFAULT `VrConfig`, which is a project on
+            // controllers: the `ext/hand_interaction_ext` block is not
+            // suggested at all, so this runtime — which advertises the
+            // extension — is asked about three profiles and not four. The ON
+            // arm needs a document and a verb, so it lives in
+            // `vr.input_session`; what is engine-level is the gate itself.
+            CHECK_MSG(!st.handsEnabled,
+                      "the session reports bare hands OFF (the default: a project on "
+                      "controllers)");
+            {
+                VrBindingBlock blocks[kVrBindingBlockMax];
+                const unsigned n = engine->vrBindingBlocks(blocks, kVrBindingBlockMax);
+                bool anyHand = false;
+                for (unsigned b = 0; b < n; ++b)
+                    if (vrIsHandProfile(blocks[b].profile.c_str()))
+                        anyHand = true;
+                CHECK_MSG(!anyHand,
+                          "...and NO bare-hand block was offered (%u blocks, none of them "
+                          "hands)", n);
+            }
+
             // (b) AND IT SAYS WHICH ONE IT BOUND.
             CHECK_MSG(st.profile.startsWith("/interaction_profiles/"),
                       "the runtime reports the profile it bound ('%s')", st.profile.c_str());
@@ -1834,6 +1914,10 @@ int main() {
         VrConfig cfg;
         cfg.mirror = VrMirrorMode::None;
         cfg.ssr = 2;                    // Epic: one ray per pixel of the eye
+        // ...and no hidden-area mask, for the reason the eye-projection case
+        // above gives: this arm is compared against a MONO control render,
+        // which cannot have one (lane HAM-1).
+        cfg.hiddenAreaMask = false;
         if (CHECK_MSG(engine->beginVrSession(scene, cfg),
                       "a session with the project's reflection row ON: %s",
                       engine->lastError().c_str())) {
@@ -2175,6 +2259,391 @@ int main() {
             if (engine->vrStatus().active) engine->endVrSession();
         }
         engine->setFrameFault(FrameFault::None, 0u);
+    }
+
+    // =======================================================================
+    // THE HIDDEN-AREA MESH (lane HAM-1; V1-RIG's COST.txt §3 measured the
+    // ceiling, this is the thing itself).
+    // =======================================================================
+    // THE SUBJECT: the corners of each eye that a headset's lenses never show
+    // are masked out at the NEAR plane, so nothing behind them is ever shaded —
+    // AND NOTHING ELSE MOVES. Four questions, each one a picture:
+    //
+    //   (a) the runtime really answered, and with what
+    //       (`hiddenArea.source`, its fraction and its triangle count);
+    //   (b) each eye's four corners are ONE colour — the background through the
+    //       post chain, i.e. nothing was shaded there — and the control render
+    //       of the same eye has them SHADED. Both eyes, which is what says the
+    //       per-vertex eye index reached both viewports: a mask that only ever
+    //       reached viewport 0 would double the left eye's and leave the right
+    //       eye's four corners exactly as the control has them;
+    //   (c) EVERYWHERE ELSE the eye is still a mono render at that eye's pose
+    //       and projection, to the same bar case 2 above uses (mean < 1/255,
+    //       under 2 % of bytes past 8). That is the "nothing else moved" half,
+    //       and it is measured against the tree's own reference rather than
+    //       against a second session — see the note on the pose below;
+    //   (d) the DESKTOP view, read while the session is live, has no masked
+    //       corner at all: kVrMaskBit plus `helperBitsToDrop` keep the mask out
+    //       of every view but the eye pair, and a leak would black the editor's
+    //       own corners.
+    //
+    // WHY THE CONTROL IS A MONO RENDER AND NOT A MASK-OFF SESSION, measured
+    // rather than chosen: a second session cannot be compared pixel for pixel
+    // with this one, because Monado's simulated head MOVES with wall time.
+    // Pinning `worldScale = 0` pins its POSITION (V1-RIG's swaying-head
+    // finding) and its ORIENTATION still turns — with the head and the exposure
+    // both pinned, two reads thirty frames apart differ by 182,003 bytes, worst
+    // 210/255. So the comparison that carries (c) is the one this suite already
+    // trusts for the eyes' projections: one stereo read paired with a control
+    // render of that same frame's eye pose, with the masked pixels excluded.
+    // The bit-exact statement about the mask lives in case 1, which asserts the
+    // two eye halves BYTE-IDENTICAL at worldScale 0 — and passes with the mask
+    // on, i.e. the two viewports received the same mask to the bit.
+    {
+        setFixtureSky(scene, true);   // the corners have SKY and floor in them
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::None;
+        cfg.worldScale = 1.0f;
+        cfg.hiddenAreaMask = true;    // the default, said out loud
+        if (CHECK_MSG(engine->beginVrSession(scene, cfg),
+                      "a session with the hidden-area mask: %s", engine->lastError().c_str())) {
+            pump(engine.get(), engine->vrStatus().frames + 60ull, 600u);
+            const VrStatus st = engine->vrStatus();
+            std::printf("HAM    source='%s' fraction %.4f / %.4f, triangles %u / %u\n",
+                        st.hiddenAreaSource.c_str(), double(st.hiddenAreaFraction[0]),
+                        double(st.hiddenAreaFraction[1]), st.hiddenAreaTriangles[0],
+                        st.hiddenAreaTriangles[1]);
+            // (a)
+            CHECK_MSG(st.hiddenAreaSource == "runtime",
+                      "THE MASK IS THE RUNTIME'S OWN GEOMETRY (XR_KHR_visibility_mask) and "
+                      "not a config file's: source='%s'", st.hiddenAreaSource.c_str());
+            CHECK_MSG(st.hiddenAreaTriangles[0] > 0u && st.hiddenAreaTriangles[1] > 0u,
+                      "both eyes were given a mask (%u and %u triangles)",
+                      st.hiddenAreaTriangles[0], st.hiddenAreaTriangles[1]);
+            CHECK_MSG(st.hiddenAreaFraction[0] > 0.001f && st.hiddenAreaFraction[0] < 0.5f &&
+                          st.hiddenAreaFraction[1] > 0.001f && st.hiddenAreaFraction[1] < 0.5f,
+                      "...covering a plausible fraction of each eye (%.4f, %.4f) — the number "
+                      "is the HEADSET'S, so it is reported and bounded, never pinned",
+                      double(st.hiddenAreaFraction[0]), double(st.hiddenAreaFraction[1]));
+
+            // THE PAIRING IS CASE 2'S, for the reason case 2 gives: readPixels
+            // renders nothing, so a read taken immediately before a control
+            // call holds the very frame whose eye poses that call pins.
+            const auto stereoHalfNow = [&](unsigned eye, Image &shot, Half &half) {
+                Half a, b;
+                if (!engine->vrView() || !engine->vrView()->readPixels(shot) ||
+                    !splitEyes(shot, a, b))
+                    return false;
+                half = eye ? b : a;
+                return true;
+            };
+            std::array<unsigned char, 3> maskColour{ 0, 0, 0 };
+            bool haveMaskColour = false;
+            for (unsigned eye = 0; eye < 2u; ++eye) {
+                Image shot, mono;
+                Half h;
+                if (!CHECK_MSG(stereoHalfNow(eye, shot, h) &&
+                                   engine->vrEyeScreenshot(eye, mono),
+                               "eye %u: one stereo read and its control render: %s", eye,
+                               engine->lastError().c_str()))
+                    continue;
+                if (!CHECK_MSG(mono.width == h.w && mono.height == h.h,
+                               "the control is one eye's size (%ux%u vs %ux%u)", mono.width,
+                               mono.height, h.w, h.h))
+                    continue;
+                const auto at = [](const std::vector<unsigned char> &px, unsigned w, unsigned x,
+                                   unsigned y) {
+                    const size_t i = (size_t(y) * w + x) * 4u;
+                    return std::array<unsigned char, 3>{ px[i], px[i + 1], px[i + 2] };
+                };
+                const unsigned cx[4] = { 0u, h.w - 1u, 0u, h.w - 1u };
+                const unsigned cy[4] = { 0u, 0u, h.h - 1u, h.h - 1u };
+                // (b) ONE COLOUR AT ALL FOUR CORNERS OF THIS EYE...
+                const auto c0 = at(h.px, h.w, cx[0], cy[0]);
+                bool allSame = true, allShadedInControl = true;
+                for (int k = 0; k < 4; ++k) {
+                    if (at(h.px, h.w, cx[k], cy[k]) != c0) allSame = false;
+                    const auto m = at(mono.rgba, mono.width, cx[k], cy[k]);
+                    int worst = 0;
+                    for (int c = 0; c < 3; ++c)
+                        worst = std::max(worst, std::abs(int(m[c]) - int(c0[c])));
+                    if (worst <= 8) allShadedInControl = false;
+                }
+                CHECK_MSG(allSame,
+                          "eye %u: ALL FOUR CORNERS CARRY ONE COLOUR (%u,%u,%u) — the "
+                          "background through the post chain, i.e. nothing was shaded there",
+                          eye, unsigned(c0[0]), unsigned(c0[1]), unsigned(c0[2]));
+                CHECK_MSG(allShadedInControl,
+                          "eye %u: ...AND THE CONTROL RENDER OF THIS EYE HAS ALL FOUR SHADED — "
+                          "the mask is what removed them, in THIS eye (a mask that reached "
+                          "only viewport 0 leaves the right eye's corners exactly as the "
+                          "control has them)", eye);
+                if (eye == 0u) { maskColour = c0; haveMaskColour = true; }
+
+                // The masked SET, taken from the picture itself: the mask is in
+                // CLIP space, so it covers the same pixels in every frame
+                // whatever the head does.
+                std::vector<unsigned char> masked(size_t(h.w) * h.h, 0u);
+                size_t maskedCount = 0;
+                for (size_t p = 0; p < masked.size(); ++p) {
+                    const size_t i = p * 4u;
+                    if (h.px[i] == c0[0] && h.px[i + 1] == c0[1] && h.px[i + 2] == c0[2]) {
+                        masked[p] = 1u;
+                        ++maskedCount;
+                    }
+                }
+                const double maskedFraction = double(maskedCount) / double(masked.size());
+                // ...and it is the fraction the RUNTIME reported. One-sided
+                // plus a floor, because the two are not identities of each
+                // other: a shaded pixel that happened to land on exactly the
+                // background colour joins the set, and a masked pixel cannot
+                // leave it.
+                CHECK_MSG(maskedFraction <= double(st.hiddenAreaFraction[eye]) + 0.004 &&
+                              maskedFraction >= double(st.hiddenAreaFraction[eye]) * 0.8,
+                          "eye %u: the pixels that were never shaded are %.4f of the eye "
+                          "against the %.4f the runtime's geometry covers", eye,
+                          maskedFraction, double(st.hiddenAreaFraction[eye]));
+
+                // (c) EVERYWHERE ELSE, the same comparison case 2 makes.
+                double sum = 0.0; size_t over = 0, n = 0; int worstOut = 0;
+                for (size_t p = 0; p < masked.size(); ++p) {
+                    if (masked[p]) continue;
+                    for (int c = 0; c < 3; ++c) {
+                        const size_t i = p * 4u + size_t(c);
+                        const int d = std::abs(int(mono.rgba[i]) - int(h.px[i]));
+                        sum += d; ++n;
+                        if (d > 8) ++over;
+                        if (d > worstOut) worstOut = d;
+                    }
+                }
+                const double mean = n ? sum / double(n) : 0.0;
+                const double frac = n ? double(over) / double(n) : 0.0;
+                std::printf("HAM    eye %u: masked %.4f of the eye, the rest against its mono "
+                            "control mean %.3f/255, %.3f%% over 8, worst %d\n",
+                            eye, maskedFraction, mean, 100.0 * frac, worstOut);
+                CHECK_MSG(mean < 1.0 && frac < 0.02,
+                          "eye %u: OUTSIDE THE MASK THE EYE IS STILL A MONO RENDER AT THAT "
+                          "EYE'S POSE AND PROJECTION — mean %.3f/255 and %.3f%% of bytes over "
+                          "8 (the bars are 1.0 and 2%%, case 2's own): the mask took the "
+                          "corners and nothing else", eye, mean, 100.0 * frac);
+                if (const char *dir = std::getenv("JAH_VR_DUMP")) {
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/ham-eye%u.ppm", dir, eye);
+                    if (FILE *f = std::fopen(path, "wb")) {
+                        std::fprintf(f, "P6\n%u %u\n255\n", h.w, h.h);
+                        for (size_t i = 0; i < size_t(h.w) * h.h; ++i)
+                            std::fwrite(&h.px[i * 4], 1, 3, f);
+                        std::fclose(f);
+                    }
+                    std::snprintf(path, sizeof(path), "%s/ham-eye%u-control.ppm", dir, eye);
+                    if (FILE *f = std::fopen(path, "wb")) {
+                        std::fprintf(f, "P6\n%u %u\n255\n", mono.width, mono.height);
+                        for (size_t i = 0; i < size_t(mono.width) * mono.height; ++i)
+                            std::fwrite(&mono.rgba[i * 4], 1, 3, f);
+                        std::fclose(f);
+                    }
+                }
+            }
+
+            // (d) THE DESKTOP, WITH THE SESSION LIVE.
+            Image desk;
+            if (haveMaskColour &&
+                CHECK_MSG(desktop->readPixels(desk), "the desktop view reads back") &&
+                desk.width > 2u && desk.height > 2u) {
+                const unsigned dx[4] = { 0u, desk.width - 1u, 0u, desk.width - 1u };
+                const unsigned dy[4] = { 0u, 0u, desk.height - 1u, desk.height - 1u };
+                bool anyMaskColour = false;
+                for (int k = 0; k < 4; ++k) {
+                    const size_t i = (size_t(dy[k]) * desk.width + dx[k]) * 4u;
+                    int worst = 0;
+                    for (int c = 0; c < 3; ++c)
+                        worst = std::max(worst, std::abs(int(desk.rgba[i + size_t(c)]) -
+                                                         int(maskColour[c])));
+                    if (worst <= 2) anyMaskColour = true;
+                }
+                CHECK_MSG(!anyMaskColour,
+                          "THE MASK NEVER REACHES THE DESKTOP: no corner of the editor view "
+                          "carries the eye mask's colour while a session is live (kVrMaskBit is "
+                          "dropped from every view but the session's eye pair)");
+            }
+            engine->endVrSession();
+            CHECK(!engine->vrStatus().active);
+        }
+        setFixtureSky(scene, false);
+    }
+
+    // =======================================================================
+    // THE DESKTOP FOLLOWS THE RUNTIME (lane MIRROR-LIVE-1; the owner's finding
+    // F2 of the push-#50 smoke: "in the editor the 3D view is not the same as
+    // the VR view — a static image, or its own camera").
+    // =======================================================================
+    // THE RULE UNDER TEST is VrSession::setDesktopShowsEye's, and the shape of
+    // the defect is why it needs a runtime: on a real headset `shouldRender`
+    // goes 0 exactly when the wearer LIFTS IT to look at the desk, and the
+    // mirror went on painting the last eye that had been drawn — so the desktop
+    // was a frozen still at the only moment anybody was looking at it. Monado
+    // never stops rendering; the pump's blink hook answers what WiVRn would,
+    // and lane MIRROR-LIVE-1 gave it a LENGTH so that the two halves of the
+    // rule can be told apart:
+    //
+    //   (1) while the runtime draws, the desktop IS the eye (its own View off);
+    //   (2) a ONE-FRAME blink changes nothing on the screen — the hysteresis;
+    //   (3) a STRETCH of no-picture frames hands the desktop its own camera
+    //       back, live, and the eye takes it again when the runtime returns;
+    //   (4) ten of those flips rebuild NO GI chain and leak no view;
+    //   (5) a session that ENDS leaves the desktop drawing.
+    {
+        setFixtureSky(scene, false);
+        desktop->setEnabled(true);
+        // ---- (1) THE COPY --------------------------------------------------
+        setenv("JAHSHAKA_VR_TEST_BLINK_EVERY", "20", 1);
+        setenv("JAHSHAKA_VR_TEST_BLINK_FRAMES", "1", 1);
+        VrConfig cfg;
+        cfg.mirror = VrMirrorMode::Left;
+        const bool began = CHECK_MSG(engine->beginVrSession(scene, cfg),
+                                     "a session whose runtime blinks for ONE frame: %s",
+                                     engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_EVERY");
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_FRAMES");
+        if (began) {
+            engine->setVrMirrorView(desktop);
+            for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            const VrStatus drawing = engine->vrStatus();
+            CHECK_MSG(drawing.mirrorShowing == VrDesktopPicture::Eye,
+                      "THE DESKTOP IS THE EYE'S COPY while the runtime draws (rendered %llu)",
+                      drawing.rendered);
+            CHECK_MSG(!desktop->isEnabled(),
+                      "...which is ONE RENDER PIPELINE: the desktop's own View is switched "
+                      "off by the ENGINE, not by a host");
+
+            // ---- (2) A BLINK MUST NOT FLAP THE SCREEN ----------------------
+            // Twelve blinks go by in this window (one every 20 frames) and the
+            // desktop must not change picture once: two pictures alternating at
+            // the runtime's cadence is worse than either of them.
+            unsigned disagreed = 0, ownFrames = 0;
+            for (int i = 0; i < 120; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+                const bool own = engine->vrStatus().mirrorShowing == VrDesktopPicture::Own;
+                if (own) ++ownFrames;
+                // The reported answer and the View's own flag are one fact:
+                // "the desktop shows the eye" IS "its View is not drawing".
+                if (own != desktop->isEnabled()) ++disagreed;
+            }
+            CHECK_MSG(ownFrames == 0u && disagreed == 0u,
+                      "A ONE-FRAME BLINK DOES NOT FLAP THE DESKTOP: %u of 120 frames showed "
+                      "the own camera (%u disagreements between the flag and the View)",
+                      ownFrames, disagreed);
+        }
+        if (began) { engine->setVrMirrorView(nullptr); engine->endVrSession(); }
+        CHECK_MSG(desktop->isEnabled(),
+                  "(5) A SESSION THAT ENDS LEAVES THE DESKTOP DRAWING: the engine switched "
+                  "the View off, so the engine switched it back on");
+
+        // ---- (3) AND (4): A STRETCH, TEN TIMES OVER ------------------------
+        // 12 no-picture frames every 20 is a wearer lifting the headset and
+        // putting it back, over and over: the hold (kDesktopHoldFrames) is
+        // ridden out, the desktop takes its own camera back, and the eye takes
+        // it again on the next accepted frame.
+        setenv("JAHSHAKA_VR_TEST_BLINK_EVERY", "20", 1);
+        setenv("JAHSHAKA_VR_TEST_BLINK_FRAMES", "12", 1);
+        VrConfig longCfg;
+        longCfg.mirror = VrMirrorMode::Left;
+        const bool began2 = CHECK_MSG(engine->beginVrSession(scene, longCfg),
+                                      "a session whose runtime stops for twelve frames at a "
+                                      "time: %s", engine->lastError().c_str());
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_EVERY");
+        unsetenv("JAHSHAKA_VR_TEST_BLINK_FRAMES");
+        if (began2) {
+            engine->setVrMirrorView(desktop);
+            for (int i = 0; i < 300 && engine->vrStatus().rendered < 3ull; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            ObjectCounts objBefore;
+            engine->objectCounts(objBefore);
+            const GiStatus giBefore = scene->giStatus();
+
+            unsigned toOwn = 0, toEye = 0, disagreements = 0;
+            double flipMs = 0.0, steadyMs = 0.0;
+            unsigned flipFrames = 0, steadyFrames = 0;
+            bool showingEye = engine->vrStatus().mirrorShowing == VrDesktopPicture::Eye;
+            // Long enough for ten whole cycles at one every 20 frames.
+            for (int i = 0; i < 400 && (toOwn < 10u || toEye < 10u); ++i) {
+                engine->advanceResources();
+                const auto t0 = std::chrono::steady_clock::now();
+                engine->renderOneFrame();
+                const double ms = std::chrono::duration<double, std::milli>(
+                                      std::chrono::steady_clock::now() - t0).count();
+                const bool eyeNow = engine->vrStatus().mirrorShowing == VrDesktopPicture::Eye;
+                if (eyeNow == desktop->isEnabled()) ++disagreements;
+                if (eyeNow != showingEye) {
+                    if (eyeNow) ++toEye; else ++toOwn;
+                    flipMs += ms; ++flipFrames;
+                    showingEye = eyeNow;
+                } else {
+                    steadyMs += ms; ++steadyFrames;
+                }
+            }
+            CHECK_MSG(toOwn >= 10u && toEye >= 10u,
+                      "A NO-PICTURE STRETCH HANDS THE DESKTOP BACK, AND THE EYE TAKES IT "
+                      "AGAIN: %u hand-overs to the own camera, %u back to the eye",
+                      toOwn, toEye);
+            CHECK_MSG(disagreements == 0u,
+                      "...and `mirrorShowing` never disagreed with the View's own enabled "
+                      "flag over %u frames (%u disagreements)",
+                      flipFrames + steadyFrames, disagreements);
+            std::printf("MIRROR flip frames %u (mean %.2f ms) vs steady %u (mean %.2f ms)\n",
+                        flipFrames, flipFrames ? flipMs / flipFrames : 0.0,
+                        steadyFrames, steadyFrames ? steadyMs / steadyFrames : 0.0);
+
+            // (4) THE CHAIN DID NOT MOVE. The GI driver is the session's View
+            // whether or not it is enabled this frame (V1-RIG item 1's rule in
+            // OgreEngine::renderOneFrame), so a desktop that takes the window
+            // back must not take the CHAIN with it — that flip cost two
+            // from-scratch cascade builds a cycle before that rule existed.
+            const GiStatus giAfter = scene->giStatus();
+            CHECK_MSG(giAfter.rebuilds == giBefore.rebuilds &&
+                          giAfter.cascadeFullRebuilds == giBefore.cascadeFullRebuilds,
+                      "TWENTY FLIPS REBUILD NO GI: from-scratch %llu -> %llu, whole-chain "
+                      "%llu -> %llu", giBefore.rebuilds, giAfter.rebuilds,
+                      giBefore.cascadeFullRebuilds, giAfter.cascadeFullRebuilds);
+            ObjectCounts objAfter;
+            engine->objectCounts(objAfter);
+            CHECK_MSG(objAfter.views == objBefore.views,
+                      "...and leak no view: %u -> %u", objBefore.views, objAfter.views);
+
+            // ---- THE DESKTOP'S OWN PICTURE IS LIVE, NOT A STILL ------------
+            // The whole point of the lane. Park the session on an OWN frame,
+            // move the desktop's camera, and its picture must follow — a mirror
+            // painting a frozen eye over it could not.
+            for (int i = 0; i < 200 &&
+                            engine->vrStatus().mirrorShowing != VrDesktopPicture::Own; ++i) {
+                engine->advanceResources();
+                engine->renderOneFrame();
+            }
+            if (CHECK_MSG(engine->vrStatus().mirrorShowing == VrDesktopPicture::Own,
+                          "parked on a frame where the desktop draws its own camera")) {
+                Image a;
+                engine->renderOneFrame();
+                REQUIRE(desktop->readPixels(a));
+                testCameraLookAt(desktop, Vec3{ -1.4f, 1.9f, 2.9f }, Vec3{ 0.0f, 1.0f, -0.6f });
+                engine->renderOneFrame();
+                Image b;
+                REQUIRE(desktop->readPixels(b));
+                CHECK_MSG(differingBytes(a.rgba, b.rgba) > 0u,
+                          "AND IT IS LIVE: the desktop's picture followed its own camera "
+                          "while the runtime was not drawing (this is the owner's F2)");
+                testCameraLookAt(desktop, Vec3{ 0.6f, 1.5f, 2.4f }, Vec3{ 0.0f, 1.3f, -0.6f });
+            }
+            engine->setVrMirrorView(nullptr);
+            engine->endVrSession();
+        }
+        CHECK(!engine->vrStatus().active);
+        CHECK_MSG(desktop->isEnabled(), "the desktop draws again after the second session");
     }
 
     // ---- a session on a dead runtime must refuse, never hang --------------

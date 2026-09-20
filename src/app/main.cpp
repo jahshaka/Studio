@@ -96,6 +96,11 @@ int main(int argc, char *argv[])
         return 2;
     }
     cli.applyPlatformPolicy();
+    // WHETHER A PERSON IS LOOKING AT THIS PROCESS, recorded once for everything
+    // that has no CliOptions to ask with (app/firstrun.h): an error box raised
+    // deep in a page is unanswerable in a driven run and spends the run's whole
+    // budget waiting to be dismissed.
+    FirstRun::rememberDriven(FirstRun::isDrivenSession(cli));
 
     // Pin the application identity instead of letting Qt infer it from the
     // executable's file name — that inference is what a renamed or bundled
@@ -448,8 +453,17 @@ int main(int argc, char *argv[])
 		dialog->show();
 	});
 
-    
-    updateChecker.checkForAppUpdate();
+
+	// GATED, AND OFF BY DEFAULT (owner, 2026-09-18: "leave auto updates for
+	// when we have an update server"). This ran on EVERY launch — a request to
+	// Constants::UPDATE_CHECK_URL before there is a server to answer it —
+	// while the Preferences checkbox that claims to govern it wrote a
+	// different key entirely and governed nothing (SMOKE-FIX-1's fix round).
+	// The decision is one function on the checker so that "does a default
+	// launch touch the network?" has one answer and a test.
+	updateChecker.checkForAppUpdateIfEnabled(
+	    SettingsManager::getDefaultManager()->getValue(
+	        UpdateChecker::kAutomaticChecksKey, UpdateChecker::kAutomaticChecksDefault));
 
 	// Tooltips: Classic's own popup (ToolTipHelper), or the Qlementine style's
 	// native tooltip with "Header | body" rendered as rich text.

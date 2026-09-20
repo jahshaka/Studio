@@ -51,6 +51,7 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 #include <QVariantMap>
 
 #include <memory>
@@ -161,6 +162,21 @@ public:
 
     QString lastBundlePath() const { return mLastBundle; }
 
+    /// THE LAST FRAME'S PASSES, as `app.renderStats().perPass` reports them:
+    /// one {name, triangles, draws} per compositor pass of the most recent
+    /// frame this object drained from the engine (owner review 2026-09-18 —
+    /// the breakdown that answers "why is an empty world 4,611 triangles").
+    ///
+    /// EMPTY UNLESS A CAPTURE IS RECORDING, and that is the honest shape: the
+    /// engine's per-pass counters need a listener on every workspace and a
+    /// clock read per pass, which is why the monitor is off by default and free
+    /// when off (Engine.h). Nothing here turns it on — a read verb that armed
+    /// an instrument would change what it measures.
+    ///
+    /// `name` is "workspace/node/pass", the same three fields frames.jsonl
+    /// carries, joined so one string identifies a pass.
+    QVariantList lastFramePasses() const { return mLastPasses; }
+
     /// The capture-length preference (`perf/captureSeconds`), and its default.
     static double defaultSeconds();
     static double preferredSeconds();
@@ -250,6 +266,10 @@ private:
     QTimer *mAutoStop = nullptr;
     QTimer *mDrainTimer = nullptr;
     QString mLastBundle;
+    /// The most recent drained frame's pass rows (lastFramePasses). Cleared
+    /// when a capture starts, so a stale breakdown from an hour ago can never
+    /// be read as the current frame's.
+    QVariantList mLastPasses;
     /// The closed bundle's totals: `status()` must still answer "how many
     /// frames did that capture get" after the writer is gone.
     double  mLastFrames = 0.0, mLastEvents = 0.0;

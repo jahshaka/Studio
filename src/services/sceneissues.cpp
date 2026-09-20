@@ -348,6 +348,39 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         }
     }
 
+    // ---- vr.colour: the runtime is encoding the picture a second time -----
+    //
+    // The other issue that is not about an object, and it belongs here for the
+    // same reason `rays.absent` does: it is a property of the MACHINE (the
+    // OpenXR runtime) that changes what the user is looking at, and nothing in
+    // the scene can put it right. The engine hands display-encoded bytes to the
+    // runtime and asks for an _SRGB swapchain, which is the format that says
+    // so; a runtime that offers none is told the bytes are linear and encodes
+    // them again, and the wearer's picture reads about a stop too bright.
+    //
+    // RAISED ONLY WHILE A SESSION RUNS, and it goes by itself when the session
+    // ends (the kind is in the scanned list below) — which is the whole
+    // contract of this bar: a line the user cannot dismiss, that leaves when
+    // the condition does.
+    {
+        const auto engine = EngineHost::instance().engine();
+        const jahshaka::engine::VrStatus vr = engine ? engine->vrStatus()
+                                                     : jahshaka::engine::VrStatus();
+        if (vr.active && !vr.colourEncodedOnce) {
+            SceneIssue issue;
+            issue.kind = QStringLiteral("vr.colour");
+            issue.message = tr("The headset's colours are wrong: this VR runtime offers no "
+                               "sRGB image format (it gave us %1), so it is brightening the "
+                               "picture a second time. The desktop is correct.")
+                                .arg(QString::fromStdString(vr.swapchainFormat));
+            issue.action = tr("Update or change the VR runtime — nothing in this project "
+                              "causes it, and nothing in the project can correct it.");
+            issue.id = issue.kind;
+            raise(issue);
+            live << issue.id;
+        }
+    }
+
     // ---- exposure.legacy: an older exposure key was ignored ---------------
     // A file written before EXPOSURE-1 carries the retired chain-unit
     // `exposure`/`exposureMin`/`exposureMax` and nothing else. The same number
@@ -377,6 +410,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak"),
                                        QStringLiteral("sky.duplicate"),
                                        QStringLiteral("rays.absent"),
+                                       QStringLiteral("vr.colour"),
                                        QStringLiteral("exposure.legacy") };
     bool removed = false;
     for (int i = mIssues.size() - 1; i >= 0; --i) {

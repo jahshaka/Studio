@@ -153,12 +153,17 @@ private:
     bool mPlacePending = false;
     unsigned long long mPlaceAfterRendered = 0ull;
     /// ONE RENDER PIPELINE FOR VR (the owner, 2026-09-17): when the desktop
-    /// mirrors an eye, the editor's own on-screen View is switched OFF on the
-    /// first drawn eye frame (the Player's rule) and put back at release, so
-    /// the desktop is a COPY of the eye and not a third camera. The third
-    /// render is `mirror:"none"` — the multi-user toggle of a later stage.
+    /// mirrors an eye, the editor's own on-screen View stops drawing and the
+    /// eye is copied over it, so the desktop is a COPY and not a third camera.
+    /// The third render is `mirror:"none"` — the multi-user toggle of a later
+    /// stage.
+    ///
+    /// THIS OBJECT ONLY NAMES THE VIEW (lane MIRROR-LIVE-1). WHEN it stops
+    /// drawing is the ENGINE's answer, because only the engine knows whether
+    /// the runtime wanted a picture this frame: the host's own `mMirrorViewOff`
+    /// bookkeeping is gone, and `vr.state().mirror.showing` reports what the
+    /// window is doing.
     jahshaka::engine::View *mMirrorView = nullptr;
-    bool mMirrorViewOff = false;
     /// Where the editor's render camera stood when the session began — the
     /// anchor the wearer is placed on, captured once (the pose BEFORE any
     /// frame of the session moved anything).

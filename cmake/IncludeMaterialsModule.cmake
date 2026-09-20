@@ -20,6 +20,7 @@ set(SRCS
 	src/modules/materials/core/bakeprogram.cpp
 	src/modules/materials/core/graphbaker.cpp
 	src/modules/materials/core/materialhelper.cpp
+	src/modules/materials/core/graphdefinition.cpp
 	src/modules/materials/core/pbrgraphevaluator.cpp
 	src/modules/materials/core/pieceemitter.cpp
 	#src/modules/materials/core/project.cpp
@@ -62,6 +63,7 @@ set(SRCS
 
 	src/modules/materials/widgets/graphicsview.cpp
 	src/modules/materials/widgets/listwidget.cpp
+	src/modules/materials/widgets/memberspanel.cpp
 	src/modules/materials/widgets/materialsettingswidget.cpp
 	src/modules/materials/widgets/nodepropertiespanel.cpp
 	src/modules/materials/widgets/shaderlistwidget.cpp
@@ -121,6 +123,7 @@ set(HEADERS
 
 	src/modules/materials/widgets/graphicsview.h
 	src/modules/materials/widgets/listwidget.h
+	src/modules/materials/widgets/memberspanel.h
 	src/modules/materials/widgets/materialsettingswidget.h
 	src/modules/materials/widgets/nodepropertiespanel.h
 	src/modules/materials/widgets/shaderlistwidget.h

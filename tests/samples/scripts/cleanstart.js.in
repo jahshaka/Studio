@@ -710,7 +710,17 @@ var FIDELITY = {
                " baseColor=" + m.baseColor + ")");
         assertTexturePath("Matcaps ground", "baseColorMap",
                           material.get(meshesByName("Ground")[0].id).baseColorMap);
-        var p = shoot("matcaps", [ { x: 0.49, y: 0.49 }, { x: 0.50, y: 0.40 }, { x: 0.15, y: 0.85 } ]);
+        // THE BODY, NOT THE HIGHLIGHT (2026-09-19). These two probes used to sit
+        // at 0.49,0.49 and 0.50,0.40 — both on the gold's SPECULAR HOTSPOT,
+        // where the picture reads 255,255,1. A hotspot is the least stable
+        // thing in the frame to pin: giving this sample's leaking point light
+        // its shadow (the shadow.leak fix, same day) moved the highlight by a
+        // couple of pixels and the same probe fell to 38,25,1 — a "failure"
+        // that was really the suite measuring a specular sparkle. The points
+        // below are DIFFUSE body, measured stable to 0/255 across two
+        // independent opens, and they carry the claim this case is about: gold
+        // reads gold.
+        var p = shoot("matcaps", [ { x: 0.40, y: 0.42 }, { x: 0.40, y: 0.54 }, { x: 0.15, y: 0.85 } ]);
         // Gold reads gold even in shadow: strong red-over-blue at two body points.
         assert(p[0].r > 40 && p[0].r > p[0].b + 30, "Matcaps: dragon body 1 is gold " + fmt(p[0]));
         assert(p[1].r > 40 && p[1].r > p[1].b + 30, "Matcaps: dragon body 2 is gold " + fmt(p[1]));
@@ -776,7 +786,11 @@ var FIDELITY = {
                (byColor["#eef4f8"] ? byColor["#eef4f8"].alpha : "?") + ")");
         assertTexturePath("World ground", "baseColorMap",
                           material.get(meshesByName("Ground")[0].id).baseColorMap);
-        var p = shoot("world", [ { x: 0.45,  y: 0.478 },   // gold dragon body highlight
+        // The gold probe moved off the HIGHLIGHT and onto the body for the
+        // reason written out in the Matcaps case above: a hotspot swings from
+        // 255 to 28 when a light's shadow moves it two pixels. 0.56,0.46 is
+        // diffuse gold, stable to 0/255 across two opens.
+        var p = shoot("world", [ { x: 0.56,  y: 0.46 },    // gold dragon body (diffuse, not the hotspot)
                                  { x: 0.194, y: 0.463 },   // silver dragon belly highlight
                                  { x: 0.829, y: 0.533 },   // glass dragon (floor shows through)
                                  { x: 0.512, y: 0.111 } ]); // cubemap sky: park foliage

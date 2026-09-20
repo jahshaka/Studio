@@ -38,6 +38,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/project.h"   // AssetRecord
+#include "services/materialbundle.h"   // shippedPresetName — the read-only law
 
 namespace assettags {
 
@@ -93,6 +94,19 @@ inline bool write(Database *db, const QString &guid, const QString &name,
                   const QStringList &tags)
 {
     if (!db) return false;
+    // A SHIPPED PRESET CANNOT BE RENAMED (MATERIAL_BUNDLE_SPEC phase 3). Its
+    // name is part of its identity: every drawer labels a preset from the
+    // shipped list, and its definition is found by that name, so a renamed
+    // row is ONE GUID WITH TWO NAMES for ever — "Fred" in the Assets page and
+    // "Gold PBR" in the Presets drawer. The definition writer refuses a
+    // preset by name; this is the same law for the row's other mutable field,
+    // at the one place both the verb and the Assets page's Update button
+    // write it. TAGS are still the user's (a preset carrying "kitchen" is
+    // theirs to find), which is why this refuses a NAME CHANGE and not the
+    // write: `setTags` passes the stored name through, and the seeder's own
+    // repair passes the shipped one.
+    const QString shipped = MaterialBundle::shippedPresetName(guid);
+    if (!shipped.isEmpty() && !name.isEmpty() && name != shipped) return false;
     return db->updateAssetMetadata(guid, name, serialize(tags));
 }
 

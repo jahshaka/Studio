@@ -48,6 +48,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
@@ -220,8 +221,11 @@ QString MaterialPropertyWidget::materialItemsKey() const
         key += it.key() + QLatin1Char('\x1f') + QFileInfo(it.value()).baseName()
              + QLatin1Char('\x1e');
     }
+    // EXACTLY WHAT setupShaderSelector PUTS IN THE COMBO, or the panel
+    // rebuilds for ever or never (fix round F12 changed both together: the
+    // session's MATERIAL entries, where it used to be the Shader ones).
     for (auto asset : AssetManager::getAssets()) {
-        if (!asset || asset->type != ModelTypes::Shader) continue;
+        if (!asset || asset->type != ModelTypes::Material) continue;
         key += asset->assetGuid + QLatin1Char('\x1f') + QFileInfo(asset->fileName).baseName()
              + QLatin1Char('\x1e');
     }
@@ -325,12 +329,18 @@ void MaterialPropertyWidget::materialChanged(int index)
 
     MaterialReader reader;
     reader.setProject(project);
-    iris::MaterialPtr picked = BuiltinMaterials::isBuiltin(guid)
-                                   ? reader.createMaterialFromShaderGuid(guid, db)
-                                         .staticCast<iris::Material>()
-                                   : reader.parseShaderAsPbr(guid, db);
-    // A graph asset with no baked material yet (a definition predating the
-    // evaluator) must not silently blank the mesh: keep what it had.
+    // THE BUNDLE'S DEFINITION for anything that is not a builtin (phase 2's
+    // Deletes: this read a ModelTypes::Shader row through parseShaderAsPbr —
+    // the module's old separate graph asset, which nothing mints and nothing
+    // else reads). `MaterialBundle::read` is pin-first, so the combo shows the
+    // version this project renders with, and a graph material resolves through
+    // its `values` like every other material.
+    iris::MaterialPtr picked =
+        BuiltinMaterials::isBuiltin(guid)
+            ? reader.createMaterialFromShaderGuid(guid, db).staticCast<iris::Material>()
+            : reader.parseMaterialTyped(MaterialBundle::read(db, guid, project), db);
+    // A guid with no definition at all must not silently blank the mesh: keep
+    // what it had.
     if (!picked) { setupShaderSelector(); addResetRow(); setWidgetProperties(); return; }
 
     picked->setName(pickedName);
@@ -402,12 +412,18 @@ void MaterialPropertyWidget::setupShaderSelector()
         materialSelector->addItem(QFileInfo(it.value()).baseName(), it.key());
     }
 
+    // AND THE PROJECT'S MATERIALS (fix round F12). This listed the session's
+    // ModelTypes::SHADER entries — the module's retired separate graph asset
+    // — so since phase 2 it offered rows this build cannot read (picking one
+    // applied a flat default instead of the graph's colours) and did NOT
+    // offer the one thing a user means by "the project's materials": the
+    // MATERIAL bundles, which is what a project hydrates
+    // (ProjectAssets::registerSessionAsset) and what every other surface
+    // applies. One type change, and the combo is about materials again.
     for (auto asset : AssetManager::getAssets()) {
-        if (asset->type == ModelTypes::Shader) {
-            materialSelector->addItem(QFileInfo(asset->fileName).baseName(), asset->assetGuid);
-        }
+        if (!asset || asset->type != ModelTypes::Material) continue;
+        materialSelector->addItem(QFileInfo(asset->fileName).baseName(), asset->assetGuid);
     }
-
     if (material) materialSelector->setCurrentItemData(material->getGuid());
 
     connect(materialSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(materialChanged(int)));

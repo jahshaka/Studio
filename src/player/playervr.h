@@ -86,11 +86,13 @@ public:
     /// `iris::Scene::renderCamera` (the active-camera seam's own rule, lead
     /// review F1): with an authored shot armed, the wearer must stand where the
     /// Player's picture was, not where the free camera happens to be parked.
-    /// `document` is the SCENE THE PROJECT AUTHORED — needed for exactly one
-    /// thing here, and named rather than reached for: the reflection row the
-    /// headset renders with is the project's own World-panel row (lane
-    /// REFLECT-VR-1; @see VrConfig::ssr). Null is allowed and means the row's
-    /// default, off.
+    /// `document` is the SCENE THE PROJECT AUTHORED, named rather than reached
+    /// for. It carries the project's own VR rows into the session: the Hands
+    /// switch (`iris::Scene::vrHands`, lane HANDS-SWITCH-1) and, through
+    /// `vrworld::adopt`, the rest of the `world.vr` block. It no longer carries
+    /// the reflection row — since lane EYE-GRADE-1 the mirror pushes the whole
+    /// of the project's post description into the session's view every frame,
+    /// that row included. Null is allowed and means the defaults.
     bool begin(jahshaka::engine::Scene *scene, jahshaka::engine::View *mirrorView,
                const iris::CameraNodePtr &camera, const iris::ScenePtr &document,
                const QVariantMap &options, QString *error);
@@ -183,11 +185,11 @@ private:
     jahshaka::engine::View *mMirrorView = nullptr;
     /// Waiting to place the rig (at begin, and at every recenter).
     bool mPlacePending = false;
-    /// HAS THIS OBJECT SWITCHED THE DESKTOP VIEW OFF YET? (lane VR-3b.) It is
-    /// switched off on the first frame the headset actually drew, never before:
-    /// until then the mirror has no picture to show and the desktop must keep
-    /// drawing its own (the engine's mirror waits for the same moment).
-    bool mMirrorViewOff = false;
+    /// (WHEN the Player's View stops drawing is the ENGINE's answer since lane
+    /// MIRROR-LIVE-1 — it is the only party that knows whether the runtime
+    /// asked for a picture this frame. This object names the view and reads
+    /// `VrStatus::mirrorShowing`; the `mMirrorViewOff` bookkeeping that used to
+    /// live here is gone.)
     /// THE FIRST LOCATE THAT CAN BE TRUSTED FOR A PLACEMENT — `VrStatus::
     /// rendered` at the moment the placement was asked for, plus one.
     ///

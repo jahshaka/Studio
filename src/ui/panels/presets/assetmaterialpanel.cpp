@@ -31,6 +31,15 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "ui/panels/singledragowner.h"
 #include "ui/style/stylesheet.h"
+#include "ui/controls/assetdrag.h"
+#include "io/materialpresets.h"
+#include "services/services.h"
+#include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
+#include "services/projectservice.h"
+#include "services/sceneeditservice.h"
+#include "services/jahlog.h"
+#include "services/selectionservice.h"
 
 AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
 {
@@ -73,34 +82,21 @@ AssetMaterialPanel::~AssetMaterialPanel()
 
 void AssetMaterialPanel::addDefaultItems()
 {
-    auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
-    auto files = dir.entryInfoList(QStringList(), QDir::Files);
-
-    auto reader = new MaterialPresetReader();
-
-    // The engine viewport authors PBR only: legacy (non-PBR) presets are
-    // deprecated there and hidden from the drawer. Legacy mode still shows both.
-    const bool pbrOnly = true;   // engine viewport is the only renderer
-    for (const auto &file : files) {
-        auto preset = reader->readMaterialPreset(file.absoluteFilePath());
-        if (pbrOnly && preset.type.compare("PBR", Qt::CaseInsensitive) != 0) continue;
-        defaultMaterials.append(preset);
-    }
-	int i;
-    for (i = 0; i < defaultMaterials.count(); ++i) {
+    // THE ONE PRESET LIST (io/materialpresets.h, MATERIAL-PREVIEW-1 item
+    // c): this was the third copy of the same directory walk, reader and PBR
+    // filter, beside the asset panel's registration loop and materials.presets.
+    for (const MaterialPreset &preset : MaterialPresets::all()) {
         auto item = new QListWidgetItem;
-        item->setData(Qt::DisplayRole, defaultMaterials[i].name);
-        item->setData(Qt::UserRole, defaultMaterials[i].name);
+        item->setData(Qt::DisplayRole, preset.name);
+        item->setData(Qt::UserRole, preset.name);
 
         item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Material));
-        item->setData(MODEL_GUID_ROLE, Constants::Reserved::DefaultMaterials.key(defaultMaterials[i].name));
+        item->setData(MODEL_GUID_ROLE, Constants::Reserved::DefaultMaterials.key(preset.name));
 
-        item->setIcon(QIcon(defaultMaterials[i].icon));
-        item->setData(0x32, i); // used to get item index
+        item->setIcon(QIcon(preset.icon));
 
         listView->addItem(item);
     }
-
 }
 
 void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)
@@ -121,8 +117,6 @@ void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)
     else {
         item->setIcon(QIcon(":/icons/empty_object.png"));
     }
-
-    item->setData(0x32, defaultMaterials.count() - 1);
 
     listView->addItem(item);
     
@@ -199,21 +193,13 @@ bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
 
                         if (item) {
                             auto drag = QPointer<QDrag>(new QDrag(this));
-                            auto mimeData = QPointer<QMimeData>(new QMimeData);
-
-                            QByteArray mdata;
-                            QDataStream stream(&mdata, QIODevice::WriteOnly);
-                            QMap<int, QVariant> roleDataMap;
-
-                            roleDataMap[0] = QVariant(item->data(MODEL_TYPE_ROLE).toInt());
-                            roleDataMap[1] = QVariant(item->data(Qt::UserRole).toString());
-                            roleDataMap[2] = QVariant("not used");
-                            roleDataMap[3] = QVariant(item->data(MODEL_GUID_ROLE).toString());
-
-                            stream << roleDataMap;
-
-                            mimeData->setData(QString("application/x-qabstractitemmodeldatalist"), mdata);
-                            drag->setMimeData(mimeData);
+                            // ONE payload builder (ui/controls/assetdrag.h). The
+                            // mesh slot used to carry the string "not used" here.
+                            drag->setMimeData(AssetDrag::mimeFor(
+                                item->data(MODEL_TYPE_ROLE).toInt(),
+                                item->data(Qt::UserRole).toString(),
+                                QString(),
+                                item->data(MODEL_GUID_ROLE).toString()));
 
                             // only hide for object models
                             drag->setPixmap(item->icon().pixmap(64, 64));
@@ -244,6 +230,36 @@ void AssetMaterialPanel::showContextMenu(const QPoint &pos)
     QMenu contextMenu;
     contextMenu.setStyleSheet(StyleSheet::PresetsContextMenu());
 
+    // CUSTOMISE (R18, the owner's words: "we can't edit presets — we have to
+    // create a new material from a starter template"). A preset is read-only
+    // in fact — the definition writer refuses one by name — so the gesture
+    // that makes one editable is a COPY, in the user's own drawer, named
+    // "<Preset>-1". It calls the same one implementation the verb
+    // `materials.createFromPreset` calls; the suffix rule lives there, once.
+    const QString presetGuid =
+        MaterialPresetAssets::guidFor(listView->indexAt(pos).data(MODEL_GUID_ROLE).toString());
+    QAction customise(tr("Customise"), this);
+    if (!presetGuid.isEmpty()) {
+        connect(&customise, &QAction::triggered, this, [this, presetGuid]() {
+            MaterialPresetSeeder::instance().finishNow();   // one importer at a time
+            QString error;
+            Project *project = services && services->project ? services->project->current()
+                                                             : nullptr;
+            const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
+                                                                 handle, project, &error);
+            if (copy.isEmpty()) {
+                irisLog("Customise: " + error);
+                return;
+            }
+            // The copy is a library material the project now holds: every
+            // drawer that lists one has to hear about it (the four-drawer
+            // rule — one list, two windows).
+            if (services && services->sceneEdit)
+                services->sceneEdit->requestAssetViewRefresh();
+        });
+        contextMenu.addAction(&customise);
+    }
+
     QAction action("Remove Item", this);
     connect(&action, &QAction::triggered, this, [this, pos]() {
         QModelIndex index = listView->indexAt(pos);
@@ -273,7 +289,13 @@ void AssetMaterialPanel::removeFavorite(const QString &assetGuid)
 
 void AssetMaterialPanel::applyMaterialPreset(QListWidgetItem *item)
 {
-    if (!mainWindow) return;
-    auto preset = defaultMaterials[item->data(0x32).toInt()];
-    mainWindow->applyMaterialPreset(preset);
+    // BY GUID, NOT BY INDEX (the audit's F6). The tile's index into the preset
+    // list was stashed in role 0x32 — and a FAVOURITE tile never had one:
+    // addNewItem wrote the index of the LAST starter preset and addFavorites
+    // wrote nothing at all, so `toInt()` returned 0 and double-clicking any
+    // favourite applied the first starter preset instead. The guid is on the
+    // tile already; it is what the drag carries and what the ONE apply takes.
+    if (!item || !services || !services->sceneEdit || !services->selection) return;
+    services->sceneEdit->applyMaterial(item->data(MODEL_GUID_ROLE).toString(),
+                                       services->selection->selected());
 }

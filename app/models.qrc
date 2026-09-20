@@ -1,6 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file>models/gear.obj</file>
         <file>models/head.obj</file>
         <file>models/head.png</file>
         <file>models/rot_circle.obj</file>
@@ -16,11 +15,17 @@
         <file>content/primitives/torus.obj</file>
         <file>content/primitives/arrow.obj</file>
         <file>content/primitives/capsule.obj</file>
-        <file>content/primitives/gear.obj</file>
-        <file>content/primitives/steps.obj</file>
         <file>content/primitives/pyramid.obj</file>
+        <!-- THE TEAPOT IS NOT A PRIMITIVE ANY MORE (owner review R6, 2026-09-18):
+             it left the table, the tile and the Add menu. The MESH stays
+             compiled in because four shipped sample scenes name this exact
+             path in their stored scene blobs (Showroom, Showroom 2, Mirror
+             Room, Physics) and must open byte-identically. -->
         <file>content/primitives/teapot.obj</file>
-        <file>content/primitives/sponge.obj</file>
+        <file>content/primitives/hemisphere.obj</file>
+        <file>content/primitives/tube.obj</file>
+        <file>content/primitives/wedge.obj</file>
+        <file>content/primitives/star.obj</file>
         <file>models/ground.obj</file>
         <file>content/vr/meta-quest-touch-pro/left.obj</file>
         <file>content/vr/meta-quest-touch-pro/right.obj</file>

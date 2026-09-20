@@ -29,7 +29,6 @@ For more information see the LICENSE file
 
 namespace ImageMaterial
 {
-
 iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
                                  Project *project, QString *resolvedPathOut,
                                  bool *hasAlphaOut)
@@ -113,11 +112,15 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     // stamp is written once, here, at the only place that mints one.
     blob[QStringLiteral("companionOf")] = textureGuid;
 
-    // Thumbnail straight from the image — headless-safe, no engine render.
+    // THE STORED FALLBACK: the image itself, at the size every other thumbnail
+    // is stored at (it used to be 72x72 — see the header for why the RENDER is
+    // not made here). `thumbrebuild::rebuildOne` on this guid replaces it with
+    // the material on the preview sphere, asked for by the gesture that minted
+    // it, off this function's critical path.
     QByteArray thumbnail;
     {
-        const QImage thumb =
-            QImage(resolvedPath).scaled(72, 72, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        QImage thumb = QImage(resolvedPath).scaled(512, 512, Qt::KeepAspectRatio,
+                                                   Qt::SmoothTransformation);
         if (!thumb.isNull()) {
             QBuffer buffer(&thumbnail);
             buffer.open(QIODevice::WriteOnly);

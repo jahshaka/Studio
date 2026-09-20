@@ -84,7 +84,13 @@ public:
     static QString objectSourcePath(const QString &guid, Database *db, Project *project);
 
     /// Move the project's pin of `guid` to the asset's CURRENT source oid
-    /// (the "Update to latest" affordance).
+    /// (the "Update to latest" affordance) and pin every member of the new
+    /// version the project does not hold yet.
+    ///
+    /// A member the project ALREADY pins is left exactly where it is (F20):
+    /// that pin is either the same bytes or this project's own copy-on-written
+    /// version, and updating a BUNDLE is not consent to discard the user's
+    /// edited texture. Updating a member is its own gesture on its own tile.
     static bool updatePinToLatest(const QString &guid, Database *db, Project *project);
 
     /// Copy-on-write: `newContentPath`'s bytes become a new CAS object

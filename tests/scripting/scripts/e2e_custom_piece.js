@@ -18,8 +18,8 @@ var projectGuid = project.create("Custom Piece " + Date.now());
 assert(projectGuid.length > 10, "project.create");
 
 // ---- a graph the emitter should take: an animated Base Color ----------------
-var shaderGuid = materials.createGraph("PulsingFx");
-assert(shaderGuid.length > 10, "materials.createGraph");
+var shaderGuid = materials.create("PulsingFx", { graph: true });
+assert(shaderGuid.length > 10, "materials.create");
 
 var masterId = null;
 graph.nodes().forEach(function (n) { if (n.master) masterId = n.id; });

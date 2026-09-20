@@ -60,6 +60,12 @@ struct Pinned
     /// True when THIS call created the project's pin (the project did not pin
     /// the row before) — what an undo of the call has to take back.
     bool newlyPinned = false;
+    /// True when THIS call MINTED the library row (the bytes were not in the
+    /// store under any Texture row). False means an existing asset answered —
+    /// possibly one the user imported themselves, which is why the material
+    /// picker only stamps its member marker on a minted row (V-2: "a texture
+    /// the user imported is ALWAYS a tile").
+    bool minted = false;
     bool ok() const { return error.isEmpty() && !path.isEmpty(); }
 };
 
@@ -96,6 +102,30 @@ enum class Ownership { Project, Platform };
 /// whatever it is called. Idempotent: the same bytes answer the same row.
 Pinned pinTexture(const QString &sourcePath, const QString &displayName,
                   Database *db, Project *project, Ownership ownership);
+
+/// THE ONE IMPORT A MATERIAL'S TEXTURE PICKER CALLS (MATERIAL_BUNDLE_SPEC
+/// P-2, owner decision Q1). The same content import as pinTexture — same
+/// pipeline, same dedup by bytes — but it always makes the LIBRARY row, and
+/// pins into `project` only when one is open. That difference matters: a
+/// material authored with no project open is a perfectly ordinary library
+/// bundle, and until this lane the module answered the same gesture with a
+/// `QFile::copy` into a retired per-guid folder and a type-11 File row with
+/// no hash, no sidecar and no pin — which is why the owner's library holds
+/// four copies of one checker image.
+/// `knownOid` — a sha256 of `sourcePath` the caller already computed on a
+/// worker (the preset seeder does). It skips the hash here, which is 19-96 ms
+/// of the UI thread per preset; wrong bytes for the oid are impossible,
+/// because the same file is what both sides read.
+Pinned importTexture(const QString &sourcePath, const QString &displayName,
+                     Database *db, Project *project, const QString &knownOid = QString());
+
+/// The LIBRARY Texture row whose stored bytes are `oid`, or empty. The same
+/// by-content lookup the imports above use to answer "I already have this" —
+/// exposed because the preset seeder must ask it on the UI thread BEFORE it
+/// hands a file to the import pipeline: the store dedups BYTES, but the
+/// pipeline would still mint a second Texture ROW for content the library
+/// already has under one.
+QString libraryTextureFor(const QString &oid, const QString &projectGuid = QString());
 
 /// The shipped cube-sky presets (app/content/skies/alternative/<dir>/).
 struct SkyPreset

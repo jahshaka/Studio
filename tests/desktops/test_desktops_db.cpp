@@ -166,6 +166,41 @@ int main(int argc, char **argv)
         CHECK(!b.hasSliderPos, "unassigned project still reports no slider assignment");
     }
 
+    // --- WHERE A PROJECT'S FOLDER LIVES (SMALL-UI-A fix round F1, owner review
+    //     R1d). The New Scene dialog's Browse button can put a project anywhere,
+    //     and a location that is not RECORDED cannot be found again: every
+    //     resolver rebuilt the path from the default root, so a restart opened a
+    //     located project pointing at a folder that does not exist and a delete
+    //     left the real folder behind. Additive and guarded like the four
+    //     columns above — the property that matters for the owner's live
+    //     library is that every existing row reads back EMPTY, which means "the
+    //     default root", which is where every one of them is.
+    CHECK(db.checkIfColumnExists("projects", "location"), "migration added the location column");
+    {
+        CHECK(db.projectLocation("guid-a").isEmpty(),
+              "a project written before the column reads back NO location (= the default root)");
+        CHECK(db.projectLocation("guid-c").isEmpty(),
+              "...and so does a project created after it, when nobody chose one");
+
+        const QString chosen = QStringLiteral("/media/an-external-drive/Worlds");
+        CHECK(db.setProjectLocation("guid-a", chosen), "setProjectLocation succeeds");
+        CHECK(db.projectLocation("guid-a") == chosen, "the chosen root round-trips exactly");
+        CHECK(db.projectLocation("guid-b").isEmpty(),
+              "...and it is PER PROJECT — the one beside it is untouched");
+
+        // Clearing puts it back on the default root rather than storing "".
+        CHECK(db.setProjectLocation("guid-a", QString()), "clearing the location succeeds");
+        CHECK(db.projectLocation("guid-a").isEmpty(), "...and it reads back as the default root");
+        CHECK(db.setProjectLocation("guid-a", chosen), "re-record it for the idempotence check");
+    }
+
+    // --- Idempotence AGAIN, with a value in the new column: a second startup
+    //     must not re-add it or wipe what is in it.
+    db.createAllTables();
+    CHECK(db.projectLocation("guid-a") == QStringLiteral("/media/an-external-drive/Worlds"),
+          "a second startup migration leaves a recorded location alone");
+    CHECK(db.fetchProjects().size() == 3, "...and loses no rows");
+
     // --- A row written with an explicit NULL desktop (e.g. by an older build after a
     //     downgrade) must still show up on Desktop 1
     {

@@ -53,6 +53,8 @@ public:
 	void setImage(QString path);
 };
 
+class Project;
+
 class TextureManager
 {
 public:
@@ -61,9 +63,10 @@ public:
 	//void addTexture(QString path);
 	GraphTexture* createTexture();
 	void removeTexture(GraphTexture* tex);
-	void removeTextureByGuid(QString guid);
 	void loadUnloadedTextures();
 	void setDatabase(Database * dataBase);
+	/// The open project, so a picked image is pinned into it (and only then).
+	void setProject(Project * proj) { project = proj; }
 	void clearTextures();
 
 	/*
@@ -82,5 +85,6 @@ public:
 	bool hasDatabase() const { return database != nullptr; }
 private:
 	Database *database = nullptr;
+	Project *project = nullptr;
 	static TextureManager* instance;
 };

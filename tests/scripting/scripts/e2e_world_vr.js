@@ -53,6 +53,11 @@ assert(d.turn === "snap", "...turning by snap");
 assert(near(d.snapTurnDegrees, 30), "...30 degrees a flick");
 assert(near(d.smoothTurnDegreesPerSecond, 90), "...90 degrees a second when it is smooth");
 assert(d.dominant === "right", "...with the right hand manipulating");
+// BARE HANDS ARE OFF IN A NEW PROJECT (lane HANDS-SWITCH-1; the owner,
+// 2026-09-18, joint): the wearer's controllers are the authored input until an
+// author says otherwise, per project — so a headset cannot hand a session to a
+// half-finished bare-hand mode the moment a controller is set down.
+assert(d.hands === false, "...and BARE HANDS OFF: a new project is on controllers");
 
 // ---- 2. every key writes and reads back ------------------------------------
 var w = world.vr({ flySpeed: 3, fly: "level", turn: "smooth", snapTurnDegrees: 45,
@@ -64,6 +69,11 @@ assert(JSON.stringify(world.vr()) === JSON.stringify(w), "...and the read agrees
 // The enums are trimmed and case-insensitive, like every other named state.
 assert(world.vr({ fly: "  GAZE " }).fly === "gaze", "a mode name is trimmed and folded");
 assert(world.setVr({ fly: "aim" }).fly === "aim", "the setVr alias is the same verb");
+// THE FLAG ROW takes a true/false and reports one — not "on"/"off" and not a
+// number (lane HANDS-SWITCH-1). It is written on its own because it is the one
+// row in this table that is not a quantity or a mode.
+assert(world.vr({ hands: true }).hands === true, "the hands row writes as a boolean");
+assert(world.vr().hands === true, "...and reads back as one");
 
 // ---- 3. what is refused, and what is clamped -------------------------------
 // A NUMBER THAT IS NOT A SETTING is refused by name: zero is a wearer who
@@ -89,6 +99,15 @@ throws(function () { world.vr({ fly: "backwards" }); }, "backwards",
        "...and an unknown fly mode");
 throws(function () { world.vr({ dominant: "either" }); }, "either",
        "...and an unknown hand");
+// AND A FLAG IS NEITHER A NUMBER NOR A WORD (lane HANDS-SWITCH-1). Coercion
+// here would accept almost anything and mean almost nothing: `QVariant("no")`
+// and `QVariant(0.3)` are both true to `toBool()`.
+throws(function () { world.vr({ hands: 1 }); }, "true or false",
+       "a 1 where a true/false belongs is refused, not read as on");
+throws(function () { world.vr({ hands: "on" }); }, "true or false",
+       "...and so is the word 'on'");
+assert(world.vr().hands === true, "...with neither refusal writing anything");
+world.vr({ hands: false });
 throws(function () { world.vr({ speed: 4 }); }, "unknown key",
        "an unknown KEY is refused with the list");
 var afterRefusals = world.vr();
@@ -123,7 +142,7 @@ assert(pushes() === before, "and a refused call records nothing");
 
 // ---- 5. saved with the scene (the writer and the reader) -------------------
 world.vr({ flySpeed: 4.5, fly: "gaze", turn: "smooth", snapTurnDegrees: 15,
-           smoothTurnDegreesPerSecond: 45, dominant: "left" });
+           smoothTurnDegreesPerSecond: 45, dominant: "left", hands: true });
 var saved = world.vr();
 project.save();
 project.close();
@@ -134,7 +153,8 @@ assert(JSON.stringify(reopened) === JSON.stringify(saved),
 // ...and a project that never set them opens at the constructor's values, which
 // is the reader-defaults law: "absent" and "fresh" must be the same scene.
 var second = project.create("VR world defaults " + Date.now());
-assert(near(world.vr().flySpeed, 15) && world.vr().fly === "aim",
+assert(near(world.vr().flySpeed, 15) && world.vr().fly === "aim" &&
+       world.vr().hands === false,
        "a fresh project still reads the documented defaults");
 project.save();
 project.close();
@@ -157,6 +177,19 @@ assert(near(loco.flySpeed, doc.flySpeed) && loco.fly === doc.fly && loco.turn ==
 assert(loco.overridden.length === 0, "...and nothing is listed as overridden");
 assert(loco.session === false,
        "no session has latched a project: the live document is what is read");
+
+// A ROW A SESSION LATCHES AT CREATION IS REFUSED HERE, BY NAME (lane
+// HANDS-SWITCH-1): the bare-hand bindings are attached to a session's action
+// sets before its first frame and no runtime can be asked to rebind them, so a
+// mid-session override would be a verb that answered yes and did nothing for
+// the life of the session. It is still REPORTED, because "is this session on
+// hands" is a fair question to ask of the effective settings.
+assert(loco.hands === doc.hands,
+       "the locomotion reports the project's hands row (" + doc.hands + ")");
+throws(function () { vr.locomotion({ hands: !doc.hands }); },
+       "fixed for the life of a session",
+       "vr.locomotion({hands:...}) is refused by name, with what to call instead");
+assert(world.vr().hands === doc.hands, "...and the refusal wrote nothing to the project");
 
 var over = vr.locomotion({ flySpeed: 9, turn: "smooth" });
 assert(near(over.flySpeed, 9) && over.turn === "smooth", "an override takes effect at once");

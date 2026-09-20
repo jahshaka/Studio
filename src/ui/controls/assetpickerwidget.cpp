@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include "services/thumbnailmanager.h"
 #include "data/constants.h"
 #include "ui/style/stylesheet.h"
+#include <QFileDialog>
+#include <QFileInfo>
 
 AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     QDialog(parent),
@@ -53,6 +55,37 @@ AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
 AssetPickerWidget::~AssetPickerWidget()
 {
     delete ui;
+}
+
+void AssetPickerWidget::setImportFromDisk(const ImportHandler &handler)
+{
+    importHandler = handler;
+    if (!handler) {
+        delete importButton;
+        importButton = nullptr;
+        return;
+    }
+    if (importButton) return;
+    importButton = new QPushButton(tr("Import from disk…"), this);
+    importButton->setToolTip(tr("Bring an image in from anywhere on disk. It is imported into "
+                                "the library once, by its content, and pinned into this project."));
+    ui->horizontalLayout->addWidget(importButton);
+    connect(importButton, &QPushButton::clicked, this, [this] {
+        if (!importHandler) return;
+        const QString path = QFileDialog::getOpenFileName(
+            this, tr("Choose an image"), QString(),
+            tr("Images (%1)").arg(QStringLiteral("*.") + Constants::IMAGE_EXTS.join(" *.")));
+        if (path.isEmpty()) return;
+        const QString guid = importHandler(path);
+        if (guid.isEmpty()) return;   // a refusal: the dialog stays open
+        // The imported image IS the pick — the user asked for that file, not
+        // for a list to find it in again.
+        auto *item = new QListWidgetItem(QFileInfo(path).fileName());
+        item->setData(Qt::UserRole, path);
+        item->setData(MODEL_GUID_ROLE, guid);
+        emit itemDoubleClicked(item);
+        close();
+    });
 }
 
 void AssetPickerWidget::populateWidget(QString filter)

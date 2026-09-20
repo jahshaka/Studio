@@ -15,6 +15,17 @@ function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
+/// A VERB THAT REFUSES A MALFORMED CALL THROWS (ApiModule::fail — a script error
+/// with a line number), while one that refuses a legal call the engine would not
+/// take answers false (ApiModule::refuse + app.lastError). Both spellings appear
+/// below, each where it belongs.
+function throws(fn, needle, msg) {
+    try { fn(); } catch (e) {
+        assert(String(e).indexOf(needle) >= 0, msg + " (" + e + ")");
+        return;
+    }
+    throw new Error("assert failed: " + msg + " — it did not throw");
+}
 
 project.create("vr verbs " + Date.now());
 
@@ -57,6 +68,19 @@ assert(typeof err === "string" && err.indexOf("vr.begin") >= 0,
 
 assert(vr.begin({ mirror: "right", worldScale: 2 }) === false,
        "...with options too, and the options are not what it refuses over");
+// A MALFORMED OPTION IS A DIFFERENT ANSWER FROM "no runtime" (lane
+// HANDS-SWITCH-1's fix round): a refusal is reserved for the questions that
+// legitimately have two answers, and a value of the wrong TYPE is a programming
+// error, so it THROWS with a line number — before anything is begun, and here
+// with no runtime at all. `hands` is a Flag: true or false and nothing else,
+// because `QVariant::toBool()` reads "no", "off" and 1 as YES and a wearer
+// would have got bare hands bound by a typo.
+throws(function () { vr.begin({ hands: "no" }); }, "true or false",
+       "vr.begin({hands:'no'}) is refused by name, not coerced to true");
+throws(function () { vr.begin({ hands: 1 }); }, "true or false",
+       "...and a 1 is not a yes either");
+throws(function () { vr.begin({ hands: true, nonsense: 1 }); }, "unknown option",
+       "...and an unknown option is still refused with the list");
 assert(vr.end() === false, "vr.end() refuses when no session is running");
 
 // ---- the proxies answer with no session, and change nothing ---------------

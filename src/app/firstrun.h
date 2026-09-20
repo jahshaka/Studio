@@ -78,6 +78,32 @@ inline bool shouldGreet(const CliOptions &cli, bool alreadySeen)
     return !alreadySeen && !isDrivenSession(cli);
 }
 
+// ---------------------------------------------------------------------------
+// THE SAME ANSWER, WHERE THERE ARE NO CliOptions (SMOKE-FIX-1's fix round).
+//
+// The greeting is not the only thing that must not put an unanswerable modal
+// window on screen: a page's error box does it too. An archive import that
+// fails ends in QMessageBox::warning, and in a `--script` or MCP run that box
+// blocks the process until the suite's timeout kills it — the run's own budget
+// spent on a dialog nobody can dismiss. The pages that raise those boxes are
+// nowhere near main()'s CliOptions, so main() records the answer ONCE, here,
+// and they ask for it.
+namespace detail {
+inline bool &drivenLatch()      // one instance per program (inline function statics)
+{
+    static bool driven = false;
+    return driven;
+}
+}   // namespace detail
+
+/// Called once from main(), with what isDrivenSession(cli) answered.
+inline void rememberDriven(bool driven) { detail::drivenLatch() = driven; }
+
+/// Is this process being DRIVEN? The latch main() set, plus the forced data
+/// root — which is process-wide state in its own right, so the answer is right
+/// even in a unit test that never ran main()'s line.
+inline bool isDrivenSession() { return detail::drivenLatch() || AppPaths::isOverridden(); }
+
 }   // namespace FirstRun
 
 #endif // APP_FIRSTRUN_H

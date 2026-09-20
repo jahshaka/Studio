@@ -172,7 +172,7 @@ assert(nodeId.length > 10, "assets.addToScene -> node " + nodeId);
 assert(node.info(nodeId).type === "mesh", "instantiated node is a mesh");
 assert(near(node.info(nodeId).position.y, 1), "drop position honoured");
 
-assert(assets.refreshThumbnail(objGuid), "assets.refreshThumbnail (engine render + DB write)");
+assert(assets.refreshThumbnail(objGuid).ok, "assets.refreshThumbnail (engine render + DB write)");
 
 // ---- materials.* / material.* ----
 var presets = materials.presets();
@@ -186,8 +186,8 @@ assert(near(after.roughness, 0.85), "roughness round-trips");
 assert(after.baseColor === "#123456", "baseColor round-trips");
 
 // ---- graph.* (the Effects module, headless) ----
-var graphGuid = materials.createGraph("Scripted Effect");
-assert(graphGuid.length > 10, "materials.createGraph -> " + graphGuid);
+var graphGuid = materials.create("Scripted Effect", { graph: true });
+assert(graphGuid.length > 10, "materials.create -> " + graphGuid);
 var gnodes = graph.nodes();
 assert(gnodes.length === 1 && gnodes[0].master && gnodes[0].type === "PbrMaterial", "new graph has a PBR master");
 assert(graph.nodeTypes().indexOf("float") >= 0, "node type registry listed");
@@ -197,8 +197,11 @@ graph.setValue(f, 0.77);
 assert(near(graph.getValue(f), 0.77), "float node value round-trips");
 var masterId = gnodes[0].id;
 assert(graph.connect(f, 0, masterId, "Roughness"), "float -> master.Roughness connected");
+// (the `hasPbrMaster` flag went with the Blinn-Phong master: there is one
+// master node now, so graph.nodeTypes() naming exactly one is the check)
+assert(graph.nodeTypes().filter(function (t) { return t === "PbrMaterial"; }).length === 1,
+       "PbrMaterial is the one master node type");
 var evald = graph.evaluate();
-assert(evald.hasPbrMaster === true, "evaluator sees the PBR master");
 assert(near(evald.values.roughness, 0.77), "graph folds to roughness 0.77");
 assert(graph.toMaterial(nodeId), "graph.toMaterial applied to the node");
 assert(graph.save(), "graph.save wrote the asset");
@@ -211,7 +214,8 @@ assert(near(graph.evaluate().values.roughness, 0.77), "reloaded graph folds iden
 // the shipped glass preset loads through the same path
 var glass = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/glass.effect");
 assert(glass.nodes >= 3, "glass.effect loads (" + glass.nodes + " nodes)");
-assert(graph.evaluate().hasPbrMaster === true, "glass has a PBR master");
+assert(graph.nodes().filter(function (n) { return n.type === "PbrMaterial"; }).length === 1,
+       "glass has a PBR master");
 
 // SAMPLES-AUDIT item: a shipped TEXTURED preset references its images by
 // APP-RELATIVE name ("materials_to_graph/brick diff.jpg"). The Effects page
@@ -220,10 +224,14 @@ assert(graph.evaluate().hasPbrMaster === true, "glass has a PBR master");
 // material. Same resolution now runs on both routes.
 var brick = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/materials_to_graph/Brick.effect");
 assert(brick.nodes >= 3, "Brick.effect loads (" + brick.nodes + " nodes)");
-assert(brick.texturesResolved >= 3,
+// TWO images, not three: the preset's SPECULAR map went with the Blinn-Phong
+// master (LEGACY-MASTER-CRUD). A specular-intensity map has no PBR input to
+// land on, so it was being resolved, copied into the user's project and
+// dropped by the bake. Diffuse and normal are what the material is made of.
+assert(brick.texturesResolved === 2,
        "its app-relative textures resolved on load: " + brick.texturesResolved);
 var brickTextures = graph.nodes().filter(function (n) { return n.type === "texture"; });
-assert(brickTextures.length >= 3, "the graph carries its texture nodes");
+assert(brickTextures.length === 2, "the graph carries its texture nodes");
 
 // ---- save + render sanity ----
 assert(project.save() === true, "project.save");

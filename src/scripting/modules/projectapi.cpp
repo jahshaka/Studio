@@ -37,24 +37,51 @@ For more information see the LICENSE file
 QVector<VerbInfo> ProjectApi::verbs() const
 {
     return {
-        { "create", "project.create(name) -> guid",
+        { "create", "project.create(name, {empty, location}) -> guid",
           "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
           "opens it in the editor. INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
           "did up to here becomes one undo step of the project being left, whose stack is then cleared with "
-          "it, and the rest of the run records into a fresh entry in the new project.",
+          "it, and the rest of the run records into a fresh entry in the new project.\n\n"
+          "`empty: true` gives a BLANK WORLD instead of the default template. The template is a ground, the "
+          "sun (a directional light), a Sky Light and the realistic real-time sky with the sun following the "
+          "atmosphere; the blank world is the root node, the Epic world mode and the document's own defaults "
+          "— no ground, no lights at all (so nothing lights it) and no sky beyond the flat default colour. "
+          "`location` is the folder the project's own directory is created under; omitted, it is the user's "
+          "projects root (the Jahshaka documents folder, or the run's --data-root). A location that does not "
+          "exist, is not a folder or is not writable is REFUSED BY NAME — no project row is written and "
+          "nothing is left pointing at a folder that was never made. These are the New Scene dialog's two "
+          "controls: its Empty scene checkbox and its Browse button call this verb.",
           Needs::Document },
         { "open", "project.open(guidOrName) -> bool",
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
           "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
           "the closed project's undo history goes with it, and the rest of the run records into a fresh entry.",
           Needs::Document },
-        { "openAsync", "project.openAsync(guidOrName) -> bool",
+        { "openAsync", "project.openAsync(guidOrName, {play}) -> bool",
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "
           "install runs one slice per event-loop turn (services/sceneopenrunner.h), which is what the desktop "
           "tile and the archive-import open now do. Returns as soon as the open is under way — poll "
           "project.openState() for completion. Needs a window; headless sessions get project.open's "
-          "synchronous behaviour. Inside a script it ends the run's undo entry first, like project.open.",
+          "synchronous behaviour. Inside a script it ends the run's undo entry first, like project.open.\n\n"
+          "`play` (default false) is WHICH SPACE THE OPEN LANDS IN: false the editor, true the Player — the "
+          "desktop tile's Play button, which until SMOKE-FIX-1 was the only route that could say it and said "
+          "it by leaving a flag on the page for every other route to read. It is an argument here for the "
+          "same reason.",
           Needs::Window },
+        { "openSample", "project.openSample(name) -> bool",
+          "Opens one of the samples this tree ships, by base name (\"Matcaps\", \"Showroom 2\") or by an "
+          "Ogre port's display title — THE SAMPLE BROWSER'S OWN ROUTE, which imports the archive and then "
+          "opens the imported world. The dialog's tiles call this, so a script and a double-click take the "
+          "same road. It lands in the EDITOR: a sample is something to look at and edit, and the Player is a "
+          "separate statement (app.space('player')). BOTH HALVES ARE THREADED, like the browser's, and "
+          "they run in that order: poll project.archiveState() until 'idle' (the import), then "
+          "project.openState() until 'idle' (the open), with a frame in the loop. project.samples() "
+          "lists the names.",
+          Needs::Window },
+        { "samples", "project.samples() -> [name]",
+          "The base names of every sample scene this tree ships, both sets (the Jahshaka samples and our "
+          "ports of Ogre's), sorted — what project.openSample accepts.",
+          Needs::Document },
         { "openState", "project.openState() -> 'idle' | 'opening'",
           "Whether an asynchronous open (project.openAsync, a desktop tile, an archive import) is still in "
           "flight. THE SAME PREDICATE project.openAsync refuses on, so the two can never disagree: while "
@@ -131,10 +158,15 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "way — poll project.archiveState(). Needs a window.",
           Needs::Window },
         { "archiveState", "project.archiveState() -> 'idle' | 'running'",
-          "Whether an asynchronous archive export/import is still in flight.",
+          "Whether an asynchronous archive export/import is still in flight — ANY of them, this "
+          "session's verbs and the desktop page's alike (project.openSample's import is the page's), "
+          "so a caller waiting on an archive can always see the one it started.",
           Needs::Window },
         { "archiveResult", "project.archiveResult() -> {ok, error, canceled, path, guid, name, assets, objects}",
-          "The outcome of the most recent asynchronous archive operation in this session.",
+          "The outcome of the most recent archive operation in this PROCESS — the same reach "
+          "archiveState() has, so the import project.openSample starts (the desktop page's, not this "
+          "module's) reports here too. `ok` false with `error` set is how a failed or incompatible "
+          "archive reaches a script: a driven run never gets the message box a person would.",
           Needs::Window },
         { "cancelArchive", "project.cancelArchive() -> bool",
           "Asks an in-flight archive operation to stop. Honoured between zip/extract entries and between "
@@ -156,18 +188,37 @@ QString ProjectApi::resolveGuid(const QString &guidOrName, QString *nameOut)
     return guid;
 }
 
-QString ProjectApi::create(const QString &name)
+QString ProjectApi::create(const QString &name, const QVariantMap &options)
 {
     if (!host.mainWindow || !host.services || !host.services->project) { fail("project: not available in this session"); return QString(); }
     if (name.trimmed().isEmpty()) { fail("project.create: a non-empty name is required"); return QString(); }
+
+    // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{emtpy: true}`
+    // silently making the template is exactly the class of bug the option maps
+    // exist to prevent.
+    static const QStringList known = { QStringLiteral("empty"), QStringLiteral("location") };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (known.contains(it.key())) continue;
+        fail(QStringLiteral("project.create: unknown option '%1' (known: %2)")
+                 .arg(it.key(), known.join(QStringLiteral(", "))));
+        return QString();
+    }
+    const bool empty = options.value(QStringLiteral("empty"), false).toBool();
+    const QString location = options.value(QStringLiteral("location")).toString();
 
     // The data half (guid, current project, folder, DB row, desktop) is
     // ProjectService's; MainWindow::newProject then builds the default scene
     // and saves it, so the row never carries the empty scene blob (the crash
     // window the census flagged).
-    const QString guid = host.services->project->createProjectShell(name);
+    QString why;
+    const QString guid = host.services->project->createProjectShell(name, location, &why);
     if (guid.isEmpty()) {
-        fail("project.create: the database rejected the project row");
+        // THE SERVICE'S OWN REASON, by name: "the location '/nope' does not
+        // exist" is the answer a caller can act on, and it is the same
+        // sentence the dialog shows.
+        fail(QStringLiteral("project.create: %1")
+                 .arg(why.isEmpty() ? QStringLiteral("the database rejected the project row")
+                                    : why));
         return QString();
     }
 
@@ -175,7 +226,7 @@ QString ProjectApi::create(const QString &name)
     // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
     // stack, and that clear is a no-op while the run's macro is open.
     host.endRunUndoMacro();
-    host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder());
+    host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder(), empty);
     host.beginRunUndoMacro();
     return guid;
 }
@@ -211,6 +262,18 @@ bool ProjectApi::open(const QString &guidOrName)
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
     }
+    // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
+    // fix round F1). A project created at a chosen location (the New Scene
+    // dialog's Browse button) records the root it lives under; if that root is
+    // gone — an unplugged drive, a folder the user moved — opening must SAY SO
+    // with the path in it, not fall back to the default root (which would open
+    // an empty world under the project's own guid and let the user save over
+    // it) and not recreate an empty folder.
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("%1: %2").arg(QStringLiteral("project.open"), whyMissing));
+    }
     // The OLD project's undo history dies with the old project (CLOSE-2
     // item 2): end the run's entry so closeProject's clear() is not a no-op,
     // and open a fresh one for what the script does in the new project.
@@ -231,11 +294,15 @@ bool ProjectApi::open(const QString &guidOrName)
     return true;
 }
 
-bool ProjectApi::openAsync(const QString &guidOrName)
+bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options)
 {
     if (!host.mainWindow || !host.services || !host.services->project)
         return fail("project: not available in this session");
 
+    // WHICH SPACE THIS OPEN LANDS IN, said by the caller (SMOKE-FIX-1). The
+    // desktop tile's Play button is the UI that means `play: true`, and it had
+    // no verb at all until now.
+    const bool play = options.value(QStringLiteral("play"), false).toBool();
     QString name;
     const QString guid = resolveGuid(guidOrName, &name);
     if (guid.isEmpty()) {
@@ -254,8 +321,20 @@ bool ProjectApi::openAsync(const QString &guidOrName)
                     "(project.openState() reads 'opening' until it finishes)");
 
     if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
-        host.mainWindow->switchSpace(WindowSpaces::EDITOR);
+        host.mainWindow->switchSpace(play ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
         return true;
+    }
+    // A RECORDED LOCATION THAT IS NOT THERE IS A REFUSAL BY NAME (SMALL-UI-A
+    // fix round F1). A project created at a chosen location (the New Scene
+    // dialog's Browse button) records the root it lives under; if that root is
+    // gone — an unplugged drive, a folder the user moved — opening must SAY SO
+    // with the path in it, not fall back to the default root (which would open
+    // an empty world under the project's own guid and let the user save over
+    // it) and not recreate an empty folder.
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("%1: %2").arg(QStringLiteral("project.openAsync"), whyMissing));
     }
     host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
@@ -264,7 +343,40 @@ bool ProjectApi::openAsync(const QString &guidOrName)
     // The open's first slices do the session registrations themselves, with
     // the worker's parsed models in hand.
     host.services->project->pointAtProject(guid, name);
-    host.mainWindow->openProjectAsync(false);
+    host.mainWindow->openProjectAsync(play);
+    host.beginRunUndoMacro();
+    return true;
+}
+
+QStringList ProjectApi::samples()
+{
+    return ProjectManager::sampleNames();
+}
+
+bool ProjectApi::openSample(const QString &name)
+{
+    if (!host.mainWindow) return fail("project.openSample: this verb needs the editor window");
+    ProjectManager *page = host.mainWindow->projectPage();
+    if (!page) return fail("project.openSample: this session has no project page");
+    if (openInFlight())
+        return fail("project.openSample: an open is already in flight "
+                    "(project.openState() reads 'opening' until it finishes)");
+    // The page's own refusal for this is a MODAL BOX, which a script run cannot
+    // answer — refuse before we get there (project.archiveState() reads
+    // 'running' until it finishes).
+    if (ProjectArchiver::anyRunning())
+        return fail("project.openSample: an archive operation is already running "
+                    "(project.archiveState() reads 'running' until it finishes)");
+    // The undo entry closes with the world that is leaving, exactly as
+    // project.open/openAsync do — the import + open that follows belongs to the
+    // sample being opened, not to the project being left.
+    QString why;
+    if (!page->openSampleByName(name, &why))
+        return fail(QStringLiteral("project.openSample: %1").arg(why));
+    // Only once the sample is really on its way: a refusal must not end the
+    // run's undo entry (project.open/openAsync end theirs on the same edge —
+    // the world that is leaving takes the run's edits with it).
+    host.endRunUndoMacro();
     host.beginRunUndoMacro();
     return true;
 }
@@ -339,6 +451,15 @@ bool ProjectApi::remove(const QString &guid)
     QString name;
     if (resolveGuid(guid, &name) != guid)
         return fail(QStringLiteral("project.remove: no project with guid '%1'").arg(guid));
+
+    // …and a delete cannot reach a folder on a drive that is not there: it must
+    // not quietly drop the catalog rows that name files it cannot remove
+    // (fix round F1).
+    {
+        QString whyMissing;
+        if (host.services->project->projectLocationMissing(guid, &whyMissing))
+            return fail(QStringLiteral("project.remove: %1").arg(whyMissing));
+    }
 
     // Folder first (like the widget), then the DB rows — through the
     // guid-parameterised service: host.project is NOT mutated (§1.6.1).
@@ -584,16 +705,28 @@ bool ProjectApi::importArchiveAsync(const QString &path)
 
 QString ProjectApi::archiveState()
 {
-    ProjectArchiver *a = sessionArchiver();
-    return (a && a->isRunning()) ? QStringLiteral("running") : QStringLiteral("idle");
+    // ANY archive in flight, not just this module's own (SMOKE-FIX-1) — the
+    // same rule openState() follows for opens: a caller waiting for the import
+    // project.openSample started (the desktop PAGE's archiver, not the script's)
+    // has to be able to see it, or it polls an idle counter and walks straight
+    // past the work it asked for.
+    return ProjectArchiver::anyRunning() ? QStringLiteral("running") : QStringLiteral("idle");
 }
 
 QVariantMap ProjectApi::archiveResult()
 {
     QVariantMap out;
-    ProjectArchiver *a = sessionArchiver();
-    if (!a) { out["ok"] = false; out["error"] = QStringLiteral("no archive operation has run"); return out; }
-    const ProjectArchiver::Result &r = a->result();
+    // THE PROCESS-WIDE RECORD, not this module's own archiver (SMOKE-FIX-1's
+    // fix round, F5). archiveState() already answers for every archiver in the
+    // process — it has to, because project.openSample starts the desktop PAGE's
+    // import — and an outcome nobody can read is not a failure channel: a
+    // failed or incompatible import ended in a message box and silence here.
+    if (!ProjectArchiver::haveLastResult()) {
+        out["ok"] = false;
+        out["error"] = QStringLiteral("no archive operation has run");
+        return out;
+    }
+    const ProjectArchiver::Result &r = ProjectArchiver::lastResult();
     out["ok"] = r.ok();
     out["error"] = r.error;
     out["canceled"] = r.canceled;

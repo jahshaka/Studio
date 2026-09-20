@@ -13,6 +13,7 @@
 #include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QElapsedTimer>
+#include <QPointer>
 #include <QMap>
 #include <QPointF>
 #include "viewport/engineviewwidget.h"
@@ -49,7 +50,6 @@ public:
     QJsonObject getSceneProperties() override;
     void loadJafModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
-    void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadJafSky(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     QImage takeScreenshot(int width, int height) override;
@@ -84,7 +84,6 @@ private:
     /// Database -> document, the AssetViewer::addJaf* readers.
     iris::SceneNodePtr readJafModel(const QString &path, const QString &guid);
     iris::MaterialPtr readJafMaterial(const QString &guid);
-    iris::MaterialPtr readJafShader(const QString &guid);
     void applyJafSky(const QString &guid);
     /// The mirror renders PbrMaterial and DefaultMaterial. Default.shader
     /// CustomMaterials (what the readers produce) become a DefaultMaterial with
@@ -95,7 +94,10 @@ private:
     void hideProgress();
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
-    EngineRenderDriver *mDriver = nullptr;
+    /// A QPointer: the render driver dies before the widget tree at quit
+    /// (EngineHost::shutdown step 4, widgets step 5) and this is read during
+    /// teardown — see enginesceneviewport.h for the abort it caused.
+    QPointer<EngineRenderDriver> mDriver;
     std::unique_ptr<EngineAssetScene> mScene;
     Database *mDb = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)

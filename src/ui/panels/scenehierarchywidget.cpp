@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "commands/setnodepropertycommand.h"
 #include "commands/scenefoldercommand.h"
 #include "services/scenefolders.h"
+#include "data/primitives.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -48,6 +49,7 @@ For more information see the LICENSE file
 #include <qcombobox.h>
 #include <QBrush>
 #include "ui/style/stylesheet.h"
+#include "ui/controls/assetdrag.h"
 
 SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
@@ -139,29 +141,19 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
 	// Primitives
     auto primtiveMenu = addMenu->addMenu("Primitive");
 
-    QAction *action = new QAction("Torus", this);
-    primtiveMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addTorus()));
-
-    action = new QAction("Cube", this);
-    primtiveMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addCube()));
-
-    action = new QAction("Sphere", this);
-    primtiveMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addSphere()));
-
-    action = new QAction("Cylinder", this);
-    primtiveMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addCylinder()));
-
-    action = new QAction("Plane", this);
-    primtiveMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addPlane()));
-
-    action = new QAction("Ground", this);
-    primtiveMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addGround()));
+    // THE MENU IS THE TABLE (owner review R6, src/data/primitives.h). It was
+    // six hand-written entries out of thirteen primitives — Cone, Capsule and
+    // Pyramid existed as verbs, as tiles and as MainWindow slots but could not
+    // be reached from the Add menu at all, and a new primitive needed a fourth
+    // hand edit to appear here. Each action carries its row's NAME, which
+    // MainWindow::addPrimitiveFromAction reads back.
+    QAction *action = nullptr;
+    for (const primitives::Def &def : primitives::all()) {
+        action = new QAction(QString::fromLatin1(def.name), this);
+        action->setData(QString::fromLatin1(def.name));
+        primtiveMenu->addAction(action);
+        connect(action, SIGNAL(triggered()), mainWindow, SLOT(addPrimitiveFromAction()));
+    }
 
     // Lamps
     auto lightMenu = addMenu->addMenu("Light");
@@ -526,7 +518,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
     // never touches the hierarchy. dropHintAt() is the single place that decides
     // which, and it also feeds the drop indicator so the two read differently on
     // screen before the mouse is released.
-    static const char *kTreeMime = "application/x-qabstractitemmodeldatalist";
+    static const char *kTreeMime = AssetDrag::format();
 
     // SHIFT+PRESS: OURS, not Qt's (EDITOR_MULTISELECT_SPEC §2.2/D1 b).
     //

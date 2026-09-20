@@ -291,9 +291,16 @@ sleep 0.6
 b=$(js 'JSON.stringify(app.frameStats())')
 at=$(num "$a" ticks);    bt=$(num "$b" ticks)
 ar=$(num "$a" rendered); br=$(num "$b" rendered)
-as=$(num "$a" skipped);  bs=$(num "$b" skipped)
+# THE IDLE-TICK COUNT. The lifetime `skipped` counter is gone (owner review
+# 2026-09-18 answer Q3: it climbed for ever and the F3 readout showed it as if
+# it were dropped frames), and it was always exactly this subtraction — every
+# counted tick either drew or did not. `drawing` is the live half of the same
+# question and is asserted below.
+as=$(( $(num "$a" ticks) - $(num "$a" rendered) ))
+bs=$(( $(num "$b" ticks) - $(num "$b" rendered) ))
+dr=$(num "$b" drawing)
 ev=$(num "$b" enabledViews)
-note "desktop page: ticks $at->$bt  rendered $ar->$br  skipped $as->$bs  enabledViews=$ev"
+note "desktop page: ticks $at->$bt  rendered $ar->$br  idle ticks $as->$bs  drawing=$dr  enabledViews=$ev"
 
 [ "$ev" = "false" ] \
     && ok "no View is enabled on the Desktop page" \
@@ -305,8 +312,11 @@ note "desktop page: ticks $at->$bt  rendered $ar->$br  skipped $as->$bs  enabled
     && ok "not one frame was submitted with zero enabled Views" \
     || bad "the loop rendered $((br-ar)) frames with nothing to draw"
 [ "$bs" -gt "$as" ] \
-    && ok "$((bs-as)) ticks were counted as skipped" \
-    || bad "no tick was counted as skipped"
+    && ok "$((bs-as)) ticks drew nothing (ticks - rendered, the old 'skipped')" \
+    || bad "no idle tick was counted"
+[ "$dr" = "false" ] \
+    && ok "the loop reports itself IDLE, which is what the readout shows" \
+    || bad "the loop still reports 'drawing' with no enabled View"
 
 # --- wake-up: the FIRST tick after a View is enabled must render ---------
 c=$(js 'app.space("editor"); JSON.stringify(app.frameStats())')

@@ -48,7 +48,6 @@ AssetImportService::AssetImportService(Database *db, Project *project)
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Texture)));
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Music)));
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Video)));
-    mImporters.append(new ShaderImporter());
     mImporters.append(new MaterialImporter());
     mImporters.append(new IesImporter());
     mImporters.append(new JafImporter());
@@ -551,9 +550,22 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
             if (staged.jaf.kind == QStringLiteral("object")) jafType = ModelTypes::Object;
             else if (staged.jaf.kind == QStringLiteral("texture")) jafType = ModelTypes::Texture;
             else if (staged.jaf.kind == QStringLiteral("material")) jafType = ModelTypes::Material;
-            else if (staged.jaf.kind == QStringLiteral("shader")) jafType = ModelTypes::Shader;
+            // NOT "shader" (fix round F11): a .jaf claiming that kind was the
+            // last door left open onto a ModelTypes::Shader row, and nothing
+            // in this build can read one. Undefined means the import is
+            // refused by name below rather than landing a row that shows a
+            // tile nobody can open.
             else if (staged.jaf.kind == QStringLiteral("sky")) jafType = ModelTypes::Sky;
             else if (staged.jaf.kind == QStringLiteral("particle_system")) jafType = ModelTypes::ParticleSystem;
+
+            if (jafType == ModelTypes::Undefined) {
+                result.error = QStringLiteral(
+                                   "this archive carries a '%1', which this version of Jahshaka "
+                                   "does not import")
+                                   .arg(staged.jaf.kind);
+                rollbackAndCleanupObjects();
+                return false;
+            }
 
             const QString guid = db->importAsset(jafType, staged.jaf.dbPath, QMap<QString, QString>(),
                                                  guidCompareMap, records,

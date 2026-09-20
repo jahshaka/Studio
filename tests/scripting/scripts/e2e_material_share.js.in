@@ -1,0 +1,83 @@
+// scripting.e2e.material_share — MATERIAL_BUNDLE_SPEC phase 2, the owner's Q5:
+// "a single-material share file, now, as the manifest-v2 zip".
+//
+// THE EXPORT HALF. A material is built the way a person builds one — a picture
+// picked from disk through the material's own picker — and then written to a
+// file that has to stand on its own. The far side (material_share_import) runs
+// on a library that has never seen any of it and is given nothing but this
+// file.
+//
+// What this half also pins, because they are the same gesture's consequences:
+//
+//   * V-2 (owner Q4): the picked picture folds into the bundle. It does not
+//     stand as its own tile in the project tray, `materials.members` counts
+//     it, and `assets.list({tray: true, members: true})` is the switch that
+//     shows it again. A texture the USER imported is never folded.
+//   * §6: `materials.cleanUnused` lists before it removes, and answers the
+//     empty list while everything is in use.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+var stamp = "" + Date.now();
+
+var proj = project.create("Material Share " + stamp);
+assert(proj.length > 10, "project.create");
+
+// A VALUES material (no graph): its slots are its own, so the picker writes
+// one directly — which is the shape `materials.addTexture({slot})` serves.
+var mat = materials.create("Shared " + stamp);
+assert(mat.length > 10, "materials.create -> one library bundle");
+assert(assets.addToProject(mat).length > 10, "the project takes it");
+
+var tex = materials.addTexture(mat, fixtures + "/tiny.png", { slot: "baseColorMap" });
+assert(tex && tex.length > 10, "materials.addTexture(<a path from disk>, {slot}) imported the image");
+
+var members = materials.members(mat);
+assert(members.length === 1, "one member: " + JSON.stringify(members));
+assert(members[0].guid === tex, "and it is the picture we picked");
+assert(members[0].slot === "baseColorMap", "which reports the SLOT it fills");
+assert(members[0].role === "source", "as a picture, not a bake");
+assert(members[0].bytes > 0, "with the stored object's size (" + members[0].bytes + " bytes)");
+assert(members[0].usedBy === 1, "used by 1 — this material");
+assert(members[0].member === true, "it carries the member stamp (it came in through the picker)");
+assert(members[0].hidden === true, "so it folds into the bundle (V-2)");
+
+// THE TRAY SHOWS THE BUNDLE, NOT ITS PARTS — and the switch shows the parts.
+function trayGuids(opts) {
+    var o = { scope: "project", tray: true };
+    for (var k in opts) o[k] = opts[k];
+    return assets.list(o).map(function (a) { return a.guid; });
+}
+assert(trayGuids({}).indexOf(mat) >= 0, "the bundle is a tray tile");
+assert(trayGuids({}).indexOf(tex) === -1, "its member picture is NOT a second tile");
+assert(trayGuids({ members: true }).indexOf(tex) >= 0,
+       "'Show member textures' lists it again (assets.list({members:true}))");
+
+// A TEXTURE THE USER IMPORTED IS ALWAYS A TILE, even used by a material.
+var mine = assets.importFile(fixtures + "/implane_wide.png");
+assert(mine && mine.length > 10, "the user imports an image of their own");
+assert(assets.addToProject(mine).length > 10, "and adds it to the project");
+var mat2 = materials.create("Mine " + stamp);
+assert(assets.addToProject(mat2).length > 10, "a second material in the project");
+assert(materials.addTexture(mat2, mine, { slot: "baseColorMap" }) === mine,
+       "a guid already in the library is REUSED, never re-imported");
+assert(trayGuids({}).indexOf(mine) >= 0,
+       "the user's own image keeps its tile — V-3 (hide anything a material uses) is not our rule");
+
+// NOTHING IS UNUSED YET, and the dry run says so without removing anything.
+assert(materials.cleanUnused(mat).length === 0, "nothing unused in the bundle");
+
+// ---- the share file ------------------------------------------------------
+var out = "@SHARE_PATH@";
+var written = assets.exportBundle(mat, out);
+assert(written && written.path === out, "assets.exportBundle wrote the file");
+assert(written.kind === "material", "the manifest's kind is 'material'");
+assert(written.assets >= 2, "it carries the material AND its member (" + written.assets + " rows)");
+assert(written.bytes > 0, "and it has bytes (" + written.bytes + ")");
+
+project.close();
+console.log("material_share e2e passed");

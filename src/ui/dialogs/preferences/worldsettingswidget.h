@@ -41,10 +41,14 @@ public:
     // the verbs and the page cannot hold different answers.)
     QString defaultProjectDirectory;
     QString defaultEditorPath;
-    bool showFps;
-	bool autoSave;
-	bool openInPlayer;
-	bool autoUpdate;
+    // (showFps / autoSave / openInPlayer / autoUpdate deleted 2026-09-18,
+    // SMOKE-FIX-1's uninitialised-member audit, and for the same reason
+    // outlineWidth/outlineColor went above: they were UNINITIALISED copies of
+    // settings, written only when the user toggled that checkbox in this
+    // session. Three were write-only; `autoSave` was read by
+    // MainWindow::updateSceneSettings, so whether the Save Scene menu item
+    // appeared was undefined until somebody opened Preferences and clicked. The
+    // stored setting is the one answer — `auto_save`, `show_fps`.)
 
 	Database *db = nullptr;
 

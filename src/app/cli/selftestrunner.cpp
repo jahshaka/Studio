@@ -15,7 +15,10 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QColor>
+#include <QCryptographicHash>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QSize>
 #include <QThread>
@@ -41,6 +44,29 @@ iris::MeshNodePtr findDefaultGround(const iris::ScenePtr &scene)
         if (mesh->isBuiltIn && mesh->meshPath == QStringLiteral(":/models/ground.obj")) return mesh;
     }
     return iris::MeshNodePtr();
+}
+
+/// The sha256 of the FILE, so it is the number `sha256sum <png>` prints — the
+/// hash CLAUDE.md's law is stated in, and the one a lane A/Bs against a base
+/// binary by hand.
+QString fileSha256(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return QString();
+    QCryptographicHash h(QCryptographicHash::Sha256);
+    if (!h.addData(&f)) return QString();
+    return QString::fromLatin1(h.result().toHex());
+}
+
+/// `out.png` -> `out.pose2.png` (and `out` -> `out.pose2.png`): the second pose
+/// is a SECOND FILE beside the first, so the first one's bytes — and therefore
+/// its hash — are exactly what they always were.
+QString posePath(const QString &outPng)
+{
+    const QFileInfo fi(outPng);
+    const QString suffix = fi.completeSuffix();
+    const QString base = suffix.isEmpty() ? outPng : outPng.left(outPng.size() - suffix.size() - 1);
+    return base + QStringLiteral(".pose2.") + (suffix.isEmpty() ? QStringLiteral("png") : suffix);
 }
 
 int countNodes(const iris::SceneNodePtr &node)
@@ -177,14 +203,88 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: could not save %s\n", qPrintable(outPng));
         return 1;
     }
-    const QColor centre = img.pixelColor(img.width() / 2, img.height() / 2);
     const QColor clear = QColor::fromRgbF(0.10f, 0.11f, 0.14f);
     const int tolerance = 2;
-    const bool differs = qAbs(centre.red() - clear.red()) > tolerance ||
-                         qAbs(centre.green() - clear.green()) > tolerance ||
-                         qAbs(centre.blue() - clear.blue()) > tolerance;
+    const auto isPicture = [&](const QImage &im) {
+        const QColor c = im.pixelColor(im.width() / 2, im.height() / 2);
+        return qAbs(c.red() - clear.red()) > tolerance ||
+               qAbs(c.green() - clear.green()) > tolerance ||
+               qAbs(c.blue() - clear.blue()) > tolerance;
+    };
+    const QColor centre = img.pixelColor(img.width() / 2, img.height() / 2);
+    const bool differs = isPicture(img);
     std::fprintf(stderr, "engine-selftest: %dx%d image, centre pixel (%d,%d,%d), clear (%d,%d,%d) -> %s\n",
                  img.width(), img.height(), centre.red(), centre.green(), centre.blue(),
                  clear.red(), clear.green(), clear.blue(), differs ? "PASS" : "FAIL");
-    return differs ? 0 : 1;
+    const QString hash1 = fileSha256(outPng);
+    std::fprintf(stderr, "engine-selftest: pose 1 sha256 %s (%s)\n",
+                 qPrintable(hash1), qPrintable(outPng));
+    if (!differs) return 1;
+
+    // ---- THE SECOND POSE (lane ENGINE-SMALL-B item 5) ----------------------
+    //
+    // WHY A SECOND POSE AT ALL. The hash CLAUDE.md's law is stated in describes
+    // ONE picture of the default scene from ONE camera that has never moved, so
+    // the whole camera-relative half of this renderer is outside it: a cascade
+    // chain that has scrolled, a probe/field placement that has followed, and
+    // the settle that a re-voxelisation owes are all invisible to it. Six lanes
+    // in a row have had to prove "the hash is exact" about code whose subject
+    // the hash cannot see. This adds the cheapest possible second observation:
+    // the same scene, one camera move, one turn, settled, hashed.
+    //
+    // FIVE METRES AND A TURN, and the number is not arbitrary: the innermost
+    // cascade's step at the default (Medium) tier is 5 m, so this crosses at
+    // least cascade 0's step plane and re-centres it — the scroll path — while
+    // the turn puts different geometry in front of the camera. The frames after
+    // it are the SETTLE: the scheduler spends one cascade per frame and
+    // LAMPREST-3's incremental settle pays one injection per frame after that,
+    // so a short pump would hash a picture that is still converging (and would
+    // be a flake, not a gate). 240 frames on the fixed clock is many times
+    // what either owes.
+    //
+    // IT CANNOT MOVE THE FIRST POSE'S HASH: the first image is saved, read and
+    // hashed above, and the second pose writes a SECOND FILE.
+    const QString pose2Png = posePath(outPng);
+    EditorCameraPose pose;
+    pose.position = iris::Vec3(5.0f, 5.0f, 14.0f);
+    pose.hasPosition = true;
+    pose.lookAt = iris::Vec3(-2.0f, 0.5f, -3.0f);
+    pose.hasLookAt = true;
+    if (!window.viewport()->setCameraPose(pose)) {
+        std::fprintf(stderr, "engine-selftest: the viewport refused the second pose — "
+                             "no editor camera\n");
+        return 1;
+    }
+    if (!window.viewport()->canRenderFrames()) {
+        std::fprintf(stderr, "engine-selftest: the viewport cannot render frames — "
+                             "the second pose cannot settle\n");
+        return 1;
+    }
+    window.viewport()->renderFrames(240, 1.0f / 60.0f);
+    app.processEvents();
+    QImage img2 = window.viewport()->takeScreenshot(256, 256);
+    if (img2.isNull() || !img2.save(pose2Png, "PNG")) {
+        std::fprintf(stderr, "engine-selftest: could not take or save the second pose (%s)\n",
+                     qPrintable(pose2Png));
+        return 1;
+    }
+    const QColor centre2 = img2.pixelColor(img2.width() / 2, img2.height() / 2);
+    const bool differs2 = isPicture(img2);
+    const QString hash2 = fileSha256(pose2Png);
+    std::fprintf(stderr, "engine-selftest: pose 2 sha256 %s (%s)\n",
+                 qPrintable(hash2), qPrintable(pose2Png));
+    std::fprintf(stderr, "engine-selftest: pose 2 (camera +5 m in x, turned, 240 frames settled): "
+                         "%dx%d image, centre pixel (%d,%d,%d) -> %s\n",
+                 img2.width(), img2.height(), centre2.red(), centre2.green(), centre2.blue(),
+                 differs2 ? "PASS" : "FAIL");
+    if (!differs2) return 1;
+    // A MOVED CAMERA THAT PRODUCES THE SAME BYTES DID NOT MOVE. The pose could
+    // be refused silently by a viewport that returns true and ignores it, and a
+    // second hash equal to the first would then be a gate on nothing.
+    if (!hash1.isEmpty() && hash1 == hash2) {
+        std::fprintf(stderr, "engine-selftest: the two poses hash IDENTICALLY — the camera move "
+                             "did not take\n");
+        return 1;
+    }
+    return 0;
 }

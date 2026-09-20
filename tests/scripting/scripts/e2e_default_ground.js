@@ -46,6 +46,18 @@ assert(proj.length > 10, "project.create");
 var ground = scene.find("Ground");
 assert(ground && node.property(ground, "defaultFloor") === true, "a new scene stands on the default floor");
 
+// THE SUITE STATES ITS OWN SKY (owner answer Q1, 2026-09-18). A new scene's sky
+// is the REALISTIC atmosphere now, and every number below was baselined against
+// the flat 96-grey one: the corner probes ask whether the sky is UNIFORM (an
+// atmosphere is a gradient, by definition), the grazing probes ask what a matte
+// floor does with a 4% sheen, and the "no floor, no horizon" step asks the bare
+// sky to be DARKER than the lit ground (an atmosphere above the horizon is not).
+// None of that is what this suite is about — the FLOOR is — so it names the sky
+// it measures against instead of inheriting the template's, which is free to
+// change again. rgb(96,96,96) is exactly what iris::Scene's constructor sets.
+world.sky("color", { color: "#606060" });
+editor.frame(3);
+
 // ---- 1. the floor's material is authored matte ------------------------------
 var m = material.get(ground);
 console.log("floor material: " + J({ workflow: m.workflow, ior: m.ior, specular: m.specularColor,

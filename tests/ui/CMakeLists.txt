@@ -17,6 +17,7 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
@@ -258,6 +259,7 @@ add_executable(test_vr_panel
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
@@ -343,6 +345,7 @@ add_executable(test_photon_panel
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
@@ -447,6 +450,7 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
@@ -568,6 +572,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
@@ -694,6 +699,7 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
@@ -794,6 +800,7 @@ jah_no_display(ui.panel_lifetime)
 # drives its World | Selection tabs). One list, so a new blade never makes one of
 # them link and the other not.
 set(JAH_PROPERTIES_PANEL_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     test_stubs.cpp
     test_selection_stubs.cpp
     # The row-undo spine (debt L6): every panel row's gesture and the command it
@@ -1097,6 +1104,7 @@ add_executable(test_tree_multiselect
     test_tree_multiselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     # The outliner's clipboard rows ask the envelope codec what the payload
     # holds before offering a Paste row (CLIPBOARD_SPEC §3.1). A leaf: QJson
     # plus QString, no database, no service.
@@ -1147,6 +1155,7 @@ add_executable(test_tree_scroll
     test_tree_scroll.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
@@ -1194,6 +1203,7 @@ add_executable(test_tree_reselect
     test_tree_reselect.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
@@ -1240,6 +1250,7 @@ add_executable(test_hierarchy_root
     test_hierarchy_root.cpp
     test_tree_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenehierarchywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/clipboardformat.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenetreewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
@@ -1356,6 +1367,28 @@ jah_lsan_blocked(ui.window_minimum)   # spawns the app
 # that constrains its aspect keeps its AUTHORED aspect (the pick paths used to
 # overwrite it with the viewport's every frame). MCP harness: the window is
 # re-shaped with app.resizeWindow and measured a request later.
+# ui.material_drag — THE GESTURE (MATERIAL-PREVIEW-1): real drag events at the
+# real viewport, through editor.dragAsset, from each of the three material
+# sources the owner named. App-driving (the MCP harness): the preview service,
+# the resolver, the apply and the undo spine all have to be live.
+add_executable(test_material_drag test_material_drag.cpp)
+set_target_properties(test_material_drag PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_material_drag PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_include_directories(test_material_drag PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_material_drag PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_matdrag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-drag)
+file(MAKE_DIRECTORY ${_matdrag_home}/run)
+add_test(NAME ui.material_drag COMMAND test_material_drag
+         WORKING_DIRECTORY ${_matdrag_home}/run)
+set_tests_properties(ui.material_drag PROPERTIES
+    ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "ui")
+jah_tsan_blocked(ui.material_drag)   # spawns the app
+jah_lsan_blocked(ui.material_drag)   # spawns the app
+
 add_executable(test_shot_aspect test_shot_aspect.cpp)
 set_target_properties(test_shot_aspect PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -1426,11 +1459,17 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 add_executable(test_presets_favorites
     test_presets_favorites.cpp
     test_presets_favorites_stubs.cpp
+    # AUTOMOC needs the header in the source list to emit the seeder's
+    # metaobject: the tray's Customise stands the launch seeder down, and the
+    # stub file defines its two methods (the tests/ui idiom).
+    ${CMAKE_SOURCE_DIR}/src/services/materialpresetseeder.h
     ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmodelpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/presets/assetmaterialpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
     ${CMAKE_SOURCE_DIR}/src/io/materialpresetreader.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/materialpresets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
@@ -1486,3 +1525,27 @@ add_test(NAME ui.import_dialog COMMAND test_import_dialog
 set_tests_properties(ui.import_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.import_dialog)
+
+# ui.new_project_dialog — THE NEW SCENE DIALOG (owner review R1, lane
+# SMALL-UI-A): parented and centred on its parent window, an Empty scene
+# checkbox and a Browse button that both ride the answer, and wide enough for
+# the button. The verb half — project.create(name, {empty, location}) — is
+# scripting.e2e.new_scene; this is the part a verb cannot see. Widgets only.
+add_executable(test_new_project_dialog test_new_project_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/newprojectdialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_new_project_dialog PROPERTIES
+    AUTOMOC ON AUTORCC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_new_project_dialog PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_new_project_dialog PRIVATE Qt6::Widgets qlementine)
+add_test(NAME ui.new_project_dialog COMMAND test_new_project_dialog
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.new_project_dialog PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.new_project_dialog)

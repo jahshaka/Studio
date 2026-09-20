@@ -349,8 +349,11 @@ QList<NodeGraphPreset> CreateNewDialog::getAdditionalPresetList()
 			graphPreset.title = graphPreset.name + " Template";
 			graphPreset.templatePath = prefix + graphPreset.name + ".effect";
 			graphPreset.iconPath = prefix + graphPreset.name.toLower() + ".png";
+			// diffuse + normal only. The specular maps went with the
+			// Blinn-Phong master (LEGACY-MASTER-CRUD): a specular-intensity
+			// map is not a PBR input, so copying one into every project made
+			// from these presets imported an image nothing could ever read.
 			graphPreset.list.append(prefix + graphPreset.name.toLower() + " diff.jpg");
-			graphPreset.list.append(prefix + graphPreset.name.toLower() + " spec.jpg");
 			graphPreset.list.append(prefix + graphPreset.name.toLower() + " norm.png");
 
 			presetsList.append(graphPreset);

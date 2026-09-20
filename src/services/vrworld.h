@@ -73,11 +73,21 @@ struct Settings
     float snapTurnDegrees = iris::kDefaultVrSnapTurnDegrees;
     float smoothTurnDegreesPerSecond = iris::kDefaultVrSmoothTurnDegreesPerSecond;
     bool dominantRight = true;
+    /// Does a session in this project bind the wearer's BARE HANDS? Off — see
+    /// `iris::Scene::vrHands` for why that is a decision and not a placeholder.
+    bool hands = false;
 };
 
-/// How a row is presented and validated: a continuous NUMBER with a range, or
-/// a choice among NAMED options.
-enum class RowKind { Number, Enum };
+/// How a row is presented and validated: a continuous NUMBER with a range, a
+/// choice among NAMED options, or a FLAG — a true/false the panel shows as a
+/// switch and the file carries as a JSON boolean.
+///
+/// A Flag is not an Enum with two options, and the difference is the one the
+/// caller sees: `world.vr({hands:true})` is what anybody writes, and this table
+/// refuses a boolean everywhere else (a `true` read as 1 m/s was a real defect,
+/// see `validate`). Two options spelled "on"/"off" would make the one honest
+/// spelling the wrong one.
+enum class RowKind { Number, Enum, Flag };
 
 /// One choice of an Enum row. `value` is what lands in the field.
 struct EnumOption
@@ -112,6 +122,13 @@ struct Row
     double perPixelStep = 0.1;      ///< scrub sensitivity in the panel
     int    decimals = 1;
     QString unit;                   ///< "m/s", "degrees", "degrees/second"
+
+    /// CAN A SESSION OVERRIDE IT (`vr.locomotion`)? Most rows are read every
+    /// frame by the locomotion step, so a session may change its mind about
+    /// them; a row the session LATCHES at creation cannot be changed while it
+    /// runs, and pretending otherwise would be a verb that silently did
+    /// nothing. Such a row is REFUSED by name, with what to call instead.
+    bool sessionFixed = false;
 
     /// When this row is LIVE. Null = always. Greyed, never hidden ("why is it
     /// grey" beats "where did it go"): the snap step means nothing while the
@@ -152,6 +169,11 @@ void write(const iris::ScenePtr &scene, QJsonObject &sceneObj);
 void read(const iris::ScenePtr &scene, const QJsonObject &sceneObj);
 
 /// VALIDATES ONE VALUE THE WAY BOTH VERBS AND THE PANEL MUST.
+///
+/// A Flag takes a true/false and nothing else — a number or a word is refused
+/// by name rather than coerced, for the reason the Number rows refuse a
+/// boolean: a value of the wrong type is a typo, and a typo that lands is a
+/// setting nobody chose.
 ///
 /// A Number must be a finite number inside the row's range: non-numeric,
 /// NaN/infinite and non-positive values are REFUSED (`error` says so) and a

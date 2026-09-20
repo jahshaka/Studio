@@ -27,6 +27,8 @@ class RotationGizmo;
 class ScaleGizmo;
 class GizmoOverlay;
 class CameraControllerBase;
+class MaterialPreviewService;
+class QMimeData;
 class PlayBack;
 class EditorCameraController;
 class OrbitalCameraController;
@@ -55,9 +57,15 @@ public:
     void setScene(iris::ScenePtr scene) override;
     iris::ScenePtr getScene() override { return mScene; }
     /// The ONE engine scene and the ONE mirror (IEditorViewport's note): the
-    /// Player page draws through these, as a second view.
+    /// Player page draws through these, as a second view. BOTH ARE PURE READS —
+    /// null until something has asked for the scene to be BUILT, which is
+    /// ensureEngineScene() and nothing else. They are read per frame.
     jahshaka::engine::Scene *engineScene() override { return mEngineScene; }
     SceneMirror *sceneMirror() override { return mMirror.get(); }
+    /// IEditorViewport: build the one scene now if it does not exist, for a
+    /// caller that draws it and cannot wait for this widget's show event (the
+    /// Player page, the editor's VR preview). See the definition.
+    bool ensureEngineScene() override;
     float measuredExposureScale() const override {
         return view() ? view()->measuredExposureScale() : 0.0f;
     }
@@ -226,8 +234,8 @@ public:
     /// The editor's VR preview (VR_SPEC §5 phase 4) — see IEditorViewport.
     void setVrPreviewStep(std::function<void()> step) override { mVrPreviewStep = std::move(step); }
     bool vrPreview() const override { return bool(mVrPreviewStep); }
-    void setVrPreviewSceneClosing(std::function<void()> closing) override
-    { mVrPreviewSceneClosing = std::move(closing); }
+    void setVrPreviewEnds(std::function<void()> ends) override
+    { mVrPreviewEnds = std::move(ends); }
     /// Bridges EngineViewWidget's own (non-virtual, and on the OTHER base) copy
     /// onto the interface — C++ does not override across hierarchies, and the
     /// shell holds an IEditorViewport*.
@@ -299,6 +307,11 @@ public:
     /// Toasts "<node> is locked — unlock it to apply <what>" and answers true
     /// when the drop must stop there.
     bool refuseDropOnLocked(const iris::SceneNodePtr &node, const QString &what);
+    /// The material payload of a drag (a Material row OR a Materials-module
+    /// Shader row), empty when the drag carries something else.
+    static QString materialDragSource(const QMimeData *mime);
+    /// The hover-preview service, or null in a host that has none.
+    MaterialPreviewService *materialPreview() const;
     /// Where a dragged asset would land: the picked surface, else the ground plane.
     iris::Vec3 dropPositionAt(const QPointF &point);
     /// IEditorViewport: the same answer, for `editor.dropPointAt` and anything
@@ -335,7 +348,9 @@ protected:
     void viewRecreated() override;
 
 private:
-    bool ensureEngineScene();
+    /// Binds this widget's View to the scene, with the view-side state that
+    /// belongs to the editor's own picture (shadows, the VR helper channel).
+    void bindViewToScene();
     void setActiveGizmo(Gizmo *g);
 
     /// The ONE grid push (visibility, plane, spacing, floor offset, colours)
@@ -413,15 +428,30 @@ private:
     bool                     mPlaying = false;
     QPointF mMousePos, mPrevMousePos;
     bool mHaveMouse = false;
-    // drag-and-drop state (material hover preview), as in SceneViewWidget
-    iris::SceneNodePtr mDragPreviewNode;
-    iris::MaterialPtr mDragOriginalMaterial;
-    bool mDragWasHit = false;
+    // Drag-and-drop state. The MATERIAL HOVER PREVIEW is no longer here: it is
+    // a service behind verbs (services/materialpreviewservice.h,
+    // MATERIAL-PREVIEW-1), because it is an editor capability — the three
+    // members that used to hold it inline are the reason a drop could leave a
+    // borrowed material on a mesh and a scene close could strand one.
     iris::Vec3 mDragScenePos;
+    /// The payload of the drag in progress, so dragMove does not re-decode and
+    /// re-resolve the mime on every mouse move.
+    QString mDragMaterialSource;
     QElapsedTimer mFrameTimer;
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
-    EngineRenderDriver *mDriver = nullptr;
+    /// A QPointer, NOT a raw one, and the reason is a use-after-free this lane
+    /// tripped over (STATS-1, 2026-09-19): EngineHost::shutdown deletes the
+    /// render driver at quit step 4 of 8, and the widget tree — this widget
+    /// included — is destroyed at step 5, with ~EngineSceneViewport reaching
+    /// through cleanup() -> clearScene() -> refreshOverlay() -> presentCovered()
+    /// to `mDriver->noteExternalFrame()`. The call has always landed on freed
+    /// memory; it went unnoticed only because the method used to be one
+    /// QElapsedTimer::restart() into the corpse, which writes and returns. The
+    /// moment it touched a container it aborted the process with `double free
+    /// or corruption` at shutdown, in eleven suites at once. QPointer makes the
+    /// `if (mDriver)` guards those call sites already carry TRUE.
+    QPointer<EngineRenderDriver> mDriver;
     jahshaka::engine::Scene *mEngineScene = nullptr;
     std::unique_ptr<SceneMirror> mMirror;
     EditorViewportEvents mEvents;
@@ -529,9 +559,10 @@ private:
     /// setVrPreviewStep). Installed by the VR module for the life of a session;
     /// not persisted — a session does not survive a restart.
     std::function<void()> mVrPreviewStep;
-    /// ...and "the world you are rendering is going" (finding 1), called from
-    /// clearScene() while the engine scene is still alive.
-    std::function<void()> mVrPreviewSceneClosing;
+    /// ...and "this preview cannot continue here" (finding 1; MIRROR-LIVE-1):
+    /// called from clearScene() while the engine scene is still alive, and from
+    /// end() when the page it is hosted on is left.
+    std::function<void()> mVrPreviewEnds;
     bool mShowShadowAtlas = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     /// The grid plane pushGridForView last PUSHED to the mirror (not what a
@@ -542,10 +573,6 @@ private:
     bool mGameView = false;             // G: helpers hidden; never persisted
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;
-    /// A VR session's mirror was pointed at THIS view when the page was left
-    /// (VR phase 3, F9), so begin() takes it back. The mirror is a workspace of
-    /// its own over this view's target and does not stop when the view does.
-    bool mVrMirrorWasOurs = false;
     bool mActive = false;
     unsigned mViewSerial = 0;
 };

@@ -155,11 +155,37 @@ Object.keys(byTier).forEach(function (tn) {
     assert(row.vrChain[row.vrChain.length - 1].stepCells === 16,
            tn + "'s VR chain pins the outermost step at 16 cells, got " +
            row.vrChain[row.vrChain.length - 1].stepCells);
-    // ...and nothing else is pinned: every inner row leaves the step to the
-    // engine's derivation (0 = derive).
-    for (var i = 0; i + 1 < row.vrChain.length; ++i)
-        assert(row.vrChain[i].stepCells === 0,
-               tn + "'s VR chain leaves inner step " + i + " to the engine");
+    // ...and every OTHER row carries the step the engine DERIVES, reported
+    // resolved rather than as the tier row's 0 (CASCADE-STEP-1: the verb runs
+    // the renderer's own giResolveCascadeSteps, so a chain a tooltip promises
+    // is the chain that gets built, down to the step).
+    [row.chain, row.vrChain].forEach(function (ch, col) {
+        var what = tn + (col ? " VR" : " desktop");
+        for (var i = 0; i < ch.length; ++i) {
+            assert(ch[i].stepCells > 0 && ch[i].stepCells <= ch[i].resolution / 2,
+                   what + " row " + i + " carries a resolved step in cells (" +
+                   ch[i].stepCells + " of " + ch[i].resolution + ")");
+            assert(Math.abs(ch[i].step - ch[i].stepCells * ch[i].cell) < 1e-4,
+                   what + " row " + i + "'s step in metres is its cells times its cell");
+        }
+        // THE NEAR-FIELD GUARANTEE (CASCADE-STEP-1, owner 2026-09-18): a
+        // cascade covers a radius around the head — halfSize - step - cell,
+        // against 0.45 of its own half-size — inside which the near field is
+        // voxelised by IT and never by the coarser cascade behind it. Before
+        // the rule every tier but Low guaranteed a NEGATIVE radius on cascade
+        // 0: the walker reached its own face before it re-centred and the metre
+        // in front of them was built by a 2-3x coarser cascade.
+        //
+        // EVERY ROW, not only cascade 0: the rule is a property of a cascade,
+        // and a mid cascade below its own fraction becomes the chain's binding
+        // constraint (the nearest distance at which ANY hand-over can happen)
+        // however good the innermost one is.
+        for (var j = 0; j < ch.length; ++j)
+            assert(ch[j].guaranteedRadius >= ch[j].nearFieldRadius - 1e-4,
+                   what + " row " + j + " guarantees its near-field radius (" +
+                   ch[j].guaranteedRadius.toFixed(3) + " >= " +
+                   ch[j].nearFieldRadius.toFixed(3) + " m)");
+    });
 });
 // THE TWO HALVES OF THE TRANSFORM APPLY INDEPENDENTLY, which is exactly where
 // the first note was wrong: LOW has no middle cascade to drop and keeps its two

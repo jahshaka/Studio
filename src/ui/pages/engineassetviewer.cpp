@@ -27,6 +27,7 @@
 #include "services/libraryassetnode.h"
 #include "io/skyassetdefinition.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "ui/dialogs/progressdialog.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
@@ -251,17 +252,6 @@ void EngineAssetViewer::loadJafMaterial(QString guid, bool firstAdd, bool cache,
     hideProgress();
 }
 
-void EngineAssetViewer::loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd, bool cache, bool firstLoad)
-{
-    Q_UNUSED(outGuids); Q_UNUSED(firstAdd); Q_UNUSED(cache);
-    showProgress();
-    mScene->setSkyColor(QColor(25, 25, 25));
-    auto node = mScene->setMaterialSubject(mirrorable(readJafShader(guid)), "ae98cx7u_shader_ball");
-    mCachedAssets.insert(guid, node);
-    if (!firstLoad) mScene->resetCameraAfter();
-    hideProgress();
-}
-
 void EngineAssetViewer::loadJafSky(QString guid, bool firstAdd, bool cache, bool firstLoad)
 {
     Q_UNUSED(firstAdd); Q_UNUSED(cache);
@@ -313,30 +303,15 @@ iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QS
 iris::MaterialPtr EngineAssetViewer::readJafMaterial(const QString &guid)
 {
     if (!mDb) return iris::MaterialPtr();
-    QJsonObject matObject = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
+    // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2) — not the
+    // row's blob cache, which is the LIBRARY's copy and can be a version this
+    // project does not hold.
+    QJsonObject matObject = MaterialBundle::read(mDb, guid, mProject);
     MaterialReader reader(TextureSource::GlobalAssets);
     reader.setProject(mProject);
     // Typed: a saved PBR material previews as a PbrMaterial, not a broken
     // shader-less CustomMaterial.
     return reader.parseMaterialTyped(matObject, mDb);
-}
-
-iris::MaterialPtr EngineAssetViewer::readJafShader(const QString &guid)
-{
-    if (!mDb) return iris::MaterialPtr();
-    // A shader asset is a GRAPH: it previews as the PbrMaterial the evaluator
-    // baked into its definition — the same conversion the thumbnail and the
-    // Materials page use (VISUAL_PARITY_SPEC item 5). The old route built a
-    // GLSL CustomMaterial through material->generate(definition); that pipeline
-    // was deleted in MATERIALS_EVALUATOR phase 5, so it produced a grey
-    // approximation of the graph at best.
-    MaterialReader reader(TextureSource::GlobalAssets);
-    reader.setProject(mProject);
-    if (auto material = reader.parseShaderAsPbr(guid, mDb)) return material;
-
-    // Pre-evaluator definition (or baked maps with no open project): show the
-    // neutral preview material rather than pretending to render the graph.
-    return iris::DefaultMaterial::create().staticCast<iris::Material>();
 }
 
 void EngineAssetViewer::applyJafSky(const QString &guid)

@@ -1508,6 +1508,133 @@ int main()
         }
     }
 
+    // =====================================================================
+    // CASE 16 — THE NEAR-FIELD GUARANTEE (CASCADE-STEP-1)
+    //
+    // THE RULE: the innermost cascade guarantees a near-field radius around the
+    // head — `kGiNearFieldRadiusFraction` of its own half-size — inside which
+    // the bounce is ALWAYS read from it and never from the coarser cascade
+    // behind. It is pure arithmetic on the table (halfSize - step - cell), so
+    // 16a asserts it for EVERY TIER AND BOTH COLUMNS with no scene at all, and
+    // 16b walks a camera and proves the geometry the arithmetic claims.
+    // =====================================================================
+    std::printf("\n== case 16a: the near-field guarantee, every tier and both columns ==\n");
+    {
+        bool allOk = true, everyRowOk = true;   // c0's claim, and EVERY row's
+        const GiQuality qualities[3] = { GiQuality::Low, GiQuality::Medium, GiQuality::High };
+        const char *qNames[3] = { "low", "medium", "high" };
+        const GiViewProfile profiles[2] = { GiViewProfile::Desktop, GiViewProfile::Vr };
+        const char *pNames[2] = { "desktop", "vr" };
+        for (int q = 0; q < 3; ++q) {
+            for (int pr = 0; pr < 2; ++pr) {
+                GiQualityFacts f = giQualityFacts(qualities[q], profiles[pr]);
+                giResolveCascadeSteps(f.cascades, f.cascadeCount);
+                std::printf("   %-6s %-7s:", qNames[q], pNames[pr]);
+                for (int i = 0; i < f.cascadeCount; ++i) {
+                    const float r  = giCascadeGuaranteedRadius(f.cascades[i]);
+                    const float rq = giNearFieldRadius(f.cascades[i]);
+                    std::printf("  c%d half %5.1f res %3d step %5.2f m r %6.2f/%5.2f", i,
+                                f.cascades[i].halfSize, f.cascades[i].resolution,
+                                f.cascades[i].stepCells * giCascadeCell(f.cascades[i]), r, rq);
+                    // CASCADE 0 IS THE PRODUCT CLAIM — the near field is what a
+                    // walker reads. It must meet the required radius exactly.
+                    if (i == 0 && r < rq - 1e-4f) allOk = false;
+                    // ...AND SO MUST EVERY OTHER ROW, in both columns. The rule
+                    // is a property of a cascade, not a property of being the
+                    // innermost one: a mid cascade that guarantees less than its
+                    // own fraction becomes the CHAIN's binding constraint — the
+                    // nearest distance at which any hand-over in the chain can
+                    // happen — however good cascade 0 is. Every shipped row
+                    // honours it with room to spare (the outermost by a factor
+                    // of 1.6 at Medium), so this is a rule the tables can be
+                    // held to and not a bar they scrape past.
+                    if (r < rq - 1e-4f) everyRowOk = false;
+                }
+                std::printf("\n");
+            }
+        }
+        CHECK(allOk, "every tier and both columns: cascade 0 guarantees its near-field radius");
+        CHECK(everyRowOk,
+              "...AND EVERY OTHER ROW OF EVERY TIER AND BOTH COLUMNS honours it too "
+              "(a mid cascade below its own fraction is the chain's binding constraint)");
+    }
+
+    std::printf("\n== case 16b: a 10 m walk never leaves the guarantee ==\n");
+    {
+        // The suite's own chain (the High tier table), walked at 1.4 m/s on the
+        // 60 Hz clock — a person's pace, which is the case the rule is written
+        // for. The instrument is giStatus: the camera's offset from cascade 0's
+        // CENTRE, every frame, against `halfSize - guaranteedRadius`.
+        //
+        // IT STARTS BY PARKING. The previous case leaves the camera metres away,
+        // and walking straight out of that relocation puts TWO cascades pending
+        // on the first frame — with one rebuild a frame (and a field follow able
+        // to own the slot) frame 1 would then read a centre from the old pose
+        // and fail an assertion about a walk that had not begun. Park, let the
+        // queue empty, and only then measure (the pattern of case 2).
+        //
+        // AND IT STARTS OFF THE LATTICE. x0 is 0.37 m, not 0: the re-centre
+        // planes are absolute world space, so a walk that begins on a plane
+        // measures the one phase that trips immediately and never the WORST
+        // phase, where the camera crosses a plane just after a frame boundary.
+        const float stride = 1.4f / 60.0f;          // 0.0233 m a frame, walking
+        const float x0 = 0.37f, z0 = 6.0f;
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(x0, 2.0f, z0),
+                                                         Vec3(x0 + 1.0f, 2.0f, z0 - 1.0f)));
+        render(e, 8);
+        const GiStatus w0 = scene->giStatus();
+        CHECK(!w0.cascades.empty(), "the chain is up before the walk is measured");
+        if (w0.cascades.empty()) { std::printf("   (no chain: the walk is skipped)\n"); }
+        else {
+        const float halfSize = w0.cascades[0].halfSize;
+        const float required = 0.45f * halfSize;     // kGiNearFieldRadiusFraction
+        const int frames = int(10.0f / stride);
+        const unsigned long long reb0 = w0.cascades[0].rebuilds;
+        float worstOff = 0.0f, worstGuarantee = 1e9f;
+        bool ok = true;
+        for (int f = 1; f <= frames; ++f) {
+            const float x = x0 + float(f) * stride;
+            view->setCamera(enginetest::testCameraDescLookAt(Vec3(x, 2.0f, z0),
+                                                             Vec3(x + 1.0f, 2.0f, z0 - 1.0f)));
+            render(e, 1);
+            const GiStatus s = scene->giStatus();
+            const GiStatus::CascadeStatus &c = s.cascades[0];
+            const float off = std::max(std::max(std::fabs(x - c.centre.x),
+                                                std::fabs(2.0f - c.centre.y)),
+                                       std::fabs(z0 - c.centre.z));
+            worstOff = std::max(worstOff, off);
+            worstGuarantee = std::min(worstGuarantee, c.halfSize - off);
+            // THE TOLERANCE IS ONE STRIDE, and it is the honest bound rather
+            // than a fudge: the re-centre test is a per-FRAME test, so the
+            // camera is up to one frame's travel past the threshold when the
+            // rebuild lands, and a rebuild the frame's one slot could not pay
+            // adds another. The step is chosen with a cell of slack for exactly
+            // this (giNearFieldMaxStepCells) — 0.078 m at this tier, four
+            // strides — so the measurement below should clear `required`
+            // outright; the stride is what the assertion may not.
+            if (c.halfSize - off < required - stride) ok = false;
+        }
+        const GiStatus w1 = scene->giStatus();
+        std::printf("   %d frames, 10.0 m at 1.4 m/s: worst offset from the centre %.3f m, "
+                    "worst live guarantee %.3f m (required %.3f), c0 rebuilds %llu "
+                    "(%.2f m per rebuild), deferrals %llu\n",
+                    frames, worstOff, worstGuarantee, required,
+                    w1.cascades[0].rebuilds - reb0,
+                    (w1.cascades[0].rebuilds - reb0)
+                        ? 10.0f / float(w1.cascades[0].rebuilds - reb0) : 0.0f,
+                    w1.cascadeDeferrals);
+        CHECK(ok, "ACROSS A 10 m WALK THE HEAD IS NEVER OUTSIDE CASCADE 0'S GUARANTEED RADIUS");
+        CHECK(worstGuarantee >= required,
+              "...and it clears the required radius OUTRIGHT, with the motion slack "
+              "unspent (the tolerance above is the bound, not the budget)");
+        CHECK(worstGuarantee >= w1.cascades[0].guaranteedRadius - stride,
+              "...and the guarantee giStatus reports is the one the walk measured, to "
+              "within the frame the per-frame test costs (the hysteresis itself costs "
+              "no radius: the supremum of the travel is one step, not 1.1 of them)");
+        CHECK(w1.cascadeFullRebuilds == 0, "a 10 m walk is not a teleport");
+        }
+    }
+
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
     GiParams off; off.mode = GiMode::Off;

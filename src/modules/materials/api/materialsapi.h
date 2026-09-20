@@ -44,11 +44,53 @@ public:
     void setGraphModule(GraphApi *graphApi) { mGraphApi = graphApi; }
 
     Q_INVOKABLE QVariantList presets();
-    Q_INVOKABLE QString createGraph(const QString &name);
+    /// ONE mint (MATERIAL_BUNDLE_SPEC 6): a library material bundle, with a
+    /// node graph as its payload when `{graph: true}`. `materials.createGraph`
+    /// was this with the flag always on and a second ModelTypes::Shader row —
+    /// one name survives (CRUD).
+    Q_INVOKABLE QString create(const QString &name, const QVariantMap &options = QVariantMap());
+    /// THE VERB THE TEXTURE PICKER CALLS. A path from anywhere on disk is
+    /// imported by CONTENT at that moment; a guid already in the library is
+    /// reused. Either way the image becomes a MEMBER of the material (the
+    /// edge is derived from the definition) and is pinned into the project
+    /// that holds the material. `{slot: "baseColorMap"}` also writes it into
+    /// the definition; with no slot the image is imported and pinned without
+    /// changing what the material looks like — what a graph texture node wants.
+    Q_INVOKABLE QString addTexture(const QString &materialGuid, const QString &pathOrGuid,
+                                   const QVariantMap &options = QVariantMap());
+    /// The bundle's members: guid, name, slot/node, role, size, used-by
+    /// count, pinned, hidden. THE Members panel's data (one projection,
+    /// services/materialmembers.h).
+    Q_INVOKABLE QVariantList members(const QString &materialGuid);
+    /// Members nothing references any more. DRY RUN BY DEFAULT — with no
+    /// guid the scope is the open PROJECT (pins), with one it is that
+    /// bundle's own born-inside rows (library). Bytes are never removed
+    /// here; that is `assets.gc`.
+    Q_INVOKABLE QVariantList cleanUnused(const QString &materialGuid = QString(),
+                                         const QVariantMap &options = QVariantMap());
+    /// A second Texture row over the SAME bytes, swapped into this one
+    /// material — "change this picture for this material only".
+    Q_INVOKABLE QString makeUnique(const QString &materialGuid, const QString &textureGuid);
+    /// ONE ROW, COPIED: a second library bundle on the same definition. The
+    /// drawer's Duplicate is this verb's implementation.
+    Q_INVOKABLE QString duplicate(const QString &materialGuid,
+                                  const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap loadGraph(const QString &guidOrPath);
     Q_INVOKABLE bool regenerate(const QString &shaderGuid);
     Q_INVOKABLE QString createFromImage(const QString &textureGuid,
                                         const QVariantMap &options = QVariantMap());
+    /// The first-run seed, on demand: every shipped preset as its read-only
+    /// library bundle. Idempotent; answers how many exist afterwards.
+    Q_INVOKABLE int seedPresets();
+    /// R18 — CUSTOMISE A PRESET. A shipped preset is read-only (the writer
+    /// refuses it by name), so the way to change one is to take a copy: this
+    /// mints an ordinary, editable library bundle from the preset's own
+    /// definition, named `<Preset>-1` with the suffix bumped against the
+    /// names already there. THE SUFFIX RULE LIVES IN ONE PLACE
+    /// (MaterialPresetAssets::customiseName) and both the editor's tray and
+    /// the Materials module's Presets drawer call this verb.
+    Q_INVOKABLE QString createFromPreset(const QString &presetOrGuid,
+                                         const QVariantMap &options = QVariantMap());
 
 private:
     /// The {graph: true} branch of createFromImage (IMAGE_PLANE_SPEC B2).
@@ -68,6 +110,8 @@ public:
     QVector<VerbInfo> verbs() const override;
 
     Q_INVOKABLE bool apply(const QString &nodeId, const QString &presetOrGuid);
+    Q_INVOKABLE bool preview(const QString &nodeId, const QString &presetOrGuid);
+    Q_INVOKABLE bool endPreview();
     Q_INVOKABLE bool set(const QString &nodeId, const QVariantMap &values);
     Q_INVOKABLE bool reset(const QString &nodeId);
     Q_INVOKABLE bool setDetail(const QString &nodeId, int layer, const QVariantMap &values);

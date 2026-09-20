@@ -274,6 +274,7 @@ set(SRCS
     src/services/nodenaming.cpp
     src/services/ogresamples.cpp
     src/services/jahlog.cpp
+    src/services/scenestats.cpp
     src/services/sessionmarkers.cpp
     src/services/perfsampler.cpp
     src/services/framemonitor.cpp
@@ -286,6 +287,11 @@ set(SRCS
     src/shell/shutdownorder.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
+    src/services/materialbundle.cpp
+    src/services/materialpresetassets.cpp
+    src/services/materialpresetseeder.cpp
+    src/services/materialmembers.cpp
+    src/services/assetshare.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
@@ -309,6 +315,7 @@ set(SRCS
     src/services/livevideo.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
+    src/services/materialpreviewservice.cpp
     src/services/sceneeditservice.cpp
     src/services/clipboardservice.cpp
     src/services/clipboardbackend.cpp
@@ -372,7 +379,8 @@ set(SRCS
     src/services/thumbnailmanager.cpp 
     src/ui/panels/propertywidgets/fogpropertywidget.cpp 
     src/io/assetiobase.cpp 
-    src/io/materialpresetreader.cpp 
+    src/io/materialpresetreader.cpp
+    src/io/materialpresets.cpp
     src/ui/panels/timeline/keyframelabeltreewidget.cpp 
     src/viewport/keyboardstate.cpp 
     src/io/scenereader.cpp 
@@ -410,6 +418,7 @@ set(SRCS
     src/commands/transformscenenodecommand.cpp 
     src/commands/changematerialpropertycommand.cpp
     src/commands/changematerialcommand.cpp
+    src/commands/pinassetcommand.cpp
     src/commands/resetmaterialcommand.cpp
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
@@ -431,6 +440,8 @@ set(SRCS
     src/ui/controls/sliderlayoutmodel.cpp
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
+    src/services/thumbnailrebuild.cpp 
+    src/services/thumbnailstop.cpp 
     src/bridge/enginepreviewscene.cpp
     src/bridge/enginethumbnailrenderer.cpp 
     src/ui/dialogs/donatedialog.cpp
@@ -441,6 +452,7 @@ set(SRCS
     src/bridge/enginematerialpreviewscene.cpp
     src/bridge/enginematerialpreview.cpp
     src/ui/controls/assetviewgrid.cpp
+    src/ui/controls/assetdrag.cpp
     src/ui/controls/assetgriditem.cpp
     src/ui/controls/drawertreewidget.cpp
     src/ui/controls/videopreviewwidget.cpp
@@ -690,6 +702,7 @@ set(HEADERS
     src/commands/transformscenenodecommand.h 
     src/commands/changematerialpropertycommand.h
     src/commands/changematerialcommand.h
+    src/commands/pinassetcommand.h
     src/commands/addscenenodecommand.h
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h
@@ -709,6 +722,8 @@ set(HEADERS
     src/ui/controls/sliderlayoutmodel.h
     src/ui/dialogs/renameprojectdialog.h 
     src/services/thumbnailgenerator.h 
+    src/services/thumbnailrebuild.h 
+    src/services/thumbnailstop.h 
     src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
     src/ui/pages/importviewertail.h

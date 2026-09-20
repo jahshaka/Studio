@@ -72,15 +72,18 @@ void GraphNodeScene::setNodeGraph(NodeGraph *graph)
 
 void GraphNodeScene::addNodeModel(NodeModel* model, bool addToGraph)
 {
-	if (model->title != "Surface Material") {
+	// THE MASTER NODE GOES STRAIGHT IN, never through the undo stack: it is
+	// the material, not an edit to it, and an undo that removed it would leave
+	// a graph that cannot bake. This used to test `title != "Surface Material"`
+	// — the deleted Blinn master's title — which meant the PBR master, titled
+	// "PBR Material", had been going onto the stack since the day it landed.
+	// Identity against the graph's master is the test that cannot go stale.
+	if (nodeGraph == nullptr || model != nodeGraph->getMasterNode()) {
 		auto addNodeCommand = new AddNodeCommand(model, this);
 		stack->push(addNodeCommand);
 	}
 	else {
-		//add surface node to the scene
-		//other nodes get added to the scene from the add node command above
-		//on AddNodeCommand, redo gets called - stupid qt
-			addNodeModel(model, model->getX(), model->getY(), addToGraph);
+		addNodeModel(model, model->getX(), model->getY(), addToGraph);
 	}
 }
 
@@ -516,7 +519,14 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 			}
 	}
 
-	if (QVariant(event->mimeData()->data("MODEL_TYPE_ROLE")).toInt() == static_cast<int>(ModelTypes::Shader) ) {
+	// A MATERIAL BUNDLE opens in the graph editor (MATERIAL_BUNDLE_SPEC 2.3):
+	// the tiles carry ModelTypes::Material now, and this gate named only
+	// Shader — so dragging a material onto the canvas did nothing at all.
+	// Shader is kept beside it for rows that still arrive from disk.
+	{
+		const int droppedType = QVariant(event->mimeData()->data("MODEL_TYPE_ROLE")).toInt();
+		if (droppedType == static_cast<int>(ModelTypes::Material)
+		    || droppedType == static_cast<int>(ModelTypes::Shader)) {
 		event->accept();
 
 		QListWidgetItem *item = new QListWidgetItem;
@@ -527,6 +537,7 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 
 		emit loadGraph(item);
 		return;
+		}
 	}
 
 	if (event->mimeData()->data("MODEL_TYPE_ROLE").toStdString() == "presets") {

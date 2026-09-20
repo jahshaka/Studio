@@ -57,6 +57,24 @@ inline QString mirror(jahshaka::engine::VrMirrorMode m)
     return QStringLiteral("left");
 }
 
+/// THE MIRROR AS A VERB ANSWERS IT (lane MIRROR-LIVE-1): the host's WISH and
+/// what the window is actually showing this moment, in one map, because the
+/// second question is the one a person asks ("why am I looking at the editor's
+/// camera?") and a bare mode string could never answer it. One spelling for
+/// `vr.state().mirror` and `player.state().vr.mirror`, like everything else
+/// here.
+inline QVariantMap mirrorState(jahshaka::engine::VrMirrorMode mode,
+                               jahshaka::engine::VrDesktopPicture showing)
+{
+    using jahshaka::engine::VrDesktopPicture;
+    return QVariantMap{
+        { QStringLiteral("mode"), mirror(mode) },
+        { QStringLiteral("showing"), showing == VrDesktopPicture::Eye
+                                         ? QStringLiteral("eye")
+                                         : QStringLiteral("own") }
+    };
+}
+
 inline jahshaka::engine::VrMirrorMode mirrorFrom(const QString &name,
                                                  jahshaka::engine::VrMirrorMode fallback)
 {

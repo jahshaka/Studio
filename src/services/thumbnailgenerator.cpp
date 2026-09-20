@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/thumbnailgenerator.h"
 
+#include <QDebug>
 #include <QJsonDocument>
 #include <QtMath>
 #include <QStandardPaths>
@@ -28,8 +29,10 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "services/libraryassetnode.h"
 #include "io/materialreader.h"
+#include "services/materialbundle.h"
 #include "bridge/enginehost.h"
 #include "bridge/enginethumbnailrenderer.h"
+#include "services/thumbnailstop.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
@@ -70,7 +73,16 @@ void ThumbnailGenerator::shutdown()
     // the main window is gone); the renderer checks anyway.
     if (tick) tick->stop();
     pending.clear();
-    engineRenderer.reset();
+    // A SWEEP MAY BE ON THE STACK ABOVE US (fix round F1). This runs from
+    // MainWindow::shutdownBackgroundWork, which is also what a window close
+    // delivered INSIDE a sweep's yield reaches — so ask the sweep to stop
+    // before destroying the renderer it is about to borrow again.
+    thumbrebuild::requestStop();
+    // The renderer is the PROCESS's, not this queue's (THUMBS-1). Destroying it
+    // here is still right — this runs while the Engine is alive and nothing is
+    // rendering — and EngineHost::shutdown() does it again for a session that
+    // tears down without closing its window.
+    EngineThumbnailRenderer::shutdown();
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +105,14 @@ void ThumbnailGenerator::processOneEngineRequest()
         while (pending.size() > 256) pending.removeFirst();
         return;
     }
-    if (!engineRenderer) engineRenderer.reset(new EngineThumbnailRenderer(engine));
+    auto loan = EngineThumbnailRenderer::borrow(engine, "the thumbnail queue");
+    if (!loan) {
+        // Busy: another caller (an import tail, a verb) has the renderer this
+        // instant. Leave the request queued and come back on the next tick —
+        // the queue is what this class is.
+        qWarning("thumbnail queue: %s", qUtf8Printable(loan.reason()));
+        return;
+    }
     // One request per tick: never block the UI for a batch.
     const EngineRequest job = pending.takeFirst();
     ThumbnailResult result;
@@ -101,7 +120,11 @@ void ThumbnailGenerator::processOneEngineRequest()
     result.type        = job.request.type;
     result.path        = job.request.path;
     result.preview     = job.request.preview;
-    result.thumbnail   = renderEngineRequest(job.request, job.size);
+    result.thumbnail   = renderEngineRequest(*loan, job.request, job.size);
+    if (result.thumbnail.isNull())
+        qWarning("thumbnail queue: nothing was rendered for '%s' (%s)",
+                 qUtf8Printable(job.request.id.isEmpty() ? job.request.path : job.request.id),
+                 qUtf8Printable(loan->lastFailure()));
     // Deliver from the event loop, not from inside this tick: receivers may block
     // (a save dialog) and must never re-enter the renderer. The payload travels
     // BY VALUE — there are two receivers and neither may own it (see
@@ -110,7 +133,8 @@ void ThumbnailGenerator::processOneEngineRequest()
                               Qt::QueuedConnection);
 }
 
-QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, QSize size)
+QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer,
+                                               const ThumbnailRequest &request, QSize size)
 {
     if (request.type == ThumbnailRequestType::ImportedMesh) {
         // THE library node — the stored blob with the asset's fit applied
@@ -122,7 +146,7 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         if (!db) return QImage();
         auto node = libraryasset::fromLibrary(db, project, request.id);
         if (!node) return QImage();
-        return engineRenderer->renderNode(node, size);
+        return renderer.renderNode(node, size);
     }
 
     if (request.type == ThumbnailRequestType::Mesh) {
@@ -134,32 +158,50 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
             return EngineThumbnailRenderer::previewMaterialForMeshData(data);
         }, &source);
         if (!node) return QImage();
-        return engineRenderer->renderNode(node, size);
+        return renderer.renderNode(node, size);
     }
 
-    if (request.type == ThumbnailRequestType::Shader) {
-        // The graph asset's baked material on the preview sphere. Null when the
-        // definition predates the evaluator or its baked maps have no project
-        // to resolve against — an empty QImage, never a half-textured render.
-        if (!db) return QImage();
-        MaterialReader reader;
-        reader.setProject(project);
-        auto material = reader.parseShaderAsPbr(request.id, db);
-        if (!material) return QImage();
-        return engineRenderer->renderMaterial(material, size);
-    }
+    // (THE SHADER REQUEST TYPE'S BODY IS GONE — phase 2's Deletes. It rendered
+    // a ModelTypes::Shader row through parseShaderAsPbr; the module asks for a
+    // MATERIAL render of its one row now, and nothing else ever asked for this
+    // kind. The enumerator survives because it is a public request type, and
+    // it falls through to the material branch below, which reads a bundle
+    // definition — the right answer for every guid a caller can hold.)
+    if (request.type == ThumbnailRequestType::Shader && !db) return QImage();
 
-    if (request.type == ThumbnailRequestType::Material) {
-        QFile file(request.path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QImage();
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    if (request.type == ThumbnailRequestType::Material
+        || request.type == ThumbnailRequestType::Shader) {
+        // TWO WAYS IN, ONE READING. A caller with a FILE (the save dialog's
+        // ".material on disk" route) hands a path; a caller with a library ROW
+        // hands the guid and nothing else, and then the definition is the
+        // bundle's — its CAS `source` file, pin-first
+        // (MATERIAL_BUNDLE_SPEC D-2), which is exactly what
+        // `thumbnailrebuild` and `SceneEditService::resolveMaterial` read.
+        //
+        // The guid route exists because the Materials module used to ask for
+        // a SHADER render of its own material: that branch read the row blob
+        // through `parseShaderAsPbr`, which refused anything with no
+        // `pbrMaterial` key — a key the bundle definition does not have — so
+        // every graph material saved in the module logged "nothing was
+        // rendered" and kept a blank tile while the library sweep rendered
+        // the same material perfectly. One reader, here, for both types.
+        QJsonObject definition;
+        if (!request.path.isEmpty()) {
+            QFile file(request.path);
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QImage();
+            definition = QJsonDocument::fromJson(file.readAll()).object();
+        } else {
+            if (!db || request.id.isEmpty()) return QImage();
+            definition = MaterialBundle::read(db, request.id, project);
+        }
+        if (definition.isEmpty()) return QImage();
         MaterialReader reader;
         reader.setProject(project);
         // Typed: PBR material thumbnails render the real PbrMaterial.
-        auto material = reader.parseMaterialTyped(doc.object(), db);
+        auto material = reader.parseMaterialTyped(definition, db);
         // No conversion any more (HLMS_ADOPTION P4b): the reader returns a
         // PbrMaterial, which the mirror renders natively.
-        return engineRenderer->renderMaterial(material, size);
+        return renderer.renderMaterial(material, size);
     }
     return QImage();
 }

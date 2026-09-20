@@ -10,7 +10,7 @@
 //
 // Four verbs close that: connections(), nodeInfo(type), removeNode(id) and
 // disconnect(). This suite drives them over a SCRIPT graph
-// (materials.createGraph — no Materials page in a --script run), which is the
+// (materials.create — no Materials page in a --script run), which is the
 // half the headless matrix guarantees. The page half — where the same two
 // removals go through the canvas's own undo commands so graph.undo covers them
 // — is gated by the shadergraph.selection unit suite, which has a real
@@ -48,7 +48,7 @@ assert(unknown, "an unknown type is refused with the same message addNode gives"
 
 // ---- build something to read and to edit ---------------------------------
 
-assert(materials.createGraph("edit me").length > 0, "materials.createGraph");
+assert(materials.create("edit me", { graph: true }).length > 0, "materials.create");
 // createGraph already installs the PbrMaterial master — adding a second one
 // would only orphan the first.
 var m = graph.nodes().filter(function (n) { return n.master; })[0].id;
@@ -133,6 +133,6 @@ assert(noNode, "an unknown node id is refused");
 
 // The graph still evaluates after all that surgery.
 var evaluated = graph.evaluate();
-assert(evaluated.hasPbrMaster === true, "the edited graph still evaluates");
+assert(typeof evaluated.values === "object", "the edited graph still evaluates");
 
 console.log("e2e_graph_edit: ALL OK");

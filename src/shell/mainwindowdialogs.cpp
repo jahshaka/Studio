@@ -99,7 +99,7 @@ QWidget *MainWindow::openDialog(const QString &name, const QVariantMap &options,
     } else if (name == QLatin1String("notices")) {
         dialog = new NoticesDialog(this);
     } else if (name == QLatin1String("newProject")) {
-        dialog = new NewProjectDialog;
+        dialog = new NewProjectDialog(this);
     } else if (name == QLatin1String("renameProject")) {
         dialog = new RenameProjectDialog;
     } else if (name == QLatin1String("progress")) {
