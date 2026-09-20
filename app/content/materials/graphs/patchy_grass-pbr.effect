@@ -46,7 +46,7 @@
                 "id": "0a57cc76-6cfe-5869-b783-cc29e09fd8cc",
                 "title": "Roughness",
                 "type": "texture",
-                "value": "../presets/patchy_grass/patchygrass_1_SPEC.png",
+                "value": "presets/patchy_grass/patchygrass_1_SPEC.png",
                 "x": -430.0,
                 "y": 140.0
             },
@@ -62,7 +62,7 @@
                 "id": "344b6df8-a0f9-566b-8abe-bfc35effcbcb",
                 "title": "Normal",
                 "type": "texture",
-                "value": "../presets/patchy_grass/patchygrass_1_NRM.png",
+                "value": "presets/patchy_grass/patchygrass_1_NRM.png",
                 "x": -430.0,
                 "y": 360.0
             },
@@ -70,7 +70,7 @@
                 "id": "b802c73b-56d5-56f5-8468-603bda84a4bb",
                 "title": "Base Colour",
                 "type": "texture",
-                "value": "../presets/patchy_grass/patchygrass_1_COLOR.png",
+                "value": "presets/patchy_grass/patchygrass_1_COLOR.png",
                 "x": -430.0,
                 "y": -210.0
             }

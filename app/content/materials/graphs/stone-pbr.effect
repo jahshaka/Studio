@@ -38,7 +38,7 @@
                 "id": "0f7b4d06-008b-5105-bc3c-73fd66486bc4",
                 "title": "Base Colour",
                 "type": "texture",
-                "value": "../presets/stone/Stone_04_UV_H_CM_1_COLOR.png",
+                "value": "presets/stone/Stone_04_UV_H_CM_1_COLOR.png",
                 "x": -430.0,
                 "y": -210.0
             },
@@ -54,7 +54,7 @@
                 "id": "76ae28f3-dec6-566b-91dd-0bbdce4914a5",
                 "title": "Roughness",
                 "type": "texture",
-                "value": "../presets/stone/Stone_04_UV_H_CM_1_SPEC.png",
+                "value": "presets/stone/Stone_04_UV_H_CM_1_SPEC.png",
                 "x": -430.0,
                 "y": 140.0
             },
@@ -70,7 +70,7 @@
                 "id": "c450931b-a852-5d7b-95f4-ab59fdae430f",
                 "title": "Normal",
                 "type": "texture",
-                "value": "../presets/stone/Stone_04_UV_H_CM_1_NRM.png",
+                "value": "presets/stone/Stone_04_UV_H_CM_1_NRM.png",
                 "x": -430.0,
                 "y": 360.0
             }

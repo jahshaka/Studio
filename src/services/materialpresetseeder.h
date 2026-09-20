@@ -24,7 +24,7 @@ For more information see the LICENSE file
 // filesystem, otherwise COPY + fsync. On the owner's box the store is ext4 on
 // a USB stick and the shipped PNGs are in the app tree, so `::link()` fails
 // and every map is copied and fsynced — 220-1,153 ms per file write there
-// (FSYNC-2's measurements on that device). Sixteen of the eighteen presets
+// (FSYNC-2's measurements on that device). Eighteen of the twenty presets
 // carry maps, up to three each. Done inside a drop, that is a frozen second
 // or more at the exact moment the user is dragging.
 //
@@ -53,7 +53,7 @@ For more information see the LICENSE file
 // catalog: this is a warm-up, not a dependency.
 //
 // IDEMPOTENT AND CHEAP ON EVERY LAUNCH AFTER THE FIRST: one query answers
-// "are all eighteen rows already there with a definition", and a seeded
+// "are all twenty rows already there with a definition", and a seeded
 // library starts no worker at all.
 
 #include <QElapsedTimer>

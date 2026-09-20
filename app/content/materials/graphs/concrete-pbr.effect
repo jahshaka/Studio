@@ -38,7 +38,7 @@
                 "id": "3406462b-b10e-5e71-8e89-6e9cec3f5d14",
                 "title": "Roughness",
                 "type": "texture",
-                "value": "../presets/concrete/Old_Painted_UV_H_CM_1_SPEC.png",
+                "value": "presets/concrete/Old_Painted_UV_H_CM_1_SPEC.png",
                 "x": -430.0,
                 "y": 140.0
             },
@@ -46,7 +46,7 @@
                 "id": "4c6e76d2-95e4-5cd4-8e85-3f8579949c70",
                 "title": "Normal",
                 "type": "texture",
-                "value": "../presets/concrete/Old_Painted_UV_H_CM_1_NRM.png",
+                "value": "presets/concrete/Old_Painted_UV_H_CM_1_NRM.png",
                 "x": -430.0,
                 "y": 360.0
             },
@@ -70,7 +70,7 @@
                 "id": "fb2756e2-0e56-5948-970d-fbb0c837ea36",
                 "title": "Base Colour",
                 "type": "texture",
-                "value": "../presets/concrete/Old_Painted_UV_H_CM_1_COLOR.png",
+                "value": "presets/concrete/Old_Painted_UV_H_CM_1_COLOR.png",
                 "x": -430.0,
                 "y": -210.0
             }

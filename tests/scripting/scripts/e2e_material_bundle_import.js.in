@@ -29,7 +29,7 @@ function assert(cond, msg) {
 var shippedMaterials = assets.list({ scope: "store", type: "material" }).filter(function (a) {
     return a.guid.indexOf("00000000-0000-0000-0000-00000000") === 0;
 }).length;
-assert(shippedMaterials === 0 || shippedMaterials === 18,
+assert(shippedMaterials === 0 || shippedMaterials === 20,
        "the only materials here are the app's own shipped presets (" + shippedMaterials + ")");
 
 var archive = "@ARCHIVE_PATH@";

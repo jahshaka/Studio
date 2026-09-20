@@ -54,7 +54,7 @@
                 "id": "ec3cfef9-9ceb-53c6-8ca6-d58c0fb77b4e",
                 "title": "Roughness",
                 "type": "texture",
-                "value": "../presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_SPEC.png",
+                "value": "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_SPEC.png",
                 "x": -430.0,
                 "y": 140.0
             },
@@ -62,7 +62,7 @@
                 "id": "f28ba396-c43f-5551-9f0e-b1b4ecf03fa3",
                 "title": "Base Colour",
                 "type": "texture",
-                "value": "../presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_COLOR.png",
+                "value": "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_COLOR.png",
                 "x": -430.0,
                 "y": -210.0
             },
@@ -70,7 +70,7 @@
                 "id": "fb9f780f-c036-5741-ae42-087be7ed1dd7",
                 "title": "Normal",
                 "type": "texture",
-                "value": "../presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_NRM.png",
+                "value": "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_NRM.png",
                 "x": -430.0,
                 "y": 360.0
             }

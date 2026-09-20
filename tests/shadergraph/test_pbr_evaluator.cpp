@@ -377,7 +377,8 @@ int main(int argc, char** argv)
         auto lib = new LibraryV1();
 
         // The graphs name their images RELATIVE to the preset file that owns
-        // them, so evaluating one means working from the graphs folder:
+        // them — the same spelling as the map slot beside them — so
+        // evaluating one means working from the PRESET folder:
         // TextureNode::deserializeWidgetValue takes the path branch only when
         // QFileInfo::exists() says so, and files anything else as an asset
         // guid with no path — a socket the baker then reads as UNCONNECTED.
@@ -386,7 +387,7 @@ int main(int argc, char** argv)
         // database.)
         const QString cwdBefore = QDir::currentPath();
         const QString presetDir = QString(JAHSHAKA_TEST_PRESET_DIR);
-        QDir::setCurrent(presetDir + "graphs");
+        QDir::setCurrent(presetDir);
 
         QStringList presetFiles;
         {

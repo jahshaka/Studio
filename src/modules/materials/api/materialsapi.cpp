@@ -214,7 +214,8 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "written into the definition and every mesh wearing the material is re-dressed — on a VALUES "
           "material only: a GRAPH material's slots come from its graph, so a slot write there is refused "
           "(the image is still imported and pinned; put it on a texture node with graph.addNode('texture') "
-          "+ graph.setValue).",
+          "+ graph.setValue). A SHIPPED PRESET is refused outright, before anything is imported: it is "
+          "read-only, and materials.createFromPreset makes the copy that is not.",
           Needs::Document },
         { "members", "materials.members(guid) -> [{guid, name, slot, node, role, bytes, usedBy, "
                      "pinned, member, hidden}]",
@@ -275,7 +276,7 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           Needs::Document },
         { "seedPresets", "materials.seedPresets() -> int",
           "Seeds every shipped preset into the library as its read-only bundle — the FIRST-RUN seed, "
-          "on demand — and answers how many exist afterwards (18). Idempotent and normally "
+          "on demand — and answers how many exist afterwards (20). Idempotent and normally "
           "unnecessary: the app runs this at launch, with the maps' bytes put in the store on a "
           "worker thread so the row pass has no device wait in it (services/materialpresetseeder.h). "
           "Call it when you need the rows to be there NOW — a script that counts material rows, or a "
@@ -285,6 +286,9 @@ QVector<VerbInfo> MaterialsApi::verbs() const
         { "createFromPreset", "materials.createFromPreset(presetOrGuid, {name}) -> materialGuid",
           "Customises a SHIPPED PRESET (R18): an editable copy of it as an ordinary library material bundle, "
           "because a preset itself is read-only — the definition writer refuses one by name, not just the UI. "
+          "THE COPY CARRIES THE PRESET'S GRAPH, so it opens in the node editor and every edit gesture works "
+          "on it — that is what 'a custom preset is a new material based on the preset it was customised from' "
+          "means (PRESET-UNIFY-1). "
           "The copy names the preset's own member textures (one object, shared) and takes the name "
           "'<Preset>-1', the suffix bumped against the material names the library already holds, unless {name} "
           "says otherwise. With a project open it is added to the project too, so it lands in the project's "
@@ -534,6 +538,20 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
     const AssetRecord row = host.db->fetchAsset(materialGuid);
     if (row.type != static_cast<int>(ModelTypes::Material)) {
         fail(QStringLiteral("materials.addTexture: '%1' is not a material").arg(materialGuid));
+        return QString();
+    }
+    // A SHIPPED PRESET IS READ-ONLY, AND THE ANSWER COMES BEFORE THE WORK
+    // (PRESET-UNIFY-1, the same rule as the apply's F6 test). The definition
+    // writer refuses a reserved guid at the end of this function anyway — but
+    // by then a picture from disk has been imported into the library and
+    // pinned into the project for an edit that was never going to land, which
+    // is exactly the shape of defect "nothing is imported for an apply that
+    // cannot happen" removed from the apply.
+    const QString shipped = MaterialBundle::shippedPresetName(materialGuid);
+    if (!shipped.isEmpty()) {
+        fail(QStringLiteral("materials.addTexture: '%1' is a material the app ships and is "
+                            "read-only — materials.createFromPreset('%1') makes your own copy")
+                 .arg(shipped));
         return QString();
     }
 

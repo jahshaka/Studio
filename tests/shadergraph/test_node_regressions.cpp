@@ -260,8 +260,9 @@ int main(int argc, char** argv)
                 const QString stored = node->serializeWidgetValue().toString();
                 if (stored.isEmpty()) continue;
                 // The graphs name their images relative to the PRESET file
-                // that owns them, one folder up from graphs/.
-                const QString abs = QDir::cleanPath(graphDir + stored);
+                // that owns them — the folder above graphs/.
+                const QString abs =
+                    QDir::cleanPath(QString(JAHSHAKA_TEST_PRESET_DIR) + stored);
                 if (QFileInfo::exists(abs))
                     static_cast<TextureNode*>(node)->setTexturePath(abs);
             }

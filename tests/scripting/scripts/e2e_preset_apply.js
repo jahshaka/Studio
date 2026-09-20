@@ -19,6 +19,11 @@
 //      named "<Preset>-1", the suffix bumped against the names already
 //      there, sharing the preset's member textures (one object, used by
 //      two). It is an ordinary bundle: editing it is allowed.
+//   4b. EVERY PRESET IS A GRAPH, AND SELECTING ONE SHOWS IT (PRESET-UNIFY-1,
+//      the owner 2026-09-20). One shipped list, no duplicates; a preset opens
+//      READ-ONLY and opening one seeds nothing; the CUSTOMISED copy carries
+//      the graph, which is what makes it something the node editor can open
+//      and edit.
 //   5. THE PIN IS AN UNDO STEP (F5's other half). What can be asserted from
 //      inside a script run is that the step was RECORDED — a run is ONE open
 //      macro, so editor.undo() cannot reach it. What undoing it DOES is
@@ -42,12 +47,29 @@ function names(rows) {
 var proj = project.create("Preset Apply " + Date.now());
 assert(proj.length > 10, "project.create");
 
-assert(materials.presets().length === 18,
-       "eighteen shipped presets (the fourteen pre-PBR files are deleted) — got "
-       + materials.presets().length);
-materials.presets().forEach(function (p) {
+// ---- 0. ONE LIST, NO DUPLICATES (PRESET-UNIFY-1) -------------------------
+//
+// Twenty, because the two graph templates that had no tray tile (Painted
+// Metal, Grass 2) are presets now and the fifteen that were BOTH a template
+// and a preset are one thing.
+var presets = materials.presets();
+assert(presets.length === 20,
+       "twenty shipped presets — got " + presets.length);
+var seenNames = {}, seenGuids = {};
+presets.forEach(function (p) {
     if (!p.guid || p.guid.length < 10) throw new Error("preset '" + p.name + "' has no guid");
+    if (seenNames[p.name]) throw new Error("two presets called '" + p.name + "'");
+    if (seenGuids[p.guid]) throw new Error("two presets on guid " + p.guid);
+    seenNames[p.name] = seenGuids[p.guid] = true;
 });
+assert(true, "…each with a guid, and no name or guid appears twice");
+// THE OLD FAMILY IS GONE: the drawer used to show "Gold" beside "Gold PBR".
+["Gold", "Brick", "Silver", "Glass", "Default", "Basic", "Texture", "Checker Board",
+ "Grass", "Leather", "Stone", "Wood", "Marble tile", "Patchy grass", "sand",
+ "Painted metal", "Grass2"].forEach(function (old) {
+    if (seenNames[old]) throw new Error("the graph template '" + old + "' is still a second preset");
+});
+assert(true, "…and not one of the seventeen graph templates survives as a second tile");
 
 // ---- 1. THE FIRST-RUN SEED, then three applies that add nothing ----------
 //
@@ -56,25 +78,37 @@ materials.presets().forEach(function (p) {
 // library reaches a steady state of EIGHTEEN bundles, one per preset, with no
 // gesture at all. `materials.seedPresets()` is that same seed on demand: it
 // makes the count deterministic here instead of racing the launch.
-assert(materials.seedPresets() === 18, "the first-run seed: eighteen bundles");
+// ---- 1b. LOOKING AT A PRESET SEEDS NOTHING (PRESET-UNIFY-1) --------------
+//
+// Before the seed, so "no row exists" is a fact and not a hope: opening a
+// preset's graph is a READ, and it must not be the thing that writes its row.
+assert(materialRows().length === 0, "nothing is seeded yet");
+var peek = materials.loadGraph("Gold PBR");
+assert(peek.nodes >= 3, "a preset's GRAPH opens (" + peek.nodes + " nodes)");
+assert(peek.master === "PbrMaterial", "…on the one master");
+assert(peek.readOnly === true, "…and it says READ-ONLY, before any edit is attempted");
+assert(materialRows().length === 0,
+       "…and LOOKING at it seeded nothing (" + materialRows().length + " rows)");
+
+assert(materials.seedPresets() === 20, "the first-run seed: twenty bundles");
 var seeded = materialRows();
-assert(seeded.length === 18,
+assert(seeded.length === 20,
        "…and that is the whole library's material list (" + seeded.length + ")");
-assert(materials.seedPresets() === 18, "seeding again is idempotent");
-assert(materialRows().length === 18, "…and mints nothing the second time");
+assert(materials.seedPresets() === 20, "seeding again is idempotent");
+assert(materialRows().length === 20, "…and mints nothing the second time");
 
 var cube = scene.addPrimitive("Cube");
 assert(!!cube, "a cube to paint");
 
 assert(material.apply(cube, "Gold PBR") === true, "apply 1: Gold PBR");
-assert(materialRows().length === 18,
+assert(materialRows().length === 20,
        "the apply MINTED NOTHING (" + materialRows().length + " rows)");
 assert(materialRows().filter(function (r) { return r.guid === GOLD; }).length === 1,
        "…it used the preset's own reserved guid");
 
 assert(material.apply(cube, "Gold PBR") === true, "apply 2");
 assert(material.apply(cube, GOLD) === true, "apply 3 (by guid this time)");
-assert(materialRows().length === 18,
+assert(materialRows().length === 20,
        "THREE APPLIES, ZERO NEW ROWS (" + materialRows().length + ")");
 
 // …and none of the project bookkeeping the old tail minted.
@@ -118,13 +152,23 @@ assert(assets.list({ scope: "project", type: "material" }).length === 1,
        "the second project pins the same bundle");
 
 // ---- 3. read-only in fact -------------------------------------------------
+var texturesNow = assets.list({ scope: "store", type: "texture" }).length;
 var refused = false;
 try { materials.addTexture(BRICK, texturesBefore > 0
                                       ? assets.list({ scope: "store", type: "texture" })[0].guid
                                       : GOLD,
                            { slot: "emissiveMap" }); }
 catch (e) { refused = true; console.log("   refusal: " + e.message); }
-assert(refused, "a WRITE to a shipped preset is refused — by the writer, not by the UI");
+assert(refused, "a WRITE to a shipped preset is refused");
+assert(assets.list({ scope: "store", type: "texture" }).length === texturesNow,
+       "…BEFORE it imports anything for an edit that cannot land");
+
+// …and the refusal is the WRITER's, not the UI's: regenerate goes straight to
+// MaterialBundle::write, which knows the reserved guid by name.
+var regenRefused = false;
+try { regenRefused = (materials.regenerate(BRICK) !== true); }
+catch (e) { regenRefused = true; console.log("   refusal: " + e.message); }
+assert(regenRefused, "…and so is a re-bake, at the definition writer");
 
 var stillThree = materials.members(BRICK).length;
 assert(stillThree === 3, "…and the preset's definition did not move (" + stillThree + " members)");
@@ -161,10 +205,59 @@ assert(JSON.stringify(copyMembers.map(function (m) { return m.guid; }).sort())
        "…the SAME rows, not copies of them");
 assert(copyMembers[0].usedBy >= 2, "…so the shared picture reads 'used by 2' or more");
 
-var edited = materials.addTexture(named, presetMemberGuids[0], { slot: "emissiveMap" });
-assert(edited === presetMemberGuids[0], "the COPY accepts an edit the preset refused");
-assert(materials.members(named).length === 3,
-       "…(the same three rows: the emissive slot now names one of them too)");
+// A COPY IS A GRAPH MATERIAL, so its slots come from the graph — the slot
+// door says so by name and imports the picture anyway rather than losing it.
+var slotRouted = false;
+try { materials.addTexture(named, presetMemberGuids[0], { slot: "emissiveMap" }); }
+catch (e) { slotRouted = /comes from the graph/.test(e.message); console.log("   " + e.message); }
+assert(slotRouted,
+       "a slot edit on the COPY is routed to its graph (it has one now), not refused as read-only");
+
+// ---- 4b. THE COPY CARRIES THE GRAPH (PRESET-UNIFY-1) ---------------------
+//
+// "a custom preset is a new material based on the preset it was customised
+// from". Before this the copy carried the preset's VALUES only, so the node
+// editor opened on an empty canvas — which is what the owner saw.
+var presetGraph = materials.loadGraph(BRICK);
+assert(presetGraph.nodes >= 3, "the preset's own graph reads (" + presetGraph.nodes + " nodes)");
+assert(presetGraph.readOnly === true, "…read-only");
+var copyGraph = materials.loadGraph(named);
+assert(copyGraph.nodes === presetGraph.nodes,
+       "the COPY carries the same graph (" + copyGraph.nodes + " nodes)");
+assert(copyGraph.master === "PbrMaterial", "…on the one master");
+assert(copyGraph.readOnly === false,
+       "…and it is NOT read-only: the copy is the user's to edit");
+
+// AND THE COPY TAKES A REAL GRAPH EDIT, which is what Customise is for. The
+// preset's own graph refuses the same save, by the reserved guid.
+materials.loadGraph(named);
+var master = graph.nodes().filter(function (n) { return n.master; })[0];
+assert(!!master, "the copy's graph has a master");
+var rough = graph.addNode("float");
+assert(!!rough, "a float node on the copy's graph");
+assert(graph.setValue(rough, 0.11) === true, "…set to 0.11");
+assert(graph.connect(rough, 0, master.id, "Roughness") === true, "…wired to Roughness");
+assert(graph.save() === true, "the COPY saves");
+var afterEdit = graph.evaluate().values.roughness;
+assert(Math.abs(afterEdit - 0.11) < 1e-3,
+       "…and the graph now folds to that roughness (" + afterEdit + ")");
+// THE PRESET REFUSES THE SAME SAVE.
+materials.loadGraph(BRICK);
+var presetSaveRefused = false;
+try { presetSaveRefused = (graph.save() !== true); }
+catch (e) { presetSaveRefused = true; console.log("   " + e.message); }
+assert(presetSaveRefused, "…while the PRESET's own graph cannot be saved over");
+
+// EVERY preset has one, which is the whole rule — a tile that cannot answer
+// "show me this material" has no business in the drawer.
+presets.forEach(function (p) {
+    var g = materials.loadGraph(p.guid);
+    if (!(g.nodes >= 2) || g.master !== "PbrMaterial")
+        throw new Error("preset '" + p.name + "' has no graph");
+    if (g.readOnly !== true)
+        throw new Error("preset '" + p.name + "' does not report read-only");
+});
+assert(true, "…and all twenty presets open as read-only PBR graphs");
 
 // ---- 5. the pin is an undo step -------------------------------------------
 //

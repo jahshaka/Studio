@@ -38,7 +38,7 @@
                 "id": "398a217e-ea8f-504e-9fe5-b82917e30b44",
                 "title": "Roughness",
                 "type": "texture",
-                "value": "../presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png",
+                "value": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png",
                 "x": -430.0,
                 "y": 140.0
             },
@@ -54,7 +54,7 @@
                 "id": "b4ff684d-0ece-5cee-a58b-9174127c3bcb",
                 "title": "Normal",
                 "type": "texture",
-                "value": "../presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
+                "value": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
                 "x": -430.0,
                 "y": 360.0
             },
@@ -70,7 +70,7 @@
                 "id": "e60faab4-710d-582c-b88c-f6f9e64615ba",
                 "title": "Base Colour",
                 "type": "texture",
-                "value": "../presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
+                "value": "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
                 "x": -430.0,
                 "y": -210.0
             }

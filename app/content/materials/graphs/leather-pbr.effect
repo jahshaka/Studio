@@ -54,7 +54,7 @@
                 "id": "58be639d-29a2-51e1-86fb-15290dbb86f1",
                 "title": "Normal",
                 "type": "texture",
-                "value": "../presets/leather/Leather_02_UV_H_CM_1_NRM.png",
+                "value": "presets/leather/Leather_02_UV_H_CM_1_NRM.png",
                 "x": -430.0,
                 "y": 360.0
             },
@@ -62,7 +62,7 @@
                 "id": "bc8c070d-f7b5-550a-b29b-bb500be740bf",
                 "title": "Base Colour",
                 "type": "texture",
-                "value": "../presets/leather/Leather_02_UV_H_CM_1_COLOR.png",
+                "value": "presets/leather/Leather_02_UV_H_CM_1_COLOR.png",
                 "x": -430.0,
                 "y": -210.0
             },
@@ -70,7 +70,7 @@
                 "id": "dcd543d2-c766-5ec2-bd78-03fda8c72fa0",
                 "title": "Roughness",
                 "type": "texture",
-                "value": "../presets/leather/Leather_02_UV_H_CM_1_SPEC.png",
+                "value": "presets/leather/Leather_02_UV_H_CM_1_SPEC.png",
                 "x": -430.0,
                 "y": 140.0
             }

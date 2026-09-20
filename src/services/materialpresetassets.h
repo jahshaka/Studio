@@ -23,6 +23,14 @@ For more information see the LICENSE file
 // PBR" three times over, an undo took none of them back, and each apply also
 // wrote a `matgen.material` file and an "Presets" folder nobody ever read.
 //
+// EVERY PRESET IS A GRAPH (PRESET-UNIFY-1, 2026-09-20). A shipped preset is
+// one file that authors its VALUES and names the graph beside it in
+// `app/content/materials/graphs/`; the definition seeded here carries both,
+// so selecting a preset shows its graph and `customise` hands the user a
+// material the node editor can open. There is no second preset family: the
+// seventeen `.effect` graph TEMPLATES that used to sit beside these in the
+// module's drawer ("Brick" above "Brick PBR") are deleted.
+//
 // It is an ordinary library bundle now, with the guid it always had
 // (`Constants::Reserved::DefaultMaterials` — the same id the tray tile, the
 // drag payload and `materials.presets()` have carried for years), its maps as
@@ -34,7 +42,7 @@ For more information see the LICENSE file
 // SEEDED ON FIRST USE, not at boot. That is the same rule its maps already
 // followed (`ShippedAssets::pinTexture`: "imported through the ONE import
 // pipeline the first time any project needs it") and it is the one that costs
-// nothing: eighteen bundles with forty-odd PNGs between them would otherwise
+// nothing: twenty bundles with forty-odd PNGs between them would otherwise
 // be hashed and ingested during the first launch, on the thread that draws,
 // for presets a user may never touch. Listing does not seed — a drawer lists
 // from `MaterialPresets::all()` and the reserved guids, so the tiles are
@@ -108,7 +116,7 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db,
                           QString *errorOut = nullptr, const Prepared *prepared = nullptr);
 
 /// Is this preset's bundle already in the library, complete? (a Material row
-/// with a definition that reads). The seeder asks it of all eighteen before
+/// with a definition that reads). The seeder asks it of all twenty before
 /// it spawns a thread, and `ensureSeeded` asks it of one before it does any
 /// work — one test, so "already seeded" cannot mean two things.
 bool isSeeded(const QString &presetOrGuid, Database *db);

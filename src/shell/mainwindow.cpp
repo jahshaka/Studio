@@ -3039,7 +3039,7 @@ void MainWindow::setupDockWidgets()
     // the app tree, which is the owner's box, and an fsync belongs nowhere
     // near the thread that draws (FSYNC-2) — and the rows follow one preset
     // per event-loop turn, with no device wait left in them. A library that
-    // already has all eighteen starts no thread at all. Nothing waits for it:
+    // already has all twenty starts no thread at all. Nothing waits for it:
     // an apply that beats the seeder seeds its own preset, as it always did.
     //
     // ONLY FOR A PERSON (app/firstrun.h, the one "is a machine driving this?"
