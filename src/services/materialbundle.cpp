@@ -504,6 +504,24 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
 
 } // namespace
 
+QString uniqueName(Database *db, const QString &wanted)
+{
+    QSet<QString> taken;
+    if (db)
+        for (const auto &row : db->fetchAssetsForAssetView())
+            if (row.type == static_cast<int>(ModelTypes::Material))
+                taken.insert(row.name.toCaseFolded());
+    for (auto it = Constants::Reserved::DefaultMaterials.constBegin();
+         it != Constants::Reserved::DefaultMaterials.constEnd(); ++it)
+        taken.insert(it.value().toCaseFolded());
+    const QString base = wanted.trimmed();
+    if (base.isEmpty()) return base;
+    QString chosen = base;
+    for (int n = 1; taken.contains(chosen.toCaseFolded()); ++n)
+        chosen = QStringLiteral("%1-%2").arg(base).arg(n);
+    return chosen;
+}
+
 QString create(Database *db, const QString &name, const QJsonObject &definition,
                const QByteArray &thumbnail, QString *errorOut)
 {

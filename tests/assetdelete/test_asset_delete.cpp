@@ -75,6 +75,7 @@
 #include "services/assetdelete.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
+#include "services/materialbundle.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -860,6 +861,22 @@ int main(int argc, char **argv)
                              .arg(companion, mintError)));
         CHECK(ImageMaterial::companionMaterials(texGuid) == QStringList{ companion },
               "companionMaterials names exactly it (the mint's stamp)");
+        // F9 (BUNDLE-P4): the companion is a BUNDLE like every other material —
+        // a CAS definition file, the stamp inside it, its membership edge
+        // derived from it with a NULL project (the intrinsic set).
+        CHECK(!AssetCas::sourceOid(conn, companion).isEmpty(),
+              "F9: the companion has a stored definition file (a source oid)");
+        {
+            const QJsonObject def = MaterialBundle::read(&db, companion, nullptr);
+            CHECK(def.value("companionOf").toString() == texGuid,
+                  "F9: the definition carries the companionOf stamp");
+            CHECK(def.value("values").toObject().value("baseColorMap").toString() == texGuid,
+                  "F9: ...and names the image in its base colour slot");
+            CHECK(MaterialBundle::memberGuids(def) == QStringList{ texGuid },
+                  "F9: the image is its one member");
+        }
+        CHECK(countWhere("dependencies", "depender", companion) == 1,
+              "F9: one membership edge, derived from the definition");
 
         // (2) a material the USER authored on the same image: same type, same
         // single dependency, no stamp.
@@ -907,6 +924,76 @@ int main(int argc, char **argv)
         CHECK(!db.fetchAsset(texGuid).guid.isEmpty() && db.isAssetListed(texGuid),
               "... and so is the image's");
         AssetStorePaths::setRootOverride(QString());
+    }
+
+    // --- 16. THE LIBRARY DELETE TAKES ONLY BORN-INSIDE MEMBERS (bundles audit
+    //         G4, the library half; BUNDLE-P4) --------------------------------
+    //
+    // A material bundle with four members of four kinds, then assets.remove
+    // with keepShared = false (the Assets page's delete): a picked texture
+    // carrying the bundle's member/memberOf stamp goes; a baked map whose
+    // PARENT is the material goes; a texture the USER imported (no stamp) keeps
+    // its row and loses only the edge; a stamped member another material still
+    // depends on keeps its row. It used to be deleteAssetAndDependencies — the
+    // whole closure, no questions asked — which is how deleting an avatar
+    // deleted the user's model.
+    {
+        conn = QSqlDatabase::database();
+        AssetStorePaths::setRootOverride(storeRoot);
+        const auto makeTex = [&](const char *guid, const char *name, const QByteArray &props,
+                                 const QString &parent) {
+            // (thumbnail, PROPERTIES, tags, asset) — the stamp is a property.
+            return db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
+                                       parent, QString(), QString(), QString(), QByteArray(),
+                                       props, QByteArray(), QByteArray(),
+                                       AssetViewFilter::AssetsView);
+        };
+        const QString bundle = db.createAssetEntry(
+            "guid-g4-bundle", "G4 Bundle", static_cast<int>(ModelTypes::Material),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"),
+            AssetViewFilter::AssetsView);
+        const QString other = db.createAssetEntry(
+            "guid-g4-other", "G4 Other", static_cast<int>(ModelTypes::Material),
+            QString(), QString(), QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray("{\"materialType\":\"pbr\",\"values\":{}}"),
+            AssetViewFilter::AssetsView);
+        const QString picked = makeTex("guid-g4-picked", "picked.png",
+                                       QByteArray("{\"member\":true,\"memberOf\":\"guid-g4-bundle\"}"),
+                                       QString());
+        const QString baked = makeTex("guid-g4-baked", "baked.png", QByteArray(), bundle);
+        const QString users = makeTex("guid-g4-users", "users.png", QByteArray(), QString());
+        const QString shared = makeTex("guid-g4-shared", "shared.png",
+                                       QByteArray("{\"member\":true,\"memberOf\":\"guid-g4-bundle\"}"),
+                                       QString());
+        CHECK(!bundle.isEmpty() && !other.isEmpty() && !picked.isEmpty() && !baked.isEmpty()
+                  && !users.isEmpty() && !shared.isEmpty(),
+              "G4: a bundle, a second material and four member textures exist");
+        const int M = static_cast<int>(ModelTypes::Material), T = static_cast<int>(ModelTypes::Texture);
+        CHECK(db.createDependency(M, T, bundle, picked, QString())
+                  && db.createDependency(M, T, bundle, baked, QString())
+                  && db.createDependency(M, T, bundle, users, QString())
+                  && db.createDependency(M, T, bundle, shared, QString())
+                  && db.createDependency(M, T, other, shared, QString()),
+              "G4: the bundle depends on all four; the other material shares one");
+
+        const auto outcome = assetdelete::remove(&db, bundle, /*keepShared*/ false, /*force*/ false);
+        CHECK(outcome.ok && !outcome.unlisted, "G4: the unpinned bundle is really deleted");
+        CHECK(countWhere("assets", "guid", bundle) == 0, "G4: the bundle's row is gone");
+        CHECK(countWhere("assets", "guid", picked) == 0,
+              "G4: the picked texture (born inside: member + memberOf) is gone");
+        CHECK(countWhere("assets", "guid", baked) == 0,
+              "G4: the baked map (born inside: parent = the bundle) is gone");
+        CHECK(countWhere("assets", "guid", users) == 1,
+              "G4: the USER'S texture (no stamp) keeps its row");
+        CHECK(db.hasMultipleDependers(users).isEmpty(),
+              "G4: ...and lost only the edge from the dead bundle");
+        CHECK(countWhere("assets", "guid", shared) == 1,
+              "G4: a member another material still depends on keeps its row");
+        CHECK(db.hasMultipleDependers(shared) == QStringList{ other },
+              "G4: ...held by that other material alone now");
+        CHECK(countWhere("dependencies", "depender", bundle) == 0,
+              "G4: every edge from the dead bundle is gone");
     }
 
     // --- 7. wipeDatabase clears the CAS catalog too (DESTRUCTIVE — last) ----

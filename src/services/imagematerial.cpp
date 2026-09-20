@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/imagematerial.h"
+#include "services/materialbundle.h"
 
 #include <QBuffer>
 #include <QFileInfo>
@@ -133,20 +134,23 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     // materials.createFromImage) and used to autocommit separately — two
     // journal + fdatasync cycles, and a window in which the row exists with
     // no edge naming its texture. The guard commits when it leaves scope.
-    DbBatch batch(db);
-
-    const QString materialGuid = GUIDManager::generateGUID();
-    db->createAssetEntry(materialGuid, matName,
-                         static_cast<int>(ModelTypes::Material),
-                         QString(),           // library row: no parent folder
-                         QString(),           // library row: no project guid
-                         QString(), QString(), thumbnail,
-                         QByteArray(), QByteArray(),
-                         QJsonDocument(blob).toJson(),
-                         AssetViewFilter::AssetsView);
-    db->createDependency(static_cast<int>(ModelTypes::Material),
-                         static_cast<int>(ModelTypes::Texture),
-                         materialGuid, textureGuid, QString());
+    // THROUGH THE ONE WRITER (BUNDLE-P4, the owed F9): the companion used to be
+    // a bare row with a blob and one hand-written edge — no CAS definition file,
+    // so it was the one Material in the library whose meaning lived only in the
+    // row, invisible to the archive's re-publish (G1), the catalog rebuild (G5)
+    // and the Members panel. `MaterialBundle::create` mints the row, stores the
+    // definition as its `source` file, derives the membership edge from it and
+    // writes the sidecar, in one transaction — the same door every other
+    // material comes through. The `companionOf` stamp rides inside the
+    // definition, as before; the pin follows in ProjectAssets::addToProject.
+    // The name the writer will accept: `uniqueName` bumps a taken name and a
+    // shipped preset's (an image called "Gold PBR.png" gets "Gold PBR-1").
+    const QString chosenName = MaterialBundle::uniqueName(db, matName);
+    QString createError;
+    const QString materialGuid = MaterialBundle::create(db, chosenName, blob, thumbnail, &createError);
+    if (materialGuid.isEmpty())
+        return failWith(createError.isEmpty() ? QStringLiteral("the companion material could not be stored")
+                                              : createError);
     return materialGuid;
 }
 

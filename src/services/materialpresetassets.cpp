@@ -327,38 +327,10 @@ int seedAll(Database *db, QString *errorOut)
 
 QString customiseName(Database *db, const QString &wanted)
 {
-    // THE SUFFIX RULE, in ONE place and for EVERY caller (R18: "Name can be
-    // presetname-1 -2 -3 if there are others"; fix round F10: a name the
-    // caller supplied is bumped too, or two rows end up called "Gold PBR").
-    // The rule is "the name you asked for, or the first free `<name>-N`".
-    //
-    // Bumped against the LIBRARY's material names — a drawer is a view of the
-    // library, and with a project open it does not even list every material,
-    // so deciding against a drawer would hand out a name already taken —
-    // PLUS every shipped preset's name, whether or not it has been seeded
-    // yet. That last part is what makes the default case read the way R18
-    // asks: "Gold PBR" is a preset's name, so it is taken, so a Customise of
-    // Gold PBR is "Gold PBR-1" on the first press and "-2" on the next,
-    // whether or not the preset's own row exists.
-    // CASE-INSENSITIVELY (PRESET-UNIFY-1 fix round 2). `MaterialPresets::find`
-    // matches a preset's name that way and so does the writers' refusal, so a
-    // typed "gold pbr" that passed here would be minted and then be refused
-    // — or, at the door that mints its own row, be minted and unreachable.
-    // One comparison, and it is the one the rest of the system uses.
-    QSet<QString> taken;
-    if (db)
-        for (const auto &row : db->fetchAssetsForAssetView())
-            if (row.type == static_cast<int>(ModelTypes::Material))
-                taken.insert(row.name.toCaseFolded());
-    for (const MaterialPreset &preset : MaterialPresets::all())
-        taken.insert(preset.name.toCaseFolded());
-
-    const QString base = wanted.trimmed();
-    if (base.isEmpty()) return base;
-    QString chosen = base;
-    for (int n = 1; taken.contains(chosen.toCaseFolded()); ++n)
-        chosen = QStringLiteral("%1-%2").arg(base).arg(n);
-    return chosen;
+    // THE SUFFIX RULE lives in ONE place: MaterialBundle::uniqueName (every
+    // door that mints a material — Customise, the New dialog, an image's
+    // companion — takes its name there). Kept as the module's verb.
+    return MaterialBundle::uniqueName(db, wanted);
 }
 
 QString customise(const QString &presetOrGuid, const QString &name,

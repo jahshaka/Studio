@@ -174,6 +174,16 @@ inline QString shippedPresetGuidForName(const QString &name)
     return QString();
 }
 
+/// THE NAME A NEW MATERIAL MAY TAKE (BUNDLE-P4; the rule was
+/// MaterialPresetAssets::customiseName, which forwards here now): `wanted`
+/// itself, or the first free `<wanted>-N`, judged case-insensitively against
+/// every LIBRARY material's name AND every shipped preset's reserved name —
+/// whether or not the preset has been seeded (R18: "Gold PBR" is taken, so a
+/// customise of it is "Gold PBR-1" on the first press). One rule for every
+/// door that mints a material: Customise, the New dialog, an image's
+/// companion. Empty in, empty out.
+QString uniqueName(Database *db, const QString &wanted);
+
 /// THE SEEDER'S DOOR, and the only writer allowed on a reserved preset guid
 /// (`MaterialPresetAssets::ensureSeeded` is its one caller). It publishes to
 /// the LIBRARY exactly as `write` does — same guard, same colour
