@@ -307,6 +307,31 @@ int main(int argc, char** argv)
                   "refuse: a PBR graph carries no migration note");
         }
 
+        // (c2) NO MASTER AT ALL, three ways (fix round). A file with no
+        //      `masternode` key, an empty one, or one naming a node that is
+        //      not in the array used to LOAD — as a graph with a null master,
+        //      which bakes nothing, draws as an empty canvas and null-derefs
+        //      in serialize() the moment anything saves it.
+        {
+            const QJsonArray nodes { node("m", "PbrMaterial", QString(), "") };
+            struct { const char* what; QJsonObject g; } cases[] = {
+                { "no masternode key",  [&]{ QJsonObject g; g["nodes"] = nodes;
+                                             g["connections"] = QJsonArray{}; return g; }() },
+                { "an empty masternode", graphJson(nodes, QJsonArray{}, "") },
+                { "a masternode naming nothing", graphJson(nodes, QJsonArray{}, "not-here") },
+            };
+            int refusedCount = 0, named = 0;
+            for (const auto& c : cases) {
+                QString reason;
+                auto* graph = NodeGraph::deserialize(c.g, new LibraryV1(), &reason);
+                if (graph == nullptr) ++refusedCount;
+                else std::printf("      loaded with no master: %s\n", c.what);
+                if (reason.contains(QStringLiteral("no master node"))) ++named;
+            }
+            CHECK(refusedCount == 3, "refuse: a graph with no master node does not load, three ways");
+            CHECK(named == 3, "refuse: ... and the reason says so in words");
+        }
+
         // (d) AN UNKNOWN NON-MASTER NODE IS STILL ONLY SKIPPED. The refusal is
         //     about the master and nothing else: the load-time renames and the
         //     skip-unknown-node rule are untouched (LEGACY-CONVERT-CRUD brief).

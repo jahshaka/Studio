@@ -2,6 +2,7 @@
 
 #include <functional>
 
+#include <QPointer>
 #include <QSet>
 
 #include "ui/style/columnedpage.h"
@@ -29,6 +30,7 @@
 #include "widgets/shaderassetwidget.h"
 #endif
 
+class Toast;
 class QLabel;
 class QMenuBar;
 class GraphNodeScene;
@@ -212,6 +214,11 @@ private:
 	/// nothing to put on the canvas. Same route as a refused save — a scene
 	/// issue, which stays up until the condition is gone.
 	void reportGraphRefused(const QString &guid, const QString &why);
+	/// The page becomes this material: identity, read-only state and canvas in
+	/// one step (fix round — see the body). Called only once a graph has
+	/// loaded; a refused open never reaches it.
+	void adoptGraph(const QString &guid, shaderInfo::Origin origin,
+	                const QString &shippedName, NodeGraph *graph);
 	void saveDefaultShader();
 
 	/// Queues the saved graph's thumbnail on the shell's ThumbnailGenerator
@@ -233,6 +240,10 @@ private:
 	bool mReadOnly = false;
 	QWidget *mReadOnlyBanner = nullptr;
 	QLabel  *mReadOnlyLabel = nullptr;
+	/// The page's own answer to a refused open (the scene-issue bar is the
+	/// editor space's and is hidden here). Created on first use, lives with
+	/// the page.
+	QPointer<Toast> mRefusalToast;
 	/// Show or hide the banner and set `mReadOnly`.
 	void setReadOnly(bool readOnly, const QString &presetName = QString());
 	/// The guids WE asked the shared thumbnail queue about (a material render
@@ -246,7 +257,6 @@ private:
 	/// — the toolbar's Import and the drawer's "Import material…".
     void importGraph();
 
-	NodeGraph* importGraphFromFilePath(QString filePath, bool assign = true);
 	/// Write ONE material and its closure as a share file.
 	void exportEffect(QString guid);
 	/// ONE ROW, COPIED: a second library bundle carrying the same definition
@@ -272,7 +282,11 @@ private:
 	                  const QString &wanted = QString());
 	void loadGraphFromTemplate(NodeGraphPreset preset, const QString &name = QString());
 	void setCurrentShaderItem();
-	QByteArray fetchAsset(QString string);
+	/// The stored definition for `guid`, read at the scope the caller names.
+	/// The ORIGIN IS AN ARGUMENT (fix round): it used to be read off
+	/// `currentShaderInformation`, which forced `loadGraph` to write the page's
+	/// identity before it knew whether the file could be opened at all.
+	QByteArray fetchAsset(QString guid, shaderInfo::Origin origin);
 
 	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has
 	/// no business knowing about scene nodes, so the shell hands it one

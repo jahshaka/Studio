@@ -125,7 +125,9 @@ public:
 	///
 	/// null = this file cannot be opened, and `refusalReason` (when given) then
 	/// carries ONE plain sentence for the person using the editor. The only
-	/// refusal is a master node that is not the PBR one: the Blinn-Phong
+	/// refusal is the MASTER: a master node that is not the PBR one, or no
+	/// master at all (an absent/empty `masternode`, or one naming a node the
+	/// file does not contain). The Blinn-Phong
 	/// "Surface Material" master was deleted with its node class
 	/// (LEGACY-MASTER-CRUD, 2026-09-20 — the owner: "we should have no legacy
 	/// graphs, remove it"), and a graph written on a master this build does not

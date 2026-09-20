@@ -234,29 +234,52 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 	// shipped sample carries a material row at all — so the conversion is
 	// deleted rather than carried. The CRUD law: nothing is owed to old data.
 	//
+	// A MASTER THAT IS NOT NAMED AT ALL is refused by the same rule (fix
+	// round). A file with no `masternode` key, an empty one, or one naming a
+	// node that is not in the array used to load as a graph with
+	// `masterNode == nullptr`: it bakes nothing, draws as an empty canvas, and
+	// `serialize()` dereferences that null the moment anything saves it. There
+	// is no such thing as a graph without a master, so there is no such thing
+	// as loading one.
+	//
 	// Refusing costs ONE pre-pass over the node array, before a single node is
-	// built, so a refused file allocates nothing and leaves nothing behind.
+	// built, so a refused file allocates no graph and leaves nothing behind.
+	// (The `new LibraryV1()` every CALLER hands in is still leaked on a
+	// refusal, exactly as it is leaked on every successful load — NodeGraph
+	// has no destructor. Recorded as debt, not changed here.)
 	{
 		const QString masterId = graphObj["masternode"].toString();
 		const QJsonArray nodesForMaster = graphObj["nodes"].toArray();
-		for (const auto& nodeVar : nodesForMaster) {
-			const QJsonObject nodeObj = nodeVar.toObject();
-			if (nodeObj["id"].toString() != masterId) continue;
-			const QString masterType = nodeObj["type"].toString();
-			if (masterType == QLatin1String("PbrMaterial")) break;
+		QString masterType;
+		bool found = false;
+		if (!masterId.isEmpty()) {
+			for (const auto& nodeVar : nodesForMaster) {
+				const QJsonObject nodeObj = nodeVar.toObject();
+				if (nodeObj["id"].toString() != masterId) continue;
+				masterType = nodeObj["type"].toString();
+				found = true;
+				break;
+			}
+		}
+		if (!found || masterType != QLatin1String("PbrMaterial")) {
 			if (refusalReason) {
-				*refusalReason =
-				    masterType == QLatin1String("Material")
-				        ? QStringLiteral(
-				              "This material was saved with the removed \"Surface Material\" node "
-				              "and cannot be opened. Recreate it on the \"PBR Material\" node.")
-				        : QStringLiteral(
-				              "This material's master node is of an unknown type (\"%1\") and "
-				              "cannot be opened. Recreate it on the \"PBR Material\" node.")
-				              .arg(masterType);
+				if (!found)
+					*refusalReason = QStringLiteral(
+					    "This material has no master node and cannot be opened. Recreate it "
+					    "on the \"PBR Material\" node.");
+				else if (masterType == QLatin1String("Material"))
+					*refusalReason = QStringLiteral(
+					    "This material was saved with the removed \"Surface Material\" node "
+					    "and cannot be opened. Recreate it on the \"PBR Material\" node.");
+				else
+					*refusalReason = QStringLiteral(
+					    "This material's master node is of an unknown type (\"%1\") and "
+					    "cannot be opened. Recreate it on the \"PBR Material\" node.")
+					        .arg(masterType);
 			}
 			qWarning().noquote()
-			    << "NodeGraph: refused a graph whose master type is" << masterType;
+			    << "NodeGraph: refused a graph whose master is"
+			    << (found ? masterType : QStringLiteral("absent"));
 			return nullptr;
 		}
 	}
