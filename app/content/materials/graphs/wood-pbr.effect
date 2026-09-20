@@ -1,5 +1,5 @@
 {
-    "name": "Board PBR",
+    "name": "Wood PBR",
     "shadergraph": {
         "connections": [
             {
@@ -114,7 +114,7 @@
         "settings": {
             "bakeResolution": 1024,
             "blendMode": "Opaque",
-            "name": "Board PBR"
+            "name": "Wood PBR"
         },
         "socketLayout": 2
     },

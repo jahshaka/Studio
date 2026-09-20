@@ -140,6 +140,19 @@ private:
     /// thread, so this never reads the source file again.
     QString relistUnlistedMatch(const StagedAsset &staged);
 
+    /// THE MEMBER THE USER IMPORTS THEMSELVES (IMPORT-INTENT-1, the bundle
+    /// spec's F14). An import the USER asked for whose bytes are already in
+    /// the library as a material's MEMBER texture — a picture that arrived
+    /// through a material's picker or with a shipped preset, and that is
+    /// therefore folded into that bundle and invisible to them — answers with
+    /// THAT row, with the stamp taken off, instead of minting a second row
+    /// over the same object. One picture, one row: the user gets the tile they
+    /// just asked for and the material keeps the member it always had.
+    /// Empty for every other import — a Material-intent one (the picker, the
+    /// seed: they may not undo their own stamp), content no stamped row
+    /// holds, or a row whose bytes are no longer in the store.
+    QString claimStampedMemberForUser(const ImportRequest &request, const StagedAsset &staged);
+
     AssetImporterBase *pickImporter(const ImportRequest &request, QString *error) const;
     bool commitStagedAsset(const ImportRequest &request, StagedAsset &staged,
                            ImportResult &result, const ImportProgressFn &progress);

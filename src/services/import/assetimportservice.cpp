@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assetcas.h"
+#include "services/memberstamp.h"
 #include "services/meshbakestore.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimporters.h"
@@ -153,6 +154,47 @@ QString AssetImportService::relistUnlistedMatch(const StagedAsset &staged)
 
     const QString guid = match.value(0).toString();
     return db->setAssetListed(guid, true) ? guid : QString();
+}
+
+QString AssetImportService::claimStampedMemberForUser(const ImportRequest &request,
+                                                      const StagedAsset &staged)
+{
+    if (!db) return QString();
+    // WHO ASKED. A material's own import may not undo the stamp it is about to
+    // write (the picker, the preset seed): only a person's import outranks an
+    // origin.
+    if (request.intent != ImportRequest::Intent::User) return QString();
+    // A TEXTURE FOR A TEXTURE. The stamp only ever sits on a Texture row, and
+    // a plan that is not making one cannot answer with one — a .jaf, a model
+    // (whose source file is a model, not a picture), a sound.
+    if (!staged.jaf.kind.isEmpty()) return QString();
+    int mainType = -1;
+    for (const StagedRow &row : staged.rows)
+        if (row.guid == staged.mainGuid) { mainType = row.type; break; }
+    if (mainType != static_cast<int>(ModelTypes::Texture)) return QString();
+
+    // The same source oid relistUnlistedMatch reads — prepare() stamped it on
+    // the worker, so nothing is hashed here (see that function for why there
+    // is no fallback read).
+    const QString oid = staged.importRecord.value(QStringLiteral("sourceOid")).toString();
+    if (oid.isEmpty()) return QString();
+
+    const QString guid = memberstamp::stampedTextureFor(db, oid);
+    if (guid.isEmpty()) return QString();
+    // A row whose object is no longer in the store cannot serve this import;
+    // a normal import brings the bytes back under a new row rather than
+    // handing out a guid that resolves to nothing (the same guard
+    // ShippedAssets::importTextureContent applies to its own by-content hit).
+    if (AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid).isEmpty())
+        return QString();
+
+    // THE USER'S INTENT OUTRANKS THE ORIGIN (V-2, read from the import side):
+    // the row is theirs from now on — a tile in the tray and on the Assets
+    // page. Nothing else about it moves: the material's definition still names
+    // this guid, so the bundle still lists it as a member, and every project
+    // pin, dependency row and scene reference is untouched.
+    if (!memberstamp::unstamp(db, guid)) return QString();
+    return guid;
 }
 
 // THE ONE "is this a model?" test the import dialog keys on
@@ -371,6 +413,12 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
         ImportResult back;
         back.assetGuid = relisted;
         back.warnings = result.warnings;
+        // A RE-LISTED ROW THE USER ASKED FOR IS THEIRS TOO (IMPORT-INTENT-1):
+        // the row coming back may be a material's member that was deleted from
+        // the library while a project still pinned it, and the person who just
+        // imported those bytes is not asking for a picture they cannot see.
+        if (request.intent == ImportRequest::Intent::User)
+            memberstamp::unstamp(db, relisted);
         // The re-listed row IS this import's answer, so it must land where the
         // import asked (code review 2026-09-10) — a drop into a drawer that
         // happened to match an unlisted row used to file nothing at all.
@@ -392,6 +440,33 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
                     .arg(QFileInfo(request.sourcePath).fileName(), relisted));
         // The staged convert is thrown away, and so are the bytes it staged:
         // the content is in the store already (that is what re-listing means).
+        AssetCas::discardStaged(staged.stagedBytes);
+        return back;
+    }
+
+    // A MEMBER TEXTURE THE USER IMPORTED THEMSELVES (IMPORT-INTENT-1): the
+    // bytes are already a material's member row, folded into that bundle and
+    // invisible to them — so the row is theirs now, and it is this import's
+    // answer. Same shape as the re-listing above: one row for one picture,
+    // the staged convert thrown away, and the import still lands where it was
+    // asked to land.
+    if (const QString mine = claimStampedMemberForUser(request, staged); !mine.isEmpty()) {
+        ImportResult back;
+        back.assetGuid = mine;
+        back.warnings = result.warnings;
+        if (!request.projectGuid.isEmpty()) db->updateAssetProject(mine, request.projectGuid);
+        if (request.drawerId > 0) {
+            if (db->fetchCollectionSubtree(request.drawerId).isEmpty())
+                back.error = QStringLiteral("imported, but drawer %1 does not exist")
+                                 .arg(request.drawerId);
+            else
+                db->switchAssetCollection(request.drawerId, mine);
+        }
+        JAH_LOG(JahLog::assets, Display,
+                QStringLiteral("import: '%1' is the content of member texture %2 — it is your "
+                               "own tile now (the material keeps it as a member) instead of a "
+                               "second row on the same bytes")
+                    .arg(QFileInfo(request.sourcePath).fileName(), mine));
         AssetCas::discardStaged(staged.stagedBytes);
         return back;
     }

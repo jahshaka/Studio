@@ -16,6 +16,10 @@
 //      one item per event-loop turn
 //      in order, progress + finished observed — completion signals precede
 //      every tail item, and the viewer/tile update hook fires per item.
+//   6. IMPORT-INTENT-1: who ASKED for the import decides what happens when it
+//      lands on a row the library already has — a USER's import of a
+//      material's member picture answers that row with the stamp cleared and
+//      mints nothing; a MATERIAL's import never clears one.
 #include <QApplication>
 #include <QBuffer>
 #include <QDir>
@@ -38,6 +42,7 @@
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
+#include "services/memberstamp.h"
 #include "services/import/importbatchrunner.h"
 #include "services/import/importtypes.h"
 #include "data/constants.h"
@@ -516,6 +521,72 @@ int main(int argc, char **argv)
         CHECK(service.importSettings(meshResult.assetGuid)
                   .value("importer").toString() == QStringLiteral("mesh"),
               "tail property merge kept the import record");
+    }
+
+    // ---- 6. WHO ASKED (IMPORT-INTENT-1): a member the user imports is theirs
+    //
+    // The stamp is an ORIGIN — "this picture arrived inside a material" — and
+    // it is what folds the picture into that bundle's tile, so the user cannot
+    // see it. Their own import of the same bytes outranks it: the SAME row
+    // comes back with the stamp cleared, not a second row over one object.
+    // An import a MATERIAL asked for (the picker, the preset seed) never
+    // clears one — that is the whole of the Intent flag.
+    {
+        const QString png6 = writeUniquePng(cwd + "/tex_member.png");
+        AssetImportService service(&db, nullptr);
+
+        ImportRequest first;
+        first.sourcePath = png6;
+        first.typeHint = static_cast<int>(ModelTypes::Texture);
+        const ImportResult born = service.import(first);
+        CHECK(born.ok(), "6: a picture in the library");
+
+        // A material picked it: the picker's stamp (materialsapi does exactly
+        // this on the row its import minted).
+        const QString material = QStringLiteral("some-material-guid");
+        CHECK(memberstamp::stamp(&db, born.assetGuid, material), "6: stamped as that material's member");
+
+        const int rowsBefore = countRows(conn, "SELECT COUNT(*) FROM assets");
+        const int objectsBefore = countObjects(root);
+
+        ImportRequest mine;
+        mine.sourcePath = png6;
+        mine.typeHint = static_cast<int>(ModelTypes::Texture);
+        mine.intent = ImportRequest::Intent::User;   // the default; stated for the contrast below
+        const ImportResult claimed = service.import(mine);
+        CHECK(claimed.ok() && claimed.assetGuid == born.assetGuid,
+              "6: a USER import of those bytes answers the SAME row");
+        CHECK(!memberstamp::isStamped(&db, born.assetGuid),
+              "6: ...with the member stamp cleared — the picture is the user's tile now");
+        CHECK(memberstamp::originOf(db.fetchAsset(born.assetGuid).properties).isEmpty(),
+              "6: the origin key went with it");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM assets") == rowsBefore,
+              "6: and NO second row was minted for one picture");
+        CHECK(countObjects(root) == objectsBefore,
+              "6: the store is untouched (the staged bytes were discarded, not orphaned)");
+
+        // The other way round: a MATERIAL asking never clears a stamp. It gets
+        // the ordinary import — a row of its own for the material to stamp.
+        CHECK(memberstamp::stamp(&db, born.assetGuid, material), "6: stamped again");
+        ImportRequest theirs;
+        theirs.sourcePath = png6;
+        theirs.typeHint = static_cast<int>(ModelTypes::Texture);
+        theirs.intent = ImportRequest::Intent::Material;
+        const ImportResult byMaterial = service.import(theirs);
+        CHECK(byMaterial.ok() && byMaterial.assetGuid != born.assetGuid,
+              "6: a MATERIAL-intent import does not claim the row");
+        CHECK(memberstamp::isStamped(&db, born.assetGuid),
+              "6: ...and the stamp it did not ask about is still there");
+        CHECK(!memberstamp::isStamped(&db, byMaterial.assetGuid),
+              "6: the row IT minted carries no stamp of its own (the picker stamps, not the pipeline)");
+
+        // A MODEL import may never claim a texture row, whatever the bytes
+        // match: the plan is not making a Texture.
+        ImportRequest model;
+        model.sourcePath = glb;
+        const ImportResult modelResult = service.import(model);
+        CHECK(modelResult.ok() && modelResult.assetGuid != born.assetGuid,
+              "6: a model import is untouched by any of this");
     }
 
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);

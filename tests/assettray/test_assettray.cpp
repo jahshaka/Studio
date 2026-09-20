@@ -50,6 +50,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/assettray.h"
 #include "services/materialmembers.h"
+#include "services/memberstamp.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); \
@@ -281,8 +282,8 @@ int main(int argc, char **argv)
             db.createDependency(static_cast<int>(ModelTypes::Material),
                                 static_cast<int>(ModelTypes::Texture), pickerMaterial, tex,
                                 QString());
-        CHECK(materialmembers::stampMember(&db, bundleOnly, pickerMaterial), "stamp: bundle-only");
-        CHECK(materialmembers::stampMember(&db, bundleAndNode, pickerMaterial), "stamp: bundle + node");
+        CHECK(memberstamp::stamp(&db, bundleOnly, pickerMaterial), "stamp: bundle-only");
+        CHECK(memberstamp::stamp(&db, bundleAndNode, pickerMaterial), "stamp: bundle + node");
         // ...and a scene node ALSO uses the second one (a material slot).
         db.createDependency(static_cast<int>(ModelTypes::Object),
                             static_cast<int>(ModelTypes::Texture), sceneNodes[2], bundleAndNode,
@@ -311,6 +312,23 @@ int main(int argc, char **argv)
               "...and nothing with the switch on (no legacy Shader row in this fixture)");
         CHECK(page.size() + folded.size() == raw.size(),
               "the listing is the raw rows less the fold, nothing else");
+
+        // IMPORT-INTENT-1 (F14): the user imports that folded picture
+        // themselves. The import clears the stamp (the spine does it —
+        // memberstamp::unstamp is the edit), and from the listing's side that
+        // is the whole story: the picture becomes a tile of the user's, while
+        // the material that brought it in still uses it.
+        CHECK(memberstamp::unstamp(&db, bundleOnly),
+              "the user's own import of those bytes clears the stamp");
+        const QVector<AssetRecord> after = assettray::libraryList(&db, /*showMembers=*/false);
+        CHECK(listed(after, bundleOnly),
+              "...so the Assets page lists it: their own tile, one row, same bytes");
+        CHECK(assettray::libraryHidden(&db, raw, false).isEmpty(),
+              "nothing is folded any more");
+        CHECK(after.size() == page.size() + 1,
+              "exactly one tile appeared — no row was created and none was hidden instead");
+        CHECK(memberstamp::stamp(&db, bundleOnly, pickerMaterial),
+              "(re-stamped for the sections below)");
     }
 
     // ---------------------------------------------------------------------

@@ -1269,10 +1269,12 @@ void EffectsPage::configureAssetsDock()
 	// exists, so the drawer costs nothing until somebody uses a preset.
 	// ONE LINE PER TILE (PRESET-UNIFY-1). A 90 px tile cannot hold "Checker
 	// Board PBR", and a WRAPPED bottom-aligned label answers that by showing
-	// its SECOND line — "Board PBR" — directly above the wood preset, which
-	// is also called "Board PBR". Two tiles reading the same word is the very
-	// thing the owner called a duplicate. Wrapping off, the view elides the
-	// one line it draws; the full name is on the tooltip.
+	// its SECOND line — "Board PBR" — which, while the wood preset was itself
+	// called "Board PBR", read as two tiles carrying the same word: the very
+	// thing the owner called a duplicate. The wood preset is "Wood PBR" since
+	// 2026-09-20, so that particular collision is gone, but the wrapping stays
+	// off for the general case — the view elides the one line it draws and the
+	// full name is on the tooltip.
 	presets->setWordWrap(false);
 	for (const MaterialPreset &preset : MaterialPresets::all()) {
 		const QString guid = MaterialPresetAssets::guidFor(preset.name);
