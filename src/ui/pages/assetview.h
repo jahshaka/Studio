@@ -78,7 +78,6 @@ class Database;
 struct StudioServices;
 class Project;
 class SettingsManager;
-class QCheckBox;
 class PreferencesDialog;
 
 typedef struct directory_tuple
@@ -379,9 +378,12 @@ private:
 	/// ASSETS-PAGE-MEMBERS-1): off = a picture that arrived inside a material
 	/// bundle and that only materials use is folded into the bundle's tile;
 	/// on = it is a tile of its own. The same rule and the same wording as the
-	/// editor tray's switch; persisted under its own key (a library view and a
-	/// project view are two places a person may want set differently).
-	QCheckBox *showMembersBox = nullptr;
+	/// editor tray's switch, as a checkable entry of the Library menu (a
+	/// checkbox in the filter bar cost the window's minimum width — the 1366
+	/// px laptop floor, ui.window_minimum); persisted under its own key (a
+	/// library view and a project view are two places a person may want set
+	/// differently).
+	QAction *showMembersAction = nullptr;
 	bool showMembers = false;
 	/// The toggle's work: add the tiles the fold hid, or delete them — the
 	/// page's grid is built once and edited tile by tile ever after.

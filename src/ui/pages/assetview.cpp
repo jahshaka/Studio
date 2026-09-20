@@ -22,7 +22,6 @@ For more information see the LICENSE file
 #include "ui/dialogs/progressdialog.h"
 #include "data/settingsmanager.h"
 #include "services/assettags.h"
-#include <QCheckBox>
 #include "services/assettray.h"
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
@@ -717,6 +716,26 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	libraryMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
 	connect(libraryMenu->addAction(tr("Rebuild missing thumbnails")), &QAction::triggered, this,
 	        [this]() { rebuildMissingThumbnails(); });
+	// "SHOW MEMBER TEXTURES" (MATERIAL_BUNDLE_SPEC V-2 on the Assets page): the
+	// editor tray has folded a material's picked pictures into the bundle
+	// since phase 2; the page the owner browses most still showed every one
+	// of them as a tile of its own (the "5 + 15 tiles" after a preset seed).
+	// One rule, one function (assettray::libraryList), one switch here with
+	// the tray's wording — a CHECKABLE MENU ENTRY, not a checkbox in the
+	// filter bar: a checkbox there added its width to the window's floor and
+	// pushed it past the 1366 px laptop budget (ui.window_minimum, push #53).
+	showMembersAction = libraryMenu->addAction(tr("Show member textures"));
+	showMembersAction->setCheckable(true);
+	showMembersAction->setToolTip(tr("List the pictures that came in INSIDE a material as tiles "
+	                                 "of their own. Your own imported images are always listed."));
+	showMembersAction->setChecked(
+	    SettingsManager::getDefaultManager()->getValue("library_show_members", false).toBool());
+	showMembers = showMembersAction->isChecked();
+	connect(showMembersAction, &QAction::toggled, this, [this](bool on) {
+		showMembers = on;
+		SettingsManager::getDefaultManager()->setValue("library_show_members", on);
+		applyShowMembers(on);
+	});
 	connect(libraryButton, &QPushButton::pressed, this, [libraryButton, libraryMenu]() {
 		libraryMenu->exec(libraryButton->mapToGlobal(QPoint(0, libraryButton->height())));
 	});
@@ -726,24 +745,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	filterLayout->addStretch();
-	// "SHOW MEMBER TEXTURES" (MATERIAL_BUNDLE_SPEC V-2 on the Assets page): the
-	// editor tray has folded a material's picked pictures into the bundle
-	// since phase 2; the page the owner browses most still showed every one
-	// of them as a tile of its own (the "5 + 15 tiles" after a preset seed).
-	// One rule, one function (assettray::libraryList), one switch here with
-	// the tray's wording.
-	showMembersBox = new QCheckBox(tr("Show member textures"));
-	showMembersBox->setToolTip(tr("List the pictures that came in INSIDE a material as tiles of "
-	                              "their own. Your own imported images are always listed."));
-	showMembersBox->setChecked(
-	    SettingsManager::getDefaultManager()->getValue("library_show_members", false).toBool());
-	showMembers = showMembersBox->isChecked();
-	filterLayout->addWidget(showMembersBox);
-	connect(showMembersBox, &QCheckBox::toggled, this, [this](bool on) {
-		showMembers = on;
-		SettingsManager::getDefaultManager()->setValue("library_show_members", on);
-		applyShowMembers(on);
-	});
 	filterLayout->addWidget(new QLabel("Search: "));
 	le = new QLineEdit();
 	le->setFixedWidth(256);
