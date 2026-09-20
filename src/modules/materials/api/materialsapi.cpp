@@ -1544,8 +1544,12 @@ QVector<VerbInfo> GraphApi::verbs() const
 
 void GraphApi::setCurrent(NodeGraph *graph, const QString &assetGuid)
 {
-    // NodeGraph has no proper deep-delete; dropping the old pointer leaks a
-    // little, matching how the shadergraph window itself swaps graphs.
+    // THE OLD GRAPH IS FREED (MATERIALS_TABS_SPEC §2.8). This used to read
+    // "NodeGraph has no proper deep-delete; dropping the old pointer leaks a
+    // little" — it has one now, so a script that opens ten materials no
+    // longer leaves nine whole graphs behind. A script graph is never in a
+    // canvas, so nothing else points into it.
+    if (mGraph != graph) delete mGraph;
     mGraph = graph;
     mAssetGuid = assetGuid;
     mSelectedNodeId.clear();

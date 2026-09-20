@@ -548,13 +548,7 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 		    || droppedType == static_cast<int>(ModelTypes::Shader)) {
 		event->accept();
 
-		QListWidgetItem *item = new QListWidgetItem;
-
-		item->setData(Qt::DisplayRole, event->mimeData()->text());
-		item->setData(MODEL_GUID_ROLE, event->mimeData()->data("MODEL_GUID_ROLE"));
-		currentlyEditing = item;
-
-		emit loadGraph(item);
+		emit loadGraph(QString::fromUtf8(event->mimeData()->data("MODEL_GUID_ROLE")));
 		return;
 		}
 	}

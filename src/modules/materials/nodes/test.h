@@ -128,6 +128,7 @@ class TextureNode : public NodeModel
 	GraphTexture* graphTexture;
 public:
 	TextureNode();
+	~TextureNode() override;
 
 	// image path of the chosen texture, empty if none (used by PbrGraphEvaluator)
 	QString getTexturePath() const;

@@ -107,6 +107,7 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/materialmembers.h"
 #include "widgets/memberspanel.h"
+#include "modules/materials/materialdocument.h"
 
 namespace materials
 {
@@ -120,8 +121,6 @@ namespace materials
 EffectsPage::EffectsPage( QWidget *parent, Database *database) :
     QMainWindow(parent)
 {
-	stack = new QUndoStack;
-	scene = nullptr;
 	// Debounce for the engine preview: one evaluation per burst of edits
 	// (graphInvalidated fires per value change while a slider drags).
 	previewUpdateTimer = new QTimer(this);
@@ -129,21 +128,10 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	previewUpdateTimer->setInterval(300); // MATERIALS_EVALUATOR_SPEC section 2
 	connect(previewUpdateTimer, &QTimer::timeout, this, &EffectsPage::updateEnginePreviewMaterial);
 
-	// Moved nodes persist on their own (owner request): a debounced save
-	// after the last position change, so re-opening a graph restores the
-	// arrangement without an explicit save click. The bake is hash-cached, so
-	// an unchanged graph re-saves cheaply.
-	// THE GRAPH'S AUTOSAVE. It began as a node-position debounce and is now the
-	// one hook every edit reaches (see graphInvalidated in createNewScene): a
-	// move, a connection, a deletion, a value. The name is kept because the
-	// member is referenced in three places and the behaviour is the same —
-	// "write the graph 1.5 s after the last change".
-	positionSaveTimer = new QTimer(this);
-	positionSaveTimer->setSingleShot(true);
-	positionSaveTimer->setInterval(1500);
-	connect(positionSaveTimer, &QTimer::timeout, this, [this]() {
-		if (!currentShaderInformation.GUID.isEmpty()) saveShader();
-	});
+	// (The page's single 1.5 s autosave timer is gone: there is one PER
+	// DOCUMENT now — MaterialDocument's, wired in newDocument. It was never
+	// stopped on a switch, so an edit made less than 1.5 s before opening
+	// another material fired against the NEW material's guid.)
 	fontIcons = new QtAwesome;
 	fontIcons->initFontAwesome();
 	configureUI();
@@ -163,6 +151,8 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 		TextureManager::getSingleton()->setDatabase(database);
 	}
 
+	// ONE library for every graph this page opens (MATERIALS_TABS_SPEC §2.8).
+	mNodeLibrary = MaterialHelper::sharedNodeLibrary();
 	newNodeGraph();
 	generateTileNode();
 	configureStyleSheet();
@@ -174,44 +164,144 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	assetView = nullptr;
 }
 
+// ---- the open materials (MATERIALS_TABS_SPEC §2) -------------------------
+
+MaterialDocument *EffectsPage::activeDoc() const
+{
+	return (mActive >= 0 && mActive < mDocs.size()) ? mDocs[mActive] : nullptr;
+}
+
+NodeGraph *EffectsPage::activeGraph() const
+{
+	auto *doc = activeDoc();
+	return doc ? doc->graph : nullptr;
+}
+
+GraphNodeScene *EffectsPage::activeScene() const
+{
+	auto *doc = activeDoc();
+	return doc ? doc->scene : nullptr;
+}
+
+QUndoStack *EffectsPage::activeStack() const
+{
+	auto *doc = activeDoc();
+	return doc ? doc->stack : nullptr;
+}
+
+shaderInfo EffectsPage::currentInfo() const
+{
+	auto *doc = activeDoc();
+	return doc ? doc->info : shaderInfo();
+}
+
+MaterialDocument *EffectsPage::newDocument()
+{
+	auto *doc = new MaterialDocument(this);
+	// THE AUTOSAVE IS THIS DOCUMENT'S. It fires against the material the
+	// document names, whether or not that document is the one on screen — which
+	// is the whole point: an edit made a moment before switching tabs is still
+	// written to the material it was made in.
+	connect(doc->saveTimer, &QTimer::timeout, this, [this, doc]() {
+		if (!doc->info.GUID.isEmpty()) saveShader(doc);
+	});
+	return doc;
+}
+
+void EffectsPage::bindGraph(MaterialDocument *doc, NodeGraph *graph)
+{
+	if (!doc || !graph) return;
+	const bool active = (doc == activeDoc());
+	restoringGraph = true;
+
+	auto *newScene = createNewScene(doc);
+	newScene->setNodeGraph(graph);
+	// The previous graph AND the scene drawing it go here, in that order
+	// (MaterialDocument::adopt) — until this lane nothing ever freed either.
+	doc->adopt(graph, newScene);
+	doc->stack->clear();
+	// THE READ-ONLY STATE IS THE DOCUMENT'S, AND THE SCENE IS REBUILT PER GRAPH:
+	// re-assert it here or a preset's canvas would be locked only until the
+	// scene it was set on was replaced — which is every open.
+	newScene->setReadOnly(doc->readOnly);
+
+	if (active) showDocument(doc);
+	restoringGraph = false;
+}
+
+void EffectsPage::showDocument(MaterialDocument *doc)
+{
+	if (!doc || !doc->scene || !doc->graph) return;
+	graphicsView->setScene(doc->scene);
+	graphicsView->setAcceptDrops(true);
+	materialSettingsWidget->setMaterialSettings(doc->graph->settings);
+	// §3a: the right dock follows this document's scene selection
+	nodePropertiesPanel->setGraph(doc->graph);
+	nodePropertiesPanel->setScene(doc->scene);
+	applyReadOnlyUi();
+	if (membersPanel) membersPanel->setMaterial(doc->info.GUID);
+	refreshCurrentTile();
+	schedulePreviewUpdate();
+}
+
+void EffectsPage::documentChanged(MaterialDocument *doc)
+{
+	if (!doc) return;
+	if (doc == activeDoc()) {
+		if (membersPanel) membersPanel->setMaterial(doc->info.GUID);
+		refreshCurrentTile();
+	}
+}
+
+void EffectsPage::forgetMaterial(const QString &guid)
+{
+	if (guid.isEmpty()) return;
+	for (MaterialDocument *doc : mDocs) {
+		if (doc->info.GUID != guid) continue;
+		doc->info = shaderInfo();
+		doc->readOnly = false;
+		doc->presetName.clear();
+		doc->saveTimer->stop();
+		if (doc == activeDoc()) {
+			if (membersPanel) membersPanel->setMaterial(QString());
+			applyReadOnlyUi();
+		}
+		documentChanged(doc);
+	}
+}
+
+void EffectsPage::renameOpenDocuments(const QString &guid, const QString &newName)
+{
+	if (guid.isEmpty()) return;
+	for (MaterialDocument *doc : mDocs) {
+		if (doc->info.GUID != guid) continue;
+		doc->info.name = newName;
+		if (doc->graph) doc->graph->settings.name = newName;
+		if (doc == activeDoc() && materialSettingsWidget) materialSettingsWidget->setName(newName);
+		documentChanged(doc);
+		saveShader(doc);
+	}
+}
+
 void EffectsPage::setNodeGraph(NodeGraph *graph)
 {
-	restoringGraph = true;
-	TextureManager::getSingleton()->clearTextures();
-
-    auto newScene = createNewScene();
-	graphicsView->setScene(newScene);
-	graphicsView->setAcceptDrops(true);
-    newScene->setNodeGraph(graph);
-
-    // delete old scene and reassign new scene
-    if (scene) {
-        scene->deleteLater();
-    }
-    scene = newScene;
-
-
-	materialSettingsWidget->setMaterialSettings(graph->settings);
-
-	// §3a: the right dock follows the new scene's selection
-	nodePropertiesPanel->setGraph(graph);
-	nodePropertiesPanel->setScene(scene);
-
-	stack->clear(); // clears stack, later to add seperate routes for each node addition
-	this->graph = graph;
-	// THE READ-ONLY STATE IS THE PAGE'S, AND THE SCENE IS REBUILT PER GRAPH
-	// (fix round): re-assert it here or a preset's canvas would be locked
-	// only until the scene it was set on was replaced — which is every open.
-	newScene->setReadOnly(mReadOnly);
-	restoringGraph = false;
-
-	schedulePreviewUpdate();
+	// The page-level entry point kept for the callers that mean "put this graph
+	// on the canvas I am looking at" — a new material, an imported file, the
+	// boot canvas. Opening a STORED material makes its own document.
+	MaterialDocument *doc = activeDoc();
+	if (!doc) {
+		doc = newDocument();
+		mDocs.append(doc);
+		mActive = mDocs.size() - 1;
+	}
+	bindGraph(doc, graph);
 }
 
 void EffectsPage::newNodeGraph(QString *shaderName, int *templateType, QString *templateName)
 {
     auto graph = new NodeGraph;
-	graph->setNodeLibrary(new LibraryV1());
+	graph->setNodeLibrary(mNodeLibrary ? mNodeLibrary
+	                                   : MaterialHelper::sharedNodeLibrary());
     // new graphs author PBR (Option B) - legacy Surface graphs still load
     auto masterNode = new PbrMasterNode();
     graph->addNode(masterNode);
@@ -237,7 +327,7 @@ void EffectsPage::refreshShaderGraph()
 	updateAssetDock();
 	assetWidget->refresh();
 #endif
-	setCurrentShaderItem();
+	refreshCurrentTile();
 }
 
 EffectsPage::~EffectsPage()
@@ -247,15 +337,25 @@ EffectsPage::~EffectsPage()
 
 void EffectsPage::saveShader()
 {
+	saveShader(activeDoc());
+}
+
+void EffectsPage::saveShader(MaterialDocument *doc)
+{
+	if (!doc || !doc->graph) return;
+
 	// A SHIPPED PRESET IS ON SCREEN TO BE READ (PRESET-UNIFY-1). It is open
 	// because the user selected it, the definition writer refuses its
 	// reserved guid, and the 1.5 s autosave runs on every node the user drags
 	// — so without this the act of LOOKING at a preset raised a refusal in
 	// the scene-issue bar every second and a half. Nothing is written, and
 	// nothing needs to be: a preset cannot change.
-	if (mReadOnly) return;
+	if (doc->readOnly) return;
 
-	if (currentShaderInformation.GUID == "") {
+	if (doc->info.GUID.isEmpty()) {
+		// The anonymous canvas: there is no material to write to yet, so this
+		// is the "name it first" route (CreateNewDialog), and the document
+		// acquires its guid in place.
 		saveDefaultShader();
 		return;
 	}
@@ -268,11 +368,11 @@ void EffectsPage::saveShader()
 	// from it and refuses any path that slipped through.
 #if(EFFECT_BUILD_AS_LIB)
 	{
-		const auto build = materials::buildDefinition(graph, currentShaderInformation.GUID,
+		const auto build = materials::buildDefinition(doc->graph, doc->info.GUID,
 		                                              dataBase, mProject);
 		if (!build.ok()) {
 			irisLog("saveShader: " + build.error);
-			reportSaveRefused(build.error);
+			reportSaveRefused(doc, build.error);
 		} else {
 			// WHOSE VERSION (the owner's model, spec 12 Q2): the DRAWER the
 			// material was opened from decides. A Projects tile is edited as
@@ -282,12 +382,11 @@ void EffectsPage::saveShader()
 			// could never be edited as the library's, and the same guid
 			// meant two things in one window.
 			const bool projectOwns =
-			    currentShaderInformation.origin == shaderInfo::Origin::Project
+			    doc->info.origin == shaderInfo::Origin::Project
 			    && mProject && !mProject->getProjectGuid().isEmpty()
-			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(),
-			                                 currentShaderInformation.GUID);
+			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID);
 			const auto written = MaterialBundle::write(
-			    dataBase, mProject, currentShaderInformation.GUID, build.definition,
+			    dataBase, mProject, doc->info.GUID, build.definition,
 			    projectOwns ? MaterialBundle::Scope::Project
 			                : MaterialBundle::Scope::Library);
 			if (!written.ok) {
@@ -297,18 +396,18 @@ void EffectsPage::saveShader()
 				// working on a graph nothing is writing down — an hour of
 				// work lost silently, which is exactly the shape of the
 				// defect the path guard exists to prevent.
-				reportSaveRefused(written.error);
-			} else if (mSaveRefused) {
+				reportSaveRefused(doc, written.error);
+			} else if (doc->saveRefused) {
 				SceneIssues::instance().clear(QStringLiteral("material.save:")
-				                              + currentShaderInformation.GUID);
-				mSaveRefused = false;
+				                              + doc->info.GUID);
+				doc->saveRefused = false;
 			}
 			// AND THE EDIT REACHES THE SCENE (R19 D2). Every mesh wearing this
 			// material is re-dressed from the definition just written, through
 			// the ONE apply the drop and the verb use. Until this lane a graph
 			// edit reached the scene only by accident — through a material
 			// SWITCH, and only while the Projects tab happened to be current.
-			else if (mMaterialChanged) mMaterialChanged(currentShaderInformation.GUID);
+			else if (mMaterialChanged) mMaterialChanged(doc->info.GUID);
 		}
 	}
 	// Thumbnail: queued, never inline. The graph's baked material renders on
@@ -316,16 +415,17 @@ void EffectsPage::saveShader()
 	// tick, main thread) and lands in onShaderThumbnail — saving must not block
 	// on a render, and the stored asset data must already be written when the
 	// request is served (the renderer re-reads it from the database).
-	requestShaderThumbnail(currentShaderInformation.GUID);
+	requestShaderThumbnail(doc->info.GUID);
 	// A SAVE CAN CHANGE THE MEMBERS: the final bake mints its maps as member
-	// textures, and a picture picked in a texture node becomes one.
-	if (membersPanel) membersPanel->refresh();
+	// textures, and a picture picked in a texture node becomes one. Only the
+	// panel's own document, though — it shows the ACTIVE material.
+	if (membersPanel && doc == activeDoc()) membersPanel->refresh();
 #else
 	// The STANDALONE build (no library): the graph goes to a file, unchanged.
 	{
 		auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
 		if (!QDir(filePath).exists()) QDir().mkpath(filePath);
-		const QJsonObject matObj = MaterialHelper::serialize(graph);
+		const QJsonObject matObj = MaterialHelper::serialize(doc->graph);
 		auto shaderFile = new QFile(filePath + matObj["name"].toString());
 		if (shaderFile->open(QIODevice::ReadWrite)) {
 			shaderFile->write(QJsonDocument(matObj).toJson());
@@ -337,8 +437,8 @@ void EffectsPage::saveShader()
 	}
 #endif
 
-	int currentTab = selectCorrectTabForItem(currentShaderInformation.GUID);
-	auto item = selectCorrectItemFromDrop(currentShaderInformation.GUID);
+	int currentTab = selectCorrectTabForItem(doc->info.GUID);
+	auto item = selectCorrectItemFromDrop(doc->info.GUID);
 	if (item) {
 		// The tile keeps whatever it has until the render arrives (blanking it
 		// here is what made every saved graph show the generic file icon).
@@ -347,19 +447,19 @@ void EffectsPage::saveShader()
 	}
 }
 
-void EffectsPage::reportSaveRefused(const QString &why)
+void EffectsPage::reportSaveRefused(MaterialDocument *doc, const QString &why)
 {
+	if (!doc) return;
 	// The scene-issue bar, not a toast: a toast leaves, and this condition
 	// stays true until the material is fixed (services/sceneissues.h). The id
 	// is per material, so a second refused autosave of the same graph is a
 	// no-op rather than a second line.
-	mSaveRefused = true;
+	doc->saveRefused = true;
 	SceneIssue issue;
-	issue.id = QStringLiteral("material.save:") + currentShaderInformation.GUID;
+	issue.id = QStringLiteral("material.save:") + doc->info.GUID;
 	issue.kind = QStringLiteral("material.save");
-	issue.nodeName = currentShaderInformation.name;
-	issue.message = tr("'%1' could not be saved: %2")
-	                    .arg(currentShaderInformation.name, why);
+	issue.nodeName = doc->info.name;
+	issue.message = tr("'%1' could not be saved: %2").arg(doc->info.name, why);
 	issue.action = tr("Your edits are still on screen but are NOT being written down. "
 	                  "Re-pick the image on the node the message names, then save again.");
 	SceneIssues::instance().raise(issue);
@@ -451,15 +551,9 @@ void EffectsPage::loadShadersFromDisk()
 	
 }
 
-void EffectsPage::deleteMaterialFile(QString filename)
-{
-#if(EFFECT_BUILD_AS_LIB)
-
-    QJsonDocument doc;
-    doc.setObject(graph->serialize());
-
-#endif
-}
+// (`deleteMaterialFile` is DELETED — MATERIALS_TABS_SPEC §7. It had no
+// callers and no body worth the name: it serialised the open graph into a
+// local QJsonDocument and dropped it on the floor.)
 
 QString EffectsPage::genGUID()
 {
@@ -533,25 +627,53 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 
 void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 {
-	// A SHIPPED PRESET OPENS — READ-ONLY (PRESET-UNIFY-1; the owner
+	openDocument(guid, origin);
+}
+
+MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Origin origin)
+{
+	if (guid.isEmpty()) return nullptr;
+	// NO TILE, NO OPEN (fix round F1), asked FIRST. `selectCorrectItemFromDrop`
+	// answers null for a guid no drawer holds \u2014 which a caller can produce
+	// simply by asking before the drawers were refilled \u2014 and everything below
+	// reads the tile. It used to be asked at the END, after the canvas had
+	// already been replaced with the new graph: a half-open, on top of the
+	// dereference that made it a segfault.
+	QListWidgetItem *tile = selectCorrectItemFromDrop(guid);
+	if (!tile) {
+		irisLog("loadGraph: no drawer holds '" + guid + "' \u2014 nothing to open");
+		return nullptr;
+	}
+
+	// A SHIPPED PRESET OPENS \u2014 READ-ONLY (PRESET-UNIFY-1; the owner
 	// 2026-09-20: "if i select a preset i should see the graph, i dont see
 	// it"). It used to be REFUSED here, with a scene issue explaining that a
-	// preset has no graph to show. It has one now — every shipped preset is
-	// an authored graph, carried in its own definition — so the honest answer
+	// preset has no graph to show. It has one now \u2014 every shipped preset is
+	// an authored graph, carried in its own definition \u2014 so the honest answer
 	// to "show me this material" is to show it. What stays true is that it
 	// cannot be CHANGED: the definition writer refuses its reserved guid, so
-	// the page opens it with the save stood down and says so above the canvas
-	// (setReadOnly), with Customise one button away.
+	// the page opens it with the save stood down and says so above the canvas,
+	// with Customise one button away.
 	const QString shipped = MaterialBundle::shippedPresetName(guid);
-	setReadOnly(!shipped.isEmpty(), shipped);
 	// A stale refusal from an earlier build's behaviour, or from a save that
 	// was refused before this material was opened, must not outlive it.
 	SceneIssues::instance().clear(QStringLiteral("material.readonly:") + guid);
 
-	// The origin is set BEFORE the read, because `fetchAsset` reads the
-	// definition at this scope.
-	currentShaderInformation.origin = origin;
-	restoringGraph = true;
+	MaterialDocument *doc = activeDoc();
+	if (!doc) {
+		doc = newDocument();
+		mDocs.append(doc);
+		mActive = mDocs.size() - 1;
+	}
+	doc->info.GUID = guid;
+	doc->info.origin = origin;
+	// A PRESET TILE'S LABEL IS ELIDED to fit its 90 px tile, so the NAME comes
+	// from the shipped list rather than from what the tile could draw.
+	doc->info.name = shipped.isEmpty() ? tile->data(Qt::DisplayRole).toString() : shipped;
+	doc->readOnly = !shipped.isEmpty();
+	doc->presetName = shipped;
+	oldName = doc->info.name;
+
 	// Parented + deleted below: this used to leak one orphanable top-level
 	// window per loadGraph call.
 	auto progressDialog = new ProgressDialog(this);
@@ -561,15 +683,16 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	progressDialog->setValueAndText(1, "Preparing graph");
 	progressDialog->show();
 
-	NodeGraph *graph;
+	NodeGraph *graph = nullptr;
+	QJsonObject obj;
 
 #if(EFFECT_BUILD_AS_LIB)
-    QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
+	obj = QJsonDocument::fromJson(fetchAsset(guid, origin)).object();
 	// A PRESET NOBODY HAS USED YET HAS NO ROW (seeding is on first USE, not on
-	// listing — services/materialpresetassets.h). Looking at one must not be
+	// listing \u2014 services/materialpresetassets.h). Looking at one must not be
 	// what seeds it: the shipped graph is on disk, so the page reads THAT and
 	// writes nothing at all. Once the preset has been applied or customised,
-	// its definition is the better source — the same graph with its images
+	// its definition is the better source \u2014 the same graph with its images
 	// named by the guids the library gave them.
 	if (!shipped.isEmpty() && !obj.contains(QStringLiteral("shadergraph"))) {
 		bool found = false;
@@ -581,7 +704,7 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
 	// A READ-ONLY OPEN BINDS THE SHIPPED FILE AND WRITES NOTHING (fix round).
 	// Opening a preset to LOOK at it must not import its pictures into the
-	// library and pin them into the open project — a device wait each, on the
+	// library and pin them into the open project \u2014 a device wait each, on the
 	// thread that draws, for a gesture that reads. Every file-named image is
 	// bound to its path here so the canvas, the evaluator and the preview all
 	// have the complete picture with no row behind it; the import happens on
@@ -591,83 +714,82 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 		MaterialHelper::resolveAppRelativeTextures(
 		    graph, MaterialHelper::TextureBinding::PathOnly);
 	progressDialog->setValueAndText(6, "Deserialize Graph");
-
-	this->setNodeGraph(graph);
 #else
-	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-	QDirIterator it(filePath);
-	QJsonObject obj;
-
-	while (it.hasNext()) {
-
-		QFile file(it.next());
-		file.open(QIODevice::ReadOnly);
-		auto doc = QJsonDocument::fromJson(file.readAll());
-		file.close();
-
-		auto obj1 = doc.object();
-        if (obj1["guid"].toString() == guid) {
-			obj = obj1;
-			break;
+	{
+		auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
+		QDirIterator it(filePath);
+		while (it.hasNext()) {
+			QFile file(it.next());
+			file.open(QIODevice::ReadOnly);
+			auto doc1 = QJsonDocument::fromJson(file.readAll());
+			file.close();
+			auto obj1 = doc1.object();
+			if (obj1["guid"].toString() == guid) { obj = obj1; break; }
 		}
+		graph = NodeGraph::deserialize(obj["graph"].toObject(), mNodeLibrary);
 	}
-	graph = NodeGraph::deserialize(obj["graph"].toObject(), new LibraryV1());
-	this->setNodeGraph(graph);
-	this->restoreGraphPositions(obj["graph"].toObject());
 #endif
+
+	bindGraph(doc, graph);
 
 	progressDialog->setValueAndText(8, "Tidying up");
 
-	// NO TILE, NO OPEN (fix round F1). Every line below reads the list item,
-	// and `selectCorrectItemFromDrop` answers null for a guid no drawer holds
-	// — which a caller can produce simply by asking before the drawers were
-	// refilled. It used to dereference it on the next line: a segfault, in the
-	// first thing a user clicks after making a material.
-	currentProjectShader = selectCorrectItemFromDrop(guid);
-	if (!currentProjectShader) {
-		irisLog("loadGraph: no drawer holds '" + guid + "' — nothing to open");
-		restoringGraph = false;
-		progressDialog->close();
-		progressDialog->deleteLater();
-		return;
-	}
-	currentShaderInformation.GUID = currentProjectShader->data(MODEL_GUID_ROLE).toString();
-	currentShaderInformation.origin = origin;
-	// A PRESET TILE'S LABEL IS ELIDED to fit its 90 px tile, so the NAME comes
-	// from the shipped list rather than from what the tile could draw.
-	oldName = currentShaderInformation.name =
-	    shipped.isEmpty() ? currentProjectShader->data(Qt::DisplayRole).toString() : shipped; 
-	restoreGraphPositions(obj["shadergraph"].toObject());
+	restoringGraph = true;
+#if(EFFECT_BUILD_AS_LIB)
+	restoreGraphPositions(doc, obj["shadergraph"].toObject());
+#else
+	restoreGraphPositions(doc, obj["graph"].toObject());
+#endif
 	restoringGraph = false;
 	// The Members panel follows the open bundle.
-	if (membersPanel) membersPanel->setMaterial(currentShaderInformation.GUID);
+	if (membersPanel && doc == activeDoc()) membersPanel->setMaterial(doc->info.GUID);
+	refreshCurrentTile();
 	progressDialog->close();
 	progressDialog->deleteLater();
+	return doc;
 }
 
 void EffectsPage::setReadOnly(bool readOnly, const QString &presetName)
 {
-	mReadOnly = readOnly;
+	if (auto *doc = activeDoc()) {
+		doc->readOnly = readOnly;
+		doc->presetName = presetName;
+	}
+	applyReadOnlyUi();
+}
+
+bool EffectsPage::isReadOnly() const
+{
+	auto *doc = activeDoc();
+	return doc && doc->readOnly;
+}
+
+void EffectsPage::applyReadOnlyUi()
+{
+	auto *doc = activeDoc();
+	const bool readOnly = doc && doc->readOnly;
 	// THE CANVAS REFUSES EDITS, it does not merely fail to save them (fix
 	// round). Flipping a flag and a banner left the scene taking nodes,
 	// wires, drags and typed values while `saveShader` quietly returned and
-	// Customise built the copy from the SHIPPED definition — so the work went
+	// Customise built the copy from the SHIPPED definition \u2014 so the work went
 	// into a window that showed it and into nothing else.
-	if (scene) scene->setReadOnly(readOnly);
+	if (doc && doc->scene) doc->scene->setReadOnly(readOnly);
 	// THE DOCKS TOO. `GraphNode::setInteractive` reaches only the widgets
 	// EMBEDDED IN A NODE; the right-hand properties panel and the settings
 	// dock are separate windows onto the same model and were writing to it
 	// through `NodePropertiesPanel::writeValue`. Disabling them is both the
-	// enforcement and the thing the user can see.
+	// enforcement and the thing the user can see. They are SHARED widgets, so
+	// this runs on every activation too, or a preset's lock leaks onto the
+	// next tab.
 	if (nodePropertiesPanel) nodePropertiesPanel->setReadOnly(readOnly);
 	if (materialSettingsWidget) materialSettingsWidget->setEnabled(!readOnly);
 	if (!mReadOnlyBanner || !mReadOnlyLabel) return;
 	if (readOnly) {
 		mReadOnlyLabel->setText(
-		    tr("'%1' is a material the app ships — read-only, so the canvas takes no edits. "
+		    tr("'%1' is a material the app ships \u2014 read-only, so the canvas takes no edits. "
 		       "This is its graph; Customise makes '%1-1', your own copy, and every edit "
 		       "works on that.")
-		        .arg(presetName));
+		        .arg(doc->presetName));
 	}
 	mReadOnlyBanner->setVisible(readOnly);
 }
@@ -720,15 +842,20 @@ void EffectsPage::duplicateShader(QString guid)
 	loadGraph(copy, shaderInfo::Origin::Library);
 }
 
-void EffectsPage::restoreGraphPositions(const QJsonObject &data)
+void EffectsPage::restoreGraphPositions(MaterialDocument *doc, const QJsonObject &data)
 {
-    auto scene = data["scene"].toObject();
-    auto nodeList = scene["nodes"].toArray();
+    if (!doc || !doc->scene) return;
+    auto sceneObj = data["scene"].toObject();
+    auto nodeList = sceneObj["nodes"].toArray();
 
     for(auto nodeVal : nodeList) {
         auto nodeObj = nodeVal.toObject();
         auto nodeId = nodeObj["id"].toString();
-        auto node = this->scene->getNodeById(nodeId);
+        auto node = doc->scene->getNodeById(nodeId);
+        // A SAVED POSITION FOR A NODE THIS GRAPH NO LONGER HAS is not a crash
+        // (getNodeById answers null and this dereferenced it): a migration
+        // that dropped a node, or a hand-edited file, is enough to produce one.
+        if (!node) continue;
         node->setX(nodeObj["x"].toDouble());
         node->setY(nodeObj["y"].toDouble());
     }
@@ -772,8 +899,12 @@ bool EffectsPage::deleteShader(QString guid)
         materialmembers::reapExclusiveMembers(dataBase, guid);
     if (outcome.ok) {
         holder->takeItem(holder->row(item));
-        currentShaderInformation = shaderInfo();
-        if (membersPanel) membersPanel->setMaterial(QString());
+        // ONLY THE MATERIAL THAT WENT (MATERIALS_TABS_SPEC C7). This used to
+        // clear the open material's record UNCONDITIONALLY, so deleting any
+        // row in the drawer left the graph on screen with no guid \u2014 and its
+        // next save went down the 'name this new material' route, modal
+        // dialog and all.
+        forgetMaterial(guid);
         return true;
     }
 #else
@@ -793,7 +924,7 @@ bool EffectsPage::deleteShader(QString guid)
         if(obj["guid"].toString() == guid){
             if(file.remove()){
                 holder->takeItem(holder->row(item));
-                currentShaderInformation = shaderInfo();
+                forgetMaterial(guid);
                 return true;
             }
         }
@@ -1004,14 +1135,17 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	effects->addItem(item);
 	effects->displayAllContents();
 
-	stack->clear();
+	if (auto *stack = activeStack()) stack->clear();
 
 	if (loadNewGraph)	loadGraphFromTemplate(preset, newShader);
-	else				setNodeGraph(graph);
-	
-	currentShaderInformation.GUID = assetGuid;
-	currentShaderInformation.name = newShader;
-	currentShaderInformation.origin = shaderInfo::Origin::Library;   // created in the library
+	else				setNodeGraph(activeGraph());   // the canvas as it stands, named at last
+
+	if (auto *doc = activeDoc()) {
+		doc->info.GUID = assetGuid;
+		doc->info.name = newShader;
+		doc->info.origin = shaderInfo::Origin::Library;   // created in the library
+		documentChanged(doc);
+	}
 
 
 #if(EFFECT_BUILD_AS_LIB)
@@ -1039,7 +1173,7 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	// format carried; the templates were the second preset family and they
 	// are deleted. The graph comes from the preset itself now — the same
 	// graph the Presets drawer shows and Customise copies.
-	currentShaderInformation.GUID = "";
+	if (auto *doc = activeDoc()) doc->info = shaderInfo();
 	setReadOnly(false);
 
 	bool found = false;
@@ -1047,12 +1181,12 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	    preset.guid.isEmpty() ? preset.name : preset.guid, &found);
 	NodeGraph *graph = nullptr;
 	if (found && !shipped.graph.isEmpty())
-		graph = NodeGraph::deserialize(shipped.graph, new LibraryV1());
+		graph = NodeGraph::deserialize(shipped.graph, mNodeLibrary);
 	if (!graph) {
 		// No preset (a blank new material): a master node on an empty canvas,
 		// which is exactly what `materials.create({graph:true})` builds.
 		graph = new NodeGraph;
-		graph->setNodeLibrary(new LibraryV1());
+		graph->setNodeLibrary(mNodeLibrary);
 		auto *master = new PbrMasterNode();
 		graph->addNode(master);
 		graph->setMasterNode(master);
@@ -1073,13 +1207,19 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	setNodeGraph(graph);
 }
 
-void EffectsPage::setCurrentShaderItem()
+void EffectsPage::refreshCurrentTile()
 {
- 	if (scene->currentlyEditing)
-		currentProjectShader = selectCorrectItemFromDrop(scene->currentlyEditing->data(MODEL_GUID_ROLE).toString());
+	// THE GUID IS THE IDENTITY, the QListWidgetItem is a view (fix round F1's
+	// family): a drawer refill deletes every item, so the active document's
+	// tile pointer is re-resolved from its guid after anything that refills a
+	// drawer. This used to ask the SCENE which tile it had last been handed \u2014
+	// a pointer the scene kept for no other reason (`currentlyEditing`, now
+	// deleted).
+	const QString guid = currentInfo().GUID;
+	currentProjectShader = guid.isEmpty() ? nullptr : selectCorrectItemFromDrop(guid);
 }
 
-QByteArray EffectsPage::fetchAsset(QString string)
+QByteArray EffectsPage::fetchAsset(const QString &guid, shaderInfo::Origin origin)
 {
 #if(EFFECT_BUILD_AS_LIB)
 	// THE DEFINITION AT THE SCOPE THIS MATERIAL WAS OPENED AT (D-2 + the
@@ -1087,18 +1227,15 @@ QByteArray EffectsPage::fetchAsset(QString string)
 	// a Custom tile reads the library original. Passing the project
 	// unconditionally made the library copy unreachable the moment any
 	// project pinned it.
-	const bool projectScope = currentShaderInformation.origin == shaderInfo::Origin::Project;
+	const bool projectScope = origin == shaderInfo::Origin::Project;
 	const QJsonObject definition =
-	    MaterialBundle::read(dataBase, string, projectScope ? mProject : nullptr);
+	    MaterialBundle::read(dataBase, guid, projectScope ? mProject : nullptr);
 	if (!definition.isEmpty()) return QJsonDocument(definition).toJson();
-	return dataBase->fetchAssetData(string);
+	return dataBase->fetchAssetData(guid);
 #else
-	// fetch file locally
-
-#endif
-
-
+	Q_UNUSED(guid); Q_UNUSED(origin);
 	return QByteArray();
+#endif
 }
 
 void EffectsPage::configureUI()
@@ -1159,8 +1296,9 @@ void EffectsPage::configureUI()
 		auto *customiseButton = new QPushButton(tr("Customise"));
 		customiseButton->setToolTip(tr("Make your own editable copy of this material."));
 		connect(customiseButton, &QPushButton::clicked, this, [this]() {
-			if (!mReadOnly || currentShaderInformation.GUID.isEmpty()) return;
-			emit presets->customisePreset(currentShaderInformation.GUID);
+			const shaderInfo open = currentInfo();
+			if (!isReadOnly() || open.GUID.isEmpty()) return;
+			emit presets->customisePreset(open.GUID);
 		});
 		bannerRow->addWidget(mReadOnlyLabel, 1);
 		bannerRow->addWidget(customiseButton, 0);
@@ -1203,8 +1341,8 @@ void EffectsPage::configureUI()
 		// A member changed identity or went: the definition on disk moved, so
 		// the graph in front of the user is re-read and every mesh wearing
 		// the material re-dressed through the ONE apply.
-		if (!guid.isEmpty() && guid == currentShaderInformation.GUID)
-			loadGraph(guid, currentShaderInformation.origin);
+		const shaderInfo open = currentInfo();
+		if (!guid.isEmpty() && guid == open.GUID) loadGraph(guid, open.origin);
 		if (mMaterialChanged) mMaterialChanged(guid);
 	});
 	addDockWidget(Qt::RightDockWidgetArea, propertyWidget, Qt::Vertical);
@@ -1354,7 +1492,8 @@ void EffectsPage::configureToolbar()
 
 	this->addToolBar(toolBar);
 
-	connect(actionSave, &QAction::triggered, this, &EffectsPage::saveShader);
+	// (a lambda, because saveShader is overloaded on the document now)
+	connect(actionSave, &QAction::triggered, this, [this]() { saveShader(); });
 	connect(importBtn, &QAction::triggered, this, &EffectsPage::importGraph);
 	connect(addBtn, &QAction::triggered, this, [=]() {
 		createNewGraph(true);
@@ -1369,7 +1508,7 @@ void EffectsPage::generateTileNode()
 {
 	QSize currentSize(90, 90);
 
-	for (NodeLibraryItem *tile : graph->library->items) {
+	for (NodeLibraryItem *tile : mNodeLibrary->items) {
 		if (tile->hidden) continue; // load aliases are not palette entries
 		auto item = new QListWidgetItem;
 		item->setText(tile->displayName);
@@ -1424,7 +1563,7 @@ void EffectsPage::updateAssetDock()
 	// material with no tile (fix round F1) — so it is dropped here and
 	// re-resolved from the GUID once the list is rebuilt, which is the only
 	// identity that survives a refill.
-	const QString openGuid = currentShaderInformation.GUID;
+	const QString openGuid = currentInfo().GUID;
 	if (currentProjectShader && currentProjectShader->listWidget() == effects)
 		currentProjectShader = nullptr;
 	effects->clear();
@@ -1502,17 +1641,19 @@ void EffectsPage::setProject(Project *project)
 
 bool EffectsPage::selectGraphNode(const QString& nodeId)
 {
+	auto *scene = activeScene();
 	return scene != nullptr && scene->selectNodeById(nodeId);
 }
 
 QString EffectsPage::selectedGraphNodeId()
 {
+	auto *scene = activeScene();
 	return scene != nullptr ? scene->selectedNodeId() : QString();
 }
 
 void EffectsPage::deselectGraphNodes()
 {
-	if (scene != nullptr) scene->deselectAll();
+	if (auto *scene = activeScene()) scene->deselectAll();
 }
 
 QVariantMap EffectsPage::paletteTileRect(const QString &name)
@@ -1585,6 +1726,7 @@ QVariantMap EffectsPage::paletteTileRect(const QString &name)
 
 bool EffectsPage::removeGraphNode(const QString& nodeId)
 {
+	auto *scene = activeScene();
 	if (scene == nullptr) return false;
 	if (!scene->deleteNodeById(nodeId)) return false;
 	scene->update();
@@ -1593,6 +1735,7 @@ bool EffectsPage::removeGraphNode(const QString& nodeId)
 
 bool EffectsPage::removeGraphConnection(const QString& connectionId)
 {
+	auto *scene = activeScene();
 	if (scene == nullptr) return false;
 	if (!scene->deleteConnectionById(connectionId)) return false;
 	scene->update();
@@ -1604,21 +1747,23 @@ bool EffectsPage::removeGraphConnection(const QString& connectionId)
 
 bool EffectsPage::graphUndo()
 {
+	auto *stack = activeStack();
 	if (!stack || !stack->canUndo()) return false;
 	stack->undo();
 	// The scene has to be told to repaint: the commands mutate node/connection
 	// state directly and QGraphicsScene has no way to know (this is what the
 	// page's own toolbar undo button did, and the graph view's deleted
 	// shortcut before it).
-	if (scene) scene->update();
+	if (auto *scene = activeScene()) scene->update();
 	return true;
 }
 
 bool EffectsPage::graphRedo()
 {
+	auto *stack = activeStack();
 	if (!stack || !stack->canRedo()) return false;
 	stack->redo();
-	if (scene) scene->update();
+	if (auto *scene = activeScene()) scene->update();
 	return true;
 }
 
@@ -1636,6 +1781,7 @@ bool EffectsPage::openNodeSearch()
 // unreliable the moment a second WindowShortcut claimed it.
 bool EffectsPage::graphDeleteSelected()
 {
+	auto *scene = activeScene();
 	if (!scene) return false;
 	scene->deleteSelectedNodes();
 	scene->update();
@@ -1644,6 +1790,7 @@ bool EffectsPage::graphDeleteSelected()
 
 bool EffectsPage::graphDuplicateSelected()
 {
+	auto *scene = activeScene();
 	if (!scene) return false;
 	scene->duplicateSelected();
 	scene->update();
@@ -1652,6 +1799,7 @@ bool EffectsPage::graphDuplicateSelected()
 
 bool EffectsPage::graphCopySelected()
 {
+	auto *scene = activeScene();
 	if (!scene) return false;
 	scene->copySelectedToClipboard();
 	return true;
@@ -1659,16 +1807,22 @@ bool EffectsPage::graphCopySelected()
 
 bool EffectsPage::graphPaste()
 {
+	auto *scene = activeScene();
 	if (!scene) return false;
 	scene->pasteFromClipboard();
 	scene->update();
 	return true;
 }
 
-int EffectsPage::graphUndoCount() const { return stack ? stack->index() : 0; }
+int EffectsPage::graphUndoCount() const
+{
+	auto *stack = activeStack();
+	return stack ? stack->index() : 0;
+}
 
 int EffectsPage::graphRedoCount() const
 {
+	auto *stack = activeStack();
 	return stack ? stack->count() - stack->index() : 0;
 }
 
@@ -1761,44 +1915,46 @@ bool EffectsPage::eventFilter(QObject * watched, QEvent * event)
 	return QObject::eventFilter(watched, event);
 }
 
-GraphNodeScene *EffectsPage::createNewScene()
+GraphNodeScene *EffectsPage::createNewScene(MaterialDocument *doc)
 {
     auto scene = new GraphNodeScene(this);
-	scene->setUndoRedoStack(stack);
+	scene->setUndoRedoStack(doc->stack);
     scene->setBackgroundBrush(QBrush(QColor(60, 60, 60)));
 
-	connect(scene, &GraphNodeScene::graphInvalidated, [this, scene]()
+	connect(scene, &GraphNodeScene::graphInvalidated, this, [this, doc]()
 	{
 		// Engine preview: every path that re-evaluates the graph ends here
 		// (graphInvalidated covers connections, deletions and value edits
-		// alike), so this one debounced hook keeps the Display dock live.
-		schedulePreviewUpdate();
+		// alike), so this one debounced hook keeps the Display dock live. One
+		// preview, so only the document on screen bakes.
+		if (doc == activeDoc()) schedulePreviewUpdate();
 		// ...AND THE EDIT IS WRITTEN DOWN (the owner, 2026-09-19: "I added a UV
 		// node and connected it to the texture, went to the editor and back and
 		// the node connection is gone; I had to toggle between materials for it
-		// to stay"). THIS SIGNAL IS EVERY REAL EDIT — a connection, a deletion,
-		// a value typed into a node — and until now the only thing that ever
+		// to stay"). THIS SIGNAL IS EVERY REAL EDIT \u2014 a connection, a deletion,
+		// a value typed into a node \u2014 and until now the only thing that ever
 		// reached `saveShader` on its own was `nodeMoved`, the timer below. So
 		// a graph you EDITED was kept only if you also happened to DRAG a node
 		// (or rename the material, or switch to another one, which saves on the
 		// way out): the work was lost on any other exit, silently. The same
-		// debounce carries it — the bake is hash-cached, so an edit
-		// that changes nothing re-saves cheaply — and `restoringGraph` still
+		// debounce carries it \u2014 the bake is hash-cached, so an edit
+		// that changes nothing re-saves cheaply \u2014 and `restoringGraph` still
 		// guards the rebuild, so loading a graph writes nothing.
-		if (!restoringGraph && positionSaveTimer) positionSaveTimer->start();
+		//
+		// THE TIMER IS THIS DOCUMENT'S: the edit lands on the material it was
+		// made in even if the user has moved to another tab meanwhile.
+		if (!restoringGraph) doc->saveTimer->start();
 	});
 
-	connect(scene, &GraphNodeScene::nodeMoved, this, [this]() {
+	connect(scene, &GraphNodeScene::nodeMoved, this, [this, doc]() {
 		// drags fire per step; setPos during graph builds must not count
-		if (!restoringGraph && positionSaveTimer) positionSaveTimer->start();
+		if (!restoringGraph) doc->saveTimer->start();
 	});
 
-	connect(scene, &GraphNodeScene::loadGraph, [=](QListWidgetItem *item) {
-		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
-		currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
+	connect(scene, &GraphNodeScene::loadGraph, this, [this](const QString &guid) {
 		// A tile dropped on the canvas opens at the scope of the drawer it
 		// was dragged out of (the four-drawer rule).
-		loadGraph(currentShaderInformation.GUID, originForItem(currentShaderInformation.GUID));
+		loadGraph(guid, originForItem(guid));
 	});
 
     return scene;
@@ -1825,25 +1981,32 @@ void EffectsPage::schedulePreviewUpdate()
 
 void EffectsPage::updateEnginePreviewMaterial()
 {
-	if (!enginePreview || !graph) return;
+	auto *doc = activeDoc();
+	if (!enginePreview || !doc || !doc->graph) return;
 
 	// MATERIALS_EVALUATOR_SPEC section 2: preview bakes run off-thread over
 	// the compiled BakeProgram (a pure value object - the graph's QWidgets
 	// are only touched here, on the GUI thread), latest-wins by generation.
-	const quint64 generation = ++previewGeneration;
-	auto compiled = materials::GraphBaker::compile(graph, MaterialHelper::textureResolver());
+	//
+	// THE GENERATION IS THE DOCUMENT'S (MATERIALS_TABS_SPEC \u00a72.5): a bake
+	// started for one tab that lands after another tab is active must not
+	// paint the wrong material, and the watcher is a CHILD of the document, so
+	// closing a tab takes its in-flight bakes with it.
+	const quint64 generation = ++doc->previewGeneration;
+	auto compiled = materials::GraphBaker::compile(doc->graph, MaterialHelper::textureResolver());
 
 	materials::GraphBaker::Options opts;
 	opts.resolution = 256; // preview quality, fixed
-	const QString guid = currentShaderInformation.GUID.isEmpty()
-	                         ? QStringLiteral("preview") : currentShaderInformation.GUID;
+	const QString guid = doc->info.GUID.isEmpty()
+	                         ? QStringLiteral("preview") : doc->info.GUID;
 	opts.outputDir = QDir::temp().absoluteFilePath("jahshaka-preview-bakes/" + guid);
 	opts.relativePrefix = opts.outputDir + "/"; // absolute: no resolver round-trip
 
-	auto watcher = new QFutureWatcher<materials::GraphBaker::Result>(this);
-	connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, generation]() {
+	auto watcher = new QFutureWatcher<materials::GraphBaker::Result>(doc);
+	connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, doc, generation]() {
 		watcher->deleteLater();
-		if (generation != previewGeneration) return; // a newer bake is in flight
+		if (generation != doc->previewGeneration) return; // a newer bake is in flight
+		if (doc != activeDoc()) return;                   // another tab is on screen
 		if (!enginePreview) return;
 		auto material = PbrGraphEvaluator::materialFromValues(
 		    watcher->result().eval.values, MaterialHelper::textureResolver());
@@ -1933,18 +2096,16 @@ void EffectsPage::configureConnections()
 	// library original — even while a project holds it, which the old
 	// "is it pinned?" inference made impossible.
 	connect(assetWidget, &ShaderAssetWidget::loadToGraph, [=](QListWidgetItem * item) {
-		currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
-		currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
-		currentShaderInformation.origin = shaderInfo::Origin::Project;
-		loadGraph(currentShaderInformation.GUID, shaderInfo::Origin::Project);
+		// (The three-line pre-write into the page's one `currentShaderInformation`
+		// is gone from every one of these gestures: the open fills the
+		// DOCUMENT's identity from the tile it found, and these writes were
+		// overwritten by it a line later.)
+		loadGraph(item->data(MODEL_GUID_ROLE).toString(), shaderInfo::Origin::Project);
 	});
 #endif
 
     connect(effects, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
-        currentShaderInformation.name = item->data(Qt::DisplayRole).toString();
-        currentShaderInformation.GUID = item->data(MODEL_GUID_ROLE).toString();
-        currentShaderInformation.origin = shaderInfo::Origin::Library;
-        loadGraph(currentShaderInformation.GUID, shaderInfo::Origin::Library);
+        loadGraph(item->data(MODEL_GUID_ROLE).toString(), shaderInfo::Origin::Library);
     });
 
     connect(effects, &QListWidget::itemPressed, [=](QListWidgetItem *item){
@@ -1967,8 +2128,8 @@ void EffectsPage::configureConnections()
 	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
 		const QString guid = item->data(MODEL_GUID_ROLE).toString();
 		if (guid.isEmpty()) return;
-		// The tile's LABEL is elided to fit 90 px; the name is the preset's.
-		currentShaderInformation.name = MaterialBundle::shippedPresetName(guid);
+		// (The tile's LABEL is elided to fit 90 px; the open takes the name
+		// from the shipped list itself.)
 		loadGraph(guid, shaderInfo::Origin::Library);
 	});
 
@@ -2085,7 +2246,6 @@ void EffectsPage::configureConnections()
 		// carries the preset's GRAPH now, so there is something to open —
 		// which is the point of the gesture: the user asked to edit this
 		// material, and the node editor is where they do it.
-		currentShaderInformation.name = dataBase->fetchAsset(copy).name;
 		loadGraph(copy, pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library);
 	});
 
@@ -2098,18 +2258,18 @@ void EffectsPage::configureConnections()
     // which is what the user sees; these guards are what makes it true for a
     // signal that arrives any other way.
     connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged,[=](MaterialSettings settings){
-		if (mReadOnly) return;
-		auto command = new MaterialSettingsChangeCommand(graph, settings, materialSettingsWidget);
-		stack->push(command);
+		if (isReadOnly() || !activeGraph()) return;
+		auto command = new MaterialSettingsChangeCommand(activeGraph(), settings, materialSettingsWidget);
+		activeStack()->push(command);
 		nodePropertiesPanel->refreshSettings();
     });
 
 	// §3a: the panel's master/graph settings views push through the SAME
 	// undo command the left settings dock uses — one edit stack
 	connect(nodePropertiesPanel, &NodePropertiesPanel::settingsEdited, [=](MaterialSettings settings) {
-		if (mReadOnly) return;
-		auto command = new MaterialSettingsChangeCommand(graph, settings, materialSettingsWidget);
-		stack->push(command);
+		if (isReadOnly() || !activeGraph()) return;
+		auto command = new MaterialSettingsChangeCommand(activeGraph(), settings, materialSettingsWidget);
+		activeStack()->push(command);
 		nodePropertiesPanel->refreshSettings();
 	});
 
@@ -2183,13 +2343,9 @@ void EffectsPage::editingFinishedOnListItem()
 
 	item->setData(Qt::DisplayRole, newName);
 
-    // update current settings if the same
-    if(pressedShaderInfo.GUID == currentShaderInformation.GUID){
-        currentShaderInformation.name = newName;
-        this->graph->settings.name = newName;
-        materialSettingsWidget->setName(newName);
-        saveShader();
-    }
+    // THE DOCUMENT THAT IS THIS MATERIAL takes the new name \u2014 not "the
+    // current one" (MATERIALS_TABS_SPEC \u00a72.6).
+    renameOpenDocuments(pressedShaderInfo.GUID, newName);
 
 	pressedShaderInfo = shaderInfo();
 }

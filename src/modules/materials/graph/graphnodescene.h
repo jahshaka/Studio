@@ -109,10 +109,11 @@ public:
 	QMenu* removeConnectionContextMenu(float x, float y);
 
 	QJsonObject serialize();
-	QListWidgetItem *currentlyEditing = Q_NULLPTR;
-	QList<QString> loadedShadersGUID;
-
-	void setList(QList<QString> list) { loadedShadersGUID = list; }
+	// (`currentlyEditing`, `loadedShadersGUID` and `setList` are DELETED —
+	// MATERIALS_TABS_SPEC §7. The first was a throwaway QListWidgetItem the
+	// drop handler minted and leaked so the page could read a guid off it;
+	// the other two were written by nobody and read by nobody. WHICH
+	// MATERIAL THIS CANVAS IS SHOWING is the document's business now.)
 
 	void addNodeFromSearchDialog(QTreeWidgetItem* item, const QPoint& point);
 
@@ -183,7 +184,11 @@ signals:
 	void nodeValueChanged(NodeModel* nodeModel, int socketIndex);
 	// exactly one node selected -> its model; empty or multi selection -> null
 	void nodeSelected(NodeModel* model);
-	void loadGraph(QListWidgetItem *item);
+	/// A MATERIAL TILE WAS DROPPED ON THE CANVAS: open this guid. (It used
+	/// to carry a QListWidgetItem the handler built for the purpose — a
+	/// widget item with no list, leaked on every drop, whose only cargo was
+	/// the guid and a label the page re-read from the real tile anyway.)
+	void loadGraph(const QString &guid);
 	// (loadGraphFromPreset / loadGraphFromPreset2 are DELETED — PRESET-UNIFY-1.
 	// They carried a dropped GRAPH TEMPLATE's name, in two flavours because
 	// the templates lived in two folders. A preset tile is an ordinary

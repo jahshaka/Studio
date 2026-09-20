@@ -240,6 +240,21 @@ TextureNode::TextureNode()
 
 }
 
+TextureNode::~TextureNode()
+{
+	// THE RESOLVER TABLE'S ENTRY DIES WITH THE NODE (MATERIALS_TABS_SPEC
+	// §2.8, correction C3). TextureManager::textures is a guid -> path resolver
+	// table with one entry per texture node, and the page used to empty the
+	// WHOLE table on every graph open (clearTextures) — which is why a second
+	// open worked at all. It does not any more: a closed graph takes its own
+	// entries with it, and the table keeps the entries of the graphs still open.
+	if (graphTexture) {
+		TextureManager::getSingleton()->removeTexture(graphTexture);
+		delete graphTexture;
+		graphTexture = nullptr;
+	}
+}
+
 QString TextureNode::getTexturePath() const
 {
 	if (graphTexture == nullptr) return QString();

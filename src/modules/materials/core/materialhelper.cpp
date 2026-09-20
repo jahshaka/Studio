@@ -230,10 +230,19 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 	return material;
 }
 
+NodeLibrary* MaterialHelper::sharedNodeLibrary()
+{
+	// Function-local static, built on first use (after QApplication, so its
+	// icons are legal) and never freed — a deliberate one, like the module's
+	// other three (ENGINE-3).
+	static LibraryV1 *library = new LibraryV1();
+	return library;
+}
+
 NodeGraph* MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj)
 {
 	auto graphObj = matObj["shadergraph"].toObject();
-	auto graph = NodeGraph::deserialize(graphObj, new LibraryV1());
+	auto graph = NodeGraph::deserialize(graphObj, sharedNodeLibrary());
 
 	return graph;
 }

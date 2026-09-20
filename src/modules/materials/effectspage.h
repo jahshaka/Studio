@@ -42,12 +42,14 @@ class AssetView;
 struct ThumbnailResult;
 
 class QTimer;
+class NodeLibrary;
 
 namespace materials
 {
 Q_NAMESPACE
 
 class IMaterialPreviewWidget;
+class MaterialDocument;
 class MembersPanel;
 
 
@@ -195,18 +197,30 @@ public:
     ~EffectsPage();
 
 	QList<NodeGraphPreset> list;
+	/// The ACTIVE document's tile, in whichever drawer holds it. A view
+	/// pointer, re-resolved from the guid after every drawer refill — the
+	/// identity is the guid, and a QListWidgetItem* does not survive a
+	/// `clear()`.
 	QListWidgetItem *currentProjectShader = Q_NULLPTR;
-	shaderInfo currentShaderInformation;
     shaderInfo pressedShaderInfo;
-	QUndoStack *stack;
-	
+	// (`stack` and `currentShaderInformation` are gone — MATERIALS_TABS_SPEC
+	// §2.1/§7. There is one of each PER OPEN MATERIAL now, on
+	// MaterialDocument, and nothing outside this class ever read either of
+	// them: the undo stack is reached through graphUndo/graphRedo.)
+
 
 private:
 	
+	/// Write the ACTIVE document (the toolbar's Save, a rename, a timeout).
 	void saveShader();
+	/// Write ONE document. Every line of a save is per document — its guid,
+	/// its origin, its graph, its refusal — which is what lets a background
+	/// tab's autosave fire against its OWN material instead of whichever
+	/// material happens to be on screen 1.5 s later (the spec's C5).
+	void saveShader(MaterialDocument *doc);
 	/// Tell the user a save was REFUSED (F16): the graph is on screen and is
 	/// not being written down, which no log line can say loudly enough.
-	void reportSaveRefused(const QString &why);
+	void reportSaveRefused(MaterialDocument *doc, const QString &why);
 	void saveDefaultShader();
 
 	/// Queues the saved graph's thumbnail on the shell's ThumbnailGenerator
@@ -225,17 +239,21 @@ private:
 	/// OFFER an edit it cannot honour: `saveShader` stands down, the autosave
 	/// timer never fires a refusal into the scene-issue bar, and the banner
 	/// above the canvas says so and offers the one gesture that works.
-	bool mReadOnly = false;
 	QWidget *mReadOnlyBanner = nullptr;
 	QLabel  *mReadOnlyLabel = nullptr;
-	/// Show or hide the banner and set `mReadOnly`.
+	/// Mark the ACTIVE document read-only (or not) and show the banner.
 	void setReadOnly(bool readOnly, const QString &presetName = QString());
+	/// Re-assert the active document's read-only state on the SHARED
+	/// widgets. The canvas, the properties panel, the settings dock and the
+	/// banner are one set of widgets showing whichever document is active,
+	/// so without this a preset's lock leaks onto the next tab.
+	void applyReadOnlyUi();
+	bool isReadOnly() const;
 	/// The guids WE asked the shared thumbnail queue about (a material render
 	/// is not ours by type alone any more — see requestShaderThumbnail).
 	QSet<QString> mPendingThumbnails;
     void loadShadersFromDisk();
 
-	void deleteMaterialFile(QString filename);
 
 	/// Import a material share file (services/assetshare.h) into the library
 	/// — the toolbar's Import and the drawer's "Import material…".
@@ -248,7 +266,7 @@ private:
 	/// (the members are SHARED, not copied — Make unique is how a picture
 	/// becomes private to one material).
 	void duplicateShader(QString guid);
-    void restoreGraphPositions(const QJsonObject& data);
+    void restoreGraphPositions(MaterialDocument *doc, const QJsonObject& data);
     bool deleteShader(QString guid);
 
 	void configureUI();
@@ -266,8 +284,15 @@ private:
 	void createShader(NodeGraphPreset preset, bool loadNewGraph = true,
 	                  const QString &wanted = QString());
 	void loadGraphFromTemplate(NodeGraphPreset preset, const QString &name = QString());
-	void setCurrentShaderItem();
-	QByteArray fetchAsset(QString string);
+	/// Re-resolve the active document's tile from its guid (after a drawer
+	/// refill, which deletes every item). Was `setCurrentShaderItem`, which
+	/// asked the SCENE which tile it had last been handed.
+	void refreshCurrentTile();
+	/// The definition, read at the scope the ORIGIN names: a Projects tile
+	/// reads the project's pinned version, a Custom tile the library
+	/// original (the four-drawer rule). It used to read the page's one
+	/// `currentShaderInformation.origin`, which is no longer a thing.
+	QByteArray fetchAsset(const QString &guid, shaderInfo::Origin origin);
 
 	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has
 	/// no business knowing about scene nodes, so the shell hands it one
@@ -277,12 +302,12 @@ private:
 	/// Until this lane an edit reached the scene only through a material
 	/// SWITCH, and only while the Projects tab happened to be current.
 
-    GraphNodeScene* createNewScene();
+    GraphNodeScene* createNewScene(MaterialDocument *doc);
 	QListWidgetItem* selectCorrectItemFromDrop(QString guid);
 	int selectCorrectTabForItem(QString guid);
 	/// Which DRAWER a tile lives in, as the scope an edit to it belongs to.
 	shaderInfo::Origin originForItem(QString guid);
-	QList<QString> loadedShadersGUID;
+	// (`loadedShadersGUID` is DELETED — written once, read never.)
 
 private:
     void configureConnections();
@@ -293,14 +318,49 @@ private:
 	void schedulePreviewUpdate();
 	void updateEnginePreviewMaterial();
 
-    GraphNodeScene* scene;
 	IMaterialPreviewWidget *enginePreview = nullptr;
 	QMainWindow *displayWindow = nullptr;   // the Display dock's inner window (menus + preview)
 	QTimer *previewUpdateTimer = nullptr;   // 300ms debounce: slider drags bake once, not per pixel
-	QTimer *positionSaveTimer = nullptr;    // 1.5s debounce: moved nodes persist without an explicit save
 	bool restoringGraph = false;            // suppress position-saves while a graph is being (re)built
-	quint64 previewGeneration = 0;          // latest-wins stamp for async preview bakes
-	NodeGraph *graph;
+
+	// ---- THE OPEN MATERIALS (MATERIALS_TABS_SPEC §2) ------------------
+	/// Every open material IN TAB ORDER, and which one is active. There is
+	/// always at least one after construction: with nothing restored the
+	/// page boots on the anonymous "Untitled" canvas, and closing the last
+	/// tab leaves that same canvas rather than an empty window.
+	QVector<MaterialDocument *> mDocs;
+	int mActive = -1;
+	/// ONE node library for every graph this page opens — it is a stateless
+	/// factory registry, and a copy per open was exactly that.
+	NodeLibrary *mNodeLibrary = nullptr;
+
+	MaterialDocument *activeDoc() const;
+	NodeGraph *activeGraph() const;
+	GraphNodeScene *activeScene() const;
+	QUndoStack *activeStack() const;
+	/// The active document's identity, or an empty one when there is none.
+	shaderInfo currentInfo() const;
+	/// A document with its own stack and its own 1.5 s autosave timer.
+	MaterialDocument *newDocument();
+	/// Give a document a graph: a fresh scene on ITS stack, the previous
+	/// pair freed, the panels rebound when it is the active one.
+	void bindGraph(MaterialDocument *doc, NodeGraph *graph);
+	/// Put a document on screen — canvas, settings, properties, members,
+	/// read-only state, preview.
+	void showDocument(MaterialDocument *doc);
+	/// OPEN A MATERIAL (MATERIALS_TABS_SPEC §2.2) — read it at the scope its
+	/// ORIGIN names, deserialise it, and put it in a document. Null when no
+	/// drawer holds the guid (NO TILE, NO OPEN).
+	MaterialDocument *openDocument(const QString &guid, shaderInfo::Origin origin);
+	/// This material's identity changed (it was just minted, or renamed):
+	/// the panels and the tile that show it follow.
+	void documentChanged(MaterialDocument *doc);
+	/// The material is GONE from the library: every document that is it
+	/// stops being it.
+	void forgetMaterial(const QString &guid);
+	/// Every open document of this material takes the new name — the label,
+	/// the graph's settings, the settings dock, and a save.
+	void renameOpenDocuments(const QString &guid, const QString &newName);
 	QSplitter *splitView;
 	AssetView* assetView;
 
