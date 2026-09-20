@@ -99,7 +99,10 @@ QString stampedTextureFor(Database *db, const QString &oid)
                   "WHERE AF.oid = ? AND AF.role = 'source' AND A.type = ? "
                   "AND A.listed = 1 "
                   "AND " + Database::memberSubquery(QStringLiteral("A.guid")) + " "
-                  "ORDER BY AF.asset_guid");
+                  // The row that FIRST brought the picture in: makeUnique re-ingests
+                  // the same bytes under a second stamped row (a material's private
+                  // copy), and the user's import must claim the original, not that.
+                  "ORDER BY A.date_created ASC, A.rowid ASC");
     query.addBindValue(oid);
     query.addBindValue(static_cast<int>(ModelTypes::Texture));
     if (!query.exec()) return QString();

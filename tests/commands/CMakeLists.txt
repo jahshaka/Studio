@@ -208,6 +208,7 @@ add_executable(test_pin_asset test_pin_asset.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/assetdelete.h"
+#include "services/memberstamp.h"
 
 #include <QDir>
 #include <QJsonDocument>
@@ -96,8 +97,8 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
             if (row.guid.isEmpty()) continue;
             const QJsonObject props = QJsonDocument::fromJson(row.properties).object();
             bool bornInside = false;
-            if (props.value(QStringLiteral("member")).toBool()
-                && set.contains(props.value(QStringLiteral("memberOf")).toString()))
+            if (memberstamp::isStamped(row.properties)
+                && set.contains(memberstamp::originOf(row.properties)))
                 bornInside = true;
             if (!row.parent.isEmpty() && set.contains(row.parent)) bornInside = true;
             if (row.type == static_cast<int>(ModelTypes::Material)) {
