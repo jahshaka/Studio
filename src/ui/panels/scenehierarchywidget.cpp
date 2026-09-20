@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/core/irisutils.h"
+#include "ui/controls/nodeicons.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -103,23 +104,6 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 
     connect(ui->folderBtn, &QPushButton::clicked,
             this, &SceneHierarchyWidget::newFolderFromSelection);
-
-	// We do QIcon::Selected manually to remove an annoying default highlight for selected icons
-	visibleIcon = new QIcon;
-	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48.png"), QIcon::Normal);
-	visibleIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48.png"), QIcon::Selected);
-
-	hiddenIcon = new QIcon;
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Normal);
-	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Selected);
-
-    pickableIcon = new QIcon;
-    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-dim.png"), QIcon::Normal);
-    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-dim.png"), QIcon::Selected);
-
-    disabledIcon = new QIcon;
-    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Normal);
-    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Selected);
 
     ui->sceneTree->setStyleSheet(StyleSheet::SceneHierarchyTree());
 }
@@ -1484,39 +1468,13 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	childTreeItem->setData(1, Qt::UserRole, QVariant::fromValue(node->isVisible()));
 	childTreeItem->setData(2, Qt::UserRole, QVariant::fromValue(node->isPickable()));
 
-	// ONE ICON PER NODE TYPE, built once and shared (CRUD, second reader
-	// 2026-09-15). Every row used to `new QIcon` and never delete it — one
-	// leaked QIcon per row per repopulate, and this function runs on every add,
-	// delete, reparent and folder gesture. A QIcon is implicitly shared, so a
-	// static table costs one pixmap pair per type for the process.
-	static const QHash<iris::SceneNodeType, QString> kTypeIcon = {
-		{ iris::SceneNodeType::Mesh,           QStringLiteral("app/icons/icons8-mesh-32.png") },
-		{ iris::SceneNodeType::Light,          QStringLiteral("app/icons/icons8-sun-48.png") },
-		{ iris::SceneNodeType::ParticleSystem, QStringLiteral("app/icons/icons8-snow-storm-26.png") },
-		{ iris::SceneNodeType::Empty,          QStringLiteral("app/icons/icons8-average-math-filled-50.png") },
-		{ iris::SceneNodeType::Decal,          QStringLiteral("app/icons/icons8-picture-50.png") },
-		{ iris::SceneNodeType::Camera,         QStringLiteral("app/icons/icons8-camera-48.png") },
-	};
-	// LEAKED ON PURPOSE, like the four member icons above: a QIcon holds
-	// QPixmaps, and a QPixmap destroyed after QApplication is gone (which is
-	// when a function-local static's destructor runs) is the classic Qt
-	// shutdown crash. One hash for the process, never destroyed.
-	static QHash<iris::SceneNodeType, QIcon> &icons =
-		*new QHash<iris::SceneNodeType, QIcon>;
-	const iris::SceneNodeType type = node->getSceneNodeType();
-	if (!icons.contains(type)) {
-		QIcon icon;
-		const QString path = kTypeIcon.value(type);
-		if (!path.isEmpty()) {
-			icon.addPixmap(IrisUtils::getAbsoluteAssetPath(path), QIcon::Normal);
-			icon.addPixmap(IrisUtils::getAbsoluteAssetPath(path), QIcon::Selected);
-		}
-		icons.insert(type, icon);      // a type with no icon caches the empty one
-	}
-	childTreeItem->setIcon(0, icons.value(type));
+	// ONE ICON PER NODE TYPE — the table lives in ui/controls/nodeicons.h now
+	// (COMPONENTS-1), because the Properties column's Components section draws
+	// the same rows and a second table would have been a second truth.
+	childTreeItem->setIcon(0, nodeicons::forType(node->getSceneNodeType()));
 	
-	node->isVisible() ? childTreeItem->setIcon(1, *visibleIcon) : childTreeItem->setIcon(1, *hiddenIcon);
-	node->isPickable() ? childTreeItem->setIcon(2, *pickableIcon) : childTreeItem->setIcon(2, *disabledIcon);
+	childTreeItem->setIcon(1, nodeicons::visibility(node->isVisible()));
+	childTreeItem->setIcon(2, nodeicons::lock(!node->isPickable()));
 
     return childTreeItem;
 }
@@ -1554,11 +1512,11 @@ void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 			const qint64 nodeId = it->data(0, Qt::UserRole).toLongLong();
 			if (nodeList.contains(nodeId) && nodeList[nodeId]) {
 				const bool own = nodeList[nodeId]->isVisible();
-				it->setIcon(1, own ? *visibleIcon : *hiddenIcon);
+				it->setIcon(1, nodeicons::visibility(own));
 				it->setData(1, Qt::UserRole, QVariant::fromValue(own));
 			}
 		} else {
-			it->setIcon(1, visible ? *visibleIcon : *hiddenIcon);
+			it->setIcon(1, nodeicons::visibility(visible));
 			it->setData(1, Qt::UserRole, QVariant::fromValue(visible));
 		}
 		for (int i = 0; i < it->childCount(); i++) paint(it->child(i));
@@ -1604,7 +1562,7 @@ void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
         return;
     }
     qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-    item->setIcon(2, *disabledIcon);
+    item->setIcon(2, nodeicons::lock(true));
     nodeList[nodeId]->setPickable(false);
     item->setData(2, Qt::UserRole, QVariant::fromValue(false));
 
@@ -1622,7 +1580,7 @@ void SceneHierarchyWidget::releaseItemAndChildren(QTreeWidgetItem *item)
         return;
     }
     qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-    item->setIcon(2, *pickableIcon);
+    item->setIcon(2, nodeicons::lock(false));
     nodeList[nodeId]->setPickable(true);
     item->setData(2, Qt::UserRole, QVariant::fromValue(true));
 

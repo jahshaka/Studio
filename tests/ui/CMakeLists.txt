@@ -413,8 +413,12 @@ jah_no_display(ui.photon_panel)
 # builds in its constructor — with the same link stubs the other panel suites
 # use for the Sql/io layer. Offscreen, no display; the document nodes need the
 # headless graph like every other document suite.
-add_executable(test_selection_cost
-    test_selection_cost.cpp
+# THE PROPERTIES-COLUMN SLICE, named once (COMPONENTS-1). Two suites compile
+# the WHOLE right column — ui.selection_cost, which measures what a pick costs,
+# and ui.components, which drives the Components section — and an eighty-line
+# source list copied twice is a list that stops agreeing with itself the first
+# time a blade is added. Both targets take this variable; neither owns it.
+set(JAH_PROPERTIES_COLUMN_SOURCES
     test_stubs.cpp
     test_selection_stubs.cpp
     # The row-undo spine (debt L6): every panel row's gesture and the command it
@@ -428,6 +432,8 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
@@ -484,6 +490,9 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    # COMPONENTS-1: the Components section pushes a click through the real
+    # selection service, so the suites link it rather than a stub of it.
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
@@ -500,6 +509,11 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+
+add_executable(test_selection_cost
+    test_selection_cost.cpp
+    ${JAH_PROPERTIES_COLUMN_SOURCES})
+
 set_target_properties(test_selection_cost PROPERTIES
     AUTOMOC ON
     AUTOUIC ON
@@ -527,6 +541,40 @@ add_test(NAME ui.selection_cost COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+
+# ui.components — THE COMPONENTS SECTION (owner review R14, COMPONENTS-1): the
+# parts of a grouped node, listed in the Properties column, clickable. Real
+# mouse events on the real panel under the real Qlementine style — a click
+# selects a part, Shift/Ctrl extend, a double-click frames it, a selection made
+# elsewhere moves the highlight — plus the cost law: 200 picks inside one model
+# rebuild the list zero times. The verb half is scripting.e2e.components.
+# Offscreen, no display.
+add_executable(test_components
+    test_components.cpp
+    ${JAH_PROPERTIES_COLUMN_SOURCES})
+set_target_properties(test_components PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_components PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_components PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_components
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Test qlementine)
+jah_document_graph(test_components)
+add_test(NAME ui.components COMMAND test_components
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.components PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+jah_no_display(ui.components)
 jah_no_display(ui.selection_cost)
 
 # ui.panel_undo — EVERY properties row is undoable, as ONE step per gesture

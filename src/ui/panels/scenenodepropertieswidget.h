@@ -42,6 +42,7 @@ class CameraPostFxPropertyWidget;
 class NodePropertyWidget;
 class MeshPropertyWidget;
 class MobilityPropertyWidget;
+class ComponentsPropertyWidget;
 class PhysicsPropertyWidget;
 class DemoPane;
 class IEditorViewport;
@@ -374,6 +375,9 @@ private:
     /// mounted for EVERY node kind — a lamp on a swinging arm needs it as much
     /// as a prop does.
     MobilityPropertyWidget* mobilityPropView;
+    /// THE PARTS OF A GROUPED NODE (owner review R14). Mounted only when the
+    /// selection's group has children; built once, like every other blade.
+    ComponentsPropertyWidget* componentsPropView = nullptr;
     PhysicsPropertyWidget *physicsPropView;
     DemoPane* demoPane;
 

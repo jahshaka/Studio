@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
 #include "ui/panels/propertywidgets/mobilitypropertywidget.h"
+#include "ui/panels/propertywidgets/componentspropertywidget.h"
 #include "ui/panels/propertywidgets/shaderpropertywidget.h"
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 #include "ui/panels/propertywidgets/physicspropertywidget.h"
@@ -185,6 +186,10 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     mobilityPropView->setPanelTitle("Movement");
     mobilityPropView->expand();
 
+    // COMPONENTS (owner review R14): the parts of a grouped node. Mounted only
+    // for a selection whose group HAS parts — see mountSelectionBlades.
+    componentsPropView = new ComponentsPropertyWidget();
+
     physicsPropView = new PhysicsPropertyWidget();
     physicsPropView->setPanelTitle("Physics Properties");
 
@@ -271,7 +276,7 @@ QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
         fogPropView, worldPropView, skyPropView,
         worldModesPropView, worldGiPropView, worldPostFxPropView,
         worldAaPropView, worldShadowPropView, worldVrPropView, transformPropView,
-        mobilityPropView,
+        mobilityPropView, componentsPropView,
         physicsPropView, meshPropView, lightPropView, decalPropView,
         emitterPropView, cameraPostFxPropView, shaderPropView
     };
@@ -875,6 +880,16 @@ void SceneNodePropertiesWidget::mountSelectionBlades()
         mobilityPropView->setSceneNode(sceneNode);
         mount(mobilityPropView);
 
+        // THE PARTS OF A GROUPED NODE (R14). The section exists only when
+        // there ARE parts — a lone cube has no components and gets no empty
+        // list — and it belongs to the GROUP, so clicking a part inside a
+        // model keeps the same list on screen with that part highlighted
+        // (ComponentsPropertyWidget::subjectFor).
+        if (ComponentsPropertyWidget::applies(sceneNode)) {
+            componentsPropView->setSceneNode(sceneNode);
+            mount(componentsPropView);
+        }
+
         switch (sceneNode->getSceneNodeType()) {
             case iris::SceneNodeType::Light: {
                 lightPropView->setSceneNode(sceneNode);
@@ -1073,6 +1088,9 @@ void SceneNodePropertiesWidget::setSceneView(IEditorViewport *sceneView)
     // to reach them, so the memo that says "already bound" is dropped.
     invalidateWorldBinding();
     if (skyPropView) skyPropView->wireViewportEvents(sceneView);
+    // A double-click on a component frames it — the viewport is the only thing
+    // that can move the camera.
+    if (componentsPropView) componentsPropView->setSceneView(sceneView);
 }
 
 void SceneNodePropertiesWidget::setServices(StudioServices *services)
@@ -1097,6 +1115,7 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     if (lightPropView) lightPropView->setServices(services);
     if (meshPropView) meshPropView->setServices(services);
     if (mobilityPropView) mobilityPropView->setServices(services);
+    if (componentsPropView) componentsPropView->setServices(services);
     if (physicsPropView) physicsPropView->setServices(services);
     if (emitterPropView) emitterPropView->setServices(services);
     if (cameraPostFxPropView) cameraPostFxPropView->setServices(services);

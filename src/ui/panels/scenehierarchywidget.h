@@ -304,10 +304,6 @@ private:
     QSharedPointer<iris::SceneNode> selectedNode;
     MainWindow* mainWindow;
 
-	QIcon *visibleIcon;
-	QIcon *hiddenIcon;
-	QIcon *pickableIcon;
-	QIcon *disabledIcon;
 
     /// D1(b): the owner's Shift rule, applied on the PRESS. Selects everything
     /// from the topmost currently-selected row to `clicked`, inclusive.

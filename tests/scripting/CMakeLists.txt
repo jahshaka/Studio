@@ -135,6 +135,21 @@ set_tests_properties(scripting.e2e.scale_lock PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# THE PARTS OF A GROUPED NODE (owner review R14, COMPONENTS-1): node.components
+# — the flattened descendants an imported model's outliner row deliberately
+# hides, in document order, with their depth and their own visibility, lock and
+# selection state. The panel half is ui.components. Document verbs only ->
+# --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-components)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.components
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_components.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.components PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 add_script_e2e(undo_macro e2e_undo_macro.js)
 # SCENEGRAPH_SPEC §3 step 4: the v2 scene format's fragment pair
 # (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,

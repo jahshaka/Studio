@@ -388,6 +388,7 @@ set(SRCS
     src/ui/panels/propertywidgets/emitterpropertywidget.cpp 
     src/ui/controls/labelwidget.cpp
     src/ui/controls/checkboxwidget.cpp 
+    src/ui/controls/nodeicons.cpp
     src/ui/controls/lightchannelswidget.cpp
     src/ui/controls/textinputwidget.cpp 
     src/ui/controls/comboboxwidget.cpp 
@@ -399,6 +400,7 @@ set(SRCS
     src/ui/controls/filepickerwidget.cpp 
     src/ui/panels/propertywidgets/meshpropertywidget.cpp
     src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
+    src/ui/panels/propertywidgets/componentspropertywidget.cpp
     src/ui/panels/propertywidgets/shaderpropertywidget.cpp 
     src/ui/panels/propertywidget.cpp
     src/ui/panels/propertyrows.cpp 
