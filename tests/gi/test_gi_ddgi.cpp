@@ -312,8 +312,17 @@ int main(int argc, char **argv)
     // 0.20 admits that and nothing structural: a collapsed lookup is still
     // caught by the three assertions below, which compare the two arms as a
     // RATIO rather than a difference.
-    CHECK(std::fabs(rawFar.r - vctFar.r) < 0.20f,
-          "far from the wall, DDGI and the cone-traced diffuse agree closely");
+    //
+    // RE-ANCHORED TO A RATIO BY PHOTON-M3 (patch 0080, the float voxel store):
+    // the red wall's bounce is no longer clipped in the volume, so BOTH
+    // estimators read more — VCT 0.6235 -> 0.6510, DDGI 0.8118 -> 0.8863 — and
+    // the DIFFERENCE grew past 0.20 (0.2353) while the RATIO barely moved
+    // (1.302 -> 1.361; the closed room's 1.14). The gap is the estimators', it
+    // scales with the light, so the honest bound is on the ratio; 1.6 admits
+    // the open-floor grazing case and nothing structural (a collapsed lookup
+    // reads under 1.0 or over 3).
+    CHECK(vctFar.r > 0.05f && rawFar.r / vctFar.r > 1.0f && rawFar.r / vctFar.r < 1.6f,
+          "far from the wall, DDGI and the cone-traced diffuse agree closely (as a ratio)");
 
     // ---- 2. brightness calibration ---------------------------------------
     // THE CALIBRATION GATE. Turning DDGI on turns the cone-traced diffuse off,
