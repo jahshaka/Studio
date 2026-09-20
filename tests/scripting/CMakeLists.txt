@@ -293,6 +293,11 @@ add_script_e2e(page_gi e2e_page_gi.js)
 # sampling one" are different readings, and only the renderer knows the second.
 # The pixel half is the gi.ddgi engine suite.
 add_script_e2e(gi_ddgi e2e_gi_ddgi.js)
+# PHOTON-M3 (ogre-patch 0080): the voxel TOTAL volume is a float that holds the
+# bounce's fixed point — the direct term bounded by the ceiling, the bounced
+# total above it in a real set of voxels. Read through world.giVoxelStats: a
+# clipped voxel draws a merely dimmer picture, so only the volume can say it.
+add_script_e2e(gi_voxel_store e2e_gi_voxel_store.js)
 # PHOTON_SPEC §7 E2 (9): the irradiance field rides CASCADE 0 at EVERY TIER.
 # Engine UP for the same reason as gi_ddgi — "the tier says on" and "the shader
 # is sampling a field whose volume is cascade 0's box" are different readings —
