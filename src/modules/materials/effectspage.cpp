@@ -365,6 +365,23 @@ void EffectsPage::reportSaveRefused(const QString &why)
 	SceneIssues::instance().raise(issue);
 }
 
+void EffectsPage::reportGraphRefused(const QString &guid, const QString &why)
+{
+	// A REFUSED OPEN IS A SCENE ISSUE, not a silent empty canvas
+	// (LEGACY-MASTER-CRUD). The page has no graph to show, and the one thing
+	// that must not happen is the user being given a blank canvas with the
+	// material's name on it and saving over their file with it. The id is per
+	// material, so re-opening the same one does not stack lines.
+	SceneIssue issue;
+	issue.id = QStringLiteral("material.legacy:") + guid;
+	issue.kind = QStringLiteral("material.legacy");
+	issue.nodeName = currentShaderInformation.name;
+	issue.message = why;
+	issue.action = tr("Make a new material from a preset and re-pick its images; "
+	                  "the old file is left exactly as it is.");
+	SceneIssues::instance().raise(issue);
+}
+
 void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
 {
 	if (shaderGuid.isEmpty()) return;
@@ -521,7 +538,15 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 	QJsonDocument d = QJsonDocument::fromJson(val);
 
 	auto obj = d.object();
-	auto graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
+	QString refused;
+	auto graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj, &refused);
+	// NULL IS A REAL ANSWER (LEGACY-MASTER-CRUD): a file written on the
+	// deleted master is refused whole. Assigning it would dereference null in
+	// setNodeGraph, which is the crash this guard closes.
+	if (graph == nullptr) {
+		reportGraphRefused(obj["guid"].toString(), refused);
+		return nullptr;
+	}
 
 	if (assign) {
 		this->setNodeGraph(graph);
@@ -547,6 +572,9 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	// A stale refusal from an earlier build's behaviour, or from a save that
 	// was refused before this material was opened, must not outlive it.
 	SceneIssues::instance().clear(QStringLiteral("material.readonly:") + guid);
+	// The same for a refusal: a material that opens now must not still carry
+	// the line saying it cannot be opened.
+	SceneIssues::instance().clear(QStringLiteral("material.legacy:") + guid);
 
 	// The origin is set BEFORE the read, because `fetchAsset` reads the
 	// definition at this scope.
@@ -578,7 +606,20 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 	}
 	progressDialog->setValueAndText(2, "Fetch graph");
 
-	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
+	QString refused;
+	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj, &refused);
+	// THE FILE CAN BE REFUSED (LEGACY-MASTER-CRUD): a material written on the
+	// deleted "Surface Material" master has no graph this build can draw. The
+	// user is told in the issue bar and the page keeps whatever it was
+	// showing — a blank canvas under this material's name is the one outcome
+	// that could lose their file to the next save.
+	if (graph == nullptr) {
+		reportGraphRefused(guid, refused);
+		restoringGraph = false;
+		progressDialog->close();
+		progressDialog->deleteLater();
+		return;
+	}
 	// A READ-ONLY OPEN BINDS THE SHIPPED FILE AND WRITES NOTHING (fix round).
 	// Opening a preset to LOOK at it must not import its pictures into the
 	// library and pin them into the open project — a device wait each, on the
@@ -611,7 +652,15 @@ void EffectsPage::loadGraph(QString guid, shaderInfo::Origin origin)
 			break;
 		}
 	}
-	graph = NodeGraph::deserialize(obj["graph"].toObject(), new LibraryV1());
+	QString refused;
+	graph = NodeGraph::deserialize(obj["graph"].toObject(), new LibraryV1(), &refused);
+	if (graph == nullptr) {
+		reportGraphRefused(guid, refused);
+		restoringGraph = false;
+		progressDialog->close();
+		progressDialog->deleteLater();
+		return;
+	}
 	this->setNodeGraph(graph);
 	this->restoreGraphPositions(obj["graph"].toObject());
 #endif

@@ -16,8 +16,8 @@ For more information see the LICENSE file
 
 
 // Every graph is a PBR graph: the master is PbrMasterNode, the only master
-// there is. A file saved with the deleted Blinn-Phong master converts on load
-// (NodeGraph::deserialize) and re-saves as PBR.
+// there is. A file saved with the deleted Blinn-Phong master is REFUSED on
+// load (NodeGraph::deserialize) — there are no legacy graphs to convert.
 ShaderGraph* ShaderGraph::createDefaultShaderGraph()
 {
 	return createPBRShaderGraph();

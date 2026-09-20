@@ -222,21 +222,24 @@ int main(int argc, char** argv)
         CHECK(!!material, "graph 3: material created");
     }
 
-    // ---- graph 4: CONVERT-ON-LOAD (LEGACY-MASTER-CRUD) ----------------------
+    // ---- graph 4: REFUSE-ON-LOAD (LEGACY-CONVERT-CRUD) ----------------------
     //
-    // The Blinn-Phong "Surface Material" master is DELETED. A saved graph whose
-    // master type is "Material" is not approximated at bake time any more — it
-    // is CONVERTED once, when it loads, into a real PBR graph that then re-saves
-    // as PBR and that the user can see and edit.
+    // The Blinn-Phong "Surface Material" master is DELETED, and so is the
+    // socket-by-socket conversion that used to open a graph written on it (the
+    // owner, 2026-09-20: "we should have no legacy graphs, remove it"). Such a
+    // file is now REFUSED WHOLE: null, with one plain sentence for the user.
     //
-    // These cases build the legacy JSON by hand (the class they describe no
-    // longer exists to build one with) and drive the real loader.
+    // Refusing, rather than half-loading, is the part worth guarding. A graph
+    // whose master never got built loads as a canvas with no master — it bakes
+    // nothing, it looks empty, and the next save writes that emptiness over
+    // the user's file. Null cannot be mistaken for a material.
     {
-        auto legacyGraph = [](const QJsonArray& nodes, const QJsonArray& cons) {
+        auto graphJson = [](const QJsonArray& nodes, const QJsonArray& cons,
+                            const char* masterId) {
             QJsonObject g;
             g["nodes"] = nodes;
             g["connections"] = cons;
-            g["masternode"] = QStringLiteral("m");
+            g["masternode"] = QString::fromLatin1(masterId);
             g["materialGuid"] = QString();
             return g;
         };
@@ -254,120 +257,68 @@ int main(int argc, char** argv)
             c["rightNodeId"] = right; c["rightNodeSocketIndex"] = rightSock;
             return c;
         };
-        const QJsonObject master = node("m", "Material", QString(), "Surface Material");
 
-        // (a) a CONSTANT Shininess, the 0-1 gloss convention every shipped
-        //     preset used: roughness is its complement, in the graph, visible.
+        // (a) THE DELETED MASTER. A real pre-2026-09-19 graph: Diffuse and a
+        //     gloss constant on the Blinn master.
         {
-            QJsonArray nodes { master, node("g", "float", 0.15, "Float Property") };
+            QJsonArray nodes { node("m", "Material", QString(), "Surface Material"),
+                               node("g", "float", 0.15, "Float Property") };
             QJsonArray cons  { con("g", 0, "m", 2) };
-            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
-            CHECK(graph && graph->getMasterNode(), "convert: a legacy graph loads");
-            CHECK(graph && graph->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
-                  "convert: its master IS the PBR master");
-            CHECK(graph && graph->getMasterNode()->title == QLatin1String("PBR Material"),
-                  "convert: titled \"PBR Material\", the only master there is");
-            const auto result = PbrGraphEvaluator::evaluate(graph);
-            CHECK(near(float(result.values["roughness"].toDouble(-1)), 0.85f),
-                  "convert: gloss 0.15 -> Roughness 0.85 (1 - gloss)");
-            CHECK(result.unsupportedNodes.isEmpty(),
-                  "convert: nothing is reported unsupported — the socket is a real PBR one now");
-            CHECK(graph && graph->migrationNotes.size() == 1,
-                  "convert: the user gets ONE line saying what happened");
-            CHECK(graph && graph->migrationNotes.value(0).contains(QStringLiteral("PBR Material")),
-                  "convert: ... and it names the master it converted to");
-            // and it RE-SAVES as PBR, which is what stops it converting forever
-            CHECK(graph && graph->serialize()["nodes"].toArray().at(0).toObject()["type"]
-                              .toString().contains(QStringLiteral("PbrMaterial"))
-                  == (graph->serialize()["nodes"].toArray().at(0).toObject()["id"].toString() == "m"),
-                  "convert: the re-save carries the PBR master type");
+            QString reason;
+            auto* graph = NodeGraph::deserialize(graphJson(nodes, cons, "m"),
+                                                 new LibraryV1(), &reason);
+            CHECK(graph == nullptr, "refuse: a legacy \"Surface Material\" graph does NOT load");
+            CHECK(!reason.isEmpty(), "refuse: ... and the caller is given a reason to show");
+            CHECK(reason.contains(QStringLiteral("Surface Material")),
+                  "refuse: the reason NAMES the node the file was written on");
+            CHECK(reason.contains(QStringLiteral("PBR Material")),
+                  "refuse: ... and says what to do instead");
         }
 
-        // (b) THE FLOOR. Legacy gloss 1.0 — the slider's own maximum, the value
-        //     every one of the nine presets used to carry — is 1 - 1 = roughness
-        //     ZERO, a GGX needle that sparks on any normal-mapped texel. The
-        //     conversion lands it on the floor, as a real number in the graph.
+        // (b) ANY OTHER master type the same way — a file from a build that
+        //     had a master this one does not. Nothing is guessed.
         {
-            QJsonArray nodes { master, node("g", "float", 1.0, "Float Property") };
-            QJsonArray cons  { con("g", 0, "m", 2) };
-            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
-            const auto result = PbrGraphEvaluator::evaluate(graph);
-            CHECK(near(float(result.values["roughness"].toDouble(-1)),
-                       float(NodeGraph::kConvertedGlossRoughnessFloor), 1e-4f),
-                  "convert: legacy gloss 1.0 lands ON the floor, never on roughness 0");
+            QJsonArray nodes { node("m", "SomeFutureMaster", QString(), "") };
+            QString reason;
+            auto* graph = NodeGraph::deserialize(graphJson(nodes, QJsonArray{}, "m"),
+                                                 new LibraryV1(), &reason);
+            CHECK(graph == nullptr, "refuse: an unknown master type does not load either");
+            CHECK(reason.contains(QStringLiteral("SomeFutureMaster")),
+                  "refuse: ... and the reason names it");
         }
 
-        // (c) A BLINN EXPONENT (anything above 1) is the other convention that
-        //     shared that socket. alpha = sqrt(2/(n+2)), perceptual roughness =
-        //     sqrt(alpha): n = 100 is 0.374, a polished surface. The old baker
-        //     divided by 100 and sent exactly that value to roughness 0.
+        // (c) THE PBR MASTER STILL LOADS, and the reason is cleared: the
+        //     refusal must not be a new way for ordinary graphs to fail.
         {
-            QJsonArray nodes { master, node("g", "float", 100.0, "Float Property") };
-            QJsonArray cons  { con("g", 0, "m", 2) };
-            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
+            QJsonArray nodes { node("m", "PbrMaterial", QString(), ""),
+                               node("r", "float", 0.35, "Roughness") };
+            QJsonArray cons  { con("r", 0, "m", 2) };
+            QString reason = QStringLiteral("stale");
+            auto* graph = NodeGraph::deserialize(graphJson(nodes, cons, "m"),
+                                                 new LibraryV1(), &reason);
+            CHECK(graph && graph->getMasterNode()
+                      && graph->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
+                  "refuse: a PBR graph loads exactly as before");
+            CHECK(reason.isEmpty(), "refuse: ... with no reason set");
             const auto result = PbrGraphEvaluator::evaluate(graph);
-            const double expected = std::sqrt(std::sqrt(2.0 / 102.0));
-            CHECK(near(float(result.values["roughness"].toDouble(-1)), float(expected), 1e-4f),
-                  "convert: Blinn exponent 100 -> roughness sqrt(sqrt(2/(n+2))) = 0.374");
+            CHECK(near(float(result.values["roughness"].toDouble(-1)), 0.35f),
+                  "refuse: ... and its values are untouched by the guard");
+            CHECK(graph && graph->migrationNotes.isEmpty(),
+                  "refuse: a PBR graph carries no migration note");
         }
 
-        // (d) A TEXTURE-FED Shininess. That socket had no map target at all, so
-        //     a gloss map used to be dropped as unsupported; the conversion
-        //     splices a real One Minus node in front of Roughness and the map
-        //     reaches the renderer for the first time.
+        // (d) AN UNKNOWN NON-MASTER NODE IS STILL ONLY SKIPPED. The refusal is
+        //     about the master and nothing else: the load-time renames and the
+        //     skip-unknown-node rule are untouched (LEGACY-CONVERT-CRUD brief).
         {
-            QJsonArray nodes { master, node("t", "texture", QString(texPath), "gloss") };
-            QJsonArray cons  { con("t", 0, "m", 2) };
-            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
-            CHECK(graph && graph->getNodesByTypeName("oneminus").size() == 1,
-                  "convert: a gloss MAP gets a One Minus node, in the graph, deletable");
-            const auto info = PbrGraphEvaluator::bakeInfo(graph)["perSocket"].toObject();
-            CHECK(info["Roughness"].toString() == QLatin1String("baked"),
-                  "convert: ... and Roughness bakes instead of being dropped");
-        }
-
-        // (e) SPECULAR AND AMBIENT have no PBR equivalent and are dropped —
-        //     including the saturated-specular "fake metal" case, because
-        //     Metallic 1 + Base Color = the specular colour is a judgement
-        //     about the picture that a converter must not make silently. What
-        //     it must do is SAY so, which is what is asserted.
-        {
-            QJsonArray nodes { master,
-                               node("s", "color", QJsonObject{{"r",0.9},{"g",0.7},{"b",0.2},{"a",1.0}}, "Specular"),
-                               node("a", "color", QJsonObject{{"r",0.1},{"g",0.1},{"b",0.1},{"a",1.0}}, "Ambient") };
-            QJsonArray cons  { con("s", 0, "m", 1), con("a", 0, "m", 4) };
-            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
-            CHECK(graph && graph->connections.isEmpty(),
-                  "convert: the Specular and Ambient connections are dropped");
-            CHECK(graph && graph->nodes.size() == 3,
-                  "convert: ... but the nodes that fed them stay in the graph");
-            const QString note = graph ? graph->migrationNotes.value(0) : QString();
-            CHECK(note.contains(QStringLiteral("Specular")) && note.contains(QStringLiteral("Ambient")),
-                  "convert: the ONE line names both dropped inputs");
-            const auto result = PbrGraphEvaluator::evaluate(graph);
-            CHECK(near(float(result.values["metallic"].toDouble(0.0)), 0.0f),
-                  "convert: a faked-metal specular is NOT guessed into Metallic");
-        }
-
-        // (f) EVERY OTHER SOCKET moves by name, not by index: the two masters'
-        //     tails do not line up (Emission 5 -> Emissive 4, Alpha 6 -> 5).
-        {
-            QJsonArray nodes { master,
-                               node("d", "color", QJsonObject{{"r",0.2},{"g",0.4},{"b",0.6},{"a",1.0}}, "Diffuse"),
-                               node("e", "color", QJsonObject{{"r",1.0},{"g",0.0},{"b",0.0},{"a",1.0}}, "Emission"),
-                               node("al", "float", 0.4, "Alpha") };
-            QJsonArray cons  { con("d", 0, "m", 0), con("e", 0, "m", 5), con("al", 0, "m", 6) };
-            auto* graph = NodeGraph::deserialize(legacyGraph(nodes, cons), new LibraryV1());
-            const auto result = PbrGraphEvaluator::evaluate(graph);
-            auto base = result.values["baseColor"].toObject();
-            CHECK(near(float(base["r"].toDouble()), 0.2f) && near(float(base["g"].toDouble()), 0.4f)
-                      && near(float(base["b"].toDouble()), 0.6f),
-                  "convert: Diffuse became Base Color");
-            auto emis = result.values["emissiveColor"].toObject();
-            CHECK(near(float(emis["r"].toDouble()), 1.0f) && near(float(emis["g"].toDouble()), 0.0f),
-                  "convert: Emission (socket 5) became Emissive (socket 4)");
-            CHECK(near(float(result.values["alpha"].toDouble(-1)), 0.4f),
-                  "convert: Alpha (socket 6) became Alpha (socket 5)");
+            QJsonArray nodes { node("m", "PbrMaterial", QString(), ""),
+                               node("x", "no-such-node", QString(), "") };
+            QString reason;
+            auto* graph = NodeGraph::deserialize(graphJson(nodes, QJsonArray{}, "m"),
+                                                 new LibraryV1(), &reason);
+            CHECK(graph != nullptr && graph->nodes.size() == 1,
+                  "refuse: an unknown ORDINARY node is skipped, not refused");
+            CHECK(reason.isEmpty(), "refuse: ... and sets no reason");
         }
     }
 
@@ -441,7 +392,7 @@ int main(int argc, char** argv)
                 continue;
             }
             if (!graph->migrationNotes.isEmpty()) {
-                std::printf("      still converts on load: %s\n", qPrintable(name));
+                std::printf("      still migrates on load: %s\n", qPrintable(name));
                 ++migrated;
             }
             const auto result = PbrGraphEvaluator::evaluate(graph);
@@ -538,7 +489,7 @@ int main(int argc, char** argv)
         }
         CHECK(noGraph == 0, "shipped: EVERY preset names a graph, and it is there");
         CHECK(notPbr == 0, "shipped: ... every one of them has a PbrMaterial master");
-        CHECK(migrated == 0, "shipped: ... and not one still needs converting on load");
+        CHECK(migrated == 0, "shipped: ... and not one still needs migrating on load");
         CHECK(unsupported == 0, "shipped: ... nothing in them evaluates unsupported");
         CHECK(disagreed == 0,
               "shipped: a preset's GRAPH and its authored VALUES describe the same material");

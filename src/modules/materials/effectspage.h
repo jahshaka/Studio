@@ -207,6 +207,11 @@ private:
 	/// Tell the user a save was REFUSED (F16): the graph is on screen and is
 	/// not being written down, which no log line can say loudly enough.
 	void reportSaveRefused(const QString &why);
+	/// Tell the user this material cannot be OPENED at all (LEGACY-MASTER-CRUD):
+	/// it was written on the master node this build deleted, so there is
+	/// nothing to put on the canvas. Same route as a refused save — a scene
+	/// issue, which stays up until the condition is gone.
+	void reportGraphRefused(const QString &guid, const QString &why);
 	void saveDefaultShader();
 
 	/// Queues the saved graph's thumbnail on the shell's ThumbnailGenerator

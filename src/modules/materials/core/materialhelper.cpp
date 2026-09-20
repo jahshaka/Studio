@@ -230,12 +230,13 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 	return material;
 }
 
-NodeGraph* MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj)
+NodeGraph* MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj,
+                                                                  QString* refusalReason)
 {
 	auto graphObj = matObj["shadergraph"].toObject();
-	auto graph = NodeGraph::deserialize(graphObj, new LibraryV1());
-
-	return graph;
+	// May be NULL: a graph whose master is not the PBR one is refused whole,
+	// with its reason (nodegraph.h). Every caller of this must handle it.
+	return NodeGraph::deserialize(graphObj, new LibraryV1(), refusalReason);
 }
 
 

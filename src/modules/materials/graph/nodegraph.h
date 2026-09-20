@@ -93,25 +93,6 @@ public:
 	/// Absent from a saved graph means 1: the key did not exist then.
 	static constexpr int kSocketLayoutVersion = 2;
 
-	/// The roughness floor the LEGACY-MASTER CONVERSION lands on.
-	///
-	/// The deleted Blinn-Phong master's Shininess socket carried GLOSS, and the
-	/// inversion is `1 - gloss`, so the slider's own maximum — the value a
-	/// legacy graph is most likely to be holding — converts to roughness
-	/// EXACTLY ZERO. HlmsPbs floors roughness at 0.02, and a GGX lobe at 0.02
-	/// is a needle: its peak is 1/(pi*alpha^2), so any single texel of a
-	/// quantised normal map that happens to point at the light comes back as a
-	/// pixel-sized white spark. That is the "white dots on the brick material"
-	/// report (lane-whitedots, 2026-09-09), and it is a property of the number,
-	/// not of the map.
-	///
-	/// 0.08 is the smallest value that still reads as "polished" while dropping
-	/// that peak by (0.08/0.02)^4 = 256x against HlmsPbs' own floor. It used to
-	/// be a clamp inside the BAKER, applied invisibly on every bake forever;
-	/// now the conversion writes it into the graph ONCE as a real Roughness
-	/// value the user can see in the node and lower deliberately.
-	static constexpr double kConvertedGlossRoughnessFloor = 0.08;
-
 	void addProperty(Property* prop);
 	void removeProperty(Property* prop);
 	Property* getPropertyByName(const QString& name);
@@ -140,7 +121,23 @@ public:
 	// gets the output node and socket for a given input node and socket
 	ConnectionModel* getConnectionFromOutputNode(NodeModel* node, int socketIndex);
 	QJsonObject serialize();
-	static NodeGraph* deserialize(QJsonObject obj, NodeLibrary* lib);
+	/// Loads a saved graph, or REFUSES it.
+	///
+	/// null = this file cannot be opened, and `refusalReason` (when given) then
+	/// carries ONE plain sentence for the person using the editor. The only
+	/// refusal is a master node that is not the PBR one: the Blinn-Phong
+	/// "Surface Material" master was deleted with its node class
+	/// (LEGACY-MASTER-CRUD, 2026-09-20 — the owner: "we should have no legacy
+	/// graphs, remove it"), and a graph written on a master this build does not
+	/// have is not a graph this build can draw. It is refused WHOLE rather than
+	/// half-loaded, because a silently master-less graph bakes nothing and looks
+	/// like an empty canvas the user then saves over.
+	///
+	/// Every caller must handle null. Nothing else in here refuses: an unknown
+	/// NODE type is still skipped, the load-time renames (trunc, the UV merge,
+	/// the PropertyNode migration) still run.
+	static NodeGraph* deserialize(QJsonObject obj, NodeLibrary* lib,
+	                              QString* refusalReason = nullptr);
 	QJsonObject serializeMaterialSettings();
 	static MaterialSettings deserializeMaterialSettings(QJsonObject obj);
 

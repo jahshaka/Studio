@@ -768,55 +768,6 @@ int main(int argc, char** argv)
         QFile::remove(texPath);
     }
 
-    // ========== the legacy master's Shininess, CONVERTED AT LOAD ==============
-    //
-    // These two rows used to measure the BAKER approximating a Blinn-Phong
-    // master's Shininess onto roughness on every bake, forever. The master is
-    // deleted; the same two numbers are now produced ONCE, by the loader, into
-    // a real Roughness value in the graph — so the rows move here rather than
-    // disappearing, and they are read off the converted graph.
-    {
-        auto legacy = [](double shininess) {
-            QJsonObject master;
-            master["id"] = "m"; master["type"] = "Material"; master["value"] = QString();
-            master["title"] = "Surface Material"; master["x"] = 0; master["y"] = 0;
-            QJsonObject gloss;
-            gloss["id"] = "g"; gloss["type"] = "float"; gloss["value"] = shininess;
-            gloss["title"] = "Float Property"; gloss["x"] = 0; gloss["y"] = 0;
-            QJsonObject con;
-            con["id"] = "c"; con["leftNodeId"] = "g"; con["leftNodeSocketIndex"] = 0;
-            con["rightNodeId"] = "m"; con["rightNodeSocketIndex"] = 2; // Shininess
-            QJsonObject g;
-            g["nodes"] = QJsonArray { master, gloss };
-            g["connections"] = QJsonArray { con };
-            g["masternode"] = "m";
-            return NodeGraph::deserialize(g, new LibraryV1());
-        };
-        {
-            auto* graph = legacy(0.22);
-            CHECK(graph && graph->getMasterNode()
-                      && graph->getMasterNode()->typeName == QLatin1String("PbrMaterial"),
-                  "converted: the legacy master loads as the PBR master");
-            auto res = PbrGraphEvaluator::evaluate(graph);
-            CHECK(near(res.values["roughness"].toDouble(), 0.78, 1e-9),
-                  "converted: gloss 0.22 -> roughness 0.78 (1 - gloss, in the graph)");
-        }
-        {
-            // Above 1 the number is a BLINN EXPONENT, and the conversion uses
-            // the exponent-to-GGX fit instead of the old /100 divide: n = 50 is
-            // alpha = sqrt(2/52) = 0.1961, perceptual roughness = sqrt(alpha) =
-            // 0.4428. The old answer, 1 - 50/100 = 0.5, was a coincidence of
-            // the arithmetic rather than a width.
-            auto* graph = legacy(50.0);
-            auto res = PbrGraphEvaluator::evaluate(graph);
-            // 1e-5: a float node stores its value as a STRING at six
-            // significant digits, which is the precision the graph actually
-            // carries once the conversion has written into it.
-            CHECK(near(res.values["roughness"].toDouble(), std::sqrt(std::sqrt(2.0 / 52.0)), 1e-5),
-                  "converted: Blinn exponent 50 -> roughness sqrt(sqrt(2/(n+2))) = 0.4428");
-        }
-    }
-
     std::printf(failures ? "FAILED: %d check(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;
 }

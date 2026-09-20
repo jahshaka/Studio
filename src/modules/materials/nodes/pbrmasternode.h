@@ -27,9 +27,10 @@ For more information see the LICENSE file
 // Emissive/Alpha connection one slot up with no error anywhere.
 //
 // This is the ONLY master node (LEGACY-MASTER-CRUD, 2026-09-19). The
-// Blinn-Phong "Surface Material" master is deleted; a graph saved with it is
-// converted socket by socket at load and re-saves as PBR — the table and the
-// reasoning live in NodeGraph::deserialize.
+// Blinn-Phong "Surface Material" master is deleted, and since 2026-09-20 so
+// is the socket-by-socket conversion that used to open a graph written on it:
+// such a file is REFUSED, with one sentence for the user
+// (NodeGraph::deserialize).
 class PbrMasterNode : public NodeModel
 {
 public:

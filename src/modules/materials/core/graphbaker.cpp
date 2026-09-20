@@ -38,7 +38,7 @@ QVector<MasterSlot> masterSlots()
 {
 	// ONE master node, one table. The legacy Blinn-Phong master's ten
 	// approximated sockets are gone with the class (LEGACY-MASTER-CRUD,
-	// 2026-09-19): a graph authored on it is CONVERTED at load
+	// 2026-09-19): a graph authored on it is REFUSED at load
 	// (NodeGraph::deserialize), so nothing reaches the baker but PBR.
 	return {
 		{ "Base Color", MasterSlot::ColorSlot, "baseColor", "baseColorMap" },
