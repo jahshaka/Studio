@@ -1029,6 +1029,30 @@ static QVector<ParamRow> buildPostFxParams()
         out.append(p);
     }
     {
+        // THE OWNER'S R17 ROW, and it sits FIRST of the three bloom parameters
+        // because it is the one a person reaches for: "how much bloom", right
+        // under the checkbox, where he asked for it. The other two describe
+        // WHICH pixels bloom and are the tuning behind it.
+        ParamRow p;
+        p.id = QStringLiteral("bloomAmount");
+        p.label = QStringLiteral("Bloom Amount");
+        p.ownerRowId = QStringLiteral("bloom");
+        p.minValue = 0.0; p.maxValue = 2.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("How much of the bloom reaches the picture: 1 is the amount "
+                               "this renderer has always drawn, 2 is twice as much and 0 is "
+                               "none at all. It multiplies the blurred highlight where the "
+                               "grade adds it, so it is linear in the light the bloom "
+                               "contributes — and it is the CHEAP dial of the three: the "
+                               "threshold and the knee decide which pixels bloom, this one "
+                               "only decides how strongly the result is mixed in, and "
+                               "changing it rebuilds nothing. 0 renders exactly the picture "
+                               "Bloom off renders, with the chain still standing; switching "
+                               "Bloom off is what stops paying for it.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->bloomAmount); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->bloomAmount = float(v); };
+        out.append(p);
+    }
+    {
         ParamRow p;
         p.id = QStringLiteral("bloomThreshold");
         p.label = QStringLiteral("Bloom Threshold");

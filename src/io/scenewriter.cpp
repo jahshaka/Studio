@@ -208,6 +208,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["bloomEnabled"] = scene->bloomEnabled;
     sceneObj["bloomThreshold"] = scene->bloomThreshold;
     sceneObj["bloomKnee"] = scene->bloomKnee;
+    sceneObj["bloomAmount"] = scene->bloomAmount;
     sceneObj["ssaoEnabled"] = scene->ssaoEnabled;
     sceneObj["ssaoScale"] = scene->ssaoScale;
     sceneObj["ssaoPower"] = scene->ssaoPower;

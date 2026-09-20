@@ -74,6 +74,31 @@ add_test(NAME hdr.dither COMMAND test_hdr_dither
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.dither PROPERTIES TIMEOUT 180 LABELS "engine")
 
+# THE BLOOM COMPOSITE TAKES AN AMOUNT (lane BLOOM-AMOUNT-1, ogre-patch 0082).
+# One bright emissive square on black, rendered four ways in ONE process —
+# bloom off, and bloom on at 0, 1 and 2 — so the dial is measured as the halo's
+# summed excess over the bloom-off picture rather than against another run. The
+# file header says what each arm would catch; the two that carry the design are
+# D (the ratio, which is what a scale applied inside the UNORM blur ladder or
+# ahead of the composite's fromSRGB square would fail) and F (the workspace
+# generation, which is what makes it a dial a person can drag).
+jahshaka_hdr_test(test_hdr_bloom_amount test_hdr_bloom_amount.cpp)
+target_link_libraries(test_hdr_bloom_amount PRIVATE JahshakaEngine)
+add_test(NAME hdr.bloom_amount COMMAND test_hdr_bloom_amount
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(hdr.bloom_amount PROPERTIES TIMEOUT 180 LABELS "engine")
+
+if(JAHSHAKA_ASAN)
+    jahshaka_hdr_test(test_hdr_bloom_amount_asan test_hdr_bloom_amount.cpp)
+    target_link_libraries(test_hdr_bloom_amount_asan PRIVATE JahshakaEngineAsan)
+    target_compile_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
+    add_test(NAME hdr.bloom_amount_asan COMMAND test_hdr_bloom_amount_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 300 LABELS "engine"
+                         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+endif()
+
 if(JAHSHAKA_ASAN)
     jahshaka_hdr_test(test_hdr_dither_asan test_hdr_dither.cpp)
     target_link_libraries(test_hdr_dither_asan PRIVATE JahshakaEngineAsan)
