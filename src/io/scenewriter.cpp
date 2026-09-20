@@ -214,6 +214,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["ssaoRadius"] = scene->ssaoRadius;
     sceneObj["smaaPreset"] = scene->smaaPreset;
     sceneObj["ssrMode"] = scene->ssrMode;
+    sceneObj["ssrMarch"] = scene->ssrMarch;
     // ONE name, the World row's (lane SMALL-ITEMS D). The old
     // `rayReflectRoughness` key is still READ (sceneformat.h) and never written
     // again, so one save retires the old spelling per document.
@@ -281,6 +282,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // so a document that leaves the tier in charge carries no empty array.
     sceneObj["giCascades"] = scene->giCascades;
     sceneObj["giCascadeInstanceCap"] = scene->giCascadeInstanceCap;
+    sceneObj["giDragMoverChannel"] = scene->giDragMoverChannel;
     if (!scene->giCascadeSet.isEmpty()) {
         QJsonArray set;
         for (const iris::Vec3 &c : scene->giCascadeSet)

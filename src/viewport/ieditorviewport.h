@@ -727,6 +727,10 @@ public:
         /// the cascade scheduler has run because a rebuild left the chain one
         /// Jacobi pass from its fixed point.
         long long chainSettles = 0;
+        /// MOVER-1: how many objects ride the mover channel because they are
+        /// being dragged right now, and how many such gestures have ENDED.
+        int       dragMovers = 0;
+        double    dragMoverGestures = 0.0;
         /// THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1) — what the
         /// renderer HOLDS, reported here because it is read beside the GI
         /// figures and by the same "what it achieved, not what was asked for"

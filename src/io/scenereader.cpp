@@ -600,6 +600,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         }
         scene->giCascadeInstanceCap = qBound(
             0, sceneObj.value("giCascadeInstanceCap").toInt(scene->giCascadeInstanceCap), 1 << 20);
+        scene->giDragMoverChannel = qBound(
+            0, sceneObj.value("giDragMoverChannel").toInt(scene->giDragMoverChannel), 1);
         scene->giCascadeSet.clear();
         for (const QJsonValue &v : sceneObj.value("giCascadeSet").toArray()) {
             const QJsonArray row = v.toArray();
@@ -741,6 +743,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         float(qBound(0.05, sceneObj.value("ssaoRadius").toDouble(scene->ssaoRadius), 64.0));
     scene->smaaPreset = qBound(-1, sceneObj.value("smaaPreset").toInt(scene->smaaPreset), 3);
     scene->ssrMode = qBound(0, sceneObj.value("ssrMode").toInt(scene->ssrMode), 2);
+    scene->ssrMarch = qBound(0, sceneObj.value("ssrMarch").toInt(scene->ssrMarch), 2);
     // BOTH SPELLINGS, absent = 40 — the helper carries the reasoning and the
     // tolerance for the old `rayReflectRoughness` key (sceneformat.h).
     scene->reflectionRoughnessCutoff = sceneformat::readReflectionRoughnessCutoff(sceneObj);

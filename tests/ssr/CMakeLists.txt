@@ -52,3 +52,24 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS};JAHSHAKA_NO_RAY_QUERY=1")
 endif()
+
+# ssr.rings — SSR-RINGS-1's measurement of the concentric staircase on a curved
+# glossy surface (its own binary: the fixture is a sphere and the statistic a
+# radial profile, and mixing it into ssr.engine's floor fixture would re-anchor
+# that suite's bars for nothing).
+add_executable(test_ssr_rings test_ssr_rings.cpp)
+set_target_properties(test_ssr_rings PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_ssr_rings PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_ssr_rings JahshakaEngineMedia)
+target_link_libraries(test_ssr_rings PRIVATE JahshakaEngine)
+add_test(NAME ssr.rings COMMAND test_ssr_rings
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ssr.rings PROPERTIES TIMEOUT 180 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")

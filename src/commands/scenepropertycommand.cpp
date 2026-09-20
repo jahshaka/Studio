@@ -108,6 +108,9 @@ QVector<sceneprops::Field> buildFields()
                           : (i == int(iris::RayTracingMode::On))   ? iris::RayTracingMode::On
                                                                    : iris::RayTracingMode::Auto;
         });
+    // THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1), 0..2.
+    add("ssrMarch", [](const ScenePtr &s) { return QVariant(s->ssrMarch); },
+        [](const ScenePtr &s, const QVariant &v) { s->ssrMarch = qBound(0, v.toInt(), 2); });
     // setWorldGravity, never the raw field: it drives the Bullet world too.
     add("gravity", [](const ScenePtr &s) { return QVariant(s->gravity); },
         [](const ScenePtr &s, const QVariant &v) { s->setWorldGravity(v.toFloat()); });
@@ -144,6 +147,8 @@ QVector<sceneprops::Field> buildFields()
     // ---- Photon (the rows the tier does NOT own) ---------------------------
     add("giCascadeInstanceCap", [](const ScenePtr &s) { return QVariant(s->giCascadeInstanceCap); },
         [](const ScenePtr &s, const QVariant &v) { s->giCascadeInstanceCap = v.toInt(); });
+    add("giDragMoverChannel", [](const ScenePtr &s) { return QVariant(s->giDragMoverChannel); },
+        [](const ScenePtr &s, const QVariant &v) { s->giDragMoverChannel = v.toInt() ? 1 : 0; });
     add("giPccGrid", [](const ScenePtr &s) { return vec(s->giPccGrid); },
         [](const ScenePtr &s, const QVariant &v) { s->giPccGrid = vec(v); });
     add("giUpdateBudget", [](const ScenePtr &s) { return QVariant(s->giUpdateBudget); },
