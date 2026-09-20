@@ -1776,13 +1776,14 @@ int main(int argc, char **argv)
         // inside this arm's frames; every arm below DRAINS first, because a
         // counter read across a section boundary measures the last section's
         // debt.) The cost that IS paid is the engine's own, and this counter
-        // cannot see it: a material-pointer change re-attaches the item and
-        // attachMesh invalidates the GI caches whole — every cascade
-        // re-voxelises, on the way in and on the way out. That, a TEXTURED
-        // preview's generation bumps, and the flag's falling edge belong to
-        // MATERIAL-SWAP-GI-1 (queued). Until then arm A records the mirror's
-        // half of the truth, arm B that the flag does no harm, and arm C that
-        // it is a gate and not a mute.
+        // could not see it: a material-pointer change RE-ATTACHED the item and
+        // attachMesh invalidated the GI caches whole — every cascade
+        // re-voxelised, on the way in and on the way out. MATERIAL-SWAP-GI-1
+        // (2026-09-20) made a material-only change an IN-PLACE SWAP
+        // (Scene::setNodeMaterial) that invalidates the item's own box; arm A
+        // asserts the mirror takes that path, gi.material_swap measures what
+        // the engine then pays. Arm B records that the flag does no harm, and
+        // arm C that it is a gate and not a mute.
         {
             auto previewTarget = gfloor;
             const iris::MaterialPtr originalMat = previewTarget->getMaterial();
@@ -1810,18 +1811,29 @@ int main(int argc, char **argv)
             // ARM A: unflagged. One hover in, one hover out.
             drain();
             const quint64 beforeA = mirror.giRefreshCount();
+            const quint64 swaps0 = mirror.materialSwapCount();
+            const quint64 attaches0 = mirror.meshAttachCount();
             previewTarget->setMaterial(borrowed);
             settle(20);
             const quint64 afterHoverA = mirror.giRefreshCount();
             previewTarget->setMaterial(originalMat);
             settle(20);
             const quint64 afterRestoreA = mirror.giRefreshCount();
-            std::printf("info: GI per hover, UNFLAGGED: enter +%llu, leave +%llu\n",
+            std::printf("info: GI per hover, UNFLAGGED: enter +%llu, leave +%llu; material swaps +%llu, "
+                        "mesh re-attaches +%llu\n",
                         (unsigned long long)(afterHoverA - beforeA),
-                        (unsigned long long)(afterRestoreA - afterHoverA));
+                        (unsigned long long)(afterRestoreA - afterHoverA),
+                        (unsigned long long)(mirror.materialSwapCount() - swaps0),
+                        (unsigned long long)(mirror.meshAttachCount() - attaches0));
             CHECK(afterRestoreA == beforeA,
-                  "GI preview (measured): a colour-only hover asks the MIRROR for no re-solve, in or out "
-                  "(the engine's own re-voxelise on re-attach is MATERIAL-SWAP-GI-1's)");
+                  "GI preview (measured): a colour-only hover asks the MIRROR for no re-solve, in or out");
+            // MATERIAL-SWAP-GI-1: the engine's half. A hover used to be two
+            // RE-ATTACHES (detach + create, the GI caches invalidated whole);
+            // it is two IN-PLACE SWAPS now — Scene::setNodeMaterial, which
+            // invalidates the item's own box (gi.material_swap measures the
+            // cascades that pays).
+            CHECK(mirror.materialSwapCount() - swaps0 == 2 && mirror.meshAttachCount() - attaches0 == 0,
+                  "GI preview: a hover in and out is two in-place material swaps and no re-attach");
 
             // ARM B: the same gesture with the scene saying a preview is on
             // screen. Nothing arms — and, the half that is easy to get wrong,
