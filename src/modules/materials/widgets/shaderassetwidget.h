@@ -73,5 +73,9 @@ private:
 	void editingFinishedOnListItem(QListWidgetItem *);
 signals:
 	void loadToGraph(QListWidgetItem *item);
+	/// The user typed a new name on a tile in THIS drawer. The page does the
+	/// rename (MATERIALS_TABS_SPEC §7) — there is one of them, and it is not
+	/// `Database::renameAsset`.
+	void assetRenamed(const QString &guid, const QString &newName);
 };
 

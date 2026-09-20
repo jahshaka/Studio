@@ -274,19 +274,19 @@ void ShaderAssetWidget::deleteShader(QString guid)
 
 void ShaderAssetWidget::editingFinishedOnListItem(QListWidgetItem *item)
 {
+	// THE DRAWER DOES NOT RENAME ANYTHING (MATERIALS_TABS_SPEC §7). It used
+	// to write the catalog row itself — `db->renameAsset` — which is neither
+	// of the two things a rename is: it bypasses the ONE name writer (so it
+	// would rename a shipped preset, or take a preset's name) and it never
+	// touched the DEFINITION, so the stored name stayed behind and the next
+	// save of that material put the old one straight back. The page owns the
+	// rename, for every drawer; this says which row the user typed in.
 	if (!db || !project) return;   // nothing to rename without a library
-	QString newName = item->data(Qt::DisplayRole).toString();
 	const QString guid = item->data(MODEL_GUID_ROLE).toString();
-	const QString oldName = db->fetchAsset(guid).name;
-	qDebug() << oldName << newName;
-	if (newName == oldName) return;
-	else {
-		//item->setText(newName);
-		item->setData(Qt::DisplayRole, newName);
-		item->setData(Qt::UserRole, newName);
-		db->renameAsset(guid, newName);
-		refresh();
-	}
+	const QString newName = item->data(Qt::DisplayRole).toString();
+	if (guid.isEmpty() || newName.isEmpty()) return;
+	if (newName == db->fetchAsset(guid).name) return;
+	emit assetRenamed(guid, newName);
 }
 
 

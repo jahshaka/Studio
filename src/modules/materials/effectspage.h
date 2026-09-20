@@ -357,6 +357,11 @@ private:
 private:
     void configureConnections();
     void editingFinishedOnListItem();
+	/// THE ONE RENAME (MATERIALS_TABS_SPEC §7): the definition's own name,
+	/// the graph payload's settings name, the catalog row through the ONE
+	/// name writer (which is where the preset-name laws live), the tile, and
+	/// every open document of that material. Both drawers call it.
+	void renameMaterial(const QString &guid, const QString &wanted);
 	void addMenuToSceneWidget();
 
 	// Debounced graph -> PbrMaterial -> engine preview (engine viewport mode).

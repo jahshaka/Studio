@@ -2507,6 +2507,13 @@ void EffectsPage::configureConnections()
 	// and saves the project's own copy; a CUSTOM tile opens and saves the
 	// library original — even while a project holds it, which the old
 	// "is it pinned?" inference made impossible.
+	// The PROJECT drawer's rename comes here, like the Custom drawer's: one
+	// rename for every drawer (§7).
+	connect(assetWidget, &ShaderAssetWidget::assetRenamed, this,
+	        [this](const QString &guid, const QString &newName) {
+		renameMaterial(guid, newName);
+		assetWidget->refresh();
+	});
 	connect(assetWidget, &ShaderAssetWidget::loadToGraph, [=](QListWidgetItem * item) {
 		// The handler names the material; loadGraph adopts it (fix round).
 		loadGraph(item->data(MODEL_GUID_ROLE).toString(), shaderInfo::Origin::Project);
@@ -2701,8 +2708,24 @@ void EffectsPage::editingFinishedOnListItem()
 {
     QListWidgetItem *item = selectCorrectItemFromDrop(pressedShaderInfo.GUID);
     if (!item) return;   // the row this edit belonged to is no longer in a drawer
-    auto oldName = pressedShaderInfo.name;
-    auto newName = item->data(Qt::DisplayRole).toString();
+    const QString guid = pressedShaderInfo.GUID;
+    pressedShaderInfo = shaderInfo();
+    renameMaterial(guid, item->data(Qt::DisplayRole).toString());
+}
+
+void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
+{
+    // ONE RENAME, FOR EVERY DRAWER (MATERIALS_TABS_SPEC §7). The PROJECT
+    // drawer had its own: `db->renameAsset` and a refresh — not through the
+    // one name writer (so a shipped preset's name could be taken, and a
+    // preset could be renamed) and never touching the DEFINITION, so the
+    // stored name stayed behind and the next save put it straight back.
+    // That is the F11 defect this function exists to fix, alive in the
+    // second door.
+    QListWidgetItem *item = selectCorrectItemFromDrop(guid);
+    if (!item || guid.isEmpty()) return;
+    const QString oldName = dataBase ? dataBase->fetchAsset(guid).name : QString();
+    const QString newName = wanted;
 
 	if (oldName == newName) return;
 
@@ -2719,9 +2742,9 @@ void EffectsPage::editingFinishedOnListItem()
     // places it lives — the definition's own `name` and the graph payload's
     // settings — and write through the ONE writer.
     {
-        const shaderInfo::Origin origin = originForItem(pressedShaderInfo.GUID);
+        const shaderInfo::Origin origin = originForItem(guid);
         const bool projectScope = origin == shaderInfo::Origin::Project;
-        QJsonObject definition = MaterialBundle::read(dataBase, pressedShaderInfo.GUID,
+        QJsonObject definition = MaterialBundle::read(dataBase, guid,
                                                       projectScope ? mProject : nullptr);
         if (!definition.isEmpty()) {
             definition[QStringLiteral("name")] = newName;
@@ -2733,14 +2756,14 @@ void EffectsPage::editingFinishedOnListItem()
                 definition[QStringLiteral("shadergraph")] = shadergraph;
             }
             const auto written = MaterialBundle::write(
-                dataBase, mProject, pressedShaderInfo.GUID, definition,
+                dataBase, mProject, guid, definition,
                 projectScope ? MaterialBundle::Scope::Project
                              : MaterialBundle::Scope::Library);
             if (!written.ok) irisLog("rename: " + written.error);
         }
     }
     // THROUGH THE ONE NAME WRITER (fix round 2) — see renameShader.
-    if (!assettags::rename(dataBase, pressedShaderInfo.GUID, newName)) {
+    if (!assettags::rename(dataBase, guid, newName)) {
         // Refused: put the tile's label back, or the drawer would show a name
         // the catalog does not have.
         irisLog("rename: '" + newName + "' was refused");
@@ -2761,9 +2784,7 @@ void EffectsPage::editingFinishedOnListItem()
 
     // THE DOCUMENT THAT IS THIS MATERIAL takes the new name — not "the
     // current one" (MATERIALS_TABS_SPEC §2.6).
-    renameOpenDocuments(pressedShaderInfo.GUID, newName);
-
-	pressedShaderInfo = shaderInfo();
+    renameOpenDocuments(guid, newName);
 }
 
 void EffectsPage::addMenuToSceneWidget()
