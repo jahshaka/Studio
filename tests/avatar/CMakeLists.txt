@@ -269,6 +269,7 @@ add_executable(test_avatar_assets test_avatar_assets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp   # BUNDLE-P4: the companion is minted through the bundle writer
     ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp

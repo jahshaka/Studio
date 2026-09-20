@@ -12,6 +12,10 @@ For more information see the LICENSE file
 #include "services/assetdelete.h"
 
 #include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSet>
+#include <QSqlDatabase>
 
 #include "data/database/database.h"
 #include "services/assetstorepaths.h"
@@ -71,7 +75,55 @@ Outcome remove(Database *db, const QString &guid, bool keepShared, bool force)
         for (const auto &dep : db->fetchAssetGUIDAndDependencies(guid, false))
             ok = db->deleteDependency(guid, dep) && ok;
     } else {
-        db->deleteAssetAndDependencies(guid, &ok, force);
+        // THE LIBRARY DELETE TAKES ONLY BORN-INSIDE MEMBERS, NEVER A USER-IMPORTED
+        // ROW (bundles audit G4, the library half; BUNDLE-P4). It used to be
+        // deleteAssetAndDependencies — every asset of the recursive closure,
+        // with no depender check — so deleting an avatar deleted the user's
+        // MODEL (one that pre-existed "Create Avatar") and any clip SHARED with
+        // another avatar. A member goes only when (a) it was born inside the set
+        // being removed — a picked texture carrying the bundle's member/origin
+        // stamp, a baked map whose PARENT is in the set, an image's companion
+        // material — (b) no depender remains OUTSIDE the set, and (c) no living
+        // project pins it. Every other row of the closure keeps its row and
+        // loses only the edge from the dying asset.
+        const QStringList closure = db->fetchAssetGUIDAndDependencies(guid, /*appendSelf*/ true);
+        const QSet<QString> set(closure.begin(), closure.end());
+        QStringList dying;
+        dying.append(guid);
+        for (const QString &member : closure) {
+            if (member == guid) continue;
+            const AssetRecord row = db->fetchAsset(member);
+            if (row.guid.isEmpty()) continue;
+            const QJsonObject props = QJsonDocument::fromJson(row.properties).object();
+            bool bornInside = false;
+            if (props.value(QStringLiteral("member")).toBool()
+                && set.contains(props.value(QStringLiteral("memberOf")).toString()))
+                bornInside = true;
+            if (!row.parent.isEmpty() && set.contains(row.parent)) bornInside = true;
+            if (row.type == static_cast<int>(ModelTypes::Material)) {
+                const QJsonObject def = QJsonDocument::fromJson(row.asset).object();
+                if (set.contains(def.value(QStringLiteral("companionOf")).toString()))
+                    bornInside = true;
+            }
+            if (!bornInside) continue;
+            if (!force && db->countAssetPins(member) > 0) continue;   // a project holds it
+            bool heldFromOutside = false;
+            for (const QString &depender : db->hasMultipleDependers(member)) {
+                if (depender == member || set.contains(depender)) continue;
+                heldFromOutside = true;
+                break;
+            }
+            if (heldFromOutside) continue;
+            dying.append(member);
+        }
+        DbTransaction tx(QSqlDatabase::database());
+        for (const QString &g : dying) {
+            ok = db->deleteAsset(g, force) && ok;
+            ok = db->deleteDependency(g) && ok;
+            for (const auto &dep : db->fetchAssetGUIDAndDependencies(g, false))
+                ok = db->deleteDependency(g, dep) && ok;
+        }
+        ok = tx.commit() && ok;
     }
 
     out.ok = ok;

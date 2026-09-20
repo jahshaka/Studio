@@ -236,6 +236,28 @@ int main(int argc, char **argv)
           "3: the BYTES are untouched — a superseded object is assets.gc's business");
     CHECK(materialmembers::unused(&db, nullptr, woody).isEmpty(), "3: nothing left to clean");
 
+    // 3b. A BAKED MAP THE DEFINITION NO LONGER NAMES (BUNDLE-P4). A baked map
+    // is a member by the PARENT relation and invisible to every library
+    // listing, so the walk above could not see one: a re-bake that dropped a
+    // slot left the old map behind for ever. The row whose parent is woody and
+    // whose guid the bake block does not name is listed and cleaned; the one
+    // the bake block DOES name ("tex-baked") is left alone.
+    {
+        db.createAssetEntry("tex-bake-old", "old-normal.png", static_cast<int>(ModelTypes::Texture),
+                            woody, QString(), QString(), QString(), QByteArray(),
+                            QByteArray(), QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        const auto stale = materialmembers::unused(&db, nullptr, woody);
+        CHECK(stale.size() == 1 && stale.first().guid == "tex-bake-old",
+              "3b: the orphaned baked map (parent = woody, not in the bake block) is listed");
+        CHECK(stale.first().scope == "library", "3b: ...as a library row");
+        const auto cleanedBake = materialmembers::cleanUnused(&db, nullptr, woody, &error);
+        CHECK(cleanedBake.size() == 1 && db.fetchAsset("tex-bake-old").guid.isEmpty(),
+              "3b: the clean removed it");
+        CHECK(!db.fetchAsset("tex-baked").guid.isEmpty(),
+              "3b: ...and the baked map the definition still names survives");
+        CHECK(materialmembers::unused(&db, nullptr, woody).isEmpty(), "3b: nothing left to clean");
+    }
+
     // =======================================================================
     // 4. MAKE UNIQUE — A SECOND ROW OVER THE SAME BYTES
     // =======================================================================

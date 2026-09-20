@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+#include <QSet>
 
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -188,6 +189,39 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
             if (props.value(kOriginKey).toString() != materialGuid) continue;
             if (!db->hasMultipleDependers(row.guid).isEmpty()) continue;   // somebody uses it
             if (!assetdelete::livePins(db, row.guid).isEmpty()) continue;  // a project holds it
+            out.append(describeRow(row, QStringLiteral("library")));
+        }
+        // AND THE BAKED MAPS THE DEFINITION NO LONGER NAMES (BUNDLE-P4, the
+        // owed "cleanUnused at library scope cannot see baked members"). A
+        // baked map is a member by the PARENT relation, invisible to every
+        // library listing, so the walk above cannot reach it — and a re-bake
+        // that dropped a slot left the old map behind for ever. The rows whose
+        // parent is this material and whose guid the current bake block does
+        // not name, referenced by nothing and pinned by no living project.
+        QSet<QString> named;
+        {
+            const QJsonObject definition = MaterialBundle::read(db, materialGuid, nullptr);
+            const QJsonObject maps = definition.value(QStringLiteral("bake")).toObject()
+                                               .value(QStringLiteral("maps")).toObject();
+            for (auto it = maps.constBegin(); it != maps.constEnd(); ++it)
+                named.insert(it.value().toString());
+            for (const QString &g : MaterialBundle::memberGuids(definition)) named.insert(g);
+        }
+        QStringList children;
+        {
+            QSqlQuery query(QSqlDatabase::database());
+            query.prepare(QStringLiteral("SELECT guid FROM assets WHERE parent = ? AND type = ?"));
+            query.addBindValue(materialGuid);
+            query.addBindValue(static_cast<int>(ModelTypes::Texture));
+            if (query.exec())
+                while (query.next()) children << query.value(0).toString();
+        }
+        for (const QString &child : children) {
+            if (named.contains(child)) continue;                            // still a member
+            if (!db->hasMultipleDependers(child).isEmpty()) continue;       // somebody uses it
+            if (!assetdelete::livePins(db, child).isEmpty()) continue;      // a project holds it
+            const AssetRecord row = db->fetchAsset(child);
+            if (row.guid.isEmpty()) continue;
             out.append(describeRow(row, QStringLiteral("library")));
         }
         return out;

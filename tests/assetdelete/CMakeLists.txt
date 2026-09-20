@@ -11,6 +11,12 @@ add_executable(test_asset_delete test_asset_delete.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
+    # BUNDLE-P4: the companion is minted through the bundle writer now
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     # database.cpp's link closure (Project, guids, asset helpers)
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
