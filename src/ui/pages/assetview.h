@@ -78,6 +78,7 @@ class Database;
 struct StudioServices;
 class Project;
 class SettingsManager;
+class QCheckBox;
 class PreferencesDialog;
 
 typedef struct directory_tuple
@@ -374,6 +375,17 @@ private:
 	QTimer *searchTimer;
 	QString searchTerm;
 	QLineEdit *le;
+	/// "Show member textures" (MATERIAL_BUNDLE_SPEC V-2 on the Assets page,
+	/// ASSETS-PAGE-MEMBERS-1): off = a picture that arrived inside a material
+	/// bundle and that only materials use is folded into the bundle's tile;
+	/// on = it is a tile of its own. The same rule and the same wording as the
+	/// editor tray's switch; persisted under its own key (a library view and a
+	/// project view are two places a person may want set differently).
+	QCheckBox *showMembersBox = nullptr;
+	bool showMembers = false;
+	/// The toggle's work: add the tiles the fold hid, or delete them — the
+	/// page's grid is built once and edited tile by tile ever after.
+	void applyShowMembers(bool on);
 
     // Image page (PreviewPage::Image): scrollable canvas with fit / 1:1 /
     // wheel zoom (ASSET_MEDIA_SPEC §2).

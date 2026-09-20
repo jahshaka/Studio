@@ -277,4 +277,34 @@ QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QStrin
     return collapse(db, projectGuid, records, pinned, showMembers);
 }
 
+QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records, bool showMembers)
+{
+    QStringList out;
+    if (!db) return out;
+    for (const AssetRecord &record : records) {
+        // 2b. a legacy Shader row (the Assets page used to skip it inline).
+        if (isType(record, ModelTypes::Shader)) { out.append(record.guid); continue; }
+        // 6. a picture that arrived inside a material bundle (V-2). The cheap
+        //    half of the test reads the record's own properties; only a
+        //    stamped row costs a query, and a library holds few of those
+        //    (the preset seed's maps, a material's picked textures).
+        if (!showMembers && foldedIntoBundle(db, record)) out.append(record.guid);
+    }
+    return out;
+}
+
+QVector<AssetRecord> libraryList(Database *db, bool showMembers)
+{
+    QVector<AssetRecord> out;
+    if (!db) return out;
+    const QVector<AssetRecord> records = db->fetchAssetsForAssetView();
+    const QStringList drop = libraryHidden(db, records, showMembers);
+    if (drop.isEmpty()) return records;
+    const QSet<QString> dropped(drop.begin(), drop.end());
+    out.reserve(records.size());
+    for (const AssetRecord &record : records)
+        if (!dropped.contains(record.guid)) out.append(record);
+    return out;
+}
+
 }   // namespace assettray

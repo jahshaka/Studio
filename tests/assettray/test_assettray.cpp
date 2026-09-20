@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "data/project.h"
 #include "services/assettray.h"
+#include "services/materialmembers.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); \
@@ -258,6 +259,58 @@ int main(int argc, char **argv)
               "an import's TEXTURE member is not a library tile");
         CHECK(!listed(grid, sceneNodes[1]),
               "a project's own scene-node row is not a library tile (view filter)");
+    }
+
+    // ---------------------------------------------------------------------
+    // 1b. THE LIBRARY LISTING (ASSETS-PAGE-MEMBERS-1, V-2 on the Assets page):
+    //     the grid rows through assettray::libraryList — the one function the
+    //     page and assets.list({scope:'store'}) read.
+    // ---------------------------------------------------------------------
+    {
+        // A picture that arrived THROUGH a material's picker (the stamp), used
+        // by that material alone.
+        const QString bundleOnly = standalone[31];
+        const QString bundleAndNode = standalone[32];
+        const QString userOwnUsedByMaterial = standalone[33];
+        const QString pickerMaterial = newGuid();
+        db.createAssetEntry(pickerMaterial, "picked material",
+                            static_cast<int>(ModelTypes::Material), QString(), QString(),
+                            QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
+                            QByteArray("{}"), AssetViewFilter::AssetsView);
+        for (const QString &tex : { bundleOnly, bundleAndNode, userOwnUsedByMaterial })
+            db.createDependency(static_cast<int>(ModelTypes::Material),
+                                static_cast<int>(ModelTypes::Texture), pickerMaterial, tex,
+                                QString());
+        CHECK(materialmembers::stampMember(&db, bundleOnly, pickerMaterial), "stamp: bundle-only");
+        CHECK(materialmembers::stampMember(&db, bundleAndNode, pickerMaterial), "stamp: bundle + node");
+        // ...and a scene node ALSO uses the second one (a material slot).
+        db.createDependency(static_cast<int>(ModelTypes::Object),
+                            static_cast<int>(ModelTypes::Texture), sceneNodes[2], bundleAndNode,
+                            projectGuid);
+
+        const QVector<AssetRecord> raw = db.fetchAssetsForAssetView();
+        const QVector<AssetRecord> page = assettray::libraryList(&db, /*showMembers=*/false);
+        const QVector<AssetRecord> pageAll = assettray::libraryList(&db, /*showMembers=*/true);
+        CHECK(listed(raw, bundleOnly), "the raw grid query still lists a stamped picture (it is a row)");
+        CHECK(!listed(page, bundleOnly),
+              "the Assets page folds a picture that arrived inside a material and only materials use");
+        CHECK(listed(pageAll, bundleOnly), "...and lists it with 'Show member textures' on");
+        CHECK(listed(page, bundleAndNode),
+              "a stamped picture a scene node also uses is a tile of its own");
+        CHECK(listed(page, userOwnUsedByMaterial),
+              "the user's own image used only by a material is a tile (no stamp, never folded)");
+        CHECK(listed(page, standalone[30]), "an unused library image is a tile");
+        CHECK(listed(page, models[0]), "an imported model is a tile");
+        CHECK(!listed(page, meshes[0]) && !listed(page, memberTextures[0]),
+              "an import's members are not tiles of the page either");
+        const QStringList folded = assettray::libraryHidden(&db, raw, false);
+        CHECK(folded.contains(bundleOnly) && !folded.contains(bundleAndNode)
+                  && !folded.contains(userOwnUsedByMaterial),
+              "libraryHidden names exactly the folded picture");
+        CHECK(assettray::libraryHidden(&db, raw, true).isEmpty(),
+              "...and nothing with the switch on (no legacy Shader row in this fixture)");
+        CHECK(page.size() + folded.size() == raw.size(),
+              "the listing is the raw rows less the fold, nothing else");
     }
 
     // ---------------------------------------------------------------------
