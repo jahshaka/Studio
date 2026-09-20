@@ -436,8 +436,6 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/mobilitypropertywidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/componentspropertywidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/nodeicons.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertyrows.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
@@ -496,7 +494,6 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
     # COMPONENTS-1: the Components section pushes a click through the real
     # selection service, so the suites link it rather than a stub of it.
-    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/looks.cpp
     ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
@@ -545,6 +542,17 @@ add_test(NAME ui.selection_cost COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+
+# THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
+# this app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
+# and a tests/ui binary does not live in bin/, where the icons are staged — so
+# a suite that asserts anything about an icon would be asserting about null
+# pixmaps. Made HERE, at configure, rather than by the suite at run time: a
+# runtime call cannot replace a link that exists but dangles (a moved or
+# rebuilt bin/), and this one is re-made on every configure. The suite still
+# checks and fails loudly, because a link is not a guarantee.
+file(CREATE_LINK "${CMAKE_BINARY_DIR}/bin/app" "${CMAKE_CURRENT_BINARY_DIR}/app"
+     SYMBOLIC)
 
 # ui.components — THE COMPONENTS SECTION (owner review R14, COMPONENTS-1): the
 # parts of a grouped node, listed in the Properties column, clickable. Real

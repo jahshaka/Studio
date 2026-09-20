@@ -848,16 +848,29 @@ void SceneNodePropertiesWidget::mountWorldBlades()
 
 void SceneNodePropertiesWidget::mountSelectionBlades()
 {
+    // THE COMPONENTS SECTION LETS GO ON EVERY PATH THAT IS NOT A NODE. It
+    // holds the whole model it is listing — the subject, every part by guid —
+    // and a section that is merely unmounted keeps a closed scene's subtree
+    // alive and repaints its stale rows for the rest of the session. The three
+    // early returns below are library-asset and empty-selection states; the
+    // node branch re-points it (and re-points it WITHOUT rebuilding, which is
+    // why this cannot simply clear unconditionally here).
+    const auto releaseComponents = [this]() {
+        if (componentsPropView) componentsPropView->setSceneNode(iris::SceneNodePtr());
+    };
+
     // A LIBRARY ASSET is what the Selection tab shows when one is picked — the
     // same slot as a scene node, and exclusive with it. Re-mounted from STATE
     // (not just at the moment of the pick) so an undo, a tab toggle or any
     // other re-apply does not replace it with the "nothing selected" line.
     if (assetBinding == AssetBinding::Shader) {
+        releaseComponents();
         shaderPropView->setShaderGuid(assetGuid);
         mount(shaderPropView);
         return;
     }
     if (assetBinding == AssetBinding::Sky) {
+        releaseComponents();
         skyPropView->setSkyAlongWithProperties(assetGuid,
                                                static_cast<iris::SkyType>(assetSkyType));
         mount(skyPropView);
@@ -867,6 +880,7 @@ void SceneNodePropertiesWidget::mountSelectionBlades()
     // NOTHING SELECTED IS AN ANSWER, and it says so (§2): an empty column
     // reads as a broken panel.
     if (!sceneNode) {
+        releaseComponents();
         if (emptySelectionLabel) mount(emptySelectionLabel);
         return;
     }
@@ -883,11 +897,20 @@ void SceneNodePropertiesWidget::mountSelectionBlades()
         // THE PARTS OF A GROUPED NODE (R14). The section exists only when
         // there ARE parts — a lone cube has no components and gets no empty
         // list — and it belongs to the GROUP, so clicking a part inside a
-        // model keeps the same list on screen with that part highlighted
-        // (ComponentsPropertyWidget::subjectFor).
-        if (ComponentsPropertyWidget::applies(sceneNode)) {
+        // model keeps the same list on screen with that part highlighted.
+        //
+        // THE WIDGET ANSWERS, NOT A STATIC FUNCTION: whether this selection
+        // keeps the section depends on what the section is already showing
+        // (ComponentsPropertyWidget::appliesTo — the sticky subject). And when
+        // it does NOT apply the widget is told so explicitly, because a
+        // section that is merely unmounted still holds the last model's whole
+        // subtree alive and repaints its rows on every later selection.
+        if (componentsPropView->appliesTo(sceneNode)) {
             componentsPropView->setSceneNode(sceneNode);
             mount(componentsPropView);
+        }
+        else {
+            releaseComponents();
         }
 
         switch (sceneNode->getSceneNodeType()) {

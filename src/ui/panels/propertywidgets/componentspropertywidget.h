@@ -25,12 +25,20 @@ For more information see the LICENSE file
 // selection, a double-click frames it in the viewport, and the list highlights
 // whatever the hierarchy has selected.
 //
-// THE SUBJECT IS THE GROUP, NOT THE SELECTION. Clicking a part makes the part
-// the selected node, and if the section then re-read "the selected node's
-// children" it would empty itself and disappear under the user's cursor. So
-// the panel hands it the GROUP: `subjectFor()` climbs out of an asset's parts
-// to the node the outliner actually draws, and the list stays put with the
-// clicked part highlighted.
+// THE SUBJECT IS THE GROUP, NOT THE SELECTION, AND IT IS STICKY. Clicking a
+// part makes the part the selected node, and if the section then re-read "the
+// selected node's children" it would empty itself and disappear under the
+// user's cursor.
+//
+// Two rules keep it on screen, and BOTH are needed. `subjectFor()` climbs out
+// of an asset's parts (`attached`) to the node the outliner draws — which
+// answers for an imported model, whose parts are attached by the importer. It
+// does NOT answer for a group a user made by hand out of plain children: those
+// are not attached, so a clicked child resolves to ITSELF, has no parts, and
+// the section went away exactly as described above (send-back item 1). So the
+// widget also KEEPS the subject it is already showing whenever the node it is
+// handed is that subject or a descendant of it. A selection that leaves the
+// group entirely drops it; a null node clears it outright.
 //
 // READ-ONLY INDICATORS. The eye and the padlock here say what the state IS;
 // the hierarchy owns the toggles (its rows edit them, undoably, with the folder
@@ -63,14 +71,28 @@ public:
     void setServices(StudioServices *s);
     void setSceneView(IEditorViewport *view) { sceneView = view; }
 
-    /// THE GROUP a selected node belongs to: climb while the node is one of its
-    /// parent's ASSET PARTS (`attached`), stopping at the node the outliner
-    /// draws. A node that is not a part answers itself. Static and public
-    /// because the panel asks it too — "does this selection have a Components
-    /// section at all" and "which list does it show" must be the one question.
+    /// THE GROUP a selected node belongs to, IGNORING what is on screen:
+    /// climb while the node is one of its parent's ASSET PARTS (`attached`),
+    /// stopping at the node the outliner draws. A node that is not a part
+    /// answers itself. The cold half of the rule — see appliesTo() for the
+    /// sticky half, which is the one the panel asks.
     static iris::SceneNodePtr subjectFor(const iris::SceneNodePtr &node);
-    /// Whether a selection warrants the section: its group has parts.
+    /// WHETHER THIS SELECTION KEEPS THE SECTION ON SCREEN — the panel's one
+    /// question, and an INSTANCE question because the answer depends on what
+    /// the list is already showing: a plain child of a hand-made group has no
+    /// parts of its own and would fail the cold test, but it is a row of the
+    /// list in front of the user and clicking it must not make the list
+    /// vanish. True when the node's own group has parts, or when the node is
+    /// the subject already on screen or one of its descendants.
+    bool appliesTo(const iris::SceneNodePtr &node) const;
+    /// The cold form of the same question, for a caller with no widget.
     static bool applies(const iris::SceneNodePtr &node);
+
+    /// The group the list is showing (null when it is showing nothing) and how
+    /// many parts it holds — read by ui.components to prove that a selection
+    /// leaving the group DROPS the subtree rather than keeping it alive.
+    iris::SceneNodePtr subjectNode() const { return subject; }
+    int partCount() const { return partsByGuid.size(); }
 
     /// HOW MANY TIMES THE LIST WAS REBUILT FROM SCRATCH, and how many times a
     /// call only repainted the highlight. The section re-lays BY DIFFERENCE
@@ -92,8 +114,13 @@ private:
     /// Repaints the rows' highlight from the editor selection, quietly.
     void applyEditorSelection();
     /// The list's current contents as a string, so a call that changes nothing
-    /// can be answered with a repaint instead of a rebuild.
+    /// can be answered with a repaint instead of a rebuild. O(parts): a
+    /// five-thousand-part import pays about a millisecond per pick to find out
+    /// that nothing changed, which is the trade this shape makes on purpose
+    /// (the alternative is a document-side change feed the panel does not have).
     QString listSignature() const;
+    /// True when `node` IS `subject` or sits under it — the sticky rule's walk.
+    bool holdsNode(const iris::SceneNodePtr &node) const;
     /// Rows the user could scroll to — every row, minus those inside a folded
     /// one. What the list's height is sized from.
     int visibleRowCount() const;

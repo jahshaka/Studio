@@ -30,7 +30,14 @@ For more information see the LICENSE file
 //     (SELECT-COST-1's law at row level: it re-lays by difference), and it DOES
 //     rebuild when a part is renamed, hidden or locked;
 //   * the section stays on screen while a part is selected — the subject is the
-//     GROUP, so clicking a part does not empty the list under the cursor;
+//     GROUP, so clicking a part does not empty the list under the cursor, and
+//     that holds for a HAND-MADE group too, whose children are not `attached`
+//     and therefore resolve to themselves (the sticky subject);
+//   * a selection that LEAVES the group releases the model: no subject, no
+//     parts held, nothing stale to repaint;
+//   * a `pickable` write that reaches the undo stack repaints the padlock
+//     WITHOUT a re-pick, and one undo puts it back — the contract the
+//     section's tooltip makes when it says the Hierarchy owns the toggles;
 //   * a selection change with the section mounted costs no more than one
 //     without it.
 //
@@ -57,6 +64,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
+#include "commands/setnodepropertycommand.h"
 #include "data/settingsmanager.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
@@ -119,22 +127,16 @@ int main(int argc, char **argv)
     enginetest::DocumentGraph graph("ui-components-ogre.log");
     if (!graph.require()) return 1;
 
-    // THE ICONS ARE REAL, which takes one line of rigging: every icon in this
-    // app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
-    // and a test binary lives in tests/ui, not in bin/ where the icons are
-    // staged. Without this the rows draw null pixmaps and "the hidden part
-    // shows a different eye" is an assertion about two empty icons.
+    // THE ICONS ARE REAL. The link that makes them reachable from a tests/ui
+    // binary is made at CONFIGURE time (see this suite's CMakeLists entry);
+    // this is the loud failure when it is not there, because "the hidden part
+    // shows a different eye" must never be an assertion about two null icons.
     {
         const QDir appDir(QCoreApplication::applicationDirPath());
-        if (!appDir.exists(QStringLiteral("app/icons"))) {
-            const QString staged = QDir(appDir.absoluteFilePath(QStringLiteral("../../bin/app")))
-                                       .absolutePath();
-            if (QDir(staged).exists())
-                QFile::link(staged, appDir.absoluteFilePath(QStringLiteral("app")));
-        }
         if (!QFile::exists(appDir.absoluteFilePath(
                 QStringLiteral("app/icons/icons8-mesh-32.png")))) {
-            std::printf("FAIL: the staged icons are not reachable from %s\n",
+            std::printf("FAIL: the staged icons are not reachable from %s "
+                        "(expected app/icons, linked at configure)\n",
                         qPrintable(appDir.absolutePath()));
             return 1;
         }
@@ -173,6 +175,27 @@ int main(int argc, char **argv)
 
     auto lone = makeMesh(QStringLiteral("Crate"));
     scene->getRootNode()->addChild(lone);
+
+    // A HAND-MADE GROUP: an Empty with two PLAIN children. Nothing here is
+    // `attached` — this is what a user builds by parenting two objects, and it
+    // is the case the cold subject rule cannot answer.
+    auto handmade = iris::SceneNode::create();
+    handmade->setName(QStringLiteral("Rig"));
+    scene->getRootNode()->addChild(handmade);
+    QVector<iris::SceneNodePtr> hands;
+    for (const QString &name : { QStringLiteral("Arm"), QStringLiteral("Hand") }) {
+        auto child = makeMesh(name);
+        handmade->addChild(child);
+        hands.append(child);
+    }
+
+    // Three standalone meshes for the cost comparison's warm arm.
+    QVector<iris::SceneNodePtr> loners;
+    for (int i = 0; i < 3; ++i) {
+        auto m = makeMesh(QStringLiteral("Crate%1").arg(i));
+        scene->getRootNode()->addChild(m);
+        loners.append(m);
+    }
 
     // ---- the panel, in a scroll area, the way the dock hosts it -------------
     QWidget host;
@@ -346,44 +369,117 @@ int main(int argc, char **argv)
               QLatin1String("1:Head,2:Rivet,1:Torso,1:Leg"),
           "a renamed part is renamed in the list");
 
-    // ---- 7. THE COST: a selection change inside the model is not a rebuild --
+    // ---- 7. A HAND-MADE GROUP KEEPS ITS SECTION TOO --------------------
     //
-    // Two hundred selection changes among the group and its parts. The rows are
-    // built ONCE; everything after is a repaint of the highlight. And the wall
-    // time is compared with the same two hundred switches on a plain object,
-    // which mounts no section at all — the section may not make a pick cost
-    // measurably more.
+    // The case the cold subject rule cannot answer: an Empty with two PLAIN
+    // children (nothing `attached`, which is what parenting two objects by
+    // hand produces). Clicking a child used to resolve to the child itself,
+    // find no parts, and unmount the section under the cursor.
+    panel->setSceneNode(handmade);
+    for (int i = 0; i < 2; ++i) turn();
+    auto *handSection = sectionOf(panel);
+    CHECK(handSection == section, "a hand-made group gets the same section");
+    CHECK(section->rowLabels().join(QStringLiteral(",")) == QLatin1String("1:Arm,1:Hand"),
+          "...listing its plain children");
+    clickRow(QStringLiteral("Arm"), Qt::NoModifier);
+    CHECK(selection.selected() == hands[0], "clicking a plain child selects it");
+    panel->setSceneNode(hands[0]);
+    for (int i = 0; i < 2; ++i) turn();
+    CHECK(sectionOf(panel) == section,
+          "THE SECTION SURVIVES: a hand-made group's child does not empty it");
+    CHECK(section->rowLabels().join(QStringLiteral(",")) == QLatin1String("1:Arm,1:Hand"),
+          "...still showing the group's list");
+    CHECK(section->subjectNode() == handmade, "...and still pointed at the group");
+    CHECK(rowFor(QStringLiteral("Arm"))->isSelected(), "...with the clicked child highlighted");
+
+    // ---- 8. LEAVING THE GROUP RELEASES THE MODEL ------------------------
+    //
+    // A section that is merely unmounted keeps the whole model it was listing
+    // alive and repaints its stale rows on every later selection.
+    panel->setSceneNode(lone);
+    for (int i = 0; i < 2; ++i) turn();
+    CHECK(sectionOf(panel) == nullptr, "selecting a lone object unmounts the section");
+    CHECK(section->subjectNode().isNull(), "...and the section lets go of its group");
+    CHECK(section->partCount() == 0, "...holding no part of it");
+    CHECK(section->rowLabels().isEmpty(), "...and no rows to repaint");
+
+    // ---- 9. A LOCK MADE ELSEWHERE REACHES THE PADLOCK ------------------
+    //
+    // The contract the section's tooltip makes: the Hierarchy owns the toggle,
+    // and the section shows the result WITHOUT the user picking again.
+    //
+    // THE WIRE IS THE COLUMN'S OWN RE-READ, not the undo stack's hook. Pushing
+    // a command does not repaint this column — UndoService fires its
+    // stack-moved hook on undo() and redo() only, deliberately (a refresh per
+    // command would rebuild the column on every frame of a drag) — so the
+    // outliner CALLS refreshPropertiesFromDocument after a flag edit, which is
+    // refreshFromDocument plus the transform rows. This drives both halves:
+    // the live edit through that re-read, and the undo through the hook.
+    panel->setSceneNode(group);
+    for (int i = 0; i < 3; ++i) turn();
+    section = sectionOf(panel);
+    CHECK(section != nullptr, "back on the model");
+    const qint64 unlockedIcon = rowFor(QStringLiteral("Head"))->icon(2).cacheKey();
+
+    undo.push(new SetNodePropertyCommand(parts[0], QStringLiteral("pickable"), true, false));
+    CHECK(!parts[0]->isPickable(), "the outliner's padlock is an undoable command now");
+    CHECK(rowFor(QStringLiteral("Head"))->icon(2).cacheKey() == unlockedIcon,
+          "...and the column is NOT repainted by the push alone (it is told, below)");
+    panel->refreshFromDocument();             // what the outliner now calls
+    for (int i = 0; i < 3; ++i) turn();       // the re-read defers its own rebuild
+    CHECK(rowFor(QStringLiteral("Head"))->icon(2).cacheKey() != unlockedIcon,
+          "THE PADLOCK FOLLOWS WITHOUT A RE-PICK");
+
+    undo.setStackMovedHook([&]() { panel->refreshFromDocument(); });
+    undo.undo();
+    for (int i = 0; i < 3; ++i) turn();
+    CHECK(parts[0]->isPickable(), "one undo unlocks it");
+    CHECK(rowFor(QStringLiteral("Head"))->icon(2).cacheKey() == unlockedIcon,
+          "...and the stack-moved hook repaints the padlock for free");
+    undo.setStackMovedHook(nullptr);
+
+    // ---- 10. THE COST: a selection change inside the model is not a rebuild -
+    //
+    // BOTH ARMS ARE WARM AND ALIKE. 200 picks moving between MESH nodes, with
+    // the same blade set mounted throughout, differing in one thing only:
+    // whether the Components section is one of those blades. (An earlier
+    // version of this measurement compared warm picks inside the model against
+    // picks that deselected between each one — a cold full mount — so the
+    // group arm could not lose.)
+    auto warmPicks = [&](const QVector<iris::SceneNodePtr> &cycle) {
+        QVector<double> ms;
+        QElapsedTimer timer;
+        panel->setSceneNode(cycle[0]);          // mount the set before measuring
+        panel->flushPendingMount();
+        for (int i = 0; i < 4; ++i) turn();
+        for (int i = 0; i < 200; ++i) {
+            timer.start();
+            panel->setSceneNode(cycle[(i + 1) % cycle.size()]);
+            panel->flushPendingMount();
+            ms.append(timer.nsecsElapsed() / 1e6);
+            turn();
+        }
+        return ms;
+    };
+
     const int rebuildsBefore = section->rebuildCount();
     const int refreshesBefore = section->refreshCount();
-    QVector<double> groupMs, plainMs;
-    QElapsedTimer timer;
-    const QVector<iris::SceneNodePtr> cycle = { group, parts[0], bolt, parts[1], parts[2] };
-    for (int i = 0; i < 200; ++i) {
-        timer.start();
-        panel->setSceneNode(cycle[i % cycle.size()]);
-        panel->flushPendingMount();
-        groupMs.append(timer.nsecsElapsed() / 1e6);
-        turn();
-    }
-    for (int i = 0; i < 200; ++i) {
-        timer.start();
-        panel->setSceneNode(lone);
-        panel->flushPendingMount();
-        plainMs.append(timer.nsecsElapsed() / 1e6);
-        turn();
-        panel->setSceneNode(iris::SceneNodePtr());
-        panel->flushPendingMount();
-        turn();
-    }
+    const QVector<double> groupMs = warmPicks({ parts[0], bolt, parts[1], parts[2] });
     const int rebuilt = section->rebuildCount() - rebuildsBefore;
     const int refreshed = section->refreshCount() - refreshesBefore;
-    std::printf("  200 picks inside the model: %d rebuilds, %d repaints; "
-                "median pick %.3f ms (group) vs %.3f ms (plain object)\n",
+    const QVector<double> plainMs = warmPicks({ loners[0], loners[1], loners[2] });
+
+    std::printf("  200 warm picks: %d rebuilds, %d repaints; median %.3f ms inside the "
+                "model vs %.3f ms between plain meshes\n",
                 rebuilt, refreshed, median(groupMs), median(plainMs));
     CHECK(rebuilt == 0, "200 picks inside one model rebuild the list ZERO times");
     CHECK(refreshed > 0, "...they repaint the highlight instead");
-    CHECK(median(groupMs) < median(plainMs) + 2.0,
-          "...and a pick with the section mounted is not measurably dearer");
+    // THE BOUND, STATED: the section's own work on a pick is one O(parts)
+    // signature and one highlight repaint. Half a millisecond of headroom over
+    // the same panel without it, on a four-part model, is generous and still
+    // catches a rebuild-per-pick regression (a rebuild costs milliseconds).
+    CHECK(median(groupMs) < median(plainMs) + 0.5,
+          "...and the section adds under 0.5 ms to a pick");
 
     std::printf(failures ? "ui.components: FAILED (%d)\n" : "ui.components: PASS\n", failures);
     return failures == 0 ? 0 : 1;

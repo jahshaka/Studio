@@ -28,6 +28,9 @@ void MainWindow::deleteNode() {}
 void MainWindow::duplicateNode() {}
 void MainWindow::createMaterial() {}
 void MainWindow::exportNode(const iris::SceneNodePtr &, ModelTypes) {}
+// The outliner's eye and padlock tell the properties column to re-read the
+// document after their edit (COMPONENTS-1): these suites host no column.
+void MainWindow::refreshPropertiesFromDocument() {}
 
 // ---- the scene-edit service (menu rows only) -------------------------------
 bool SceneEditService::setDecalTexture(const iris::DecalNodePtr &, const QString &) { return false; }

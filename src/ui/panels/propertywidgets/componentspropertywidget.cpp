@@ -53,6 +53,26 @@ bool ComponentsPropertyWidget::applies(const iris::SceneNodePtr &node)
     return group && group->childCount() > 0;
 }
 
+bool ComponentsPropertyWidget::holdsNode(const iris::SceneNodePtr &node) const
+{
+    if (!subject || !node) return false;
+    for (iris::SceneNodePtr n = node; n; n = n->getParent())
+        if (n == subject) return true;
+    return false;
+}
+
+bool ComponentsPropertyWidget::appliesTo(const iris::SceneNodePtr &node) const
+{
+    if (!node) return false;
+    // ALREADY ON SCREEN AND STILL A GROUP: a row of the list the user is
+    // looking at. This is the half that keeps a HAND-MADE group's section
+    // alive when one of its plain children is clicked — those children are not
+    // `attached`, so the cold test below resolves them to themselves and finds
+    // no parts.
+    if (holdsNode(node) && subject->childCount() > 0) return true;
+    return applies(node);
+}
+
 ComponentsPropertyWidget::ComponentsPropertyWidget()
 {
     setPanelTitle("Components");
@@ -133,7 +153,15 @@ QString ComponentsPropertyWidget::listSignature() const
 
 void ComponentsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
-    subject = subjectFor(sceneNode);
+    // THE SUBJECT IS STICKY (see the header). A node the list is already
+    // showing keeps the list; anything else re-resolves; a null node — which
+    // is what the panel hands over when the selection leaves the group
+    // entirely — clears it, so a deleted model's subtree is not held alive by
+    // a hidden section and no stale row is repainted on every later pick.
+    if (!sceneNode)
+        subject.clear();
+    else if (!(holdsNode(sceneNode) && subject->childCount() > 0))
+        subject = subjectFor(sceneNode);
 
     // RE-LAY BY DIFFERENCE. Selecting a part of a model calls this with a
     // different node every time, and every one of those calls resolves to the
@@ -143,7 +171,7 @@ void ComponentsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     // the column: a selection change moves nothing in or out that did not
     // change.
     const QString sig = listSignature();
-    if (sig == builtSignature && tree->topLevelItemCount() > 0) {
+    if (sig == builtSignature && (tree->topLevelItemCount() > 0 || !subject)) {
         ++refreshes;
         applyEditorSelection();
         return;

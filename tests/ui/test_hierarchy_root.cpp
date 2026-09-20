@@ -157,7 +157,7 @@ void run()
 
     // ---- 4. the lock cascade is unreachable ------------------------------
     // The lock column of the World row read an unset flag as false and called
-    // releaseItemAndChildren(root) — every node in the scene unlocked, in one
+    // setItemLocked(root, false) — every node in the scene unlocked, in one
     // stray click. With no row there is nothing to click; the per-node lock is
     // untouched.
     cube->setPickable(false);
