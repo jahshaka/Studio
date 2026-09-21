@@ -300,20 +300,60 @@ QVector<AssetRecord> listAll(Database *db, const QString &projectGuid, int typeF
     // Materials module's project drawer reads this: it is one column of tiles
     // with no breadcrumb, so a folder-filed material would otherwise be
     // invisible in the module while the editor tray shows it.
+    //
+    // ONE LISTING, NOT ONE PER FOLDER (LISTALL-1). This used to CALL `list`
+    // for the root and for every folder, and `list` is four project-wide reads
+    // plus the collapse's batch — so a project with ten folders cost eleven
+    // listings, about 110 SQL statements, and it ran on EVERY
+    // ProjectMembership::changed. A dependency-edge write is one of those, and
+    // the editor writes one every time a material is applied. The project-wide
+    // reads are project-wide: they are the same answer eleven times over.
+    //
+    // So: the folders once, the rows of the root AND every folder in ONE
+    // query, the pins and their filing once, and ONE collapse over the union
+    // (the rules are per record, and `collapse` de-duplicates by guid itself).
+    // The ORDER is the order the loop produced — the root's rows and pins,
+    // then each folder's — so a drawer's tiles do not move.
+    const QSet<QString> folderSet = db->fetchProjectFolderGuids(projectGuid);
     QStringList folders;
     folders << projectGuid;
-    for (const QString &guid : db->fetchProjectFolderGuids(projectGuid)) folders << guid;
+    for (const QString &guid : folderSet) folders << guid;
 
-    QVector<AssetRecord> out;
-    QSet<QString> seen;
+    QHash<QString, QVector<AssetRecord>> byParent;
+    for (const AssetRecord &record : db->fetchChildAssetsIn(folders, projectGuid, typeFilter > 0 ? typeFilter : -1))
+        byParent[record.parent].append(record);
+
+    const QVector<AssetRecord> pinned = db->fetchProjectPinnedAssets(projectGuid);
+    const QHash<QString, QString> pinFolders = db->fetchProjectPinFolders(projectGuid);
+
+    QVector<AssetRecord> records;
+    QSet<QString> taken;
+    const auto take = [&](const AssetRecord &record) {
+        if (taken.contains(record.guid)) return;
+        taken.insert(record.guid);
+        records.append(record);
+    };
     for (const QString &folder : folders) {
-        for (const AssetRecord &record : list(db, projectGuid, folder, typeFilter, showMembers)) {
-            if (seen.contains(record.guid)) continue;
-            seen.insert(record.guid);
-            out.append(record);
+        for (const AssetRecord &record : byParent.value(folder)) take(record);
+        // THE PINS, filed exactly as `list` files them: at the root the ones
+        // that are not filed anywhere (or whose folder is gone), in a folder
+        // the ones whose PIN names it. A pin whose `parent` is one of this
+        // project's folders is listed by that folder's own rows — it is a row
+        // the project owns — and is skipped here, which is what `list` does at
+        // the root.
+        for (const AssetRecord &record : pinned) {
+            if (typeFilter > 0 && record.type != typeFilter) continue;
+            const QString filed = pinFolders.value(record.guid);
+            if (folder == projectGuid) {
+                if (folderSet.contains(record.parent)) continue;
+                if (folderSet.contains(filed)) continue;
+            } else if (filed != folder) {
+                continue;
+            }
+            take(record);
         }
     }
-    return out;
+    return collapse(db, projectGuid, records, pinned, showMembers);
 }
 
 QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records, bool showMembers)
