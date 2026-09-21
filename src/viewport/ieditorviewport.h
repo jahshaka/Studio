@@ -58,10 +58,10 @@ signals:
     void addDroppedImagePlane(iris::Vec3 position, QString guid);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
     void updateToolbarButton();
-    /// The camera fly-speed multiplier changed from INSIDE the viewport (the
-    /// scroll wheel while flying). The shell shows the toast and re-syncs the
-    /// toolbar dropdown; FlySpeedSettings already holds the new value.
-    void flySpeedChanged();
+    /// THE camera speed changed from INSIDE the viewport (the scroll wheel
+    /// while flying). The shell shows the toast and re-syncs the toolbar's
+    /// speed button; CameraSpeed already holds the new integer.
+    void cameraSpeedChanged();
     void changeSkyFromAssetWidget(int index);
 };
 
@@ -265,11 +265,11 @@ public:
     virtual double pipSize() const { return 0.0; }
     virtual void setPipSize(double) {}
 
-    /// The fly speed changed under the viewport's feet — the wheel stepped it
-    /// while the camera was flying. The viewport shows the multiplier briefly
-    /// and tells the shell so the toolbar dropdown follows. FlySpeedSettings
+    /// The camera speed changed under the viewport's feet — the wheel stepped
+    /// it while the camera was flying. The viewport shows the number briefly
+    /// and tells the shell so the toolbar's speed button follows. CameraSpeed
     /// already holds the new value; this only announces it.
-    virtual void onFlySpeedChanged() {}
+    virtual void onCameraSpeedChanged() {}
     virtual void setEditorData(EditorData *data) = 0;
     virtual EditorData *getEditorData() = 0;
 

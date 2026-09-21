@@ -10,9 +10,6 @@
 #include <QFormLayout>
 #include "../graph/nodegraph.h"
 
-namespace Ui {
-class MaterialSettingsWidget;
-}
 
 // The graph material's settings form: NAME and BLEND MODE, and nothing else.
 //
@@ -45,13 +42,12 @@ private:
     MaterialSettings settings;
 
 	void setConnections();
-	Ui::MaterialSettingsWidget* ui;
-	QGridLayout *gridLayout;
-	QFormLayout *formLayout;
-	QLabel *label;
-	QLineEdit *lineEdit;
-	QLabel *label_4;
-	QComboBox *comboBox;
+	QGridLayout *gridLayout = nullptr;
+	QFormLayout *formLayout = nullptr;
+	QLabel *label = nullptr;
+	QLineEdit *lineEdit = nullptr;
+	QLabel *label_4 = nullptr;
+	QComboBox *comboBox = nullptr;
 	QFont font;
 signals:
     void settingsChanged(MaterialSettings value);

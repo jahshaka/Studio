@@ -112,7 +112,7 @@ public:
 
 class TextureSamplerNode : public NodeModel
 {
-	QComboBox* combo;
+	QComboBox* combo = nullptr;
 	QString uv;
 public:
 	TextureSamplerNode();

@@ -46,8 +46,8 @@ class Subscriber;
 
 struct AssetItem {
     QString selectedPath;
-    QTreeWidgetItem *item;
-    QListWidgetItem *wItem;
+    QTreeWidgetItem *item = nullptr;
+    QListWidgetItem *wItem = nullptr;
 	QString selectedGuid;
     // add one for assetView maybe...
 };
@@ -314,9 +314,9 @@ public:
         this->mainWindow = mainWindow;
     }
 
-    MainWindow *mainWindow;
+    MainWindow *mainWindow = nullptr;
 
-	IEditorViewport *sceneView;
+	IEditorViewport *sceneView = nullptr;
 
 signals:
 	void assetItemSelected(QListWidgetItem*);
@@ -452,7 +452,7 @@ private:
 	QSize listSize;
 	QSize currentSize;
 
-    bool draggingItem;
+    bool draggingItem = false;
 
     /// ONE toast for the panel, reused (ui/pages/assetview.cpp's pattern): a
     /// folder refusal cannot be a modal box — the move runs one event-loop

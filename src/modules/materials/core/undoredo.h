@@ -29,7 +29,7 @@ private :
 	QPointF initialPosition;
 	GraphNodeScene* scene;
 	NodeModel * nodeModel;
-	GraphNode *node;
+	GraphNode *node = nullptr;
 };
 
 class AddConnectionCommand : public UndoRedo
@@ -43,8 +43,8 @@ public:
 private:
 	int left, right;
 	GraphNodeScene* scene;
-	GraphNode* node;
-	SocketConnection* connection;
+	GraphNode* node = nullptr;
+	SocketConnection* connection = nullptr;
 	QString leftNodeId;
 	QString rightNodeId;
 };
@@ -74,8 +74,8 @@ public:
 private:
 	QPointF oldPos;
 	QPointF newPos;
-	GraphNode* node;
-	GraphNodeScene* scene;
+	GraphNode* node = nullptr;
+	GraphNodeScene* scene = nullptr;
 };
 
 class MoveMultipleCommand : public UndoRedo
@@ -102,7 +102,7 @@ public:
 private:
 	GraphNodeScene* scene;
 	QList<GraphNode*> list;
-	GraphNode* node;
+	GraphNode* node = nullptr;
 	//QVector<ConnectionModel*> connections;
 	QMap<QString, ConnectionModel*> connections;
 };

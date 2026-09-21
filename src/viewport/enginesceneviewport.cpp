@@ -305,7 +305,7 @@ void EngineSceneViewport::pushEditorHelpers(bool helpers)
 // because two questions need it: which view a name IS (setCameraView) and
 // whether the current view is an axis one (the rotation lock).
 namespace {
-struct AxisView { const char *name; float yaw; float pitch; };
+struct AxisView { const char *name = nullptr; float yaw = 0.0f; float pitch = 0.0f; };
 const AxisView kAxisViews[] = {
     { "top", 0.f, -90.f }, { "bottom", 0.f, 90.f },
     { "left", 90.f, 0.f }, { "right", -90.f, 0.f },

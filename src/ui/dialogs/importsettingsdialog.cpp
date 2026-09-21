@@ -43,7 +43,7 @@ const char *const kAxisNames[] = { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
 
 /// The units combo's rows, in order. "auto" first: the file's own word is the
 /// default answer, and the row says what that word was.
-struct UnitRow { const char *key; const char *label; };
+struct UnitRow { const char *key = nullptr; const char *label = nullptr; };
 const UnitRow kUnitRows[] = {
     { "auto", QT_TRANSLATE_NOOP("ImportSettingsDialog", "Auto (what the file says)") },
     { "m",    QT_TRANSLATE_NOOP("ImportSettingsDialog", "Metres") },

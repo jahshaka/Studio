@@ -254,7 +254,7 @@ QVector<SkyPreset> skyPresets()
 {
     // The display names are the panel's, and they are not the folder names:
     // ame_desert has always been shown as "Hamarikyu" and yokohama as "Bay".
-    struct Row { const char *name; const char *dir; const char *ext; };
+    struct Row { const char *name = nullptr; const char *dir = nullptr; const char *ext = nullptr; };
     static const Row rows[] = {
         { "Cove", "cove", "jpg" },
         { "Hamarikyu", "ame_desert", "png" },

@@ -27,7 +27,7 @@ struct Property
     QString             displayName;
     QString             name;
     //QString             uniform;
-    PropertyType        type;
+    PropertyType        type = PropertyType::None;
 
     Property();
 
@@ -93,10 +93,10 @@ struct BoolProperty : public Property
 
 struct IntProperty : public Property
 {
-    int value;
-    int minValue;
-    int maxValue;
-	int step;
+    int value = 0;
+    int minValue = 0;
+    int maxValue = 0;
+	int step = 0;
 
     IntProperty() {
 		value = 0;
@@ -145,10 +145,10 @@ struct IntProperty : public Property
 
 struct FloatProperty : public Property
 {
-    float value;
-    float minValue;
-    float maxValue;
-	float step;
+    float value = 0.0f;
+    float minValue = 0.0f;
+    float maxValue = 0.0f;
+	float step = 0.0f;
 
     FloatProperty() {
         value = 0;

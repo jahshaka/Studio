@@ -63,7 +63,6 @@ private:
     /// Populating the rows, not showing an edit (see rowundo::Binding::guard).
     bool loading = false;
     panelundo::SceneRows rows;
-    CheckBoxWidget *flipView;
     CheckBoxWidget *showGridToggle = nullptr;
     QAction *gridAction = nullptr;
     CheckBoxWidget *sunDiscVisible = nullptr;    // the sun disc, a world setting (§3)

@@ -34,7 +34,7 @@ public:
         return defaultSettings;
     }
 
-    QSettings* settings;
+    QSettings* settings = nullptr;
 
     int recentlyOpenedFilesSize;
 

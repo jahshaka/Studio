@@ -400,8 +400,8 @@ private:
 // The master sockets each stage can land, and how.
 struct SocketPlan
 {
-	const char *name;
-	bool vertex;
+	const char *name = nullptr;
+	bool vertex = false;
 };
 const SocketPlan kPlans[] = {
 	{ "Base Color", false },

@@ -31,15 +31,12 @@ class IEditorViewport;
 class OrbitalCameraController:public CameraControllerBase
 {
 public:
-    float lookSpeed;
-    float linearSpeed;
 
     float yaw;
     float pitch;
 
 	float targetYaw;
 	float targetPitch;
-	float lerpSpeed;
 
 	bool previewMode;
 

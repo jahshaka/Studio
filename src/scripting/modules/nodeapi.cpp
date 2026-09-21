@@ -889,7 +889,7 @@ QStringList NodeApi::propertyKeys(const iris::SceneNodePtr &node)
 // says so in its doc string). The mapping lives HERE, at the verb, because the
 // document layer's row is shared with the properties panel's combo box.
 namespace {
-struct CullName { const char *name; int value; };
+struct CullName { const char *name = nullptr; int value = 0; };
 const CullName kCullModes[] = {
     { "none",     int(iris::FaceCullingMode::None) },
     { "front",    int(iris::FaceCullingMode::Front) },
@@ -1307,7 +1307,7 @@ bool NodeApi::setDecalMaps(const QString &id, const QVariant &maps)
 
     // Parse and validate EVERY requested map before writing any of them: a
     // partial apply would leave the node half-bound with one undo entry.
-    struct Change { DecalMapKind kind; QString guid; QString was; };
+    struct Change { DecalMapKind kind = DecalMapKind::Diffuse; QString guid; QString was; };
     QVector<Change> changes;
     const struct { const char *key; DecalMapKind kind; } kinds[] = {
         { "diffuse",  DecalMapKind::Diffuse },
@@ -1446,7 +1446,7 @@ QVariant NodeApi::lightTexture(const QString &id)
 
 namespace {
 
-struct EnumRow { const char *name; int value; };
+struct EnumRow { const char *name = nullptr; int value = 0; };
 
 const EnumRow kPhysicsTypes[] = {
     { "none",      static_cast<int>(iris::PhysicsType::None) },

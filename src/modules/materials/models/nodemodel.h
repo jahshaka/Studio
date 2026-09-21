@@ -41,7 +41,7 @@ public:
 
 	QString typeName;
 	QString title;
-	NodeCategory nodeType;
+	NodeCategory nodeType = NodeCategory::Input;
 
 	// A QPointer, because the SCENE owns these once a node is drawn: a
 	// GraphNode embeds them in QGraphicsProxyWidgets, which delete them

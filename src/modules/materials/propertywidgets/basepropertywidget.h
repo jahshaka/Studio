@@ -47,8 +47,8 @@ public:
 	HeaderObject *displayWidget;
 	QWidget *contentWidget = 0;
 	QVBoxLayout *layout;
-	Property *modelProperty;
-	QPropertyAnimation *anim;
+	Property *modelProperty = nullptr;
+	QPropertyAnimation *anim = nullptr;
 
 	bool pressed = false;
 	bool minimized = false;

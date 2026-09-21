@@ -128,7 +128,7 @@ private:
     /// True while rebind() is putting values into the rows: the handlers are
     /// inert, so filling a slider is not an edit of the material it reads from.
     bool rebinding = false;
-    iris::PropertyListener *listener;
+    iris::PropertyListener *listener = nullptr;
     int progressiveHeight, stretch;
 
     /// Records a property's row and returns its slot (see propertyAt).

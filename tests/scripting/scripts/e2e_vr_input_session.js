@@ -340,6 +340,35 @@ var fastWalk = Math.sqrt((fastTo.x - fastFrom.x) * (fastTo.x - fastFrom.x)
 console.log("      walked " + fastWalk.toFixed(3) + " m — 45 frames at 1/90 s of 9 m/s is 4.5");
 assert(near(fastWalk, 4.5, 0.08),
        "THE RIG MOVED AT THE PROJECT'S SPEED: " + fastWalk.toFixed(3) + " m against 4.5");
+
+// ---------------------------------------------------------------------------
+// AND THE PERSON'S OWN SPEED DIAL MULTIPLIES IT (lane FLYSPEED-1, owner R15).
+// The project's m/s is the BASE — how fast this world is meant to be walked —
+// and `editor.cameraSpeed` is the one integer 1-32 the desktop fly, the Player
+// and the wearer all ride on, so somebody who wants to move faster today moves
+// faster everywhere, including with the headset on. Measured on the rig, not
+// asserted from the report: 45 frames of 1/90 s at 9 m/s x 2.0 is 9 m.
+assert(editor.cameraSpeed().n === 10, "the dial starts where every session so far ran: 10");
+assert(near(vr.state().preview.flySpeed, 9),
+       "...so the wearer's effective speed is the project's own 9 m/s");
+assert(editor.cameraSpeed(20).n === 20, "the dial goes to 20 — twice today's speed");
+assert(near(vr.locomotion().flySpeed, 9),
+       "the PROJECT's setting is untouched by it (the dial is a preference, not a document "
+       + "field): " + vr.locomotion().flySpeed);
+assert(near(vr.state().preview.flySpeed, 18),
+       "but the wearer's EFFECTIVE speed is 18 m/s: " + vr.state().preview.flySpeed);
+leftStick(0, 0);
+var dialFrom = showRig("before 45 frames at 9 m/s with the dial at 20");
+for (var df = 0; df < 45; ++df) leftStick(0, 1);
+var dialTo = showRig("after them");
+var dialWalk = Math.sqrt((dialTo.x - dialFrom.x) * (dialTo.x - dialFrom.x)
+                         + (dialTo.z - dialFrom.z) * (dialTo.z - dialFrom.z));
+console.log("      walked " + dialWalk.toFixed(3) + " m — 45 frames at 1/90 s of 18 m/s is 9");
+assert(near(dialWalk, 9.0, 0.16),
+       "THE WEARER REALLY MOVED AT BASE x FACTOR: " + dialWalk.toFixed(3) + " m against 9.0");
+leftStick(0, 0);
+assert(editor.cameraSpeed(10).n === 10, "the dial goes back to 10 (it is persisted)");
+assert(near(vr.state().preview.flySpeed, 9), "...and the wearer is back at the project's speed");
 // AN OVERRIDE ASKED FOR BEFORE A SESSION SURVIVES THE BEGIN, and dies with the
 // session that used it (the Fable read of VR-WORLD-1, item 3): adopting a
 // project used to clear every override, so a `vr.locomotion` issued in the

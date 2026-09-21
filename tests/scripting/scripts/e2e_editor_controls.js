@@ -721,45 +721,73 @@ assert(input.bindings()[2].keys.join(",") === "Space", "Jump is back to Space");
 console.log("editor_controls: gameplay input verbs verified");
 
 // ---------------------------------------------------------------------------
-// FLY SPEED (fix wave 2026-09-07 item 5) — the Unreal-style camera speed
-// control, verb-first: the toolbar dropdown and the scroll-wheel gesture in the
-// viewport are two more callers of exactly this, so the verb IS the feature.
-var fs0 = editor.flySpeed();
-assert(typeof fs0.multiplier === "number", "flySpeed().multiplier is a number");
-assert(fs0.base === 8, "the editor's base fly speed is 8 u/s: " + fs0.base);
-assert(near(fs0.speed, fs0.base * fs0.multiplier, 1e-4),
-    "speed is base * multiplier: " + fs0.speed);
-assert(fs0.steps.length >= 4 && fs0.steps[0] < fs0.steps[fs0.steps.length - 1],
-    "steps is the ascending ladder the dropdown offers: " + fs0.steps.join(", "));
+// THE CAMERA SPEED (owner R15, lane FLYSPEED-1) — ONE integer 1..32 for every
+// way a person moves through a scene, verb-first: the toolbar's speed button,
+// the popover's slider and number field, and the scroll-wheel gesture in the
+// viewport are four more callers of exactly this, so the verb IS the feature.
+var cs0 = editor.cameraSpeed();
+assert(cs0.n === 10, "a fresh install sits at 10, the dial's middle: " + cs0.n);
+assert(near(cs0.factor, 1, 1e-6), "and 10 is a factor of exactly 1 — today's speed");
+assert(near(cs0.editorSpeed, 8, 1e-4), "the editor's fly is 8 u/s at 10: " + cs0.editorSpeed);
+assert(near(cs0.playerSpeed, 25, 1e-4), "the Player's free camera is 25 u/s: " + cs0.playerSpeed);
+assert(near(cs0.vrSpeed, world.vr().flySpeed, 1e-4),
+    "and a VR wearer flies the PROJECT's own m/s at 10: " + cs0.vrSpeed);
 
-var fs1 = editor.setFlySpeed(4);
-assert(fs1.multiplier === 4 && fs1.speed === 32, "setFlySpeed(4) -> 4x, 32 u/s");
-assert(editor.flySpeed().multiplier === 4, "and it reads back");
+var cs20 = editor.cameraSpeed(20);
+assert(cs20.n === 20 && near(cs20.factor, 2, 1e-6), "cameraSpeed(20) -> a factor of 2");
+assert(near(cs20.editorSpeed, 16, 1e-4) && near(cs20.playerSpeed, 50, 1e-4),
+    "every surface doubles: " + cs20.editorSpeed + " u/s, " + cs20.playerSpeed + " u/s");
+assert(near(cs20.vrSpeed, world.vr().flySpeed * 2, 1e-4),
+    "...the headset included: " + cs20.vrSpeed + " m/s");
+assert(editor.cameraSpeed().n === 20, "and it reads back");
 
-// The wheel's gesture, as a verb: one step along the ladder in each direction.
-var up = editor.setFlySpeed("faster");
-assert(up.multiplier > 4, "\"faster\" steps up the ladder: " + up.multiplier);
-var down = editor.setFlySpeed("slower");
-assert(down.multiplier === 4, "\"slower\" steps back: " + down.multiplier);
+// The wheel's gesture, as a verb: one step in each direction.
+assert(editor.cameraSpeed("faster").n === 21, "\"faster\" steps the dial by one");
+assert(editor.cameraSpeed("slower").n === 20, "\"slower\" steps it back");
 
-// Clamped, not refused — the ladder is what the UI offers, not the legal range.
-assert(editor.setFlySpeed(1000).multiplier <= 32, "an absurd multiplier is clamped");
-assert(editor.setFlySpeed(0.001).multiplier >= 0.05, "and so is a microscopic one");
-var badSpeed = false;
-try { editor.setFlySpeed("quick"); } catch (e) { badSpeed = true; }
-assert(badSpeed, "a word that is neither faster nor slower is refused");
-var negSpeed = false;
-try { editor.setFlySpeed(-2); } catch (e) { negSpeed = true; }
-assert(negSpeed, "a negative multiplier is refused (it is a speed, not a direction)");
+// Clamped at the ends rather than refused — 1 and 32 are the dial.
+assert(editor.cameraSpeed(1000).n === 32, "an absurd number clamps at 32");
+assert(editor.cameraSpeed(0).n === 1, "and zero at 1 — there is no 'off'");
+// ...AT ANY MAGNITUDE. 1e10 does not fit an int, and narrowing it before
+// clamping is undefined behaviour that landed on INT_MIN here — so a caller
+// asking for "as fast as possible" got the SLOWEST setting (fix round item 3).
+assert(editor.cameraSpeed(1e10).n === 32, "1e10 clamps UP to 32, not down to 1");
+assert(editor.cameraSpeed(-1e10).n === 1, "and -1e10 clamps to 1");
+for (var i = 0; i < 5; i++) editor.cameraSpeed("slower");
+assert(editor.cameraSpeed().n === 1, "stepping below the bottom holds at 1");
 
-// The player has its OWN speed on its own base, and the two never cross.
-var ps0 = player.flySpeed();
-assert(ps0.base === 25, "the player's base fly speed is 25 u/s: " + ps0.base);
-assert(player.setFlySpeed(2).multiplier === 2, "player.setFlySpeed(2)");
-assert(editor.flySpeed().multiplier !== 2 || true, "editor and player are separate values");
-assert(editor.setFlySpeed(1).multiplier === 1, "editor back to 1x");
-assert(player.flySpeed().multiplier === 2, "and the PLAYER's is still 2x — separate surfaces");
-assert(player.setFlySpeed(1).multiplier === 1, "player back to 1x (leave no persisted state)");
+// NO DECIMALS. The dial is an integer and says so, rather than silently
+// rounding a caller who thought otherwise (owner R15: "so we don't hold
+// decimals in the UI").
+var fractional = false;
+try { editor.cameraSpeed(12.5); } catch (e) { fractional = ("" + e).indexOf("whole number") >= 0; }
+assert(fractional, "12.5 is refused, and the message says the dial is an integer");
+var badWord = false;
+try { editor.cameraSpeed("quick"); } catch (e) { badWord = true; }
+assert(badWord, "a word that is neither faster nor slower is refused");
+// TWO WORDS, THE TWO THE DOCUMENTATION NAMES: "up"/"down" rode along
+// undocumented from the retired setFlySpeed and went with it (the CRUD law).
+var upWord = false;
+try { editor.cameraSpeed("up"); } catch (e) { upWord = true; }
+assert(upWord, "\"up\" is not a spelling of \"faster\" — the undocumented alias is gone");
+var downWord = false;
+try { editor.cameraSpeed("down"); } catch (e) { downWord = true; }
+assert(downWord, "...nor \"down\" of \"slower\"");
+var boolSpeed = false;
+try { editor.cameraSpeed(true); } catch (e) { boolSpeed = true; }
+assert(boolSpeed, "and a true/false is not a camera speed (it would arrive as 1)");
+assert(editor.cameraSpeed().n === 1, "none of the refusals moved the dial");
+
+// THE RETIRED VERBS ARE GONE (the CRUD law): two multipliers on two surfaces,
+// a ladder of rungs, and a Player that could fly at a different speed from the
+// editor that opened it.
+assert(typeof editor.flySpeed === "undefined" && typeof editor.setFlySpeed === "undefined",
+    "editor.flySpeed/setFlySpeed are deleted, not aliased");
+assert(typeof player.flySpeed === "undefined" && typeof player.setFlySpeed === "undefined",
+    "and so are player.flySpeed/setFlySpeed");
+
+editor.cameraSpeed(10);   // leave no persisted state behind
+assert(editor.cameraSpeed().n === 10, "back to 10");
 
 // ---------------------------------------------------------------------------
 // POST PROCESS PARAMETERS (fix wave item 8). world.postFx is generated from the

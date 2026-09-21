@@ -26,12 +26,11 @@ For more information see the LICENSE file
 Q_DECLARE_METATYPE(iris::MaterialPtr)
 
 struct Asset {
-    ModelTypes          type;
+    ModelTypes          type = ModelTypes::Undefined;
     QString             path;
     QString             fileName;
 	QString				assetGuid;
     QPixmap             thumbnail;
-    bool                deletable;
 
     // AssetManager OWNS every registered Asset (see assetmanager.cpp). The
     // destructor is virtual because the list is a QVector<Asset*> of derived
@@ -51,7 +50,6 @@ struct AssetVariant : public Asset
 {
     AssetVariant() {
         type = ModelTypes::Variant;
-        deletable = true;
     }
 
     virtual QVariant getValue() {

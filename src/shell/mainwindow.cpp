@@ -88,6 +88,11 @@ For more information see the LICENSE file
 #include <QTextEdit>
 #include <QPlainTextEdit>
 #include <QAbstractSpinBox>
+#include <QSpinBox>
+#include <QSlider>
+#include <QMenu>
+#include <QWidgetAction>
+#include <QHBoxLayout>
 
 #include "ui/panels/timeline/nodekeyframeanimation.h"
 #include "ui/panels/timeline/nodekeyframe.h"
@@ -180,7 +185,7 @@ For more information see the LICENSE file
 #include "services/shortcutregistry.h"
 #include "services/worldmodes.h"
 #include "viewport/snapsettings.h"
-#include "viewport/flyspeedsettings.h"
+#include "viewport/cameraspeed.h"
 #include "services/subscriber.h"
 #include "services/undoservice.h"
 #include "services/selectioncost.h"
@@ -235,7 +240,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 	settings = SettingsManager::getDefaultManager();
 	SnapSettings::bindSettings(settings->settings);   // snap sizes persist beside the shortcuts
-	FlySpeedSettings::bindSettings(settings->settings);   // and the camera fly speeds
+	CameraSpeed::bindSettings(settings->settings);   // and THE camera speed (owner R15)
 
 
     // F-S3: the theme owns the window's font (see ThemeManager::applyWindowFont
@@ -871,7 +876,6 @@ SettingsManager* MainWindow::getSettingsManager()
 
 bool MainWindow::handleMousePress(QMouseEvent *event)
 {
-    mouseButton = event->button();
     mousePressPos = event->pos();
 
     return true;
@@ -4422,26 +4426,83 @@ void MainWindow::setupToolBar()
 	actionArcballCam->setIcon(fontIcons->icon(fa::dotcircleo, options));
 	toolBar->addAction(actionArcballCam);
 
-	// CAMERA SPEED (owner request 2026-09-07, Unreal's control). A multiplier
-	// on the fly base, in the toolbar beside the two camera-mode buttons it
-	// belongs with. The value lives in FlySpeedSettings (persisted) and the
-	// verb editor.setFlySpeed owns writing it; this combo reads and writes
-	// through the same place the scroll wheel does, so the three can never
-	// disagree.
-	flySpeedCombo = new QComboBox;
-	flySpeedCombo->setObjectName(QStringLiteral("flySpeedCombo"));
-	flySpeedCombo->setToolTip("Camera Speed | Multiplier on the fly speed (8 u/s). "
-	                          "Scroll the wheel while holding the right mouse button in the viewport.");
-	for (float step : FlySpeedSettings::steps())
-		flySpeedCombo->addItem(QString("%1x").arg(double(step)));
-	flySpeedCombo->setFocusPolicy(Qt::NoFocus);   // never steal the fly keys
-	connect(flySpeedCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
-		const QVector<float> &steps = FlySpeedSettings::steps();
-		if (index < 0 || index >= steps.size()) return;   // the off-ladder entry
-		FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, steps[index]);
+	// THE CAMERA SPEED (owner R15). ONE integer 1..32 for every way a person
+	// moves through a scene — the RMB fly, the Player's free camera and a VR
+	// wearer — shown on a compact toolbar button beside the two camera-mode
+	// buttons it belongs with. The value lives in CameraSpeed (persisted as the
+	// preference camera/speed) and the verb editor.cameraSpeed owns writing it;
+	// the button, the popover's two controls and the scroll wheel are four
+	// views of that one number, so they can never disagree.
+	//
+	// A BUTTON WITH A POPOVER, not a dropdown of fixed rungs: 32 menu entries
+	// would be a scroll, and the owner asked for a slider with a number field
+	// beside it. A QMenu carrying a QWidgetAction is the house's popover (the
+	// theme already styles one — ThemeManager puts its Switch rows in one), and
+	// it costs the toolbar less width than the ladder combo it replaces, which
+	// the 1366 x 768 floor (ui.window_minimum) cares about.
+	cameraSpeedButton = new QToolButton;
+	cameraSpeedButton->setObjectName(QStringLiteral("cameraSpeedButton"));
+	cameraSpeedButton->setToolTip("Camera Speed | One speed for the editor fly, the Player and "
+	                              "VR: 1 to 32, where 10 is normal. Scroll the wheel while "
+	                              "holding the right mouse button in the viewport (Shift steps "
+	                              "by five).");
+	cameraSpeedButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+	cameraSpeedButton->setPopupMode(QToolButton::InstantPopup);
+	cameraSpeedButton->setFocusPolicy(Qt::NoFocus);   // never steal the fly keys
+	cameraSpeedButton->setAutoRaise(true);
+
+	auto *speedMenu = new QMenu(cameraSpeedButton);
+	auto *speedPanel = new QWidget(speedMenu);
+	auto *speedRow = new QHBoxLayout(speedPanel);
+	speedRow->setContentsMargins(10, 6, 10, 6);
+	speedRow->setSpacing(8);
+	cameraSpeedSlider = new QSlider(Qt::Horizontal, speedPanel);
+	cameraSpeedSlider->setObjectName(QStringLiteral("cameraSpeedSlider"));
+	cameraSpeedSlider->setRange(CameraSpeed::kMin, CameraSpeed::kMax);
+	cameraSpeedSlider->setPageStep(5);
+	cameraSpeedSlider->setMinimumWidth(180);
+	cameraSpeedSpin = new QSpinBox(speedPanel);
+	cameraSpeedSpin->setObjectName(QStringLiteral("cameraSpeedSpin"));
+	cameraSpeedSpin->setRange(CameraSpeed::kMin, CameraSpeed::kMax);
+	cameraSpeedSpin->setKeyboardTracking(false);   // 3 on the way to 30 is not a speed
+	speedRow->addWidget(cameraSpeedSlider, 1);
+	speedRow->addWidget(cameraSpeedSpin, 0);
+	auto *speedAction = new QWidgetAction(speedMenu);
+	speedAction->setDefaultWidget(speedPanel);
+	speedMenu->addAction(speedAction);
+	cameraSpeedButton->setMenu(speedMenu);
+
+	// LIVE, both of them: dragging the slider moves the number and the camera
+	// at the same time (the owner's ask), and each control writes through the
+	// one setter so the other follows from syncCameraSpeedUi rather than from a
+	// second copy of the value.
+	connect(cameraSpeedSlider, &QSlider::valueChanged, this, [this](int n) {
+		if (n == CameraSpeed::value()) return;
+		CameraSpeed::setValue(n);
+		syncCameraSpeedUi();
 	});
-	toolBar->addWidget(flySpeedCombo);
-	syncFlySpeedUi();
+	connect(cameraSpeedSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) {
+		if (n == CameraSpeed::value()) return;
+		CameraSpeed::setValue(n);
+		syncCameraSpeedUi();
+	});
+	toolBar->addWidget(cameraSpeedButton);
+
+	// THE BUTTON FOLLOWS THE DIAL BY CONSTRUCTION, not by every caller
+	// remembering to say so (fix round item 1): the Player's wheel writes the
+	// same one value from a page with no toolbar of its own, and used to leave
+	// this button reading the old number until something else moved it — the
+	// per-controller hook it called was assigned nowhere. Every writer — both
+	// wheels, the popover, the verb — announces through here now.
+	CameraSpeed::setOnChanged([this] { syncCameraSpeedUi(); });
+	syncCameraSpeedUi();
+
+	// ...AND THE POPOVER CLOSING IS A GESTURE ENDING: the store write is
+	// deferred (CameraSpeed::flush's note) so a slider drag is not one durable
+	// rewrite of jahsettings.ini per mouse-move, and this is where a drag with
+	// this window's hand on it is over.
+	connect(speedMenu, &QMenu::aboutToHide, this, [] { CameraSpeed::flush(); });
+	connect(cameraSpeedSlider, &QSlider::sliderReleased, this, [] { CameraSpeed::flush(); });
 
 	toolBar->addSeparator();
 
@@ -4550,14 +4611,16 @@ void MainWindow::setupToolBar()
 		setViewsButtonLabel(sceneView->cameraView());
 	});
 
-	// The scroll wheel stepped the fly speed while the camera was flying: show
-	// the new multiplier over the viewport and move the dropdown to match.
-	connect(sceneView->events(), &EditorViewportEvents::flySpeedChanged, this, [this]() {
-		syncFlySpeedUi();
+	// The scroll wheel stepped the camera speed while the EDITOR's camera was
+	// flying: show the new number over the viewport. The toolbar button needs
+	// no telling — it follows the dial itself (CameraSpeed::setOnChanged,
+	// installed above) — and this signal exists for the TOAST, which is
+	// anchored to this viewport and therefore belongs to this gesture alone.
+	connect(sceneView->events(), &EditorViewportEvents::cameraSpeedChanged, this, [this]() {
 		showViewportToast("Camera Speed",
-		                  QString("%1x  (%2 u/s)")
-		                      .arg(double(FlySpeedSettings::multiplier(FlySpeedSettings::Editor)))
-		                      .arg(double(FlySpeedSettings::speed(FlySpeedSettings::Editor))));
+		                  QString("%1  (%2 u/s)")
+		                      .arg(CameraSpeed::value())
+		                      .arg(double(CameraSpeed::editorSpeed())));
 	});
 	
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
@@ -4954,33 +5017,23 @@ void MainWindow::showViewportToast(const QString &title, const QString &text)
     snapToast->showToast(title, text);   // auto-hides
 }
 
-// THE FLY-SPEED DROPDOWN follows FlySpeedSettings, never the other way round
-// (API-first: editor.setFlySpeed is the verb, this is a view of its value).
-// Reached from three directions — the dropdown's own activation, the scroll
-// wheel while flying (EditorViewportEvents::flySpeedChanged) and the verb
-// (invoked by name) — so the signal is blocked while the index is written or
-// the first two would fight.
-void MainWindow::syncFlySpeedUi()
+// THE SPEED BUTTON AND ITS POPOVER follow CameraSpeed, never the other way
+// round (API-first: editor.cameraSpeed is the verb, these are views of its
+// value). Reached from four directions — the slider, the number field, the
+// scroll wheel while flying (EditorViewportEvents::cameraSpeedChanged) and the
+// verb (invoked by name) — so both signals are blocked while the controls are
+// written or the first two would fight.
+void MainWindow::syncCameraSpeedUi()
 {
-    if (!flySpeedCombo) return;
-    const float mult = FlySpeedSettings::multiplier(FlySpeedSettings::Editor);
-    const QVector<float> &steps = FlySpeedSettings::steps();
-    int index = -1;
-    for (int i = 0; i < steps.size(); ++i)
-        if (qFuzzyCompare(steps[i], mult)) { index = i; break; }
-    QSignalBlocker blocked(flySpeedCombo);
-    if (index >= 0) {
-        // A step value: show the ladder entry.
-        if (flySpeedCombo->count() > steps.size()) flySpeedCombo->removeItem(steps.size());
-        flySpeedCombo->setCurrentIndex(index);
-    } else {
-        // A verb set something off the ladder (0.05..32 is legal, the ladder is
-        // only what the UI offers). Show it as a trailing entry rather than
-        // lying about which step is active.
-        const QString label = QString("%1x").arg(double(mult));
-        if (flySpeedCombo->count() > steps.size()) flySpeedCombo->setItemText(steps.size(), label);
-        else                                       flySpeedCombo->addItem(label);
-        flySpeedCombo->setCurrentIndex(steps.size());
+    const int n = CameraSpeed::value();
+    if (cameraSpeedButton) cameraSpeedButton->setText(QString::number(n));
+    if (cameraSpeedSlider) {
+        QSignalBlocker blocked(cameraSpeedSlider);
+        cameraSpeedSlider->setValue(n);
+    }
+    if (cameraSpeedSpin) {
+        QSignalBlocker blocked(cameraSpeedSpin);
+        cameraSpeedSpin->setValue(n);
     }
 }
 
@@ -5983,6 +6036,13 @@ MainWindow::~MainWindow()
     // outlives every window — it is process-wide — so the hook goes first,
     // before anything here can raise it.
     editgate::setNoticeHook({});
+
+    // ...and so did the camera-speed dial (fix round item 1). CameraSpeed is
+    // process-wide too, so a handler capturing this window must not outlive
+    // it. Its pending value goes to the store here, on the way out: a deferred
+    // write that a quit could swallow would be a preference that did not stick.
+    CameraSpeed::setOnChanged({});
+    CameraSpeed::flush();
 
     // ORDER IS LOAD-BEARING. Undo commands owe the database work when they die
     // (DeleteSceneNodeCommand finalises the asset row once no undo can reach

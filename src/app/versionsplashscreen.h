@@ -24,8 +24,8 @@ public:
 signals:
 
 private:
-    QLabel* version_label_;
-    QLabel* shader_label_;
+    QLabel* version_label_ = nullptr;
+    QLabel* shader_label_ = nullptr;
 };
 
 #endif // VERSIONSPLASHSCREEN_H

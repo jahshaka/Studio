@@ -32,7 +32,7 @@ public:
     }
 
     // unsigned id;
-    WidgetType type;
+    WidgetType type = IntWidget;
 };
 
 #endif // BASEWIDGET_H

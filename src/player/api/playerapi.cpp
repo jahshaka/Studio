@@ -22,7 +22,6 @@ For more information see the LICENSE file
 #include "services/playerservice.h"
 #include "viewport/ieditorviewport.h"
 #include "services/services.h"
-#include "scripting/modules/flyspeedverb.h"
 #include "viewport/flystep.h"
 
 using namespace scriptmod;
@@ -98,17 +97,8 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "`origin` (the rig: {x,y,z,yaw} of the room the wearer stands in, as the ENGINE holds "
           "it), `head` ({x,y,z,yaw} of the wearer's head in the world), `posesValid`, "
           "`spaceChanges` (times the RUNTIME recentred the room under the wearer — absorbed "
-          "into the rig so they do not move), `worldScale` and `flySpeed`.",
-          Needs::Document },
-        { "flySpeed", "player.flySpeed() -> {multiplier, base, speed, steps:[...]}",
-          "THE PLAYER'S FREE-CAMERA SPEED — editor.flySpeed for the other space, and a "
-          "SEPARATE value: the player's base is 25 world units per second (it flies through "
-          "finished worlds, not around a model on a turntable), so the same multiplier means a "
-          "different speed here. Persisted as camera/flySpeedPlayer.",
-          Needs::Document },
-        { "setFlySpeed", "player.setFlySpeed(multiplier | \"faster\" | \"slower\") -> {multiplier, base, speed, steps:[...]}",
-          "Sets the player's free-camera speed multiplier (clamped 0.05..32) or steps it along "
-          "`steps`, exactly like editor.setFlySpeed. Does not touch the editor's.",
+          "into the rig so they do not move), `worldScale` and `flySpeed` (the EFFECTIVE metres "
+          "per second: the project's `world.vr().flySpeed` times editor.cameraSpeed()'s factor).",
           Needs::Document },
         { "frame", "player.frame(count = 1, dt = -1) -> bool",
           "Steps and renders exactly `count` PLAYER frames synchronously — editor.frame for the "
@@ -340,22 +330,4 @@ QVariantMap PlayerApi::screenshot(const QString &path, const QVariantMap &option
     }
     if (!probeResults.isEmpty()) out["probes"] = probeResults;
     return out;
-}
-
-// The player's half of the fly-speed control (owner request 2026-09-07) — the
-// same verb over the OTHER FlySpeedSettings surface, sharing editor.setFlySpeed's
-// argument grammar through flyspeedverb.h so the two cannot drift apart.
-QVariantMap PlayerApi::flySpeed()
-{
-    return flyspeedverb::state(FlySpeedSettings::Player);
-}
-
-QVariantMap PlayerApi::setFlySpeed(const QVariant &multiplier)
-{
-    QString error;
-    if (!flyspeedverb::apply(FlySpeedSettings::Player, multiplier, error)) {
-        fail(QStringLiteral("player.setFlySpeed: %1").arg(error));
-        return QVariantMap();
-    }
-    return flyspeedverb::state(FlySpeedSettings::Player);
 }

@@ -57,9 +57,9 @@ public:
     QSize baseSize;
     int lastWidth;
     QList<ItemGridWidget*> originalItems;
-    int scale;
+    int scale = 0;
     int offset;
-    float scl;
+    float scl = 0.0f;
     void scaleTile(QString);
     void searchTiles(QString);
     bool containsTiles();
@@ -83,7 +83,7 @@ signals:
 
 private:
     void updateGridColumns(int width);
-    int autoColumnCount;
+    int autoColumnCount = 0;
     QSize sizeFromString(QString);
 
     // freeform helpers

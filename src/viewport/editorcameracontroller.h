@@ -23,6 +23,8 @@ namespace iris
     class CameraNode;
 }
 
+#include "viewport/cameraspeed.h"
+
 class IEditorViewport;
 class EditorCameraController : public CameraControllerBase
 {
@@ -39,6 +41,11 @@ class EditorCameraController : public CameraControllerBase
 	/// Keys currently held (fed by the viewport's key events). Movement only
 	/// happens while the right mouse button is down — the Unreal fly rule.
 	QSet<int> heldKeys;
+
+	/// The wheel's leftover eighths-of-a-degree while flying, so a trackpad or
+	/// a high-resolution wheel steps the camera speed once per NOTCH and not
+	/// once per event (see WheelNotches).
+	WheelNotches speedWheel;
 
 public:
     EditorCameraController(IEditorViewport* sceneWidget);

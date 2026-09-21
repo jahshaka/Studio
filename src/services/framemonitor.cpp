@@ -326,7 +326,7 @@ private:
     void writeMachine(bool early);
 
     QString mDir;
-    qint64  mCap;
+    qint64  mCap = 0;
     QFile   mFrames, mEvents, mTrace;
     /// Chrome-trace timeline requested? (Request::trace — off by default.)
     bool    mWantTrace = false;

@@ -29,7 +29,7 @@ public:
     explicit ComboBoxWidget(QWidget *parent = 0);
     ~ComboBoxWidget();
 
-    int index;
+    int index = 0;
     void setLabel(const QString&);
     void addItem(const QString&, const QVariant &data = QVariant());
     int findData(const QVariant &data);
