@@ -75,4 +75,14 @@ set_tests_properties(meshbake.roundtrip PROPERTIES
 # jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
+# SURFACE CARDS (SURFACE-CACHE phase 1). Its own test name because it is its
+# own claim — the card GENERATOR's policy and coverage against the shipped
+# meshes — and because it prints a bake-time table the assessment lacked.
+add_test(NAME meshbake.cards COMMAND test_mesh_bake --cards
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.cards PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 180 LABELS "meshbake")
+
 jah_no_display(meshbake.roundtrip)
+jah_no_display(meshbake.cards)

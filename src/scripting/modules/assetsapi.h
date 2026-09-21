@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE QVariantMap metadata(const QString &guid);
     /// ATOM stage 1: the LOD chain the asset's bake carries.
     Q_INVOKABLE QVariantList meshLods(const QString &guid);
+    Q_INVOKABLE QVariantList meshCards(const QString &guid);
     Q_INVOKABLE QString import(const QString &path, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString importFile(const QString &path, int drawerId = -1,
                                    const QVariantMap &options = QVariantMap());
