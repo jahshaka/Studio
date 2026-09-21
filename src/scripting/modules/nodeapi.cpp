@@ -99,7 +99,10 @@ QVector<VerbInfo> NodeApi::verbs() const
           "BODY moves the body too \u2014 placed at rest and woken \u2014 so the object carries on "
           "from where it was put instead of being overwritten from the solver's pose on the next "
           "step (PLAY-SELECT-1: the hand wins over the simulation, the same rule the gizmo takes "
-          "during play). "
+          "during play), and the write is TRANSIENT — it pushes no undo command, because Stop "
+          "throws the run's transforms away and a command for one would rewind the node to a "
+          "pose that stopped existing when Stop was pressed. "
+          ""
           "WITH NO CHANGE \u2014 node.transform(id) \u2014 it is a pure READ: "
           "nothing is pushed onto the undo stack and a SCENE_STATIC node stays static (a write of a node's own "
           "values back onto it still counts as a move, and rule 4 demotes the subtree for it).",
@@ -835,8 +838,26 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
         scale = iris::scalelock::apply(node->getLocalScale(), channel, scale[channel], uniform);
     }
 
-    host.services->undo->push(new TransformSceneNodeCommand(
-        node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));
+    // A RUN'S EDIT IS NOT AN UNDO STEP (PLAY-SELECT-1 fix round, F9 — the same
+    // rule the gizmo's drag takes, which this verb's doc already claimed).
+    // Stop throws the run's transforms away (PlayBack's snapshot), so a
+    // command for one would rewind the node to a pose that stopped existing
+    // the moment Stop was pressed — and it would sit on the stack under the
+    // user's next Ctrl+Z. The write still lands, live; only the stack is
+    // spared. `isPlaying` on the DOCUMENT is the run-exists reading (it stays
+    // true through a pause, which is exactly when an edit is most likely).
+    const iris::ScenePtr owningScene = node->getScene();
+    const bool transient = owningScene && owningScene->isPlaying();
+    if (transient) {
+        node->setLocalPos(pos);
+        node->setLocalRot(iris::Quat::fromEulerAngles(rotEuler));
+        node->setLocalScale(scale);
+        if (host.services && host.services->sceneEdit)
+            host.services->sceneEdit->notifyTransformChanged();
+    } else {
+        host.services->undo->push(new TransformSceneNodeCommand(
+            node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));
+    }
 
     // A HAND THAT MOVES A SIMULATED BODY MOVES THE BODY (PLAY-SELECT-1, the
     // same rule the gizmo takes during play). Without this the write lands on
@@ -845,8 +866,8 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
     // itself one frame later. The body is placed at rest and woken, so the
     // object carries on from where it was put; a node with no body in the
     // world answers false and nothing happens.
-    if (const iris::ScenePtr scene = node->getScene())
-        if (const auto env = scene->getPhysicsEnvironment())
+    if (owningScene)
+        if (const auto env = owningScene->getPhysicsEnvironment())
             if (env->isSimulating()) env->syncBodyToNode(node);
 
     return { { "position", vecToJs(node->getLocalPos()) },

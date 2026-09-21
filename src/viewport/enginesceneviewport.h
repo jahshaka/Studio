@@ -152,6 +152,14 @@ public:
     bool isPlaying() const override { return mPlaying; }
     QRect widgetRectInWindow() const override;
     bool playEjected() const override { return mPlayEjected; }
+    /// A RUN EXISTS — not "a run is stepping" (PLAY-SELECT-1 fix round, F5).
+    /// `mPlaying` goes FALSE on pause while the run, its physics world and its
+    /// pre-play snapshot all live on, so every rule about what a run's edits
+    /// are worth — the transient drag, the physics hand-over, the Alt+drag
+    /// refusal, the eject verb — keys on this instead. PlayBack's own flag is
+    /// the one that says it (isScenePlaying stays true through a pause,
+    /// deliberately).
+    bool playRunLive() const override;
     void setPlayEjected(bool ejected) override;
     QString playInputOwner() const override;
     void startPhysicsSimulation() override;    // simulate in place: steps the document's
@@ -481,6 +489,13 @@ private:
     /// take one somebody else is holding (VrInteraction::beginGizmoDrag refuses
     /// the mirror case).
     bool mMouseDrag = false;
+    /// THE BUTTONS WHOSE PRESS THIS WIDGET TOOK (PLAY-SELECT-1 fix round, F2).
+    /// A release belongs to whoever got the press, not to whatever the
+    /// ownership predicate answers at release time: eject, un-eject and
+    /// possession can all change that answer mid-gesture, and routing the
+    /// release by the new answer strands the gizmo drag (never ended) or the
+    /// run's own look (never released).
+    Qt::MouseButtons mEditorButtons = Qt::NoButton;
     bool mVertexSnapHeld = false;             // V held: translate drags snap to vertices
     QWidget *mHierarchyDragSource = nullptr;   // drags from the hierarchy tree are reparents, not spawns
     Database *mDatabase = nullptr;
@@ -553,6 +568,11 @@ private:
     /// the cursor in a picture nobody could see. Outside play it is
     /// viewCamera() to the pointer — renderCamera's first term.
     iris::CameraNodePtr pickCamera() const;
+    /// Whether a pick through `cam` must give the camera's authored aspect back
+    /// when it is done with it (F1): true for every camera this viewport is
+    /// only LOOKING THROUGH — an armed active camera, a possession's — and
+    /// false for the explorer, whose aspect the frame tick owns.
+    bool borrowsPickAspect(const iris::CameraNodePtr &cam) const;
     /// WHO OWNS THE POINTER while a run is in flight (PLAY-SELECT-1). True only
     /// while the run really consumes input — a POSSESSED avatar — and never
     /// while ejected. False is the ordinary case (explorer/camera play), and it
@@ -561,6 +581,17 @@ private:
     /// The document's possession slot has somebody (the one state where the
     /// play controller is a real consumer of mouse and keys).
     bool playPossessing() const;
+    /// Ends whatever gesture this widget is holding — a live gizmo drag (the
+    /// run's way: no undo step, the bodies handed back), an open Alt+drag
+    /// macro, and the buttons the camera controller believes are down. Called
+    /// at an eject hand-over and at Stop, because a gesture cannot survive the
+    /// moment its input owner changes underneath it (F2).
+    void endEditorMouseGesture();
+    /// A drag the RUN would win anyway is refused by name, with a toast (F6):
+    /// a character's movement, a socket rider and an animation with real
+    /// channels rewrite their node every frame of a run, so the gizmo cannot
+    /// hold one. True = refused, and the press does nothing else.
+    bool refuseDragOnDrivenNode();
     /// The selection as it stood at Stop, re-anchored on the restored document
     /// (PLAY-SELECT-1): the nodes that survived the run keep the selection, the
     /// outline and the properties column; the gizmo re-reads the poses the

@@ -331,6 +331,11 @@ public:
     /// nothing is playing is refused by the verb and ignored here. Stand-in
     /// viewports never eject.
     virtual bool playEjected() const { return false; }
+    /// A RUN EXISTS — paused counts (PLAY-SELECT-1 fix round, F5). `isPlaying`
+    /// answers "is it STEPPING", which pause makes false while the run, its
+    /// physics world and its pre-play snapshot all live on; every rule about
+    /// what a run's edits are worth needs this one instead.
+    virtual bool playRunLive() const { return false; }
     virtual void setPlayEjected(bool) {}
     /// WHO OWNS A PLAIN LEFT CLICK RIGHT NOW: "controller" while a run is
     /// consuming input, "editor" otherwise (including outside play). The verb

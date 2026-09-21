@@ -145,6 +145,20 @@ js() {
 num() { printf '%s' "$1" | jq -r "if has(\"$2\") then .$2 else \"?\" end" 2>/dev/null || echo "?"; }
 # jq floats: note the -r (a quoted "yes" takes the failing branch silently).
 gt() { jq -rn --argjson a "$1" --argjson b "$2" 'if $a > $b then "yes" else "no" end'; }
+dist() { jq -n --argjson a "$1" --argjson b "$2" \
+    '(($a.x-$b.x)*($a.x-$b.x)+($a.y-$b.y)*($a.y-$b.y)+($a.z-$b.z)*($a.z-$b.z)) | sqrt'; }
+# The X handle of the translate gizmo on the SELECTED node, as a window pixel —
+# found rather than assumed (editor.gizmoHitTest answers in viewport pixels;
+# the node is framed first so the gizmo sits at the viewport's middle). Echoes
+# the window x of the handle, or nothing.
+findXHandle() {
+    local dx H
+    for dx in 30 40 50 60 70 80 90 100 110 120 130 140 150; do
+        H=$(js "JSON.stringify(editor.gizmoHitTest($((VPW/2 + dx)), $((VPH/2))))") || return 1
+        [ "$(num "$H" handle)" = "x" ] && { echo $((CX + dx)); return 0; }
+    done
+    return 1
+}
 
 # The app's MAIN window — the largest of the process's windows, like input_keys.
 WIN=""; WIN_W=0; WIN_H=0
@@ -234,7 +248,6 @@ js 'editor.selectNone()' > /dev/null
 # ##########################################################################
 # SECTION 1 — A CLICK DURING PLAY SELECTS (the owner's request)
 # ##########################################################################
-PUSHES0=$(js 'JSON.stringify(editor.undoState())' | jq -r .pushes)
 js 'editor.play()' > /dev/null || bad "editor.play()"
 sleep 0.6
 [ "$(js 'editor.playing()')" = "true" ] && ok "the scene is playing" || bad "the scene is not playing"
@@ -274,6 +287,11 @@ if [ -z "$HANDLE_DX" ]; then
 else
     note "the X handle answers at +${HANDLE_DX} px"
     X0=$(js "JSON.stringify(node.info('$CUBE').position)" | jq -r .x)
+    # AN UNDO STEP FOR A PLAY-TIME DRAG would rewind the cube to a pose the
+    # restore has already thrown away, so the gesture must push none. Bracketed
+    # around the DRAG alone: anything else this suite does to build a scene is
+    # an ordinary edit and records ordinarily.
+    PUSHES0=$(js 'JSON.stringify(editor.undoState())' | jq -r .pushes)
     drag $((CX + HANDLE_DX)) "$CY" $((CX + HANDLE_DX + 150)) "$CY"
     X1=$(js "JSON.stringify(node.info('$CUBE').position)" | jq -r .x)
     note "the cube's x: $X0 -> $X1"
@@ -284,6 +302,10 @@ else
         && ok "and the run is still running after the drag" || bad "the drag stopped the run"
     [ "$(js 'editor.selection()')" = "$CUBE" ] \
         && ok "the drag kept the selection" || bad "the drag lost the selection"
+    PUSHES1=$(js 'JSON.stringify(editor.undoState())' | jq -r .pushes)
+    [ "$PUSHES0" = "$PUSHES1" ] \
+        && ok "and it pushed NO undo command ($PUSHES0 before, $PUSHES1 after)" \
+        || bad "the play-time drag left $((PUSHES1 - PUSHES0)) undo command(s) behind"
 fi
 
 # ##########################################################################
@@ -325,6 +347,149 @@ MODE=$(js 'editor.gizmoMode()')
     || bad "W still reaches the tool after un-ejecting (mode '$MODE')"
 
 # ##########################################################################
+# SECTION 3b — THE KEYBOARD IS DROPPED ON BOTH SIDES OF A HAND-OVER (F3)
+# ##########################################################################
+#
+# PlayBack::keyPressEvent writes TWO stores — the InputSystem (what a possessed
+# avatar consumes) and KeyboardState (what the camera controllers poll) — and
+# only the first was being cleared when a run lost the keyboard. What this
+# suite can SEE is the InputSystem half: hold a Move key, eject, and the run's
+# input must read empty. The KeyboardState half has no reading from here (its
+# only consumer is the play-mode fly, and that fly does not move the camera in
+# this build at all — measured below and reported upward: `input.state().move`
+# reads 1 with the key held and editor.camera() does not move a millimetre, for
+# an arrow and for W alike, which is a Player-side defect this lane does not
+# own).
+A=$(js 'JSON.stringify(editor.camera().position)')
+xdotool keydown Up; sleep 0.5
+MOVE=$(js 'JSON.stringify(input.state().move)')
+[ "$(printf '%s' "$MOVE" | jq -r .y)" != "0" ] \
+    && ok "the held key reached the RUN (input.state().move $MOVE)" \
+    || bad "the held key never reached the run ($MOVE) — the hand-over means nothing"
+B=$(js 'JSON.stringify(editor.camera().position)')
+note "the run's camera under a held fly key: $A -> $B (see the note above)"
+
+key j                                    # EJECT with the key still down
+xdotool keyup Up; sleep 0.3              # the release the RUN will never see
+MOVE=$(js 'JSON.stringify(input.state().move)')
+[ "$(printf '%s' "$MOVE" | jq -r '(.x|fabs) + (.y|fabs)')" = "0" ] \
+    && ok "EJECTED with the key held, the run's input state was dropped ($MOVE)" \
+    || bad "the run still believes the key is down after the hand-over ($MOVE)"
+key j                                    # back to the run
+sleep 0.3
+MOVE=$(js 'JSON.stringify(input.state().move)')
+[ "$(printf '%s' "$MOVE" | jq -r '(.x|fabs) + (.y|fabs)')" = "0" ] \
+    && ok "...and the run did not inherit it when it took the keyboard back ($MOVE)" \
+    || bad "the run took the keyboard back still believing the key was down ($MOVE)"
+
+# ##########################################################################
+# SECTION 3c — A GESTURE CANNOT SURVIVE THE HAND-OVER (fix round F2)
+# ##########################################################################
+#
+# Ejecting hands the whole widget to the editor; the drag the widget was
+# holding has to END there, with the body it borrowed given back to the solver.
+# It used to run on, live, until whenever the button happened to come up: the
+# rigid body stayed out of its own simulation (disablePhysicsTransform, which
+# nothing else in the tree clears) for the length of that.
+# PAUSED for the set-up and the gesture: a falling ball moves between the
+# handle probe and the press, and the probe walks the pixels one at a time. A
+# paused run is still a run (the snapshot, the physics world and every
+# play-scoped rule live on — fix round F5), so this is a run's drag in every
+# way that matters, and the resume below is what shows the body was given back.
+js 'editor.pause()' > /dev/null || bad "editor.pause() for the hand-over arm"
+js "editor.select('$BALL'); node.transform('$BALL', {position:{x:0, y:6, z:0}}); editor.focusSelection()" > /dev/null \
+    || bad "could not set the ball up for the drag"
+js 'editor.setGizmoMode("translate")' > /dev/null
+sleep 0.4
+BALLX=$(findXHandle) || bad "no X handle on the ball — cannot test the hand-over"
+if [ -n "${BALLX:-}" ]; then
+    note "the ball's X handle at window x $BALLX"
+    X0=$(js "JSON.stringify(node.info('$BALL').position)" | jq -r .x)
+    xdotool mousemove --window "$WIN" "$BALLX" "$CY"; sleep 0.3
+    xdotool mousedown 1; sleep 0.3
+    for i in 1 2 3; do
+        xdotool mousemove --window "$WIN" $((BALLX + i*20)) "$CY"; sleep 0.15
+    done
+    X1=$(js "JSON.stringify(node.info('$BALL').position)" | jq -r .x)
+    key j                                        # EJECT, with the button STILL DOWN
+    for i in 4 5 6 7 8; do
+        xdotool mousemove --window "$WIN" $((BALLX + i*20)) "$CY"; sleep 0.15
+    done
+    X2=$(js "JSON.stringify(node.info('$BALL').position)" | jq -r .x)
+    xdotool mouseup 1; sleep 0.5
+    note "the ball's x: $X0 -> $X1 (dragging) -> $X2 (after the eject, still holding)"
+    [ "$(gt "$X1" "$X0")" = "yes" ] \
+        && ok "the drag was live before the hand-over" \
+        || bad "the drag never moved the ball ($X0 -> $X1)"
+    SAME=$(jq -rn --argjson a "$X1" --argjson b "$X2" \
+             'if (($a-$b)|fabs) < 0.05 then "yes" else "no" end')
+    [ "$SAME" = "yes" ] \
+        && ok "THE EJECT ENDED THE GESTURE: 100 px more of held drag moved nothing" \
+        || bad "the drag ran on past the hand-over ($X1 -> $X2)"
+    Y0=$(js "JSON.stringify(node.info('$BALL').position)" | jq -r .y)
+    js 'editor.play()' > /dev/null           # resume: the solver steps again
+    sleep 0.9
+    Y1=$(js "JSON.stringify(node.info('$BALL').position)" | jq -r .y)
+    [ "$(gt "$Y0" "$Y1")" = "yes" ] \
+        && ok "and the body was handed back to the solver — it is falling again ($Y0 -> $Y1)" \
+        || bad "the body is still out of its own simulation after the gesture ($Y0 -> $Y1)"
+    key j                                        # back to the run
+    # ...and nothing is stranded: an ordinary click still picks. The ball has
+    # fallen out of the middle of the picture by now, so the CUBE is framed and
+    # the BALL is left selected — a click that lands makes the cube the
+    # selection, a viewport stuck in a dead gesture leaves the ball.
+    # The ball is put well out of the picture first: it fell to the floor a few
+    # centimetres from the cube, so "the click selected the cube" could not tell
+    # a landed click from a stray hit on the ball.
+    js "node.transform('$BALL', {position:{x:25, y:6, z:0}});
+        editor.select('$CUBE'); editor.focusSelection(); editor.select('$BALL')" > /dev/null
+    sleep 0.4
+    click "$CX" "$CY"
+    SEL=$(js 'editor.selection() || ""')
+    [ "$SEL" = "$CUBE" ] \
+        && ok "a click after the interrupted gesture still selects (the cube)" \
+        || bad "the interrupted gesture stranded the viewport — the click selected '$SEL'"
+fi
+
+# ##########################################################################
+# SECTION 3d — A NODE THE RUN DRIVES REFUSES THE DRAG, BY NAME (fix round F6)
+# ##########################################################################
+#
+# The physics hand-over makes the hand the only author of a dragged BODY. An
+# ANIMATION with real channels has no such place to put a pose: it recomputes
+# the node every frame of the run, so a drag on one is a tug of war the hand
+# loses sixty times a second. It is refused with a toast instead of started and
+# silently lost. (Two identical keys, so the node does not move on its own and
+# "it did not move" means the drag was refused, not that the animation fought.)
+ANIM=$(js 'var a = scene.addPrimitive("cube", {position:{x:0, y:1, z:0}});
+           anim.create(a, "hold");
+           anim.keyframe(a, "position", 0, {x:0, y:1, z:0});
+           anim.keyframe(a, "position", 2, {x:0, y:1, z:0});
+           editor.select(a); editor.focusSelection(); a') \
+    || bad "could not build the animated cube"
+if [ -n "${ANIM:-}" ]; then
+    MOB=$(js "JSON.stringify(node.mobility('$ANIM'))" 2>/dev/null || echo '{}')
+    note "the animated cube $ANIM: $MOB"
+    sleep 0.4
+    ANIMX=$(findXHandle) || bad "no X handle on the animated cube"
+    if [ -n "${ANIMX:-}" ]; then
+        AX0=$(js "JSON.stringify(node.info('$ANIM').position)" | jq -r .x)
+        drag "$ANIMX" "$CY" $((ANIMX + 150)) "$CY"
+        AX1=$(js "JSON.stringify(node.info('$ANIM').position)" | jq -r .x)
+        note "the animated cube's x: $AX0 -> $AX1"
+        REFUSED=$(jq -rn --argjson a "$AX0" --argjson b "$AX1" \
+                    'if (($a-$b)|fabs) < 0.02 then "yes" else "no" end')
+        [ "$REFUSED" = "yes" ] \
+            && ok "THE DRAG WAS REFUSED on a node the run drives (it did not move)" \
+            || bad "the gizmo dragged a node the run rewrites every frame ($AX0 -> $AX1)"
+        [ "$(js 'editor.playing()')" = "true" ] \
+            && ok "and the refusal did not disturb the run" || bad "the refusal stopped the run"
+    fi
+fi
+# Back to the cube for the Stop section.
+js "editor.select('$CUBE')" > /dev/null
+
+# ##########################################################################
 # SECTION 4 — STOP RESTORES THE DOCUMENT AND KEEPS THE SELECTION
 # ##########################################################################
 js 'editor.stop()' > /dev/null
@@ -347,16 +512,7 @@ note "after stop: cube x=$XEND  ball y=$YEND  selection=$SEL"
     && ok "and the editor owns the pointer with nothing playing" \
     || bad "playInputOwner is wrong outside play"
 
-# AN UNDO STEP FOR A PLAY-TIME DRAG WOULD REWIND THE CUBE TO A POSE THE RESTORE
-# HAS ALREADY THROWN AWAY, so the run must have pushed none. `pushes` is the
-# process's lifetime count of commands that reached the undo sink, so this is
-# the whole run — the drag included — measured against the moment before Play.
-UNDO=$(js 'JSON.stringify(editor.undoState())')
-PUSHES1=$(printf '%s' "$UNDO" | jq -r .pushes)
-note "undo after the run: $UNDO"
-[ "$PUSHES0" = "$PUSHES1" ] \
-    && ok "the run pushed NO undo command ($PUSHES0 before Play, $PUSHES1 after Stop)" \
-    || bad "the run left $((PUSHES1 - PUSHES0)) undo command(s) behind for edits Stop discarded"
+note "undo after the run: $(js 'JSON.stringify(editor.undoState())')"
 
 echo
 if [ "$fail" -eq 0 ]; then echo "$TAG: ALL SECTIONS PASSED"; else echo "$TAG: FAILURES ABOVE"; fi

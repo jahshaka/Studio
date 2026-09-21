@@ -620,7 +620,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "the SAME predicate this reports, so a click's destination is readable rather than "
           "guessable (the 2026-09-05 stuck-play defect was exactly a routing flag nobody could "
           "ask about). The right button, the wheel and the gameplay keys are NOT covered by "
-          "this: they stay with the run whatever it answers, until editor.playEject(true).",
+          "this: they stay with the run whatever it answers, until editor.playEject(true). "
+          "AND MOVING THINGS IN EDITOR PLAY IS THE GIZMO'S JOB, deliberately: the run's own "
+          "left-click physics GRAB (the picking constraint that lets you throw a crate around "
+          "by hand) belongs to the Player page, where the click is the game's — here the click "
+          "is the editor's, and the gizmo is the answer.",
           Needs::Document },
         { "simulate", "editor.simulate(enabled=true) -> bool",
           "Starts/stops the in-place physics simulation without entering play mode.",
@@ -2353,7 +2357,11 @@ bool EditorApi::playEject(const QVariant &on)
     // The VIEWPORT's flag, not the service's: it is the one the event handlers
     // branch on (the reason editor.playing() reads it too).
     if (!on.isValid()) return host.viewport->playEjected();
-    if (!host.viewport->isPlaying())
+    // A RUN EXISTS, not "a run is stepping" (fix round F5): a PAUSED run is
+    // still a run — its physics world, its snapshot and its possession all
+    // live on — and ejecting from one is exactly what somebody who paused to
+    // look around is asking for.
+    if (!host.viewport->playRunLive())
         return fail("editor.playEject: nothing is playing — eject is a state of a run in "
                     "flight, not a setting");
     host.viewport->setPlayEjected(on.toBool());
