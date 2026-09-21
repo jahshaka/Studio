@@ -52,6 +52,8 @@
 #include <QSqlQuery>
 #include <QRegularExpression>
 #include <QElapsedTimer>
+#include <cmath>
+#include <vector>
 #include <QTemporaryDir>
 #include <cstdio>
 #include <string>
@@ -75,6 +77,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/vertexbuffer.h"
+#include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/graphicshelper.h"
 #include "irisgl/import/importflags.h"
@@ -1030,7 +1033,8 @@ static void lodChain()
 //   (d) THE BUDGET — `maxCards` is honoured, 0 means none, and more budget can
 //       never make the answer worse (it did once: the 6-face box was measured
 //       only when the clustered list FAILED, so a torus went from 0.983 at six
-//       cards to 0.909 at seven).
+//       cards to 0.909 at seven — the torus's own numbers have moved since, but
+//       the shape of that defect is why this case exists).
 //
 // Bake TIME per mesh is printed, not asserted — the assessment lacks the
 // number and a threshold on this box would be a flake on another.
@@ -1062,15 +1066,18 @@ const CardSubject kCardSubjects[] = {
     { "app/content/primitives/torus.obj",        0.90f, nullptr },
     { "app/content/primitives/capsule.obj",      0.90f, nullptr },
     { "app/content/primitives/wedge.obj",        0.90f, nullptr },
-    // THE ONE EXCEPTION, and it is the representation's limit rather than the
-    // generator's: a five-point star extruded in Z hides most of its side faces
-    // behind its own arms from every one of the six axes, and the cards that
-    // would see them are cards whose depth range isolates one notch — which is
-    // more than twelve of them. Epic's axis-aligned cards have exactly this
-    // limit; Epic's answer is the same budget dial. Measured 0.844 at eight
-    // cards of a budget of twelve (the generator stops when no further split
-    // pays). The floor below is a REGRESSION guard on that number, not an
-    // endorsement of it.
+    // THE ONE EXCEPTION, and the budget is NOT what is short: a five-point star
+    // extruded in Z hides most of its side faces behind its own arms from every
+    // one of the six axes. Measured 0.848 at NINE cards — and swept, it is
+    // 0.848 at a budget of 12, of 16, of 24 and of 48: the generator retires
+    // every bucket because no further axis-aligned split reaches the surface,
+    // so the remaining sixth is not a card this list failed to buy, it is
+    // surface no axis-aligned card can see. Epic's cards have exactly this
+    // limit. (It was 0.844 at eight cards before the added centre was seeded at
+    // the centroid of a bucket's UNSEEN surfels instead of by farthest point,
+    // which is worth 0.004 here and nothing anywhere else — the fix is right,
+    // the star is simply at the representation's ceiling.) The floor below is a
+    // REGRESSION guard on that number, not an endorsement of it.
     { "app/content/primitives/star.obj",         0.80f,
       "self-occluding: axis-aligned cards cannot see inside its own arms" },
     { "app/models/ground.obj",                   0.90f, nullptr },
@@ -1081,6 +1088,47 @@ const CardSubject kCardSubjects[] = {
 };
 
 }   // namespace
+
+/// A synthetic "crumpled sheet": an n x n grid of quads with a deterministic
+/// height, built by hand so it has a real surface, a real silhouette — and NO
+/// LOD CHAIN, which is the case the coverage raster's ceiling exists for.
+static iris::MeshPtr crumpledGrid(int n)
+{
+    std::vector<float> pos;
+    pos.reserve(size_t(n + 1) * size_t(n + 1) * 3);
+    for (int z = 0; z <= n; ++z)
+        for (int x = 0; x <= n; ++x) {
+            const float fx = float(x) / float(n) * 4.0f - 2.0f;
+            const float fz = float(z) / float(n) * 4.0f - 2.0f;
+            pos.push_back(fx);
+            pos.push_back(0.35f * std::sin(fx * 3.1f) * std::cos(fz * 2.7f));
+            pos.push_back(fz);
+        }
+    std::vector<unsigned> idx;
+    idx.reserve(size_t(n) * size_t(n) * 6);
+    for (int z = 0; z < n; ++z)
+        for (int x = 0; x < n; ++x) {
+            const unsigned a = unsigned(z * (n + 1) + x), b = a + 1;
+            const unsigned c = unsigned((z + 1) * (n + 1) + x), d = c + 1;
+            idx.push_back(a); idx.push_back(c); idx.push_back(b);
+            idx.push_back(b); idx.push_back(c); idx.push_back(d);
+        }
+    auto mesh = iris::MeshPtr(new iris::Mesh());
+    mesh->setPrimitiveMode(iris::PrimitiveMode::Triangles);
+    mesh->usesIndexBuffer = true;
+    mesh->numVerts = int(pos.size() / 3);
+    mesh->numFaces = int(idx.size() / 3);
+    iris::VertexLayout layout;
+    layout.addAttrib(iris::VertexAttribUsage::Position, 0x1406 /*GL_FLOAT*/, 3,
+                     int(sizeof(float) * 3));
+    auto vb = iris::VertexBuffer::create(layout);
+    vb->setData(reinterpret_cast<char *>(pos.data()), unsigned(pos.size() * sizeof(float)));
+    mesh->addVertexBuffer(vb);
+    auto ib = iris::IndexBuffer::create();
+    ib->setData(reinterpret_cast<char *>(idx.data()), unsigned(idx.size() * sizeof(unsigned)));
+    mesh->setIndexBuffer(ib);
+    return mesh;
+}
 
 static void surfaceCards()
 {
@@ -1289,6 +1337,69 @@ static void surfaceCards()
                    "by the format bump, not by a renamed key)");
         CHECK_LOUD(six.hash() != iris::ImportSettings::identityHash(),
                    "a different budget is a different bake key");
+    }
+
+    // (g) THE COVERAGE RASTER'S CEILING — A MESH WITH NO CHAIN (F1).
+    //
+    // The raster is charged per TRIANGLE PER CARD PER ROUND, so an unbounded
+    // one is quadratic in the wrong place: at twelve cards and a dozen rounds a
+    // 2 M-triangle mesh is 144 x 2 M triangle setups. The ceiling took the
+    // COARSEST BAKED LEVEL, which misses the two classes that have no chain at
+    // all — a mesh whose topology stopped the simplifier, and EVERY mesh born
+    // through Mesh::loadMesh — and those are exactly the meshes a user's import
+    // and Preferences' bake-all hand to the UI thread.
+    //
+    // WHAT IS ASSERTED, and why it is shaped this way: the claim is a BOUND, so
+    // the assertion is that the cost stops tracking the triangle count —
+    // quadrupling the triangles must not quadruple the time — plus a generous
+    // absolute ceiling that a "seconds" regression trips and a loaded box does
+    // not. A tight wall-clock threshold here would be the flake class CLAUDE.md
+    // names; the measured numbers are PRINTED so a reader sees the real shape.
+    // Measured on this box (Debug): 65 k tris 100 ms, 259 k 190 ms, 2 M 632 ms
+    // — against 115 / 414 ms and rising linearly with the ceiling removed.
+    //
+    // AND COVERAGE MUST NOT PAY FOR THE BOUND. Both halves of this were found
+    // by measurement and both were wrong first: a uniform stride aliased
+    // against the grid's own period (1.000 -> 0.399), and a centre-sampled
+    // raster leaves a texel empty whenever every triangle in it is finer than a
+    // texel, which any thinning then makes worse. The golden-ratio selection
+    // and the centroid splat are those two fixes, and this case is what holds
+    // them: the same surface at five densities must read the same coverage.
+    {
+        std::printf("      %-44s %9s %9s\n", "synthetic chainless grid", "triangles", "cards ms");
+        double previousMs = 0.0;
+        int previousTris = 0;
+        bool bounded = true, covered = true, underCeiling = true;
+        for (int n : { 120, 180, 360, 700 }) {
+            const iris::MeshPtr mesh = crumpledGrid(n);
+            CHECK(mesh->lodIndices.isEmpty(), "the synthetic grid carries no LOD chain");
+            QElapsedTimer timer;
+            timer.start();
+            iris::MeshBake::buildCards(mesh, iris::kDefaultMaxCards);
+            const double ms = double(timer.nsecsElapsed()) / 1e6;
+            std::printf("      %-44s %9d %9.1f   cov %.3f\n", "", mesh->numFaces, ms,
+                        double(mesh->cardCoverage));
+            if (mesh->cardCoverage < 0.95f) covered = false;
+            if (ms > 4000.0) underCeiling = false;
+            // The bound: 4x the triangles must not cost 4x the time. Compared
+            // against the FIRST measured pair only, and with a wide factor,
+            // because this is a shape assertion and not a benchmark.
+            if (previousTris > 0) {
+                const double triRatio = double(mesh->numFaces) / double(previousTris);
+                const double msRatio = previousMs > 0.5 ? ms / previousMs : 1.0;
+                if (msRatio > triRatio) bounded = false;
+            }
+            previousMs = ms;
+            previousTris = mesh->numFaces;
+        }
+        CHECK_LOUD(covered,
+                   "the same surface reads the same coverage at every density — the raster's "
+                   "ceiling does not buy its bound with coverage");
+        CHECK_LOUD(bounded,
+                   "and the cost stops tracking the triangle count: 4x the triangles is less "
+                   "than 4x the time, at every step");
+        CHECK_LOUD(underCeiling,
+                   "no density takes seconds (the unbounded raster did, on the UI thread)");
     }
 }
 

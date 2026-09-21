@@ -414,10 +414,10 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "FBX UnitScaleFactor/100, 1 for the formats that declare none) and `extent` {x,y,z}, the "
           "measured size in metres AS IMPORTED. Absent for a non-model asset.",
           Needs::Document },
-        { "reimport", "assets.reimport(guid, {units, scale, axes, rotate, translate, skeleton, clips, materials}) -> {guid, settings, extent, bakeOid}",
+        { "reimport", "assets.reimport(guid, {units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards}) -> {guid, settings, extent, bakeOid}",
           "RE-READS a model asset's stored SOURCE with new import settings and rebuilds everything derived "
-          "from it: the mesh bake (the LOD chain with it), the measured extent, the recorded settings and "
-          "the thumbnail. The options are MERGED over the stored record, so a caller sends only what it is "
+          "from it: the mesh bake (the LOD chain and the SURFACE CARDS with it), the measured extent, the "
+          "recorded settings and the thumbnail. The options are MERGED over the stored record, so a caller sends only what it is "
           "changing. "
           "A reimport is NOT a new import: the source content id, the row's guid, its member Texture rows "
           "and every project's pin are unchanged, because a pin freezes source BYTES and those bytes did "
