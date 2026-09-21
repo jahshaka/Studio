@@ -599,6 +599,29 @@ QVector<VerbInfo> EditorApi::verbs() const
           "for the 2026-09-05 stuck-play defect (input routed to the player controller "
           "after a space round trip).",
           Needs::Document },
+        { "playEject", "editor.playEject([on]) -> bool",
+          "EJECT (owner R13, Unreal's F8) — hand the mouse and the keyboard back to the EDITOR "
+          "without stopping the run. No argument reads the latch; `true`/`false` sets it. "
+          "It exists for the one state where a run really consumes input: a POSSESSED avatar "
+          "takes every click and key, so without an eject the only way back to the editor is to "
+          "stop the simulation. Ejected, the whole widget is the editor's again — the gizmo "
+          "shortcuts (W/E/R), the fly arrows, V-hold, the pick — while physics, animation and "
+          "the possessed character keep stepping; the possession's follow camera stands down "
+          "from the view camera so the editor's fly moves the picture, and takes it back when "
+          "you return. REFUSED when nothing is playing: it is a state of the run in flight, not "
+          "a setting, and every Play and every Stop clears it. Note the asymmetry that makes it "
+          "rarely needed: with NOBODY possessed a plain left click already belongs to the editor "
+          "(editor.playInputOwner) and only the keys and the camera gestures are the run's.",
+          Needs::Document },
+        { "playInputOwner", "editor.playInputOwner() -> \"editor\" | \"controller\"",
+          "WHO OWNS A PLAIN LEFT CLICK IN THE VIEWPORT RIGHT NOW. \"controller\" only while a "
+          "run is really consuming input — a possessed avatar, and not ejected; \"editor\" "
+          "otherwise, including outside play entirely. The viewport's event handlers branch on "
+          "the SAME predicate this reports, so a click's destination is readable rather than "
+          "guessable (the 2026-09-05 stuck-play defect was exactly a routing flag nobody could "
+          "ask about). The right button, the wheel and the gameplay keys are NOT covered by "
+          "this: they stay with the run whatever it answers, until editor.playEject(true).",
+          Needs::Document },
         { "simulate", "editor.simulate(enabled=true) -> bool",
           "Starts/stops the in-place physics simulation without entering play mode.",
           Needs::Document },
@@ -620,8 +643,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "default install\" was true for as long as it was because nothing could ask. Read-only; "
           "the capabilities behind the buttons are their own verbs.",
           Needs::Window },
-        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, engineScene, heldKeys, flying}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
+        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, engineScene, windowX, windowY, windowW, windowH, heldKeys, flying}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `windowX`/`windowY`/`windowW`/`windowH` are where the viewport WIDGET sits inside its top-level window, in window pixels — the conversion a suite synthesising a real click needs, since every pixel-taking verb here (gizmoHitTest, dropTargetAt, dropPointAt) speaks the viewport's coordinates and an X click speaks the window's; all four are 0 when the viewport has no window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
           Needs::Document },
         { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
@@ -2323,6 +2346,26 @@ bool EditorApi::playing()
     return host.services->playback->isPlaying();
 }
 
+bool EditorApi::playEject(const QVariant &on)
+{
+    if (!host.services || !host.services->playback || !host.viewport)
+        return fail("editor: not available in this session");
+    // The VIEWPORT's flag, not the service's: it is the one the event handlers
+    // branch on (the reason editor.playing() reads it too).
+    if (!on.isValid()) return host.viewport->playEjected();
+    if (!host.viewport->isPlaying())
+        return fail("editor.playEject: nothing is playing — eject is a state of a run in "
+                    "flight, not a setting");
+    host.viewport->setPlayEjected(on.toBool());
+    return host.viewport->playEjected();
+}
+
+QString EditorApi::playInputOwner()
+{
+    if (!host.viewport) return QStringLiteral("editor");
+    return host.viewport->playInputOwner();
+}
+
 bool EditorApi::simulate(bool enabled)
 {
     if (!host.services || !host.services->playback || !host.viewport)
@@ -2631,6 +2674,19 @@ QVariantMap EditorApi::viewportState()
     // are dead" had no reading anywhere. These two make it one.
     out.insert("heldKeys", host.viewport->heldFlyKeys());
     out.insert("flying", host.viewport->flying());
+    // WHERE THE VIEWPORT IS INSIDE THE WINDOW (PLAY-SELECT-1). A suite that
+    // synthesises a real click has the WINDOW's pixels to aim with (xdotool
+    // mousemove --window) and every verb that speaks pixels — gizmoHitTest,
+    // dropTargetAt, dropPointAt, editor.screenshot's probes — speaks the
+    // VIEWPORT's. Without this the difference is a guess, and a guess at a
+    // pixel is how a drag lands on a dock's tab bar instead of the scene
+    // (hygiene lane, 2026-09-09). Zero-sized with no window (the offscreen and
+    // stand-in viewports), which is honest: there is no window to be inside of.
+    const QRect inWindow = host.viewport->widgetRectInWindow();
+    out.insert("windowX", inWindow.x());
+    out.insert("windowY", inWindow.y());
+    out.insert("windowW", inWindow.width());
+    out.insert("windowH", inWindow.height());
     return out;
 }
 

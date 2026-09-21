@@ -68,6 +68,7 @@
 #include <QUndoStack>
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/editordata.h"
+#include "irisgl/document/physics/environment.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -567,9 +568,72 @@ QString EngineSceneViewport::gizmoTransformSpace() const
                ? QStringLiteral("local") : QStringLiteral("global");
 }
 
+// THE CAMERA THE PICTURE IS TAKEN THROUGH (PLAY-SELECT-1). Outside play this
+// is viewCamera() — renderCamera's own first term — so nothing but a run can
+// make the two differ. Inside one, the document decides (Scene::renderCamera:
+// the armed active camera, or the host's again while an avatar is possessed),
+// and clicking during play has to unproject the frustum the user is LOOKING
+// THROUGH, not the explorer's.
+iris::CameraNodePtr EngineSceneViewport::pickCamera() const
+{
+    const iris::CameraNodePtr host = viewCamera();
+    return mScene ? mScene->renderCamera(host) : host;
+}
+
+// The widget's rect in its WINDOW's coordinates — read from the live layout
+// (mapTo), so a moved dock, a hidden tray or a resize can never make it stale.
+QRect EngineSceneViewport::widgetRectInWindow() const
+{
+    const QWidget *top = window();
+    if (!top || top == this) return QRect();
+    return QRect(mapTo(const_cast<QWidget *>(top), QPoint(0, 0)), size());
+}
+
+bool EngineSceneViewport::playPossessing() const
+{
+    if (!mScene) return false;
+    const iris::AvatarPossession *possession = mScene->getPossession();
+    return possession && possession->isPossessing();
+}
+
+// THE ONE OWNERSHIP PREDICATE (PLAY-SELECT-1, owner R13). A run owns the
+// pointer only when something is really driving it — a possessed avatar — and
+// never while ejected. Everything else about play is unchanged: the right
+// button, the wheel and the gameplay keys stay with the run (its fly and its
+// character), because with nobody possessed the run flies the very camera the
+// editor owns (PlayBack::playCamera) and the Gameplay shortcut rows have to
+// keep meaning what they say. What comes back to the editor here is the plain
+// LEFT CLICK: the pick, the selection and the gizmo.
+bool EngineSceneViewport::runOwnsPointer() const
+{
+    if (!mPlaying) return false;
+    if (mPlayEjected) return false;
+    return playPossessing();
+}
+
+QString EngineSceneViewport::playInputOwner() const
+{
+    return runOwnsPointer() ? QStringLiteral("controller") : QStringLiteral("editor");
+}
+
+void EngineSceneViewport::setPlayEjected(bool ejected)
+{
+    if (mPlayEjected == ejected) return;
+    mPlayEjected = ejected;
+    // A HAND-OVER DROPS THE INPUT STATE ON BOTH SIDES (§8.3 rule 1's argument,
+    // applied to the eject edge): a key held at the moment of the hand-over
+    // produces no release edge on the side that was listening, so W held while
+    // ejecting would walk the character for ever and an arrow held while
+    // possessing again would fly the editor camera for ever.
+    if (mPlayback) mPlayback->clearInputState();
+    if (mCamController) mCamController->clearKeys();
+    iris::InputSystem::instance().clearKeys();
+    mVertexSnapHeld = false;
+}
+
 bool EngineSceneViewport::mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const
 {
-    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    const iris::CameraNodePtr cam = pickCamera();   // the PILOT, or the run's own shot
     if (!cam) return false;
     viewDir = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
     // THE VIEW THE GIZMO IS PICKED IN (smoke S15). Every gizmo hit test and
@@ -750,7 +814,7 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
 iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
                                                 iris::Vec3 *hitPoint, bool forcePickable)
 {
-    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    const iris::CameraNodePtr cam = pickCamera();   // the PILOT, or the run's own shot
     if (!mScene || !cam) return iris::SceneNodePtr();
     iris::Vec3 a, b;
     pictureSegment(cam, point, a, b);
@@ -824,7 +888,7 @@ iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
     iris::Vec3 hit;
     if (pickAt(point, false, &hit, true)) return hit;
     // Ground plane (y = 0), like the legacy viewport's sceneFloor.
-    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    const iris::CameraNodePtr cam = pickCamera();   // the PILOT, or the run's own shot
     if (!cam) return iris::Vec3();
     iris::Vec3 a, b;
     pictureSegment(cam, point, a, b);
@@ -1194,8 +1258,27 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
     // re-picked and rebuilt the property panel). The legacy widget accepts too.
     e->accept();
     setFocus();
-    if (mPlaying && mPlayback) { mPlayback->mousePressEvent(e); return; }
+    // THE PLAY SPLIT (PLAY-SELECT-1, owner R13: "in play mode I can select only
+    // through the scene graph — I want viewport selection during play"). While
+    // a run is in flight the editor keeps exactly ONE gesture, the plain left
+    // click — the pick, the selection and the gizmo — and the run keeps the
+    // rest: the right button's look, the middle button, the wheel. The moment
+    // the run really consumes input (a possessed avatar) it takes the left
+    // button back too, until the user EJECTS (setPlayEjected), which hands the
+    // whole widget over to the editor with the simulation still running.
+    if (mPlaying && mPlayback && !mPlayEjected &&
+        (runOwnsPointer() || e->button() != Qt::LeftButton)) {
+        mPlayback->mousePressEvent(e);
+        return;
+    }
     mMousePos = mPrevMousePos = e->position(); mHaveMouse = true;
+    // IS THE EDITOR'S CAMERA OURS TO MOVE? Not during a run we have not been
+    // ejected from: the run flies its own camera through PlayBack (and with an
+    // active camera armed that is not this widget's camera at all), so an
+    // Alt-orbit or a left-drag pan here would turn a camera nobody is looking
+    // through. Ejected, the editor has the whole widget back and its camera
+    // with it.
+    const bool editorCameraIsOurs = !mPlaying || mPlayEjected;
     if (e->button() == Qt::LeftButton) {
         iris::Vec3 rayPos, rayDir, viewDir;
         const bool haveRay = mouseRay(rayPos, rayDir, viewDir);
@@ -1217,7 +1300,12 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
             && mGizmo->isHit(rayPos, rayDir) && !editgate::refuse()) {
             // Alt+drag duplicates first, then drags the COPY — one undo macro
             // covers duplicate + move (EDITOR_SHORTCUTS_SPEC §4).
-            if ((e->modifiers() & Qt::AltModifier) && mServices && mServices->sceneEdit &&
+            // ...BUT NEVER DURING A RUN (PLAY-SELECT-1): stop restores the
+            // transforms of the nodes play STARTED with and knows nothing about
+            // a node born mid-run, so an Alt+drag during play would leave a copy
+            // behind after the rest of the run was thrown away. Moving what is
+            // already there is the capability this lane ships; creating is not.
+            if (!mPlaying && (e->modifiers() & Qt::AltModifier) && mServices && mServices->sceneEdit &&
                 mServices->undo && mServices->undo->stack() && mSelectedNode->isDuplicable()) {
                 mServices->undo->stack()->beginMacro(QStringLiteral("Duplicate + Move"));
                 if (mSelectedSet.size() > 1) {
@@ -1242,9 +1330,16 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
             // gizmo.h's setDragModifiers): Shift on a scale axis handle means
             // "scale all three by this drag's ratio".
             mGizmo->setDragModifiers(e->modifiers());
+            // A DRAG DURING A RUN IS NOT AN UNDO STEP (PLAY-SELECT-1). The run's
+            // edits are thrown away at stop (PlayBack's snapshot), so an undo
+            // entry for one would rewind a node to a pose that stopped existing
+            // the moment the user pressed Stop. The transform still lands, live;
+            // only the stack is spared.
+            mGizmo->setTransientDrag(mPlaying);
             mGizmo->startDragging(rayPos, rayDir, viewDir);
             mMouseDrag = mGizmo->isDragging();     // this host owns what it started
-        } else if (e->modifiers() & Qt::AltModifier) {
+            if (mMouseDrag && mPlaying) beginPlayDragOverPhysics();
+        } else if (editorCameraIsOurs && (e->modifiers() & Qt::AltModifier)) {
             // Alt+LMB anywhere BUT the gizmo orbits around THE POINT UNDER THE
             // CURSOR (Maya/Unreal; owner report §353). The gizmo hit-test above
             // ran first on purpose: Alt ON the gizmo keeps meaning
@@ -1272,21 +1367,28 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
             }
         }
     }
-    if (mCamController) mCamController->onMouseDown(e->button());
+    if (editorCameraIsOurs && mCamController) mCamController->onMouseDown(e->button());
 }
 
 void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
 {
     e->accept();
-    if (mPlaying && mPlayback) {
+    if (mPlaying && mPlayback && !mPlayEjected) {
         // Play-in-place is still THE EDITOR: free mouse-look grabbed the
         // cursor the instant Play started ("my mouse should not be linked to
         // play scene" — owner, 2026-09-06). Look only while RMB is held, the
         // same gesture as the editor fly camera; the dedicated Player page
         // (EnginePlayerView) keeps unrestricted look — a page you switched to
         // is a game surface, the editor viewport is not.
-        if (e->buttons() & Qt::RightButton) mPlayback->mouseMoveEvent(e);
-        return;
+        if (e->buttons() & Qt::RightButton) { mPlayback->mouseMoveEvent(e); return; }
+        // The run consuming input keeps the pointer whole — exactly today's
+        // behaviour, swallowed rather than picked.
+        if (runOwnsPointer()) return;
+        // ...and otherwise the motion falls through to the editor's half
+        // (PLAY-SELECT-1): the pick ray the gizmo hover reads, and a live
+        // left-button gizmo drag. Nothing below moves the editor's camera
+        // without a button press this handler gave it (onMouseDown is withheld
+        // during a run), so a bare hover cannot pan anything.
     }
     mMousePos = e->position(); mHaveMouse = true;
     const QPointF dir = mMousePos - mPrevMousePos;
@@ -1308,15 +1410,29 @@ void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
         if (mouseRay(rayPos, rayDir, viewDir)) mGizmo->drag(rayPos, rayDir, viewDir);
         return;
     }
-    if (mCamController) mCamController->onMouseMove(-int(dir.x()), -int(dir.y()));
+    // The run flies its own camera while we are not ejected from it (see
+    // editorCameraIsOurs in the press handler).
+    if (mCamController && (!mPlaying || mPlayEjected))
+        mCamController->onMouseMove(-int(dir.x()), -int(dir.y()));
 }
 
 void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
 {
     e->accept();
-    if (mPlaying && mPlayback) { mPlayback->mouseReleaseEvent(e); return; }
+    // THE PRESS'S OWNER OWNS THE RELEASE (PLAY-SELECT-1): a left button the
+    // editor picked with must end here, or a gizmo drag started during play
+    // would never be closed and the next click would find a live drag.
+    if (mPlaying && mPlayback && !mPlayEjected &&
+        (runOwnsPointer() || e->button() != Qt::LeftButton)) {
+        mPlayback->mouseReleaseEvent(e);
+        return;
+    }
     if (e->button() == Qt::LeftButton && mMouseDrag) {
         mMouseDrag = false;
+        // The body the gizmo was holding still goes back to the simulation
+        // where the hand left it (endPlayDragOverPhysics); a no-op outside play
+        // and for a node with no rigid body.
+        if (mPlaying) endPlayDragOverPhysics();
         // ...and a click that ends NOTHING of ours ends nothing at all: a stray
         // press and release while the wearer holds a handle used to call
         // endDragging on their drag, which commits a second undo entry for one
@@ -1333,26 +1449,34 @@ void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
     // Alt+LMB orbit ends with the drag (the free camera returns to fly).
     if (e->button() == Qt::LeftButton && mCamController && mCamController->isAltOrbiting())
         mCamController->setAltOrbit(false, iris::Vec3());
-    if (mCamController) mCamController->onMouseUp(e->button());
+    if (mCamController && (!mPlaying || mPlayEjected)) mCamController->onMouseUp(e->button());
 }
 
 void EngineSceneViewport::mouseDoubleClickEvent(QMouseEvent *e)
 {
     // QWidget's default forwards to mousePressEvent (a second pick + panel rebuild).
     e->accept();
-    if (mPlaying && mPlayback) mPlayback->mouseDoubleClickEvent(e);
+    if (mPlaying && mPlayback && !mPlayEjected) mPlayback->mouseDoubleClickEvent(e);
 }
 
 void EngineSceneViewport::wheelEvent(QWheelEvent *e)
 {
     e->accept();
-    if (mPlaying && mPlayback) { mPlayback->wheelEvent(e); return; }
+    // The wheel is the RUN's (its camera speed / dolly) unless we are ejected —
+    // the editor's dolly would move a camera the run is not rendering through.
+    if (mPlaying && mPlayback && !mPlayEjected) { mPlayback->wheelEvent(e); return; }
     if (mCamController) mCamController->onMouseWheel(e->angleDelta().y());
 }
 
 void EngineSceneViewport::keyPressEvent(QKeyEvent *e)
 {
-    if (mPlaying && mPlayback) { mPlayback->keyPressEvent(e); return; }
+    // THE KEYS ARE THE RUN'S UNTIL THE USER EJECTS (PLAY-SELECT-1). Unlike the
+    // left button, they are not split: W/A/S/D and Space are the Gameplay rows
+    // (AVATAR_LOCOMOTION_SPEC §8.2) for as long as the run has the keyboard,
+    // and F8 is what takes the whole keyboard back — tool shortcuts, the fly
+    // arrows, V-hold and all (the ShortcutOverride gate in event() keys on the
+    // same flag, so the two can never disagree).
+    if (mPlaying && mPlayback && !mPlayEjected) { mPlayback->keyPressEvent(e); return; }
     // Auto-repeat presses would be harmless (the key is already in the held
     // set) but auto-repeat RELEASES would clear it mid-hold — skip both.
     if (e->isAutoRepeat()) return;
@@ -1366,7 +1490,7 @@ void EngineSceneViewport::keyPressEvent(QKeyEvent *e)
 
 void EngineSceneViewport::keyReleaseEvent(QKeyEvent *e)
 {
-    if (mPlaying && mPlayback) { mPlayback->keyReleaseEvent(e); return; }
+    if (mPlaying && mPlayback && !mPlayEjected) { mPlayback->keyReleaseEvent(e); return; }
     if (e->isAutoRepeat()) return;
     if (e->key() == Qt::Key_V) mVertexSnapHeld = false;
     if (mCamController) mCamController->keyReleaseEvent(e);
@@ -1390,7 +1514,7 @@ void EngineSceneViewport::focusOutEvent(QFocusEvent *e)
 // live translate drag, so endDragging()'s undo command covers it.
 bool EngineSceneViewport::snapDragToVertexUnderCursor()
 {
-    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    const iris::CameraNodePtr cam = pickCamera();   // the PILOT, or the run's own shot
     if (!mSelectedNode || !mScene || !cam || !mHaveMouse) return false;
     iris::Vec3 a, b;
     pictureSegment(cam, mMousePos, a, b);
@@ -1446,7 +1570,12 @@ bool EngineSceneViewport::event(QEvent *e)
         // Only while playing: when the scene is stopped the gizmo shortcuts are
         // untouched, which is the whole contract the shortcuts.registry gate
         // asserts.
-        if (iris::gameplayClaimsKey(mPlaying, key)) {
+        //
+        // ...AND ON THE EJECT (PLAY-SELECT-1): an ejected run has handed the
+        // keyboard back, so the gameplay claim stands down with the routing
+        // above it — W is the translate tool again while the simulation keeps
+        // running, which is the whole point of ejecting.
+        if (iris::gameplayClaimsKey(mPlaying && !mPlayEjected, key)) {
             e->accept();
             return true;
         }
@@ -1507,6 +1636,11 @@ void EngineSceneViewport::startPlayingScene()
     // viewport flag only says whether syncFrame drives the simulation.
     if (!mPlaying) mPlayback->playScene();
     mPlaying = true;
+    // EVERY RUN STARTS POSSESSED (PLAY-SELECT-1): the eject latch is a state of
+    // the run in flight, not a setting — nothing about it is persisted and a
+    // second Play never inherits the first one's hand-over. A resume from pause
+    // takes the same line, which is what the user means by pressing Play.
+    mPlayEjected = false;
 }
 
 void EngineSceneViewport::pausePlayingScene()
@@ -1524,8 +1658,88 @@ void EngineSceneViewport::stopPlayingScene()
 {
     if (!mPlaying && !(mPlayback && mPlayback->isScenePlaying())) return;
     mPlaying = false;
+    mPlayEjected = false;
+    // A GESTURE CANNOT OUTLIVE THE RUN IT WAS MADE IN (PLAY-SELECT-1): a gizmo
+    // drag still held when Stop is pressed is closed here, and closed the way
+    // the run would have closed it (transient — no undo step, the physics hand
+    // back), before PlayBack puts every transform back. Left open, the next
+    // press in the restored scene would find a live drag anchored to a pose
+    // that no longer exists.
+    if (mMouseDrag && mGizmo && mGizmo->isDragging()) {
+        endPlayDragOverPhysics();
+        mGizmo->endDragging();
+        mMouseDrag = false;
+    }
     if (mPlayback) mPlayback->stopScene();
     if (mScene) mScene->updateSceneAnimation(0.0f);
+    // THE SELECTION SURVIVES THE RUN (PLAY-SELECT-1). Nothing below clears it —
+    // stop restores transforms, not the graph — but the gizmo and the outline
+    // are anchored on POSES that just moved back, so they are re-pointed at the
+    // same nodes to re-read them. A node deleted during the run is dropped by
+    // the same call.
+    refreshSelectionAfterPlay();
+}
+
+// The selection as it stood at Stop, re-anchored on the restored document. Any
+// node that is gone (deleted mid-run) drops out; the rest keep the selection,
+// the outline and the properties column they had.
+void EngineSceneViewport::refreshSelectionAfterPlay()
+{
+    if (mSelectedSet.isEmpty() && !mSelectedNode) return;
+    QList<iris::SceneNodePtr> alive;
+    for (const iris::SceneNodePtr &n : mSelectedSet)
+        if (n && n->getScene()) alive.append(n);
+    const bool primaryGone = mSelectedNode && !mSelectedNode->getScene();
+    if (primaryGone || alive.size() != mSelectedSet.size()) {
+        // Something in the set died during the run. Through the SERVICE, so the
+        // outliner, the properties column and this widget agree on what is
+        // selected — the viewport-local setter would leave the panels pointing
+        // at a node that is gone.
+        if (mServices && mServices->selection) mServices->selection->select(alive);
+        else setSelectedSet(alive);
+        return;
+    }
+    // Same set, same primary — re-point the gizmo so it reads the transforms
+    // the restore just wrote.
+    if (mGizmo && mSelectedNode) mGizmo->setSelectedNode(mSelectedNode);
+    pushGizmoGroup();
+}
+
+// ---- THE GIZMO WINS WHILE IT IS HELD (PLAY-SELECT-1) ----------------------
+//
+// A rigid body under the gizmo has two authors: Bullet, which writes the node
+// every step from the body's world transform (iris::Scene::advance), and the
+// hand. `SceneNode::disablePhysicsTransform` is the document's own answer to
+// exactly that — a flag Scene::advance has always honoured and nothing ever
+// set. The drag sets it on every node it is moving, so the hand writes alone;
+// the release hands the pose to the BODY (Environment::syncBodyToNode: the
+// world transform, its motion state, velocities zeroed, the body woken) and
+// clears the flag, so the object carries on falling from where it was put
+// instead of snapping back to where the simulation last had it.
+void EngineSceneViewport::beginPlayDragOverPhysics()
+{
+    mPlayDragBodies.clear();
+    if (!mScene) return;
+    auto claim = [this](const iris::SceneNodePtr &n) {
+        if (!n || n->disablePhysicsTransform) return;   // already somebody's
+        if (!n->isPhysicsBody) return;
+        n->disablePhysicsTransform = true;
+        mPlayDragBodies.append(n);
+    };
+    claim(mSelectedNode);
+    for (const iris::SceneNodePtr &n : mSelectedSet) if (n != mSelectedNode) claim(n);
+}
+
+void EngineSceneViewport::endPlayDragOverPhysics()
+{
+    if (mPlayDragBodies.isEmpty()) return;
+    iris::Environment *env = mScene ? mScene->getPhysicsEnvironment().data() : nullptr;
+    for (const iris::SceneNodePtr &n : mPlayDragBodies) {
+        if (!n) continue;
+        n->disablePhysicsTransform = false;
+        if (env) env->syncBodyToNode(n);
+    }
+    mPlayDragBodies.clear();
 }
 
 // "Simulate physics" — run the document's physics world in the editor, without
@@ -1996,6 +2210,16 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     if (mPlaying && mPlayback) {
         iris::Viewport vp; vp.width = width(); vp.height = height(); vp.pixelRatioScale = 1.0f;
         simulated = mPlayback->update(vp, dt);   // physics, animation, play controllers move the document
+        // EJECTED: the editor's own camera controller runs too (PLAY-SELECT-1).
+        // The fly is a per-frame integration of held keys, and while a run has
+        // the keyboard nothing in this branch drives it — so without this the
+        // ejected arrows would be a dead key rather than the editor's fly. It
+        // is the controller's own update, clamped by the controller, exactly as
+        // the editing branch below calls it.
+        if (mPlayEjected && mCamController) {
+            mCamController->setFlySuppressed(bool(mVrPreviewStep));
+            mCamController->update(dt);
+        }
     } else {
         // `dt` HERE IS THE WALL CLOCK of the frame just gone, and after a
         // UI-thread block that is the whole stall (ledger §356). The camera
@@ -2047,7 +2271,13 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // PILOTING WINS — a user flying a scene camera asked for that shot — and
     // while piloting the arm is not applied at all, so the eventual restore
     // still puts the explorer back where play found it.
-    if (mScene && mScene->getPossession() && !mPilot)
+    //
+    // ...AND AN EJECTED RUN DOES NOT HOLD THE CAMERA EITHER (PLAY-SELECT-1).
+    // Ejecting means the editor has the input, and an editor whose fly is
+    // overwritten by the arm every frame has a dead fly. The arm keeps its
+    // saved pose latched while it stands down, so un-ejecting takes the shot
+    // back and Stop still returns the explorer to where play found it.
+    if (mScene && mScene->getPossession() && !mPilot && !mPlayEjected)
         mScene->getPossession()->applyToViewCamera(viewCamera());
     // Emitters used to be ticked here, one document node at a time, because the
     // document owned a CPU particle simulator. It does not any more

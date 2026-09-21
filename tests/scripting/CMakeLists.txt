@@ -1092,6 +1092,29 @@ set_tests_properties(scripting.e2e.possession PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
+# PLAY-SELECT-1 (owner R13): EDITING WHILE THE SCENE PLAYS, through the verbs —
+# who owns a click during a run (editor.playInputOwner), the eject latch
+# (editor.playEject, refused outside play), the editor's selection and gizmo
+# verbs working mid-run, a hand-placed rigid body carrying on from where it was
+# put instead of being overwritten by the solver, and Stop throwing the run's
+# edits away while KEEPING the selection. The possession arm needs a real
+# character, hence the fixture and the configure_file. The other half of the
+# lane — a real left click and a real gizmo drag on the viewport — is
+# app.play_select, which needs synthesised X input.
+#
+# NOT --headless: play-in-place, the physics stepper and the input routing all
+# live in the engine viewport.
+configure_file(scripts/e2e_play_select.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-play_select)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.play_select
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.play_select PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 # AVATAR_LOCOMOTION_SPEC Stage 4 through the VERBS and a REAL scene file: the
 # four state-machine verbs, the shipped default asset generated for an imported
 # character with zero authoring, its degradation when only one role binds

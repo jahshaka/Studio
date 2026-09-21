@@ -150,6 +150,10 @@ public:
     void pausePlayingScene() override;
     void stopPlayingScene() override;
     bool isPlaying() const override { return mPlaying; }
+    QRect widgetRectInWindow() const override;
+    bool playEjected() const override { return mPlayEjected; }
+    void setPlayEjected(bool ejected) override;
+    QString playInputOwner() const override;
     void startPhysicsSimulation() override;    // simulate in place: steps the document's
     void restartPhysicsSimulation() override;  // physics world without entering play mode
     void stopPhysicsSimulation() override;
@@ -426,6 +430,12 @@ private:
     CameraControllerBase    *mCamController = nullptr;
     PlayBack                *mPlayback = nullptr;
     bool                     mPlaying = false;
+    /// EJECTED (PLAY-SELECT-1, Unreal's F8): the run keeps simulating and the
+    /// EDITOR has the input — every mouse gesture and every key comes back to
+    /// this widget, and the possession arm stands down from the view camera so
+    /// the editor's own fly moves the picture again. Cleared on every play
+    /// start and every stop: it is a state of THIS run, not a preference.
+    bool                     mPlayEjected = false;
     QPointF mMousePos, mPrevMousePos;
     bool mHaveMouse = false;
     // Drag-and-drop state. The MATERIAL HOVER PREVIEW is no longer here: it is
@@ -533,6 +543,37 @@ private:
     /// is deliberate (the explorer's own state: per-view memory, resets, the
     /// EditorData round trip).
     iris::CameraNodePtr viewCamera() const { return mPilot ? mPilot : mEditorCam; }
+    /// THE CAMERA THE PICTURE IS TAKEN THROUGH — viewCamera() everywhere except
+    /// inside a play run, where the document's one camera rule
+    /// (iris::Scene::renderCamera) may hand the shot to the armed active camera
+    /// or to a possession's spring arm. Every pick ray, every gizmo hit test
+    /// and every gizmo size is built from THIS (PLAY-SELECT-1): a click during
+    /// play that unprojected the explorer's frustum while the user was looking
+    /// through the scene's camera would select whatever happened to be behind
+    /// the cursor in a picture nobody could see. Outside play it is
+    /// viewCamera() to the pointer — renderCamera's first term.
+    iris::CameraNodePtr pickCamera() const;
+    /// WHO OWNS THE POINTER while a run is in flight (PLAY-SELECT-1). True only
+    /// while the run really consumes input — a POSSESSED avatar — and never
+    /// while ejected. False is the ordinary case (explorer/camera play), and it
+    /// is what gives a plain left click back to the editor's pick and gizmo.
+    bool runOwnsPointer() const;
+    /// The document's possession slot has somebody (the one state where the
+    /// play controller is a real consumer of mouse and keys).
+    bool playPossessing() const;
+    /// The selection as it stood at Stop, re-anchored on the restored document
+    /// (PLAY-SELECT-1): the nodes that survived the run keep the selection, the
+    /// outline and the properties column; the gizmo re-reads the poses the
+    /// restore wrote.
+    void refreshSelectionAfterPlay();
+    /// A gizmo drag during a run takes the dragged rigid bodies away from
+    /// Bullet for the length of the gesture and gives them back where the hand
+    /// left them (see the definitions).
+    void beginPlayDragOverPhysics();
+    void endPlayDragOverPhysics();
+    /// The bodies THIS drag took over — the exact set endPlayDragOverPhysics
+    /// gives back, so a selection change mid-drag cannot strand a flag.
+    QList<iris::SceneNodePtr> mPlayDragBodies;
     iris::CameraNodePtr mPilot;
     /// The piloted camera's transform when piloting STARTED, so ejecting can
     /// push ONE undo command for the whole flight (a per-mouse-event command

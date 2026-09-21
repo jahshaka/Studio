@@ -19,6 +19,7 @@
 #include <QPointF>
 #include <QObject>
 #include <QImage>
+#include <QRect>
 #include <QSize>
 #include <QString>
 #include <QStringList>
@@ -323,6 +324,20 @@ public:
     /// desynced once, 2026-09-05, and every editor click went to the player
     /// controller). Verb surface: editor.playing().
     virtual bool isPlaying() const = 0;
+    /// EJECT (PLAY-SELECT-1, owner R13 — Unreal's F8). While a run owns the
+    /// input (a possessed avatar), ejecting hands the mouse and the keyboard
+    /// back to the editor WITHOUT stopping the simulation; un-ejecting gives
+    /// them back. Idempotent, and meaningless outside play: setting it while
+    /// nothing is playing is refused by the verb and ignored here. Stand-in
+    /// viewports never eject.
+    virtual bool playEjected() const { return false; }
+    virtual void setPlayEjected(bool) {}
+    /// WHO OWNS A PLAIN LEFT CLICK RIGHT NOW: "controller" while a run is
+    /// consuming input, "editor" otherwise (including outside play). The verb
+    /// surface is editor.playInputOwner(); the routing in the engine viewport's
+    /// event handlers is keyed on the SAME predicate, so the two cannot
+    /// disagree — the lesson of the 2026-09-05 stuck-play defect.
+    virtual QString playInputOwner() const { return QStringLiteral("editor"); }
     virtual void startPhysicsSimulation() = 0;
     virtual void restartPhysicsSimulation() = 0;
     virtual void stopPhysicsSimulation() = 0;
@@ -520,6 +535,13 @@ public:
     /// The viewport's current render-target size, or an empty size when there is
     /// no render target. Used by the selftest to prove a resize was applied.
     virtual QSize renderTargetSize() const { return QSize(); }
+
+    /// WHERE THIS WIDGET SITS INSIDE ITS TOP-LEVEL WINDOW, in window pixels
+    /// (PLAY-SELECT-1). Every pixel-taking verb speaks the VIEWPORT's
+    /// coordinates and a synthesised X click speaks the WINDOW's; this is the
+    /// conversion, read from the live layout rather than guessed from dock
+    /// sizes. An empty rect when there is no window (stand-ins, offscreen).
+    virtual QRect widgetRectInWindow() const { return QRect(); }
 
     /// The shadow-map atlas base resolution the renderer is CURRENTLY using —
     /// global, one atlas for every light (VISUAL_PARITY_SPEC item 2). The scene
