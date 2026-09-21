@@ -44,6 +44,7 @@ For more information see the LICENSE file
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
 #include "bridge/previewenvironment.h"
+#include "services/materialtile.h"
 #include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
 #include "io/materialpresets.h"
@@ -509,7 +510,7 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     // image as a fallback — correct and instant, and the only answer headless;
     // ONE gesture can afford ONE render, so ask for it here. A batch (a drop of
     // a hundred images) goes through the tray's one-per-turn backlog instead.
-    thumbrebuild::rebuildOne(host.db, host.project, materialGuid, EngineHost::instance().engine());
+    materialtile::mint(host.db, host.project, materialGuid, "materials.createFromImage");
     return materialGuid;
 }
 
@@ -547,14 +548,9 @@ QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVaria
     asset->fileName = host.db->fetchAsset(copy).name;
     asset->assetGuid = copy;
     AssetManager::addAsset(asset);
-    // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
-    // R9(a); the rule THUMBS-1 set and `createFromImage` was the only mint
-    // that kept). A customised preset used to keep the SHIPPED PRESET'S ICON —
-    // which is a picture of the preset, not of this copy, and is not a sphere
-    // for silver or glass: the owner's R9(a) report exactly.
-    // ONE gesture can afford ONE render; headless it fails by name and the
-    // fallback tile stays.
-    thumbrebuild::rebuildOne(host.db, host.project, copy, EngineHost::instance().engine());
+    // (The copy's TILE is rendered inside `customise` now — one place for all
+    // three Customise doors, and a refused render is logged rather than
+    // discarded; PREVIEWENV-2 item c, services/materialtile.h.)
     return copy;
 }
 
@@ -623,12 +619,9 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     assetShader->assetGuid = assetGuid;
     AssetManager::addAsset(assetShader);
     // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
-    // R9(a); the rule THUMBS-1 set and `createFromImage` was the only mint
-    // that kept). The graph twin of createFromImage minted its bundle with
-    // no tile while its VALUES twin rendered one.
-    // ONE gesture can afford ONE render; headless it fails by name and the
-    // fallback tile stays.
-    thumbrebuild::rebuildOne(host.db, host.project, assetGuid, EngineHost::instance().engine());
+    // R9(a)). The graph twin of createFromImage minted its bundle with no tile
+    // while its VALUES twin rendered one.
+    materialtile::mint(host.db, host.project, assetGuid, "materials.createImageGraph");
 
     if (mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
     return assetGuid;
@@ -738,12 +731,9 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     asset->assetGuid = assetGuid;
     AssetManager::addAsset(asset);
     // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
-    // R9(a); the rule THUMBS-1 set and `createFromImage` was the only mint
-    // that kept). A minted bundle carried NO thumbnail at all, so a
-    // material made this way was a grey tile until some sweep found it.
-    // ONE gesture can afford ONE render; headless it fails by name and the
-    // fallback tile stays.
-    thumbrebuild::rebuildOne(host.db, host.project, assetGuid, EngineHost::instance().engine());
+    // R9(a)). A minted bundle carried NO thumbnail at all, so a material made
+    // this way was a grey tile until some sweep found it.
+    materialtile::mint(host.db, host.project, assetGuid, "materials.create");
 
     // `folder` PUTS IT IN THE PROJECT, FILED (DRAWERS-1, the owner's "creating
     // in the project should add it to the project drawer in Materials
@@ -987,14 +977,12 @@ QString MaterialsApi::duplicate(const QString &materialGuid, const QVariantMap &
     asset->fileName = host.db->fetchAsset(copy).name;
     asset->assetGuid = copy;
     AssetManager::addAsset(asset);
-    // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
-    // R9(a); the rule THUMBS-1 set and `createFromImage` was the only mint
-    // that kept). A duplicate inherited the SOURCE row's tile, which is the
-    // right picture only while the copy is untouched and the wrong one the
-    // moment the source's was an icon.
-    // ONE gesture can afford ONE render; headless it fails by name and the
-    // fallback tile stays.
-    thumbrebuild::rebuildOne(host.db, host.project, copy, EngineHost::instance().engine());
+    // THE COPY'S TILE IS A RENDER OF THE COPY (owner review R9(a)): a duplicate
+    // inherits the SOURCE row's tile, which is the right picture only while
+    // the copy is untouched and the wrong one the moment the source's was an
+    // icon. ONE implementation, and it says so when it cannot
+    // (services/materialtile.h).
+    materialtile::mint(host.db, host.project, copy, "materials.duplicate");
     return copy;
 }
 

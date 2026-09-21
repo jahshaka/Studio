@@ -102,11 +102,18 @@ namespace assettray {
 QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QString &folderGuid,
                           int typeFilter = -1, bool showMembers = false);
 
-/// THE WHOLE PROJECT, FLAT: `list` applied to the root AND to every folder,
-/// each asset once, order preserved (DRAWERS-1). What a drawer with no folder
-/// navigation of its own shows — the Materials module's project drawer, which
-/// is a materials-filtered VIEW of this same model and must not lose a
+/// THE WHOLE PROJECT, FLAT: the rule `list` applies, over the root AND every
+/// folder, each asset once, order preserved (DRAWERS-1). What a drawer with no
+/// folder navigation of its own shows — the Materials module's project drawer,
+/// which is a materials-filtered VIEW of this same model and must not lose a
 /// material to a folder the user made in the editor's tray.
+///
+/// IT IS ONE LISTING, NOT ONE PER FOLDER (LISTALL-1). It used to CALL `list`
+/// per folder, and every one of those repeated the four project-wide reads and
+/// the collapse's batch: ~110 SQL statements for a ten-folder project, on
+/// every ProjectMembership::changed — which a dependency-edge write (a
+/// material applied in the editor) is. The cost is now flat in the number of
+/// folders, bounded by assettray.listall_cost.
 QVector<AssetRecord> listAll(Database *db, const QString &projectGuid, int typeFilter = -1,
                              bool showMembers = false);
 

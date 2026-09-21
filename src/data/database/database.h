@@ -540,6 +540,14 @@ public:
     /// which is where "what is a tile" is decided (the dependee filter that
     /// used to ride here hid every asset a scene USED — lane L13).
     QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1);
+    /// THE SAME LISTING FOR SEVERAL PARENTS AT ONCE, in one statement
+    /// (LISTALL-1): `parent IN (...)`, the same project scope, the same
+    /// ORDER BY name DESC, so a caller that wants the whole project — the
+    /// root and every folder — pays one query instead of one per folder.
+    /// Rows come back in parent order is NOT promised: bucket them by
+    /// `record.parent`, which is what assettray::listAll does.
+    QVector<AssetRecord> fetchChildAssetsIn(const QStringList &parents, const QString &projectGuid,
+                                            int filter = -1);
     /// THE MEMBERSHIP RULE as a SQL fragment: `column NOT IN (the rows whose
     /// parent is another ASSET)` — an import's Mesh and Texture members, which
     /// ride their Object and are never library tiles of their own. The Assets

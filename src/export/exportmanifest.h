@@ -31,7 +31,8 @@ For more information see the LICENSE file
 //        "typeId": 5,                   // raw ModelTypes int (lossless)
 //        "files": [ { "role": "source", "name": "lotus.glb",
 //                     "size": 24567890, "oid": "<sha256 hex>" } ],
-//        "dependencies": [ "guid2", ... ]   // OUTGOING edges (what it needs)
+//        "dependencies": [ "guid2", ... ],  // OUTGOING edges (what it needs)
+//        "folder": "<project folder guid>"  // where the PIN files it; absent = root
 //     } ]
 //   }
 //
@@ -68,6 +69,20 @@ struct ManifestAsset
     int typeId = -1;         // raw ModelTypes value
     QVector<ManifestFile> files;
     QStringList dependencies;   // guids this asset depends on (outgoing edges)
+    /// WHERE THE PROJECT FILES IT, when the project files it on the PIN
+    /// (ARCHIVE-FOLDER-1). A project folder's guid, or empty for "at the root"
+    /// — which is also what every archive written before this key says, and
+    /// what a non-project export means.
+    ///
+    /// WHY IT IS HERE AND NOT IN THE CATALOG BLOB. A row the project OWNS
+    /// carries its folder in `assets.parent`, which travels inside the
+    /// archive's database; a row the project PINS is a LIBRARY row shared by
+    /// every project, so its filing lives on the pin (`project_assets.folder`
+    /// — services/projectfolders.h) and the pin is re-created by the importer,
+    /// which had nothing to re-create it FROM. The folder ROW itself travels
+    /// in the catalog and keeps its guid (Database::importProject), so this
+    /// guid still names it on the far side.
+    QString folder;
 };
 
 /// THE SCENE-SCALE BLOCK (owner's scene-scale convention, 2026-09-08;

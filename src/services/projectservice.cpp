@@ -345,12 +345,20 @@ void ProjectService::saveOpenScene()
 
 void ProjectService::saveInitialScene(const QString &projectPath)
 {
-    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
+    {
+        LoadTimeline::Accumulate row(QStringLiteral("save:preWrite"));
+        if (mPreWrite) mPreWrite();  // a save writes the ORIGINAL material
+    }
     SceneWriter writer;
-    auto sceneObject = writer.getSceneObject(projectPath,
-                                             sceneProvider(),
-                                             iris::PostProcessManagerPtr(),
-                                             viewport->isInitialized() ? viewport->getEditorData() : nullptr);
+    QByteArray sceneObject;
+    {
+        LoadTimeline::Accumulate row(QStringLiteral("save:serialize"));
+        sceneObject = writer.getSceneObject(projectPath,
+                                            sceneProvider(),
+                                            iris::PostProcessManagerPtr(),
+                                            viewport->isInitialized() ? viewport->getEditorData()
+                                                                      : nullptr);
+    }
 
     // Headless (scripted project.create): the viewport never initialized — the
     // legacy widget's takeScreenshot would touch a GL context that isn't there.
@@ -376,7 +384,9 @@ void ProjectService::saveInitialScene(const QString &projectPath)
         const iris::ScenePtr scene = sceneProvider();
         const iris::GiMode parkedGi = scene ? scene->giMode : iris::GiMode::OFF;
         if (scene) scene->giMode = iris::GiMode::OFF;
+        LoadTimeline::Accumulate shot(QStringLiteral("save:thumbnail"));
         auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+        shot.stop();
         if (scene) scene->giMode = parkedGi;
         if (!img.isNull()) {
             QBuffer buffer(&thumb);
@@ -385,7 +395,10 @@ void ProjectService::saveInitialScene(const QString &projectPath)
         }
     }
 
-    db->updateProject(sceneObject, thumb, project->getProjectGuid());
+    {
+        LoadTimeline::Accumulate row(QStringLiteral("save:updateProject"));
+        db->updateProject(sceneObject, thumb, project->getProjectGuid());
+    }
 
     undo->markSaved();
 }

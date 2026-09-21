@@ -941,3 +941,32 @@ add_dependencies(test_gi_boot_textures JahshakaEngineMedia)
 add_test(NAME gi.boot_textures COMMAND test_gi_boot_textures
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# gi.stream_edit — AN EDIT THAT ARRIVES WHILE THE ARM IS STILL BEING BUILT
+# (SPECS/OPEN_COVER_SPEC.md §2 A; lane OPEN-COVER-2a's fix round item 1).
+#
+# A world's first GI arm is built one STAGE per streaming driver frame now, so
+# there is a three-to-five frame window in which the scene can be edited
+# mid-build. The first cut ENDED the build there and the scene kept its cascades
+# with no probe grid and no irradiance field for the rest of its life; the rule
+# is that an invalidation REWINDS the machine and the scout re-fits the box.
+# This is the only suite that can drive that window deterministically — it sets
+# the frame pace itself, which a script cannot (editor.frame is always Complete,
+# and that is the property case 4 pins).
+#
+# RUN_SERIAL like every cascade suite: the chain holds four voxel volumes.
+add_executable(test_gi_stream_edit test_gi_stream_edit.cpp)
+set_target_properties(test_gi_stream_edit PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_stream_edit PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_stream_edit PRIVATE JahshakaEngine)
+add_dependencies(test_gi_stream_edit JahshakaEngineMedia)
+add_test(NAME gi.stream_edit COMMAND test_gi_stream_edit
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)

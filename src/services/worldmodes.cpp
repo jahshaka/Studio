@@ -1101,8 +1101,15 @@ static QVector<ParamRow> buildPostFxParams()
         p.label = QStringLiteral("AO Radius");
         p.ownerRowId = QStringLiteral("ssao");
         p.minValue = 0.05; p.maxValue = 64.0; p.perPixelStep = 0.02; p.decimals = 2;
-        p.doc = QStringLiteral("How far the occlusion looks, in metres. Too large and every "
-                               "surface shadows every other; too small and only the tightest "
+        p.doc = QStringLiteral("How far the occlusion looks, in metres, and it is a CONTACT "
+                               "scale by default (0.35 m) rather than a room scale. Photon "
+                               "already computes the occlusion of the ambient at every scale "
+                               "its voxels resolve, from the real geometry; what is left for a "
+                               "screen-space march is what falls between the voxels, which is "
+                               "centimetres. Raising it does not add contact shadowing, it adds "
+                               "a second and cruder copy of the bounce's own occlusion \u2014 "
+                               "measured on a 4 m cube, a 2 m radius darkened the bottom 1.55 m "
+                               "of the wall, sunlight included. Too small and only the tightest "
                                "corners darken.");
         p.get = [](const iris::ScenePtr &s) { return double(s->ssaoRadius); };
         p.set = [](const iris::ScenePtr &s, double v) { s->ssaoRadius = float(v); };

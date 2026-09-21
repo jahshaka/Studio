@@ -235,6 +235,18 @@ for (var pi = 0; pi < PORTS.length; ++pi) {
     // ---- the world the port authored ----
     assert(world.get().gi.mode === port.gi,
            port.name + ": GI mode " + world.get().gi.mode + " (authored " + port.gi + ")");
+    // GIVE THE WORLD ITS FRAMES BEFORE ASKING WHAT THE RENDERER BUILT
+    // (OPEN_COVER_SPEC §2 A, lane OPEN-COVER-2a). A world's FIRST GI arm is no
+    // longer built inside the open — it is the longest thing the engine does on
+    // the UI thread and it used to land on a frame drawn behind the loading
+    // cover — so `giStatus().voxelMetres` reads 0 until a frame has rendered.
+    // This is the same rule `threading.newproject_stall` already states in its
+    // own words ("the deferral is a deferral, not a cancellation: give the
+    // viewport its frames and it must arm"), and ONE frame is enough: a
+    // `Complete` frame, which is what `editor.frame` renders, builds the whole
+    // arm. The assertion itself is unchanged, and it is still the assertion
+    // that a silently unbuilt arm fails.
+    editor.frame(2);
     if (port.check) port.check();
 
     // ---- the picture ----
