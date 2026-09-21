@@ -131,9 +131,9 @@ public:
 	WideRangeSpinBox* minSpinBox;
 	QDoubleSpinBox* stepSpinBox;
 	double value;
-	double min;
-	double max;
-	double step;
+	double min = 0.0;
+	double max = 0.0;
+	double step = 0.0;
 
 	LabelState state = LabelState::Visible;
 signals:

@@ -53,11 +53,11 @@ namespace previewenv {
 /// in, its half-extents in DEGREES about that direction, and its radiance.
 struct Softbox
 {
-    const char *name;
-    float dir[3];
-    float halfWidthDeg;
-    float halfHeightDeg;
-    float radiance;
+    const char *name = nullptr;
+    float dir[3] = {};
+    float halfWidthDeg = 0.0f;
+    float halfHeightDeg = 0.0f;
+    float radiance = 0.0f;
 };
 
 /// The three softboxes, in the order they are painted.

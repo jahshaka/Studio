@@ -19,7 +19,7 @@ public:
 
 private:
 	
-	IntProperty *prop;
+	IntProperty *prop = nullptr;
 	int x = 0;
 	WidgetInt *wid;
 	void setConnections();

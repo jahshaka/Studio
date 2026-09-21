@@ -22,9 +22,9 @@ public:
 	void setValue(QString guid);
 
 private:
-	TextureProperty *prop;
+	TextureProperty *prop = nullptr;
 	GraphTexture* graphTexture = nullptr;
-	QPushButton *texture;
+	QPushButton *texture = nullptr;
 	QString value = "";
 	WidgetTexture *wid;
 	void setConnections();

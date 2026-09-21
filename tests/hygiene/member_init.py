@@ -198,6 +198,14 @@ class Scanner:
         self.texts = {}
         self.nospace = {}
         self.enums = set()
+        # Every `class X` / `struct X` in scope. A name in BOTH sets is not an
+        # enum here: enum names collide across files (irisgl's `enum Value` in
+        # document/materials/material.h against materials::Value, the bake
+        # program's own struct, which initialises itself) and this scanner has
+        # no scopes. The collision is resolved towards "not an enum", which
+        # costs a false negative and never a false positive — the rule this
+        # gate is written under.
+        self.class_names = set()
         self.aliases = {}
         for path in source_files(root, roots):
             with open(path, errors='replace') as fh:
@@ -209,6 +217,12 @@ class Scanner:
             self.nospace[rel] = t.replace(' ', '')
             for m in re.finditer(r'\benum\s+(?:class\s+|struct\s+)?(\w+)', t):
                 self.enums.add(m.group(1))
+            for m in CLASS_RE.finditer(t):
+                # `enum class X {` matches CLASS_RE too — that is the enum, not
+                # a class of the same name.
+                if t[:m.start()].rstrip().endswith('enum'):
+                    continue
+                self.class_names.add(m.group(2))
             for m in re.finditer(r'\busing\s+(\w+)\s*=\s*([\w:]+)\s*;', t):
                 self.aliases[m.group(1)] = m.group(2)
             for m in re.finditer(r'\btypedef\s+([\w:\s]+?)\s+(\w+)\s*;', t):
@@ -244,7 +258,7 @@ class Scanner:
             short = self.aliases[short].split('::')[-1]
             if short in SCALAR:
                 return 'scalar'
-        if short in self.enums:
+        if short in self.enums and short not in self.class_names:
             return 'enum'
         if last.startswith('Qt::') or (last.count('::') >= 1 and last.split('::')[0].startswith('Q')
                                        and short in QT_ENUMS):

@@ -52,7 +52,7 @@ struct MasterSlot
 {
 	enum Target { ColorSlot, FloatSlot, NormalSlot, NoTarget };
 	QString socketName;
-	Target target;
+	Target target = ColorSlot;
 	QString valueKey; // constant lands here ("" = constants unsupported)
 	QString mapKey;   // texture lands here ("" = textures unsupported)
 };
