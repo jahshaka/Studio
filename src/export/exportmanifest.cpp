@@ -62,6 +62,9 @@ QJsonObject ExportManifest::toJson() const
             for (const QString &d : a.dependencies) deps.append(d);
             ao["dependencies"] = deps;
         }
+        // Written only when there is one: an unfiled pin and every non-project
+        // export say nothing, exactly as archives did before the key existed.
+        if (!a.folder.isEmpty()) ao["folder"] = a.folder;
         assetArr.append(ao);
     }
     root["assets"] = assetArr;
@@ -172,6 +175,7 @@ ExportManifest ExportManifest::fromBytes(const QByteArray &bytes, QString *error
         }
         for (const auto &dv : ao["dependencies"].toArray())
             a.dependencies.append(dv.toString());
+        a.folder = ao["folder"].toString();   // absent = the project root
         m.assets.append(a);
     }
 

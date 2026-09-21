@@ -38,11 +38,14 @@ For more information see the LICENSE file
 // is the only place that has to know which of the two a guid takes — `file`
 // decides, `folderOf` answers, and everything above them speaks in guids.
 //
-// KNOWN GAP, stated rather than hidden: a project ARCHIVE does not carry the
-// pin's folder (services/projectarchiver.cpp exports rows and re-pins), so a
-// pinned library asset comes back at the root of the imported project. A row
-// the project OWNS keeps its folder, because that rides `assets.parent` in the
-// exported asset row.
+// AN ARCHIVE CARRIES BOTH FILINGS (ARCHIVE-FOLDER-1; this was a stated gap
+// until then). A row the project OWNS keeps its folder because that rides
+// `assets.parent` inside the archive's catalog snapshot; a PINNED row's folder
+// rides the export manifest (`folder` per asset, exportmanifest.h) and is
+// written back by the importer right after the pin. The folder ROW itself
+// travels in the catalog and keeps its guid, so the recorded guid still names
+// it on the far side. An archive written before the key carries no folder and
+// its pins come back at the root, exactly as they used to.
 //
 // REFERENCE-WITH-PIN IS UNCHANGED. A move changes where a row is LISTED and
 // nothing else: no pin moves, no content is re-resolved, no bytes are touched.

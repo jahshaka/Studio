@@ -202,12 +202,22 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
     const QString objectsDir = QDir(mStage->path()).filePath(QStringLiteral("objects"));
     QSet<QString> written;
 
+    // WHERE THE PROJECT FILES ITS PINS (ARCHIVE-FOLDER-1). A row the project
+    // OWNS carries its folder in `assets.parent`, and that travels inside the
+    // catalog snapshot above; a PINNED library row is shared by every project,
+    // so its filing is a column on the PIN (services/projectfolders.h) and
+    // nothing in the archive carried it — every pinned row came back at the
+    // root of the imported project, the folders the user made standing empty
+    // beside it. One query for the whole export.
+    const QHash<QString, QString> pinFolders = db->fetchProjectPinFolders(projectGuid);
+
     while (members.next()) {
         ManifestAsset asset;
         asset.guid = members.value(0).toString();
         asset.name = members.value(1).toString();
         asset.typeId = members.value(2).toInt();
         asset.type = typeNameOf(asset.typeId);
+        asset.folder = pinFolders.value(asset.guid);   // empty = the root
 
         // Outgoing dependency edges.
         QSqlQuery deps(conn);
@@ -412,6 +422,7 @@ bool ProjectArchiver::workImport()
         for (const ManifestAsset &asset : manifest.assets) {
             IngestAsset plan;
             plan.archiveGuid = asset.guid;
+            plan.folder = asset.folder;   // ARCHIVE-FOLDER-1; empty = the root
             for (const ManifestFile &file : asset.files) {
                 // objects/<oid>.<ext> — find by oid prefix (ext recorded in name).
                 const auto candidates =
@@ -586,6 +597,14 @@ void ProjectArchiver::installImportSlice()
         ++mResult.objects;
     }
     AssetCas::writePin(conn, mResult.projectGuid, localGuid, sourceOid);
+    // ...AND WHERE THE PROJECT FILED IT (ARCHIVE-FOLDER-1). The pin's folder
+    // is a column on the row writePin just upserted, and the folder itself
+    // travelled in the catalog under its own guid (Database::importProject
+    // maps a folder guid to itself), so the archive's guid still names it
+    // here. An archive written before the key carries none and the pin stays
+    // at the root, which is what it has always done.
+    if (!asset.folder.isEmpty())
+        db->setProjectAssetFolder(mResult.projectGuid, localGuid, asset.folder);
     ++mResult.assets;
 
     emitProgress(55 + (40 * mNextIngest) / qMax(1, mIngest.size()),
