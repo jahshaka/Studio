@@ -191,6 +191,22 @@ set_tests_properties(scripting.e2e.cube_shade PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 400)
+# LATTICE-1: the picture does not know where the voxel lattice sits. Five arms,
+# each one standing the whole Photon chain somewhere else (up to eight cascade-0
+# cells off the camera) while the scene and the camera never move, and each one
+# checking that it really did — a cascade that re-centred on the way back
+# measures nothing and is skipped by name. Engine-up, four GI chain builds per
+# arm; ~110 s solo on the rig, 400 s is the gate-load headroom.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lattice_placement)
+file(MAKE_DIRECTORY ${_home})
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.lattice_placement
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lattice_placement.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.lattice_placement PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 400)
 # HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
 # roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts
