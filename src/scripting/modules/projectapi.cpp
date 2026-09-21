@@ -340,7 +340,10 @@ bool ProjectApi::open(const QString &guidOrName)
     // item 2): end the run's entry so closeProject's clear() is not a no-op,
     // and open a fresh one for what the script does in the new project.
     host.endRunUndoMacro();
-    if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
+    // The close is the first half of this open: the page the user is on stays
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
+    if (host.services->project->isSceneOpen())
+        host.mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
 
     // The ledger starts HERE, not in MainWindow::openProject: the session
     // registrations are part of what an open costs and they happen inside it.
@@ -399,7 +402,10 @@ bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options
             return fail(QStringLiteral("%1: %2").arg(QStringLiteral("project.openAsync"), whyMissing));
     }
     host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
-    if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
+    // The close is the first half of this open: the page the user is on stays
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
+    if (host.services->project->isSceneOpen())
+        host.mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
 
     LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
     // The open's first slices do the session registrations themselves, with

@@ -47,6 +47,29 @@ public:
     /// Qt must not paint here — the engine owns these pixels.
     QPaintEngine *paintEngine() const override { return nullptr; }
 
+    /// IS THIS WIDGET'S NATIVE WINDOW ON SCREEN RIGHT NOW (VIEW-REBUILD-1)?
+    ///
+    /// Qt's own notion, and it is the one that matters: `isVisible()` is false
+    /// exactly when Qt has unmapped this window or one of its native ancestors
+    /// (every ancestor of a WA_NativeWindow widget has a window of its own), and
+    /// an unmapped window cannot show a frame however many the engine presents
+    /// into it. The X server agrees — `xwininfo` reads the window UNVIEWABLE for
+    /// precisely these stretches (spikes/view-rebuild-1/).
+    bool nativeMapped() const { return isVisible() && internalWinId() != 0; }
+
+    /// HOW MANY TIMES THAT WINDOW HAS LEFT THE SCREEN, and how many times its
+    /// rectangle has changed. Never reset, so a caller DIFFERENCES them across
+    /// an operation — the same shape as `coversPresented` and `blankPresented`,
+    /// and for the same reason: an instant poll from outside the process cannot
+    /// see a window that was away for 500 ms in the middle of an open.
+    ///
+    /// A load IN PLACE must move NEITHER: the page it happens on never changes,
+    /// so the viewport keeps its window and its rect from the teardown through
+    /// to the first frame of the new world. A page switch (the Desktop, the
+    /// Player, a create from the Desktop) moves both, by design.
+    qulonglong nativeHides() const { return mNativeHides; }
+    qulonglong rectChanges() const { return mRectChanges; }
+
 protected:
     /// Deliberately empty. Together with WA_OpaquePaintEvent this stops Qt
     /// erasing or repainting the region between the engine's presents, which
@@ -99,6 +122,10 @@ private:
     QString                                 mViewName;
     jahshaka::engine::Colour                mBackground{0.10f, 0.11f, 0.14f};
     QString                                 mCreateError;
+    /// VIEW-REBUILD-1's two counters — see nativeHides()/rectChanges().
+    qulonglong                              mNativeHides = 0;
+    qulonglong                              mRectChanges = 0;
+    QSize                                   mLastRect;
 };
 
 #endif // ENGINEVIEWWIDGET_H

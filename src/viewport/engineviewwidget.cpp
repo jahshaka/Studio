@@ -129,6 +129,12 @@ void EngineViewWidget::recreateViewForNewWindow()
 void EngineViewWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    // Counted BEFORE the view is told, and only when the size really moved: Qt
+    // sends a resize event for a move-only layout pass too (VIEW-REBUILD-1).
+    if (event->size() != mLastRect) {
+        mLastRect = event->size();
+        ++mRectChanges;
+    }
     if (mView) mView->resize(static_cast<unsigned>(width()), static_cast<unsigned>(height()));
 }
 
@@ -141,5 +147,10 @@ void EngineViewWidget::showEvent(QShowEvent *event)
 void EngineViewWidget::hideEvent(QHideEvent *event)
 {
     QWidget::hideEvent(event);
+    // THE WINDOW HAS LEFT THE SCREEN. Qt sends this to the widget whether it was
+    // hidden itself or an ANCESTOR was (QWidgetPrivate::hideChildren) — which is
+    // what a page switch does, and what made an in-place open show the app's
+    // watermark for up to three seconds before VIEW-REBUILD-1.
+    ++mNativeHides;
     if (mView) mView->setEnabled(false);
 }

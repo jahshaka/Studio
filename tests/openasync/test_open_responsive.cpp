@@ -804,6 +804,15 @@ int main(int argc, char **argv)
                     return mcp.runScript(QStringLiteral("editor.viewportState().blankPresented"))
                         .value("result").toDouble();
                 };
+                // THE WINDOW THOSE FRAMES GO TO (lane VIEW-REBUILD-1). Read as
+                // one object: three numbers of one instant, and two of them are
+                // only meaningful as a difference across the open.
+                const auto window = [&]() {
+                    return mcp.runScript(QStringLiteral(
+                                             "JSON.parse(JSON.stringify(editor.viewportState()))"))
+                        .value("result").toObject();
+                };
+                const QJsonObject viewBefore = window();
                 const double blanksBefore = blanks();
                 const double coversBefore = covers();
                 mcp.runScript(QStringLiteral("project.openAsync('%1')").arg(showroomGuid));
@@ -814,6 +823,7 @@ int main(int argc, char **argv)
                     QThread::msleep(20);
                 }
                 const double blanksAfter = blanks();
+                const QJsonObject viewAfter = window();
                 std::printf("info: [in-place open, preference OFF] background frames presented "
                             "%.0f -> %.0f | loading covers %.0f -> %.0f\n",
                             blanksBefore, blanksAfter, coversBefore, covers());
@@ -821,6 +831,63 @@ int main(int argc, char **argv)
                 CHECK(blanksAfter > blanksBefore,
                       "a load IN PLACE presents the viewport's own background while no world is "
                       "bound — the previous world's last frame is not what stays on screen");
+                // ...AND THE WINDOW IT PRESENTS THEM INTO STAYED ON SCREEN
+                // (VIEW-REBUILD-1). Before this lane the open's close half
+                // switched the window to the Desktop page and the reveal
+                // switched it back; the editor page is a native X ancestor of
+                // the viewport's own window, so the viewport was UNVIEWABLE for
+                // 499-2,973 ms (measured, spikes/view-rebuild-1/) and the user
+                // watched the app's watermark while the engine presented into
+                // nothing — which makes every frame counted above invisible.
+                // Differenced, not polled, for the same reason `coversPresented`
+                // is: from outside the process a poll lands after it is over.
+                std::printf("info: [in-place open] nativeHides %.0f -> %.0f | rectChanges "
+                            "%.0f -> %.0f | mapped %s -> %s\n",
+                            viewBefore.value("nativeHides").toDouble(),
+                            viewAfter.value("nativeHides").toDouble(),
+                            viewBefore.value("rectChanges").toDouble(),
+                            viewAfter.value("rectChanges").toDouble(),
+                            viewBefore.value("nativeMapped").toBool() ? "yes" : "no",
+                            viewAfter.value("nativeMapped").toBool() ? "yes" : "no");
+                std::fflush(stdout);
+                CHECK(viewAfter.value("nativeHides").toDouble()
+                          == viewBefore.value("nativeHides").toDouble(),
+                      "a load IN PLACE never takes the viewport's native window off screen — "
+                      "the page it happens on does not change");
+                CHECK(viewAfter.value("rectChanges").toDouble()
+                          == viewBefore.value("rectChanges").toDouble(),
+                      "...and the viewport's rectangle does not move across it either: the "
+                      "panels around it are never taken down and put back");
+                CHECK(viewAfter.value("nativeMapped").toBool()
+                          && viewBefore.value("nativeMapped").toBool(),
+                      "...and the window is on screen at both ends of the open");
+
+                // THE CONTROL, and the arm above is worth nothing without it: a
+                // counter that never moves proves nothing. A CREATE from the
+                // editor still goes out to the Desktop and back — its page
+                // switch IS its reveal — so it MUST move both counters, and it
+                // must land on a presenting editor when it is done.
+                const QJsonObject beforeCreate = window();
+                mcp.runScript(QStringLiteral("project.create('VIEW-REBUILD-1 control %1')")
+                                  .arg(QDateTime::currentMSecsSinceEpoch()));
+                const QJsonObject afterCreate = window();
+                std::printf("info: [create from the editor — the control] nativeHides %.0f -> "
+                            "%.0f | rectChanges %.0f -> %.0f | state '%s'\n",
+                            beforeCreate.value("nativeHides").toDouble(),
+                            afterCreate.value("nativeHides").toDouble(),
+                            beforeCreate.value("rectChanges").toDouble(),
+                            afterCreate.value("rectChanges").toDouble(),
+                            qUtf8Printable(afterCreate.value("state").toString()));
+                std::fflush(stdout);
+                CHECK(afterCreate.value("nativeHides").toDouble()
+                          > beforeCreate.value("nativeHides").toDouble(),
+                      "a CREATE from the editor does take the window off screen — it goes out "
+                      "to the Desktop and back, and that page switch is its reveal (so the "
+                      "assertions above are measuring something real)");
+                CHECK(afterCreate.value("nativeMapped").toBool()
+                          && afterCreate.value("state").toString() != QLatin1String("noscene"),
+                      "...and the create lands on an editor page that is on screen with a world "
+                      "bound");
             }
         }
 
