@@ -420,15 +420,16 @@ private:
     static constexpr int kIndicatorHoldTicks = 12;
     StreamSample mStream;
     /// Reads `Engine::streamingWork()` and banks this frame's differences.
-    /// Called from the driver's tick, before the overlay is refreshed, so the
-    /// line drawn this frame describes what the PREVIOUS frame left owed.
-    void sampleStreamingWork();
+    /// Called before EVERY frame this viewport draws, so the line describes
+    /// what the previous frame left owed. `driverFrame` is the safety rule:
+    /// see the definition.
+    void sampleStreamingWork(bool driverFrame);
     /// Composes the line from the CURRENT reading — the counts are the
     /// engine's and the world's name is the host's. Called once per drawn
     /// frame by `sampleStreamingWork`, never by the overlay (which reads the
     /// held line, so what is on screen and what `editor.viewportState()
     /// .indicator` reports are the same string).
-    QString composeIndicatorLine() const;
+    QString composeIndicatorLine(bool driverFrame) const;
     /// A world is on its way and none of it is on screen yet — the engine's
     /// half of `mSceneLoadPending`, and it needs to be its own flag because
     /// `clearScene` wipes that one while an open is in flight (see

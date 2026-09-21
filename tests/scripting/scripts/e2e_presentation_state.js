@@ -166,6 +166,24 @@ if (editor.viewportState().state !== "offscreen") {
         "a scripted frame builds the lighting arm to completion, never a stage of it");
     assert(after.cover === "none", "and still no cover");
 
+    // ...AND IT DRAWS NO INDICATOR EITHER, which is a harder rule than it
+    // looks and cost this lane a gate (scripting.e2e.atom_lods). THE OVERLAY
+    // IS GEOMETRY: its text quads go through the same render queue as the
+    // scene, so every character of that line adds draw calls and triangles to
+    // `app.renderStats().submittedTriangles` — the number the LOD suites
+    // measure a level switch with. A first cut spent the streaming window on
+    // DRIVER ticks only, and a --script run has none, so the line came back
+    // hundreds of frames after the load on any frame that compiled a shader.
+    // After a load the line belongs to the render loop and to nothing else.
+    var tris = app.renderStats().submittedTriangles;
+    editor.frame(1);
+    assert(editor.viewportState().indicator === "",
+        "a scripted frame after a load draws NO indicator (got '" +
+        editor.viewportState().indicator + "')");
+    editor.frame(1);
+    assert(app.renderStats().submittedTriangles === tris,
+        "...so a stepped frame submits the same geometry it did before (" + tris + ")");
+
     // (4) AND THE PREFERENCE SURVIVES A ROUND TRIP through the one capability
     //     the Preferences row also calls (services/loadingcover.h).
     assert(editor.loadingCover(true) === true, "cover on");

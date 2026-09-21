@@ -125,7 +125,7 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // overlay is composed, because two of its three numbers are
             // DIFFERENCES across frames: the indicator drawn this frame
             // describes the state the previous frame ended in.
-            sampleStreamingWork();
+            sampleStreamingWork(true);
             // The cover comes down here, one frame BEHIND the present that
             // earned it: framesPresented counts frames already on screen.
             refreshOverlay();
@@ -2749,7 +2749,7 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         // The indicator's reading is per FRAME THIS VIEWPORT DREW, whoever
         // drove it (OPEN_COVER_SPEC §2.1): the open runner's slice boundaries
         // come through here, and during a load they are most of the frames.
-        sampleStreamingWork();
+        sampleStreamingWork(false);
         ++mFrameEpoch;
         // A SCRIPTED frame is not a driver frame, and a capture taken while a
         // script runs must not read like the owner's own loop (§4.2's frame
@@ -3365,7 +3365,25 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
 //  load began, against the last saved run's total — and what keeps the line
 //  ALIVE is whether the last frame compiled anything at all.
 
-void EngineSceneViewport::sampleStreamingWork()
+// `driverFrame` IS THE SAFETY RULE, AND IT COST A GATE (scripting.e2e.atom_lods,
+// this lane's first gate). THE OVERLAY IS GEOMETRY: its text quads go through
+// the same render queue as the scene, so every character of this line ADDS
+// DRAW CALLS AND TRIANGLES to `app.renderStats().submittedTriangles` — which is
+// the number the LOD suites measure a level switch with. The first cut spent
+// the streaming window on DRIVER ticks only (that is what `mStreamFramesLeft`
+// is for, and a `--script` run has no driver ticks at all), so in a scripted
+// run the window never drained and the line came back on any frame that
+// happened to compile a shader, hundreds of frames after the load: the suite
+// read 2,035 triangles for a pose that must read the authored count.
+//
+// So after the load the line is a DRIVER-LOOP thing and nothing else. During
+// the load itself any frame may draw it — the runner's slice boundaries are the
+// only frames there are — and the first deterministic frame after the load
+// clears it with no hold at all, so a scripted run cannot carry it into a
+// measurement. THE GENERAL RULE, beside "a scripted frame renders complete":
+// anything the host draws OVER the scene is part of the scene's numbers, so it
+// belongs to the driver's frames only.
+void EngineSceneViewport::sampleStreamingWork(bool driverFrame)
 {
     if (!mEngine) return;
     const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
@@ -3380,10 +3398,15 @@ void EngineSceneViewport::sampleStreamingWork()
     // drawn frame, so the string the HUD draws and the string
     // `editor.viewportState().indicator` reports are the same object and
     // cannot disagree about a reading taken a microsecond apart.
-    const QString now = composeIndicatorLine();
+    const QString now = composeIndicatorLine(driverFrame);
     if (!now.isEmpty()) {
         mStream.line = now;
-        mStream.holdTicks = kIndicatorHoldTicks;
+        // The hold exists to stop a 60 Hz flicker, which is a property of the
+        // render loop; a deterministic frame gets none.
+        mStream.holdTicks = driverFrame ? kIndicatorHoldTicks : 0;
+    } else if (!driverFrame) {
+        mStream.line.clear();
+        mStream.holdTicks = 0;
     } else if (mStream.holdTicks > 0 && --mStream.holdTicks == 0) {
         mStream.line.clear();
     }
@@ -3420,16 +3443,18 @@ QString EngineSceneViewport::coverState() const
     return QStringLiteral("none");
 }
 
-QString EngineSceneViewport::composeIndicatorLine() const
+QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
 {
     // WHEN THE LINE IS UP. While the host says a world is on its way it is up
     // unconditionally — that is the only thing on screen saying so once the
-    // panel is off — and after the reveal it stays for as long as the streaming
-    // window is open AND something is actually owed. Outside a load it never
-    // appears: a texture arriving behind an asset drop is not a world loading.
+    // panel is off — and after the reveal it stays while the DRIVER's streaming
+    // window is open AND something is actually owed (see the note on
+    // sampleStreamingWork for why the driver's frames and nobody else's).
+    // Outside a load it never appears: a texture arriving behind an asset drop
+    // is not a world loading.
     const StreamingPending p = streamingPending();
     const bool arriving = mSceneLoadPending;
-    if (!arriving && !(mStreamFramesLeft > 0 && p.any())) return QString();
+    if (!arriving && !(driverFrame && mStreamFramesLeft > 0 && p.any())) return QString();
 
     // ASCII ONLY, and it is not a style choice: the overlay font is Ogre's
     // `DebugFont` (irisgl/engine/src/OgreOverlayHud.cpp), whose glyph range
@@ -3547,7 +3572,7 @@ void EngineSceneViewport::presentCovered(int frames)
     const bool wasEnabled = view()->isEnabled();
     view()->setEnabled(true);
     for (int i = 0; i < frames; ++i) {
-        sampleStreamingWork();
+        sampleStreamingWork(false);
         ++mFrameEpoch;
         mEngine->renderOneFrame();
         devicelossend::checkAfterFrame(mEngine.get());
