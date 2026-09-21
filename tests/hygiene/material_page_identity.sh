@@ -20,11 +20,25 @@
 # happens on the one path where the load says no.
 #
 # THE RULE: the three identity fields are written ONLY by the functions that
-# own an identity change — `adoptGraph` (the page takes a material that HAS
+# own an identity change — `adoptGraph` (a document takes a material that HAS
 # loaded), `createShader` (a material this page just made), `loadGraphFromTemplate`
 # (an unsaved new graph clears the guid) and `editingFinishedOnListItem` (a
 # rename). A signal handler naming a material must pass it to `loadGraph` as an
 # ARGUMENT and let the load decide.
+#
+# THE IDENTITY IS A DOCUMENT'S SINCE MATERIALS-TABS-1 (several materials are
+# open at once, each with its own guid, origin, graph, undo stack and pending
+# autosave), so the field spelling this reads is `doc->info.<field>` as well as
+# the page's old `currentShaderInformation.<field>`. The rule and the defect it
+# gates are unchanged — one place, after the graph is in hand — and the list
+# gains the two functions that own the OTHER two identity changes a document
+# can have, both of which are about a material that is no longer what it was:
+#   * `renameOpenDocuments` — the body of `editingFinishedOnListItem`'s rename,
+#     which now has to reach EVERY open document of the renamed material rather
+#     than "the current one".
+#   * `forgetMaterial` — the material was deleted from the library, so the
+#     documents that are it stop being it (and close). Clearing an identity
+#     cannot write a graph into a row: the save is stood down first.
 #
 # $1 = the repo root
 set -u
@@ -40,7 +54,7 @@ fi
 
 # The functions allowed to write the page's identity. A new one here is a
 # deliberate decision, which is the point of the list.
-ALLOWED="adoptGraph createShader loadGraphFromTemplate editingFinishedOnListItem"
+ALLOWED="adoptGraph createShader loadGraphFromTemplate editingFinishedOnListItem renameOpenDocuments forgetMaterial"
 
 offenders=$(awk -v allowed="$ALLOWED" '
     # a function definition starts at column 0: "void EffectsPage::name(..."
@@ -50,7 +64,7 @@ offenders=$(awk -v allowed="$ALLOWED" '
         sub(/\(.*$/, "", line)
         fn = line
     }
-    /currentShaderInformation\.(GUID|name|origin)[ \t]*=[^=]/ {
+    /(currentShaderInformation|->info)\.(GUID|name|origin)[ \t]*=([^=]|$)/ || /->info[ \t]*=[ \t]*shaderInfo\(\)/ {
         ok = 0
         n = split(allowed, a, " ")
         for (i = 1; i <= n; i++) if (fn == a[i]) ok = 1
@@ -77,7 +91,13 @@ if ! grep -q 'void EffectsPage::adoptGraph(' "$FILE"; then
     echo "source.material_page_identity: FAIL — EffectsPage::adoptGraph is gone or renamed"
     failures=1
 fi
-if ! grep -q 'setReadOnly(!shippedName.isEmpty(), shippedName);' "$FILE"; then
+# ...and the read-only state still moves WITH the graph, in that one step: it
+# is what stands the save down for a shipped preset, and dropping it for a
+# material that turned out not to open is how an edit reached a read-only row.
+# (It is the DOCUMENT's state since MATERIALS-TABS-1 — one tab may be a
+# read-only preset while another is the user's own material — so the line is
+# `doc->readOnly = !shippedName.isEmpty();` inside adoptGraph.)
+if ! grep -q 'readOnly = !shippedName.isEmpty();' "$FILE"; then
     echo "source.material_page_identity: FAIL — the read-only state no longer moves with the graph"
     failures=1
 fi

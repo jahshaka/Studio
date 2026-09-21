@@ -230,13 +230,22 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 	return material;
 }
 
+NodeLibrary* MaterialHelper::sharedNodeLibrary()
+{
+	// Function-local static, built on first use (after QApplication, so its
+	// icons are legal) and never freed — a deliberate one, like the module's
+	// other three (ENGINE-3).
+	static LibraryV1 *library = new LibraryV1();
+	return library;
+}
+
 NodeGraph* MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj,
                                                                   QString* refusalReason)
 {
 	auto graphObj = matObj["shadergraph"].toObject();
 	// May be NULL: a graph whose master is not the PBR one is refused whole,
 	// with its reason (nodegraph.h). Every caller of this must handle it.
-	return NodeGraph::deserialize(graphObj, new LibraryV1(), refusalReason);
+	return NodeGraph::deserialize(graphObj, sharedNodeLibrary(), refusalReason);
 }
 
 

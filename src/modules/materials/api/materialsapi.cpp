@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/materialmembers.h"
+#include "services/memberstamp.h"
 #include "services/thumbnailrebuild.h"
 #include "services/materialdefaults.h"
 #include "io/materialpresets.h"
@@ -312,7 +313,153 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "says otherwise. With a project open it is added to the project too, so it lands in the project's "
           "materials drawer and the editor's asset tray. NOT undoable (it is an asset, like an import).",
           Needs::Document },
+        { "open", "materials.open(guidOrName, {scope}) -> {tab, guid, name, scope, readOnly}",
+          "Opens a material bundle in the Materials page's node editor as a TAB and makes it the active one — "
+          "the drawer's double-click, as a verb. A material already open at that scope is activated, not opened "
+          "twice. `scope` is 'library' or 'project' (the four-drawer rule: the project's pinned copy or the "
+          "library original — two tabs if both are open); the default is 'project' when the open project pins "
+          "the guid, else 'library'. A shipped preset (by name or reserved guid) opens READ-ONLY, as the drawer "
+          "does. `tab` is the tab index. Refused when the library holds no material of that name or "
+          "guid, and when the file cannot be opened at all (a graph written on a master this build "
+          "no longer has) — a refusal opens no tab and changes nothing on the page.",
+          Needs::Document },
+        { "newMaterial", "materials.newMaterial(presetOrName?, {name}) -> {tab, guid, name, scope, readOnly}",
+          "NEW MATERIAL — the Materials page's + button, as a verb, with the dialog's two answers as its "
+          "arguments: which shipped preset the new material is based on (omit it for a blank graph: a "
+          "master node on an empty canvas) and what to call it (the preset's name, numbered against the "
+          "library's, when omitted). It is created in the LIBRARY — adding it to a project is a separate "
+          "gesture — and it opens in a TAB OF ITS OWN and becomes the active one, so the material that was "
+          "on screen stays open with its own graph, its own undo history and its own pending save.",
+          Needs::Document },
+        { "tabs", "materials.tabs() -> [{tab, guid, name, scope, active, readOnly, dirty}]",
+          "The Materials page's open tabs in bar order. `dirty` = an autosave is pending on that document (it "
+          "writes 1.5 s after the last edit, or on close). The anonymous new-material tab reports an empty guid.",
+          Needs::Document },
+        { "activate", "materials.activate(tabOrGuid) -> bool",
+          "Makes a tab the active one (by index, or by guid — the first tab with that guid in bar order). The "
+          "canvas, the properties panel, the material settings, the Members panel, the preview and Ctrl+Z all "
+          "follow it.",
+          Needs::Document },
+        { "closeTab", "materials.closeTab(tabOrGuid) -> bool",
+          "Closes a tab. A pending autosave is written FIRST; a read-only tab writes nothing. The document's "
+          "graph, canvas and undo history are freed.",
+          Needs::Document },
+        { "activeTab", "materials.activeTab() -> {tab, guid, name, scope, readOnly, dirty} | null",
+          "The active tab, or null with no page.",
+          Needs::Document },
     };
+}
+
+// ---- the Materials page's tabs (MATERIALS_TABS_SPEC §3) ------------------
+
+bool MaterialsApi::pageOrFail(const QString &verb)
+{
+    if (mPage.tabs) return true;
+    fail(QStringLiteral("%1: no Materials page in this session").arg(verb));
+    return false;
+}
+
+QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
+{
+    const QString wanted = guidOrName.trimmed();
+    if (wanted.isEmpty()) return QString();
+    // A SHIPPED PRESET BY NAME OR BY ITS RESERVED GUID (the drawer's own two
+    // spellings, and what every other materials.* verb accepts).
+    if (MaterialPresetAssets::isPreset(wanted)) return MaterialPresetAssets::guidFor(wanted);
+    if (!host.db) return QString();
+    // A MATERIAL, not any row that answers to the guid (fix round F4): a
+    // texture's or a model's guid would be carried all the way to the page,
+    // where the read finds no graph and the open is refused with a message
+    // about a master node.
+    const auto row = host.db->fetchAsset(wanted);
+    if (!row.guid.isEmpty())
+        return row.type == static_cast<int>(ModelTypes::Material) ? wanted : QString();
+    // ...or a library material's NAME, which is what the user calls it.
+    const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
+    for (const auto &asset : assets) {
+        if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
+        if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
+    }
+    return QString();
+}
+
+QVariantMap MaterialsApi::open(const QString &guidOrName, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!pageOrFail(QStringLiteral("materials.open"))) return out;
+    static const QStringList knownOptions = { QStringLiteral("scope") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.open"),
+                                              options, knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+    const QString scope = options.value(QStringLiteral("scope")).toString().trimmed().toLower();
+    if (!scope.isEmpty() && scope != QLatin1String("library") && scope != QLatin1String("project")) {
+        fail(QStringLiteral("materials.open: scope is 'library' or 'project', not '%1'").arg(scope));
+        return out;
+    }
+    const QString guid = resolveMaterialGuid(guidOrName);
+    if (guid.isEmpty()) {
+        fail(QStringLiteral("materials.open: no material '%1'").arg(guidOrName));
+        return out;
+    }
+    out = mPage.open(guid, scope);
+    if (out.isEmpty()) {
+        // The page's own rule: no tile, no open (a material the drawers do not
+        // hold — unlisted, or not in the project at the scope asked for).
+        fail(QStringLiteral("materials.open: no drawer holds '%1'%2")
+                 .arg(guidOrName, scope.isEmpty() ? QString()
+                                                  : QStringLiteral(" at scope '%1'").arg(scope)));
+    }
+    return out;
+}
+
+QVariantMap MaterialsApi::newMaterial(const QString &presetOrName, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!mPage.newMaterial) {
+        fail(QStringLiteral("materials.newMaterial: no Materials page in this session"));
+        return out;
+    }
+    static const QStringList knownOptions = { QStringLiteral("name") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("materials.newMaterial"),
+                                              options, knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+    out = mPage.newMaterial(presetOrName, options.value(QStringLiteral("name")).toString());
+    if (out.isEmpty())
+        fail(QStringLiteral("materials.newMaterial: no shipped preset '%1'").arg(presetOrName));
+    return out;
+}
+
+QVariantList MaterialsApi::tabs()
+{
+    if (!pageOrFail(QStringLiteral("materials.tabs"))) return QVariantList();
+    return mPage.tabs();
+}
+
+bool MaterialsApi::activate(const QVariant &tabOrGuid)
+{
+    if (!pageOrFail(QStringLiteral("materials.activate"))) return false;
+    if (!mPage.activate(tabOrGuid)) {
+        fail(QStringLiteral("materials.activate: no such tab (%1)").arg(tabOrGuid.toString()));
+        return false;
+    }
+    return true;
+}
+
+bool MaterialsApi::closeTab(const QVariant &tabOrGuid)
+{
+    if (!pageOrFail(QStringLiteral("materials.closeTab"))) return false;
+    if (!mPage.closeTab(tabOrGuid)) {
+        fail(QStringLiteral("materials.closeTab: no such tab (%1)").arg(tabOrGuid.toString()));
+        return false;
+    }
+    return true;
+}
+
+QVariant MaterialsApi::activeTab()
+{
+    if (!mPage.activeTab) return QVariant();   // no page: null, not a refusal
+    const QVariantMap info = mPage.activeTab();
+    return info.isEmpty() ? QVariant() : QVariant(info);
 }
 
 QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariantMap &options)
@@ -394,7 +541,10 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
 
     const QString shaderName = QFileInfo(record.name).completeBaseName();
 
-    auto *lib = new LibraryV1();
+    // THE ONE NODE LIBRARY (fix round F9). Four verbs minted a LibraryV1 per
+    // CALL — a registry of every node type, with its icons — and nothing
+    // ever freed one, so a script that opened ten materials left ten behind.
+    auto *lib = MaterialHelper::sharedNodeLibrary();
     auto *graph = new NodeGraph;
     graph->setNodeLibrary(lib);
     auto *master = new PbrMasterNode();
@@ -457,7 +607,8 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
 
     QString refusedGraph;
     NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(),
-                                              new LibraryV1(), &refusedGraph);
+                                              MaterialHelper::sharedNodeLibrary(),
+                                              &refusedGraph);
     if (!graph)
         return fail(QStringLiteral("materials.regenerate: %1")
                         .arg(refusedGraph.isEmpty()
@@ -520,7 +671,7 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
         // be reopened by the graph loader; the .effect presets are the live
         // shape).
         graph = new NodeGraph;
-        graph->setNodeLibrary(new LibraryV1());
+        graph->setNodeLibrary(MaterialHelper::sharedNodeLibrary());
         auto *master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
@@ -664,7 +815,7 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         // stamp: if the bytes were already in the library the user imported
         // that image themselves, and their own texture is always a tile.
         if (imported.minted)
-            materialmembers::stampMember(host.db, textureGuid, materialGuid);
+            memberstamp::stamp(host.db, textureGuid, materialGuid);
     }
 
     // THE SLOT. Naming one writes it into the definition (and the membership
@@ -860,7 +1011,8 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     // The real loader path (pixel-parity-tested): deserialize with LibraryV1.
     QString refused;
     NodeGraph *graph =
-        NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1(), &refused);
+        NodeGraph::deserialize(definition["shadergraph"].toObject(),
+                               MaterialHelper::sharedNodeLibrary(), &refused);
     // A REFUSED GRAPH IS AN ERROR, NOT A CRASH (LEGACY-MASTER-CRUD): this used
     // to dereference the result three lines down. A material written on the
     // deleted "Surface Material" master has nothing to load.
@@ -1623,8 +1775,12 @@ QVector<VerbInfo> GraphApi::verbs() const
 
 void GraphApi::setCurrent(NodeGraph *graph, const QString &assetGuid)
 {
-    // NodeGraph has no proper deep-delete; dropping the old pointer leaks a
-    // little, matching how the shadergraph window itself swaps graphs.
+    // THE OLD GRAPH IS FREED (MATERIALS_TABS_SPEC §2.8). This used to read
+    // "NodeGraph has no proper deep-delete; dropping the old pointer leaks a
+    // little" — it has one now, so a script that opens ten materials no
+    // longer leaves nine whole graphs behind. A script graph is never in a
+    // canvas, so nothing else points into it.
+    if (mGraph != graph) delete mGraph;
     mGraph = graph;
     mAssetGuid = assetGuid;
     mSelectedNodeId.clear();

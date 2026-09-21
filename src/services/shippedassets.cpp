@@ -146,6 +146,16 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         ImportRequest request;
         request.sourcePath = importPath;
         request.typeHint = static_cast<int>(ModelTypes::Texture);
+        // A MATERIAL (OR THE PLATFORM) ASKED, NEVER THE USER (IMPORT-INTENT-1).
+        // Every door into this file is one of those: a material's texture
+        // picker, a graph texture node, a preset's maps, the default floor's
+        // checker, the emitter's particle image. So the import may not clear
+        // the member stamp of a row it lands on — and it cannot reach that
+        // code anyway, because by-content reuse is answered above and the
+        // pipeline runs only when this call is MINTING a row. The intent is
+        // still stated, because the next caller of this function will inherit
+        // whatever it says.
+        request.intent = ImportRequest::Intent::Material;
         AssetImportService importer(db, project);
         const ImportResult result = importer.import(request);
         if (!result.ok()) {

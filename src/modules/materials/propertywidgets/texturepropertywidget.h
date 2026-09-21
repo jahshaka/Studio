@@ -23,7 +23,7 @@ public:
 
 private:
 	TextureProperty *prop;
-	GraphTexture* graphTexture;
+	GraphTexture* graphTexture = nullptr;
 	QPushButton *texture;
 	QString value = "";
 	WidgetTexture *wid;

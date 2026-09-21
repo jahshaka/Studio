@@ -287,37 +287,39 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	auto *item = assetViewWidget->currentItem();
 	if (!item) return;
 
-	// A FOLDER, TOO, IS A PROJECT-SIDE REMOVE (fix round F16). This called
-	// `deleteFolderAndDependencies`, which deletes the folder AND the library
-	// rows of everything filed in it — from the PROJECT drawer, which
-	// contradicts the one rule this function exists to keep. Each asset in
-	// the folder leaves the project by the same door a single tile takes, and
-	// then the (now empty) folder row goes.
-	// (The FOLDER branch is gone with the folder tiles — DRAWERS-1. This drawer
-	// is flat; a folder is deleted in the editor's asset tray, through
+	// (THE FOLDER BRANCH IS GONE WITH THE FOLDER TILES — DRAWERS-1. This
+	// drawer is FLAT: it lists the project's materials wherever they are
+	// filed, so it shows no folder tile and this branch was unreachable. A
+	// folder is deleted in the editor's asset tray, through
 	// assets.deleteFolder / services/projectfolders.h, which does exactly what
-	// this branch did by hand.)
+	// this branch did by hand — and moves the contents up to the parent rather
+	// than taking them out of the project, which is what a Delete on a FOLDER
+	// should do. MATERIALS-TABS-1's `assetRemoved` is emitted for every row
+	// that really leaves the project, below and in the tray's own delete.)
 	const QString target = guid.isEmpty() ? item->data(MODEL_GUID_ROLE).toString() : guid;
 	if (target.isEmpty()) return;
 	assetdelete::removeFromProject(db, target, project->getProjectGuid());
+	// AND THE PAGE IS TOLD (fix round F1): a '(project)' tab is editing this
+	// project's copy, and the pin it reads and writes through has just gone.
+	emit assetRemoved(target);
 	refresh();
 }
 
 void ShaderAssetWidget::editingFinishedOnListItem(QListWidgetItem *item)
 {
+	// THE DRAWER DOES NOT RENAME ANYTHING (MATERIALS_TABS_SPEC §7). It used
+	// to write the catalog row itself — `db->renameAsset` — which is neither
+	// of the two things a rename is: it bypasses the ONE name writer (so it
+	// would rename a shipped preset, or take a preset's name) and it never
+	// touched the DEFINITION, so the stored name stayed behind and the next
+	// save of that material put the old one straight back. The page owns the
+	// rename, for every drawer; this says which row the user typed in.
 	if (!db || !project) return;   // nothing to rename without a library
-	QString newName = item->data(Qt::DisplayRole).toString();
 	const QString guid = item->data(MODEL_GUID_ROLE).toString();
-	const QString oldName = db->fetchAsset(guid).name;
-	qDebug() << oldName << newName;
-	if (newName == oldName) return;
-	else {
-		//item->setText(newName);
-		item->setData(Qt::DisplayRole, newName);
-		item->setData(Qt::UserRole, newName);
-		db->renameAsset(guid, newName);
-		refresh();
-	}
+	const QString newName = item->data(Qt::DisplayRole).toString();
+	if (guid.isEmpty() || newName.isEmpty()) return;
+	if (newName == db->fetchAsset(guid).name) return;
+	emit assetRenamed(guid, newName);
 }
 
 

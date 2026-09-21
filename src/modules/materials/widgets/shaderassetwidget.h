@@ -90,5 +90,13 @@ private:
 	static ShaderAssetWidget *sLive;
 signals:
 	void loadToGraph(QListWidgetItem *item);
+	/// The user typed a new name on a tile in THIS drawer. The page does the
+	/// rename (MATERIALS_TABS_SPEC §7) — there is one of them, and it is not
+	/// `Database::renameAsset`.
+	void assetRenamed(const QString &guid, const QString &newName);
+	/// A tile left THIS PROJECT (the drawer's Delete is a pin removal). The
+	/// page closes the project-scope tab that was editing it — with the pin
+	/// gone there is nothing behind it (fix round F1).
+	void assetRemoved(const QString &guid);
 };
 

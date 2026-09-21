@@ -2,6 +2,7 @@
 #define NODE_MODEL_H
 
 #include <QObject>
+#include <QPointer>
 #include <QJsonValue>
 #include <QVector>
 #include <QColor>
@@ -42,8 +43,13 @@ public:
 	QString title;
 	NodeCategory nodeType;
 
-	QWidget* widget;
-	QWidget* headerWidget; // compact editor shown in the node's title bar
+	// A QPointer, because the SCENE owns these once a node is drawn: a
+	// GraphNode embeds them in QGraphicsProxyWidgets, which delete them
+	// when the scene dies. The destructor below has to be able to tell
+	// "already gone with the canvas" from "never drawn" (a script graph's
+	// nodes are never in a scene) without reading a dangling pointer.
+	QPointer<QWidget> widget;
+	QPointer<QWidget> headerWidget; // compact editor shown in the node's title bar
 	// place `widget` beside the socket rows (left of a right-aligned out
 	// socket's text) instead of below them — used by the float node so its
 	// number box sits next to "value" inside the node body (owner request)
@@ -65,6 +71,7 @@ public:
 
 	}
 	NodeModel();
+	~NodeModel() override;
 
 	NodeGraph* graph = nullptr;
 

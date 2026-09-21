@@ -36,8 +36,7 @@ GraphTexture* TextureManager::createTexture()
 
 void TextureManager::removeTexture(GraphTexture* tex)
 {
-	// clearTextures() may already have dropped it from the list; removeAt(-1)
-	// would assert
+	// a node may have been removed already; removeAt(-1) would assert
 	int index = textures.indexOf(tex);
 	if (index >= 0)
 		this->textures.removeAt(index);
@@ -56,11 +55,6 @@ void TextureManager::loadUnloadedTextures()
 void TextureManager::setDatabase(Database * dataBase)
 {
 	this->database = dataBase;
-}
-
-void TextureManager::clearTextures()
-{
-	textures.clear();
 }
 
 GraphTexture * TextureManager::loadTextureFromGuid(QString guid)

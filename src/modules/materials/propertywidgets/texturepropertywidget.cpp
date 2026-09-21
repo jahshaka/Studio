@@ -25,6 +25,14 @@ TexturePropertyWidget::TexturePropertyWidget() : BasePropertyWidget()
 
 TexturePropertyWidget::~TexturePropertyWidget()
 {
+	// ITS RESOLVER ENTRY TOO (MATERIALS_TABS_SPEC §2.8). setProp mints a
+	// GraphTexture per widget; with the page's process-wide clearTextures gone,
+	// the entry has to leave with the widget that made it.
+	if (graphTexture) {
+		TextureManager::getSingleton()->removeTexture(graphTexture);
+		delete graphTexture;
+		graphTexture = nullptr;
+	}
 }
 
 void TexturePropertyWidget::setProp(TextureProperty * prop)

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QSet>
 #include <QTimer>
 #include <algorithm>
 #include <QtConcurrent/QtConcurrent>
@@ -27,6 +28,7 @@ For more information see the LICENSE file
 #include "services/shippedassets.h"
 #include "services/jahlog.h"
 #include "services/materialpresetassets.h"
+#include "services/memberstamp.h"
 
 MaterialPresetSeeder &MaterialPresetSeeder::instance()
 {
@@ -56,6 +58,8 @@ bool MaterialPresetSeeder::start(Database *db)
     mDb = db;
     mPending = pending;
     mSeeded = 0;
+    mStamped = 0;
+    mStampMs = 0;
     mAborted.store(false);
     mRunning.store(true);
 
@@ -102,14 +106,11 @@ void MaterialPresetSeeder::hashMapsOnWorker(const QStringList &presetNames)
     QMetaObject::invokeMethod(this, [this, prepared, ms]() {
         mHashMs = ms;
         mPrepared = prepared;
-        QVector<QPair<QString, QString>> hashed;
-        for (auto it = prepared.mapOids.constBegin(); it != prepared.mapOids.constEnd(); ++it)
-            hashed.append({ it.key(), it.value() });
-        importMapsThenRows(hashed);
+        importMapsThenRows();
     }, Qt::QueuedConnection);
 }
 
-void MaterialPresetSeeder::importMapsThenRows(const QVector<QPair<QString, QString>> &hashed)
+void MaterialPresetSeeder::importMapsThenRows()
 {
     if (mAborted.load() || !mDb) { mRunning.store(false); emit finished(mSeeded); return; }
 
@@ -119,12 +120,39 @@ void MaterialPresetSeeder::importMapsThenRows(const QVector<QPair<QString, QStri
     // already has one, so this is the filter that keeps the seed from growing
     // duplicates in a library that already imported the same picture.
     QVector<ImportRequest> requests;
-    for (const auto &entry : hashed) {
-        if (!ShippedAssets::libraryTextureFor(entry.second).isEmpty()) continue;
+    QSet<QString> queued;
+    mStampOrigin.clear();
+    for (const auto &entry : mPrepared.mapOwners) {
+        const QString oid = mPrepared.mapOids.value(entry.first);
+        if (oid.isEmpty()) continue;
+        if (!ShippedAssets::libraryTextureFor(oid).isEmpty()) continue;
+        // ONE PICTURE, ONE ROW — INSIDE THIS BATCH TOO (SEED-STAMP-1,
+        // measured). The library test above is asked BEFORE anything is
+        // imported, so two shipped files with the same BYTES both answered
+        // "not here" and both minted a row: the pipeline dedups objects, not
+        // rows. Three of the shipped maps are that case today — the same
+        // picture is named by a preset's map slot and by its graph in two
+        // spellings of one path ('…/materials/../../shadergraph/wood.jpg'
+        // against the cleaned '…/shadergraph/wood.jpg', AssetIOBase::
+        // getAbsolutePath does not clean) — and the second row of each pair
+        // was named by no definition, so nothing could ever stamp it and it
+        // stood in the tray for ever. Keyed by CONTENT because content is
+        // what a duplicate row means; `definitionFor` resolves both spellings
+        // to the one row by the same key.
+        if (queued.contains(oid)) continue;
+        queued.insert(oid);
         ImportRequest request;
         request.sourcePath = entry.first;
         request.typeHint = static_cast<int>(ModelTypes::Texture);
+        // THE MATERIAL ASKED, not the user (IMPORT-INTENT-1): these maps are
+        // arriving INSIDE the shipped presets. A seed may never take a stamp
+        // off — and a User-intent import of the same bytes later is exactly
+        // the gesture that does.
+        request.intent = ImportRequest::Intent::Material;
         requests.append(request);
+        // AND WHO IT CAME IN THROUGH, for the stamp this pass now writes
+        // itself (below).
+        mStampOrigin.insert(entry.first, MaterialPresetAssets::guidFor(entry.second));
     }
     if (requests.isEmpty()) { seedNextRow(); return; }
 
@@ -136,9 +164,43 @@ void MaterialPresetSeeder::importMapsThenRows(const QVector<QPair<QString, QStri
     // instead of a second half-copy of it.
     mRunner = new ImportBatchRunner(mDb, nullptr, this);
     mRunner->setRequests(requests);
+    // THE MAP IS STAMPED THE MOMENT ITS ROW EXISTS (SEED-STAMP-1; V-2, owner
+    // review R10.2: "a preset's map is not one of the user's tiles").
+    //
+    // The stamp used to be written in ONE place — `definitionFor`, on a row
+    // IT minted — and that is exactly why the route a PERSON takes never got
+    // one: this pass mints the rows first, so the row pass behind it finds
+    // them by content, hears minted=false, and skips the stamp. Twenty
+    // presets' maps stood in the tray and on the Assets page as if the user
+    // had imported them (measured on the launch route: 31 members, 0
+    // stamped). The seed that mints is the seed that must stamp.
+    //
+    // ONLY THE ROWS THIS BATCH MINTS, which is the other half of V-2: a
+    // picture the library already held is the USER'S and a seed may not
+    // quietly hide it. That is not an assumption here, it is the batch's own
+    // filter — every request above exists BECAUSE no Texture row held those
+    // bytes (`libraryTextureFor`), and the pipeline's two by-content answers
+    // cannot fire on such a request: re-listing needs an unlisted row with
+    // this source oid (that query would have found it) and the member claim
+    // is User-intent only.
+    //
+    // ON THE UI THREAD, where fileFinished is emitted and the database lives:
+    // one small UPDATE per map, interleaved with the commits — see the log line
+    // below for what it costs.
+    connect(mRunner, &ImportBatchRunner::fileFinished, this,
+            [this](int, const ImportRequest &request, const ImportResult &result) {
+                if (!mDb || !result.ok()) return;
+                const QString origin = mStampOrigin.value(request.sourcePath);
+                if (origin.isEmpty()) return;
+                QElapsedTimer stampTimer;
+                stampTimer.start();
+                if (memberstamp::stamp(mDb, result.assetGuid, origin)) ++mStamped;
+                mStampMs += stampTimer.elapsed();
+            });
     connect(mRunner, &ImportBatchRunner::finished, this, [this](bool cancelled) {
-        irisLog(QStringLiteral("preset seed: %1 map(s) imported through the pipeline%2")
-                    .arg(mRunner->requests().size())
+        irisLog(QStringLiteral("preset seed: %1 map(s) imported through the pipeline, "
+                               "%2 stamped as members in %3 ms%4")
+                    .arg(mRunner->requests().size()).arg(mStamped).arg(mStampMs)
                     .arg(cancelled ? QStringLiteral(" (cancelled)") : QString()));
         mRunner->deleteLater();
         mRunner = nullptr;

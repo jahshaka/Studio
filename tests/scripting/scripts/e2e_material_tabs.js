@@ -1,0 +1,235 @@
+// scripting.e2e.material_tabs — SEVERAL MATERIALS OPEN AT ONCE
+// (MATERIALS_TABS_SPEC §5, lane MATERIALS-TABS-1).
+//
+// The owner's ask, in his words (review 2026-09-18, R-tabs): "currently I have
+// to reopen any custom material to edit them". The Materials page held ONE of
+// everything — one graph, one canvas, one undo stack, one 1.5 s autosave — so
+// opening a material threw the previous one away. This drives the five verbs
+// that open, list, activate and close TABS, and it pins the three properties
+// that cost real work:
+//
+//   * IDENTITY. A material already open at a scope is ACTIVATED, not opened
+//     twice; the same guid at the two scopes (library original / the project's
+//     pinned copy) is two documents by the four-drawer rule.
+//   * THE UNDO STACK IS PER DOCUMENT. A deletion made in B is still B's after
+//     switching to A and back, and A's stack never saw it.
+//   * THE AUTOSAVE IS PER DOCUMENT (the spec's C5 — the defect this lane
+//     removes by construction): an edit made less than 1.5 s before leaving a
+//     material lands on THAT material. Step 6 closes B immediately after
+//     editing it, which is the shortest possible version of that race, and
+//     then reads B's stored definition back.
+//
+// The graphs are authored through `graph.*` on the SCRIPT-local graph first
+// (nothing adds a node ON THE PAGE by verb — the palette drag is a rig
+// gesture, app.input_keys), then opened; the page's own edit verbs
+// (graph.removeNode) work on whichever tab is active, which is the property
+// under test.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function tabGuids() { return materials.tabs().map(function (t) { return t.guid; }); }
+function tabOf(guid) {
+    var rows = materials.tabs().filter(function (t) { return t.guid === guid; });
+    return rows.length ? rows[0] : null;
+}
+// The NON-MASTER node of a two-node graph: the definition's ids are the page's
+// (the page deserialises the same file), so an id read here addresses the
+// canvas.
+function loneNodeId(guid) {
+    materials.loadGraph(guid);
+    var ids = graph.nodes().filter(function (n) { return !n.master; })
+                   .map(function (n) { return n.id; });
+    assert(ids.length === 1, "authored graph '" + guid + "' has one node beside the master");
+    return ids[0];
+}
+function nodeCount(guid) { return materials.loadGraph(guid).nodes; }
+
+// ---- 1. two authored materials -------------------------------------------
+var projectGuid = project.create("Material Tabs " + Date.now());
+assert(projectGuid.length > 10, "project.create");
+
+var A = materials.create("Tabs A", { graph: true });
+assert(A.length > 10, "materials.create A");
+assert(graph.addNode("float").length > 0, "A: a float node");
+assert(graph.save() === true, "A: saved (a two-node definition)");
+
+var B = materials.create("Tabs B", { graph: true });
+assert(B.length > 10, "materials.create B");
+assert(graph.addNode("float").length > 0, "B: a float node");
+assert(graph.save() === true, "B: saved");
+
+assert(nodeCount(A) === 2 && nodeCount(B) === 2, "both definitions carry two nodes");
+
+// ---- 2. open both: two tabs, B active ------------------------------------
+assert(app.space("materials") === true, "app.space('materials')");
+// The boot canvas is a document too (the anonymous untitled one), and it
+// stands aside for the first material that opens.
+assert(materials.tabs().length === 1 && materials.tabs()[0].guid === "",
+       "the page boots on the anonymous tab");
+
+var openA = materials.open(A);
+assert(openA.guid === A && openA.scope === "library" && openA.readOnly === false,
+       "materials.open(A) -> a library tab");
+var openB = materials.open(B);
+assert(openB.guid === B, "materials.open(B)");
+
+var tabs = materials.tabs();
+assert(tabs.length === 2, "two tabs (the anonymous boot tab stood aside)");
+assert(tabs[0].guid === A && tabs[1].guid === B, "in bar order: A then B");
+assert(materials.activeTab().guid === B, "the material just opened is the active one");
+
+// ---- 3. an edit on the ACTIVE tab lands on its own stack ------------------
+var idB = loneNodeId(B);
+assert(graph.removeNode(idB) === true, "graph.removeNode on the page (B is active)");
+assert(graph.undoState().undoCount === 1, "B's stack carries the deletion");
+
+// ---- 4. the stack is PER DOCUMENT ----------------------------------------
+assert(materials.activate(A) === true, "materials.activate(A)");
+assert(materials.activeTab().guid === A, "A is active");
+assert(graph.undoState().undoCount === 0, "A's stack is empty — it never saw B's edit");
+assert(materials.activate(B) === true, "materials.activate(B)");
+assert(graph.undoState().undoCount === 1, "B's stack still carries it");
+
+// ---- 5. identity: the same material does not open twice ------------------
+materials.open(A);
+assert(materials.tabs().length === 2, "opening A again ACTIVATES it (identity is guid+scope)");
+assert(materials.activeTab().guid === A, "...and makes it active");
+
+// ---- 6. a shipped preset opens read-only ---------------------------------
+var preset = materials.open("Brick PBR");
+assert(preset.readOnly === true, "a shipped preset opens READ-ONLY");
+assert(materials.tabs().length === 3, "three tabs");
+assert(materials.closeTab(preset.guid) === true, "materials.closeTab(preset)");
+assert(materials.tabs().length === 2, "two tabs again");
+
+// ---- 7. closing FLUSHES the pending autosave, onto its OWN material ------
+// B's deletion was made moments ago and its 1.5 s autosave has not fired: the
+// close writes it — to B. (The page's single timer used to fire against
+// whatever material was open 1.5 s later.)
+assert(materials.activate(B) === true, "B is active again");
+assert(tabOf(B).dirty === true, "B is dirty — its autosave is pending");
+assert(materials.closeTab(B) === true, "materials.closeTab(B)");
+assert(materials.tabs().length === 1 && tabGuids()[0] === A, "one tab left: A");
+assert(nodeCount(B) === 1, "B's stored definition lost the node — the close flushed ITS save");
+assert(nodeCount(A) === 2, "A is untouched — the edit never reached the other material");
+
+// ---- 8. the project's own copy is a SECOND document ----------------------
+// The four-drawer rule: a library original and the project's pinned copy are
+// two things, so the same guid open at both scopes is two tabs and neither
+// one's save may touch the other.
+assert(assets.addToProject(A) === A, "assets.addToProject(A) — the pin, same guid");
+var projectTab = materials.open(A, { scope: "project" });
+assert(projectTab.scope === "project", "materials.open(A, {scope:'project'})");
+assert(materials.tabs().length === 2, "two tabs: A's library copy and the project's");
+assert(tabGuids()[0] === A && tabGuids()[1] === A, "the same guid, twice, at two scopes");
+
+// ...and it goes when the project does (§2.7), while the LIBRARY tab stays.
+assert(project.close() === true, "project.close()");
+app.space("materials");
+var afterClose = materials.tabs();
+assert(afterClose.filter(function (t) { return t.scope === "project"; }).length === 0,
+       "no project-scope tab survives the project it belonged to");
+assert(afterClose.filter(function (t) { return t.guid === A; }).length === 1,
+       "the LIBRARY tab stays across the switch — the library is the same library");
+
+// Reopening the project brings its own set back.
+assert(project.open(projectGuid) === true, "project.open (the same project)");
+app.space("materials");
+assert(materials.tabs().filter(function (t) { return t.scope === "project"; }).length === 1,
+       "the project's tab set is restored with the project");
+
+// ---- 9. refusals -----------------------------------------------------------
+var refused = false;
+try { materials.open("no such material at all"); } catch (e) { refused = true; }
+assert(refused, "materials.open refuses a name nothing answers to");
+refused = false;
+try { materials.activate(42); } catch (e) { refused = true; }
+assert(refused, "materials.activate refuses a tab that is not there");
+
+// ---- 9b. NEW MATERIAL OPENS A TAB, it does not take one over (F3) --------
+// A New used to wipe the ACTIVE document's identity while its autosave was
+// still armed — so the pending edit fired later under the NEW material's guid,
+// and a read-only PRESET tab was silently turned into the user's new material.
+var presetTab = materials.open("Gold PBR");
+assert(presetTab.readOnly === true, "a preset tab is open and read-only");
+var before = materials.tabs().length;
+var minted = materials.newMaterial("Gold PBR", { name: "Tabs New" });
+assert(minted.guid.length > 10 && minted.name === "Tabs New",
+       "materials.newMaterial -> a library material of its own");
+assert(materials.tabs().length === before + 1, "New opened a TAB, it did not take one over");
+assert(materials.activeTab().guid === minted.guid, "...and the new material is the active one");
+var presetStill = materials.tabs().filter(function (t) { return t.guid === presetTab.guid; });
+assert(presetStill.length === 1 && presetStill[0].readOnly === true,
+       "the preset tab is still open, still read-only — still the preset");
+assert(materials.loadGraph(presetTab.guid).readOnly === true,
+       "and the preset itself was not written to");
+materials.closeTab(presetTab.guid);
+materials.closeTab(minted.guid);
+
+// ---- 9c. A PROJECT COPY WITH NO PIN IS NOT THE LIBRARY'S (F1) -----------
+// The pin can go while the tab is open (the project drawer's Delete, the
+// editor tray's, this verb, a project closed under a hidden page). The save
+// used to fall through to the LIBRARY original: one project's edits landing on
+// the material every other project takes its copies from.
+assert(materials.open(A, { scope: "project" }).scope === "project", "A's project copy is open");
+var beforeLibrary = materials.loadGraph(A).nodes;
+assert(assets.removeFromProject(A) === true, "assets.removeFromProject(A) — the pin goes");
+var idA = materials.loadGraph(A).nodes > 1 ? loneNodeId(A) : null;
+assert(idA !== null, "A still has its node to delete");
+materials.activate(materials.tabs().filter(function (t) { return t.scope === "project"; })[0].tab);
+assert(graph.removeNode(idA) === true, "an edit on the orphaned project copy");
+materials.closeTab(materials.tabs().filter(function (t) { return t.scope === "project"; })[0].tab);
+assert(materials.loadGraph(A).nodes === beforeLibrary,
+       "the LIBRARY original is untouched — the refused save wrote nothing");
+var refusals = editor.issues().filter(function (i) { return i.kind === "material.save"; });
+assert(refusals.length === 1, "and the user is told, once: " + refusals[0].message);
+
+// ---- 10. open/close twenty times: the memory comes back ------------------
+// A closed document frees its graph, its canvas and its undo history — none of
+// which anything ever freed before this lane (NodeGraph had no destructor at
+// all, and every open leaked one).
+function openCloseOnce() {
+    materials.open(B);
+    materials.closeTab(B);
+}
+openCloseOnce();
+var rssAfterFirst = app.memoryStats().residentBytes;
+for (var i = 0; i < 20; i++) openCloseOnce();
+var rssAfter20 = app.memoryStats().residentBytes;
+var growth = (rssAfter20 - rssAfterFirst) / rssAfterFirst;
+console.log("    RSS after 1 pass: " + rssAfterFirst + ", after 21: " + rssAfter20
+            + " (" + (growth * 100).toFixed(2) + "%)");
+assert(growth < 0.05, "twenty opens and closes grow the resident set by under 5%");
+
+// ---- 11. what the RELAUNCH half will read --------------------------------
+// The tab set is persisted PER PROJECT, plus one for the library, so the set
+// this run leaves behind has to be left under the key the next process will
+// read: it starts with no project open, which is the LIBRARY's key.
+// A MATERIAL THAT IS DELETED WHILE ITS TAB IS OPEN leaves a stale row in the
+// saved set (F4): the relaunch must skip it in SILENCE, not open it, fail to
+// find a master node and raise a toast plus a permanent scene issue naming a
+// raw guid on every show of the page.
+var C = materials.create("Tabs Ghost", { graph: true });
+graph.addNode("float"); graph.save();
+materials.open(C);
+assert(materials.tabs().filter(function (t) { return t.guid === C; }).length === 1,
+       "a third material is open");
+assert(assets.remove(C) === true, "assets.remove(C) — deleted from the library under its own tab");
+
+assert(project.close() === true, "project.close() — the library's set is what a fresh launch reads");
+app.space("materials");
+while (materials.tabs().length > 1 || materials.tabs()[0].guid !== "")
+    materials.closeTab(0);
+materials.open(A);
+materials.open(B);
+materials.activate(B);   // the relaunch asserts THIS tab comes back active (F5)
+var left = materials.tabs();
+assert(left.length === 2 && left[0].guid === A && left[1].guid === B,
+       "the run leaves A and B open, in that order");
+assert(materials.activeTab().guid === B, "with B active");
+console.log("    left open: " + JSON.stringify(tabGuids()));
+console.log("    project: " + projectGuid);
+
+console.log("material_tabs: PASS");

@@ -9,6 +9,7 @@ add_executable(test_asset_delete test_asset_delete.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     # the project-side remove and the image material it knows about (case 15)
     ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
     # BUNDLE-P4: the companion is minted through the bundle writer now

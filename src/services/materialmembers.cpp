@@ -26,17 +26,9 @@ For more information see the LICENSE file
 #include "services/assetdelete.h"
 #include "services/assetstorepaths.h"
 #include "services/materialbundle.h"
+#include "services/memberstamp.h"
 
 namespace {
-
-const QLatin1String kMemberKey("member");
-const QLatin1String kOriginKey("memberOf");
-
-QJsonObject propertiesOf(Database *db, const QString &guid)
-{
-    if (!db) return QJsonObject();
-    return QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
-}
 
 qint64 storedBytes(Database *db, Project *project, const QString &guid)
 {
@@ -65,28 +57,10 @@ int usedBy(Database *db, const QString &guid)
     return db->hasMultipleDependers(guid).size();
 }
 
-bool isStampedMember(Database *db, const QString &guid)
-{
-    return propertiesOf(db, guid).value(kMemberKey).toBool();
-}
-
-bool stampMember(Database *db, const QString &textureGuid, const QString &materialGuid)
-{
-    if (!db || textureGuid.isEmpty()) return false;
-    QJsonObject props = propertiesOf(db, textureGuid);
-    if (props.value(kMemberKey).toBool()
-        && !props.value(kOriginKey).toString().isEmpty())
-        return true;   // already somebody's member; an origin never moves
-    props.insert(kMemberKey, true);
-    if (!materialGuid.isEmpty() && props.value(kOriginKey).toString().isEmpty())
-        props.insert(kOriginKey, materialGuid);
-    return db->updateAssetProperties(textureGuid, QJsonDocument(props).toJson());
-}
-
 bool hiddenAsMember(Database *db, const QString &guid)
 {
     if (!db || guid.isEmpty()) return false;
-    if (!isStampedMember(db, guid)) return false;   // the user's own image is a tile, always
+    if (!memberstamp::isStamped(db, guid)) return false;   // the user's own image is a tile, always
 
     const QStringList dependers = db->hasMultipleDependers(guid);
     // Used by nothing: a tile, so the user can SEE it and clean it up. This is
@@ -156,7 +130,7 @@ QVector<Member> describe(Database *db, Project *project, const QString &material
         member.bytes = storedBytes(db, project, guid);
         member.usedBy = usedBy(db, guid);
         member.pinned = !projectGuid.isEmpty() && db->isAssetPinnedBy(projectGuid, guid);
-        member.member = isStampedMember(db, guid);
+        member.member = memberstamp::isStamped(db, guid);
         member.hidden = hiddenAsMember(db, guid);
         out.append(member);
     }
@@ -184,9 +158,8 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
         // definition, so they went with the slot.
         for (const auto &row : db->fetchAssetsForAssetView()) {
             if (row.type != static_cast<int>(ModelTypes::Texture)) continue;
-            const QJsonObject props = QJsonDocument::fromJson(row.properties).object();
-            if (!props.value(kMemberKey).toBool()) continue;
-            if (props.value(kOriginKey).toString() != materialGuid) continue;
+            if (!memberstamp::isStamped(row.properties)) continue;
+            if (memberstamp::originOf(row.properties) != materialGuid) continue;
             if (!db->hasMultipleDependers(row.guid).isEmpty()) continue;   // somebody uses it
             if (!assetdelete::livePins(db, row.guid).isEmpty()) continue;  // a project holds it
             out.append(describeRow(row, QStringLiteral("library")));
@@ -234,8 +207,7 @@ QVector<Unused> unused(Database *db, Project *project, const QString &materialGu
     const QString projectGuid = project->getProjectGuid();
     for (const auto &row : db->fetchProjectPinnedAssets(projectGuid)) {
         if (row.type != static_cast<int>(ModelTypes::Texture)) continue;
-        const QJsonObject props = QJsonDocument::fromJson(row.properties).object();
-        if (!props.value(kMemberKey).toBool()) continue;
+        if (!memberstamp::isStamped(row.properties)) continue;
         if (!db->hasMultipleDependers(row.guid).isEmpty()) continue;
         out.append(describeRow(row, QStringLiteral("project")));
     }
@@ -408,9 +380,11 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     // both rows now name it. That is the whole trick — "a second row on the
     // same bytes, zero disk" (spec §4).
     const QString newGuid = GUIDManager::generateGUID();
-    QJsonObject props = QJsonDocument::fromJson(texture.properties).object();
-    props.insert(kMemberKey, true);
-    props.insert(kOriginKey, materialGuid);
+    // THE COPY IS THIS MATERIAL'S MEMBER, whatever the row it was copied from
+    // carries: the origin of a row minted here is the material that asked for
+    // it (memberstamp::stamped replaces, where the by-guid `stamp` never moves
+    // an origin that already exists).
+    const QByteArray props = memberstamp::stamped(texture.properties, materialGuid);
 
     // A COPY IS A ROW OF ITS OWN, never a member row of somebody else (fix
     // round F16's nit). `parent` is inherited only when it names a FOLDER —
@@ -425,7 +399,7 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     db->createAssetEntry(newGuid, texture.name, static_cast<int>(ModelTypes::Texture),
                          parent, QString(),
                          texture.license, texture.author, texture.thumbnail,
-                         QJsonDocument(props).toJson(), texture.tags, QByteArray(),
+                         props, texture.tags, QByteArray(),
                          AssetViewFilter::AssetsView);
 
     QString error;

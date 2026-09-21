@@ -158,4 +158,42 @@ assert(assets.list({ scope: "store" }).length === rowsBefore,
        "ARCHIVE-GUIDS-1: no library row was added at all by re-importing what it already had (" + rowsBefore + ")");
 assert(materials.members(matGuid).length > 0, "...and the material's members still resolve");
 
+// ---- 6. THE MEMBER THE USER IMPORTS THEMSELVES (IMPORT-INTENT-1, F14) ----
+//
+// The stamp is an ORIGIN and the user's intent outranks it. `tiny.png` came
+// in through the material's picker, so it is stamped and folds into the
+// bundle's tile — the user never sees it on its own. The moment they import
+// that picture THEMSELVES, it is theirs: the SAME row comes back (one picture
+// is one row and one stored object — the import does not mint a second), the
+// stamp is gone, the Assets page lists it, and the material keeps it as a
+// member, because membership is the definition's edges and never the stamp.
+assert(assets.metadata(texGuid).member === true,
+       "the picked image is still stamped as the bundle's member");
+var storeBefore = assets.list({ scope: "store" }).map(function (a) { return a.guid; });
+assert(storeBefore.indexOf(texGuid) === -1,
+       "...so the Assets page does NOT list it — it is folded into the bundle's tile");
+
+var mine = assets.importFile(fixtures + "/tiny.png");
+assert(mine === texGuid,
+       "importing the same picture myself answers the SAME row, not a second one (" + mine + ")");
+assert(assets.metadata(texGuid).member === undefined,
+       "and the member stamp is gone: the picture is mine now");
+assert(assets.metadata(texGuid).memberOf === undefined, "the origin key went with it");
+assert(assets.list({ scope: "store" }).map(function (a) { return a.guid; }).indexOf(texGuid) >= 0,
+       "the Assets page lists it: a tile of my own");
+assert(materials.members(matGuid).map(function (m) { return m.guid; }).indexOf(texGuid) >= 0,
+       "and the material still lists it as a member (membership is the definition)");
+// AND THE REVERSE STILL HOLDS (V-2's other half): a picture that is the
+// user's, picked into a material, STAYS a tile — the picker stamps only a row
+// its own import minted, and this row was already here.
+var second = materials.create("Second " + stamp);
+assert(materials.addTexture(second, fixtures + "/tiny.png", { slot: "baseColorMap" }) === texGuid,
+       "a material picking the user's picture answers the same row");
+assert(assets.metadata(texGuid).member === undefined,
+       "...and does NOT stamp it: a texture the user imported is always a tile");
+
+// (Importing it AGAIN from here is an ordinary duplicate import — the claim
+// above exists to stop a picture the user CANNOT SEE from being duplicated,
+// not to change what importing the same file twice has always done.)
+
 console.log("material_bundle e2e passed");
