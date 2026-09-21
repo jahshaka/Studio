@@ -31,7 +31,6 @@ public:
     QWidget *previewWidget() override { return this; }
     void setPreviewMaterial(iris::MaterialPtr material) override;
     void setPreviewModel(Model model) override;
-    void setPreviewBackground(const QColor &colour) override;
 
     EngineMaterialPreviewScene *previewScene() const { return mScene.get(); }
 

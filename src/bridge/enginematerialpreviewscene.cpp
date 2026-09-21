@@ -5,6 +5,10 @@
 #include <QFileInfo>
 
 #include "irisgl/mirror/scenemirror.h"
+#include "bridge/previewenvironment.h"
+#include "bridge/secondarysurfacetonemap.h"
+#include "viewport/freecamerapolicy.h"
+#include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
@@ -52,49 +56,30 @@ EngineMaterialPreviewScene::~EngineMaterialPreviewScene()
 
 void EngineMaterialPreviewScene::buildDocument()
 {
-    // SceneWidget::start, minus the GL: primitive at the origin, lights around
-    // it, the grey clear colour. Lit like the assets preview (a key directional
-    // and a fill point) so PBR materials read; no floor, no shadows.
+    // THE STUDIO IS THE LIGHTING (MATPREVIEW-ENV-1, owner review R9). What
+    // stood here was a HAND RIG — a warm key directional at 0.86 and a fill
+    // point at 0.5 over a flat 125-grey sky — and every complaint in the
+    // owner's report was a property of it: a flat sky is a uniform ball of
+    // light, so a metal material mirrored a blank grey sphere ("weird mirrored
+    // reflections"), and two point-like lights over an UNGRADED preview surface
+    // clipped their speculars to white ("burnt-out lights"). Both lights and
+    // the colour sky are GONE. The environment `previewenv::apply` binds is the
+    // only light in this document, and it is the same one the thumbnail
+    // renderer uses, so a material's tile and its preview are the same picture.
     mDocument = iris::Scene::create();
-    mDocument->shadowEnabled = false;
-
-    auto key = iris::LightNode::create();
-    key->setLightType(iris::LightType::Directional);
-    key->setName("matpreview-key");
-    key->color = QColor(255, 255, 240);
-    key->setLocalRot(iris::Quat::fromEulerAngles(45, 45, 0));
-    key->intensity = 0.86f;
-    key->isBuiltIn = true;
-    mDocument->rootNode->addChild(key);
-
-    auto fill = iris::LightNode::create();
-    fill->setLightType(iris::LightType::Point);
-    fill->setName("matpreview-fill");
-    fill->setLocalPos(iris::Vec3(-3, 0, 3));
-    fill->color = QColor(255, 255, 255);
-    fill->intensity = 0.5f;
-    fill->isBuiltIn = true;
-    mDocument->rootNode->addChild(fill);
+    previewenv::apply(mDocument);
 
     // The legacy camera sat at (2,0,3) looking at the origin; a touch of height
     // keeps the Plane primitive from being edge-on at first sight.
     mCamera = iris::CameraNode::create();
     mCamera->setLocalPos(iris::Vec3(2, 1.2f, 3));
     mCamera->lookAt(iris::Vec3(0, 0, 0));
+    // THE FREE CAMERA'S FRAMING RULE, in a dock (freecamerapolicy.h): at or
+    // below 16:9 the authored vertical angle is rendered exactly; wider, the
+    // vertical narrows to hold the horizontal extent. reframe() asks for the
+    // EFFECTIVE angle, so a Display dock dragged to any shape stays composed.
+    mCamera->setFramingAspect(freecam::kFreeCameraFramingAspect);
     mDocument->setCamera(mCamera);
-
-    mDocument->setSkyColor(QColor(125, 125, 125));   // SceneWidget's initial clearColor
-    // A PREVIEW HAS NO SUN DISC (SKY_LIGHT_SPEC.md round-2 review item 9). Every
-    // preview document carries a colour sky, which is a REAL sky now — so it
-    // bakes a strip, six reflection faces and an IBL convolution, and would draw
-    // the disc wherever the preview's own light happens to point. A thumbnail is
-    // a photograph of an ASSET, not of a world with a sun in it.
-    mDocument->sunDiscVisible = false;
-    // (The dead `setAmbientColor` that stood here is GONE with the field —
-    // SKY_LIGHT_SPEC.md §5. This preview lights its ENGINE scene directly
-    // through Engine::setAmbient and never calls applyEnvironment, so the
-    // document write reached nothing and always had.)
-    mDocument->fogEnabled = false;
 
     mCamera->update(0);
     mDocument->refresh();
@@ -112,9 +97,40 @@ void EngineMaterialPreviewScene::buildDocument()
     setPreviewMesh(PreviewMesh::Sphere);
 }
 
+// THE FRAMING, RE-DONE FROM THE DOCK'S ACTUAL SHAPE (owner review R9: the
+// preview sphere "is CLIPPED at the panel's right edge").
+//
+// The camera used to sit at a fixed 3.78 units whatever the dock was, so the
+// subject's size on screen followed the dock's HEIGHT and its margin followed
+// the dock's WIDTH: a narrow column cut the sphere off at both sides (measured:
+// 274 silhouette pixels lost at 160x256) and a wide strip shrank it to a
+// seventh of the frame. This frames by the subject's own radius against the
+// SMALLER dimension of the frame (viewport/previewframing.h), so the margin is
+// the same at every shape, and it re-runs whenever the dock is resized or the
+// primitive changes. The user's own zoom rides ON TOP as a factor, so a
+// resize keeps how close they had pulled in.
+void EngineMaterialPreviewScene::reframe(int width, int height)
+{
+    if (!mCamera || !mSubject) return;
+    const iris::AABB bounds = preview::worldBoundingBox(mSubject);
+    const float radius = preview::subjectRadius(mSubject, bounds);
+    const float aspect = height > 0 ? float(width) / float(height) : 1.0f;
+    mCamera->setAspectRatio(aspect);
+    mBaseDistance = preview::previewDistance(radius, mCamera->effectiveFovDegrees(), aspect);
+    preview::clipPlanesForFraming(mBaseDistance * kMaxZoomOut, radius,
+                                  mCamera->nearClip, mCamera->farClip);
+    mFramedFor = QSize(width, height);
+    mFramedRadius = radius;
+    mOrbit.distFromPivot = mBaseDistance * mZoom;
+    mOrbit.apply(mCamera);
+}
+
 void EngineMaterialPreviewScene::configureScene(Scene *scene)
 {
-    scene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
+    // The environment's own two halves — the nine diffuse bands and the
+    // specular gain — instead of the flat hemisphere pair that used to stand
+    // in for a sky here (previewenv::pushAmbient).
+    previewenv::pushAmbient(scene);
 }
 
 void EngineMaterialPreviewScene::configureMirror(SceneMirror *mirror)
@@ -125,6 +141,14 @@ void EngineMaterialPreviewScene::configureMirror(SceneMirror *mirror)
 void EngineMaterialPreviewScene::configureView(View *view)
 {
     view->setShadows(false);
+    // THE PREVIEW IS GRADED, at the studio's own manual exposure. Without this
+    // the dock wrote raw linear radiance into an 8-bit surface — the same
+    // defect the secondary-surface tonemap fixed for thumbnails in 2026-09-07
+    // and which was still live here, and the reason a specular highlight was a
+    // flat white hole instead of a highlight with a shoulder. It is the
+    // thumbnail's grade, at the thumbnail's exposure, so the two surfaces
+    // develop one picture.
+    secondaryfx::apply(view, true, previewenv::exposureChain());
 }
 
 iris::MeshPtr EngineMaterialPreviewScene::meshFor(PreviewMesh mesh)
@@ -154,6 +178,7 @@ void EngineMaterialPreviewScene::rebuildSubject()
         node->setMesh(mesh);
         if (mMaterial) node->setMaterial(mMaterial);
         node->update(0);
+        mFramedFor = QSize();     // a new primitive is a new radius
         return;
     }
     if (mSubject) { mSubject->removeFromParent(); mSubject.reset(); }
@@ -168,6 +193,7 @@ void EngineMaterialPreviewScene::rebuildSubject()
     mDocument->rootNode->addChild(node);
     node->update(0);
     mSubject = node;
+    mFramedFor = QSize();
 }
 
 void EngineMaterialPreviewScene::setMaterial(iris::MaterialPtr material)
@@ -184,11 +210,6 @@ bool EngineMaterialPreviewScene::setPreviewMesh(PreviewMesh mesh)
     mMesh = mesh;
     rebuildSubject();
     return mSubject != nullptr;
-}
-
-void EngineMaterialPreviewScene::setBackground(const QColor &colour)
-{
-    mDocument->setSkyColor(colour);
 }
 
 // ---- orbit camera: the shared PreviewOrbit (viewport/previeworbit.h) ----
@@ -211,16 +232,21 @@ void EngineMaterialPreviewScene::orbit(float yawDegrees, float pitchDegrees)
 
 void EngineMaterialPreviewScene::wheel(int delta)
 {
-    // The zoom POLICY is this dock's own (previeworbit.h): a primitive filling
-    // the frame stops half a unit out, never at the pivot.
-    const float zoomSpeed = 0.01f;
-    mOrbit.distFromPivot += -delta * zoomSpeed;
-    if (mOrbit.distFromPivot < 0.5f) mOrbit.distFromPivot = 0.5f;
+    // A ZOOM IS A FACTOR ON THE FRAMING, not an absolute distance: the framing
+    // moves with the dock's shape (reframe), and a user who had pulled in
+    // must stay pulled in across a resize. One notch is 120 units of angle
+    // delta and moves the factor by ~10 %.
+    mZoom *= std::pow(1.1f, -float(delta) / 120.0f);
+    mZoom = std::max(kMinZoomIn, std::min(kMaxZoomOut, mZoom));
+    mOrbit.distFromPivot = std::max(0.5f, mBaseDistance * mZoom);
     mOrbit.apply(mCamera);
 }
 
 void EngineMaterialPreviewScene::step(float dt, int width, int height)
 {
+    // THE FRAME'S SHAPE IS AN INPUT TO THE FRAMING, so it is read first — the
+    // camera's effective vertical angle depends on it.
+    if (mFramedFor != QSize(width, height)) reframe(width, height);
     mOrbit.advance();
     mOrbit.apply(mCamera);
 

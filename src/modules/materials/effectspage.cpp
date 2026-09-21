@@ -61,6 +61,7 @@ For more information see the LICENSE file
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/sceneissues.h"
+#include "services/thumbnailrebuild.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
 #include <QFutureWatcher>
@@ -1158,6 +1159,11 @@ void EffectsPage::duplicateShader(QString guid)
 		                     tr("That material could not be duplicated: %1").arg(error));
 		return;
 	}
+	// THE TILE IS A RENDER OF THE COPY ON THE STUDIO SPHERE (owner review
+	// R9(a)): a duplicate inherits the source row's thumbnail, which is the
+	// wrong picture the moment that one was a preset's shipped icon. Before
+	// the drawers refill, so they show the render and not the inherited tile.
+	thumbrebuild::rebuildOne(dataBase, mProject, copy, EngineHost::instance().engine());
 	// THE DRAWERS FIRST, THEN THE OPEN (fix round F1): `loadGraph` finds its
 	// tile in the widgets, so opening the copy before the Custom list is
 	// refilled used to dereference a tile that did not exist.
@@ -2780,6 +2786,10 @@ void EffectsPage::configureConnections()
 		const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
 		                                                     dataBase, mProject, &error);
 		if (copy.isEmpty()) { irisLog("Customise: " + error); return; }
+		// THE TILE IS A RENDER OF THE COPY (owner review R9(a)): a customised
+		// preset used to keep the shipped preset's ICON, which is a picture of
+		// the preset and not a sphere for silver or glass.
+		thumbrebuild::rebuildOne(dataBase, mProject, copy, EngineHost::instance().engine());
 		refreshShaderGraph();
 		// It is the user's material now: show them where it landed. In a
 		// project it is the Project drawer (Customise pins it), otherwise
@@ -2923,16 +2933,19 @@ void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
 
 void EffectsPage::addMenuToSceneWidget()
 {
+	// (THE BACKGROUND MENU IS GONE — MATPREVIEW-ENV-1, CRUD. White/Gray/Black
+	// painted a flat colour SKY over the preview scene, and a flat sky is a
+	// uniform ball of light: it was half of the owner's R9 report ("weird
+	// mirrored reflections"). There is ONE studio environment now, and a menu
+	// that could replace it with a grey ball would be that defect wearing a
+	// menu item.)
 	QMenu *modelMenu = new QMenu("Model");
-	QMenu *backgroundMenu = new QMenu("Background");
 	modelMenu->setStyleSheet(StyleSheet::EffectsPreviewMenu());
-	backgroundMenu->setStyleSheet(StyleSheet::EffectsPreviewMenu());
 
 	QMainWindow *window = new QMainWindow;
 	QToolBar *bar = new QToolBar;
 
 	window->menuBar()->addMenu(modelMenu);
-	window->menuBar()->addMenu(backgroundMenu);
 	displayWidget->setWidget(window);
 	displayWindow = window;
 	// The central slot stays empty until Studio hands in the engine-rendered
@@ -2971,34 +2984,14 @@ void EffectsPage::addMenuToSceneWidget()
 						   torusAction,
 		});
 
-	auto whiteAction = new QAction("White");
-	connect(whiteAction, &QAction::triggered, [=]() {
-		if (enginePreview) enginePreview->setPreviewBackground(QColor(255, 255, 255));
-	});
-
-	auto grayAction = new QAction("Gray");
-	connect(grayAction, &QAction::triggered, [=]() {
-		if (enginePreview) enginePreview->setPreviewBackground(QColor(125, 125, 125));
-	});
-
-
-	auto blackAction = new QAction("Black");
-	connect(blackAction, &QAction::triggered, [=]() {
-		if (enginePreview) enginePreview->setPreviewBackground(QColor(0, 0, 0));
-	});
-	backgroundMenu->addActions({ whiteAction, grayAction, blackAction});
-
 	cubeAction->setCheckable(true);
 	planeAction->setCheckable(true);
 	sphereAction->setCheckable(true);
 	cylinderAction->setCheckable(true);
 	capsuleAction->setCheckable(true);
 	torusAction->setCheckable(true);
-	whiteAction->setCheckable(true);
-	blackAction->setCheckable(true);
 
 	sphereAction->setChecked(true);
-	whiteAction->setChecked(true);
 
 	auto screenShotBtn = new QPushButton("screenshot");
 	bar->addWidget(screenShotBtn);
@@ -3014,12 +3007,6 @@ void EffectsPage::addMenuToSceneWidget()
 	modelGroup->addAction(cylinderAction);
 	modelGroup->addAction(capsuleAction);
 	modelGroup->addAction(torusAction);
-	modelGroup->setExclusive(true);
-
-	// background group
-	modelGroup = new QActionGroup(this);
-	modelGroup->addAction(whiteAction);
-	modelGroup->addAction(blackAction);
 	modelGroup->setExclusive(true);
 }
 

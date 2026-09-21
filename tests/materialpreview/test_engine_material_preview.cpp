@@ -37,14 +37,15 @@ using namespace jahshaka::engine;
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-// The preview's default background is the legacy grey (125,125,125): no hue.
+// The preview's backdrop is the studio environment's neutral wall: no hue, and
+// GRADED now (MATPREVIEW-ENV-1 puts the fixed studio tonemap on the preview
+// view, which is what makes the dock and a thumbnail one picture), so the
+// readback's linear value is the film curve's output for that wall and not the
+// picked colour it used to be. The band is wide because the wall is a gradient
+// — what is asserted is "neutral, lit, neither black nor blown".
 static bool isGrey(const Colour &c)
 {
-    // RE-BASELINED (SKY_LIGHT_SPEC.md §4): the preview's 125-grey sky is a
-    // COLOUR a user could have picked and is decoded sRGB->linear like every
-    // other one, so it reaches this linear readback at 0.202 rather than 0.49.
-    // Still "a neutral grey backdrop", at the value it now has.
-    return std::fabs(c.r - c.g) < 0.05f && std::fabs(c.g - c.b) < 0.05f && c.r > 0.12f && c.r < 0.32f;
+    return std::fabs(c.r - c.g) < 0.05f && std::fabs(c.g - c.b) < 0.05f && c.r > 0.05f && c.r < 0.85f;
 }
 static bool isRed(const Colour &c)   { return c.r > 0.12f && c.r > c.b * 1.5f && c.r > c.g * 1.5f; }
 static bool isGreen(const Colour &c) { return c.g > 0.12f && c.g > c.r * 1.5f && c.g > c.b * 1.5f; }
@@ -144,12 +145,16 @@ int main(int argc, char **argv)
         show("torus", img, CX, CY);
         CHECK(img.width == unsigned(W) && img.height == unsigned(H), "torus renders");
 
-        // ---- 5. background colour (the Background menu) ----
+        // ---- 5. THE STUDIO BACKDROP (MATPREVIEW-ENV-1) ----
+        // This used to be the Background menu: setBackground(blue) and a blue
+        // corner pixel. Both are gone — the backdrop IS the one generated
+        // studio environment now, so the corner is the neutral wall that
+        // environment hangs behind the subject, and the subject still reads
+        // over it.
         preview.setPreviewMesh(PreviewMesh::Sphere);
-        preview.setBackground(QColor(10, 10, 200));
         img = render(preview, *engine, view);
-        show("blue background, sphere", img, CX, CY);
-        CHECK(isBlue(img.at(2, 2)), "corner takes the background colour");
+        show("studio backdrop, sphere", img, CX, CY);
+        CHECK(isGrey(img.at(2, 2)), "the corner is the studio's neutral wall");
         CHECK(isGreen(img.at(CX, CY)), "sphere still shows the material over it");
 
         // ---- 6. the orbit is the same path the mouse takes ----
@@ -230,7 +235,6 @@ int main(int argc, char **argv)
         //      the previous claim is not vacuous).
         {
             preview.setPreviewMesh(PreviewMesh::Sphere);
-            preview.setBackground(QColor(10, 10, 200));
 
             auto makeMat = [](float coat, float coatRough, int brdf) {
                 auto m = iris::PbrMaterial::create();

@@ -4,6 +4,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_thumbnails test_thumbnails.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     # previewMaterialForMeshData is BuiltinMaterials::fromMeshData now — the one
     # mesh-data conversion, instead of a third copy that ignored every PBR field.
@@ -33,6 +34,7 @@ set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia Concurrent)
 add_executable(test_shader_thumbnail test_shader_thumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/io/materialreader.cpp
@@ -133,6 +135,7 @@ add_executable(test_thumbnail_sweep test_thumbnail_sweep.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailstop.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/assetthumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/services/libraryassetnode.cpp
@@ -207,3 +210,30 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
 add_test(NAME thumbnails.sweep COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnail_sweep
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
 set_tests_properties(thumbnails.sweep PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
+
+# thumbnails.studio_env — THE ONE STUDIO ENVIRONMENT, measured
+# (MATPREVIEW-ENV-1, owner review R9). One binary because the assertion that
+# matters most is an agreement between two surfaces: the Materials dock's
+# preview scene and the shared thumbnail renderer, lit by the same generated
+# environment, graded at the same derived exposure.
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
+add_executable(test_preview_environment test_preview_environment.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginematerialpreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
+set_target_properties(test_preview_environment PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_preview_environment PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+   ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_preview_environment PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_preview_environment PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_preview_environment JahshakaEngineMedia)
+add_test(NAME thumbnails.studio_env COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "mirror")

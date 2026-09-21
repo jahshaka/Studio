@@ -28,6 +28,7 @@
 #include "io/builtinmaterials.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/offscreenrenderscope.h"
+#include "bridge/previewenvironment.h"
 #include "bridge/stableoffscreenrender.h"
 #include "viewport/previewframing.h"
 
@@ -153,18 +154,21 @@ void EngineThumbnailRenderer::clearSubject()
 
 Colour EngineThumbnailRenderer::backgroundColour()
 {
-    // The legacy generator cleared to (25, 25, 25) — a COLOUR, so it enters the
-    // renderer linear like every other one (SKY_LIGHT_SPEC.md §4). It has to:
-    // the preview document carries the same 25 grey as its SKY, the sky now
-    // draws a real quad, and a raw clear behind a decoded sky quad would show a
-    // seam wherever the quad did not cover.
-    const iris::LinearColor c = iris::linearOf(QColor(25, 25, 25));
-    return Colour(c.r, c.g, c.b, 1.0f);
+    // THE FALLBACK BEHIND THE SKY, and only that (MATPREVIEW-ENV-1). The studio
+    // environment draws a real sky quad over the whole frame, so this is what
+    // shows where no sky pass ran at all (a failed upload, a headless view). It
+    // is the environment's own mean radiance rather than the legacy 25-grey, so
+    // the seam nobody should ever see is the right colour if they do.
+    const float mean = previewenv::ambientSh()[0];
+    return Colour(mean, mean, mean, 1.0f);
 }
 
 void EngineThumbnailRenderer::configureScene(Scene *scene)
 {
-    scene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
+    // ONE STUDIO for every preview surface (previewenv): the environment's nine
+    // diffuse bands and its specular gain, instead of the flat hemisphere pair
+    // that stood in for a sky.
+    previewenv::pushAmbient(scene);
 }
 
 void EngineThumbnailRenderer::releaseSubject(bool)
@@ -213,38 +217,18 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
 
 iris::ScenePtr EngineThumbnailRenderer::buildPreviewScene(iris::CameraNodePtr &cameraOut)
 {
+    // THE STUDIO, AND NOTHING ELSE (MATPREVIEW-ENV-1, owner review R9). This
+    // carried a hand rig of its own — a 0.76 key and a 0.47 blue-white rim over
+    // a near-black 25-grey sky — which was a THIRD lighting setup beside the
+    // material preview dock's and the editor's: a material's tile could not
+    // agree with its own preview, because nothing about the two rigs was the
+    // same. Both lights are gone. `previewenv::apply` binds the generated
+    // studio environment, the exposure a preview grades at (read back out by
+    // render(), below, through the document's own `exposure` field) and the
+    // three things a photograph of an asset never has: a sun disc, fog,
+    // shadows.
     auto scene = iris::Scene::create();
-    scene->setSkyColor(QColor(25, 25, 25, 0));
-    // A PREVIEW HAS NO SUN DISC (SKY_LIGHT_SPEC.md round-2 review item 9). Every
-    // preview document carries a colour sky, which is a REAL sky now — so it
-    // bakes a strip, six reflection faces and an IBL convolution, and would draw
-    // the disc wherever the preview's own light happens to point. A thumbnail is
-    // a photograph of an ASSET, not of a world with a sun in it.
-    scene->sunDiscVisible = false;
-    // (The dead `setAmbientColor` that stood here is GONE with the field —
-    // SKY_LIGHT_SPEC.md §5. This preview lights its ENGINE scene directly
-    // through Engine::setAmbient and never calls applyEnvironment, so the
-    // document write reached nothing and always had.)
-    scene->fogEnabled = false;
-    scene->shadowEnabled = false;
-
-    auto dlight = iris::LightNode::create();
-    dlight->color = QColor(255, 255, 240);
-    dlight->intensity = 0.76f;
-    dlight->setLightType(iris::LightType::Directional);
-    dlight->setName("Key Light");
-    dlight->setLocalRot(iris::Quat::fromEulerAngles(45, 45, 0));
-    dlight->setShadowMapType(iris::ShadowMapType::None);
-    scene->rootNode->addChild(dlight);
-
-    auto plight = iris::LightNode::create();
-    plight->color = QColor(210, 210, 255);
-    plight->intensity = 0.47f;
-    plight->setLightType(iris::LightType::Point);
-    plight->setName("Rim Light");
-    plight->setLocalPos(iris::Vec3(0, 0, -3));
-    plight->setShadowMapType(iris::ShadowMapType::None);
-    scene->rootNode->addChild(plight);
+    previewenv::apply(scene);
 
     cameraOut = iris::CameraNode::create();
     cameraOut->setLocalPos(iris::Vec3(1, 1, 5));
@@ -330,8 +314,26 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
     iris::CameraNodePtr cam;
     auto document = buildPreviewScene(cam);
     document->rootNode->addChild(node);
-    const float dist = 1.2f / qTan(qDegreesToRadians(cam->angle / 2.0f));
-    cam->setLocalPos(iris::Vec3(0, 0, dist));
+    // THE SAME FRAMING THE DOCK USES (previewframing.h), at the tile's own
+    // aspect: the sphere fills a fixed fraction of the SMALLER dimension, so a
+    // non-square tile keeps it whole. (This was `1.2 / tan(fov/2)` — the
+    // vertical angle only, with the sphere's radius assumed to be exactly 1.)
+    node->update(0);
+    const float aspect = size.height() > 0 ? float(size.width()) / float(size.height()) : 1.0f;
+    cam->setAspectRatio(aspect);
+    const iris::AABB bounds = preview::worldBoundingBox(node);
+    const float radius = preview::subjectRadius(node, bounds);
+    const float dist = preview::previewDistance(radius, cam->effectiveFovDegrees(), aspect);
+    preview::clipPlanesForFraming(dist, radius, cam->nearClip, cam->farClip);
+    // FROM THE ENVIRONMENT'S OWN VIEWPOINT (previewenv::viewDirection), not
+    // straight down +Z. The studio is not isotropic — the lamps are over one
+    // shoulder and the dark wall is opposite — so a tile shot from a different
+    // side of it is a different picture of the same material: measured 108.1
+    // against the dock's 118.4 on an 18 % grey ball, ten codes apart, before
+    // this line. The two agree to under one code with it.
+    float v[3];
+    previewenv::viewDirection(v);
+    cam->setLocalPos(iris::Vec3(v[0] * dist, v[1] * dist, v[2] * dist));
     cam->lookAt(iris::Vec3(0, 0, 0));
     cam->update(0);
     return render(document, cam, size);
@@ -351,9 +353,10 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     engine->setFixedFrameDelta(jahshaka::engine::Engine::kDefaultFrameDelta);
     mirror()->setSource(document);
     mirror()->sync();
-    // Background from the document's sky (buildPreviewScene's 25,25,25 for asset
-    // previews; a real scene's sky colour matches the viewport). Ambient stays the
-    // renderer's own studio lighting — deliberately not applyEnvironment.
+    // The sky — the studio environment for every request (buildPreviewScene).
+    // NOT applyEnvironment, deliberately: the ambient is the environment's own
+    // (configureScene), and a thumbnail takes no shadow, GI or post row from a
+    // document it never had.
     mirror()->applySky(view());
     mirror()->applyCamera(camera, view());
     // THE SECONDARY-SURFACE TONEMAP (bridge/secondarysurfacetonemap.h). A
