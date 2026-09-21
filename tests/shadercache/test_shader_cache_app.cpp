@@ -179,6 +179,21 @@ int main(int argc, char **argv)
           "the progress counter has a denominator on the second launch");
     CHECK(warm.value("fingerprint").toString() == cold.value("fingerprint").toString(),
           "the fingerprint is stable between launches");
+    // THE REPLAY WARMS WHAT IT RECORDED OR NOTHING (WARMUPSET-1, ogre-patch
+    // 0084). A recorded set names one representative MATERIAL per permutation,
+    // and `Renderable::setDatablock( IdString )` used to answer a name it could
+    // not find with a CRITICAL log line and the DEFAULT datablock — so a set
+    // recorded by a process whose datablock names are per-process counters (as
+    // this app's are: "pbr_18", "unlit_21") compiled the default datablock's
+    // permutations on EVERY warm launch and reported them as a warm-up.
+    // Measured before the patch: seven "Can't find HLMS datablock material"
+    // lines and eight shaders per warm launch, none of them ever bound.
+    //
+    // The line is Ogre's, so this is a log assertion; it is the only place the
+    // defect was ever visible, which is exactly why it stood for months.
+    CHECK(!gLastOutput.contains(QStringLiteral("Can't find HLMS datablock")),
+          "run 2's warm-up replay resolved every material it applied "
+          "(no 'Can't find HLMS datablock' line)");
 
     // ---- run 3: steady state ----------------------------------------------
     // The launch after the warm-up set's own permutations have been cached: the
