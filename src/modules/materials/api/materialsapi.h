@@ -51,6 +51,7 @@ public:
     /// every one of the five refuses by name rather than pretending.
     struct PageDelegate {
         std::function<QVariantMap(const QString &guid, const QString &scope)> open;
+        std::function<QVariantMap(const QString &presetOrName, const QString &name)> newMaterial;
         std::function<QVariantList()> tabs;
         std::function<bool(const QVariant &)> activate;
         std::function<bool(const QVariant &)> closeTab;
@@ -108,6 +109,8 @@ public:
                                          const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap open(const QString &guidOrName,
                                  const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap newMaterial(const QString &presetOrName = QString(),
+                                        const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList tabs();
     Q_INVOKABLE bool activate(const QVariant &tabOrGuid);
     Q_INVOKABLE bool closeTab(const QVariant &tabOrGuid);

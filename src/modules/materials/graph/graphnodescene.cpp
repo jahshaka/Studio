@@ -134,7 +134,12 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 		nodeGraph->addNode(model);
 	}
 
-	connect(model, &NodeModel::valueChanged, [this](NodeModel* nodeModel, int sockedIndex) {
+	// WITH THIS SCENE AS THE CONTEXT (fix round F12): the connection's
+	// lifetime used to be the MODEL's, and a model outlives a scene whenever
+	// the same graph is re-bound to a new canvas — so a value edit reached a
+	// scene that had been deleted, through a captured `this`.
+	connect(model, &NodeModel::valueChanged, this,
+	        [this](NodeModel* nodeModel, int sockedIndex) {
 		emit nodeValueChanged(nodeModel, sockedIndex);
 		emit graphInvalidated();
 	});

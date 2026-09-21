@@ -218,6 +218,10 @@ void EffectsPage::bindGraph(MaterialDocument *doc, NodeGraph *graph)
 	const bool active = (doc == activeDoc());
 	restoringGraph = true;
 
+	// The scene being replaced keeps this document's handlers until it is
+	// actually deleted (deleteLater), and one of them starts the autosave —
+	// cut them here for the same reason a close does (fix round F7).
+	if (doc->scene) doc->scene->disconnect(this);
 	auto *newScene = createNewScene(doc);
 	newScene->setNodeGraph(graph);
 	// The previous graph AND the scene drawing it go here, in that order
@@ -295,7 +299,11 @@ bool EffectsPage::closeDocumentAt(int index)
 		showDocument(mDocs[mActive]);
 	}
 	// Only now — the view is showing another document's scene, and the panels
-	// point at another document's graph.
+	// point at another document's graph. THE SCENE OUTLIVES THE DOCUMENT by
+	// one event-loop turn (it is deleteLater'd), and its three handlers
+	// capture this document by pointer, so they are cut here rather than
+	// left to fire against freed memory (fix round F7).
+	if (doc->scene) doc->scene->disconnect(this);
 	delete doc;
 	syncTabBar();
 	return true;
@@ -377,6 +385,11 @@ int EffectsPage::indexForRef(const QVariant &tabOrGuid) const
 QVariantMap EffectsPage::openMaterialTab(const QString &guid, const QString &scope)
 {
 	shaderInfo::Origin origin;
+	// THERE IS NO PROJECT COPY WITHOUT A PROJECT (fix round F6). Asked for
+	// one with nothing open, this used to open a '(project)' tab whose save
+	// would write into the pins of a project that is not there.
+	const bool sceneOpenNow = mSceneOpenProbe && mSceneOpenProbe();
+	if (scope == QLatin1String("project") && !sceneOpenNow) return QVariantMap();
 	if (scope == QLatin1String("project")) origin = shaderInfo::Origin::Project;
 	else if (scope == QLatin1String("library")) origin = shaderInfo::Origin::Library;
 	else {
@@ -397,6 +410,26 @@ QVariantMap EffectsPage::openMaterialTab(const QString &guid, const QString &sco
 		origin = pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library;
 	}
 	return tabInfo(openDocument(guid, origin));
+}
+
+QVariantMap EffectsPage::newMaterialTab(const QString &presetOrName, const QString &name)
+{
+	// THE SAME DOOR THE + BUTTON USES (API-first): `createShader` mints the
+	// row, opens the tab and saves it once. The dialog's two answers — which
+	// preset, and what to call it — are this function's arguments, which is
+	// also what makes the tab rule testable: a New opens a TAB, it does not
+	// take over the one that is active (fix round F3).
+	NodeGraphPreset preset;
+	if (!presetOrName.trimmed().isEmpty()) {
+		bool found = false;
+		const MaterialPreset shipped = MaterialPresets::find(presetOrName.trimmed(), &found);
+		if (!found) return QVariantMap();
+		preset.name = shipped.name;
+		preset.title = shipped.name;
+		preset.guid = MaterialPresetAssets::guidFor(shipped.name);
+	}
+	createShader(preset, true, name);
+	return tabInfo(activeDoc());
 }
 
 QVariantList EffectsPage::materialTabs() const
@@ -431,16 +464,24 @@ void EffectsPage::documentChanged(MaterialDocument *doc)
 	syncTabBar();   // the label is the document's name
 }
 
-void EffectsPage::forgetMaterial(const QString &guid)
+void EffectsPage::forgetMaterial(const QString &guid, Gone gone)
 {
-	// THE MATERIAL IS GONE FROM THE LIBRARY, so the tabs that are it CLOSE —
-	// without a save, because the row they would write to no longer exists
-	// (MATERIALS_TABS_SPEC §2.6). Nothing else on the page changes: deleting one
-	// material never touched the others, and the unconditional reset this
-	// replaced made every delete reach for whatever was on screen.
+	// THE COPY THAT WENT IS THE COPY THAT CLOSES (fix round F2). Identity is
+	// (guid, origin), and the three gestures are three different things:
+	// removing a material from a PROJECT leaves the library original open and
+	// editable; an UNLISTED library delete — a row a project still pins —
+	// leaves that project's copy open and editable; only a real library delete
+	// takes both. This used to match on the guid alone and close tabs that
+	// were still perfectly valid.
+	//
+	// The tabs that do close do so WITHOUT a save: the row they would write to
+	// is not there any more.
 	if (guid.isEmpty()) return;
 	for (int i = mDocs.size() - 1; i >= 0; --i) {
 		if (mDocs[i]->info.GUID != guid) continue;
+		const bool isProjectCopy = mDocs[i]->info.origin == shaderInfo::Origin::Project;
+		if (gone == Gone::ProjectCopy && !isProjectCopy) continue;
+		if (gone == Gone::LibraryCopy && isProjectCopy) continue;
 		mDocs[i]->saveTimer->stop();
 		mDocs[i]->info = shaderInfo();   // no save on the way out
 		closeDocumentAt(i);
@@ -454,7 +495,15 @@ void EffectsPage::renameOpenDocuments(const QString &guid, const QString &newNam
 		if (doc->info.GUID != guid) continue;
 		doc->info.name = newName;
 		if (doc->graph) doc->graph->settings.name = newName;
-		if (doc == activeDoc() && materialSettingsWidget) materialSettingsWidget->setName(newName);
+		if (doc == activeDoc() && materialSettingsWidget) {
+			// NOT AN EDIT (fix round F11): `setName` emits `settingsChanged`, and
+			// that signal pushes an undoable MaterialSettingsChangeCommand — so a
+			// rename typed in the drawer landed on the graph's undo stack as a
+			// settings change, and Ctrl+Z on the canvas took it back halfway.
+			mShowingDocument = true;
+			materialSettingsWidget->setName(newName);
+			mShowingDocument = false;
+		}
 		documentChanged(doc);
 		saveShader(doc);
 	}
@@ -567,6 +616,21 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			    doc->info.origin == shaderInfo::Origin::Project
 			    && mProject && !mProject->getProjectGuid().isEmpty()
 			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID);
+			// A PROJECT'S COPY THAT IS NO LONGER THE PROJECT'S IS NOT THE
+			// LIBRARY'S (fix round F1). The pin can go while the tab is open —
+			// the project drawer's Delete, the editor tray's, `assets.
+			// removeFromProject`, a project closed under a hidden page — and
+			// the test above then answers false, which used to send the write
+			// STRAIGHT ON to the library original: the user's edits to one
+			// project's copy landing on the material every other project takes
+			// its copies from. A scope cannot be substituted; the save is
+			// refused and said out loud.
+			if (doc->info.origin == shaderInfo::Origin::Project && !projectOwns) {
+				reportSaveRefused(doc, tr("this project no longer holds it, and a "
+				                          "project's copy is never written to the "
+				                          "library original"));
+				return;
+			}
 			const auto written = MaterialBundle::write(
 			    dataBase, mProject, doc->info.GUID, build.definition,
 			    projectOwns ? MaterialBundle::Scope::Project
@@ -619,6 +683,11 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 	}
 #endif
 
+	// THE DRAWER FOLLOWS THE MATERIAL THE USER IS LOOKING AT, and only that
+	// one (fix round F8): a BACKGROUND tab's 1.5 s autosave used to switch
+	// the drawer's tab and flash a highlight on its tile while the user was
+	// working in another material.
+	if (doc != activeDoc()) return;
 	int currentTab = selectCorrectTabForItem(doc->info.GUID);
 	auto item = selectCorrectItemFromDrop(doc->info.GUID);
 	if (item) {
@@ -1156,12 +1225,16 @@ bool EffectsPage::deleteShader(QString guid)
         materialmembers::reapExclusiveMembers(dataBase, guid);
     if (outcome.ok) {
         holder->takeItem(holder->row(item));
-        // ONLY THE MATERIAL THAT WENT (MATERIALS_TABS_SPEC C7). This used to
-        // clear the open material's record UNCONDITIONALLY, so deleting any
-        // row in the drawer left the graph on screen with no guid — and its
-        // next save went down the 'name this new material' route, modal
-        // dialog and all.
-        forgetMaterial(guid);
+        // ONLY THE COPY THAT WENT (MATERIALS_TABS_SPEC C7 + fix round F2).
+        // This used to clear the open material's record UNCONDITIONALLY, so
+        // deleting any row in the drawer left the graph on screen with no
+        // guid — and its next save went down the 'name this new material'
+        // route, modal dialog and all. And then it closed every tab of that
+        // guid, at either scope: a library UNLIST, which exists precisely so
+        // the projects that pin it keep working, shut their tabs too.
+        forgetMaterial(guid, fromProject  ? Gone::ProjectCopy
+                             : outcome.unlisted ? Gone::LibraryCopy
+                                                : Gone::Both);
         return true;
     }
 #else
@@ -1181,7 +1254,7 @@ bool EffectsPage::deleteShader(QString guid)
         if(obj["guid"].toString() == guid){
             if(file.remove()){
                 holder->takeItem(holder->row(item));
-                forgetMaterial(guid);
+                forgetMaterial(guid, Gone::Both);
                 return true;
             }
         }
@@ -1341,9 +1414,12 @@ void EffectsPage::configureAssetsDock()
 
 void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const QString &wanted)
 {
-	// A NEW MATERIAL IS THE USER'S (PRESET-UNIFY-1): whatever was on the
-	// canvas, this one is editable, so the read-only banner goes.
-	setReadOnly(false);
+	// (A NEW MATERIAL IS THE USER'S — PRESET-UNIFY-1 — and it is editable, so
+	// the read-only banner goes. That is done by `loadGraphFromTemplate` on
+	// the NEW document, below. It used to be done HERE, on whatever document
+	// was active: pressing New while looking at a shipped preset took the
+	// read-only state off the PRESET's tab — the lock that stands its save
+	// down — which is the second half of the fix-round F3 defect.)
 
 	// AND IT IS NOT CALLED WHAT THE PRESET IS CALLED (fix round; corrected in
 	// round 2). It took `preset.title` — a shipped preset's own name — so
@@ -1394,6 +1470,26 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	effects->addItem(item);
 	effects->displayAllContents();
 
+	// NEW IS AN OPEN GESTURE, SO IT OPENS A TAB (MATERIALS_TABS_SPEC §2.2;
+	// fix round F3). It used to take the ACTIVE tab over: the document's
+	// identity was wiped by `loadGraphFromTemplate` while its autosave was
+	// still armed, so the edit that was pending fired later under the NEW
+	// material's guid — and a read-only PRESET tab was silently turned into
+	// the user's new material. The one in-place route left is the ANONYMOUS
+	// canvas being named (loadNewGraph == false, the Save-with-no-guid
+	// door), which is the whole purpose of that document.
+	if (loadNewGraph) {
+		if (MaterialDocument *previous = activeDoc()) {
+			if (previous->saveTimer->isActive()) {
+				previous->saveTimer->stop();
+				if (!previous->readOnly && !previous->info.GUID.isEmpty())
+					saveShader(previous);
+			}
+		}
+		MaterialDocument *fresh = newDocument();
+		mDocs.append(fresh);
+		mActive = mDocs.size() - 1;
+	}
 	if (auto *stack = activeStack()) stack->clear();
 
 	if (loadNewGraph)	loadGraphFromTemplate(preset, newShader);
@@ -1404,6 +1500,9 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 		doc->info.name = newShader;
 		doc->info.origin = shaderInfo::Origin::Library;   // created in the library
 		documentChanged(doc);
+		// The boot canvas stands aside for a material, this one included.
+		dropUntouchedAnonymous(doc);
+		syncTabBar();
 	}
 
 
@@ -1949,10 +2048,12 @@ void EffectsPage::persistTabs()
 {
 	if (!mSettings || mTabsKey.isEmpty() || mTabsRestorePending) return;
 	QJsonArray rows;
+	int activeRow = -1;
 	for (MaterialDocument *doc : mDocs) {
 		// The anonymous canvas is not a saved tab: it is what the page falls
 		// back to, and it has no material to reopen.
 		if (doc->isAnonymous()) continue;
+		if (doc == activeDoc()) activeRow = rows.size();
 		QJsonObject row;
 		row[QStringLiteral("guid")] = doc->info.GUID;
 		row[QStringLiteral("scope")] = doc->info.origin == shaderInfo::Origin::Project
@@ -1962,7 +2063,11 @@ void EffectsPage::persistTabs()
 	}
 	QJsonObject set;
 	set[QStringLiteral("tabs")] = rows;
-	set[QStringLiteral("active")] = mActive;
+	// THE ACTIVE TAB IS A ROW OF THIS LIST, not an index into `mDocs` (fix
+	// round F5): the anonymous canvas is a document but not a row, so the
+	// two spaces differ by one whenever it is open — and the restore
+	// activated the wrong material.
+	set[QStringLiteral("active")] = activeRow;
 	mSettings->setValue(mTabsKey, QString::fromUtf8(
 	    QJsonDocument(set).toJson(QJsonDocument::Compact)));
 }
@@ -1981,22 +2086,37 @@ void EffectsPage::restoreTabs()
 	    QJsonDocument::fromJson(mSettings->getValue(mTabsKey, QString()).toString().toUtf8())
 	        .object();
 	const QJsonArray rows = set.value(QStringLiteral("tabs")).toArray();
+	// The documents this restore opened, IN ROW ORDER: the saved `active` is
+	// a row of the saved list, and a row that no longer opens is dropped.
+	QVector<MaterialDocument *> restored;
 	// NO MIGRATION: an absent key is an empty set, which is the anonymous
 	// canvas the page already has.
 	for (const QJsonValue &value : rows) {
 		const QJsonObject row = value.toObject();
 		const QString guid = row.value(QStringLiteral("guid")).toString();
 		if (guid.isEmpty()) continue;
-		// A restored entry whose material no drawer holds is skipped SILENTLY:
-		// it may have been deleted, unlisted, or removed from this project
-		// since the set was written (openDocument's own no-tile rule).
-		openDocument(guid, row.value(QStringLiteral("scope")).toString()
-		                           == QLatin1String("project")
-		                       ? shaderInfo::Origin::Project
-		                       : shaderInfo::Origin::Library);
+		// A restored entry whose MATERIAL IS NOT THERE ANY MORE is skipped in
+		// silence (fix round F4). "Silently" was not true: a deleted material's
+		// guid still opened, read an empty definition, was refused for having
+		// no master node — and raised a toast plus a permanent scene issue
+		// naming a raw guid, on every single show of the page. A saved set is
+		// a memory of what was open, not a claim that it still exists, so the
+		// row is tested against the catalog first and simply dropped.
+		if (!dataBase
+		    || dataBase->fetchAsset(guid).type != static_cast<int>(ModelTypes::Material))
+			continue;
+		MaterialDocument *opened =
+		    openDocument(guid, row.value(QStringLiteral("scope")).toString()
+		                               == QLatin1String("project")
+		                           ? shaderInfo::Origin::Project
+		                           : shaderInfo::Origin::Library);
+		if (opened) restored.append(opened);
 	}
-	const int active = set.value(QStringLiteral("active")).toInt(0);
-	if (active >= 0 && active < mDocs.size()) activateTab(active);
+	const int activeRow = set.value(QStringLiteral("active")).toInt(0);
+	if (activeRow >= 0 && activeRow < restored.size()) {
+		const int index = mDocs.indexOf(restored[activeRow]);
+		if (index >= 0) activateTab(index);
+	}
 	mTabsRestorePending = false;
 	syncTabBar();
 	persistTabs();
@@ -2509,6 +2629,14 @@ void EffectsPage::configureConnections()
 	// and saves the project's own copy; a CUSTOM tile opens and saves the
 	// library original — even while a project holds it, which the old
 	// "is it pinned?" inference made impossible.
+	// THE PROJECT DRAWER'S DELETE IS A PIN REMOVAL, and the page has to be
+	// told (fix round F1): the material's project copy is what a '(project)'
+	// tab is editing, and with the pin gone that tab has nothing behind it.
+	// It closes, unsaved. (The save itself is guarded too — a project-scope
+	// document never falls through to the library original — because this
+	// is only one of the four doors a pin can leave by.)
+	connect(assetWidget, &ShaderAssetWidget::assetRemoved, this,
+	        [this](const QString &guid) { forgetMaterial(guid, Gone::ProjectCopy); });
 	// The PROJECT drawer's rename comes here, like the Custom drawer's: one
 	// rename for every drawer (§7).
 	connect(assetWidget, &ShaderAssetWidget::assetRenamed, this,
@@ -2732,6 +2860,18 @@ void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
 	if (oldName == newName) return;
 
 #if(EFFECT_BUILD_AS_LIB)
+    // THE ROW FIRST, BECAUSE THE ROW CAN SAY NO (fix round F10). The one
+    // name writer is where the name laws live — a shipped preset cannot be
+    // renamed, and nothing may take a preset's name — and the definition
+    // write below used to run BEFORE it, so a refused rename had already
+    // put the new name inside the stored material.
+    if (!assettags::rename(dataBase, guid, newName)) {
+        // Refused: put the tile's label back, or the drawer would show a name
+        // the catalog does not have.
+        irisLog("rename: '" + newName + "' was refused");
+        item->setData(Qt::DisplayRole, oldName);
+        return;
+    }
     // A RENAME IS A DEFINITION WRITE (F11). It used to write the row's BLOB
     // and the row's name and stop — so the stored DEFINITION kept the old
     // name and the next save, which builds the definition from the graph,
@@ -2763,14 +2903,6 @@ void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
                              : MaterialBundle::Scope::Library);
             if (!written.ok) irisLog("rename: " + written.error);
         }
-    }
-    // THROUGH THE ONE NAME WRITER (fix round 2) — see renameShader.
-    if (!assettags::rename(dataBase, guid, newName)) {
-        // Refused: put the tile's label back, or the drawer would show a name
-        // the catalog does not have.
-        irisLog("rename: '" + newName + "' was refused");
-        item->setData(Qt::DisplayRole, oldName);
-        return;
     }
 #else
     // get json obj from file and edit graph like above

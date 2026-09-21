@@ -28,6 +28,20 @@ assert(tabs[0].scope === "library" && tabs[1].scope === "library",
        "both at the scope they were opened at");
 assert(tabs.filter(function (t) { return t.guid === ""; }).length === 0,
        "no anonymous canvas beside them — a restored set replaces it");
+// A STALE ROW IS SKIPPED IN SILENCE (fix round F4): the previous run deleted
+// "Tabs Ghost" from the library while its tab was open, so the saved set names
+// a material that is not there. Opening it would read an empty definition, be
+// refused for having no master node, and leave a toast plus a PERMANENT scene
+// issue naming a raw guid — on every show of the page, for ever.
+assert(tabs.filter(function (t) { return t.name === "Tabs Ghost"; }).length === 0,
+       "the deleted material's row is gone from the restored set");
+var legacy = editor.issues().filter(function (i) { return i.kind === "material.legacy"; });
+assert(legacy.length === 0,
+       "and it was skipped SILENTLY — no refusal issue was raised: "
+       + JSON.stringify(legacy.map(function (i) { return i.message; })));
+// The tab that was active comes back active (fix round F5 persists the ACTIVE
+// ROW, not an index into a list the anonymous canvas is also in).
+assert(materials.activeTab().name === "Tabs B", "the tab that was active is active again");
 
 // They are real documents, not a list of names: the active one's canvas takes
 // an edit and its own stack records it.

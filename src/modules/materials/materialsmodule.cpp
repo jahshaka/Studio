@@ -116,6 +116,9 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
         pageDelegate.open = [effectsPage](const QString &guid, const QString &scope) {
             return effectsPage->openMaterialTab(guid, scope);
         };
+        pageDelegate.newMaterial = [effectsPage](const QString &preset, const QString &name) {
+            return effectsPage->newMaterialTab(preset, name);
+        };
         pageDelegate.tabs = [effectsPage]() { return effectsPage->materialTabs(); };
         pageDelegate.activate = [effectsPage](const QVariant &ref) {
             return effectsPage->activateMaterialTab(ref);

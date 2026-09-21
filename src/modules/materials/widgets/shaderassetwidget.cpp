@@ -260,8 +260,10 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	// then the (now empty) folder row goes.
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
 		const QString folder = item->data(MODEL_GUID_ROLE).toString();
-		for (const auto &asset : db->fetchChildAssets(folder, project->getProjectGuid()))
+		for (const auto &asset : db->fetchChildAssets(folder, project->getProjectGuid())) {
 			assetdelete::removeFromProject(db, asset.guid, project->getProjectGuid());
+			emit assetRemoved(asset.guid);
+		}
 		db->deleteFolder(folder);
 		refresh();
 		return;
@@ -269,6 +271,9 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	const QString target = guid.isEmpty() ? item->data(MODEL_GUID_ROLE).toString() : guid;
 	if (target.isEmpty()) return;
 	assetdelete::removeFromProject(db, target, project->getProjectGuid());
+	// AND THE PAGE IS TOLD (fix round F1): a '(project)' tab is editing this
+	// project's copy, and the pin it reads and writes through has just gone.
+	emit assetRemoved(target);
 	refresh();
 }
 

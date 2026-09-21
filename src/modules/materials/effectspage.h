@@ -217,6 +217,12 @@ public:
 	/// for the default (the project's copy when it pins the guid). Empty
 	/// when no drawer holds it.
 	QVariantMap openMaterialTab(const QString &guid, const QString &scope);
+	/// NEW MATERIAL — the toolbar's + and the drawer's New, without the
+	/// dialog: `presetOrName` is the shipped preset the new material is based
+	/// on (empty = a blank graph) and `name` what it is called (empty = the
+	/// preset's name, bumped against the library's). It opens in its OWN tab
+	/// (fix round F3) and becomes the active one.
+	QVariantMap newMaterialTab(const QString &presetOrName, const QString &name);
 	QVariantList materialTabs() const;
 	QVariantMap activeMaterialTab() const;
 	/// By tab INDEX (a number) or by guid (the first tab in bar order).
@@ -421,9 +427,15 @@ private:
 	/// This material's identity changed (it was just minted, or renamed):
 	/// the panels and the tile that show it follow.
 	void documentChanged(MaterialDocument *doc);
-	/// The material is GONE from the library: every document that is it
-	/// stops being it.
-	void forgetMaterial(const QString &guid);
+	/// WHICH COPIES OF A MATERIAL ARE GONE (fix round F2). Identity is
+	/// (guid, origin), and the three delete gestures do three different
+	/// things: taking a material out of a PROJECT leaves the library
+	/// original open and editable; an UNLISTED library delete (a row a
+	/// project still pins) leaves that project's copy open and editable;
+	/// only a real library delete takes both. Matching on the guid alone
+	/// closed tabs that were still perfectly valid.
+	enum class Gone { ProjectCopy, LibraryCopy, Both };
+	void forgetMaterial(const QString &guid, Gone gone);
 	/// Every open document of this material takes the new name — the label,
 	/// the graph's settings, the settings dock, and a save.
 	void renameOpenDocuments(const QString &guid, const QString &newName);
