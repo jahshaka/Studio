@@ -51,6 +51,7 @@
 #include <QJsonObject>
 #include <QSqlQuery>
 #include <QRegularExpression>
+#include <QElapsedTimer>
 #include <QTemporaryDir>
 #include <cstdio>
 #include <string>
@@ -327,6 +328,35 @@ static void roundTrip(const QString &relPath)
     const iris::SceneNodePtr bakedFragment =
         iris::MeshBake::buildFragment(read, path, testMaterial);
     compareFragment(parsedFragment, bakedFragment, relPath + " fragment");
+
+    // SURFACE CARDS survive the blob byte for byte (SURFACE-CACHE phase 1).
+    // The PARSED side has none by design — cards are a product of the bake, as
+    // the LOD chain is — so the comparison that means something is built
+    // against read.
+    {
+        bool identical = built.meshes.size() == read.meshes.size();
+        int totalCards = 0;
+        for (int i = 0; identical && i < built.meshes.size(); ++i) {
+            const iris::MeshPtr &a = built.meshes.at(i);
+            const iris::MeshPtr &b = read.meshes.at(i);
+            if (a.isNull() || b.isNull()) { identical = false; break; }
+            identical = a->cards.size() == b->cards.size()
+                        && a->cardCoverage == b->cardCoverage;
+            totalCards += int(a->cards.size());
+            for (int c = 0; identical && c < a->cards.size(); ++c) {
+                const iris::MeshCard &x = a->cards.at(c), &y = b->cards.at(c);
+                identical = x.axis == y.axis && x.lodLevel == y.lodLevel
+                            && x.origin.x() == y.origin.x() && x.origin.y() == y.origin.y()
+                            && x.origin.z() == y.origin.z()
+                            && x.halfU == y.halfU && x.halfV == y.halfV
+                            && x.halfDepth == y.halfDepth && x.coverage == y.coverage;
+            }
+        }
+        CHECK_LOUD(identical,
+                   qUtf8Printable(relPath + QStringLiteral(": every surface card survives the "
+                                                           "blob byte for byte (%1 cards)")
+                                                .arg(totalCards)));
+    }
 
     std::printf("ok:   %s: baked load is field-for-field the parsed build (%d meshes, %lld bytes)\n",
                 qUtf8Printable(relPath), int(read.meshes.size()),
@@ -976,9 +1006,306 @@ static void lodChain()
                "a mesh with no chain has exactly one level at every cell size");
 }
 
+// ---------------------------------------------------------------------------
+// 8. SURFACE CARDS (SPECS/SURFACE_CACHE_ASSESSMENT.md §2/§7 phase 1) — the
+//    `meshbake.cards` suite.
+//
+// The card list is what phases 2 and 4 will SPEND: the capture's cost is fixed
+// per card (SURFACE-CACHE-0 measured 0.042-0.057 ms of CPU and 352 KB at 128^2
+// each), so a generator that authors the wrong cards is not a cosmetic problem,
+// it is the cache's budget wrong forever. Four claims, and they fail in
+// different ways:
+//
+//   (a) COVERAGE — the fraction of the mesh's own surface the list can see. It
+//       is measured WITH OCCLUSION by the generator (a surfel hidden behind
+//       nearer surface of the same mesh is not covered), so it is a real
+//       number and not 1.0 by construction.
+//   (b) THE 6-FACE BOX on a convex mesh: the cube's list IS the box, exactly —
+//       six cards, one per axis, each the exact 2x2 face.
+//   (c) DETERMINISM — the same mesh must produce the same cards twice, because
+//       the bake's bytes are content-addressed (assets.gc / assets.verify /
+//       assets.checkConsistency all compare oids). The generator uses no random
+//       numbers at all: the surfel positions come from a van der Corput pair on
+//       the surfel INDEX and the K-means seeding is farthest-point.
+//   (d) THE BUDGET — `maxCards` is honoured, 0 means none, and more budget can
+//       never make the answer worse (it did once: the 6-face box was measured
+//       only when the clustered list FAILED, so a torus went from 0.983 at six
+//       cards to 0.909 at seven).
+//
+// Bake TIME per mesh is printed, not asserted — the assessment lacks the
+// number and a threshold on this box would be a flake on another.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct CardSubject
+{
+    const char *path;
+    float minCoverage;
+    const char *note;
+};
+
+/// The primitive table's meshes (src/data/primitives.h), by FILE — the table's
+/// own paths are Qt resources, which a document-side suite does not link.
+/// Every primitive the samples are built from is here; the four that are not in
+/// the table (arrow, endlessplane, hp_sphere, teapot) are here too because they
+/// ship and they are loaded through the same function.
+const CardSubject kCardSubjects[] = {
+    { "app/content/primitives/plane.obj",        0.90f, nullptr },
+    { "app/content/primitives/cube.obj",         0.90f, nullptr },
+    { "app/content/primitives/sphere.obj",       0.90f, nullptr },
+    { "app/content/primitives/hemisphere.obj",   0.90f, nullptr },
+    { "app/content/primitives/cylinder.obj",     0.90f, nullptr },
+    { "app/content/primitives/tube.obj",         0.90f, nullptr },
+    { "app/content/primitives/cone.obj",         0.90f, nullptr },
+    { "app/content/primitives/pyramid.obj",      0.90f, nullptr },
+    { "app/content/primitives/torus.obj",        0.90f, nullptr },
+    { "app/content/primitives/capsule.obj",      0.90f, nullptr },
+    { "app/content/primitives/wedge.obj",        0.90f, nullptr },
+    // THE ONE EXCEPTION, and it is the representation's limit rather than the
+    // generator's: a five-point star extruded in Z hides most of its side faces
+    // behind its own arms from every one of the six axes, and the cards that
+    // would see them are cards whose depth range isolates one notch — which is
+    // more than twelve of them. Epic's axis-aligned cards have exactly this
+    // limit; Epic's answer is the same budget dial. Measured 0.844 at eight
+    // cards of a budget of twelve (the generator stops when no further split
+    // pays). The floor below is a REGRESSION guard on that number, not an
+    // endorsement of it.
+    { "app/content/primitives/star.obj",         0.80f,
+      "self-occluding: axis-aligned cards cannot see inside its own arms" },
+    { "app/models/ground.obj",                   0.90f, nullptr },
+    { "app/content/primitives/endlessplane.obj", 0.90f, nullptr },
+    { "app/content/primitives/hp_sphere.obj",    0.90f, nullptr },
+    { "app/content/primitives/teapot.obj",       0.90f, nullptr },
+    { "app/content/primitives/arrow.obj",        0.90f, nullptr },
+};
+
+}   // namespace
+
+static void surfaceCards()
+{
+    // (a) COVERAGE + the bake TIME, over the primitive table and the shipped
+    // meshes the sample scenes are built from.
+    std::printf("      %-44s %7s %6s %8s %9s %9s\n", "mesh", "tris", "cards", "coverage",
+                "cards ms", "load ms");
+    for (const CardSubject &subject : kCardSubjects) {
+        const QString path = fixture(QLatin1String(subject.path));
+        if (!QFileInfo::exists(path)) {
+            std::printf("FAIL: card fixture missing: %s\n", subject.path);
+            ++failures;
+            continue;
+        }
+        // Mesh::loadMesh is the PRIMITIVE's own path — it builds the cards at
+        // creation, which is the thing being tested for these meshes.
+        iris::Mesh::clearLoadCache();
+        QElapsedTimer timer;
+        timer.start();
+        const iris::MeshPtr mesh = iris::Mesh::loadMesh(path);
+        const double loadMs = double(timer.nsecsElapsed()) / 1e6;
+        if (mesh.isNull()) {
+            std::printf("FAIL: could not load %s\n", subject.path);
+            ++failures;
+            continue;
+        }
+        // THE GENERATOR'S OWN TIME, apart from the assimp parse that dominates
+        // the load of a big mesh — the number the assessment lacked. The
+        // generator is deterministic, so re-running it costs nothing but time.
+        timer.restart();
+        iris::MeshBake::buildCards(mesh, iris::kDefaultMaxCards);
+        const double cardsMs = double(timer.nsecsElapsed()) / 1e6;
+        const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
+        std::printf("      %-44s %7d %6d %8.3f %9.2f %9.2f%s%s\n", subject.path,
+                    ib ? ib->dataSize / 12 : 0, int(mesh->cards.size()),
+                    double(mesh->cardCoverage), cardsMs, loadMs,
+                    subject.note ? "   " : "", subject.note ? subject.note : "");
+        CHECK(mesh->cards.size() > 0 && mesh->cards.size() <= iris::kDefaultMaxCards,
+              qUtf8Printable(QStringLiteral("%1: a card list inside the budget")
+                                 .arg(QLatin1String(subject.path))));
+        CHECK(mesh->cardCoverage >= subject.minCoverage,
+              qUtf8Printable(QStringLiteral("%1: coverage %2 >= %3")
+                                 .arg(QLatin1String(subject.path))
+                                 .arg(double(mesh->cardCoverage), 0, 'f', 3)
+                                 .arg(double(subject.minCoverage), 0, 'f', 2)));
+        // Every card has to be a capture somebody can actually run.
+        bool wellFormed = true;
+        for (const iris::MeshCard &card : mesh->cards)
+            wellFormed = wellFormed && card.axis < iris::MeshCard::kAxisCount
+                         && card.halfU > 0.0f && card.halfV > 0.0f && card.halfDepth > 0.0f
+                         && card.coverage >= 0.0f && card.coverage <= 1.0f
+                         && int(card.lodLevel) <= mesh->lodIndices.size();
+        CHECK(wellFormed, qUtf8Printable(QStringLiteral("%1: every card is a runnable capture")
+                                             .arg(QLatin1String(subject.path))));
+    }
+    std::printf("ok:   every shipped mesh's card list covers its surface\n");
+    ++checks;
+
+    // (b) THE 6-FACE BOX, EXACT, on the cube: six cards, one per axis, each the
+    // exact face of the 2 x 2 x 2 mesh. A card is grown by a margin and then
+    // clamped to the mesh's own box in its plane, which is what makes this
+    // exact rather than "the box plus a margin".
+    {
+        iris::Mesh::clearLoadCache();
+        const iris::MeshPtr cube =
+            iris::Mesh::loadMesh(fixture(QStringLiteral("app/content/primitives/cube.obj")));
+        CHECK_LOUD(!cube.isNull() && cube->cards.size() == 6,
+                   "the cube gets exactly six cards — the 6-face box, not two per face");
+        if (!cube.isNull() && cube->cards.size() == 6) {
+            bool oneEach = true;
+            bool exact = true;
+            QVector<int> perAxis(iris::MeshCard::kAxisCount, 0);
+            const iris::Vec3 lo = cube->aabb.getMin(), hi = cube->aabb.getMax();
+            const iris::Vec3 size = hi - lo;
+            for (const iris::MeshCard &card : cube->cards) {
+                ++perAxis[card.axis];
+                // The card's rectangle is the face: its u and v sizes are the
+                // box's own extents along axisU / axisV.
+                const float wantU = std::fabs(iris::Vec3::dotProduct(size,
+                                        iris::MeshCard::axisU(card.axis)));
+                const float wantV = std::fabs(iris::Vec3::dotProduct(size,
+                                        iris::MeshCard::axisV(card.axis)));
+                if (std::fabs(card.halfU * 2.0f - wantU) > 1e-4f) exact = false;
+                if (std::fabs(card.halfV * 2.0f - wantV) > 1e-4f) exact = false;
+            }
+            for (int a = 0; a < iris::MeshCard::kAxisCount; ++a)
+                if (perAxis[a] != 1) oneEach = false;
+            CHECK_LOUD(oneEach, "one card per axis, all six");
+            CHECK_LOUD(exact, "each card's rectangle is the box's face, exactly");
+            CHECK_LOUD(cube->cardCoverage >= 0.999f,
+                       "and the six of them see the whole cube");
+        }
+    }
+
+    // (c) DETERMINISM. Two independent loads of one mesh, and the same mesh
+    // built through the BAKE, must agree card for card. The bake's bytes are
+    // content-addressed, so a generator with a random seed would make one
+    // model's bake a different object on every import.
+    {
+        const QString path = fixture(QStringLiteral("app/content/primitives/torus.obj"));
+        iris::Mesh::clearLoadCache();
+        const iris::MeshPtr first = iris::Mesh::loadMesh(path);
+        iris::Mesh::clearLoadCache();
+        const iris::MeshPtr second = iris::Mesh::loadMesh(path);
+        bool same = !first.isNull() && !second.isNull()
+                    && first->cards.size() == second->cards.size()
+                    && first->cardCoverage == second->cardCoverage;
+        for (int i = 0; same && i < first->cards.size(); ++i) {
+            const iris::MeshCard &a = first->cards.at(i), &b = second->cards.at(i);
+            same = a.axis == b.axis && a.lodLevel == b.lodLevel
+                   && a.origin.x() == b.origin.x() && a.origin.y() == b.origin.y()
+                   && a.origin.z() == b.origin.z()
+                   && a.halfU == b.halfU && a.halfV == b.halfV && a.halfDepth == b.halfDepth
+                   && a.coverage == b.coverage;
+        }
+        CHECK_LOUD(same, "the same mesh builds the same cards twice, bit for bit (no seed exists)");
+
+        // And the GENERATOR is idempotent: asking twice must replace the list,
+        // never append to it.
+        if (!first.isNull()) {
+            const int before = int(first->cards.size());
+            iris::MeshBake::buildCards(first, iris::kDefaultMaxCards);
+            CHECK_LOUD(int(first->cards.size()) == before,
+                       "buildCards replaces the list, it does not append to it");
+        }
+    }
+
+    // (d) THE BUDGET, and monotonicity in it.
+    {
+        const QString path = fixture(QStringLiteral("app/content/primitives/star.obj"));
+        iris::Mesh::clearLoadCache();
+        const iris::MeshPtr mesh = iris::Mesh::loadMesh(path);
+        if (!mesh.isNull()) {
+            iris::MeshBake::buildCards(mesh, 0);
+            CHECK_LOUD(mesh->cards.isEmpty() && mesh->cardCoverage == 0.0f,
+                       "maxCards 0 authors no cards at all — and says so, rather than a box");
+            float previous = -1.0f;
+            bool monotone = true;
+            bool capped = true;
+            for (int budget : { 1, 2, 6, 8, 12, 24 }) {
+                iris::MeshBake::buildCards(mesh, budget);
+                if (mesh->cards.size() > budget) capped = false;
+                if (mesh->cardCoverage < previous - 1e-6f) monotone = false;
+                previous = mesh->cardCoverage;
+            }
+            CHECK_LOUD(capped, "the card count never exceeds maxCards");
+            CHECK_LOUD(monotone, "raising maxCards never lowers the coverage");
+            iris::MeshBake::buildCards(mesh, 1000);
+            CHECK_LOUD(mesh->cards.size() <= 64,
+                       "an absurd budget is clamped to the format's ceiling of 64");
+        }
+    }
+
+    // (e) A SKINNED mesh gets NONE — a card baked against a bind pose is a lie,
+    // and the ray hit on a skinned surface keeps reading the voxel fallback
+    // (Epic states the same limit for skeletal meshes).
+    {
+        QTemporaryDir scratch;
+        iris::MeshBake::Model rigged = iris::MeshBake::buildFromFile(
+            fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb")),
+            iris::MeshBake::fingerprintFor(QStringLiteral("cardskin")), scratch.path());
+        if (rigged.valid && !rigged.meshes.isEmpty()) {
+            bool anySkinned = false, skinnedHaveNoCards = true;
+            for (const iris::MeshPtr &mesh : rigged.meshes) {
+                if (mesh.isNull() || mesh->getSkeleton().isNull()) continue;
+                anySkinned = true;
+                if (!mesh->cards.isEmpty()) skinnedHaveNoCards = false;
+            }
+            if (anySkinned)
+                CHECK_LOUD(skinnedHaveNoCards, "a skinned mesh gets no cards");
+        }
+    }
+
+    // (f) THE IMPORT SETTING. `maxCards` is a recorded, validated, hashed part
+    // of the import record — API-first: the verb and its refusals before any
+    // dialog row (SPECS/SCRIPTING_SPEC.md §2.3).
+    {
+        QString error;
+        QJsonObject record;
+        record[QStringLiteral("maxCards")] = 6;
+        const iris::ImportSettings six = iris::ImportSettings::fromJson(record, &error);
+        CHECK_LOUD(error.isEmpty() && six.maxCards == 6, "assets import settings read maxCards");
+        CHECK_LOUD(six.transform().maxCards == 6, "and carry it to the builder");
+        CHECK_LOUD(six.toJson().value(QStringLiteral("maxCards")).toInt() == 6,
+                   "and write it back in the complete record");
+
+        for (const QJsonValue &bad : { QJsonValue(-1), QJsonValue(65), QJsonValue(3.5),
+                                       QJsonValue(QStringLiteral("twelve")) }) {
+            QJsonObject wrong;
+            wrong[QStringLiteral("maxCards")] = bad;
+            QString why;
+            iris::ImportSettings::fromJson(wrong, &why);
+            CHECK(!why.isEmpty(),
+                  qUtf8Printable(QStringLiteral("a refused maxCards value fails the import: %1")
+                                     .arg(bad.toVariant().toString())));
+        }
+        std::printf("ok:   maxCards is validated the same way every other import setting is\n");
+        ++checks;
+
+        // IT IS PART OF THE BAKE KEY: two imports of one file at different card
+        // budgets are two different bakes, exactly as two scales are.
+        iris::ImportSettings twelve;
+        CHECK_LOUD(twelve.hash() == iris::ImportSettings::identityHash()
+                       && twelve.maxCards == iris::kDefaultMaxCards,
+                   "the default budget is 12 and keys as IDENTITY (an old row re-bakes once, "
+                   "by the format bump, not by a renamed key)");
+        CHECK_LOUD(six.hash() != iris::ImportSettings::identityHash(),
+                   "a different budget is a different bake key");
+    }
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+
+    // `--cards` is the meshbake.cards suite; with no argument the binary runs
+    // everything meshbake.roundtrip has always run (plus the card SERIALIZER
+    // check inside the round trip itself).
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cards")) {
+        std::printf("== 8. surface cards ==\n");
+        surfaceCards();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
 
     std::printf("== 1. round trip: baked == parsed ==\n");
     roundTrip(QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb"));

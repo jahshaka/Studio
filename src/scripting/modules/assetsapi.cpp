@@ -167,6 +167,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "The automatic LOD chain a MODEL asset's bake carries (ATOM stage 1, SPECS/NANITE_SPEC.md §7), one row per mesh per level, level 0 (the authored geometry) included. `error` is that level's simplifier error (position + attribute quadrics, >= the geometric error) as a LENGTH IN THE MODEL'S OWN UNITS — 0 for level 0 — and `switchPixels` is the SIZE ON SCREEN at which the renderer swaps to it at LOD bias 1: the projected radius of the mesh's bounding sphere, in pixels, at which that level's error covers one pixel. It is a size and not a distance because the renderer's rule is a real screen-space pixel error at whatever lens, window and render target the pass is using — the same asset switches at the same SIZE on a 4K window, in a 256-pixel thumbnail and in either eye of a headset, and therefore at very different distances. "
           "An EMPTY list is the honest answer for a model with no chain, and there are four ways to have none: the asset has no bake yet (assets.bakeAll builds them), the mesh is SKINNED (stage 1 ships static meshes only), it is too small to be worth simplifying, or its topology stopped the simplifier before it could shed a useful fraction. Nothing here is authored: the chain is built at import and the levels are derived, never stored as a user setting.",
           Needs::Document },
+        { "meshCards", "assets.meshCards(guid) -> [{mesh, card, axis, origin, size, depth, lodLevel, texel, coverage, meshCoverage}]",
+          "The SURFACE CARDS a MODEL asset's bake carries (SURFACE-CACHE phase 1, SPECS/SURFACE_CACHE_ASSESSMENT.md), one row per card per mesh. A card is an axis-aligned orthographic capture of a patch of the mesh's surface, in the MESH'S OWN SPACE: `axis` is one of '+X','-X','+Y','-Y','+Z','-Z' — the direction the card looks FROM; `origin` is the centre of its box; `size` is the capture rectangle {u, v} in metres and `depth` how deep along the axis it must see; `texel` is `max(size) / 128` — the metres per texel a 128-texel page would give it, and the number `lodLevel` was chosen by (the coarsest baked LOD level whose simplifier error is below that texel, the same rule the voxeliser picks a level by). "
+          "`coverage` is the fraction of the mesh's sampled surfels THAT card sees — facing it, inside its rectangle and depth range, and not hidden behind nearer surface of the same mesh — and `meshCoverage` is the fraction covered by at least one card of the mesh, which is the quality of the whole list. Cards overlap, so the per-card numbers do not sum to it. "
+          "Nothing reads a card yet: the capture is phase 2 and the hit lighting is phase 4. This verb is how the list they will spend is inspected. "
+          "An EMPTY list is the honest answer for: a model with no bake yet (assets.bakeAll builds them), a SKINNED mesh (a card baked against a bind pose is a lie — the same limit Epic states), a mesh with no surface area, and an asset imported with `maxCards: 0`. The budget is `maxCards` on the import record (assets.importSettings / assets.import / assets.reimport), 12 by default.",
+          Needs::Document },
         { "rename", "assets.rename(guid, name) -> bool",
           "Renames a library asset — the Assets page's name field + Update button, as a verb. "
           "The row's TAGS are carried through untouched (both live in one write). Renaming "
@@ -185,7 +191,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "tags", "assets.tags(guid) -> [tags]",
           "The asset's tags, [] when it has none (also in assets.metadata's read).",
           Needs::Document },
-        { "import", "assets.import(path, {units, scale, axes, rotate, translate, skeleton, clips, materials}) -> guid",
+        { "import", "assets.import(path, {units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards}) -> guid",
           "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable. "
           "THE TYPE FOLLOWS THE FILE, not the extension: a model file that carries animation and NO geometry — a Mixamo download 'without skin', a .bvh capture — is stored as an ANIMATION asset (its own library type; every mesh path refuses a zero-mesh file), while a file with meshes stays an object even when it also carries clips. "
           "Read the type back with assets.metadata(guid).kind or assets.list({type: 'animation'}). "
@@ -195,11 +201,12 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "`axes` {up, forward}: the axes THE FILE uses, as signed names ('+X'..'-Z'); our convention is up '+Y', forward '-Z', which is the identity. They must be perpendicular. "
           "`rotate` [x,y,z]: a free rotation in degrees, applied after the axis fix. `translate` [x,y,z]: an origin shift in METRES, applied last. "
           "`skeleton`, `clips` (true | false | a list of clip names) and `materials` ('import' | 'none') are recorded and are part of the asset's bake key; the pipeline builds all of them today. "
+          "`maxCards` (0..64, default 12 — Epic's own 'Max Lumen Mesh Cards') is how many SURFACE CARDS the bake may author per mesh: axis-aligned orthographic captures of the surface, read back with assets.meshCards. 0 authors none. It is part of the bake key too, so changing it re-bakes the asset rather than quietly leaving the old list in place. "
           "An unknown key or a refused value FAILS the import rather than importing at the wrong size. Read the record back with assets.importSettings(guid) and change it with assets.reimport(guid, {...}). "
           "AN IMPORT YOU ASK FOR IS YOURS (the rule assets.importFile states in full): importing bytes the library already holds as a MATERIAL'S MEMBER texture answers with that row, unstamped, instead of a second copy. Models are never stamped, so for this verb it is the rule of the pipeline rather than a thing that happens here. "
           "AND WHAT IT IS NOT (SEED-SMALL-2, stated so nobody reads it as a bug): the answer-by-content rule covers a MATERIAL'S MEMBER picture only. Importing the same file twice yourself mints a SECOND library row over the one stored object — the bytes are content-addressed and never copied, but two rows means two tiles with two names, two thumbnails and two sets of tags, and nothing merges them afterwards. That is the long-standing behaviour of this pipeline, on purpose for now: whether a user's own second import of their own picture should answer with the first row is an open question for the owner (IMPORT-DEDUP-1), not an oversight here.",
           Needs::Document },
-        { "importFile", "assets.importFile(path, drawerId?, {typeHint, units, scale, axes, rotate, translate, skeleton, clips, materials}) -> guid",
+        { "importFile", "assets.importFile(path, drawerId?, {typeHint, units, scale, axes, rotate, translate, skeleton, clips, materials, maxCards}) -> guid",
           "Imports any library-supported file (models, animation clips, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
           "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, animation, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list. "
           "RE-IMPORTING A MATERIAL'S MEMBER PICTURE (MATERIAL_BUNDLE_SPEC V-2): a texture that arrived inside a material — picked through its picker, or shipped with a preset — is stamped as that bundle's member and folds into its tile, so the user never sees it on its own. Importing those exact bytes YOURSELF answers with THAT row and clears the stamp: the same guid comes back, it is a tile from then on (assets.list({scope:'store'}) and the editor tray list it), and the material keeps it as a member — membership is the material's definition, never the stamp. One picture stays one row and one stored object; nothing is copied. An import a MATERIAL asks for never clears a stamp, and a deleted-but-pinned row is still re-listed rather than duplicated. "
@@ -715,6 +722,53 @@ QVariantList AssetsApi::meshLods(const QString &guid)
                                       ? double(jahshaka::engine::kLodBudgetPixels * r / e)
                                       : 0.0;
             out.append(lod);
+        }
+    }
+    return out;
+}
+
+QVariantList AssetsApi::meshCards(const QString &guid)
+{
+    QVariantList out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    const auto record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("assets.meshCards: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    const QString source = storeFileFor(guid);
+    if (source.isEmpty()) {
+        fail(QStringLiteral("assets.meshCards: '%1' has no stored source file").arg(guid));
+        return out;
+    }
+    // Same read as assets.meshLods and for the same reason: the BAKE is where
+    // the card list lives, and a model with no fresh bake gets none at open.
+    iris::BakedModelPtr baked = MeshBakeStore::load(source, guid);
+    if (!baked) return out;   // no usable bake: an empty list, not an error
+    static const char *kAxisNames[] = { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+    for (int m = 0; m < baked->meshes.size(); ++m) {
+        const iris::MeshPtr &mesh = baked->meshes.at(m);
+        if (mesh.isNull()) continue;
+        for (int c = 0; c < mesh->cards.size(); ++c) {
+            const iris::MeshCard &card = mesh->cards.at(c);
+            QVariantMap row;
+            row["mesh"] = m;
+            row["card"] = c;
+            row["axis"] = QString::fromLatin1(
+                kAxisNames[std::min<int>(card.axis, iris::MeshCard::kAxisCount - 1)]);
+            row["origin"] = QVariantList{ double(card.origin.x()), double(card.origin.y()),
+                                          double(card.origin.z()) };
+            // SIZES, not half-sizes: a user reading this wants "how big is the
+            // capture", and the half-extent form belongs to the maths that
+            // places a camera.
+            row["size"] = QVariantList{ double(card.halfU * 2.0f), double(card.halfV * 2.0f) };
+            row["depth"] = double(card.halfDepth * 2.0f);
+            row["lodLevel"] = int(card.lodLevel);
+            row["texel"] = double(std::max(card.halfU, card.halfV) * 2.0f
+                                  / float(iris::MeshBake::cardCaptureResolution()));
+            row["coverage"] = double(card.coverage);
+            row["meshCoverage"] = double(mesh->cardCoverage);
+            out.append(row);
         }
     }
     return out;

@@ -1,0 +1,128 @@
+// scripting.e2e.surface_cards — SURFACE CACHE PHASE 1, THROUGH THE VERBS
+// (SPECS/SURFACE_CACHE_ASSESSMENT.md §7 phase 1).
+//
+// THE CLAIM UNDER TEST: an import authors a card list, the budget is the user's
+// (`maxCards` on the import record), and `assets.meshCards` reports what the
+// bake actually holds — not what the generator was asked for.
+//
+// It is the companion of meshbake.cards, which tests the GENERATOR against the
+// shipped meshes with no app around it. This one takes the door a script and a
+// dialog take: the real import pipeline, the real CAS, the real bake store.
+// API-first (SCRIPTING_SPEC §2.3) — the verb and this test exist before any
+// import-dialog row.
+//
+// THE FIXTURE is the shipped gizmo sphere (960 triangles, static): convex, so
+// its six axis cards see all of it, and big enough to carry a LOD chain, which
+// is what makes the `lodLevel` column mean something.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var SPHERE = "@SOURCE_DIR@/app/models/axis_sphere.obj";
+var AXES = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"];
+
+var proj = project.create("Surface Cards " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+// ---------------------------------------------------------------------------
+// 1. THE DEFAULT IMPORT AUTHORS CARDS, and the verb reports them.
+var guid = assets.importFile(SPHERE);
+assert(guid && guid.length > 10, "assets.importFile(axis_sphere.obj) -> " + guid);
+
+var settings = assets.importSettings(guid);
+assert(settings.settings.maxCards === 12,
+       "the complete import record carries maxCards, 12 by default");
+
+var cards = assets.meshCards(guid);
+assert(cards.length > 0, "assets.meshCards reports a list (" + cards.length + " cards)");
+assert(cards.length <= 12, "and it is inside the budget");
+
+var seenAxes = {};
+var coverage = -1;
+for (var i = 0; i < cards.length; ++i) {
+    var c = cards[i];
+    assert(c.mesh === 0, "card " + i + " belongs to mesh 0");
+    assert(c.card === i, "card " + i + " is numbered in order");
+    assert(AXES.indexOf(c.axis) >= 0, "card " + i + " looks from a named axis (" + c.axis + ")");
+    seenAxes[c.axis] = true;
+    assert(c.origin.length === 3, "card " + i + " has an origin in mesh space");
+    assert(c.size.length === 2 && c.size[0] > 0 && c.size[1] > 0,
+           "card " + i + " is a real rectangle (" + c.size[0].toFixed(3) + " x " +
+           c.size[1].toFixed(3) + " m)");
+    assert(c.depth > 0, "card " + i + " has a depth range (" + c.depth.toFixed(3) + " m)");
+    // The texel is the rectangle at a 128-texel page — the number the LOD level
+    // was chosen by, so the two have to agree arithmetically.
+    var expectedTexel = Math.max(c.size[0], c.size[1]) / 128.0;
+    assert(Math.abs(c.texel - expectedTexel) < 1e-6,
+           "card " + i + "'s texel is its own rectangle at a 128-texel page (" +
+           (c.texel * 1000).toFixed(2) + " mm)");
+    assert(c.lodLevel >= 0, "card " + i + " names a LOD level (" + c.lodLevel + ")");
+    assert(c.coverage >= 0 && c.coverage <= 1, "card " + i + "'s coverage is a fraction");
+    if (coverage < 0) coverage = c.meshCoverage;
+    assert(c.meshCoverage === coverage, "every row reports the same mesh coverage");
+}
+assert(coverage >= 0.9,
+       "the list covers the sphere's own surface (" + coverage.toFixed(3) + " >= 0.9)");
+console.log("   axes used: " + Object.keys(seenAxes).join(" "));
+
+// THE LOD LEVEL IS NOT A FICTION: it names a level assets.meshLods reports, and
+// the level's error really is below the card's texel (the rule the voxeliser
+// picks a level by, with the card texel in the cell's place).
+var lods = assets.meshLods(guid);
+var errorFor = {};
+for (var L = 0; L < lods.length; ++L) if (lods[L].mesh === 0) errorFor[lods[L].level] = lods[L].error;
+for (var k = 0; k < cards.length; ++k) {
+    var lvl = cards[k].lodLevel;
+    assert(errorFor[lvl] !== undefined,
+           "card " + k + "'s level " + lvl + " is a level this mesh has");
+    if (lvl > 0)
+        assert(errorFor[lvl] < cards[k].texel,
+               "card " + k + "'s level error " + errorFor[lvl].toFixed(5) +
+               " is below its texel " + cards[k].texel.toFixed(5));
+    // ...and the NEXT level, if there is one, is too coarse — which is what
+    // makes it the COARSEST level that fits rather than just a level that fits.
+    if (errorFor[lvl + 1] !== undefined)
+        assert(!(errorFor[lvl + 1] < cards[k].texel),
+               "card " + k + " took the COARSEST level its texel allows");
+}
+
+// ---------------------------------------------------------------------------
+// 2. THE BUDGET IS THE USER'S. `maxCards` is refused by value like every other
+//    import setting, and it is part of the bake key — a reimport at a different
+//    budget re-bakes rather than leaving the old list in place.
+var refused = null;
+try { assets.reimport(guid, { maxCards: 99 }); } catch (e) { refused = "" + e; }
+assert(refused !== null, "a budget past the ceiling is refused: " + refused);
+refused = null;
+try { assets.reimport(guid, { maxCards: -3 }); } catch (e2) { refused = "" + e2; }
+assert(refused !== null, "a negative budget is refused: " + refused);
+
+assets.reimport(guid, { maxCards: 0 });
+var none = assets.meshCards(guid);
+assert(none.length === 0, "maxCards 0 re-bakes with NO cards at all (" + none.length + ")");
+assert(assets.importSettings(guid).settings.maxCards === 0,
+       "and the record says so");
+
+assets.reimport(guid, { maxCards: 12 });
+var back = assets.meshCards(guid);
+assert(back.length === cards.length,
+       "putting the budget back re-bakes the same list (" + back.length + ")");
+assert(Math.abs(back[0].meshCoverage - coverage) < 1e-6,
+       "and the same coverage — the generator has no seed to differ by");
+
+// ---------------------------------------------------------------------------
+// 3. THE HONEST EMPTY ANSWERS, so nobody reads one as a failure.
+var textures = assets.list({ type: "texture", limit: 1 });
+if (textures.length > 0) {
+    var notAModel = assets.meshCards(textures[0].guid);
+    assert(notAModel.length === 0,
+           "a non-model asset has no cards (an empty list, not an error)");
+}
+
+var unknown = null;
+try { assets.meshCards("no-such-guid"); } catch (e3) { unknown = "" + e3; }
+assert(unknown !== null, "an unknown guid is refused by name: " + unknown);
+
+console.log("ALL SURFACE CARD CHECKS PASSED");
