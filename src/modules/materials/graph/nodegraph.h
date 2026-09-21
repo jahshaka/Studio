@@ -64,6 +64,11 @@ struct MaterialSettings {
 class NodeGraph
 {
 public:
+	/// A CLOSED GRAPH IS FREED (MATERIALS_TABS_SPEC §2.8). Nothing ever
+	/// deleted one: the page dropped the pointer on every open, so every
+	/// material a session looked at leaked its whole graph.
+	~NodeGraph();
+
 	QMap<QString, NodeModel*> nodes;
 	QMap<QString, ConnectionModel*> connections;
 	NodeModel* masterNode = nullptr;
@@ -101,7 +106,12 @@ public:
 
 	//QMap<QString, std::function<NodeModel*()>> modelFactories;
 	//void registerModel(QString name, std::function<NodeModel*()> factoryFunction);
-	NodeLibrary* library;
+	/// THE NODE LIBRARY IS NOT OWNED. It is a stateless factory registry
+	/// handed in from outside, and half the callers own a stack-allocated
+	/// one (tests/shadergraph, tests/materialpreview) — so the destructor
+	/// below frees the graph's own nodes and connections and never this.
+	/// The app has exactly one (MaterialHelper::sharedNodeLibrary).
+	NodeLibrary* library = nullptr;
 	void setNodeLibrary(NodeLibrary* lib);
 
 	void addNode(NodeModel* model);

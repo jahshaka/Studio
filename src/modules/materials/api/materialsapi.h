@@ -20,6 +20,7 @@ For more information see the LICENSE file
 // design) — the bridge here is glue. graph.* operates on ONE current graph,
 // opened by materials.loadGraph or created by materials.createGraph.
 
+#include <QVariant>
 #include <QVariantList>
 #include <QVariantMap>
 #include <functional>
@@ -42,6 +43,21 @@ public:
 
     /// loadGraph hands the deserialized graph to the graph.* module.
     void setGraphModule(GraphApi *graphApi) { mGraphApi = graphApi; }
+
+    /// THE MATERIALS PAGE'S TABS (MATERIALS_TABS_SPEC §3). The five verbs
+    /// below are the page's own entry points through this delegate, so a
+    /// click on a tab and `materials.activate` are ONE gesture with one
+    /// implementation. Unset in headless slices — there is no page there, and
+    /// every one of the five refuses by name rather than pretending.
+    struct PageDelegate {
+        std::function<QVariantMap(const QString &guid, const QString &scope)> open;
+        std::function<QVariantMap(const QString &presetOrName, const QString &name)> newMaterial;
+        std::function<QVariantList()> tabs;
+        std::function<bool(const QVariant &)> activate;
+        std::function<bool(const QVariant &)> closeTab;
+        std::function<QVariantMap()> activeTab;
+    };
+    void setPageDelegate(const PageDelegate &delegate) { mPage = delegate; }
 
     Q_INVOKABLE QVariantList presets();
     /// ONE mint (MATERIAL_BUNDLE_SPEC 6): a library material bundle, with a
@@ -91,12 +107,26 @@ public:
     /// the Materials module's Presets drawer call this verb.
     Q_INVOKABLE QString createFromPreset(const QString &presetOrGuid,
                                          const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap open(const QString &guidOrName,
+                                 const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap newMaterial(const QString &presetOrName = QString(),
+                                        const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantList tabs();
+    Q_INVOKABLE bool activate(const QVariant &tabOrGuid);
+    Q_INVOKABLE bool closeTab(const QVariant &tabOrGuid);
+    Q_INVOKABLE QVariant activeTab();
 
 private:
     /// The {graph: true} branch of createFromImage (IMAGE_PLANE_SPEC B2).
     QString createImageGraph(const QString &textureGuid);
+    /// A guid, a shipped preset's NAME, or a library material's name — to
+    /// the guid the page opens. Empty when it names nothing.
+    QString resolveMaterialGuid(const QString &guidOrName) const;
+    /// The page, or a refusal by name (headless).
+    bool pageOrFail(const QString &verb);
 
     GraphApi *mGraphApi = nullptr;
+    PageDelegate mPage;           // the Materials page's tabs, when wired
 };
 
 /// material.* — the material on one scene node.

@@ -48,6 +48,9 @@ public:
 	void addToListWidget(QListWidgetItem *item);
 	static void updateThumbnailImage(QByteArray arr, QListWidgetItem *item);
 	static void highlightNodeForInterval(int seconds, QListWidgetItem* item);
+	/// Clearing a drawer deletes its items, and the highlight above paints
+	/// into one by raw pointer for two seconds — so this stops it first.
+	void clear();
 	static void stopHighlightedNode();
 	static QVariantAnimation* anim;
 

@@ -260,8 +260,10 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	// then the (now empty) folder row goes.
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
 		const QString folder = item->data(MODEL_GUID_ROLE).toString();
-		for (const auto &asset : db->fetchChildAssets(folder, project->getProjectGuid()))
+		for (const auto &asset : db->fetchChildAssets(folder, project->getProjectGuid())) {
 			assetdelete::removeFromProject(db, asset.guid, project->getProjectGuid());
+			emit assetRemoved(asset.guid);
+		}
 		db->deleteFolder(folder);
 		refresh();
 		return;
@@ -269,24 +271,27 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	const QString target = guid.isEmpty() ? item->data(MODEL_GUID_ROLE).toString() : guid;
 	if (target.isEmpty()) return;
 	assetdelete::removeFromProject(db, target, project->getProjectGuid());
+	// AND THE PAGE IS TOLD (fix round F1): a '(project)' tab is editing this
+	// project's copy, and the pin it reads and writes through has just gone.
+	emit assetRemoved(target);
 	refresh();
 }
 
 void ShaderAssetWidget::editingFinishedOnListItem(QListWidgetItem *item)
 {
+	// THE DRAWER DOES NOT RENAME ANYTHING (MATERIALS_TABS_SPEC §7). It used
+	// to write the catalog row itself — `db->renameAsset` — which is neither
+	// of the two things a rename is: it bypasses the ONE name writer (so it
+	// would rename a shipped preset, or take a preset's name) and it never
+	// touched the DEFINITION, so the stored name stayed behind and the next
+	// save of that material put the old one straight back. The page owns the
+	// rename, for every drawer; this says which row the user typed in.
 	if (!db || !project) return;   // nothing to rename without a library
-	QString newName = item->data(Qt::DisplayRole).toString();
 	const QString guid = item->data(MODEL_GUID_ROLE).toString();
-	const QString oldName = db->fetchAsset(guid).name;
-	qDebug() << oldName << newName;
-	if (newName == oldName) return;
-	else {
-		//item->setText(newName);
-		item->setData(Qt::DisplayRole, newName);
-		item->setData(Qt::UserRole, newName);
-		db->renameAsset(guid, newName);
-		refresh();
-	}
+	const QString newName = item->data(Qt::DisplayRole).toString();
+	if (guid.isEmpty() || newName.isEmpty()) return;
+	if (newName == db->fetchAsset(guid).name) return;
+	emit assetRenamed(guid, newName);
 }
 
 

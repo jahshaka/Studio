@@ -6,6 +6,7 @@
 
 class GraphNodeScene;
 class NodeGraph;
+class NodeLibrary;
 
 class MaterialHelper
 {
@@ -81,6 +82,12 @@ public:
 	// is no project-relative path left to resolve, so the one piece of
 	// process-wide state in this class is gone.)
 	static PbrGraphEvaluator::TextureResolver textureResolver();
+
+	/// ONE NODE LIBRARY FOR THE PROCESS. A NodeLibrary is a stateless
+	/// registry of node factories (name -> icon, category, constructor);
+	/// every graph the app opened used to build its own copy of it, and
+	/// nothing ever freed one. Graphs borrow this; none owns a library.
+	static NodeLibrary* sharedNodeLibrary();
 
 	// The definition's graph, or NULL when this build refuses it — a material
 	// written on the deleted "Surface Material" master (LEGACY-MASTER-CRUD).

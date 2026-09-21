@@ -73,6 +73,7 @@ set(SRCS
 	#graphtest.cpp
 	src/modules/materials/shadergraph.cpp
 	src/modules/materials/effectspage.cpp
+	src/modules/materials/materialdocument.cpp
 	)
 
 set(HEADERS
@@ -133,6 +134,7 @@ set(HEADERS
 	#graphtest.h
 	src/modules/materials/shadergraph.h
 	src/modules/materials/effectspage.h
+	src/modules/materials/materialdocument.h
 	)
 
 

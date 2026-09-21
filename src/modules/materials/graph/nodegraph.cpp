@@ -566,3 +566,21 @@ void NodeGraph::setMaterialSettings(MaterialSettings setting)
 	this->settings = setting;
 }
 
+NodeGraph::~NodeGraph()
+{
+	// EVERY NODE, EVERY CONNECTION, EVERY LEGACY PROPERTY (MATERIALS_TABS_SPEC
+	// §2.8). Connections first — they hold a socket on each side — then the
+	// nodes, which own their sockets and (unless a scene's proxy took it) their
+	// widget.
+	//
+	// NOT the library (see the header), and NOT a node the undo stack is
+	// holding for its redo: a deleted node leaves `nodes`, and the command that
+	// deleted it owns it until the stack is cleared.
+	qDeleteAll(connections);
+	connections.clear();
+	qDeleteAll(nodes);
+	nodes.clear();
+	masterNode = nullptr;
+	qDeleteAll(properties);
+	properties.clear();
+}

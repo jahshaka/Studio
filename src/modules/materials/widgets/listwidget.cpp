@@ -94,11 +94,24 @@ void ListWidget::highlightNodeForInterval(int seconds, QListWidgetItem * item)
 	// every line below reads the item, and the callers get theirs from
 	// `selectCorrectItemFromDrop`, which answers null by design.
 	if (!item) return;
+	// THE FLASH OUTLIVED THE TILE (MATERIALS-TABS-1 fix round, found by
+	// scripting.e2e.material_tabs — a SEGV at 0x21 inside QListWidgetItem::
+	// setIcon). This animation holds a RAW QListWidgetItem* for two seconds
+	// and paints into it on every tick; a drawer refill inside those two
+	// seconds — `updateAssetDock`'s `clear()`, which is what any save,
+	// duplicate, import or add-to-project runs into — deletes every item
+	// under it. It was also never stopped and never deleted: one leaked
+	// animation per highlight, all of them still running.
+	//
+	// One at a time, owned, and stopped by `ListWidget::clear()` before the
+	// items it points into go.
+	stopHighlightedNode();
 	anim = new QVariantAnimation;
 	anim->setStartValue(QColor(50, 148, 213, 255));
 	anim->setEndValue(QColor(50, 148, 213, 0));
 	anim->setDuration(seconds*1000);
-	anim->start();
+	QObject::connect(anim, &QAbstractAnimation::finished, anim, []() { anim = Q_NULLPTR; });
+	anim->start(QAbstractAnimation::DeleteWhenStopped);
 	QPixmap pixmap = item->icon().pixmap(90, 90);
 
 	connect(anim, &QVariantAnimation::valueChanged, [=](const QVariant &value) {
@@ -114,7 +127,21 @@ void ListWidget::highlightNodeForInterval(int seconds, QListWidgetItem * item)
 void ListWidget::stopHighlightedNode()
 {
 	if (!anim) return;
-	if (anim->state() == QVariantAnimation::Running)  anim->stop();
+	// `DeleteWhenStopped` frees it; the `finished` handler nulls the pointer,
+	// and this clears it too for the case where the animation had already
+	// ended.
+	QVariantAnimation *dying = anim;
+	anim = Q_NULLPTR;
+	if (dying->state() == QAbstractAnimation::Running) dying->stop();
+	else delete dying;
+}
+
+void ListWidget::clear()
+{
+	// THE TILES GO, SO THE FLASH GOES. Every refill of a drawer runs through
+	// here, and the highlight animation paints into an item by raw pointer.
+	stopHighlightedNode();
+	QListWidget::clear();
 }
 
 void ListWidget::displayAllContents()
