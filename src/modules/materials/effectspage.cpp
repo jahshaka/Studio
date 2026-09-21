@@ -619,7 +619,18 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 	// under a material this save is not going to write to.
 	if (!MaterialBundle::shippedPresetName(doc->info.GUID).isEmpty()) {
 		if (!mMakeEditable) return;      // no shell: the old stand-down
+		// THE PIN MOVE IS NOT NEWS TO THIS PAGE (the rig's crash). The copy
+		// unpins the master, `ProjectMembership::changed` fires INSIDE the
+		// call below, and this page's handler closes every project-scope tab
+		// whose guid the project no longer pins — which at that instant is
+		// THIS document, still on the master's guid. It was closed and freed
+		// under the save that asked for the copy.
+		mPresetCopyInFlight = true;
 		const presetedit::Target target = mMakeEditable(doc->info.GUID);
+		mPresetCopyInFlight = false;
+		// Belt and braces: if anything else closed this document while the
+		// copy ran, there is nothing left to write to.
+		if (!mDocs.contains(doc)) return;
 		if (!target.ok()) {
 			reportSaveRefused(doc, target.error);
 			return;
@@ -2757,6 +2768,10 @@ void EffectsPage::configureConnections()
 	connect(ProjectMembership::instance(), &ProjectMembership::changed, this,
 	        [this](const QString &projectGuid) {
 		if (!dataBase || !mProject || mProject->getProjectGuid().isEmpty()) return;
+		// OUR OWN COPY-ON-WRITE IS NOT A PIN THE USER DROPPED (PRESET-EDIT-1):
+		// it moves the pin off the master and onto the copy, and the document
+		// it belongs to is being re-pointed by the save that asked for it.
+		if (mPresetCopyInFlight) return;
 		// An empty guid means "some project" (an edge delete that cannot name
 		// one); anything else must be ours.
 		if (!projectGuid.isEmpty() && projectGuid != mProject->getProjectGuid()) return;
@@ -2764,6 +2779,12 @@ void EffectsPage::configureConnections()
 		for (MaterialDocument *doc : mDocs) {
 			if (doc->info.origin != shaderInfo::Origin::Project) continue;
 			if (doc->info.GUID.isEmpty()) continue;
+			// A SHIPPED PRESET'S TAB IS NEVER CLOSED BY A PIN (PRESET-EDIT-1).
+			// A preset opens at project scope because the project holds it,
+			// and the pin moving off it is what an EDIT does — by the verb
+			// `materials.edit` as much as by this page's save. The tab is the
+			// thing being copied, not a stale window onto a deleted row.
+			if (!MaterialBundle::shippedPresetName(doc->info.GUID).isEmpty()) continue;
 			if (!dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID))
 				gone << doc->info.GUID;
 		}

@@ -49,6 +49,15 @@ function loneNodeId(guid) {
     return ids[0];
 }
 function nodeCount(guid) { return materials.loadGraph(guid).nodes; }
+// ANY non-master node of a material's graph (a preset has several): the
+// definition's ids are the page's, so an id read here addresses the canvas.
+function loneNodeIdOf(guid) {
+    materials.loadGraph(guid);
+    var ids = graph.nodes().filter(function (n) { return !n.master; })
+                   .map(function (n) { return n.id; });
+    assert(ids.length >= 1, "graph '" + guid + "' has a node beside the master");
+    return ids[0];
+}
 
 // ---- 1. two authored materials -------------------------------------------
 var projectGuid = project.create("Material Tabs " + Date.now());
@@ -125,6 +134,33 @@ assert(preset.master === preset.guid,
 assert(materials.tabs().length === 3, "three tabs");
 assert(tabOf(preset.guid).editable === true, "…the tab list agrees");
 assert(materials.closeTab(preset.guid) === true, "materials.closeTab(preset)");
+assert(materials.tabs().length === 2, "two tabs again");
+
+// ---- 6b. THE PAGE'S OWN FIRST EDIT OF A PRESET COPIES IT ON WRITE --------
+//
+// The gesture the owner makes: open a preset the project holds, delete a node,
+// let the save land. It is asserted HERE, on the page, because the page is
+// where it CRASHED: the copy unpins the master, this page closes project-scope
+// tabs whose pin has gone, and the document being saved was the one it closed
+// (a use-after-free on the very first try on the rig). A close FLUSHES the
+// pending autosave, which is that save landing, with no wall clock in it.
+var pageEdit = materials.open("Brick PBR");
+assert(pageEdit.editable === true, "the preset opens editable on the page");
+var brickNode = loneNodeIdOf(pageEdit.guid);
+assert(graph.removeNode(brickNode) === true, "the page's canvas takes the deletion");
+assert(materials.closeTab(pageEdit.tab) === true,
+       "closing the tab flushes the pending autosave — the first edit landing");
+var projectMaterials = assets.list({ scope: "project", type: "material" });
+var brickCopy = projectMaterials.filter(function (a) {
+    return materials.masterOf(a.guid) === pageEdit.guid && a.guid !== pageEdit.guid;
+});
+assert(brickCopy.length === 1,
+       "…and the project holds its OWN copy of the preset (" + brickCopy.length + ")");
+assert(brickCopy[0].name === "Brick PBR", "…under the preset's own name");
+assert(assets.list({ scope: "project", type: "material" }).filter(function (a) {
+           return a.guid === pageEdit.guid;
+       }).length === 0,
+       "…and has let go of the shipped master");
 assert(materials.tabs().length === 2, "two tabs again");
 
 // ---- 7. the pending save lands on its OWN material ----------------------

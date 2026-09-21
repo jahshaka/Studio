@@ -114,6 +114,14 @@ public:
 private:
 	std::function<bool()> mSceneOpenProbe;
 	Project *mProject = nullptr;
+	/// A COPY-ON-WRITE IS IN FLIGHT (PRESET-EDIT-1, the rig's crash). The copy
+	/// unpins the master and pins the copy, and the page LISTENS to project
+	/// membership: without this, the membership signal raised in the middle of
+	/// `saveShader` closed — and FREED — the very document being saved, and
+	/// the next line of that save wrote into it (SIGSEGV in closeDocumentAt's
+	/// `saveTimer->stop()`). Nothing about our own pin move is news to this
+	/// page: it is re-pointing the document itself.
+	bool mPresetCopyInFlight = false;
 	/// THE PROJECT, BUT ONLY WHEN ONE IS REALLY OPEN (PRESET-EDIT-1). The app
 	/// has ONE Project instance, mutated in place, and it keeps its guid after
 	/// a close — so "is a project open?" is the scene probe, not the guid, and
