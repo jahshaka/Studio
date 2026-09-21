@@ -59,6 +59,7 @@
 #include "services/materialpreviewservice.h"
 #include "services/engineerrorpump.h"
 #include "services/framemonitor.h"
+#include "services/loadingcover.h"
 #include "services/loadtimeline.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -119,6 +120,12 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // a previous cover and skip the present that should have raised it.
             ++mFrameEpoch;
             syncFrame();
+            // WHAT THE LAST FRAME LEFT OWED (OPEN_COVER_SPEC §2.1, lane
+            // OPEN-COVER-2b). Sampled HERE, once per driver tick and before the
+            // overlay is composed, because two of its three numbers are
+            // DIFFERENCES across frames: the indicator drawn this frame
+            // describes the state the previous frame ended in.
+            sampleStreamingWork();
             // The cover comes down here, one frame BEHIND the present that
             // earned it: framesPresented counts frames already on screen.
             refreshOverlay();
@@ -2739,6 +2746,10 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     if (!mEngine) return;
     for (int i = 0; i < n; ++i) {
         syncFrame(dt);
+        // The indicator's reading is per FRAME THIS VIEWPORT DREW, whoever
+        // drove it (OPEN_COVER_SPEC §2.1): the open runner's slice boundaries
+        // come through here, and during a load they are most of the frames.
+        sampleStreamingWork();
         ++mFrameEpoch;
         // A SCRIPTED frame is not a driver frame, and a capture taken while a
         // script runs must not read like the owner's own loop (§4.2's frame
@@ -3278,10 +3289,37 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
         for (const QString &line : mStatsLines) d.lines.push_back(line.toStdString());
     }
 
+    // ---- the streaming indicator (OPEN_COVER_SPEC §2.1, lane OPEN-COVER-2b)
+    // ONE LINE, and it goes in the SAME text slot the stats readout uses —
+    // there is one caption in this HUD and one corner for it (the constraint is
+    // written down on ViewOverlayDesc). So: alone, it sits BOTTOM-LEFT, out of
+    // the way of everything; with the F3 readout or the piloting banner up it
+    // joins their block in the corner they chose, rather than fighting them for
+    // the caption. Empty while nothing is owed, which is nearly always.
+    const QString indicator = mStream.line;
+    if (!indicator.isEmpty()) {
+        if (!d.stats) {      // nothing else is using the caption
+            d.stats = true;
+            d.corner = jahshaka::engine::OverlayCorner::BottomLeft;
+        }
+        d.lines.push_back(indicator.toStdString());
+    }
+
     // A world is on its way. Asked for explicitly by beginSceneLoad rather than
     // derived, because at that moment the OLD world is still bound (or none is)
     // and the state machine would answer "presenting" or "noscene".
+    //
+    // THE COVER IS A PREFERENCE AND IT IS OFF BY DEFAULT (§3, owner's pick):
+    // with it off a load draws the world as it is — the sky, every object whose
+    // shader exists, fallback textures where the pixels have not landed, no
+    // lighting arm yet — and the line above says what is still coming. The
+    // panel is then never drawn for a load, at either of the two tests below:
+    // the second one matters as much as the first, because between
+    // `openStageBegin`'s teardown and the bind there is genuinely no world, and
+    // "No world open" is a statement about an idle window, not about a load in
+    // flight.
     if (mSceneLoadPending) {
+        if (!mCoverThisLoad) return d;
         d.cover = Cover::Loading;
         d.coverTitle = tr("Loading world…").toStdString();
         d.coverSubtitle = mLoadingTitle.toStdString();
@@ -3289,6 +3327,7 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
     }
     const QString state = presentationState();
     if (state == QLatin1String("loading")) {
+        if (!mCoverThisLoad) return d;
         d.cover = Cover::Loading;
         d.coverTitle = tr("Loading world…").toStdString();
         d.coverSubtitle = mLoadingTitle.toStdString();
@@ -3305,6 +3344,118 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
     // toast + return-to-Desktop path in MainWindow (STATS_OVERLAY_SPEC §6.4),
     // driven off viewCreationError().
     return d;
+}
+
+// ---------------------------------------------------------------------------
+//  THE STREAMING INDICATOR (SPECS/OPEN_COVER_SPEC.md §2.1/§3, lane OPEN-COVER-2b)
+//
+//  With the cover OFF — the default since the owner's pick — a world appears at
+//  once and fills in over the frames that follow: shaders compile, textures
+//  swap in for their fallbacks, the lighting arm builds one stage per frame.
+//  That is visible, and without a word from the app it looks like a glitch. So
+//  one line says what is still coming, and goes when nothing is.
+//
+//  THREE COUNTS, TWO OF WHICH ARE EXACT. The lighting arm's stages and the
+//  materials waiting on a texture are read straight off the engine
+//  (`Engine::streamingWork`, which reads the same scenes the pace rule reads,
+//  so the line cannot claim work the renderer is not doing). The shader term is
+//  a RATE, not a queue, and the header says why: a pipeline state object is
+//  generated when a renderable is first drawn, so nothing in this process knows
+//  how many are left. What the line shows is progress — compiled since this
+//  load began, against the last saved run's total — and what keeps the line
+//  ALIVE is whether the last frame compiled anything at all.
+
+void EngineSceneViewport::sampleStreamingWork()
+{
+    if (!mEngine) return;
+    const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+    // The frame that has just been drawn either built shaders or it did not.
+    mStream.shadersLastFrame = w.shadersCompiled >= mStream.shadersAtSample
+                                   ? w.shadersCompiled - mStream.shadersAtSample
+                                   : 0u;
+    mStream.shadersAtSample = w.shadersCompiled;
+    if (w.materialsAwaitingTexture > mStream.texturesPeak)
+        mStream.texturesPeak = w.materialsAwaitingTexture;
+    // ...and the line, HELD (see StreamSample::line). Composed here, once per
+    // drawn frame, so the string the HUD draws and the string
+    // `editor.viewportState().indicator` reports are the same object and
+    // cannot disagree about a reading taken a microsecond apart.
+    const QString now = composeIndicatorLine();
+    if (!now.isEmpty()) {
+        mStream.line = now;
+        mStream.holdTicks = kIndicatorHoldTicks;
+    } else if (mStream.holdTicks > 0 && --mStream.holdTicks == 0) {
+        mStream.line.clear();
+    }
+}
+
+IEditorViewport::StreamingPending EngineSceneViewport::streamingPending() const
+{
+    StreamingPending out;
+    if (!mEngine) return out;
+    const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+    out.gi = w.giStagesLeft;
+    out.textures = w.materialsAwaitingTexture;
+    out.shaders = mStream.shadersLastFrame;
+    out.shadersThisLoad = w.shadersCompiled >= mStream.shadersAtLoad
+                              ? w.shadersCompiled - mStream.shadersAtLoad
+                              : 0u;
+    out.shadersExpected = w.shadersExpected;
+    out.texturesThisLoad = qMax(mStream.texturesPeak, out.textures);
+    return out;
+}
+
+QString EngineSceneViewport::coverState() const
+{
+    using Cover = jahshaka::engine::ViewOverlayDesc::Cover;
+    // THE DESC THAT IS ON SCREEN, not the one this instant would compose: the
+    // question a caller asks is "what is the user looking at", and the overlay
+    // the view holds is the answer. With no view there is nothing to cover.
+    if (!view()) return QStringLiteral("none");
+    switch (view()->overlay().cover) {
+    case Cover::Loading: return QStringLiteral("loading");
+    case Cover::NoScene: return QStringLiteral("noscene");
+    case Cover::None:    break;
+    }
+    return QStringLiteral("none");
+}
+
+QString EngineSceneViewport::composeIndicatorLine() const
+{
+    // WHEN THE LINE IS UP. While the host says a world is on its way it is up
+    // unconditionally — that is the only thing on screen saying so once the
+    // panel is off — and after the reveal it stays for as long as the streaming
+    // window is open AND something is actually owed. Outside a load it never
+    // appears: a texture arriving behind an asset drop is not a world loading.
+    const StreamingPending p = streamingPending();
+    const bool arriving = mSceneLoadPending;
+    if (!arriving && !(mStreamFramesLeft > 0 && p.any())) return QString();
+
+    // ASCII ONLY, and it is not a style choice: the overlay font is Ogre's
+    // `DebugFont` (irisgl/engine/src/OgreOverlayHud.cpp), whose glyph range
+    // stops at the ASCII block — an em dash, a middle dot or an ellipsis in
+    // this line renders as a BLANK, silently, and the first cut of this lane
+    // photographed exactly that ("Loading Grand Showroom 2   shaders 15").
+    const QString name = mLoadingTitle.trimmed();
+    QString line = name.isEmpty() ? tr("Loading world") : tr("Loading %1").arg(name);
+    QStringList terms;
+    // Progress, not a queue (see the note above). Shown while this load has
+    // built any at all, or while the last frame did.
+    if (p.shadersThisLoad || p.shaders) {
+        terms << (p.shadersExpected > p.shadersThisLoad
+                      ? tr("shaders %1/%2").arg(p.shadersThisLoad).arg(p.shadersExpected)
+                      : tr("shaders %1").arg(p.shadersThisLoad));
+    }
+    // Only while something is STILL waiting: "textures 1/1" after the last one
+    // landed is a term that says nothing and never leaves.
+    if (p.textures) {
+        terms << tr("textures %1/%2")
+                     .arg(p.texturesThisLoad - p.textures)
+                     .arg(p.texturesThisLoad);
+    }
+    if (p.gi) terms << tr("lighting...");
+    if (terms.isEmpty()) return line + QStringLiteral("...");
+    return line + QStringLiteral(" - ") + terms.join(QStringLiteral("  "));
 }
 
 void EngineSceneViewport::refreshOverlay()
@@ -3396,6 +3547,7 @@ void EngineSceneViewport::presentCovered(int frames)
     const bool wasEnabled = view()->isEnabled();
     view()->setEnabled(true);
     for (int i = 0; i < frames; ++i) {
+        sampleStreamingWork();
         ++mFrameEpoch;
         mEngine->renderOneFrame();
         devicelossend::checkAfterFrame(mEngine.get());
@@ -3430,6 +3582,22 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
     mSceneLoadPending = true;
     mLoadingTitle = title;
+    // THE COVER IS A PREFERENCE, LATCHED HERE (services/loadingcover.h,
+    // OPEN_COVER_SPEC §3; owner's pick: OFF by default, so the world appears at
+    // once and streams in behind one indicator line). Read ONCE per load: a
+    // preference toggled while a world is arriving must not put the panel up
+    // over a world that is already drawing.
+    mCoverThisLoad = loadingcover::enabled();
+    // The indicator's baselines. `shadersAtLoad` is the engine's running
+    // compile total right now, so the progress pair counts THIS load's
+    // compiles and not the boot's.
+    {
+        mStream = StreamSample();
+        if (mEngine) {
+            const jahshaka::engine::StreamingWork w = mEngine->streamingWork();
+            mStream.shadersAtLoad = mStream.shadersAtSample = w.shadersCompiled;
+        }
+    }
     // The streaming window opens with the load and is spent by the driver's
     // ticks after the reveal (OPEN_COVER_SPEC §2.1).
     mStreamFramesLeft = kStreamFramesAfterReveal;

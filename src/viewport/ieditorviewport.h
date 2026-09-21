@@ -1123,6 +1123,39 @@ public:
     /// the thread. `title` names the world (shown under the message). A no-op
     /// for viewports with no on-screen render target.
     virtual void beginSceneLoad(const QString &title = QString()) { Q_UNUSED(title); }
+    /// WHAT THE WORLD STILL OWES while it streams in, and what the viewport is
+    /// therefore saying about it (SPECS/OPEN_COVER_SPEC.md §2.1/§4, lane
+    /// OPEN-COVER-2b). Read by `editor.viewportState()` and by the indicator
+    /// line the viewport draws in the HUD's bottom-left corner.
+    ///
+    /// `shaders` IS NOT A QUEUE, and cannot be: a pipeline state object is
+    /// generated when a renderable is first DRAWN, so "how many are left" is
+    /// not a number anything in this process knows. It is how many the LAST
+    /// DRIVER FRAME built — a rate, zero as soon as a frame draws without
+    /// compiling anything, which is exactly the moment the picture stops
+    /// changing for that reason. `shadersThisLoad`/`shadersExpected` are the
+    /// progress pair the indicator shows ("shaders 12/45").
+    struct StreamingPending {
+        unsigned shaders = 0;         ///< compiled by the last driver frame
+        unsigned textures = 0;        ///< materials still drawing a fallback
+        unsigned gi = 0;              ///< stages of the first lighting arm left
+        unsigned shadersThisLoad = 0; ///< compiled since this load began
+        unsigned shadersExpected = 0; ///< the last saved run's total, 0 = unknown
+        unsigned texturesThisLoad = 0;///< the most this load has waited on at once
+        /// Anything at all still arriving — `shaders || textures || gi`.
+        bool any() const { return shaders || textures || gi; }
+    };
+    virtual StreamingPending streamingPending() const { return StreamingPending(); }
+    /// WHICH COVER IS UP, as a word: "none", "loading" or "noscene". The
+    /// loading cover is a preference (services/loadingcover.h) and a preference
+    /// whose whole job is drawing a panel needs a reading, or its test has to
+    /// photograph the screen. "noscene" is not a preference and always shows.
+    virtual QString coverState() const { return QStringLiteral("none"); }
+    /// THE INDICATOR LINE this viewport is drawing at the bottom of the frame
+    /// while a world streams in, or empty when it is drawing none. The same
+    /// argument as `coverState`: a line whose whole job is to be read needs a
+    /// reading, or its test has to photograph the screen.
+    virtual QString loadingIndicator() const { return QString(); }
     /// THE OTHER END OF beginSceneLoad (SPECS/OPEN_COVER_SPEC.md §2 A): the
     /// world is installed and the page it lives on has been switched to, so
     /// the frames from here on are frames the user can see. The engine builds
