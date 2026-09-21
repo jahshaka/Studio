@@ -99,6 +99,11 @@ public:
     Q_INVOKABLE bool stop();
     Q_INVOKABLE bool pause();
     Q_INVOKABLE bool playing();
+    /// EJECT (PLAY-SELECT-1, owner R13). No argument reads the latch; with one
+    /// it sets it. Refused when nothing is playing — ejecting from a run that
+    /// does not exist is a caller's mistake, not a state.
+    Q_INVOKABLE bool playEject(const QVariant &on = QVariant());
+    Q_INVOKABLE QString playInputOwner();
     Q_INVOKABLE bool simulate(bool enabled = true);
     Q_INVOKABLE bool frame(int n = 1, double dt = -1.0);
     Q_INVOKABLE QVariantMap warmUpShaders();

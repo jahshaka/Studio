@@ -133,6 +133,35 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
+# app.play_select — A REAL CLICK AND A REAL GIZMO DRAG ON A PLAYING SCENE
+# (PLAY-SELECT-1, owner R13). The verb-level half of the lane is
+# scripting.e2e.play_select; what only a live window can answer is whether the
+# gesture ARRIVES — the routing under test is QMouseEvent delivery into the
+# viewport widget, which no function call can stand in for. Same shape as
+# app.input_keys above: its own private Xvfb (never JAH_TEST_DISPLAY, which may
+# name a developer's session), an ephemeral MCP port read back from the log,
+# RUN_SERIAL because synthesised input goes wherever the server has focus.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
+        set(_ps_home ${CMAKE_CURRENT_BINARY_DIR}/play-select-home)
+        file(MAKE_DIRECTORY ${_ps_home}/run)
+        add_test(NAME app.play_select
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/play_select.sh"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
+                 WORKING_DIRECTORY ${_ps_home}/run)
+        # Like app.input_keys, a DOCUMENTED exception to the 6x policy: a chain
+        # of synthesised gestures with fixed sleeps between them, every one of
+        # which a loaded box stretches. 400 s against a ~50 s measured run.
+        set_tests_properties(app.play_select PROPERTIES
+            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
+            RUN_SERIAL TRUE
+            TIMEOUT 400
+            LABELS "app")
+    else()
+        message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")
+    endif()
+endif()
+
 # ---- app.scene_switch_after_play -------------------------------------------
 # crash-1788594910 regression gate: switching scenes with play/simulate state
 # still armed must not crash (PlayBack::stopScene + updateSceneAnimation ran
