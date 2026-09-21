@@ -6,8 +6,6 @@
 #include <QLineEdit>
 #include <QVBoxLayout>
 #include "../models/properties.h"
-#include "../misc/QtAwesome.h"
-#include "../misc/QtAwesomeAnim.h"
 
 class HeaderObject : public QWidget
 {
@@ -66,7 +64,6 @@ protected:
 private:
 	QPushButton *button;
 	QSize currentSize;
-	QtAwesome *fontIcons;
 
 signals:
 	void buttonPressed(bool shouldDelete);

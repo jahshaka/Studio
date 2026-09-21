@@ -252,10 +252,8 @@ void AssetMaterialPanel::showContextMenu(const QPoint &pos)
                 irisLog("Customise: " + error);
                 return;
             }
-            // THE TILE IS A RENDER OF THE COPY (owner review R9(a)): the
-            // customised copy inherits the shipped preset's ICON otherwise,
-            // and an icon is not a sphere of this material.
-            thumbrebuild::rebuildOne(handle, project, copy, EngineHost::instance().engine());
+            // (The copy's TILE is a render of the copy — `customise` does it
+            // for every Customise door now; PREVIEWENV-2 item c.)
             // The copy is a library material the project now holds: every
             // drawer that lists one has to hear about it (the four-drawer
             // rule — one list, two windows).

@@ -37,9 +37,6 @@ set(SRCS
 	src/modules/materials/graph/socket.cpp
 	src/modules/materials/graph/socketconnection.cpp
 
-	#src/modules/materials/misc/QtAwesome.cpp
-	#src/modules/materials/misc/QtAwesomeAnim.cpp
-
 	src/modules/materials/models/connectionmodel.cpp
 	src/modules/materials/models/library.cpp
 	src/modules/materials/models/libraryv1.cpp
@@ -97,9 +94,6 @@ set(HEADERS
 	src/modules/materials/graph/socket.h
 	src/modules/materials/graph/sockets.h
 	src/modules/materials/graph/socketconnection.h
-
-	#src/modules/materials/misc/QtAwesome.h
-	#src/modules/materials/misc/QtAwesomeAnim.h
 
 	src/modules/materials/models/connectionmodel.h
 	src/modules/materials/models/library.h

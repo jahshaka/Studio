@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/qtinterop.h"
 #include "bridge/assetthumbnail.h"
+#include "services/materialtile.h"
 #include "services/thumbnailrebuild.h"
 #include "bridge/enginehost.h"
 #include "ui/pages/assetview.h"
@@ -2888,9 +2889,11 @@ void AssetView::createMaterialFromImageTile(AssetGridItem *item)
 		emit assetAddedToProject(materialGuid);
 	}
 
-	// THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1): the mint stores the
-	// image as a fallback and one gesture can afford one render.
-	thumbrebuild::rebuildOne(db, project, materialGuid, EngineHost::instance().engine());
+	// THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1, owner review R9(a)): the
+	// mint stores the image as a fallback and one gesture can afford one
+	// render. Through the ONE door (services/materialtile.h), so a refused
+	// borrow is logged by name instead of discarded.
+	materialtile::mint(db, project, materialGuid, "the Assets page's Create Material from Image");
 
 	// The library tile for the new material, same tail the import path uses.
 	addLibraryTileForAsset(materialGuid);

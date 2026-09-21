@@ -333,8 +333,26 @@ int main(int argc, char **argv)
                 counter.total, counter.onBlades, counter.blades.size(), counter.frameReDerivations);
 
     // ---- the assertions -----------------------------------------------------
-    CHECK(lastAvg <= 1.5 * firstAvg,
-          "cost: the last 50 switches cost no more than 1.5x the first 50");
+    // THE SAME FLOOR AS THE FILTERED RATIO BELOW (SELCOST-1 fix round), so the
+    // rule is one rule. It does NOT fire at today's numbers and is not a cure
+    // for a live flake: this quotient is over the whole TURN — select, settle
+    // and a grab() paint — which measures 13.6 ms / 14.0 ms on this box, three
+    // orders of magnitude above the floor. (The ~10 us quantity is
+    // setSceneNode ALONE, which is what the filtered arm times and why only
+    // that one has ever been jitter.) It is here so that a future turn cheap
+    // enough to be jitter cannot quietly start reding.
+    constexpr double kTurnRatioFloorMs = 0.05;   // 50 us per switch
+    if (firstAvg < kTurnRatioFloorMs) {
+        std::printf("  info: a switch's whole turn costs %.1f us (first50) / %.1f us (last50) — "
+                    "under the %.0f us floor, the %.2fx ratio is NOT asserted\n",
+                    firstAvg * 1000.0, lastAvg * 1000.0, kTurnRatioFloorMs * 1000.0,
+                    firstAvg > 0 ? lastAvg / firstAvg : 0.0);
+    } else {
+        CHECK(lastAvg <= 1.5 * firstAvg,
+              QStringLiteral("cost: the last 50 switches cost no more than 1.5x the first 50 "
+                             "(%1 ms -> %2 ms)")
+                  .arg(firstAvg, 0, 'f', 2).arg(lastAvg, 0, 'f', 2).toUtf8().constData());
+    }
     // A generous ceiling, ~10x the measured cost of a healthy run on the
     // development box: this catches a switch that became slow OUTRIGHT (rather
     // than progressively) without turning into a machine-speed assertion.
@@ -382,8 +400,32 @@ int main(int argc, char **argv)
                     "total %.0f ms (unfiltered setSceneNode last50 %.2f ms)\n",
                     filteredFirst, filteredLast, filteredTotal, lastSwitchAvg);
 
-        CHECK(filteredLast <= 1.5 * filteredFirst,
-              "cost: under a live filter the last 50 switches cost no more than 1.5x the first 50");
+        // A FLOOR UNDER THE RATIO (SELCOST-1, the same shape as
+        // commands.undo_clear_cost's). setSceneNode() alone is TEN
+        // MICROSECONDS here — 50 switches of it is half a millisecond, 200 is
+        // the 2 ms printed above — so `last/first` is a quotient of two
+        // numbers that scheduler jitter owns outright: one descheduled turn in
+        // the last fifty moves it by more than 1.5x while nothing about the
+        // panel has changed. The CONTRACT this line means to hold is "a
+        // filtered pick did not become progressively slower", and below a few
+        // tens of microseconds per switch there is no such measurement in the
+        // data. Say what was measured, assert only when there is something to
+        // assert; the absolute-order assertion below (and the 60 s total) hold
+        // either way, and the growth/storm assertions — which ARE the
+        // regression this suite exists for — are counts, not clocks.
+        constexpr double kRatioFloorMs = 0.05;   // 50 us per switch
+        if (filteredFirst < kRatioFloorMs) {
+            std::printf("  info: a filtered switch costs %.1f us (first50) / %.1f us (last50) — "
+                        "under the %.0f us floor, the %.2fx ratio is NOT asserted\n",
+                        filteredFirst * 1000.0, filteredLast * 1000.0, kRatioFloorMs * 1000.0,
+                        filteredFirst > 0 ? filteredLast / filteredFirst : 0.0);
+        } else {
+            CHECK(filteredLast <= 1.5 * filteredFirst,
+                  QStringLiteral("cost: under a live filter the last 50 switches cost no more "
+                                 "than 1.5x the first 50 (%1 ms -> %2 ms)")
+                      .arg(filteredFirst, 0, 'f', 3).arg(filteredLast, 0, 'f', 3)
+                      .toUtf8().constData());
+        }
         CHECK(filteredTotal < 60000.0,
               "cost: 200 switches under a live filter finish well inside a minute");
         // The filter is a walk and a hide, not a rebuild: a pick with one live

@@ -162,6 +162,13 @@ QString customiseName(Database *db, const QString &wanted);
 /// every edit gesture works on it. Pinned into `project` when one is open, so
 /// it lands in the project's drawer and the editor's tray too. Empty on
 /// failure with `errorOut`.
+///
+/// AND IT RENDERS THE COPY'S TILE (owner review R9(a), PREVIEWENV-2): a
+/// material's tile is a picture OF THAT MATERIAL on the studio sphere, and the
+/// copy inherits the shipped preset's ICON until something draws it. That is
+/// here rather than at each of the three Customise doors — through
+/// services/materialtile.h, which logs a refusal instead of discarding it.
+/// Headless it fails by name and the inherited tile stands.
 QString customise(const QString &presetOrGuid, const QString &name,
                   Database *db, Project *project, QString *errorOut = nullptr);
 

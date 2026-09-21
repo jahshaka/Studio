@@ -132,6 +132,22 @@ assert(("" + wornNow.baseColorMap).length > 0,
 // autosave off the GI caches while the user types.
 assert(graph.save() === true, "a second save of an unchanged graph still succeeds");
 
+// ---- 3a. THE PIN'S FOLDER TRAVELS (ARCHIVE-FOLDER-1) --------------------
+//
+// A pinned LIBRARY row is shared by every project, so where THIS project files
+// it is recorded on the PIN (project_assets.folder) and not on the row. The
+// archive used to carry rows, objects and pins and nothing else, so every
+// pinned asset came back at the root of the imported project with the user's
+// folders standing empty beside it. The manifest carries the pin's folder now;
+// the far side (scripting.e2e.material_bundle_import) checks it arrived, and
+// the re-import below checks it in THIS library too.
+var props = assets.createFolder("Props");
+assert(("" + props).length > 10, "assets.createFolder('Props') -> " + props);
+assert(assets.moveToFolder(matGuid, props) === 1, "the pinned material is filed in Props/");
+var rootTiles = assets.list({ scope: "project", tray: true }).map(function (a) { return a.guid; });
+assert(rootTiles.indexOf(matGuid) === -1,
+       "...so it is no longer a tile at the tray ROOT (it is in the folder)");
+
 // ---- 3. PORTABILITY: export, for the fresh-library half to import --------
 assert(project.save() === true, "project.save");
 var archive = "@CMAKE_CURRENT_BINARY_DIR@/material_bundle.zip";
@@ -157,6 +173,22 @@ assert(assets.list({ scope: "store", type: "material" }).length === matsBefore,
 assert(assets.list({ scope: "store" }).length === rowsBefore,
        "ARCHIVE-GUIDS-1: no library row was added at all by re-importing what it already had (" + rowsBefore + ")");
 assert(materials.members(matGuid).length > 0, "...and the material's members still resolve");
+
+// THE FOLDER ITSELF CANNOT TRAVEL INTO A LIBRARY THAT ALREADY HOLDS IT, and
+// that is a SEPARATE, PRE-EXISTING defect this arm found rather than caused
+// (reported with ARCHIVE-FOLDER-1): `folders.guid` is the table's PRIMARY KEY
+// and ARCHIVE-GUIDS-1 makes an imported folder keep its guid, so importing an
+// archive back into the SAME library fails every folder insert with "UNIQUE
+// constraint failed: folders.guid" — the re-imported project has no folders at
+// all. Nothing is LOST when that happens: a pin whose recorded folder does not
+// exist in this project comes home to the tray root (services/assettray.h's
+// belt to that brace), which is what this asserts. The fresh-library half
+// (scripting.e2e.material_bundle_import) is where the filing itself is proved,
+// because there the folder row travels.
+console.log("info: folders in the re-imported project: " + assets.folders().length
+            + " (a folder cannot be re-imported into the library that already holds it)");
+assert(assets.list({ scope: "project" }).map(function (a) { return a.guid; }).indexOf(matGuid) >= 0,
+       "the re-imported project holds the material whatever became of the folder");
 
 // ---- 6. THE MEMBER THE USER IMPORTS THEMSELVES (IMPORT-INTENT-1, F14) ----
 //

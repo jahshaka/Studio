@@ -280,8 +280,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     camControl = Q_NULLPTR;
 
     setupFileMenu();
-	fontIcons = new QtAwesome;
-	fontIcons->initFontAwesome();
+	// THE PROCESS'S ICON SET (QTAWESOME-1): one QtAwesome, one font load, one
+	// 786-entry codepoint map, shared with every other widget that draws a
+	// glyph icon — the shell used to make its own and never delete it, and
+	// the materials page made a second (and a third per property row).
+	fontIcons = &fonticons::shared();
 
     setupViewPort();
 	setupUndoRedo();
