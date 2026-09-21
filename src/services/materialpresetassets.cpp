@@ -106,7 +106,13 @@ Prepared prepare(const QStringList &presetNames)
         for (const QString &file : imageFiles(preset)) {
             if (out.mapOids.contains(file)) continue;
             const QString oid = AssetCas::hashFile(file);
-            if (!oid.isEmpty()) out.mapOids.insert(file, oid);
+            if (oid.isEmpty()) continue;
+            out.mapOids.insert(file, oid);
+            // …and WHOSE map it is, in the order the presets are seeded: the
+            // seeder stamps by this (see `Prepared::mapOwners`). Recorded in
+            // the same first-wins step as the hash, so the two lists can never
+            // disagree about which files this run prepared.
+            out.mapOwners.append({ file, preset.name });
         }
     }
     return out;
@@ -221,6 +227,15 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
         // ONLY A MINTED ROW IS STAMPED, which is the other half of V-2: if
         // these bytes were already in the library under a row the USER
         // imported, that row is theirs and a seed may not quietly hide it.
+        //
+        // WHICH IS WHY THE SEEDER STAMPS ITS OWN IMPORTS and this call is not
+        // the only writer (SEED-STAMP-1): on the route a person takes,
+        // `MaterialPresetSeeder` mints these rows through the pipeline first
+        // — off the thread that draws — so by the time the row pass gets here
+        // the picture is an existing row, `minted` is false, and a stamp
+        // written only here would never fire at all. `memberstamp::stamp` is
+        // idempotent and never moves an origin, so the two writers agree on
+        // every row they both see.
         if (pinned.minted)
             memberstamp::stamp(db, pinned.guid, MaterialPresetAssets::guidFor(preset.name));
         guidForFile.insert(file, pinned.guid);

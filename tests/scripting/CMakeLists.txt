@@ -1931,3 +1931,49 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     FIXTURES_REQUIRED presetApplyHome
     LABELS "scripting"
     TIMEOUT 180)
+
+# scripting.e2e.preset_seed_boot — THE FIRST-RUN SEED ON THE ROUTE A PERSON
+# TAKES (SEED-STAMP-1). preset_apply above seeds through
+# `materials.seedPresets()`, which mints each map inside `definitionFor` and
+# stamps it there; a LAUNCH runs `MaterialPresetSeeder`, which mints the maps
+# ahead of the row pass — so `definitionFor` found existing rows, answered
+# `minted = false`, and the stamp never fired. Thirty-one preset maps stood in
+# the tray and on the Assets page as the user's own tiles (owner review R10.2,
+# measured 31 members / 0 stamped before the fix). Two arms over ONE data root:
+#   1. user_first — no seed (no JAHSHAKA_SEED_PRESETS here): the user imports
+#      one picture a preset also uses, so arm 2 can prove a seed stamps only
+#      the rows it MINTS (V-2's other half). Document verbs -> --headless.
+#   2. the launch seed itself, which needs the WINDOW that starts it (and so
+#      the gate's display) with JAHSHAKA_SEED_PRESETS=1 — the env that lets a
+#      driven session take the seed a person's launch runs.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_preset_seed_user.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_user.js @ONLY)
+configure_file(scripts/e2e_preset_seed_boot.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_boot.js @ONLY)
+set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_boot)
+add_test(NAME scripting.e2e.preset_seed_boot.fresh_home
+         COMMAND sh -c "rm -rf '${_psHome}' && mkdir -p '${_psHome}/run'")
+set_tests_properties(scripting.e2e.preset_seed_boot.fresh_home PROPERTIES
+    FIXTURES_SETUP presetSeedBootHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_psHome}/run)
+add_test(NAME scripting.e2e.preset_seed_boot.user_first
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_user.js --headless
+         WORKING_DIRECTORY ${_psHome}/run)
+set_tests_properties(scripting.e2e.preset_seed_boot.user_first PROPERTIES
+    ENVIRONMENT "HOME=${_psHome};JAHSHAKA_DATA_ROOT=${_psHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED presetSeedBootHome
+    FIXTURES_SETUP presetSeedBootUser
+    LABELS "scripting"
+    TIMEOUT 180)
+jah_no_display(scripting.e2e.preset_seed_boot.user_first)
+add_test(NAME scripting.e2e.preset_seed_boot
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_boot.js
+         WORKING_DIRECTORY ${_psHome}/run)
+set_tests_properties(scripting.e2e.preset_seed_boot PROPERTIES
+    ENVIRONMENT "HOME=${_psHome};JAHSHAKA_DATA_ROOT=${_psHome}/.local/share/Jahshaka;JAHSHAKA_SEED_PRESETS=1"
+    FIXTURES_REQUIRED "presetSeedBootHome;presetSeedBootUser"
+    LABELS "scripting"
+    TIMEOUT 300)

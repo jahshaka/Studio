@@ -52,11 +52,26 @@ For more information see the LICENSE file
 // fallback is the OLD behaviour, never a worse one, and never a wrong
 // catalog: this is a warm-up, not a dependency.
 //
+// AND THE SEED THAT MINTS IS THE SEED THAT STAMPS (SEED-STAMP-1). A map
+// arrives INSIDE a material, so its row carries the member stamp and folds
+// into the bundle's tile instead of standing in the tray as one of the user's
+// own pictures (MATERIAL_BUNDLE_SPEC V-2, owner review R10.2). That stamp used
+// to be written only where the rows were minted — inside
+// `MaterialPresetAssets::definitionFor`, on a row IT minted — which is exactly
+// what this class took away from it: the maps are imported HERE, ahead of the
+// row pass, so the row pass finds them by content, hears "not minted", and
+// wrote no stamp at all. Measured on the launch route before the fix: 31
+// member maps, 0 stamped, 34 texture tiles in a library nobody had imported
+// anything into. So the stamp is written as each row is committed (one small
+// UPDATE, 1 ms for all 31), for the rows THIS batch mints and no others — a
+// picture the library already held is the user's, and a seed may not hide it.
+//
 // IDEMPOTENT AND CHEAP ON EVERY LAUNCH AFTER THE FIRST: one query answers
 // "are all twenty rows already there with a definition", and a seeded
 // library starts no worker at all.
 
 #include <QElapsedTimer>
+#include <QHash>
 #include <QObject>
 #include <QPair>
 #include <QStringList>
@@ -117,7 +132,7 @@ private:
     MaterialPresetSeeder() = default;
 
     void hashMapsOnWorker(const QStringList &presetNames);
-    void importMapsThenRows(const QVector<QPair<QString, QString>> &hashed);
+    void importMapsThenRows();
     void seedNextRow();
 
     Database *mDb = nullptr;
@@ -129,6 +144,15 @@ private:
     QElapsedTimer mTimer;      ///< wall time of the whole seed
     ImportBatchRunner *mRunner = nullptr;
     MaterialPresetAssets::Prepared mPrepared;   ///< what the worker did ahead
+    /// map file path -> the PRESET GUID its row is stamped with, for the maps
+    /// this run imports itself. THE SEED THAT MINTS IS THE SEED THAT STAMPS
+    /// (SEED-STAMP-1): `MaterialPresetAssets::definitionFor` stamps only a row
+    /// it minted, and on this route the rows already exist by the time it
+    /// looks, so the boot seed left every preset map standing as one of the
+    /// user's own tiles (V-2, owner review R10.2).
+    QHash<QString, QString> mStampOrigin;
+    int mStamped = 0;          ///< maps stamped as members by this run
+    qint64 mStampMs = 0;       ///< …and what those writes cost the UI thread
     std::atomic<bool> mRunning{false};
     std::atomic<bool> mAborted{false};
 };
