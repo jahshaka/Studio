@@ -87,7 +87,14 @@ assert(assets.thumbnail(presetGuid).empty === false,
 // after this line runs in the state the owner's imports met.
 var queueGuid = materials.create("Thumbs Queue", { graph: true });
 assert(queueGuid.length > 10, "materials.create -> " + queueGuid);
-assert(assets.thumbnail(queueGuid).empty === true, "a fresh graph material starts with no tile");
+// EVERY MINT RENDERS ITS TILE NOW (MATPREVIEW-ENV-1, owner review R9(a)): a
+// material created by any route is photographed on the studio sphere there and
+// then, so this row is not empty — it used to be, which is exactly the "grey
+// tile until some sweep finds it" the owner reported. The borrow below is
+// still the precondition this section is about: it is what proves the ONE
+// shared renderer is alive and holding its view.
+assert(assets.thumbnail(queueGuid).empty === false,
+       "a fresh graph material already carries a rendered tile (R9(a))");
 var firstBorrow = assets.refreshThumbnail(queueGuid);
 assert(firstBorrow.ok === true, "the first borrow renders: " + JSON.stringify(firstBorrow));
 assert(assets.thumbnail(queueGuid).empty === false,
@@ -105,7 +112,11 @@ var colour = graph.addNode("vector4");
 assert(graph.setValue(colour, { x: 0.85, y: 0.08, z: 0.08, w: 1.0 }) === true, "colour set");
 assert(graph.connect(colour, 0, master, "Base Color") === true, "wired into Base Color");
 assert(graph.save() === true, "graph.save");
-assert(assets.thumbnail(shaderGuid).empty === true, "a saved graph starts with no thumbnail");
+var savedTile = assets.thumbnail(shaderGuid);
+assert(savedTile.empty === false, "the mint rendered this one's tile too (R9(a))");
+assert(!(savedTile.centre.r > savedTile.centre.g + 40),
+       "…of the plain material it was minted as, not the red it has just been saved as: "
+       + JSON.stringify(savedTile.centre));
 
 var first = assets.refreshThumbnail(shaderGuid);
 assert(first.ok === true, "a material thumbnail renders with the queue's renderer alive: "

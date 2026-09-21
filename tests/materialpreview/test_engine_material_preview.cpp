@@ -17,9 +17,11 @@
 #include <string>
 
 #include "../support/previewdump.h"
+#include "irisgl/core/math/quat.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "jahshaka/engine/Engine.h"
 #include "bridge/enginematerialpreviewscene.h"
@@ -162,6 +164,18 @@ int main(int argc, char **argv)
         img = render(preview, *engine, view, 8);
         show("orbited 180 degrees", img, CX, CY);
         CHECK(isGreen(img.at(CX, CY)), "subject stays centred through a 180-degree orbit");
+        // …AND BACK TO THE FRONT, because the studio is not isotropic
+        // (MATPREVIEW-ENV-1): the lamps are over one shoulder and the wall
+        // opposite is darker, so from behind the subject the same material
+        // renders at about half the level — measured, and correct. Every case
+        // below measures a material's own look, so they measure it from the
+        // viewpoint the environment is authored for; leaving the camera behind
+        // the subject made the baked red read 27/255 and the BRDF delta vanish
+        // into the dark, which is a statement about where the camera was
+        // standing and not about the material.
+        preview.orbit(180.0f, 0.0f);
+        img = render(preview, *engine, view, 8);
+        CHECK(isGreen(img.at(CX, CY)), "…and back round the other 180 degrees");
 
         // ---- 7. a BAKED map reaches pixels (Materials Evaluator phase 3) ----
         // A solid-red source sampled through math classifies Baked, GraphBaker
@@ -214,7 +228,7 @@ int main(int argc, char **argv)
             img = render(preview, *engine, view, 8);
             show("BAKED baseColorMap on the sphere", img, CX, CY);
             CHECK(isRed(img.at(CX, CY)), "baked map reaches pixels: centre is the baked red");
-            CHECK(isBlue(img.at(2, 2)), "background stays blue behind the baked-map sphere");
+            CHECK(isGrey(img.at(2, 2)), "the studio wall is still behind the baked-map sphere");
             QDir(bakeDir).removeRecursively();
         }
 
@@ -236,11 +250,18 @@ int main(int argc, char **argv)
         {
             preview.setPreviewMesh(PreviewMesh::Sphere);
 
+            // A GLOSSIER SURFACE THAN THE 0.6 THIS USED (MATPREVIEW-ENV-1).
+            // The BRDF picker and the coat are SPECULAR decisions, and the
+            // preview's light is now an area source rather than two point
+            // lamps: at roughness 0.6 the difference between Default and
+            // Cook-Torrance under a soft studio is under one code, which says
+            // nothing about the picker. At 0.25 it is measurable again — the
+            // same claim, on a surface that can carry it.
             auto makeMat = [](float coat, float coatRough, int brdf) {
                 auto m = iris::PbrMaterial::create();
                 m->setBaseColor(QColor(120, 120, 125));
                 m->setMetallicFactor(0.0f);
-                m->setRoughnessFactor(0.6f);
+                m->setRoughnessFactor(0.25f);
                 m->setClearCoat(coat);
                 m->setClearCoatRoughness(coatRough);
                 m->setBrdf(brdf);
@@ -285,15 +306,40 @@ int main(int argc, char **argv)
 
             // Cook-Torrance (index 1): a different BRDF family, which cannot
             // carry a coat at all.
+            //
+            // UNDER A KEY LIGHT OF THIS CASE'S OWN (MATPREVIEW-ENV-1). The BRDF
+            // picker is a DIRECT-lighting decision — it selects the specular
+            // term applied to each light in the list — and the preview document
+            // has no light in it any more: it is lit by the studio environment,
+            // whose specular arrives through the prefiltered cube and is the
+            // same for both families. Measured with no light: Default and
+            // Cook-Torrance render within one code of each other, which says
+            // nothing about the picker. So the case adds a light, makes its
+            // comparison, and takes it away again; the coat cases above need no
+            // such thing (the coat DOES change the environment term — 107/255
+            // on this sphere).
+            auto brdfKey = iris::LightNode::create();
+            brdfKey->setLightType(iris::LightType::Directional);
+            brdfKey->setName("brdf-case-key");
+            brdfKey->setLocalRot(iris::Quat::fromEulerAngles(40, 30, 0));
+            brdfKey->intensity = 2.0f;
+            preview.document()->rootNode->addChild(brdfKey);
+
+            preview.setMaterial(makeMat(0.0f, 0.0f, 0));
+            const Image litDefault = render(preview, *engine, view, 8);
+            show("Default BRDF under a key light", litDefault, CX, CY);
             preview.setMaterial(makeMat(0.0f, 0.0f, 1));
             const Image ct = render(preview, *engine, view, 8);
-            show("Cook-Torrance, no coat", ct, CX, CY);
-            CHECK(maxDelta(noCoat, ct) > 2.0f, "the BRDF picker reaches pixels (Cook-Torrance != Default)");
+            show("Cook-Torrance under the same key light", ct, CX, CY);
+            const float brdfDelta = maxDelta(litDefault, ct);
+            std::printf("    BRDF max channel delta: %.1f/255\n", double(brdfDelta));
+            CHECK(brdfDelta > 2.0f, "the BRDF picker reaches pixels (Cook-Torrance != Default)");
 
             preview.setMaterial(makeMat(1.0f, 0.05f, 1));
             const Image ctCoated = render(preview, *engine, view, 8);
             CHECK(imagesEqual(ct, ctCoated),
                   "a coat on a non-Default BRDF is not applied (BRDF wins, byte-identical)");
+            brdfKey->removeFromParent();
         }
 
         preview.release();

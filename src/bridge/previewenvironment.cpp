@@ -43,7 +43,16 @@ const char *kSkyGuid = "jahshaka-preview-studio-environment";
 // (that hemisphere is behind it) and buys the whole budget for the lamps.
 //   E_front = PI * Lfront   ->   m = x* / (0.18 * Lfront) = 2.7
 //   the brightest panel:  1.0 * 2.7 = 2.7  ->  the curve gives 0.92, i.e. 245.
-constexpr float kBackWall  = 0.10f;   ///< the wall the subject is photographed against
+//
+// AND THE WALL IS NOT BLACK, for a reason the pictures made obvious: the dock
+// ORBITS. At wall 0.10 a camera swung round behind the subject saw it lit by
+// nothing (an 18 % grey ball read 36/255 against 118 from the front) — a
+// material preview that goes dark when the user turns it round is a defect
+// whatever the physics says. 0.22 costs the front nothing measurable (the
+// exposure moves by 0.02 stops, the brightest panel by one code), lifts the
+// turned-round view to 57/255, and renders the visible wall at a mid grey
+// (132/255) that both a white and a black material read against.
+constexpr float kBackWall  = 0.22f;   ///< the wall the subject is photographed against
 constexpr float kLampSide  = 0.65f;   ///< the lit side: the lamps' own room
 constexpr float kFloorMul  = 0.35f;   ///< everything below the horizon, times this
 
