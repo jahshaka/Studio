@@ -992,3 +992,50 @@ add_dependencies(test_gi_surface_cache_spike JahshakaEngineMedia)
 add_test(NAME gi.surface_cache_spike COMMAND test_gi_surface_cache_spike
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.surface_cache_spike PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# ---------------------------------------------------------------------------
+# gi.gather_spike — GATHER-0, the phase-0 SCREEN-PROBE GATHER spike.
+#
+# A MEASUREMENT SUITE, like gi.surface_cache_spike beside it and for the same
+# reason: SPECS/SCREEN_PROBE_GATHER_SPEC.md section 10 records that not one
+# millisecond of its budget table is measured, and section 7 phase 0 is the
+# lane that takes them. Its own binary because the gather binds descriptors and
+# a pass texture no other suite's frames carry.
+add_executable(test_gi_gather_spike test_gi_gather_spike.cpp)
+set_target_properties(test_gi_gather_spike PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_spike PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_spike PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_spike JahshakaEngineMedia)
+add_test(NAME gi.gather_spike COMMAND test_gi_gather_spike
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_spike PROPERTIES TIMEOUT 600 LABELS "engine")
+
+# THE COST, at the resolution the spec's budget table is stated at.
+#
+# LABELLED `benchmark`, AND RUN_SERIAL, BECAUSE IT READS THE GPU'S CLOCK. The
+# MERGE and PUSH tiers exclude that label by construction (-LE benchmark), and
+# they must: this rig's GPU idles at 210 of 3105 MHz under Xvfb unless the
+# clocks are locked by hand, so a GPU-time number taken inside a -j4 gate is
+# not a measurement. The suite PRINTS its milliseconds and asserts only a
+# catastrophe ceiling; the numbers of record are taken by hand with the clocks
+# locked (spikes/gather-0/FINDINGS.md).
+add_test(NAME gi.gather_spike_cost COMMAND test_gi_gather_spike
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_spike_cost PROPERTIES
+                     TIMEOUT 600 LABELS "benchmark" RUN_SERIAL TRUE
+                     ENVIRONMENT "JAH_GATHER_COST=1")
+
+# ...and the picture a machine WITHOUT ray queries draws, which this lane may
+# not move by one byte.
+add_test(NAME gi.gather_spike_norays COMMAND test_gi_gather_spike
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_spike_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
