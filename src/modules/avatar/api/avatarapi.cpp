@@ -360,6 +360,10 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "avatar's, `open` what avatar.asset would report. scope 'project' also pins it into "
           "the open project. A file with no skeleton is imported (it is a perfectly good model) "
           "and only the AVATAR is refused, so nothing is lost either way. "
+          "`maxCards` — the SURFACE CARD budget the other import verbs take — is NOT accepted here, and is "
+          "refused by name rather than ignored: a skinned mesh carries no cards at all (a card baked "
+          "against a bind pose is a lie), so the key could only split one character's bake in two for "
+          "nothing. Import the file with assets.importFile if a static model of it needs a card budget. "
           "{async: true} runs the whole thing — import, mint, open, preview — OFF the UI thread "
           "through the pipeline's own ImportBatchRunner (the Assets page's threaded import) and "
           "returns {started: true} immediately; watch avatar.progress() and cancel with "
@@ -2365,6 +2369,13 @@ QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &opti
     // (SPECS/IMPORT_DIALOG_SPEC.md §7): a character's size, orientation and
     // origin are baked at import here exactly as they are for any other model,
     // which is what replaced the module's old spawn-time height rule.
+    //
+    // `maxCards` IS DELIBERATELY NOT ONE OF THEM (SURFACE-CACHE phase 1): an
+    // avatar is a skinned mesh and a skinned mesh carries no surface cards at
+    // all — a card baked against a bind pose is a lie — so accepting the key
+    // here would only make two avatars key to two different bakes of identical
+    // bytes. It is REFUSED by name like any other unknown option rather than
+    // dropped silently, and the verb's doc says so.
     static const QStringList known = { "scope", "drawer", "name", "async",
                                        "units", "scale", "axes", "rotate", "translate",
                                        "skeleton", "clips", "materials" };

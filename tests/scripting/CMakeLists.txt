@@ -1796,6 +1796,26 @@ set_tests_properties(scripting.e2e.atom_lods PROPERTIES
     TIMEOUT 300)
 
 # ---------------------------------------------------------------------------
+# SURFACE CARDS THROUGH THE VERBS (SURFACE-CACHE phase 1). The companion of
+# meshbake.cards, which tests the GENERATOR with no app around it: this one
+# takes the door a script and the import dialog take — the real import
+# pipeline, the real CAS, the real bake store — so assets.meshCards reports
+# what a bake on disk holds rather than what a generator was asked for. Same
+# fixture as atom_lods (the shipped gizmo sphere: static, convex, and big
+# enough to carry a chain, which is what makes the card's LOD level mean
+# something).
+configure_file(scripts/e2e_surface_cards.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-surface_cards)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.surface_cards
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.surface_cards PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
 # THE SMOKE OF PUSH #50, AS TWO SUITES (lane SMOKE-FIX-1, 2026-09-18).
 #
 # Both scripts carry their own reasoning; in one line each:
