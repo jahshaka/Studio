@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "services/materialpresetassets.h"
 #include "services/memberstamp.h"
+#include "services/presetrestamp.h"
 
 MaterialPresetSeeder &MaterialPresetSeeder::instance()
 {
@@ -53,7 +54,17 @@ bool MaterialPresetSeeder::start(Database *db)
         if (MaterialPresetAssets::isSeeded(guid, db)) continue;
         pending.append(preset.name);
     }
-    if (pending.isEmpty()) return false;
+    if (pending.isEmpty()) {
+        // SEEDED ALREADY — AND THAT IS WHERE THE REPAIR BELONGS (SEED-RESTAMP-1).
+        // A library minted by a seed older than SEED-STAMP-1 holds its preset
+        // maps with no member stamp, and this pass is idempotent, so it never
+        // looks at them again: the owner's tray showed thirty-five loose map
+        // tiles beside the seven bundles they came in through. The re-stamp is
+        // that one repair, by CONTENT: 16 ms the once, 3 ms on every launch
+        // after it (services/presetrestamp.h measures both).
+        restampExistingMaps(db);
+        return false;
+    }
 
     mDb = db;
     mPending = pending;
@@ -216,9 +227,25 @@ void MaterialPresetSeeder::importMapsThenRows()
     mRunner->start();
 }
 
+void MaterialPresetSeeder::restampExistingMaps(Database *db)
+{
+    // `db`, not `mDb`: the "nothing to seed" call happens BEFORE a run is set
+    // up, so the member is still null there (it is set when a run starts).
+    if (!db) return;
+    // The shipped set is the table's, in its order (MaterialPresetAssets::
+    // allGuids) — the same order the seed mints in, so the first preset that
+    // names a picture owns it. The pass logs its own line.
+    presetrestamp::restamp(db, MaterialPresetAssets::allGuids());
+}
+
 void MaterialPresetSeeder::seedNextRow()
 {
     if (mAborted.load() || !mDb || mPending.isEmpty()) {
+        // …AND AFTER THE SEED'S OWN PASS (SEED-RESTAMP-1): a library that was
+        // PARTLY seeded by an older build gets its remaining maps repaired the
+        // moment this run finishes the rest. Not after an abort — that run
+        // seeded nothing it can reason about, and the next launch repairs.
+        if (!mAborted.load()) restampExistingMaps(mDb);
         mRunning.store(false);
         emit finished(mSeeded);
         return;
