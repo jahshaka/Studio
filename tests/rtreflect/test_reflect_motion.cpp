@@ -218,6 +218,32 @@ int main()
     fx.ssr = 2;
     view->setPostFx(fx);
 
+    // THE REFLECTION IS THERE AT ALL. Every bar below compares a moving frame with
+    // a settled one, and two frames with NO reflection in them agree perfectly: a
+    // resolve that declined everywhere (a matrix that stopped being pushed reads
+    // as zero and declines every pixel) would pass this file at 0.000. So first:
+    // the settled floor with the chain's reflections differs from the same floor
+    // without them.
+    {
+        const Pose rest = yawPose(0);
+        enginetest::testCameraLookAt(view, rest.pos, rest.target);
+        render(e, kWarmFrames);
+        Image with, without;
+        view->readPixels(with);
+        PostFxDesc off = fx;
+        off.ssr = 0;
+        view->setPostFx(off);
+        render(e, kWarmFrames);
+        view->readPixels(without);
+        view->setPostFx(fx);
+        const float present = meanDiff(with, without, 0u, kWidth, kHeight / 3u, kHeight);
+        // Measured 50.7 with the ray tier (the floor mirrors the sky) and 3.4 with
+        // the march alone (only the pillars are on screen to be reflected).
+        CHECK_MSG(present > 1.5f,
+                  "THE FLOOR REFLECTS: reflections on vs off differ by %.3f codes over the floor (> 1.5)",
+                  present);
+    }
+
     // THE CONTROL: with the camera STILL the same two read-backs must agree, or
     // the bars below measure the fixture's own restlessness and not the move.
     {
@@ -233,7 +259,9 @@ int main()
         // a blend FLOOR (it keeps following a changing scene), so a glossy lobe
         // never stops moving by a fraction of a code. That is the noise floor the
         // moving numbers below sit on.
-        CHECK_MSG(still < 1.0f, "THE CONTROL: a still camera's floor is settled (%.3f codes < 1.0)", still);
+        const float stillBar = raysWanted ? 1.0f : 0.05f;   // the march alone is exactly still
+        CHECK_MSG(still < stillBar, "THE CONTROL: a still camera's floor is settled (%.3f codes < %.2f)",
+                  still, stillBar);
     }
 
     const RayQueryStatus rq = s->rayQueryStatus();
@@ -246,12 +274,14 @@ int main()
     const float yawErr = runMove(e, view, yawPose, "yaw 1.5 deg/frame", skyYaw);
     const float truckErr = runMove(e, view, truckPose, "truck 0.25 m/frame", skyTruck);
 
-    // THE BARS sit between the two measurements in the header, nearer the fixed
-    // one. What is left with rays on is the single-sample grain of a
-    // roughness-0.2 lobe in a frame that has just moved — noise around the right
-    // answer, on a 0.5-code floor, gone when the camera stops.
-    const float yawBar = raysWanted ? 3.0f : 0.3f;
-    const float truckBar = raysWanted ? 4.0f : 0.3f;
+    // THE BARS are about twice the fixed measurement (the run is deterministic), so
+    // HALF of any one mechanism coming back reds them: mechanism 3 alone is worth
+    // 3.4 codes on the slide, mechanism 2 alone 0.8. What is left with rays on is
+    // the single-sample grain of a roughness-0.2 lobe in a frame that has just
+    // moved — noise around the right answer, on a 0.5-code floor, gone when the
+    // camera stops.
+    const float yawBar = raysWanted ? 1.5f : 0.3f;
+    const float truckBar = raysWanted ? 2.5f : 0.3f;
     CHECK_MSG(yawErr < yawBar,
               "A TURNING CAMERA: the moving floor is within %.1f codes of the settled one (%.3f)",
               yawBar, yawErr);
