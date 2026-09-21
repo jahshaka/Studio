@@ -856,6 +856,11 @@ private:
 
     // ---- the open, in stages (shared by the synchronous and threaded paths) --
     /// Cover up + tear the previous world down. Always first.
+    /// The sliced CREATE (OPEN_COVER_SPEC §2 C) — the same runner, the same
+    /// stage order. `newProject` is this plus the pumped drain.
+    void startCreateRun(const QString &filename, const QString &projectPath, bool empty);
+    /// Builds the open/create runner and its slice boundary, once per window.
+    void startOpenRunnerIfNeeded();
     void openStageBegin();
     /// Read the document (optionally out of a worker's prewarm), bind it to
     /// the viewports and the panels that follow the scene. The threaded open

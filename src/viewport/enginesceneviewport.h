@@ -254,6 +254,7 @@ public:
     QString viewCreationError() const override
     { return EngineViewWidget::viewCreationError(); }
     void beginSceneLoad(const QString &title = QString()) override;
+    void endSceneLoad() override;
     void coverIfNotPresenting() override;
     void primeSceneGeometry() override;
     void primeSceneEnvironment() override;
@@ -299,6 +300,27 @@ public:
     /// one: a Vulkan present is queued, so the frame counted first is not
     /// guaranteed to be the one the compositor is showing.
     static constexpr unsigned long long kPresentsBeforeReveal = 2;
+
+    // ---- streaming a world in (SPECS/OPEN_COVER_SPEC.md §2.1) -------------
+    /// What the NEXT engine frame drawn for THIS viewport may put off. The rule
+    /// lives here because this widget is the only object that knows both of its
+    /// terms: whether the world has been revealed, and whether the engine still
+    /// owes first-time work.
+    ///
+    /// THE CONTRACT, and it is the safety argument for the whole lane: THE
+    /// DRIVER'S OWN TICKS ARE THE ONLY CALLER. A script's `editor.frame`, a
+    /// screenshot, a thumbnail, a preview, the open runner's slice boundaries,
+    /// the selftest and every pixel suite render `Complete` frames by not
+    /// asking — so no gate and neither selftest hash can move. (The other half
+    /// of the rule, "nothing of this world is on screen yet", is NOT a frame's
+    /// property and is not here: it is `Scene::setLoading`, raised for the
+    /// length of the load.)
+    jahshaka::engine::FramePace driverFramePace() const;
+    /// How many DRIVER frames after a reveal may still stream. A bound, not a
+    /// budget: the engine's own `framePaceOwesWork` is what normally ends the
+    /// window, and this stops a scene whose textures never arrive from leaving
+    /// the frame-edge drain switched off for the life of the session.
+    static constexpr int kStreamFramesAfterReveal = 240;
 
 
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.
@@ -360,6 +382,13 @@ protected:
     void viewRecreated() override;
 
 private:
+    /// Driver frames left in the streaming window (kStreamFramesAfterReveal).
+    int mStreamFramesLeft = 0;
+    /// A world is on its way and none of it is on screen yet — the engine's
+    /// half of `mSceneLoadPending`, and it needs to be its own flag because
+    /// `clearScene` wipes that one while an open is in flight (see
+    /// refreshOverlay). Drives `Scene::setLoading`.
+    bool mWorldArriving = false;
     /// Binds this widget's View to the scene, with the view-side state that
     /// belongs to the editor's own picture (shadows, the VR helper channel).
     void bindViewToScene();

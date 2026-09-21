@@ -1033,6 +1033,7 @@ public:
     /// not implement renderFrames at all.
     virtual bool canRenderFrames() const { return false; }
 
+
     // ---- the "nothing is presenting" cover ----
     // Drawn by the ENGINE since owner decision D2 (STATS_OVERLAY_SPEC.md §6):
     // the Qt widget that used to do it (ViewportCover, a second native X window
@@ -1122,6 +1123,18 @@ public:
     /// the thread. `title` names the world (shown under the message). A no-op
     /// for viewports with no on-screen render target.
     virtual void beginSceneLoad(const QString &title = QString()) { Q_UNUSED(title); }
+    /// THE OTHER END OF beginSceneLoad (SPECS/OPEN_COVER_SPEC.md §2 A): the
+    /// world is installed and the page it lives on has been switched to, so
+    /// the frames from here on are frames the user can see. The engine builds
+    /// a world's FIRST global-illumination arm only after this — the single
+    /// longest thing it does on the UI thread, and worth nothing at all while
+    /// the load is still running behind a cover.
+    ///
+    /// The host says it rather than the viewport inferring it: "two frames
+    /// have presented" is satisfied by the open runner's own boundary frames
+    /// long before the page is shown, and the cover's own state machine is
+    /// torn down and rebuilt mid-load (clearScene).
+    virtual void endSceneLoad() {}
     /// "Show whatever you have": re-evaluates the cover and presents it
     /// synchronously. Every route onto the editor page calls this — a page
     /// switch reveals the viewport's native window, and until the engine
