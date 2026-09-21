@@ -86,6 +86,13 @@ QString guidFor(const QString &presetOrGuid);
 /// True when `presetOrGuid` names a shipped preset (either spelling).
 bool isPreset(const QString &presetOrGuid);
 
+/// EVERY SHIPPED PRESET'S GUID, in the shipped table's order — the set that
+/// means "the app's own read-only bundles", for a caller that has to reason
+/// about all of them at once (the boot re-stamp of their maps,
+/// services/presetrestamp.h). `guidFor` is the rule; this is it, applied to
+/// the table, in one place instead of a loop at each caller.
+QStringList allGuids();
+
 /// WHAT A WORKER CAN DO AHEAD OF THE ROW PASS. Seeding a preset is mostly
 /// NOT database work: it is hashing four megabytes of PNG per map (the
 /// content id is how the library answers "I already have this") and decoding

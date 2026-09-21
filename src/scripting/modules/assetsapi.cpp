@@ -30,6 +30,8 @@ For more information see the LICENSE file
 #include "services/assetshare.h"
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
+#include "services/materialpresetassets.h"
+#include "services/presetrestamp.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetgc.h"
@@ -464,6 +466,26 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "DRY RUN BY DEFAULT: reports how many assets would be baked without writing anything. "
           "Assets are baked lazily on first open too, so this is the bulk/explicit form — the button beside "
           "Preferences \u2192 Assets\u2019 storage cleanup.",
+          Needs::Document },
+        { "restampSeed", "assets.restampSeed() -> {stamped, presets, skipped, scanned, ran}",
+          "Gives the SHIPPED PRESETS\u2019 MAPS the member stamp in a library that already exists "
+          "(SEED-RESTAMP-1). A preset\u2019s picture arrived inside a material, so it folds into the "
+          "bundle\u2019s tile instead of standing in the tray as one of the user\u2019s own "
+          "(MATERIAL_BUNDLE_SPEC V-2) \u2014 but the seed writes that stamp as it MINTS each row, so a "
+          "library seeded by a build older than the stamping seed keeps its maps loose for ever (the seed "
+          "is idempotent and never looks at them again). This is that one repair, and the app runs it "
+          "itself at every launch beside the seed. "
+          "MATCHED BY CONTENT, NEVER BY NAME: a texture row is a preset\u2019s map when its stored source "
+          "object is one a shipped preset\u2019s own definition names \u2014 so a duplicate row over the "
+          "same bytes is repaired too, and a picture the user imported themselves is untouched. A preset "
+          "with at least one already-stamped map is left alone entirely: a stamping seed minted that batch, "
+          "so an unstamped map of it is the user\u2019s own copy. "
+          "`stamped` is how many rows were repaired, `presets` across how many bundles, `skipped` how many "
+          "presets were left alone, `scanned` how many texture rows were looked at, `ms` what the pass cost "
+          "the thread that called it, and `ran` is false when "
+          "the cheap pre-gate answered (every texture row already carries a stamp). IDEMPOTENT: a second "
+          "call writes nothing. Nothing is pinned, unpinned, renamed or moved, and no bytes are touched. "
+          "NOT undoable \u2014 asset mutations never are (SCRIPTING_SPEC \u00a71.6.5).",
           Needs::Document },
     };
 }
@@ -1980,4 +2002,26 @@ QVariantMap AssetsApi::checkConsistency(const QString &guid)
     if (report.value("ok").toBool() == false)
         fail(QStringLiteral("assets.checkConsistency: %1").arg(report.value("error").toString()));
     return report.toVariantMap();
+}
+
+QVariantMap AssetsApi::restampSeed()
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    // THE SAME CALL THE LAUNCH MAKES (services/materialpresetseeder.h runs it
+    // beside its own pass), so the verb the test drives and the route a user
+    // takes are one function over one shipped set.
+    const presetrestamp::Report report =
+        presetrestamp::restamp(host.db, MaterialPresetAssets::allGuids());
+    if (!report.error.isEmpty()) {
+        fail(QStringLiteral("assets.restampSeed: %1").arg(report.error));
+        return out;
+    }
+    out.insert(QStringLiteral("stamped"), report.stamped);
+    out.insert(QStringLiteral("presets"), report.presets);
+    out.insert(QStringLiteral("skipped"), report.skipped);
+    out.insert(QStringLiteral("scanned"), report.scanned);
+    out.insert(QStringLiteral("ms"), static_cast<qint64>(report.ms));
+    out.insert(QStringLiteral("ran"), report.ran);
+    return out;
 }

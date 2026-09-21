@@ -132,6 +132,13 @@ private:
     MaterialPresetSeeder() = default;
 
     void hashMapsOnWorker(const QStringList &presetNames);
+    /// THE REPAIR BESIDE THE SEED (SEED-RESTAMP-1): the shipped preset maps of
+    /// a library that ALREADY EXISTS get the member stamp a seed older than
+    /// SEED-STAMP-1 never wrote. Run once per launch, after this class's own
+    /// pass — both when there was nothing to seed and when the row pass ends.
+    /// Idempotent and matched by content; the rule and its one blind spot are
+    /// services/presetrestamp.h.
+    void restampExistingMaps(Database *db);
     void importMapsThenRows();
     void seedNextRow();
 
