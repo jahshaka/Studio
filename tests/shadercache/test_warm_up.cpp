@@ -169,75 +169,20 @@ int main() {
         gEngine->destroyView(v);
     }
 
-    // ---- 5. the recorded warm-up set (SHADER_CACHE_SPEC §2.7b) ------------
+    // ---- 5. THE RECORDED WARM-UP SET: DELETED (WARMUPSET-2, 2026-09-21) ---
     //
-    // Record a scene's permutations, throw the scene away entirely, and rebuild
-    // its shaders in a DIFFERENT scene from the recording alone — no mesh, no
-    // material, no texture. That is the whole claim of a ".rec" recording, and
-    // it is what a shipped pre-warmed cache would eventually rest on.
-    {
-        const char *setFile = "warmup-test.set";
-        std::remove(setFile);
-
-        View *v = gEngine->createOffscreenView("record", 64, 64, Colour(0, 0.2f, 0));
-        Scene *s = gEngine->createScene("record");
-        CHECK(v && s, "recording view + scene");
-        v->setScene(s);
-        s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.1f, 0.1f, 0.1f));
-        enginetest::addDirectionalLight(s, Vec3(-0.4f, -0.9f, -0.3f), 3.0f);
-        // A permutation nothing above has built: emissive is its own shader.
-        {
-            const NodeId n = s->createNode();
-            const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-            PbrParams p;
-            p.albedo = Colour(0.2f, 0.2f, 0.2f);
-            p.emissive = Colour(0.9f, 0.4f, 0.1f);
-            const MaterialId m = s->createPbrMaterial(p);
-            CHECK(n && mesh && m && s->attachMesh(n, mesh, m), "an emissive cube to record");
-        }
-        enginetest::testCameraLookAt(v, Vec3(2.5f, 2.0f, 3.0f), Vec3(0, 0, 0));
-        gEngine->renderOneFrame();   // the permutations only exist once drawn
-
-        CHECK(gEngine->recordWarmUpSet(s), "recordWarmUpSet(scene)");
-        CHECK(gEngine->saveWarmUpSet(setFile), "saveWarmUpSet wrote the set");
-        {
-            std::FILE *f = std::fopen(setFile, "rb");
-            long size = 0;
-            if (f) { std::fseek(f, 0, SEEK_END); size = std::ftell(f); std::fclose(f); }
-            std::printf("    recorded set is %ld bytes\n", size);
-            CHECK(size > 0, "and the set is not empty");
-        }
-
-        // Everything the recording describes is now gone.
-        gEngine->destroyScene(s);
-        gEngine->destroyView(v);
-
-        // A fresh scene with NO content at all, warmed from the file alone.
-        View *v2 = gEngine->createOffscreenView("replay", 64, 64, Colour(0, 0, 0));
-        Scene *s2 = gEngine->createScene("replay");
-        CHECK(v2 && s2, "replay view + empty scene");
-        v2->setScene(s2);
-        enginetest::testCameraLookAt(v2, Vec3(0, 0, 3), Vec3(0, 0, 0));
-        const unsigned built = gEngine->applyWarmUpSet(setFile, s2);
-        std::printf("    replaying the set built %u shader(s)\n", built);
-        // The shaders it names are already in this process's Hlms cache, so the
-        // honest assertion is not "it compiled something" — it is that the
-        // replay RAN, over a scene that contains nothing, without a crash and
-        // leaving no renderable behind.
-        CHECK(gEngine->lastError().empty() || built == 0,
-              "applyWarmUpSet ran against a scene with no content of its own");
-        Image img;
-        CHECK(v2->readPixels(img) && img.width == 64, "the replay scene still renders");
-        const Colour c = img.at(32, 32);
-        CHECK(c.r < 0.02f && c.g < 0.02f && c.b < 0.02f,
-              "and is still EMPTY — the warm-up renderables were destroyed, not left in it");
-
-        CHECK(gEngine->applyWarmUpSet("no-such-file.set", s2) == 0u,
-              "a missing set is not a crash");
-        gEngine->destroyScene(s2);
-        gEngine->destroyView(v2);
-        std::remove(setFile);
-    }
+    // This case recorded a scene's permutations, threw the scene away and
+    // rebuilt its shaders in a different scene from the recording alone. The
+    // claim never held in this app: a set names each permutation by one
+    // representative MATERIAL and resolves it BY NAME in the next process,
+    // while this engine names datablocks from a process-unique counter — so
+    // every recorded name missed, Ogre silently substituted the DEFAULT
+    // datablock, and the replay compiled permutations nothing would ever bind
+    // (measured: seven "Can't find HLMS datablock" lines and eight never-bound
+    // shaders on every warm launch of the real app). The case passed anyway,
+    // because it asserted only that the replay RAN. The three verbs and the
+    // file are gone; what warms this renderer is the per-scene precache (cases
+    // 1-4 above) and the persistent shader cache.
 
     // ---- 6. THE F2 ACCEPTANCE CASE: the warm-up pass reaches what the -------
     //         camera CANNOT SEE.

@@ -2132,12 +2132,9 @@ void MainWindow::openProject(bool playMode)
 	// silently on the very first open, when no render view exists yet.
 	LoadTimeline::mark(QStringLiteral("primeSceneSync"));
 	sceneView->primeSceneSync();
-	// The synchronous open's half of the F1a recording. No warm-up slice here
-	// on purpose — the sync path has no cover to hide one behind — but the
-	// RECORD is cheap (a memory-manager walk, no GPU work) and the next
-	// launch's warm-up is only as good as the sets it was given.
-	LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
-	sceneView->recordWarmUpSet();
+	// The pass shape this machine's editor draws with, for the NEXT launch's
+	// startup gate (F1b): two settings values, written only on change.
+	sceneView->rememberPassShape();
 	openStageReveal(playMode);
 }
 
@@ -2335,16 +2332,17 @@ void MainWindow::startOpenRun(bool playMode)
 			if (built) qInfo("scene open: precompiled %u shader(s) behind the cover", built);
 		} });
 	}
-	// WRITE THE WORLD DOWN for the next launch (SHADER_CACHE_AUDIT F1a). Behind
-	// the cover, in its own event-loop turn, and AFTER the geometry and
-	// environment pushes — the recording reads each renderable's Hlms hash and
-	// vertex declaration, both of which exist as soon as the mirror has bound
-	// the datablocks. Unconditional: the recorded set is what makes the NEXT
-	// startup warm, so it must not be gated on this session's precache setting.
-	slices.append({ QStringLiteral("Precompiling shaders…"), 96, [this]() {
-		LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
-		sceneView->recordWarmUpSet();
-	} });
+	// THE PASS SHAPE for the next launch's startup gate (SHADER_CACHE_AUDIT
+	// F1b): two settings values, written only on change.
+	//
+	// (What used to be here as well — WARMUPSET-2, 2026-09-21 — was the
+	// RECORDING of this world's permutation set "for the next launch". That set
+	// named its materials by a process-unique datablock name, so it resolved
+	// nothing in the next process and warmed the default datablock instead; the
+	// whole machinery is deleted. The slice above, the per-scene PSO precache
+	// behind the cover, is what actually precompiles a world, and it stays.)
+	slices.append({ QStringLiteral("Precompiling shaders…"), 96,
+	                [this]() { sceneView->rememberPassShape(); } });
 	slices.append({ QStringLiteral("Opening…"), 100,
 	                [this, playMode]() { openStageReveal(playMode); } });
 

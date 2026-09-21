@@ -3505,33 +3505,24 @@ unsigned EngineSceneViewport::warmUpShaders()
     return after - before;
 }
 
-void EngineSceneViewport::recordWarmUpSet()
+void EngineSceneViewport::rememberPassShape()
 {
-    // WHY THIS RUNS WHERE IT RUNS (audit F1a + spec §7.9).
+    // THE PASS SHAPE, AND ONLY THE PASS SHAPE (WARMUPSET-2, 2026-09-21). This
+    // function used to also RECORD the world's permutation set for the next
+    // launch to replay; that set identified each permutation by a datablock
+    // NAME and this engine's names are process-unique counters, so it warmed
+    // nothing and was deleted with its whole machinery. What is left is the
+    // half that still pays: the startup gate builds a tiny offscreen view to
+    // compile the process-wide materials in, and a permutation depends on the
+    // PASS as much as on the renderable, so the gate needs to know whether this
+    // machine's editor draws with shadows and at how many samples.
     //
-    // The audit asked for a recording "after the first rendered frame of an
-    // open". The mechanism says a frame is not what it needs: Ogre's
-    // VertexFormatWarmUpStorage::analyze walks the scene's object memory
-    // managers and reads each renderable's VAO declaration and Hlms hash
-    // (OgreVertexFormatWarmUp.cpp:112-156), and the Hlms hash is assigned when
-    // the DATABLOCK is bound, not when anything is drawn. So everything the
-    // recording wants exists the moment SceneMirror has pushed the world —
-    // which is on the open path, BEHIND the cover, where the spec's own
-    // interaction note wants this work to live rather than after the reveal.
-    //
-    // Recording per world (rather than only at quit) is the whole fix: Ogre's
-    // storage ACCUMULATES and de-duplicates by {Hlms hash, render queue}, so
-    // recording every world as it goes IS the merged set — and a world that was
-    // closed before the app quit used to be in no set at all.
+    // sampleCount() is the ACHIEVED count (the driver may clamp below what the
+    // scene asked for) — matching what was REQUESTED would build variants this
+    // machine cannot render. Two settings values, written only on change.
     if (!mEngine || !mEngineScene) return;
-    if (View *v = view()) {
-        // Remember the shape THIS pass has, for the next launch's warm-up view
-        // to match. sampleCount() is the ACHIEVED count (the driver may clamp
-        // below what the scene asked for) — matching what was requested would
-        // build variants this machine cannot render.
+    if (View *v = view())
         EngineHost::rememberWarmUpShape({ v->sampleCount(), v->shadows() });
-    }
-    EngineHost::instance().recordWarmUpSetNow();
 }
 
 void EngineSceneViewport::coverIfNotPresenting()
@@ -3574,14 +3565,12 @@ void EngineSceneViewport::clearScene()
     // alone). COPIED BEFORE IT IS CALLED: ending the session clears this very
     // std::function, and a closure must not be destroyed while it runs.
     if (const std::function<void()> ends = mVrPreviewEnds) ends();
-    // WRITE THE WORLD DOWN BEFORE IT GOES (audit F1a). This is the scene-close
-    // half of the recording, and it is the half that was missing entirely:
-    // recordWarmUpSet had exactly two callers, EngineHost::shutdown and the
-    // verb, so a world the user opened, worked in and CLOSED contributed
-    // nothing to the next launch's warm-up. The engine scene is still alive at
-    // this point in the teardown, which is the only reason this line can be
-    // here and not three lines down.
-    recordWarmUpSet();
+    // THE PASS SHAPE, BEFORE THE WORLD GOES (WARMUPSET-2). The view still
+    // answers for the pass the editor was drawing; a line later the scene is
+    // gone. (This used to record the permutation SET as well — deleted: it
+    // named its materials by a process-unique datablock name and warmed
+    // nothing in the next process.)
+    rememberPassShape();
     if (mOverlay) { mOverlay->clear(); mOverlay.reset(); }
     if (mMirror) { mMirror->setSource(nullptr); mMirror.reset(); }
     if (view()) {

@@ -273,12 +273,6 @@ QString EngineHost::shaderCacheDirectory()
     return QDir(base).filePath(QStringLiteral("shadercache"));
 }
 
-QString EngineHost::warmUpSetPath()
-{
-    const QString dir = shaderCacheDirectory();
-    return dir.isEmpty() ? QString() : QDir(dir).filePath(QStringLiteral("warmup.set"));
-}
-
 bool EngineHost::shaderCacheEnabled()
 {
     return SettingsManager::getDefaultManager()->getValue("shader_cache_enabled", true).toBool();
@@ -464,22 +458,6 @@ void EngineHost::rememberWarmUpShape(const WarmUpShape &shape)
     if (had.shadows != shape.shadows) sm->setValue("shader_warmup_shadows", shape.shadows);
 }
 
-bool EngineHost::recordWarmUpSetNow()
-{
-    if (!mEngine) return false;
-    // GATED ON THE SETTING (audit F12). warmUpSetPath() derives from
-    // shaderCacheDirectory(), which is computed regardless of the preference —
-    // only `cfg.shaderCacheDir` was gated — so with the cache switched off the
-    // app still wrote a warmup.set into the cache directory and still replayed
-    // it at the next startup. "Off" has to mean off.
-    if (!shaderCacheEnabled()) return false;
-    const QString setPath = warmUpSetPath();
-    if (setPath.isEmpty()) return false;
-    if (!mEngine->recordWarmUpSet()) return false;   // no live scenes: nothing to say
-    QDir().mkpath(QFileInfo(setPath).absolutePath());
-    return mEngine->saveWarmUpSet(setPath.toStdString());
-}
-
 void EngineHost::startShaderCacheWatchdog()
 {
     if (mCacheWatchdog || !mEngine) return;
@@ -527,17 +505,6 @@ void EngineHost::startShaderCacheWatchdog()
 void EngineHost::shutdown()
 {
     if (mCacheWatchdog) { mCacheWatchdog->stop(); delete mCacheWatchdog; mCacheWatchdog = nullptr; }
-    // Record what this session actually drew, for the NEXT launch to warm from
-    // (SHADER_CACHE_SPEC §2.7b). A set is a permutation LIST, not shaders: it
-    // lets the next startup compile everything this session needed without
-    // loading one mesh, skeleton or texture. Recording every live scene here is
-    // the whole "merge the recordings" step — the engine's storage accumulates.
-    //
-    // This is no longer the ONLY caller (audit F1a): scene close and the first
-    // rendered frame of an open record too, so a world the user opened, looked
-    // at and closed before quitting is in the set. This one stays because it is
-    // the only point that catches a scene still open at quit.
-    recordWarmUpSetNow();
     // THE clean-quit save (SHADER_CACHE_SPEC §4.4). The engine's destructor
     // saves too, but a viewport that still holds the shared_ptr can defer that
     // destructor past Qt's own teardown — this is the point we can prove runs,

@@ -6,7 +6,6 @@
 
 #include <QApplication>
 #include <QElapsedTimer>
-#include <QFileInfo>
 #include <QThread>
 
 using namespace jahshaka::engine;
@@ -154,36 +153,31 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // low-level material scripts (sky, DPSM, depth utils, copy/resolve, ESM,
     // HDR, SSAO, SMAA) and the compositor chain. What it cannot cover on its
     // own is the Hlms permutations — the Hlms generates a shader per RENDERABLE
-    // and the permutation set is a property of the CONTENT. Those come from the
-    // recorded set below, replayed into this correctly-shaped pass.
+    // and the permutation set is a property of the CONTENT. Those are compiled
+    // on the open path instead, behind the loading cover (View::warmUpShaders).
     for (int i = 0; i < kWarmUpFrames && warmView; ++i) {
         engine->renderOneFrame();
         poll();
     }
 
-    // THE RECORDED SET (SHADER_CACHE_SPEC §2.7b). The previous session wrote
-    // down which permutations it actually used — a list of vertex formats,
-    // render queues and one representative material each, not shaders. Applying
-    // it here builds every one of them against degenerate 4-vertex buffers, so
-    // this session's Hlms permutations exist before the window does, without
-    // loading a single mesh, skeleton or texture.
+    // THE RECORDED SET IS GONE (WARMUPSET-2, 2026-09-21). A replay used to run
+    // here: the previous session's permutation list, applied to degenerate
+    // 4-vertex buffers so this session's Hlms permutations existed before the
+    // window did. It never worked in this app and could not have — a set names
+    // each permutation by one representative MATERIAL and resolves it BY NAME
+    // in the next process, while this engine names datablocks from a
+    // process-unique counter. Measured before the deletion: seven "Can't find
+    // HLMS datablock" lines and eight shaders compiled for the DEFAULT
+    // datablock on every warm launch, none of them ever bound, and eight
+    // permanent entries added to the shader cache. Deleted on the owner's word
+    // rather than repaired.
     //
-    // This is what the process-wide warm-up above cannot do on its own: Hlms
-    // shaders are per RENDERABLE, so guessing at them from an empty scene is
-    // impossible — but REMEMBERING them from last time is not.
-    //
-    // GATED ON THE CACHE SETTING (audit F12): the set lives in the cache
-    // directory and is derived data of exactly the same kind, so "keep compiled
-    // shaders between launches: off" has to mean this too.
-    if (warmScene && EngineHost::shaderCacheEnabled()) {
-        const QString setPath = EngineHost::warmUpSetPath();
-        if (!setPath.isEmpty() && QFileInfo::exists(setPath)) {
-            const unsigned built =
-                engine->applyWarmUpSet(setPath.toStdString(), warmScene);
-            poll();
-            qInfo("startup: replayed the recorded warm-up set (%u shader(s) built)", built);
-        }
-    }
+    // What remains on this path is the PROCESS-WIDE half above, which is real:
+    // Hlms registration, the low-level material scripts and the compositor
+    // chain, compiled in a view shaped like the editor's (EngineHost::
+    // warmUpShape — the pass shape a world OPEN writes down). The per-world
+    // Hlms permutations are compiled behind the loading cover by the per-scene
+    // precache instead (View::warmUpShaders).
     // The SCENE goes; the VIEW stays, disabled, for the life of the process.
     //
     // That asymmetry is not tidiness, it is a DEFECT WORKAROUND, narrowed by

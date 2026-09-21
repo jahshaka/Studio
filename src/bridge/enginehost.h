@@ -34,27 +34,9 @@ public:
     /// Deletes that directory. Safe with no engine running; the next launch is
     /// cold. This is our `r.InvalidateCachedShaders`.
     static bool clearShaderCacheOnDisk();
-    /// The recorded warm-up set (SHADER_CACHE_SPEC §2.7b): the permutation list
-    /// this machine's previous sessions used, replayed at the next startup so
-    /// their shaders exist before anything is drawn. Lives beside the cache and
-    /// dies with it — it is derived data too, and re-recording costs one
-    /// session.
-    static QString warmUpSetPath();
     /// The `shader_cache_enabled` preference, in one place. Everything that
-    /// writes into the cache DIRECTORY has to ask — including the warm-up set,
-    /// which lives there but is not part of the cache the engine loads (audit
-    /// F12: it was recorded and replayed even with the feature switched off,
-    /// because warmUpSetPath() derives from shaderCacheDirectory() and that is
-    /// computed whether or not the setting says yes).
+    /// writes into the cache DIRECTORY has to ask.
     static bool shaderCacheEnabled();
-    /// Records the live scenes' shader permutations into the warm-up set and
-    /// writes it, if the cache is enabled. Called on a scene close and once
-    /// after a world's first rendered frame — NOT only at shutdown, which is
-    /// what made the owner's recorded set 203 bytes (audit F1a): Ogre's storage
-    /// accumulates and de-duplicates, so recording as you go IS the merged set,
-    /// but a world closed before quit was never in it at all.
-    /// Cheap and idempotent; false when there was nothing to record.
-    bool recordWarmUpSetNow();
     /// THE PASS SHAPE the last session's editor actually drew with.
     ///
     /// Hlms permutations are a function of the PASS, not only the renderable:
