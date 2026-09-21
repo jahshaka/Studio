@@ -429,8 +429,19 @@ int main()
         Image afterTeardown;
         view->readPixels(afterTeardown);
         CHECK(afterTeardown.width == kSize && afterTeardown.height == kSize,
-              "D1: the tier torn down while the spike is armed still draws a frame (the shader's "
+              "D1: the tier torn down while the gather is on still draws a frame (the shader's "
               "registration dies with the textures it names)");
+        // ...AND THE REGISTRATION IS ACTUALLY GONE, which is the half an image
+        // size cannot see (the lead's read): the frame would draw either way,
+        // once with a live binding and once with a freed TextureGpu behind it.
+        // `running` false is the Component reporting that it holds nothing for
+        // this scene any more.
+        {
+            const GatherStatus torn = gatherStatus(s);
+            CHECK_MSG(!torn.running,
+                      "D1: ...and the gather holds nothing for the scene after the teardown "
+                      "(running %d, probes %u)", int(torn.running), torn.probes);
+        }
         e->setRayTracing(true);
         render(e, 4);
         armGather(s, gatherGi, false);
@@ -499,6 +510,13 @@ int main()
         // ...and with the cap at zero the picture is still drawn (the arm that
         // prices the adaptive pass at phase 2, and the guard that a capped-out
         // frame is an ordinary frame).
+        //
+        // ASSERTED ON THE RAW COUNTER, not on `adaptive`: that one is
+        // `min(requested, cap)`, so `adaptive <= cap` and `adaptive == 0` under
+        // a cap of zero are arithmetic identities and would pass with the whole
+        // placement job deleted (the lead's read). `adaptiveRequested` is what
+        // the job actually asked for, and the cap is what it is doing something
+        // TO.
         armGather(s, gi, true, 16u, 8u, false, false, 0);
         render(e, 16);
         const GatherStatus capped = gatherStatus(s);
@@ -506,6 +524,74 @@ int main()
         CHECK_MSG(capped.adaptive == 0u && cappedImg.width == kSize,
                   "the adaptive cap at zero is a uniform grid and an ordinary frame (%u appended)",
                   capped.adaptive);
+        CHECK_MSG(capped.adaptiveRequested > 0u && capped.adaptive == 0u,
+                  "...and the placement job still ASKED for its probes under that cap (%u "
+                  "requested, %u appended) — the cap is a budget, not an off switch, and the "
+                  "raw counter is what says so",
+                  capped.adaptiveRequested, capped.adaptive);
+        CHECK_MSG(railing.adaptiveRequested >= railing.adaptive,
+                  "the railing's raw request (%u) is what the cap clamped to %u",
+                  railing.adaptiveRequested, railing.adaptive);
+
+        // ---- MUST 6: A GATHER TOGGLE IS NOT A GI REBUILD -------------------
+        // The row changes a chain shape and a listener registration and NOTHING
+        // about the GI configuration, so it rides `setGiTuning` and not the
+        // configuration push. It was in `GiParams::operator==` for a round,
+        // which tore the whole cascade chain down and built it again to turn a
+        // compute dispatch on — and made every A/B arm of every suite above
+        // compare ACROSS a GI rebuild.
+        // PUSHED THE WAY A HOST PUSHES IT: `setGlobalIllumination` has no
+        // early-out by contract — it is the CONFIGURATION door and it rebuilds
+        // — and the mirror only calls it when the configuration really moved.
+        // A gather toggle moves no configuration, so it rides `setGiTuning`,
+        // and this case asserts that route costs no rebuild. (Before the fix
+        // round the row was in `GiParams::operator==`, so the mirror itself
+        // would have taken the rebuilding door.)
+        armGather(s, gi, false);
+        render(e, 8);
+        const GiStatus before = s->giStatus();
+        GiParams toggled = gi;
+        toggled.gather = GiToggle::On;
+        s->setGiTuning(toggled);
+        render(e, 8);
+        const GatherStatus onStatus = gatherStatus(s);
+        toggled.gather = GiToggle::Off;
+        s->setGiTuning(toggled);
+        render(e, 8);
+        const GiStatus after = s->giStatus();
+        CHECK_MSG(onStatus.running,
+                  "the tuning push turned the gather ON without a configuration push (%u probes)",
+                  onStatus.probes);
+        CHECK_MSG(after.rebuilds == before.rebuilds &&
+                      after.cascadeFullRebuilds == before.cascadeFullRebuilds,
+                  "A GATHER TOGGLE RE-VOXELISES NOTHING: %llu/%llu rebuilds across an on-and-off "
+                  "against %llu/%llu before it",
+                  (unsigned long long)after.rebuilds,
+                  (unsigned long long)after.cascadeFullRebuilds,
+                  (unsigned long long)before.rebuilds,
+                  (unsigned long long)before.cascadeFullRebuilds);
+
+        // ---- MUST 4: NO PIXEL IS BLACK WHERE A PROBE DECLINED --------------
+        // Turning the gather on compiles the cone diffuse out of the shader,
+        // and every fallback term of this renderer lives inside the irradiance
+        // field's block — so with the FIELD ABSENT (this arm, and every arm of
+        // this suite) a pixel whose probe the plane test rejected used to get
+        // NOTHING. A region MEAN cannot see it; a COUNT of black pixels can.
+        armGather(s, gi, true);
+        render(e, 24);
+        Image lit; view->readPixels(lit);
+        unsigned black = 0u, floorPixels = 0u;
+        for (unsigned y = lit.height / 2u; y < lit.height; ++y)
+            for (unsigned x = 0; x < lit.width; ++x) {
+                const Colour c = lit.at(x, y);
+                ++floorPixels;
+                if (c.r < 0.004f && c.g < 0.004f && c.b < 0.004f) ++black;
+            }
+        std::printf("   BLACK PIXELS on the lit half of the gathered frame: %u of %u\n", black,
+                    floorPixels);
+        CHECK_MSG(black == 0u,
+                  "NO PIXEL IS BLACK under the gather with no field bound (%u of %u) — the "
+                  "pixels no probe answered for get the sky, not nothing", black, floorPixels);
         armGather(s, gi, false);
         e->destroyScene(s);
     }

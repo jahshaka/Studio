@@ -157,6 +157,12 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giDdgiIntensity = v.toFloat(); });
     add("giDdgiAmbient", [](const ScenePtr &s) { return QVariant(s->giDdgiAmbient); },
         [](const ScenePtr &s, const QVariant &v) { s->giDdgiAmbient = v.toFloat(); });
+    // THE SCREEN-PROBE GATHER's row (GATHER-1a). Verb-only like the two above
+    // it, and in this table for the same reason: a world field the verb writes
+    // outside WorldEdit is not undoable and is not rolled back when a later key
+    // of the same call is refused.
+    add("giGather", [](const ScenePtr &s) { return QVariant(s->giGather); },
+        [](const ScenePtr &s, const QVariant &v) { s->giGather = v.toInt(); });
     // Verb-only integrator knobs (world.gi): no panel row, but the verb's one
     // undo step records them through this table like every other world field.
     add("giRayMarchStepScale", [](const ScenePtr &s) { return QVariant(s->giRayMarchStepScale); },

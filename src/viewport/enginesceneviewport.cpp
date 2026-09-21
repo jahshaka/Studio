@@ -2762,6 +2762,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.probes       = int(st.gather.probes);
     out.gather.adaptive     = int(st.gather.adaptive);
     out.gather.adaptiveCap  = int(st.gather.adaptiveCap);
+    out.gather.adaptiveRequested = int(st.gather.adaptiveRequested);
     out.gather.raysPerFrame = double(st.gather.raysPerFrame);
     out.gather.targetW      = int(st.gather.targetW);
     out.gather.targetH      = int(st.gather.targetH);
@@ -2770,6 +2771,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.traceMs      = st.gather.traceMs;
     out.gather.integrateMs  = st.gather.integrateMs;
     out.gather.cpuMs        = st.gather.cpuMs;
+    out.gather.error        = QString::fromStdString(st.gather.error);
     return out;
 }
 

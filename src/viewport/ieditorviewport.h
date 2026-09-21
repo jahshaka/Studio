@@ -823,11 +823,13 @@ public:
             int   raysPerProbe = 0;  ///< octRes squared
             int   probesX = 0, probesY = 0, probes = 0;   ///< the uniform grid
             int   adaptive = 0, adaptiveCap = 0;          ///< ...and the extra probes
+            int   adaptiveRequested = 0;                  ///< ...before the cap
             double raysPerFrame = 0.0;
             int   targetW = 0, targetH = 0;
             double atlasBytes = 0.0; ///< the atlas + records + irradiance, resident
             float placeMs = -1.0f, traceMs = -1.0f, integrateMs = -1.0f;
             float cpuMs = -1.0f;     ///< the CPU cost of RECORDING the three jobs
+            QString error;           ///< why it is not running, when it is not
         };
         GatherInfo gather;
     };

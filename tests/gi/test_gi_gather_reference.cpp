@@ -613,6 +613,59 @@ int main()
         s->setNodeMaterial(floorNode, floorMat);
     }
 
+    // ---- ONE DIFFUSE TERM, WITH THE FIELD BOUND (ogre-patch 0086) ----------
+    //
+    // THE ACCOUNTING RULE, and the only arm of any gather suite that tests it:
+    // every other arm measures with `ddgi` OFF, which is what makes the three
+    // estimators comparable and also what hides this. With a field BOUND and
+    // the gather on, a covered pixel must read exactly what it reads with no
+    // field at all — the cage declines (the patch), and the field's own
+    // FALLBACK terms decline with it (this lane's half, in JahIfd's resolve).
+    //
+    // WHAT IT DOES NOT GUARD, said here because a reader will come looking. The
+    // confidence divisor in JahIfd's resolve (`ifdFrontWeight / sumIfdWeight`)
+    // must be SCALE-FREE rather than floored -- a crushed cage carries the same
+    // tiny scale in both terms, so the ratio is still one and the field fades to
+    // nothing deliberately, while a 1e-6 floor on the denominator alone would
+    // collapse the confidence and hand the pixel the whole fallback. THREE
+    // fixtures were built to catch that and NONE of them discriminates: the
+    // outer wall of a sealed box and its roof (the case that code's own comment
+    // names) both have `ifdFrontWeight` EXACTLY zero -- every probe behind the
+    // surface -- where the two spellings agree; and this arm's declined cage
+    // never reaches the divide, because the resolve pins the confidence to one
+    // when the cage did not run. The discriminating input is a cage that DID run
+    // whose front share is non-zero and whose every weight was crushed by the
+    // visibility test, and no scene was found that produces it. What stands
+    // instead of a fixture is that the shipped arithmetic is unchanged for every
+    // non-zero divisor, which is a property of the line rather than of a
+    // picture.
+    {
+        std::vector<double> fieldOnE;
+        measure("gather+field", GiToggle::On, true, fieldOnE);
+        {
+            const GiStatus st2 = s->giStatus();
+            std::printf("   (the arm really is both: gather running %d, field bound %d; E/pi at "
+                        "x = 2.60 m reads %.5f with the field against %.5f without it)\n",
+                        int(st2.gather.running), int(st2.ifdBound), fieldOnE[0], gatherE[0]);
+        }
+        // Seeded at the NEUTRAL ratio, not at zero: seeded at zero nothing is ever
+        // "worse than" it and the loop reports its own initialiser.
+        double worst = 1.0;
+        size_t worstAt = 0;
+        for (size_t i = 0; i < points.size(); ++i) {
+            const double base = gatherE[i] > 1e-9 ? gatherE[i] : 1e-9;
+            const double r = fieldOnE[i] / base;
+            if (std::fabs(r - 1.0) > std::fabs(worst - 1.0)) { worst = r; worstAt = i; }
+        }
+        std::printf("\n   ONE DIFFUSE TERM WITH THE FIELD BOUND: the gather's answer at each "
+                    "point with ddgi ON against the same point with it OFF — worst ratio %.3f "
+                    "at x = %.2f m\n", worst, double(points[worstAt].x));
+        CHECK_MSG(worst > 0.90 && worst < 1.10,
+                  "A COVERED PIXEL GETS ONE DIFFUSE TERM: with a field bound the gather's answer "
+                  "is %.3f of the field-off answer (bar 0.90 to 1.10) — the cage declines "
+                  "(ogre-patch 0086) and its fallback declines with it", worst);
+    }
+
     e->destroyScene(s);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

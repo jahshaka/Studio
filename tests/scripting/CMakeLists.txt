@@ -341,6 +341,12 @@ add_script_e2e(page_gi e2e_page_gi.js)
 # sampling one" are different readings, and only the renderer knows the second.
 # The pixel half is the gi.ddgi engine suite.
 add_script_e2e(gi_ddgi e2e_gi_ddgi.js)
+# GATHER-1a: the SCREEN-PROBE GATHER's row — `world.gi({gather})`, its undo step
+# and `world.giStatus().gather`. Engine UP for the same reason as gi_ddgi: "the
+# project asked for a gather" and "this machine is running one" are different
+# readings and only the renderer knows the second. The pixel half is the
+# gi.gather engine suite.
+add_script_e2e(gather_row e2e_gather_row.js)
 # PHOTON-M3 (ogre-patch 0080): the voxel TOTAL volume is a float that holds the
 # bounce's fixed point — the direct term bounded by the ceiling, the bounced
 # total above it in a real set of voxels. Read through world.giVoxelStats: a
