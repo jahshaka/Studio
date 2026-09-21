@@ -40,6 +40,7 @@
 // Studio-side code: includes iris (Qt) and the engine abstraction. Never Ogre.
 #include <memory>
 #include <QImage>
+#include <QtGlobal>
 #include <QSize>
 #include <QString>
 #include "irisgl/irisglfwd.h"
@@ -113,6 +114,30 @@ public:
     /// Background the offscreen view is cleared to (what "not the background" means).
     static jahshaka::engine::Colour backgroundColour();
 
+    /// WHAT THE RENDERER STILL HOLDS BETWEEN RENDERS — diagnostic, for the
+    /// growth arm of thumbnails.studio_env (PREVIEWENV-2 fix round).
+    ///
+    /// The studio document is bound for the whole session now, so "the picture
+    /// does not move" is no longer the whole contract: the caches behind it
+    /// must not grow either.
+    ///
+    /// `nodes` is the mirror's live entry count, which is ZERO between renders
+    /// (clearSubject takes the subject off and the sweep reclaims what it
+    /// referenced). `lastRenderMaterialBuilds` is how many material
+    /// conversions the LAST render's own sync did — SceneMirror::
+    /// materialBuildCount is a PER-WALK counter (it is zeroed at the top of
+    /// every sync, scenemirror.cpp:713), so it is captured at the one moment
+    /// it means something: right after the sync that mirrors the subject. One
+    /// material subject must cost exactly ONE conversion however many tiles
+    /// came before it; a number that grows with the tile index is the bound
+    /// document re-converting its predecessors. Zeros when there is no mirror.
+    struct Held
+    {
+        quint64 nodes = 0;
+        quint64 lastRenderMaterialBuilds = 0;
+    };
+    Held held() const;
+
     /// Preview material for an imported model's assimp material data: the colours
     /// AND the diffuse/specular/normal maps — the same material the asset preview
     /// viewer shows. (Thumbnails used to drop the textures and render grey.)
@@ -153,6 +178,8 @@ private:
     void clearSubject();
 
     iris::ScenePtr mStudio;  // the one preview document (studioDocument)
+    /// Material conversions done by the last render's own sync (see Held).
+    quint64 mLastRenderMaterialBuilds = 0;
     iris::MeshPtr mSphere;   // preview sphere, loaded once
     QString mLastFailure;
 };

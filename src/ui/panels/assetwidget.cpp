@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include <QTimer>
 
 #include "bridge/enginehost.h"
+#include "services/materialtile.h"
 #include "services/thumbnailrebuild.h"
 #include <QComboBox>
 
@@ -1421,9 +1422,11 @@ void AssetWidget::createMaterialFromImage()
     if (project && !project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(materialGuid, db, project, ProjectAssets::AddKind::Direct);
 
-    // THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1): the mint stores the
-    // image as a fallback and one gesture can afford one render.
-    thumbrebuild::rebuildOne(db, project, materialGuid, EngineHost::instance().engine());
+    // THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1, owner review R9(a)): the
+    // mint stores the image as a fallback and one gesture can afford one
+    // render. Through the ONE door (services/materialtile.h), so a refused
+    // borrow is logged by name instead of discarded.
+    materialtile::mint(db, project, materialGuid, "the tray's Create Material from Image");
 
     updateAssetView(assetItem.selectedGuid);
 }

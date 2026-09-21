@@ -373,6 +373,13 @@ int main(int argc, char **argv)
                 const int kTiles = 8;
                 QImage first, firstAlt;
                 bool same = true, sameAlt = true;
+                // THE CACHES BEHIND THE PICTURE (fix round). Keeping the studio
+                // document bound is the whole optimisation, so "the tiles are
+                // identical" is only half the contract: the mirror must also
+                // hold NOTHING of a finished tile, and must not convert more
+                // materials than the tiles introduced.
+                quint64 buildsPerTile[8] = { 0 };
+                bool buildsFlat = true;
                 for (int i = 0; i < kTiles; ++i) {
                     const bool alt = (i % 2) != 0;
                     QElapsedTimer tileTimer;
@@ -384,6 +391,8 @@ int main(int argc, char **argv)
                     // One line per tile: this binary shares stdout with Ogre's
                     // own log, which interleaves with a partial line.
                     std::printf("    tile %d (%s): %.2f ms\n", i + 1, alt ? "orange" : "grey", ms);
+                    buildsPerTile[i] = loan->held().lastRenderMaterialBuilds;
+                    if (buildsPerTile[i] != 1) buildsFlat = false;
                     if (alt) {
                         if (firstAlt.isNull()) firstAlt = tile;
                         else if (tile != firstAlt) sameAlt = false;
@@ -402,6 +411,29 @@ int main(int argc, char **argv)
                                     QCryptographicHash::Sha256).toHex().constData());
                 CHECK(!first.isNull() && same && !firstAlt.isNull() && sameAlt,
                       "eight tiles of two interleaved materials are byte-identical per material");
+
+                // ---- and the caches did not grow ------------------------
+                const EngineThumbnailRenderer::Held after = loan->held();
+                QString perTile;
+                for (int i = 0; i < kTiles; ++i)
+                    perTile += QStringLiteral("%1%2").arg(i ? " " : "").arg(buildsPerTile[i]);
+                std::printf("    held after %d tiles: %llu mirrored node(s); material "
+                            "conversions per tile: %s\n", kTiles,
+                            (unsigned long long)after.nodes, qPrintable(perTile));
+                CHECK(after.nodes == 0,
+                      QStringLiteral("growth: the renderer's mirror holds no node between "
+                                     "renders (%1)").arg(after.nodes).toUtf8().constData());
+                // ONE CONVERSION PER TILE, FLAT. The loop hands renderMaterial a
+                // fresh iris::PbrMaterial every time, and the mirror's memo is
+                // keyed on the material it is given, so one subject is one
+                // conversion — the eighth tile as much as the first. A number
+                // that GREW with the tile index would be the bound document
+                // re-converting the materials of the tiles before it, which is
+                // exactly the cost a per-request document used to pay by
+                // throwing everything away.
+                CHECK(buildsFlat,
+                      QStringLiteral("growth: every tile costs exactly ONE material conversion "
+                                     "(%1)").arg(perTile).toUtf8().constData());
             }
         }
     }

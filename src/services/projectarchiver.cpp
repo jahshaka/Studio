@@ -603,7 +603,20 @@ void ProjectArchiver::installImportSlice()
     // maps a folder guid to itself), so the archive's guid still names it
     // here. An archive written before the key carries none and the pin stays
     // at the root, which is what it has always done.
-    if (!asset.folder.isEmpty())
+    //
+    // ONLY IF THE FOLDER IS THIS PROJECT'S (fix round). A re-import into the
+    // library that already holds the archive's folders cannot insert them —
+    // `folders.guid` is the table's PRIMARY KEY and ARCHIVE-GUIDS-1 keeps an
+    // imported folder's guid, so every insert fails "UNIQUE constraint failed:
+    // folders.guid" and the new project has none. Writing the column anyway
+    // would name ANOTHER PROJECT'S folder on this project's pin, and
+    // `projectfolders::folderOf` answers with the raw column (projectfolders.
+    // cpp:260-263) — a filing that points outside the project is worse than no
+    // filing, which the tray already handles (an unknown folder comes home to
+    // the root). NULL is the honest answer until ARCHIVE-FOLDERS-2 gives a
+    // colliding folder a fresh guid.
+    if (!asset.folder.isEmpty()
+        && db->fetchFolder(asset.folder).projectGuid == mResult.projectGuid)
         db->setProjectAssetFolder(mResult.projectGuid, localGuid, asset.folder);
     ++mResult.assets;
 

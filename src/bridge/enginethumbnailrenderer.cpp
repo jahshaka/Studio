@@ -178,6 +178,14 @@ void EngineThumbnailRenderer::clearSubject()
     }
 }
 
+EngineThumbnailRenderer::Held EngineThumbnailRenderer::held() const
+{
+    Held out;
+    if (const SceneMirror *m = mirror()) out.nodes = m->mirroredNodeCount();
+    out.lastRenderMaterialBuilds = mLastRenderMaterialBuilds;
+    return out;
+}
+
 Colour EngineThumbnailRenderer::backgroundColour()
 {
     // THE FALLBACK BEHIND THE SKY, and only that (MATPREVIEW-ENV-1). The studio
@@ -199,10 +207,35 @@ void EngineThumbnailRenderer::configureScene(Scene *scene)
 
 void EngineThumbnailRenderer::releaseSubject(bool sceneAlive)
 {
-    // The studio document is this renderer's and dies with it. The base
-    // unbinds the mirror right after this hook, so the nodes it still holds
-    // leave the engine in the ordinary way.
-    (void)sceneAlive;
+    // THE STUDIO DOCUMENT COMES OUT OF THE ENGINE HERE, while everything is
+    // still alive (this hook runs first in release(), before the mirror is
+    // dropped and long before destroyScene). Since PREVIEWENV-2 the mirror
+    // stays BOUND to it between renders, so this class is the one that has to
+    // put it down.
+    //
+    // WHEN THE SCENE IS ALREADY GONE THERE IS NOTHING SAFE TO CALL, and the
+    // fix round's suggestion — unbind anyway, because "setSource(nullptr)
+    // guards its own engine calls" — does not hold at this tree: that function
+    // dereferences the engine Scene unconditionally (scenemirror.cpp ~471-505:
+    // destroyMesh on the wire meshes, setGrid, removeNode/destroyMesh/
+    // destroyMaterial on the horizon and the GI-volume overlay, destroyMaterial
+    // on the highlight, then releaseEntry for every entry). Calling it with the
+    // Engine gone is a read-after-free where the present behaviour is one
+    // warning: ~SceneMirror takes the document out of the dead manager and
+    // iris::Scene::setGraphScene says so by design ("SceneMirror must unbind
+    // (setSource(null)) before Engine::destroyScene()", scene.cpp:1083-1093),
+    // dropping every stale handle instead of walking it.
+    //
+    // AND NO SHIPPING PATH REACHES IT: EngineHost::shutdown calls
+    // EngineThumbnailRenderer::shutdown() (enginehost.cpp:583) BEFORE
+    // mEngine.reset(), and ThumbnailGenerator::shutdown() does the same on the
+    // window-close path — both with the Engine alive, so `sceneAlive` is true
+    // and the unbind below is the one that runs. What is left is borrow()'s
+    // "a new Engine" branch with the old one already expired (a second boot in
+    // one test process); the real answer there is to let go of the renderer
+    // before the Engine, which is what both shutdown calls do.
+    if (sceneAlive && mirror() && mirror()->source() == mStudio && mStudio)
+        mirror()->setSource(nullptr);
     mStudio.reset();
     mSphere.reset();
 }
@@ -396,6 +429,11 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // when the answer is the same — the whole cost this lane is about.
     if (mirror()->source() != document) mirror()->setSource(document);
     mirror()->sync();
+    // THE SUBJECT'S OWN COST, captured where the counter means something: the
+    // mirror zeroes its material-build counter at the top of every sync, and
+    // this is the sync that mirrored the subject (thumbnails.studio_env's
+    // growth arm reads it through held()).
+    mLastRenderMaterialBuilds = mirror()->materialBuildCount();
     // The sky — the studio environment for every request (studioDocument).
     // NOT applyEnvironment, deliberately: the ambient is the environment's own
     // (configureScene), and a thumbnail takes no shadow, GI or post row from a
