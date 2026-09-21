@@ -21,7 +21,7 @@ For more information see the LICENSE file
 #include "viewport/gizmo.h"
 #include "viewport/ieditorviewport.h"
 #include "viewport/flystep.h"
-#include "viewport/flyspeedsettings.h"
+#include "viewport/cameraspeed.h"
 
 #include <QDebug>
 using namespace iris;
@@ -204,17 +204,23 @@ bool EditorCameraController::canLeftMouseDrag()
 }
 
 // THE WHEEL HAS TWO JOBS (owner request 2026-09-07, Unreal's model). While the
-// RIGHT BUTTON IS HELD the camera is flying, and the wheel steps the fly speed
-// — the same value the toolbar dropdown sets, persisted, with the toast the
-// viewport shows. Otherwise it dollies, exactly as it always has. The two can
-// never fight: flying and not flying are disjoint, and dollying while flying
-// was never a gesture anyone could make on purpose (it fought the fly keys).
+// RIGHT BUTTON IS HELD the camera is flying, and the wheel steps THE camera
+// speed — the one integer the toolbar button shows and the VR fly rides on
+// too (CameraSpeed, owner R15), persisted, with the toast the viewport shows.
+// Otherwise it dollies, exactly as it always has. The two can never fight:
+// flying and not flying are disjoint, and dollying while flying was never a
+// gesture anyone could make on purpose (it fought the fly keys).
+//
+// ONE NOTCH IS ONE, AND SHIFT IS FIVE: the dial is 32 steps wide now rather
+// than a six-rung ladder, so crossing it a notch at a time is a long scroll —
+// and Shift is already this gesture's "more of that" key on the fly itself.
 void EditorCameraController::onMouseWheel(int delta)
 {
     if (rightMouseDown) {
         if (delta != 0) {
-            FlySpeedSettings::step(FlySpeedSettings::Editor, delta > 0 ? 1 : -1);
-            if (sceneWidget) sceneWidget->onFlySpeedChanged();
+            const int stride = heldKeys.contains(Qt::Key_Shift) ? 5 : 1;
+            CameraSpeed::step(delta > 0 ? stride : -stride);
+            if (sceneWidget) sceneWidget->onCameraSpeedChanged();
         }
         return;
     }
@@ -342,8 +348,9 @@ void EditorCameraController::updateCameraRot()
 // keys on the arrow cluster, so the whole fly stays under one hand without
 // crossing back to the letters.
 //
-// SPEED is FlySpeedSettings::speed(Editor) — linearSpeed is the base and the
-// user-chosen multiplier rides on it (toolbar dropdown / wheel while flying).
+// SPEED is CameraSpeed::editorSpeed() — linearSpeed is this surface's base
+// (8 u/s) and the user's one camera-speed dial rides on it as the factor n/10
+// (toolbar speed button / wheel while flying).
 void EditorCameraController::update(float dt)
 {
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
@@ -407,7 +414,7 @@ void EditorCameraController::update(float dt)
     if (move.isNull()) return;
 
     const float boost = heldKeys.contains(Qt::Key_Shift) ? flystep::kBoost : 1.0f;
-    const float speed = linearSpeed * FlySpeedSettings::multiplier(FlySpeedSettings::Editor);
+    const float speed = CameraSpeed::applyTo(linearSpeed);
     camera->setLocalPos(camera->getLocalPos() + move.normalized() * speed * boost * dt);
     camera->update(0);
 }

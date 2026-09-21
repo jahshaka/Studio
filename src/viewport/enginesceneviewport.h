@@ -113,7 +113,7 @@ public:
     void setPipEnabled(bool on) override;
     double pipSize() const override { return mPipSize; }
     void setPipSize(double fraction) override;
-    void onFlySpeedChanged() override { emit mEvents.flySpeedChanged(); }
+    void onCameraSpeedChanged() override { emit mEvents.cameraSpeedChanged(); }
 
 private:
     /// The wide-aspect FRAMING HOLD aspect for the camera this view is

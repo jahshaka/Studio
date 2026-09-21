@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/enginerenderdriver.h"
 #include "services/vrworld.h"
+#include "viewport/cameraspeed.h"
 #include "viewport/flystep.h"
 #include "viewport/ieditorviewport.h"
 
@@ -301,14 +302,17 @@ void EditorVrPreview::release()
     mEngine.reset();
 }
 
-/// THE WEARER'S SPEED IS THE PROJECT'S (lane VR-WORLD-1) — `world.vr`'s
-/// `flySpeed` in metres per second, with this session's `vr.locomotion`
-/// override if it has one, so the keys and the thumbstick fly at exactly one
-/// speed. It was the desktop editor's camera speed until VR had a setting of
-/// its own.
+/// THE WEARER'S SPEED IS THE PROJECT'S, TIMES THE PERSON'S DIAL (lane
+/// VR-WORLD-1, then FLYSPEED-1) — `world.vr`'s `flySpeed` in metres per second
+/// is the PROJECT's base, with this session's `vr.locomotion` override if it
+/// has one, and `CameraSpeed`'s factor n/10 on top of it: how fast a world is
+/// meant to be walked is authored, how fast the person at the controls wants to
+/// move today is a preference, and the keys and the thumbstick fly at exactly
+/// one number either way.
 float EditorVrPreview::wearerSpeed() const
 {
-    return vrworld::resolve(mViewport ? mViewport->getScene() : iris::ScenePtr()).flySpeed;
+    return CameraSpeed::applyTo(
+        vrworld::resolve(mViewport ? mViewport->getScene() : iris::ScenePtr()).flySpeed);
 }
 
 void EditorVrPreview::applyRig(const vrorigin::Rig &rig)

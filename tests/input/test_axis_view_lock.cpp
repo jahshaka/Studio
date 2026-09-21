@@ -54,7 +54,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/editorcameracontroller.h"
 #include "viewport/orbitalcameracontroller.h"
-#include "viewport/flyspeedsettings.h"
+#include "viewport/cameraspeed.h"
 #include "viewport/flystep.h"
 
 static int failures = 0;
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     // A camera node IS an Ogre scene node since the scene-graph swap, so even a
     // suite that only moves one needs the headless engine underneath it.
     enginetest::DocumentGraph graph("axis-view-lock-ogre.log");
-    FlySpeedSettings::reset();
+    CameraSpeed::reset();
 
     // ---- 1. the free camera, TOP view, locked ----------------------------
     {

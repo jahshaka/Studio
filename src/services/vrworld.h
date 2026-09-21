@@ -43,7 +43,7 @@ For more information see the LICENSE file
 // WHY A FILE-SCOPE HOLDER rather than a service handed around: the three
 // consumers (the interaction's per-frame step, the editor preview's fly, the
 // Player's fly) sit inside per-frame update maths with no services plumbed
-// through, which is the same argument FlySpeedSettings and SnapSettings carry.
+// through, which is the same argument CameraSpeed and SnapSettings carry.
 // The state is a session's, and there is exactly one session per process
 // (Engine::beginVrSession refuses a second).
 

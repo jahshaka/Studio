@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "player/playermousecontroller.h"
 #include "viewport/keyboardstate.h"
-#include "viewport/flyspeedsettings.h"
+#include "viewport/cameraspeed.h"
 #include "viewport/flystep.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -105,14 +105,15 @@ iris::Vec3 PlayerMouseController::calculateMouseRay(const QPointF& pos)
     return final_ray_coords.normalized();
 }
 
-// The wheel steps the free camera's speed while the RIGHT BUTTON is held — the
-// editor's gesture (EditorCameraController::onMouseWheel), on the player's own
-// FlySpeedSettings surface. It did nothing at all before; the player has no
-// dolly to conflict with.
+// The wheel steps the camera speed while the RIGHT BUTTON is held — the
+// editor's gesture (EditorCameraController::onMouseWheel) on THE one dial
+// (CameraSpeed, owner R15: the Player had a second multiplier of its own until
+// this lane). It did nothing at all before; the player has no dolly to conflict
+// with.
 void PlayerMouseController::onMouseWheel(int delta)
 {
     if (!rightMouseDown || delta == 0) return;
-    FlySpeedSettings::step(FlySpeedSettings::Player, delta > 0 ? 1 : -1);
+    CameraSpeed::step(delta > 0 ? 1 : -1);
     if (onSpeedChanged) onSpeedChanged();
 }
 
@@ -279,8 +280,7 @@ void PlayerMouseController::setScene(iris::ScenePtr scene)
 
 void PlayerMouseController::update(float dt)
 {
-    const float linearSpeed =
-        15.0f * FlySpeedSettings::multiplier(FlySpeedSettings::Player) * dt;
+    const float linearSpeed = CameraSpeed::applyTo(15.0f) * dt;
     if (!_isPlaying) {
         this->doGodMode(dt);
 		return;
@@ -316,13 +316,12 @@ void PlayerMouseController::update(float dt)
 //     aliases of W/A/S/D in the editor fly. The player shipped with arrows
 //     only, the editor with WASD only, and moving between the two spaces meant
 //     changing hands — one lookup table, both spellings, in both places.
-//   * The speed is the persisted FlySpeedSettings multiplier on this surface's
-//     own base (25 u/s, `movementSpeed`), stepped by the toolbar dropdown and
+//   * The speed is this surface's own base (25 u/s, `movementSpeed`) times the
+//     persisted CameraSpeed factor, stepped by the toolbar's speed button and
 //     by the wheel while the right button is held (onMouseWheel).
 void PlayerMouseController::doGodMode(float dt)
 {
-    const float linearSpeed =
-        movementSpeed * FlySpeedSettings::multiplier(FlySpeedSettings::Player) * dt;
+    const float linearSpeed = CameraSpeed::applyTo(movementSpeed) * dt;
     // SAME STEP AS PLAY MODE, and as the editor's (S13): viewport/flystep.h.
     // This function's own version differed in one detail nobody wanted — it
     // strafed along the camera's ROLLED right rather than a horizontal one.

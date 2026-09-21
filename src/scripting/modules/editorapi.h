@@ -69,8 +69,9 @@ public:
     Q_INVOKABLE bool setViewCamera(const QVariant &id = QVariant());
     Q_INVOKABLE QVariantMap pip();
     Q_INVOKABLE QVariantMap setPip(const QVariantMap &change = QVariantMap());
-    Q_INVOKABLE QVariantMap flySpeed();
-    Q_INVOKABLE QVariantMap setFlySpeed(const QVariant &multiplier);
+    /// THE camera speed, one integer 1..32 for every surface (owner R15).
+    /// Reads with no argument; sets with an integer, "faster" or "slower".
+    Q_INVOKABLE QVariantMap cameraSpeed(const QVariant &speed = QVariant());
     Q_INVOKABLE QString cameraMode();
     Q_INVOKABLE bool setCameraMode(const QString &mode);
     Q_INVOKABLE QString gizmoSpace();
@@ -129,6 +130,9 @@ public:
     Q_INVOKABLE bool importAssets(const QVariant &paths);
 
 private:
+    /// What `cameraSpeed` answers with, read or written: the dial, its factor,
+    /// and the three surfaces' effective speeds.
+    QVariantMap cameraSpeedState() const;
     /// Is the PLAYER page the visible space? (editorapi.cpp's note: `frame` and
     /// `screenshot` act on the space that owns the screen.)
     bool playerHasTheScreen() const;
