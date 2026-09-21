@@ -222,6 +222,15 @@ void ShaderAssetWidget::setUpDatabase(Database * db)
 
 void ShaderAssetWidget::refresh()
 {
+	// A REPOPULATE DONE NOW SUBSUMES THE ONE QUEUED (TABS-SMALL-1). The
+	// coalesced slot above and this function do the same work from the same
+	// model, so a caller that refreshes synchronously — the page does, on
+	// every gesture that changes what the library or the project holds — was
+	// leaving a second full repopulate armed for the next event-loop turn.
+	// That is not just waste: a repopulate DELETES every item (the tiles are
+	// QListWidgetItems), so the fewer unprompted ones there are the fewer
+	// windows exist in which something holds a tile that has gone.
+	mRefreshPending = false;
 	updateAssetView();
 }
 

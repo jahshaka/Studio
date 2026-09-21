@@ -313,16 +313,20 @@ assert(drawerGuids().indexOf(filed) >= 0,
 
 // WITH A GRAPH: the node editor opens a graph, and a values-only bundle has
 // none — `materials.open` refuses one, which is the page.s own rule.
+//
+// CREATED AND OPENED IN ONE BREATH, with no drawer read in between
+// (TABS-SMALL-1). DRAWERS-1 left a `materials.projectDrawer()` call here with
+// a comment calling it load-bearing — "the open asks the drawer whether it
+// holds the guid" — and it is not: an open is not gated on a tile, it refills
+// the view and carries on (EffectsPage::openDocument), which is what this arm
+// holds it to. The drawer is read AFTER the open instead, where it proves what
+// it is actually for: the new material has a tile without anybody asking.
 var tabbed = materials.create("Tabbed Material", { graph: true, folder: "" });
-// READ THE DRAWER FIRST, and that is not a formality: the module's drawer
-// repopulates on the next event-loop TURN (the one announcement is coalesced),
-// a --script run holds the loop for its whole run, and `materials.open` asks
-// the drawer whether it holds the guid. Reading the drawer flushes the pending
-// repopulate — which is the same thing a person gets for free.
-assert(drawerGuids().indexOf(tabbed) >= 0, "the new material is in the module's drawer");
 var opened = materials.open(tabbed, { scope: "project" });
 assert(opened && opened.guid === tabbed && opened.scope === "project",
-       "a project copy opens as a tab " + J(opened));
+       "a project copy opens as a tab, created in the breath before " + J(opened));
+assert(drawerGuids().indexOf(tabbed) >= 0,
+       "... and the module's drawer has its tile " + J(materials.projectDrawer()));
 function tabGuids() { return materials.tabs().map(function (t) { return t.guid; }); }
 assert(tabGuids().indexOf(tabbed) >= 0, "... and it is in materials.tabs()");
 assert(assets.removeFromProject(tabbed) === true,
