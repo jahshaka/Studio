@@ -38,6 +38,25 @@ QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QSt
     return mime;
 }
 
+QMimeData *mimeForMany(int type, const QString &name, const QString &mesh,
+                       const QString &guid, const QStringList &guids)
+{
+    QMimeData *mime = mimeFor(type, name, mesh, guid);
+    if (guids.size() <= 1) return mime;   // one tile: the four-slot payload, unchanged
+
+    QByteArray encoded;
+    QDataStream stream(&encoded, QIODevice::WriteOnly);
+    QMap<int, QVariant> roleDataMap;
+    roleDataMap[TypeSlot] = QVariant(type);
+    roleDataMap[NameSlot] = QVariant(name);
+    roleDataMap[MeshSlot] = QVariant(mesh);
+    roleDataMap[GuidSlot] = QVariant(guid);
+    roleDataMap[GuidsSlot] = QVariant(guids);
+    stream << roleDataMap;
+    mime->setData(QString::fromLatin1(format()), encoded);
+    return mime;
+}
+
 bool isAssetDrag(const QMimeData *mime)
 {
     return mime && mime->hasFormat(QString::fromLatin1(format()));
@@ -65,6 +84,15 @@ int typeOf(const QMimeData *mime)
 QString guidOf(const QMimeData *mime)
 {
     return roles(mime).value(GuidSlot).toString();
+}
+
+QStringList guidsOf(const QMimeData *mime)
+{
+    const QMap<int, QVariant> role = roles(mime);
+    const QStringList many = role.value(GuidsSlot).toStringList();
+    if (!many.isEmpty()) return many;
+    const QString one = role.value(GuidSlot).toString();
+    return one.isEmpty() ? QStringList() : QStringList{ one };
 }
 
 } // namespace AssetDrag

@@ -280,6 +280,13 @@ public:
     /// tray rule (services/assettray.h) — the same listing assets.list({tray:
     /// true}) answers with.
     void updateAssetView(const QString &path, int filter = 0);
+    /// WHERE A TILE IS, for a synthesised gesture (DRAWERS-1,
+    /// `editor.dragAssetToTray`): the widget a drop is posted to — THIS panel,
+    /// which is the one drop owner here (see AssetWidget::folderItemAt) — and
+    /// the point at the centre of `guid`'s tile in that widget's coordinates.
+    /// A null point when the tray is not showing it, or is not laid out.
+    QWidget *dropTarget() const;
+    QPoint tileCentre(const QString &guid);
     /// What the tray is SHOWING, in order: [{guid, name, folder}] (`name` is
     /// the catalog name for an asset, the label for a folder) — the
     /// editor.trayAssets verb, which is how a suite proves the panel and the
@@ -330,11 +337,19 @@ signals:
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
     void dragEnterEvent(QDragEnterEvent*) override;
+    void dragMoveEvent(QDragMoveEvent*) override;
     void dropEvent(QDropEvent*) override;
 
     /// The texture/material .jaf exports' payload: each member guid's stored
     /// bytes copied into `<writePath>/assets/` under its display name.
     void copyMemberFilesForExport(const QStringList &members, const QString &writePath);
+
+    /// The FOLDER tile at a viewport point, or null — the internal drop's
+    /// target test (DRAWERS-1).
+    QListWidgetItem *folderItemAt(const QPoint &pos) const;
+    /// Files `guids` in `folderGuid`, undoably and as ONE step, and repopulates
+    /// (the body of `assets.moveToFolder`, on the editor's stack).
+    void moveToFolder(const QStringList &guids, const QString &folderGuid);
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem* item);
@@ -346,9 +361,7 @@ protected slots:
     void assetViewClicked(QListWidgetItem*);
     void assetViewDblClicked(QListWidgetItem*);
 
-    void updateAssetItem();
 
-    void renameTreeItem();
     void renameViewItem();
     void favoriteItem();
     void refreshThumbnail();
@@ -375,9 +388,14 @@ protected slots:
 
     void deleteTreeFolder();
     void deleteItem();
-    void openAtFolder();
     void createSky();
     void createFolder();
+    /// Right-click on a FOLDER tile (DRAWERS-1): the project-side delete — the
+    /// folder goes and everything in it moves up to its parent.
+    void deleteFolderItem();
+    /// Right-click on the BACKGROUND > Create > Material (owner review item 4):
+    /// `materials.create(name, {folder})` at the folder the user is looking at.
+    void createMaterial();
     void importAssetB();
     /// `askImportSettings` opens the import dialog once per MODEL file first
     /// (SPECS/IMPORT_DIALOG_SPEC.md §8). True for the panel's own gestures — a
@@ -435,6 +453,13 @@ private:
 	QSize currentSize;
 
     bool draggingItem;
+
+    /// ONE toast for the panel, reused (ui/pages/assetview.cpp's pattern): a
+    /// folder refusal cannot be a modal box — the move runs one event-loop
+    /// turn after the drop, and inside a script's run through
+    /// editor.dragAssetToTray.
+    class Toast *mToast = nullptr;
+    class Toast *toast();
 };
 
 #endif // ASSETWIDGET_H

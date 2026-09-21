@@ -228,6 +228,10 @@ public:
 	/// By tab INDEX (a number) or by guid (the first tab in bar order).
 	bool activateMaterialTab(const QVariant &tabOrGuid);
 	bool closeMaterialTab(const QVariant &tabOrGuid);
+	/// WHAT THE PROJECT DRAWER IS SHOWING, in order (DRAWERS-1): the
+	/// `materials.projectDrawer()` verb, through the page delegate — the one
+	/// route the module's verbs take. Empty with no drawer.
+	QVariantList projectDrawerTiles() const;
 
     ~EffectsPage();
 

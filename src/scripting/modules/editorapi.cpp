@@ -58,6 +58,8 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QMimeData>
 #include <memory>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include "ui/controls/assetdrag.h"
 
 using namespace scriptmod;
@@ -770,6 +772,21 @@ QVector<VerbInfo> EditorApi::verbs() const
           "gesture the owner performs with a mouse; everything it reaches is the viewport's own "
           "handler, so it cannot drift from what a person gets.",
           Needs::Engine },
+        { "dragAssetToTray", "editor.dragAssetToTray(guidOrGuids, folderGuid, {action}) -> bool",
+          "DROPS TILES ON A FOLDER TILE IN THE EDITOR'S ASSET TRAY, for real (DRAWERS-1): it "
+          "posts the same QDragEnter/QDragMove/QDrop events the tray's own drag posts, aimed at "
+          "the CENTRE of that folder's tile, carrying the one asset payload "
+          "(ui/controls/assetdrag.h) with every dragged guid in it — which is the gesture that "
+          "files a multi-selection, and the only way a script or an MCP client can perform it. "
+          "The move itself is `assets.moveToFolder`, and it is one undo step either way; this "
+          "verb exists so the WIDGET's half — the payload, the drop target under the cursor, the "
+          "panel's own handler — is driven by a test rather than assumed. `action` is 'drop' (the "
+          "default, the whole gesture) or 'move' (hover only, which files nothing). A 'drop' also "
+          "spends the turn of the event loop the panel defers the move into (a drop handler runs "
+          "inside the drag source's nested loop, so the move cannot happen there), and answers "
+          "once it has happened. False when the tray is not showing that folder, when it is not "
+          "laid out yet, or when the tile under the cursor is not a folder.",
+          Needs::Window },
         { "dropTargetAt", "editor.dropTargetAt(x, y) -> {id, name, locked} | null",
           "WHAT A DROP AT THIS VIEWPORT PIXEL APPLIES TO — the node a dragged MATERIAL or IMAGE "
           "would land on. `locked` is the hierarchy's lock (the node's `pickable` flag, which is "
@@ -2335,6 +2352,94 @@ QVariant EditorApi::dropTargetAt(double x, double y)
     // from "there is nothing here", and only one of them spawns an image plane.
     out.insert("locked", locked);
     return out;
+}
+
+bool EditorApi::dragAssetToTray(const QVariant &guidOrGuids, const QString &folderGuid,
+                                const QVariantMap &options)
+{
+    if (!host.mainWindow || !host.mainWindow->assetTray())
+        return fail("editor.dragAssetToTray: this verb needs the editor window (a "
+                    "--script/--headless run has no tray)");
+    AssetWidget *tray = host.mainWindow->assetTray();
+
+    static const QStringList kActions{ QStringLiteral("move"), QStringLiteral("drop") };
+    const QString action = options.value(QStringLiteral("action"),
+                                         QStringLiteral("drop")).toString().toLower();
+    if (!kActions.contains(action))
+        return fail(QStringLiteral("editor.dragAssetToTray: action must be one of %1")
+                        .arg(kActions.join(QStringLiteral(", "))));
+
+    QStringList guids;
+    const QVariant picked = scriptmod::normalizeJs(guidOrGuids);
+    if (picked.typeId() == QMetaType::QVariantList) {
+        for (const QVariant &value : picked.toList()) guids << value.toString();
+    } else {
+        guids << picked.toString();
+    }
+    guids.removeAll(QString());
+    if (guids.isEmpty())
+        return fail("editor.dragAssetToTray: a guid (or an array of guids) is required");
+
+    const QPoint centre = tray->tileCentre(folderGuid);
+    if (centre.isNull())
+        return fail(QStringLiteral("editor.dragAssetToTray: the tray is not showing a tile for "
+                                   "'%1' (open the folder that holds it, and make sure the "
+                                   "Assets tab is in front)").arg(folderGuid));
+
+    QWidget *target = tray->dropTarget();
+    if (!target) return fail("editor.dragAssetToTray: the tray has no list viewport");
+
+    // ONE payload builder, the one the tray's own drag uses — a synthesised
+    // drag that built its own map would be testing itself.
+    const AssetRecord row = host.db ? host.db->fetchAsset(guids.first()) : AssetRecord();
+    auto mimeData = [&] {
+        return AssetDrag::mimeForMany(row.type, row.name, QString(), guids.first(), guids);
+    };
+
+    {
+        std::unique_ptr<QMimeData> mime(mimeData());
+        QDragEnterEvent event(centre, Qt::MoveAction, mime.get(),
+                              Qt::LeftButton, Qt::NoModifier);
+        event.ignore();
+        QApplication::sendEvent(target, &event);
+        // Qt never delivers a move or a drop to a widget that ignored the
+        // enter, and neither may this.
+        if (!event.isAccepted())
+            return refuse(QStringLiteral("editor.dragAssetToTray: the tray refused the drag "
+                                         "(the panel takes no asset drag at all)"));
+    }
+    {
+        std::unique_ptr<QMimeData> mime(mimeData());
+        QDragMoveEvent event(centre, Qt::MoveAction, mime.get(),
+                             Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(target, &event);
+        // THE ANSWER THE CURSOR GIVES A PERSON: only a FOLDER tile takes a
+        // move, and a drop that the panel would refuse must be refused here
+        // too rather than reported as done.
+        if (!event.isAccepted())
+            return refuse(QStringLiteral("editor.dragAssetToTray: the tray takes no drop on "
+                                         "'%1' — only a folder tile does").arg(folderGuid));
+    }
+    if (action == QLatin1String("move")) return true;
+    {
+        std::unique_ptr<QMimeData> mime(mimeData());
+        QDropEvent event(QPointF(centre), Qt::MoveAction, mime.get(),
+                         Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(target, &event);
+        if (!event.isAccepted())
+            return refuse(QStringLiteral("editor.dragAssetToTray: the tray refused the drop on "
+                                         "'%1'").arg(folderGuid));
+    }
+    // AND THE TURN OF THE LOOP THE DROP DEFERS INTO. The panel does the move
+    // on the next event-loop turn on purpose — a drop handler runs inside the
+    // drag SOURCE's nested loop, and repopulating the list the source is
+    // dragging from is the shape of the sticky-drag defect
+    // (ui/panels/singledragowner.h) — so the gesture is not over when the
+    // event returns. A person's drop gets that turn for free; a script holds
+    // the loop for its whole run, so this verb spends it here and answers
+    // once the move has actually happened.
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    return true;
 }
 
 bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVariantMap &options)

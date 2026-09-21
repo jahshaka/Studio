@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "../core/graphdefinition.h"
 #include "services/shippedassets.h"
 #include "services/materialbundle.h"
+#include "services/projectfolders.h"
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/materialmembers.h"
@@ -211,13 +212,24 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "(the exposure is derived from it), and `softboxes` the panels with their directions, half-extents "
           "in degrees and radiances.",
           Needs::Document },
-        { "create", "materials.create(name, {graph}) -> guid",
+        { "create", "materials.create(name, {graph, folder}) -> guid",
           "Creates a LIBRARY material bundle: ONE Material asset whose definition is its own file in the "
           "content-addressed store, naming its textures by guid. With {graph: true} the definition also carries a "
           "node graph as its PAYLOAD and the graph opens as the current one for graph.* verbs — there is no "
           "separate shader/effect asset any more, and no second row. Adding it to a project is a separate gesture "
-          "(assets.addToProject), which pins the bundle and its members at the version the project took.",
+          "(assets.addToProject), which pins the bundle and its members at the version the project took. "
+          "{folder} DOES BOTH IN ONE CALL (DRAWERS-1): the material is pinned into the OPEN project and filed in "
+          "that folder — a folder guid from assets.folders(), or the project's own guid (or an empty string) for "
+          "the root — and both project drawers, the editor's asset tray and the Materials module's, show it at "
+          "once. It is what the tray's right-click > Create Material passes. Without the key nothing is pinned.",
           Needs::Document },
+        { "projectDrawer", "materials.projectDrawer() -> [{guid, name}]",
+          "What the Materials module's PROJECT drawer is showing, in order — read off the widget, so a script "
+          "(and scripting.e2e.tray_panel) can prove the two project drawers are ONE list. The drawer is the "
+          "project's materials wherever they are filed: it has no folder navigation of its own, so a material "
+          "in a folder the user made in the editor's tray is listed here all the same. Refuses (without "
+          "throwing) in a session with no Materials module.",
+          Needs::Window },
         { "addTexture", "materials.addTexture(materialGuid, pathOrGuid, {slot}) -> textureGuid",
           "Puts an image on a material as a MEMBER. A path from anywhere on disk is imported through the one "
           "import pipeline at that moment, keyed on its CONTENT (so picking the same image twice answers the same "
@@ -723,9 +735,57 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     // fallback tile stays.
     thumbrebuild::rebuildOne(host.db, host.project, assetGuid, EngineHost::instance().engine());
 
+    // `folder` PUTS IT IN THE PROJECT, FILED (DRAWERS-1, the owner's "creating
+    // in the project should add it to the project drawer in Materials
+    // automatically"). Without the key this stays what it has always been: a
+    // library bundle, and adding it to a project is the separate gesture
+    // `assets.addToProject`. With it — the editor tray's right-click > Create
+    // Material passes the folder the user is looking at, the project's own
+    // guid at the root — the material is pinned into the open project and
+    // filed there, and the ONE announcement repopulates both drawers.
+    if (options.contains(QStringLiteral("folder"))) {
+        if (!host.project || host.project->getProjectGuid().isEmpty()) {
+            fail("materials.create: {folder} files the material in the OPEN project, and no "
+                 "project is open");
+            return QString();
+        }
+        const ProjectAssets::Result pinned = ProjectAssets::addToProject(
+            assetGuid, host.db, host.project, ProjectAssets::AddKind::Direct);
+        if (!pinned.ok()) {
+            fail(QStringLiteral("materials.create: %1").arg(pinned.error));
+            return QString();
+        }
+        const QString folder = options.value(QStringLiteral("folder")).toString();
+        if (!folder.isEmpty() && folder != host.project->getProjectGuid()) {
+            const projectfolders::Result filed = projectfolders::moveTo(
+                host.db, host.project->getProjectGuid(), { assetGuid }, folder);
+            if (!filed.ok) {
+                fail(QStringLiteral("materials.create: %1").arg(filed.error));
+                return QString();
+            }
+        }
+        projectfolders::announce(host.project->getProjectGuid());
+    }
+
     // Adopt the freshly built graph as the current one directly.
     if (graph && mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
     return assetGuid;
+}
+
+QVariantList MaterialsApi::projectDrawer()
+{
+    // THE MODULE'S PROJECT DRAWER, AS THE WIDGET SHOWS IT (DRAWERS-1). It
+    // reads the live drawer rather than re-deriving the listing, because the
+    // point of the verb is to prove that the two drawers are one list: a
+    // suite compares this with editor.trayAssets() filtered to materials.
+    // Through the page delegate, like every other verb here — a process-wide
+    // static pointing at the live widget was the first cut and is gone.
+    if (!mPage.projectDrawer) {
+        refuse("materials.projectDrawer: the Materials module's project drawer is not built "
+               "in this session");
+        return QVariantList();
+    }
+    return mPage.projectDrawer();
 }
 
 QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pathOrGuid,

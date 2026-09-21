@@ -69,6 +69,10 @@ bool Database::hasDependencies(const QString &) { return false; }
 QStringList Database::hasMultipleDependers(const QString &) { return QStringList(); }
 QStringList Database::deleteFolderAndDependencies(const QString &, bool *) { return QStringList(); }
 bool Database::deleteFolder(const QString &) { return true; }
+// ProjectMembership installs this at its first instance() (the real
+// projectmembership.cpp is in this target since DRAWERS-1): a dependency edge
+// is a USE, and the tray listens for it. Nothing in this suite writes one.
+void Database::setDependencyListener(std::function<void(const QString &)>) {}
 // The project drawer's Delete is the ONE project-side remove now (phase 2:
 // the module's private 130-line delete is gone). This suite is about the
 // widget's library HANDLE, so the stub answers "nothing happened".
@@ -107,4 +111,14 @@ QVector<AssetRecord> list(Database *db, const QString &, const QString &, int, b
     ++gFetchChildAssetsCalls;
     return QVector<AssetRecord>();
 }
+// The drawer is FLAT since DRAWERS-1 — the project's materials wherever they
+// are filed — so the listing it asks for is `listAll`. Same stub, same
+// question: which handle did the widget keep?
+QVector<AssetRecord> listAll(Database *db, const QString &, int, bool)
+{
+    gLastFetchChildAssetsHandle = db;
+    ++gFetchChildAssetsCalls;
+    return QVector<AssetRecord>();
+}
 }   // namespace assettray
+

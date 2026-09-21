@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QMap>
 #include <QString>
+#include <QStringList>
 #include <QVariant>
 
 class QMimeData;
@@ -37,7 +38,11 @@ class QMimeData;
 namespace AssetDrag
 {
 
-enum Slot { TypeSlot = 0, NameSlot = 1, MeshSlot = 2, GuidSlot = 3 };
+///   4  EVERY guid of the gesture  (DRAWERS-1) — present only when more than
+///                                      one tile was dragged; slot 3 is still
+///                                      the primary one, so every handler that
+///                                      takes a single asset is unchanged.
+enum Slot { TypeSlot = 0, NameSlot = 1, MeshSlot = 2, GuidSlot = 3, GuidsSlot = 4 };
 
 /// The MIME type every asset drag uses. Qt's own item-view name, kept because
 /// item views already produce and consume it.
@@ -46,6 +51,13 @@ const char *format();
 /// A QMimeData carrying those four slots. Caller owns it (hand it straight to
 /// QDrag::setMimeData, which takes ownership).
 QMimeData *mimeFor(int type, const QString &name, const QString &mesh, const QString &guid);
+
+/// THE SAME PAYLOAD FOR A MULTI-SELECTION (DRAWERS-1): the four slots describe
+/// the tile under the cursor, and slot 4 carries every guid the user picked up.
+/// A one-tile gesture produces exactly `mimeFor`'s payload — no handler sees a
+/// new shape unless it asks for one.
+QMimeData *mimeForMany(int type, const QString &name, const QString &mesh,
+                       const QString &guid, const QStringList &guids);
 
 /// Is this an asset drag at all?
 bool isAssetDrag(const QMimeData *mime);
@@ -57,6 +69,9 @@ QMap<int, QVariant> roles(const QMimeData *mime);
 /// Slot readers, so a handler never spells an index. -1 / empty when absent.
 int typeOf(const QMimeData *mime);
 QString guidOf(const QMimeData *mime);
+/// Every guid in the gesture — slot 4 when it is there, otherwise the one guid
+/// of slot 3. Empty only when this is not an asset drag.
+QStringList guidsOf(const QMimeData *mime);
 
 } // namespace AssetDrag
 

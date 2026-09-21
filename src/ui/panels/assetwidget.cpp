@@ -65,6 +65,13 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "services/assetdelete.h"
 #include "services/assettray.h"
+#include "services/projectfolders.h"
+#include "services/materialbundle.h"
+#include "services/undoservice.h"
+#include "commands/projectfoldercommand.h"
+#include <memory>
+#include "modules/materials/api/materialsapi.h"
+#include "scripting/scriptengine.h"
 #include "services/projectmembership.h"
 #include "services/avatarassets.h"
 #include "services/assetmetadata.h"
@@ -83,6 +90,7 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 #include "services/loadtimeline.h"
 #include "io/materialreader.h"
+#include "ui/dialogs/toast.h"
 #include "ui/style/panelmetrics.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -170,10 +178,17 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
 	// ONE DRAG OWNER (ui/panels/singledragowner.h): this widget's eventFilter
-	// starts the QDrag, so the view's own machinery stays disarmed. Drops are
-	// untouched — the browser still accepts file URLs. LAST, because
-	// setDragDropMode arms dragEnabled.
+	// starts the QDrag, so the view's own machinery stays disarmed. LAST,
+	// because setDragDropMode arms dragEnabled.
 	singledrag::disarmViewDrag(ui->assetView);
+	// AND ONE DROP OWNER (DRAWERS-1): the PANEL takes every drop — the file
+	// URLs it always took and the internal drop onto a folder tile
+	// (AssetWidget::dropEvent) — so the view is told plainly that it takes
+	// none. It was already declining them, but only because its model refuses
+	// an unknown payload; the day the model accepted one, the view would
+	// swallow the event and the panel's handler would silently stop running.
+	// Said, rather than relied upon.
+	ui->assetView->viewport()->setAcceptDrops(false);
 
 	activeFilter = SettingsManager::getDefaultManager()->getValue("active_filter", 0).toInt();
 	// (The "Show dependencies" checkbox is gone, lane L13: it switched off the
@@ -720,6 +735,26 @@ void AssetWidget::updateAssetView(const QString &path, int filter)
     goUpOneControl->setEnabled(false);
 }
 
+QWidget *AssetWidget::dropTarget() const
+{
+	// The panel itself: the drag events arrive here (see folderItemAt).
+	return const_cast<AssetWidget *>(this);
+}
+
+QPoint AssetWidget::tileCentre(const QString &guid)
+{
+	flushPendingRefresh();
+	for (int i = 0; i < ui->assetView->count(); ++i) {
+		QListWidgetItem *item = ui->assetView->item(i);
+		if (item->data(MODEL_GUID_ROLE).toString() != guid) continue;
+		const QRect rect = ui->assetView->visualItemRect(item);
+		if (rect.isEmpty()) return QPoint();
+		// In THIS WIDGET's coordinates, which is where a drop lands.
+		return ui->assetView->viewport()->mapTo(this, rect.center());
+	}
+	return QPoint();
+}
+
 QVariantList AssetWidget::shownTiles()
 {
     // What the user sees once the event loop turns: a repopulate a pin change
@@ -784,12 +819,26 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
                             if (item) {
                                 auto drag = QPointer<QDrag>(new QDrag(this));
-                                // ONE payload builder (ui/controls/assetdrag.h).
-                                drag->setMimeData(AssetDrag::mimeFor(
+                                // ONE payload builder (ui/controls/assetdrag.h),
+                                // carrying the WHOLE selection (DRAWERS-1): the
+                                // four slots still describe the tile under the
+                                // cursor, so every existing drop handler is
+                                // unchanged, and slot 4 carries every guid the
+                                // user picked up — which is what a drop onto a
+                                // folder tile files. The dragged tile is part of
+                                // the gesture even when it is not selected (a
+                                // press on an unselected tile starts a drag of
+                                // that one thing).
+                                QStringList picked;
+                                for (QListWidgetItem *chosen : ui->assetView->selectedItems())
+                                    picked << chosen->data(MODEL_GUID_ROLE).toString();
+                                const QString primary = item->data(MODEL_GUID_ROLE).toString();
+                                if (!picked.contains(primary)) picked = QStringList{ primary };
+                                drag->setMimeData(AssetDrag::mimeForMany(
                                     item->data(MODEL_TYPE_ROLE).toInt(),
                                     item->data(Qt::UserRole).toString(),
                                     item->data(MODEL_MESH_ROLE).toString(),
-                                    item->data(MODEL_GUID_ROLE).toString()));
+                                    primary, picked));
 
                                 drag->setPixmap(item->icon().pixmap(64, 64));
                                 drag->exec();
@@ -819,15 +868,128 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 	return QObject::eventFilter(watched, event);
 }
 
+// THE DROP TARGET UNDER THE CURSOR, from a point in THIS WIDGET's coordinates
+// (DRAWERS-1). The drag events arrive HERE and not on the list's viewport, and
+// the reason is worth writing down, because the first version of this handler
+// was installed on the viewport and never ran once.
+//
+// The viewport DOES accept drops: `setDragDropMode(DragDrop)` sets it on the
+// view and QAbstractScrollArea syncs the viewport on AcceptDropsChange, so
+// both read true (measured with this exact construction — a QListWidget at
+// DragDrop with dragEnabled cleared by singledragowner.h). What happens is one
+// step later: QAbstractItemView asks its MODEL whether it can take the payload,
+// the list's model declines a four/five-slot map that is not its own internal
+// move, the view ignores the event — and Qt then propagates the drag up to the
+// first ancestor that accepts it, which is this panel (MainWindow sets
+// `assetWidget->setAcceptDrops(true)`). That is also why the file-URL drop has
+// always landed in AssetWidget::dropEvent.
+//
+// So the panel is where the handler belongs, and the list is explicitly told it
+// takes no drops of its own (DropNone in the constructor) rather than left to
+// decline them by accident: the day the model accepts an item-view payload,
+// the view would swallow the event and this handler would go silent with no
+// error anywhere.
+QListWidgetItem *AssetWidget::folderItemAt(const QPoint &pos) const
+{
+	QListWidgetItem *item =
+		ui->assetView->itemAt(ui->assetView->viewport()->mapFrom(
+			const_cast<AssetWidget *>(this), pos));
+	if (!item || item->data(MODEL_ITEM_TYPE).toInt() != MODEL_FOLDER) return nullptr;
+	return item;
+}
+
+// THE PANEL CALLS THE MODEL, AND THE MODEL ANSWERS IN WORDS (DRAWERS-1). Every
+// folder gesture here is the body of the verb it mirrors — one rule set, one
+// wording — and it goes on the editor's undo stack exactly as the verb does on
+// a script's, so one Ctrl+Z takes back a drag of a dozen tiles.
+void AssetWidget::moveToFolder(const QStringList &guids, const QString &folderGuid)
+{
+	if (!db || !project || guids.isEmpty()) return;
+	const QString projectGuid = project->getProjectGuid();
+	if (projectGuid.isEmpty()) return;
+
+	// JUDGED BEFORE ANYTHING IS PUSHED (the same order the verb takes): a
+	// refused move must not leave a step on the user's undo stack, and neither
+	// must a drop onto the folder the rows are already in.
+	const projectfolders::Result judged =
+		projectfolders::judgeMove(db, projectGuid, guids, folderGuid);
+	if (!judged.ok) {
+		// A TOAST, NOT A MODAL. This runs one event-loop turn after a drop —
+		// and, through editor.dragAssetToTray, inside a SCRIPT's run: a modal
+		// box there waits for a click nobody is going to make.
+		toast()->showToast(tr("Move to folder"), judged.error, 3000);
+		return;
+	}
+	if (judged.moved == 0) return;
+
+	auto outcome = std::make_shared<FolderCommandOutcome>();
+	auto *command = new MoveToProjectFolderCommand(db, projectGuid, guids, folderGuid, outcome);
+	if (services && services->undo) {
+		services->undo->push(command);            // redo() runs the move; may self-delete
+	} else {
+		command->redo();
+		delete command;
+	}
+	if (!outcome->error.isEmpty()) {
+		toast()->showToast(tr("Move to folder"), outcome->error, 3000);
+		return;
+	}
+	// NO refresh() HERE (fix round item 10): the model announced the change and
+	// this panel repopulates from that announcement on the next turn. Calling
+	// both repopulated the tray twice for every gesture.
+}
+
+// ONE TOAST FOR THE PANEL, reused — the Assets page's own pattern
+// (ui/pages/assetview.cpp): a new one per message leaks a widget per refusal.
+Toast *AssetWidget::toast()
+{
+	if (!mToast) mToast = new Toast(this);
+	return mToast;
+}
+
 void AssetWidget::dragEnterEvent(QDragEnterEvent *evt)
 {
 	if (evt->mimeData()->hasUrls()) {
 		evt->acceptProposedAction();
+		return;
 	}
+	// THE INTERNAL DROP (DRAWERS-1): a tile, or a whole selection, dropped ON A
+	// FOLDER TILE is a move into that folder. The gesture carries the ONE asset
+	// payload (ui/controls/assetdrag.h) — the same one this panel's own drag
+	// builds — so the enter is accepted for any asset drag and dragMoveEvent
+	// decides, tile by tile, whether this particular pixel takes one.
+	if (AssetDrag::isAssetDrag(evt->mimeData())) evt->acceptProposedAction();
+}
+
+void AssetWidget::dragMoveEvent(QDragMoveEvent *evt)
+{
+	if (evt->mimeData()->hasUrls()) { evt->acceptProposedAction(); return; }
+	if (!AssetDrag::isAssetDrag(evt->mimeData())) { evt->ignore(); return; }
+	// ONLY a folder tile takes a move — over anything else the gesture reads
+	// as refused, which is what the cursor tells the user.
+	if (!folderItemAt(evt->position().toPoint())) { evt->ignore(); return; }
+	evt->setDropAction(Qt::MoveAction);
+	evt->accept();
 }
 
 void AssetWidget::dropEvent(QDropEvent *evt)
 {
+	// An internal drop first: it is the only one that is not a file import.
+	if (!evt->mimeData()->hasUrls() && AssetDrag::isAssetDrag(evt->mimeData())) {
+		QListWidgetItem *folder = folderItemAt(evt->position().toPoint());
+		if (!folder) { evt->ignore(); return; }
+		const QStringList guids = AssetDrag::guidsOf(evt->mimeData());
+		evt->setDropAction(Qt::MoveAction);
+		evt->accept();
+		// DEFERRED out of the handler, like the import below: the move puts a
+		// command on the undo stack and repopulates the list the drag source
+		// still belongs to, and a drop handler is inside the source's nested
+		// event loop.
+		const QString target = folder->data(MODEL_GUID_ROLE).toString();
+		QTimer::singleShot(0, this, [this, guids, target]() { moveToFolder(guids, target); });
+		return;
+	}
+
 	QList<QUrl> droppedUrls = evt->mimeData()->urls();
 	QStringList list;
 	for (auto url : droppedUrls) {
@@ -897,17 +1059,9 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	connect(action, SIGNAL(triggered()), this, SLOT(createFolder()));
 	createMenu->addAction(action);
 
-	//    action = new QAction(QIcon(), "Open in Explorer", this);
-	//    connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
-	//    menu.addAction(action);
-
 	action = new QAction(QIcon(), "Import Asset", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(importAsset()));
 	menu.addAction(action);
-
-	//    action = new QAction(QIcon(), "Rename", this);
-	//    connect(action, SIGNAL(triggered()), this, SLOT(renameTreeItem()));
-	//    menu.addAction(action);
 
 	action = new QAction(QIcon(), "Delete", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(deleteTreeFolder()));
@@ -975,6 +1129,26 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	if (index.isValid()) {
 		auto item = ui->assetView->itemAt(pos);
 		assetItem.wItem = item;
+
+		// A FOLDER HAS TWO ROWS AND THEY ARE ITS OWN (DRAWERS-1). Rename goes
+		// through the folder model's rule (a system folder, a duplicate name
+		// under the same parent), and Delete is the PROJECT-side delete: the
+		// folder goes and everything in it moves up to its parent. It used to
+		// fall through to the asset rows below, where Delete ran
+		// `deleteFolderAndDependencies` — a LIBRARY delete of every row filed
+		// in the folder, from a view of one project.
+		if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
+			action = new QAction(QIcon(), tr("Rename"), this);
+			connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
+			menu.addAction(action);
+
+			action = new QAction(QIcon(), tr("Delete Folder"), this);
+			connect(action, SIGNAL(triggered()), this, SLOT(deleteFolderItem()));
+			menu.addAction(action);
+
+			menu.exec(ui->assetView->mapToGlobal(pos));
+			return;
+		}
 
 		action = new QAction(QIcon(), "Rename", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(renameViewItem()));
@@ -1097,6 +1271,14 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	else {
 		QMenu *createMenu = menu.addMenu("Create");
 
+		// CREATE MATERIAL, ON THE BACKGROUND (DRAWERS-1; the owner: "right
+		// click > Create Material — I think we also need this in the asset
+		// drawer of the editor"). The image row's "Create Material from Image"
+		// is the other half and is on the image itself, where it belongs.
+		action = new QAction(QIcon(), tr("Material"), this);
+		connect(action, SIGNAL(triggered()), this, SLOT(createMaterial()));
+		createMenu->addAction(action);
+
         action = new QAction(QIcon(), "Sky", this);
         connect(action, SIGNAL(triggered()), this, SLOT(createSky()));
         createMenu->addAction(action);
@@ -1109,9 +1291,6 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 		connect(action, SIGNAL(triggered()), this, SLOT(importAssetB()));
 		menu.addAction(action);
 
-		// action = new QAction(QIcon(), "Open in Explorer", this);
-		// connect(action, SIGNAL(triggered()), this, SLOT(openAtFolder()));
-		// menu.addAction(action);
 	}
 
 	menu.exec(ui->assetView->mapToGlobal(pos));
@@ -1173,16 +1352,6 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
         updateAssetView(guid, activeFilter);
         syncTreeAndView(guid);
     }
-}
-
-void AssetWidget::updateAssetItem()
-{
-
-}
-
-void AssetWidget::renameTreeItem()
-{
-
 }
 
 void AssetWidget::renameViewItem()
@@ -1640,32 +1809,59 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
             }
         }
         else {
-            db->renameFolder(guid, newName);
-            populateAssetTree(false);
+            // THE FOLDER MODEL'S RULE (DRAWERS-1): a system folder and a
+            // duplicate under the same parent are refused, with the same
+            // sentence a script gets. A bare `db->renameFolder` was here.
+            const projectfolders::Result result =
+                projectfolders::rename(db, project->getProjectGuid(), guid, newName);
+            if (!result.ok) {
+                toast()->showToast(tr("Rename"), result.error, 3000);
+                refresh();   // the tile is showing the name the user typed
+            }
+            // (A rename that took repopulates from the model's announcement.)
         }
     }
 }
 
 void AssetWidget::deleteTreeFolder()
 {
-	QDir dir(assetItem.selectedPath);
-	if (dir.removeRecursively()) {
-		auto item = assetItem.item;
-		delete item->parent()->takeChild(item->parent()->indexOfChild(item));
+	// THE SAME DELETE THE FOLDER TILE'S IS (DRAWERS-1): the folder row goes and
+	// everything in it moves up to its parent, through the one folder model.
+	// What was here removed a DIRECTORY RECURSIVELY from disk — `QDir(assetItem
+	// .selectedPath).removeRecursively()` — on a path the tree never sets (no
+	// tree item carries Qt::UserRole), for a project layout that has not
+	// existed since reference-with-pin: a project holds no asset files. It
+	// deleted nothing because the path was always empty, and it would have
+	// deleted a user's directory the day anything filled it in.
+	if (!db || !project || !assetItem.item) return;
+	const QString guid = assetItem.item->data(0, MODEL_GUID_ROLE).toString();
+	// WHERE THE USER ENDS UP. The deleted folder may be the one the view is
+	// listing, and `selectedGuid` left pointing at a row that no longer exists
+	// lists nothing at all until the user clicks somewhere — an empty tray that
+	// looks like a data loss. The parent is where the contents went, so it is
+	// where the user goes.
+	const QString parent = db->fetchFolder(guid).parent;
+	const projectfolders::Result result =
+		projectfolders::remove(db, project->getProjectGuid(), guid, true);
+	if (!result.ok) {
+		toast()->showToast(tr("Delete Folder"), result.error, 3000);
+		return;
 	}
+	const QString landing = parent.isEmpty() ? project->getProjectGuid() : parent;
+	assetItem.selectedGuid = landing;
+	refresh();
+	syncTreeAndView(landing);
 }
 
 void AssetWidget::deleteItem()
 {
 	auto item = assetItem.wItem;
 
-	// Delete folder and contents
-	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
-		for (const auto &files : db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-			auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
-			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
-		}
-	}
+	// (THE FOLDER BRANCH IS GONE — DRAWERS-1. A folder tile has its own two
+	// menu rows now and never reaches this function; what stood here ran
+	// `deleteFolderAndDependencies`, a LIBRARY delete of every row filed in the
+	// folder, from a view of ONE project — the opposite of the click, and the
+	// same defect the module's project drawer had fixed in its own copy.)
 
 	// Remove a PINNED library asset from THIS project (code review 2026-09-10):
 	// the panel's Delete used to run the library delete, which under the pin
@@ -1839,11 +2035,6 @@ void AssetWidget::deleteItem()
 	}
 }
 
-void AssetWidget::openAtFolder()
-{
-
-}
-
 void AssetWidget::createSky()
 {
     QListWidgetItem *item = new QListWidgetItem;
@@ -1890,52 +2081,110 @@ void AssetWidget::createSky()
 
 void AssetWidget::createFolder()
 {
-	const QString newFolder = "New Folder";
-	QListWidgetItem *item = new QListWidgetItem;
-	item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setSizeHint(currentSize);
-	item->setTextAlignment(Qt::AlignCenter);
-	item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
+	// ONE FOLDER MODEL (DRAWERS-1, services/projectfolders.h). What was here
+	// was the model's second implementation: a fresh guid, a "New Folder N"
+	// loop against `fetchFolderNameByParent`, a bare `db->createFolder` and a
+	// hand-built tree branch. The name loop survives — it is the panel's job
+	// to propose a name nothing else has — and the rule, the write and the
+	// announcement are the verb's.
+	if (!db || !project || project->getProjectGuid().isEmpty()) return;
+	const QString parent = assetItem.selectedGuid.isEmpty() ? project->getProjectGuid()
+	                                                        : assetItem.selectedGuid;
 
-	item->setData(MODEL_GUID_ROLE, GUIDManager::generateGUID());
-	item->setData(MODEL_PARENT_ROLE, assetItem.selectedGuid);
-	item->setData(MODEL_ITEM_TYPE, MODEL_FOLDER);
-
-	assetItem.wItem = item;
-
-	QString folderName = newFolder;
-
-	QStringList foldersInProject = db->fetchFolderNameByParent(assetItem.selectedGuid);
-
-	// If we encounter the same file, make a duplicate...
+	// THE PROPOSED NAME, judged the way the model judges it: CASE-INSENSITIVELY
+	// (projectfolders' nameTaken is, and this loop was not — "new folder"
+	// beside "New Folder" proposed a name the create then refused).
+	const QString base = tr("New Folder");
+	QString folderName = base;
+	const QStringList taken = db->fetchFolderNameByParent(parent);
+	auto isTaken = [&taken](const QString &name) {
+		for (const QString &other : taken)
+			if (other.compare(name, Qt::CaseInsensitive) == 0) return true;
+		return false;
+	};
 	int increment = 1;
-	while (foldersInProject.contains(folderName)) {
-		folderName = newFolder + " " + QString::number(increment++);
+	while (isTaken(folderName)) folderName = base + " " + QString::number(increment++);
+
+	const projectfolders::Result judged =
+		projectfolders::judgeCreate(db, project->getProjectGuid(), folderName, parent);
+	if (!judged.ok) {
+		toast()->showToast(tr("New Folder"), judged.error, 3000);
+		return;
 	}
 
-	const QString guid = item->data(MODEL_GUID_ROLE).toString();
-	const QString parent = item->data(MODEL_PARENT_ROLE).toString();
-
-	//// Create a new database entry for the new folder
-	db->createFolder(folderName, parent, guid, project->getProjectGuid());
-
-	// Update the tree browser
-	QTreeWidgetItem *child = ui->assetTree->currentItem();
-	if (child) {    // should always be set but just in case
-		auto branch = new QTreeWidgetItem();
-		branch->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
-		branch->setText(0, folderName);
-		branch->setData(0, MODEL_GUID_ROLE, guid);
-		branch->setData(0, MODEL_PARENT_ROLE, parent);
-		child->addChild(branch);
-		ui->assetTree->clearSelection();
-		branch->setSelected(true);
+	auto outcome = std::make_shared<FolderCommandOutcome>();
+	auto *command = new CreateProjectFolderCommand(db, project->getProjectGuid(),
+	                                               folderName, parent, outcome);
+	if (services && services->undo) {
+		services->undo->push(command);            // redo() runs the create
+	} else {
+		command->redo();
+		delete command;
+	}
+	if (!outcome->error.isEmpty()) {
+		toast()->showToast(tr("New Folder"), outcome->error, 3000);
+		return;
 	}
 
-	populateAssetTree(false);
-	// We could just addItem but this is by choice and also so we can order folders first
-	updateAssetView(assetItem.selectedGuid, activeFilter);
-	//syncTreeAndView(assetItem.selectedGuid);
+	// The repopulate comes from the model's announcement (item 10); the tree
+	// selection is this panel's own business.
+	syncTreeAndView(parent);
+}
+
+void AssetWidget::deleteFolderItem()
+{
+	// THE PROJECT-SIDE DELETE: the folder goes, everything in it moves up to
+	// its parent (services/projectfolders.h). Nothing leaves the project and
+	// nothing leaves the library, so there is no question to ask first.
+	if (!assetItem.wItem || !db || !project) return;
+	const projectfolders::Result result = projectfolders::remove(
+		db, project->getProjectGuid(), assetItem.wItem->data(MODEL_GUID_ROLE).toString(), true);
+	// (The tile's delete never lists the folder it deletes — the tile is IN the
+	// folder's parent — so there is no selection to move, unlike the tree's.)
+	if (!result.ok) {
+		toast()->showToast(tr("Delete Folder"), result.error, 3000);
+		return;
+	}
+	// The repopulate comes from the model's announcement (item 10).
+}
+
+void AssetWidget::createMaterial()
+{
+	// THE VERB, WITH THE FOLDER THE USER IS LOOKING AT (DRAWERS-1):
+	// `materials.create(name, {folder})` mints the library bundle, pins it into
+	// this project and files it here, and its one announcement repopulates this
+	// panel AND the Materials module's project drawer — which is the owner's
+	// "creating in the project should add it to the project drawer in Materials
+	// automatically", made true by construction rather than by a second call.
+	if (!db || !project || project->getProjectGuid().isEmpty()) return;
+	if (!mainWindow || !mainWindow->scripting()) return;
+
+	const QString folder = assetItem.selectedGuid.isEmpty() ? project->getProjectGuid()
+	                                                        : assetItem.selectedGuid;
+	MaterialsApi api(mainWindow->scripting()->scriptHost());
+	const QString name = MaterialBundle::uniqueName(db, tr("New Material"));
+	const QString guid = api.quietly([&] {
+		return api.create(name, QVariantMap{ { QStringLiteral("folder"), folder } });
+	});
+	if (guid.isEmpty()) {
+		QMessageBox::warning(this, tr("Create Material"),
+		                     tr("The material could not be created: %1").arg(api.lastError()));
+		return;
+	}
+	// (NO rebuildOne HERE: `materials.create` renders the tile itself on the
+	// studio sphere since MATPREVIEW-ENV-1 — one gesture, one render, and the
+	// panel asking for a second would draw the same sphere twice.)
+	refresh();
+	// Created AND SELECTED (the brief): opening it in the Materials module is
+	// the user's double-click, not ours.
+	for (int i = 0; i < ui->assetView->count(); ++i) {
+		QListWidgetItem *item = ui->assetView->item(i);
+		if (item->data(MODEL_GUID_ROLE).toString() != guid) continue;
+		ui->assetView->setCurrentItem(item);
+		assetItem.wItem = item;
+		emit assetItemSelected(item);
+		break;
+	}
 }
 
 void AssetWidget::importAssetB()

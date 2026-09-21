@@ -56,6 +56,9 @@ public:
         std::function<bool(const QVariant &)> activate;
         std::function<bool(const QVariant &)> closeTab;
         std::function<QVariantMap()> activeTab;
+        /// THE PROJECT DRAWER's tiles, in order (DRAWERS-1) — the page hands
+        /// over what its ShaderAssetWidget is showing.
+        std::function<QVariantList()> projectDrawer;
     };
     void setPageDelegate(const PageDelegate &delegate) { mPage = delegate; }
 
@@ -72,6 +75,10 @@ public:
     /// was this with the flag always on and a second ModelTypes::Shader row —
     /// one name survives (CRUD).
     Q_INVOKABLE QString create(const QString &name, const QVariantMap &options = QVariantMap());
+    /// THE MODULE'S PROJECT DRAWER, as the widget shows it: [{guid, name}]
+    /// (DRAWERS-1). A read verb, so a suite can prove the module's drawer and
+    /// the editor's tray are ONE list.
+    Q_INVOKABLE QVariantList projectDrawer();
     /// THE VERB THE TEXTURE PICKER CALLS. A path from anywhere on disk is
     /// imported by CONTENT at that moment; a guid already in the library is
     /// reused. Either way the image becomes a MEMBER of the material (the
