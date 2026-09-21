@@ -275,6 +275,12 @@ static int caseCapture()
     CHECK_MSG(c1.pagesUsed == pagesBefore, "the page count is unchanged (%u)", c1.pagesUsed);
     // THE WHOLE POINT: six new captures, not twelve. The other crate's cards are
     // in the atlas, unmoved and untouched — `gi.material_swap`'s counter model.
+    // SIX, AND THE WINDOW ALLOWS SEVEN because the counter is read after a
+    // fixed number of frames rather than after a drained queue: a single card
+    // of the OTHER crate may have been queued by the same frame's light or
+    // residency bookkeeping and captured inside the window. Twelve would mean
+    // the whole resident set was re-captured, which is the defect the assertion
+    // is about; seven cannot be that.
     const unsigned long long moved = c1.captures - capturesBefore;
     CHECK_MSG(moved >= 6u && moved <= 7u,
               "a moved instance re-captured ITS six cards and nothing else (%llu captures)",
@@ -302,6 +308,7 @@ static int caseCapture()
     // whole point of the model MATERIAL-SWAP-GI-1 built for the voxel side, and
     // it is what makes a hover preview cost the object under the mouse.
     const unsigned long long matCaptures = c2.captures - capturesBeforeMat;
+    // Six, with the same one-card window and for the same reason as above.
     CHECK_MSG(matCaptures >= 6u && matCaptures <= 7u,
               "a material edit re-captured the cards of the instance WEARING it and nothing"
               " else (%llu captures)", matCaptures);
@@ -312,6 +319,139 @@ static int caseCapture()
         CHECK_MSG(std::fabs(after.albedo[1] - expectG) < 0.02f,
                   "the card carries the NEW albedo (g %.4f, expected %.4f)", after.albedo[1],
                   expectG);
+    }
+
+    // ---- THE ATLAS MAPPING IS NOT MIRRORED IN v -------------------------
+    // Nothing else in this suite exercises v: a card's +Z face is uniform, so
+    // an upside-down atlas rect would read identically. This arm makes the
+    // card's two v halves DIFFERENT and asserts the read agrees with the
+    // capture — which is what keeps the GPU record phase 4 is told to port
+    // (`CardGpuRec::uvScaleBias`, whose scale.y is negative) honest against the
+    // CPU read (`sampleCard`, which flips v).
+    {
+        const NodeId tall = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.5f, 0.5f, 0.5f);
+        p.roughness = 0.5f;
+        const MaterialId mat = s->createPbrMaterial(p);
+        MeshData md = texturedCubeMesh();
+        md.cards = boxCards(0.5f);
+        const MeshId mesh = s->createMesh(md);
+        CHECK(tall && mat && mesh && s->attachMesh(tall, mesh, mat), "the v-asymmetric cube exists");
+        // AN EMISSIVE MAP THAT IS BRIGHT ON ITS TOP HALF AND DARK ON ITS
+        // BOTTOM. The cube's +Z face carries the texture's own 0..1 v with
+        // v = 0 at the TOP row of the image (texturedCubeMesh's uv table), and
+        // the card's +v is world +Y, so the BRIGHT half must read at card
+        // v > 0.5.
+        std::vector<unsigned char> tex(32u * 32u * 4u);
+        for (unsigned y = 0; y < 32u; ++y)
+            for (unsigned x = 0; x < 32u; ++x) {
+                unsigned char *o = &tex[(size_t(y) * 32u + x) * 4u];
+                const bool top = y < 16u;
+                o[0] = top ? 255u : 0u; o[1] = 0u; o[2] = 0u; o[3] = 255u;
+            }
+        const TextureId em = s->createTexture(32u, 32u, tex.data(), true, false);
+        CHECK(em && s->setPbrTexture(mat, PbrTextureSlot::Emissive, em),
+              "...wearing an emissive map that is bright on its top half");
+        enginetest::setNodeScale(s, tall, Vec3(2.0f, 2.0f, 2.0f));
+        enginetest::setNodePosition(s, tall, Vec3(0.0f, 1.0f, -3.0f));
+        render(f.e, 16);
+        CardSample up, down;
+        const bool okUp = s->readCardTexel(tall, 4u, 0.5f, 0.75f, up);
+        const bool okDown = s->readCardTexel(tall, 4u, 0.5f, 0.25f, down);
+        CHECK(okUp && okDown && up.ok && down.ok, "both halves of the +Z card read back");
+        if (up.ok && down.ok) {
+            std::printf("    +Z card: v 0.75 emissive %.3f, v 0.25 emissive %.3f\n",
+                        up.emissive[0], down.emissive[0]);
+            CHECK_MSG(up.emissive[0] > down.emissive[0] + 0.2f,
+                      "the card's HIGH v is the world's UP (%.3f vs %.3f) — the atlas rect is"
+                      " not mirrored in v",
+                      up.emissive[0], down.emissive[0]);
+        }
+    }
+
+    // ---- A SMALL CARD IS SUB-ALLOCATED, AND THE MASK HOLDS ---------------
+    // A 10 cm mesh wants a 7-texel card, which the allocator floors at
+    // `kCardMinSize`. At 8 that page's slot mask would be 256 slots in a
+    // 64-bit word — undefined, and on x86 three quarters of the page reads as
+    // permanently taken. This arm exists so that a future change to the floor
+    // has to answer to a test.
+    {
+        const NodeId tiny = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.9f, 0.1f, 0.1f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = boxCards(0.5f);
+        const MeshId mesh = s->createMesh(md);
+        CHECK(tiny && mat && mesh && s->attachMesh(tiny, mesh, mat), "a 10 cm mesh exists");
+        enginetest::setNodeScale(s, tiny, Vec3(0.1f, 0.1f, 0.1f));
+        enginetest::setNodePosition(s, tiny, Vec3(-3.0f, 0.5f, -2.0f));
+        render(f.e, 16);
+        CardSample small;
+        CHECK(s->readCardAt(Vec3(-3.0f, 0.5f, -2.05f), Vec3(0, 0, -1), small) && small.ok,
+              "the 10 cm mesh's card is allocated and captured");
+        const CardCacheStatus st2 = s->giStatus().cards;
+        std::printf("    after a 10 cm mesh: %u instances, %u cards, %u of %u pages\n",
+                    st2.instancesResident, st2.cardsResident, st2.pagesUsed, st2.pages);
+        CHECK_MSG(st2.pagesUsed <= st2.pages, "the page count is sane (%u of %u)", st2.pagesUsed,
+                  st2.pages);
+    }
+
+    // ---- A TURN IS A TRANSFORM CHANGE, EVEN WHEN THE BOX DOES NOT MOVE ---
+    // A 90 degree turn of a cube leaves its world AABB exactly where it was
+    // while every card now describes a different face. A signature built on
+    // the box alone cannot see it; this arm is why the signature carries the
+    // derived orientation too.
+    {
+        const CardCacheStatus before = s->giStatus().cards;
+        const float s45 = 0.70710678f;
+        s->setNodeTransform(crate[0], Vec3(-2.0f, 1.0f, 0.0f), Quat(0.0f, s45, 0.0f, s45),
+                            Vec3(2.0f, 2.0f, 2.0f));
+        render(f.e, 16);
+        const CardCacheStatus after2 = s->giStatus().cards;
+        std::printf("    a 90 degree turn: invalidTransform %llu -> %llu, captures +%llu\n",
+                    (unsigned long long)before.invalidTransform,
+                    (unsigned long long)after2.invalidTransform,
+                    (unsigned long long)(after2.captures - before.captures));
+        CHECK_MSG(after2.invalidTransform > before.invalidTransform,
+                  "a TURN that leaves the world box alone still re-allocates the cards (%llu ->"
+                  " %llu)",
+                  (unsigned long long)before.invalidTransform,
+                  (unsigned long long)after2.invalidTransform);
+    }
+
+    // ---- A HOVER PREVIEW IS A MATERIAL SWAP, NOT A MATERIAL EDIT ---------
+    // MATERIAL-SWAP-GI-1's in-place swap writes the node's material and swaps
+    // the datablock on the live Item WITHOUT destroying or editing a material,
+    // so `noteMaterialChanged` is never called. The cache hears about it by
+    // re-reading the candidate's material every frame, and this is the arm that
+    // says so: the previous arm edits the SAME material's params and cannot.
+    {
+        PbrParams p;
+        p.albedo = Colour(0.05f, 0.05f, 0.95f);
+        p.roughness = 0.4f;
+        const MaterialId preset = s->createPbrMaterial(p);
+        const CardCacheStatus before = s->giStatus().cards;
+        CHECK(preset && s->setNodeMaterial(crate[0], preset),
+              "a preset is hovered onto a carded crate (an in-place swap)");
+        render(f.e, 16);
+        const CardCacheStatus after2 = s->giStatus().cards;
+        CHECK_MSG(after2.invalidMaterial > before.invalidMaterial,
+                  "the SWAP reached the cache (%llu -> %llu)",
+                  (unsigned long long)before.invalidMaterial,
+                  (unsigned long long)after2.invalidMaterial);
+        CHECK_MSG(after2.pagesUsed == before.pagesUsed,
+                  "...and freed no page (%u -> %u)", before.pagesUsed, after2.pagesUsed);
+        CardSample swapped;
+        if (s->readCardTexel(crate[0], 4u, 0.5f, 0.5f, swapped) && swapped.ok) {
+            const float expectB = 0.95f / 3.14159265358979323846f;
+            std::printf("    after the hover: albedo %.4f %.4f %.4f (expected b %.4f)\n",
+                        swapped.albedo[0], swapped.albedo[1], swapped.albedo[2], expectB);
+            CHECK_MSG(std::fabs(swapped.albedo[2] - expectB) < 0.02f,
+                      "the atlas carries the PRESET's albedo, not the one it replaced (b %.4f)",
+                      swapped.albedo[2]);
+        }
     }
 
     // ---- RESIDENCY BY DISTANCE ------------------------------------------
@@ -328,7 +468,10 @@ static int caseCapture()
     CHECK(s->setGlobalIllumination(gi), "the radius grows again");
     render(f.e, 12);
     st = s->giStatus();
-    CHECK_MSG(st.cards.instancesResident == 2u, "both crates come back (%u)",
+    // FOUR, not two: the arms above added a v-asymmetric cube and a 10 cm mesh
+    // to the scene, and both are carded. What this asserts is that widening the
+    // radius brings the whole resident set BACK, whatever its size.
+    CHECK_MSG(st.cards.instancesResident >= 2u, "the resident set comes back (%u instances)",
               st.cards.instancesResident);
 
     // ---- THE ROW OFF FREES EVERYTHING ------------------------------------
@@ -409,14 +552,23 @@ static int caseShadow()
     GiParams gi = baseGi();
     gi.cardResidencyRadius = 40.0f;
     // A BUDGET THAT HOLDS THE WHOLE RESIDENT SET IN ONE FRAME, and the reason
-    // is a MEASURED limitation of the capture rather than convenience: the pin
-    // early-outs a shadow node's fit on "same camera, same frame", so every
-    // card captured after the first of a frame samples the FIRST card's fit.
-    // At the shipped three-cards-a-frame budget the cards the first fit does
-    // not reach read a flat 1.0 (measured on this fixture) — the capture's
-    // note at `mShadowNodeRecalculation` states the whole of it and hands the
-    // cull-camera fix to phase 3. This case is about the CONTENT of a card;
-    // `gi.card_budget` is the one about the cadence.
+    // is a MEASURED limitation the capture still carries. The pin's shadow node
+    // caches its light list AND its casters box per (camera, compositor-manager
+    // frame count) — a hand-driven workspace never bumps that count — so every
+    // card captured after a frame's FIRST reuses the first card's fit and reads
+    // a flat 1.0 wherever that fit does not reach.
+    //
+    // TWO ATTEMPTS ARE RECORDED AT THE CAPTURE, both MEASURED and both failed:
+    // a separate wide cull camera, and ALTERNATING TWO capture cameras (which
+    // defeats `mLastCamera == newCamera` and gives every card its own camera —
+    // shipped anyway, because a per-card camera is strictly closer to correct
+    // and costs nothing). Neither restored the profile at the shipped
+    // three-cards-a-frame budget: the casters box is fitted under the pass's
+    // subject-only visibility mask, which is the half neither attempt moves.
+    // Phase 3 owns a card's lighting and is where this belongs.
+    //
+    // This case is about the CONTENT of a card; `gi.card_budget` is the one
+    // about the cadence.
     gi.cardBudgetTexels = 64u * 128u * 128u;
     CHECK(s->setGlobalIllumination(gi), "GI builds");
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 6.0f, -10.0f), Vec3(0.0f, 0.0f, 0.0f));
