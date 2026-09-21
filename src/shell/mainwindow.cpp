@@ -4488,7 +4488,22 @@ void MainWindow::setupToolBar()
 		syncCameraSpeedUi();
 	});
 	toolBar->addWidget(cameraSpeedButton);
+
+	// THE BUTTON FOLLOWS THE DIAL BY CONSTRUCTION, not by every caller
+	// remembering to say so (fix round item 1): the Player's wheel writes the
+	// same one value from a page with no toolbar of its own, and used to leave
+	// this button reading the old number until something else moved it — the
+	// per-controller hook it called was assigned nowhere. Every writer — both
+	// wheels, the popover, the verb — announces through here now.
+	CameraSpeed::setOnChanged([this] { syncCameraSpeedUi(); });
 	syncCameraSpeedUi();
+
+	// ...AND THE POPOVER CLOSING IS A GESTURE ENDING: the store write is
+	// deferred (CameraSpeed::flush's note) so a slider drag is not one durable
+	// rewrite of jahsettings.ini per mouse-move, and this is where a drag with
+	// this window's hand on it is over.
+	connect(speedMenu, &QMenu::aboutToHide, this, [] { CameraSpeed::flush(); });
+	connect(cameraSpeedSlider, &QSlider::sliderReleased, this, [] { CameraSpeed::flush(); });
 
 	toolBar->addSeparator();
 
@@ -4597,10 +4612,12 @@ void MainWindow::setupToolBar()
 		setViewsButtonLabel(sceneView->cameraView());
 	});
 
-	// The scroll wheel stepped the camera speed while the camera was flying:
-	// show the new number over the viewport and move the toolbar to match.
+	// The scroll wheel stepped the camera speed while the EDITOR's camera was
+	// flying: show the new number over the viewport. The toolbar button needs
+	// no telling — it follows the dial itself (CameraSpeed::setOnChanged,
+	// installed above) — and this signal exists for the TOAST, which is
+	// anchored to this viewport and therefore belongs to this gesture alone.
 	connect(sceneView->events(), &EditorViewportEvents::cameraSpeedChanged, this, [this]() {
-		syncCameraSpeedUi();
 		showViewportToast("Camera Speed",
 		                  QString("%1  (%2 u/s)")
 		                      .arg(CameraSpeed::value())
@@ -6020,6 +6037,13 @@ MainWindow::~MainWindow()
     // outlives every window — it is process-wide — so the hook goes first,
     // before anything here can raise it.
     editgate::setNoticeHook({});
+
+    // ...and so did the camera-speed dial (fix round item 1). CameraSpeed is
+    // process-wide too, so a handler capturing this window must not outlive
+    // it. Its pending value goes to the store here, on the way out: a deferred
+    // write that a quit could swallow would be a preference that did not stick.
+    CameraSpeed::setOnChanged({});
+    CameraSpeed::flush();
 
     // ORDER IS LOAD-BEARING. Undo commands owe the database work when they die
     // (DeleteSceneNodeCommand finalises the asset row once no undo can reach

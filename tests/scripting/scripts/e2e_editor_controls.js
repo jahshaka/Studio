@@ -748,6 +748,11 @@ assert(editor.cameraSpeed("slower").n === 20, "\"slower\" steps it back");
 // Clamped at the ends rather than refused — 1 and 32 are the dial.
 assert(editor.cameraSpeed(1000).n === 32, "an absurd number clamps at 32");
 assert(editor.cameraSpeed(0).n === 1, "and zero at 1 — there is no 'off'");
+// ...AT ANY MAGNITUDE. 1e10 does not fit an int, and narrowing it before
+// clamping is undefined behaviour that landed on INT_MIN here — so a caller
+// asking for "as fast as possible" got the SLOWEST setting (fix round item 3).
+assert(editor.cameraSpeed(1e10).n === 32, "1e10 clamps UP to 32, not down to 1");
+assert(editor.cameraSpeed(-1e10).n === 1, "and -1e10 clamps to 1");
 for (var i = 0; i < 5; i++) editor.cameraSpeed("slower");
 assert(editor.cameraSpeed().n === 1, "stepping below the bottom holds at 1");
 
@@ -760,6 +765,14 @@ assert(fractional, "12.5 is refused, and the message says the dial is an integer
 var badWord = false;
 try { editor.cameraSpeed("quick"); } catch (e) { badWord = true; }
 assert(badWord, "a word that is neither faster nor slower is refused");
+// TWO WORDS, THE TWO THE DOCUMENTATION NAMES: "up"/"down" rode along
+// undocumented from the retired setFlySpeed and went with it (the CRUD law).
+var upWord = false;
+try { editor.cameraSpeed("up"); } catch (e) { upWord = true; }
+assert(upWord, "\"up\" is not a spelling of \"faster\" — the undocumented alias is gone");
+var downWord = false;
+try { editor.cameraSpeed("down"); } catch (e) { downWord = true; }
+assert(downWord, "...nor \"down\" of \"slower\"");
 var boolSpeed = false;
 try { editor.cameraSpeed(true); } catch (e) { boolSpeed = true; }
 assert(boolSpeed, "and a true/false is not a camera speed (it would arrive as 1)");

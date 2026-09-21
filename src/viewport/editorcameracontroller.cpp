@@ -214,12 +214,15 @@ bool EditorCameraController::canLeftMouseDrag()
 // ONE NOTCH IS ONE, AND SHIFT IS FIVE: the dial is 32 steps wide now rather
 // than a six-rung ladder, so crossing it a notch at a time is a long scroll —
 // and Shift is already this gesture's "more of that" key on the fly itself.
+// A NOTCH, not an event: `delta` is eighths of a degree and a trackpad sends
+// fractions of one (WheelNotches).
 void EditorCameraController::onMouseWheel(int delta)
 {
     if (rightMouseDown) {
-        if (delta != 0) {
+        const int notches = speedWheel.accumulate(delta);
+        if (notches != 0) {
             const int stride = heldKeys.contains(Qt::Key_Shift) ? 5 : 1;
-            CameraSpeed::step(delta > 0 ? stride : -stride);
+            CameraSpeed::step(notches * stride);
             if (sceneWidget) sceneWidget->onCameraSpeedChanged();
         }
         return;
@@ -260,13 +263,17 @@ void EditorCameraController::onMouseWheel(int delta)
 void EditorCameraController::onMouseDown(Qt::MouseButton button)
 {
 	CameraControllerBase::onMouseDown(button);
-	if (button == Qt::RightButton) clearKeys();
+	if (button == Qt::RightButton) { clearKeys(); speedWheel.reset(); }
 }
 
 void EditorCameraController::onMouseUp(Qt::MouseButton button)
 {
 	CameraControllerBase::onMouseUp(button);
-	if (button == Qt::RightButton) clearKeys();
+	// THE FLY IS OVER: drop the wheel's leftover fraction, and give the dial's
+	// deferred store write its gesture end (CameraSpeed::flush) so the value
+	// the user settled on is on disk without a single notch of the scroll
+	// having waited for one.
+	if (button == Qt::RightButton) { clearKeys(); speedWheel.reset(); CameraSpeed::flush(); }
 }
 
 void EditorCameraController::onKeyPressed(Qt::Key key)

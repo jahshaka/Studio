@@ -38,6 +38,9 @@ For more information see the LICENSE file
 //
 // No document beyond a camera node, no engine, no display.
 
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QGuiApplication>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -342,6 +345,7 @@ int main(int argc, char **argv)
             CameraSpeed::bindSettings(&first);
             CHECK(CameraSpeed::value() == 10, "an empty settings file leaves the default standing");
             CameraSpeed::setValue(23);
+            CameraSpeed::flush();
             first.sync();
             CameraSpeed::bindSettings(nullptr);
         }
@@ -357,6 +361,7 @@ int main(int argc, char **argv)
             // been touched and one that was set back to normal are the same
             // file (the house rule for every persisted default).
             CameraSpeed::setValue(10);
+            CameraSpeed::flush();
             second.sync();
             CHECK(!second.contains("camera/speed"), "setting it back to 10 removes the key");
 
@@ -378,6 +383,153 @@ int main(int argc, char **argv)
             CHECK(CameraSpeed::value() == 10, "...and the dial pays no attention to them");
             CameraSpeed::bindSettings(nullptr);
         }
+        CameraSpeed::reset();
+    }
+
+    // ---- A BURST OF SETS IS ONE WRITE (the fix round's item 2) -----------
+    //
+    // MEASURED on Qt 6.10.2: a QSettings::setValue makes the NEXT pass of the
+    // event loop rewrite the whole ini through a QSaveFile — two fdatasyncs
+    // and a rename, ON THE UI THREAD. One notch of the wheel mid-fly is one of
+    // those, and a slider drag is one per mouse-move; the house law since
+    // FSYNC-2 is that the thread that draws never waits for a disk.
+    //
+    // So a set moves the value at once and only ARMS the write, and a burst
+    // inside one gesture writes ONCE, at the end of it.
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("jahsettings.ini");
+        QSettings store(path, QSettings::IniFormat);
+        CameraSpeed::bindSettings(&store);
+
+        const int before = CameraSpeed::storeWrites();
+        for (int n = 11; n <= 20; ++n) CameraSpeed::setValue(n);   // a drag, or ten notches
+        CHECK(CameraSpeed::value() == 20, "the dial moved to 20 at once — the VALUE is immediate");
+        CHECK(CameraSpeed::storeWrites() == before,
+              "...and not one of the ten sets has touched the disk yet");
+
+        // The gesture ends (an RMB release, a slider release, the popover
+        // closing, the window shutting down) — or, failing all of those, the
+        // half-second timer this armed.
+        CameraSpeed::flush();
+        CHECK(CameraSpeed::storeWrites() == before + 1,
+              "ONE write for the whole burst, and it is the value the dial ended on");
+        store.sync();
+        CHECK(store.value("camera/speed").toInt() == 20, "...which is 20, in the file");
+        CHECK(CameraSpeed::storeWrites() == before + 1,
+              "a second flush with nothing pending writes nothing");
+        CameraSpeed::flush();
+        CHECK(CameraSpeed::storeWrites() == before + 1, "...still nothing");
+
+        // AND NOBODY HAS TO CALL flush(): the arm is a half-second single shot
+        // on the application's own event loop, which is what makes a wheel
+        // notch in a window nobody closes durable anyway.
+        const int armed = CameraSpeed::storeWrites();
+        CameraSpeed::setValue(7);
+        CHECK(CameraSpeed::storeWrites() == armed, "the set is still not a write");
+        QElapsedTimer clock;
+        clock.start();
+        while (clock.elapsed() < 2000 && CameraSpeed::storeWrites() == armed)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        std::printf("    the deferred write landed after %lld ms\n", clock.elapsed());
+        CHECK(CameraSpeed::storeWrites() == armed + 1, "the armed write lands on its own");
+        store.sync();
+        CHECK(store.value("camera/speed").toInt() == 7, "...carrying 7");
+
+        CameraSpeed::bindSettings(nullptr);
+        CameraSpeed::reset();
+    }
+
+    // ---- THE DIAL ANNOUNCES ITSELF, whoever moved it ---------------------
+    //
+    // The toolbar's speed button is a VIEW of this value and there is exactly
+    // one of it, on the editor's toolbar — but the PLAYER's wheel writes the
+    // same dial from a page that has no toolbar. It used to call a
+    // per-controller `onSpeedChanged` hook that was ASSIGNED NOWHERE, so
+    // stepping the speed in the Player left the editor's button stale.
+    {
+        int announced = 0;
+        int lastSeen = 0;
+        CameraSpeed::setOnChanged([&] { ++announced; lastSeen = CameraSpeed::value(); });
+
+        CameraSpeed::setValue(17);
+        CHECK(announced == 1 && lastSeen == 17, "a set announces the new value");
+        CameraSpeed::setValue(17);
+        CHECK(announced == 1, "...and setting it to what it already is announces nothing");
+        CameraSpeed::step(+1);
+        CHECK(announced == 2 && lastSeen == 18, "a step announces");
+
+        // THE PLAYER'S WHEEL, at the gesture level.
+        {
+            KeyboardState::reset();
+            PlayerMouseController c;
+            auto cam = freshCamera();
+            c.setCamera(cam);
+            const int was = announced;
+            c.onMouseWheel(120);
+            CHECK(announced == was, "the Player's wheel does nothing with no button held");
+            c.onMouseDown(Qt::RightButton);
+            c.onMouseWheel(120);
+            CHECK(announced == was + 1 && lastSeen == 19,
+                  "THE PLAYER'S WHEEL MOVES THE ONE DIAL AND SAYS SO — the editor's toolbar "
+                  "button cannot go stale behind it");
+
+            // ...with the same Shift stride the editor has and the button's
+            // tooltip promises on both surfaces (fix round item 5).
+            KeyboardState::keyStates[int(Qt::Key_Shift)] = true;
+            c.onMouseWheel(120);
+            CHECK(CameraSpeed::value() == 24, "Shift steps the Player's wheel by five too");
+            c.onMouseWheel(-120);
+            CHECK(CameraSpeed::value() == 19, "and -5 the other way");
+            KeyboardState::reset();
+        }
+
+        CameraSpeed::setOnChanged({});
+        CameraSpeed::setValue(3);
+        CHECK(announced == 5, "a cleared handler is not called (nor a dangling one)");
+        CameraSpeed::reset();
+    }
+
+    // ---- A NOTCH, NOT AN EVENT (the fix round's item 4) ------------------
+    //
+    // A wheel event carries angleDelta in EIGHTHS OF A DEGREE and a mouse
+    // notch is 120 of them — but a high-resolution wheel or a trackpad sends
+    // FRACTIONS of 120 per event, so "one event is one step" turns a gentle
+    // swipe into a dozen steps. Accumulate, spend whole notches, keep the
+    // remainder; and drop the remainder when the gesture ends.
+    {
+        CameraSpeed::reset();
+        EditorCameraController c(nullptr);
+        auto cam = freshCamera();
+        c.setCamera(cam);
+        c.onMouseDown(Qt::RightButton);
+
+        for (int i = 0; i < 7; ++i) c.onMouseWheel(15);   // a trackpad: 7 x 1/8 notch
+        CHECK(CameraSpeed::value() == 10,
+              "seven eighths of a notch is not a step — a trackpad swipe no longer runs the "
+              "dial away");
+        c.onMouseWheel(15);                                // the eighth eighth
+        CHECK(CameraSpeed::value() == 11, "...and the eighth completes ONE step");
+        for (int i = 0; i < 8; ++i) c.onMouseWheel(-15);
+        CHECK(CameraSpeed::value() == 10, "the same swipe back is one step down");
+
+        // A BIG EVENT IS ITS OWN NUMBER OF NOTCHES, not one: a fling that
+        // carries three notches moves three.
+        c.onMouseWheel(360);
+        CHECK(CameraSpeed::value() == 13, "a three-notch event steps three");
+
+        // THE REMAINDER DIES WITH THE GESTURE: half a notch of one fly must
+        // not finish a step in the next one.
+        c.onMouseWheel(60);
+        CHECK(CameraSpeed::value() == 13, "half a notch is still no step");
+        c.onMouseUp(Qt::RightButton);
+        c.onMouseDown(Qt::RightButton);
+        c.onMouseWheel(60);
+        CHECK(CameraSpeed::value() == 13,
+              "...and half a notch in a NEW fly does not cash in the last one's half");
+        c.onMouseWheel(60);
+        CHECK(CameraSpeed::value() == 14, "two halves inside one fly are a step");
+        c.onMouseUp(Qt::RightButton);
         CameraSpeed::reset();
     }
 

@@ -47,7 +47,41 @@ For more information see the LICENSE file
 // snap sizes) the value persists as `camera/speed`; unit tests run unbound and
 // get the pure default.
 
+#include <functional>
+
 class QSettings;
+
+/// QT'S WHEEL IDIOM, once (FLYSPEED-1 fix round item 4). A wheel event carries
+/// `angleDelta` in EIGHTHS OF A DEGREE and a mouse notch is 120 of them — but
+/// a high-resolution wheel or a trackpad delivers FRACTIONS of 120 per event,
+/// so "one event is one step" turns a gentle trackpad swipe into a dozen steps
+/// and a slow high-res wheel into steps that never stop. Accumulate, spend
+/// whole notches, keep the remainder.
+///
+/// It lives beside the dial rather than in each controller because the editor's
+/// fly and the Player's fly both do this and they must not drift apart.
+class WheelNotches
+{
+public:
+    /// Adds an event's angleDelta and returns the WHOLE notches to spend
+    /// (signed, 0 when the swipe has not added up to one yet). The remainder
+    /// is kept for the next event.
+    int accumulate(int angleDelta)
+    {
+        mAccum += angleDelta;
+        const int notches = mAccum / kNotch;   // truncates toward zero, both signs
+        mAccum -= notches * kNotch;
+        return notches;
+    }
+
+    /// Drops the remainder — called when the GESTURE ends, so half a notch of
+    /// one fly cannot finish a step in the next one.
+    void reset() { mAccum = 0; }
+
+private:
+    static constexpr int kNotch = 120;   // Qt: QWheelEvent's notch, all platforms
+    int mAccum = 0;
+};
 
 class CameraSpeed
 {
@@ -84,8 +118,30 @@ public:
     static float playerSpeed();
 
     /// Loads the persisted value and writes every future set through
-    /// `settings`. Nullable (unbinds). Not owned.
+    /// `settings` (see `flush` for WHEN). Nullable (unbinds, after flushing
+    /// what the old store was owed). Not owned.
     static void bindSettings(QSettings *settings);
+
+    /// WRITES THE PENDING VALUE NOW, if there is one. Called at the end of a
+    /// gesture and when the app shuts down; see `flush`'s note in the .cpp for
+    /// why a set does not write by itself.
+    static void flush();
+
+    /// HOW MANY TIMES THE VALUE HAS REALLY BEEN WRITTEN TO THE STORE, for the
+    /// suite that pins "a burst of sets is one write" — monotonic for the life
+    /// of the process, the house rule for anything a loaded box could slow
+    /// down (a wall clock measures the box, not the gesture).
+    static int storeWrites();
+
+    /// THE VALUE CHANGED, by whatever hand — the wheel in the editor, the
+    /// wheel in the PLAYER, the popover, the verb. The shell installs one
+    /// (`syncCameraSpeedUi`) so the toolbar's speed button is a view of this
+    /// value BY CONSTRUCTION rather than by every caller remembering to say
+    /// so: the Player's wheel used to leave the editor's button stale, through
+    /// a per-controller hook that was assigned nowhere.
+    ///
+    /// Cleared with a null. The installer MUST clear it before it dies.
+    static void setOnChanged(std::function<void()> handler);
 
     /// Back to the default, the persisted value cleared. Mainly for tests.
     static void reset();

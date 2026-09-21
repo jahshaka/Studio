@@ -108,13 +108,25 @@ iris::Vec3 PlayerMouseController::calculateMouseRay(const QPointF& pos)
 // The wheel steps the camera speed while the RIGHT BUTTON is held — the
 // editor's gesture (EditorCameraController::onMouseWheel) on THE one dial
 // (CameraSpeed, owner R15: the Player had a second multiplier of its own until
-// this lane). It did nothing at all before; the player has no dolly to conflict
-// with.
+// this lane), with the same two strides: one notch is one, and five with SHIFT
+// held, which is what the toolbar button's tooltip promises on both surfaces.
+// It did nothing at all before; the player has no dolly to conflict with.
+//
+// A NOTCH, not an event (WheelNotches), for the reason the editor's does it:
+// a trackpad delivers fractions of a notch per event.
+//
+// NOTHING IS TOLD FROM HERE: the dial announces itself (CameraSpeed::
+// setOnChanged) and the shell's one handler re-syncs the toolbar. This used to
+// call a per-controller `onSpeedChanged` hook that was assigned NOWHERE, so
+// stepping the speed in the Player left the editor's button showing the old
+// number until something else happened to move it.
 void PlayerMouseController::onMouseWheel(int delta)
 {
-    if (!rightMouseDown || delta == 0) return;
-    CameraSpeed::step(delta > 0 ? 1 : -1);
-    if (onSpeedChanged) onSpeedChanged();
+    if (!rightMouseDown) return;
+    const int notches = speedWheel.accumulate(delta);
+    if (notches == 0) return;
+    const int stride = KeyboardState::isKeyDown(Qt::Key_Shift) ? 5 : 1;
+    CameraSpeed::step(notches * stride);
 }
 
 void PlayerMouseController::onMouseDown(Qt::MouseButton button)

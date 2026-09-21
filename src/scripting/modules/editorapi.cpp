@@ -1755,8 +1755,12 @@ QVariantMap EditorApi::cameraSpeed(const QVariant &speed)
 
     if (value.typeId() == QMetaType::QString) {
         const QString word = value.toString().trimmed().toLower();
-        if (word == QLatin1String("faster") || word == QLatin1String("up"))        CameraSpeed::step(+1);
-        else if (word == QLatin1String("slower") || word == QLatin1String("down")) CameraSpeed::step(-1);
+        // TWO WORDS, THE TWO THE DOCUMENTATION NAMES. "up"/"down" rode along
+        // undocumented from the retired setFlySpeed and are deleted with it
+        // (the CRUD law): a grammar nobody can read from the docs is a grammar
+        // nobody can rely on.
+        if (word == QLatin1String("faster"))      CameraSpeed::step(+1);
+        else if (word == QLatin1String("slower")) CameraSpeed::step(-1);
         else {
             fail(QStringLiteral("editor.cameraSpeed: unknown speed '%1' (an integer 1..32, "
                                 "\"faster\" or \"slower\")").arg(value.toString()));
@@ -1784,11 +1788,21 @@ QVariantMap EditorApi::cameraSpeed(const QVariant &speed)
                                 "speed is an integer 1..32").arg(value.toString()));
             return QVariantMap();
         }
-        CameraSpeed::setValue(int(number));
+        // CLAMPED AS A DOUBLE, THEN NARROWED: `int(1e10)` is undefined
+        // behaviour, and on this compiler it lands on INT_MIN — so an absurdly
+        // large number clamped to 1 instead of 32, which is the opposite of
+        // what the caller asked for (fix round item 3).
+        const double clamped = std::min(std::max(number, double(CameraSpeed::kMin)),
+                                        double(CameraSpeed::kMax));
+        CameraSpeed::setValue(int(clamped));
     }
-    // The toolbar's speed button is a VIEW of this value; tell the shell so a
-    // scripted change moves it, exactly as the wheel gesture does.
-    if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "syncCameraSpeedUi");
+    // NOTHING TO TELL THE SHELL: the toolbar's speed button follows the dial
+    // itself (CameraSpeed::setOnChanged), which is what makes the Player's
+    // wheel move it too — and nothing to write, either. The store write is
+    // deferred (CameraSpeed::flush's note) precisely so a caller in a loop —
+    // a script here, a mouse-move on the slider there — cannot turn a setting
+    // into one durable rewrite of jahsettings.ini each; the value reaches the
+    // file half a second later, or at the latest when the window closes.
     return cameraSpeedState();
 }
 
