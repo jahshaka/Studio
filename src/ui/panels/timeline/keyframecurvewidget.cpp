@@ -37,7 +37,7 @@ For more information see the LICENSE file
 struct CurveHandle
 {
     //CurveHandleType type;
-    iris::FloatKey* key;
+    iris::FloatKey* key = nullptr;
 };
 
 void KeyFrameCurveWidget::setAnimWidgetData(AnimationWidgetData *value)

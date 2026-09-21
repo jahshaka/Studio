@@ -29,7 +29,7 @@ struct PickingResult
     iris::Vec3 hitPoint;
 
     // this is often used for comparisons so it's not necessary to find the root
-    float distanceFromCameraSqrd;
+    float distanceFromCameraSqrd = 0.0f;
 };
 
 class PlayerMouseController : public CameraControllerBase

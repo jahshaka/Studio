@@ -94,7 +94,7 @@ struct EnumOption
 {
     QString id;        ///< stable, script-facing ("aim", "snap", "right")
     QString label;     ///< human ("Aim", "Snap", "Right")
-    int     value;     ///< the field's value (an enum ordinal, or 0/1 for a flag)
+    int     value = 0;     ///< the field's value (an enum ordinal, or 0/1 for a flag)
 };
 
 /// One setting. The FOUR accessors are what make the panel and the verbs

@@ -95,8 +95,6 @@ class KeyFrameWidget:public QWidget
      * they are used for translating keys from their local "key space"
      * to viewport space and vice versa.
      */
-    float viewLeft;
-    float viewRight;
 
 private:
     QColor bgColor;

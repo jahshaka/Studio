@@ -159,11 +159,11 @@ protected:
 
 	SettingsManager* settings;
 
-    bool leftMouseDown;
-    bool middleMouseDown;
-    bool rightMouseDown;
-    int mouseX;
-    int mouseY;
+    bool leftMouseDown = false;
+    bool middleMouseDown = false;
+    bool rightMouseDown = false;
+    int mouseX = 0;
+    int mouseY = 0;
 };
 
 #endif // ICAMERACONTROLLER_H

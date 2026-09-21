@@ -45,8 +45,7 @@ void AssetViewGrid::updateImage() {
 // local
 void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 {
-	int columnCount = viewport()->width() / (128 + 10);
-	if (columnCount == 0) columnCount = 1;
+	const int columnCount = columnsFor(viewport()->width());
 
 	originalItems.push_back(item);
 
@@ -77,8 +76,7 @@ void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObject properties, QJsonObject tags, bool select) {
 	auto sampleWidget = new AssetGridItem(details, image, properties, tags);
 
-	int columnCount = viewport()->width() / (128 + 10);
-	if (columnCount == 0) columnCount = 1;
+	const int columnCount = columnsFor(viewport()->width());
 
 	originalItems.push_back(sampleWidget);
 
@@ -175,7 +173,7 @@ void AssetViewGrid::deleteChildWidgets(QLayoutItem *item) {
 
 void AssetViewGrid::searchTiles(QString searchString)
 {
-	int columnCount = lastWidth / (128 + 10);
+	const int columnCount = columnsFor(lastWidth);
 
 	int count = 0;
 	if (!searchString.isEmpty()) {
@@ -203,7 +201,7 @@ void AssetViewGrid::searchTiles(QString searchString)
 
 void AssetViewGrid::filterAssets(int id)
 {
-	int columnCount = lastWidth / (128 + 10);
+	const int columnCount = columnsFor(lastWidth);
 
 	int count = 0;
 	if (id != -1) {
@@ -231,8 +229,7 @@ void AssetViewGrid::filterAssets(int id)
 
 void AssetViewGrid::updateGridColumns(int width)
 {
-	int columnCount = width / (128 + 10);
-	if (columnCount == 0) columnCount = 1;
+	const int columnCount = columnsFor(width);
 
 	int count = 0;
 	foreach(auto gridItem, originalItems) {

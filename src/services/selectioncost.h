@@ -122,7 +122,7 @@ public:
     Scope &operator=(const Scope &) = delete;
 
 private:
-    Stage mStage;
+    Stage mStage = Viewport;
     QElapsedTimer mTimer;
 };
 

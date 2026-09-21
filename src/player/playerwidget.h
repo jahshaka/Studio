@@ -15,7 +15,7 @@ class PlayerWidget : public QWidget
 	Q_OBJECT
 
 	EnginePlayerView* playerView;
-	QPushButton* playBtn;
+	QPushButton* playBtn = nullptr;
 	QPushButton* vrBtn = nullptr;
 	QIcon playIcon, stopIcon;
 	std::function<void()> vrToggle;

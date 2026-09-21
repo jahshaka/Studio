@@ -51,8 +51,8 @@ public:
     //timeline widget doesnt manage lifetime of this pointer
     iris::SceneNodePtr node;
 
-    float highlightStart;
-    float highlightEnd;
+    float highlightStart = 0.0f;
+    float highlightEnd = 0.0f;
     bool drawHighlight;
 
     TimelineWidget(QWidget* parent);

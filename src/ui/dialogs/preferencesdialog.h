@@ -66,7 +66,7 @@ public:
     void wireDesktop(ProjectManager *projectManager);
     ~PreferencesDialog();
 
-	WorldSettingsWidget* worldSettings;
+	WorldSettingsWidget* worldSettings = nullptr;
 	McpSettingsWidget* mcpSettings = nullptr;
 	ScriptingSettingsWidget* scriptingSettings = nullptr;
 	AssetsSettingsWidget* assetsSettings = nullptr;

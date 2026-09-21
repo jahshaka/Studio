@@ -133,7 +133,6 @@ public slots:
 	void deleteAssetFromLibrary(AssetGridItem*);
 
 public:
-	int gridCount;
 	/// `previewViewer` (optional) is the page's preview viewer; null means the
 	/// legacy AssetViewer. MainWindow passes the engine one in engine mode.
 	AssetView(Database *handle, QWidget *parent = Q_NULLPTR, IAssetViewer *previewViewer = nullptr);
@@ -275,9 +274,7 @@ private:
 	QString lastImportedGuid;
 	StudioServices *services = nullptr;
 	QSplitter *_splitter;
-	QWidget *_filterBar;
 	QWidget *_navPane;
-	QWidget *_previewPane;
 	QWidget *_viewPane;
 	QWidget *_metadataPane;
 
@@ -291,7 +288,7 @@ private:
 	QVector<QByteArray> iconList;
 	QString filename;
 
-    PreferencesDialog* prefsDialog;
+    PreferencesDialog* prefsDialog = nullptr;
     ProgressDialog* progressDialog;
 
 	QPushButton *updateAsset;
@@ -314,7 +311,7 @@ private:
     /// (the model's scene graph, read from its stored node-tree blob).
     QTreeWidget *assetNodeTree = nullptr;
     void populateAssetNodeTree(const QString &guid, int assetType);
-	QTreeWidgetItem *rootItem;
+	QTreeWidgetItem *rootItem = nullptr;
 	bool drawerTreeUpdating = false;   // guards itemChanged during rebuilds
 	AssetGridItem *loadingTile = nullptr;
 

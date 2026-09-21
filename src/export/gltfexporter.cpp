@@ -981,7 +981,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     // resolved after the node array is complete (joint nodes are appended).
     struct PendingSkin
     {
-        int meshNodeIndex;
+        int meshNodeIndex = 0;
         iris::MeshPtr mesh;
         MeshBuffers buffers;      // holds JOINTS/WEIGHTS float data
         iris::SceneNodePtr node;  // the mesh NODE — where library clips live

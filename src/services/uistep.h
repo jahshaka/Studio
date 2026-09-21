@@ -69,7 +69,7 @@ public:
     Scope &operator=(const Scope &) = delete;
 
 private:
-    const char *mPrevious;
+    const char *mPrevious = nullptr;
 };
 
 }   // namespace UiStep

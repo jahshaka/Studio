@@ -25,7 +25,20 @@ class AssetViewGrid : public QScrollArea
 
 public:
 	QGridLayout *_layout;
-	int lastWidth;
+	/// The last width a resizeEvent reported. ZERO UNTIL THE FIRST ONE, and
+	/// that is a value this class must survive: the tray is POPULATED BEFORE
+	/// IT IS SHOWN, so a search, a filter or a tile removal can run before any
+	/// resize has happened. It used to be uninitialised, which made the column
+	/// count whatever the heap held (UNINIT-SWEEP-1 A1-4).
+	int lastWidth = 0;
+	/// THE COLUMN COUNT, in ONE place. It was written out three times and only
+	/// updateGridColumns() guarded the zero — so with `lastWidth` honest at 0,
+	/// searchTiles() and filterAssets() divided by it. One tile column is what
+	/// a grid too narrow for one tile has always laid out.
+	static int columnsFor(int width) {
+		const int c = width / (128 + 10);
+		return c > 0 ? c : 1;
+	}
 	QWidget *parent;
 
 	AssetViewGrid(QWidget *parent);
