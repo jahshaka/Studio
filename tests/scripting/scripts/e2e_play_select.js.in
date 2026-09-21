@@ -99,17 +99,20 @@ near(pos(prop).x, 5, 1e-3, "...and the running simulation left it where the hand
 
 // ---- 3. the hand wins over the solver on a BODY ---------------------------
 
-var beforeHand = pos(faller);
-node.transform(faller, { position: { x: 4, y: beforeHand.y, z: 0 } });
+// Placed HIGH and to the side, so both halves are readable: the x says the
+// hand won over the solver's pose, and the y says the solver still has it
+// (the body was resting on the ground by now, and a body that stayed asleep
+// under the teleport would sit at 5 for ever).
+node.transform(faller, { position: { x: 4, y: 5, z: 0 } });
 near(pos(faller).x, 4, 1e-3, "the body was placed by hand");
-editor.frame(10, 1 / 60);
+near(pos(faller).y, 5, 1e-3, "...at the height the hand chose");
+editor.frame(20, 1 / 60);
 var afterHand = pos(faller);
 near(afterHand.x, 4, 0.05,
      "the body CARRIED ON from where the hand put it instead of snapping back to the " +
      "solver's pose");
-assert(afterHand.y < beforeHand.y - 1e-3,
-       "...and it is still falling under the solver (" + beforeHand.y.toFixed(3) + " -> " +
-       afterHand.y.toFixed(3) + ")");
+assert(afterHand.y < 5 - 0.05,
+       "...and it is falling again from there, awake (5 -> " + afterHand.y.toFixed(3) + ")");
 
 // ---- 4. Stop throws the run's edits away and keeps the selection ----------
 
