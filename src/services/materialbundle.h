@@ -200,6 +200,31 @@ WriteResult writeShipped(Database *db, const QString &guid, const QJsonObject &d
 QString create(Database *db, const QString &name, const QJsonObject &definition,
                const QByteArray &thumbnail = QByteArray(), QString *errorOut = nullptr);
 
+/// THE PROJECT'S OWN COPY OF A SHIPPED PRESET (PRESET-EDIT-1, the owner's
+/// rule: "only the MASTER materials should be locked; if they are added to a
+/// project they should be editable already"). The same mint as `create` with
+/// two differences, and both of them are the rule rather than a relaxation:
+///
+///   * IT KEEPS THE PRESET'S NAME. The user sees ONE material — they added
+///     "Wood PBR" to their project and edited it — so the copy is called
+///     "Wood PBR", not "Wood PBR-1". That is exactly the collision
+///     `create` refuses (PRESET-UNIFY-1: a material carrying a preset's name
+///     is unreachable BY NAME), and it is acceptable here because the copy
+///     replaces the master in this project: `presetedit::masterOf` is the
+///     link back, and the module's name lookup prefers the open project's
+///     material over the shipped table.
+///   * THE CALLER SUPPLIES THE GUID. An undone copy must be re-makeable
+///     EXACTLY — same guid, same pins, same use edges — or a redo would
+///     leave the scene wearing a material that no longer exists
+///     (commands/presetcopycommand.h). Empty means "mint one".
+///
+/// Not a door for anything else: `create` is the one every other mint comes
+/// through.
+QString createPresetCopy(Database *db, const QString &guid, const QString &name,
+                         const QJsonObject &definition,
+                         const QByteArray &thumbnail = QByteArray(),
+                         QString *errorOut = nullptr);
+
 /// Every asset this definition names: the texture guid in each texture slot,
 /// plus the baked maps' member guids. Order preserved, each guid once. A slot
 /// holding a path names nothing and is skipped (`write` refuses one anyway).

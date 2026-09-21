@@ -4426,6 +4426,122 @@ void hud_overlay_draws_where_it_says_when_allowed() {
               "the stats readout must touch NOTHING outside its corner: %zu px", bottomRight);
 }
 
+/// A VIEW WITH NO SCENE BOUND CLEARS ITS BACKGROUND AND STILL DRAWS ITS PANEL
+/// (lane STALE-VIEW-1; chain::buildBlank).
+///
+/// THE DEFECT, measured on the rig before this existed (spikes/stale-view-1/):
+/// `detachScene()` destroyed the view's workspace, so a view with no scene
+/// presented NOTHING and the X server kept the last frame it was given. In a
+/// load IN PLACE that is the one to two frames between the teardown and the
+/// moment the panel rebuild takes the window off screen; the bigger half is the
+/// other defect with the same cause — the "No world open" panel, raised by
+/// every close, never reached a pixel.
+///
+/// Three assertions, in the order the bug happens: the old world's pixels are
+/// GONE the frame after the scene is detached, the background is what replaced
+/// them, and the cover the host raises over that background is drawn. Then a
+/// scene binds and the picture comes back — the swap has to work both ways.
+void a_scene_less_view_clears_and_still_draws_its_panel() {
+    Fixture fx;
+    View *v = fx.view("blank-view", 192, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("blank-scene");               REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    render(fx.e, 4); Image world; REQUIRE(v->readPixels(world));
+    // The object is LIT, so its centre is not the authored colour — what matters
+    // is only that something other than the background is there to lose.
+    CHECK_MSG(!near(centre(world), kBlue, 8),
+              "the fixture must actually draw its object first: %d %d %d",
+              centre(world).r, centre(world).g, centre(world).b);
+    const unsigned long long blankBefore = v->blankFramesPresented();
+
+    // ---- the scene goes ----------------------------------------------------
+    v->setScene(nullptr);
+    render(fx.e, 2); Image bare; REQUIRE(v->readPixels(bare));
+    CHECK_MSG(bare.rgba != world.rgba,
+              "a view with no scene must NOT still be showing the world that was bound");
+    size_t notBackground = 0;
+    for (unsigned y = 0; y < bare.height; ++y)
+        for (unsigned x = 0; x < bare.width; ++x)
+            if (!near(px(bare, x, y), kBlue, 4)) ++notBackground;
+    CHECK_MSG(notBackground == 0,
+              "every pixel must be the view's own background: %zu of %u are not",
+              notBackground, bare.width * bare.height);
+    CHECK_MSG(v->blankFramesPresented() > blankBefore,
+              "...and the view must have COUNTED those frames (%llu -> %llu)",
+              blankBefore, v->blankFramesPresented());
+
+    // ---- the panel a close raises, on that background -----------------------
+    ViewOverlayDesc noScene;
+    noScene.cover = ViewOverlayDesc::Cover::NoScene;
+    noScene.coverTitle = "No world open";
+    noScene.coverSubtitle = "Open or create a world from the Desktop";
+    noScene.coverFill = Colour(1.0f, 0.0f, 1.0f, 1.0f);
+    noScene.allowOffscreen = true;    // the only way an offscreen view draws a HUD
+    v->setOverlay(noScene);
+    render(fx.e, 4); Image panel; REQUIRE(v->readPixels(panel));
+    CHECK_MSG(near(centre(panel), noScene.coverFill, 6),
+              "the panel must own the centre of a scene-less view: %d %d %d",
+              centre(panel).r, centre(panel).g, centre(panel).b);
+    // ...and its TEXT, which is the half that never reached the screen: count
+    // pixels in the title band that are neither the fill nor the background.
+    size_t titlePixels = 0;
+    for (unsigned y = panel.height / 2 - 14; y < panel.height / 2 + 14; ++y)
+        for (unsigned x = 0; x < panel.width; ++x)
+            if (!near(px(panel, x, y), noScene.coverFill, 24)) ++titlePixels;
+    std::printf("    no-scene panel title/subtitle pixels: %zu\n", titlePixels);
+    CHECK_MSG(titlePixels > 40,
+              "the panel's captions must actually render on a scene-less view: %zu px",
+              titlePixels);
+
+    // ---- AND AT MSAA, which is reasoned everywhere else and pinned here ----
+    // The clear-only chain's clear STORES its samples and its overlay pass
+    // carries the resolve (kMultiWorkspaceStore) — the same split, and the same
+    // trap, as the scene chain's two passes: a plain Store that never resolves
+    // leaves the whole frame black, and a discarding resolve on the clear
+    // leaves the overlay drawing into samples nobody reads. Neither is visible
+    // at 1x, which is why this arm exists.
+    for (const unsigned samples : { 2u, 4u }) {
+        v->setSampleCount(samples);
+        render(fx.e, 3);
+        const unsigned achieved = v->sampleCount();
+        Image aa; REQUIRE(v->readPixels(aa));
+        CHECK_MSG(near(centre(aa), noScene.coverFill, 6),
+                  "%ux (achieved %u): the panel must survive the resolve: %d %d %d",
+                  samples, achieved, centre(aa).r, centre(aa).g, centre(aa).b);
+        CHECK_MSG(near(px(aa, 4, aa.height - 4), noScene.coverFill, 6),
+                  "%ux (achieved %u): and so must the fill under it: %d %d %d",
+                  samples, achieved, px(aa, 4, aa.height - 4).r,
+                  px(aa, 4, aa.height - 4).g, px(aa, 4, aa.height - 4).b);
+    }
+    // ...and the background alone at the highest count, with the panel down:
+    // the clear IS the picture there, so a lost resolve is a black frame.
+    v->setOverlay(ViewOverlayDesc());
+    render(fx.e, 3); Image aaBare; REQUIRE(v->readPixels(aaBare));
+    size_t aaNotBackground = 0;
+    for (unsigned y = 0; y < aaBare.height; ++y)
+        for (unsigned x = 0; x < aaBare.width; ++x)
+            if (!near(px(aaBare, x, y), kBlue, 4)) ++aaNotBackground;
+    CHECK_MSG(aaNotBackground == 0,
+              "at %ux every pixel must still be the view's background: %zu of %u are not",
+              v->sampleCount(), aaNotBackground, aaBare.width * aaBare.height);
+    v->setSampleCount(1);
+    render(fx.e, 2);
+
+    // ---- and back: binding a scene replaces the clear with the world --------
+    Scene *s2 = fx.scene("blank-scene-2"); REQUIRE(s2);
+    v->setScene(s2);
+    populate(s2, kOrange);
+    aim(v);
+    render(fx.e, 4); Image again; REQUIRE(v->readPixels(again));
+    const Px was = centre(world), now = centre(again);
+    CHECK_MSG(std::abs(was.r - now.r) <= 8 && std::abs(was.g - now.g) <= 8 &&
+              std::abs(was.b - now.b) <= 8,
+              "binding a scene must put its picture back: %d %d %d, was %d %d %d",
+              now.r, now.g, now.b, was.r, was.g, was.b);
+}
+
 /// Showing and hiding the overlay is element state, never a chain edit — or
 /// every F3 press and every world open would cost a workspace rebuild
 /// (STATS_OVERLAY_SPEC §6.6 test 3). Only the offscreen ENTITLEMENT changes the
@@ -6255,6 +6371,8 @@ int main(int argc, char **argv) {
         { "dynamic_mesh_shadow_follows_its_pose",   dynamic_mesh_shadow_follows_its_pose },
         { "hud_overlay_is_ignored_offscreen_unless_asked", hud_overlay_is_ignored_offscreen_unless_asked },
         { "hud_overlay_draws_where_it_says_when_allowed", hud_overlay_draws_where_it_says_when_allowed },
+        { "a_scene_less_view_clears_and_still_draws_its_panel",
+          a_scene_less_view_clears_and_still_draws_its_panel },
         { "hud_overlay_toggle_does_not_rebuild_the_workspace", hud_overlay_toggle_does_not_rebuild_the_workspace },
         { "render_stats_are_live_and_lazily_recorded", render_stats_are_live_and_lazily_recorded },
         { "object_counts_track_lifetimes",          object_counts_track_lifetimes },

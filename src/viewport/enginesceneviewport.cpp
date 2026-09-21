@@ -1775,6 +1775,12 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
     // the engine scene underneath is the same object (close/open reuses it).
     mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
     refreshOverlay();
+    // AND THE TEARDOWN REACHES THE SCREEN (lane STALE-VIEW-1). This is the one
+    // moment the world a user is looking at stops existing; without a frame
+    // here the window keeps its last picture until somebody else draws, and on
+    // a load in place that somebody is 20-60 ms away at best. See
+    // presentBackground for the whole argument and for every case it declines.
+    presentBackground();
 }
 
 void EngineSceneViewport::startPlayingScene()
@@ -3251,6 +3257,14 @@ qulonglong EngineSceneViewport::framesPresented() const
     return presentsSinceBind();
 }
 
+qulonglong EngineSceneViewport::blankFramesPresented() const
+{
+    // Straight off the engine, with NO rebase: unlike framesPresented — which
+    // is "frames of the world bound right now", and therefore restarts at every
+    // bind — this one is a running total a caller differences across a load.
+    return view() ? qulonglong(view()->blankFramesPresented()) : 0;
+}
+
 void EngineSceneViewport::setShowFps(bool value)
 {
     if (mShowStats == value) return;
@@ -3345,7 +3359,9 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
     // the second one matters as much as the first, because between
     // `openStageBegin`'s teardown and the bind there is genuinely no world, and
     // "No world open" is a statement about an idle window, not about a load in
-    // flight.
+    // flight. (Since STALE-VIEW-1 that distinction is VISIBLE rather than
+    // theoretical: a scene-less view presents its background, so whatever is
+    // composed here is what the user sees in that gap.)
     if (mSceneLoadPending) {
         if (!mCoverThisLoad) return d;
         d.cover = Cover::Loading;
@@ -3666,6 +3682,36 @@ void EngineSceneViewport::presentCovered(int frames)
     mPresentingCover = false;
 }
 
+void EngineSceneViewport::presentBackground()
+{
+    // See the declaration for why this is explicit. Everything below is a
+    // reason there is nothing to do, in the order it is cheapest to find out.
+    if (!mActive || !mEngine) return;
+    if (!view() || view()->isOffscreen()) return;
+    if (mEngineScene) return;              // a world is bound: ordinary frames own the picture
+    if (!isVisible()) return;              // no pixels of ours on screen to replace
+    // THE COVER ON PATH IS presentCovered's, BYTE FOR BYTE. With the preference
+    // ON the composed desc is the Loading panel and that route already draws it
+    // (and counts it); a second frame from here would put a cover on screen
+    // that `coversPresented` never saw.
+    if (overlayDesc().cover == jahshaka::engine::ViewOverlayDesc::Cover::Loading) return;
+    refreshOverlay();
+    // The View is enabled by widget VISIBILITY, and the page this runs on is up
+    // — but a load begun before the page was shown can reach here with the view
+    // still disabled. Enable it for this one frame and put it back, exactly as
+    // presentCovered does.
+    const bool wasEnabled = view()->isEnabled();
+    view()->setEnabled(true);
+    sampleStreamingWork(false);
+    ++mFrameEpoch;
+    mEngine->renderOneFrame();
+    devicelossend::checkAfterFrame(mEngine.get());
+    // A frame on the display is a frame the pacing clock has to know about
+    // (DOUBLE-FRAME-1).
+    if (mDriver) mDriver->noteExternalFrame();
+    view()->setEnabled(wasEnabled);
+}
+
 void EngineSceneViewport::beginSceneLoad(const QString &title)
 {
     // The world on screen (if any) is about to be replaced: nothing presented
@@ -3679,33 +3725,54 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     // preference toggled while a world is arriving must not put the panel up
     // over a world that is already drawing.
     //
-    // A LOAD IN PLACE LEAVES THE PREVIOUS WORLD FROZEN ON SCREEN, AND NOTHING
-    // HERE CAN FIX IT — measured, twice, rather than reasoned (the Fable read,
-    // item 3; the lead asked for `|| isVisible()` here and it is NOT shipped,
-    // because it is a switch that never fires).
+    // WHAT A LOAD IN PLACE ACTUALLY SHOWS, measured rather than reasoned (lane
+    // STALE-VIEW-1; the captures and the per-sample table are in
+    // spikes/stale-view-1/). Four runs, Grand Showroom 2 and Matcaps both ways,
+    // the screen sampled every ~57 ms with the viewport's own state on the same
+    // clock, against the UNMODIFIED base:
     //
-    // What happens: a View with no scene bound PRESENTS NOTHING — the engine
-    // destroys its workspace with its scene — so from `openStageBegin`'s
-    // teardown until the new world's first frame the X server keeps the last
-    // frame it was given. On a load begun from the editor page that frame is
-    // the PREVIOUS WORLD. Measured on the rig with the cover off: the whole
-    // gap (128-511 ms of a warm Grand Showroom 2 open, states `noscene` then
-    // `loading`) is BYTE-IDENTICAL to the frame before the open began.
+    //   0 ->  222-242 ms   the previous world, still bound and still drawing
+    //                      (mean |difference| 0.01-0.10 per byte from the frame
+    //                      before the open — the same picture). The viewport
+    //                      first reports `noscene` at 227-250 ms, so this
+    //                      stretch is BEFORE the teardown and is not stale.
+    //   the teardown       one to two frames (~20-60 ms) in which the old
+    //                      world's last frame was all the X server had. THIS is
+    //                      what this lane removes.
+    //   ~278 ms onward     the MainWindow's WATERMARK, content-independent
+    //                      (the same hash in every run whichever worlds are
+    //                      involved) — the viewport's native window is not on
+    //                      screen at all. Unchanged by this lane, and not
+    //                      changeable by any engine: see below.
+    //   then               the new world.
     //
-    // Why a cover cannot hide it. After the teardown there is no workspace, so
-    // a cover cannot be presented at all — `Cover::NoScene` is raised and
-    // "presented" by every close and changes not one pixel, which is the same
-    // defect seen from the other side. Before the teardown a cover COULD be
-    // presented, but by then Qt already reports this widget as not visible on
-    // both routes (`presentCovered` returns early on exactly that), while its
-    // NATIVE window's pixels are still on screen — which is the whole trap.
-    // Measured with `coversPresented`: with the preference off, a create from
-    // the editor page and an open in place present ZERO loading covers, so
-    // `|| isVisible()` would change nothing; with it ON a create presents one.
+    // So the engine-side fix is narrow and real: a View with no scene bound used
+    // to have no workspace and present NOTHING; it now owns a CLEAR-ONLY one
+    // (chain::buildBlank), so the frames between the teardown and the unmap show
+    // this viewport's own background with whatever the HUD is asked to draw over
+    // it. That is also what finally put the "No world open" panel on a screen
+    // (photographed): it was raised by every close and changed not one pixel.
+    // `View::blankFramesPresented` counts those frames,
+    // `editor.viewportState().blankPresented` reports it, and the teardown
+    // presents one EXPLICITLY (presentBackground, below) so the clear does not
+    // depend on a driver tick landing inside a 20-60 ms window.
     //
-    // The fix is engine-side — a scene-less view drawing its own background
-    // (STALE-VIEW-1) — and it fixes the never-drawn "No world open" panel with
-    // the same change.
+    // WHY A COVER STILL CANNOT BE PUT UP FOR THIS LOAD, and why the lead's
+    // `|| isVisible()` is still NOT shipped here: by the time this runs Qt
+    // already reports this widget as not visible on both routes
+    // (`presentCovered` returns early on exactly that) while its NATIVE
+    // window's pixels are still on screen. Measured with `coversPresented`:
+    // with the preference off, a create from the editor page and an open in
+    // place present ZERO loading covers, so the switch would change nothing.
+    //
+    // WHAT IS NOT OURS TO DRAW, and it is the big number (measured on the rig,
+    // 2026-09-21; VIEW-REBUILD-1): the editor viewport's native window is
+    // UNVIEWABLE from ~215 ms to ~355 ms of an in-place open while the panels
+    // are rebuilt — its geometry walks 1612x910 -> 1326x910 -> 924x910 ->
+    // 924x567 before it comes back — and nothing can be presented into a window
+    // that is not on screen. For that stretch the user sees the watermark, in
+    // this build exactly as in the one before it. That is a Studio question
+    // (why the panel rebuild hides the viewport), not an engine one.
     mCoverThisLoad = loadingcover::enabled();
     // The indicator's baselines. `shadersAtLoad` is the engine's running
     // compile total right now, so the progress pair counts THIS load's
@@ -3943,6 +4010,17 @@ void EngineSceneViewport::clearScene()
         view()->setScene(nullptr);
         // The next project may not drive the background (only SINGLE_COLOR
         // skies do) — reset to the editor grey the view was created with.
+        //
+        // TWO CLEAR-ONLY CHAINS ARE BUILT ACROSS THESE TWO LINES, deliberately
+        // accepted (lane STALE-VIEW-1, the lead's item 6): setScene(nullptr)
+        // puts one up carrying the OLD world's background colour, and this line
+        // rebuilds it with the editor grey. Both are DEFINITION work — two
+        // passes and a workspace instance on a view that is drawing nothing —
+        // and it happens once per close. The alternative is a second way for a
+        // background to reach the screen (a live clear-colour write on a
+        // scene-less view, with the definitions left stale until the next
+        // bind), and one seam that every rebuild goes through is worth more
+        // than one avoided definition build per world change.
         view()->setBackground(Colour(0.10f, 0.11f, 0.14f));
     }
     if (mEngineScene && mEngine) { mEngine->destroyScene(mEngineScene); mEngineScene = nullptr; }

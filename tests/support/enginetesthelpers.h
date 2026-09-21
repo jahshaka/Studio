@@ -178,4 +178,112 @@ inline void testCameraLookAt(View *v, const Vec3 &pos, const Vec3 &target)
     v->setCamera(testCameraDescLookAt(pos, target));
 }
 
+// ---------------------------------------------------------------------------
+// THE LEAK ROOM — ONE fixture, two suites (GATHER-0 fix round, B1).
+//
+// A sealed 10 m room with one lamp INSIDE it (pure green, so the red channel
+// is 100 % the other lamp) and one OUTSIDE it (red, a metre off the -Z wall).
+// Shadows on, the direct term through the wall is exactly zero at every
+// thickness, so every red pixel inside the room arrived through global
+// illumination and that number IS the leak.
+//
+// It lived in tests/gi/test_gi_leak_room.cpp and was copied verbatim into
+// gi.gather_spike, which is one fixture too many: the two suites compare their
+// numbers against each other (the gather's field arm reproduces gi.leak_room's
+// chain arm to within 0.7 %) and that comparison is only worth anything while
+// the rooms are the SAME room. It is here so they cannot drift.
+namespace leakroom {
+
+/// One axis-aligned slab of the shell.
+inline NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale)
+{
+    const NodeId node = s->createNode();
+    const MeshId mesh = s->createMesh(unitCubeMesh());
+    PbrParams p;
+    p.albedo = albedo;
+    p.metalness = 0.0f;
+    p.roughness = 0.9f;
+    const MaterialId mat = s->createPbrMaterial(p);
+    if (!node || !mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
+    s->setNodeTransform(node, pos, Quat(), scale);
+    return node;
+}
+
+/// What `build` hands back: the two lamps, and the outside one's description
+/// so a caller can darken and relight it (which is how the leak is isolated).
+struct Room {
+    NodeId inside = 0;
+    NodeId outside = 0;
+    LightDesc outsideLight;
+};
+
+/// The room at wall thickness `T`, its two lamps, and the camera at the pose
+/// both suites measure from. The interior (x,z in [-5,5], y in [0,4]) is
+/// identical at every thickness — only the barrier's depth in voxels changes.
+inline Room build(Scene *s, View *view, float T)
+{
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    const Colour white(0.8f, 0.8f, 0.8f);
+    const float ho = 5.0f + T * 0.5f;
+    const float span = 10.0f + 2.0f * T;
+    addSlab(s, white, Vec3(0, -T * 0.5f, 0), Vec3(span, T, span));            // floor
+    addSlab(s, white, Vec3(0, 4.0f + T * 0.5f, 0), Vec3(span, T, span));      // ceiling
+    addSlab(s, white, Vec3(0, 2, -ho), Vec3(span, 4.0f, T));                  // -Z: THE wall
+    addSlab(s, white, Vec3(0, 2,  ho), Vec3(span, 4.0f, T));                  // +Z
+    addSlab(s, white, Vec3(-ho, 2, 0), Vec3(T, 4.0f, span));                  // -X
+    addSlab(s, white, Vec3( ho, 2, 0), Vec3(T, 4.0f, span));                  // +X
+
+    Room r;
+    // The inside lamp: PURE GREEN, so the red channel is entirely the outside
+    // lamp's and no threshold has to separate them.
+    r.inside = s->createNode();
+    s->setNodeTransform(r.inside, Vec3(0.0f, 3.0f, 2.5f), Quat(), Vec3(1, 1, 1));
+    LightDesc li;
+    li.type = LightType::Point;
+    li.colour = Colour(0.0f, 1.0f, 0.0f);
+    li.intensity = 3.0f;
+    li.range = 14.0f;
+    li.castShadows = true;
+    s->setLight(r.inside, li);
+
+    // The outside lamp: RED, a metre beyond the outer face of the -Z wall.
+    r.outside = s->createNode();
+    s->setNodeTransform(r.outside, Vec3(0.0f, 2.0f, -(ho + T * 0.5f + 1.0f)), Quat(), Vec3(1, 1, 1));
+    r.outsideLight.type = LightType::Point;
+    r.outsideLight.colour = Colour(1.0f, 0.0f, 0.0f);
+    r.outsideLight.intensity = 25.0f;
+    r.outsideLight.range = 12.0f;
+    r.outsideLight.castShadows = true;
+    s->setLight(r.outside, r.outsideLight);
+
+    // The camera looks at the inner face of the -Z wall from THREE METRES
+    // away, off to +X so nothing else is in the shot. Three metres, and not
+    // the original spike's six, for one reason: under a chain the irradiance
+    // field rides cascade 0 — a 10 m box centred on the camera — and the wall
+    // being measured has to be inside it, or the suite grades the ring.
+    if (view) testCameraLookAt(view, Vec3(3.6f, 2.0f, -2.0f), Vec3(3.6f, 2.0f, -5.0f));
+    return r;
+}
+
+/// The lamp on or off, for the two halves of one leak reading.
+inline void setOutsideIntensity(Scene *s, Room &r, float intensity)
+{
+    r.outsideLight.intensity = intensity;
+    s->setLight(r.outside, r.outsideLight);
+}
+
+/// Mean red and green of the centred block both suites measure — expressed as
+/// FRACTIONS of the image so the two may use different resolutions.
+inline void meanRG(const Image &img, float &r, float &g)
+{
+    double sr = 0.0, sg = 0.0; int n = 0;
+    const unsigned x0 = img.width * 5u / 16u, x1 = img.width * 11u / 16u;
+    const unsigned y0 = img.height * 5u / 16u, y1 = img.height * 11u / 16u;
+    for (unsigned y = y0; y < y1; ++y)
+        for (unsigned x = x0; x < x1; ++x) { const Colour c = img.at(x, y); sr += c.r; sg += c.g; ++n; }
+    r = float(n ? sr / n : 0.0); g = float(n ? sg / n : 0.0);
+}
+
+}  // namespace leakroom
+
 }  // namespace enginetest

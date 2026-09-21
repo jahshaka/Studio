@@ -49,6 +49,15 @@ function loneNodeId(guid) {
     return ids[0];
 }
 function nodeCount(guid) { return materials.loadGraph(guid).nodes; }
+// ANY non-master node of a material's graph (a preset has several): the
+// definition's ids are the page's, so an id read here addresses the canvas.
+function loneNodeIdOf(guid) {
+    materials.loadGraph(guid);
+    var ids = graph.nodes().filter(function (n) { return !n.master; })
+                   .map(function (n) { return n.id; });
+    assert(ids.length >= 1, "graph '" + guid + "' has a node beside the master");
+    return ids[0];
+}
 
 // ---- 1. two authored materials -------------------------------------------
 var projectGuid = project.create("Material Tabs " + Date.now());
@@ -110,12 +119,81 @@ materials.open(A);
 assert(materials.tabs().length === 2, "opening A again ACTIVATES it (identity is guid+scope)");
 assert(materials.activeTab().guid === A, "...and makes it active");
 
-// ---- 6. a shipped preset opens read-only ---------------------------------
+// ---- 6. a shipped preset opens EDITABLE in a project (PRESET-EDIT-1) -----
+//
+// It used to open READ-ONLY wherever it was found, with Customise beside the
+// banner. The owner's rule of 2026-09-21: only the MASTER is locked, and a
+// preset a project holds is that project's to edit — so the tab takes edits
+// and the FIRST SAVE makes the project its own copy (the copy's full contract
+// is scripting.e2e.preset_edit's; what belongs here is what the TAB says).
 var preset = materials.open("Brick PBR");
-assert(preset.readOnly === true, "a shipped preset opens READ-ONLY");
+assert(preset.readOnly === false && preset.editable === true,
+       "a shipped preset opens EDITABLE with a project open");
+assert(preset.master === preset.guid,
+       "…and the tab names the shipped master behind it (itself, until a copy exists)");
 assert(materials.tabs().length === 3, "three tabs");
+assert(tabOf(preset.guid).editable === true, "…the tab list agrees");
 assert(materials.closeTab(preset.guid) === true, "materials.closeTab(preset)");
 assert(materials.tabs().length === 2, "two tabs again");
+
+// ---- 6b. THE PAGE'S OWN FIRST EDIT OF A PRESET COPIES IT ON WRITE --------
+//
+// The gesture the owner makes: open a preset the project holds, delete a node,
+// let the save land. It is asserted HERE, on the page, because the page is
+// where it CRASHED: the copy unpins the master, this page closes PROJECT-SCOPE
+// tabs whose pin has gone, and the document being saved was the one it closed
+// (a use-after-free on the very first try on the rig). A close FLUSHES the
+// pending autosave, which is that save landing, with no wall clock in it.
+//
+// THE TAB MUST BE PROJECT-SCOPE FOR THAT TO BE TRUE (the Fable read's item 2):
+// an unpinned preset opens at LIBRARY origin, which the membership handler
+// never touches — the arm would then pass with the guards removed. So the
+// project holds it first, by the apply, exactly as the owner's does.
+var brickCube = scene.addPrimitive("Cube");
+assert(material.apply(brickCube, "Brick PBR") === true, "Brick PBR applied: the project holds it");
+var pageEdit = materials.open("Brick PBR");
+assert(pageEdit.scope === "project",
+       "…so the preset opens at PROJECT scope (" + pageEdit.scope + ")");
+assert(pageEdit.editable === true, "…editable on the page");
+assert(pageEdit.master === pageEdit.guid, "…and it is the shipped master, so far");
+var brickNode = loneNodeIdOf(pageEdit.guid);
+assert(graph.removeNode(brickNode) === true, "the page's canvas takes the deletion");
+assert(tabOf(pageEdit.guid) !== null,
+       "…and the tab is still open on the master until the save lands");
+assert(materials.closeTab(pageEdit.tab) === true,
+       "closing the tab flushes the pending autosave — the first edit landing");
+var brickCopies = assets.list({ scope: "project", type: "material" }).filter(function (a) {
+    return materials.masterOf(a.guid) === pageEdit.guid && a.guid !== pageEdit.guid;
+});
+assert(brickCopies.length === 1,
+       "…and the project holds its OWN copy of the preset (" + brickCopies.length + ")");
+assert(brickCopies[0].name === "Brick PBR", "…under the preset's own name");
+assert(assets.list({ scope: "project", type: "material" }).filter(function (a) {
+           return a.guid === pageEdit.guid;
+       }).length === 0,
+       "…and has let go of the shipped master");
+assert(materials.tabs().length === 2, "two tabs again");
+
+// ---- 6c. AND THE SECOND TIME, THE PAGE ADOPTS THAT COPY ------------------
+//
+// The preset TILE carries the MASTER's guid, so the second double-click opens
+// the master again — at LIBRARY scope now, since the project has let go of it.
+// Editing it must ADOPT the copy this project already has, not make a second
+// one (the Fable read's item 1: two "Wood PBR" rows pinned, and an edit that
+// could land on a copy no mesh wears).
+var rowsBefore6c = assets.list({ scope: "store", type: "material" }).length;
+var again = materials.open(pageEdit.guid);      // by the MASTER's guid: the tile's route
+assert(again.editable === true, "the master opens editable a second time");
+assert(graph.removeNode(loneNodeIdOf(again.guid)) === true, "…the canvas takes an edit");
+assert(materials.closeTab(again.tab) === true, "…and the save lands on the close");
+assert(assets.list({ scope: "store", type: "material" }).length === rowsBefore6c,
+       "NO SECOND COPY WAS MINTED (" + assets.list({ scope: "store", type: "material" }).length
+       + " material rows, was " + rowsBefore6c + ")");
+var stillOne = assets.list({ scope: "project", type: "material" }).filter(function (a) {
+    return materials.masterOf(a.guid) === pageEdit.guid && a.guid !== pageEdit.guid;
+});
+assert(stillOne.length === 1 && stillOne[0].guid === brickCopies[0].guid,
+       "…the project still holds exactly the copy it had");
 
 // ---- 7. the pending save lands on its OWN material ----------------------
 // B's deletion (§3) armed B's autosave and nothing else's — that was read at
@@ -185,7 +263,8 @@ assert(refused, "materials.activate refuses a tab that is not there");
 // still armed — so the pending edit fired later under the NEW material's guid,
 // and a read-only PRESET tab was silently turned into the user's new material.
 var presetTab = materials.open("Gold PBR");
-assert(presetTab.readOnly === true, "a preset tab is open and read-only");
+assert(presetTab.editable === true && presetTab.master === presetTab.guid,
+       "a preset tab is open, editable, and knows which shipped material it is");
 var before = materials.tabs().length;
 var minted = materials.newMaterial("Gold PBR", { name: "Tabs New" });
 assert(minted.guid.length > 10 && minted.name === "Tabs New",
@@ -193,9 +272,13 @@ assert(minted.guid.length > 10 && minted.name === "Tabs New",
 assert(materials.tabs().length === before + 1, "New opened a TAB, it did not take one over");
 assert(materials.activeTab().guid === minted.guid, "...and the new material is the active one");
 var presetStill = materials.tabs().filter(function (t) { return t.guid === presetTab.guid; });
-assert(presetStill.length === 1 && presetStill[0].readOnly === true,
-       "the preset tab is still open, still read-only — still the preset");
-assert(materials.loadGraph(presetTab.guid).readOnly === true,
+assert(presetStill.length === 1 && presetStill[0].master === presetTab.guid,
+       "the preset tab is still open on the preset — New took no tab over");
+// AND THE PRESET ITSELF WAS NOT WRITTEN TO. Asked of the GRAPH, because a
+// preset nobody has used has no library row at all (seeding is on first USE):
+// it still reads as the shipped material, on its own reserved guid.
+var presetGraph = materials.loadGraph(presetTab.guid);
+assert(presetGraph.presetMaster === presetTab.guid && presetGraph.nodes >= 2,
        "and the preset itself was not written to");
 materials.closeTab(presetTab.guid);
 materials.closeTab(minted.guid);

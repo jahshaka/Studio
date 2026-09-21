@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/projectfolders.h"
 #include "services/materialpresetassets.h"
+#include "services/presetedit.h"
 #include "services/materialpresetseeder.h"
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
@@ -239,8 +240,8 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "written into the definition and every mesh wearing the material is re-dressed — on a VALUES "
           "material only: a GRAPH material's slots come from its graph, so a slot write there is refused "
           "(the image is still imported and pinned; put it on a texture node with graph.addNode('texture') "
-          "+ graph.setValue). A SHIPPED PRESET is refused outright, before anything is imported: it is "
-          "read-only, and materials.createFromPreset makes the copy that is not.",
+          "+ graph.setValue). A SHIPPED PRESET is refused outright, before anything is imported: its library row "
+          "is read-only, and materials.edit gives you this project's own copy to write to.",
           Needs::Document },
         { "members", "materials.members(guid) -> [{guid, name, slot, node, role, bytes, usedBy, "
                      "pinned, member, hidden}]",
@@ -274,15 +275,19 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           Needs::Document },
         { "loadGraph",
           "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved, "
-          "texturesImported, readOnly}",
+          "texturesImported, readOnly, editable, presetMaster}",
           "Opens a material bundle's GRAPH (a Material asset guid, a shipped PRESET by name or by its reserved "
           "guid, or a .effect/.shader file path) as the current graph for graph.* verbs. EVERY SHIPPED PRESET HAS "
           "A GRAPH and opening one costs nothing: a preset nobody has used yet has no library row, so its graph "
           "is read from the shipped file and no row is written — looking at a preset is never what seeds it. "
-          "`readOnly` is true for a shipped preset: the definition writer refuses its reserved guid, so an edit "
-          "made to this graph cannot be saved — materials.createFromPreset makes the editable copy. Texture nodes "
+          "`readOnly` is true only when this graph cannot be edited AT ALL — a shipped preset with no project "
+          "open, which is the one lock left on a master (PRESET-EDIT-1). With a project open a preset is that "
+          "project's to edit: graph.save() makes the project its own copy of it first, keeping its name, and "
+          "`presetMaster` names the shipped material behind this one (itself for a preset, the master it came "
+          "from for a copy). A script that needs the guid the save will move to calls materials.edit() itself. "
+          "Texture nodes "
           "naming an image by FILE rather than by guid are imported through the one content import and connected "
-          "here; texturesResolved reports how many. A READ-ONLY open IMPORTS NOTHING — it binds the "
+          "here; texturesResolved reports how many. A PRESET'S open IMPORTS NOTHING — it binds the "
           "shipped file to the node instead, so looking at a preset writes no row, pins nothing into "
           "the open project and never waits for the device; texturesImported is 0 for one and equal "
           "to texturesResolved otherwise.",
@@ -324,13 +329,36 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "says otherwise. With a project open it is added to the project too, so it lands in the project's "
           "materials drawer and the editor's asset tray. NOT undoable (it is an asset, like an import).",
           Needs::Document },
-        { "open", "materials.open(guidOrName, {scope}) -> {tab, guid, name, scope, readOnly}",
+        { "edit", "materials.edit(guidOrName) -> {guid, master, copied, editable}",
+          "MAKE THIS MATERIAL EDITABLE IN THE OPEN PROJECT, and answer the guid every later edit "
+          "must use. A shipped preset that a project holds is the project's to edit (the owner's "
+          "rule, 2026-09-21: only the MASTER is locked), and THE FIRST EDIT IS WHAT MAKES THE "
+          "COPY: this mints the project's own material bundle from the preset — keeping its NAME, "
+          "sharing its member textures — moves the project's pin from the shared master to it, "
+          "re-points every scene node that wore the master, and leaves the library master and "
+          "every other project untouched. `copied` says whether THIS call did it; `guid` is the "
+          "material to edit either way, so a script must read it back (THE GUID MOVES). "
+          "Idempotent and free on anything else: an ordinary material, or a copy made earlier, is "
+          "answered unchanged with no write at all. ONE UNDO STEP (the copy, the pin move and the "
+          "use edges together; inside a script run it belongs to the run's own macro). Refused "
+          "when no project is open — there is nowhere for the copy to live — and that is the only "
+          "lock left on a preset.",
+          Needs::Document },
+        { "masterOf", "materials.masterOf(guidOrName) -> guid",
+          "The SHIPPED PRESET behind a material: the preset's own reserved guid when `guidOrName` "
+          "names one, the master a project's copy was made from (materials.edit) when it is one, "
+          "and an empty string for an ordinary material. The link is recorded on the copy's row, "
+          "so it survives every later edit of the copy.",
+          Needs::Document },
+        { "open", "materials.open(guidOrName, {scope}) -> {tab, guid, name, scope, readOnly, editable, master}",
           "Opens a material bundle in the Materials page's node editor as a TAB and makes it the active one — "
           "the drawer's double-click, as a verb. A material already open at that scope is activated, not opened "
           "twice. `scope` is 'library' or 'project' (the four-drawer rule: the project's pinned copy or the "
           "library original — two tabs if both are open); the default is 'project' when the open project pins "
-          "the guid, else 'library'. A shipped preset (by name or reserved guid) opens READ-ONLY, as the drawer "
-          "does. `tab` is the tab index. Refused when the library holds no material of that name or "
+          "the guid, else 'library'. A shipped preset (by name or reserved guid) opens EDITABLE when a "
+          "project is open — `editable` true and `master` naming the preset — and its first edit "
+          "makes that project's own copy (materials.edit); with NO project open it opens "
+          "read-only, because there is nowhere for the copy to live. `tab` is the tab index. Refused when the library holds no material of that name or "
           "guid, and when the file cannot be opened at all (a graph written on a master this build "
           "no longer has) — a refusal opens no tab and changes nothing on the page.",
           Needs::Document },
@@ -374,17 +402,38 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
 {
     const QString wanted = guidOrName.trimmed();
     if (wanted.isEmpty()) return QString();
-    // A SHIPPED PRESET BY NAME OR BY ITS RESERVED GUID (the drawer's own two
-    // spellings, and what every other materials.* verb accepts).
+    // A ROW BY GUID FIRST — the cheap, common case, and it must stay cheap:
+    // every open, every edit and every masterOf comes through here. A MATERIAL,
+    // not any row that answers to the guid (fix round F4): a texture's or a
+    // model's guid would be carried all the way to the page, where the read
+    // finds no graph and the open is refused with a message about a master node.
+    if (host.db) {
+        const auto row = host.db->fetchAsset(wanted);
+        if (!row.guid.isEmpty())
+            return row.type == static_cast<int>(ModelTypes::Material) ? wanted : QString();
+    }
+    // THE OPEN PROJECT'S OWN MATERIAL WINS ON A NAME (PRESET-EDIT-1). A
+    // project's copy of a preset keeps the PRESET'S NAME — the user sees one
+    // material — so in a project that has edited "Wood PBR", that name means
+    // the project's copy and not the shipped master. Only the rows this project
+    // PINS, and only ones that record a master, so nothing changes for a project
+    // that has copied nothing. (Everywhere else a preset name still means the
+    // preset: `material.apply('Wood PBR')` is the shipped one, and every gesture
+    // the user actually makes carries a guid in its drag payload.)
+    if (host.db && host.isProjectOpen()) {
+        const QString projectGuid = host.project->getProjectGuid();
+        for (const auto &asset : host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView)) {
+            if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
+            if (asset.name.compare(wanted, Qt::CaseInsensitive) != 0) continue;
+            if (presetedit::masterOf(host.db, asset.guid).isEmpty()) continue;
+            if (host.db->isAssetPinnedBy(projectGuid, asset.guid)) return asset.guid;
+        }
+    }
+    // A SHIPPED PRESET BY NAME, or by a reserved guid whose row has not been
+    // seeded yet (the drawer's own two spellings, and what every other
+    // materials.* verb accepts).
     if (MaterialPresetAssets::isPreset(wanted)) return MaterialPresetAssets::guidFor(wanted);
     if (!host.db) return QString();
-    // A MATERIAL, not any row that answers to the guid (fix round F4): a
-    // texture's or a model's guid would be carried all the way to the page,
-    // where the read finds no graph and the open is refused with a message
-    // about a master node.
-    const auto row = host.db->fetchAsset(wanted);
-    if (!row.guid.isEmpty())
-        return row.type == static_cast<int>(ModelTypes::Material) ? wanted : QString();
     // ...or a library material's NAME, which is what the user calls it.
     const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
     for (const auto &asset : assets) {
@@ -392,6 +441,49 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
         if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
     }
     return QString();
+}
+
+QVariantMap MaterialsApi::edit(const QString &guidOrName)
+{
+    QVariantMap out;
+    if (!host.db) { fail("materials.edit: not available in this session"); return out; }
+    const QString guid = resolveMaterialGuid(guidOrName);
+    if (guid.isEmpty()) {
+        fail(QStringLiteral("materials.edit: no material '%1'").arg(guidOrName));
+        return out;
+    }
+    // THE PROJECT ONLY WHEN ONE IS REALLY OPEN (presetedit.h): the live
+    // Project instance keeps its guid after a close, so `isProjectOpen` is
+    // the question, not the guid.
+    const presetedit::Target target = presetedit::forEdit(
+        host.db, host.isProjectOpen() ? host.project : nullptr, guid,
+        host.services ? host.services->undo : nullptr,
+        host.services ? host.services->sceneEdit : nullptr);
+    if (!target.ok()) {
+        fail(QStringLiteral("materials.edit: %1").arg(target.error));
+        return out;
+    }
+    out["guid"] = target.guid;
+    out["master"] = target.master;
+    out["copied"] = target.copied;
+    out["editable"] = true;
+    // THE COPY IS A NEW TILE in the project drawer and the editor tray, and
+    // the master has just left both — every drawer that lists one has to hear
+    // about it (the four-drawer rule: one list, two windows).
+    if (target.copied && host.services && host.services->sceneEdit)
+        host.services->sceneEdit->requestAssetViewRefresh();
+    return out;
+}
+
+QString MaterialsApi::masterOf(const QString &guidOrName)
+{
+    if (!host.db) { fail("materials.masterOf: not available in this session"); return QString(); }
+    const QString guid = resolveMaterialGuid(guidOrName);
+    if (guid.isEmpty()) {
+        fail(QStringLiteral("materials.masterOf: no material '%1'").arg(guidOrName));
+        return QString();
+    }
+    return presetedit::masterOf(host.db, guid);
 }
 
 QVariantMap MaterialsApi::open(const QString &guidOrName, const QVariantMap &options)
@@ -810,8 +902,15 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
     // cannot happen" removed from the apply.
     const QString shipped = MaterialBundle::shippedPresetName(materialGuid);
     if (!shipped.isEmpty()) {
-        fail(QStringLiteral("materials.addTexture: '%1' is a material the app ships and is "
-                            "read-only — materials.createFromPreset('%1') makes your own copy")
+        // (AND THIS DOOR DOES NOT COPY ON WRITE, deliberately — PRESET-EDIT-1.
+        // Every shipped preset is a GRAPH material, and a slot edit on a graph
+        // material is refused by the next guard anyway ("that slot comes from
+        // the graph"): copying first would mint the project a material it
+        // never asked for and THEN refuse. The door that copies is
+        // `materials.edit`, which the message names.)
+        fail(QStringLiteral("materials.addTexture: '%1' is a material the app ships and its "
+                            "library row is read-only — materials.edit('%1') gives you this "
+                            "project's own copy of it to write to")
                  .arg(shipped));
         return QString();
     }
@@ -1066,11 +1165,16 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
         return out;
     }
 
-    // READ-ONLY IS PART OF THE ANSWER (PRESET-UNIFY-1). A shipped preset opens
-    // to be READ: the definition writer refuses its reserved guid, so a caller
-    // that edits this graph will have its save refused, and that has to be
-    // knowable before the edit rather than after it.
-    const bool readOnly = !MaterialBundle::shippedPresetName(assetGuid).isEmpty();
+    // WHETHER THIS GRAPH CAN BE EDITED IS PART OF THE ANSWER (PRESET-UNIFY-1;
+    // re-read by PRESET-EDIT-1). A shipped preset is no longer read-only
+    // wherever it is found: with a project open it is that project's to edit,
+    // and the SAVE is what makes the copy (materials.edit). So `readOnly` is
+    // the one case where an edit cannot land at all — a preset with no project
+    // — and `master` says which shipped material is behind this one either way.
+    const bool preset = !MaterialBundle::shippedPresetName(assetGuid).isEmpty();
+    const QString why = presetedit::refusal(
+        host.db, host.isProjectOpen() ? host.project : nullptr, assetGuid);
+    const bool readOnly = !why.isEmpty();
 
     // AND A READ WRITES NOTHING (fix round). Binding a graph's file-named
     // images through the content import is how they become library rows — and
@@ -1080,16 +1184,26 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     // it is what this verb did: opening the unseeded Brick preset imported and
     // pinned three PNGs. A read-only open binds the shipped FILE instead;
     // everything that draws the graph works from paths.
+    //
+    // THE KEY IS "IS THIS A PRESET", NOT "IS IT LOCKED" (PRESET-EDIT-1). A
+    // preset a project could edit is still only being LOOKED at here — the
+    // copy happens at the save — so its pictures stay bound as files until
+    // then, and `graph.save` re-binds them as library assets the moment it
+    // makes the copy.
     out["texturesResolved"] = MaterialHelper::resolveAppRelativeTextures(
-        graph, readOnly ? MaterialHelper::TextureBinding::PathOnly
-                        : MaterialHelper::TextureBinding::Import);
-    out["texturesImported"] = readOnly ? 0 : out["texturesResolved"];
+        graph, preset ? MaterialHelper::TextureBinding::PathOnly
+                      : MaterialHelper::TextureBinding::Import);
+    out["texturesImported"] = preset ? 0 : out["texturesResolved"];
     mGraphApi->setCurrent(graph, assetGuid);
 
     out["nodes"] = graph->nodes.size();
     out["master"] = graph->masterNode ? graph->masterNode->typeName : QString();
     out["name"] = definition.value("name").toString();
     out["readOnly"] = readOnly;
+    out["editable"] = !readOnly;
+    // `presetMaster`, not `master`: this map's `master` has named the graph's
+    // MASTER NODE type since the evaluator landed.
+    out["presetMaster"] = presetedit::masterOf(host.db, assetGuid);
     return out;
 }
 
@@ -1839,11 +1953,18 @@ NodeGraph *GraphApi::editableGraphOrFail(const QString &verb)
 {
     NodeGraph *graph = graphOrFail(verb);
     if (!graph) return nullptr;
-    const QString shipped = MaterialBundle::shippedPresetName(mAssetGuid);
-    if (shipped.isEmpty()) return graph;
-    fail(QStringLiteral("%1: '%2' is a material the app ships and is read-only — "
-                        "materials.createFromPreset('%2') makes your own copy, and every edit "
-                        "works on that").arg(verb, shipped));
+    // A PRESET IS EDITABLE IN A PROJECT (PRESET-EDIT-1). The lock used to be
+    // absolute — the definition writer refuses the reserved guid, so every
+    // mutation was refused before it could reach a save that could not land.
+    // The writer still refuses the MASTER; what changed is that an edit made
+    // with a project open is not aimed at the master at all: `graph.save()`
+    // copies on write first (materials.edit) and saves into the project's own
+    // bundle. So the refusal is now exactly the one case where that cannot
+    // happen — no project, nowhere for the copy to live.
+    const QString why = presetedit::refusal(
+        host.db, host.isProjectOpen() ? host.project : nullptr, mAssetGuid);
+    if (why.isEmpty()) return graph;
+    fail(QStringLiteral("%1: %2").arg(verb, why));
     return nullptr;
 }
 
@@ -2359,6 +2480,40 @@ bool GraphApi::save()
         return fail("graph.save: this graph was loaded from a file, not an asset — no destination");
     if (!graph->masterNode)
         return fail("graph.save: the graph has no master node (serialize would crash)");
+
+    // THE FIRST EDIT OF A PRESET COPIES IT INTO THE PROJECT (PRESET-EDIT-1),
+    // and this is an edit landing. BEFORE `buildDefinition`, which parents the
+    // final bake's maps to the material being written: run on the master's
+    // guid it would mint the preset's member rows all over again, under a
+    // material the save is not going to write to.
+    //
+    // A script that needs the new guid calls `materials.edit()` itself — this
+    // verb answers true, as it always has, and `mAssetGuid` is what moved.
+    {
+        const presetedit::Target target = presetedit::forEdit(
+            host.db, host.isProjectOpen() ? host.project : nullptr, mAssetGuid,
+            host.services ? host.services->undo : nullptr,
+            host.services ? host.services->sceneEdit : nullptr);
+        if (!target.ok()) return fail(QStringLiteral("graph.save: %1").arg(target.error));
+        // ON AN IDENTITY CHANGE, NOT ON `copied` (the Fable read's item 1):
+        // the guid also moves when this project ALREADY had its copy and the
+        // graph was loaded from the master — and it is the graph's bindings
+        // that make the difference, not who minted the row.
+        if (target.guid != mAssetGuid) {
+            // A READ BOUND THE SHIPPED FILES (looking at a preset writes
+            // nothing); an EDIT binds library assets, because a definition may
+            // never carry a path — lock 3, MaterialBundle::write. The content
+            // import answers "I already have this" for every one of them
+            // (seeding put the bytes in the store), so this costs a hash each.
+            MaterialHelper::resolveAppRelativeTextures(
+                graph, MaterialHelper::TextureBinding::Import);
+            // Only a MINT is news to the drawers; adopting the copy that was
+            // already there changes no tile.
+            if (target.copied && host.services && host.services->sceneEdit)
+                host.services->sceneEdit->requestAssetViewRefresh();
+        }
+        mAssetGuid = target.guid;
+    }
 
     // SAVING IS THE DEFINITION WRITE (MATERIAL_BUNDLE_SPEC phase 1), and still
     // a final-bake trigger: the maps land as MEMBER textures in the store, not

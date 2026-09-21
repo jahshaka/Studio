@@ -522,6 +522,36 @@ QString uniqueName(Database *db, const QString &wanted)
     return chosen;
 }
 
+namespace {
+
+/// THE ROW MINT both doors share: the catalog row, then the definition
+/// through `write` — and the row is taken back when the write is refused, so
+/// a refused mint leaves nothing behind.
+QString mintRow(Database *db, const QString &guid, const QString &name,
+                const QJsonObject &definition, const QByteArray &thumbnail,
+                QString *errorOut)
+{
+    QJsonObject stored = definition;
+    stored[QStringLiteral("name")] = name;
+
+    db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Material),
+                         QString(),          // a library row: no parent folder
+                         QString(),          // a library row: no project guid
+                         QString(), QString(), thumbnail,
+                         QByteArray(), QByteArray(), QByteArray(),
+                         AssetViewFilter::AssetsView);
+
+    const WriteResult written = write(db, nullptr, guid, stored, Scope::Library);
+    if (!written.ok) {
+        if (errorOut) *errorOut = written.error;
+        db->deleteAsset(guid);
+        return QString();
+    }
+    return guid;
+}
+
+} // namespace
+
 QString create(Database *db, const QString &name, const QJsonObject &definition,
                const QByteArray &thumbnail, QString *errorOut)
 {
@@ -538,29 +568,27 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
     if (!shippedPresetGuidForName(name).isEmpty()) {
         if (errorOut)
             *errorOut = QStringLiteral("'%1' is the name of a material the app ships — choose "
-                                       "another, or use materials.createFromPreset to customise "
-                                       "it (which names the copy '%1-1')").arg(name);
+                                       "another. (A PROJECT'S own copy of a preset does keep the "
+                                       "preset's name — MaterialBundle::createPresetCopy — "
+                                       "because there the copy replaces the master.)").arg(name);
         return QString();
     }
 
-    QJsonObject stored = definition;
-    stored[QStringLiteral("name")] = name;
+    return mintRow(db, GUIDManager::generateGUID(), name, definition, thumbnail, errorOut);
+}
 
-    const QString guid = GUIDManager::generateGUID();
-    db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Material),
-                         QString(),          // a library row: no parent folder
-                         QString(),          // a library row: no project guid
-                         QString(), QString(), thumbnail,
-                         QByteArray(), QByteArray(), QByteArray(),
-                         AssetViewFilter::AssetsView);
-
-    const WriteResult written = write(db, nullptr, guid, stored, Scope::Library);
-    if (!written.ok) {
-        if (errorOut) *errorOut = written.error;
-        db->deleteAsset(guid);
+QString createPresetCopy(Database *db, const QString &guid, const QString &name,
+                         const QJsonObject &definition, const QByteArray &thumbnail,
+                         QString *errorOut)
+{
+    if (!db) {
+        if (errorOut) *errorOut = QStringLiteral("no database");
         return QString();
     }
-    return guid;
+    // NO NAME GUARD HERE, ON PURPOSE — see the header: this copy IS the
+    // preset as far as the project is concerned, so it carries its name.
+    return mintRow(db, guid.isEmpty() ? GUIDManager::generateGUID() : guid, name,
+                   definition, thumbnail, errorOut);
 }
 
 } // namespace MaterialBundle

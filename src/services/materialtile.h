@@ -23,7 +23,8 @@ For more information see the LICENSE file
 //
 // WHY A FUNCTION AND NOT FIVE COPIES. The call was written out at five doors
 // (materials.createFromPreset, the module's Customise, the tray panel's
-// Customise, materials.duplicate, the module's duplicate), each with the same
+// Customise — the last two are gone with PRESET-EDIT-1 — materials.duplicate,
+// the module's duplicate), each with the same
 // six-line comment, each fetching the engine — and every one of them THREW THE
 // OUTCOME AWAY. thumbrebuild::rebuildOne answers {ok, reason} precisely so a
 // failed tile is never silent, and a discarded answer is a silent one: a

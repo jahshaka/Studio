@@ -42,19 +42,11 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
-static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale)
-{
-    const NodeId node = s->createNode();
-    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-    PbrParams p;
-    p.albedo = albedo;
-    p.metalness = 0.0f;
-    p.roughness = 0.9f;
-    const MaterialId mat = s->createPbrMaterial(p);
-    if (!node || !mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
-    s->setNodeTransform(node, pos, Quat(), scale);
-    return node;
-}
+// THE ROOM ITSELF LIVES IN tests/support/enginetesthelpers.h SINCE GATHER-0
+// (its fix round, B1): gi.gather_spike measures the same room with a third arm
+// and the two suites compare their numbers against each other, which is only
+// worth anything while the rooms are the same room. `enginetest::leakroom`
+// carries the shell, the two lamps, the pose and the measurement block.
 
 /// ONE FLAT QUAD WITH A CHOSEN NORMAL — the smallest thing that can be put in a
 /// voxel facing a direction of our choosing.
@@ -98,15 +90,10 @@ static NodeId addMesh(Scene *s, const MeshData &md, const Colour &albedo, const 
     return node;
 }
 
-/// Mean red and green of a centred block, so one texel of noise cannot move a
-/// number. The block is the same one the spike measured with.
-static void meanRG(const Image &img, float &r, float &g)
-{
-    double sr = 0.0, sg = 0.0; int n = 0;
-    for (unsigned y = 40; y < 88; ++y)
-        for (unsigned x = 40; x < 88; ++x) { const Colour c = img.at(x, y); sr += c.r; sg += c.g; ++n; }
-    r = float(sr / n); g = float(sg / n);
-}
+/// Mean red and green of the centred block, so one texel of noise cannot move
+/// a number — `enginetest::leakroom::meanRG`, which is the SAME block (it was
+/// 40..88 of 128 here and is 5/16..11/16 there, which is those pixels exactly).
+using enginetest::leakroom::meanRG;
 
 int main()
 {
@@ -184,51 +171,9 @@ int main()
         const float T = thicknesses[a];
         Scene *s = e->createScene("leak" + std::to_string(a));
         view->setScene(s);
-        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
-
-        // Interior: x,z in [-5,5], y in [0,4]. The walls sit OUTSIDE that box,
-        // so the interior is identical in all four arms and the only thing that
-        // changes is how thick the barrier is in voxels.
-        const Colour white(0.8f, 0.8f, 0.8f);
-        const float ho = 5.0f + T * 0.5f;
-        const float span = 10.0f + 2.0f * T;
-        addSlab(s, white, Vec3(0, -T * 0.5f, 0), Vec3(span, T, span));            // floor
-        addSlab(s, white, Vec3(0, 4.0f + T * 0.5f, 0), Vec3(span, T, span));      // ceiling
-        addSlab(s, white, Vec3(0, 2, -ho), Vec3(span, 4.0f, T));                  // -Z: THE wall
-        addSlab(s, white, Vec3(0, 2,  ho), Vec3(span, 4.0f, T));                  // +Z
-        addSlab(s, white, Vec3(-ho, 2, 0), Vec3(T, 4.0f, span));                  // -X
-        addSlab(s, white, Vec3( ho, 2, 0), Vec3(T, 4.0f, span));                  // +X
-
-        // The inside lamp: PURE GREEN, so the red channel is entirely the
-        // outside lamp's and no threshold has to separate them.
-        const NodeId inside = s->createNode();
-        s->setNodeTransform(inside, Vec3(0.0f, 3.0f, 2.5f), Quat(), Vec3(1, 1, 1));
-        LightDesc li;
-        li.type = LightType::Point;
-        li.colour = Colour(0.0f, 1.0f, 0.0f);
-        li.intensity = 3.0f;
-        li.range = 14.0f;
-        li.castShadows = true;
-        s->setLight(inside, li);
-
-        // The outside lamp: RED, a metre beyond the outer face of the -Z wall.
-        const NodeId outside = s->createNode();
-        s->setNodeTransform(outside, Vec3(0.0f, 2.0f, -(ho + T * 0.5f + 1.0f)), Quat(), Vec3(1, 1, 1));
-        LightDesc lo;
-        lo.type = LightType::Point;
-        lo.colour = Colour(1.0f, 0.0f, 0.0f);
-        lo.intensity = 25.0f;
-        lo.range = 12.0f;
-        lo.castShadows = true;
-        s->setLight(outside, lo);
-
-        // The camera looks at the inner face of the -Z wall from THREE METRES
-        // away, off to +X so nothing else is in the shot. Three metres, and not
-        // the spike's six, for one reason: under the chain the field rides
-        // cascade 0, a 10 m box centred on the camera, and the wall this
-        // measures has to be inside it or the suite is measuring the ring
-        // instead of the field.
-        enginetest::testCameraLookAt(view, Vec3(3.6f, 2.0f, -2.0f), Vec3(3.6f, 2.0f, -5.0f));
+        // The shell, the two lamps and the pose — one shared fixture, so
+        // gi.gather_spike's third arm measures THIS room and not a copy of it.
+        enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T);
 
         // ONE measurement path, run once per arm: set the arm, light the
         // outside lamp, read; darken it, read again. The difference in the red
@@ -250,11 +195,13 @@ int main()
             }
             if (!s->setGlobalIllumination(gi))
                 std::printf("   engine error: %s\n", e->lastError().c_str());
-            lo.intensity = 25.0f; s->setLight(outside, lo); s->refreshGlobalIllumination();
+            enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
+            s->refreshGlobalIllumination();
             render(e, 10);
             Image img; view->readPixels(img);
             float onR = 0.0f, onG = 0.0f; meanRG(img, onR, onG);
-            lo.intensity = 0.0f; s->setLight(outside, lo); s->refreshGlobalIllumination();
+            enginetest::leakroom::setOutsideIntensity(s, room, 0.0f);
+            s->refreshGlobalIllumination();
             render(e, 10);
             view->readPixels(img);
             float offR = 0.0f, offG = 0.0f; meanRG(img, offR, offG);

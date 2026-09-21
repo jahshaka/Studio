@@ -1075,6 +1075,23 @@ public:
     /// close/open reuses the engine scene, so the engine's own counter does
     /// not restart there.
     virtual qulonglong framesPresented() const { return 0; }
+    /// THE OTHER HALF OF THAT QUESTION (lane STALE-VIEW-1, View::blankFrames
+    /// Presented): frames this viewport presented with NO WORLD BOUND — its
+    /// background cleared, and whatever it asked the HUD to draw over it.
+    ///
+    /// A viewport with no world used to present NOTHING, so the window kept the
+    /// last frame it was given. Measured on the rig against the unmodified base
+    /// (spikes/stale-view-1/): in a load IN PLACE that is the one to two frames
+    /// (~20-60 ms) between the teardown and the moment the panel rebuild takes
+    /// the native window off screen — after which the user sees the app's
+    /// watermark for ~140 ms whatever the engine does (VIEW-REBUILD-1). The
+    /// bigger half is the OTHER defect with the same cause: the "No world open"
+    /// panel, raised by every close, changed not one pixel.
+    ///
+    /// This is the number that says the teardown reached the screen: a caller
+    /// differences it across a load exactly as it differences `coversPresented`.
+    /// Never reset.
+    virtual qulonglong blankFramesPresented() const { return 0; }
     /// THE FLY'S HELD-KEY SET, by name ("Left", "PageUp", "Shift" …), sorted
     /// (ledger §356). A key stuck in it is otherwise INVISIBLE: Left and Right
     /// held together cancel to no movement at all, which reads as "the arrows
