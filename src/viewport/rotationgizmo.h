@@ -177,7 +177,7 @@ class RotationGizmo : public Gizmo
 	static constexpr int kScreenHandle = 3;
 	RotationHandle* handles[4];
 
-	float startAngle;
+	float startAngle = 0.0f;
 	iris::Quat nodeStartRot;
 	RotationHandle* draggedHandle;
 

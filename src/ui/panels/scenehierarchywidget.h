@@ -127,7 +127,7 @@ public:
     void removeChild(iris::SceneNodePtr childNode);
 
     void OnLstItemsCommitData(QWidget *listItem);
-    QComboBox *box;
+    QComboBox *box = nullptr;
 
     QTreeWidget *getWidget();
 

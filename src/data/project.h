@@ -70,9 +70,9 @@ struct DatabaseMetadataRecord
 	QByteArray data;
 
 	// specific version
-	int major;
-	int minor;
-	int patch;
+	int major = 0;
+	int minor = 0;
+	int patch = 0;
 };
 
 // The int fields default: not every fetch query selects every column, and an
@@ -122,8 +122,8 @@ struct AssetPinRecord
 
 struct DependencyRecord
 {
-    int         dependerType;
-    int         dependeeType;
+    int         dependerType = 0;
+    int         dependeeType = 0;
     QString     projectGuid;
     QString     depender;
     QString     dependee;
@@ -139,15 +139,15 @@ struct FolderRecord
     QString     projectGuid;
     QDateTime   dateCreated;
     QDateTime   lastUpdated;
-	int	        count;
-    bool        visible;
+	int	        count = 0;
+    bool        visible = false;
 };
 
 struct CollectionRecord
 {
     QString     name;
     QDateTime   dateCreated;
-    int         id;
+    int         id = 0;
     int         parent = -1;    // parent drawer id; -1 = top level (ASSET_DRAWERS_SPEC §2)
 };
 

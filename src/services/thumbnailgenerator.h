@@ -43,10 +43,10 @@ enum class ThumbnailRequestType
 
 struct ThumbnailRequest
 {
-    ThumbnailRequestType type;
+    ThumbnailRequestType type = ThumbnailRequestType::Material;
     QString path;
     QString id;
-    bool preview;
+    bool preview = false;
 };
 
 /// The rendered thumbnail, delivered BY VALUE.

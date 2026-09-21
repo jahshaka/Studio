@@ -1629,3 +1629,32 @@ add_test(NAME ui.new_project_dialog COMMAND test_new_project_dialog
 set_tests_properties(ui.new_project_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.new_project_dialog)
+
+# ui.grid_columns — THE ASSET GRID LAYS OUT BEFORE IT HAS EVER BEEN RESIZED
+# (UNINIT-SWEEP-1, hazard A1-4). `AssetViewGrid::lastWidth` is written only by
+# resizeEvent and read by the search, the drawer filter and the tile removal —
+# all three reachable on a tray that is populated before it is shown. It was
+# uninitialised; the honest zero it carries now is the one value the old code
+# could not survive, because two of the three divisions by it lacked the guard
+# the third had. Widgets only, offscreen, no window shown and no resize
+# delivered — that IS the case under test. MALLOC_PERTURB_ makes the failure on
+# a tree without the initialiser deterministic rather than a coin.
+add_executable(test_grid_columns test_grid_columns.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetviewgrid.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetgriditem.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_grid_columns PROPERTIES
+    AUTOMOC ON AUTORCC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_grid_columns PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_grid_columns PRIVATE Qt6::Widgets Qt6::Sql qlementine)
+add_test(NAME ui.grid_columns COMMAND test_grid_columns
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.grid_columns PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;MALLOC_PERTURB_=165" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.grid_columns)

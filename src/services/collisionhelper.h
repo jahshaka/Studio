@@ -25,10 +25,6 @@ struct Plane
         this->d = d;
     }
 
-    Plane()
-    {
-    }
-
     iris::Vec3 rayIntersect(const iris::Vec3 &rayOrigin, const iris::Vec3 &ray,float &t)
     {
         float divisor = iris::Vec3::dotProduct(ray, normal);

@@ -53,7 +53,7 @@ class AnimationWidget : public QWidget
     QIcon playIcon;
     QIcon pauseIcon;
 
-    float startedTime;
+    float startedTime = 0.0f;
     bool loopAnim;
 
     TimelineWidget* mainTimeline;
@@ -61,8 +61,7 @@ class AnimationWidget : public QWidget
     KeyFrameCurveWidget* curveWidget;
     CreateAnimationWidget* createAnimWidget;
 
-    QMenu* addMenu;
-    QMenu* deleteMenu;
+    QMenu* addMenu = nullptr;
 
     QList<iris::Property*> nodeProperties;
     QList<iris::Property*> matProperties;

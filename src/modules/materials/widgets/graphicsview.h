@@ -31,7 +31,7 @@ private:
 	QPointF clickPos;
 	QFont font;
 
-	GraphNodeScene *scene;
+	GraphNodeScene *scene = nullptr;
 
 	void addShortcuts();
 

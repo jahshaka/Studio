@@ -32,7 +32,7 @@ QString typeName(InputAction a)
 /// the (x, y) each contributes. Deliberately named rather than positional:
 /// `{up:"W", down:"S", left:"A", right:"D"}` reads the same in a script, in
 /// the docs and in a settings file.
-struct AxisSlot { const char *name; float x; float y; };
+struct AxisSlot { const char *name = nullptr; float x = 0.0f; float y = 0.0f; };
 const AxisSlot kAxisSlots[] = {
     { "up",    0.f, +1.f },
     { "down",  0.f, -1.f },

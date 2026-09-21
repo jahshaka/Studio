@@ -169,7 +169,7 @@ public slots:
     void setColor(QColor col);
 private:
     QImage *image = Q_NULLPTR;
-    qreal saturation;
+    qreal saturation = 0.0f;
     qreal alpha = 255.0;
 
 
@@ -192,38 +192,38 @@ private:
     QColor initialColor;
     const qreal factor = 2.55;
     bool picking = false;
-    QSlider *rSlider;
-    QSlider *gSlider;
-    QSlider *bSlider;
-    QSlider *aSlider;
-    QSlider *hSlider;
-    QSlider *sSlider;
-    QSlider *vSlider;
-    QStackedWidget *stackWidget;
+    QSlider *rSlider = nullptr;
+    QSlider *gSlider = nullptr;
+    QSlider *bSlider = nullptr;
+    QSlider *aSlider = nullptr;
+    QSlider *hSlider = nullptr;
+    QSlider *sSlider = nullptr;
+    QSlider *vSlider = nullptr;
+    QStackedWidget *stackWidget = nullptr;
 
-    QSpinBox *rBox;
-    QSpinBox *gBox;
-    QSpinBox *bBox;
-    QSpinBox *hBox;
-    QSpinBox *sBox;
-    QSpinBox *vBox;
-    QSpinBox *aBox;
+    QSpinBox *rBox = nullptr;
+    QSpinBox *gBox = nullptr;
+    QSpinBox *bBox = nullptr;
+    QSpinBox *hBox = nullptr;
+    QSpinBox *sBox = nullptr;
+    QSpinBox *vBox = nullptr;
+    QSpinBox *aBox = nullptr;
 
-    QLineEdit *lineEditor;
-    QComboBox *comboBox;
-    QList<Overlay*> *list;
-    QPushButton *confirm;
-    QPushButton *reset;
-    QPushButton *cancel;
+    QLineEdit *lineEditor = nullptr;
+    QComboBox *comboBox = nullptr;
+    QList<Overlay*> *list = nullptr;
+    QPushButton *confirm = nullptr;
+    QPushButton *reset = nullptr;
+    QPushButton *cancel = nullptr;
 
-    QPushButton *rgb;
-    QPushButton *hsv;
-    QPushButton *hex;
+    QPushButton *rgb = nullptr;
+    QPushButton *hsv = nullptr;
+    QPushButton *hex = nullptr;
     QButtonGroup grp;
 
-    ColorDisplay *display;
-    ColorCircle *circle;
-    InputCircle *inputCircle;
+    ColorDisplay *display = nullptr;
+    ColorCircle *circle = nullptr;
+    InputCircle *inputCircle = nullptr;
     
     QColor::Spec spec = QColor::Rgb;
     

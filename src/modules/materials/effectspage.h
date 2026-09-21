@@ -60,8 +60,8 @@ class MembersPanel;
 struct nodeListModel {
 	QString name;
 	//NodeType type;
-	int inSockets;
-	int outSockets;
+	int inSockets = 0;
+	int outSockets = 0;
 
 };
 
@@ -472,36 +472,36 @@ private:
 	/// a project open usually lands the user in the editor).
 	void requestTabRestore(const QString &key);
 	int indexForRef(const QVariant &tabOrGuid) const;
-	QSplitter *splitView;
+	QSplitter *splitView = nullptr;
 	AssetView* assetView;
 
-	QDockWidget* nodeTray;
-	QWidget *centralWidget;
-	QDockWidget* displayWidget;
-	MaterialSettingsWidget *materialSettingsWidget;
+	QDockWidget* nodeTray = nullptr;
+	QWidget *centralWidget = nullptr;
+	QDockWidget* displayWidget = nullptr;
+	MaterialSettingsWidget *materialSettingsWidget = nullptr;
 
 	/// Applies the PanelMetrics column widths; run once, from showEvent.
 	void applyColumnWidths();
 	bool mColumnsSized = false;
 
-	QDockWidget *propertyWidget;
-	QDockWidget *materialSettingsDock;
-	QDockWidget *projectDock;
-	QDockWidget *assetsDock;
-	QTabWidget *tabbedWidget;
-	QTabWidget *tabWidget;
-	GraphicsView* graphicsView;
-	NodePropertiesPanel* nodePropertiesPanel;
-	QListWidget *nodeContainer;
-	QMenuBar *bar;  
-	QToolBar *toolBar;
-	QMenu *file;
-	QMenu *window;
-	QMenu *edit;
+	QDockWidget *propertyWidget = nullptr;
+	QDockWidget *materialSettingsDock = nullptr;
+	QDockWidget *projectDock = nullptr;
+	QDockWidget *assetsDock = nullptr;
+	QTabWidget *tabbedWidget = nullptr;
+	QTabWidget *tabWidget = nullptr;
+	GraphicsView* graphicsView = nullptr;
+	NodePropertiesPanel* nodePropertiesPanel = nullptr;
+	QListWidget *nodeContainer = nullptr;
+	QMenuBar *bar = nullptr;  
+	QToolBar *toolBar = nullptr;
+	QMenu *file = nullptr;
+	QMenu *window = nullptr;
+	QMenu *edit = nullptr;
 	QFont font;
 
-	ListWidget *presets;
-	ListWidget *effects;
+	ListWidget *presets = nullptr;
+	ListWidget *effects = nullptr;
 	/// WHAT THE OPEN MATERIAL IS MADE OF (MATERIAL_BUNDLE_SPEC 6). Lives in
 	/// the left column under Material Settings, because it is about the
 	/// material being edited, not about the graph's selected node.
@@ -514,7 +514,7 @@ private:
 	QString oldName;
 	QString newName;
 
-	QLineEdit *projectName;
+	QLineEdit *projectName = nullptr;
 #if(EFFECT_BUILD_AS_LIB)
 	ShaderAssetWidget *assetWidget;
 	Database *dataBase = nullptr;

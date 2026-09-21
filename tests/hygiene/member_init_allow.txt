@@ -1,0 +1,27 @@
+# source.member_init — PERMANENT EXEMPTIONS (UNINIT-SWEEP-1, 2026-09-21)
+#
+# Format: <path> <Class>::<member>  # why
+#
+# A member belongs here ONLY when leaving it unwritten is the point. That is nine
+# members in this tree, all of them the maths types' storage: each of `Vec2`, `Vec3`,
+# `Vec4`, `Quat`, `Mat3` and `Mat4` has a `Qt::Uninitialized` overload whose whole
+# purpose is to SKIP the write on a value the caller is about to fill (the value
+# constructors initialise: vec.h:121/196/299, quat.h:44, mat4.h:65, mat3's
+# setToIdentity). A default member initialiser would zero the storage first and defeat
+# the overload — it would cost a write per temporary in the maths inner loops.
+#
+# EVERYTHING ELSE TAKES THE INITIALISER. A false positive from the scanner is answered
+# with the one-line default member initialiser, never with a row here: the initialiser
+# is correct however the scanner is wrong, and a row here is a claim a reviewer has to
+# re-verify. A row that stops matching a real member is a FAILURE of this gate, not a
+# harmless leftover — delete it.
+
+irisgl/core/math/vec.h  Vec2::v      # Qt::Uninitialized overload (vec.h:179); the value ctors fill it
+irisgl/core/math/vec.h  Vec3::v      # Qt::Uninitialized overload (vec.h:282)
+irisgl/core/math/vec.h  Vec4::v      # Qt::Uninitialized overload (vec.h:387)
+irisgl/core/math/quat.h Quat::wp     # Qt::Uninitialized overload; the constexpr ctor (quat.h:44) initialises
+irisgl/core/math/quat.h Quat::xp     # same
+irisgl/core/math/quat.h Quat::yp     # same
+irisgl/core/math/quat.h Quat::zp     # same
+irisgl/core/math/mat3.h Mat3::m      # Qt::Uninitialized overload; Mat3() fills via setToIdentity
+irisgl/core/math/mat4.h Mat4::m      # Qt::Uninitialized overload; Mat4() { setToIdentity(); } (mat4.h:65)

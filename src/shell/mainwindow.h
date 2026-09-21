@@ -904,32 +904,21 @@ private:
 
 
     Ui::MainWindow *ui;
-    IEditorViewport* sceneView;
-	PlayerWidget* playerView;
+    IEditorViewport* sceneView = nullptr;
+	PlayerWidget* playerView = nullptr;
 	/// The player's engine backend, or null in headless runs. Held so
 	/// setupServices can hand it to PlayerService (verb-coverage audit F1).
 	class EnginePlayerView* playerBackend = nullptr;
 
-    QStandardItemModel* treeModel;
-    QWidget *container;
+    QWidget *container = nullptr;
     EditorCameraController* camControl;
 
     QSharedPointer<iris::Scene> scene;
 
 
-    TransformWidget* transformUi;
 
-    LightLayerWidget* lightLayerWidget;
-    ModelLayerWidget* modelLayerWidget;
-    TorusLayerWidget* torusLayerWidget;
-    SphereLayerWidget* sphereLayerWidget;
-    TexturedPlaneLayerWidget* texPlaneLayerWidget;
-    WorldLayerWidget* worldLayerWidget;
-    EndlessPlaneLayerWidget* endlessPlaneLayerWidget;
-    MaterialWidget* materialWidget;
-    AnimationWidget* animWidget;
+    AnimationWidget* animWidget = nullptr;
 
-    Qt::MouseButton mouseButton;
     QPoint mousePressPos;
     QPoint mouseReleasePos;
     QPoint mousePos;
@@ -940,9 +929,9 @@ private:
     ShortcutRegistry* shortcutRegistry = nullptr;
     AboutDialog* aboutDialog;
 
-    QActionGroup* transformGroup;
-    QActionGroup* transformSpaceGroup;
-    QActionGroup* cameraGroup;
+    QActionGroup* transformGroup = nullptr;
+    QActionGroup* transformSpaceGroup = nullptr;
+    QActionGroup* cameraGroup = nullptr;
 
     Database *db = nullptr;
 
@@ -971,35 +960,35 @@ private:
     /// (setProjectPath/setProjectGuid) for the process lifetime.
     Project *project = nullptr;
 
-    ProjectManager *pmContainer;
+    ProjectManager *pmContainer = nullptr;
 
-    QUndoStack* undoStack;
+    QUndoStack* undoStack = nullptr;
 
-	QPushButton *worlds_menu;
-	QPushButton *player_menu;
-	QPushButton *editor_menu;
-	QPushButton *effect_menu;
-	QPushButton *assets_menu;
-	QPushButton *publish_menu;
-	QPushButton *avatar_menu;
+	QPushButton *worlds_menu = nullptr;
+	QPushButton *player_menu = nullptr;
+	QPushButton *editor_menu = nullptr;
+	QPushButton *effect_menu = nullptr;
+	QPushButton *assets_menu = nullptr;
+	QPushButton *publish_menu = nullptr;
+	QPushButton *avatar_menu = nullptr;
 	QWidget *publishView = nullptr;   // stacked page 5: publishing stub
 	QWidget *avatarView = nullptr;    // stacked page 6: the avatar module
-	QWidget *assets_panel;
-	QLabel *jlogo;
-	QPushButton *help;
-	QPushButton *prefs;
+	QWidget *assets_panel = nullptr;
+	QLabel *jlogo = nullptr;
+	QPushButton *help = nullptr;
+	QPushButton *prefs = nullptr;
 
-    QMainWindow *dialog;
+    QMainWindow *dialog = nullptr;
 
-    QDockWidget *sceneHierarchyDock;
-    SceneHierarchyWidget *sceneHierarchyWidget;
+    QDockWidget *sceneHierarchyDock = nullptr;
+    SceneHierarchyWidget *sceneHierarchyWidget = nullptr;
 
-    QDockWidget *sceneNodePropertiesDock;
-    SceneNodePropertiesWidget *sceneNodePropertiesWidget;
+    QDockWidget *sceneNodePropertiesDock = nullptr;
+    SceneNodePropertiesWidget *sceneNodePropertiesWidget = nullptr;
     /// The right column's World | Selection tab bar (above the scroll area).
     class PropertiesTabStrip *propertiesTabStrip = nullptr;
 
-    QDockWidget *presetsDock;
+    QDockWidget *presetsDock = nullptr;
     /// Gives the editor's two COLUMNS their default widths, once per session
     /// (ui/style/panelmetrics.h): the Properties/Presets column on the right
     /// and the Hierarchy column on the left, which every other page copies.
@@ -1062,7 +1051,7 @@ private:
     /// into that field, so a raise alone would be read straight back out again.
     void raiseLaunchBottomTab();
 
-    QTabWidget *presetsTabWidget;
+    QTabWidget *presetsTabWidget = nullptr;
 
     /// The bottom area's three docks — ONE tab group, one tab bar (lane
     /// SPACE-2). `assetDock` holds the asset browser directly (the QTabWidget
@@ -1071,22 +1060,21 @@ private:
     /// until Ctrl+` (or editor.tray) asks for it — a hidden dock has no tab, so
     /// "the Console tab is in the bar" and "the console dock is open" are the
     /// same statement.
-    QDockWidget *assetDock;
-    AssetWidget *assetWidget;
+    QDockWidget *assetDock = nullptr;
+    AssetWidget *assetWidget = nullptr;
 
-    QDockWidget *animationDock;
-    AnimationWidget *animationWidget;
+    QDockWidget *animationDock = nullptr;
+    AnimationWidget *animationWidget = nullptr;
     QDockWidget *scriptConsoleDock = nullptr;
 
-    QMainWindow *viewPort;
-    QWidget *sceneContainer;
+    QMainWindow *viewPort = nullptr;
+    QWidget *sceneContainer = nullptr;
 
-    QWidget *controlBar;
-    QWidget *playerControls;
-    QPushButton *playSceneBtn;
-    QMenu *wireFramesMenu;
-    QCheckBox *wireCheckBtn;
-    QToolButton *wireFramesButton;
+    QWidget *controlBar = nullptr;
+    QWidget *playerControls = nullptr;
+    QPushButton *playSceneBtn = nullptr;
+    QMenu *wireFramesMenu = nullptr;
+    QToolButton *wireFramesButton = nullptr;
     QToolButton *viewsButton = nullptr;
     QMenu *viewsMenu = nullptr;
     QVector<QAction *> viewsActions;   // checkable, ordered as built
@@ -1100,13 +1088,13 @@ private:
     /// while the menu exists, and a stale list would pilot a dead node.
     QToolButton *camerasButton = nullptr;
     QMenu *camerasMenu = nullptr;
-    QPushButton *restartBtn;
-    QPushButton *playBtn;
-    QPushButton *stopBtn;
+    QPushButton *restartBtn = nullptr;
+    QPushButton *playBtn = nullptr;
+    QPushButton *stopBtn = nullptr;
 
-    QToolBar *toolBar;
-    AssetView *_assetView;
-	QAction *actionSaveScene;
+    QToolBar *toolBar = nullptr;
+    AssetView *_assetView = nullptr;
+	QAction *actionSaveScene = nullptr;
 
     /// THE VR TOGGLE (SPECS/VR_SPEC.md §4.5, phase 3) — the editor toolbar's
     /// half. The Player page has its own button and both make the same call
@@ -1121,8 +1109,8 @@ private:
     /// this cached bool first and an ordinary launch pays nothing.
     bool mVrCapable = false;
 
-    QAction *wireCheckAction;
-    QAction *physicsCheckAction;
+    QAction *wireCheckAction = nullptr;
+    QAction *physicsCheckAction = nullptr;
     QAction *gridCheckAction = nullptr;
     QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
@@ -1169,21 +1157,21 @@ private:
     /// two members down from it).
     WindowSpaces previousSpace = WindowSpaces::DESKTOP;
     WindowSpaces currentSpace = WindowSpaces::DESKTOP;
-	QPushButton *playSimBtn;
+	QPushButton *playSimBtn = nullptr;
 
-    QAction *actionTranslate;
-    QAction *actionRotate;
-    QAction *actionScale;
+    QAction *actionTranslate = nullptr;
+    QAction *actionRotate = nullptr;
+    QAction *actionScale = nullptr;
     /// The toolbar's transform-space pair. Members (they were locals) so a
     /// scripted editor.setGizmoSpace can leave the buttons telling the truth,
     /// exactly as actionTranslate/Rotate/Scale do for the gizmo mode.
     QAction *actionGlobalSpace = nullptr;
     QAction *actionLocalSpace = nullptr;
 
-    AssetModelPanel *assetModelPanel;
-    AssetMaterialPanel *assetMaterialPanel;
+    AssetModelPanel *assetModelPanel = nullptr;
+    AssetMaterialPanel *assetMaterialPanel = nullptr;
 
-	QPushButton *cameraView;
+	QPushButton *cameraView = nullptr;
 	QtAwesome *fontIcons;
 
 	bool isSceneOpen = false;

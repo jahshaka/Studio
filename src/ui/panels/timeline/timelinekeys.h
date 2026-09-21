@@ -31,7 +31,7 @@ class Key
 {
 public:
     T value;
-    double time;
+    double time = 0.0;
 
     inline bool operator< ( const T& rhs)
     {

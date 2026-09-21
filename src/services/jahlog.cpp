@@ -923,8 +923,8 @@ std::atomic<bool> gHandlerInstalled { false };
 // upstream flood — and stays TESTED: the log suite compiles this file with
 // JAH_KNOWN_NOISE_SELFTEST, which adds the synthetic entry below.
 struct KnownNoise {
-    const char *exactText;   // the full message, byte-exact
-    const char *anchor;      // where the upstream defect lives
+    const char *exactText = nullptr;   // the full message, byte-exact
+    const char *anchor = nullptr;      // where the upstream defect lives
     std::atomic<quint64> suppressed { 0 };
     std::atomic<bool> announced { false };
 };

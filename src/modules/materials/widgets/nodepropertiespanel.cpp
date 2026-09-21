@@ -390,7 +390,7 @@ void NodePropertiesPanel::rebuildNodeEditors()
 	// rotation — so it may not be rearranged without rearranging that.
 	if (type == "uv") {
 		auto obj = value.toObject();
-		struct Field { const char* label; const char* key; double fallback; };
+		struct Field { const char* label = nullptr; const char* key = nullptr; double fallback = 0.0; };
 		static const Field fields[5] = {
 			{ QT_TR_NOOP("Tile U"),   "tileX",    1.0 },
 			{ QT_TR_NOOP("Tile V"),   "tileY",    1.0 },

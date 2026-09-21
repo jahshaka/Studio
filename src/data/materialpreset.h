@@ -39,26 +39,26 @@ struct MaterialPreset
     /// the preset list refuses to list.
     QJsonObject graph;
 
-    float textureScale;
+    float textureScale = 0.0f;
 
     // --- PBR (material_type: "PBR") ---
     QColor  baseColor;
     QString baseColorMap;
-    float   metallic;
+    float   metallic = 0.0f;
     QString metallicMap;
-    float   roughness;
+    float   roughness = 0.0f;
     QString roughnessMap;
-    float   roughnessLowerBound;
-    float   roughnessUpperBound;
+    float   roughnessLowerBound = 0.0f;
+    float   roughnessUpperBound = 0.0f;
     QString pbrNormalMap;
-    float   pbrNormalFactor;
+    float   pbrNormalFactor = 0.0f;
     QColor  emissiveColor;
-    float   emissiveIntensity;
+    float   emissiveIntensity = 0.0f;
     QString emissiveMap;
-    int     alphaMode;      // 0 opaque, 1 masked, 2 translucent, 3 glass,
+    int     alphaMode = 0;      // 0 opaque, 1 masked, 2 translucent, 3 glass,
                             // 4 additive, 5 modulate (PbrMaterial::alphaMode)
-    float   alpha;
-    float   alphaCutoff;
+    float   alpha = 0.0f;
+    float   alphaCutoff = 0.0f;
 };
 
 #endif // MATERIALPRESET_H

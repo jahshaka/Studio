@@ -125,9 +125,9 @@ private:
     QSharedPointer<iris::SceneNode> editableNode() const;
     QSharedPointer<iris::SceneNode> defaultStateNode;
 
-    DragSpinBox* xpos; DragSpinBox* ypos; DragSpinBox* zpos;
-    DragSpinBox* xrot; DragSpinBox* yrot; DragSpinBox* zrot;
-    DragSpinBox* xscale; DragSpinBox* yscale; DragSpinBox* zscale;
+    DragSpinBox* xpos = nullptr; DragSpinBox* ypos = nullptr; DragSpinBox* zpos = nullptr;
+    DragSpinBox* xrot = nullptr; DragSpinBox* yrot = nullptr; DragSpinBox* zrot = nullptr;
+    DragSpinBox* xscale = nullptr; DragSpinBox* yscale = nullptr; DragSpinBox* zscale = nullptr;
     QPushButton* resetBtn;
     /// The preserve-ratio lock, to the right of the "Scale" label and before
     /// the three fields (SCALE-LOCK-1).

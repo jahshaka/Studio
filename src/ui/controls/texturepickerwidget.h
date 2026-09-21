@@ -35,7 +35,7 @@ private slots:
 	void changeMap(const QString &);
 
 public:
-	int index;
+	int index = 0;
 	QString filename, filePath, textureGuid;
 
 	/// The one live Project (Phase 4: was the Globals::project static). Set by

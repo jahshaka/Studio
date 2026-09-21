@@ -106,13 +106,11 @@ private:
     Ui::KeyFrameLabelTreeWidget *ui;
     iris::SceneNodePtr node;
     QHash<QString,KeyFrameGroup*> groups;
-    AnimationWidget* animWidget;
+    AnimationWidget* animWidget = nullptr;
 
     QTreeWidgetItem* rightClickedItem;
 
     // context menu actions
-    QAction* removePropertyAction;
-    QAction* clearKeyFrameAction;
 
     void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
 

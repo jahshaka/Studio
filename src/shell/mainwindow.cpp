@@ -871,7 +871,6 @@ SettingsManager* MainWindow::getSettingsManager()
 
 bool MainWindow::handleMousePress(QMouseEvent *event)
 {
-    mouseButton = event->button();
     mousePressPos = event->pos();
 
     return true;
