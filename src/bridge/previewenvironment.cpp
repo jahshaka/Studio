@@ -234,7 +234,8 @@ const std::vector<Softbox> &softboxes() { return boxes(); }
 
 const QImage &image() { return built().image; }
 
-namespace { const float kViewNormal[3] = { 0.5145f, 0.3087f, 0.7717f }; }
+// (2, 1.2, 3) / |(2, 1.2, 3)| — unit length (the merge read: the old constant was 0.9775 long).
+namespace { const float kViewNormal[3] = { 0.526316f, 0.315789f, 0.789474f }; }
 
 void viewDirection(float out[3])
 {
