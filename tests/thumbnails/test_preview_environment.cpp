@@ -18,6 +18,7 @@
 //  * THE SILHOUETTE comes from an EMISSIVE GREEN subject, not from "the dark
 //    pixels": the studio has a dim floor half, so darkness is not a subject.
 //    Green against a neutral environment is separable at any exposure.
+#include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QColor>
 #include <QImage>
@@ -157,7 +158,17 @@ int main(int argc, char **argv)
 
     // ---- 0. the environment's own constants ----
     {
+        // WHAT IT COSTS TO EXIST, once per process: the picture and the nine
+        // ambient bands are built together on first use, on the thread that
+        // asked (the UI thread, at the first preview or the first thumbnail).
+        // Printed rather than asserted — it is a number a lane changing the
+        // size should see move, not a budget.
+        QElapsedTimer built;
+        built.start();
         const QImage &env = previewenv::image();
+        previewenv::ambientSh();
+        std::printf("    the environment was generated in %lld ms\n",
+                    static_cast<long long>(built.elapsed()));
         CHECK(env.width() == previewenv::size().width() && env.height() == previewenv::size().height()
               && !env.isNull(), "the studio environment is generated at its stated size");
         const float *sh = previewenv::ambientSh();

@@ -239,9 +239,14 @@ console.log("   tray-imported thumbnail " + JSON.stringify(trayThumb));
 assert(trayThumb.coverage > 0.05 && trayThumb.coverage < 0.98,
        "…and it is a picture of the model, not an empty frame: coverage " + trayThumb.coverage);
 
-// ---- 6. THE REPAIR PASS for rows that are already grey ---------------------
-// A freshly saved graph is a row with no thumbnail — exactly the shape of the
-// owner's grey tiles, made through a verb rather than by hand.
+// ---- 6. THE REPAIR PASS, and what there is left for it to repair -----------
+// This section used to MAKE a grey row — a freshly saved graph, which carried
+// no thumbnail — and watch the sweep repair it. MATPREVIEW-ENV-1 (owner review
+// R9(a)) closed that door: every route that mints a material photographs it on
+// the studio sphere there and then, so a grey row is no longer a thing a verb
+// can produce. That guarantee is what is asserted here instead, and the repair
+// machinery is proved on the FULL redraw below, which re-renders rows that
+// already have tiles.
 var broken = materials.create("Needs A Tile", { graph: true });
 var brokenMaster = null;
 var brokenNodes = graph.nodes();
@@ -250,13 +255,15 @@ var blue = graph.addNode("vector4");
 graph.setValue(blue, { x: 0.08, y: 0.10, z: 0.90, w: 1.0 });
 graph.connect(blue, 0, brokenMaster, "Base Color");
 assert(graph.save() === true, "a second graph saved");
-assert(assets.thumbnail(broken).empty === true, "…and it has NO thumbnail (a grey tile)");
+assert(assets.thumbnail(broken).empty === false,
+       "…and it has a tile without anybody sweeping for it (R9(a))");
 
 var swept = assets.rebuildThumbnails({ missingOnly: true });
 console.log("   rebuildThumbnails -> " + JSON.stringify(swept));
 assert(swept.cancelled === false, "the sweep ran to the end");
-assert(swept.rebuilt >= 1, "assets.rebuildThumbnails repaired at least the grey row");
-assert(assets.thumbnail(broken).empty === false, "THE GREY TILE IS REPAIRED");
+assert(swept.rebuilt === 0,
+       "…and found NOTHING missing: no route in this session left a grey row (" +
+       JSON.stringify(swept) + ")");
 assert(swept.failed.length !== undefined, "the sweep reports its failures as a list");
 for (var f = 0; f < swept.failed.length; f++)
     console.log("   could not rebuild " + swept.failed[f].guid + ": " + swept.failed[f].reason);
@@ -267,6 +274,8 @@ for (var f = 0; f < swept.failed.length; f++)
 // the `skipped` rows (a builtin's Object row, which stores no definition).
 var everything = assets.rebuildThumbnails({ missingOnly: false });
 console.log("   rebuildThumbnails(all) -> " + JSON.stringify(everything));
+assert(everything.rebuilt >= 1,
+       "the full redraw re-renders rows that already have tiles — the repair path itself");
 var named = everything.failed.filter(function (x) { return x.guid === orphanAvatar; });
 assert(named.length === 1, "the avatar whose model is gone is IN the sweep's failed list");
 assert(named[0].reason.length > 0, "…with its reason: " + named[0].reason);
