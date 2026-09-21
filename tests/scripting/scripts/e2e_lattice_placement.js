@@ -127,4 +127,89 @@ assert(worst <= BAR,
        "the picture does not depend on where the volume sits: worst " + worst + "/255 <= " + BAR
        + " over placements up to eight cascade-0 cells off the camera");
 
+// ---------------------------------------------------------------------------
+// THE SECOND HALF: THE PICTURE DOES NOT KNOW WHERE THE WORLD ORIGIN IS
+// (lane CLIFF-32-1, 2026-09-21, from LATTICE-1's finding 2).
+//
+// The same rule, stated over a longer distance. Translating the WHOLE scene and
+// the camera together by d metres is not a change of the scene: every surface,
+// every light direction, every screen-space effect and the camera's view of all
+// of them are identical. Choose d an exact multiple of 1.875 m and it is a whole
+// number of cells of EVERY cascade (24 / 12 / 4 / 1 at Epic), so the scene sits
+// in the same voxels, the volumes stand in the same place relative to it, and
+// the mip pyramids pair exactly. The picture must be the same picture.
+//
+// IT WAS NOT. Beyond 32 m the cube's shaded face read 8-9/255 BRIGHTER, flat out
+// to 180 m, with the light volume proven identical at every arm. The mechanism
+// (CLIFF-32-1, patch 0084): the anisotropic escape estimate `min3` read the half
+// of each axis volume chosen by the SIGN of that component of the cone's
+// direction, and on an axis-aligned surface two of those components are zero in
+// exact arithmetic and the last bits of the view matrix in the shader -- so the
+// sign, and with it the sky's weight on the surface, was decided by how far the
+// camera stood from the world origin. The escape now reads both halves.
+//
+// The bar is 3/255 on a probe. Measured on the lane's rig after the fix, over
+// the whole 960x540 face: mean 0.10-0.11 of a code and no pixel above 3 at 60 m
+// (nine of 108,675 at 30 and 120 m, every one of them on the cube's silhouette
+// corner, where a sub-pixel rasterisation difference from the camera's own float
+// rounding lives and no probe sits). Before the fix the same measurement read
+// 8.82 and 7.59.
+var TRANSLATIONS = [60.0, 120.0];       // 32 and 64 cells of the outermost cascade
+var TBAR = 3;                           // display codes; measured 1
+
+var rootId = null;
+var allNodes = scene.nodes();
+for (var n = 0; n < allNodes.length; ++n)
+    if (allNodes[n].name === "World") rootId = allNodes[n].id;
+assert(rootId !== null, "the scene's root node is there to translate");
+
+function translatedArm(d) {
+    node.transform(rootId, { position: { x: d, y: 0, z: 0 } });
+    // Away first, so the teleport guard builds the whole chain at this arm's pose
+    // rather than walking it there; then back, and settle in FRAMES.
+    editor.setCamera({ position: { x: CAM.x + d + 600, y: CAM.y + 300, z: CAM.z + 600 },
+                       lookAt:   { x: AIM.x + d + 600, y: AIM.y + 300, z: AIM.z + 600 } });
+    editor.frame(60, 1 / 60);
+    editor.setCamera({ position: { x: CAM.x + d, y: CAM.y, z: CAM.z },
+                       lookAt:   { x: AIM.x + d, y: AIM.y, z: AIM.z } });
+    editor.frame(240, 1 / 60);
+    world.refreshGi();
+    editor.frame(240, 1 / 60);
+    var shot = editor.screenshot("lattice_translate_" + d.toFixed(0) + ".png",
+                                 960, 540, PROBES, "scene");
+    var st = world.giStatus(), cs = [];
+    for (var c = 0; c < st.cascades.length; ++c) cs.push(st.cascades[c].centre.x.toFixed(6));
+    return { probes: shot.probes, centres: cs.join(","), lit: world.giVoxelStats({ cascade: 0 }) };
+}
+
+var home = translatedArm(0.0);
+console.log("translation 0 m: centresX=[" + home.centres + "] voxelsLit=" + home.lit.voxelsLit);
+
+var tWorst = 0, tWhere = "";
+for (var t = 0; t < TRANSLATIONS.length; ++t) {
+    var td = TRANSLATIONS[t];
+    var r = translatedArm(td);
+    // The volumes must really be standing somewhere else, and they must hold the
+    // same light: an arm where the voxelisation moved is measuring two things.
+    assert(r.centres !== home.centres, "translation " + td + " m: the volumes moved with the scene");
+    assert(r.lit.voxelsLit === home.lit.voxelsLit,
+           "translation " + td + " m: the light volume holds the same lit voxels ("
+           + r.lit.voxelsLit + " vs " + home.lit.voxelsLit + ")");
+    var worst = 0, at = 0;
+    for (var p = 0; p < PROBES.length; ++p) {
+        var dd = Math.max(Math.abs(r.probes[p].r - home.probes[p].r),
+                          Math.abs(r.probes[p].g - home.probes[p].g),
+                          Math.abs(r.probes[p].b - home.probes[p].b));
+        if (dd > worst) { worst = dd; at = p; }
+    }
+    console.log("translation " + td + " m: centresX=[" + r.centres + "] worst probe "
+                + worst + "/255 at probe " + at);
+    if (worst > tWorst) { tWorst = worst; tWhere = td + " m, probe " + at; }
+}
+node.transform(rootId, { position: { x: 0, y: 0, z: 0 } });
+
+assert(tWorst <= TBAR,
+       "the picture does not know where the world origin is: worst " + tWorst + "/255 <= " + TBAR
+       + " over translations of 60 and 120 m (" + tWhere + ")");
+
 console.log("DONE");
