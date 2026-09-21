@@ -43,7 +43,7 @@ static int failures = 0;
 static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
 // THE ROOM ITSELF LIVES IN tests/support/enginetesthelpers.h SINCE GATHER-0
-// (its fix round, B1): gi.gather_spike measures the same room with a third arm
+// (its fix round, B1): gi.gather measures the same room with a third arm
 // and the two suites compare their numbers against each other, which is only
 // worth anything while the rooms are the same room. `enginetest::leakroom`
 // carries the shell, the two lamps, the pose and the measurement block.
@@ -172,7 +172,7 @@ int main()
         Scene *s = e->createScene("leak" + std::to_string(a));
         view->setScene(s);
         // The shell, the two lamps and the pose — one shared fixture, so
-        // gi.gather_spike's third arm measures THIS room and not a copy of it.
+        // gi.gather's third arm measures THIS room and not a copy of it.
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T);
 
         // ONE measurement path, run once per arm: set the arm, light the
