@@ -174,6 +174,23 @@ add_script_e2e(material_preview e2e_material_preview.js)
 # The document half of the floor is scripting.e2e.default_floor, which is
 # headless; this one needs a camera.
 add_script_e2e(default_ground e2e_default_ground.js)
+# CUBE-SHADE-1: the two things the owner saw on a cube (review R8) — a flat
+# face shaded as two triangles (ogre-patch 0083, the diffuse cone basis) and the
+# dark climb up its sides (the AO radius, now a contact scale). Needs a camera
+# and the whole post chain, so it is an engine-up e2e and not a headless one.
+# add_script_e2e's own 180 s is not enough for it: four 2 m cubes at Epic mean
+# four GI re-solves (one per turn of the first cube) and seven settled shots.
+# 71 s solo on the rig; 400 s is the gate-load headroom.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-cube_shade)
+file(MAKE_DIRECTORY ${_home})
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.cube_shade
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cube_shade.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.cube_shade PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 400)
 # HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
 # roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts
