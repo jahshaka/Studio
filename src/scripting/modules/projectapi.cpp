@@ -50,12 +50,28 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "projects root (the Jahshaka documents folder, or the run's --data-root). A location that does not "
           "exist, is not a folder or is not writable is REFUSED BY NAME — no project row is written and "
           "nothing is left pointing at a folder that was never made. These are the New Scene dialog's two "
-          "controls: its Empty scene checkbox and its Browse button call this verb.",
+          "controls: its Empty scene checkbox and its Browse button call this verb."
+          "\n\nTHE WORLD'S LIGHTING ARRIVES ON THE FRAMES AFTER THIS RETURNS "
+          "(SPECS/OPEN_COVER_SPEC.md §2 A). A world's FIRST global-illumination arm — the voxel "
+          "cascades, the reflection-probe grid, the irradiance field — is the longest thing the "
+          "engine does on the UI thread, and it is no longer built inside the load: it would land "
+          "on a frame drawn behind the loading cover, which nobody can see. It is built one stage "
+          "per frame once the world is on screen, so `world.giStatus()` read immediately after this "
+          "reports an arm that is not there yet. A script that asserts on it renders its own frames "
+          "first (`editor.frame(n)`); a person never notices, because the frames are the app's own.",
           Needs::Document },
         { "open", "project.open(guidOrName) -> bool",
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
           "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
-          "the closed project's undo history goes with it, and the rest of the run records into a fresh entry.",
+          "the closed project's undo history goes with it, and the rest of the run records into a fresh entry."
+          "\n\nTHE WORLD'S LIGHTING ARRIVES ON THE FRAMES AFTER THIS RETURNS "
+          "(SPECS/OPEN_COVER_SPEC.md §2 A). A world's FIRST global-illumination arm — the voxel "
+          "cascades, the reflection-probe grid, the irradiance field — is the longest thing the "
+          "engine does on the UI thread, and it is no longer built inside the load: it would land "
+          "on a frame drawn behind the loading cover, which nobody can see. It is built one stage "
+          "per frame once the world is on screen, so `world.giStatus()` read immediately after this "
+          "reports an arm that is not there yet. A script that asserts on it renders its own frames "
+          "first (`editor.frame(n)`); a person never notices, because the frames are the app's own.",
           Needs::Document },
         { "openAsync", "project.openAsync(guidOrName, {play}) -> bool",
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "

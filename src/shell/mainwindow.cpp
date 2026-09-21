@@ -6053,12 +6053,39 @@ void MainWindow::startCreateRun(const QString &filename, const QString &projectP
     // and `recordWarmUpSet` lets it find those permutations already built.
     // Nothing downstream reads the row in between: the reveal below switches
     // the page, and the desktop re-reads the tile when it is next shown.
-    slices.append({ QStringLiteral("Saving the scene…"), 97, [this, filename, projectPath]() {
+    //
+    // ...AND THE TILE NEEDS A VIEW (fix round item 5). `ProjectService::
+    // saveInitialScene` takes a headless branch when `viewport->isInitialized()`
+    // is false, writing the row with NO tile and no editor data — and a View is
+    // born in `EngineSceneViewport::showEvent`, because it needs the widget's
+    // MAPPED NATIVE WINDOW (the engine's own startup order: a render window
+    // before a scene manager). There is therefore no "create the editor context
+    // without switching page": showing the page IS what births it, and the page
+    // switch is the reveal below.
+    //
+    // MEASURED on the rig before this was written, and it does NOT fire today —
+    // the editor viewport is shown once during startup, so the View exists from
+    // boot and survives every close (`clearScene` keeps it deliberately): a
+    // create from the desktop wrote a 149-179 KB tile and real editor data,
+    // both as the session's first project and after a close. So this is a
+    // guarantee, not a repair: the flag records whether the save really had a
+    // viewport, and the reveal — which has just mapped the window — takes the
+    // tile if it did not.
+    auto hadViewport = std::make_shared<bool>(true);
+    slices.append({ QStringLiteral("Saving the scene…"), 97,
+                    [this, filename, projectPath, hadViewport]() {
         LoadTimeline::mark(QStringLiteral("saveInitialScene"));
+        *hadViewport = sceneView->isInitialized();
         saveScene(filename, projectPath);
     } });
-    slices.append({ QStringLiteral("Opening…"), 100, [this]() {
+    slices.append({ QStringLiteral("Opening…"), 100,
+                    [this, filename, projectPath, hadViewport]() {
         openStageReveal(false);
+        if (!*hadViewport && sceneView->isInitialized()) {
+            qInfo("scene create: the tile was taken after the reveal — the editor page "
+                  "had never been shown, so the initial save had no viewport");
+            saveScene(filename, projectPath);
+        }
     } });
 
     openRunner->setPlan(QStringList(), slices,

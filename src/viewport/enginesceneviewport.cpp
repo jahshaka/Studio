@@ -3063,14 +3063,17 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
 // frame of a world the user can already see takes one step of it and draws,
 // instead of all of it and not drawing.
 //
-// THE THREE TERMS, and why they are all here: only this widget knows whether a
-// world is still loading (`mSceneLoadPending`), whether it has been revealed
-// (`presentsSinceBind`), and — through the engine — whether anything is still
-// owed. And only the DRIVER's ticks and the open runner's slice boundaries ever
-// reach this function: a script's `editor.frame`, a screenshot, a thumbnail, a
-// preview and the selftest all render `Complete` frames by not asking, which is
-// what makes every pixel gate and both selftest hashes untouched BY
-// CONSTRUCTION rather than by measurement.
+// THE TWO TERMS, and why they are here: only this widget knows whether the world
+// has been revealed and — through the engine — whether anything is still owed.
+// THE DRIVER'S OWN TICKS ARE THE ONLY CALLER: a script's `editor.frame`, a
+// screenshot, a thumbnail, a preview, the open runner's slice boundaries and the
+// selftest all render `Complete` frames by not asking, which is what makes every
+// pixel gate and both selftest hashes untouched BY CONSTRUCTION rather than by
+// measurement.
+//
+// The other half — "nothing of this world is on screen yet" — is deliberately
+// NOT here. A load draws frames from half a dozen places and a per-frame flag
+// cannot cover them all; it is `Scene::setLoading`, sticky for the whole load.
 jahshaka::engine::FramePace EngineSceneViewport::driverFramePace() const
 {
     using jahshaka::engine::FramePace;
