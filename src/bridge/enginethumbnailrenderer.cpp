@@ -149,7 +149,41 @@ QImage EngineThumbnailRenderer::failed(const QString &why)
 
 void EngineThumbnailRenderer::clearSubject()
 {
-    if (mirror() && engine()) mirror()->setSource(nullptr);
+    // NOTHING OF ONE BORROWER'S SUBJECT REACHES THE NEXT — and that is a
+    // SUBJECT, not the studio (PREVIEWENV-2 item a). This used to unbind the
+    // document entirely, which is a much bigger hammer than the job: a
+    // `setSource(nullptr)` destroys every cached mesh, material and TEXTURE
+    // the mirror holds and pushes `setSky(SkyDesc())`, so the next tile
+    // re-uploaded the 512x256 studio equirect and made the engine capture and
+    // convolve it again — one upload, one capture and one convolution per
+    // tile, for a sky that is the same session texture for every preview
+    // surface in the process.
+    //
+    // Taking the subject OFF the document does the whole of what this is for:
+    // the mirror drops the nodes, and reclaimUnused frees the meshes,
+    // materials and textures nothing references any more on the next sync
+    // (the sky texture is pinned by the mirror itself for as long as the sky
+    // stands, which is exactly the state worth keeping).
+    if (!mStudio || !mirror() || !engine()) return;
+    bool removedAny = false;
+    const QList<iris::SceneNodePtr> subjects = mStudio->rootNode->children();
+    for (const iris::SceneNodePtr &child : subjects) {
+        if (!child) continue;
+        child->removeFromParent();
+        removedAny = true;
+    }
+    if (removedAny) {
+        mStudio->refresh();
+        mirror()->sync();
+    }
+}
+
+EngineThumbnailRenderer::Held EngineThumbnailRenderer::held() const
+{
+    Held out;
+    if (const SceneMirror *m = mirror()) out.nodes = m->mirroredNodeCount();
+    out.lastRenderMaterialBuilds = mLastRenderMaterialBuilds;
+    return out;
 }
 
 Colour EngineThumbnailRenderer::backgroundColour()
@@ -171,8 +205,38 @@ void EngineThumbnailRenderer::configureScene(Scene *scene)
     previewenv::pushAmbient(scene);
 }
 
-void EngineThumbnailRenderer::releaseSubject(bool)
+void EngineThumbnailRenderer::releaseSubject(bool sceneAlive)
 {
+    // THE STUDIO DOCUMENT COMES OUT OF THE ENGINE HERE, while everything is
+    // still alive (this hook runs first in release(), before the mirror is
+    // dropped and long before destroyScene). Since PREVIEWENV-2 the mirror
+    // stays BOUND to it between renders, so this class is the one that has to
+    // put it down.
+    //
+    // WHEN THE SCENE IS ALREADY GONE THERE IS NOTHING SAFE TO CALL, and the
+    // fix round's suggestion — unbind anyway, because "setSource(nullptr)
+    // guards its own engine calls" — does not hold at this tree: that function
+    // dereferences the engine Scene unconditionally (scenemirror.cpp ~471-505:
+    // destroyMesh on the wire meshes, setGrid, removeNode/destroyMesh/
+    // destroyMaterial on the horizon and the GI-volume overlay, destroyMaterial
+    // on the highlight, then releaseEntry for every entry). Calling it with the
+    // Engine gone is a read-after-free where the present behaviour is one
+    // warning: ~SceneMirror takes the document out of the dead manager and
+    // iris::Scene::setGraphScene says so by design ("SceneMirror must unbind
+    // (setSource(null)) before Engine::destroyScene()", scene.cpp:1083-1093),
+    // dropping every stale handle instead of walking it.
+    //
+    // AND NO SHIPPING PATH REACHES IT: EngineHost::shutdown calls
+    // EngineThumbnailRenderer::shutdown() (enginehost.cpp:583) BEFORE
+    // mEngine.reset(), and ThumbnailGenerator::shutdown() does the same on the
+    // window-close path — both with the Engine alive, so `sceneAlive` is true
+    // and the unbind below is the one that runs. What is left is borrow()'s
+    // "a new Engine" branch with the old one already expired (a second boot in
+    // one test process); the real answer there is to let go of the renderer
+    // before the Engine, which is what both shutdown calls do.
+    if (sceneAlive && mirror() && mirror()->source() == mStudio && mStudio)
+        mirror()->setSource(nullptr);
+    mStudio.reset();
     mSphere.reset();
 }
 
@@ -215,7 +279,7 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
     return true;
 }
 
-iris::ScenePtr EngineThumbnailRenderer::buildPreviewScene(iris::CameraNodePtr &cameraOut)
+iris::ScenePtr EngineThumbnailRenderer::studioDocument(iris::CameraNodePtr &cameraOut)
 {
     // THE STUDIO, AND NOTHING ELSE (MATPREVIEW-ENV-1, owner review R9). This
     // carried a hand rig of its own — a 0.76 key and a 0.47 blue-white rim over
@@ -227,14 +291,23 @@ iris::ScenePtr EngineThumbnailRenderer::buildPreviewScene(iris::CameraNodePtr &c
     // render(), below, through the document's own `exposure` field) and the
     // three things a photograph of an asset never has: a sun disc, fog,
     // shadows.
-    auto scene = iris::Scene::create();
-    previewenv::apply(scene);
+    // ONE DOCUMENT FOR THE WHOLE SESSION (PREVIEWENV-2 item a). It used to be
+    // a fresh iris::Scene per request, and a fresh document means a fresh
+    // bind, and a bind is the mirror's full teardown: the studio sky was
+    // uploaded, captured and convolved again for every tile. The sky, the
+    // exposure and the three things a preview never has do not vary by
+    // subject, so neither does the document — only what is parented into it.
+    // (The CAMERA is per request: framing is the subject's.)
+    if (!mStudio) {
+        mStudio = iris::Scene::create();
+        previewenv::apply(mStudio);
+    }
 
     cameraOut = iris::CameraNode::create();
     cameraOut->setLocalPos(iris::Vec3(1, 1, 5));
     cameraOut->lookAt(iris::Vec3(0, 0.5f, 0));
     cameraOut->update(0);
-    return scene;
+    return mStudio;
 }
 
 // THE FRAMING (smoke S6, the second half of the owner's Assets report).
@@ -291,7 +364,7 @@ QImage EngineThumbnailRenderer::renderNode(iris::SceneNodePtr subject, QSize siz
 {
     if (!subject) return failed(QStringLiteral("there is no subject node to render"));
     iris::CameraNodePtr cam;
-    auto document = buildPreviewScene(cam);
+    auto document = studioDocument(cam);
     document->rootNode->addChild(subject);
     frameCamera(cam, subject);
     QImage img = render(document, cam, size);
@@ -312,7 +385,7 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
     node->setMaterial(material ? material : iris::DefaultMaterial::create().staticCast<iris::Material>());
 
     iris::CameraNodePtr cam;
-    auto document = buildPreviewScene(cam);
+    auto document = studioDocument(cam);
     document->rootNode->addChild(node);
     // THE SAME FRAMING THE DOCK USES (previewframing.h), at the tile's own
     // aspect: the sphere fills a fixed fraction of the SMALLER dimension, so a
@@ -351,9 +424,17 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // time) steps on the default grid for a thumbnail regardless of what the
     // last host left in force (A4.2 review S3).
     engine->setFixedFrameDelta(jahshaka::engine::Engine::kDefaultFrameDelta);
-    mirror()->setSource(document);
+    // BOUND ONCE (PREVIEWENV-2 item a): the studio document is the same
+    // document every time, and `setSource` is a full teardown-and-rebind even
+    // when the answer is the same — the whole cost this lane is about.
+    if (mirror()->source() != document) mirror()->setSource(document);
     mirror()->sync();
-    // The sky — the studio environment for every request (buildPreviewScene).
+    // THE SUBJECT'S OWN COST, captured where the counter means something: the
+    // mirror zeroes its material-build counter at the top of every sync, and
+    // this is the sync that mirrored the subject (thumbnails.studio_env's
+    // growth arm reads it through held()).
+    mLastRenderMaterialBuilds = mirror()->materialBuildCount();
+    // The sky — the studio environment for every request (studioDocument).
     // NOT applyEnvironment, deliberately: the ambient is the environment's own
     // (configureScene), and a thumbnail takes no shadow, GI or post row from a
     // document it never had.
@@ -397,8 +478,10 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     const bool ok = view()->readPixels(img);
     view()->setEnabled(false);
 
-    // Nothing leaks across requests: drop every mirrored node, mesh and material.
-    mirror()->setSource(nullptr);
+    // Nothing leaks across requests: the SUBJECT comes off the studio document
+    // and the mirror reclaims its meshes, materials and textures. The studio
+    // itself — the sky, its capture and its convolution — stays (clearSubject).
+    clearSubject();
 
     if (!ok) return failed(QStringLiteral("the offscreen view produced no pixels: %1")
                                .arg(QString::fromStdString(engine->lastError())));

@@ -150,6 +150,18 @@ public:
     void pausePlayingScene() override;
     void stopPlayingScene() override;
     bool isPlaying() const override { return mPlaying; }
+    QRect widgetRectInWindow() const override;
+    bool playEjected() const override { return mPlayEjected; }
+    /// A RUN EXISTS — not "a run is stepping" (PLAY-SELECT-1 fix round, F5).
+    /// `mPlaying` goes FALSE on pause while the run, its physics world and its
+    /// pre-play snapshot all live on, so every rule about what a run's edits
+    /// are worth — the transient drag, the physics hand-over, the Alt+drag
+    /// refusal, the eject verb — keys on this instead. PlayBack's own flag is
+    /// the one that says it (isScenePlaying stays true through a pause,
+    /// deliberately).
+    bool playRunLive() const override;
+    void setPlayEjected(bool ejected) override;
+    QString playInputOwner() const override;
     void startPhysicsSimulation() override;    // simulate in place: steps the document's
     void restartPhysicsSimulation() override;  // physics world without entering play mode
     void stopPhysicsSimulation() override;
@@ -455,6 +467,12 @@ private:
     CameraControllerBase    *mCamController = nullptr;
     PlayBack                *mPlayback = nullptr;
     bool                     mPlaying = false;
+    /// EJECTED (PLAY-SELECT-1, Unreal's F8): the run keeps simulating and the
+    /// EDITOR has the input — every mouse gesture and every key comes back to
+    /// this widget, and the possession arm stands down from the view camera so
+    /// the editor's own fly moves the picture again. Cleared on every play
+    /// start and every stop: it is a state of THIS run, not a preference.
+    bool                     mPlayEjected = false;
     QPointF mMousePos, mPrevMousePos;
     bool mHaveMouse = false;
     // Drag-and-drop state. The MATERIAL HOVER PREVIEW is no longer here: it is
@@ -500,6 +518,13 @@ private:
     /// take one somebody else is holding (VrInteraction::beginGizmoDrag refuses
     /// the mirror case).
     bool mMouseDrag = false;
+    /// THE BUTTONS WHOSE PRESS THIS WIDGET TOOK (PLAY-SELECT-1 fix round, F2).
+    /// A release belongs to whoever got the press, not to whatever the
+    /// ownership predicate answers at release time: eject, un-eject and
+    /// possession can all change that answer mid-gesture, and routing the
+    /// release by the new answer strands the gizmo drag (never ended) or the
+    /// run's own look (never released).
+    Qt::MouseButtons mEditorButtons = Qt::NoButton;
     bool mVertexSnapHeld = false;             // V held: translate drags snap to vertices
     QWidget *mHierarchyDragSource = nullptr;   // drags from the hierarchy tree are reparents, not spawns
     Database *mDatabase = nullptr;
@@ -562,6 +587,53 @@ private:
     /// is deliberate (the explorer's own state: per-view memory, resets, the
     /// EditorData round trip).
     iris::CameraNodePtr viewCamera() const { return mPilot ? mPilot : mEditorCam; }
+    /// THE CAMERA THE PICTURE IS TAKEN THROUGH — viewCamera() everywhere except
+    /// inside a play run, where the document's one camera rule
+    /// (iris::Scene::renderCamera) may hand the shot to the armed active camera
+    /// or to a possession's spring arm. Every pick ray, every gizmo hit test
+    /// and every gizmo size is built from THIS (PLAY-SELECT-1): a click during
+    /// play that unprojected the explorer's frustum while the user was looking
+    /// through the scene's camera would select whatever happened to be behind
+    /// the cursor in a picture nobody could see. Outside play it is
+    /// viewCamera() to the pointer — renderCamera's first term.
+    iris::CameraNodePtr pickCamera() const;
+    /// Whether a pick through `cam` must give the camera's authored aspect back
+    /// when it is done with it (F1): true for every camera this viewport is
+    /// only LOOKING THROUGH — an armed active camera, a possession's — and
+    /// false for the explorer, whose aspect the frame tick owns.
+    bool borrowsPickAspect(const iris::CameraNodePtr &cam) const;
+    /// WHO OWNS THE POINTER while a run is in flight (PLAY-SELECT-1). True only
+    /// while the run really consumes input — a POSSESSED avatar — and never
+    /// while ejected. False is the ordinary case (explorer/camera play), and it
+    /// is what gives a plain left click back to the editor's pick and gizmo.
+    bool runOwnsPointer() const;
+    /// The document's possession slot has somebody (the one state where the
+    /// play controller is a real consumer of mouse and keys).
+    bool playPossessing() const;
+    /// Ends whatever gesture this widget is holding — a live gizmo drag (the
+    /// run's way: no undo step, the bodies handed back), an open Alt+drag
+    /// macro, and the buttons the camera controller believes are down. Called
+    /// at an eject hand-over and at Stop, because a gesture cannot survive the
+    /// moment its input owner changes underneath it (F2).
+    void endEditorMouseGesture();
+    /// A drag the RUN would win anyway is refused by name, with a toast (F6):
+    /// a character's movement, a socket rider and an animation with real
+    /// channels rewrite their node every frame of a run, so the gizmo cannot
+    /// hold one. True = refused, and the press does nothing else.
+    bool refuseDragOnDrivenNode();
+    /// The selection as it stood at Stop, re-anchored on the restored document
+    /// (PLAY-SELECT-1): the nodes that survived the run keep the selection, the
+    /// outline and the properties column; the gizmo re-reads the poses the
+    /// restore wrote.
+    void refreshSelectionAfterPlay();
+    /// A gizmo drag during a run takes the dragged rigid bodies away from
+    /// Bullet for the length of the gesture and gives them back where the hand
+    /// left them (see the definitions).
+    void beginPlayDragOverPhysics();
+    void endPlayDragOverPhysics();
+    /// The bodies THIS drag took over — the exact set endPlayDragOverPhysics
+    /// gives back, so a selection change mid-drag cannot strand a flag.
+    QList<iris::SceneNodePtr> mPlayDragBodies;
     iris::CameraNodePtr mPilot;
     /// The piloted camera's transform when piloting STARTED, so ejecting can
     /// push ONE undo command for the whole flight (a per-mouse-event command

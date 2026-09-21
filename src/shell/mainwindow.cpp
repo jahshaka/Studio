@@ -280,8 +280,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     camControl = Q_NULLPTR;
 
     setupFileMenu();
-	fontIcons = new QtAwesome;
-	fontIcons->initFontAwesome();
+	// THE PROCESS'S ICON SET (QTAWESOME-1): one QtAwesome, one font load, one
+	// 786-entry codepoint map, shared with every other widget that draws a
+	// glyph icon — the shell used to make its own and never delete it, and
+	// the materials page made a second (and a third per property row).
+	fontIcons = &fonticons::shared();
 
     setupViewPort();
 	setupUndoRedo();
@@ -4759,6 +4762,27 @@ void MainWindow::setupShortcuts()
                     onPlaySceneButton();
                 else if (currentSpace == WindowSpaces::PLAYER)
                     playerView->onPlayScene();
+            });
+
+    // F8 — EJECT (PLAY-SELECT-1, owner R13). Unreal's key, and free in this
+    // registry (the only other F-keys here are F3 and F11). It hands the mouse
+    // and the keyboard back to the editor WITHOUT stopping the run; pressed
+    // again it gives them back to the run. Editor space only, and only while
+    // something is playing — said out loud either way, because an eject that
+    // changes nothing visible is indistinguishable from a dead key.
+    //
+    // ONE PATH with `editor.playEject` (SCRIPTING_SPEC §2.3): both this lambda
+    // and the verb set the VIEWPORT's latch, which is the flag its event
+    // handlers branch on.
+    reg.add("play.eject", "Eject (editor input during play)", "Playback",
+            QKeySequence(Qt::Key_F8), this, [this]() {
+                if (currentSpace != WindowSpaces::EDITOR || !sceneView) return;
+                if (!sceneView->isPlaying()) return;
+                const bool ejected = !sceneView->playEjected();
+                sceneView->setPlayEjected(ejected);
+                showViewportToast(ejected ? tr("Ejected") : tr("Possessed"),
+                                  ejected ? tr("The editor has the input; the scene keeps playing.")
+                                          : tr("Input is back with the running scene."));
             });
 
     // ---- snapping (SnapSettings, EDITOR_SHORTCUTS_SPEC §4) ----

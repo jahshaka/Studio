@@ -96,7 +96,10 @@ SCOPE = ['src', 'irisgl/core', 'irisgl/document', 'irisgl/engine', 'irisgl/impor
 def in_scope(rel):
     if '/thirdparty/' in rel or rel.startswith('thirdparty/'):
         return False
-    if '_autogen' in rel or '/misc/QtAwesome' in rel:
+    # (The `/misc/QtAwesome` carve-out went with the files: QTAWESOME-1 deleted
+    # src/modules/materials/misc/QtAwesome*, a second copy of the vendored
+    # thirdparty/qtawesome/ headers that no CMakeLists ever compiled.)
+    if '_autogen' in rel:
         return False
     # There is NO `-old.` carve-out. The prototype had one, it covered exactly one
     # file (src/modules/materials/propertywidgets/floatpropertywidget-old.h, in no

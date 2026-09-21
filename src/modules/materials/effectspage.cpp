@@ -61,6 +61,7 @@ For more information see the LICENSE file
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/sceneissues.h"
+#include "services/materialtile.h"
 #include "services/thumbnailrebuild.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
@@ -138,8 +139,10 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	// DOCUMENT now — MaterialDocument's, wired in newDocument. It was never
 	// stopped on a switch, so an edit made less than 1.5 s before opening
 	// another material fired against the NEW material's guid.)
-	fontIcons = new QtAwesome;
-	fontIcons->initFontAwesome();
+	// THE PROCESS'S ICON SET (QTAWESOME-1) — not a second one. This page used
+	// to build its own QtAwesome, run initFontAwesome() through it and fill a
+	// second 786-entry codepoint map, for the five toolbar glyphs it draws.
+	fontIcons = &fonticons::shared();
 	configureUI();
 	configureToolbar();
 	addMenuToSceneWidget();
@@ -1180,7 +1183,8 @@ void EffectsPage::duplicateShader(QString guid)
 	// R9(a)): a duplicate inherits the source row's thumbnail, which is the
 	// wrong picture the moment that one was a preset's shipped icon. Before
 	// the drawers refill, so they show the render and not the inherited tile.
-	thumbrebuild::rebuildOne(dataBase, mProject, copy, EngineHost::instance().engine());
+	// (services/materialtile.h — one implementation, and a refusal is logged.)
+	materialtile::mint(dataBase, mProject, copy, "the module's Duplicate");
 	// THE DRAWERS FIRST, THEN THE OPEN (fix round F1): `loadGraph` finds its
 	// tile in the widgets, so opening the copy before the Custom list is
 	// refilled used to dereference a tile that did not exist.
@@ -2830,10 +2834,8 @@ void EffectsPage::configureConnections()
 		const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
 		                                                     dataBase, mProject, &error);
 		if (copy.isEmpty()) { irisLog("Customise: " + error); return; }
-		// THE TILE IS A RENDER OF THE COPY (owner review R9(a)): a customised
-		// preset used to keep the shipped preset's ICON, which is a picture of
-		// the preset and not a sphere for silver or glass.
-		thumbrebuild::rebuildOne(dataBase, mProject, copy, EngineHost::instance().engine());
+		// (The copy's TILE is a render of the copy — `customise` does it, for
+		// this door and the other two; PREVIEWENV-2 item c.)
 		refreshShaderGraph();
 		// It is the user's material now: show them where it landed. In a
 		// project it is the Project drawer (Customise pins it), otherwise

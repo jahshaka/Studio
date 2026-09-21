@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "irisgl/import/meshprewarm.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
+#include "ui/controls/fonticons.h"
 #include "data/project.h"
 
 namespace Ui {

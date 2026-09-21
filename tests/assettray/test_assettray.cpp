@@ -370,12 +370,14 @@ int main(int argc, char **argv)
     // Six folders, as a project with a handful of drawers has: one keystroke
     // of AssetWidget::searchAssets lists every one of them.
     QStringList folders;
+    QString filedTexture;   // one of the filed rows, for 3c's flat listing
     for (int i = 0; i < 5; ++i) {
         const QString folder = newGuid();
         db.createFolder(QStringLiteral("Folder %1").arg(i), projectGuid, folder, projectGuid, true);
         folders << folder;
         for (int j = 0; j < 6; ++j) {
             const QString guid = newGuid();
+            if (filedTexture.isEmpty()) filedTexture = guid;
             db.createAssetEntry(guid, QStringLiteral("filed_%1_%2.png").arg(i).arg(j),
                                 static_cast<int>(ModelTypes::Texture), folder, projectGuid,
                                 QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
@@ -402,6 +404,65 @@ int main(int argc, char **argv)
         CHECK(keystroke.statements <= 120,
               QStringLiteral("one search keystroke costs <= 120 statements (measured %1)")
                   .arg(keystroke.statements).toUtf8().constData());
+    }
+
+    // ---------------------------------------------------------------------
+    // 3c. THE MODULE DRAWER'S WHOLE-PROJECT LISTING (LISTALL-1). The Materials
+    //     module's project drawer has no breadcrumb, so it reads `listAll` —
+    //     the rule over the root AND every folder — and it repopulates on
+    //     ProjectMembership::changed, which a dependency-edge write (every
+    //     material applied in the editor) is. It used to CALL `list` per
+    //     folder, repeating four project-wide reads and the collapse's batch
+    //     each time: with the six folders built above, about a hundred
+    //     statements per refresh, outside this suite's bound entirely.
+    //
+    //     Both halves are pinned: the ANSWER is compared against the shape it
+    //     replaced, row for row and in order, and the COST is counted.
+    // ---------------------------------------------------------------------
+    {
+        const auto perFolder = [&](int typeFilter) {
+            QVector<AssetRecord> out;
+            QSet<QString> seen;
+            QStringList all;
+            all << projectGuid;
+            for (const QString &guid : db.fetchProjectFolderGuids(projectGuid)) all << guid;
+            for (const QString &folder : all)
+                for (const AssetRecord &record : assettray::list(&db, projectGuid, folder, typeFilter))
+                    if (!seen.contains(record.guid)) { seen.insert(record.guid); out.append(record); }
+            return out;
+        };
+        const auto guidsOf = [](const QVector<AssetRecord> &records) {
+            QStringList out;
+            for (const AssetRecord &record : records) out << record.guid;
+            return out;
+        };
+
+        const QVector<AssetRecord> flatOld = perFolder(-1);
+        const QVector<AssetRecord> flatNew = assettray::listAll(&db, projectGuid);
+        std::printf("measure: listAll -> %d tiles (the per-folder shape: %d)\n",
+                    int(flatNew.size()), int(flatOld.size()));
+        CHECK(guidsOf(flatNew) == guidsOf(flatOld),
+              "listAll answers exactly what list-per-folder answered, in the same order");
+
+        const int textureType = static_cast<int>(ModelTypes::Texture);
+        CHECK(guidsOf(assettray::listAll(&db, projectGuid, textureType))
+                  == guidsOf(perFolder(textureType)),
+              "...and with a type filter too");
+        CHECK(listed(flatNew, filedTexture),
+              "a row filed in a folder is in the flat listing (what the module drawer shows)");
+
+        Measured flat = measure([&] { return assettray::listAll(&db, projectGuid).size(); });
+        std::printf("measure: one listAll (6 folders) -> %d tiles, %d statements, %lld us\n",
+                    flat.rows, flat.statements, static_cast<long long>(flat.micros));
+        if (tracing) {
+            // THE SHAPE: the folders once, every folder's rows in ONE query,
+            // the pins and their filing once, and ONE collapse batch — flat in
+            // the number of folders. The per-folder shape read ~110 here.
+            CHECK(flat.statements <= 25,
+                  QStringLiteral("one whole-project listing costs <= 25 statements "
+                                 "(measured %1, %2 tiles, 6 folders)")
+                      .arg(flat.statements).arg(flat.rows).toUtf8().constData());
+        }
     }
 
     // ---------------------------------------------------------------------

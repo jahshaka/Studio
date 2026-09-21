@@ -2388,6 +2388,52 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QSt
     return tileData;
 }
 
+QVector<AssetRecord> Database::fetchChildAssetsIn(const QStringList &parents,
+                                                 const QString &projectGuid, int filter)
+{
+    QVector<AssetRecord> tileData;
+    if (parents.isEmpty() || projectGuid.isEmpty()) return tileData;
+
+    // ONE STATEMENT FOR EVERY FOLDER (LISTALL-1). assettray::listAll used to
+    // call fetchChildAssets once per folder — and the whole listing rule with
+    // it — so a project with ten folders cost eleven listings (~110 SQL
+    // statements) on EVERY ProjectMembership::changed, which a dependency-edge
+    // write (every material applied in the editor) is one of.
+    //
+    // The placeholders are generated, the VALUES are bound: a folder guid is
+    // data and never reaches the SQL text.
+    QStringList marks;
+    for (int i = 0; i < parents.size(); ++i) marks << QStringLiteral("?");
+    QString assetsQuery =
+        QStringLiteral("SELECT name, thumbnail, guid, parent, type, properties "
+                       "FROM assets A WHERE parent IN (%1) AND project_guid = ? ")
+            .arg(marks.join(QStringLiteral(", ")));
+    if (filter > 0) assetsQuery.append("AND type = ? ");
+    // The same order one folder's listing had, so a bucketed caller sees each
+    // folder's rows exactly as fetchChildAssets would have handed them over.
+    assetsQuery.append("ORDER BY A.name DESC");
+
+    QSqlQuery query;
+    query.prepare(assetsQuery);
+    for (const QString &parent : parents) query.addBindValue(parent);
+    query.addBindValue(projectGuid);
+    if (filter > 0) query.addBindValue(filter);
+    executeAndCheckQuery(query, "fetchChildAssetsIn");
+
+    while (query.next()) {
+        AssetRecord data;
+        data.name = query.value(0).toString();
+        data.thumbnail = query.value(1).toByteArray();
+        data.guid = query.value(2).toString();
+        data.parent = query.value(3).toString();
+        data.type = query.value(4).toInt();
+        data.properties = query.value(5).toByteArray();
+        data.projectGuid = projectGuid;
+        tileData.push_back(data);
+    }
+    return tileData;
+}
+
 QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGuid)
 {
     QVector<AssetRecord> records;

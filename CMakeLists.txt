@@ -392,6 +392,7 @@ set(SRCS
     src/ui/controls/labelwidget.cpp
     src/ui/controls/checkboxwidget.cpp 
     src/ui/controls/nodeicons.cpp
+    src/ui/controls/fonticons.cpp
     src/ui/controls/lightchannelswidget.cpp
     src/ui/controls/textinputwidget.cpp 
     src/ui/controls/comboboxwidget.cpp 
@@ -447,6 +448,7 @@ set(SRCS
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
     src/services/thumbnailrebuild.cpp 
+    src/services/materialtile.cpp
     src/services/thumbnailstop.cpp 
     src/bridge/enginepreviewscene.cpp
     src/bridge/previewenvironment.cpp

@@ -224,7 +224,10 @@ private:
     // the install slices (FSYNC-1 — an AssetCas::Staged carries the source
     // path, the hash, and the temp its bytes are already flushed into, so a
     // slice is a rename and two rows).
-    struct IngestAsset { QString archiveGuid; QVector<AssetCas::Staged> files; };
+    /// `folder`: the project folder the PIN is filed in (ARCHIVE-FOLDER-1),
+    /// empty for the root. A pinned library row's filing lives on the pin,
+    /// so it rides the manifest rather than the catalog snapshot.
+    struct IngestAsset { QString archiveGuid; QString folder; QVector<AssetCas::Staged> files; };
     /// ARCHIVE-GUIDS-1: the archive guids this library already held at the same type.
     QSet<QString> mKnownGuids;
     QVector<IngestAsset> mIngest;

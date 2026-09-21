@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/document/scenegraph/scalelock.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -367,6 +368,30 @@ QSharedPointer<iris::SceneNode> TransformEditor::editableNode() const
     return sceneNode;
 }
 
+// A RUN'S TRANSFORM EDIT IS NOT AN UNDO STEP (PLAY-SELECT-1 fix round, F9).
+//
+// The properties column is live-tweakable while the scene plays — that is the
+// point of editing during a run — but Stop puts every transform back from
+// PlayBack's snapshot, so a command recorded for one would rewind the node to
+// a pose that stopped existing when Stop was pressed, and it would sit on the
+// stack under the user's next Ctrl+Z. The write lands; only the stack is
+// spared, which is exactly what the gizmo's drag does during a run.
+//
+// THE DOCUMENT is the one that knows: `Scene::isPlaying` stays true through a
+// pause (the snapshot and the physics world live on), which is precisely when
+// somebody is most likely to type a number into this panel.
+//
+// TRANSFORMS ONLY. The other rows this panel and its neighbours write — a
+// light's intensity, a material, a name — are NOT in the snapshot and survive
+// Stop, so they stay ordinary undoable edits; "what else a run's edits should
+// mean" is the live-editing mode's question, recorded upward, not this one's.
+static bool runOwnsTheseTransforms(const iris::SceneNodePtr &node)
+{
+    if (!node) return false;
+    const iris::ScenePtr scene = node->getScene();
+    return scene && scene->isPlaying();
+}
+
 void TransformEditor::onScrubStarted()
 {
     if (!!sceneNode) {
@@ -398,6 +423,7 @@ void TransformEditor::onScrubFinished(bool cancelled)
 
     // same pattern as Gizmo::createUndoAction — rewind to the drag-start
     // transform, then push; the command's redo() applies the new transform
+    if (runOwnsTheseTransforms(sceneNode)) return;   // the write stands, the stack hears nothing
     sceneNode->setLocalPos(scrubStartPos);
     sceneNode->setLocalRot(scrubStartRot);
     sceneNode->setLocalScale(scrubStartScale);
@@ -449,6 +475,7 @@ void TransformEditor::writeTransform(DragSpinBox *box,
     if (newPos == oldPos && newRot == oldRot && newScale == oldScale)
         return;                            // the same value again is not an edit
 
+    if (runOwnsTheseTransforms(node)) return;        // the typed value stands, unrecorded
     node->setLocalPos(oldPos);
     node->setLocalRot(oldRot);
     node->setLocalScale(oldScale);

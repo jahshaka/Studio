@@ -47,6 +47,21 @@ assert(mats.length >= 1, "the material came back");
 assert(assets.list({ scope: "store", type: "shader" }).length === 0,
        "no ModelTypes::Shader row exists on the far side either");
 
+// THE PIN'S FOLDER CAME WITH IT (ARCHIVE-FOLDER-1), on a machine that has
+// never seen the project. A pinned library row's filing lives on the PIN, not
+// on the row, so before this the material arrived at the ROOT of the tray with
+// an empty "Props" folder beside it — the user's organisation lost in the
+// round trip while the rows survived it.
+var propsHere = assets.folders().filter(function (f) { return f.name === "Props"; });
+assert(propsHere.length === 1, "the archive brought the Props folder (" + propsHere.length + ")");
+assert(propsHere[0].count >= 1,
+       "and the pinned material is filed IN it (count " + propsHere[0].count + ")");
+var rootHere = assets.list({ scope: "project", tray: true }).map(function (a) { return a.guid; });
+mats.forEach(function (g) {
+    if (materials.members(g).length > 0)
+        assert(rootHere.indexOf(g) === -1, "the bundle is a tile of the FOLDER, not of the root");
+});
+
 var bundled = null;
 mats.forEach(function (g) { if (materials.members(g).length > 0) bundled = g; });
 assert(bundled !== null, "one of them has MEMBERS — the bundle is self-contained");

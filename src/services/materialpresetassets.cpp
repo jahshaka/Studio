@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "services/assetcas.h"
 #include "services/materialbundle.h"
+#include "services/materialtile.h"
 #include "services/memberstamp.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
@@ -413,6 +414,15 @@ QString customise(const QString &presetOrGuid, const QString &name,
     // would be half an answer. Direct, because THEY asked for it.
     if (project && !project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(copy, db, project, ProjectAssets::AddKind::Direct);
+    // AND ITS TILE IS A RENDER OF IT (owner review R9(a)), HERE rather than at
+    // every door: the copy carries the shipped preset's ICON until something
+    // draws it, and that is a picture of the PRESET — not a sphere of this
+    // material at all for silver or glass. Three doors called Customise (the
+    // verb, the module's tile menu, the tray panel's) and each carried its own
+    // copy of the call, so a fourth would have had to remember.
+    // (services/materialtile.h: one gesture, one render, and a refusal is
+    // logged by name instead of discarded.)
+    materialtile::mint(db, project, copy, "Customise");
     return copy;
 }
 

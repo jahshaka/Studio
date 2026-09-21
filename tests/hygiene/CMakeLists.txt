@@ -150,3 +150,14 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(source.notices_coverage PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.notices_coverage)
 endif()
+
+# source.one_fonticons — QTAWESOME-1: one QtAwesome per process (fonticons::
+# shared()) and one copy of the vendored sources. The tree carried a second,
+# uncompiled copy of thirdparty/qtawesome under the materials module, and a
+# fresh 786-entry codepoint map was built and leaked per PROPERTY ROW by a
+# member no line ever read. See the script's header.
+add_test(NAME source.one_fonticons
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_fonticons.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_fonticons PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_fonticons)

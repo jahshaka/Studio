@@ -1,0 +1,265 @@
+// scripting.e2e.play_select — EDITING WHILE THE SCENE PLAYS (PLAY-SELECT-1,
+// owner R13: "in the editor's PLAY mode I can select only through the scene
+// graph — I want viewport selection during play").
+//
+// This is the half a --script run can prove: the OWNERSHIP RULE and everything
+// that hangs off it, driven through the verbs. The other half — a real left
+// click and a real gizmo drag landing on the viewport while the simulation
+// runs — needs synthesised X input and lives in `app.play_select`, which drives
+// the same code through the mouse.
+//
+// The claims here:
+//   1. editor.playInputOwner() answers "editor" outside play and during an
+//      ordinary (explorer) run, and editor.playEject is REFUSED when nothing is
+//      playing — it is a state of a run in flight, not a setting.
+//   2. The editor's capabilities keep working DURING a run: editor.select moves
+//      the selection, the gizmo verbs answer, and a transform write lands live
+//      while the simulation is still advancing (a falling body proves it is).
+//   3. A write onto a RIGID BODY during a run moves the BODY (the hand wins
+//      over the solver) instead of being overwritten one step later.
+//   4. Stop restores the document — the run's edits are thrown away, including
+//      the ones made by hand — and KEEPS the selection.
+//   5. POSSESSION is the one state where the run owns the pointer:
+//      playInputOwner() reads "controller", editor.playEject(true) hands it
+//      back and playEject(false) returns it, and every Stop clears the latch.
+//
+// ENGINE UP (no --headless): play-in-place, the physics stepper and the input
+// routing all live in the engine viewport, and the headless stand-in's play is
+// a no-op.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b, tol, msg) {
+    assert(Math.abs(a - b) <= tol, msg + " (" + a + " vs " + b + ", tol " + tol + ")");
+}
+function caught(fn) {
+    try { fn(); } catch (e) { return "" + e; }
+    return null;
+}
+function pos(id) { return node.info(id).position; }
+
+project.create("Play Select " + Date.now());
+
+// ---- 1. the ownership rule, before anything plays -------------------------
+
+assert(editor.playing() === false, "a fresh project is not playing");
+assert(editor.playInputOwner() === "editor",
+       "outside play the editor owns the pointer");
+assert(editor.playEject() === false, "and nothing is ejected");
+var refused = caught(function () { editor.playEject(true); });
+assert(refused !== null, "editor.playEject(true) is REFUSED with nothing playing: " + refused);
+assert(editor.playEject() === false, "...and the refusal changed nothing");
+
+// ---- the scene: one falling body, one prop the hand will move -------------
+
+var faller = scene.addPrimitive("sphere", { position: { x: -2, y: 6, z: 0 } });
+assert(node.physics(faller, { type: "rigidbody", shape: "sphere", mass: 1 }) === true,
+       "the sphere is a rigid body");
+var prop = scene.addPrimitive("cube", { position: { x: 2, y: 1, z: 0 } });
+assert(prop.length > 10, "a prop cube -> " + prop);
+
+var fallerStart = pos(faller);
+var propStart = pos(prop);
+
+// ---- 2. the editor keeps working while the run advances -------------------
+
+editor.select(prop);
+assert(editor.selection() === prop, "the prop is selected before Play");
+
+assert(editor.play(), "editor.play()");
+assert(editor.playing(), "...it really is playing");
+assert(editor.playInputOwner() === "editor",
+       "an explorer run does NOT own the pointer — a plain left click is the editor's");
+assert(editor.playEject() === false, "a fresh run starts un-ejected");
+
+editor.frame(30, 1 / 60);
+var fallerMid = pos(faller);
+assert(fallerMid.y < fallerStart.y - 0.2,
+       "the simulation is advancing (the body fell " +
+       (fallerStart.y - fallerMid.y).toFixed(3) + " u)");
+
+// The selection verb — what a viewport click ends up calling.
+editor.select(faller);
+assert(editor.selection() === faller, "editor.select moves the selection DURING play");
+editor.select(prop);
+assert(editor.selection() === prop, "...and back");
+
+// The gizmo verbs answer during a run (the tool a click then drags).
+assert(editor.setGizmoMode("rotate"), "editor.setGizmoMode during play");
+assert(editor.gizmoMode() === "rotate", "...and it reads back");
+assert(editor.setGizmoMode("translate"), "back to translate");
+
+// A live transform write on a node the simulation does not own: it stays put.
+node.transform(prop, { position: { x: 5, y: 1, z: 0 } });
+near(pos(prop).x, 5, 1e-3, "the prop moved live while the scene plays");
+editor.frame(30, 1 / 60);
+near(pos(prop).x, 5, 1e-3, "...and the running simulation left it where the hand put it");
+
+// ---- 3. the hand wins over the solver on a BODY ---------------------------
+
+// Placed HIGH and to the side, so both halves are readable: the x says the
+// hand won over the solver's pose, and the y says the solver still has it
+// (the body was resting on the ground by now, and a body that stayed asleep
+// under the teleport would sit at 5 for ever).
+node.transform(faller, { position: { x: 4, y: 5, z: 0 } });
+near(pos(faller).x, 4, 1e-3, "the body was placed by hand");
+near(pos(faller).y, 5, 1e-3, "...at the height the hand chose");
+editor.frame(20, 1 / 60);
+var afterHand = pos(faller);
+near(afterHand.x, 4, 0.05,
+     "the body CARRIED ON from where the hand put it instead of snapping back to the " +
+     "solver's pose");
+assert(afterHand.y < 5 - 0.05,
+       "...and it is falling again from there, awake (5 -> " + afterHand.y.toFixed(3) + ")");
+
+// ---- 4. Stop throws the run's edits away and keeps the selection ----------
+
+assert(editor.selection() === prop, "the selection at Stop is the prop");
+editor.stop();
+assert(editor.playing() === false, "stopped");
+assert(editor.selection() === prop,
+       "THE SELECTION SURVIVES THE RUN — the node still exists, so it is still selected");
+near(pos(prop).x, propStart.x, 1e-3,
+     "the prop is back where Play found it (the run's edits are discarded)");
+near(pos(faller).y, fallerStart.y, 1e-3,
+     "and so is the body, from the snapshot rather than from the solver");
+assert(editor.playInputOwner() === "editor", "outside play, the editor owns the pointer again");
+assert(editor.playEject() === false, "Stop cleared the eject latch");
+
+// ---- 6. THE RUN'S EDITS ARE NOT UNDO STEPS, from the verb too (F9) --------
+//
+// The gizmo's drag has been transient since the lane landed; `node.transform`
+// still pushed a command, which is the same trap from the other door — Stop
+// throws the transform away and the command outlives it on the stack.
+
+var pushesBefore = editor.undoState().pushes;
+node.transform(prop, { position: { x: 7, y: 1, z: 0 } });
+assert(editor.undoState().pushes === pushesBefore + 1,
+       "OUTSIDE a run, node.transform records an undo command (the control)");
+
+// The control above moved the prop for real (outside a run, recorded), so THIS
+// run's snapshot is taken at x = 7 — the pose Stop must put back below.
+var propBeforeSecondRun = pos(prop).x;
+assert(editor.play(), "play for the transient-write arm");
+var pushesInRun = editor.undoState().pushes;
+node.transform(prop, { position: { x: -4, y: 1, z: 0 } });
+near(pos(prop).x, -4, 1e-3, "the write landed live during the run");
+assert(editor.undoState().pushes === pushesInRun,
+       "...and recorded NOTHING on the undo stack (a command Stop would outlive)");
+
+// ---- 7. A PAUSED RUN IS STILL A RUN (F5) ---------------------------------
+//
+// `editor.playing()` answers "is it stepping", which pause makes false while
+// the run, its physics world and its snapshot all live on. Every rule about
+// what a run's edits are worth has to key on the run, not on the stepping.
+
+assert(editor.pause(), "editor.pause()");
+assert(editor.playing() === false, "a paused run is not RUNNING");
+var pushesPaused = editor.undoState().pushes;
+node.transform(prop, { position: { x: -6, y: 1, z: 0 } });
+near(pos(prop).x, -6, 1e-3, "a transform write during a PAUSE lands");
+assert(editor.undoState().pushes === pushesPaused,
+       "...and is transient too — the pause did not turn the run's edits into undo steps");
+assert(editor.playEject(true) === true,
+       "editor.playEject is ACCEPTED during a pause — a paused run is a run in flight");
+assert(editor.playEject() === true, "...and it reads back");
+assert(editor.play(), "resume");
+assert(editor.playing(), "...running again");
+assert(editor.playEject() === true,
+       "a RESUME keeps the eject the user asked for (only a cold start clears it)");
+editor.playEject(false);
+editor.stop();
+near(pos(prop).x, propBeforeSecondRun, 1e-3,
+     "and Stop still put the prop back where THIS run found it (x " +
+     propBeforeSecondRun + "), transient writes and all");
+
+// ---- 8. A PICK MUST NOT AUTHOR THE CAMERA IT LOOKS THROUGH (F1) ----------
+//
+// An ARMED camera renders the run (Scene::renderCamera), so every pick during
+// that run unprojects through it — and both ways of building a camera's
+// matrices WRITE `aspectRatio`, a serialised field, on the way. The frame tick
+// asks for a pick ray every frame for the gizmo overlay, so an armed camera's
+// authored lens was being overwritten sixty times a second and kept it through
+// Stop and into the file. And the picture is LETTERBOXED when the camera
+// constrains its aspect, so the pick has to unproject across the PICTURE, not
+// across the widget.
+//
+// The camera looks straight down from 10 m with a 45 deg vertical angle, so
+// both halves are arithmetic: the picture's right edge is 10*tan(22.5)*2.39 =
+// 9.90 m from the nadir, and its top edge is 10*tan(22.5) = 4.14 m. (Before
+// the fix the same three readings were the WIDGET's aspect instead: 1.635,
+// 6.77 m, and a widget top edge that landed exactly on 4.14 because the bars
+// did not exist.)
+
+var eye = scene.addCamera({ position: { x: 0, y: 10, z: 0 }, rotation: { x: -90, y: 0, z: 0 } });
+camera.settings(eye, { angle: 45, aspectRatio: 2.39, constrainAspect: true });
+assert(scene.setActiveCamera(eye), "the camera is armed for play");
+var vp = editor.viewportState();
+var W = vp.windowW || vp.width, H = vp.windowH || vp.height;
+console.log("viewport " + W + "x" + H + " (aspect " + (W / H).toFixed(3) + ")");
+assert(W > 200 && H > 200, "the viewport has a real size to pick across");
+
+assert(editor.play(), "play through the armed camera");
+editor.frame(30, 1 / 60);          // the frame tick asks for a pick ray on every one
+near(camera.settings(eye).aspectRatio, 2.39, 1e-3,
+     "THE AUTHORED ASPECT SURVIVED 30 FRAMES OF PICKING through it");
+
+// THREE QUARTERS ACROSS, not the very edge: `dropPointAt` force-picks, so the
+// last few pixels can land on a light's helper sphere (they did — y read 2.0
+// instead of the ground's 0). Every reading below asserts it is ON THE GROUND
+// before it believes the x it carries.
+var extent = 10 * Math.tan(22.5 * Math.PI / 180);    // the vertical half-extent, 4.142 m
+var edge = editor.dropPointAt(W * 3 / 4, H / 2);     // ndc x = +0.5
+assert(edge !== null && Math.abs(edge.y) < 0.01, "the 3/4 pixel is on the ground");
+console.log("x at ndc 0.5: " + edge.x.toFixed(3) + " (2.39 -> " + (extent * 2.39 * 0.5).toFixed(3) +
+            ", the widget's " + (W / H).toFixed(3) + " -> " +
+            (extent * (W / H) * 0.5).toFixed(3) + ")");
+assert(Math.abs(edge.x - extent * 2.39 * 0.5) < 0.15,
+       "the pick unprojected through the CAMERA's aspect, not the widget's");
+
+var top = editor.dropPointAt(W / 2, 2);
+assert(top !== null && Math.abs(top.y) < 0.01, "the widget's top edge is on the ground");
+console.log("widget top z " + top.z.toFixed(3) + " (the picture's own top is " +
+            (-extent).toFixed(3) + ")");
+assert(Math.abs(top.z) > extent + 0.25,
+       "the widget's top edge is OUTSIDE the letterboxed picture — the bars are real");
+
+editor.stop();
+near(camera.settings(eye).aspectRatio, 2.39, 1e-3,
+     "...and the authored aspect is still the user's after Stop (it is a saved field)");
+assert(scene.setActiveCamera(null), "disarm the camera again");
+
+// ---- 5. possession: the one state where the run owns the pointer ----------
+
+var rig = assets.import("@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb");
+assert(rig.length > 10, "assets.import(rig2.glb) -> " + rig);
+assert(assets.addToProject(rig) === rig, "the rig joins the project");
+var character = avatar.spawn(rig, { position: { x: 0, y: 0, z: 0 } });
+assert(character && character.length > 10, "avatar.spawn -> " + character);
+
+assert(editor.play(), "play again, with a character in the scene");
+assert(avatar.possess(character), "avatar.possess(character)");
+editor.frame(5, 1 / 60);
+assert(editor.playInputOwner() === "controller",
+       "A POSSESSED RUN OWNS THE POINTER — a click goes to the character, not to the picker");
+
+assert(editor.playEject(true) === true, "editor.playEject(true)");
+assert(editor.playEject() === true, "...and it reads back");
+assert(editor.playInputOwner() === "editor",
+       "EJECTED: the editor has the input again while the scene keeps playing");
+editor.frame(20, 1 / 60);
+assert(editor.playing(), "...and the run did not stop");
+// The editor's capabilities are all there while ejected.
+editor.select(prop);
+assert(editor.selection() === prop, "an ejected run still selects through the editor");
+
+assert(editor.playEject(false) === false, "editor.playEject(false) gives the input back");
+assert(editor.playInputOwner() === "controller", "...the controller owns it again");
+
+editor.stop();
+assert(editor.playEject() === false, "Stop clears the latch whatever it was");
+assert(editor.playInputOwner() === "editor", "and the editor owns the pointer with nothing playing");
+
+console.log("play_select: all assertions passed");

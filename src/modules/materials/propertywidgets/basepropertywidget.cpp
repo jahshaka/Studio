@@ -25,9 +25,12 @@ BasePropertyWidget::BasePropertyWidget(QWidget * parent) : QWidget(parent)
 
 	setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
 
-	fontIcons = new QtAwesome;
-	fontIcons->initFontAwesome();
-	
+	// (QTAWESOME-1: a `new QtAwesome` stood here — ONE PER PROPERTY ROW, with
+	// its own 786-entry codepoint map, never deleted and never read: no line
+	// of this class or of any BasePropertyWidget subclass ever asked it for
+	// an icon. The rows' icons are .png resources. Deleted outright; a widget
+	// that wants a glyph asks fonticons::shared().)
+
 	displayName = new QLineEdit;
 	displayName->setText("Display");
 
