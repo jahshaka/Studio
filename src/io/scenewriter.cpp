@@ -294,6 +294,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // written like the probe knobs above: always, and read back onto the same
     // defaults, so a document that never touched them reopens identical.
     sceneObj["giDdgi"] = scene->giDdgi;
+    sceneObj["giGather"] = scene->giGather;
     sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
     sceneObj["giDdgiAmbient"] = scene->giDdgiAmbient;
     // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode

@@ -2729,6 +2729,26 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.reflectRays  = rq.reflectRays;
         out.rayQuery.reflectMs    = rq.reflectMs;
     }
+    // THE SCREEN-PROBE GATHER (SCREEN_PROBE_GATHER_SPEC phase 1) — a member of
+    // GiStatus, unlike the tier above it: it IS global illumination.
+    out.gather.on           = st.gather.on;
+    out.gather.running      = st.gather.running;
+    out.gather.stride       = int(st.gather.stride);
+    out.gather.octRes       = int(st.gather.octRes);
+    out.gather.raysPerProbe = int(st.gather.raysPerProbe);
+    out.gather.probesX      = int(st.gather.probesX);
+    out.gather.probesY      = int(st.gather.probesY);
+    out.gather.probes       = int(st.gather.probes);
+    out.gather.adaptive     = int(st.gather.adaptive);
+    out.gather.adaptiveCap  = int(st.gather.adaptiveCap);
+    out.gather.raysPerFrame = double(st.gather.raysPerFrame);
+    out.gather.targetW      = int(st.gather.targetW);
+    out.gather.targetH      = int(st.gather.targetH);
+    out.gather.atlasBytes   = double(st.gather.atlasBytes);
+    out.gather.placeMs      = st.gather.placeMs;
+    out.gather.traceMs      = st.gather.traceMs;
+    out.gather.integrateMs  = st.gather.integrateMs;
+    out.gather.cpuMs        = st.gather.cpuMs;
     return out;
 }
 

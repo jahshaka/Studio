@@ -789,6 +789,26 @@ public:
             float   reflectMs = -1.0f;///< GPU ms of that dispatch; -1 until measured
         };
         RayQueryInfo rayQuery;
+        /// THE SCREEN-PROBE GATHER (SPECS/SCREEN_PROBE_GATHER_SPEC.md phase 1) —
+        /// what the row RESOLVED to against this machine and what the last
+        /// gathered frame did. `on` false with every number zero is the shipped
+        /// state; `on` true with `running` false means no view of this scene
+        /// carries the prepass the probes read their surfaces from.
+        struct GatherInfo {
+            bool  on = false;
+            bool  running = false;
+            int   stride = 0;        ///< pixels per probe, both axes
+            int   octRes = 0;        ///< the octahedral map's resolution
+            int   raysPerProbe = 0;  ///< octRes squared
+            int   probesX = 0, probesY = 0, probes = 0;   ///< the uniform grid
+            int   adaptive = 0, adaptiveCap = 0;          ///< ...and the extra probes
+            double raysPerFrame = 0.0;
+            int   targetW = 0, targetH = 0;
+            double atlasBytes = 0.0; ///< the atlas + records + irradiance, resident
+            float placeMs = -1.0f, traceMs = -1.0f, integrateMs = -1.0f;
+            float cpuMs = -1.0f;     ///< the CPU cost of RECORDING the three jobs
+        };
+        GatherInfo gather;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
