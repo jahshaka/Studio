@@ -39,7 +39,6 @@ For more information see the LICENSE file
 #include "services/shippedassets.h"
 #include "services/materialbundle.h"
 #include "services/projectfolders.h"
-#include "../widgets/shaderassetwidget.h"
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/materialmembers.h"
@@ -737,18 +736,18 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
 
 QVariantList MaterialsApi::projectDrawer()
 {
-    QVariantList out;
     // THE MODULE'S PROJECT DRAWER, AS THE WIDGET SHOWS IT (DRAWERS-1). It
     // reads the live drawer rather than re-deriving the listing, because the
     // point of the verb is to prove that the two drawers are one list: a
     // suite compares this with editor.trayAssets() filtered to materials.
-    ShaderAssetWidget *drawer = ShaderAssetWidget::live();
-    if (!drawer) {
+    // Through the page delegate, like every other verb here — a process-wide
+    // static pointing at the live widget was the first cut and is gone.
+    if (!mPage.projectDrawer) {
         refuse("materials.projectDrawer: the Materials module's project drawer is not built "
                "in this session");
-        return out;
+        return QVariantList();
     }
-    return drawer->shownTiles();
+    return mPage.projectDrawer();
 }
 
 QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pathOrGuid,

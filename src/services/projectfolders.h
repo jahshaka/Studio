@@ -62,7 +62,10 @@ class Database;
 namespace projectfolders {
 
 /// One folder of a project's tree. `count` is how many ROWS the folder holds —
-/// rows the project owns plus pins filed there, not a recursive total and not
+/// the UNION of the rows the project owns and the pins filed there, never
+/// their sum: a row is very often both (an import made with a project open
+/// writes the project's guid on the row and addToProject then pins it), and
+/// the two filing columns describe ONE asset. Not a recursive total, and not
 /// the tray's collapsed TILE count (a row the tray folds away, an import
 /// member, still counts as something filed here).
 struct Info
@@ -84,16 +87,26 @@ struct Result
     int     moved = 0;
 };
 
-/// A FOLDER THE EDITOR OWNS BY NAME. `Database::ensureFolder` resolves these
-/// by NAME inside the project — "Systems" holds a row per particle emitter,
-/// "Presets" a row per applied material preset — so renaming or deleting one,
-/// or minting a user folder that takes the name, silently breaks the writer
-/// that looks it up. Refused at this door, in all three directions.
+/// A FOLDER THE EDITOR OWNS BY NAME — today exactly one, `Systems`, which
+/// holds a row per particle emitter and which SceneEditService finds through
+/// `Database::ensureFolder`, by NAME. Renaming or deleting it, minting a user
+/// folder that takes the name, or MOVING it somewhere the editor does not
+/// expect all break the writer that looks it up, so all four directions are
+/// refused here. ("Presets" used to be a second one and is dead — nothing has
+/// ensured it since a preset became an ordinary library bundle,
+/// services/materialpresetassets.h.)
 bool isSystemFolder(const QString &name);
 
 /// The project's folders: every one of them, or (with `parent` set) just that
 /// parent's children. The project's own guid names the ROOT.
 QVector<Info> list(Database *db, const QString &projectGuid,
+                   const QString &parent = QString());
+
+/// WOULD IT BE ACCEPTED? The same rules and the same words as `create`, with
+/// nothing written — so a caller that wraps the create in an UNDO COMMAND can
+/// ask before it pushes. A refused command that is pushed anyway becomes a
+/// no-op step on the user's undo stack: one Ctrl+Z that does nothing at all.
+Result judgeCreate(Database *db, const QString &projectGuid, const QString &name,
                    const QString &parent = QString());
 
 /// Creates a folder under `parent` (empty = the project root). Refuses an
@@ -117,12 +130,20 @@ Result rename(Database *db, const QString &projectGuid, const QString &guid,
 Result remove(Database *db, const QString &projectGuid, const QString &guid,
               bool keepContents = true);
 
+/// WOULD IT BE ACCEPTED, AND WOULD IT MOVE ANYTHING? The same rules, the same
+/// words and the same count as `moveTo`, with nothing written — for the same
+/// reason as `judgeCreate`, plus one of its own: a move whose rows are all
+/// already in that folder moves nothing, and THAT must not become an undo step
+/// either.
+Result judgeMove(Database *db, const QString &projectGuid, const QStringList &guids,
+                 const QString &folderGuid);
+
 /// Files `guids` in `folderGuid` (empty, or the project's own guid, = the
 /// root). One row or many; a folder guid moves the FOLDER (a move into its own
-/// subtree is refused). Refuses an unknown row, an import MEMBER (its parent is
-/// another asset — it is part of that asset, not in a folder), a row this
-/// project neither owns nor pins, and an unknown target folder. `moved` counts
-/// the rows that were not already there.
+/// subtree, and any move of a system folder, is refused). Refuses an unknown
+/// row, an import MEMBER (its parent is another asset — it is part of that
+/// asset, not in a folder), a row this project neither owns nor pins, and an
+/// unknown target folder. `moved` counts the rows that were not already there.
 Result moveTo(Database *db, const QString &projectGuid, const QStringList &guids,
               const QString &folderGuid);
 
@@ -132,7 +153,10 @@ Result moveTo(Database *db, const QString &projectGuid, const QStringList &guids
 QString folderOf(Database *db, const QString &projectGuid, const QString &guid);
 
 /// Files ONE row, with no rules applied (they live in `moveTo`; this is what
-/// the undo command replays). False when nothing could be written.
+/// the undo command replays). A `folder` that no longer exists means the ROOT:
+/// an undo replays a filing the user may have deleted the folder of, and an
+/// owned row left pointing at a dead guid is listed by nothing at all. False
+/// when nothing could be written.
 bool file(Database *db, const QString &projectGuid, const QString &guid,
           const QString &folder);
 

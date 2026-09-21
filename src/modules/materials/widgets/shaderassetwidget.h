@@ -68,12 +68,6 @@ public:
 	/// `materials.projectDrawer()` verb, which is how a suite proves the two
 	/// project drawers are one list.
 	QVariantList shownTiles();
-
-	/// THE LIVE PROJECT DRAWER (DRAWERS-1). One editor per process and one
-	/// Materials module in it, so the verb reaches the widget through this
-	/// rather than through EffectsPage's private member. Null before the
-	/// module builds its page and after it is destroyed.
-	static ShaderAssetWidget *live();
 private:
 	void setWidgetToBeShown();
 	QWidget *noWidget;
@@ -87,7 +81,6 @@ private:
 	/// A repopulate queued by the one refresh signal (coalesced).
 	bool mRefreshPending = false;
 	void flushPendingRefresh();
-	static ShaderAssetWidget *sLive;
 signals:
 	void loadToGraph(QListWidgetItem *item);
 	/// The user typed a new name on a tile in THIS drawer. The page does the

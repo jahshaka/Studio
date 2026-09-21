@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QUndoCommand>
 
+#include <memory>
+
 class Database;
 
 // ORGANISING THE DRAWER IS UNDOABLE (DRAWERS-1).
@@ -36,6 +38,21 @@ class Database;
 // `assetdelete::removeFromProject`, which is the same permanent door the
 // tray's own Delete uses.
 
+/// WHAT HAPPENED, READ AFTER THE PUSH. A command that turns out to be a NO-OP
+/// marks itself obsolete inside redo(), and QUndoStack::push then DELETES it —
+/// which is the whole point (a refused create or a move of rows that are
+/// already there must not become a step one Ctrl+Z is spent on) and which also
+/// means the caller may not touch the command afterwards. So the outcome lives
+/// in a box the CALLER owns.
+struct FolderCommandOutcome
+{
+    QString guid;    ///< the new folder (filled at construction, so it is always there)
+    QString error;   ///< empty when the command did what it was asked
+    int     moved = 0;
+};
+
+using FolderOutcomePtr = std::shared_ptr<FolderCommandOutcome>;
+
 /// New Folder. The guid is minted once, at construction, so a redo re-creates
 /// the SAME folder — anything filed into it between the undo and the redo
 /// therefore still points at something real.
@@ -43,15 +60,15 @@ class CreateProjectFolderCommand : public QUndoCommand
 {
 public:
     CreateProjectFolderCommand(Database *db, const QString &projectGuid,
-                               const QString &name, const QString &parent);
+                               const QString &name, const QString &parent,
+                               FolderOutcomePtr outcome = {});
 
     void undo() override;
     void redo() override;
 
-    /// The folder's guid (minted at construction, valid before the push).
+    /// The folder's guid (minted at construction; also in the outcome box,
+    /// which is what a caller reads after the push).
     QString guid() const { return mGuid; }
-    /// Empty when the create succeeded.
-    QString error() const { return mError; }
 
 private:
     Database *mDb = nullptr;
@@ -59,7 +76,7 @@ private:
     QString   mName;
     QString   mParent;
     QString   mGuid;
-    QString   mError;
+    FolderOutcomePtr mOutcome;
     bool      mCreated = false;
 };
 
@@ -68,15 +85,11 @@ class MoveToProjectFolderCommand : public QUndoCommand
 {
 public:
     MoveToProjectFolderCommand(Database *db, const QString &projectGuid,
-                               const QStringList &guids, const QString &folderGuid);
+                               const QStringList &guids, const QString &folderGuid,
+                               FolderOutcomePtr outcome = {});
 
     void undo() override;
     void redo() override;
-
-    /// How many rows the last redo re-filed.
-    int moved() const { return mMoved; }
-    /// Empty when the move was accepted (every row is judged before any moves).
-    QString error() const { return mError; }
 
 private:
     Database *mDb = nullptr;
@@ -84,8 +97,7 @@ private:
     QStringList mGuids;
     QString   mFolderGuid;
     QHash<QString, QString> mWas;   ///< guid -> the folder it was filed in
-    int       mMoved = 0;
-    QString   mError;
+    FolderOutcomePtr mOutcome;
     bool      mCaptured = false;
 };
 

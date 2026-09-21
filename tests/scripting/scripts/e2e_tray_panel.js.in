@@ -304,6 +304,32 @@ assert(guidsOf(panelRows()).indexOf(filed) < 0,
        "a material created INTO a folder is not a root tile");
 assert(drawerGuids().indexOf(filed) >= 0,
        "... but the module's project drawer still shows it " + J(materials.projectDrawer()));
+// ---- a pin that leaves by ANY door closes its Materials tab ---------------
+//
+// The drawer's own Delete told the page (MATERIALS-TABS-1 F1); every other
+// door — this verb, the tray's Delete, assets.deleteFolder({keepContents:
+// false}), a project close — did not, and a '(project)' tab whose pin has gone
+// is editing nothing. The page listens to the one announcement they all make.
+
+// WITH A GRAPH: the node editor opens a graph, and a values-only bundle has
+// none — `materials.open` refuses one, which is the page.s own rule.
+var tabbed = materials.create("Tabbed Material", { graph: true, folder: "" });
+// READ THE DRAWER FIRST, and that is not a formality: the module's drawer
+// repopulates on the next event-loop TURN (the one announcement is coalesced),
+// a --script run holds the loop for its whole run, and `materials.open` asks
+// the drawer whether it holds the guid. Reading the drawer flushes the pending
+// repopulate — which is the same thing a person gets for free.
+assert(drawerGuids().indexOf(tabbed) >= 0, "the new material is in the module's drawer");
+var opened = materials.open(tabbed, { scope: "project" });
+assert(opened && opened.guid === tabbed && opened.scope === "project",
+       "a project copy opens as a tab " + J(opened));
+function tabGuids() { return materials.tabs().map(function (t) { return t.guid; }); }
+assert(tabGuids().indexOf(tabbed) >= 0, "... and it is in materials.tabs()");
+assert(assets.removeFromProject(tabbed) === true,
+       "assets.removeFromProject(it) — a door the drawer's Delete is not");
+assert(tabGuids().indexOf(tabbed) < 0,
+       "... the tab closed with the pin " + J(materials.tabs()));
+
 assert(project.close(), "folders: closed");
 
 console.log("e2e_tray_panel: all sections passed");

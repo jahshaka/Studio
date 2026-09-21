@@ -54,6 +54,7 @@ For more information see the LICENSE file
 #include "services/projectfolders.h"
 #include "commands/projectfoldercommand.h"
 #include <QUndoStack>
+#include <memory>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); \
@@ -648,9 +649,9 @@ int main(int argc, char **argv)
 
         const QStringList rows{ sceneNodes[4], sceneNodes[5], sceneNodes[7] };
         QUndoStack stack;
-        auto *command = new MoveToProjectFolderCommand(&db, projectGuid, rows, folder.guid);
-        stack.push(command);
-        CHECK(command->error().isEmpty() && command->moved() == 3, "three rows moved");
+        auto outcome = std::make_shared<FolderCommandOutcome>();
+        stack.push(new MoveToProjectFolderCommand(&db, projectGuid, rows, folder.guid, outcome));
+        CHECK(outcome->error.isEmpty() && outcome->moved == 3, "three rows moved");
         CHECK(stack.count() == 1, "...as ONE step on the stack");
         for (const QString &guid : rows)
             if (db.fetchAsset(guid).parent != folder.guid) {
@@ -671,9 +672,10 @@ int main(int argc, char **argv)
 
         // New Folder is undoable too, and a redo re-creates the SAME guid.
         QUndoStack folderStack;
-        auto *create = new CreateProjectFolderCommand(&db, projectGuid, "Undoable", QString());
-        const QString createdGuid = create->guid();
-        folderStack.push(create);
+        auto made = std::make_shared<FolderCommandOutcome>();
+        folderStack.push(new CreateProjectFolderCommand(&db, projectGuid, "Undoable",
+                                                        QString(), made));
+        const QString createdGuid = made->guid;
         CHECK(!createdGuid.isEmpty() && db.fetchFolder(createdGuid).name == "Undoable",
               "createFolder as a command");
         folderStack.undo();
@@ -681,6 +683,100 @@ int main(int argc, char **argv)
         folderStack.redo();
         CHECK(db.fetchFolder(createdGuid).guid == createdGuid,
               "...and a redo re-creates the SAME folder guid");
+
+        // A COMMAND THAT DOES NOTHING IS NOT A STEP (fix round item 3). A
+        // refused create and a move of rows that are already there both used
+        // to sit on the stack as a Ctrl+Z that undoes nothing at all; they
+        // mark themselves obsolete inside redo(), which is where
+        // QUndoStack::push looks.
+        const int before = folderStack.count();
+        auto refused = std::make_shared<FolderCommandOutcome>();
+        folderStack.push(new CreateProjectFolderCommand(&db, projectGuid, "Undoable",
+                                                        QString(), refused));
+        CHECK(folderStack.count() == before && !refused->error.isEmpty(),
+              "a REFUSED create leaves no step on the stack");
+        auto noop = std::make_shared<FolderCommandOutcome>();
+        folderStack.push(new MoveToProjectFolderCommand(&db, projectGuid, rows, folder.guid,
+                                                        noop));
+        CHECK(folderStack.count() == before && noop->moved == 0,
+              "a move of rows already in that folder leaves no step either");
+    }
+
+    // ---------------------------------------------------------------------
+    // 7. THE FIX ROUND'S READ (DRAWERS-1): the count's union, the system
+    //    folder's fourth direction, a refused child, and an undo into a
+    //    folder that is gone.
+    // ---------------------------------------------------------------------
+    {
+        // COUNT IS A UNION, NEVER A SUM. A row the project OWNS and also PINS
+        // is the ordinary case — an import made with a project open writes the
+        // project guid on the row and addToProject pins it — and `file` writes
+        // both columns for it.
+        const projectfolders::Result box = projectfolders::create(&db, projectGuid, "Both");
+        CHECK(box.ok, "a folder for the owned+pinned row");
+        const QString ownedAndPinned = newGuid();
+        db.createAssetEntry(ownedAndPinned, "owned_and_pinned.png",
+                            static_cast<int>(ModelTypes::Texture), projectGuid, projectGuid,
+                            QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
+                            QByteArray(), AssetViewFilter::Editor);
+        pin(projectGuid, ownedAndPinned);
+        CHECK(projectfolders::moveTo(&db, projectGuid, { ownedAndPinned }, box.guid).moved == 1,
+              "an owned AND pinned row moves");
+        CHECK(db.fetchAsset(ownedAndPinned).parent == box.guid
+                  && db.fetchProjectPinFolders(projectGuid).value(ownedAndPinned) == box.guid,
+              "...and BOTH columns say where it is");
+        int counted = -1;
+        for (const auto &info : projectfolders::list(&db, projectGuid, projectGuid))
+            if (info.guid == box.guid) counted = info.count;
+        CHECK(counted == 1, QStringLiteral("...and the folder counts it ONCE (read %1)")
+                                .arg(counted).toUtf8().constData());
+        // ...and the tray lists it once, too.
+        CHECK(assettray::list(&db, projectGuid, box.guid).size() == 1,
+              "...the tray lists that folder's one row once");
+
+        // THE SYSTEM FOLDER'S FOURTH DIRECTION: it cannot be MOVED either.
+        const QString systems = db.ensureFolder(QStringLiteral("Systems"), projectGuid, false);
+        CHECK(!projectfolders::moveTo(&db, projectGuid, { systems }, box.guid).ok,
+              "the editor's own Systems folder cannot be moved");
+        CHECK(db.fetchFolder(systems).parent == projectGuid, "...and it did not move");
+
+        // "Presets" IS AN ORDINARY NAME AGAIN (nothing ensures it any more).
+        CHECK(projectfolders::create(&db, projectGuid, "Presets").ok,
+              "'Presets' is a name a user may have (nothing keeps it any more)");
+
+        // A REFUSED CHILD STOPS THE PARENT'S DELETE: a folder holding the
+        // Systems folder cannot go without it.
+        const projectfolders::Result holder = projectfolders::create(&db, projectGuid, "Holder");
+        db.setFolderParent(systems, holder.guid);
+        CHECK(!projectfolders::remove(&db, projectGuid, holder.guid, false).ok,
+              "a folder holding the Systems folder refuses the contents-out delete");
+        CHECK(!db.fetchFolder(holder.guid).guid.isEmpty()
+                  && db.fetchFolder(systems).parent == holder.guid,
+              "...and BOTH folders are still there (no orphan)");
+        db.setFolderParent(systems, projectGuid);   // put it back
+
+        // AN UNDO INTO A FOLDER THAT IS GONE LANDS AT THE ROOT — never on a
+        // dead guid, which no listing can see.
+        const projectfolders::Result vanishing =
+            projectfolders::create(&db, projectGuid, "Vanishing");
+        // NOT a multiple of three: those rows carry the `builtin` marker the
+        // tray drops by rule 4, and this assertion is about the listing.
+        const QString row = sceneNodes[11];
+        QUndoStack stack;
+        auto first = std::make_shared<FolderCommandOutcome>();
+        stack.push(new MoveToProjectFolderCommand(&db, projectGuid, { row }, vanishing.guid,
+                                                  first));
+        CHECK(first->moved == 1, "a row filed in a folder about to be deleted");
+        auto second = std::make_shared<FolderCommandOutcome>();
+        stack.push(new MoveToProjectFolderCommand(&db, projectGuid, { row }, box.guid, second));
+        CHECK(second->moved == 1, "...then moved on to another folder");
+        CHECK(projectfolders::remove(&db, projectGuid, vanishing.guid, true).ok,
+              "...and the first folder deleted");
+        stack.undo();
+        CHECK(db.fetchAsset(row).parent == projectGuid,
+              "the undo files it at the ROOT, not under the dead folder guid");
+        CHECK(listed(assettray::list(&db, projectGuid, projectGuid), row),
+              "...so the tray still shows it");
     }
 
     printf(failures ? "\n%d FAILURES\n" : "\nall assertions passed\n", failures);

@@ -68,6 +68,7 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/undoservice.h"
 #include "commands/projectfoldercommand.h"
+#include <memory>
 #include "modules/materials/api/materialsapi.h"
 #include "scripting/scriptengine.h"
 #include "services/projectmembership.h"
@@ -88,6 +89,7 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 #include "services/loadtimeline.h"
 #include "io/materialreader.h"
+#include "ui/dialogs/toast.h"
 #include "ui/style/panelmetrics.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -175,10 +177,17 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
 	// ONE DRAG OWNER (ui/panels/singledragowner.h): this widget's eventFilter
-	// starts the QDrag, so the view's own machinery stays disarmed. Drops are
-	// untouched — the browser still accepts file URLs. LAST, because
-	// setDragDropMode arms dragEnabled.
+	// starts the QDrag, so the view's own machinery stays disarmed. LAST,
+	// because setDragDropMode arms dragEnabled.
 	singledrag::disarmViewDrag(ui->assetView);
+	// AND ONE DROP OWNER (DRAWERS-1): the PANEL takes every drop — the file
+	// URLs it always took and the internal drop onto a folder tile
+	// (AssetWidget::dropEvent) — so the view is told plainly that it takes
+	// none. It was already declining them, but only because its model refuses
+	// an unknown payload; the day the model accepted one, the view would
+	// swallow the event and the panel's handler would silently stop running.
+	// Said, rather than relied upon.
+	ui->assetView->viewport()->setAcceptDrops(false);
 
 	activeFilter = SettingsManager::getDefaultManager()->getValue("active_filter", 0).toInt();
 	// (The "Show dependencies" checkbox is gone, lane L13: it switched off the
@@ -725,7 +734,7 @@ void AssetWidget::updateAssetView(const QString &path, int filter)
     goUpOneControl->setEnabled(false);
 }
 
-QWidget *AssetWidget::tileViewport() const
+QWidget *AssetWidget::dropTarget() const
 {
 	// The panel itself: the drag events arrive here (see folderItemAt).
 	return const_cast<AssetWidget *>(this);
@@ -860,11 +869,25 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
 // THE DROP TARGET UNDER THE CURSOR, from a point in THIS WIDGET's coordinates
 // (DRAWERS-1). The drag events arrive HERE and not on the list's viewport, and
-// that is not a choice: the view's viewport does not accept drops (measured —
-// `viewport()->acceptDrops()` is false on this panel, which is why the file-URL
-// drop has always been handled by AssetWidget::dropEvent), and Qt delivers a
-// drag only to a widget that does, propagating up until it finds one. A drop
-// handler installed on the viewport would never have run.
+// the reason is worth writing down, because the first version of this handler
+// was installed on the viewport and never ran once.
+//
+// The viewport DOES accept drops: `setDragDropMode(DragDrop)` sets it on the
+// view and QAbstractScrollArea syncs the viewport on AcceptDropsChange, so
+// both read true (measured with this exact construction — a QListWidget at
+// DragDrop with dragEnabled cleared by singledragowner.h). What happens is one
+// step later: QAbstractItemView asks its MODEL whether it can take the payload,
+// the list's model declines a four/five-slot map that is not its own internal
+// move, the view ignores the event — and Qt then propagates the drag up to the
+// first ancestor that accepts it, which is this panel (MainWindow sets
+// `assetWidget->setAcceptDrops(true)`). That is also why the file-URL drop has
+// always landed in AssetWidget::dropEvent.
+//
+// So the panel is where the handler belongs, and the list is explicitly told it
+// takes no drops of its own (DropNone in the constructor) rather than left to
+// decline them by accident: the day the model accepts an item-view payload,
+// the view would swallow the event and this handler would go silent with no
+// error anywhere.
 QListWidgetItem *AssetWidget::folderItemAt(const QPoint &pos) const
 {
 	QListWidgetItem *item =
@@ -884,20 +907,43 @@ void AssetWidget::moveToFolder(const QStringList &guids, const QString &folderGu
 	const QString projectGuid = project->getProjectGuid();
 	if (projectGuid.isEmpty()) return;
 
-	auto *command = new MoveToProjectFolderCommand(db, projectGuid, guids, folderGuid);
-	if (services && services->undo) {
-		services->undo->push(command);            // redo() runs the move
-	} else {
-		command->redo();
-	}
-	const QString error = command->error();
-	if (!services || !services->undo) delete command;
-	if (!error.isEmpty()) {
-		QMessageBox::warning(this, tr("Move to folder"),
-		                     tr("Nothing was moved: %1").arg(error));
+	// JUDGED BEFORE ANYTHING IS PUSHED (the same order the verb takes): a
+	// refused move must not leave a step on the user's undo stack, and neither
+	// must a drop onto the folder the rows are already in.
+	const projectfolders::Result judged =
+		projectfolders::judgeMove(db, projectGuid, guids, folderGuid);
+	if (!judged.ok) {
+		// A TOAST, NOT A MODAL. This runs one event-loop turn after a drop —
+		// and, through editor.dragAssetToTray, inside a SCRIPT's run: a modal
+		// box there waits for a click nobody is going to make.
+		toast()->showToast(tr("Move to folder"), judged.error, 3000);
 		return;
 	}
-	refresh();
+	if (judged.moved == 0) return;
+
+	auto outcome = std::make_shared<FolderCommandOutcome>();
+	auto *command = new MoveToProjectFolderCommand(db, projectGuid, guids, folderGuid, outcome);
+	if (services && services->undo) {
+		services->undo->push(command);            // redo() runs the move; may self-delete
+	} else {
+		command->redo();
+		delete command;
+	}
+	if (!outcome->error.isEmpty()) {
+		toast()->showToast(tr("Move to folder"), outcome->error, 3000);
+		return;
+	}
+	// NO refresh() HERE (fix round item 10): the model announced the change and
+	// this panel repopulates from that announcement on the next turn. Calling
+	// both repopulated the tray twice for every gesture.
+}
+
+// ONE TOAST FOR THE PANEL, reused — the Assets page's own pattern
+// (ui/pages/assetview.cpp): a new one per message leaks a widget per refusal.
+Toast *AssetWidget::toast()
+{
+	if (!mToast) mToast = new Toast(this);
+	return mToast;
 }
 
 void AssetWidget::dragEnterEvent(QDragEnterEvent *evt)
@@ -1767,10 +1813,11 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
             // sentence a script gets. A bare `db->renameFolder` was here.
             const projectfolders::Result result =
                 projectfolders::rename(db, project->getProjectGuid(), guid, newName);
-            if (!result.ok)
-                QMessageBox::warning(this, tr("Rename"),
-                                     tr("The folder could not be renamed: %1").arg(result.error));
-            refresh();
+            if (!result.ok) {
+                toast()->showToast(tr("Rename"), result.error, 3000);
+                refresh();   // the tile is showing the name the user typed
+            }
+            // (A rename that took repopulates from the model's announcement.)
         }
     }
 }
@@ -1787,14 +1834,22 @@ void AssetWidget::deleteTreeFolder()
 	// deleted a user's directory the day anything filled it in.
 	if (!db || !project || !assetItem.item) return;
 	const QString guid = assetItem.item->data(0, MODEL_GUID_ROLE).toString();
+	// WHERE THE USER ENDS UP. The deleted folder may be the one the view is
+	// listing, and `selectedGuid` left pointing at a row that no longer exists
+	// lists nothing at all until the user clicks somewhere — an empty tray that
+	// looks like a data loss. The parent is where the contents went, so it is
+	// where the user goes.
+	const QString parent = db->fetchFolder(guid).parent;
 	const projectfolders::Result result =
 		projectfolders::remove(db, project->getProjectGuid(), guid, true);
 	if (!result.ok) {
-		QMessageBox::warning(this, tr("Delete Folder"),
-		                     tr("The folder could not be deleted: %1").arg(result.error));
+		toast()->showToast(tr("Delete Folder"), result.error, 3000);
 		return;
 	}
+	const QString landing = parent.isEmpty() ? project->getProjectGuid() : parent;
+	assetItem.selectedGuid = landing;
 	refresh();
+	syncTreeAndView(landing);
 }
 
 void AssetWidget::deleteItem()
@@ -2035,28 +2090,43 @@ void AssetWidget::createFolder()
 	const QString parent = assetItem.selectedGuid.isEmpty() ? project->getProjectGuid()
 	                                                        : assetItem.selectedGuid;
 
+	// THE PROPOSED NAME, judged the way the model judges it: CASE-INSENSITIVELY
+	// (projectfolders' nameTaken is, and this loop was not — "new folder"
+	// beside "New Folder" proposed a name the create then refused).
 	const QString base = tr("New Folder");
 	QString folderName = base;
 	const QStringList taken = db->fetchFolderNameByParent(parent);
+	auto isTaken = [&taken](const QString &name) {
+		for (const QString &other : taken)
+			if (other.compare(name, Qt::CaseInsensitive) == 0) return true;
+		return false;
+	};
 	int increment = 1;
-	while (taken.contains(folderName)) folderName = base + " " + QString::number(increment++);
+	while (isTaken(folderName)) folderName = base + " " + QString::number(increment++);
 
+	const projectfolders::Result judged =
+		projectfolders::judgeCreate(db, project->getProjectGuid(), folderName, parent);
+	if (!judged.ok) {
+		toast()->showToast(tr("New Folder"), judged.error, 3000);
+		return;
+	}
+
+	auto outcome = std::make_shared<FolderCommandOutcome>();
 	auto *command = new CreateProjectFolderCommand(db, project->getProjectGuid(),
-	                                               folderName, parent);
+	                                               folderName, parent, outcome);
 	if (services && services->undo) {
 		services->undo->push(command);            // redo() runs the create
 	} else {
 		command->redo();
+		delete command;
 	}
-	const QString error = command->error();
-	if (!services || !services->undo) delete command;
-	if (!error.isEmpty()) {
-		QMessageBox::warning(this, tr("New Folder"),
-		                     tr("The folder could not be created: %1").arg(error));
+	if (!outcome->error.isEmpty()) {
+		toast()->showToast(tr("New Folder"), outcome->error, 3000);
 		return;
 	}
 
-	refresh();
+	// The repopulate comes from the model's announcement (item 10); the tree
+	// selection is this panel's own business.
 	syncTreeAndView(parent);
 }
 
@@ -2068,12 +2138,13 @@ void AssetWidget::deleteFolderItem()
 	if (!assetItem.wItem || !db || !project) return;
 	const projectfolders::Result result = projectfolders::remove(
 		db, project->getProjectGuid(), assetItem.wItem->data(MODEL_GUID_ROLE).toString(), true);
+	// (The tile's delete never lists the folder it deletes — the tile is IN the
+	// folder's parent — so there is no selection to move, unlike the tree's.)
 	if (!result.ok) {
-		QMessageBox::warning(this, tr("Delete Folder"),
-		                     tr("The folder could not be deleted: %1").arg(result.error));
+		toast()->showToast(tr("Delete Folder"), result.error, 3000);
 		return;
 	}
-	refresh();
+	// The repopulate comes from the model's announcement (item 10).
 }
 
 void AssetWidget::createMaterial()

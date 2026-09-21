@@ -56,6 +56,9 @@ public:
         std::function<bool(const QVariant &)> activate;
         std::function<bool(const QVariant &)> closeTab;
         std::function<QVariantMap()> activeTab;
+        /// THE PROJECT DRAWER's tiles, in order (DRAWERS-1) — the page hands
+        /// over what its ShaderAssetWidget is showing.
+        std::function<QVariantList()> projectDrawer;
     };
     void setPageDelegate(const PageDelegate &delegate) { mPage = delegate; }
 

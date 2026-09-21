@@ -52,6 +52,7 @@ For more information see the LICENSE file
 #include "services/projectfolders.h"
 #include "commands/projectfoldercommand.h"
 #include <QUndoStack>
+#include <memory>
 #include "services/import/assetimportservice.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
@@ -225,24 +226,26 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "a drawer (assets.drawers, a numbered `collections` row) organises the LIBRARY and is the same for "
           "every project; a folder organises ONE project's asset tray and is named by guid. With no `parent` "
           "this is every folder the project has; with one (a folder guid, or the project's own guid for the "
-          "root) it is that folder's children only. `count` is how many ROWS the folder holds — rows the "
-          "project owns plus the library assets it pins there — not a recursive total (and not "
-          "the collapsed TILE count: a row the tray folds into another still counts as filed "
-          "here). "
-          "The editor's own hidden folders (Systems, Presets) are listed like any other: they are real rows, "
-          "and the verbs refuse to rename or delete them because the editor finds them BY NAME.",
+          "root) it is that folder's children only. `count` is how many ROWS the folder holds — the UNION of the rows "
+          "the project owns and the library assets it pins there, never their sum: a row is very "
+          "often both (an import made with a project open writes the project's guid on the row "
+          "and addToProject then pins it) and the two filings describe ONE asset. Not a recursive "
+          "total, and not the collapsed TILE count: a row the tray folds into another still "
+          "counts as filed here. "
+          "The editor's own hidden folder (Systems, which holds a row per particle emitter) is listed "
+          "like any other: it is a real row, and the verbs refuse to rename, move or delete it "
+          "because the editor finds it BY NAME.",
           Needs::Document },
         { "createFolder", "assets.createFolder(name, {parent}) -> guid",
           "Creates a folder in the open project and returns its guid — the editor tray's right-click > Create > "
           "New Folder, as a verb. `parent` is a folder guid (default: the project root). "
-          "Refuses an empty name, a duplicate name under the same parent, an unknown parent, and the names the "
-          "editor keeps for itself (Systems, Presets — it resolves those by name, so a second one would hijack "
-          "them). UNDOABLE: one Ctrl+Z removes it, and anything filed into it meanwhile moves up to its parent "
+          "Refuses an empty name, a duplicate name under the same parent, an unknown parent, and the name the "
+          "editor keeps for itself (Systems — it resolves that one by name, so a second one would hijack it). UNDOABLE: one Ctrl+Z removes it, and anything filed into it meanwhile moves up to its parent "
           "rather than leaving the project.",
           Needs::Document },
         { "renameFolder", "assets.renameFolder(guid, name) -> bool",
           "Renames a project folder. Refuses an empty name, a duplicate under the same parent, an unknown "
-          "folder, a folder belonging to another project, and the editor's own Systems/Presets. NOT undoable.",
+          "folder, a folder belonging to another project, and the editor's own Systems. NOT undoable.",
           Needs::Document },
         { "deleteFolder", "assets.deleteFolder(guid, {keepContents}) -> bool",
           "Deletes a project folder. `keepContents` defaults to TRUE: everything inside — child folders and "
@@ -250,13 +253,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "With `keepContents: false` the folder's rows LEAVE THE PROJECT instead (the project's pin and the "
           "members only it uses — the same door assets.removeFromProject uses; the LIBRARY row is never "
           "touched) and its subtree of folders goes with them. Refuses the project root, an unknown folder and "
-          "the editor's own Systems/Presets. NOT undoable.",
+          "the editor's own Systems (and a folder that HOLDS one, which cannot go without it). NOT undoable.",
           Needs::Document },
         { "moveToFolder", "assets.moveToFolder(guidOrGuids, folderGuid | null) -> n",
           "Files one row or many in a project folder — the tray's drag of a (multi-)selection onto a folder "
           "tile — and answers how many rows actually moved. `folderGuid` null, empty or the project's own guid "
           "means the ROOT. A FOLDER GUID may be passed as a row: the folder itself moves (a move into its own "
-          "subtree is refused). "
+          "subtree, and any move of the editor's own Systems folder, is refused). "
           "Filing changes where a row is LISTED IN THIS PROJECT and nothing else: no pin moves, no content is "
           "re-resolved, no other project sees it — which is why a pinned library asset's folder is recorded on "
           "the PIN (a library row is shared, so writing the folder on the row would file it for everybody). "
@@ -1064,15 +1067,28 @@ QString AssetsApi::createFolder(const QString &name, const QVariantMap &options)
     // UNDOABLE, on the session's stack when there is one. The command mints
     // the guid at construction, so the caller has it whether or not the create
     // went through (and a redo re-creates the same folder).
+    // JUDGED BEFORE IT IS PUSHED. A command whose redo() refuses still sits on
+    // the stack as a step that does nothing — one Ctrl+Z spent on a folder
+    // that was never created — so the answer is taken from the model FIRST and
+    // nothing is pushed unless the create will happen.
+    const projectfolders::Result judged =
+        projectfolders::judgeCreate(host.db, projectGuid, name, parent);
+    if (!judged.ok) {
+        fail(QStringLiteral("assets.createFolder: %1").arg(judged.error));
+        return QString();
+    }
+
     if (host.undoStack) {
-        auto *command = new CreateProjectFolderCommand(host.db, projectGuid, name, parent);
-        const QString guid = command->guid();
-        host.undoStack->push(command);          // redo() runs the create
-        if (!command->error().isEmpty()) {
-            fail(QStringLiteral("assets.createFolder: %1").arg(command->error()));
+        // The outcome is read out of a box the CALLER owns: a command that
+        // turns out to be a no-op deletes itself inside push().
+        auto outcome = std::make_shared<FolderCommandOutcome>();
+        host.undoStack->push(new CreateProjectFolderCommand(host.db, projectGuid, name,
+                                                            parent, outcome));
+        if (!outcome->error.isEmpty()) {        // lost a race with another writer
+            fail(QStringLiteral("assets.createFolder: %1").arg(outcome->error));
             return QString();
         }
-        return guid;
+        return outcome->guid;
     }
 
     const projectfolders::Result result =
@@ -1132,14 +1148,25 @@ int AssetsApi::moveToFolder(const QVariant &guidOrGuids, const QVariant &folderG
                                ? folderGuid.toString() : QString();
     const QString projectGuid = host.project->getProjectGuid();
 
+    // JUDGED BEFORE IT IS PUSHED, for two reasons: a refused move must not
+    // leave a no-op step on the user's stack, and neither must a move whose
+    // rows are ALL already in that folder (a drop on the folder they came
+    // from). `judgeMove` answers with the same rules and the same words.
+    const projectfolders::Result judged =
+        projectfolders::judgeMove(host.db, projectGuid, guids, target);
+    if (!judged.ok) {
+        fail(QStringLiteral("assets.moveToFolder: %1").arg(judged.error));
+        return 0;
+    }
+    if (judged.moved == 0) return 0;            // nothing to do, and nothing to undo
+
     if (host.undoStack) {
-        auto *command = new MoveToProjectFolderCommand(host.db, projectGuid, guids, target);
-        host.undoStack->push(command);          // redo() runs the move
-        if (!command->error().isEmpty()) {
-            fail(QStringLiteral("assets.moveToFolder: %1").arg(command->error()));
-            return 0;
-        }
-        return command->moved();
+        auto outcome = std::make_shared<FolderCommandOutcome>();
+        host.undoStack->push(new MoveToProjectFolderCommand(host.db, projectGuid, guids,
+                                                            target, outcome));
+        if (!outcome->error.isEmpty())          // lost a race with another writer
+            fail(QStringLiteral("assets.moveToFolder: %1").arg(outcome->error));
+        return outcome->moved;
     }
 
     const projectfolders::Result result =

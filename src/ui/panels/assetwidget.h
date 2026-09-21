@@ -282,10 +282,10 @@ public:
     void updateAssetView(const QString &path, int filter = 0);
     /// WHERE A TILE IS, for a synthesised gesture (DRAWERS-1,
     /// `editor.dragAssetToTray`): the widget a drop is posted to — THIS panel,
-    /// because the list's viewport does not accept drops — and the point at the
-    /// centre of `guid`'s tile in that widget's coordinates. A null point when
-    /// the tray is not showing it, or is not laid out.
-    QWidget *tileViewport() const;
+    /// which is the one drop owner here (see AssetWidget::folderItemAt) — and
+    /// the point at the centre of `guid`'s tile in that widget's coordinates.
+    /// A null point when the tray is not showing it, or is not laid out.
+    QWidget *dropTarget() const;
     QPoint tileCentre(const QString &guid);
     /// What the tray is SHOWING, in order: [{guid, name, folder}] (`name` is
     /// the catalog name for an asset, the label for a folder) — the
@@ -453,6 +453,13 @@ private:
 	QSize currentSize;
 
     bool draggingItem;
+
+    /// ONE toast for the panel, reused (ui/pages/assetview.cpp's pattern): a
+    /// folder refusal cannot be a modal box — the move runs one event-loop
+    /// turn after the drop, and inside a script's run through
+    /// editor.dragAssetToTray.
+    class Toast *mToast = nullptr;
+    class Toast *toast();
 };
 
 #endif // ASSETWIDGET_H

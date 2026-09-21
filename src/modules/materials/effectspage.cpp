@@ -63,6 +63,7 @@ For more information see the LICENSE file
 #include "services/sceneissues.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
+#include "services/projectmembership.h"
 #include <QFutureWatcher>
 #include <QtConcurrent>
 #include "models/library.h"
@@ -442,6 +443,11 @@ QVariantList EffectsPage::materialTabs() const
 QVariantMap EffectsPage::activeMaterialTab() const
 {
 	return tabInfo(activeDoc());
+}
+
+QVariantList EffectsPage::projectDrawerTiles() const
+{
+	return assetWidget ? assetWidget->shownTiles() : QVariantList();
 }
 
 bool EffectsPage::activateMaterialTab(const QVariant &tabOrGuid)
@@ -2637,6 +2643,33 @@ void EffectsPage::configureConnections()
 	// is only one of the four doors a pin can leave by.)
 	connect(assetWidget, &ShaderAssetWidget::assetRemoved, this,
 	        [this](const QString &guid) { forgetMaterial(guid, Gone::ProjectCopy); });
+	// AND EVERY OTHER DOOR A PIN LEAVES BY (DRAWERS-1's read, item 5). The row
+	// above is the drawer's own Delete, and it is one of several: a pin also
+	// goes through `assets.removeFromProject`, through the tray's Delete,
+	// through `assets.deleteFolder({keepContents: false})` and through a
+	// project close — and a '(project)' tab whose pin has gone is editing
+	// nothing. Rather than teach each door about this page, the page listens to
+	// the ONE announcement every one of them already makes
+	// (services/projectmembership.h, which the two project drawers repopulate
+	// from) and re-checks its own Project-origin tabs: a tab whose guid this
+	// project no longer pins is forgotten, exactly as the drawer's Delete
+	// forgets it. Cheap — one `isAssetPinnedBy` per project tab, and only when
+	// the project's membership really changed.
+	connect(ProjectMembership::instance(), &ProjectMembership::changed, this,
+	        [this](const QString &projectGuid) {
+		if (!dataBase || !mProject || mProject->getProjectGuid().isEmpty()) return;
+		// An empty guid means "some project" (an edge delete that cannot name
+		// one); anything else must be ours.
+		if (!projectGuid.isEmpty() && projectGuid != mProject->getProjectGuid()) return;
+		QStringList gone;
+		for (MaterialDocument *doc : mDocs) {
+			if (doc->info.origin != shaderInfo::Origin::Project) continue;
+			if (doc->info.GUID.isEmpty()) continue;
+			if (!dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID))
+				gone << doc->info.GUID;
+		}
+		for (const QString &guid : gone) forgetMaterial(guid, Gone::ProjectCopy);
+	});
 	// The PROJECT drawer's rename comes here, like the Custom drawer's: one
 	// rename for every drawer (§7).
 	connect(assetWidget, &ShaderAssetWidget::assetRenamed, this,

@@ -127,6 +127,9 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
             return effectsPage->closeMaterialTab(ref);
         };
         pageDelegate.activeTab = [effectsPage]() { return effectsPage->activeMaterialTab(); };
+        // materials.projectDrawer — what the module's Project drawer is
+        // showing, straight off the widget (DRAWERS-1).
+        pageDelegate.projectDrawer = [effectsPage]() { return effectsPage->projectDrawerTiles(); };
         materialsApi->setPageDelegate(pageDelegate);
     }
     engine.addModule(materialsApi);

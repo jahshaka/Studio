@@ -107,15 +107,6 @@ ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()
 		mRefreshPending = true;
 		QTimer::singleShot(0, this, [this]() { flushPendingRefresh(); });
 	});
-
-	sLive = this;
-}
-
-ShaderAssetWidget *ShaderAssetWidget::sLive = nullptr;
-
-ShaderAssetWidget *ShaderAssetWidget::live()
-{
-	return sLive;
 }
 
 void ShaderAssetWidget::flushPendingRefresh()
@@ -145,7 +136,6 @@ QVariantList ShaderAssetWidget::shownTiles()
 
 ShaderAssetWidget::~ShaderAssetWidget()
 {
-	if (sLive == this) sLive = nullptr;
 }
 
 void ShaderAssetWidget::updateAssetView()

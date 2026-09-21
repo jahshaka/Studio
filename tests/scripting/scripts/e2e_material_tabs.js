@@ -168,23 +168,38 @@ assert(materials.loadGraph(presetTab.guid).readOnly === true,
 materials.closeTab(presetTab.guid);
 materials.closeTab(minted.guid);
 
-// ---- 9c. A PROJECT COPY WITH NO PIN IS NOT THE LIBRARY'S (F1) -----------
-// The pin can go while the tab is open (the project drawer's Delete, the
-// editor tray's, this verb, a project closed under a hidden page). The save
-// used to fall through to the LIBRARY original: one project's edits landing on
+// ---- 9c. A PROJECT COPY WHOSE PIN GOES CLOSES (F1, every door — DRAWERS-1)
+// The pin can go while the tab is open, and by several doors: the project
+// drawer's Delete (which told the page from the start), the editor tray's,
+// this verb, a folder delete that takes its contents out, a project closed
+// under a hidden page. The page used to hear about ONE of them and keep the
+// others' tabs open over a pin that was gone — where the danger was that a
+// save fell through to the LIBRARY original, one project's edits landing on
 // the material every other project takes its copies from.
-assert(materials.open(A, { scope: "project" }).scope === "project", "A's project copy is open");
+//
+// It listens to the ONE announcement they all make now
+// (services/projectmembership.h) and re-checks its Project-origin tabs, so
+// this verb closes the tab exactly as the drawer's Delete does: nothing is
+// left editing a pin that is not there. The save guard underneath is still
+// there and is now the SECOND lock, with no route reaching it from this door
+// — which is why the assertion below is that NOTHING was written and nothing
+// was refused, rather than one refusal.
 var beforeLibrary = materials.loadGraph(A).nodes;
+assert(materials.open(A, { scope: "project" }).scope === "project", "A's project copy is open");
+function projectTabsFor(guid) {
+    return materials.tabs().filter(function (t) {
+        return t.guid === guid && t.scope === "project";
+    });
+}
+assert(projectTabsFor(A).length === 1, "...as a tab");
 assert(assets.removeFromProject(A) === true, "assets.removeFromProject(A) — the pin goes");
-var idA = materials.loadGraph(A).nodes > 1 ? loneNodeId(A) : null;
-assert(idA !== null, "A still has its node to delete");
-materials.activate(materials.tabs().filter(function (t) { return t.scope === "project"; })[0].tab);
-assert(graph.removeNode(idA) === true, "an edit on the orphaned project copy");
-materials.closeTab(materials.tabs().filter(function (t) { return t.scope === "project"; })[0].tab);
+assert(projectTabsFor(A).length === 0,
+       "...and the tab goes with it, by the door that used to say nothing");
 assert(materials.loadGraph(A).nodes === beforeLibrary,
-       "the LIBRARY original is untouched — the refused save wrote nothing");
+       "the LIBRARY original is untouched — nothing was saved on the way out");
 var refusals = editor.issues().filter(function (i) { return i.kind === "material.save"; });
-assert(refusals.length === 1, "and the user is told, once: " + refusals[0].message);
+assert(refusals.length === 0,
+       "...and no save was even attempted, so the user is told nothing");
 
 // ---- 10. open/close twenty times: the memory comes back ------------------
 // A closed document frees its graph, its canvas and its undo history — none of

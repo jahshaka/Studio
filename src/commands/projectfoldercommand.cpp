@@ -16,12 +16,28 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "services/projectfolders.h"
 
+namespace {
+/// A command that did nothing marks itself obsolete INSIDE redo(), which is
+/// where QUndoStack::push looks: it then deletes the command instead of
+/// keeping a step that undoes nothing. Callers judge with the model first
+/// (services/projectfolders.h `judgeCreate`/`judgeMove`), so reaching this is
+/// a race with another writer, not the ordinary path.
+void report(const FolderOutcomePtr &outcome, const QString &error, int moved)
+{
+    if (!outcome) return;
+    outcome->error = error;
+    outcome->moved = moved;
+}
+}   // namespace
+
 CreateProjectFolderCommand::CreateProjectFolderCommand(Database *db, const QString &projectGuid,
-                                                       const QString &name, const QString &parent)
+                                                       const QString &name, const QString &parent,
+                                                       FolderOutcomePtr outcome)
     : QUndoCommand(QObject::tr("New folder")),
       mDb(db), mProjectGuid(projectGuid), mName(name.trimmed()), mParent(parent),
-      mGuid(GUIDManager::generateGUID())
+      mGuid(GUIDManager::generateGUID()), mOutcome(std::move(outcome))
 {
+    if (mOutcome) mOutcome->guid = mGuid;
 }
 
 void CreateProjectFolderCommand::redo()
@@ -29,7 +45,8 @@ void CreateProjectFolderCommand::redo()
     const projectfolders::Result result =
         projectfolders::create(mDb, mProjectGuid, mName, mParent, mGuid);
     mCreated = result.ok;
-    mError = result.error;
+    report(mOutcome, result.error, result.ok ? 1 : 0);
+    if (!result.ok) setObsolete(true);
 }
 
 void CreateProjectFolderCommand::undo()
@@ -43,9 +60,11 @@ void CreateProjectFolderCommand::undo()
 
 MoveToProjectFolderCommand::MoveToProjectFolderCommand(Database *db, const QString &projectGuid,
                                                        const QStringList &guids,
-                                                       const QString &folderGuid)
+                                                       const QString &folderGuid,
+                                                       FolderOutcomePtr outcome)
     : QUndoCommand(QObject::tr("Move to folder")),
-      mDb(db), mProjectGuid(projectGuid), mGuids(guids), mFolderGuid(folderGuid)
+      mDb(db), mProjectGuid(projectGuid), mGuids(guids), mFolderGuid(folderGuid),
+      mOutcome(std::move(outcome))
 {
 }
 
@@ -61,8 +80,10 @@ void MoveToProjectFolderCommand::redo()
     }
     const projectfolders::Result result =
         projectfolders::moveTo(mDb, mProjectGuid, mGuids, mFolderGuid);
-    mMoved = result.moved;
-    mError = result.error;
+    report(mOutcome, result.error, result.moved);
+    // A move that moved NOTHING is not a step: the rows were already there, or
+    // somebody else took them somewhere else between the judgement and here.
+    if (!result.ok || result.moved == 0) setObsolete(true);
 }
 
 void MoveToProjectFolderCommand::undo()

@@ -2386,7 +2386,7 @@ bool EditorApi::dragAssetToTray(const QVariant &guidOrGuids, const QString &fold
                                    "'%1' (open the folder that holds it, and make sure the "
                                    "Assets tab is in front)").arg(folderGuid));
 
-    QWidget *target = tray->tileViewport();
+    QWidget *target = tray->dropTarget();
     if (!target) return fail("editor.dragAssetToTray: the tray has no list viewport");
 
     // ONE payload builder, the one the tray's own drag uses — a synthesised

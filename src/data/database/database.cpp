@@ -902,6 +902,10 @@ void Database::createCasTables()
 // filing cannot ride `assets.parent`: that column would put the same asset in
 // one project's folder for everybody. It rides the pin. NULL/empty = the
 // project root, which is what every row written before this column says.
+//
+// A table created TODAY has the column from the schema constant
+// (data/database/casschema.h) and this does nothing; this is for the libraries
+// that predate it.
 void Database::migrateProjectAssetsTable()
 {
     if (checkIfColumnExists("project_assets", "folder")) return;
