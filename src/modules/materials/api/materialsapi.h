@@ -60,6 +60,13 @@ public:
     void setPageDelegate(const PageDelegate &delegate) { mPage = delegate; }
 
     Q_INVOKABLE QVariantList presets();
+    /// THE STUDIO EVERY MATERIAL IS SHOWN IN, as data (MATPREVIEW-ENV-1): the
+    /// exposure the preview and the thumbnails are graded at, the generated
+    /// environment's size, its mean and key radiance, the viewpoint it is
+    /// authored for and its softboxes. A READ — the environment is one
+    /// constant set, not a preference — and the one place a test or a picture
+    /// sheet can quote it from.
+    Q_INVOKABLE QVariantMap previewEnvironment();
     /// ONE mint (MATERIAL_BUNDLE_SPEC 6): a library material bundle, with a
     /// node graph as its payload when `{graph: true}`. `materials.createGraph`
     /// was this with the flag always on and a second ModelTypes::Shader row —

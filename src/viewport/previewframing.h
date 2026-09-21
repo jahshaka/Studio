@@ -19,7 +19,10 @@
 #include "irisgl/core/math/vec.h"
 #include <QtMath>
 
+#include <cmath>
+
 #include "irisgl/core/geometry/aabb.h"
+#include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -109,6 +112,70 @@ inline Framing frameBounds(const iris::AABB &bounds, const iris::Vec3 &fallbackT
     f.distance = qMax(1.0f, framingDistance(f.radius, fovDegrees));
     clipPlanesForFraming(f.distance, f.radius, f.nearClip, f.farClip);
     return f;
+}
+
+/// THE RADIUS A PREVIEW FRAMES BY (MATPREVIEW-ENV-1): the TIGHT radius about
+/// the subject's centre — the furthest vertex — where the mesh carries CPU
+/// geometry (the picking TriMesh, which every assimp-loaded mesh has, and every
+/// preview primitive is one), and the AABB's half-diagonal otherwise.
+///
+/// WHY NOT THE HALF-DIAGONAL EVERYWHERE, which is what frameSubject uses, and
+/// why not `Mesh::getBoundingSphere()` either — it IS the half-diagonal
+/// (`aabb.getMinimalEnclosingSphere()`, mesh.cpp). For a BOX the two agree (its
+/// corners are the far points); for a SPHERE the diagonal is sqrt(3) times the
+/// radius, so a preview framed by it renders the subject at 58 % of the size it
+/// asked for — measured, and the reason the first version of this lane's
+/// framing put an 80 %-of-frame sphere at 47 %.
+///
+/// The radius is orientation-free (the furthest point is the furthest point
+/// from any angle), so it is right for the orbit at every yaw and holds for a
+/// cube seen corner-on.
+inline float subjectRadius(const iris::SceneNodePtr &node, const iris::AABB &bounds)
+{
+    const bool haveBox = bounds.getMin().x() <= bounds.getMax().x();
+    const iris::Vec3 centre = haveBox ? bounds.getCenter() : iris::Vec3(0, 0, 0);
+    float tight = 0.0f;
+    if (node && node->sceneNodeType == iris::SceneNodeType::Mesh) {
+        auto meshNode = node.staticCast<iris::MeshNode>();
+        if (meshNode->getMesh()) {
+            if (iris::TriMesh *tri = meshNode->getMesh()->getTriMesh()) {
+                const iris::Mat4 xf = meshNode->getGlobalTransform();
+                float furthest = 0.0f;
+                for (const iris::Triangle &t : tri->triangles) {
+                    const iris::Vec3 p[3] = { xf.map(t.a), xf.map(t.b), xf.map(t.c) };
+                    for (const iris::Vec3 &v : p)
+                        furthest = qMax(furthest, (v - centre).lengthSquared());
+                }
+                tight = std::sqrt(furthest);
+            }
+        }
+    }
+    if (tight > 0.0f) return tight;
+    return haveBox ? qMax(0.05f, bounds.getSize().length() * 0.5f) : 1.0f;
+}
+
+/// THE PREVIEW'S DISTANCE, AT THE FRAME'S ACTUAL SHAPE (MATPREVIEW-ENV-1,
+/// owner review R9: "clipped at the panel's right edge").
+///
+/// `framingDistance` above fills the VERTICAL angle, which is right for a
+/// 16:9-ish window and wrong for the two shapes a dock really takes: a narrow
+/// column clips the subject left and right, and a very wide strip shrinks it to
+/// nothing. A preview instead fills a fixed fraction of the SMALLER dimension,
+/// so the subject is whole and the margin is the same on whichever side is
+/// tight:
+///
+///     tan(h/2) = aspect * tan(v/2)     (the horizontal half-angle)
+///     dist     = radius / (fill * tan(v/2) * min(1, aspect))
+///
+/// `vfovDegrees` is the RENDERED vertical angle — `CameraNode::
+/// effectiveFovDegrees()`, never the authored one — so the free camera's
+/// wide-aspect hold (freecam::kFreeCameraFramingAspect) is already in it.
+inline float previewDistance(float radius, float vfovDegrees, float aspect, float fill = 0.8f)
+{
+    const float tanHalf = qTan(qDegreesToRadians(qBound(1.0f, vfovDegrees, 179.0f) / 2.0f));
+    const float limit = tanHalf * qMin(1.0f, aspect > 0.0f ? aspect : 1.0f);
+    const float f = qBound(0.05f, fill, 1.0f);
+    return qMax(0.05f, radius / qMax(1e-4f, limit * f));
 }
 
 /// The framing of a node's whole subtree, measured where the node stands.

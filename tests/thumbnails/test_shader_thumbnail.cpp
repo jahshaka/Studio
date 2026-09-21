@@ -47,11 +47,16 @@ using namespace jahshaka::engine;
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-static bool isBackground(QColor c)
+// THE BACKDROP IS A PICTURE NOW (MATPREVIEW-ENV-1): a thumbnail is a subject
+// in the ONE generated studio environment, so behind it is that room's neutral
+// wall and not the view's flat clear colour. "Is this the background" is
+// therefore neutrality — the room is neutral by construction, and this suite's
+// subjects are a red graph and a blue one.
+static bool isNeutral(QColor c, int tolerance = 14)
 {
-    const Colour bg = EngineThumbnailRenderer::backgroundColour();
-    return std::abs(c.redF() - bg.r) < 0.04f && std::abs(c.greenF() - bg.g) < 0.04f
-        && std::abs(c.blueF() - bg.b) < 0.04f;
+    return std::abs(c.red() - c.green()) <= tolerance
+        && std::abs(c.green() - c.blue()) <= tolerance
+        && std::abs(c.red() - c.blue()) <= tolerance;
 }
 static QColor centre(const QImage &img) { return img.pixelColor(img.width() / 2, img.height() / 2); }
 static void show(const char *tag, const QImage &img)
@@ -195,10 +200,10 @@ int main(int argc, char **argv)
         show("red graph", img);
         CHECK(!img.isNull() && img.size() == size, "shader thumbnail renders at the requested size");
         const QColor c = centre(img);
-        CHECK(!isBackground(c), "centre pixel is the material, not the background");
+        CHECK(!isNeutral(c), "centre pixel is the material, not the neutral backdrop");
         CHECK(c.red() > c.green() + 40 && c.red() > c.blue() + 40,
               "the thumbnail shows the graph's colour (red-dominant)");
-        CHECK(isBackground(img.pixelColor(2, 2)), "the sphere is framed inside the view");
+        CHECK(isNeutral(img.pixelColor(2, 2)), "the sphere is framed inside the view");
 
         // ---- 5. it is NOT the grey fallback the old route produced ----
         QImage grey = renderer.renderMaterial(
@@ -234,7 +239,7 @@ int main(int argc, char **argv)
             QImage bundleImg = renderer.renderMaterial(bundleMaterial, size);
             show("bundle graph", bundleImg);
             const QColor bc = centre(bundleImg);
-            CHECK(!bundleImg.isNull() && !isBackground(bc),
+            CHECK(!bundleImg.isNull() && !isNeutral(bc),
                   "5b: the tile is NOT blank (the module's own save used to render nothing)");
             CHECK(bc.green() > bc.red() + 40 && bc.green() > bc.blue() + 40,
                   "5b: and it shows the material's colour, not black");

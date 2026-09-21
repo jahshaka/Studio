@@ -109,6 +109,7 @@ jah_no_display(avatar.document)
 add_executable(test_avatar_preview test_avatar_preview.cpp ${AVATAR_LOAD_SOURCES}
     ${CMAKE_SOURCE_DIR}/src/bridge/avatarpreviewscene.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/boneoverlay.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/app/models.qrc)

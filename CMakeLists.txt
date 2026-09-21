@@ -447,6 +447,7 @@ set(SRCS
     src/services/thumbnailrebuild.cpp 
     src/services/thumbnailstop.cpp 
     src/bridge/enginepreviewscene.cpp
+    src/bridge/previewenvironment.cpp
     src/bridge/enginethumbnailrenderer.cpp 
     src/ui/dialogs/donatedialog.cpp
     src/ui/pages/assetview.cpp

@@ -28,10 +28,18 @@ using namespace jahshaka::engine;
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-static bool isBackground(QColor c)
+// THE BACKDROP IS A PICTURE NOW (MATPREVIEW-ENV-1): a thumbnail is a subject
+// in the ONE generated studio environment, so behind it is that room's neutral
+// wall — a graded gradient — and not the view's flat clear colour. "Is this the
+// background" is therefore NEUTRALITY: the room is neutral by construction (a
+// studio that tints lies about a material's colour), and every coloured subject
+// in this suite is not. A neutral subject (the white cube below) is separated
+// by brightness instead, where it is measured.
+static bool isNeutral(QColor c, int tolerance = 14)
 {
-    const Colour bg = EngineThumbnailRenderer::backgroundColour();
-    return std::abs(c.redF() - bg.r) < 0.04f && std::abs(c.greenF() - bg.g) < 0.04f && std::abs(c.blueF() - bg.b) < 0.04f;
+    return std::abs(c.red() - c.green()) <= tolerance
+        && std::abs(c.green() - c.blue()) <= tolerance
+        && std::abs(c.red() - c.blue()) <= tolerance;
 }
 // A SECOND RENDERER CANNOT BE CONSTRUCTED — as a compile-time fact, which is
 // what "one per process" has to be to stay true (THUMBS-1).
@@ -111,9 +119,9 @@ int main(int argc, char **argv)
         CHECK(!a.isNull(), "thumbnail is non-null");
         CHECK(a.size() == size, "thumbnail has the requested size");
         const QColor ca = centre(a);
-        CHECK(!isBackground(ca), "centre pixel is not the background");
+        CHECK(!isNeutral(ca), "centre pixel is the material, not the neutral backdrop");
         CHECK(ca.red() > ca.green() + 40 && ca.red() > ca.blue() + 40, "centre is dominated by the material colour (red)");
-        CHECK(isBackground(a.pixelColor(2, 2)), "corner is the background (cube framed inside the view)");
+        CHECK(isNeutral(a.pixelColor(2, 2)), "corner is the studio wall (cube framed inside the view)");
 
         // 2. blue cube differs
         QImage b = thumbnail(renderer, QColor(30, 30, 220), size); show("blue cube", b);
@@ -151,9 +159,9 @@ int main(int argc, char **argv)
             giant->setLocalScale(iris::Vec3(200.0f, 200.0f, 200.0f));
             QImage h = renderer.renderNode(giant, size); show("giant cube x200", h);
             const QColor ch = centre(h);
-            CHECK(!isBackground(ch), "a huge model still renders (far plane follows the framing)");
+            CHECK(!isNeutral(ch), "a huge model still renders (far plane follows the framing)");
             CHECK(ch.red() > ch.green() + 40 && ch.red() > ch.blue() + 40, "giant cube shows its material colour");
-            CHECK(isBackground(h.pixelColor(2, 2)), "giant cube is framed inside the view");
+            CHECK(isNeutral(h.pixelColor(2, 2)), "giant cube is framed inside the view");
         }
 
         // 7. a textured model must NOT come out greyscale: the Mesh path's material
@@ -176,7 +184,7 @@ int main(int argc, char **argv)
             node->setMaterial(mat);
             QImage t = renderer.renderNode(node, size); show("textured cube", t);
             const QColor ct = centre(t);
-            CHECK(!isBackground(ct), "textured cube renders");
+            CHECK(!isNeutral(ct), "textured cube renders");
             const int variance = std::abs(ct.red() - ct.green()) + std::abs(ct.green() - ct.blue());
             std::printf("    centre channel variance = %d\n", variance);
             CHECK(variance > 60, "thumbnail shows the texture's colour, not greyscale");
@@ -208,10 +216,14 @@ int main(int argc, char **argv)
             hot->setMaterial(hm);
             QImage w = renderer.renderNode(hot, size); show("white cube", w);
 
+            // THE WHOLE PICTURE, environment included (MATPREVIEW-ENV-1): a
+            // white cube is as neutral as the wall behind it, so there is no
+            // filtering the subject out by colour — and there is no need to.
+            // What the grade has to hold is that NOTHING in the frame clips,
+            // the room's own softbox panels included.
             int saturated = 0, lit = 0, maxChannel = 0;
             for (int y = 0; y < w.height(); ++y) for (int x = 0; x < w.width(); ++x) {
                 const QColor p = w.pixelColor(x, y);
-                if (isBackground(p)) continue;
                 ++lit;
                 maxChannel = std::max(maxChannel, std::max({ p.red(), p.green(), p.blue() }));
                 if (p.red() >= 254 && p.green() >= 254 && p.blue() >= 254) ++saturated;
@@ -221,12 +233,15 @@ int main(int argc, char **argv)
             CHECK(lit > 200, "the white cube rendered");
             CHECK(saturated == 0 && maxChannel < 255,
                   "the tonemapped thumbnail does not clip: no pixel is flat white");
-            // MEASURED: 176 raw, 138 graded, on this renderer's studio lights.
-            // The band is wide enough to survive a driver, narrow enough that
-            // silently losing the grade (which would put it back at 176) fails.
-            CHECK(maxChannel > 100 && maxChannel < 160,
-                  "and the filmic curve is actually applied (brightest channel rolled down "
-                  "from the raw path's 176 into the 100..160 band)");
+            // MEASURED, in the studio environment (MATPREVIEW-ENV-1): the
+            // brightest thing in the frame is a softbox panel, and the grade
+            // rolls it to the band below. Ungraded, that panel is radiance 1.0
+            // times the exposure multiplier — far past 255 — so losing the
+            // grade saturates and the case above fails first; losing the
+            // EXPOSURE moves this number out of the band.
+            CHECK(maxChannel > 140 && maxChannel < 220,
+                  "and the filmic curve is actually applied (the brightest pixel rolls down "
+                  "into the 140..220 band instead of clipping; measured 168)");
         }
 
         // 7b. THE OWNER'S FAILURE, MADE AUDIBLE (THUMBS-1). The renderer's View
@@ -252,7 +267,7 @@ int main(int argc, char **argv)
             // …and with the name free again it renders, so the failure was the
             // name and nothing else.
             const QImage recovered = thumbnail(r, QColor(220, 30, 30), size);
-            CHECK(!recovered.isNull() && !isBackground(centre(recovered)),
+            CHECK(!recovered.isNull() && !isNeutral(centre(recovered)),
                   "with the name free again the same renderer draws the subject");
             CHECK(r.lastFailure().isEmpty(), "…and reports no failure");
         }
