@@ -57,7 +57,11 @@ QVector<Row> buildRows()
             "brisk walk is 1.5 and a car in town is 14, so it crosses an authored set without "
             "being the speed people report as unpleasant in a headset. It replaced the desktop "
             "editor's 8 u/s camera speed, which the headset borrowed only because nothing else "
-            "existed.");
+            "existed.\n\nIT IS THE PROJECT'S BASE: the person at the controls has one dial of "
+            "their own (editor.cameraSpeed, the toolbar's speed button — an integer 1-32 where "
+            "10 is normal) and a wearer moves at this speed times that factor. How fast a world "
+            "is meant to be walked is authored; how fast somebody wants to move through it "
+            "today is a preference.");
         row.get = [](const iris::ScenePtr &s) { return double(s->vrFlySpeed); };
         row.set = [](const iris::ScenePtr &s, double v) { s->vrFlySpeed = float(v); };
         row.read = [](const Settings &s) { return double(s.flySpeed); };

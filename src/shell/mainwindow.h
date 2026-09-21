@@ -812,11 +812,12 @@ public slots:
     // explicitly instead of toggling the play button)
     void enterEditMode();
     void enterPlayMode();
-    /// Re-reads FlySpeedSettings into the toolbar dropdown. Public and a SLOT
-    /// because editor.setFlySpeed invokes it by name (the verb owns the value,
-    /// the toolbar is only a view of it) and because the viewport's wheel
-    /// gesture routes here through EditorViewportEvents::flySpeedChanged.
-    void syncFlySpeedUi();
+    /// Re-reads CameraSpeed into the toolbar's speed button and its popover.
+    /// Public and a SLOT because editor.cameraSpeed invokes it by name (the
+    /// verb owns the value, the toolbar is only a view of it) and because the
+    /// viewport's wheel gesture routes here through
+    /// EditorViewportEvents::cameraSpeedChanged.
+    void syncCameraSpeedUi();
 
 private slots:
     void translateGizmo();
@@ -1114,10 +1115,13 @@ private:
     QAction *gridCheckAction = nullptr;
     QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
-    /// The editor toolbar's camera fly-speed dropdown (Unreal's speed control).
-    /// Owned by the toolbar; held to keep it in sync with FlySpeedSettings,
-    /// which the verb and the scroll wheel can both change behind its back.
-    class QComboBox *flySpeedCombo = nullptr;
+    /// THE CAMERA-SPEED BUTTON and the two controls in its popover (owner
+    /// R15). Owned by the toolbar and the popover menu; held to keep all three
+    /// in sync with CameraSpeed, which the verb and the scroll wheel can both
+    /// change behind their backs.
+    class QToolButton *cameraSpeedButton = nullptr;
+    class QSlider *cameraSpeedSlider = nullptr;
+    class QSpinBox *cameraSpeedSpin = nullptr;
     /// "The 3D view could not be created" — the respecced Failed state
     /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
     class Toast *viewErrorToast = nullptr;

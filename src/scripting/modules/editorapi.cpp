@@ -32,8 +32,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/simulationclock.h"
 #include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
-#include "viewport/flyspeedsettings.h"
-#include "scripting/modules/flyspeedverb.h"
+#include "viewport/cameraspeed.h"
 #include "shell/mainwindow.h"
 #include "ui/panels/assetwidget.h"
 #include "ui/panels/scenehierarchywidget.h"
@@ -44,6 +43,7 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 #include "services/sceneissues.h"
 #include "services/sceneeditservice.h"
+#include "services/vrworld.h"
 #include "services/clipboardservice.h"
 #include "services/selectionservice.h"
 #include "services/outlinesettings.h"
@@ -326,19 +326,19 @@ QVector<VerbInfo> EditorApi::verbs() const
           "REFUSED. `size` is clamped to 0.08-0.6. This is the Preferences row's own path — the UI "
           "calls this verb.",
           Needs::Engine },
-        { "flySpeed", "editor.flySpeed() -> {multiplier, base, speed, steps:[...]}",
-          "THE EDITOR FLY SPEED, Unreal's model: a `multiplier` on a fixed `base` of 8 world "
-          "units per second, so `speed` = base * multiplier is what the RMB fly actually moves "
-          "at (before Shift's 3x boost). `steps` is the ladder the toolbar dropdown offers and "
-          "the scroll wheel walks while flying. Editor-global and persisted (camera/flySpeedEditor); "
-          "the player has its own, player.flySpeed().",
-          Needs::Document },
-        { "setFlySpeed", "editor.setFlySpeed(multiplier | \"faster\" | \"slower\") -> {multiplier, base, speed, steps:[...]}",
-          "Sets the editor fly-speed multiplier and returns the state that resulted (the same "
-          "shape editor.flySpeed() reads). A NUMBER is the multiplier itself, clamped to "
-          "0.05..32 — it need not be one of the `steps`, which are only what the UI offers. "
-          "\"faster\"/\"slower\" step one entry along that ladder, exactly as the scroll wheel "
-          "does while the right mouse button is held. The toolbar dropdown follows either way.",
+        { "cameraSpeed", "editor.cameraSpeed([n | \"faster\" | \"slower\"]) -> {n, factor, editorSpeed, playerSpeed, vrSpeed}",
+          "THE CAMERA SPEED — one dial for every way a person moves through a scene (owner R15). "
+          "`n` is an INTEGER 1..32 and 10 IS TODAY: the factor it applies is n/10, so a fresh "
+          "install flies exactly as it always did. That factor rides on each surface's own base — "
+          "the editor's RMB fly at 8 units/second (`editorSpeed`, before Shift's 3x boost), the "
+          "Player's free camera at 25 (`playerSpeed`), and a VR wearer's PROJECT speed "
+          "`world.vr().flySpeed` in metres per second (`vrSpeed`), which stays the project's "
+          "number because how fast a world is meant to be walked is authored. Called with no "
+          "argument it reads. A NUMBER sets it, clamped to 1..32; a non-integer is REFUSED (the "
+          "dial holds no decimals). \"faster\"/\"slower\" step it by one, exactly as the scroll "
+          "wheel does while the right mouse button is held (Shift there steps by five). "
+          "Editor-global and persisted as the preference `camera/speed` — not a property of a "
+          "project. The toolbar's speed button is a view of this value.",
           Needs::Document },
         { "cameraMode", "editor.cameraMode() -> \"free\" | \"orbit\"",
           "The active camera controller: \"free\" (fly camera) or \"orbit\" (arcball).",
@@ -1737,28 +1737,90 @@ QVariantMap EditorApi::setPip(const QVariantMap &change)
     return pip();
 }
 
-// FLY SPEED (owner request 2026-09-07). Verb-first, per the API-first rule: the
-// toolbar dropdown and the scroll-wheel gesture both land here, on
-// FlySpeedSettings, so there is exactly one value and one clamp. Needs::Document
-// deliberately — the setting is editor-global state, not a property of a live
-// engine, so a headless run can set it and a suite can assert it with no display.
-// The argument grammar is shared with player.setFlySpeed (flyspeedverb.h).
-QVariantMap EditorApi::flySpeed()
+// THE CAMERA SPEED (owner R15, lane FLYSPEED-1). ONE verb, ONE value, and
+// every other way to change it — the toolbar's speed button, the scroll wheel
+// while flying — lands here, so there is exactly one clamp and one place the
+// preference is written. It replaced editor.flySpeed/setFlySpeed and
+// player.flySpeed/setFlySpeed, which were two multipliers on two surfaces and
+// could disagree about how fast "fast" is.
+//
+// Needs::Document deliberately — the setting is editor-global state, not a
+// property of a live engine, so a headless run can set it and a suite can
+// assert it with no display.
+QVariantMap EditorApi::cameraSpeedState() const
 {
-    return flyspeedverb::state(FlySpeedSettings::Editor);
+    // THE VR NUMBER IS THE PROJECT'S BASE TIMES THE FACTOR, read from the open
+    // document exactly as a session would read it (vrworld::resolve answers the
+    // documented default for a null scene, so a headless run still gets a
+    // number rather than a zero).
+    const iris::ScenePtr scene = (host.services && host.services->sceneEdit)
+                                     ? host.services->sceneEdit->scene() : iris::ScenePtr();
+    return QVariantMap{
+        { QStringLiteral("n"),           CameraSpeed::value() },
+        { QStringLiteral("factor"),      double(CameraSpeed::factor()) },
+        { QStringLiteral("editorSpeed"), double(CameraSpeed::editorSpeed()) },
+        { QStringLiteral("playerSpeed"), double(CameraSpeed::playerSpeed()) },
+        { QStringLiteral("vrSpeed"),
+          double(CameraSpeed::applyTo(vrworld::resolve(scene).flySpeed)) },
+    };
 }
 
-QVariantMap EditorApi::setFlySpeed(const QVariant &multiplier)
+QVariantMap EditorApi::cameraSpeed(const QVariant &speed)
 {
-    QString error;
-    if (!flyspeedverb::apply(FlySpeedSettings::Editor, multiplier, error)) {
-        fail(QStringLiteral("editor.setFlySpeed: %1").arg(error));
+    const QVariant value = scriptmod::normalizeJs(speed);
+    if (!value.isValid() || value.isNull()) return cameraSpeedState();
+
+    if (value.typeId() == QMetaType::QString) {
+        const QString word = value.toString().trimmed().toLower();
+        // TWO WORDS, THE TWO THE DOCUMENTATION NAMES. "up"/"down" rode along
+        // undocumented from the retired setFlySpeed and are deleted with it
+        // (the CRUD law): a grammar nobody can read from the docs is a grammar
+        // nobody can rely on.
+        if (word == QLatin1String("faster"))      CameraSpeed::step(+1);
+        else if (word == QLatin1String("slower")) CameraSpeed::step(-1);
+        else {
+            fail(QStringLiteral("editor.cameraSpeed: unknown speed '%1' (an integer 1..32, "
+                                "\"faster\" or \"slower\")").arg(value.toString()));
+            return QVariantMap();
+        }
+    } else if (value.typeId() == QMetaType::Bool) {
+        // A BOOLEAN IS NOT A SPEED, and Qt would hand us 1 for `true` (the
+        // world.vr defect of VR-WORLD-1, in the one other place a number is
+        // read from a script).
+        fail(QStringLiteral("editor.cameraSpeed: a true/false is not a camera speed "
+                            "(an integer 1..32, \"faster\" or \"slower\")"));
         return QVariantMap();
+    } else {
+        bool numeric = false;
+        const double number = value.toDouble(&numeric);
+        if (!numeric || !std::isfinite(number)) {
+            fail(QStringLiteral("editor.cameraSpeed: '%1' is not a camera speed (an integer "
+                                "1..32, \"faster\" or \"slower\")").arg(value.toString()));
+            return QVariantMap();
+        }
+        // AN INTEGER, NOT A ROUNDED ONE: the dial holds no decimals, so 12.5 is
+        // a caller who thinks it does and would silently get 12 or 13.
+        if (number != std::floor(number)) {
+            fail(QStringLiteral("editor.cameraSpeed: %1 is not a whole number — the camera "
+                                "speed is an integer 1..32").arg(value.toString()));
+            return QVariantMap();
+        }
+        // CLAMPED AS A DOUBLE, THEN NARROWED: `int(1e10)` is undefined
+        // behaviour, and on this compiler it lands on INT_MIN — so an absurdly
+        // large number clamped to 1 instead of 32, which is the opposite of
+        // what the caller asked for (fix round item 3).
+        const double clamped = std::min(std::max(number, double(CameraSpeed::kMin)),
+                                        double(CameraSpeed::kMax));
+        CameraSpeed::setValue(int(clamped));
     }
-    // The toolbar dropdown is a VIEW of this value; tell the shell so a
-    // scripted change moves it, exactly as the wheel gesture does.
-    if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "syncFlySpeedUi");
-    return flyspeedverb::state(FlySpeedSettings::Editor);
+    // NOTHING TO TELL THE SHELL: the toolbar's speed button follows the dial
+    // itself (CameraSpeed::setOnChanged), which is what makes the Player's
+    // wheel move it too — and nothing to write, either. The store write is
+    // deferred (CameraSpeed::flush's note) precisely so a caller in a loop —
+    // a script here, a mouse-move on the slider there — cannot turn a setting
+    // into one durable rewrite of jahsettings.ini each; the value reaches the
+    // file half a second later, or at the latest when the window closes.
+    return cameraSpeedState();
 }
 
 QString EditorApi::cameraMode()

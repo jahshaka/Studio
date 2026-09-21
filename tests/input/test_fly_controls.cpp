@@ -26,15 +26,24 @@ For more information see the LICENSE file
 //  for); in the player, that both spellings produce the IDENTICAL motion, not
 //  merely "some" motion.
 //
-//  ITEM 5, THE SPEED MULTIPLIER. FlySpeedSettings is one persisted multiplier
-//  per surface on a fixed base (8 u/s editor, 25 u/s player), stepped by the
-//  toolbar dropdown, the scroll wheel while flying, and editor/player
-//  .setFlySpeed. What is pinned here is the ARITHMETIC — distance scales
-//  exactly with the multiplier — and the ladder's stepping and clamping.
+//  THE CAMERA SPEED (owner R15, lane FLYSPEED-1, replacing item 5's two
+//  multipliers). CameraSpeed is ONE persisted integer 1..32 — the preference
+//  camera/speed — applied as the factor n/10 on each surface's own base (8 u/s
+//  the editor's fly, 25 the Player's free camera, 15 its play-mode fly, and a
+//  project's `world.vr.flySpeed` in m/s for a wearer). What is pinned here is
+//  the ARITHMETIC, against a number measured on main before the change:
+//  ONE SECOND OF THE EDITOR'S RMB FLY AT THE DEFAULT COVERS 8.000 UNITS, and
+//  n = 10 must still cover exactly that, n = 20 twice it and n = 1 a tenth of
+//  it. Plus the wheel's stepping and clamping, and the persistence.
 //
 // No document beyond a camera node, no engine, no display.
 
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QGuiApplication>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <cmath>
 #include <cstdio>
 
@@ -42,7 +51,7 @@ For more information see the LICENSE file
 #include "../support/documentgraph.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/editorcameracontroller.h"
-#include "viewport/flyspeedsettings.h"
+#include "viewport/cameraspeed.h"
 #include "viewport/flystep.h"
 #include "viewport/keyboardstate.h"
 #include "player/playermousecontroller.h"
@@ -130,7 +139,7 @@ int main(int argc, char **argv)
     // suite that only moves one needs the headless engine underneath it
     // (tests/support/documentgraph.h). Declared FIRST so it dies LAST.
     enginetest::DocumentGraph graph("fly-controls-ogre.log");
-    FlySpeedSettings::reset();               // unbound: pure defaults
+    CameraSpeed::reset();                    // unbound: pure defaults
 
     // ---- the EDITOR flies on the arrow cluster, and ONLY on it -----------
     {
@@ -222,71 +231,306 @@ int main(int argc, char **argv)
         CHECK(godDown.z() < -1.0f, "the free camera still flies forward");
     }
 
-    // ---- item 5: the speed multiplier ------------------------------------
+    // ---- THE CAMERA SPEED: one dial, measured against main -------------
     {
-        CHECK(near(FlySpeedSettings::multiplier(FlySpeedSettings::Editor), 1.0f),
-              "a fresh install flies at 1x");
-        CHECK(near(FlySpeedSettings::baseSpeed(FlySpeedSettings::Editor), 8.0f),
+        CHECK(CameraSpeed::value() == 10, "a fresh install sits at 10 — the dial's middle");
+        CHECK(near(CameraSpeed::factor(), 1.0f), "and 10 is a factor of exactly 1");
+        CHECK(near(CameraSpeed::editorSpeed(), 8.0f),
               "the editor's base is 8 u/s (measured on the rig, unchanged by this feature)");
-        CHECK(near(FlySpeedSettings::baseSpeed(FlySpeedSettings::Player), 25.0f),
-              "the player's base is 25 u/s");
-        CHECK(near(FlySpeedSettings::speed(FlySpeedSettings::Editor), 8.0f),
-              "speed = base * multiplier");
+        CHECK(near(CameraSpeed::playerSpeed(), 25.0f), "the Player's free camera is 25 u/s");
 
+        // THE PIN. Measured on main at babb90647, before this lane existed:
+        // one second of the editor's RMB fly with Up held covers 8.000 units
+        // (z goes to -8.000). n = 10 must reproduce it to the last float, or
+        // the "10 is today" promise is not kept.
+        //
         // AN ARROW, not W: the editor's fly moved to the arrow cluster on
-        // 2026-09-09 and the letters do nothing, so this pair measured 0.000
-        // against 0.000 and passed vacuously (found by GIZMO-1, 2026-09-15).
+        // 2026-09-09 and the letters do nothing, so this pair used to measure
+        // 0.000 against 0.000 and pass vacuously (found by GIZMO-1,
+        // 2026-09-15).
+        const float atTen = editorFly({ Qt::Key_Up }).z();
+        std::printf("    one second at n=10 -> %.4f (main measured -8.0000)\n", atTen);
+        CHECK(near(atTen, -8.0f, 1e-4f),
+              "n = 10 IS TODAY: one second of the RMB fly covers the same 8.000 units it "
+              "covered before this dial existed");
+
+        CameraSpeed::setValue(20);
+        const float atTwenty = editorFly({ Qt::Key_Up }).z();
+        std::printf("    one second at n=20 -> %.4f\n", atTwenty);
+        CHECK(near(atTwenty, atTen * 2.0f, 1e-3f), "n = 20 is TWICE the distance, exactly");
+        CHECK(near(CameraSpeed::editorSpeed(), 16.0f), "...which is 16 u/s");
+
+        CameraSpeed::setValue(1);
         const float atOne = editorFly({ Qt::Key_Up }).z();
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, 4.0f);
-        const float atFour = editorFly({ Qt::Key_Up }).z();
-        std::printf("    one second at 1x -> %.3f, at 4x -> %.3f\n", atOne, atFour);
-        CHECK(near(atFour, atOne * 4.0f, 1e-3f),
-              "FOUR TIMES the multiplier is FOUR TIMES the distance, exactly");
+        std::printf("    one second at n=1  -> %.4f\n", atOne);
+        CHECK(near(atOne, atTen * 0.1f, 1e-4f), "n = 1 is a TENTH of it, exactly");
+        CHECK(near(CameraSpeed::editorSpeed(), 0.8f), "...which is 0.8 u/s");
 
-        // The two surfaces are independent — the whole reason FlySpeedSettings
-        // has a Surface argument rather than one global number.
-        CHECK(near(FlySpeedSettings::multiplier(FlySpeedSettings::Player), 1.0f),
-              "changing the editor's speed left the player's alone");
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Player, 8.0f);
-        CHECK(near(FlySpeedSettings::multiplier(FlySpeedSettings::Editor), 4.0f),
-              "and the reverse");
+        CameraSpeed::setValue(32);
+        CHECK(near(CameraSpeed::editorSpeed(), 25.6f), "and the top of the dial is 3.2x: 25.6 u/s");
 
-        // The ladder: the scroll wheel's and the dropdown's steps.
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, 1.0f);
-        CHECK(near(FlySpeedSettings::step(FlySpeedSettings::Editor, +1), 2.0f),
-              "one step up from 1x is 2x");
-        CHECK(near(FlySpeedSettings::step(FlySpeedSettings::Editor, -1), 1.0f),
-              "and one step back down is 1x again");
-        // Clamps at the ends rather than wrapping or running off.
-        for (int i = 0; i < 20; ++i) FlySpeedSettings::step(FlySpeedSettings::Editor, +1);
-        CHECK(near(FlySpeedSettings::multiplier(FlySpeedSettings::Editor),
-                   FlySpeedSettings::steps().last()),
-              "stepping past the top stops at the top of the ladder");
-        for (int i = 0; i < 20; ++i) FlySpeedSettings::step(FlySpeedSettings::Editor, -1);
-        CHECK(near(FlySpeedSettings::multiplier(FlySpeedSettings::Editor),
-                   FlySpeedSettings::steps().first()),
-              "and past the bottom stops at the bottom");
+        // ONE VALUE, EVERY SURFACE — the whole point of the lane. The Player
+        // had a second multiplier of its own until this; now a person who
+        // slows down slows down everywhere, including in the headset.
+        CameraSpeed::setValue(20);
+        CHECK(near(CameraSpeed::playerSpeed(), 50.0f), "the Player's free camera follows the dial");
+        CHECK(near(CameraSpeed::applyTo(15.0f), 30.0f),
+              "and so does a VR wearer's project speed (world.vr.flySpeed m/s x the factor)");
 
-        // A value OFF the ladder is legal (the verb accepts any multiplier);
-        // stepping from there moves to the nearest rung in that direction.
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, 1.3f);
-        CHECK(near(FlySpeedSettings::step(FlySpeedSettings::Editor, +1), 2.0f),
-              "stepping up from an off-ladder 1.3x lands on 2x");
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, 1.3f);
-        CHECK(near(FlySpeedSettings::step(FlySpeedSettings::Editor, -1), 1.0f),
-              "and stepping down lands on 1x");
+        // The PLAYER's own fly, measured the same way the editor's was: its
+        // 25 u/s base times the same factor, through the same one dial.
+        CameraSpeed::setValue(10);
+        const float playerAtTen = playerFly({ Qt::Key_Up }).z();
+        CameraSpeed::setValue(20);
+        const float playerAtTwenty = playerFly({ Qt::Key_Up }).z();
+        std::printf("    the Player: one second at n=10 -> %.4f, at n=20 -> %.4f\n",
+                    playerAtTen, playerAtTwenty);
+        CHECK(near(playerAtTen, -25.0f, 1e-3f), "the Player flies 25.000 units at n = 10");
+        CHECK(near(playerAtTwenty, playerAtTen * 2.0f, 1e-3f),
+              "and twice that at n = 20 — one dial, both surfaces");
 
-        // Out of range, and nonsense, are clamped to something flyable rather
-        // than stored: a zero multiplier is a camera that cannot move.
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, 1e6f);
-        CHECK(FlySpeedSettings::multiplier(FlySpeedSettings::Editor) <= 32.0f, "clamped at the top");
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, 0.0f);
-        CHECK(FlySpeedSettings::multiplier(FlySpeedSettings::Editor) > 0.0f,
-              "zero is refused — it is not a speed");
-        FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, -3.0f);
-        CHECK(FlySpeedSettings::multiplier(FlySpeedSettings::Editor) > 0.0f, "and so is negative");
+        // THE WHEEL WHILE FLYING steps by one, and Shift by five. Driven
+        // through the controller's own gesture, not the setter, so what is
+        // pinned is what a hand on the wheel gets.
+        {
+            CameraSpeed::setValue(10);
+            EditorCameraController c(nullptr);
+            auto cam = freshCamera();
+            c.setCamera(cam);
+            c.onMouseWheel(120);
+            CHECK(CameraSpeed::value() == 10,
+                  "the wheel does NOT touch the speed while the camera is not flying (it dollies)");
+            c.onMouseDown(Qt::RightButton);
+            c.onMouseWheel(120);
+            CHECK(CameraSpeed::value() == 11, "flying, one notch up is +1");
+            c.onMouseWheel(-120);
+            CHECK(CameraSpeed::value() == 10, "and one notch down is -1");
+            c.onKeyPressed(Qt::Key_Shift);
+            c.onMouseWheel(120);
+            CHECK(CameraSpeed::value() == 15, "with Shift held a notch is +5");
+            c.onMouseWheel(-120);
+            CHECK(CameraSpeed::value() == 10, "and -5 the other way");
+            // The ends hold rather than wrap or run off.
+            for (int i = 0; i < 20; ++i) c.onMouseWheel(120);
+            CHECK(CameraSpeed::value() == 32, "stepping past the top stops at 32");
+            for (int i = 0; i < 20; ++i) c.onMouseWheel(-120);
+            CHECK(CameraSpeed::value() == 1, "and past the bottom stops at 1");
+        }
 
-        FlySpeedSettings::reset();
+        // Out of range is clamped rather than stored: a zero dial is a camera
+        // that cannot move, and there is no "off".
+        CameraSpeed::setValue(1000);
+        CHECK(CameraSpeed::value() == 32, "clamped at the top");
+        CameraSpeed::setValue(0);
+        CHECK(CameraSpeed::value() == 1, "and at the bottom — zero is not a speed");
+        CameraSpeed::setValue(-3);
+        CHECK(CameraSpeed::value() == 1, "and so is negative");
+
+        CameraSpeed::reset();
+        CHECK(CameraSpeed::value() == 10, "reset() puts the dial back at 10");
+    }
+
+    // ---- IT SURVIVES A RELAUNCH (it is a preference) ---------------------
+    //
+    // Two QSettings over one file, the second one bound after the first is
+    // gone: that is what the next launch of the app does with the shared
+    // settings file, and the only way to prove a preference is persisted
+    // without spawning a process.
+    {
+        QTemporaryDir dir;
+        CHECK(dir.isValid(), "a scratch directory for the settings file");
+        const QString path = dir.filePath("jahsettings.ini");
+        {
+            QSettings first(path, QSettings::IniFormat);
+            CameraSpeed::bindSettings(&first);
+            CHECK(CameraSpeed::value() == 10, "an empty settings file leaves the default standing");
+            CameraSpeed::setValue(23);
+            CameraSpeed::flush();
+            first.sync();
+            CameraSpeed::bindSettings(nullptr);
+        }
+        CameraSpeed::setValue(4);                // whatever the process did after
+        {
+            QSettings second(path, QSettings::IniFormat);
+            CHECK(second.value("camera/speed").toInt() == 23,
+                  "the dial is written as the preference camera/speed, as an INTEGER");
+            CameraSpeed::bindSettings(&second);
+            CHECK(CameraSpeed::value() == 23, "and the next launch comes up at 23");
+
+            // BACK AT THE DEFAULT THE KEY GOES AWAY, so a file that has never
+            // been touched and one that was set back to normal are the same
+            // file (the house rule for every persisted default).
+            CameraSpeed::setValue(10);
+            CameraSpeed::flush();
+            second.sync();
+            CHECK(!second.contains("camera/speed"), "setting it back to 10 removes the key");
+
+            // A KEY THAT IS NOT A WHOLE NUMBER leaves the default standing
+            // rather than flying at nothing (the reader-defaults law).
+            second.setValue("camera/speed", "quickly");
+            CameraSpeed::bindSettings(&second);
+            CHECK(CameraSpeed::value() == 10, "an unreadable value reads as the default");
+            second.remove("camera/speed");
+
+            // THE TWO RETIRED KEYS (camera/flySpeedEditor, camera/flySpeedPlayer)
+            // are REMOVED on bind, not read: nothing is owed to old settings.
+            second.setValue("camera/flySpeedEditor", 4.0);
+            second.setValue("camera/flySpeedPlayer", 8.0);
+            CameraSpeed::bindSettings(&second);
+            CHECK(!second.contains("camera/flySpeedEditor")
+                      && !second.contains("camera/flySpeedPlayer"),
+                  "the two retired per-surface multipliers are swept out of the file");
+            CHECK(CameraSpeed::value() == 10, "...and the dial pays no attention to them");
+            CameraSpeed::bindSettings(nullptr);
+        }
+        CameraSpeed::reset();
+    }
+
+    // ---- A BURST OF SETS IS ONE WRITE (the fix round's item 2) -----------
+    //
+    // MEASURED on Qt 6.10.2: a QSettings::setValue makes the NEXT pass of the
+    // event loop rewrite the whole ini through a QSaveFile — two fdatasyncs
+    // and a rename, ON THE UI THREAD. One notch of the wheel mid-fly is one of
+    // those, and a slider drag is one per mouse-move; the house law since
+    // FSYNC-2 is that the thread that draws never waits for a disk.
+    //
+    // So a set moves the value at once and only ARMS the write, and a burst
+    // inside one gesture writes ONCE, at the end of it.
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("jahsettings.ini");
+        QSettings store(path, QSettings::IniFormat);
+        CameraSpeed::bindSettings(&store);
+
+        const int before = CameraSpeed::storeWrites();
+        for (int n = 11; n <= 20; ++n) CameraSpeed::setValue(n);   // a drag, or ten notches
+        CHECK(CameraSpeed::value() == 20, "the dial moved to 20 at once — the VALUE is immediate");
+        CHECK(CameraSpeed::storeWrites() == before,
+              "...and not one of the ten sets has touched the disk yet");
+
+        // The gesture ends (an RMB release, a slider release, the popover
+        // closing, the window shutting down) — or, failing all of those, the
+        // half-second timer this armed.
+        CameraSpeed::flush();
+        CHECK(CameraSpeed::storeWrites() == before + 1,
+              "ONE write for the whole burst, and it is the value the dial ended on");
+        store.sync();
+        CHECK(store.value("camera/speed").toInt() == 20, "...which is 20, in the file");
+        CHECK(CameraSpeed::storeWrites() == before + 1,
+              "a second flush with nothing pending writes nothing");
+        CameraSpeed::flush();
+        CHECK(CameraSpeed::storeWrites() == before + 1, "...still nothing");
+
+        // AND NOBODY HAS TO CALL flush(): the arm is a half-second single shot
+        // on the application's own event loop, which is what makes a wheel
+        // notch in a window nobody closes durable anyway.
+        const int armed = CameraSpeed::storeWrites();
+        CameraSpeed::setValue(7);
+        CHECK(CameraSpeed::storeWrites() == armed, "the set is still not a write");
+        QElapsedTimer clock;
+        clock.start();
+        while (clock.elapsed() < 2000 && CameraSpeed::storeWrites() == armed)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        std::printf("    the deferred write landed after %lld ms\n", clock.elapsed());
+        CHECK(CameraSpeed::storeWrites() == armed + 1, "the armed write lands on its own");
+        store.sync();
+        CHECK(store.value("camera/speed").toInt() == 7, "...carrying 7");
+
+        CameraSpeed::bindSettings(nullptr);
+        CameraSpeed::reset();
+    }
+
+    // ---- THE DIAL ANNOUNCES ITSELF, whoever moved it ---------------------
+    //
+    // The toolbar's speed button is a VIEW of this value and there is exactly
+    // one of it, on the editor's toolbar — but the PLAYER's wheel writes the
+    // same dial from a page that has no toolbar. It used to call a
+    // per-controller `onSpeedChanged` hook that was ASSIGNED NOWHERE, so
+    // stepping the speed in the Player left the editor's button stale.
+    {
+        int announced = 0;
+        int lastSeen = 0;
+        CameraSpeed::setOnChanged([&] { ++announced; lastSeen = CameraSpeed::value(); });
+
+        CameraSpeed::setValue(17);
+        CHECK(announced == 1 && lastSeen == 17, "a set announces the new value");
+        CameraSpeed::setValue(17);
+        CHECK(announced == 1, "...and setting it to what it already is announces nothing");
+        CameraSpeed::step(+1);
+        CHECK(announced == 2 && lastSeen == 18, "a step announces");
+
+        // THE PLAYER'S WHEEL, at the gesture level.
+        {
+            KeyboardState::reset();
+            PlayerMouseController c;
+            auto cam = freshCamera();
+            c.setCamera(cam);
+            const int was = announced;
+            c.onMouseWheel(120);
+            CHECK(announced == was, "the Player's wheel does nothing with no button held");
+            c.onMouseDown(Qt::RightButton);
+            c.onMouseWheel(120);
+            CHECK(announced == was + 1 && lastSeen == 19,
+                  "THE PLAYER'S WHEEL MOVES THE ONE DIAL AND SAYS SO — the editor's toolbar "
+                  "button cannot go stale behind it");
+
+            // ...with the same Shift stride the editor has and the button's
+            // tooltip promises on both surfaces (fix round item 5).
+            KeyboardState::keyStates[int(Qt::Key_Shift)] = true;
+            c.onMouseWheel(120);
+            CHECK(CameraSpeed::value() == 24, "Shift steps the Player's wheel by five too");
+            c.onMouseWheel(-120);
+            CHECK(CameraSpeed::value() == 19, "and -5 the other way");
+            KeyboardState::reset();
+        }
+
+        CameraSpeed::setOnChanged({});
+        CameraSpeed::setValue(3);
+        CHECK(announced == 5, "a cleared handler is not called (nor a dangling one)");
+        CameraSpeed::reset();
+    }
+
+    // ---- A NOTCH, NOT AN EVENT (the fix round's item 4) ------------------
+    //
+    // A wheel event carries angleDelta in EIGHTHS OF A DEGREE and a mouse
+    // notch is 120 of them — but a high-resolution wheel or a trackpad sends
+    // FRACTIONS of 120 per event, so "one event is one step" turns a gentle
+    // swipe into a dozen steps. Accumulate, spend whole notches, keep the
+    // remainder; and drop the remainder when the gesture ends.
+    {
+        CameraSpeed::reset();
+        EditorCameraController c(nullptr);
+        auto cam = freshCamera();
+        c.setCamera(cam);
+        c.onMouseDown(Qt::RightButton);
+
+        for (int i = 0; i < 7; ++i) c.onMouseWheel(15);   // a trackpad: 7 x 1/8 notch
+        CHECK(CameraSpeed::value() == 10,
+              "seven eighths of a notch is not a step — a trackpad swipe no longer runs the "
+              "dial away");
+        c.onMouseWheel(15);                                // the eighth eighth
+        CHECK(CameraSpeed::value() == 11, "...and the eighth completes ONE step");
+        for (int i = 0; i < 8; ++i) c.onMouseWheel(-15);
+        CHECK(CameraSpeed::value() == 10, "the same swipe back is one step down");
+
+        // A BIG EVENT IS ITS OWN NUMBER OF NOTCHES, not one: a fling that
+        // carries three notches moves three.
+        c.onMouseWheel(360);
+        CHECK(CameraSpeed::value() == 13, "a three-notch event steps three");
+
+        // THE REMAINDER DIES WITH THE GESTURE: half a notch of one fly must
+        // not finish a step in the next one.
+        c.onMouseWheel(60);
+        CHECK(CameraSpeed::value() == 13, "half a notch is still no step");
+        c.onMouseUp(Qt::RightButton);
+        c.onMouseDown(Qt::RightButton);
+        c.onMouseWheel(60);
+        CHECK(CameraSpeed::value() == 13,
+              "...and half a notch in a NEW fly does not cash in the last one's half");
+        c.onMouseWheel(60);
+        CHECK(CameraSpeed::value() == 14, "two halves inside one fly are a step");
+        c.onMouseUp(Qt::RightButton);
+        CameraSpeed::reset();
     }
 
     // ---- the fly only runs while the right button is held -----------------
@@ -365,7 +609,7 @@ int main(int argc, char **argv)
         c.onKeyPressed(Qt::Key_Up);
         c.update(13.0f);                       // the stall, as one frame
         const float travelled = cam->getLocalPos().length();
-        const float cap = FlySpeedSettings::speed(FlySpeedSettings::Editor) * flystep::kMaxFlyStep;
+        const float cap = CameraSpeed::editorSpeed() * flystep::kMaxFlyStep;
         std::printf("    a 13-second frame moved the camera %.3f units (the cap is %.3f; "
                     "unclamped it was 104)\n", travelled, cap);
         CHECK(travelled > 0.0f, "a long frame still flies");

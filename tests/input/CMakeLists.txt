@@ -27,14 +27,15 @@ jah_lsan_lane(input.actions)
 # input.fly_controls — the two FREE cameras' movement contract (fix wave
 # 2026-09-07 items 3 and 5): the arrow keys are W/A/S/D aliases in BOTH the
 # editor fly and the player free camera (identical motion, not merely "some"),
-# and the FlySpeedSettings multiplier scales the distance exactly.
+# and the CameraSpeed dial scales the distance exactly (FLYSPEED-1: one
+# integer 1-32, n/10 on each surface's base).
 #
 # Links IrisGL for the camera node and the vector maths; no engine view, no
 # display, no GPU.
 add_executable(test_fly_controls test_fly_controls.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/editorcameracontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/flyspeedsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/cameraspeed.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/keyboardstate.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp)
@@ -69,7 +70,7 @@ add_executable(test_axis_view_lock test_axis_view_lock.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/editorcameracontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/orbitalcameracontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/flyspeedsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/cameraspeed.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
 set_target_properties(test_axis_view_lock PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -99,7 +100,7 @@ add_executable(test_alt_orbit test_alt_orbit.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/editorcameracontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/orbitalcameracontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/flyspeedsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/cameraspeed.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
 set_target_properties(test_alt_orbit PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
