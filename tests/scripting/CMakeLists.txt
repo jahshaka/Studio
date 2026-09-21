@@ -1977,3 +1977,33 @@ set_tests_properties(scripting.e2e.preset_seed_boot PROPERTIES
     FIXTURES_REQUIRED "presetSeedBootHome;presetSeedBootUser"
     LABELS "scripting"
     TIMEOUT 300)
+
+# scripting.e2e.preset_seed_race — THE USER'S IMPORT *DURING* THAT SEED
+# (SEED-SMALL-1). The two arms above are a BEFORE and an AFTER, one importer at
+# a time by construction; this one runs both at once, which is the case the
+# seed's own by-content check cannot answer (it is asked once, for all
+# thirty-one maps, before the first of them is imported). Every user door now
+# stands the seeder down first — the Assets page, the editor tray, and the
+# verbs through AssetService — so there is still exactly one row for those
+# bytes and it is the user's, unstamped, with the preset resolving to it.
+#
+# Its OWN fresh data root: it seeds and imports, and it must not move the
+# censuses the two arms above compare. A window (the seeder is started by
+# MainWindow) and JAHSHAKA_SEED_PRESETS=1, like the boot arm.
+set(_prHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_race)
+configure_file(scripts/e2e_preset_seed_race.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js @ONLY)
+add_test(NAME scripting.e2e.preset_seed_race.fresh_home
+         COMMAND sh -c "rm -rf '${_prHome}' && mkdir -p '${_prHome}/run'")
+set_tests_properties(scripting.e2e.preset_seed_race.fresh_home PROPERTIES
+    FIXTURES_SETUP presetSeedRaceHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_prHome}/run)
+add_test(NAME scripting.e2e.preset_seed_race
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js
+         WORKING_DIRECTORY ${_prHome}/run)
+set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
+    ENVIRONMENT "HOME=${_prHome};JAHSHAKA_DATA_ROOT=${_prHome}/.local/share/Jahshaka;JAHSHAKA_SEED_PRESETS=1"
+    FIXTURES_REQUIRED presetSeedRaceHome
+    LABELS "scripting"
+    TIMEOUT 300)

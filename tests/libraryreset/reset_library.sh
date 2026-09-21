@@ -188,5 +188,22 @@ check $? "the reset-seed run exits 0"
 grep -q "^ALL PASS" resetseed.log
 check $? "the reset's OWN seed stamps every preset map as a member (see resetseed.log)"
 
+# ONE PICTURE, ONE SPELLING (PATHCLEAN-1, SEED-SMALL-1). The seeder logs the
+# files its worker HASHED beside the imports it then made, and those two numbers
+# must be equal: a gap is the path-spelling defect returning —
+# `AssetIOBase::getAbsolutePath` used to hand back
+# '…/materials/../../shadergraph/wood.jpg' where the graph reader's own
+# cleanPath produced '…/shadergraph/wood.jpg', so three of the shipped pictures
+# were hashed twice under two names (34 files for 31 imports). The seed's
+# by-content filter hid the symptom; the equality gates the cause. Read off the
+# LAUNCH seed's line, the first of the two this run writes.
+SEED_LINE="$(grep -m1 'map file(s) prepared' resetseed.log)"
+test -n "$SEED_LINE"
+check $? "the seed reported what it prepared ($SEED_LINE)"
+PREPARED="$(printf '%s' "$SEED_LINE" | sed -n 's/.*seed: \([0-9]*\) map file(s) prepared.*/\1/p')"
+IMPORTED="$(printf '%s' "$SEED_LINE" | sed -n 's/.*prepared, \([0-9]*\) imported.*/\1/p')"
+[ -n "$PREPARED" ] && [ "$PREPARED" = "$IMPORTED" ]
+check $? "ONE PICTURE, ONE SPELLING: the seed hashed $PREPARED file(s) and imported $IMPORTED"
+
 if [ $fail -eq 0 ]; then echo "ALL PASS"; else echo "FAILURES"; fi
 exit $fail

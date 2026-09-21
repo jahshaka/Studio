@@ -56,7 +56,19 @@ assert(result.removed.thumbnails >= 1, "…and the stored thumbnails");
 // it after the reset, and the two censuses are then a real count of shipped
 // content rather than 0 == 0.
 var seeded = materials.seedPresets();
-assert(seeded === 20, "the built-ins seed again after the reset (" + seeded + " presets)");
+
+// THE ONE PLACE IN THE TREE THAT NAMES THE SHIPPED TABLE'S SIZE
+// (SEED-SMALL-1). Three suites used to carry 20, 31 and 30 as literals, so a
+// twenty-first preset — or one map added to an existing one — made all three
+// red about a product that was working perfectly. Everything else now derives:
+// the bundle count from `materials.presets()` (the table itself, read live) and
+// the map censuses from the bundles' own membership. Add a preset and this line
+// is the only one to update.
+var PRESET_TABLE = materials.presets();
+assert(PRESET_TABLE.length === 20,
+       "the shipped preset table has twenty entries (" + PRESET_TABLE.length + ")");
+assert(seeded === PRESET_TABLE.length,
+       "the built-ins seed again after the reset (" + seeded + " of " + PRESET_TABLE.length + ")");
 
 // AND THEIR MAPS ARE MEMBERS AGAIN, not the user's tiles (V-2): the stamp is
 // written by the seed, so a reset library that forgot it would put twenty
