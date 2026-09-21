@@ -60,8 +60,8 @@ bool MaterialPresetSeeder::start(Database *db)
         // maps with no member stamp, and this pass is idempotent, so it never
         // looks at them again: the owner's tray showed thirty-five loose map
         // tiles beside the seven bundles they came in through. The re-stamp is
-        // that one repair, by CONTENT: 16 ms the once, 3 ms on every launch
-        // after it (services/presetrestamp.h measures both).
+        // that one repair, by CONTENT: 16-27 ms the once, 3-6 ms on every
+        // launch after it (services/presetrestamp.h measures both).
         restampExistingMaps(db);
         return false;
     }

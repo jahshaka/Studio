@@ -61,11 +61,11 @@ For more information see the LICENSE file
 // again); it is the price of a library that remembers content and not intent.
 //
 // WHAT IT COSTS, MEASURED at boot on a twenty-preset library (Debug, this box):
-// 16 ms for the repair itself — 32 texture rows read, 31 stamped across 13
-// bundles, one small UPDATE each in one transaction (the sidecar each of those
-// refreshes is a DERIVED write: an atomic rename, no fsync) — and 3 ms on every
-// launch afterwards, which is the twenty definitions being read off the store to
-// ask the question. The cheap pre-gate above them (one query: "is any texture
+// 16 ms on a quiet box and 27 ms with a gate running beside it for the repair
+// itself — 32 texture rows read, 31 stamped across 13 bundles, one small UPDATE
+// each in one transaction (the sidecar each of those refreshes is a DERIVED
+// write: an atomic rename, no fsync) — and 3-6 ms on every launch afterwards,
+// which is the twenty definitions being read off the store to ask the question. The cheap pre-gate above them (one query: "is any texture
 // row unstamped?") skips even that, but only for a library whose textures are
 // ALL stamped — a real one rarely is, because the default ground's checker is a
 // PLATFORM row and carries no member stamp. 3 ms of the thread that draws, once
