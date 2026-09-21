@@ -36,6 +36,25 @@ other Vulkan gates (or the owner's app plus one) are live.
   rebuilds `build-linux` (api.contract reads the source tree; a relinked binary mid-gate
   makes a mixed verdict).
 
+## 2b. The source-hygiene lints, and `source.member_init` in particular
+
+Eleven `source.*` rows read the SOURCE TREE, not a running binary: they need no display and
+no build artefact, they cost under ten seconds together, and every tier runs them (the
+`hygiene` dir rides most gate-scope rules for exactly that reason). They exist because a
+large deletion or a one-line law grows back one call site at a time.
+
+**`source.member_init` (UNINIT-SWEEP-1, 2026-09-21) is the one a lane will meet by
+accident**, because it fires on code nobody thought was about it: every scalar, pointer,
+enum, atomic or array member you declare in `src/` or `irisgl/{core,document,engine,import,
+mirror}` must carry a DEFAULT MEMBER INITIALISER, or be written by the mem-initialiser list
+or body of EVERY constructor of its class. Not by a helper the constructor calls, not by an
+out-parameter, not by "every caller sets it" — a helper can grow an early return, and the
+initialiser is the one form a gate can see. **The answer to a red is the one-line
+initialiser, never a row in `member_init_allow.txt`**: the allow file holds nine members
+whose whole point is to stay unwritten (the maths types' `Qt::Uninitialized` overloads) and
+nothing else belongs there. The staged `member_init_baseline.txt` is GONE — the sweep
+finished at 384 initialisers and 34 deletions — so the gate now reads zero and stays there.
+
 ## 3. The SCOPED tier — `scripts/gate-scope.sh`
 
 `-j N` / `--jobs N` sets the ctest parallelism (default 4, the tier's contract). A lane gating beside other live lanes runs `-j 2`

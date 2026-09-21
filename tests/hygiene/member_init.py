@@ -41,11 +41,16 @@ THE TWO FILES BESIDE IT — both carry a reason per line, `path Class::member  #
                             the storage first and defeat the overload). Adding a line
                             here is a decision a reviewer sees in the diff.
 
-  member_init_baseline.txt  the rows UNINIT-SWEEP-1 has not swept yet. The gate reds on
-                            a flagged member that is in NEITHER file, and on a baseline
-                            row whose member is now compliant or gone — so the baseline
-                            can only shrink, never grow, and the file is deleted when
-                            it empties. A stale ALLOW row reds for the same reason.
+  member_init_baseline.txt  THE SWEEP IS FINISHED AND THIS FILE IS GONE. It held the
+                            rows UNINIT-SWEEP-1 had not reached yet — 506 of them at
+                            phase 0 — and it could only SHRINK: the gate reds on a
+                            flagged member in neither file AND on a baseline row whose
+                            member is now compliant or gone, so a phase that half
+                            finished could not leave it behind. It emptied at phase 4
+                            and was deleted at phase 5. The mechanism stays: if a future
+                            sweep ever needs a staged population again, write the file
+                            (`--emit-baseline` prints it) and it works exactly as
+                            before. A stale ALLOW row reds for the same reason.
 
   A FALSE POSITIVE IS ANSWERED WITH THE DEFAULT MEMBER INITIALISER, never with an
   allow row: the initialiser costs one line and is correct however the scanner is wrong.
@@ -498,6 +503,7 @@ SELF_TEST_FLAGGED = ['Flagged::count', 'Flagged::owner', 'Flagged::mode', 'Flagg
                      'Flagged::busy', 'SomeCtorsMiss::b', 'NoCtorAggregate::x',
                      'NoCtorAggregate::p', 'DefaultedOnly::n', 'Nested::deep']
 SELF_TEST_COMPLIANT = 9
+EXEMPT_REASON = "the maths types' Qt::Uninitialized overloads"
 
 
 def self_test(root, here):
@@ -576,11 +582,14 @@ def main(argv):
     if failures:
         print('source.member_init: FAILED (%d)' % len(failures))
         return 1
-    swept = len(allow)
-    print('  ok: %d member(s) flagged by the rule, %d permanently exempt (%s), %d still on the '
-          'baseline%s'
-          % (len(rows), swept, 'the maths types\' Qt::Uninitialized overloads',
-             len(base), ' — delete the file when it empties' if base else ' (the sweep is complete)'))
+    if base:
+        print('  ok: %d member(s) flagged by the rule, %d permanently exempt (%s), %d still on '
+              'the baseline — delete the file when it empties'
+              % (len(rows), len(allow), EXEMPT_REASON, len(base)))
+    else:
+        print('  ok: every scalar, pointer, enum, atomic and array member in scope carries a '
+              'value; the %d the rule flags are the permanently exempt ones (%s) and there is '
+              'no baseline left' % (len(rows), EXEMPT_REASON))
     print('source.member_init: PASSED')
     return 0
 

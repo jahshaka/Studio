@@ -126,8 +126,10 @@ endif()
 # (previews rendered orthographic for years), Mesh::numFaces, the 24 Database pointers of
 # DBPTR-1 — and a symptom is a slow way to find a member with no value. The allow file
 # holds the nine members whose whole point is to stay unwritten (the maths types'
-# Qt::Uninitialized overloads); the baseline file holds what the sweep has not reached
-# yet and can only shrink. See the script's header for the rule and its blind spots.
+# Qt::Uninitialized overloads) and is the ONLY thing that belongs there — a red is
+# answered with the one-line initialiser. The staged baseline file is gone: the sweep
+# finished, so this gate reads zero and stays there. See the script's header for the
+# rule and its blind spots.
 if(Python3_Interpreter_FOUND)
     add_test(NAME source.member_init
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/member_init.py"
