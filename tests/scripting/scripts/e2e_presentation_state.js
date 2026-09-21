@@ -318,13 +318,22 @@ if (editor.viewportState().state !== "offscreen") {
         if (mid.cover !== "none")
             throw new Error("assert failed: a cover appeared in a session with no visible " +
                 "viewport ('" + mid.cover + "')");
-        // ONLY BEFORE THE REVEAL. The runner is still finishing when the page
-        // switch has already happened, so the tail of this loop is a world
-        // that IS on screen — and a line there is the designed behaviour, not
-        // a violation. What this asserts is the other half: while nothing of
-        // this world is showing, nothing is drawn over it either. (Solo the
-        // loop happened to end before the reveal; under a gate's load it did
-        // not, which is what made the wider form red at 460/461.)
+        // WHAT IS DRAWN WHILE NO WORLD IS BOUND (rewritten by VIEW-REBUILD-1,
+        // and the old form's premise is what changed). This used to assert
+        // that NOTHING was drawn before the reveal, because what a line would
+        // have been drawn over was the PREVIOUS world's frozen frame — the
+        // viewport presented nothing of its own in that gap and, on a real
+        // window, was not even on screen for most of it (the open's close half
+        // switched the window to the Desktop page).
+        //
+        // Both halves of that are gone: the viewport presents its own
+        // background from the teardown (STALE-VIEW-1) and its window stays on
+        // screen through the whole open (VIEW-REBUILD-1), so those frames are
+        // frames a user really sees — and the load's line is exactly what
+        // should be on them, since with the cover off the indicator is the
+        // app's only "it is loading" (OPEN_COVER_SPEC §2.1). So the assertion
+        // is now positive: a line drawn while no world is bound NAMES THE WORLD
+        // BEING LOADED, and is never some other load's leftover.
         if (mid.state !== "presenting" && mid.indicator !== "") sawLine = mid.indicator;
         editor.frame(1);
     }
@@ -334,9 +343,9 @@ if (editor.viewportState().state !== "offscreen") {
         "...and the viewport presented its own background while no world was bound, " +
         "so the previous world's last frame is not what was on screen (" +
         blankBeforeOpen + " -> " + editor.viewportState().blankPresented + ")");
-    assert(sawLine === "",
-        "...and no indicator line was drawn while nothing of the world was on screen " +
-        "(saw '" + sawLine + "')");
+    assert(sawLine === "" || sawLine.indexOf(name) >= 0,
+        "...and any line drawn while no world was bound names THIS load, over the " +
+        "viewport's own background (saw '" + sawLine + "', loading '" + name + "')");
 
     // (6) AND THE PREFERENCE SURVIVES A ROUND TRIP through the one capability
     //     the Preferences row also calls (services/loadingcover.h).

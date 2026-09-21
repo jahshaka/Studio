@@ -2559,12 +2559,21 @@ void MainWindow::closeProject(CloseIntent intent)
 	//                         measured 499-2,973 ms of an in-place open with the
 	//                         viewport UNVIEWABLE and the app's watermark on
 	//                         screen, five rect changes as the docks came back.
-	//   sceneView->end()      ends the page's VR session and disables the View —
-	//                         the view is about to draw this window's next world.
-	//   playerView->end()     the same for the Player's view; the Player page is
-	//                         not up and its session went with the scene above
-	//                         (endVrForSceneClose).
+	//   sceneView->end()      would disable the editor's View for the whole load
+	//                         — and a disabled view presents nothing, which is
+	//                         the stale frame STALE-VIEW-1 removed coming back
+	//                         through the other door. The view stays live and
+	//                         draws its background until the new world binds.
 	//
+	// THE PLAYER'S VIEW STILL ENDS, either way, and it is not a page statement:
+	// it is bound to the scene that has just been destroyed above, and the page
+	// it belongs to is not the page an open reveals into. Measured: without this
+	// line, `project.open` from the PLAYER space comes back to a BLACK player
+	// frame (scripting.e2e.space_switch's "the Player renders it, not a black
+	// frame"), because the Player's view kept its binding to the dead scene
+	// across the swap.
+	playerView->end();
+
 	// The reveal calls enterEditorSpace() itself when the page never left.
 	if (intent == CloseIntent::ReopenInPlace) return;
 
@@ -2572,7 +2581,6 @@ void MainWindow::closeProject(CloseIntent intent)
 
 	if (sceneView->isInitialized())
 		sceneView->end();
-	playerView->end();
 }
 
 // (MainWindow::applyMaterialPreset is GONE, both overloads — MATERIAL-PREVIEW-1.
