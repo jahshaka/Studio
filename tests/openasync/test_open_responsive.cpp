@@ -779,18 +779,33 @@ int main(int argc, char **argv)
                   "byte for byte, and the HUD draws its text OVER the cover fill)");
             mcp.runScript(QStringLiteral("editor.loadingCover(false)"));
 
-            // AND THE ONE THING NO PREFERENCE CAN FIX, printed every run so it
-            // cannot be forgotten: a world opened while the editor page already
-            // shows one leaves the PREVIOUS world's last frame on screen for
-            // the length of the load. A View with no scene bound presents
-            // NOTHING (the engine destroys its workspace with its scene), so
-            // after the teardown neither the world nor a cover can reach the
-            // screen — measured on the rig, the whole 128-511 ms gap of a warm
-            // Grand Showroom 2 open is byte-identical to the frame before it.
-            // The fix is engine-side: STALE-VIEW-1. When it lands, THIS is the
-            // number that changes, and the arm becomes an assertion.
+            // A LOAD IN PLACE MUST NOT LEAVE THE PREVIOUS WORLD ON SCREEN
+            // (lane STALE-VIEW-1), and this is the arm that says so on a REAL
+            // on-screen viewport.
+            //
+            // It used to: a View with no scene bound presented NOTHING — the
+            // engine destroyed its workspace with its scene — so between
+            // openStageBegin's teardown and the bind neither the world nor a
+            // cover could reach the screen and the X server kept the frame it
+            // was last given. Measured on the rig against the unmodified base:
+            // the viewport rectangle stayed the PREVIOUS world (mean
+            // |difference| 0.01-0.10 per byte from the frame before the open)
+            // until the window itself went away.
+            //
+            // A scene-less View now owns a clear-only workspace, and
+            // `blankPresented` counts the frames it puts on screen with no
+            // world bound. A load in place has to move it: that is the
+            // teardown reaching the screen, in a number, which is the only
+            // shape this question has from outside the process (`coverState`
+            // is an instant, and a warm load is over before a second reading
+            // gets in — the same argument as `coversPresented` above).
             if (!showroomGuid.isEmpty()) {
-                const double before = covers();
+                const auto blanks = [&]() {
+                    return mcp.runScript(QStringLiteral("editor.viewportState().blankPresented"))
+                        .value("result").toDouble();
+                };
+                const double blanksBefore = blanks();
+                const double coversBefore = covers();
                 mcp.runScript(QStringLiteral("project.openAsync('%1')").arg(showroomGuid));
                 QElapsedTimer t; t.start();
                 while (t.elapsed() < 60000) {
@@ -798,11 +813,14 @@ int main(int argc, char **argv)
                             .value("result").toString() == QLatin1String("idle")) break;
                     QThread::msleep(20);
                 }
-                std::printf("info: [in-place open, preference OFF] loading covers %.0f -> %.0f "
-                            "(STALE-VIEW-1 owes this one: nothing can be presented between the "
-                            "teardown and the new world, so the previous world stays on screen)\n",
-                            before, covers());
+                const double blanksAfter = blanks();
+                std::printf("info: [in-place open, preference OFF] background frames presented "
+                            "%.0f -> %.0f | loading covers %.0f -> %.0f\n",
+                            blanksBefore, blanksAfter, coversBefore, covers());
                 std::fflush(stdout);
+                CHECK(blanksAfter > blanksBefore,
+                      "a load IN PLACE presents the viewport's own background while no world is "
+                      "bound — the previous world's last frame is not what stays on screen");
             }
         }
 

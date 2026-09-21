@@ -240,6 +240,7 @@ public:
     // order, no input region, no Qt clock.
     QString presentationState() const override;
     qulonglong framesPresented() const override;
+    qulonglong blankFramesPresented() const override;
     /// The active camera controller's held-key set, by name, sorted (§356).
     QStringList heldFlyKeys() const override;
     bool flying() const override;
@@ -294,6 +295,24 @@ public:
     ///
     /// Does nothing when there is no on-screen View to present into.
     void presentCovered(int frames = int(kPresentsBeforeReveal));
+    /// ONE FRAME OF THE VIEWPORT'S OWN BACKGROUND, right after a world is torn
+    /// down (lane STALE-VIEW-1). The engine half — a scene-less View owns a
+    /// clear-only workspace — only says what such a view DRAWS; something still
+    /// has to draw one, and the window the old world is on belongs to the X
+    /// server until somebody presents into it.
+    ///
+    /// WHY IT IS EXPLICIT AND NOT LEFT TO THE DRIVER: the gap between the
+    /// teardown and the moment the panel rebuild takes this window off screen
+    /// is 20-60 ms (measured, spikes/stale-view-1/) — a 16 ms tick lands in it
+    /// on a quiet box and misses it under load, which is a test that reds for
+    /// the weather and a user who sometimes sees the old world. Same argument,
+    /// same shape and the same inline-frame mechanism as presentCovered, which
+    /// is what does this job when the loading cover is ON.
+    ///
+    /// Does nothing unless this viewport has an on-screen View, is visible, has
+    /// NO world bound, and is not showing the loading cover (that one is
+    /// presentCovered's, byte for byte).
+    void presentBackground();
     /// Frames presented since the CURRENT world was bound to this viewport.
     /// Not simply View::framesPresented(): a project close/open reuses the
     /// engine scene (MainWindow::closeProject leaves it bound), so the engine's

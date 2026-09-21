@@ -70,6 +70,17 @@ function state(tag) {
 }
 
 // THE COVER IS A PREFERENCE NOW, and its default is OFF (see the header).
+//
+// PUT IT BACK FIRST, and that is not belt and braces — it is this suite's own
+// hygiene (STALE-VIEW-1 finding 4). The preference is PERSISTED in the data
+// root this suite keeps between runs, phase A switches it ON, and a run that
+// dies anywhere after that line leaves it on: the NEXT run then fails on its
+// very first assertion, "the loading cover is OFF by default", with nothing to
+// do with the change under test. The default is what an absent key means, so
+// writing it off here restores exactly the state a fresh home has, and the
+// assertion below still asserts the default — it reads the shipped value back
+// through the same verb the Preferences row calls.
+editor.loadingCover(false);
 assert(editor.loadingCover() === false, "the loading cover is OFF by default");
 assert(editor.loadingCover(true) === true, "editor.loadingCover(true) switches it on");
 
@@ -120,6 +131,37 @@ if (st.state === "offscreen") {
     var closed = state("after close");
     assert(closed.state === "noscene",
         "project.close releases the viewport's world (got " + closed.state + ")");
+
+    // ---- phase B2: AND A VIEWPORT WITH NO WORLD PRESENTS ITS OWN BACKGROUND
+    //      (lane STALE-VIEW-1) ---------------------------------------------
+    // Until this lane a view with no scene had no workspace, so it presented
+    // NOTHING and the window kept the last frame it was given — the world that
+    // had just been closed, with "No world open" raised over it and unable to
+    // reach a pixel. `blankPresented` counts the frames the viewport put on
+    // screen with no world bound; it is the number that says the panel is
+    // actually drawn, and it is the same number phase D differences across a
+    // load in place. (The PIXELS are asserted where pixels can be read: an
+    // on-screen view refuses readPixels, so tests/engine's
+    // `a_scene_less_view_clears_and_still_draws_its_panel` owns that half.)
+    assert(closed.cover === "noscene",
+        "...and the panel that says so is up (got '" + closed.cover + "')");
+    var blankAtClose = closed.blankPresented;
+    assert(typeof blankAtClose === "number", "viewportState().blankPresented is a number");
+    // PRINTED, NOT ASSERTED, and the reason is the behaviour itself: a plain
+    // close switches the window to the Desktop page, the editor viewport is
+    // hidden, and a hidden view is DISABLED — it owns no pixels on screen, so
+    // it presents nothing and this count does not move. That is right. What
+    // this arm is here to catch is the shape and the state; the number is
+    // asserted where a world is torn down with the page still up — phase D's
+    // load in place, below.
+    editor.frame(3);
+    var idle = editor.viewportState();
+    console.log("   blankPresented across three stepped frames with no world: " +
+        blankAtClose + " -> " + idle.blankPresented +
+        " (the close switched to the Desktop, so the viewport is hidden)");
+    assert(idle.framesPresented === 0,
+        "no frame stepped with no world bound is a frame of a world (framesPresented " +
+        idle.framesPresented + ")");
 
     assert(project.open(name), "project.open(" + name + ")");
 
@@ -258,6 +300,15 @@ if (editor.viewportState().state !== "offscreen") {
     //     up — is asserted over MCP against the real window, in
     //     open.responsive's streaming arm; it cannot be asserted from here.
     assert(editor.viewportState().loadingCover === false, "the preference is still OFF");
+    // THE NEVER-THE-STALE-FRAME NUMBER (lane STALE-VIEW-1). A load in place
+    // tears the previous world down and binds the next one some hundreds of
+    // milliseconds later; between the two the viewport has NO world, and what
+    // it puts on screen in that gap used to be nothing at all — so the window
+    // kept the previous world's last frame (measured on the rig: mean
+    // |difference| 0.01-0.10 per byte from the frame before the open, i.e. the
+    // same picture). It now clears to its own background, and this difference
+    // is the assertion that the teardown reached the screen.
+    var blankBeforeOpen = editor.viewportState().blankPresented;
     assert(project.openAsync(name), "an open IN PLACE, with the preference off");
     var seen = [], lastSeen = "", sawLine = "";
     for (var g = 0; g < 4000 && project.openState() !== "idle"; ++g) {
@@ -279,6 +330,10 @@ if (editor.viewportState().state !== "offscreen") {
     }
     console.log("   in-place open saw: " + seen.join(" -> "));
     assert(project.openState() === "idle", "the in-place open finished");
+    assert(editor.viewportState().blankPresented > blankBeforeOpen,
+        "...and the viewport presented its own background while no world was bound, " +
+        "so the previous world's last frame is not what was on screen (" +
+        blankBeforeOpen + " -> " + editor.viewportState().blankPresented + ")");
     assert(sawLine === "",
         "...and no indicator line was drawn while nothing of the world was on screen " +
         "(saw '" + sawLine + "')");
