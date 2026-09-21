@@ -1,0 +1,135 @@
+// scripting.e2e.preset_seed_race — A USER'S IMPORT *DURING* THE FIRST-RUN SEED
+// (SEED-SMALL-1, from SEED-STAMP-1's read).
+//
+// THE DEFECT THIS GATES. The launch seed and a person's import are two
+// importers running the same pipeline over the same library, and NEITHER
+// DEDUPS ROWS: each asks "does the library already hold these bytes"
+// (`ShippedAssets::libraryTextureFor` on the seed's side) and acts on the
+// answer. The seed asks that question ONCE, for all thirty-one maps, before it
+// imports the first of them — so a User-intent import of the same picture
+// landing in the seconds between that check and the seed's own commit produced
+// TWO rows for one file: the user's, and a second one stamped a preset member.
+// The stamped one is the worse half. A spare visible tile is a nuisance; a row
+// hidden behind 'Show member textures' that no definition names is an orphan
+// for ever — the exact shape SEED-STAMP-1 removed from the seed's OWN batch
+// and left standing at the user's door.
+//
+// THE FIX IS THE RULE THE MATERIAL DOORS ALREADY FOLLOWED: one importer at a
+// time. Every user door now calls `MaterialPresetSeeder::finishNow()` before
+// it imports — the Assets page, the editor tray, and the verbs through
+// `AssetService` — so the seed stands down and the user's import is alone.
+// What the seed had not reached, the next launch finishes (`isSeeded` is the
+// test), and nothing it HAD already committed is touched.
+//
+// The session takes the real launch seed (JAHSHAKA_SEED_PRESETS=1) on a FRESH
+// data root of its own, with a window — the seeder is started by MainWindow.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var PRESET_MAP = "@SOURCE_DIR@/app/content/materials/presets/wood/wood_planks_03_1_COLOR.png";
+var MAP_NAME = PRESET_MAP.split("/").pop();
+var WOOD = "Wood PBR";
+
+// ---- the race, deliberately not waited for -------------------------------
+// No poll and no pause before this: the script's first verbs run while the
+// seeder's worker is still hashing (measured: 780 ms of hashing before its
+// first import, 3.4 s wall for the whole seed). The count is asserted because
+// a test that stopped racing would still pass every assertion below while
+// proving nothing at all.
+var bundlesAtImport = assets.list({ scope: "store", type: "material" }).length;
+var table = materials.presets();
+var expected = table.length;
+var woodGuid = "";
+for (var w = 0; w < table.length; ++w) if (table[w].name === WOOD) woodGuid = table[w].guid;
+assert(woodGuid.length > 10, "the shipped table names '" + WOOD + "' (" + woodGuid + ")");
+assert(bundlesAtImport < expected,
+       "the launch seed is still running when the user imports (" + bundlesAtImport
+       + " of " + expected + " bundles so far)");
+
+var mine = assets.importFile(PRESET_MAP);
+assert(!!mine, "the user imports a picture the seed is importing too: " + mine);
+
+// ---- THE SEED STOOD DOWN, WHICH IS THE FIX'S CONTRACT ---------------------
+// The DUPLICATE itself is not a thing a script can provoke on demand — the
+// window is between the seed's one by-content question (asked before it
+// imports the first of the thirty-one) and its commit of that particular map,
+// tens of milliseconds wide, and an import that lands EARLIER simply gets
+// found by that question and is correct by luck. What is deterministic, and is
+// exactly what closes the window, is that a user import stops the seed: after
+// the verb returns, `MaterialPresetSeeder::finishNow` has aborted the batch and
+// cleared the row pass, so not one more bundle can appear in this session.
+//
+// So this watches for one. Without the call the seed runs to completion and
+// the count climbs to the whole table within a few seconds; with it the count
+// is frozen at whatever the seed had already committed, and the presets this
+// session did not reach are seeded below by the caller, exactly as
+// `finishNow`'s contract says ("what it had not reached the caller now does
+// itself, and the next launch finishes whatever the abort skipped").
+var watchUntil = Date.now() + 8000;
+var highWater = bundlesAtImport;
+while (Date.now() < watchUntil) {
+    sleep(200);
+    var now = assets.list({ scope: "store", type: "material" }).length;
+    if (now > highWater) highWater = now;
+}
+assert(highWater === bundlesAtImport,
+       "THE SEED STOOD DOWN FOR THE USER'S IMPORT — no bundle appeared after it ("
+       + bundlesAtImport + " before, " + highWater + " at the high-water mark of eight "
+       + "seconds' watching)");
+
+// ---- ONE ROW FOR THOSE BYTES, AND IT IS THEIRS ---------------------------
+var meta = assets.metadata(mine);
+assert(meta.member !== true, "their row carries NO member stamp (it is theirs)");
+assert(meta.memberOf === undefined, "…and no origin");
+
+// The verb stood the seed down, so the presets this session did not reach are
+// seeded here — synchronously, the route `materials.seedPresets()` takes,
+// which is what a person's next launch would do for them.
+var seeded = materials.seedPresets();
+assert(seeded === expected, "the rest of the presets seed (" + seeded + " of " + expected + ")");
+
+// ---- and the preset resolves TO their row --------------------------------
+var woodMaps = materials.members(woodGuid);
+var named = [];
+for (var i = 0; i < woodMaps.length; ++i) named.push(woodMaps[i].guid);
+assert(named.indexOf(mine) >= 0,
+       "THE PRESET NAMES THE USER'S OWN ROW — one picture, one object, one guid ("
+       + MAP_NAME + ")");
+
+// ---- no duplicate anywhere in the library --------------------------------
+// Every texture row, members included, with the user's picture among them
+// exactly once. Before the fix this listing carried the same file twice: the
+// user's tile and a stamped member row.
+var all = assets.list({ scope: "store", type: "texture", members: true });
+var sameName = [];
+for (var t = 0; t < all.length; ++t)
+    if (all[t].name === MAP_NAME) sameName.push(all[t].guid);
+assert(sameName.length === 1,
+       "ONE ROW FOR THOSE BYTES IN THE WHOLE LIBRARY (" + sameName.length + ": "
+       + sameName.join(", ") + ")");
+assert(sameName[0] === mine, "…and it is the USER'S row, not a stamped duplicate");
+
+// …and it is still a tile of theirs on the Assets page.
+var tiles = assets.list({ scope: "store", type: "texture" });
+var mineIsATile = false;
+for (var k = 0; k < tiles.length; ++k) if (tiles[k].guid === mine) mineIsATile = true;
+assert(mineIsATile, "their picture is still a TILE — a seed may not hide a row it did not mint");
+
+// THE CENSUS RULE, as everywhere else (SEED-SMALL-1): every member row a
+// bundle names, once, plus the user's own.
+var members = {}, memberCount = 0;
+var mats = assets.list({ scope: "store", type: "material" });
+for (var m = 0; m < mats.length; ++m) {
+    var list = materials.members(mats[m].guid);
+    for (var j = 0; j < list.length; ++j)
+        if (!members.hasOwnProperty(list[j].guid)) { members[list[j].guid] = true; memberCount++; }
+}
+console.log("MAP_COUNT=" + memberCount);
+assert(all.length === memberCount,
+       "'Show member textures' finds each map ONCE and nothing else (" + all.length
+       + " rows, " + memberCount + " members)");
+
+console.log("ALL PASS");

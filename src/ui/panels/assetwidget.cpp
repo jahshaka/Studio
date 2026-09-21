@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
+#include "services/materialpresetseeder.h"
 #include "services/thumbnailmanager.h"
 #include "services/thumbnailgenerator.h"
 #include "services/assethelper.h"
@@ -1994,6 +1995,15 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 	}
 
 	if (expanded.isEmpty()) return;
+
+	// AND ONE IMPORTER AT A TIME (SEED-SMALL-1): the first-run preset seed is
+	// an import of the same shape through the same pipeline, and two of them
+	// asking the library "do you have these bytes" both hear no and both mint
+	// a row. The seed stands down before a USER's import — the rule the
+	// material doors already follow, now at this one too
+	// (MaterialPresetSeeder::finishNow says what it costs: nothing but the
+	// rest of the seed, which the next launch finishes).
+	MaterialPresetSeeder::instance().finishNow();
 
 	// ONE IMPORT AT A TIME, AND AN OPEN QUESTION COUNTS AS ONE. `isRunning()` is
 	// false while the modal dialog below is up, so without mAsking a scripted

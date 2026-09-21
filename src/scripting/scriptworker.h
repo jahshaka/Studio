@@ -108,6 +108,28 @@ public:
     /// values scriptmod::normalizeJs already expects.
     Q_INVOKABLE QVariant call(const QString &module, const QString &verb, const QVariant &args);
 
+    /// PAUSE THE SCRIPT, not the app (`sleep(ms)` in the bootstrap globals).
+    ///
+    /// Runs on the WORKER, which is the whole point: it is called by the JS
+    /// engine directly rather than through `call()`, so no hop is made and the
+    /// UI thread is left entirely alone for those milliseconds. A verb could
+    /// not do this — every verb executes on the UI thread by construction
+    /// (VerbDispatcher), so `app.sleep()` would be a freeze.
+    ///
+    /// IT EXISTS BECAUSE A TIGHT POLL IS NOT A WAIT. A loop of bare verb calls
+    /// is a chain of blocking-queued events, and Qt's dispatcher serves posted
+    /// events before zero-timers — so a script polling for something the app
+    /// advances one event-loop turn at a time (an async open's slices, the
+    /// first-run preset seed's rows) STARVES the very work it is waiting for.
+    /// docs/SCRIPTING.md has said "call editor.frame(1) in the poll body, or
+    /// sleep" since the async open landed; this is the half a HEADLESS script,
+    /// which has no frame to ask for, could not do.
+    ///
+    /// Clamped to 10 s per call so a typo cannot park a session for ever; a
+    /// longer wait is a loop with a deadline, which is what the callers write
+    /// anyway.
+    Q_INVOKABLE void sleep(int ms);
+
     /// The engine whose scripts this bridge serves — the one it rethrows into.
     /// Set once, on the worker, before any script runs.
     void setEngine(QJSEngine *js) { mJs = js; }

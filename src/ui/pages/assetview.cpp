@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/progressdialog.h"
 #include "data/settingsmanager.h"
 #include "services/assettags.h"
+#include "services/materialpresetseeder.h"
 #include "services/assettray.h"
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
@@ -1654,6 +1655,18 @@ bool AssetView::shutdownImports(int msTimeout)
 
 void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 {
+	// ONE IMPORTER AT A TIME (SEED-SMALL-1; the rule MaterialPresetSeeder::
+	// finishNow documents, which until now only the MATERIAL doors obeyed).
+	// The first-run seed imports the presets' maps through this same pipeline,
+	// and neither importer dedups ROWS: each asks the library "do you have
+	// these bytes" and both hear no. A person importing one of those pictures
+	// during the seconds the seed runs therefore got their row AND a second,
+	// stamped one that no definition names — a hidden orphan, the worse half
+	// of the duplicate the content check was added to prevent. So the seed
+	// stands down before a USER's import starts; what it had not reached, the
+	// next launch finishes.
+	MaterialPresetSeeder::instance().finishNow();
+
 	if (importRunner && importRunner->isRunning()) {
 		Toast *t = libraryToast();
 		t->showToast(tr("Import in progress"),

@@ -198,9 +198,16 @@ void MaterialPresetSeeder::importMapsThenRows()
                 mStampMs += stampTimer.elapsed();
             });
     connect(mRunner, &ImportBatchRunner::finished, this, [this](bool cancelled) {
-        irisLog(QStringLiteral("preset seed: %1 map(s) imported through the pipeline, "
-                               "%2 stamped as members in %3 ms%4")
-                    .arg(mRunner->requests().size()).arg(mStamped).arg(mStampMs)
+        // THE PREPARED COUNT IS PART OF THE LINE (PATHCLEAN-1): the files the
+        // worker hashed against the requests this batch actually made. They
+        // differed by three until `AssetIOBase::getAbsolutePath` learned to
+        // clean — the same picture named '…/materials/../../shadergraph/x.jpg'
+        // by a map slot and '…/shadergraph/x.jpg' by the graph hashed twice —
+        // and a gap between them is the symptom of that class returning.
+        irisLog(QStringLiteral("preset seed: %1 map file(s) prepared, %2 imported through "
+                               "the pipeline, %3 stamped as members in %4 ms%5")
+                    .arg(mPrepared.mapOwners.size()).arg(mRunner->requests().size())
+                    .arg(mStamped).arg(mStampMs)
                     .arg(cancelled ? QStringLiteral(" (cancelled)") : QString()));
         mRunner->deleteLater();
         mRunner = nullptr;
