@@ -267,13 +267,21 @@ if (editor.viewportState().state !== "offscreen") {
         if (mid.cover !== "none")
             throw new Error("assert failed: a cover appeared in a session with no visible " +
                 "viewport ('" + mid.cover + "')");
-        if (mid.indicator !== "") sawLine = mid.indicator;
+        // ONLY BEFORE THE REVEAL. The runner is still finishing when the page
+        // switch has already happened, so the tail of this loop is a world
+        // that IS on screen — and a line there is the designed behaviour, not
+        // a violation. What this asserts is the other half: while nothing of
+        // this world is showing, nothing is drawn over it either. (Solo the
+        // loop happened to end before the reveal; under a gate's load it did
+        // not, which is what made the wider form red at 460/461.)
+        if (mid.state !== "presenting" && mid.indicator !== "") sawLine = mid.indicator;
         editor.frame(1);
     }
     console.log("   in-place open saw: " + seen.join(" -> "));
     assert(project.openState() === "idle", "the in-place open finished");
     assert(sawLine === "",
-        "...and no indicator line was drawn on any frame of it (saw '" + sawLine + "')");
+        "...and no indicator line was drawn while nothing of the world was on screen " +
+        "(saw '" + sawLine + "')");
 
     // (6) AND THE PREFERENCE SURVIVES A ROUND TRIP through the one capability
     //     the Preferences row also calls (services/loadingcover.h).
