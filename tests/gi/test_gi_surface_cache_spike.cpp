@@ -476,8 +476,39 @@ int main()
               "(mean %.2f/255 over %u pixels, against a floor of %.2f over %u)",
               bestMean, bestMoved, floorMean, floorMoved);
 
-    SurfaceCardSpikeDesc d; d.action = SurfaceCardSpikeAction::Destroy;
-    SurfaceCardSpikeResult r; s->surfaceCardSpike(d, r);
+    // ---- THE TEARDOWN ORDER, which is a real assert and not hygiene --------
+    //
+    // A card set holds a scratch SceneManager whose one Item's SubItems LINK
+    // this scene's datablocks, and `OgreScene::destroy()`'s material loop
+    // destroys every one of them — so a scene torn down with a LIVE card set
+    // used to take `~HlmsDatablock`'s assert on a datablock that still has
+    // linked renderables (OgreHlmsDatablock.cpp:205) and leak the scratch
+    // manager, the five atlases and the capture workspace to Root::shutdown.
+    // The set is therefore deleted first inside destroy(), and this case is the
+    // guard: a card set is built and DELIBERATELY NOT destroyed, then the whole
+    // scene goes.
+    //
+    // HOW A REGRESSION SHOWS, measured by standing the fix down and re-running:
+    // NOT as a failed assertion line here. The scene's own destroy() survives —
+    // it leaves the scratch Item pointing at freed datablocks — and the process
+    // SEGVs during the ENGINE's teardown, after this file has already printed
+    // PASSED (exit 139, core dumped). ctest reds on the exit code, which is the
+    // whole point of the case: without it a regression would surface as a
+    // crash in whichever suite next happened to close a scene holding one.
+    {
+        SurfaceCardSpikeDesc d;
+        d.action = SurfaceCardSpikeAction::Build;
+        d.node = crate;
+        d.cardSize = 128u;
+        SurfaceCardSpikeResult r;
+        CHECK(s->surfaceCardSpike(d, r), "a card set is rebuilt and left alive on purpose");
+    }
+    view->setScene(nullptr);
+    e->destroyScene(s);
+    s = nullptr;
+    CHECK(true, "the scene is destroyed with a LIVE card set (a regression reds on the "
+          "process's EXIT CODE, not on this line — see the note above)");
+
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
