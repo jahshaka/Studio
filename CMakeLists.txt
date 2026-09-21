@@ -294,6 +294,7 @@ set(SRCS
     src/services/materialpresetseeder.cpp
     src/services/materialmembers.cpp
     src/services/memberstamp.cpp
+    src/services/presetrestamp.cpp
     src/services/assetshare.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp

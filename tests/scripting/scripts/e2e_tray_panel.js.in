@@ -170,6 +170,94 @@ assert(guidsOf(panelRows()).indexOf(plane) < 0, "... the image plane's own row i
 agree("after the uses");
 assert(project.close(), "closed");
 
+// ---- 2b. AN EXISTING LIBRARY'S PRESET MAPS FOLD (SEED-RESTAMP-1) -----------
+//
+// THE OWNER'S #56 SMOKE FINDING: "my project tray doesn't have bundles — it has
+// the presets and their textures; the textures should be inside the bundles."
+// His library was reset on build #53 and the STAMPING seed (SEED-STAMP-1)
+// shipped in #54: the seed writes the member stamp as it MINTS each map and is
+// idempotent, so thirty-five maps minted by the older build carried none for
+// ever and stood in his tray as loose tiles beside the seven bundles they came
+// in through. `assets.restampSeed()` is the repair, and a person's launch runs
+// it beside the seed (services/presetrestamp.h).
+//
+// THE #53 SHAPE, BUILT HERE: apply a preset with three maps — that seeds the
+// bundle and pins its closure — and then import each of those three pictures
+// as the USER, which takes the stamp off the row it lands on (IMPORT-INTENT-1).
+// That is the only door a script has to the state an older seed left behind,
+// and it leaves exactly it: the bundle, its three maps pinned, none stamped.
+var BRICK = "00000000-0000-0000-0000-000000002014";   // Brick PBR: three maps
+var BRICK_MAPS = [
+    "@SOURCE_DIR@/app/content/materials/presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
+    "@SOURCE_DIR@/app/content/materials/presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
+    "@SOURCE_DIR@/app/content/materials/presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png"];
+
+project.create("tray restamp");
+var painted = scene.addPrimitive("cube", { position: { x: 0, y: 0, z: 6 } });
+assert(material.apply(painted, "Brick PBR") === true,
+       "restamp: a preset with three maps is applied — it seeds the bundle and pins its closure");
+var mapRows = materials.members(BRICK);
+assert(mapRows.length === 3, "restamp: the bundle names its three maps " + J(mapRows.length));
+var mapGuids = guidsOf(mapRows);
+mapGuids.forEach(function (g) {
+    assert(assets.pins(g).length > 0, "restamp: …and the project pins each of them");
+});
+
+BRICK_MAPS.forEach(function (path) {
+    assert(!!assets.importFile(path), "restamp: the user imports that picture themselves");
+});
+mapGuids.forEach(function (g) {
+    assert(assets.metadata(g).member !== true,
+           "restamp: …so the row carries no stamp — the library a #53 seed left");
+});
+
+// THE SYMPTOM: the maps are tiles in the tray, beside the bundle's own tile.
+//
+// READ FROM THE VERB, not the widget, and that is a FINDING of this lane worth
+// stating: the tray PANEL repopulates on pin changes, and taking a row's member
+// stamp off is not one — after the three imports above the widget still shows
+// the folded listing it built at the apply. (The verb is the model; the panel
+// agrees again the moment anything repopulates it, which `agree` below checks
+// once the repair has folded them for good.)
+var loose = guidsOf(verbRows());
+mapGuids.forEach(function (g) {
+    assert(loose.indexOf(g) >= 0, "restamp: the map stands in the tray as a LOOSE TILE");
+});
+assert(loose.indexOf(BRICK) >= 0, "restamp: …beside the preset's own tile, which is the complaint");
+
+// THE REPAIR.
+var report = assets.restampSeed();
+assert(report.ran === true, "assets.restampSeed() had something to repair " + J(report));
+assert(report.stamped === 3,
+       "restamp: THREE MAPS STAMPED — the preset's, matched by content (" + report.stamped + ")");
+assert(report.presets === 1, "restamp: …across the one bundle " + J(report));
+mapGuids.forEach(function (g) {
+    var meta = assets.metadata(g);
+    assert(meta.member === true && meta.memberOf === BRICK,
+           "restamp: …each naming the preset it came in through");
+});
+
+// AND THE TRAY IS WHAT THE OWNER ASKED FOR: one tile, the material.
+var folded = guidsOf(verbRows());
+mapGuids.forEach(function (g) {
+    assert(folded.indexOf(g) < 0, "restamp: the map is folded into the bundle's tile");
+});
+assert(folded.indexOf(BRICK) >= 0, "restamp: …and the PRESET is still the tile that is there");
+mapGuids.forEach(function (g) {
+    assert(assets.pins(g).length > 0, "restamp: …with its pin untouched (a fold is not an unpin)");
+});
+assert(guidsOf(assets.list({ scope: "project", tray: true, type: "texture", members: true }))
+           .indexOf(mapGuids[0]) >= 0,
+       "restamp: …and 'Show member textures' still lists it");
+agree("after the re-stamp");
+
+// IDEMPOTENT: the same launch route, run twice, writes nothing.
+var again = assets.restampSeed();
+assert(again.stamped === 0 && again.presets === 0,
+       "assets.restampSeed() a second time writes nothing " + J(again));
+assert(again.skipped >= 1, "restamp: …because the preset now shows a stamping seed's work");
+assert(project.close(), "restamp: closed");
+
 // ---- 3. every shipped sample: the tray is the scene's asset closure --------
 
 for (var i = 0; i < SAMPLES.length; ++i) {

@@ -758,6 +758,27 @@ public:
         /// being dragged right now, and how many such gestures have ENDED.
         int       dragMovers = 0;
         double    dragMoverGestures = 0.0;
+        /// THE SURFACE CACHE (SURFACE-CACHE phase 2). Restated in plain types
+        /// rather than carried as the engine's own `CardCacheStatus`, for the
+        /// same reason every other field of this struct is: `ieditorviewport.h`
+        /// is included by targets that do not build against the engine at all
+        /// (the player's routing suite is one), and an engine include here is a
+        /// dependency for every one of them. The engine's documentation of each
+        /// counter is on `CardCacheStatus`.
+        struct CardsInfo {
+            bool     built = false;
+            int      pageSize = 0, pages = 0, pagesUsed = 0, bytesPerTexel = 0;
+            double   bytes = 0.0;
+            QString  emissiveFormat;
+            int      instances = 0, cards = 0;
+            double   radius = 0.0;
+            int      queue = 0, budgetTexels = 0, capturesLastFrame = 0, texelsLastFrame = 0;
+            double   captures = 0.0;
+            double   invalidTransform = 0.0, invalidMaterial = 0.0, invalidLight = 0.0;
+            double   captureMs = 0.0;
+            /// Phase 4's tables, as maintained (nothing binds them yet).
+            int      cardRecords = 0, instanceSlots = 0;
+        } cards;
         /// THE HARDWARE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1) — what the
         /// renderer HOLDS, reported here because it is read beside the GI
         /// figures and by the same "what it achieved, not what was asked for"

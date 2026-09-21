@@ -140,6 +140,16 @@ bool isPreset(const QString &presetOrGuid)
     return !guidFor(presetOrGuid).isEmpty();
 }
 
+QStringList allGuids()
+{
+    QStringList out;
+    for (const MaterialPreset &preset : MaterialPresets::all()) {
+        const QString guid = guidFor(preset.name);
+        if (!guid.isEmpty() && !out.contains(guid)) out.append(guid);
+    }
+    return out;
+}
+
 bool isSeeded(const QString &presetOrGuid, Database *db)
 {
     if (!db) return false;
