@@ -2007,6 +2007,98 @@ int main(int argc, char **argv)
         lmirror.setSource(nullptr);
     }
 
+    // ---- A LAMP THAT MOVES IS A LIGHT WRITE, WHOEVER MOVED IT -------------
+    //
+    // (MIRROR-LAMPSIG-1; the refused half of LAMPREST-3, ledger §716.)
+    //
+    // The renderer's voxel light injection reads each light's DERIVED pose at
+    // the moment it runs, and two of its optimisations ask "have the lights
+    // changed since the injection I am about to trust?" — the in-motion light
+    // tick, which skips a cascade a rebuild already injected with the same
+    // lights, and the incremental settle, which restarts when a light moves
+    // under it. Both read Scene::lightWriteSerial().
+    //
+    // NOTHING COULD ADVANCE THAT SERIAL FOR A LAMP THAT SIMPLY MOVED. Since the
+    // scene-graph adoption the document's nodes ARE the renderer's nodes, so a
+    // dragged, carried or animated lamp writes its transform straight into the
+    // graph: setNodeTransform is never called (it refuses an adopted node
+    // outright), and setLight is not called either because the light's
+    // DESCRIPTION did not change — the mirror's own comment says so. The
+    // renderer's pose was right and its serial stood still, so an injection was
+    // skipped or absorbed by a settle that believed it had finished, and the
+    // bounce kept the pose the lamp had at the last rebuild. That is what broke
+    // `scripting.e2e.movable_lamp_rest` at 3/255 when the mirror-skip half of
+    // LAMPREST-3 trusted it.
+    //
+    // The mirror hashes every lamp's WORLD transform (ancestors included) and
+    // says so once per changed frame; these are the three cases that matters
+    // for — still, moved itself, carried by a parent.
+    {
+        auto ldoc = iris::Scene::create();
+        ldoc->giMode = iris::GiMode::VCT;
+        ldoc->giQuality = iris::GiQuality::LOW;   // 32^3: this is a counter test
+        ldoc->giUpdateBudget = 1;
+        auto lfloor = iris::MeshNode::create();
+        lfloor->setName("lamp-floor");
+        lfloor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+        lfloor->setLocalScale(iris::Vec3(4, 4, 4));
+        lfloor->setMaterial(iris::PbrMaterial::create());
+        ldoc->getRootNode()->addChild(lfloor, false);
+        // The carrier is the whole point: an ordinary empty with a lamp under
+        // it — a torch in a hand, a lamp on a rig, a light parented to a prop.
+        auto carrier = iris::SceneNode::create();
+        carrier->setName("carrier");
+        ldoc->getRootNode()->addChild(carrier, false);
+        auto torch = iris::LightNode::create();
+        torch->setName("torch");
+        torch->setLightType(iris::LightType::Point);
+        torch->intensity = 2.0f;
+        torch->distance = 12.0f;
+        torch->setLocalPos(iris::Vec3(0.0f, 2.0f, 0.0f));
+        torch->setMobility(iris::Mobility::Movable);   // owner decision O2's lamp
+        carrier->addChild(torch, false);
+
+        SceneMirror lampMirror(target);
+        lampMirror.setSource(ldoc);
+        auto lcam = iris::CameraNode::create();
+        lcam->setLocalPos(iris::Vec3(0, 3, 5));
+        lcam->update(0.0f);
+        lampMirror.applyCamera(lcam, view);
+        const auto tick = [&]() {
+            lampMirror.sync();
+            lampMirror.applyEnvironment(view, engine.get());
+            engine->renderOneFrame();
+        };
+        tick();
+        tick();
+        const unsigned long long s0 = target->lightWriteSerial();
+        tick();
+        tick();
+        CHECK(target->lightWriteSerial() == s0,
+              "light writes: a still scene reports none (two idle frames)");
+
+        torch->setLocalPos(iris::Vec3(1.0f, 2.0f, 0.0f));
+        tick();
+        const unsigned long long s1 = target->lightWriteSerial();
+        CHECK(s1 > s0, "light writes: a lamp that moves ITSELF is a light write");
+        tick();
+        CHECK(target->lightWriteSerial() == s1,
+              "light writes: ...once for the move, not once per frame after it");
+
+        // THE CASE THAT WAS INVISIBLE: the lamp's own transform never changes.
+        carrier->setLocalPos(iris::Vec3(0.0f, 0.0f, 3.0f));
+        tick();
+        const unsigned long long s2 = target->lightWriteSerial();
+        CHECK(s2 > s1, "light writes: a lamp CARRIED by its parent is a light write too");
+        tick();
+        CHECK(target->lightWriteSerial() == s2,
+              "light writes: ...and that one settles back to still as well");
+        std::printf("    light-write serial: still %llu, own move %llu, carried %llu\n",
+                    (unsigned long long)s0, (unsigned long long)s1, (unsigned long long)s2);
+
+        lampMirror.setSource(nullptr);
+    }
+
     // ---- SCENE_STATIC through the mirror ----------------------------------
     // SCENEGRAPH_SPEC §6 rule 3: the engine creates a node's Item in the NODE's
     // memory-manager class, because SceneNode::attachObject throws when the two

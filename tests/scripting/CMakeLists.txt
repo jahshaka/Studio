@@ -191,6 +191,22 @@ set_tests_properties(scripting.e2e.cube_shade PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 400)
+# LATTICE-1: the picture does not know where the voxel lattice sits. Five arms,
+# each one standing the whole Photon chain somewhere else (up to eight cascade-0
+# cells off the camera) while the scene and the camera never move, and each one
+# checking that it really did — a cascade that re-centred on the way back
+# measures nothing and is skipped by name. Engine-up, four GI chain builds per
+# arm; ~110 s solo on the rig, 400 s is the gate-load headroom.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lattice_placement)
+file(MAKE_DIRECTORY ${_home})
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.lattice_placement
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lattice_placement.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.lattice_placement PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 400)
 # HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
 # roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts
@@ -474,6 +490,13 @@ add_script_e2e(vr_teleport e2e_vr_teleport.js)
 add_script_e2e(player_vr e2e_player_vr.js)
 add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
+# THE SKY'S RESOURCE NAMES (lane ENGINE-SMALL-C, SKYARRAY-LEAK-1): sixty sky
+# changes must not burn sixty texture NAMES, because a dead name in the sky
+# material's texture unit resolves against the resource groups and leaves the
+# layer blank ("Cannot locate resource skyarray_NN"). Reads the live names
+# through app.textureMemory(); the file header carries the mechanism.
+add_script_e2e(sky_name_recycle e2e_sky_name_recycle.js)
+set_tests_properties(scripting.e2e.sky_name_recycle PROPERTIES TIMEOUT 300)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
