@@ -188,7 +188,7 @@ inline void testCameraLookAt(View *v, const Vec3 &pos, const Vec3 &target)
 // illumination and that number IS the leak.
 //
 // It lived in tests/gi/test_gi_leak_room.cpp and was copied verbatim into
-// gi.gather_spike, which is one fixture too many: the two suites compare their
+// gi.gather, which is one fixture too many: the two suites compare their
 // numbers against each other (the gather's field arm reproduces gi.leak_room's
 // chain arm to within 0.7 %) and that comparison is only worth anything while
 // the rooms are the SAME room. It is here so they cannot drift.

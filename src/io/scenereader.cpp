@@ -625,6 +625,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // -1 (auto, which resolves OFF while there is no Photon tier) is what
         // makes those documents render exactly as they always did.
         scene->giDdgi = qBound(-1, sceneObj.value("giDdgi").toInt(scene->giDdgi), 1);
+        // THE SCREEN-PROBE GATHER's row, with the absent-key fallback reading the
+        // value the CONSTRUCTOR left (-1, auto) — the reader-defaults law
+        // (READER-DEFAULTS-1): a fallback that disagrees with the ctor is how the
+        // five Medium samples once shipped at exposure 0.
+        scene->giGather = qBound(-1, sceneObj.value("giGather").toInt(scene->giGather), 1);
         // (A "giDdgiSource" key written before 2026-09-17 is IGNORED: the
         // irradiance field's rasterised probe source was deleted with the lane
         // FIELD-RASTER-CRUD, and the voxel source is the only one there is.)
