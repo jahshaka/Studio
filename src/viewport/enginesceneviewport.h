@@ -242,6 +242,7 @@ public:
     QString viewCreationError() const override
     { return EngineViewWidget::viewCreationError(); }
     void beginSceneLoad(const QString &title = QString()) override;
+    void endSceneLoad() override;
     void coverIfNotPresenting() override;
     void primeSceneGeometry() override;
     void primeSceneEnvironment() override;
@@ -300,10 +301,6 @@ public:
     /// thumbnail, a preview, the selftest and every pixel suite render complete
     /// frames — so no gate and neither selftest hash can move.
     jahshaka::engine::FramePace driverFramePace() const;
-    /// A frame the OPEN RUNNER draws between two install slices (OPEN-FRAMES-1).
-    /// It advances the renderer's bookkeeping, which is why it exists, and it
-    /// must start no first-time work: nothing of this world is on screen.
-    void renderSliceBoundaryFrame() override;
     /// How many DRIVER frames after a reveal may still stream. A bound, not a
     /// budget: the engine's own `framePaceOwesWork` is what normally ends the
     /// window, and this stops a scene whose textures never arrive from leaving
@@ -372,6 +369,11 @@ protected:
 private:
     /// Driver frames left in the streaming window (kStreamFramesAfterReveal).
     int mStreamFramesLeft = 0;
+    /// A world is on its way and none of it is on screen yet — the engine's
+    /// half of `mSceneLoadPending`, and it needs to be its own flag because
+    /// `clearScene` wipes that one while an open is in flight (see
+    /// refreshOverlay). Drives `Scene::setLoading`.
+    bool mWorldArriving = false;
     /// Binds this widget's View to the scene, with the view-side state that
     /// belongs to the editor's own picture (shadows, the VR helper channel).
     void bindViewToScene();

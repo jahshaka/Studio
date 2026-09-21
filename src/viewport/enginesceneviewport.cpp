@@ -118,11 +118,21 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // a previous cover and skip the present that should have raised it.
             ++mFrameEpoch;
             syncFrame();
+            // The cover comes down here, one frame BEHIND the present that
+            // earned it: framesPresented counts frames already on screen.
+            refreshOverlay();
             // WHAT THIS FRAME MAY PUT OFF (OPEN_COVER_SPEC §2.1). Set HERE and
             // nowhere else for the driver's own ticks: the engine consumes it
             // in the renderOneFrame this tick is about to make and resets it to
             // `Complete`, so a tick that does not draw (no enabled view) leaves
             // nothing behind for somebody else's frame to pick up.
+            //
+            // AFTER refreshOverlay, and that ordering is load-bearing: the
+            // cover's RISING edge presents its frames inline from inside that
+            // call, and each of those consumes a pace. Setting ours first would
+            // hand this tick's own frame the `Complete` those presents reset to
+            // — one un-streamed frame per cover rise, which is exactly the
+            // frame the whole arm used to land in.
             if (mEngine) {
                 mEngine->setNextFramePace(driverFramePace());
                 // The window is spent by DRIVER frames of a revealed world —
@@ -130,9 +140,6 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
                 // from consuming it before the user sees anything.
                 if (!mSceneLoadPending && mStreamFramesLeft > 0) --mStreamFramesLeft;
             }
-            // The cover comes down here, one frame BEHIND the present that
-            // earned it: framesPresented counts frames already on screen.
-            refreshOverlay();
         });
 }
 
@@ -675,6 +682,11 @@ bool EngineSceneViewport::ensureEngineScene()
     mMirror.reset(new SceneMirror(mEngineScene));
     mOverlay.reset(new GizmoOverlay(mEngineScene));
     if (mScene) mMirror->setSource(mScene);
+    // A SCENE BORN DURING A LOAD IS BORN LOADING (OPEN_COVER_SPEC §2 A).
+    // `beginSceneLoad` raises the flag, and on the first world of a session it
+    // runs BEFORE this scene exists — so the flag is pushed again here, and the
+    // world that would otherwise build its whole arm behind the cover does not.
+    mEngineScene->setLoading(mWorldArriving);
     bindViewToScene();
     return true;
 }
@@ -2909,6 +2921,7 @@ void EngineSceneViewport::refreshOverlay()
     // Presenting again: the load this viewport was told about is over.
     if (mSceneLoadPending && mScene && presentsSinceBind() >= kPresentsBeforeReveal)
         mSceneLoadPending = false;
+
     const jahshaka::engine::ViewOverlayDesc desc = overlayDesc();
     const bool wasUp = mCoverUp;
     mCoverUp = desc.cover != jahshaka::engine::ViewOverlayDesc::Cover::None;
@@ -2992,13 +3005,6 @@ void EngineSceneViewport::presentCovered(int frames)
     view()->setEnabled(true);
     for (int i = 0; i < frames; ++i) {
         ++mFrameEpoch;
-        // A COVERED FRAME STARTS NO FIRST-TIME WORK (OPEN_COVER_SPEC §2.1):
-        // nothing of this world is on screen, and this is the frame the whole
-        // arm used to land in. Uncovered — the reveal's two ordinary frames —
-        // it is a normal frame of a world the user can see, so it takes a
-        // streaming step like any other.
-        mEngine->setNextFramePace(covered ? jahshaka::engine::FramePace::Deferred
-                                          : driverFramePace());
         mEngine->renderOneFrame();
         devicelossend::checkAfterFrame(mEngine.get());
         // These are frames on the display too (DOUBLE-FRAME-1): the pacing
@@ -3035,6 +3041,11 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     // The streaming window opens with the load and is spent by the driver's
     // ticks after the reveal (OPEN_COVER_SPEC §2.1).
     mStreamFramesLeft = kStreamFramesAfterReveal;
+    // AND THE ENGINE IS TOLD, for the whole stretch: no first-time GI arm until
+    // this world is on screen. Raised here and lowered in refreshOverlay, where
+    // the cover comes down — the two are the same event seen from both sides.
+    mWorldArriving = true;
+    if (mEngineScene) mEngineScene->setLoading(true);
     // Loading, not the computed state: the caller is telling us a world is on
     // its way, and it is about to block this thread reading it. The Qt cover
     // called repaint() here for exactly that reason — a posted paint would
@@ -3064,11 +3075,10 @@ jahshaka::engine::FramePace EngineSceneViewport::driverFramePace() const
 {
     using jahshaka::engine::FramePace;
     if (!mEngine || !view() || view()->isOffscreen()) return FramePace::Complete;
-    // A world is on its way and none of it is on screen yet — the cover is up,
-    // or the page has not been switched to. Start nothing: a half-built world
-    // nobody can see is pure UI-thread cost (this is the frame that used to
-    // carry the whole arm, `switchSpace` in the open profile).
-    if (mSceneLoadPending) return FramePace::Deferred;
+    // While the world is still arriving it is `Scene::setLoading` that holds
+    // the arm back, not this — see the note on that verb: a load draws frames
+    // from half a dozen places and a per-frame flag cannot cover them all.
+    if (mSceneLoadPending) return FramePace::Complete;
     // Revealed, and something is still owed. The window is bounded so a scene
     // whose textures never arrive cannot leave the frame-edge drain switched
     // off for the rest of the session.
@@ -3076,15 +3086,15 @@ jahshaka::engine::FramePace EngineSceneViewport::driverFramePace() const
     return FramePace::Complete;
 }
 
-void EngineSceneViewport::renderSliceBoundaryFrame()
+// THE END OF THE LOAD, SAID BY THE HOST (OPEN_COVER_SPEC §2 A). See the
+// interface's note for why it is not inferred from the present counter: the
+// open runner's own slice-boundary frames satisfy "two presented" while the
+// editor page is still hidden, and `clearScene` wipes the cover's flag in the
+// middle of every load-in-place.
+void EngineSceneViewport::endSceneLoad()
 {
-    // The open runner's frame between two install slices (OPEN-FRAMES-1): it
-    // exists to turn the renderer's bookkeeping, and the world it belongs to is
-    // still behind the cover — so it must start no first-time work either. Same
-    // rule as the covered presents, for the same reason.
-    if (!mEngine) return;
-    mEngine->setNextFramePace(jahshaka::engine::FramePace::Deferred);
-    renderFrames(1);
+    mWorldArriving = false;
+    if (mEngineScene) mEngineScene->setLoading(false);
 }
 
 void EngineSceneViewport::primeSceneGeometry()
@@ -3272,6 +3282,10 @@ void EngineSceneViewport::clearScene()
     // the flag set would caption the NoScene cover "Loading world…" for ever.
     mSceneLoadPending = false;
     mLoadingTitle.clear();
+    // `mWorldArriving` is deliberately NOT cleared: an open raises it and then
+    // calls this to tear the OLD world down, so clearing it here would hand the
+    // world being installed a scene that builds its whole GI arm behind the
+    // cover (OPEN_COVER_SPEC §2 A). A plain close never raised it.
     mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
     refreshOverlay();
 }

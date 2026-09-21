@@ -2139,6 +2139,12 @@ void MainWindow::openProject(bool playMode)
 	LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
 	sceneView->recordWarmUpSet();
 	openStageReveal(playMode);
+	// THE LOAD IS OVER (OPEN_COVER_SPEC §2 A). Said here and at the runner's
+	// `finished` — the two ends of the two routes — and NOT inside
+	// `openStageReveal`, which is a SLICE on the threaded route with one more
+	// boundary frame behind it: that frame is the world's first, and letting it
+	// build the whole GI arm is the block this lane removes, one frame later.
+	sceneView->endSceneLoad();
 }
 
 bool MainWindow::isOpeningProject() const
@@ -2195,6 +2201,11 @@ void MainWindow::startOpenRunnerIfNeeded()
 	        });
 	connect(openRunner, &SceneOpenRunner::finished, this, [this](bool) {
 		if (pmContainer) pmContainer->hideOpenProgress();
+		// EVERY SLICE HAS RUN, AND SO HAS THE LAST BOUNDARY FRAME: the world is
+		// installed and on screen, so the engine may build its first GI arm
+		// (OPEN_COVER_SPEC §2 A). One frame later than the reveal, and
+		// deliberately — see openStageReveal.
+		if (sceneView) sceneView->endSceneLoad();
 	});
 	// THE INSTALL DRIVES ITS OWN FRAME (lane OPEN-FRAMES-1, 2026-09-15).
 	// Set once, on the runner this window keeps for its whole life.
@@ -2232,12 +2243,7 @@ void MainWindow::startOpenRunnerIfNeeded()
 	openRunner->setSliceBoundary([this]() {
 		LoadTimeline::Accumulate row(QStringLiteral("slice:boundaryFrame"));
 		if (sceneView && sceneView->canRenderFrames()) {
-			// ...AND IT STARTS NO FIRST-TIME WORK (OPEN_COVER_SPEC §2.1):
-			// the world it belongs to is still behind the cover, so a
-			// boundary frame that built the GI arm would be the block this
-			// lane removes, moved one stage earlier. The same frame in
-			// every other respect.
-			sceneView->renderSliceBoundaryFrame();
+			sceneView->renderFrames(1);
 			++openSliceBoundaryFrameCount;
 			return;
 		}
