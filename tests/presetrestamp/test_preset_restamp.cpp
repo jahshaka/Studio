@@ -157,6 +157,19 @@ int main(int argc, char **argv)
     CHECK(!colourOid.isEmpty() && dupOid == colourOid,
           "fixture: the duplicate row stores the SAME object (identity is the bytes)");
 
+    // …and one map that carries a SECOND stored object: `asset_files` is keyed
+    // by (guid, role, NAME), so a project that painted on a member under
+    // another name leaves the row with two source objects. It is still ONE row.
+    {
+        const QString paintedSrc = writeTempFile(scratchDir, "brick_SPEC_edit.png",
+                                                 QByteArray("brick-rough-painted"));
+        QString oid, err;
+        AssetCas::ingestFile(QSqlDatabase::database(), storeRoot, paintedSrc, "tex-rough",
+                             QStringLiteral("source"), QStringLiteral("brick_SPEC_edit.png"),
+                             &oid, &err);
+        CHECK(!oid.isEmpty(), "fixture: one map carries a second source object");
+    }
+
     const QString presetA = bundle(db, "Brick PBR (shipped)",
                                    { { "baseColorMap", "tex-colour" },
                                      { "normalMap",    "tex-normal" },
@@ -193,8 +206,9 @@ int main(int argc, char **argv)
     const presetrestamp::Report first = presetrestamp::restamp(&db, shipped);
     CHECK(first.error.isEmpty(), "2: the pass ran against the live library");
     CHECK(first.ran, "2: …and had something to look at (the pre-gate did not answer)");
-    CHECK(first.scanned == 6, qPrintable(QStringLiteral("2: six texture rows scanned (%1)")
-                                             .arg(first.scanned)));
+    CHECK(first.scanned == 6,
+          qPrintable(QStringLiteral("2: six texture ROWS scanned — the row with two stored "
+                                    "objects is one of them (%1)").arg(first.scanned)));
     CHECK(first.stamped == 5, qPrintable(QStringLiteral("2: FIVE ROWS STAMPED — four maps and the "
                                                         "duplicate over one map's bytes (%1)")
                                              .arg(first.stamped)));
@@ -205,6 +219,8 @@ int main(int argc, char **argv)
           "2: every map of the first preset is a member now");
     CHECK(originOf(db, "tex-colour") == presetA && originOf(db, "tex-rough") == presetA,
           "2: …stamped with the material they came in through");
+    CHECK(first.stamped == 5,
+          "2: …and the row with two stored objects was stamped ONCE, not twice");
     CHECK(stamped(db, "tex-metal") && originOf(db, "tex-metal") == presetB,
           "2: …and the second preset's map with ITS bundle, not the first");
 
@@ -294,6 +310,7 @@ int main(int argc, char **argv)
           "5: …reporting nothing done");
     CHECK(quiet.scanned == 8, qPrintable(QStringLiteral("5: …having only counted the rows (%1)")
                                              .arg(quiet.scanned)));
+
     CHECK(originOf(db, "tex-mine") == mineMat,
           "5: …and the user's stamp still names THEIR material, never a preset");
 

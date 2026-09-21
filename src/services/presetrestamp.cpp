@@ -105,7 +105,13 @@ Report restampImpl(Database *db, const QStringList &presetGuids)
     }
 
     const QVector<TextureRow> rows = textureRows(conn);
-    out.scanned = rows.size();
+    // ROWS, NOT FILES: `asset_files` is keyed by (guid, role, NAME), so one
+    // texture may carry a SECOND source object — a project's copy-on-write edit
+    // staged under a different name is the way that happens. Every oid of it is
+    // an identity of that picture (below), and it is still one row.
+    QSet<QString> seenGuids;
+    for (const TextureRow &row : rows) seenGuids.insert(row.guid);
+    out.scanned = seenGuids.size();
 
     // THE CHEAP PRE-GATE, and the answer on every launch of a library that has
     // been repaired (or was minted by a stamping seed in the first place): if
@@ -127,17 +133,22 @@ Report restampImpl(Database *db, const QStringList &presetGuids)
     // FIRST NAMER WINS, in the shipped table's order: the same rule the seed
     // itself follows (`Prepared::mapOwners`) and the one `memberstamp::stamp`
     // enforces anyway — an origin never moves.
-    QHash<QString, QString> oidOfRow;        // texture guid -> its source oid
-    for (const TextureRow &row : rows) oidOfRow.insert(row.guid, row.oid);
+    QHash<QString, QStringList> oidsOfRow;   // texture guid -> its source object(s)
+    for (const TextureRow &row : rows) oidsOfRow[row.guid].append(row.oid);
 
     QHash<QString, QString> presetOfOid;     // map content -> the preset it came in through
     for (const QString &presetGuid : presetGuids) {
         const QJsonObject definition = MaterialBundle::read(db, presetGuid);
         if (definition.isEmpty()) continue;
         for (const QString &member : MaterialBundle::memberGuids(definition)) {
-            const QString oid = oidOfRow.value(member);
-            if (oid.isEmpty()) continue;                     // not a texture row here
-            if (!presetOfOid.contains(oid)) presetOfOid.insert(oid, presetGuid);
+            // EVERY object that row stores counts as that map's content: a
+            // member a project painted on carries the edited bytes beside the
+            // shipped ones, and a duplicate row over either of them is the same
+            // picture.
+            for (const QString &oid : oidsOfRow.value(member)) {
+                if (oid.isEmpty()) continue;                 // not a texture row here
+                if (!presetOfOid.contains(oid)) presetOfOid.insert(oid, presetGuid);
+            }
         }
     }
     if (presetOfOid.isEmpty()) return out;
@@ -164,12 +175,15 @@ Report restampImpl(Database *db, const QStringList &presetGuids)
     // pictures and not the others.
     DbTransaction tx(conn);
     QSet<QString> repaired;
+    QSet<QString> stampedGuids;                     // a row with two objects is ONE row
     for (const TextureRow &row : rows) {
         if (memberstamp::isStamped(row.properties)) continue;
+        if (stampedGuids.contains(row.guid)) continue;
         const QString preset = presetOfOid.value(row.oid);
         if (preset.isEmpty()) continue;             // the user's own picture: never touched
         if (claimed.contains(preset)) continue;     // their own copy of a preset's map
         if (!memberstamp::stamp(db, row.guid, preset)) continue;
+        stampedGuids.insert(row.guid);
         ++out.stamped;
         repaired.insert(preset);
     }
