@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QByteArray>
 #include <QJsonObject>
 #include <QString>
-#include <QStringList>
 #include <QUndoCommand>
 #include <functional>
 
@@ -85,7 +84,6 @@ private:
     QString     mCopyGuid;        ///< minted on the first redo, then kept
     QString     mError;
     bool        mMasterWasPinned = false;
-    QStringList mMovedNodes;      ///< the nodes whose use edge this command moved
 };
 
 #endif // PRESETCOPYCOMMAND_H

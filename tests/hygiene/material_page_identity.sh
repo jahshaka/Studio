@@ -39,6 +39,12 @@
 #   * `forgetMaterial` — the material was deleted from the library, so the
 #     documents that are it stop being it (and close). Clearing an identity
 #     cannot write a graph into a row: the save is stood down first.
+#   * `adoptProjectCopy` (PRESET-EDIT-1) — the document was a shipped preset
+#     the project holds, and the project has just taken its OWN copy of it: the
+#     document is that copy from here, on a new guid, and the save that asked
+#     for the copy goes on to write to it. A deliberate addition, which is what
+#     this list is for — and it obeys the rule it belongs to: the identity
+#     moves in ONE named place, with the graph already in hand.
 #
 # $1 = the repo root
 set -u
@@ -54,7 +60,7 @@ fi
 
 # The functions allowed to write the page's identity. A new one here is a
 # deliberate decision, which is the point of the list.
-ALLOWED="adoptGraph createShader loadGraphFromTemplate editingFinishedOnListItem renameOpenDocuments forgetMaterial"
+ALLOWED="adoptGraph adoptProjectCopy createShader loadGraphFromTemplate editingFinishedOnListItem renameOpenDocuments forgetMaterial"
 
 offenders=$(awk -v allowed="$ALLOWED" '
     # a function definition starts at column 0: "void EffectsPage::name(..."

@@ -156,22 +156,32 @@ Target forEdit(Database *db, Project *project, const QString &guid,
         };
     }
     auto *command = new PresetCopyCommand(db, project, redress, guid);
+    target.master = guid;
     if (undo) {
         // ONE UNDO STEP for the copy, the pin move and the use edges — and,
         // inside a script run or a gesture macro, the same step as the edit
         // that asked for it (a run is one open macro).
         undo->push(command);
+        // THE ANSWER COMES FROM THE CATALOG, NOT FROM THE COMMAND: a
+        // QUndoStack OWNS what it is handed and may destroy it inside push
+        // (a merge, an obsolete command, the stack's own limit), so
+        // dereferencing it afterwards is a dangling read waiting to happen.
+        // The copy is the material this project now pins in the master's
+        // place, which is a fact this function can ask for.
+        target.guid = projectCopyOf(db, project, guid);
+        if (target.guid.isEmpty())
+            target.error = QObject::tr("'%1' could not be copied into this project")
+                               .arg(MaterialBundle::shippedPresetName(guid));
     } else {
         // NO UNDO SERVICE (a headless slice): the copy still happens, and it
         // is simply not undoable — the same rule every gesture in such a
         // session follows.
         command->redo();
+        target.guid = command->copyGuid();
+        target.error = command->error();
+        delete command;
     }
-    target.master = guid;
-    target.guid = command->copyGuid();
     target.copied = !target.guid.isEmpty();
-    target.error = command->error();
-    if (!undo) delete command;
     return target;
 }
 

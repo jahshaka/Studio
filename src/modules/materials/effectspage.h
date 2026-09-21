@@ -322,6 +322,10 @@ private:
 	/// the page.
 	QPointer<Toast> mRefusalToast;
 	/// Mark the ACTIVE document read-only (or not) and show the banner.
+	/// THE DOCUMENT BECOMES THIS PROJECT'S COPY OF THE PRESET IT WAS
+	/// (PRESET-EDIT-1) — one named owner for that identity change, as
+	/// `adoptGraph` is for the other; called by the save that made the copy.
+	void adoptProjectCopy(MaterialDocument *doc, const QString &copyGuid);
 	void setReadOnly(bool readOnly, const QString &presetName = QString());
 	/// Re-assert the active document's read-only state on the SHARED
 	/// widgets. The canvas, the properties panel, the settings dock and the

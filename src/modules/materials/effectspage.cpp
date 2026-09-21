@@ -635,39 +635,7 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			reportSaveRefused(doc, target.error);
 			return;
 		}
-		if (target.copied) {
-			// THE DOCUMENT IS THE COPY FROM HERE: the same canvas, the same
-			// undo history and the same name, at PROJECT scope on a new guid.
-			doc->info.GUID = target.guid;
-			doc->info.origin = shaderInfo::Origin::Project;
-			doc->presetName.clear();
-			// A READ BOUND THE SHIPPED FILES (looking at a preset writes
-			// nothing); an EDIT binds library assets, because a definition may
-			// never carry a path. The content import answers "I already have
-			// this" for every one of them — seeding put the bytes in the store
-			// — so this costs a hash each and no device wait.
-			MaterialHelper::resolveAppRelativeTextures(
-			    doc->graph, MaterialHelper::TextureBinding::Import);
-			applyReadOnlyUi();
-			syncTabBar();
-			// The drawers: the copy is a new tile in the project's, and the
-			// master has left the project (the four-drawer rule — one list,
-			// two windows).
-			refreshShaderGraph();
-			if (membersPanel && doc == activeDoc()) membersPanel->setMaterial(doc->info.GUID);
-			// SAID OUT LOUD, where the gesture happened. The user edited a
-			// material the app ships and now owns a copy of it; nothing about
-			// the picture changed, so nothing on screen would otherwise say so.
-			if (!mRefusalToast) {
-				mRefusalToast = new Toast(this);
-				mRefusalToast->setAnchor(Toast::Anchor::WindowBottom);
-			}
-			mRefusalToast->showToast(tr("Edited as this project's copy"),
-			                         tr("'%1' is this project's own material now. The one the "
-			                            "app ships is untouched, and so is every other project.")
-			                             .arg(doc->info.name),
-			                         6000);
-		}
+		if (target.copied) adoptProjectCopy(doc, target.guid);
 	}
 
 	if (doc->info.GUID.isEmpty()) {
@@ -1178,6 +1146,50 @@ void EffectsPage::adoptGraph(MaterialDocument *doc, const QString &guid,
 	doc->presetName = shippedName;
 	bindGraph(doc, graph);
 	documentChanged(doc);
+}
+
+void EffectsPage::adoptProjectCopy(MaterialDocument *doc, const QString &copyGuid)
+{
+	// A DOCUMENT'S SECOND IDENTITY CHANGE (PRESET-EDIT-1), and it is here
+	// rather than inline in `saveShader` for the reason the whole list in
+	// tests/hygiene/material_page_identity.sh exists: the page's identity —
+	// the guid it SAVES BY — is written in ONE named place per kind of change,
+	// never in the middle of a handler.
+	//
+	// The change: the document was the shipped preset, at project scope; the
+	// project has just taken its own copy of it, so the document IS that copy
+	// from here — the same canvas, the same undo history and the same name, on
+	// a new guid. The save that called this then writes to the copy.
+	if (!doc || copyGuid.isEmpty()) return;
+	doc->info.GUID = copyGuid;
+	doc->info.origin = shaderInfo::Origin::Project;
+	doc->presetName.clear();
+	doc->readOnly = false;
+	// A READ BOUND THE SHIPPED FILES (looking at a preset writes nothing); an
+	// EDIT binds library assets, because a definition may never carry a path.
+	// The content import answers "I already have this" for every one of them —
+	// seeding put the bytes in the store — so this costs a hash each and no
+	// device wait.
+	MaterialHelper::resolveAppRelativeTextures(doc->graph,
+	                                           MaterialHelper::TextureBinding::Import);
+	applyReadOnlyUi();
+	syncTabBar();
+	// The drawers: the copy is a new tile in the project's, and the master has
+	// left the project (the four-drawer rule — one list, two windows).
+	refreshShaderGraph();
+	if (membersPanel && doc == activeDoc()) membersPanel->setMaterial(doc->info.GUID);
+	// SAID OUT LOUD, where the gesture happened. The user edited a material the
+	// app ships and now owns a copy of it; nothing about the picture changed,
+	// so nothing on screen would otherwise say so.
+	if (!mRefusalToast) {
+		mRefusalToast = new Toast(this);
+		mRefusalToast->setAnchor(Toast::Anchor::WindowBottom);
+	}
+	mRefusalToast->showToast(tr("Edited as this project's copy"),
+	                         tr("'%1' is this project's own material now. The one the app "
+	                            "ships is untouched, and so is every other project.")
+	                             .arg(doc->info.name),
+	                         6000);
 }
 
 void EffectsPage::setReadOnly(bool readOnly, const QString &presetName)

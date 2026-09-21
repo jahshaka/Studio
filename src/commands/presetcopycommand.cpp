@@ -125,7 +125,6 @@ void PresetCopyCommand::undo()
     assetdelete::remove(mDb, mCopyGuid, /*keepShared*/ true, /*force*/ true);
 
     if (mRedress) mRedress(mMaster);
-    mMovedNodes.clear();
 }
 
 void PresetCopyCommand::moveUseEdges(const QString &from, const QString &to)
@@ -143,5 +142,4 @@ void PresetCopyCommand::moveUseEdges(const QString &from, const QString &to)
                               static_cast<int>(ModelTypes::Material),
                               nodeGuid, to, mProjectGuid);
     }
-    mMovedNodes = nodes;
 }
