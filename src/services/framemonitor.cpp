@@ -702,7 +702,34 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "cascadesAwaitingCamera", s.gi.cascadesAwaitingCamera },
             { "cascadeFullRebuilds", double(s.gi.cascadeFullRebuilds) },
             { "cascadeDeferrals", double(s.gi.cascadeDeferrals) },
-            { "cascadeDirtyMajority", double(s.gi.cascadeDirtyMajority) } } },
+            { "cascadeDirtyMajority", double(s.gi.cascadeDirtyMajority) },
+            // THE SURFACE CACHE (SURFACE-CACHE phase 2), as two rows: what the
+            // last frame SPENT on captures, and what the atlas is HOLDING. The
+            // capture runs inside the frame — the monitor attaches its
+            // listeners at the frame's head, so between-frame work is timed by
+            // nobody — and its workspace is in `monitorWorkspaces`, so the
+            // per-pass CPU and GPU milliseconds cover it beside these counters.
+            { "cardsCapture", QJsonObject{
+                { "capturesLastFrame", int(s.gi.cards.capturesLastFrame) },
+                { "texelsLastFrame", int(s.gi.cards.texelsLastFrame) },
+                { "budgetTexels", int(s.gi.cards.budgetTexels) },
+                { "queue", int(s.gi.cards.queueLength) },
+                { "cpuMs", double(s.gi.cards.captureMs) },
+                { "captures", double(s.gi.cards.captures) },
+                { "invalidTransform", double(s.gi.cards.invalidTransform) },
+                { "invalidMaterial", double(s.gi.cards.invalidMaterial) },
+                { "invalidLight", double(s.gi.cards.invalidLight) } } },
+            { "cardsResident", QJsonObject{
+                { "built", s.gi.cards.built },
+                { "pages", int(s.gi.cards.pages) },
+                { "pagesUsed", int(s.gi.cards.pagesUsed) },
+                { "pageSize", int(s.gi.cards.pageSize) },
+                { "instances", int(s.gi.cards.instancesResident) },
+                { "cards", int(s.gi.cards.cardsResident) },
+                { "radius", double(s.gi.cards.residencyRadius) },
+                { "bytesPerTexel", int(s.gi.cards.bytesPerTexel) },
+                { "megabytes", double(s.gi.cards.bytes) / (1024.0 * 1024.0) },
+                { "emissiveFormat", qs(s.gi.cards.emissiveFormat) } } } } },
         { "shaderCache", QJsonObject{
             { "enabled", s.shaderCache.enabled },
             { "dir", qs(s.shaderCache.dir) },

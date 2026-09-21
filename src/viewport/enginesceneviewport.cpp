@@ -2706,6 +2706,27 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.chainSettles         = st.chainSettles;
     out.dragMovers           = st.dragMovers;
     out.dragMoverGestures    = double(st.dragMoverGestures);
+    out.cards.built             = st.cards.built;
+    out.cards.pageSize          = int(st.cards.pageSize);
+    out.cards.pages             = int(st.cards.pages);
+    out.cards.pagesUsed         = int(st.cards.pagesUsed);
+    out.cards.bytesPerTexel     = int(st.cards.bytesPerTexel);
+    out.cards.bytes             = double(st.cards.bytes);
+    out.cards.emissiveFormat    = QString::fromStdString(st.cards.emissiveFormat);
+    out.cards.instances         = int(st.cards.instancesResident);
+    out.cards.cards             = int(st.cards.cardsResident);
+    out.cards.radius            = double(st.cards.residencyRadius);
+    out.cards.queue             = int(st.cards.queueLength);
+    out.cards.budgetTexels      = int(st.cards.budgetTexels);
+    out.cards.capturesLastFrame = int(st.cards.capturesLastFrame);
+    out.cards.texelsLastFrame   = int(st.cards.texelsLastFrame);
+    out.cards.captures          = double(st.cards.captures);
+    out.cards.invalidTransform  = double(st.cards.invalidTransform);
+    out.cards.invalidMaterial   = double(st.cards.invalidMaterial);
+    out.cards.invalidLight      = double(st.cards.invalidLight);
+    out.cards.captureMs         = double(st.cards.captureMs);
+    out.cards.cardRecords       = int(st.cards.cardRecords);
+    out.cards.instanceSlots     = int(st.cards.instanceSlots);
     // THE RAY-QUERY TIER (PHOTON_SPEC §7 R1). A separate engine reading, not a
     // member of GiStatus: the tier is a geometry service, and GI is only its
     // first consumer.

@@ -971,36 +971,59 @@ add_test(NAME gi.stream_edit COMMAND test_gi_stream_edit
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
-# SURFACE-CACHE-0 (the phase-0 design SPIKE, 2026-09-21) — a MEASUREMENT, not a
-# gate. It captures one mesh instance's six axis cards through a capture
-# workspace, reads them at a reflection ray's hits instead of the cascade's
-# voxels, and PRINTS the three numbers SPECS/SURFACE_CACHE_ASSESSMENT.md §8
-# records as unverified. Its own binary because the card read binds a descriptor
-# the reflect pass otherwise never carries.
-add_executable(test_gi_surface_cache_spike test_gi_surface_cache_spike.cpp)
-set_target_properties(test_gi_surface_cache_spike PROPERTIES
+# SURFACE-CACHE phase 2 (SURFACE-CACHE-1b) — the capture Component's gates.
+# THREE ctest names out of ONE binary, selected by argv: three different scenes
+# are needed and a GI arm binds process-wide state (sVctBindingOwner), so they
+# must not share a process — while the fixture scaffolding is the same in all
+# three. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
+add_executable(test_gi_cards test_gi_cards.cpp)
+set_target_properties(test_gi_cards PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_surface_cache_spike PRIVATE
+target_compile_definitions(test_gi_cards PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_surface_cache_spike PRIVATE JahshakaEngine)
-add_dependencies(test_gi_surface_cache_spike JahshakaEngineMedia)
-add_test(NAME gi.surface_cache_spike COMMAND test_gi_surface_cache_spike
+target_link_libraries(test_gi_cards PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cards JahshakaEngineMedia)
+add_test(NAME gi.card_capture COMMAND test_gi_cards capture
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.surface_cache_spike PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_capture PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.card_shadow COMMAND test_gi_cards shadow
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+add_test(NAME gi.card_budget COMMAND test_gi_cards budget
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# SURFACE-CACHE-1b's MEASUREMENT ARM — a TOOL, not a suite (no add_test): the
+# numbers in the lane's report are taken by code that is read, and re-taking
+# them later is one command rather than a reconstruction.
+add_executable(sc1b_measure EXCLUDE_FROM_ALL sc1b_measure.cpp)
+set_target_properties(sc1b_measure PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(sc1b_measure PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(sc1b_measure PRIVATE JahshakaEngine)
+add_dependencies(sc1b_measure JahshakaEngineMedia)
 
 # ---------------------------------------------------------------------------
 # gi.gather_spike — GATHER-0, the phase-0 SCREEN-PROBE GATHER spike.
 #
-# A MEASUREMENT SUITE, like gi.surface_cache_spike beside it and for the same
-# reason: SPECS/SCREEN_PROBE_GATHER_SPEC.md section 10 records that not one
-# millisecond of its budget table is measured, and section 7 phase 0 is the
-# lane that takes them. Its own binary because the gather binds descriptors and
-# a pass texture no other suite's frames carry.
+# A MEASUREMENT SUITE. SPECS/SCREEN_PROBE_GATHER_SPEC.md section 10 records
+# that not one millisecond of its budget table is measured, and section 7
+# phase 0 is the lane that takes them. Its own binary because the gather binds
+# descriptors and a pass texture no other suite's frames carry. (Its sibling,
+# gi.surface_cache_spike, stood beside it until SURFACE-CACHE-1b took that
+# spike into a Component — gi.card_capture / gi.card_shadow / gi.card_budget
+# above are what a shipped cache is gated by instead.)
 add_executable(test_gi_gather_spike test_gi_gather_spike.cpp)
 set_target_properties(test_gi_gather_spike PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
