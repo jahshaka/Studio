@@ -1887,6 +1887,10 @@ void MainWindow::openStageBind(bool playMode)
 	ui->actionClose->setDisabled(false);
 	setScene(scene);
 	refreshClaudeChatContext();   // D1: rebind an open chat to the new project
+	// The Materials page's open tabs are per project (MATERIALS_TABS_SPEC
+	// §2.7): this project's set comes back, and it is the only way the page
+	// can be told at all — `setProject` is called once, at module init.
+	if (shaderGraph) shaderGraph->onProjectChanged();
 
 	if (editorData != Q_NULLPTR) {
 		sceneView->setEditorData(editorData);
@@ -2436,6 +2440,9 @@ void MainWindow::closeProject()
     playbackService->setPlaying(false);
     ui->actionClose->setDisabled(false);
     refreshClaudeChatContext();   // D1: an open chat loses its project
+    // The Materials page saves this project's open tabs and closes the ones
+    // that were the PROJECT's copies — their scope is going with it.
+    if (shaderGraph) shaderGraph->onProjectChanged();
 
     undoService->clear();
     AssetManager::clearAssetList();
@@ -5878,6 +5885,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath,
     updateWindowTitle();
 	updateTopMenuStates(WindowSpaces::EDITOR);
     refreshClaudeChatContext();   // D1: rebind an open chat to the new project
+    if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project
 }
 
 // ===========================================================================

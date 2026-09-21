@@ -67,7 +67,11 @@ public:
 	void setDatabase(Database * dataBase);
 	/// The open project, so a picked image is pinned into it (and only then).
 	void setProject(Project * proj) { project = proj; }
-	void clearTextures();
+	// (`clearTextures` is DELETED — fix round F9. It emptied the WHOLE resolver
+	// table, which is what the Materials page used to do on every graph open;
+	// with entries dying with their nodes (~TextureNode) it had no callers,
+	// and a process-wide wipe is not a thing anybody should be able to reach
+	// for again while several materials are open.)
 
 	/*
 	Loads texture using it's Guid

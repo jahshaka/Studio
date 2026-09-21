@@ -5,6 +5,7 @@
 #include <QShowEvent>
 #include <QWheelEvent>
 
+#include "bridge/previewenvironment.h"
 #include "viewport/enginerenderdriver.h"
 
 using namespace jahshaka::engine;
@@ -57,11 +58,6 @@ void EngineMaterialPreview::setPreviewModel(Model model)
     mScene->setPreviewMesh(toPreviewMesh(model));
 }
 
-void EngineMaterialPreview::setPreviewBackground(const QColor &colour)
-{
-    mScene->setBackground(colour);
-}
-
 void EngineMaterialPreview::viewAboutToBeDestroyed()
 {
     // The View this widget is holding dies one line from now: the Scene has to
@@ -74,8 +70,12 @@ void EngineMaterialPreview::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);
     if (!view() && mEngine)
+        // The clear colour is the FALLBACK behind the studio sky, and the sky
+        // covers every pixel of the frame: the legacy 125-grey was the dock's
+        // background, and it is the environment's now (MATPREVIEW-ENV-1).
         createView(mEngine, "matpreview-view-" + QString::number(reinterpret_cast<uintptr_t>(this)),
-                   Colour(125 / 255.0f, 125 / 255.0f, 125 / 255.0f));
+                   Colour(previewenv::ambientSh()[0], previewenv::ambientSh()[1],
+                          previewenv::ambientSh()[2], 1.0f));
     if (view()) mScene->attach(view());
     mActive = true;
     mFrameTimer.restart();

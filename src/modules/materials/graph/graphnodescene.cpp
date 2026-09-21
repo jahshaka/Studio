@@ -134,7 +134,12 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 		nodeGraph->addNode(model);
 	}
 
-	connect(model, &NodeModel::valueChanged, [this](NodeModel* nodeModel, int sockedIndex) {
+	// WITH THIS SCENE AS THE CONTEXT (fix round F12): the connection's
+	// lifetime used to be the MODEL's, and a model outlives a scene whenever
+	// the same graph is re-bound to a new canvas — so a value edit reached a
+	// scene that had been deleted, through a captured `this`.
+	connect(model, &NodeModel::valueChanged, this,
+	        [this](NodeModel* nodeModel, int sockedIndex) {
 		emit nodeValueChanged(nodeModel, sockedIndex);
 		emit graphInvalidated();
 	});
@@ -548,13 +553,7 @@ void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 		    || droppedType == static_cast<int>(ModelTypes::Shader)) {
 		event->accept();
 
-		QListWidgetItem *item = new QListWidgetItem;
-
-		item->setData(Qt::DisplayRole, event->mimeData()->text());
-		item->setData(MODEL_GUID_ROLE, event->mimeData()->data("MODEL_GUID_ROLE"));
-		currentlyEditing = item;
-
-		emit loadGraph(item);
+		emit loadGraph(QString::fromUtf8(event->mimeData()->data("MODEL_GUID_ROLE")));
 		return;
 		}
 	}

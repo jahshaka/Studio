@@ -1,0 +1,39 @@
+// scripting.e2e.preset_seed_boot, ARM 1 — THE USER'S OWN PICTURE, IMPORTED
+// BEFORE THE SEED EVER RUNS (MATERIAL_BUNDLE_SPEC V-2's other half).
+//
+// This run seeds NOTHING on purpose: a driven session takes no launch seed
+// unless JAHSHAKA_SEED_PRESETS says so, and this row's environment does not.
+// It imports one picture that a shipped preset also uses — the SAME BYTES —
+// as a person would, and leaves it in the library for arm 2, where the launch
+// seed runs over it. The rule the pair gates: a seed may stamp only the rows
+// IT mints; a picture the library already held is the user's and stays a tile.
+//
+// The data root is shared with arm 2 through the ctest fixture (no wipe
+// between them) — that is what makes this a BEFORE, not a separate library.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var PRESET_MAP = "@SOURCE_DIR@/app/content/materials/presets/wood/wood_planks_03_1_COLOR.png";
+
+// NOTHING IS SEEDED YET, and this is the assertion that makes arm 2 mean
+// something: if a driven session seeded presets by itself, the import below
+// would be landing on a row the seed had already minted and stamped.
+var materialsBefore = assets.list({ scope: "store", type: "material" });
+assert(materialsBefore.length === 0,
+       "a driven session seeds no presets at launch (" + materialsBefore.length + " material rows)");
+
+var mine = assets.importFile(PRESET_MAP);
+assert(!!mine, "the user imports a picture a preset also uses: " + mine);
+var meta = assets.metadata(mine);
+assert(meta.member !== true, "…and it carries no member stamp (it is theirs)");
+assert(meta.memberOf === undefined, "…and no origin");
+
+var tiles = assets.list({ scope: "store", type: "texture" });
+assert(tiles.length === 1, "…and it is the library's one texture tile");
+assert(tiles[0].guid === mine, "…that row");
+
+console.log("USER_TEXTURE=" + mine);
+console.log("ALL PASS");

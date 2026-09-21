@@ -214,4 +214,122 @@ for (var i = 0; i < SAMPLES.length; ++i) {
     assert(project.close(), name + ": closed");
 }
 
+// ---- 4. FOLDERS, MOVES AND CREATE MATERIAL (DRAWERS-1) ---------------------
+//
+// The owner's item 10: "folders + a move verb + internal drop in the drawer,
+// materials.create (right-click > Create Material), the two project drawers as
+// ONE list." The drag itself is a gesture this suite cannot perform; what it
+// pins down is everything under it — the verbs the drop calls, the tile the
+// folder becomes in the PANEL, and the two drawers agreeing without a click.
+
+project.create("tray folders");
+assert(panelRows().length === 0, "folders: a fresh project's panel is empty");
+assert(assets.folders().length === 0, "... and it has no folders");
+
+var props = assets.createFolder("Props");
+assert(props && props.length > 10, "assets.createFolder('Props') -> a guid");
+var folderTiles = editor.trayAssets().filter(function (t) { return t.folder; });
+assert(folderTiles.length === 1 && folderTiles[0].guid === props,
+       "the folder is a TILE in the tray panel " + J(folderTiles));
+assert(assets.folders()[0].name === "Props", "assets.folders() lists it");
+
+// Two pinned library assets, moved in ONE call — what the internal drop of a
+// multi-selection onto the folder tile does. (Adding an IMAGE directly mints
+// its companion material, and the material is the image's tile — rule 5 — so
+// the tiles to move are the companions.)
+var texA = assets.importFile(FIXTURES + "/tiny.png");
+var texB = assets.importFile(FIXTURES + "/implane_wide.png");
+assets.addToProject(texA);
+assets.addToProject(texB);
+var matA = companionOf(texA), matB = companionOf(texB);
+assert(matA && matB && matA !== matB, "two library materials in the project");
+assert(guidsOf(panelRows()).indexOf(matA) >= 0 && guidsOf(panelRows()).indexOf(matB) >= 0,
+       "both are tiles at the ROOT");
+// THE GESTURE ITSELF, not just the verb it calls: real QDragEnter/QDragMove/
+// QDrop events at the CENTRE of the folder's tile in the tray, carrying the
+// one asset payload with BOTH guids in it (editor.dragAssetToTray). This is
+// what a person's drag of a multi-selection onto a folder does.
+assert(editor.dragAssetToTray([matA, matB], props) === true,
+       "the tray takes a DROP of a two-tile selection on the folder tile");
+assert(guidsOf(panelRows()).indexOf(matA) < 0 && guidsOf(panelRows()).indexOf(matB) < 0,
+       "... and neither is at the ROOT any more");
+assert(assets.folders()[0].count === 2, "... the folder holds two tiles");
+agree("after a multi-move");
+
+// A drop on an ASSET tile is not a move (only a folder takes one).
+var stray = materials.create("Not A Folder", { folder: "" });
+assert(editor.dragAssetToTray([matA], stray) === false,
+       "a drop on an ASSET tile is refused: " + app.lastError());
+assert(assets.folders()[0].count === 2, "... and nothing moved");
+
+// The verb the drop calls, on its own — one row, back to the ROOT.
+assert(assets.moveToFolder(matB, null) === 1,
+       "assets.moveToFolder(guid, null) brings one row back to the root");
+assert(guidsOf(panelRows()).indexOf(matB) >= 0, "... and it is a root tile again");
+assert(assets.moveToFolder([matB], props) === 1, "... and back in");
+
+// The refusals a drop can hit, as the verb answers them.
+try {
+    assets.moveToFolder([matA], "not-a-folder-guid");
+    assert(false, "moving into an unknown folder should be refused");
+} catch (e) {
+    assert(("" + e).indexOf("no folder") >= 0, "an unknown target folder is refused: " + e);
+}
+
+// ---- Create Material, and the two project drawers as ONE list -------------
+
+var made = materials.create("Tray Made", { folder: "" });
+assert(made && made.length > 10, "materials.create(name, {folder}) -> a guid");
+assert(guidsOf(panelRows()).indexOf(made) >= 0,
+       "the new material is a tile in the EDITOR's tray with no click");
+function drawerGuids() { return guidsOf(materials.projectDrawer()); }
+assert(drawerGuids().indexOf(made) >= 0,
+       "... and in the MATERIALS module's project drawer " + J(materials.projectDrawer()));
+
+// The other direction (the owner: "adding a material to the project should add
+// it to the project assets").
+var libraryOnly = materials.create("Library Only");
+assert(guidsOf(panelRows()).indexOf(libraryOnly) < 0,
+       "a material created with NO folder is a library bundle, not a project tile");
+assert(drawerGuids().indexOf(libraryOnly) < 0, "... and not in the module's drawer either");
+assert(assets.addToProject(libraryOnly) === libraryOnly, "assets.addToProject(it)");
+assert(guidsOf(panelRows()).indexOf(libraryOnly) >= 0, "... now it is a tray tile");
+assert(drawerGuids().indexOf(libraryOnly) >= 0, "... and a module-drawer tile");
+
+// A material FILED IN A FOLDER is not at the tray root — and IS in the module's
+// drawer, which is flat by design: it has no breadcrumb to navigate a folder
+// with, so it shows the project's materials wherever they are filed.
+var filed = materials.create("Filed Material", { folder: props });
+assert(guidsOf(panelRows()).indexOf(filed) < 0,
+       "a material created INTO a folder is not a root tile");
+assert(drawerGuids().indexOf(filed) >= 0,
+       "... but the module's project drawer still shows it " + J(materials.projectDrawer()));
+// ---- a pin that leaves by ANY door closes its Materials tab ---------------
+//
+// The drawer's own Delete told the page (MATERIALS-TABS-1 F1); every other
+// door — this verb, the tray's Delete, assets.deleteFolder({keepContents:
+// false}), a project close — did not, and a '(project)' tab whose pin has gone
+// is editing nothing. The page listens to the one announcement they all make.
+
+// WITH A GRAPH: the node editor opens a graph, and a values-only bundle has
+// none — `materials.open` refuses one, which is the page.s own rule.
+var tabbed = materials.create("Tabbed Material", { graph: true, folder: "" });
+// READ THE DRAWER FIRST, and that is not a formality: the module's drawer
+// repopulates on the next event-loop TURN (the one announcement is coalesced),
+// a --script run holds the loop for its whole run, and `materials.open` asks
+// the drawer whether it holds the guid. Reading the drawer flushes the pending
+// repopulate — which is the same thing a person gets for free.
+assert(drawerGuids().indexOf(tabbed) >= 0, "the new material is in the module's drawer");
+var opened = materials.open(tabbed, { scope: "project" });
+assert(opened && opened.guid === tabbed && opened.scope === "project",
+       "a project copy opens as a tab " + J(opened));
+function tabGuids() { return materials.tabs().map(function (t) { return t.guid; }); }
+assert(tabGuids().indexOf(tabbed) >= 0, "... and it is in materials.tabs()");
+assert(assets.removeFromProject(tabbed) === true,
+       "assets.removeFromProject(it) — a door the drawer's Delete is not");
+assert(tabGuids().indexOf(tabbed) < 0,
+       "... the tab closed with the pin " + J(materials.tabs()));
+
+assert(project.close(), "folders: closed");
+
 console.log("e2e_tray_panel: all sections passed");

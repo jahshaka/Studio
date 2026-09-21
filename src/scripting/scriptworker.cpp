@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "scripting/scriptworker.h"
 
+#include <algorithm>
 #include <cmath>
 #include <exception>
 
@@ -78,6 +79,11 @@ const char *kBootstrap = R"JS(
     };
     print = console.log;
     help = function(topic) { console.log(api.help(topic === undefined ? "" : String(topic))); };
+    // A PAUSE THAT COSTS THE APP NOTHING. __bridge.sleep runs on this thread
+    // (no verb hop), so the UI thread is free for the whole wait — which is
+    // what a poll for something the app advances one event-loop turn at a time
+    // needs, and what `editor.frame(1)` cannot be in a headless run.
+    sleep = function(ms) { __bridge.sleep(ms === undefined ? 0 : Number(ms)); };
 })();
 )JS";
 
@@ -361,6 +367,15 @@ QVariant scrubJsValues(const QVariant &value)
 }
 
 } // namespace
+
+void ScriptBridge::sleep(int ms)
+{
+    // ON THE WORKER. This method is reached from the script's own engine, not
+    // through the dispatcher, so `currentThread()` is the script thread and
+    // msleep parks exactly that. The clamp is the header's.
+    if (ms <= 0) return;
+    QThread::msleep(static_cast<unsigned long>(std::min(ms, 10000)));
+}
 
 QVariant ScriptBridge::call(const QString &module, const QString &verb, const QVariant &args)
 {

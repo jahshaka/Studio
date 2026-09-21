@@ -15,6 +15,7 @@
 #include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QColor>
+#include <QSize>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
 #include "bridge/enginepreviewscene.h"   // brings jahshaka/engine/Engine.h
@@ -54,8 +55,10 @@ public:
     /// (scenemirror.cpp), so an in-place mesh swap would never reach the engine.
     bool setPreviewMesh(PreviewMesh mesh);
     PreviewMesh previewMesh() const { return mMesh; }
-    /// The flat background behind the primitive (legacy setClearColor).
-    void setBackground(const QColor &colour);
+    /// (setBackground is GONE with the Display dock's Background menu —
+    /// MATPREVIEW-ENV-1. The backdrop IS the studio environment now, and a flat
+    /// colour sky painted over it would be the "blobby grey ball" reflection
+    /// the lane removed, wearing a menu item.)
 
     // ---- the orbit (EngineAssetScene's maths; left/right drag orbits) ----
     void mouseDown(Qt::MouseButton b);
@@ -65,9 +68,16 @@ public:
     /// Turns the orbit by whole angles (tests; the same path the mouse takes).
     void orbit(float yawDegrees, float pitchDegrees);
 
-    /// One frame: orbit lerp, document update, document -> engine, sky and
-    /// camera -> view. `width`/`height` are the view's pixel size.
+    /// One frame: re-framing if the dock changed shape, orbit lerp, document
+    /// update, document -> engine, sky and camera -> view. `width`/`height` are
+    /// the view's pixel size.
     void step(float dt, int width, int height);
+
+    /// Frames the subject for a view of this size (the resize path; step calls
+    /// it when the shape changes). Public so a test can frame without a widget.
+    void reframe(int width, int height);
+    /// How far back the framing put the camera before the user's zoom factor.
+    float framedDistance() const { return mBaseDistance; }
 
 protected:
     void configureScene(jahshaka::engine::Scene *scene) override;
@@ -85,6 +95,15 @@ private:
     iris::MaterialPtr   mMaterial;
     iris::MeshPtr       mMeshes[6];
     PreviewMesh mMesh = PreviewMesh::Sphere;
+
+    /// The framing: what shape it was computed for, what it computed, and the
+    /// user's zoom on top of it (MATPREVIEW-ENV-1).
+    QSize mFramedFor;
+    float mFramedRadius = 1.0f;
+    float mBaseDistance = 3.78f;
+    float mZoom = 1.0f;
+    static constexpr float kMinZoomIn = 0.35f;
+    static constexpr float kMaxZoomOut = 3.0f;
 
     /// The shared arcball (left or right drag orbits, rotation speed .5).
     PreviewOrbit mOrbit;

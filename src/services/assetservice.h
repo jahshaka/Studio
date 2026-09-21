@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <vector>
 
 #include "services/assetimporter.h"
+#include "services/materialpresetseeder.h"
 
 class Database;
 class Project;
@@ -39,6 +40,7 @@ public:
     AssetImporter::Result importMesh(const QString &filePath,
                                      const QJsonObject &settings = QJsonObject())
     {
+        standDownTheSeed();
         auto result = AssetImporter::importMesh(filePath, db, project, settings);
         if (result.ok()) announceLibraryChanged(result.objectGuid);
         return result;
@@ -53,6 +55,7 @@ public:
                                      int typeHint = -1,
                                      const QJsonObject &settings = QJsonObject())
     {
+        standDownTheSeed();
         auto result = AssetImporter::importFile(filePath, db, project, drawerId, typeHint,
                                                 settings);
         if (result.ok()) announceLibraryChanged(result.objectGuid);
@@ -108,6 +111,32 @@ public:
     }
 
 private:
+    // ONE IMPORTER AT A TIME (SEED-SMALL-1), at the door every VERB comes
+    // through — `assets.import`, `assets.importFile`, `assets.importAndPlace`,
+    // the avatar module's own import. The first-run preset seed
+    // (MaterialPresetSeeder) imports the shipped maps through this same
+    // pipeline on a worker, and NEITHER IMPORTER DEDUPS ROWS: each asks the
+    // library "do you have these bytes", and in the seconds the seed runs both
+    // answers are no. The same picture is then minted twice — the caller's row
+    // AND a stamped member row no definition names, which is the HIDDEN half of
+    // the duplicate (a visible spare tile is a nuisance; one the tray cannot
+    // show is an orphan for ever). So the seed stands down first, which is the
+    // rule the material doors have always followed
+    // (MaterialPresetSeeder::finishNow spells out what it costs: nothing but
+    // the rest of the seed, which the next launch finishes).
+    //
+    // HERE AND NOT IN THE AssetImporter FACADE, deliberately: the facade is
+    // the pipeline, pure and headless, and importer.extent links it on its own
+    // (a CPU suite that has no business linking a QtConcurrent service and the
+    // whole shipped-preset chain behind it). The seed standing down is a
+    // property of an app SESSION — the same layer that announces a library
+    // change above — and this service is the one door every session caller
+    // passes: nothing reaches AssetImporter:: except the two calls above.
+    //
+    // Free after the first launch and free once the seed is done: finishNow's
+    // first line is `isRunning()`.
+    void standDownTheSeed() { MaterialPresetSeeder::instance().finishNow(); }
+
     Database *db = nullptr;
     Project *project;   // the live Project (Phase 4: was Globals::project)
     std::vector<PinChangedFn> pinSubscribers;

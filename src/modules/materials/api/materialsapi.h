@@ -20,6 +20,7 @@ For more information see the LICENSE file
 // design) — the bridge here is glue. graph.* operates on ONE current graph,
 // opened by materials.loadGraph or created by materials.createGraph.
 
+#include <QVariant>
 #include <QVariantList>
 #include <QVariantMap>
 #include <functional>
@@ -43,12 +44,41 @@ public:
     /// loadGraph hands the deserialized graph to the graph.* module.
     void setGraphModule(GraphApi *graphApi) { mGraphApi = graphApi; }
 
+    /// THE MATERIALS PAGE'S TABS (MATERIALS_TABS_SPEC §3). The five verbs
+    /// below are the page's own entry points through this delegate, so a
+    /// click on a tab and `materials.activate` are ONE gesture with one
+    /// implementation. Unset in headless slices — there is no page there, and
+    /// every one of the five refuses by name rather than pretending.
+    struct PageDelegate {
+        std::function<QVariantMap(const QString &guid, const QString &scope)> open;
+        std::function<QVariantMap(const QString &presetOrName, const QString &name)> newMaterial;
+        std::function<QVariantList()> tabs;
+        std::function<bool(const QVariant &)> activate;
+        std::function<bool(const QVariant &)> closeTab;
+        std::function<QVariantMap()> activeTab;
+        /// THE PROJECT DRAWER's tiles, in order (DRAWERS-1) — the page hands
+        /// over what its ShaderAssetWidget is showing.
+        std::function<QVariantList()> projectDrawer;
+    };
+    void setPageDelegate(const PageDelegate &delegate) { mPage = delegate; }
+
     Q_INVOKABLE QVariantList presets();
+    /// THE STUDIO EVERY MATERIAL IS SHOWN IN, as data (MATPREVIEW-ENV-1): the
+    /// exposure the preview and the thumbnails are graded at, the generated
+    /// environment's size, its mean and key radiance, the viewpoint it is
+    /// authored for and its softboxes. A READ — the environment is one
+    /// constant set, not a preference — and the one place a test or a picture
+    /// sheet can quote it from.
+    Q_INVOKABLE QVariantMap previewEnvironment();
     /// ONE mint (MATERIAL_BUNDLE_SPEC 6): a library material bundle, with a
     /// node graph as its payload when `{graph: true}`. `materials.createGraph`
     /// was this with the flag always on and a second ModelTypes::Shader row —
     /// one name survives (CRUD).
     Q_INVOKABLE QString create(const QString &name, const QVariantMap &options = QVariantMap());
+    /// THE MODULE'S PROJECT DRAWER, as the widget shows it: [{guid, name}]
+    /// (DRAWERS-1). A read verb, so a suite can prove the module's drawer and
+    /// the editor's tray are ONE list.
+    Q_INVOKABLE QVariantList projectDrawer();
     /// THE VERB THE TEXTURE PICKER CALLS. A path from anywhere on disk is
     /// imported by CONTENT at that moment; a guid already in the library is
     /// reused. Either way the image becomes a MEMBER of the material (the
@@ -91,12 +121,26 @@ public:
     /// the Materials module's Presets drawer call this verb.
     Q_INVOKABLE QString createFromPreset(const QString &presetOrGuid,
                                          const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap open(const QString &guidOrName,
+                                 const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap newMaterial(const QString &presetOrName = QString(),
+                                        const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantList tabs();
+    Q_INVOKABLE bool activate(const QVariant &tabOrGuid);
+    Q_INVOKABLE bool closeTab(const QVariant &tabOrGuid);
+    Q_INVOKABLE QVariant activeTab();
 
 private:
     /// The {graph: true} branch of createFromImage (IMAGE_PLANE_SPEC B2).
     QString createImageGraph(const QString &textureGuid);
+    /// A guid, a shipped preset's NAME, or a library material's name — to
+    /// the guid the page opens. Empty when it names nothing.
+    QString resolveMaterialGuid(const QString &guidOrName) const;
+    /// The page, or a refusal by name (headless).
+    bool pageOrFail(const QString &verb);
 
     GraphApi *mGraphApi = nullptr;
+    PageDelegate mPage;           // the Materials page's tabs, when wired
 };
 
 /// material.* — the material on one scene node.

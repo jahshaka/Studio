@@ -1796,6 +1796,37 @@ add_script_e2e(new_scene e2e_new_scene.js)
 # four refused by name, plus the Mirror Room still opening with its teapot.
 add_script_e2e(primitives e2e_primitives.js)
 
+# scripting.e2e.material_tabs — MATERIALS_TABS_SPEC §5: SEVERAL MATERIALS OPEN
+# AT ONCE. It needs the PAGE (the five tab verbs are the page's own entry
+# points), so no --headless; its own home, wiped before the run, because the
+# tab set it leaves behind is what the relaunch half reads.
+set(_mtHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_tabs)
+add_test(NAME scripting.e2e.material_tabs.fresh_home
+         COMMAND sh -c "rm -rf '${_mtHome}' && mkdir -p '${_mtHome}/run'")
+set_tests_properties(scripting.e2e.material_tabs.fresh_home PROPERTIES
+    FIXTURES_SETUP materialTabsHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_mtHome}/run)
+add_test(NAME scripting.e2e.material_tabs
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs.js
+         WORKING_DIRECTORY ${_mtHome}/run)
+set_tests_properties(scripting.e2e.material_tabs PROPERTIES
+    ENVIRONMENT "HOME=${_mtHome};JAHSHAKA_DATA_ROOT=${_mtHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED materialTabsHome
+    FIXTURES_SETUP materialTabsSession
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# ...and a SECOND process on the same home: the tab set is persisted in the
+# app's settings, and only a relaunch can prove it is read back.
+add_test(NAME scripting.e2e.material_tabs.relaunch
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs_relaunch.js
+         WORKING_DIRECTORY ${_mtHome}/run)
+set_tests_properties(scripting.e2e.material_tabs.relaunch PROPERTIES
+    ENVIRONMENT "HOME=${_mtHome};JAHSHAKA_DATA_ROOT=${_mtHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED "materialTabsHome;materialTabsSession"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 # scripting.e2e.material_bundle — MATERIAL_BUNDLE_SPEC phase 1, the acceptance
 # flow the spec names: pick an image from disk -> ONE tile -> export -> an
 # EMPTY library -> it still resolves. Two processes, because "an empty library"
@@ -1900,3 +1931,79 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     FIXTURES_REQUIRED presetApplyHome
     LABELS "scripting"
     TIMEOUT 180)
+
+# scripting.e2e.preset_seed_boot — THE FIRST-RUN SEED ON THE ROUTE A PERSON
+# TAKES (SEED-STAMP-1). preset_apply above seeds through
+# `materials.seedPresets()`, which mints each map inside `definitionFor` and
+# stamps it there; a LAUNCH runs `MaterialPresetSeeder`, which mints the maps
+# ahead of the row pass — so `definitionFor` found existing rows, answered
+# `minted = false`, and the stamp never fired. Thirty-one preset maps stood in
+# the tray and on the Assets page as the user's own tiles (owner review R10.2,
+# measured 31 members / 0 stamped before the fix). Two arms over ONE data root:
+#   1. user_first — no seed (no JAHSHAKA_SEED_PRESETS here): the user imports
+#      one picture a preset also uses, so arm 2 can prove a seed stamps only
+#      the rows it MINTS (V-2's other half). Document verbs -> --headless.
+#   2. the launch seed itself, which needs the WINDOW that starts it (and so
+#      the gate's display) with JAHSHAKA_SEED_PRESETS=1 — the env that lets a
+#      driven session take the seed a person's launch runs.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_preset_seed_user.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_user.js @ONLY)
+configure_file(scripts/e2e_preset_seed_boot.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_boot.js @ONLY)
+set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_boot)
+add_test(NAME scripting.e2e.preset_seed_boot.fresh_home
+         COMMAND sh -c "rm -rf '${_psHome}' && mkdir -p '${_psHome}/run'")
+set_tests_properties(scripting.e2e.preset_seed_boot.fresh_home PROPERTIES
+    FIXTURES_SETUP presetSeedBootHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_psHome}/run)
+add_test(NAME scripting.e2e.preset_seed_boot.user_first
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_user.js --headless
+         WORKING_DIRECTORY ${_psHome}/run)
+set_tests_properties(scripting.e2e.preset_seed_boot.user_first PROPERTIES
+    ENVIRONMENT "HOME=${_psHome};JAHSHAKA_DATA_ROOT=${_psHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED presetSeedBootHome
+    FIXTURES_SETUP presetSeedBootUser
+    LABELS "scripting"
+    TIMEOUT 180)
+jah_no_display(scripting.e2e.preset_seed_boot.user_first)
+add_test(NAME scripting.e2e.preset_seed_boot
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_boot.js
+         WORKING_DIRECTORY ${_psHome}/run)
+set_tests_properties(scripting.e2e.preset_seed_boot PROPERTIES
+    ENVIRONMENT "HOME=${_psHome};JAHSHAKA_DATA_ROOT=${_psHome}/.local/share/Jahshaka;JAHSHAKA_SEED_PRESETS=1"
+    FIXTURES_REQUIRED "presetSeedBootHome;presetSeedBootUser"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# scripting.e2e.preset_seed_race — THE USER'S IMPORT *DURING* THAT SEED
+# (SEED-SMALL-1). The two arms above are a BEFORE and an AFTER, one importer at
+# a time by construction; this one runs both at once, which is the case the
+# seed's own by-content check cannot answer (it is asked once, for all
+# thirty-one maps, before the first of them is imported). Every user door now
+# stands the seeder down first — the Assets page, the editor tray, and the
+# verbs through AssetService — so there is still exactly one row for those
+# bytes and it is the user's, unstamped, with the preset resolving to it.
+#
+# Its OWN fresh data root: it seeds and imports, and it must not move the
+# censuses the two arms above compare. A window (the seeder is started by
+# MainWindow) and JAHSHAKA_SEED_PRESETS=1, like the boot arm.
+set(_prHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_race)
+configure_file(scripts/e2e_preset_seed_race.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js @ONLY)
+add_test(NAME scripting.e2e.preset_seed_race.fresh_home
+         COMMAND sh -c "rm -rf '${_prHome}' && mkdir -p '${_prHome}/run'")
+set_tests_properties(scripting.e2e.preset_seed_race.fresh_home PROPERTIES
+    FIXTURES_SETUP presetSeedRaceHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_prHome}/run)
+add_test(NAME scripting.e2e.preset_seed_race
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js
+         WORKING_DIRECTORY ${_prHome}/run)
+set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
+    ENVIRONMENT "HOME=${_prHome};JAHSHAKA_DATA_ROOT=${_prHome}/.local/share/Jahshaka;JAHSHAKA_SEED_PRESETS=1"
+    FIXTURES_REQUIRED presetSeedRaceHome
+    LABELS "scripting"
+    TIMEOUT 300)

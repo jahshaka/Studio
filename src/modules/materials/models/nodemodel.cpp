@@ -32,6 +32,20 @@ NodeModel::NodeModel()
 	y = 0;
 }
 
+NodeModel::~NodeModel()
+{
+	// THE SOCKETS ARE THE NODE'S (MATERIALS_TABS_SPEC §2.8): they are minted
+	// in the constructor of every node type and nothing ever freed them.
+	qDeleteAll(inSockets);
+	qDeleteAll(outSockets);
+	// The widget, only if no canvas took it: a drawn node's widget belongs to
+	// the QGraphicsProxyWidget that embeds it and is already gone (the QPointer
+	// is null). A graph opened by a script is never drawn, and its widgets were
+	// leaked one per node per open.
+	if (widget && !widget->graphicsProxyWidget()) delete widget.data();
+	if (headerWidget && !headerWidget->graphicsProxyWidget()) delete headerWidget.data();
+}
+
 void NodeModel::updateStyle()
 {
 	widget->setStyleSheet(StyleSheet::MaterialsNodeMenu());

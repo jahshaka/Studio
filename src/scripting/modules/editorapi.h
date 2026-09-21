@@ -103,6 +103,10 @@ public:
     Q_INVOKABLE QVariantMap warmUpShaders();
     Q_INVOKABLE QVariant dropPointAt(double x, double y);
     Q_INVOKABLE QVariant dropTargetAt(double x, double y);
+    /// THE TRAY'S OWN DROP (DRAWERS-1): the gesture that files tiles in a
+    /// folder, posted as real drag events at the tray's list viewport.
+    Q_INVOKABLE bool dragAssetToTray(const QVariant &guidOrGuids, const QString &folderGuid,
+                                     const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool dragAsset(const QString &guid, double x, double y,
                                const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap viewportState();

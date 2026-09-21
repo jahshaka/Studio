@@ -372,6 +372,9 @@ add_executable(test_asset_widget_db
     test_asset_widget_db.cpp
     test_asset_widget_db_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/shaderassetwidget.cpp
+    # THE ONE REFRESH SIGNAL (DRAWERS-1): the drawer repopulates from
+    # ProjectMembership, like the editor's tray.
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/shaderlistwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/widgets/listwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp

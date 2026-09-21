@@ -36,7 +36,11 @@
 #      failed to execute!" and "updateMetadataVersion query failed to execute!
 #      Parameter count mismatch". A boot on the reset root must log none of the
 #      three — and neither must a boot on a genuinely fresh one, which is the
-#      reference.
+#      reference;
+#   7. THE SEED THE RESET STARTS stamps its maps as members (SEED-STAMP-1): a
+#      reset ends by running the first-run seed a LAUNCH runs — the async
+#      seeder — and until that lane it left thirty-one preset maps in the
+#      library as the user's own tiles.
 #
 # Document verbs only -> --headless, no display.
 #
@@ -52,8 +56,8 @@ check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1;
 # this script makes is cleared FIRST — a test whose verdict depends on what the
 # previous run left behind is not a gate (app.data_root learned this by
 # failing).
-rm -rf root-fresh root-live
-rm -f fresh.log fresh-boot.log populate.log reset.log afterboot.log populate.run.js reset.run.js
+rm -rf root-fresh root-live root-seed
+rm -f fresh.log fresh-boot.log populate.log reset.log afterboot.log resetseed.log populate.run.js reset.run.js
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT_FRESH="$PWD/root-fresh"
@@ -168,6 +172,38 @@ done
 AFTER_BOOT_CENSUS="$(grep '^CENSUS_' afterboot.log | sort)"
 [ "$AFTER_BOOT_CENSUS" = "$FRESH_CENSUS" ]
 check $? "…and the reset library still censuses as a first launch after a boot"
+
+# ---- 7. THE SEED THE RESET STARTS STAMPS ITS MAPS -------------------------
+# `app.resetLibrary()` ends by running the same first-run seed a launch does —
+# the ASYNC seeder, which is the route a person takes and the one whose maps
+# used to come back as the user's own tiles (SEED-STAMP-1). Its own data root,
+# so nothing it seeds moves the censuses compared above, and its own run
+# because JAHSHAKA_SEED_PRESETS must be set for a driven session to take that
+# seed at all.
+ROOT_SEED="$PWD/root-seed"
+rm -rf root-seed
+JAHSHAKA_SEED_PRESETS=1 "$BIN" --headless --data-root "$ROOT_SEED" \
+    --script "$HERE/reset_seed.js" > resetseed.log 2>&1
+check $? "the reset-seed run exits 0"
+grep -q "^ALL PASS" resetseed.log
+check $? "the reset's OWN seed stamps every preset map as a member (see resetseed.log)"
+
+# ONE PICTURE, ONE SPELLING (PATHCLEAN-1, SEED-SMALL-1). The seeder logs the
+# files its worker HASHED beside the imports it then made, and those two numbers
+# must be equal: a gap is the path-spelling defect returning —
+# `AssetIOBase::getAbsolutePath` used to hand back
+# '…/materials/../../shadergraph/wood.jpg' where the graph reader's own
+# cleanPath produced '…/shadergraph/wood.jpg', so three of the shipped pictures
+# were hashed twice under two names (34 files for 31 imports). The seed's
+# by-content filter hid the symptom; the equality gates the cause. Read off the
+# LAUNCH seed's line, the first of the two this run writes.
+SEED_LINE="$(grep -m1 'map file(s) prepared' resetseed.log)"
+test -n "$SEED_LINE"
+check $? "the seed reported what it prepared ($SEED_LINE)"
+PREPARED="$(printf '%s' "$SEED_LINE" | sed -n 's/.*seed: \([0-9]*\) map file(s) prepared.*/\1/p')"
+IMPORTED="$(printf '%s' "$SEED_LINE" | sed -n 's/.*prepared, \([0-9]*\) imported.*/\1/p')"
+[ -n "$PREPARED" ] && [ "$PREPARED" = "$IMPORTED" ]
+check $? "ONE PICTURE, ONE SPELLING: the seed hashed $PREPARED file(s) and imported $IMPORTED"
 
 if [ $fail -eq 0 ]; then echo "ALL PASS"; else echo "FAILURES"; fi
 exit $fail

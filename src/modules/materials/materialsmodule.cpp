@@ -37,6 +37,8 @@ void MaterialsModule::initialize(ModuleHost &host)
         page->setSceneOpenProbe([projectService]() { return projectService->isSceneOpen(); });
     }
     page->setProject(host.project);
+    // The open TAB SET lives in the app's settings, per project (§2.7).
+    page->setSettings(host.settings);
 
     // A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page
     // commits a definition; this puts it on every mesh already wearing that
@@ -105,6 +107,30 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
             return effectsPage->paletteTileRect(name);
         };
         graphApi->setPaletteDelegate(paletteDelegate);
+
+        // materials.open / tabs / activate / closeTab / activeTab — THE TABS
+        // (MATERIALS_TABS_SPEC §3). The five verbs and the tab bar call the
+        // same five page methods, so a click and a verb cannot disagree about
+        // what "open a material" means.
+        MaterialsApi::PageDelegate pageDelegate;
+        pageDelegate.open = [effectsPage](const QString &guid, const QString &scope) {
+            return effectsPage->openMaterialTab(guid, scope);
+        };
+        pageDelegate.newMaterial = [effectsPage](const QString &preset, const QString &name) {
+            return effectsPage->newMaterialTab(preset, name);
+        };
+        pageDelegate.tabs = [effectsPage]() { return effectsPage->materialTabs(); };
+        pageDelegate.activate = [effectsPage](const QVariant &ref) {
+            return effectsPage->activateMaterialTab(ref);
+        };
+        pageDelegate.closeTab = [effectsPage](const QVariant &ref) {
+            return effectsPage->closeMaterialTab(ref);
+        };
+        pageDelegate.activeTab = [effectsPage]() { return effectsPage->activeMaterialTab(); };
+        // materials.projectDrawer — what the module's Project drawer is
+        // showing, straight off the widget (DRAWERS-1).
+        pageDelegate.projectDrawer = [effectsPage]() { return effectsPage->projectDrawerTiles(); };
+        materialsApi->setPageDelegate(pageDelegate);
     }
     engine.addModule(materialsApi);
     engine.addModule(new MaterialApi(host));

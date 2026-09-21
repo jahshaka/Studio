@@ -50,6 +50,17 @@ public:
     Q_INVOKABLE bool deleteDrawer(int id);
     Q_INVOKABLE bool moveDrawer(int id, int parentId);
     Q_INVOKABLE bool moveToDrawer(const QString &guid, int id);
+    // ---- the open PROJECT's folders (DRAWERS-1, services/projectfolders.h) ----
+    // A FOLDER IS NOT A DRAWER: a drawer (a `collections` row, the verbs above)
+    // organises the LIBRARY, is numbered and is the same for every project; a
+    // folder organises ONE PROJECT's tray and is named by guid. The editor's
+    // asset tray and the Materials module's project drawer are both views of
+    // these five verbs.
+    Q_INVOKABLE QVariantList folders(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QString createFolder(const QString &name, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE bool renameFolder(const QString &guid, const QString &name);
+    Q_INVOKABLE bool deleteFolder(const QString &guid, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE int moveToFolder(const QVariant &guidOrGuids, const QVariant &folderGuid);
     Q_INVOKABLE QString addToProject(const QString &guid);
     Q_INVOKABLE QVariantMap updateFromLibrary(const QString &guid);
     Q_INVOKABLE QString addToScene(const QString &guid, const QVariantMap &options = QVariantMap());

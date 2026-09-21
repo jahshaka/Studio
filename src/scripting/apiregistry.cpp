@@ -263,7 +263,16 @@ QString ApiRegistry::markdown() const
         "Claude's run_script, by default — you watch the script build the scene) or\n"
         "off (command-line runs, always: the picture holds still and nothing at all\n"
         "happens between two verbs, which is what a deterministic script needs).\n"
-        "Scripts do not NEST: a run started while one is running is refused.\n\n");
+        "Scripts do not NEST: a run started while one is running is refused.\n\n"
+        "BESIDE THE VERBS, four globals the script HOST provides (they take no\n"
+        "hop and appear in no table): `console.log`/`print`, `help(topic)`, and\n"
+        "**`sleep(ms)`** — a pause of the SCRIPT thread, capped at 10 s a call,\n"
+        "which leaves the UI thread entirely free. Use it in every poll loop: a\n"
+        "tight chain of verb calls is a chain of posted events, Qt serves those\n"
+        "before zero-timers, and so a bare poll STARVES whatever the app is\n"
+        "advancing one event-loop turn at a time (an async open's slices, the\n"
+        "first-run preset seed's rows). `editor.frame(1)` does the same job when\n"
+        "there is a viewport; `sleep` is the one a headless run can use.\n\n");
     for (auto *m : mModules) {
         out += QStringLiteral("## %1\n\n").arg(m->jsName());
         out += QStringLiteral("| verb | needs | description |\n|---|---|---|\n");

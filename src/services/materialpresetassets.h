@@ -66,8 +66,10 @@ For more information see the LICENSE file
 #include <QByteArray>
 #include <QHash>
 #include <QJsonObject>
+#include <QPair>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 
 struct MaterialPreset;
 class Database;
@@ -99,6 +101,20 @@ struct Prepared
 {
     QHash<QString, QString>    mapOids;       ///< map file path -> sha256
     QHash<QString, QByteArray> thumbnails;    ///< preset name -> stored tile (PNG)
+
+    /// EVERY MAP ONCE, IN TABLE ORDER, WITH THE PRESET IT CAME IN THROUGH —
+    /// (map file path, preset NAME), the file's FIRST namer in
+    /// `MaterialPresets::all()` order.
+    ///
+    /// `mapOids` cannot answer either question: a QHash has no order, and it
+    /// remembers no owner. Both matter to the seeder, which imports these
+    /// files ITSELF (ahead of the row pass, on the pipeline's worker) and so
+    /// must write the member stamp itself — `definitionFor`'s stamp fires only
+    /// on a row IT minted, and by then these rows exist (SEED-STAMP-1). The
+    /// origin is the first preset in table order because that is the one
+    /// `definitionFor` would have recorded: it seeds in that order and
+    /// `memberstamp::stamp` never overwrites an origin.
+    QVector<QPair<QString, QString>> mapOwners;
 };
 
 /// Hash the maps and build the tiles for `presetNames` (all of them when the

@@ -101,6 +101,7 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
     # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
     ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
@@ -300,6 +301,7 @@ add_executable(test_importer_materials test_importer_materials.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp

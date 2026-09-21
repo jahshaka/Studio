@@ -98,9 +98,9 @@ public:
     /// True while the shared renderer exists. Tests and diagnostics only.
     static bool exists();
 
-    /// Renders `subject` (a mesh node or a hierarchy of them) framed by its bounding
-    /// spheres, with the preview lights. Null image if the engine is gone or the
-    /// subject has no geometry.
+    /// Renders `subject` (a mesh node or a hierarchy of them) framed by its
+    /// world bounds, in the studio environment. Null image if the engine is
+    /// gone or the subject has no geometry.
     QImage renderNode(iris::SceneNodePtr subject, QSize size);
     /// Renders `material` on the preview sphere (app/content/primitives/sphere.obj).
     QImage renderMaterial(iris::MaterialPtr material, QSize size);
@@ -132,7 +132,9 @@ private:
 
     bool ensureResources(QSize size);
     QImage render(iris::ScenePtr document, iris::CameraNodePtr camera, QSize size);
-    /// The preview scene every thumbnail shares: ambient, key light, rim light, camera.
+    /// The preview scene every thumbnail shares: the ONE studio environment
+    /// (bridge/previewenvironment.h) and the camera. No light node — the
+    /// environment is the lighting.
     static iris::ScenePtr buildPreviewScene(iris::CameraNodePtr &cameraOut);
     /// Records `why`, logs it, and returns a null image (the one failure exit).
     QImage failed(const QString &why);

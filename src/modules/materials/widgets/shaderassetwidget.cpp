@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetdelete.h"
 #include "services/assettray.h"
+#include "services/projectmembership.h"
 #include "services/projectassets.h"
 #include "services/assetstorepaths.h"
 #include <QMenu>
@@ -22,6 +23,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QFileInfo>
 #include <QDebug>
+#include <QTimer>
 
 
 #include "irisgl/core/irisutils.h"
@@ -45,10 +47,9 @@ ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()
 	setLayout(layout);
 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-	breadCrumbs = new QHBoxLayout;
-	auto breadCrumbsWidget = new QWidget;
-	breadCrumbsWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	breadCrumbsWidget->setLayout(breadCrumbs);
+	// (The breadcrumb row is GONE — DRAWERS-1's CRUD. It was an empty QHBoxLayout
+	// in a widget of its own: nothing ever put a crumb in it, because nothing
+	// here ever navigated into a folder.)
 
 	assetViewWidget = new ShaderListWidget;
     assetViewWidget->shaderContextMenuAllowed = true;
@@ -65,7 +66,6 @@ ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()
 	stackWidget = new QStackedWidget;
 
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->addWidget(breadCrumbsWidget);
 	layout->addWidget(stackWidget);
 
 	noWidget = new QWidget;
@@ -88,63 +88,88 @@ ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()
 	stackWidget->addWidget(noWidget);
 	this->setWidgetToBeShown();
 	configureConnections();
+
+	// BOTH DRAWERS REFRESH FROM ONE SIGNAL (DRAWERS-1, the owner's "creating in
+	// the project should add it to the project drawer in Materials
+	// automatically; likewise adding a material to the project should add it to
+	// the project assets"). ProjectMembership is the announcement every pin
+	// change and every folder verb makes (services/projectmembership.h,
+	// services/projectfolders.h) and the editor's asset tray has repopulated
+	// from since lane L13 — this drawer was the one view that did not, so a
+	// material minted or added anywhere else sat missing here until the user
+	// switched space. Coalesced onto the next event-loop turn, like the tray's:
+	// one gesture can pin a dozen rows.
+	connect(ProjectMembership::instance(), &ProjectMembership::changed, this,
+	        [this](const QString &projectGuid) {
+		if (!project || project->getProjectGuid().isEmpty()) return;
+		if (!projectGuid.isEmpty() && project->getProjectGuid() != projectGuid) return;
+		if (mRefreshPending) return;
+		mRefreshPending = true;
+		QTimer::singleShot(0, this, [this]() { flushPendingRefresh(); });
+	});
+}
+
+void ShaderAssetWidget::flushPendingRefresh()
+{
+	if (!mRefreshPending) return;
+	mRefreshPending = false;
+	refresh();
+}
+
+QVariantList ShaderAssetWidget::shownTiles()
+{
+	// What the user sees once the event loop turns: a repopulate the one
+	// refresh signal queued lands first (a --script run holds the loop for its
+	// whole run, exactly as AssetWidget::shownTiles has to handle).
+	flushPendingRefresh();
+	QVariantList out;
+	for (int i = 0; i < assetViewWidget->count(); ++i) {
+		const QListWidgetItem *item = assetViewWidget->item(i);
+		out.append(QVariantMap{
+			{ QStringLiteral("guid"), item->data(MODEL_GUID_ROLE).toString() },
+			{ QStringLiteral("name"), item->data(Qt::UserRole).toString() },
+		});
+	}
+	return out;
 }
 
 
 ShaderAssetWidget::~ShaderAssetWidget()
 {
-	
 }
 
-void ShaderAssetWidget::updateAssetView(const QString & path)
+void ShaderAssetWidget::updateAssetView()
 {
 	assetViewWidget->clear();
 
 	// No library or no project = nothing to list, and the stacked widget's
 	// "no scene open" page is what the user sees (setWidgetToBeShown decides
 	// which page that is). The truthful empty state, not a skipped refresh.
+	//
 	// THE PROJECT DRAWER *IS* THE EDITOR'S ASSET TRAY, filtered to materials
 	// (the four-drawer rule, OWNER_REVIEW 9: "the project asset tray should
-	// mirror the materials project drawer" — ONE LIST, TWO WINDOWS).
+	// mirror the materials project drawer" — ONE LIST, TWO WINDOWS). So it
+	// calls the function the tray calls — services/assettray.h — and carries
+	// no listing rule of its own.
 	//
-	// So it calls the function the tray calls — `assettray::list`, which is
-	// the single implementation the tray panel, its search and
-	// `assets.list({tray:true})` already share (services/assettray.h). A
-	// second query here was a second RULE: it listed pinned rows plus the
-	// folder's rows and knew nothing of the tray's collapsing (an import
-	// member, a row the editor minted rather than the user, a companion
-	// whose image is its tile), so the two windows disagreed by
-	// construction. `path` is the folder the user has navigated into — the
-	// project's own guid at the root — and the tray listing takes exactly
-	// that.
+	// FLAT, ACROSS EVERY FOLDER (DRAWERS-1). The tray can file a material in a
+	// folder now; this drawer has no breadcrumb to navigate one with (the
+	// folder code it used to carry was never wired to anything), so it shows
+	// the project's materials wherever they are filed. A drawer that listed
+	// only the root would silently lose a material the moment the user tidied
+	// up in the editor.
 	if (db && project && !project->getProjectGuid().isEmpty()) {
-		const QString folder = path.isEmpty() ? project->getProjectGuid() : path;
-		for (const auto &asset : assettray::list(db, project->getProjectGuid(), folder,
-		                                         static_cast<int>(ModelTypes::Material)))
+		for (const auto &asset : assettray::listAll(db, project->getProjectGuid(),
+		                                            static_cast<int>(ModelTypes::Material)))
 			addItem(asset);
 	}
 
 	setWidgetToBeShown();
 }
 
-void ShaderAssetWidget::addItem(const FolderRecord & folderData)
-{
-	if (!folderData.visible) return;
-
-	QListWidgetItem *item = new QListWidgetItem;
-	item->setData(Qt::DisplayRole, folderData.name);
-	item->setData(MODEL_ITEM_TYPE, MODEL_FOLDER);
-	item->setData(MODEL_GUID_ROLE, folderData.guid);
-	item->setData(MODEL_PARENT_ROLE, folderData.parent);
-
-	item->setSizeHint(currentSize);
-	item->setTextAlignment(Qt::AlignCenter);
-	item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
-	 
-	assetViewWidget->addItem(item);
-}
-
+// (addItem(FolderRecord) is DELETED — DRAWERS-1's CRUD. It built a folder tile
+// this drawer never listed: nothing called it, because updateAssetView lists
+// assets only. The drawer is flat by design now, and says so above.)
 void ShaderAssetWidget::addItem(const AssetRecord & assetData)
 {
     auto prop = QJsonDocument::fromJson(assetData.properties).object();
@@ -190,14 +215,14 @@ void ShaderAssetWidget::setUpDatabase(Database * db)
 	this->db = db;
 	//remove noWidget if preset and add assetViewWidget
 	if (sceneOpenProbe && sceneOpenProbe() && project) {
-		updateAssetView(project->getProjectGuid());
+		updateAssetView();
 		assetItemShader.selectedGuid = project->getProjectGuid();
 	}
 }
 
 void ShaderAssetWidget::refresh()
 {
-	updateAssetView(project ? project->getProjectGuid() : QString());
+	updateAssetView();
 }
 
 void ShaderAssetWidget::setWidgetToBeShown()
@@ -252,78 +277,49 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	auto *item = assetViewWidget->currentItem();
 	if (!item) return;
 
-	// A FOLDER, TOO, IS A PROJECT-SIDE REMOVE (fix round F16). This called
-	// `deleteFolderAndDependencies`, which deletes the folder AND the library
-	// rows of everything filed in it — from the PROJECT drawer, which
-	// contradicts the one rule this function exists to keep. Each asset in
-	// the folder leaves the project by the same door a single tile takes, and
-	// then the (now empty) folder row goes.
-	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
-		const QString folder = item->data(MODEL_GUID_ROLE).toString();
-		for (const auto &asset : db->fetchChildAssets(folder, project->getProjectGuid()))
-			assetdelete::removeFromProject(db, asset.guid, project->getProjectGuid());
-		db->deleteFolder(folder);
-		refresh();
-		return;
-	}
+	// (THE FOLDER BRANCH IS GONE WITH THE FOLDER TILES — DRAWERS-1. This
+	// drawer is FLAT: it lists the project's materials wherever they are
+	// filed, so it shows no folder tile and this branch was unreachable. A
+	// folder is deleted in the editor's asset tray, through
+	// assets.deleteFolder / services/projectfolders.h, which does exactly what
+	// this branch did by hand — and moves the contents up to the parent rather
+	// than taking them out of the project, which is what a Delete on a FOLDER
+	// should do. MATERIALS-TABS-1's `assetRemoved` is emitted for every row
+	// that really leaves the project, below and in the tray's own delete.)
 	const QString target = guid.isEmpty() ? item->data(MODEL_GUID_ROLE).toString() : guid;
 	if (target.isEmpty()) return;
 	assetdelete::removeFromProject(db, target, project->getProjectGuid());
+	// AND THE PAGE IS TOLD (fix round F1): a '(project)' tab is editing this
+	// project's copy, and the pin it reads and writes through has just gone.
+	emit assetRemoved(target);
 	refresh();
 }
 
 void ShaderAssetWidget::editingFinishedOnListItem(QListWidgetItem *item)
 {
+	// THE DRAWER DOES NOT RENAME ANYTHING (MATERIALS_TABS_SPEC §7). It used
+	// to write the catalog row itself — `db->renameAsset` — which is neither
+	// of the two things a rename is: it bypasses the ONE name writer (so it
+	// would rename a shipped preset, or take a preset's name) and it never
+	// touched the DEFINITION, so the stored name stayed behind and the next
+	// save of that material put the old one straight back. The page owns the
+	// rename, for every drawer; this says which row the user typed in.
 	if (!db || !project) return;   // nothing to rename without a library
-	QString newName = item->data(Qt::DisplayRole).toString();
 	const QString guid = item->data(MODEL_GUID_ROLE).toString();
-	const QString oldName = db->fetchAsset(guid).name;
-	qDebug() << oldName << newName;
-	if (newName == oldName) return;
-	else {
-		//item->setText(newName);
-		item->setData(Qt::DisplayRole, newName);
-		item->setData(Qt::UserRole, newName);
-		db->renameAsset(guid, newName);
-		refresh();
-	}
+	const QString newName = item->data(Qt::DisplayRole).toString();
+	if (guid.isEmpty() || newName.isEmpty()) return;
+	if (newName == db->fetchAsset(guid).name) return;
+	emit assetRenamed(guid, newName);
 }
 
 
-void ShaderAssetWidget::createFolder()
-{
-	if (!db || !project) return;   // a folder is a library row
-	const QString newFolder = "New Folder";
-	QListWidgetItem *item = new QListWidgetItem;
-	item->setFlags(item->flags() | Qt::ItemIsEditable);
-	item->setSizeHint(currentSize);
-	item->setTextAlignment(Qt::AlignCenter);
-	item->setIcon(QIcon(":/icons/icons8-folder-72.png"));
-
-	item->setData(MODEL_GUID_ROLE, GUIDManager::generateGUID());
-	item->setData(MODEL_PARENT_ROLE, assetItemShader.selectedGuid);
-	item->setData(MODEL_ITEM_TYPE, MODEL_FOLDER);
-
-	assetItemShader.wItem = item;
-
-	QString folderName = newFolder;
-	QStringList foldersInProject = db->fetchFolderNameByParent(assetItemShader.selectedGuid);
-
-	// If we encounter the same file, make a duplicate...
-	int increment = 1;
-	while (foldersInProject.contains(folderName)) {
-		folderName = newFolder + " " + QString::number(increment++);
-	}
-
-	const QString guid = item->data(MODEL_GUID_ROLE).toString();
-	const QString parent = item->data(MODEL_PARENT_ROLE).toString();
-
-	//// Create a new database entry for the new folder
-	db->createFolder(folderName, parent, guid, project->getProjectGuid());
-
-	// We could just addItem but this is by choice and also so we can order folders first
-	updateAssetView(assetItemShader.selectedGuid);
-}
+// (createFolder() is DELETED — DRAWERS-1's CRUD. It was a SECOND
+// implementation of the tray's own New Folder (the same duplicate-name loop,
+// the same db->createFolder call) with NO caller: nothing in the Materials
+// module ever offered the gesture, so every folder it could have made would
+// have been invisible in a drawer that lists no folders. A project folder is
+// made in one place now — services/projectfolders.h, behind
+// assets.createFolder.)
 
 void ShaderAssetWidget::addDroppedToProject(QListWidgetItem *item)
 {

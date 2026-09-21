@@ -274,6 +274,12 @@ public:
     void createAllTables();
     void createIndexes();
     void createCasTables();
+    /// THE PIN'S FILING (DRAWERS-1): `project_assets.folder`, added in place on
+    /// an older library. A folder is a PER-PROJECT fact and a pinned row is a
+    /// LIBRARY row shared by every project, so where a project files its pin
+    /// cannot live in `assets.parent` — that column would file the same asset
+    /// into one project's folder for everybody. Empty/NULL = the project root.
+    void migrateProjectAssetsTable();
 
     // INSERT ===============================================================================
     bool createProject(const QString &guid,
@@ -455,6 +461,19 @@ public:
     /// drawers/parents, and cycles (a drawer cannot move under its own subtree).
     bool setCollectionParent(const int collectionId, const int parent);
     bool renameAsset(const QString &guid, const QString &newName);
+    /// WHERE A ROW IS FILED (DRAWERS-1). `assets.parent` carries both kinds of
+    /// parent — a FOLDER guid for a filed row, the owning ASSET's guid for an
+    /// import member — so this is only ever called on a row the project owns,
+    /// with a folder guid (or the project guid for the root). The membership
+    /// rule in services/assettray.h reads the same column.
+    bool setAssetParent(const QString &guid, const QString &parent);
+    /// Reparents a project FOLDER. Cycles are the caller's to refuse
+    /// (services/projectfolders.h does).
+    bool setFolderParent(const QString &guid, const QString &parent);
+    /// WHERE THIS PROJECT FILES ITS PIN on a library asset (DRAWERS-1). Empty
+    /// = the project root. True when the pin row exists and took the value.
+    bool setProjectAssetFolder(const QString &projectGuid, const QString &assetGuid,
+                               const QString &folder);
     bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid);
     bool updateProjectBlob(const QByteArray &sceneBlob, const QString &projectGuid);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
@@ -555,6 +574,11 @@ public:
     /// records. This is THE source assets.list({scope:'project'}) and the
     /// editor's asset tray share.
     QVector<AssetRecord> fetchProjectPinnedAssets(const QString &projectGuid);
+    /// WHERE EACH PIN IS FILED: asset guid -> folder guid, for the pins this
+    /// project has filed somewhere (an unfiled pin is absent). ONE query for a
+    /// whole listing, like the batch reads above — the tray reads it on every
+    /// edge write and every search keystroke.
+    QHash<QString, QString> fetchProjectPinFolders(const QString &projectGuid);
     /// The DEPENDERS of `dependee` among the dependency edges recorded for
     /// `projectGuid` — who in this project uses the asset (a node's material
     /// slot, the ground, a decal, an emitter, a material). Duplicates removed.
@@ -593,6 +617,8 @@ public:
     // to that desktop, treating an absent/NULL desktop column value as Desktop 1.
     QVector<ProjectTileData> fetchProjects(int desktop = 0);
     QVector<FolderRecord> fetchChildFolders(const QString &parent, const QString &projectGuid);
+    /// ONE folder row by guid; an empty `guid` field when nothing has it.
+    FolderRecord fetchFolder(const QString &guid);
     QVector<FolderRecord> fetchCrumbTrail(const QString &parent, const QString &projectGuid);
     QVector<AssetRecord> fetchAssetThumbnails(const QStringList &guids);
     QByteArray fetchAssetData(const QString &guid) const;

@@ -102,6 +102,14 @@ namespace assettray {
 QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QString &folderGuid,
                           int typeFilter = -1, bool showMembers = false);
 
+/// THE WHOLE PROJECT, FLAT: `list` applied to the root AND to every folder,
+/// each asset once, order preserved (DRAWERS-1). What a drawer with no folder
+/// navigation of its own shows — the Materials module's project drawer, which
+/// is a materials-filtered VIEW of this same model and must not lose a
+/// material to a folder the user made in the editor's tray.
+QVector<AssetRecord> listAll(Database *db, const QString &projectGuid, int typeFilter = -1,
+                             bool showMembers = false);
+
 /// The rule applied to an arbitrary listing of `projectGuid`'s rows. The
 /// overload taking `pinned` (the project's pinned members, which rule 3 needs)
 /// is for a caller that has already read them — `list` has.
