@@ -45,7 +45,7 @@ public:
     Q_INVOKABLE bool flushShaderCache(int budgetMs = 20000);
     Q_INVOKABLE QVariantMap warmUpSet(const QString &action = QString());
     Q_INVOKABLE QVariantMap engineErrors(bool reset = false);
-    Q_INVOKABLE QVariantMap frameStats();
+    Q_INVOKABLE QVariantMap frameStats(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap pacing(const QString &mode = QString());
     Q_INVOKABLE QVariantMap renderStats();
     Q_INVOKABLE QVariantMap engineObjects();

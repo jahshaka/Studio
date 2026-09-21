@@ -138,6 +138,13 @@ public:
     /// viewport/framewindows.h), so a reader that stops reading cannot leave a
     /// stale rate standing.
     Stats stats() const;
+    /// FORGETS THE TWO HIGH-WATER MARKS (`worstMs`, `slowFrames`) and nothing
+    /// else — the rolling averages, the tick counts and the windows are
+    /// untouched. A running maximum answers "has this process ever hitched",
+    /// which is not the question a caller measuring ONE open or ONE create is
+    /// asking: a boot's own 2 s compile frame would swamp every reading taken
+    /// after it for the life of the session. `app.frameStats({reset:true})`.
+    void resetWorst();
 
     // ---- the script run policy (SCRIPTING_LIVE_SPEC §3.1) -----------------
     /// What a script run in flight is doing to this loop. ONE setter, called
