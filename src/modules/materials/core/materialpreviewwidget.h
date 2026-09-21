@@ -49,8 +49,9 @@ public:
 	virtual void setPreviewMaterial(iris::MaterialPtr material) = 0;
 	/// Switches the preview primitive (the legacy Model menu).
 	virtual void setPreviewModel(Model model) = 0;
-	/// The background colour behind the primitive (the legacy Background menu).
-	virtual void setPreviewBackground(const QColor &colour) = 0;
+	// (setPreviewBackground is GONE — MATPREVIEW-ENV-1, CRUD: the backdrop is
+	// the ONE studio environment, and the legacy Background menu that painted a
+	// flat colour sky over it went with it.)
 };
 
 }

@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
+#include "services/thumbnailrebuild.h"
 #include "services/projectservice.h"
 #include "services/sceneeditservice.h"
 #include "services/jahlog.h"
@@ -251,6 +252,10 @@ void AssetMaterialPanel::showContextMenu(const QPoint &pos)
                 irisLog("Customise: " + error);
                 return;
             }
+            // THE TILE IS A RENDER OF THE COPY (owner review R9(a)): the
+            // customised copy inherits the shipped preset's ICON otherwise,
+            // and an icon is not a sphere of this material.
+            thumbrebuild::rebuildOne(handle, project, copy, EngineHost::instance().engine());
             // The copy is a library material the project now holds: every
             // drawer that lists one has to hear about it (the four-drawer
             // rule — one list, two windows).

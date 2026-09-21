@@ -253,4 +253,31 @@ assert(near(material.get(setTarget).roughness, 0.2),
 // suite's follow-up run observes — a script cannot see past its own end.
 assert(material.preview(setTarget, presetGuid) === true, "a preview left up at the end of the run");
 
+// -------------------------------------------- THE STUDIO EVERY MATERIAL IS SHOWN IN
+//
+// MATPREVIEW-ENV-1: one generated environment lights the Materials dock's
+// preview, a material tile and an asset tile, and this verb is where its
+// constants are read from (the pictures themselves are measured in
+// thumbnails.studio_env). The assertions are the contract, not the values: a
+// lane tuning the room moves the numbers and keeps these true.
+var env = materials.previewEnvironment();
+assert(env.size.width > 0 && env.size.height === env.size.width / 2,
+       "the environment is an equirect (2:1), " + env.size.width + "x" + env.size.height);
+assert(env.meanRadiance > 0 && env.keyRadiance > 0,
+       "it has a mean and a key radiance (" + env.meanRadiance.toFixed(3) + " / " +
+       env.keyRadiance.toFixed(3) + ")");
+assert(env.keyRadiance > env.meanRadiance,
+       "the key — the light on a face turned to the camera — is above the sphere average: " +
+       "the lamps are on the camera's side and the wall behind the subject is dark");
+assert(isFinite(env.exposureEv) && isFinite(env.exposureChain),
+       "the exposure is a number of stops (" + env.exposureEv.toFixed(3) + ")");
+assert(env.viewDirection.length === 3, "it names the viewpoint it is authored for");
+assert(env.softboxes.length >= 2, "it carries at least two softboxes");
+for (var b = 0; b < env.softboxes.length; ++b) {
+    var box = env.softboxes[b];
+    assert(box.name.length > 0 && box.direction.length === 3 &&
+           box.halfWidthDeg > 0 && box.halfHeightDeg > 0 && box.radiance > 0,
+           "softbox '" + box.name + "' is fully described");
+}
+
 console.log("scripting.e2e.material_preview OK");

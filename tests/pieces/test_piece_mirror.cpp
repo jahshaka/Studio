@@ -135,6 +135,18 @@ int main(int argc, char **argv)
     // assertion below would be measuring nothing.
     CHECK(preview.setPreviewMesh(PreviewMesh::Cube), "cube primitive loaded");
 
+    // WARM THE ENVIRONMENT FIRST (MATPREVIEW-ENV-1). The preview scene is lit
+    // by a generated studio sky, and the engine captures that sky and convolves
+    // it for reflections INSIDE the first rendered frames — so the first
+    // fraction of a second after attach is the environment arriving, not an
+    // animation. Measured: the control's "still" picture moved 5/255 over its
+    // first 0.4 s and 0/255 once warm. The house rule, again: warm up, then
+    // measure.
+    for (int i = 0; i < 12; ++i) {
+        preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
+        engine->renderOneFrame();
+    }
+
     // ---- the control FIRST: a plain material must not move ------------------
     auto plain = iris::PbrMaterial::create();
     plain->setBaseColor(QColor::fromRgbF(0.6, 0.3, 0.2));

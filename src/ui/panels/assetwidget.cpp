@@ -2170,9 +2170,9 @@ void AssetWidget::createMaterial()
 		                     tr("The material could not be created: %1").arg(api.lastError()));
 		return;
 	}
-	// A TILE IS A RENDER OF THE MATERIAL (THUMBS-1), as the image companion's
-	// mint does: one gesture can afford one render.
-	thumbrebuild::rebuildOne(db, project, guid, EngineHost::instance().engine());
+	// (NO rebuildOne HERE: `materials.create` renders the tile itself on the
+	// studio sphere since MATPREVIEW-ENV-1 — one gesture, one render, and the
+	// panel asking for a second would draw the same sphere twice.)
 	refresh();
 	// Created AND SELECTED (the brief): opening it in the Materials module is
 	// the user's double-click, not ours.

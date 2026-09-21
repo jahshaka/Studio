@@ -7,6 +7,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_engine_asset_viewer test_engine_asset_viewer.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/engineassetscene.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     # The sky-asset switch the Assets viewer drives (VISUAL_PARITY re-audit F1).
     # Deliberately Database-free — the guid->path step is the caller's lambda —
     # so this suite drives the shipped code path, not a copy of it.
@@ -33,6 +34,7 @@ set_tests_properties(assets.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
 # because that is the smallest link closure that has the base in it.
 add_executable(test_preview_scene_lifecycle test_preview_scene_lifecycle.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginepreviewscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/previewenvironment.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_preview_scene_lifecycle PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

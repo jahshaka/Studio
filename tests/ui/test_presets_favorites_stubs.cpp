@@ -68,3 +68,29 @@ QString customise(const QString &, const QString &, Database *, Project *, QStri
     return QString();
 }
 }
+
+// The tray's Customise also asks for the new material's TILE — a render of it
+// on the studio sphere through the one shared renderer (MATPREVIEW-ENV-1,
+// owner review R9(a)). Same reasoning as the service above: a context-menu
+// gesture this layout suite never performs, whose implementation would drag
+// the engine into a panel test. What the render DOES is asserted in
+// thumbnails.studio_env.
+#include "bridge/enginehost.h"
+#include "services/thumbnailrebuild.h"
+
+EngineHost &EngineHost::instance()
+{
+    // A REAL object, never destroyed (its destructor stops the engine, which
+    // this suite has none of): `engine()` on it answers null, which is what
+    // the render request is given and what it refuses by name.
+    static EngineHost *host = new EngineHost();
+    return *host;
+}
+
+namespace thumbrebuild {
+Outcome rebuildOne(Database *, Project *, const QString &,
+                   const std::shared_ptr<jahshaka::engine::Engine> &)
+{
+    return Outcome::bad(QStringLiteral("no engine in this test"));
+}
+}

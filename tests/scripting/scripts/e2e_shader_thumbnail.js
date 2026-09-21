@@ -37,10 +37,17 @@ assert(evaluated.values.baseColor.r > 0.5, "the graph folds to a red baseColor")
 
 assert(graph.save() === true, "graph.save writes the definition back to the asset");
 
-// Before the fix this returned false with "only object and material assets
-// are supported"; the empty row is what the Assets page papered over.
+// THE MINT ALREADY RENDERS ONE (MATPREVIEW-ENV-1, owner review R9(a)): every
+// route that makes a material asks for the studio sphere, so a fresh graph
+// starts with a tile of the material it currently IS — a plain sphere, not the
+// red one it becomes below. (It used to start EMPTY, which is what the Assets
+// page papered over with a file icon.) What this suite proves is the rest of
+// the chain: the refresh re-renders the SAVED definition, and the picture
+// changes to the graph's colour.
 var before = assets.thumbnail(shaderGuid);
-assert(before.empty === true, "a freshly created graph starts with no thumbnail");
+assert(before.empty === false, "a freshly created graph already carries a tile (R9(a))");
+assert(!(before.centre.r > before.centre.g + 40),
+       "…and it is the plain material, not red: " + JSON.stringify(before.centre));
 
 assert(assets.refreshThumbnail(shaderGuid).ok === true, "assets.refreshThumbnail accepts a shader asset");
 

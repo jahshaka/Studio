@@ -486,9 +486,17 @@ int main(int argc, char **argv)
                     // the black-model defect this test exists for) and so does
                     // drifting brighter, which would mean kS had gone back to
                     // being invented.
-                    CHECK(fixedLuma > 35.0 && fixedLuma < 45.0,
+                    // RE-PINNED AGAIN (MATPREVIEW-ENV-1): 39.4 -> 71.0. The
+                    // thumbnail renderer's hand rig — a key directional and a
+                    // blue-white rim over a near-black sky — is gone; every
+                    // preview surface is now lit by the ONE generated studio
+                    // environment at one derived exposure, and this quad reads
+                    // brighter in it. The claim the case exists for is the
+                    // RELATIVE one below (lit, and far above the full-metal
+                    // reading), which moved not at all.
+                    CHECK(fixedLuma > 65.0 && fixedLuma < 77.0,
                           "5: the imported spec-gloss material is LIT, at the re-pinned value "
-                          "(39.4 +/- 5; was 40.3 with the conversion's invented white kS)");
+                          "(71.0 +/- 6 in the studio environment; 39.4 under the old hand rig)");
                     CHECK(fixedLuma > brokenLuma * 1.5,
                           "5: ... and is far brighter than the full-metal reading it used to get");
                 }
