@@ -3,6 +3,8 @@
 #include "bridge/enginematerialpreviewscene.h"
 
 #include <QFileInfo>
+#include <algorithm>
+#include <cmath>
 
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/previewenvironment.h"
@@ -16,7 +18,6 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 
 using namespace jahshaka::engine;
@@ -120,7 +121,7 @@ void EngineMaterialPreviewScene::reframe(int width, int height)
     preview::clipPlanesForFraming(mBaseDistance * kMaxZoomOut, radius,
                                   mCamera->nearClip, mCamera->farClip);
     mFramedFor = QSize(width, height);
-    mFramedRadius = radius;
+    mFramedRadius = radius;   // what the zoom factor below is a factor OF
     mOrbit.distFromPivot = mBaseDistance * mZoom;
     mOrbit.apply(mCamera);
 }
