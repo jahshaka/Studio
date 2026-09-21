@@ -70,6 +70,17 @@ function state(tag) {
 }
 
 // THE COVER IS A PREFERENCE NOW, and its default is OFF (see the header).
+//
+// PUT IT BACK FIRST, and that is not belt and braces — it is this suite's own
+// hygiene (STALE-VIEW-1 finding 4). The preference is PERSISTED in the data
+// root this suite keeps between runs, phase A switches it ON, and a run that
+// dies anywhere after that line leaves it on: the NEXT run then fails on its
+// very first assertion, "the loading cover is OFF by default", with nothing to
+// do with the change under test. The default is what an absent key means, so
+// writing it off here restores exactly the state a fresh home has, and the
+// assertion below still asserts the default — it reads the shipped value back
+// through the same verb the Preferences row calls.
+editor.loadingCover(false);
 assert(editor.loadingCover() === false, "the loading cover is OFF by default");
 assert(editor.loadingCover(true) === true, "editor.loadingCover(true) switches it on");
 
