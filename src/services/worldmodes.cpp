@@ -76,7 +76,7 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// that walks out of it walks out of the bounce. The chain is the shipped answer
 /// from this tier table on; `world.gi({cascades:false})` is still a per-scene
 /// PIN, like every other row here, for anyone who wants the one box back.
-struct PhotonRow { int technique, quality, ddgi, bounces, probeSize, cascades; };
+struct PhotonRow { int technique = 0, quality = 0, ddgi = 0, bounces = 0, probeSize = 0, cascades = 0; };
 const PhotonRow kPhotonTable[4] = {
     /* Low    */ { 1, 0, 1, 1, 0, 1 },   // VCT, 2 cascades @ 64^3, the field on, no probes
     /* Medium */ { 1, 1, 1, 1, 0, 1 },   // VCT, the chain at 64^3, DDGI-fed (voxel source)

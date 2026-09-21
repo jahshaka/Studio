@@ -44,7 +44,6 @@ class MeshPropertyWidget;
 class MobilityPropertyWidget;
 class ComponentsPropertyWidget;
 class PhysicsPropertyWidget;
-class DemoPane;
 class IEditorViewport;
 struct StudioServices;
 class Database;
@@ -379,7 +378,6 @@ private:
     /// selection's group has children; built once, like every other blade.
     ComponentsPropertyWidget* componentsPropView = nullptr;
     PhysicsPropertyWidget *physicsPropView;
-    DemoPane* demoPane;
 
     QSharedPointer<iris::Scene> scene;
 
@@ -387,7 +385,6 @@ private:
 	ShaderPropertyWidget *shaderPropView;
     IEditorViewport *sceneView = nullptr;   // was uninitialized: read before setSceneView() on some paths
 
-    QWidget *widgetProperty;
     QVBoxLayout *widgetPropertyLayout;
 };
 

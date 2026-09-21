@@ -25,11 +25,11 @@ class ColorPickerWidget : public QWidget
     Q_OBJECT
 
     QColor color;
-	ColorView *view;
-    QColorDialog* dialog;
+	ColorView *view = nullptr;
+    QColorDialog* dialog = nullptr;
 
 public:
-    int index;
+    int index = 0;
     explicit ColorPickerWidget(QWidget *parent = 0);
     ~ColorPickerWidget();
 

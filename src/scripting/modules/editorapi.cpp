@@ -32,8 +32,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/simulationclock.h"
 #include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
-#include "viewport/flyspeedsettings.h"
-#include "scripting/modules/flyspeedverb.h"
+#include "viewport/cameraspeed.h"
 #include "shell/mainwindow.h"
 #include "ui/panels/assetwidget.h"
 #include "ui/panels/scenehierarchywidget.h"
@@ -44,6 +43,7 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 #include "services/sceneissues.h"
 #include "services/sceneeditservice.h"
+#include "services/vrworld.h"
 #include "services/clipboardservice.h"
 #include "services/selectionservice.h"
 #include "services/outlinesettings.h"
@@ -326,19 +326,19 @@ QVector<VerbInfo> EditorApi::verbs() const
           "REFUSED. `size` is clamped to 0.08-0.6. This is the Preferences row's own path — the UI "
           "calls this verb.",
           Needs::Engine },
-        { "flySpeed", "editor.flySpeed() -> {multiplier, base, speed, steps:[...]}",
-          "THE EDITOR FLY SPEED, Unreal's model: a `multiplier` on a fixed `base` of 8 world "
-          "units per second, so `speed` = base * multiplier is what the RMB fly actually moves "
-          "at (before Shift's 3x boost). `steps` is the ladder the toolbar dropdown offers and "
-          "the scroll wheel walks while flying. Editor-global and persisted (camera/flySpeedEditor); "
-          "the player has its own, player.flySpeed().",
-          Needs::Document },
-        { "setFlySpeed", "editor.setFlySpeed(multiplier | \"faster\" | \"slower\") -> {multiplier, base, speed, steps:[...]}",
-          "Sets the editor fly-speed multiplier and returns the state that resulted (the same "
-          "shape editor.flySpeed() reads). A NUMBER is the multiplier itself, clamped to "
-          "0.05..32 — it need not be one of the `steps`, which are only what the UI offers. "
-          "\"faster\"/\"slower\" step one entry along that ladder, exactly as the scroll wheel "
-          "does while the right mouse button is held. The toolbar dropdown follows either way.",
+        { "cameraSpeed", "editor.cameraSpeed([n | \"faster\" | \"slower\"]) -> {n, factor, editorSpeed, playerSpeed, vrSpeed}",
+          "THE CAMERA SPEED — one dial for every way a person moves through a scene (owner R15). "
+          "`n` is an INTEGER 1..32 and 10 IS TODAY: the factor it applies is n/10, so a fresh "
+          "install flies exactly as it always did. That factor rides on each surface's own base — "
+          "the editor's RMB fly at 8 units/second (`editorSpeed`, before Shift's 3x boost), the "
+          "Player's free camera at 25 (`playerSpeed`), and a VR wearer's PROJECT speed "
+          "`world.vr().flySpeed` in metres per second (`vrSpeed`), which stays the project's "
+          "number because how fast a world is meant to be walked is authored. Called with no "
+          "argument it reads. A NUMBER sets it, clamped to 1..32; a non-integer is REFUSED (the "
+          "dial holds no decimals). \"faster\"/\"slower\" step it by one, exactly as the scroll "
+          "wheel does while the right mouse button is held (Shift there steps by five). "
+          "Editor-global and persisted as the preference `camera/speed` — not a property of a "
+          "project. The toolbar's speed button is a view of this value.",
           Needs::Document },
         { "cameraMode", "editor.cameraMode() -> \"free\" | \"orbit\"",
           "The active camera controller: \"free\" (fly camera) or \"orbit\" (arcball).",
@@ -599,6 +599,33 @@ QVector<VerbInfo> EditorApi::verbs() const
           "for the 2026-09-05 stuck-play defect (input routed to the player controller "
           "after a space round trip).",
           Needs::Document },
+        { "playEject", "editor.playEject([on]) -> bool",
+          "EJECT (owner R13, Unreal's F8) — hand the mouse and the keyboard back to the EDITOR "
+          "without stopping the run. No argument reads the latch; `true`/`false` sets it. "
+          "It exists for the one state where a run really consumes input: a POSSESSED avatar "
+          "takes every click and key, so without an eject the only way back to the editor is to "
+          "stop the simulation. Ejected, the whole widget is the editor's again — the gizmo "
+          "shortcuts (W/E/R), the fly arrows, V-hold, the pick — while physics, animation and "
+          "the possessed character keep stepping; the possession's follow camera stands down "
+          "from the view camera so the editor's fly moves the picture, and takes it back when "
+          "you return. REFUSED when nothing is playing: it is a state of the run in flight, not "
+          "a setting, and every Play and every Stop clears it. Note the asymmetry that makes it "
+          "rarely needed: with NOBODY possessed a plain left click already belongs to the editor "
+          "(editor.playInputOwner) and only the keys and the camera gestures are the run's.",
+          Needs::Document },
+        { "playInputOwner", "editor.playInputOwner() -> \"editor\" | \"controller\"",
+          "WHO OWNS A PLAIN LEFT CLICK IN THE VIEWPORT RIGHT NOW. \"controller\" only while a "
+          "run is really consuming input — a possessed avatar, and not ejected; \"editor\" "
+          "otherwise, including outside play entirely. The viewport's event handlers branch on "
+          "the SAME predicate this reports, so a click's destination is readable rather than "
+          "guessable (the 2026-09-05 stuck-play defect was exactly a routing flag nobody could "
+          "ask about). The right button, the wheel and the gameplay keys are NOT covered by "
+          "this: they stay with the run whatever it answers, until editor.playEject(true). "
+          "AND MOVING THINGS IN EDITOR PLAY IS THE GIZMO'S JOB, deliberately: the run's own "
+          "left-click physics GRAB (the picking constraint that lets you throw a crate around "
+          "by hand) belongs to the Player page, where the click is the game's — here the click "
+          "is the editor's, and the gizmo is the answer.",
+          Needs::Document },
         { "simulate", "editor.simulate(enabled=true) -> bool",
           "Starts/stops the in-place physics simulation without entering play mode.",
           Needs::Document },
@@ -620,8 +647,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "default install\" was true for as long as it was because nothing could ask. Read-only; "
           "the capabilities behind the buttons are their own verbs.",
           Needs::Window },
-        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, engineScene, heldKeys, flying}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
+        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, engineScene, windowX, windowY, windowW, windowH, heldKeys, flying}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `windowX`/`windowY`/`windowW`/`windowH` are where the viewport WIDGET sits inside its top-level window, in window pixels — the conversion a suite synthesising a real click needs, since every pixel-taking verb here (gizmoHitTest, dropTargetAt, dropPointAt) speaks the viewport's coordinates and an X click speaks the window's; all four are 0 when the viewport has no window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
           Needs::Document },
         { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
@@ -1737,28 +1764,90 @@ QVariantMap EditorApi::setPip(const QVariantMap &change)
     return pip();
 }
 
-// FLY SPEED (owner request 2026-09-07). Verb-first, per the API-first rule: the
-// toolbar dropdown and the scroll-wheel gesture both land here, on
-// FlySpeedSettings, so there is exactly one value and one clamp. Needs::Document
-// deliberately — the setting is editor-global state, not a property of a live
-// engine, so a headless run can set it and a suite can assert it with no display.
-// The argument grammar is shared with player.setFlySpeed (flyspeedverb.h).
-QVariantMap EditorApi::flySpeed()
+// THE CAMERA SPEED (owner R15, lane FLYSPEED-1). ONE verb, ONE value, and
+// every other way to change it — the toolbar's speed button, the scroll wheel
+// while flying — lands here, so there is exactly one clamp and one place the
+// preference is written. It replaced editor.flySpeed/setFlySpeed and
+// player.flySpeed/setFlySpeed, which were two multipliers on two surfaces and
+// could disagree about how fast "fast" is.
+//
+// Needs::Document deliberately — the setting is editor-global state, not a
+// property of a live engine, so a headless run can set it and a suite can
+// assert it with no display.
+QVariantMap EditorApi::cameraSpeedState() const
 {
-    return flyspeedverb::state(FlySpeedSettings::Editor);
+    // THE VR NUMBER IS THE PROJECT'S BASE TIMES THE FACTOR, read from the open
+    // document exactly as a session would read it (vrworld::resolve answers the
+    // documented default for a null scene, so a headless run still gets a
+    // number rather than a zero).
+    const iris::ScenePtr scene = (host.services && host.services->sceneEdit)
+                                     ? host.services->sceneEdit->scene() : iris::ScenePtr();
+    return QVariantMap{
+        { QStringLiteral("n"),           CameraSpeed::value() },
+        { QStringLiteral("factor"),      double(CameraSpeed::factor()) },
+        { QStringLiteral("editorSpeed"), double(CameraSpeed::editorSpeed()) },
+        { QStringLiteral("playerSpeed"), double(CameraSpeed::playerSpeed()) },
+        { QStringLiteral("vrSpeed"),
+          double(CameraSpeed::applyTo(vrworld::resolve(scene).flySpeed)) },
+    };
 }
 
-QVariantMap EditorApi::setFlySpeed(const QVariant &multiplier)
+QVariantMap EditorApi::cameraSpeed(const QVariant &speed)
 {
-    QString error;
-    if (!flyspeedverb::apply(FlySpeedSettings::Editor, multiplier, error)) {
-        fail(QStringLiteral("editor.setFlySpeed: %1").arg(error));
+    const QVariant value = scriptmod::normalizeJs(speed);
+    if (!value.isValid() || value.isNull()) return cameraSpeedState();
+
+    if (value.typeId() == QMetaType::QString) {
+        const QString word = value.toString().trimmed().toLower();
+        // TWO WORDS, THE TWO THE DOCUMENTATION NAMES. "up"/"down" rode along
+        // undocumented from the retired setFlySpeed and are deleted with it
+        // (the CRUD law): a grammar nobody can read from the docs is a grammar
+        // nobody can rely on.
+        if (word == QLatin1String("faster"))      CameraSpeed::step(+1);
+        else if (word == QLatin1String("slower")) CameraSpeed::step(-1);
+        else {
+            fail(QStringLiteral("editor.cameraSpeed: unknown speed '%1' (an integer 1..32, "
+                                "\"faster\" or \"slower\")").arg(value.toString()));
+            return QVariantMap();
+        }
+    } else if (value.typeId() == QMetaType::Bool) {
+        // A BOOLEAN IS NOT A SPEED, and Qt would hand us 1 for `true` (the
+        // world.vr defect of VR-WORLD-1, in the one other place a number is
+        // read from a script).
+        fail(QStringLiteral("editor.cameraSpeed: a true/false is not a camera speed "
+                            "(an integer 1..32, \"faster\" or \"slower\")"));
         return QVariantMap();
+    } else {
+        bool numeric = false;
+        const double number = value.toDouble(&numeric);
+        if (!numeric || !std::isfinite(number)) {
+            fail(QStringLiteral("editor.cameraSpeed: '%1' is not a camera speed (an integer "
+                                "1..32, \"faster\" or \"slower\")").arg(value.toString()));
+            return QVariantMap();
+        }
+        // AN INTEGER, NOT A ROUNDED ONE: the dial holds no decimals, so 12.5 is
+        // a caller who thinks it does and would silently get 12 or 13.
+        if (number != std::floor(number)) {
+            fail(QStringLiteral("editor.cameraSpeed: %1 is not a whole number — the camera "
+                                "speed is an integer 1..32").arg(value.toString()));
+            return QVariantMap();
+        }
+        // CLAMPED AS A DOUBLE, THEN NARROWED: `int(1e10)` is undefined
+        // behaviour, and on this compiler it lands on INT_MIN — so an absurdly
+        // large number clamped to 1 instead of 32, which is the opposite of
+        // what the caller asked for (fix round item 3).
+        const double clamped = std::min(std::max(number, double(CameraSpeed::kMin)),
+                                        double(CameraSpeed::kMax));
+        CameraSpeed::setValue(int(clamped));
     }
-    // The toolbar dropdown is a VIEW of this value; tell the shell so a
-    // scripted change moves it, exactly as the wheel gesture does.
-    if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "syncFlySpeedUi");
-    return flyspeedverb::state(FlySpeedSettings::Editor);
+    // NOTHING TO TELL THE SHELL: the toolbar's speed button follows the dial
+    // itself (CameraSpeed::setOnChanged), which is what makes the Player's
+    // wheel move it too — and nothing to write, either. The store write is
+    // deferred (CameraSpeed::flush's note) precisely so a caller in a loop —
+    // a script here, a mouse-move on the slider there — cannot turn a setting
+    // into one durable rewrite of jahsettings.ini each; the value reaches the
+    // file half a second later, or at the latest when the window closes.
+    return cameraSpeedState();
 }
 
 QString EditorApi::cameraMode()
@@ -2261,6 +2350,30 @@ bool EditorApi::playing()
     return host.services->playback->isPlaying();
 }
 
+bool EditorApi::playEject(const QVariant &on)
+{
+    if (!host.services || !host.services->playback || !host.viewport)
+        return fail("editor: not available in this session");
+    // The VIEWPORT's flag, not the service's: it is the one the event handlers
+    // branch on (the reason editor.playing() reads it too).
+    if (!on.isValid()) return host.viewport->playEjected();
+    // A RUN EXISTS, not "a run is stepping" (fix round F5): a PAUSED run is
+    // still a run — its physics world, its snapshot and its possession all
+    // live on — and ejecting from one is exactly what somebody who paused to
+    // look around is asking for.
+    if (!host.viewport->playRunLive())
+        return fail("editor.playEject: nothing is playing — eject is a state of a run in "
+                    "flight, not a setting");
+    host.viewport->setPlayEjected(on.toBool());
+    return host.viewport->playEjected();
+}
+
+QString EditorApi::playInputOwner()
+{
+    if (!host.viewport) return QStringLiteral("editor");
+    return host.viewport->playInputOwner();
+}
+
 bool EditorApi::simulate(bool enabled)
 {
     if (!host.services || !host.services->playback || !host.viewport)
@@ -2569,6 +2682,19 @@ QVariantMap EditorApi::viewportState()
     // are dead" had no reading anywhere. These two make it one.
     out.insert("heldKeys", host.viewport->heldFlyKeys());
     out.insert("flying", host.viewport->flying());
+    // WHERE THE VIEWPORT IS INSIDE THE WINDOW (PLAY-SELECT-1). A suite that
+    // synthesises a real click has the WINDOW's pixels to aim with (xdotool
+    // mousemove --window) and every verb that speaks pixels — gizmoHitTest,
+    // dropTargetAt, dropPointAt, editor.screenshot's probes — speaks the
+    // VIEWPORT's. Without this the difference is a guess, and a guess at a
+    // pixel is how a drag lands on a dock's tab bar instead of the scene
+    // (hygiene lane, 2026-09-09). Zero-sized with no window (the offscreen and
+    // stand-in viewports), which is honest: there is no window to be inside of.
+    const QRect inWindow = host.viewport->widgetRectInWindow();
+    out.insert("windowX", inWindow.x());
+    out.insert("windowY", inWindow.y());
+    out.insert("windowW", inWindow.width());
+    out.insert("windowH", inWindow.height());
     return out;
 }
 

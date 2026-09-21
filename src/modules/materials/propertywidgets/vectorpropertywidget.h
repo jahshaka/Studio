@@ -28,7 +28,7 @@ public:
 
 
 private:
-	Vec2Property *prop;
+	Vec2Property *prop = nullptr;
 	double x;
 	double y;
 	iris::Vec2 value;
@@ -57,7 +57,7 @@ public:
 
 
 private:
-	Vec3Property *prop;
+	Vec3Property *prop = nullptr;
 	double x;
 	double y;
 	double z;
@@ -85,7 +85,7 @@ public:
 	void setProp(Vec4Property *prop);
 
 private:
-	Vec4Property *prop;
+	Vec4Property *prop = nullptr;
 	double x;
 	double y;
 	double z;

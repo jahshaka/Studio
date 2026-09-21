@@ -13,7 +13,11 @@ struct NodeLibraryItem
 	QString name;
 	QString displayName;
 	QIcon icon;
-	NodeCategory nodeCategory;
+	/// NodeCategory(0) rather than NodeCategory::Input: this header only
+	/// forward-declares the enum (a scoped enum's opaque declaration is a
+	/// complete type, but its enumerators are not in scope here), and the
+	/// value is Input — nodemodel.h:16 numbers it 0.
+	NodeCategory nodeCategory = NodeCategory(0);
 	std::function<NodeModel *()> factoryFunction;
 	/// A LOAD ALIAS, not a palette entry (MATERIAL_UV_NODES_SPEC D-3).
 	/// `texCoords` and `uvTransform` merged into the single `uv` node; both

@@ -31,7 +31,7 @@ private slots:
     void pickFile(QListWidgetItem*);
 
 public:
-    int index;
+    int index = 0;
     QString filename;
     QString filepath;
     QString suffix;

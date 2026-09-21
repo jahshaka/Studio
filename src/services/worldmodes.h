@@ -63,7 +63,7 @@ enum class TierSpace { World, Photon, None };
 struct EnumOption {
     QString id;      ///< stable, script-facing ("vct", "4x", "auto")
     QString label;   ///< human ("VCT", "4x", "Auto")
-    int     value;   ///< the backing-field value
+    int     value = 0;   ///< the backing-field value
 };
 
 struct Row {

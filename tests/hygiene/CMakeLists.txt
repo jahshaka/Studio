@@ -103,8 +103,9 @@ find_package(Python3 COMPONENTS Interpreter QUIET)
 if(NOT Python3_Interpreter_FOUND)
     message(WARNING
         "no python3 interpreter found: the source gates source.gate_scope_rules (the scoping "
-        "tool's own guard) and source.notices_coverage (every vendored component is "
-        "acknowledged) are NOT registered in this build, and neither is "
+        "tool's own guard), source.notices_coverage (every vendored component is "
+        "acknowledged) and source.member_init (every member of ours carries a value) "
+        "are NOT registered in this build, and neither is "
         "document.reader_defaults or theme.no_raw_sheets in their own directories. Install "
         "python3 and reconfigure.")
 endif()
@@ -114,6 +115,27 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
     jah_no_display(source.gate_scope_rules)
+endif()
+
+# source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours
+# carries a value, either as a default member initialiser or from every constructor of
+# its class. The family this holds at zero was found one symptom at a time —
+# ProjectManager::openInPlayMode (every sample-browser open landed in the Player),
+# MainWindow::previousSpace (Ctrl+Tab's first press), WorldSettingsWidget::autoSave
+# (whether Save Scene appeared was undefined at every launch), CameraNode::isPerspective
+# (previews rendered orthographic for years), Mesh::numFaces, the 24 Database pointers of
+# DBPTR-1 — and a symptom is a slow way to find a member with no value. The allow file
+# holds the nine members whose whole point is to stay unwritten (the maths types'
+# Qt::Uninitialized overloads) and is the ONLY thing that belongs there — a red is
+# answered with the one-line initialiser. The staged baseline file is gone: the sweep
+# finished, so this gate reads zero and stays there. See the script's header for the
+# rule and its blind spots.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME source.member_init
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/member_init.py"
+                     "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.member_init PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.member_init)
 endif()
 
 # source.notices_coverage — NOTICES-1: every vendored component under

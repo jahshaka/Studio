@@ -31,7 +31,7 @@ void SliderLayoutModel::build(const QVector<SliderTileInfo> &tiles, int rowCount
     // pass 1 — stored assignments win. Sort each row by the stored orderIndex;
     // std::stable_sort keeps input order for equal indices, so a legacy store
     // with duplicate indices still yields a deterministic strip.
-    struct Stored { int index; int arrival; QString guid; };
+    struct Stored { int index = 0; int arrival = 0; QString guid; };
     QVector<QVector<Stored>> stored(rowCount);
     QVector<const SliderTileInfo*> unassigned;
 
@@ -57,7 +57,7 @@ void SliderLayoutModel::build(const QVector<SliderTileInfo> &tiles, int rowCount
     if (seed == Seed::FreeformBands) {
         // y-band -> row, ordered within the band by x; tiles that never got a
         // freeform position fall through to round-robin below
-        struct Banded { qreal normX; int arrival; const SliderTileInfo *tile; };
+        struct Banded { qreal normX = 0.0f; int arrival = 0; const SliderTileInfo *tile = nullptr; };
         QVector<QVector<Banded>> bands(rowCount);
         QVector<const SliderTileInfo*> leftovers;
         int i = 0;

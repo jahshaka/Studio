@@ -72,7 +72,19 @@ public:
 
 	void setProject(Project *p) { project = p; }
 
-    bool useAlternativeLocation;
+    /// FALSE MEANS "resolve by the open project's PIN", which is what a project
+    /// load means, and it is only ever turned on by setLibrarySource() below.
+    /// It was left indeterminate until UNINIT-SWEEP-1, and the readers that do
+    /// not call either setter reached it: ProjectService::plannedModelPaths
+    /// builds a reader, sets the handle and the project and asks
+    /// collectMeshSources for the THREADED OPEN'S PREWARM PLAN — so a byte that
+    /// happened to read true planned the prewarm by LIBRARY SOURCE while
+    /// createMesh, on its own fresh reader, resolved the PIN. For a project
+    /// whose pin has moved off the library's current content (a copy-on-write
+    /// edit, a re-imported library asset) that is a prewarm of the wrong file
+    /// and a parse of the right one ON THE UI THREAD — the threaded open's
+    /// whole point, lost, nondeterministically.
+    bool useAlternativeLocation = false;
 
     /// Resolve guids against the LIBRARY source rather than the open
     /// project's pins — what a store-asset preview wants, and what the

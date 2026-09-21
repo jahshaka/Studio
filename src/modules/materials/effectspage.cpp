@@ -945,6 +945,17 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	// page — may have no tile yet. Ask the catalog once; the open does not
 	// DEPEND on the tile (adoptGraph takes the name from the row when there is
 	// none), but the tile work that follows a save does.
+	//
+	// AND AN OPEN IS NEVER GATED ON A DRAWER (TABS-SMALL-1, measured on
+	// 849e65cde): no tile, no drawer and no repopulate can refuse this — the
+	// line below refills the view and carries on either way, which is why
+	// `materials.create` followed by `materials.open` in one breath opens,
+	// with no drawer read in between (scripting.e2e.tray_panel drives exactly
+	// that now; the workaround read DRAWERS-1 left there was not the thing
+	// that made it work). The repopulate is synchronous, and it stands the
+	// project drawer's queued one down with it (ShaderAssetWidget::refresh),
+	// so the view is current before the name is read and no second refill is
+	// left armed behind this open.
 	if (!selectCorrectItemFromDrop(guid)) refreshShaderGraph();
 
 	restoringGraph = true;

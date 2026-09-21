@@ -59,16 +59,16 @@ struct Def
 {
     /// The name everything calls it by: `scene.addPrimitive("Cube")`, the
     /// tile's caption, the Add menu's entry and the node's own name.
-    const char *name;
+    const char *name = nullptr;
     /// The reserved library guid, or nullptr for a row that has no library
     /// tile (Ground — it is an Add-menu entry and a verb name, never a tile:
     /// it is 100 m of floor, not something to drag into a drawer).
-    const char *guid;
+    const char *guid = nullptr;
     /// The bundled mesh, as a Qt resource path.
-    const char *mesh;
+    const char *mesh = nullptr;
     /// The tile's icon, relative to the app folder (IrisUtils::
     /// getAbsoluteAssetPath), or nullptr when there is no tile.
-    const char *icon;
+    const char *icon = nullptr;
 };
 
 /// The table. ORDER IS THE TILE ORDER AND THE MENU ORDER — one order, so the
@@ -123,7 +123,7 @@ inline QString canonicalGuid(const QString &guid)
     // (…0007 Gear, …0010 Sponge, …0011 Steps) and the Teapot (…0009) map to
     // NOTHING: they are not primitives any more, and answering with some other
     // shape would be worse than answering with nothing.
-    struct Moved { const char *from; const char *to; };
+    struct Moved { const char *from = nullptr; const char *to = nullptr; };
     static const Moved moved[] = {
         { "00000000-0000-0000-0000-000000001000", "00000000-0000-0000-0000-000000004000" },  // Plane
         { "00000000-0000-0000-0000-000000001001", "00000000-0000-0000-0000-000000004006" },  // Cone

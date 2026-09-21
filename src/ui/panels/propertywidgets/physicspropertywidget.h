@@ -50,12 +50,11 @@ private:
     rowundo::Binding bodyRow(const QString &text, std::function<float()> get,
                              std::function<void(float)> set);
 
-    btRigidBody *currentBody;
     StudioServices *services = nullptr;
     /// Populating the rows for a newly selected node (rowundo's guard).
     bool loading = false;
     iris::SceneNodePtr sceneNode;
-    IEditorViewport *sceneView;
+    IEditorViewport *sceneView = nullptr;
 
     CheckBoxWidget* isVisible;
     HFloatSliderWidget *massValue;

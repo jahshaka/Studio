@@ -17,7 +17,7 @@ public:
 
 private:
 	static ToolTip *instance;
-	QTimer *timer;
+	QTimer *timer = nullptr;
 	static bool morphing;
 	static QWidget *senderObj;
 	static void setLocation();

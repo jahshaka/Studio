@@ -29,7 +29,7 @@ class ColorValueWidget : public BaseWidget
     QString _title;
 
 public:
-    int index;
+    int index = 0;
     explicit ColorValueWidget(QWidget *parent = 0);
     ~ColorValueWidget();
     Ui::ColorValueWidget *ui;

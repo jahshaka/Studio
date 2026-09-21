@@ -197,25 +197,15 @@ void PhysicsPropertyWidget::setSceneView(IEditorViewport *sceneView)
 void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
 {
     if (loading || !sceneNode) return;
-    if (sceneView && sceneView->getScene())
-        currentBody = sceneView->getScene()->getPhysicsEnvironment()->hashBodies.value(sceneNode->getGUID());
 
     int shape = physicsShapeSelector->getItemData(index).toInt();
 
     edit(tr("Collision Shape"), [this, shape]() {
     this->sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(shape);
 
-    // Can I change shape of a rigid body after it created in Bullet3D?
-    // https://gamedev.stackexchange.com/a/11956/16598
-    //if (currentBody) {
-    //    currentBody->setMotionState(motionState);
-    //    currentBody->setMassProps(mass, inertia);
-    //    shape->calculateLocalInertia(mass, inertia);
-    //    currentBody->setCollisionShape(shape);
-    //    currentBody->setRestitution(bounciness);
-    //    currentBody->setCenterOfMassTransform(transform);
-    //    currentBody->updateInertiaTensor();
-    //}
+    // The live rigid body is NOT re-shaped here: Bullet wants the body rebuilt
+    // (https://gamedev.stackexchange.com/a/11956/16598) and the environment does
+    // that from the document's own property. The panel writes the document.
 
     this->sceneNode->isPhysicsBody = true;
     });

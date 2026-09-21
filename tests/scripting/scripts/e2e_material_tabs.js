@@ -15,9 +15,13 @@
 //     switching to A and back, and A's stack never saw it.
 //   * THE AUTOSAVE IS PER DOCUMENT (the spec's C5 — the defect this lane
 //     removes by construction): an edit made less than 1.5 s before leaving a
-//     material lands on THAT material. Step 6 closes B immediately after
-//     editing it, which is the shortest possible version of that race, and
-//     then reads B's stored definition back.
+//     material lands on THAT material. NOTHING HERE IS TIMED: §3 reads which
+//     document the edit armed in the same breath as the edit, §7 reads which
+//     material the write landed on out of the stored definitions, and §7b
+//     proves the close is the writer on a material edited and closed in two
+//     adjacent verbs. (Reading "a save is pending" ten verbs after the edit —
+//     one of them a preset open with a shader compile — is a wall clock, and
+//     a wall clock measures nothing in this engine: TABS-SMALL-1.)
 //
 // The graphs are authored through `graph.*` on the SCRIPT-local graph first
 // (nothing adds a node ON THE PAGE by verb — the palette drag is a rig
@@ -84,6 +88,15 @@ assert(materials.activeTab().guid === B, "the material just opened is the active
 var idB = loneNodeId(B);
 assert(graph.removeNode(idB) === true, "graph.removeNode on the page (B is active)");
 assert(graph.undoState().undoCount === 1, "B's stack carries the deletion");
+// THE AUTOSAVE IS ARMED ON THE DOCUMENT THE EDIT WAS MADE ON — read HERE, in
+// the same breath as the edit. `dirty` is "a save is pending", and pending is
+// a 1.5 s WALL CLOCK: it used to be read ten verbs later, one of them a preset
+// open with a shader compile and two disk-cache writes, so under a cold-cache
+// gate the timer had legitimately fired and the suite redded on the clock
+// rather than on the product (a wall-clock settle measures nothing in this
+// engine). What the clock cannot change is WHICH document the edit armed.
+assert(tabOf(B).dirty === true, "the edit armed the autosave on B");
+assert(tabOf(A).dirty === false, "...and on B alone — A's document is clean");
 
 // ---- 4. the stack is PER DOCUMENT ----------------------------------------
 assert(materials.activate(A) === true, "materials.activate(A)");
@@ -104,16 +117,35 @@ assert(materials.tabs().length === 3, "three tabs");
 assert(materials.closeTab(preset.guid) === true, "materials.closeTab(preset)");
 assert(materials.tabs().length === 2, "two tabs again");
 
-// ---- 7. closing FLUSHES the pending autosave, onto its OWN material ------
-// B's deletion was made moments ago and its 1.5 s autosave has not fired: the
-// close writes it — to B. (The page's single timer used to fire against
-// whatever material was open 1.5 s later.)
+// ---- 7. the pending save lands on its OWN material ----------------------
+// B's deletion (§3) armed B's autosave and nothing else's — that was read at
+// the edit. WHERE the write lands is what this lane exists for, and it is read
+// off the stored definitions, never off a clock: whichever of the two writers
+// ran (the 1.5 s timer, or the close below), the edit reached B and left A
+// alone. The page's single timer used to fire against whatever material was
+// open 1.5 s later, which this catches as A having lost a node.
 assert(materials.activate(B) === true, "B is active again");
-assert(tabOf(B).dirty === true, "B is dirty — its autosave is pending");
 assert(materials.closeTab(B) === true, "materials.closeTab(B)");
 assert(materials.tabs().length === 1 && tabGuids()[0] === A, "one tab left: A");
-assert(nodeCount(B) === 1, "B's stored definition lost the node — the close flushed ITS save");
+assert(nodeCount(B) === 1, "B's stored definition lost the node — the save was B's own");
 assert(nodeCount(A) === 2, "A is untouched — the edit never reached the other material");
+
+// ---- 7b. and the CLOSE is what writes it, with nothing in between --------
+// On a material of its own, so that no verb at all stands between the edit and
+// the close: two adjacent verbs cannot straddle a 1.5 s timer, whatever the
+// box is doing, so this arm proves the close FLUSHES (rather than merely
+// agreeing with a timer that has already fired) without measuring time.
+var closeMe = materials.create("Tabs Close", { graph: true });
+assert(graph.addNode("float").length > 0, "C: a float node");
+assert(graph.save() === true, "C: saved (a two-node definition)");
+assert(nodeCount(closeMe) === 2, "C's stored definition carries two nodes");
+assert(materials.open(closeMe).guid === closeMe, "materials.open(C)");
+var idC = loneNodeId(closeMe);
+assert(graph.removeNode(idC) === true, "C: the node is removed on the page");
+assert(tabOf(closeMe).dirty === true, "...and C's autosave is armed (read at the edit)");
+assert(materials.closeTab(closeMe) === true, "materials.closeTab(C) — in the next breath");
+assert(nodeCount(closeMe) === 1, "the CLOSE wrote it: C's stored definition lost the node");
+assert(materials.tabs().length === 1 && tabGuids()[0] === A, "one tab left again: A");
 
 // ---- 8. the project's own copy is a SECOND document ----------------------
 // The four-drawer rule: a library original and the project's pinned copy are

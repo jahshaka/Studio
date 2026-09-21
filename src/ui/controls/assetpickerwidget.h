@@ -60,7 +60,7 @@ protected:
 
 private:
     Ui::AssetPickerWidget *ui;
-	ModelTypes type;
+	ModelTypes type = ModelTypes::Undefined;
     ImportHandler importHandler;
     QPushButton *importButton = nullptr;
 };

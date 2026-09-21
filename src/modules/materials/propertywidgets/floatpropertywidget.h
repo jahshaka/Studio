@@ -18,7 +18,7 @@ public:
 	float getValue();
 
 private:
-	FloatProperty *prop;
+	FloatProperty *prop = nullptr;
 	float x = 0;
 	WidgetFloat *wid;
 	void setConnections();

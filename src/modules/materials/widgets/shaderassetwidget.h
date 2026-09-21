@@ -18,7 +18,7 @@
 
 struct AssetItemShader {
 	QString selectedPath; 
-	QListWidgetItem *wItem;
+	QListWidgetItem *wItem = nullptr;
 	QString selectedGuid;
 	// add one for assetView maybe...
 };

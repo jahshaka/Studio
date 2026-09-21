@@ -31,7 +31,7 @@ public:
 	float dimentions;
 	qreal opactyValue = 0.0;
 	QGraphicsTextItem* text;
-	GraphNode* node;
+	GraphNode* node = nullptr;
 	GraphNode* owner;
 
 	int socketIndex = -1;
@@ -58,9 +58,7 @@ private:
 	bool hovered = false;
 	SocketDragHighlight dragHighlight = SocketDragHighlight::None;
 	int outSocketXOffset;
-	int outSocketYOffset;
 	int inSocketXOffset;
-	int inSocketYOffset;
 
 	void setConnected(bool value);
 

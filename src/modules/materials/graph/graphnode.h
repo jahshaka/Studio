@@ -45,7 +45,7 @@ public:
 	QColor titleColor;
 	QIcon icon;
 	QTimer updateTimer;
-	NodeGraph* nodeGraph;
+	NodeGraph* nodeGraph = nullptr;
 	NodeModel* model;
 
 	GraphNode(QGraphicsItem* parent);

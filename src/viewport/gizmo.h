@@ -229,6 +229,14 @@ protected:
 	/// an empty command on the stack would eat the user's next Ctrl+Z (the
 	/// lesson the group path records below).
 	bool cancelPending = false;
+	/// A DRAG MADE INSIDE A PLAY RUN IS NOT AN UNDO STEP (PLAY-SELECT-1, owner
+	/// R13). The run's edits are thrown away at Stop (PlayBack's snapshot), so
+	/// an undo entry for one would rewind a node to a pose that stopped
+	/// existing the moment Stop was pressed. Unlike `cancelPending` the
+	/// transform STAYS — the object really did move while the simulation ran;
+	/// it is only the stack that hears nothing. Set by the host at
+	/// startDragging (setTransientDrag) and read by createUndoAction.
+	bool transientDrag = false;
 
 	// ---- GROUP TRANSFORM (EDITOR_MULTISELECT_SPEC §2.4) -------------------
 	//
@@ -407,6 +415,11 @@ public:
 	/// single-node behaviour exactly.
 	void setGroup(const QList<iris::SceneNodePtr> &nodes);
 	int groupSize() const { return group.size(); }
+
+	/// "This gesture records no undo step" — see `transientDrag`. Latched per
+	/// gesture by the host at the moment the drag starts.
+	void setTransientDrag(bool transient) { transientDrag = transient; }
+	bool isTransientDrag() const { return transientDrag; }
 
 	// undo-redo
 	void setInitialTransform();

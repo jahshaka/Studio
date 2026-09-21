@@ -53,7 +53,7 @@ class HFloatSliderWidget : public BaseWidget
     bool spinboxEditing = false;
 
 public:
-    int index;
+    int index = 0;
     HFloatSliderWidget(QWidget *parent = 0);
     ~HFloatSliderWidget();
 

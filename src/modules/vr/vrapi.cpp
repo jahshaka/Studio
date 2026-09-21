@@ -696,7 +696,10 @@ QVector<VerbInfo> VrApi::verbs() const
           "session changed, and `session` says whether a session has latched a project's "
           "values (false = the live document is being read, which is what a gate injecting "
           "input at a desktop editor sees).\n\n"
-          "`flySpeed` is metres per second; `fly` is \"aim\" (the stick hand's own ray — "
+          "`flySpeed` is metres per second AND IT IS THE PROJECT'S BASE, session override and "
+          "all: a wearer moves at it times the person's own speed dial (editor.cameraSpeed, an "
+          "integer 1-32 where 10 is normal), and `vr.state().flySpeed` is that effective "
+          "number. `fly` is \"aim\" (the stick hand's own ray — "
           "Unreal's VR editor, and the default), \"gaze\" (where the wearer looks) or "
           "\"level\" (the head's heading with the pitch thrown away, the comfort option).\n\n"
           "`turn` is \"snap\" (the default — a step per flick of the stick, which is what "
@@ -1501,9 +1504,11 @@ void VrApi::installInteraction()
     // the fly direction, the turn, its step or rate and the dominant hand are
     // document fields (`world.vr`), adopted by a session when it begins and
     // overridable for that session by `vr.locomotion`. Before this they were
-    // the DESKTOP camera's speed (FlySpeedSettings) and four session-only
-    // fields with defaults of their own — one wearer with two speeds, and
-    // nothing a project could carry.
+    // the DESKTOP camera's own multiplier and four session-only fields with
+    // defaults of their own — one wearer with two speeds, and nothing a
+    // project could carry. The person's speed DIAL (CameraSpeed, FLYSPEED-1)
+    // multiplies what this resolves to, at the three sites that fly a wearer;
+    // these Settings stay the project's own numbers.
     deps.locomotion = [this] {
         return vrworld::resolve(moduleHost.viewport ? moduleHost.viewport->getScene()
                                                     : iris::ScenePtr());

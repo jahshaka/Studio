@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "player/playermousecontroller.h"
 #include "services/vrworld.h"
+#include "viewport/cameraspeed.h"
 
 using namespace jahshaka::engine;
 
@@ -346,19 +347,21 @@ QVariantMap PlayerVr::idleReport()
     out[QStringLiteral("head")] = vrnames::pose(VrPose{});
     // NO SESSION, so no project is latched: the documented default, which is
     // what "a player that has never been asked for a headset" can honestly say.
-    out[QStringLiteral("flySpeed")] = double(vrworld::resolve(iris::ScenePtr()).flySpeed);
+    out[QStringLiteral("flySpeed")] =
+        double(CameraSpeed::applyTo(vrworld::resolve(iris::ScenePtr()).flySpeed));
     return out;
 }
 
-/// THE WEARER'S SPEED IS THE PROJECT'S (lane VR-WORLD-1): `world.vr`'s
-/// `flySpeed` in metres per second — latched when this session began — with the
-/// session's `vr.locomotion` override if it has one. The same number the
-/// editor's VR preview and the thumbstick fly at, because a wearer has ONE
-/// speed in a world however they got into it. It was the desktop Player's
-/// 25 u/s camera speed until VR had a setting of its own.
+/// THE WEARER'S SPEED IS THE PROJECT'S, TIMES THE PERSON'S DIAL (lane
+/// VR-WORLD-1, then FLYSPEED-1): `world.vr`'s `flySpeed` in metres per second —
+/// latched when this session began, with the session's `vr.locomotion` override
+/// if it has one — multiplied by `CameraSpeed`'s factor n/10, the one editor-
+/// global speed dial the desktop fly rides on too. The same number the editor's
+/// VR preview and the thumbstick fly at, because a wearer has ONE speed in a
+/// world however they got into it.
 float PlayerVr::wearerSpeed() const
 {
-    return vrworld::resolve(mDocument.lock()).flySpeed;
+    return CameraSpeed::applyTo(vrworld::resolve(mDocument.lock()).flySpeed);
 }
 
 QVariantMap PlayerVr::report() const

@@ -55,15 +55,15 @@ public:
 
 	QString textureGuid;
 	QString path;
-	CubeMapPosition position;
-	QVBoxLayout* layout;
+	CubeMapPosition position = CubeMapPosition::front;   // the face the enum numbers 0
+	QVBoxLayout* layout = nullptr;
 	QImage image;
 	QPixmap pixmap;
 	Rotation rotation = Rotation::Zero;
-	QLabel* positionLabel;
-	QWidget* container;
-	QPushButton* select;
-	QPushButton* clear;
+	QLabel* positionLabel = nullptr;
+	QWidget* container = nullptr;
+	QPushButton* select = nullptr;
+	QPushButton* clear = nullptr;
 	CubeMapWidget* parent;
 private:
 	void configureUi();

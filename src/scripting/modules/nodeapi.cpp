@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "services/nodecomponents.h"
 #include "services/selectionservice.h"
 #include "services/undoservice.h"
+#include "irisgl/document/physics/environment.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -94,6 +95,14 @@ QVector<VerbInfo> NodeApi::verbs() const
           "`scaleUniform` overrides the flag for one call in either direction (true = preserve the ratio anyway, "
           "the verb's spelling of Shift-dragging a scale field; false = per-channel even on a locked node) and is "
           "REFUSED on a call that does not name exactly one channel, where it could only be a misunderstanding. "
+          "WHILE THE PHYSICS WORLD IS STEPPING (play, or editor.simulate) a write onto a RIGID "
+          "BODY moves the body too \u2014 placed at rest and woken \u2014 so the object carries on "
+          "from where it was put instead of being overwritten from the solver's pose on the next "
+          "step (PLAY-SELECT-1: the hand wins over the simulation, the same rule the gizmo takes "
+          "during play), and the write is TRANSIENT — it pushes no undo command, because Stop "
+          "throws the run's transforms away and a command for one would rewind the node to a "
+          "pose that stopped existing when Stop was pressed. "
+          ""
           "WITH NO CHANGE \u2014 node.transform(id) \u2014 it is a pure READ: "
           "nothing is pushed onto the undo stack and a SCENE_STATIC node stays static (a write of a node's own "
           "values back onto it still counts as a move, and rule 4 demotes the subtree for it).",
@@ -829,8 +838,37 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
         scale = iris::scalelock::apply(node->getLocalScale(), channel, scale[channel], uniform);
     }
 
-    host.services->undo->push(new TransformSceneNodeCommand(
-        node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));
+    // A RUN'S EDIT IS NOT AN UNDO STEP (PLAY-SELECT-1 fix round, F9 — the same
+    // rule the gizmo's drag takes, which this verb's doc already claimed).
+    // Stop throws the run's transforms away (PlayBack's snapshot), so a
+    // command for one would rewind the node to a pose that stopped existing
+    // the moment Stop was pressed — and it would sit on the stack under the
+    // user's next Ctrl+Z. The write still lands, live; only the stack is
+    // spared. `isPlaying` on the DOCUMENT is the run-exists reading (it stays
+    // true through a pause, which is exactly when an edit is most likely).
+    const iris::ScenePtr owningScene = node->getScene();
+    const bool transient = owningScene && owningScene->isPlaying();
+    if (transient) {
+        node->setLocalPos(pos);
+        node->setLocalRot(iris::Quat::fromEulerAngles(rotEuler));
+        node->setLocalScale(scale);
+        if (host.services && host.services->sceneEdit)
+            host.services->sceneEdit->notifyTransformChanged();
+    } else {
+        host.services->undo->push(new TransformSceneNodeCommand(
+            node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));
+    }
+
+    // A HAND THAT MOVES A SIMULATED BODY MOVES THE BODY (PLAY-SELECT-1, the
+    // same rule the gizmo takes during play). Without this the write lands on
+    // the NODE and the very next physics step overwrites it from the body,
+    // which is still where the solver left it — a move that visibly undoes
+    // itself one frame later. The body is placed at rest and woken, so the
+    // object carries on from where it was put; a node with no body in the
+    // world answers false and nothing happens.
+    if (owningScene)
+        if (const auto env = owningScene->getPhysicsEnvironment())
+            if (env->isSimulating()) env->syncBodyToNode(node);
 
     return { { "position", vecToJs(node->getLocalPos()) },
              { "rotation", vecToJs(node->getLocalRot().toEulerAngles()) },
@@ -889,7 +927,7 @@ QStringList NodeApi::propertyKeys(const iris::SceneNodePtr &node)
 // says so in its doc string). The mapping lives HERE, at the verb, because the
 // document layer's row is shared with the properties panel's combo box.
 namespace {
-struct CullName { const char *name; int value; };
+struct CullName { const char *name = nullptr; int value = 0; };
 const CullName kCullModes[] = {
     { "none",     int(iris::FaceCullingMode::None) },
     { "front",    int(iris::FaceCullingMode::Front) },
@@ -1307,7 +1345,7 @@ bool NodeApi::setDecalMaps(const QString &id, const QVariant &maps)
 
     // Parse and validate EVERY requested map before writing any of them: a
     // partial apply would leave the node half-bound with one undo entry.
-    struct Change { DecalMapKind kind; QString guid; QString was; };
+    struct Change { DecalMapKind kind = DecalMapKind::Diffuse; QString guid; QString was; };
     QVector<Change> changes;
     const struct { const char *key; DecalMapKind kind; } kinds[] = {
         { "diffuse",  DecalMapKind::Diffuse },
@@ -1446,7 +1484,7 @@ QVariant NodeApi::lightTexture(const QString &id)
 
 namespace {
 
-struct EnumRow { const char *name; int value; };
+struct EnumRow { const char *name = nullptr; int value = 0; };
 
 const EnumRow kPhysicsTypes[] = {
     { "none",      static_cast<int>(iris::PhysicsType::None) },

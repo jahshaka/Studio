@@ -52,7 +52,6 @@ public:
 	void configureStylesheet();
 	/// WHAT THE USER TYPED, trimmed, empty when they typed nothing.
 	QString getName() { return name; }
-	int getType() { return type; }
 	NodeGraphPreset getPreset() { return currentInfoSelected; }
 
 	void createViewWithOptions();
@@ -71,18 +70,16 @@ public:
 
 private:
 	QString name;
-	int type; // presets = 1, assets =2 
 
-	QPushButton * cancel;
-	QPushButton * confirm;
-	QLineEdit * nameEdit;
-	QWidget* options;
-	QWidget *holder;
-	QTabWidget *tabbedWidget;
-	QWidget *optionsScroll;
-    QWidget *optionsWidget;
+	QPushButton * cancel = nullptr;
+	QPushButton * confirm = nullptr;
+	QLineEdit * nameEdit = nullptr;
+	QWidget* options = nullptr;
+	QWidget *holder = nullptr;
+	QTabWidget *tabbedWidget = nullptr;
+	QWidget *optionsScroll = nullptr;
 	NodeGraphPreset currentInfoSelected;
-	QLabel *infoLabel;
+	QLabel *infoLabel = nullptr;
     int num_of_widgets_per_row = 3;
 
 

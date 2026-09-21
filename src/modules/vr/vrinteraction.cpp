@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
+#include "viewport/cameraspeed.h"
 #include "services/vrorigin.h"
 #include "viewport/gizmo.h"
 #include "viewport/gizmomode.h"
@@ -1195,7 +1196,9 @@ bool VrInteraction::fly(float stickX, float stickY, float seconds, bool boost,
     iris::Quat headRot;
     if (!rigNow(rig, head, headRot)) return false;
     const vrworld::Settings loco = locomotion();
-    const float speed = loco.flySpeed;
+    // THE PROJECT'S BASE TIMES THE PERSON'S DIAL (FLYSPEED-1) — one speed for
+    // the wearer, the desktop fly and the Player, through CameraSpeed.
+    const float speed = CameraSpeed::applyTo(loco.flySpeed);
     if (speed <= 0.0f) return false;
     // ALONG THE HAND when the option says so and the hand is located (the
     // owner: "fly like Unreal"); level along the head's heading otherwise.
@@ -1785,7 +1788,10 @@ QVariantMap VrInteraction::report() const
     out[QStringLiteral("snapTurnDegrees")] = double(loco.snapTurnDegrees);
     out[QStringLiteral("smoothTurnDegreesPerSecond")] =
         double(loco.smoothTurnDegreesPerSecond);
-    out[QStringLiteral("flySpeed")] = double(loco.flySpeed);
+    // THE EFFECTIVE speed, which is what a caller measuring a walk must divide
+    // by; `world.vr().flySpeed` is the project's own base beside it, and
+    // `editor.cameraSpeed()` the factor between them (FLYSPEED-1).
+    out[QStringLiteral("flySpeed")] = double(CameraSpeed::applyTo(loco.flySpeed));
     out[QStringLiteral("fly")] = QString::fromLatin1(iris::vrFlyModeName(loco.fly));
     out[QStringLiteral("installed")] = mInstalled;
     out[QStringLiteral("grabbing")] = mGesture.active;
