@@ -725,6 +725,26 @@ void AssetWidget::updateAssetView(const QString &path, int filter)
     goUpOneControl->setEnabled(false);
 }
 
+QWidget *AssetWidget::tileViewport() const
+{
+	// The panel itself: the drag events arrive here (see folderItemAt).
+	return const_cast<AssetWidget *>(this);
+}
+
+QPoint AssetWidget::tileCentre(const QString &guid)
+{
+	flushPendingRefresh();
+	for (int i = 0; i < ui->assetView->count(); ++i) {
+		QListWidgetItem *item = ui->assetView->item(i);
+		if (item->data(MODEL_GUID_ROLE).toString() != guid) continue;
+		const QRect rect = ui->assetView->visualItemRect(item);
+		if (rect.isEmpty()) return QPoint();
+		// In THIS WIDGET's coordinates, which is where a drop lands.
+		return ui->assetView->viewport()->mapTo(this, rect.center());
+	}
+	return QPoint();
+}
+
 QVariantList AssetWidget::shownTiles()
 {
     // What the user sees once the event loop turns: a repopulate a pin change
@@ -831,40 +851,6 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 			    break;
 		    }
 
-		    // THE INTERNAL DROP (DRAWERS-1): a tile, or a whole selection,
-		    // dropped ON A FOLDER TILE is a move into that folder. It lives
-		    // here, on the viewport, for the same reason the drag does — this
-		    // widget owns the gesture and the view's own machinery stays
-		    // disarmed (ui/panels/singledragowner.h). Consuming the events is
-		    // load-bearing: QListWidget's own drop would otherwise try to
-		    // insert the dragged rows into the list as items.
-		    case QEvent::DragEnter:
-		    case QEvent::DragMove: {
-			    auto evt = static_cast<QDragMoveEvent*>(event);
-			    if (folderItemAt(evt->position().toPoint())) {
-				    evt->setDropAction(Qt::MoveAction);
-				    evt->accept();
-				    return true;
-			    }
-			    // Not over a folder: a file drop from the desktop is still an
-			    // import (the widget's own dropEvent), anything else is not
-			    // ours.
-			    if (evt->mimeData()->hasUrls()) { evt->acceptProposedAction(); return false; }
-			    evt->ignore();
-			    return true;
-		    }
-
-		    case QEvent::Drop: {
-			    auto evt = static_cast<QDropEvent*>(event);
-			    QListWidgetItem *folder = folderItemAt(evt->position().toPoint());
-			    if (!folder) return false;   // URLs fall through to dropEvent
-			    const QStringList guids = AssetDrag::guidsOf(evt->mimeData());
-			    evt->setDropAction(Qt::MoveAction);
-			    evt->accept();
-			    moveToFolder(guids, folder->data(MODEL_GUID_ROLE).toString());
-			    return true;
-		    }
-
 		    default: break;
 		}
 	}
@@ -872,9 +858,18 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 	return QObject::eventFilter(watched, event);
 }
 
+// THE DROP TARGET UNDER THE CURSOR, from a point in THIS WIDGET's coordinates
+// (DRAWERS-1). The drag events arrive HERE and not on the list's viewport, and
+// that is not a choice: the view's viewport does not accept drops (measured —
+// `viewport()->acceptDrops()` is false on this panel, which is why the file-URL
+// drop has always been handled by AssetWidget::dropEvent), and Qt delivers a
+// drag only to a widget that does, propagating up until it finds one. A drop
+// handler installed on the viewport would never have run.
 QListWidgetItem *AssetWidget::folderItemAt(const QPoint &pos) const
 {
-	QListWidgetItem *item = ui->assetView->itemAt(pos);
+	QListWidgetItem *item =
+		ui->assetView->itemAt(ui->assetView->viewport()->mapFrom(
+			const_cast<AssetWidget *>(this), pos));
 	if (!item || item->data(MODEL_ITEM_TYPE).toInt() != MODEL_FOLDER) return nullptr;
 	return item;
 }
@@ -909,11 +904,45 @@ void AssetWidget::dragEnterEvent(QDragEnterEvent *evt)
 {
 	if (evt->mimeData()->hasUrls()) {
 		evt->acceptProposedAction();
+		return;
 	}
+	// THE INTERNAL DROP (DRAWERS-1): a tile, or a whole selection, dropped ON A
+	// FOLDER TILE is a move into that folder. The gesture carries the ONE asset
+	// payload (ui/controls/assetdrag.h) — the same one this panel's own drag
+	// builds — so the enter is accepted for any asset drag and dragMoveEvent
+	// decides, tile by tile, whether this particular pixel takes one.
+	if (AssetDrag::isAssetDrag(evt->mimeData())) evt->acceptProposedAction();
+}
+
+void AssetWidget::dragMoveEvent(QDragMoveEvent *evt)
+{
+	if (evt->mimeData()->hasUrls()) { evt->acceptProposedAction(); return; }
+	if (!AssetDrag::isAssetDrag(evt->mimeData())) { evt->ignore(); return; }
+	// ONLY a folder tile takes a move — over anything else the gesture reads
+	// as refused, which is what the cursor tells the user.
+	if (!folderItemAt(evt->position().toPoint())) { evt->ignore(); return; }
+	evt->setDropAction(Qt::MoveAction);
+	evt->accept();
 }
 
 void AssetWidget::dropEvent(QDropEvent *evt)
 {
+	// An internal drop first: it is the only one that is not a file import.
+	if (!evt->mimeData()->hasUrls() && AssetDrag::isAssetDrag(evt->mimeData())) {
+		QListWidgetItem *folder = folderItemAt(evt->position().toPoint());
+		if (!folder) { evt->ignore(); return; }
+		const QStringList guids = AssetDrag::guidsOf(evt->mimeData());
+		evt->setDropAction(Qt::MoveAction);
+		evt->accept();
+		// DEFERRED out of the handler, like the import below: the move puts a
+		// command on the undo stack and repopulates the list the drag source
+		// still belongs to, and a drop handler is inside the source's nested
+		// event loop.
+		const QString target = folder->data(MODEL_GUID_ROLE).toString();
+		QTimer::singleShot(0, this, [this, guids, target]() { moveToFolder(guids, target); });
+		return;
+	}
+
 	QList<QUrl> droppedUrls = evt->mimeData()->urls();
 	QStringList list;
 	for (auto url : droppedUrls) {

@@ -245,12 +245,28 @@ var matA = companionOf(texA), matB = companionOf(texB);
 assert(matA && matB && matA !== matB, "two library materials in the project");
 assert(guidsOf(panelRows()).indexOf(matA) >= 0 && guidsOf(panelRows()).indexOf(matB) >= 0,
        "both are tiles at the ROOT");
-assert(assets.moveToFolder([matA, matB], props) === 2,
-       "assets.moveToFolder([two guids], the folder) moved two rows");
+// THE GESTURE ITSELF, not just the verb it calls: real QDragEnter/QDragMove/
+// QDrop events at the CENTRE of the folder's tile in the tray, carrying the
+// one asset payload with BOTH guids in it (editor.dragAssetToTray). This is
+// what a person's drag of a multi-selection onto a folder does.
+assert(editor.dragAssetToTray([matA, matB], props) === true,
+       "the tray takes a DROP of a two-tile selection on the folder tile");
 assert(guidsOf(panelRows()).indexOf(matA) < 0 && guidsOf(panelRows()).indexOf(matB) < 0,
        "... and neither is at the ROOT any more");
 assert(assets.folders()[0].count === 2, "... the folder holds two tiles");
 agree("after a multi-move");
+
+// A drop on an ASSET tile is not a move (only a folder takes one).
+var stray = materials.create("Not A Folder", { folder: "" });
+assert(editor.dragAssetToTray([matA], stray) === false,
+       "a drop on an ASSET tile is refused: " + app.lastError());
+assert(assets.folders()[0].count === 2, "... and nothing moved");
+
+// The verb the drop calls, on its own — one row, back to the ROOT.
+assert(assets.moveToFolder(matB, null) === 1,
+       "assets.moveToFolder(guid, null) brings one row back to the root");
+assert(guidsOf(panelRows()).indexOf(matB) >= 0, "... and it is a root tile again");
+assert(assets.moveToFolder([matB], props) === 1, "... and back in");
 
 // The refusals a drop can hit, as the verb answers them.
 try {

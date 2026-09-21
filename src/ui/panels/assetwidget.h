@@ -280,6 +280,13 @@ public:
     /// tray rule (services/assettray.h) — the same listing assets.list({tray:
     /// true}) answers with.
     void updateAssetView(const QString &path, int filter = 0);
+    /// WHERE A TILE IS, for a synthesised gesture (DRAWERS-1,
+    /// `editor.dragAssetToTray`): the widget a drop is posted to — THIS panel,
+    /// because the list's viewport does not accept drops — and the point at the
+    /// centre of `guid`'s tile in that widget's coordinates. A null point when
+    /// the tray is not showing it, or is not laid out.
+    QWidget *tileViewport() const;
+    QPoint tileCentre(const QString &guid);
     /// What the tray is SHOWING, in order: [{guid, name, folder}] (`name` is
     /// the catalog name for an asset, the label for a folder) — the
     /// editor.trayAssets verb, which is how a suite proves the panel and the
@@ -330,6 +337,7 @@ signals:
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
     void dragEnterEvent(QDragEnterEvent*) override;
+    void dragMoveEvent(QDragMoveEvent*) override;
     void dropEvent(QDropEvent*) override;
 
     /// The texture/material .jaf exports' payload: each member guid's stored
