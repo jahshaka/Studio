@@ -94,7 +94,9 @@ var waitsAtRest = assets.storeStatus().deviceWaits;
 var peek = materials.loadGraph("Brick PBR");
 assert(peek.nodes >= 4, "a TEXTURED preset's graph opens (" + peek.nodes + " nodes)");
 assert(peek.master === "PbrMaterial", "…on the one master");
-assert(peek.readOnly === true, "…and it says READ-ONLY, before any edit is attempted");
+assert(peek.readOnly === false && peek.presetMaster === BRICK,
+       "…and with a project open it says EDITABLE, naming the master behind it "
+       + "(PRESET-EDIT-1: the copy happens at the SAVE, not here)");
 assert(peek.texturesResolved === 3,
        "…with its three images bound (" + peek.texturesResolved + ")");
 assert(peek.texturesImported === 0, "…and NONE of them imported");
@@ -110,28 +112,27 @@ assert(assets.storeStatus().deviceWaits === waitsAtRest,
 
 // The same for a preset with no maps at all, which is where this started.
 var gold = materials.loadGraph("Gold PBR");
-assert(gold.readOnly === true && materialRows().length === 0,
+assert(gold.readOnly === false && materialRows().length === 0,
        "…and Gold PBR too");
 
-// ---- 1c. THE READ-ONLY GRAPH REFUSES EDITS (fix round) -------------------
+// ---- 1c. A PRESET'S GRAPH TAKES AN EDIT WITH A PROJECT OPEN, AND WRITES
+//          NOTHING UNTIL A SAVE (PRESET-EDIT-1) ---------------------------
 //
-// It used to TAKE them: the canvas accepted nodes, wires, drags and typed
-// values, the save quietly returned, and Customise then built the copy from
-// the SHIPPED definition — so the work went into a window that showed it and
-// into nothing else.
+// The old rule here was that every mutation was REFUSED, because the
+// definition writer refuses the reserved guid and a canvas that takes edits
+// nothing will ever save is the defect the fix round removed. The owner's
+// rule of 2026-09-21 answers it the other way: a preset a project holds is
+// that project's to edit, and the SAVE is what makes the copy. What this arm
+// keeps is the half that must not change — an edit that has not been saved
+// has written NOTHING down, so a library with no preset rows still has none.
+// (The save, the copy and the pin move are scripting.e2e.preset_edit's.)
 var presetNodes = graph.nodes().length;
-["addNode", "setBlendMode", "save"].forEach(function (verb) {
-    var refused = false;
-    try {
-        if (verb === "addNode") graph.addNode("float");
-        else if (verb === "setBlendMode") graph.setBlendMode("Translucent");
-        else refused = (graph.save() !== true);
-    } catch (e) { refused = true; }
-    if (!refused) throw new Error("graph." + verb + " was NOT refused on a read-only preset");
-});
-assert(true, "graph.addNode / setBlendMode / save are refused on a read-only preset");
-assert(graph.nodes().length === presetNodes,
-       "…and the graph is untouched (" + graph.nodes().length + " nodes)");
+assert(!!graph.addNode("float"), "graph.addNode is taken on a preset's graph");
+assert(graph.setBlendMode("Translucent") === true, "…and so is a settings edit");
+assert(graph.nodes().length === presetNodes + 1, "…the graph really took it");
+assert(materialRows().length === 0,
+       "…and NOTHING was written down: an unsaved edit is not a copy ("
+       + materialRows().length + " rows)");
 
 assert(materials.seedPresets() === 20, "the first-run seed: twenty bundles");
 var seeded = materialRows();
@@ -306,7 +307,7 @@ assert(slotRouted,
 // editor opened on an empty canvas — which is what the owner saw.
 var presetGraph = materials.loadGraph(BRICK);
 assert(presetGraph.nodes >= 3, "the preset's own graph reads (" + presetGraph.nodes + " nodes)");
-assert(presetGraph.readOnly === true, "…read-only");
+assert(presetGraph.presetMaster === BRICK, "…and says which shipped material it is");
 var copyGraph = materials.loadGraph(named);
 assert(copyGraph.nodes === presetGraph.nodes,
        "the COPY carries the same graph (" + copyGraph.nodes + " nodes)");
@@ -314,8 +315,10 @@ assert(graph.settings().name === "My Bricks",
        "…under ITS OWN name, not the preset's (graph settings say '"
        + graph.settings().name + "')");
 assert(copyGraph.master === "PbrMaterial", "…on the one master");
-assert(copyGraph.readOnly === false,
-       "…and it is NOT read-only: the copy is the user's to edit");
+assert(copyGraph.readOnly === false && copyGraph.presetMaster === "",
+       "…and it is NOT read-only, and no longer a shipped material at all: "
+       + "Customise's copy is independent (PRESET-EDIT-1's copy records its master; "
+       + "this one is a NEW material based on the preset, which is R18's rule)");
 
 // CUSTOMISE AND SAVE CHANGES NOTHING ABOUT THE PICTURE. This is the assertion
 // the whole design rests on: a preset's VALUES and its GRAPH describe one
@@ -352,12 +355,25 @@ assert(graph.save() === true, "the COPY saves");
 var afterEdit = graph.evaluate().values.roughness;
 assert(Math.abs(afterEdit - 0.11) < 1e-3,
        "…and the graph now folds to that roughness (" + afterEdit + ")");
-// THE PRESET REFUSES THE SAME SAVE.
+// AND THE PRESET'S OWN ROW IS NEVER SAVED OVER. The save is allowed now (the
+// owner's rule: a preset a project holds is editable) — what it does is COPY:
+// the write lands on the project's own bundle and the master's definition does
+// not move. `scripting.e2e.preset_edit` owns the copy's full contract; what is
+// asserted here is the master's immutability, which is this suite's subject.
+var brickBefore = JSON.stringify(materials.members(BRICK).map(function (m) {
+    return m.guid + ":" + m.slot;
+}).sort());
 materials.loadGraph(BRICK);
-var presetSaveRefused = false;
-try { presetSaveRefused = (graph.save() !== true); }
-catch (e) { presetSaveRefused = true; console.log("   " + e.message); }
-assert(presetSaveRefused, "…while the PRESET's own graph cannot be saved over");
+assert(graph.save() === true, "a save on a preset's graph is taken…");
+assert(materials.masterOf(BRICK) === BRICK, "…the preset is still the preset…");
+assert(JSON.stringify(materials.members(BRICK).map(function (m) {
+           return m.guid + ":" + m.slot;
+       }).sort()) === brickBefore,
+       "…and ITS definition did not move: the write went to this project's copy");
+var brickCopy = assets.list({ scope: "project", type: "material" }).map(function (a) {
+    return a.guid;
+}).filter(function (g) { return materials.masterOf(g) === BRICK && g !== BRICK; })[0];
+assert(!!brickCopy, "…which the project now pins in its place");
 
 // ---- 4c. THE FOUR WAYS A SAVE USED TO CHANGE WHAT NOBODY TOUCHED --------
 //
@@ -517,10 +533,10 @@ presets.forEach(function (p) {
     var g = materials.loadGraph(p.guid);
     if (!(g.nodes >= 2) || g.master !== "PbrMaterial")
         throw new Error("preset '" + p.name + "' has no graph");
-    if (g.readOnly !== true)
-        throw new Error("preset '" + p.name + "' does not report read-only");
+    if (g.presetMaster !== p.guid)
+        throw new Error("preset '" + p.name + "' does not name itself as the shipped master");
 });
-assert(true, "…and all twenty presets open as read-only PBR graphs");
+assert(true, "…and all twenty presets open as PBR graphs that know what they are");
 
 // ---- 5. the pin is an undo step -------------------------------------------
 //

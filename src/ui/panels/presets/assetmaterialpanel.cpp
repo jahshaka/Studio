@@ -34,10 +34,6 @@ For more information see the LICENSE file
 #include "ui/controls/assetdrag.h"
 #include "io/materialpresets.h"
 #include "services/services.h"
-#include "services/materialpresetassets.h"
-#include "services/materialpresetseeder.h"
-#include "services/thumbnailrebuild.h"
-#include "services/projectservice.h"
 #include "services/sceneeditservice.h"
 #include "services/jahlog.h"
 #include "services/selectionservice.h"
@@ -231,37 +227,16 @@ void AssetMaterialPanel::showContextMenu(const QPoint &pos)
     QMenu contextMenu;
     contextMenu.setStyleSheet(StyleSheet::PresetsContextMenu());
 
-    // CUSTOMISE (R18, the owner's words: "we can't edit presets — we have to
-    // create a new material from a starter template"). A preset is read-only
-    // in fact — the definition writer refuses one by name — so the gesture
-    // that makes one editable is a COPY, in the user's own drawer, named
-    // "<Preset>-1". It calls the same one implementation the verb
-    // `materials.createFromPreset` calls; the suffix rule lives there, once.
-    const QString presetGuid =
-        MaterialPresetAssets::guidFor(listView->indexAt(pos).data(MODEL_GUID_ROLE).toString());
-    QAction customise(tr("Customise"), this);
-    if (!presetGuid.isEmpty()) {
-        connect(&customise, &QAction::triggered, this, [this, presetGuid]() {
-            MaterialPresetSeeder::instance().finishNow();   // one importer at a time
-            QString error;
-            Project *project = services && services->project ? services->project->current()
-                                                             : nullptr;
-            const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
-                                                                 handle, project, &error);
-            if (copy.isEmpty()) {
-                irisLog("Customise: " + error);
-                return;
-            }
-            // (The copy's TILE is a render of the copy — `customise` does it
-            // for every Customise door now; PREVIEWENV-2 item c.)
-            // The copy is a library material the project now holds: every
-            // drawer that lists one has to hear about it (the four-drawer
-            // rule — one list, two windows).
-            if (services && services->sceneEdit)
-                services->sceneEdit->requestAssetViewRefresh();
-        });
-        contextMenu.addAction(&customise);
-    }
+    // (CUSTOMISE IS GONE — PRESET-EDIT-1's Deletes, the owner's rule of
+    // 2026-09-21: "only the MASTER materials should be locked; if they are
+    // added to a project they should be editable already". Customise existed
+    // because a preset was locked wherever it was, so the only way to edit one
+    // was to mint a SECOND material called "<Preset>-1". A preset a project
+    // holds is editable in the Materials page now and the FIRST EDIT makes the
+    // project its own copy, under the preset's own name — there is nothing
+    // left for a tray gesture to do. The mechanism survives as the verb
+    // `materials.createFromPreset`, for a script that wants an independent
+    // copy.)
 
     QAction action("Remove Item", this);
     connect(&action, &QAction::triggered, this, [this, pos]() {

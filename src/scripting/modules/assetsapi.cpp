@@ -868,8 +868,8 @@ bool AssetsApi::rename(const QString &guid, const QString &name)
     const QString shipped = MaterialBundle::shippedPresetName(guid);
     if (!shipped.isEmpty() && wanted != shipped)
         return fail(QStringLiteral("assets.rename: '%1' is a material the app ships and is "
-                                   "read-only - materials.createFromPreset makes your own copy, "
-                                   "and that one renames").arg(shipped));
+                                   "read-only - materials.edit gives you this project's own copy "
+                                   "of it, and that one renames").arg(shipped));
     if (!assettags::rename(host.db, guid, wanted))
         return fail(QStringLiteral("assets.rename: the database refused the rename of '%1'")
                         .arg(guid));

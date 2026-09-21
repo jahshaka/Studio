@@ -79,6 +79,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/materialdefaults.h"
 #include "services/materialbundle.h"
 #include "services/materialpresetassets.h"
+#include "services/presetedit.h"
 #include "services/materialpresetseeder.h"
 #include "services/projectassets.h"
 #include "services/shippedassets.h"
@@ -1226,9 +1227,18 @@ iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid)
 
     bool isPreset = false;
     const MaterialPreset preset = MaterialPresets::find(presetOrGuid, &isPreset);
-    if (isPreset) return BuiltinMaterials::fromPreset(preset);
+    // …UNLESS THIS PROJECT HAS ITS OWN COPY OF THAT PRESET (PRESET-EDIT-1):
+    // the hover preview must show what the drop will apply, and the drop
+    // applies the copy (see applyMaterial). Read through the ordinary bundle
+    // branch below, which is the copy's own definition.
+    const QString mine = isPreset
+                             ? presetedit::projectCopyOf(
+                                   db, project, MaterialPresetAssets::guidFor(presetOrGuid))
+                             : QString();
+    if (isPreset && mine.isEmpty()) return BuiltinMaterials::fromPreset(preset);
 
     if (!db) return iris::MaterialPtr();
+    const QString wanted = mine.isEmpty() ? presetOrGuid : mine;
 
     // A MATERIAL row: its stored definition, dispatched on the materialType the
     // writer stamps. This is the same call applyMaterialAsset makes, which is
@@ -1236,13 +1246,13 @@ iris::MaterialPtr SceneEditService::resolveMaterial(const QString &presetOrGuid)
     // be two different readings of one row.
     MaterialReader reader;
     reader.setProject(project);
-    const AssetRecord row = db->fetchAsset(presetOrGuid);
+    const AssetRecord row = db->fetchAsset(wanted);
     if (row.type == static_cast<int>(ModelTypes::Material)) {
         // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2/F11):
         // a project renders the version it was built with, not whatever the
         // library row holds now. Falls back to the row blob for a material
         // that has no stored definition yet.
-        const QJsonObject matObject = MaterialBundle::read(db, presetOrGuid, project);
+        const QJsonObject matObject = MaterialBundle::read(db, wanted, project);
         if (matObject.isEmpty()) return iris::MaterialPtr();
         return reader.parseMaterialTyped(matObject, db);
     }
@@ -1293,6 +1303,14 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
     // the seeder existed.
     QString materialGuid = presetOrGuid;
     if (MaterialPresetAssets::isPreset(presetOrGuid)) {
+        // THIS PROJECT'S OWN COPY OF IT, IF IT HAS ONE (PRESET-EDIT-1). Once a
+        // project has edited "Wood PBR", that name means the project's copy —
+        // dropping the shipped tile again must not put a SECOND material of
+        // the same name in the tray beside the user's own, and must not paint
+        // the mesh with a picture they have already changed.
+        const QString mine = presetedit::projectCopyOf(
+            db, project, MaterialPresetAssets::guidFor(presetOrGuid));
+        if (!mine.isEmpty()) return applyMaterialAsset(mine, target);
         // ONE IMPORTER AT A TIME (see MaterialPresetSeeder::finishNow): a
         // drop that beats the launch seed takes the job over rather than
         // racing it into two Texture rows for one picture.
@@ -1436,6 +1454,11 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
 void SceneEditService::requestAssetViewRefresh()
 {
     emit assetViewRefreshRequested();
+}
+
+void SceneEditService::forgetMaterialDressing(const QString &materialGuid)
+{
+    mDressedFrom.remove(materialGuid);
 }
 
 int SceneEditService::refreshMaterialUsers(const QString &materialGuid)

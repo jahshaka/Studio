@@ -121,6 +121,17 @@ public:
     /// the Materials module's Presets drawer call this verb.
     Q_INVOKABLE QString createFromPreset(const QString &presetOrGuid,
                                          const QVariantMap &options = QVariantMap());
+    /// A PRESET IN A PROJECT IS THE PROJECT'S TO EDIT (PRESET-EDIT-1, the
+    /// owner's rule). This is the COPY-ON-WRITE as a verb: it answers the guid
+    /// every later edit must use, minting the project's own bundle the first
+    /// time a shipped preset is edited there. Every edit door calls it — the
+    /// Materials page's save, `graph.save()` on a preset's graph — so a script
+    /// can make the same move explicitly and learn the guid that moved.
+    Q_INVOKABLE QVariantMap edit(const QString &guidOrName);
+    /// The shipped preset behind a material: the preset itself when `guidOrName`
+    /// names one, the master a project's copy was made from when it is one, and
+    /// an empty string for an ordinary material.
+    Q_INVOKABLE QString masterOf(const QString &guidOrName);
     Q_INVOKABLE QVariantMap open(const QString &guidOrName,
                                  const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap newMaterial(const QString &presetOrName = QString(),
