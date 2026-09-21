@@ -259,7 +259,7 @@ public:
     void primeSceneGeometry() override;
     void primeSceneEnvironment() override;
     unsigned warmUpShaders() override;
-    void recordWarmUpSet() override;
+    void rememberPassShape() override;
     /// Sentinel for mWarmUpIdleAt meaning "always run the warm-up": no real
     /// compile count can equal it.
     static constexpr unsigned kWarmUpAlwaysRun = ~0u;

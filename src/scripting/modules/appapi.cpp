@@ -217,23 +217,6 @@ QVector<VerbInfo> AppApi::verbs() const
           "the write is still going. For a test that wants to read the files back; the app itself "
           "waits at quit.",
           Needs::Engine },
-        { "warmUpSet", "app.warmUpSet(action?) -> {path, exists, enabled, sizeBytes, "
-                       "shape:{samples, shadows}, recorded?, saved?, built?}",
-          "The recorded warm-up set (SHADER_CACHE_SPEC.md §2.7b) — this machine's list of the "
-          "shader permutations previous sessions actually used. Not shaders and not SPIR-V: a list "
-          "of vertex formats, render queues and one representative material each, which is why it "
-          "is tiny and why it is the only cached artifact that is platform- and driver-independent. "
-          "With no argument it reports. 'record' adds every live scene to the set and writes it; "
-          "'apply' replays it, compiling every permutation against degenerate 4-vertex buffers so "
-          "nothing is loaded from disk, and reports how many shaders that built. The app records on "
-          "every world OPEN and CLOSE and again on quit, and applies at startup, on its own; these "
-          "are for tests and for recording a set deliberately from a scene built for the purpose. "
-          "'enabled' mirrors the shader-cache preference — with the cache off nothing is recorded "
-          "or replayed automatically, because the set lives in the cache directory and is derived "
-          "data of the same kind. 'shape' is the PASS the last session's editor drew with (MSAA "
-          "sample count and whether shadows were on); the startup warm-up view is built to match, "
-          "because a permutation depends on the pass as much as on the renderable.",
-          Needs::Engine },
         { "engineErrors", "app.engineErrors(reset?) -> {drains, recorded, suppressed, entries:[{message, count, suppressed, firstMs, lastMs}]}",
           "What the renderer refused to do, and did not otherwise tell anyone. The engine swallows "
           "failures by design (every backend call is wrapped and returns a refusal value instead of "
@@ -753,50 +736,6 @@ bool AppApi::flushShaderCache(int budgetMs)
     auto engine = EngineHost::instance().engine();
     if (!engine) return fail("app.flushShaderCache: the engine is not running");
     return engine->flushShaderCache(unsigned(qMax(0, budgetMs)));
-}
-
-QVariantMap AppApi::warmUpSet(const QString &action)
-{
-    QVariantMap m;
-    const QString path = EngineHost::warmUpSetPath();
-    m["path"] = path;
-    auto engine = EngineHost::instance().engine();
-    const QString what = action.trimmed().toLower();
-    if (!what.isEmpty() && !engine) { fail("app.warmUpSet: the engine is not running"); return m; }
-
-    if (what == QLatin1String("record")) {
-        const bool recorded = engine->recordWarmUpSet();
-        m["recorded"] = recorded;
-        if (recorded) {
-            QDir().mkpath(QFileInfo(path).absolutePath());
-            m["saved"] = engine->saveWarmUpSet(path.toStdString());
-        }
-    } else if (what == QLatin1String("apply")) {
-        // Needs a scene to host the degenerate renderables. The editor's own
-        // scene is the natural one and leaves nothing behind (createWarmUp /
-        // destroyWarmUp are paired inside the engine).
-        m["built"] = 0u;
-        if (!QFileInfo::exists(path)) return fail("app.warmUpSet: no set recorded yet"), m;
-        m["built"] = engine->applyWarmUpSet(path.toStdString(), nullptr);
-    } else if (!what.isEmpty()) {
-        return fail(QStringLiteral("app.warmUpSet: unknown action '%1' (record, apply)").arg(action)), m;
-    }
-
-    const QFileInfo info(path);
-    m["exists"] = info.exists();
-    m["sizeBytes"] = QVariant::fromValue(qulonglong(info.exists() ? info.size() : 0));
-    // The two things a caller needs to reason about the AUTOMATIC recording and
-    // replay, both of which used to be invisible: whether they happen at all
-    // (audit F12 — they used to happen even with the cache off) and what pass
-    // shape the startup replay will use (audit F1b — it used to be an empty,
-    // lightless, shadowless 1x scene whatever the editor drew).
-    m["enabled"] = EngineHost::shaderCacheEnabled();
-    const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
-    QVariantMap shapeMap;
-    shapeMap["samples"] = shape.samples;
-    shapeMap["shadows"] = shape.shadows;
-    m["shape"] = shapeMap;
-    return m;
 }
 
 bool AppApi::quit()

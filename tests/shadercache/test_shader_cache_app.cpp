@@ -15,9 +15,9 @@
 //   run 2, warm : after run 1 has quit and saved, a second launch compiles a
 //                 small fraction of what the cold one did and serves the rest
 //                 from the cache. This is the whole feature, asserted.
-//   run 3       : steady state — NOTHING compiles. (Run 2 is not zero because
-//                 it also replays the warm-up set run 1 recorded, whose
-//                 degenerate vertex formats are permutations of their own.)
+//   run 3       : steady state — NOTHING compiles. (So is run 2 now: the
+//                 recorded warm-up SET, whose replay used to add a handful of
+//                 permutations of its own, was deleted in WARMUPSET-2.)
 //   run 4       : --clear-shader-cache makes a warm launch cold again, and the
 //                 run still succeeds. Our r.InvalidateCachedShaders.
 //   run 5       : THE SAVE UNDER CHURN. Every World post row through every
@@ -150,11 +150,6 @@ int main(int argc, char **argv)
     // is back, and 2 would mean something else survived that should not have.
     CHECK(cold.value("afterClearFiles").toInt() == 1,
           "app.clearShaderCache() removed every cache file and kept only the writer lock");
-    // The warm-up set's reporting surface (F1b/F12).
-    CHECK(cold.value("warmUpEnabled").toBool(),
-          "app.warmUpSet() reports the automatic record/replay armed with the cache on");
-    CHECK(cold.value("warmUpShapeSamples").toInt() >= 1,
-          "app.warmUpSet() reports the pass shape the startup warm-up will match");
 
     // ---- run 2: warm ------------------------------------------------------
     // Run 1 cleared its own cache at the end, then quit — and the clean-quit
@@ -162,13 +157,11 @@ int main(int argc, char **argv)
     // launch, and it is also a test of that rewrite path.
     const QJsonObject warm = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
     CHECK(rc == 0, "run 2 exited cleanly");
-    // NOT "compiled nothing", and the reason is a real (small, one-off) cost
-    // worth pinning: run 1 also RECORDED a warm-up set, and run 2 replays it.
-    // The replay applies the recorded materials to DEGENERATE 4-vertex buffers,
-    // whose vertex format is not byte-identical to the originals — so the first
-    // launch that replays a set compiles a handful of permutations of its own,
-    // once, and caches them. Measured: 64 cold, 2 on the first replay, 0 from
-    // then on. What must hold is that the cache did nearly all the work.
+    // The cache did nearly all the work. (This used to allow for a "small,
+    // one-off cost": the recorded warm-up SET, replayed on the first warm
+    // launch, compiled a handful of permutations of its own. The set is gone —
+    // WARMUPSET-2, 2026-09-21 — and so is the allowance's reason; the headroom
+    // stays because a driver may still recompile a variant or two.)
     CHECK(warm.value("compiledThisRun").toInt() * 4 < cold.value("compiledThisRun").toInt(),
           "run 2 compiled a small fraction of what the cold run did");
     CHECK(warm.value("loadedThisRun").toInt() > 0, "run 2 served its shaders from the cache");
@@ -179,10 +172,23 @@ int main(int argc, char **argv)
           "the progress counter has a denominator on the second launch");
     CHECK(warm.value("fingerprint").toString() == cold.value("fingerprint").toString(),
           "the fingerprint is stable between launches");
+    // THE MACHINERY IS GONE, AND THE LAUNCH SAYS SO BY SAYING NOTHING
+    // (WARMUPSET-2). A warm launch used to replay a recorded permutation set
+    // here and log SEVEN "Can't find HLMS datablock material" lines while
+    // compiling eight shaders for the DEFAULT datablock — a set names each
+    // permutation by one representative MATERIAL and resolves it by name in the
+    // next process, and this app's datablock names are process-unique counters
+    // ("pbr_18", "unlit_21"), so none of them ever resolved. Both lines are
+    // Ogre's, and this is the only place either was ever visible; the assertion
+    // is that a warm launch produces NEITHER — not the miss, and not the
+    // storage's own line, because nothing replays anything any more.
+    CHECK(!gLastOutput.contains(QStringLiteral("Can't find HLMS datablock")),
+          "run 2 logs no missing warm-up material");
+    CHECK(!gLastOutput.contains(QStringLiteral("VertexFormatWarmUp")),
+          "run 2 runs no warm-up-set replay at all (the machinery is deleted)");
 
     // ---- run 3: steady state ----------------------------------------------
-    // The launch after the warm-up set's own permutations have been cached: the
-    // number that describes every launch a user ever sees after the first two.
+    // The number that describes every launch a user ever sees after the first.
     const QJsonObject steady = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
     CHECK(rc == 0, "run 3 exited cleanly");
     // THE NUMBER, PRINTED, because "NOTHING AT ALL" with no count sends the next
