@@ -26,7 +26,10 @@
 //
 // WHAT IS NOT A PREFERENCE: `Cover::NoScene` ("No world open", the Desktop's
 // empty viewport). That is not a load — it is a statement about a window with
-// nothing in it — and it is always drawn.
+// nothing in it — and it is always drawn. (Always RAISED was true from the
+// start; always DRAWN only since STALE-VIEW-1: a view with no scene bound had
+// no workspace, so the panel changed not one pixel and the region showed the
+// app's watermark. A scene-less view owns a clear-only workspace now.)
 //
 // ONE CAPABILITY, three callers: `editor.loadingCover()` (the verb, with its
 // test), Preferences › General (the row), and `beginSceneLoad` (which reads it

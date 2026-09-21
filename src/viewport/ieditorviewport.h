@@ -1054,6 +1054,19 @@ public:
     /// close/open reuses the engine scene, so the engine's own counter does
     /// not restart there.
     virtual qulonglong framesPresented() const { return 0; }
+    /// THE OTHER HALF OF THAT QUESTION (lane STALE-VIEW-1, View::blankFrames
+    /// Presented): frames this viewport presented with NO WORLD BOUND — its
+    /// background cleared, and whatever it asked the HUD to draw over it.
+    ///
+    /// A viewport with no world used to present NOTHING, so the window kept the
+    /// last frame it was given: an open IN PLACE left the PREVIOUS world frozen
+    /// on screen for the length of the load (measured on the rig at 903 ms of a
+    /// warm Grand Showroom 2 open, byte-identical to the frame before it), and
+    /// the "No world open" panel — raised by every close — changed not one
+    /// pixel. Both are the same defect, and this is the number that says the
+    /// teardown reached the screen: a caller differences it across a load
+    /// exactly as it differences `coversPresented`. Never reset.
+    virtual qulonglong blankFramesPresented() const { return 0; }
     /// THE FLY'S HELD-KEY SET, by name ("Left", "PageUp", "Shift" …), sorted
     /// (ledger §356). A key stuck in it is otherwise INVISIBLE: Left and Right
     /// held together cancel to no movement at all, which reads as "the arrows

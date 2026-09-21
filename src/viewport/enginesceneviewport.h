@@ -240,6 +240,7 @@ public:
     // order, no input region, no Qt clock.
     QString presentationState() const override;
     qulonglong framesPresented() const override;
+    qulonglong blankFramesPresented() const override;
     /// The active camera controller's held-key set, by name, sorted (§356).
     QStringList heldFlyKeys() const override;
     bool flying() const override;
