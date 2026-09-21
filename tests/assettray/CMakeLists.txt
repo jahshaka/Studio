@@ -1,4 +1,8 @@
 # assets.tray — the EDITOR TRAY's listing and the Assets page's LIBRARY GRID,
+# plus (DRAWERS-1) the PROJECT'S FOLDER MODEL behind assets.folders and its
+# four mutating verbs: the rules, the refusals, where a filing is recorded for
+# a pinned library row against a row the project owns, and the undo of a
+# multi-row move as ONE step.
 # as rules AND as queries (small-items round B). Builds the REAL Database,
 # services/assettray.cpp and services/imagematerial.cpp against a throwaway
 # SQLite file with a realistic library in it: the five collapse rules, the
@@ -9,6 +13,11 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_assettray test_assettray.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assettray.cpp
+    # DRAWERS-1: the project's FOLDER model and its two undo commands — the
+    # bodies of assets.folders/createFolder/renameFolder/deleteFolder/
+    # moveToFolder, tested here with no ScriptHost in the way.
+    ${CMAKE_SOURCE_DIR}/src/services/projectfolders.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/projectfoldercommand.cpp
     ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
     # rule 6 asks the bundle layer whether a texture folds into its material
     ${CMAKE_SOURCE_DIR}/src/services/materialmembers.cpp

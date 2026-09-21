@@ -48,6 +48,9 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
 #include "services/projectassets.h"
+#include "services/projectfolders.h"
+#include "commands/projectfoldercommand.h"
+#include <QUndoStack>
 #include "services/import/assetimportservice.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
@@ -213,6 +216,51 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "moveToDrawer", "assets.moveToDrawer(guid, id) -> bool",
           "Files a store asset in a drawer (0 = Uncategorized).",
+          Needs::Document },
+        { "folders", "assets.folders({parent}) -> [{guid, name, parent, count}]",
+          "THE OPEN PROJECT'S FOLDERS — the tray's own organisation (DRAWERS-1). A FOLDER IS NOT A DRAWER: "
+          "a drawer (assets.drawers, a numbered `collections` row) organises the LIBRARY and is the same for "
+          "every project; a folder organises ONE project's asset tray and is named by guid. With no `parent` "
+          "this is every folder the project has; with one (a folder guid, or the project's own guid for the "
+          "root) it is that folder's children only. `count` is how many ROWS the folder holds — rows the "
+          "project owns plus the library assets it pins there — not a recursive total (and not "
+          "the collapsed TILE count: a row the tray folds into another still counts as filed "
+          "here). "
+          "The editor's own hidden folders (Systems, Presets) are listed like any other: they are real rows, "
+          "and the verbs refuse to rename or delete them because the editor finds them BY NAME.",
+          Needs::Document },
+        { "createFolder", "assets.createFolder(name, {parent}) -> guid",
+          "Creates a folder in the open project and returns its guid — the editor tray's right-click > Create > "
+          "New Folder, as a verb. `parent` is a folder guid (default: the project root). "
+          "Refuses an empty name, a duplicate name under the same parent, an unknown parent, and the names the "
+          "editor keeps for itself (Systems, Presets — it resolves those by name, so a second one would hijack "
+          "them). UNDOABLE: one Ctrl+Z removes it, and anything filed into it meanwhile moves up to its parent "
+          "rather than leaving the project.",
+          Needs::Document },
+        { "renameFolder", "assets.renameFolder(guid, name) -> bool",
+          "Renames a project folder. Refuses an empty name, a duplicate under the same parent, an unknown "
+          "folder, a folder belonging to another project, and the editor's own Systems/Presets. NOT undoable.",
+          Needs::Document },
+        { "deleteFolder", "assets.deleteFolder(guid, {keepContents}) -> bool",
+          "Deletes a project folder. `keepContents` defaults to TRUE: everything inside — child folders and "
+          "filed rows alike — moves up to the deleted folder's parent, so tidying up can never lose an asset. "
+          "With `keepContents: false` the folder's rows LEAVE THE PROJECT instead (the project's pin and the "
+          "members only it uses — the same door assets.removeFromProject uses; the LIBRARY row is never "
+          "touched) and its subtree of folders goes with them. Refuses the project root, an unknown folder and "
+          "the editor's own Systems/Presets. NOT undoable.",
+          Needs::Document },
+        { "moveToFolder", "assets.moveToFolder(guidOrGuids, folderGuid | null) -> n",
+          "Files one row or many in a project folder — the tray's drag of a (multi-)selection onto a folder "
+          "tile — and answers how many rows actually moved. `folderGuid` null, empty or the project's own guid "
+          "means the ROOT. A FOLDER GUID may be passed as a row: the folder itself moves (a move into its own "
+          "subtree is refused). "
+          "Filing changes where a row is LISTED IN THIS PROJECT and nothing else: no pin moves, no content is "
+          "re-resolved, no other project sees it — which is why a pinned library asset's folder is recorded on "
+          "the PIN (a library row is shared, so writing the folder on the row would file it for everybody). "
+          "EVERY ROW IS JUDGED BEFORE ANY ROW MOVES, so a refusal moves nothing: an unknown guid, a row this "
+          "project neither owns nor pins, and an import MEMBER (a mesh or a texture that arrived inside a "
+          "model — it is part of that asset, not a tile in a folder) are all refused. UNDOABLE AS ONE STEP, "
+          "however many rows it carries.",
           Needs::Document },
         { "addToProject", "assets.addToProject(storeGuid) -> guid",
           "Adds a library asset to the open project and returns its guid — THE SAME GUID: this is "
@@ -971,6 +1019,136 @@ bool AssetsApi::moveToDrawer(const QString &guid, int id)
     if (id != 0 && host.db->fetchCollectionSubtree(id).isEmpty())
         return fail(QStringLiteral("assets.moveToDrawer: no drawer with id %1").arg(id));
     return host.db->switchAssetCollection(id, guid);
+}
+
+// --- THE OPEN PROJECT'S FOLDERS (DRAWERS-1) --------------------------------
+//
+// Every one of these is a thin view over services/projectfolders.h, which is
+// the ONE folder model the editor tray and the Materials module's project
+// drawer are both views of. The rules and their wording live there, so a
+// refusal reads the same in a script, in a toast and in a test.
+
+QVariantList AssetsApi::folders(const QVariantMap &options)
+{
+    QVariantList out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    if (!requireProject()) return out;
+    for (const QString &key : options.keys())
+        if (key != QLatin1String("parent")) {
+            fail(QStringLiteral("assets.folders: unknown option '%1' (parent)").arg(key));
+            return out;
+        }
+    const QString projectGuid = host.project->getProjectGuid();
+    for (const auto &folder : projectfolders::list(host.db, projectGuid,
+                                                   options.value("parent").toString()))
+        out.append(QVariantMap{ { "guid", folder.guid },
+                                { "name", folder.name },
+                                { "parent", folder.parent == projectGuid ? QString()
+                                                                         : folder.parent },
+                                { "count", folder.count } });
+    return out;
+}
+
+QString AssetsApi::createFolder(const QString &name, const QVariantMap &options)
+{
+    if (!host.db) { fail("assets: not available in this session"); return QString(); }
+    if (!requireProject()) return QString();
+    for (const QString &key : options.keys())
+        if (key != QLatin1String("parent")) {
+            fail(QStringLiteral("assets.createFolder: unknown option '%1' (parent)").arg(key));
+            return QString();
+        }
+    const QString projectGuid = host.project->getProjectGuid();
+    const QString parent = options.value("parent").toString();
+
+    // UNDOABLE, on the session's stack when there is one. The command mints
+    // the guid at construction, so the caller has it whether or not the create
+    // went through (and a redo re-creates the same folder).
+    if (host.undoStack) {
+        auto *command = new CreateProjectFolderCommand(host.db, projectGuid, name, parent);
+        const QString guid = command->guid();
+        host.undoStack->push(command);          // redo() runs the create
+        if (!command->error().isEmpty()) {
+            fail(QStringLiteral("assets.createFolder: %1").arg(command->error()));
+            return QString();
+        }
+        return guid;
+    }
+
+    const projectfolders::Result result =
+        projectfolders::create(host.db, projectGuid, name, parent);
+    if (!result.ok) {
+        fail(QStringLiteral("assets.createFolder: %1").arg(result.error));
+        return QString();
+    }
+    return result.guid;
+}
+
+bool AssetsApi::renameFolder(const QString &guid, const QString &name)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    if (!requireProject()) return false;
+    const projectfolders::Result result =
+        projectfolders::rename(host.db, host.project->getProjectGuid(), guid, name);
+    if (!result.ok) return fail(QStringLiteral("assets.renameFolder: %1").arg(result.error));
+    return true;
+}
+
+bool AssetsApi::deleteFolder(const QString &guid, const QVariantMap &options)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    if (!requireProject()) return false;
+    for (const QString &key : options.keys())
+        if (key != QLatin1String("keepContents"))
+            return fail(QStringLiteral("assets.deleteFolder: unknown option '%1' "
+                                       "(keepContents)").arg(key));
+    const bool keep = options.contains("keepContents") ? options.value("keepContents").toBool()
+                                                       : true;
+    const projectfolders::Result result =
+        projectfolders::remove(host.db, host.project->getProjectGuid(), guid, keep);
+    if (!result.ok) return fail(QStringLiteral("assets.deleteFolder: %1").arg(result.error));
+    return true;
+}
+
+int AssetsApi::moveToFolder(const QVariant &guidOrGuids, const QVariant &folderGuid)
+{
+    if (!host.db) { fail("assets: not available in this session"); return 0; }
+    if (!requireProject()) return 0;
+
+    // ONE GUID OR MANY. A QVariantList arrives from a JS array; `Array.isArray`
+    // is false for the bridged value, so the shape is read off the variant.
+    QStringList guids;
+    if (guidOrGuids.typeId() == QMetaType::QVariantList) {
+        for (const QVariant &value : guidOrGuids.toList()) guids << value.toString();
+    } else {
+        guids << guidOrGuids.toString();
+    }
+    if (guids.isEmpty()) {
+        fail("assets.moveToFolder: a guid (or an array of guids) is required");
+        return 0;
+    }
+    // null / undefined / "" all mean THE ROOT.
+    const QString target = folderGuid.isValid() && !folderGuid.isNull()
+                               ? folderGuid.toString() : QString();
+    const QString projectGuid = host.project->getProjectGuid();
+
+    if (host.undoStack) {
+        auto *command = new MoveToProjectFolderCommand(host.db, projectGuid, guids, target);
+        host.undoStack->push(command);          // redo() runs the move
+        if (!command->error().isEmpty()) {
+            fail(QStringLiteral("assets.moveToFolder: %1").arg(command->error()));
+            return 0;
+        }
+        return command->moved();
+    }
+
+    const projectfolders::Result result =
+        projectfolders::moveTo(host.db, projectGuid, guids, target);
+    if (!result.ok) {
+        fail(QStringLiteral("assets.moveToFolder: %1").arg(result.error));
+        return 0;
+    }
+    return result.moved;
 }
 
 QString AssetsApi::addToProject(const QString &guid)

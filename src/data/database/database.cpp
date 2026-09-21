@@ -885,6 +885,7 @@ void Database::createCasTables()
     QSqlQuery projectAssetsTable;
     projectAssetsTable.prepare(CasSchema::kProjectAssetsTable);
     executeAndCheckQuery(projectAssetsTable, "CreateProjectAssetsTable");
+    migrateProjectAssetsTable();
 
     QSqlQuery versionQuery;
     versionQuery.exec("PRAGMA user_version");
@@ -894,6 +895,19 @@ void Database::createCasTables()
         QSqlQuery setVersion;
         setVersion.exec(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion));
     }
+}
+
+// WHERE A PROJECT FILES ITS PIN (DRAWERS-1). A folder is a fact about ONE
+// project and a pinned row is a LIBRARY row every project shares, so the
+// filing cannot ride `assets.parent`: that column would put the same asset in
+// one project's folder for everybody. It rides the pin. NULL/empty = the
+// project root, which is what every row written before this column says.
+void Database::migrateProjectAssetsTable()
+{
+    if (checkIfColumnExists("project_assets", "folder")) return;
+    QSqlQuery query;
+    query.prepare("ALTER TABLE project_assets ADD COLUMN folder TEXT");
+    executeAndCheckQuery(query, "MigrateProjectAssetsAddFolder");
 }
 
 void Database::createIndexes()
@@ -1301,6 +1315,24 @@ QVector<FolderRecord> Database::fetchChildFolders(const QString &parent, const Q
 	}
 
 	return folderData;
+}
+
+FolderRecord Database::fetchFolder(const QString &guid)
+{
+    FolderRecord data;
+    if (guid.isEmpty()) return data;
+    QSqlQuery query;
+    query.prepare("SELECT guid, parent, name, project_guid, visible FROM folders WHERE guid = ?");
+    query.addBindValue(guid);
+    executeAndCheckQuery(query, "fetchFolder");
+    if (query.next()) {
+        data.guid = query.value(0).toString();
+        data.parent = query.value(1).toString();
+        data.name = query.value(2).toString();
+        data.projectGuid = query.value(3).toString();
+        data.visible = query.value(4).toBool();
+    }
+    return data;
 }
 
 QVector<AssetRecord> Database::fetchAssetThumbnails(const QStringList &guids)
@@ -1922,6 +1954,40 @@ bool Database::renameAsset(const QString &guid, const QString &newName)
     return ok;
 }
 
+bool Database::setAssetParent(const QString &guid, const QString &parent)
+{
+    if (guid.isEmpty()) return false;
+    QSqlQuery query;
+    query.prepare("UPDATE assets SET parent = ?, last_updated = datetime() WHERE guid = ?");
+    query.addBindValue(parent);
+    query.addBindValue(guid);
+    return executeAndCheckQuery(query, "SetAssetParent");
+}
+
+bool Database::setFolderParent(const QString &guid, const QString &parent)
+{
+    if (guid.isEmpty()) return false;
+    QSqlQuery query;
+    query.prepare("UPDATE folders SET parent = ?, last_updated = datetime() WHERE guid = ?");
+    query.addBindValue(parent);
+    query.addBindValue(guid);
+    return executeAndCheckQuery(query, "SetFolderParent");
+}
+
+bool Database::setProjectAssetFolder(const QString &projectGuid, const QString &assetGuid,
+                                     const QString &folder)
+{
+    if (projectGuid.isEmpty() || assetGuid.isEmpty()) return false;
+    QSqlQuery query;
+    query.prepare("UPDATE project_assets SET folder = ? "
+                  "WHERE project_guid = ? AND asset_guid = ?");
+    query.bindValue(0, folder.isEmpty() ? QVariant() : QVariant(folder));
+    query.bindValue(1, projectGuid);
+    query.bindValue(2, assetGuid);
+    if (!executeAndCheckQuery(query, "SetProjectAssetFolder")) return false;
+    return query.numRowsAffected() > 0;
+}
+
 bool Database::updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid)
 {
     QSqlQuery query;
@@ -2217,6 +2283,19 @@ QSet<QString> Database::fetchProjectPinnedGuids(const QString &projectGuid)
     query.addBindValue(projectGuid);
     executeAndCheckQuery(query, "fetchProjectPinnedGuids");
     while (query.next()) out.insert(query.value(0).toString());
+    return out;
+}
+
+QHash<QString, QString> Database::fetchProjectPinFolders(const QString &projectGuid)
+{
+    QHash<QString, QString> out;
+    if (projectGuid.isEmpty()) return out;
+    QSqlQuery query;
+    query.prepare("SELECT asset_guid, folder FROM project_assets "
+                  "WHERE project_guid = ? AND folder IS NOT NULL AND folder <> ''");
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchProjectPinFolders");
+    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toString());
     return out;
 }
 

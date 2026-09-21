@@ -305,6 +305,7 @@ set(SRCS
     src/services/lightbindings.cpp
     src/services/assetcas.cpp
     src/services/assettray.cpp
+    src/services/projectfolders.cpp
     src/services/assetdelete.cpp
     src/services/assetgc.cpp
     src/services/assetmigration.cpp
@@ -422,6 +423,7 @@ set(SRCS
     src/commands/changematerialpropertycommand.cpp
     src/commands/changematerialcommand.cpp
     src/commands/pinassetcommand.cpp
+    src/commands/projectfoldercommand.cpp
     src/commands/resetmaterialcommand.cpp
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
@@ -707,6 +709,7 @@ set(HEADERS
     src/commands/changematerialpropertycommand.h
     src/commands/changematerialcommand.h
     src/commands/pinassetcommand.h
+    src/commands/projectfoldercommand.h
     src/commands/addscenenodecommand.h
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h

@@ -50,6 +50,9 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/assettray.h"
 #include "services/materialmembers.h"
+#include "services/projectfolders.h"
+#include "commands/projectfoldercommand.h"
+#include <QUndoStack>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); \
@@ -502,6 +505,164 @@ int main(int argc, char **argv)
         folderQ.exec(); folderQ.next();
         CHECK(folderQ.value(0).toInt() == 1, "and that folder exists in the importing library, under the new project");
         QFile::remove(archive + ".db");
+    }
+
+    // ---------------------------------------------------------------------
+    // 5. THE PROJECT'S FOLDERS (DRAWERS-1): the five verbs' rules, on this
+    //    same throwaway library. The verbs (assets.folders / createFolder /
+    //    renameFolder / deleteFolder / moveToFolder) are thin forwarders over
+    //    services/projectfolders.h, which owns the rules AND their wording, so
+    //    this is the verbs' behaviour with no ScriptHost in the way.
+    //
+    //    The load-bearing fact here is WHERE A FILING LIVES. A pinned row is a
+    //    LIBRARY row every project shares, so its folder rides the PIN
+    //    (project_assets.folder); a row the project owns rides `assets.parent`.
+    //    Both must list in the folder and vanish from the root, and a move of
+    //    MANY rows must be ONE undo step.
+    // ---------------------------------------------------------------------
+    {
+        const QString props = newGuid();
+        projectfolders::Result made =
+            projectfolders::create(&db, projectGuid, "Props", QString(), props);
+        CHECK(made.ok && made.guid == props, "createFolder('Props') at the root");
+        CHECK(!projectfolders::create(&db, projectGuid, "Props").ok,
+              "...a second 'Props' under the same parent is refused");
+        CHECK(!projectfolders::create(&db, projectGuid, "   ").ok, "an empty name is refused");
+        CHECK(!projectfolders::create(&db, projectGuid, "Systems").ok,
+              "a folder called 'Systems' is refused (the editor finds that one BY NAME)");
+        CHECK(!projectfolders::create(&db, projectGuid, "Nested", newGuid()).ok,
+              "an unknown parent is refused");
+
+        const projectfolders::Result nested =
+            projectfolders::create(&db, projectGuid, "Props", props);
+        CHECK(nested.ok, "the SAME name under a DIFFERENT parent is fine");
+
+        // The listing.
+        const QVector<projectfolders::Info> children =
+            projectfolders::list(&db, projectGuid, projectGuid);
+        int rootProps = 0;
+        for (const auto &info : children) if (info.guid == props) ++rootProps;
+        CHECK(rootProps == 1, "folders({parent: root}) lists the root's children");
+        bool sawNested = false;
+        for (const auto &info : projectfolders::list(&db, projectGuid))
+            if (info.guid == nested.guid) sawNested = true;
+        CHECK(sawNested, "folders() with no parent walks the whole tree");
+
+        // --- A PINNED LIBRARY ROW moves by its PIN.
+        const QString libraryRow = standalone[30];       // pinned below
+        pin(projectGuid, libraryRow);
+        CHECK(listed(assettray::list(&db, projectGuid, projectGuid), libraryRow),
+              "an unfiled pin is a ROOT tile");
+        projectfolders::Result moved =
+            projectfolders::moveTo(&db, projectGuid, { libraryRow }, props);
+        CHECK(moved.ok && moved.moved == 1, "moveToFolder(pinned library row, Props)");
+        CHECK(db.fetchAsset(libraryRow).parent.isEmpty(),
+              "...the LIBRARY row's own parent is untouched (it is shared by every project)");
+        CHECK(db.fetchProjectPinFolders(projectGuid).value(libraryRow) == props,
+              "...the filing is on the PIN");
+        CHECK(listed(assettray::list(&db, projectGuid, props), libraryRow),
+              "...the tray lists it INSIDE Props");
+        CHECK(!listed(assettray::list(&db, projectGuid, projectGuid), libraryRow),
+              "...and no longer at the root");
+        CHECK(projectfolders::moveTo(&db, projectGuid, { libraryRow }, props).moved == 0,
+              "moving it where it already is moves nothing");
+
+        // --- A ROW THE PROJECT OWNS moves by its parent.
+        const QString ownRow = sceneNodes[1];            // not a builtin marker
+        CHECK(projectfolders::moveTo(&db, projectGuid, { ownRow }, props).moved == 1,
+              "moveToFolder(a row the project owns, Props)");
+        CHECK(db.fetchAsset(ownRow).parent == props, "...it rides assets.parent");
+        CHECK(listed(assettray::list(&db, projectGuid, props), ownRow),
+              "...and it lists inside Props");
+
+        // --- THE REFUSALS. Nothing moves when one row is refused.
+        const QString memberTexture = memberTextures[0];
+        projectfolders::Result refused =
+            projectfolders::moveTo(&db, projectGuid, { sceneNodes[2], memberTexture }, props);
+        CHECK(!refused.ok && refused.error.contains("part of another asset"),
+              "an import MEMBER is refused (it is part of its model, not a tile in a folder)");
+        CHECK(db.fetchAsset(sceneNodes[2]).parent == projectGuid,
+              "...and the row beside it in the same call did NOT move");
+        CHECK(!projectfolders::moveTo(&db, projectGuid, { newGuid() }, props).ok,
+              "an unknown guid is refused");
+        CHECK(!projectfolders::moveTo(&db, projectGuid, { standalone[31] }, props).ok,
+              "a row this project neither owns nor pins is refused");
+        CHECK(!projectfolders::moveTo(&db, projectGuid, { ownRow }, newGuid()).ok,
+              "an unknown target folder is refused");
+        CHECK(!projectfolders::moveTo(&db, projectGuid, { props }, nested.guid).ok,
+              "a folder cannot be moved inside itself");
+
+        // --- RENAME / DELETE.
+        CHECK(!projectfolders::rename(&db, projectGuid, props, "Systems").ok,
+              "renaming a folder TO a system name is refused");
+        const QString systems = db.ensureFolder(QStringLiteral("Systems"), projectGuid, false);
+        CHECK(!projectfolders::rename(&db, projectGuid, systems, "Stuff").ok,
+              "renaming the editor's own Systems folder is refused");
+        CHECK(!projectfolders::remove(&db, projectGuid, systems).ok,
+              "deleting the editor's own Systems folder is refused");
+        CHECK(!projectfolders::remove(&db, projectGuid, projectGuid).ok,
+              "deleting the project root is refused");
+        CHECK(projectfolders::rename(&db, projectGuid, props, "Kit").ok, "renameFolder works");
+        CHECK(db.fetchFolder(props).name == "Kit", "...and it took");
+
+        // Delete with keepContents: everything comes up to the parent, and
+        // NOTHING leaves the project.
+        CHECK(projectfolders::remove(&db, projectGuid, props, true).ok, "deleteFolder(Kit)");
+        CHECK(db.fetchFolder(props).guid.isEmpty(), "...the folder row is gone");
+        CHECK(db.fetchFolder(nested.guid).parent == projectGuid,
+              "...its child folder came up to the root");
+        CHECK(db.fetchAsset(ownRow).parent == projectGuid, "...its own row came up to the root");
+        CHECK(db.fetchProjectPinFolders(projectGuid).value(libraryRow).isEmpty(),
+              "...and its pinned row is unfiled again");
+        CHECK(listed(assettray::list(&db, projectGuid, projectGuid), libraryRow),
+              "...so the pinned row is a root tile once more");
+    }
+
+    // ---------------------------------------------------------------------
+    // 6. A MULTI-MOVE IS ONE UNDO STEP (DRAWERS-1). The drag of a selection
+    //    onto a folder tile is one gesture, so it is one command carrying
+    //    every row — this is that command on a real QUndoStack.
+    // ---------------------------------------------------------------------
+    {
+        const projectfolders::Result folder =
+            projectfolders::create(&db, projectGuid, "Batch");
+        CHECK(folder.ok, "a folder to move into");
+
+        const QStringList rows{ sceneNodes[4], sceneNodes[5], sceneNodes[7] };
+        QUndoStack stack;
+        auto *command = new MoveToProjectFolderCommand(&db, projectGuid, rows, folder.guid);
+        stack.push(command);
+        CHECK(command->error().isEmpty() && command->moved() == 3, "three rows moved");
+        CHECK(stack.count() == 1, "...as ONE step on the stack");
+        for (const QString &guid : rows)
+            if (db.fetchAsset(guid).parent != folder.guid) {
+                CHECK(false, "...every row is in the folder"); break;
+            }
+        CHECK(db.fetchAsset(rows[2]).parent == folder.guid, "...every row is in the folder");
+
+        stack.undo();
+        CHECK(stack.index() == 0, "one undo");
+        int back = 0;
+        for (const QString &guid : rows) if (db.fetchAsset(guid).parent == projectGuid) ++back;
+        CHECK(back == 3, "...and ALL THREE are back at the root");
+
+        stack.redo();
+        int again = 0;
+        for (const QString &guid : rows) if (db.fetchAsset(guid).parent == folder.guid) ++again;
+        CHECK(again == 3, "...a redo files all three again");
+
+        // New Folder is undoable too, and a redo re-creates the SAME guid.
+        QUndoStack folderStack;
+        auto *create = new CreateProjectFolderCommand(&db, projectGuid, "Undoable", QString());
+        const QString createdGuid = create->guid();
+        folderStack.push(create);
+        CHECK(!createdGuid.isEmpty() && db.fetchFolder(createdGuid).name == "Undoable",
+              "createFolder as a command");
+        folderStack.undo();
+        CHECK(db.fetchFolder(createdGuid).guid.isEmpty(), "...one undo removes it");
+        folderStack.redo();
+        CHECK(db.fetchFolder(createdGuid).guid == createdGuid,
+              "...and a redo re-creates the SAME folder guid");
     }
 
     printf(failures ? "\n%d FAILURES\n" : "\nall assertions passed\n", failures);

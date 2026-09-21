@@ -257,6 +257,12 @@ QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QStrin
     // in, and rule 3 (the avatar claim) needs them too — reading them twice was
     // half this function's cost (small-items round B).
     const QVector<AssetRecord> pinned = db->fetchProjectPinnedAssets(projectGuid);
+    // WHERE THIS PROJECT FILES ITS PINS (DRAWERS-1): a pinned row is a LIBRARY
+    // row shared by every project, so its folder cannot ride `assets.parent`
+    // and rides the PIN instead (services/projectfolders.h). One query, like
+    // every other read here.
+    const QHash<QString, QString> pinFolders = db->fetchProjectPinFolders(projectGuid);
+    const QSet<QString> folders = db->fetchProjectFolderGuids(projectGuid);
     if (folder == projectGuid) {
         // A PIN LISTS AT THE ROOT ONLY IF IT IS NOT FILED (small-items round
         // B). A project archive's import pins every row it brings in, the
@@ -267,14 +273,47 @@ QVector<AssetRecord> list(Database *db, const QString &projectGuid, const QStrin
         // whose parent is one of this project's folders is listed BY that
         // folder; only unfiled pins (a library asset, which has no folder
         // here) are root tiles.
-        const QSet<QString> folders = db->fetchProjectFolderGuids(projectGuid);
         for (const auto &record : pinned) {
             if (typeFilter > 0 && record.type != typeFilter) continue;
             if (folders.contains(record.parent)) continue;
+            // A pin filed in a folder that still EXISTS lists there, not here;
+            // one whose folder is gone comes home to the root rather than
+            // disappearing (nothing deletes a folder without re-filing its
+            // rows, so this is the belt to that brace).
+            if (folders.contains(pinFolders.value(record.guid))) continue;
             records.append(record);
+        }
+    } else {
+        for (const auto &record : pinned) {
+            if (typeFilter > 0 && record.type != typeFilter) continue;
+            if (pinFolders.value(record.guid) == folder) records.append(record);
         }
     }
     return collapse(db, projectGuid, records, pinned, showMembers);
+}
+
+QVector<AssetRecord> listAll(Database *db, const QString &projectGuid, int typeFilter,
+                             bool showMembers)
+{
+    if (!db || projectGuid.isEmpty()) return {};
+    // THE WHOLE PROJECT, FLAT — the same rule, every folder (DRAWERS-1). The
+    // Materials module's project drawer reads this: it is one column of tiles
+    // with no breadcrumb, so a folder-filed material would otherwise be
+    // invisible in the module while the editor tray shows it.
+    QStringList folders;
+    folders << projectGuid;
+    for (const QString &guid : db->fetchProjectFolderGuids(projectGuid)) folders << guid;
+
+    QVector<AssetRecord> out;
+    QSet<QString> seen;
+    for (const QString &folder : folders) {
+        for (const AssetRecord &record : list(db, projectGuid, folder, typeFilter, showMembers)) {
+            if (seen.contains(record.guid)) continue;
+            seen.insert(record.guid);
+            out.append(record);
+        }
+    }
+    return out;
 }
 
 QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records, bool showMembers)
