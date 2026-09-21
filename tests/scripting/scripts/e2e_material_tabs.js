@@ -140,28 +140,60 @@ assert(materials.tabs().length === 2, "two tabs again");
 //
 // The gesture the owner makes: open a preset the project holds, delete a node,
 // let the save land. It is asserted HERE, on the page, because the page is
-// where it CRASHED: the copy unpins the master, this page closes project-scope
+// where it CRASHED: the copy unpins the master, this page closes PROJECT-SCOPE
 // tabs whose pin has gone, and the document being saved was the one it closed
 // (a use-after-free on the very first try on the rig). A close FLUSHES the
 // pending autosave, which is that save landing, with no wall clock in it.
+//
+// THE TAB MUST BE PROJECT-SCOPE FOR THAT TO BE TRUE (the Fable read's item 2):
+// an unpinned preset opens at LIBRARY origin, which the membership handler
+// never touches — the arm would then pass with the guards removed. So the
+// project holds it first, by the apply, exactly as the owner's does.
+var brickCube = scene.addPrimitive("Cube");
+assert(material.apply(brickCube, "Brick PBR") === true, "Brick PBR applied: the project holds it");
 var pageEdit = materials.open("Brick PBR");
-assert(pageEdit.editable === true, "the preset opens editable on the page");
+assert(pageEdit.scope === "project",
+       "…so the preset opens at PROJECT scope (" + pageEdit.scope + ")");
+assert(pageEdit.editable === true, "…editable on the page");
+assert(pageEdit.master === pageEdit.guid, "…and it is the shipped master, so far");
 var brickNode = loneNodeIdOf(pageEdit.guid);
 assert(graph.removeNode(brickNode) === true, "the page's canvas takes the deletion");
+assert(tabOf(pageEdit.guid) !== null,
+       "…and the tab is still open on the master until the save lands");
 assert(materials.closeTab(pageEdit.tab) === true,
        "closing the tab flushes the pending autosave — the first edit landing");
-var projectMaterials = assets.list({ scope: "project", type: "material" });
-var brickCopy = projectMaterials.filter(function (a) {
+var brickCopies = assets.list({ scope: "project", type: "material" }).filter(function (a) {
     return materials.masterOf(a.guid) === pageEdit.guid && a.guid !== pageEdit.guid;
 });
-assert(brickCopy.length === 1,
-       "…and the project holds its OWN copy of the preset (" + brickCopy.length + ")");
-assert(brickCopy[0].name === "Brick PBR", "…under the preset's own name");
+assert(brickCopies.length === 1,
+       "…and the project holds its OWN copy of the preset (" + brickCopies.length + ")");
+assert(brickCopies[0].name === "Brick PBR", "…under the preset's own name");
 assert(assets.list({ scope: "project", type: "material" }).filter(function (a) {
            return a.guid === pageEdit.guid;
        }).length === 0,
        "…and has let go of the shipped master");
 assert(materials.tabs().length === 2, "two tabs again");
+
+// ---- 6c. AND THE SECOND TIME, THE PAGE ADOPTS THAT COPY ------------------
+//
+// The preset TILE carries the MASTER's guid, so the second double-click opens
+// the master again — at LIBRARY scope now, since the project has let go of it.
+// Editing it must ADOPT the copy this project already has, not make a second
+// one (the Fable read's item 1: two "Wood PBR" rows pinned, and an edit that
+// could land on a copy no mesh wears).
+var rowsBefore6c = assets.list({ scope: "store", type: "material" }).length;
+var again = materials.open(pageEdit.guid);      // by the MASTER's guid: the tile's route
+assert(again.editable === true, "the master opens editable a second time");
+assert(graph.removeNode(loneNodeIdOf(again.guid)) === true, "…the canvas takes an edit");
+assert(materials.closeTab(again.tab) === true, "…and the save lands on the close");
+assert(assets.list({ scope: "store", type: "material" }).length === rowsBefore6c,
+       "NO SECOND COPY WAS MINTED (" + assets.list({ scope: "store", type: "material" }).length
+       + " material rows, was " + rowsBefore6c + ")");
+var stillOne = assets.list({ scope: "project", type: "material" }).filter(function (a) {
+    return materials.masterOf(a.guid) === pageEdit.guid && a.guid !== pageEdit.guid;
+});
+assert(stillOne.length === 1 && stillOne[0].guid === brickCopies[0].guid,
+       "…the project still holds exactly the copy it had");
 
 // ---- 7. the pending save lands on its OWN material ----------------------
 // B's deletion (§3) armed B's autosave and nothing else's — that was read at

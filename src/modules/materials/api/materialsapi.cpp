@@ -2495,7 +2495,11 @@ bool GraphApi::save()
             host.services ? host.services->undo : nullptr,
             host.services ? host.services->sceneEdit : nullptr);
         if (!target.ok()) return fail(QStringLiteral("graph.save: %1").arg(target.error));
-        if (target.copied) {
+        // ON AN IDENTITY CHANGE, NOT ON `copied` (the Fable read's item 1):
+        // the guid also moves when this project ALREADY had its copy and the
+        // graph was loaded from the master — and it is the graph's bindings
+        // that make the difference, not who minted the row.
+        if (target.guid != mAssetGuid) {
             // A READ BOUND THE SHIPPED FILES (looking at a preset writes
             // nothing); an EDIT binds library assets, because a definition may
             // never carry a path — lock 3, MaterialBundle::write. The content
@@ -2503,7 +2507,9 @@ bool GraphApi::save()
             // (seeding put the bytes in the store), so this costs a hash each.
             MaterialHelper::resolveAppRelativeTextures(
                 graph, MaterialHelper::TextureBinding::Import);
-            if (host.services && host.services->sceneEdit)
+            // Only a MINT is news to the drawers; adopting the copy that was
+            // already there changes no tile.
+            if (target.copied && host.services && host.services->sceneEdit)
                 host.services->sceneEdit->requestAssetViewRefresh();
         }
         mAssetGuid = target.guid;

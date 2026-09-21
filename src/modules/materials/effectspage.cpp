@@ -635,7 +635,12 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			reportSaveRefused(doc, target.error);
 			return;
 		}
-		if (target.copied) adoptProjectCopy(doc, target.guid);
+		// ADOPTED ON AN IDENTITY CHANGE, NOT ON `copied` (the Fable read's
+		// item 1): the guid moves in TWO cases — the copy this save just made,
+		// and the copy this project already had (the second double-click of a
+		// preset tile, which carries the MASTER's guid). Both mean the same
+		// thing to the document: it is that material from here.
+		if (target.guid != doc->info.GUID) adoptProjectCopy(doc, target.guid);
 	}
 
 	if (doc->info.GUID.isEmpty()) {
@@ -1156,10 +1161,11 @@ void EffectsPage::adoptProjectCopy(MaterialDocument *doc, const QString &copyGui
 	// the guid it SAVES BY — is written in ONE named place per kind of change,
 	// never in the middle of a handler.
 	//
-	// The change: the document was the shipped preset, at project scope; the
-	// project has just taken its own copy of it, so the document IS that copy
-	// from here — the same canvas, the same undo history and the same name, on
-	// a new guid. The save that called this then writes to the copy.
+	// The change: the document was the shipped preset; this project's own copy
+	// of it is `copyGuid` — minted by the save that called this, or already
+	// there from an earlier edit — so the document IS that copy from here: the
+	// same canvas, the same undo history and the same name, on a new guid. The
+	// save that called this then writes to the copy.
 	if (!doc || copyGuid.isEmpty()) return;
 	doc->info.GUID = copyGuid;
 	doc->info.origin = shaderInfo::Origin::Project;

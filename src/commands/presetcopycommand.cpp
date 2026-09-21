@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "commands/presetcopycommand.h"
 
 #include <QJsonDocument>
+#include <QSqlDatabase>
 #include <QObject>
 
 #include "data/guidmanager.h"
@@ -78,6 +79,20 @@ void PresetCopyCommand::redo()
         return;
     }
 
+    // ONE TRANSACTION FOR THE CATALOG HALF (the Fable read's item 4, and the
+    // same rule `MaterialBundle::write` follows): the mint, the master link,
+    // the pin, the unpin and the use edges are five catalog writes that mean
+    // nothing apart — a failure between any two of them would leave a project
+    // pinning two materials, or none, or a mesh wearing a row that is not
+    // there. The guard rolls back at destruction unless `commit()` is reached,
+    // and it degrades to a no-op inside somebody else's transaction (a gesture
+    // batch, an import slice), which is the correct nesting behaviour. The
+    // BYTES the definition write publishes are content-addressed and are
+    // collected by `assets.gc` if the rows never land — the harmless direction.
+    QSqlDatabase conn = QSqlDatabase::database();
+    DbTransaction tx(conn);
+    const QString mintedBefore = mCopyGuid;
+
     // 1. THE COPY. The guid is minted once and kept, so a redo after an undo
     // re-makes the SAME material (see the header).
     const QString guid = mCopyGuid.isEmpty() ? GUIDManager::generateGUID() : mCopyGuid;
@@ -103,8 +118,20 @@ void PresetCopyCommand::redo()
     mMasterWasPinned = mDb->isAssetPinnedBy(mProjectGuid, mMaster);
     if (mMasterWasPinned) assetdelete::removeFromProject(mDb, mMaster, mProjectGuid);
 
-    // 3. THE USE EDGES, and 4. the re-dress.
+    // 3. THE USE EDGES…
     moveUseEdges(mMaster, mCopyGuid);
+    if (!tx.commit()) {
+        mError = QObject::tr("the catalog refused the copy");
+        // A FIRST redo that failed made nothing, and `copyGuid()` must say so
+        // (it is what `presetedit::forEdit` answers with on the route that has
+        // no undo stack). A LATER one keeps the guid it established, because a
+        // rolled-back redo has not changed which material this command IS.
+        mCopyGuid = mintedBefore;
+        return;
+    }
+    // …and 4. the re-dress, AFTER the commit: it reads the definition back
+    // through the store and hands every mesh a new material, which is not work
+    // to do inside a transaction that may still roll back.
     if (mRedress) mRedress(mCopyGuid);
 }
 
@@ -112,17 +139,26 @@ void PresetCopyCommand::undo()
 {
     if (!mDb || mCopyGuid.isEmpty() || mProjectGuid.isEmpty()) return;
 
-    // Exactly the four steps, backwards. The edges first: nothing may point at
-    // the copy by the time its row goes.
-    moveUseEdges(mCopyGuid, mMaster);
-    if (mMasterWasPinned)
-        ProjectAssets::addToProject(mMaster, mDb, mProject, ProjectAssets::AddKind::Direct);
+    {
+        // One transaction here too, for the reason it is one in `redo`: half an
+        // undo is a project pinning a material whose row is gone.
+        QSqlDatabase conn = QSqlDatabase::database();
+        DbTransaction tx(conn);
 
-    // The project side, then the library row. `keepShared` true is the point:
-    // the copy names the PRESET'S member textures, and they belong to the
-    // preset — a closure delete here would take the master's pictures with it.
-    assetdelete::removeFromProject(mDb, mCopyGuid, mProjectGuid);
-    assetdelete::remove(mDb, mCopyGuid, /*keepShared*/ true, /*force*/ true);
+        // Exactly the four steps, backwards. The edges first: nothing may point
+        // at the copy by the time its row goes.
+        moveUseEdges(mCopyGuid, mMaster);
+        if (mMasterWasPinned)
+            ProjectAssets::addToProject(mMaster, mDb, mProject, ProjectAssets::AddKind::Direct);
+
+        // The project side, then the library row. `keepShared` true is the
+        // point: the copy names the PRESET'S member textures, and they belong
+        // to the preset — a closure delete here would take the master's
+        // pictures with it.
+        assetdelete::removeFromProject(mDb, mCopyGuid, mProjectGuid);
+        assetdelete::remove(mDb, mCopyGuid, /*keepShared*/ true, /*force*/ true);
+        tx.commit();
+    }
 
     if (mRedress) mRedress(mMaster);
 }

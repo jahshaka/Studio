@@ -28,6 +28,11 @@
 //   7. WITH NO PROJECT OPEN IT IS REFUSED, with the reason. That is the only
 //      lock left on a preset, and the library master keeps it.
 //
+// A SECOND EDIT ADOPTS the copy rather than making another (arm 2b) — asked
+// here of the VERB; the same rule through the Materials PAGE (the preset tile
+// carries the master's guid, so the second double-click opens the master
+// again) is scripting.e2e.material_tabs 6c, which is where the page is.
+//
 // UNDO is not assertable from inside a run (a run is ONE open macro, so
 // editor.undo() cannot reach the step). What undoing it DOES is
 // commands.preset_copy, against the same command with the real database.
@@ -103,6 +108,29 @@ var plain = materials.create("Plain " + Date.now());
 var plainEdit = materials.edit(plain);
 assert(plainEdit.copied === false && plainEdit.guid === plain && plainEdit.master === "",
        "an ordinary material is answered unchanged, with no master");
+
+// ---- 2b. A SECOND EDIT ADOPTS THE COPY, IT DOES NOT MAKE ANOTHER --------
+//
+// A preset TILE carries the MASTER's guid wherever it is shown — the Presets
+// drawer, the tray, a drag payload — so the second double-click, and a second
+// `materials.edit(<master>)`, arrive naming the master again. Without the
+// project-copy check they made a SECOND "Wood PBR": two rows pinned, the new
+// command finding no master pin to move and no mesh to re-point, and the
+// answer adopting whichever row the catalog listed first — so the edit could
+// land on a copy nothing wears.
+var rowsBeforeSecond = materialRows().length;
+var second = materials.edit(WOOD);              // BY THE MASTER'S GUID, again
+assert(second.copied === false, "a second materials.edit(master) copies nothing");
+assert(second.guid === copy, "…it answers the copy this project already has");
+assert(second.master === WOOD, "…still naming the master behind it");
+assert(materialRows().length === rowsBeforeSecond, "…and mints no row");
+assert(projectMaterials().length === 1 && projectMaterials()[0] === copy,
+       "…the project still holds exactly ONE material");
+// …and by the preset's NAME, which is the other spelling every door accepts.
+var byName = materials.edit("Wood PBR");
+assert(byName.copied === false && byName.guid === copy,
+       "…and so does the same call by name");
+assert(materialRows().length === rowsBeforeSecond, "…still no new row");
 
 // ---- 3. the edit lands on the copy, and reaches the scene ---------------
 //

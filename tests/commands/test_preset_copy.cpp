@@ -210,16 +210,23 @@ int main(int argc, char **argv)
     CHECK(db.isAssetPinnedBy(otherGuid, master), "6: …the other project, through all of it");
 
     // ---- 7. no project, nothing done --------------------------------------
+    //
+    // DRIVEN DIRECTLY, NOT THROUGH A STACK (the Fable read's item 3): a
+    // QUndoStack OWNS what it is handed and may destroy it inside push, so
+    // reading the command back afterwards is the dangling read
+    // `presetedit::forEdit` itself refuses to make. The command is a local
+    // here, and redo/undo are the same two calls the stack would have made.
     Project placeholder;   // the startup placeholder: a Project with no guid
-    QUndoStack loose;
-    auto *refused = new PresetCopyCommand(&db, &placeholder, PresetCopyCommand::Redress(),
-                                          master);
-    loose.push(refused);
-    CHECK(refused->copyGuid().isEmpty() && !refused->error().isEmpty(),
-          "7: with no project there is nowhere to copy to, and it says so");
-    loose.undo();
+    {
+        PresetCopyCommand refused(&db, &placeholder, PresetCopyCommand::Redress(), master);
+        refused.redo();
+        CHECK(refused.copyGuid().isEmpty() && !refused.error().isEmpty(),
+              "7: with no project there is nowhere to copy to, and it says so");
+        refused.undo();
+    }
     CHECK(db.isAssetPinnedBy(projectGuid, copy),
           "7: …and its undo changes nothing either");
+    CHECK(!db.fetchAsset(copy).guid.isEmpty(), "7: …the project's own copy is still there");
 
     printf(failures ? "\n%d FAILURES\n" : "\nall preset-copy assertions passed\n", failures);
     return failures ? 1 : 0;

@@ -119,6 +119,25 @@ Target forEdit(Database *db, Project *project, const QString &guid,
         return target;
     }
 
+    // THIS PROJECT MAY ALREADY HAVE ITS COPY (the Fable read's item 1, and it
+    // is the second edit of every preset the owner touches). A preset TILE
+    // carries the MASTER's guid wherever it is shown — the Presets drawer, the
+    // tray, a drag payload — so the second double-click, the second
+    // `materials.edit(<master>)` and a save under a still-open master tab all
+    // arrive here naming the master again. Without this the copy-on-write ran
+    // a SECOND time: two "Wood PBR" rows pinned, the new command finding no
+    // master pin to move and no node to re-point, and the answer adopting
+    // whichever row the catalog listed first — so the edit could land on a copy
+    // no mesh wears. ANSWERED, not copied: the project's material IS the copy.
+    {
+        const QString mine = projectCopyOf(db, project, guid);
+        if (!mine.isEmpty()) {
+            target.guid = mine;
+            target.master = guid;
+            return target;            // `copied` false: nothing was minted
+        }
+    }
+
     // THE MASTER MUST EXIST BEFORE IT CAN BE COPIED. Seeding is on first USE
     // (services/materialpresetassets.h) and this is a use: a preset nobody has
     // applied yet has no row, no definition and no members, so the copy would
