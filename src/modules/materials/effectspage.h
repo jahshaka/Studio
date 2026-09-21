@@ -23,8 +23,9 @@
 #include "widgets/materialsettingswidget.h"
 #include "dialogs/createnewdialog.h"
 #include "widgets/listwidget.h"
-#include "misc/QtAwesome.h"
-#include "misc/QtAwesomeAnim.h"
+#include "thirdparty/qtawesome/QtAwesome.h"
+#include "thirdparty/qtawesome/QtAwesomeAnim.h"
+#include "ui/controls/fonticons.h"
 
 #if(EFFECT_BUILD_AS_LIB)
 #include "widgets/shaderassetwidget.h"

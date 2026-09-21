@@ -138,8 +138,10 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	// DOCUMENT now — MaterialDocument's, wired in newDocument. It was never
 	// stopped on a switch, so an edit made less than 1.5 s before opening
 	// another material fired against the NEW material's guid.)
-	fontIcons = new QtAwesome;
-	fontIcons->initFontAwesome();
+	// THE PROCESS'S ICON SET (QTAWESOME-1) — not a second one. This page used
+	// to build its own QtAwesome, run initFontAwesome() through it and fill a
+	// second 786-entry codepoint map, for the five toolbar glyphs it draws.
+	fontIcons = &fonticons::shared();
 	configureUI();
 	configureToolbar();
 	addMenuToSceneWidget();
