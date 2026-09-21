@@ -994,28 +994,26 @@ add_test(NAME gi.surface_cache_spike COMMAND test_gi_surface_cache_spike
 set_tests_properties(gi.surface_cache_spike PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # ---------------------------------------------------------------------------
-# gi.gather_spike — GATHER-0, the phase-0 SCREEN-PROBE GATHER spike.
+# gi.gather — THE SCREEN-PROBE GATHER, phase 1
+# (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 1).
 #
-# A MEASUREMENT SUITE, like gi.surface_cache_spike beside it and for the same
-# reason: SPECS/SCREEN_PROBE_GATHER_SPEC.md section 10 records that not one
-# millisecond of its budget table is measured, and section 7 phase 0 is the
-# lane that takes them. Its own binary because the gather binds descriptors and
-# a pass texture no other suite's frames carry.
-add_executable(test_gi_gather_spike test_gi_gather_spike.cpp)
-set_target_properties(test_gi_gather_spike PROPERTIES
+# Its own binary because the gather binds descriptors and a pass texture no
+# other suite's frames carry.
+add_executable(test_gi_gather test_gi_gather.cpp)
+set_target_properties(test_gi_gather PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_gather_spike PRIVATE
+target_compile_definitions(test_gi_gather PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_gather_spike PRIVATE JahshakaEngine)
-add_dependencies(test_gi_gather_spike JahshakaEngineMedia)
-add_test(NAME gi.gather_spike COMMAND test_gi_gather_spike
+target_link_libraries(test_gi_gather PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather JahshakaEngineMedia)
+add_test(NAME gi.gather COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.gather_spike PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.gather PROPERTIES TIMEOUT 900 LABELS "engine")
 
 # THE COST, at the resolution the spec's budget table is stated at.
 #
@@ -1025,17 +1023,55 @@ set_tests_properties(gi.gather_spike PROPERTIES TIMEOUT 600 LABELS "engine")
 # clocks are locked by hand, so a GPU-time number taken inside a -j4 gate is
 # not a measurement. The suite PRINTS its milliseconds and asserts only a
 # catastrophe ceiling; the numbers of record are taken by hand with the clocks
-# locked (spikes/gather-0/FINDINGS.md).
-add_test(NAME gi.gather_spike_cost COMMAND test_gi_gather_spike
+# locked (spikes/gather-1a/FINDINGS.md).
+add_test(NAME gi.gather_cost COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.gather_spike_cost PROPERTIES
-                     TIMEOUT 600 LABELS "benchmark" RUN_SERIAL TRUE
+set_tests_properties(gi.gather_cost PROPERTIES
+                     TIMEOUT 900 LABELS "benchmark" RUN_SERIAL TRUE
                      ENVIRONMENT "JAH_GATHER_COST=1")
 
 # ...and the picture a machine WITHOUT ray queries draws, which this lane may
 # not move by one byte.
-add_test(NAME gi.gather_spike_norays COMMAND test_gi_gather_spike
+add_test(NAME gi.gather_norays COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.gather_spike_norays PROPERTIES
+set_tests_properties(gi.gather_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
+# ---------------------------------------------------------------------------
+# gi.gather_reference — THE ANALYTIC GATE (the lead's decision, ledger §937/§938)
+#
+# A rectangular Lambertian emitter over a diffuse plane has a CLOSED FORM for
+# the irradiance it delivers (Lambert's formula for the projected solid angle of
+# a polygon), and this suite measures all three of this renderer's diffuse-GI
+# estimators against it at a set of floor points: the screen-probe gather, the
+# voxel CONES and the irradiance FIELD. It is the first time any of them has
+# been compared with a reference rather than with each other.
+#
+# Its own binary, and its own entry, because it is a different question from
+# gi.gather's: that suite asks whether the gather behaves, this one asks whether
+# it is RIGHT.
+add_executable(test_gi_gather_reference test_gi_gather_reference.cpp)
+set_target_properties(test_gi_gather_reference PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_reference PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_reference PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_reference JahshakaEngineMedia)
+add_test(NAME gi.gather_reference COMMAND test_gi_gather_reference
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_reference PROPERTIES TIMEOUT 900 LABELS "engine")
+
+# ...and the TRACE's own bar, in R5's form: a probe a metre from a lit red wall
+# reads at least 0.6 of that wall's albedo times its lighting, in the wall's
+# direction.
+add_test(NAME gi.gather_trace COMMAND test_gi_gather_reference
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_trace PROPERTIES
+                     TIMEOUT 600 LABELS "engine"
+                     ENVIRONMENT "JAH_GATHER_TRACE=1")

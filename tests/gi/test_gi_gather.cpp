@@ -1,20 +1,28 @@
-// gi.gather_spike — GATHER-0, THE NAKED SCREEN-PROBE TRACE
-// (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 0; the brief
-// SPECS/briefs/GATHER-0.md).
+// gi.gather — THE SCREEN-PROBE GATHER, phase 1
+// (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 1; the brief
+// SPECS/briefs/GATHER-1a.md).
 //
-// A MEASUREMENT SUITE. Its job is to PRINT the numbers the spec records as
-// unmeasured and to assert only the things a phase-0 spike can honestly
-// assert: that the trace and the integrate run and are timed, that a still
-// frame is byte-deterministic, that the diffuse answer really comes from the
-// rays, that the leak through a thin wall is measured against the field's own
-// bars in the SAME process at the SAME pose, and that a machine without rays
-// is untouched.
+// WHAT IT ASSERTS, and why it is these things and not smoothness: at phase 1
+// there is no filter and no temporal accumulation, so the picture is BLOCKY at
+// the probe stride and NOISY at 64 rays BY DESIGN. What can be asserted
+// honestly is that the diffuse answer really comes from the rays, that the leak
+// through a thin wall is measured against the irradiance field's own bars in
+// the SAME process at the SAME pose, that the adaptive pass appends probes
+// where geometry needs them and none where it does not, that a still frame is
+// byte-deterministic, and that a machine without rays draws exactly what it
+// drew before.
+//
+// THE MAGNITUDE is gi.gather_reference's question, not this suite's: a
+// rectangular Lambertian emitter over a plane has a closed-form irradiance, and
+// that is the first measurement of any of this renderer's diffuse-GI estimators
+// against a reference.
 //
 // THREE ENTRIES, ONE BINARY (the gi.rt_reflect shape):
-//   gi.gather_spike         — the leak room, the picture, determinism
-//   gi.gather_spike_cost    — the GPU milliseconds at 1080p on a dense scene
-//   gi.gather_spike_norays  — the fallback: arming REFUSES, the picture is the
-//                             one a no-ray machine already draws
+//   gi.gather          — the leak room, the picture, the adaptive pass,
+//                        determinism, the tier-teardown case
+//   gi.gather_cost     — the GPU milliseconds at 1080p on a dense scene
+//   gi.gather_norays   — the fallback: the row does nothing and the picture is
+//                        the one a no-ray machine already draws
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -56,17 +64,32 @@ static void armChain(View *view, int ssrRow = 2)
     view->setPostFx(fx);
 }
 
-static bool armGather(Scene *s, bool on, ProbeGatherSpikeResult &out, unsigned stride = 16u,
-                      unsigned rays = 64u, bool freeze = false, bool farOff = false)
+/// THE ROW AND THE KNOBS. The row is `GiParams::gather` and travels with the
+/// rest of the GI configuration (a GI push, because the gather changes the
+/// CHAIN as well as the shader); the knobs are the test-and-tool door, and
+/// every zero in them means "what the tier derives".
+///
+/// `gi` is passed by value on purpose: every arm of this suite states the whole
+/// GI configuration it is measuring, so no arm can inherit a row from the one
+/// before it.
+static void armGather(Scene *s, GiParams gi, bool on, unsigned stride = 16u,
+                      unsigned octRes = 8u, bool freeze = false, bool farOff = false,
+                      int adaptiveCap = -1, bool jitterOff = false)
 {
-    ProbeGatherSpikeDesc d;
-    d.on = on;
-    d.probeStride = stride;
-    d.raysPerProbe = rays;
-    d.freezeFrameIndex = freeze;
-    d.farTermOff = farOff;
-    return s->probeGatherSpike(d, out);
+    gi.gather = on ? GiToggle::On : GiToggle::Off;
+    s->setGlobalIllumination(gi);
+    GatherTuning t;
+    t.probeStride = stride;
+    t.octRes = octRes;
+    t.freezeFrameIndex = freeze;
+    t.farTermOff = farOff;
+    t.adaptiveCap = adaptiveCap;
+    t.jitterOff = jitterOff;
+    s->setGatherTuning(t);
 }
+
+/// What the engine reports back about the last gathered frame.
+static GatherStatus gatherStatus(Scene *s) { return s->giStatus().gather; }
 
 static void writePpm(const Image &img, const std::string &path)
 {
@@ -141,7 +164,7 @@ int main()
     armChain(view);
 
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
-        std::printf("ok: no ray queries on this machine — gi.gather_spike is about the tier "
+        std::printf("ok: no ray queries on this machine — gi.gather is about the tier "
                     "and skips cleanly\n");
         return 0;
     }
@@ -176,15 +199,14 @@ int main()
         view->setScene(s);
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T);
 
-        // THE ACCOUNTING RULE, and why the gather arm runs with `ddgi` OFF
-        // (fix round, H3). A pixel gets exactly ONE diffuse-GI term. Arming
-        // the gather compiles the CONE diffuse out (the listener's
-        // `vct_disable_diffuse`), which is the half a host can do from
-        // outside; the irradiance field's own cage is inside upstream's body
-        // and still adds its term, so an armed scene with a bound field would
-        // shade TWO. Phase 0 measures with the field off in every arm — which
-        // is also what makes the three arms comparable; GATHER-1 owns the real
-        // answer, the cage-guard hook of ogre-patch 0085.
+        // THE ACCOUNTING RULE. A pixel gets exactly ONE diffuse-GI term, and
+        // since ogre-patch 0086 that is true of the FIELD too: the listener
+        // compiles the cone diffuse out under the gather's pass property
+        // (`vct_disable_diffuse`) and the patch's cage gate stands the field's
+        // eight-probe cage down on every pixel a probe answered for. The three
+        // arms are still measured with the field OFF in the gather's arm, for
+        // a different and simpler reason: it is what makes the three arms
+        // comparable, each being ONE estimator and nothing else.
         const auto leakOf = [&](GiToggle ddgi, bool gather, const char *what) {
             GiParams gi;
             gi.mode = GiMode::Vct;
@@ -193,9 +215,7 @@ int main()
             gi.updateBudget = 1;
             gi.numBounces = 1;
             gi.cascades = true;
-            s->setGlobalIllumination(gi);
-            ProbeGatherSpikeResult gr;
-            armGather(s, gather, gr);
+            armGather(s, gi, gather);
             enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
             s->refreshGlobalIllumination();
             render(e, 16);
@@ -208,7 +228,7 @@ int main()
             render(e, 16);
             view->readPixels(img);
             float offR = 0, offG = 0; meanRG(img, offR, offG);
-            armGather(s, false, gr);
+            armGather(s, gi, false);
             std::printf("   %-7s wall %.2f m: LEAK %.4f (lamp on r %.4f, off r %.4f), green %.4f\n",
                         what, double(T), double(onR - offR), double(onR), double(offR),
                         double(onG));
@@ -287,9 +307,7 @@ int main()
             gi.ddgi = ddgi;
             gi.numBounces = 1;
             gi.cascades = true;
-            s->setGlobalIllumination(gi);
-            ProbeGatherSpikeResult r;
-            armGather(s, gather, r);
+            armGather(s, gi, gather);
             s->refreshGlobalIllumination();
             render(e, 40);
             view->readPixels(out);
@@ -304,8 +322,7 @@ int main()
             std::printf("   %-7s floor red %.4f  green %.4f  (red excess over green %.4f)\n",
                         what, double(red), double(green), double(red - green));
             if (dumpDir)
-                writePpm(out, std::string(dumpDir) + "/g0-bounce-" + what + ".ppm");
-            armGather(s, false, r);
+                writePpm(out, std::string(dumpDir) + "/g1a-bounce-" + what + ".ppm");
             return red - green;
         };
         Image offImg, conesImg, fieldImg, gatherImg;
@@ -314,31 +331,32 @@ int main()
         const float fieldRed = arm(GiMode::Vct, GiToggle::On, false, "field", fieldImg);
         const float gatherRed = arm(GiMode::Vct, GiToggle::Off, true, "gather", gatherImg);
 
-        ProbeGatherSpikeResult stats;
-        {
-            GiParams gi;
-            gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.ddgi = GiToggle::Off;
-            gi.numBounces = 1; gi.cascades = true;
-            s->setGlobalIllumination(gi);
-            armGather(s, true, stats);
-            render(e, 40);
-            armGather(s, true, stats);
-        }
-        std::printf("\n   gather: %u x %u probes (%u) x %u rays = %llu rays/frame over %ux%u, "
-                    "trace %.4f ms, integrate %.4f ms, record %.4f ms CPU, VRAM %llu bytes\n",
-                    stats.probesX, stats.probesY, stats.probes, stats.raysPerProbe,
-                    (unsigned long long)stats.raysPerFrame, stats.targetW, stats.targetH,
-                    double(stats.traceMs), double(stats.integrateMs), double(stats.cpuMs),
-                    (unsigned long long)stats.vramBytes);
+        GiParams gatherGi;
+        gatherGi.mode = GiMode::Vct; gatherGi.quality = GiQuality::High;
+        gatherGi.ddgi = GiToggle::Off; gatherGi.numBounces = 1; gatherGi.cascades = true;
+        armGather(s, gatherGi, true);
+        render(e, 40);
+        const GatherStatus stats = gatherStatus(s);
+        std::printf("\n   gather: %u x %u probes (%u) + %u adaptive (cap %u) x %u rays = %llu "
+                    "rays/frame over %ux%u, place %.4f ms, trace %.4f ms, integrate %.4f ms, "
+                    "record %.4f ms CPU, VRAM %llu bytes\n",
+                    stats.probesX, stats.probesY, stats.probes, stats.adaptive, stats.adaptiveCap,
+                    stats.raysPerProbe, (unsigned long long)stats.raysPerFrame, stats.targetW,
+                    stats.targetH, double(stats.placeMs), double(stats.traceMs),
+                    double(stats.integrateMs), double(stats.cpuMs),
+                    (unsigned long long)stats.atlasBytes);
+        CHECK(stats.on && stats.running,
+              "the scene reports the gather ON and a view RUNNING it (giStatus().gather)");
         CHECK_MSG(gatherRed > offRed + 0.01f,
                   "THE BOUNCE IS THE RAYS': the floor's red excess is %.4f under the gather "
                   "against %.4f with no diffuse GI at all", double(gatherRed), double(offRed));
         CHECK_MSG(stats.probes > 0u && stats.raysPerFrame > 0ull,
                   "the tier reports the trace it dispatched (%u probes, %llu rays)", stats.probes,
                   (unsigned long long)stats.raysPerFrame);
-        CHECK_MSG(stats.traceMs > 0.0f && stats.integrateMs > 0.0f,
-                  "both stages are timed on the GPU (trace %.4f ms, integrate %.4f ms)",
-                  double(stats.traceMs), double(stats.integrateMs));
+        CHECK_MSG(stats.placeMs > 0.0f && stats.traceMs > 0.0f && stats.integrateMs > 0.0f,
+                  "all three stages are timed on the GPU (place %.4f, trace %.4f, integrate "
+                  "%.4f ms)", double(stats.placeMs), double(stats.traceMs),
+                  double(stats.integrateMs));
         const Delta gf = deltaOf(fieldImg, gatherImg), gc = deltaOf(conesImg, gatherImg),
                     go = deltaOf(offImg, gatherImg), fo = deltaOf(offImg, fieldImg);
         std::printf("   THE SHEET at one pose (256x256):\n");
@@ -355,32 +373,24 @@ int main()
                     double(offRed), double(conesRed), double(fieldRed), double(gatherRed));
 
         // ---- the far term's A/B (spec section 10 item 6) -----------------
-        {
-            GiParams gi;
-            gi.mode = GiMode::Vct; gi.quality = GiQuality::High; gi.ddgi = GiToggle::Off;
-            gi.numBounces = 1; gi.cascades = true;
-            s->setGlobalIllumination(gi);
-        }
-        ProbeGatherSpikeResult fr;
-        armGather(s, true, fr, 16u, 64u, false, true);
+        armGather(s, gatherGi, true, 16u, 8u, false, true);
         render(e, 40);
         Image farOff; view->readPixels(farOff);
-        armGather(s, true, fr, 16u, 64u, false, false);
+        armGather(s, gatherGi, true, 16u, 8u, false, false);
         render(e, 40);
         Image farOn; view->readPixels(farOn);
         const Delta fd = deltaOf(farOn, farOff);
         std::printf("   THE FAR TERM (the outer cascades' voxel at tMax, against the sky): "
                     "%u of %u px moved (%.1f%%), mean %.2f/255, worst %u\n", fd.moved, fd.total,
                     100.0 * fd.moved / std::max(1u, fd.total), fd.meanMoved, fd.worst);
-        if (dumpDir) writePpm(farOff, std::string(dumpDir) + "/g0-bounce-gather-farOff.ppm");
+        if (dumpDir) writePpm(farOff, std::string(dumpDir) + "/g1a-bounce-gather-farOff.ppm");
 
         // ---- DETERMINISM (spec section 5) --------------------------------
         // With the sample sequence's frame term HELD, the whole estimator is a
         // pure function of the scene and the pixel: no clock, no atomic whose
         // order is the scheduler's, no subgroup identity. Three consecutive
         // frames of a still scene must be byte-identical.
-        ProbeGatherSpikeResult fz;
-        armGather(s, true, fz, 16u, 64u, true);
+        armGather(s, gatherGi, true, 16u, 8u, true);
         render(e, 24);
         Image a1, a2, a3;
         view->readPixels(a1);
@@ -391,7 +401,7 @@ int main()
               "scene are byte-identical (no clock, no ordered atomic in the estimator)");
         // ...and with it LIVE the estimate moves, which is what says the frame
         // index really is the sequence's input and nothing else is.
-        armGather(s, true, fz, 16u, 64u, false);
+        armGather(s, gatherGi, true, 16u, 8u, false);
         render(e, 8);
         Image b1, b2;
         view->readPixels(b1);
@@ -403,7 +413,6 @@ int main()
         CHECK(!identical(b1, b2),
               "...and with the frame term live the estimate moves frame to frame (it is what "
               "makes the temporal mean an integral)");
-        armGather(s, false, fz);
 
         // ---- D1: THE TIER CLOSES WHILE THE SPIKE IS ARMED ----------------
         // `Engine::setRayTracing(false)` tears the whole tier down —
@@ -413,8 +422,7 @@ int main()
         // `close()` the next colour pass binds a DESTROYED TextureGpu, which
         // is a validation error at best and a lost device at worst. Armed,
         // then torn down, then drawn: the frames after must be ordinary.
-        ProbeGatherSpikeResult armed;
-        CHECK(armGather(s, true, armed), "armed again for the teardown case");
+        armGather(s, gatherGi, true);
         render(e, 8);
         e->setRayTracing(false);
         render(e, 8);
@@ -425,7 +433,80 @@ int main()
               "registration dies with the textures it names)");
         e->setRayTracing(true);
         render(e, 4);
-        armGather(s, false, fz);
+        armGather(s, gatherGi, false);
+        e->destroyScene(s);
+    }
+
+    // =====================================================================
+    // 3. THE ADAPTIVE PASS: probes appear where a cell's pixels do not lie in
+    //    its probe's plane, and NOWHERE else.
+    //
+    // Two fixtures in one scene, measured one after the other at two poses: a
+    // flat floor filling the frame (one plane, every cell's pixels in it) and a
+    // RAILING — a row of thin uprights crossing every cell of the shot, which
+    // is the case Lumen's adaptive placement exists for and the case a uniform
+    // grid interpolates straight through.
+    //
+    // The bar is a COMPARISON and not a count: what the pass must do is find
+    // more cells on the railing than on the plane, and find none at all on the
+    // plane. An absolute count would be a number invented rather than measured.
+    {
+        Scene *s = e->createScene("adaptive");
+        view->setScene(s);
+        s->setAmbient(Colour(0.05f, 0.05f, 0.06f), Colour(0.02f, 0.02f, 0.03f));
+        addSlab(s, Colour(0.8f, 0.8f, 0.8f), Vec3(0, -0.25f, 0), Vec3(40, 0.5f, 40));
+        enginetest::addDirectionalLight(s, Vec3(-0.2f, -1.0f, -0.35f), 2.0f);
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::High;
+        gi.ddgi = GiToggle::Off;
+        gi.numBounces = 1;
+        gi.cascades = true;
+
+        // THE PLANE: the camera low over the floor, nothing else in shot.
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.2f, 6.0f), Vec3(0.0f, 0.0f, 0.0f));
+        armGather(s, gi, true);
+        render(e, 24);
+        const GatherStatus flat = gatherStatus(s);
+
+        // THE RAILING: twenty thin uprights a metre apart, across the shot.
+        const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+        PbrParams railP;
+        railP.albedo = Colour(0.7f, 0.7f, 0.72f);
+        railP.roughness = 0.8f;
+        const MaterialId railMat = s->createPbrMaterial(railP);
+        for (int i = 0; i < 20; ++i) {
+            const NodeId n = s->createNode();
+            if (!n || !s->attachMesh(n, cube, railMat)) { std::printf("FAIL: rail\n"); ++failures; break; }
+            s->setNodeTransform(n, Vec3(-4.75f + 0.5f * float(i), 0.6f, 0.0f), Quat(),
+                                Vec3(0.06f, 1.2f, 0.06f));
+        }
+        s->refreshGlobalIllumination();
+        render(e, 24);
+        const GatherStatus railing = gatherStatus(s);
+        std::printf("   ADAPTIVE PROBES: a flat floor %u of a %u-probe grid (cap %u); the same "
+                    "shot with a railing in it %u\n", flat.adaptive, flat.probes, flat.adaptiveCap,
+                    railing.adaptive);
+        CHECK_MSG(flat.adaptive == 0u,
+                  "a cell of a FLAT FLOOR wants no second probe (%u appended)", flat.adaptive);
+        CHECK_MSG(railing.adaptive > 0u && railing.adaptive > flat.adaptive,
+                  "...and a railing crossing the cells does (%u appended against %u)",
+                  railing.adaptive, flat.adaptive);
+        CHECK_MSG(railing.adaptive <= railing.adaptiveCap,
+                  "the adaptive pass stays inside its per-frame cap (%u of %u)", railing.adaptive,
+                  railing.adaptiveCap);
+
+        // ...and with the cap at zero the picture is still drawn (the arm that
+        // prices the adaptive pass at phase 2, and the guard that a capped-out
+        // frame is an ordinary frame).
+        armGather(s, gi, true, 16u, 8u, false, false, 0);
+        render(e, 16);
+        const GatherStatus capped = gatherStatus(s);
+        Image cappedImg; view->readPixels(cappedImg);
+        CHECK_MSG(capped.adaptive == 0u && cappedImg.width == kSize,
+                  "the adaptive cap at zero is a uniform grid and an ordinary frame (%u appended)",
+                  capped.adaptive);
+        armGather(s, gi, false);
         e->destroyScene(s);
     }
 
@@ -459,14 +540,15 @@ static int noRaysMain(Engine *e)
     render(e, 24);
     Image before; view->readPixels(before);
 
-    ProbeGatherSpikeResult r;
-    const bool armed = armGather(s, true, r);
-    CHECK(!armed && !r.armed, "arming REFUSES on a machine with no ray query, with a reason");
-    std::printf("   refusal: %s\n", r.error.c_str());
+    armGather(s, gi, true);
     render(e, 24);
+    const GatherStatus st = gatherStatus(s);
+    CHECK(!st.on && !st.running,
+          "the row resolves OFF on a machine with no ray query — the machine answers, not the "
+          "project (giStatus().gather.on)");
     Image after; view->readPixels(after);
     CHECK(identical(before, after),
-          "THE FALLBACK PICTURE IS UNTOUCHED: byte-identical before and after the refused arm");
+          "THE FALLBACK PICTURE IS UNTOUCHED: byte-identical with the row on and off");
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
@@ -485,7 +567,7 @@ static int costMain(Engine *e)
     view->setShadows(true);
     armChain(view);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
-        std::printf("ok: no ray queries on this machine — gi.gather_spike_cost skips cleanly\n");
+        std::printf("ok: no ray queries on this machine — gi.gather_cost skips cleanly\n");
         return 0;
     }
     s->setAmbient(Colour(0.02f, 0.02f, 0.03f), Colour(0.01f, 0.01f, 0.02f));
@@ -532,6 +614,10 @@ static int costMain(Engine *e)
     gi.numBounces = 1;
     gi.cascades = true;
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the room");
+    // ONE VIEW GATHERS AT A TIME (GATHER-0's D3): `giStatus().gather` answers
+    // for the first view of the scene that is running one, in a map keyed by
+    // listener POINTER, so with two gathering views the milliseconds are the
+    // allocator's choice. Every arm below leaves exactly one enabled.
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
 
     // ONE GATHERING VIEW AT A TIME, and it is not tidiness (fix round, D3):
@@ -540,41 +626,39 @@ static int costMain(Engine *e)
     // of one scene both gathering, which view's milliseconds come back is
     // decided by the allocator's addresses. Every arm below therefore leaves
     // exactly one view enabled.
-    const auto measure = [&](View *v, unsigned stride, unsigned rays, const char *what) {
-        ProbeGatherSpikeResult r;
-        armGather(s, true, r, stride, rays);
-        std::vector<float> trace, integrate;
+    const auto measure = [&](View *, unsigned stride, unsigned octRes, const char *what) {
+        armGather(s, gi, true, stride, octRes);
+        std::vector<float> place, trace, integrate;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
-            ProbeGatherSpikeResult q;
-            armGather(s, true, q, stride, rays);
+            const GatherStatus q = gatherStatus(s);
+            if (q.placeMs >= 0.0f) place.push_back(q.placeMs);
             if (q.traceMs >= 0.0f) trace.push_back(q.traceMs);
             if (q.integrateMs >= 0.0f) integrate.push_back(q.integrateMs);
         }
-        ProbeGatherSpikeResult fin;
-        armGather(s, true, fin, stride, rays);
+        const GatherStatus fin = gatherStatus(s);
         const auto median = [](std::vector<float> v) {
             if (v.empty()) return -1.0f;
             std::vector<float> tail(v.end() - std::min<size_t>(30u, v.size()), v.end());
             std::sort(tail.begin(), tail.end());
             return tail[tail.size() / 2];
         };
-        const float tm = median(trace), im = median(integrate);
-        std::printf("   %-34s %u probes x %u rays = %llu rays: TRACE %.4f ms, INTEGRATE %.4f ms, "
-                    "sum %.4f, CPU %.4f ms, VRAM %.2f MB\n",
-                    what, fin.probes, fin.raysPerProbe, (unsigned long long)fin.raysPerFrame,
-                    double(tm), double(im), double(tm + im), double(fin.cpuMs),
-                    double(fin.vramBytes) / (1024.0 * 1024.0));
-        CHECK_MSG(tm > 0.0f && im > 0.0f, "%s: both stages were timed", what);
-        ProbeGatherSpikeResult off;
-        armGather(s, false, off);
+        const float pm = median(place), tm = median(trace), im = median(integrate);
+        std::printf("   %-34s %u probes (+%u adaptive) x %u rays = %llu rays: PLACE %.4f, "
+                    "TRACE %.4f, INTEGRATE %.4f ms, sum %.4f, CPU %.4f ms, VRAM %.2f MB\n",
+                    what, fin.probes, fin.adaptive, fin.raysPerProbe,
+                    (unsigned long long)fin.raysPerFrame, double(pm), double(tm), double(im),
+                    double(pm + tm + im), double(fin.cpuMs),
+                    double(fin.atlasBytes) / (1024.0 * 1024.0));
+        CHECK_MSG(pm > 0.0f && tm > 0.0f && im > 0.0f, "%s: all three stages were timed", what);
+        armGather(s, gi, false);
         render(e, 2);
-        return tm + im;
+        return pm + tm + im;
     };
-    const float high = measure(view, 16u, 64u, "1080p, 16 px probes, 64 rays (High)");
-    measure(view, 16u, 16u, "1080p, 16 px probes, 16 rays");
-    measure(view, 8u, 64u, "1080p, 8 px probes, 64 rays (Epic)");
-    measure(view, 32u, 64u, "1080p, 32 px probes, 64 rays");
+    const float high = measure(view, 16u, 8u, "1080p, 16 px probes, 64 rays (High)");
+    measure(view, 16u, 6u, "1080p, 16 px probes, 36 rays (Medium)");
+    measure(view, 8u, 8u, "1080p, 8 px probes, 64 rays (Epic)");
+    measure(view, 32u, 8u, "1080p, 32 px probes, 64 rays");
 
     // ---- THE VR EYE SIZE, as ONE mono target of the same pixel count ------
     // Two Quest Pro eyes are 10.26 Mpx (SCREEN_PROBE_GATHER_SPEC section 4's
@@ -594,19 +678,17 @@ static int costMain(Engine *e)
         armChain(vr);
         enginetest::testCameraLookAt(vr, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
         render(e, 8);
-        measure(vr, 16u, 64u, "10.3 Mpx (two Quest Pro eyes), 16 px, 64 rays");
-        measure(vr, 16u, 32u, "10.3 Mpx (two Quest Pro eyes), 16 px, 32 rays");
+        measure(vr, 16u, 8u, "10.3 Mpx (two Quest Pro eyes), 16 px, 64 rays");
+        measure(vr, 16u, 6u, "10.3 Mpx (two Quest Pro eyes), 16 px, 36 rays");
         // AND THE READING IS THE VR VIEW'S, asserted by its own size rather
-        // than assumed — the whole point of D3.
-        ProbeGatherSpikeResult who;
-        armGather(s, true, who, 16u, 64u);
-        render(e, 4);
-        armGather(s, true, who, 16u, 64u);
+        // than assumed — the whole point of GATHER-0's D3.
+        armGather(s, gi, true, 16u, 8u);
+        render(e, 8);
+        const GatherStatus who = gatherStatus(s);
         CHECK_MSG(who.targetW == 4320u && who.targetH == 2384u,
                   "the VR rows above are the VR view's (%ux%u reported)", who.targetW,
                   who.targetH);
-        ProbeGatherSpikeResult off;
-        armGather(s, false, off);
+        armGather(s, gi, false);
         render(e, 2);
     }
     // THE NUMBER IS PRINTED, NOT GATED — and that is a gate-system decision,
