@@ -1108,7 +1108,7 @@ static QVector<ParamRow> buildPostFxParams()
                                "screen-space march is what falls between the voxels, which is "
                                "centimetres. Raising it does not add contact shadowing, it adds "
                                "a second and cruder copy of the bounce's own occlusion \u2014 "
-                               "measured on a 2 m cube, a 2 m radius darkened the bottom 1.35 m "
+                               "measured on a 4 m cube, a 2 m radius darkened the bottom 1.55 m "
                                "of the wall, sunlight included. Too small and only the tightest "
                                "corners darken.");
         p.get = [](const iris::ScenePtr &s) { return double(s->ssaoRadius); };
