@@ -457,6 +457,13 @@ add_script_e2e(vr_teleport e2e_vr_teleport.js)
 add_script_e2e(player_vr e2e_player_vr.js)
 add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
+# THE SKY'S RESOURCE NAMES (lane ENGINE-SMALL-C, SKYARRAY-LEAK-1): sixty sky
+# changes must not burn sixty texture NAMES, because a dead name in the sky
+# material's texture unit resolves against the resource groups and leaves the
+# layer blank ("Cannot locate resource skyarray_NN"). Reads the live names
+# through app.textureMemory(); the file header carries the mechanism.
+add_script_e2e(sky_name_recycle e2e_sky_name_recycle.js)
+set_tests_properties(scripting.e2e.sky_name_recycle PROPERTIES TIMEOUT 300)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
