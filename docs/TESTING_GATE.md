@@ -52,8 +52,9 @@ out-parameter, not by "every caller sets it" — a helper can grow an early retu
 initialiser is the one form a gate can see. **The answer to a red is the one-line
 initialiser, never a row in `member_init_allow.txt`**: the allow file holds nine members
 whose whole point is to stay unwritten (the maths types' `Qt::Uninitialized` overloads) and
-nothing else belongs there. The staged `member_init_baseline.txt` is GONE — the sweep
-finished at 384 initialisers and 34 deletions — so the gate now reads zero and stays there.
+nothing else belongs there. The staged `member_init_baseline.txt` is GONE — its 506 rows
+were closed by 473 default member initialisers and 33 deletions — so the gate now reads
+zero and stays there.
 
 ## 3. The SCOPED tier — `scripts/gate-scope.sh`
 

@@ -36,7 +36,7 @@ WHAT THIS ASSERTS
 THE TWO FILES BESIDE IT — both carry a reason per line, `path Class::member  # why`:
 
   member_init_allow.txt     permanent exemptions: a member whose whole point is to
-                            stay unwritten. Ten rows today, all of them the maths
+                            stay unwritten. Nine rows today, all of them the maths
                             types' `Qt::Uninitialized` overloads (a DMI would zero
                             the storage first and defeat the overload). Adding a line
                             here is a decision a reviewer sees in the diff.
@@ -64,8 +64,15 @@ reach from an analysed call in the same TU, which is none of our widgets):
     treated as a class type and NOT flagged (a false negative, never a false positive);
   * templates' dependent types;
   * a constructor defined in a file outside scope;
-  * two classes with one name in two files (the twin `Plane`) are scanned per file and
-    never merged — each file answers for its own.
+  * TWO CLASSES WITH ONE NAME, and the two halves of this scanner disagree about them:
+    the MEMBER scan is per file (each file answers for its own declarations), but the
+    CONSTRUCTOR search is by NAME across the whole scope — ctors_of() looks for `Cls(`
+    and `Cls::Cls(` in every file it read. So a twin's constructor can cover a
+    constructor-less class of the same name somewhere else and the members of the
+    second one go unflagged: a false negative. (It cut the other way too, until this
+    lane: `iris::Plane`'s members were flagged because src/services/collisionhelper.h's
+    unrelated `Plane` had an EMPTY constructor. That one is gone.) The answer, if a
+    twin ever matters, is to rename one of them — which is the right fix anyway.
 
 Usage:  member_init.py <source-root>
         member_init.py <source-root> --self-test      the fixtures under fixtures/member_init/
@@ -91,8 +98,12 @@ def in_scope(rel):
         return False
     if '_autogen' in rel or '/misc/QtAwesome' in rel:
         return False
-    if '-old.' in os.path.basename(rel):
-        return False
+    # There is NO `-old.` carve-out. The prototype had one, it covered exactly one
+    # file (src/modules/materials/propertywidgets/floatpropertywidget-old.h, in no
+    # CMakeLists), and UNINIT-SWEEP-1 deleted that file rather than exempting it —
+    # so the rule had zero files behind it and would only ever have let the NEXT
+    # `foo-old.h` escape the gate. A file that is dead is deleted; a file that is
+    # alive answers for its members like every other.
     return True
 
 

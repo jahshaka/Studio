@@ -31,7 +31,6 @@ struct Asset {
     QString             fileName;
 	QString				assetGuid;
     QPixmap             thumbnail;
-    bool                deletable = false;
 
     // AssetManager OWNS every registered Asset (see assetmanager.cpp). The
     // destructor is virtual because the list is a QVector<Asset*> of derived
@@ -51,7 +50,6 @@ struct AssetVariant : public Asset
 {
     AssetVariant() {
         type = ModelTypes::Variant;
-        deletable = true;
     }
 
     virtual QVariant getValue() {

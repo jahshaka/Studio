@@ -105,13 +105,17 @@ void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObj
 void AssetViewGrid::resizeEvent(QResizeEvent *event)
 {
 	lastWidth = event->size().width();
-	int check = event->size().width() / (128 + 10);
-	//gridWidget->setMinimumWidth(viewport()->width());
 
-	if (check != 0) {
-		updateGridColumns(event->size().width());
+	// THE ONE THING columnsFor() CANNOT SAY. Everywhere else the question is
+	// "how many columns", and one is the floor — but here it is "is this grid
+	// wide enough for a tile at all", and a grid that is not is left with the
+	// layout it had rather than re-laid into a single column it cannot show.
+	// This used to be a sixth copy of `width / (128 + 10)` tested against zero,
+	// which is the same predicate written as arithmetic.
+	if (lastWidth >= kTileStride) {
+		updateGridColumns(lastWidth);
 	}
-	
+
 	QScrollArea::resizeEvent(event);
 }
 

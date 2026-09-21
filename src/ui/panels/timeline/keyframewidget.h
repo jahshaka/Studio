@@ -90,12 +90,6 @@ class KeyFrameWidget:public QWidget
 {
     Q_OBJECT
 
-    /**
-     * viewLeft and viewRight are like the "camera" of the keyframes
-     * they are used for translating keys from their local "key space"
-     * to viewport space and vice versa.
-     */
-
 private:
     QColor bgColor;
     QColor propColor;

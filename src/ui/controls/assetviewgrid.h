@@ -35,8 +35,10 @@ public:
 	/// updateGridColumns() guarded the zero — so with `lastWidth` honest at 0,
 	/// searchTiles() and filterAssets() divided by it. One tile column is what
 	/// a grid too narrow for one tile has always laid out.
+	/// A tile plus its gap: the one number the grid's arithmetic is written in.
+	static constexpr int kTileStride = 128 + 10;
 	static int columnsFor(int width) {
-		const int c = width / (128 + 10);
+		const int c = width / kTileStride;
 		return c > 0 ? c : 1;
 	}
 	QWidget *parent;

@@ -44,7 +44,6 @@ class MeshPropertyWidget;
 class MobilityPropertyWidget;
 class ComponentsPropertyWidget;
 class PhysicsPropertyWidget;
-class DemoPane;
 class IEditorViewport;
 struct StudioServices;
 class Database;
