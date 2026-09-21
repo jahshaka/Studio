@@ -456,6 +456,14 @@ public:
     /// That is the MATERIAL-SWAP-GI-1 lane's subject, not phase 1's.
     int refreshMaterialUsers(const QString &materialGuid);
 
+    /// FORGET WHAT A MATERIAL'S USERS WERE LAST DRESSED FROM, so the next
+    /// `refreshMaterialUsers` really re-dresses them (PRESET-EDIT-1). The memo
+    /// above answers "nothing moved" by comparing CONTENT ids, which is right
+    /// for a save; it is wrong when the thing that moved is WHICH material a
+    /// node wears — a preset's copy-on-write and its undo both re-point nodes
+    /// between two materials whose content is identical at that instant.
+    void forgetMaterialDressing(const QString &materialGuid);
+
     /// The hover-preview service, injected by the shell so every apply can end
     /// a live preview before it pushes. Null in headless hosts — which have no
     /// pointer to hover.

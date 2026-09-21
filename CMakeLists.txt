@@ -289,6 +289,7 @@ set(SRCS
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
     src/services/materialbundle.cpp
+    src/services/presetedit.cpp
     src/services/materialpresetassets.cpp
     src/services/materialpresetseeder.cpp
     src/services/materialmembers.cpp
@@ -426,6 +427,7 @@ set(SRCS
     src/commands/changematerialpropertycommand.cpp
     src/commands/changematerialcommand.cpp
     src/commands/pinassetcommand.cpp
+    src/commands/presetcopycommand.cpp
     src/commands/projectfoldercommand.cpp
     src/commands/resetmaterialcommand.cpp
     src/commands/addscenenodecommand.cpp

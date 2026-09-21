@@ -365,6 +365,12 @@ QVariantMap EffectsPage::tabInfo(MaterialDocument *doc) const
 	out["scope"] = doc->info.origin == shaderInfo::Origin::Project
 	                   ? QStringLiteral("project") : QStringLiteral("library");
 	out["readOnly"] = doc->readOnly;
+	// PRESET-EDIT-1: `editable` is the answer to "will this canvas take an
+	// edit?", and `master` names the shipped preset behind the material — the
+	// preset itself while the project is still on the master, the preset it
+	// was copied from afterwards.
+	out["editable"] = !doc->readOnly;
+	out["master"] = presetedit::masterOf(dataBase, doc->info.GUID);
 	// DIRTY = an autosave is pending on this document (it writes 1.5 s after
 	// the last edit, or on close).
 	out["dirty"] = doc->saveTimer && doc->saveTimer->isActive();
@@ -576,6 +582,13 @@ EffectsPage::~EffectsPage()
     
 }
 
+Project *EffectsPage::openProject() const
+{
+	if (!mProject || mProject->getProjectGuid().isEmpty()) return nullptr;
+	if (mSceneOpenProbe && !mSceneOpenProbe()) return nullptr;
+	return mProject;
+}
+
 void EffectsPage::saveShader()
 {
 	saveShader(activeDoc());
@@ -585,13 +598,66 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 {
 	if (!doc || !doc->graph) return;
 
-	// A SHIPPED PRESET IS ON SCREEN TO BE READ (PRESET-UNIFY-1). It is open
-	// because the user selected it, the definition writer refuses its
-	// reserved guid, and the 1.5 s autosave runs on every node the user drags
-	// — so without this the act of LOOKING at a preset raised a refusal in
-	// the scene-issue bar every second and a half. Nothing is written, and
-	// nothing needs to be: a preset cannot change.
+	// A SHIPPED PRESET WITH NO PROJECT OPEN IS ON SCREEN TO BE READ
+	// (PRESET-UNIFY-1, narrowed by PRESET-EDIT-1). The definition writer
+	// refuses its reserved guid and the 1.5 s autosave runs on every node the
+	// user drags — so without this the act of LOOKING at a preset would raise
+	// a refusal in the scene-issue bar every second and a half. Nothing is
+	// written, and nothing needs to be.
 	if (doc->readOnly) return;
+
+	// …AND WITH A PROJECT OPEN, THE FIRST EDIT MAKES THE PROJECT ITS OWN COPY
+	// (PRESET-EDIT-1, the owner's rule: "only the MASTER materials should be
+	// locked; if they are added to a project they should be editable
+	// already"). This save IS the first edit landing: the copy is minted, the
+	// project's pin moves off the shared master, every mesh that wore it is
+	// re-pointed, and the document goes on writing — to the copy, under the
+	// same name.
+	//
+	// BEFORE `buildDefinition` below, which parents the final bake's maps to
+	// the material being written: run on the master's guid it would mint rows
+	// under a material this save is not going to write to.
+	if (!MaterialBundle::shippedPresetName(doc->info.GUID).isEmpty()) {
+		if (!mMakeEditable) return;      // no shell: the old stand-down
+		const presetedit::Target target = mMakeEditable(doc->info.GUID);
+		if (!target.ok()) {
+			reportSaveRefused(doc, target.error);
+			return;
+		}
+		if (target.copied) {
+			// THE DOCUMENT IS THE COPY FROM HERE: the same canvas, the same
+			// undo history and the same name, at PROJECT scope on a new guid.
+			doc->info.GUID = target.guid;
+			doc->info.origin = shaderInfo::Origin::Project;
+			doc->presetName.clear();
+			// A READ BOUND THE SHIPPED FILES (looking at a preset writes
+			// nothing); an EDIT binds library assets, because a definition may
+			// never carry a path. The content import answers "I already have
+			// this" for every one of them — seeding put the bytes in the store
+			// — so this costs a hash each and no device wait.
+			MaterialHelper::resolveAppRelativeTextures(
+			    doc->graph, MaterialHelper::TextureBinding::Import);
+			applyReadOnlyUi();
+			syncTabBar();
+			// The drawers: the copy is a new tile in the project's, and the
+			// master has left the project (the four-drawer rule — one list,
+			// two windows).
+			refreshShaderGraph();
+			if (membersPanel && doc == activeDoc()) membersPanel->setMaterial(doc->info.GUID);
+			// SAID OUT LOUD, where the gesture happened. The user edited a
+			// material the app ships and now owns a copy of it; nothing about
+			// the picture changed, so nothing on screen would otherwise say so.
+			if (!mRefusalToast) {
+				mRefusalToast = new Toast(this);
+				mRefusalToast->setAnchor(Toast::Anchor::WindowBottom);
+			}
+			mRefusalToast->showToast(tr("Edited as this project's copy"),
+			                         tr("'%1' is this project's own material now. The one the "
+			                            "app ships is untouched, and so is every other project.")
+			                             .arg(doc->info.name),
+			                         6000);
+		}
+	}
 
 	if (doc->info.GUID.isEmpty()) {
 		// The anonymous canvas: there is no material to write to yet, so this
@@ -1090,7 +1156,14 @@ void EffectsPage::adoptGraph(MaterialDocument *doc, const QString &guid,
 	// AFTER the graph is in hand, never before: this is what stands the save
 	// down for a shipped preset, and dropping it for a material that turned
 	// out not to open is how an edit could reach a read-only row.
-	doc->readOnly = !shippedName.isEmpty();
+	//
+	// A PRESET IN A PROJECT IS THE PROJECT'S TO EDIT (PRESET-EDIT-1, the
+	// owner's rule). So "read-only" is no longer "this is a preset": it is
+	// the one case where the copy-on-write cannot happen — no project open,
+	// nowhere for the copy to live. `presetName` still says WHICH preset,
+	// which is what the banner quotes in both states.
+	doc->readOnly = !shippedName.isEmpty()
+	                && !presetedit::refusal(dataBase, openProject(), guid).isEmpty();
 	doc->presetName = shippedName;
 	bindGraph(doc, graph);
 	documentChanged(doc);
@@ -1131,14 +1204,25 @@ void EffectsPage::applyReadOnlyUi()
 	if (nodePropertiesPanel) nodePropertiesPanel->setReadOnly(readOnly);
 	if (materialSettingsWidget) materialSettingsWidget->setEnabled(!readOnly);
 	if (!mReadOnlyBanner || !mReadOnlyLabel) return;
+	// TWO BANNERS, ONE ROW (PRESET-EDIT-1). A preset with a project open is
+	// EDITABLE and the line says what the first edit will do — it is a
+	// statement, not a lock, and there is no button beside it because there is
+	// no separate gesture left to press. With no project open the lock is real
+	// and the line says the way out.
+	const bool preset = doc && !doc->presetName.isEmpty();
 	if (readOnly) {
 		mReadOnlyLabel->setText(
-		    tr("'%1' is a material the app ships — read-only, so the canvas takes no edits. "
-		       "This is its graph; Customise makes '%1-1', your own copy, and every edit "
-		       "works on that.")
+		    tr("'%1' is a material the app ships, and the library's copy of it is read-only, "
+		       "so this canvas takes no edits. Open a project and it is yours to edit there.")
+		        .arg(doc->presetName));
+	} else if (preset) {
+		mReadOnlyLabel->setText(
+		    tr("'%1' is a material the app ships. Edit it here and this project takes its own "
+		       "copy — still called '%1' — leaving the original and every other project as "
+		       "they are.")
 		        .arg(doc->presetName));
 	}
-	mReadOnlyBanner->setVisible(readOnly);
+	mReadOnlyBanner->setVisible(readOnly || preset);
 }
 
 void EffectsPage::exportEffect(QString guid)
@@ -1345,11 +1429,11 @@ void EffectsPage::configureAssetsDock()
 	// read-only library bundles with a Customise gesture; until then the
 	// drawer must not offer edits it cannot honour).
 	presets->shaderContextMenuAllowed = false;
-	// …but it has ONE gesture (R18): Customise, which is how a read-only
-	// preset becomes a material the user owns.
-	presets->presetContextMenuAllowed = true;
-	presets->setToolTip(tr("Shipped materials — read-only. Double-click one to SEE its graph; "
-	                       "right-click › Customise for your own copy to edit."));
+	// …and it has no menu at all since PRESET-EDIT-1: Customise was its one
+	// item, and the first edit is that gesture now.
+	presets->setToolTip(tr("Shipped materials. Double-click one to see its graph — and to edit "
+	                       "it: with a project open, the first edit makes that project its own "
+	                       "copy, under the same name."));
 	presets->setStyleSheet(StyleSheet::EffectsPresetsList());
 
 	// THE SHIPPED PRESETS — ONE LIST, TWO WINDOWS (PRESET-UNIFY-1, the owner
@@ -1676,11 +1760,13 @@ void EffectsPage::configureUI()
 	this->setCentralWidget(splitView);
 	splitView->setOrientation(Qt::Vertical);
 
-	// THE READ-ONLY BANNER (PRESET-UNIFY-1). A shipped preset opens here so
-	// the user can SEE its graph; it is read-only in fact, so the page says
-	// so above the canvas and offers the one gesture that does work rather
-	// than letting them edit into a save that will be refused. No stylesheet:
-	// a framed row of ordinary widgets reads correctly in both themes.
+	// THE PRESET BANNER (PRESET-UNIFY-1; PRESET-EDIT-1). A shipped preset
+	// opens here so the user can SEE its graph, and — with a project open —
+	// EDIT it: the line above the canvas says what the first edit will do, or,
+	// with no project, why it cannot. NO BUTTON BESIDE IT ANY MORE: Customise
+	// was the gesture that made a preset editable, and the first edit is that
+	// gesture now (CRUD). No stylesheet: a framed row of ordinary widgets
+	// reads correctly in both themes.
 	{
 		mReadOnlyBanner = new QWidget;
 		auto *bannerRow = new QHBoxLayout(mReadOnlyBanner);
@@ -1688,15 +1774,7 @@ void EffectsPage::configureUI()
 		bannerRow->setSpacing(8);
 		mReadOnlyLabel = new QLabel;
 		mReadOnlyLabel->setWordWrap(true);
-		auto *customiseButton = new QPushButton(tr("Customise"));
-		customiseButton->setToolTip(tr("Make your own editable copy of this material."));
-		connect(customiseButton, &QPushButton::clicked, this, [this]() {
-			const shaderInfo open = currentInfo();
-			if (!isReadOnly() || open.GUID.isEmpty()) return;
-			emit presets->customisePreset(open.GUID);
-		});
 		bannerRow->addWidget(mReadOnlyLabel, 1);
-		bannerRow->addWidget(customiseButton, 0);
 		mReadOnlyBanner->hide();
 
 		auto *canvas = new QWidget;
@@ -2823,38 +2901,14 @@ void EffectsPage::configureConnections()
 	});
 
 
-	// R18 — CUSTOMISE A SHIPPED PRESET. The drawer's one gesture on a
-	// read-only tile, and it calls the SAME implementation
-	// `materials.createFromPreset` calls (the suffix rule lives there, once):
-	// an ordinary editable bundle named "<Preset>-1", pinned into the open
-	// project so the project drawer and the editor's tray show it too.
-	connect(presets, &ListWidget::customisePreset, [=](QString presetGuid) {
-		MaterialPresetSeeder::instance().finishNow();   // one importer at a time
-		QString error;
-		const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
-		                                                     dataBase, mProject, &error);
-		if (copy.isEmpty()) { irisLog("Customise: " + error); return; }
-		// (The copy's TILE is a render of the copy — `customise` does it, for
-		// this door and the other two; PREVIEWENV-2 item c.)
-		refreshShaderGraph();
-		// It is the user's material now: show them where it landed. In a
-		// project it is the Project drawer (Customise pins it), otherwise
-		// Custom.
-		const bool pinned = mProject && !mProject->getProjectGuid().isEmpty()
-		                    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), copy);
-		tabWidget->setCurrentIndex(static_cast<int>(pinned ? ShaderWorkspace::Projects
-		                                                   : ShaderWorkspace::MyEffects));
-		if (auto *tile = selectCorrectItemFromDrop(copy))
-			ListWidget::highlightNodeForInterval(2, tile);
-		// AND IT OPENS (PRESET-UNIFY-1, the owner: "a custom preset is a new
-		// material based on the preset it was customised from"). The copy
-		// carries the preset's GRAPH now, so there is something to open —
-		// which is the point of the gesture: the user asked to edit this
-		// material, and the node editor is where they do it.
-		// (The name comes from the row inside `adoptGraph`, after the graph
-		// has loaded — fix round.)
-		loadGraph(copy, pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library);
-	});
+	// (THE DRAWER'S CUSTOMISE GESTURE IS GONE — PRESET-EDIT-1's Deletes.
+	// "Customise" existed because a preset a project held was locked: the only
+	// way to edit one was to mint a SECOND material called "<Preset>-1". A
+	// preset in a project is editable in place now and the first edit makes
+	// the project its own copy, under the preset's own name — so there is
+	// nothing left for a second gesture to do. The mechanism survives as the
+	// verb `materials.createFromPreset` / `MaterialPresetAssets::customise`,
+	// which is still how a script asks for an independent copy.)
 
     // change: any settings changed
     //

@@ -92,12 +92,15 @@ if ! grep -q 'void EffectsPage::adoptGraph(' "$FILE"; then
     failures=1
 fi
 # ...and the read-only state still moves WITH the graph, in that one step: it
-# is what stands the save down for a shipped preset, and dropping it for a
-# material that turned out not to open is how an edit reached a read-only row.
+# is what stands the save down for a material that cannot take an edit, and
+# dropping it for a material that turned out not to open is how an edit
+# reached a read-only row.
 # (It is the DOCUMENT's state since MATERIALS-TABS-1 — one tab may be a
-# read-only preset while another is the user's own material — so the line is
-# `doc->readOnly = !shippedName.isEmpty();` inside adoptGraph.)
-if ! grep -q 'readOnly = !shippedName.isEmpty();' "$FILE"; then
+# locked preset while another is the user's own material — and since
+# PRESET-EDIT-1 "locked" is no longer "is a preset": a preset a project holds
+# is editable there and the first edit copies it, so the line reads
+# `doc->readOnly = !shippedName.isEmpty() && <the refusal stands>`.)
+if ! grep -q 'doc->readOnly = !shippedName.isEmpty()' "$FILE"; then
     echo "source.material_page_identity: FAIL — the read-only state no longer moves with the graph"
     failures=1
 fi

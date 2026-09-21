@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include "modules/materials/effectspage.h"
 #include "scripting/scriptengine.h"
 #include "services/projectservice.h"
+#include "services/presetedit.h"
+#include "services/undoservice.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 
@@ -47,6 +49,27 @@ void MaterialsModule::initialize(ModuleHost &host)
         auto *sceneEdit = host.services->sceneEdit;
         page->mMaterialChanged = [sceneEdit](const QString &materialGuid) {
             sceneEdit->refreshMaterialUsers(materialGuid);
+        };
+    }
+
+    // A PRESET A PROJECT HOLDS IS EDITABLE THERE, AND THE FIRST EDIT MAKES
+    // THE COPY (PRESET-EDIT-1). The page commits definitions and has neither
+    // an undo service nor a scene; the copy-on-write needs both (it is ONE
+    // undo step, and it re-points the meshes wearing the master), so the
+    // shell hands the page the one call. The verb `materials.edit` is the
+    // same call — one implementation for the click and the script.
+    {
+        Database *db = host.db;
+        Project *project = host.project;
+        auto *projectService = host.services ? host.services->project : nullptr;
+        auto *undo = host.services ? host.services->undo : nullptr;
+        auto *sceneEdit = host.services ? host.services->sceneEdit : nullptr;
+        page->mMakeEditable = [db, project, projectService, undo, sceneEdit](const QString &guid) {
+            // THE PROJECT ONLY WHEN ONE IS REALLY OPEN (presetedit.h): the one
+            // live Project instance keeps its guid after a close.
+            const bool open = projectService && projectService->isSceneOpen()
+                              && project && !project->getProjectGuid().isEmpty();
+            return presetedit::forEdit(db, open ? project : nullptr, guid, undo, sceneEdit);
         };
     }
 }

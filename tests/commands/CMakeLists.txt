@@ -194,6 +194,59 @@ set_tests_properties(commands.db_batch PROPERTIES
 jah_no_display(commands.db_batch)
 
 # ---------------------------------------------------------------------------
+# commands.preset_copy — PRESET-EDIT-1: the first edit of a preset a project
+# holds is ONE undo step (the copy, the pin move and the use edges together).
+#
+# The same idiom as commands.pin_asset below it: the REAL Database and the REAL
+# content-addressed store on a throwaway SQLite file, because a pin, an edge
+# and a row are catalog facts a stub could not tell the truth about.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
+add_executable(test_preset_copy test_preset_copy.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/presetcopycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/imagematerial.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationfile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_preset_copy PROPERTIES
+    AUTOMOC ON AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_preset_copy PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_preset_copy PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+add_test(NAME commands.preset_copy COMMAND test_preset_copy
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(commands.preset_copy PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "commands")
+jah_no_display(commands.preset_copy)
+
+# ---------------------------------------------------------------------------
 # commands.pin_asset — MATERIAL_BUNDLE_SPEC phase 3 / the materials audit's F5:
 # an apply that PINS is an apply that UNPINS on undo.
 #

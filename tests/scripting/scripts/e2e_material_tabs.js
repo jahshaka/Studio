@@ -110,10 +110,20 @@ materials.open(A);
 assert(materials.tabs().length === 2, "opening A again ACTIVATES it (identity is guid+scope)");
 assert(materials.activeTab().guid === A, "...and makes it active");
 
-// ---- 6. a shipped preset opens read-only ---------------------------------
+// ---- 6. a shipped preset opens EDITABLE in a project (PRESET-EDIT-1) -----
+//
+// It used to open READ-ONLY wherever it was found, with Customise beside the
+// banner. The owner's rule of 2026-09-21: only the MASTER is locked, and a
+// preset a project holds is that project's to edit — so the tab takes edits
+// and the FIRST SAVE makes the project its own copy (the copy's full contract
+// is scripting.e2e.preset_edit's; what belongs here is what the TAB says).
 var preset = materials.open("Brick PBR");
-assert(preset.readOnly === true, "a shipped preset opens READ-ONLY");
+assert(preset.readOnly === false && preset.editable === true,
+       "a shipped preset opens EDITABLE with a project open");
+assert(preset.master === preset.guid,
+       "…and the tab names the shipped master behind it (itself, until a copy exists)");
 assert(materials.tabs().length === 3, "three tabs");
+assert(tabOf(preset.guid).editable === true, "…the tab list agrees");
 assert(materials.closeTab(preset.guid) === true, "materials.closeTab(preset)");
 assert(materials.tabs().length === 2, "two tabs again");
 
@@ -185,7 +195,8 @@ assert(refused, "materials.activate refuses a tab that is not there");
 // still armed — so the pending edit fired later under the NEW material's guid,
 // and a read-only PRESET tab was silently turned into the user's new material.
 var presetTab = materials.open("Gold PBR");
-assert(presetTab.readOnly === true, "a preset tab is open and read-only");
+assert(presetTab.editable === true && presetTab.master === presetTab.guid,
+       "a preset tab is open, editable, and knows which shipped material it is");
 var before = materials.tabs().length;
 var minted = materials.newMaterial("Gold PBR", { name: "Tabs New" });
 assert(minted.guid.length > 10 && minted.name === "Tabs New",
@@ -193,9 +204,11 @@ assert(minted.guid.length > 10 && minted.name === "Tabs New",
 assert(materials.tabs().length === before + 1, "New opened a TAB, it did not take one over");
 assert(materials.activeTab().guid === minted.guid, "...and the new material is the active one");
 var presetStill = materials.tabs().filter(function (t) { return t.guid === presetTab.guid; });
-assert(presetStill.length === 1 && presetStill[0].readOnly === true,
-       "the preset tab is still open, still read-only — still the preset");
-assert(materials.loadGraph(presetTab.guid).readOnly === true,
+assert(presetStill.length === 1 && presetStill[0].master === presetTab.guid,
+       "the preset tab is still open on the preset — New took no tab over");
+assert(materials.masterOf(presetTab.guid) === presetTab.guid
+           && materials.members(presetTab.guid).length
+              === materials.members("Gold PBR").length,
        "and the preset itself was not written to");
 materials.closeTab(presetTab.guid);
 materials.closeTab(minted.guid);

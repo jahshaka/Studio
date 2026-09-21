@@ -216,7 +216,9 @@ assert(near(graph.evaluate().values.roughness, 0.77), "reloaded graph folds iden
 // of (PRESET-UNIFY-1)
 var glass = materials.loadGraph("Glass PBR");
 assert(glass.nodes >= 3, "Glass PBR's graph loads (" + glass.nodes + " nodes)");
-assert(glass.readOnly === true, "…and says it is read-only");
+assert(glass.presetMaster && glass.presetMaster.length > 10,
+       "…and says which shipped material it is (a preset is editable in a project "
+       + "since PRESET-EDIT-1: the copy happens at the save, not at the read)");
 assert(graph.nodes().filter(function (n) { return n.type === "PbrMaterial"; }).length === 1,
        "glass has a PBR master");
 
@@ -230,11 +232,12 @@ assert(brick.nodes >= 3, "Brick PBR's graph loads (" + brick.nodes + " nodes)");
 // PBR input on this master) and the normal — what the preset is made of.
 assert(brick.texturesResolved === 3,
        "its shipped textures are BOUND on load: " + brick.texturesResolved);
-// …AND NOT ONE OF THEM IMPORTED (PRESET-UNIFY-1 fix round). This is a
-// READ-ONLY open, so the graph is bound to the shipped FILES: no library row,
-// no pin into the open project, no wait for the device. Looking at a material
-// is not a write.
-assert(brick.readOnly === true, "…it is read-only");
+// …AND NOT ONE OF THEM IMPORTED (PRESET-UNIFY-1 fix round). A PRESET's open
+// binds the shipped FILES: no library row, no pin into the open project, no
+// wait for the device. Looking at a material is not a write — and it is still
+// not one now that a preset a project holds is editable (PRESET-EDIT-1): the
+// copy, and the import of its pictures, happen at the SAVE.
+assert(brick.texturesImported === 0, "…and it imported none of them");
 assert(brick.texturesImported === 0,
        "…so NOTHING was imported for it (" + brick.texturesImported + ")");
 var brickTextures = graph.nodes().filter(function (n) { return n.type === "texture"; });

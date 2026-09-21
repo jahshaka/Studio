@@ -6,6 +6,7 @@
 #include <QSet>
 
 #include "ui/style/columnedpage.h"
+#include "services/presetedit.h"
 #include <QListWidget>
 #include <QVariantMap>
 #include <QMainWindow>
@@ -113,6 +114,11 @@ public:
 private:
 	std::function<bool()> mSceneOpenProbe;
 	Project *mProject = nullptr;
+	/// THE PROJECT, BUT ONLY WHEN ONE IS REALLY OPEN (PRESET-EDIT-1). The app
+	/// has ONE Project instance, mutated in place, and it keeps its guid after
+	/// a close — so "is a project open?" is the scene probe, not the guid, and
+	/// every preset decision on this page asks it through here.
+	Project *openProject() const;
 public:
 	/// A GRAPH EDIT REACHES THE SCENE (OWNER_REVIEW 9, R19 D2). The page has
 	/// no business knowing about scene nodes, so the shell hands it one
@@ -122,6 +128,16 @@ public:
 	/// Until this lane an edit reached the scene only through a material
 	/// SWITCH, and only while the Projects tab happened to be current.
 	std::function<void(const QString &)> mMaterialChanged;
+
+	/// THE COPY-ON-WRITE (PRESET-EDIT-1, the owner's rule: "only the MASTER
+	/// materials should be locked"). A shipped preset a project holds is
+	/// editable HERE, and the first edit is what makes the project its own
+	/// copy. The page commits definitions; it has no undo service and no
+	/// scene, so the shell hands it the one call — guid in, the guid to write
+	/// to out (`copied` true the once) — and MaterialsModule wires it to
+	/// `presetedit::forEdit`. Unset in a page with no shell: the save then
+	/// stands down on a preset exactly as it did before.
+	std::function<presetedit::Target(const QString &)> mMakeEditable;
 
 
 	// Engine viewport mode: Studio hands in the engine-rendered Display preview

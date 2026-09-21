@@ -1438,6 +1438,11 @@ void SceneEditService::requestAssetViewRefresh()
     emit assetViewRefreshRequested();
 }
 
+void SceneEditService::forgetMaterialDressing(const QString &materialGuid)
+{
+    mDressedFrom.remove(materialGuid);
+}
+
 int SceneEditService::refreshMaterialUsers(const QString &materialGuid)
 {
     if (materialGuid.isEmpty() || !db) return 0;

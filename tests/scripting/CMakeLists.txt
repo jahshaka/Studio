@@ -2015,6 +2015,28 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.preset_edit — PRESET-EDIT-1: A PRESET A PROJECT HOLDS IS THE
+# PROJECT'S TO EDIT, and the FIRST EDIT is what makes the copy (the owner's
+# rule, 2026-09-21). The copy keeps the preset's NAME, the project's pin moves
+# onto it, the meshes follow, the library master and every other project are
+# untouched — and with no project open the master is still locked, which is
+# the only lock left. Document verbs only -> --headless. A FRESH HOME, because
+# the arms count library rows.
+set(_peHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_edit)
+add_test(NAME scripting.e2e.preset_edit.fresh_home
+         COMMAND sh -c "rm -rf '${_peHome}' && mkdir -p '${_peHome}/run'")
+set_tests_properties(scripting.e2e.preset_edit.fresh_home PROPERTIES
+    FIXTURES_SETUP presetEditHome LABELS "scripting")
+file(MAKE_DIRECTORY ${_peHome}/run)
+add_test(NAME scripting.e2e.preset_edit
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_edit.js --headless
+         WORKING_DIRECTORY ${_peHome}/run)
+set_tests_properties(scripting.e2e.preset_edit PROPERTIES
+    ENVIRONMENT "HOME=${_peHome};JAHSHAKA_DATA_ROOT=${_peHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED presetEditHome
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # scripting.e2e.preset_seed_boot — THE FIRST-RUN SEED ON THE ROUTE A PERSON
 # TAKES (SEED-STAMP-1). preset_apply above seeds through
 # `materials.seedPresets()`, which mints each map inside `definitionFor` and

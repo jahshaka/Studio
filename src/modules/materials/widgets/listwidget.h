@@ -32,13 +32,6 @@ public:
 	void dropEvent(QDropEvent *event) override;
     bool shaderContextMenuAllowed = false;
 	bool addToProjectMenuAllowed = false;
-	/// The PRESETS drawer's one gesture (R18). A shipped preset is read-only
-	/// — it has no Rename, no Delete, no Edit, because none of those can be
-	/// honoured — so the only thing its menu offers is CUSTOMISE: a copy of
-	/// it the user owns and may edit. Set on the presets drawer alone; a tile
-	/// with no material guid (a graph TEMPLATE, which is instantiated by
-	/// double-click) gets no menu at all.
-	bool presetContextMenuAllowed = false;
 	/// Injected by the module window: is a project scene open? (Phase 4:
 	/// was UiManager::isSceneOpen). Null-safe: no probe = treated as closed.
 	std::function<bool()> sceneOpenProbe;
@@ -74,8 +67,6 @@ signals:
     void createShader(QString guid);
     void importShader(QString guid);
 	void addToProject(QListWidgetItem *item);
-	/// R18 — "give me my own copy of this shipped preset to edit".
-	void customisePreset(QString presetGuid);
 
 	void resizeItem(int size);
 };
