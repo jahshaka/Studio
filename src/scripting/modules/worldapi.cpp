@@ -213,6 +213,7 @@ const QStringList &giPlainKeys()
         QStringLiteral("giPccGrid"), QStringLiteral("giUpdateBudget"),
         QStringLiteral("giDdgiIntensity"), QStringLiteral("giDdgiAmbient"),
         QStringLiteral("giGather"),
+        QStringLiteral("giCards"), QStringLiteral("giCardBudgetTexels"), QStringLiteral("giCardRadius"),
         QStringLiteral("giRayMarchStepScale"), QStringLiteral("giProbeHdr"),
         QStringLiteral("giProbeShadows"), QStringLiteral("giProbeOverlap"),
         QStringLiteral("giProbeSnapDeviation"), QStringLiteral("giProbeSnapSidesMin"),

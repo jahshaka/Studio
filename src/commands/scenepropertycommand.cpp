@@ -163,6 +163,12 @@ QVector<sceneprops::Field> buildFields()
     // of the same call is refused.
     add("giGather", [](const ScenePtr &s) { return QVariant(s->giGather); },
         [](const ScenePtr &s, const QVariant &v) { s->giGather = v.toInt(); });
+    add("giCards", [](const ScenePtr &s) { return QVariant(s->giCards); },
+        [](const ScenePtr &s, const QVariant &v) { s->giCards = v.toInt(); });
+    add("giCardBudgetTexels", [](const ScenePtr &s) { return QVariant(s->giCardBudgetTexels); },
+        [](const ScenePtr &s, const QVariant &v) { s->giCardBudgetTexels = v.toInt(); });
+    add("giCardRadius", [](const ScenePtr &s) { return QVariant(s->giCardRadius); },
+        [](const ScenePtr &s, const QVariant &v) { s->giCardRadius = v.toFloat(); });
     // Verb-only integrator knobs (world.gi): no panel row, but the verb's one
     // undo step records them through this table like every other world field.
     add("giRayMarchStepScale", [](const ScenePtr &s) { return QVariant(s->giRayMarchStepScale); },
