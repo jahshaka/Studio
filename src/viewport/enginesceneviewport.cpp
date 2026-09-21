@@ -143,10 +143,17 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // frame the whole arm used to land in.
             if (mEngine) {
                 mEngine->setNextFramePace(driverFramePace());
-                // The window is spent by DRIVER frames of a revealed world —
-                // never by the covered ones, which is what stops a slow load
-                // from consuming it before the user sees anything.
-                if (!mSceneLoadPending && mStreamFramesLeft > 0) --mStreamFramesLeft;
+                // The window is spent by DRIVER frames of a REVEALED world —
+                // never by the load's own, which is what stops a slow load from
+                // consuming it before the user sees anything. `mWorldArriving`
+                // and not `mSceneLoadPending`: the latter is lowered by
+                // `refreshOverlay` and WIPED by `clearScene` in the middle of
+                // every load-in-place, so the slices after the teardown were
+                // spending this window while nothing of the new world existed
+                // (the Fable read, item 2). `mWorldArriving` is the host's own
+                // "a world is on its way", raised in beginSceneLoad, lowered at
+                // endSceneLoad, and deliberately sticky across clearScene.
+                if (!mWorldArriving && mStreamFramesLeft > 0) --mStreamFramesLeft;
             }
         });
 }
@@ -3423,7 +3430,6 @@ IEditorViewport::StreamingPending EngineSceneViewport::streamingPending() const
     out.shadersThisLoad = w.shadersCompiled >= mStream.shadersAtLoad
                               ? w.shadersCompiled - mStream.shadersAtLoad
                               : 0u;
-    out.shadersExpected = w.shadersExpected;
     out.texturesThisLoad = qMax(mStream.texturesPeak, out.textures);
     return out;
 }
@@ -3452,8 +3458,37 @@ QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
     // sampleStreamingWork for why the driver's frames and nobody else's).
     // Outside a load it never appears: a texture arriving behind an asset drop
     // is not a world loading.
+    // WITH THE COVER ON THERE IS NO LINE, EVER (the Fable read, item 1; the
+    // lead's decision). ON is defined as "today's contract, byte for byte" —
+    // the panel until the second present, then the stream-in exactly as before
+    // this lane — and it is NOT byte for byte if the panel carries a caption:
+    // the HUD draws the stats text OVER the cover fill by design
+    // (jahshaka/engine/Types.h on ViewOverlayDesc::lines), so a line pushed
+    // here would appear on the grey panel and again during the ON stream-in.
+    // One test, before anything else is computed.
+    if (mCoverThisLoad) return QString();
+    // AND NOTHING IS DRAWN WHERE NOTHING CAN BE SEEN. A load that runs with
+    // this viewport hidden — every create and every open from the Desktop
+    // page, which is most of them — still draws frames here (the open runner
+    // renders one at every slice boundary), and a line composed for those is
+    // pure cost AND pure risk: the overlay is geometry, so its quads land in
+    // the `submittedTriangles` of frames a suite may be measuring, which is
+    // the defect scripting.e2e.atom_lods caught once already. The owner loses
+    // nothing: the page switch at the reveal is what makes this viewport
+    // visible, and the line appears on the first frame he can actually see.
+    if (!isVisible()) return QString();
+
     const StreamingPending p = streamingPending();
-    const bool arriving = mSceneLoadPending;
+    // `mWorldArriving`, NOT `mSceneLoadPending` (the Fable read, item 2). The
+    // latter is lowered only by `refreshOverlay` — which runs on driver ticks —
+    // and wiped by `clearScene` mid-load, so it said "arriving" on a SCRIPTED
+    // frame taken between the reveal and the first tick (the line's quads then
+    // land in a deterministic frame's `submittedTriangles`: the atom_lods
+    // class, again) and said "not arriving" for the whole stretch after a
+    // load-in-place's teardown, which is when the line is most needed.
+    // `mWorldArriving` is the host's own flag: raised in beginSceneLoad,
+    // lowered at endSceneLoad, sticky across clearScene on purpose.
+    const bool arriving = mWorldArriving;
     if (!arriving && !(driverFrame && mStreamFramesLeft > 0 && p.any())) return QString();
 
     // ASCII ONLY, and it is not a style choice: the overlay font is Ogre's
@@ -3466,11 +3501,14 @@ QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
     QStringList terms;
     // Progress, not a queue (see the note above). Shown while this load has
     // built any at all, or while the last frame did.
-    if (p.shadersThisLoad || p.shaders) {
-        terms << (p.shadersExpected > p.shadersThisLoad
-                      ? tr("shaders %1/%2").arg(p.shadersThisLoad).arg(p.shadersExpected)
-                      : tr("shaders %1").arg(p.shadersThisLoad));
-    }
+    // NO DENOMINATOR (the Fable read, item 5). `shadersExpected` is the
+    // PREVIOUS SESSION's whole total — everything it compiled or read from the
+    // cache, boot included — so "12/45" invited the reader to see a load that
+    // is 27 % done when the 45 is not this load's number at all. A count that
+    // is only a count says what it is. A real denominator would have to come
+    // from something that knows THIS world's permutation set (the warm-up
+    // slice's own built count is the candidate); until one exists there is none.
+    if (p.shadersThisLoad || p.shaders) terms << tr("shaders %1").arg(p.shadersThisLoad);
     // Only while something is STILL waiting: "textures 1/1" after the last one
     // landed is a term that says nothing and never leaves.
     if (p.textures) {
@@ -3593,6 +3631,13 @@ void EngineSceneViewport::presentCovered(int frames)
     // driver's own ticks while the cover is up DO count, exactly as they always
     // did — that is what eventually reveals the viewport.)
     if (covered) mPresentBaseline = qulonglong(view()->framesPresented());
+    // THE COUNT A CALLER DIFFERENCES ACROSS A LOAD to ask "was this one
+    // covered" after the fact (IEditorViewport::coversPresented) — the LOADING
+    // cover only. `Cover::NoScene` is not a load and is presented by every
+    // close, so counting it would answer a different question with the same
+    // number.
+    if (view()->overlay().cover == jahshaka::engine::ViewOverlayDesc::Cover::Loading)
+        ++mCoversPresented;
     mLastPresentedCover = wanted;
     mLastPresentedW = view()->width();
     mLastPresentedH = view()->height();
@@ -3612,6 +3657,34 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     // once and streams in behind one indicator line). Read ONCE per load: a
     // preference toggled while a world is arriving must not put the panel up
     // over a world that is already drawing.
+    //
+    // A LOAD IN PLACE LEAVES THE PREVIOUS WORLD FROZEN ON SCREEN, AND NOTHING
+    // HERE CAN FIX IT — measured, twice, rather than reasoned (the Fable read,
+    // item 3; the lead asked for `|| isVisible()` here and it is NOT shipped,
+    // because it is a switch that never fires).
+    //
+    // What happens: a View with no scene bound PRESENTS NOTHING — the engine
+    // destroys its workspace with its scene — so from `openStageBegin`'s
+    // teardown until the new world's first frame the X server keeps the last
+    // frame it was given. On a load begun from the editor page that frame is
+    // the PREVIOUS WORLD. Measured on the rig with the cover off: the whole
+    // gap (128-511 ms of a warm Grand Showroom 2 open, states `noscene` then
+    // `loading`) is BYTE-IDENTICAL to the frame before the open began.
+    //
+    // Why a cover cannot hide it. After the teardown there is no workspace, so
+    // a cover cannot be presented at all — `Cover::NoScene` is raised and
+    // "presented" by every close and changes not one pixel, which is the same
+    // defect seen from the other side. Before the teardown a cover COULD be
+    // presented, but by then Qt already reports this widget as not visible on
+    // both routes (`presentCovered` returns early on exactly that), while its
+    // NATIVE window's pixels are still on screen — which is the whole trap.
+    // Measured with `coversPresented`: with the preference off, a create from
+    // the editor page and an open in place present ZERO loading covers, so
+    // `|| isVisible()` would change nothing; with it ON a create presents one.
+    //
+    // The fix is engine-side — a scene-less view drawing its own background
+    // (STALE-VIEW-1) — and it fixes the never-drawn "No world open" panel with
+    // the same change.
     mCoverThisLoad = loadingcover::enabled();
     // The indicator's baselines. `shadersAtLoad` is the engine's running
     // compile total right now, so the progress pair counts THIS load's

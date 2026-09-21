@@ -735,6 +735,77 @@ int main(int argc, char **argv)
             CHECK(reportsAfter == reportsBefore,
                   "the main-thread watchdog reported no stall across an open with the cover off");
         }
+        // THE PREFERENCE'S OWN CONTRACT, ON A REAL ON-SCREEN VIEWPORT — which
+        // is why it lives here and not in the `--script` suite, whose viewport
+        // is never shown.
+        //
+        // MEASURED WITH A COUNTER, NOT WITH A POLL, and the first cut of this
+        // arm is why: a warm load finishes INSIDE the request that starts it —
+        // the runner's slices are posted events and outrank the socket read
+        // that would ask — so polling `editor.viewportState().cover` from
+        // outside the process saw one state, `none/presenting`, after it was
+        // all over. `coversPresented` counts the LOADING covers this viewport
+        // has actually put on screen, and a load is the difference across it.
+        {
+            const auto covers = [&]() {
+                return mcp.runScript(QStringLiteral("editor.viewportState().coversPresented"))
+                    .value("result").toDouble();
+            };
+            const auto createAndCount = [&](const char *label) {
+                const double before = covers();
+                mcp.runScript(QStringLiteral("project.create('Cover %1 %2')")
+                                  .arg(QString::fromLatin1(label))
+                                  .arg(QDateTime::currentMSecsSinceEpoch()));
+                const double after = covers();
+                std::printf("info: [cover %s] loading covers presented %.0f -> %.0f\n",
+                            label, before, after);
+                std::fflush(stdout);
+                return after - before;
+            };
+            mcp.runScript(QStringLiteral("editor.loadingCover(false)"));
+            const double off = createAndCount("preference OFF");
+            CHECK(off == 0.0,
+                  "with the preference OFF a load presents NO cover — the world is what is on "
+                  "screen, and the indicator line says what is still coming");
+            mcp.runScript(QStringLiteral("editor.loadingCover(true)"));
+            const double on = createAndCount("preference ON");
+            CHECK(on == 1.0,
+                  "with it ON the load is covered exactly once, which is today's contract");
+            const QJsonObject covered = mcp.runScript(
+                QStringLiteral("JSON.parse(JSON.stringify(editor.viewportState()))"))
+                                            .value("result").toObject();
+            CHECK(covered.value("indicator").toString().isEmpty(),
+                  "...and a covered load draws no indicator line, ever (ON is today's contract "
+                  "byte for byte, and the HUD draws its text OVER the cover fill)");
+            mcp.runScript(QStringLiteral("editor.loadingCover(false)"));
+
+            // AND THE ONE THING NO PREFERENCE CAN FIX, printed every run so it
+            // cannot be forgotten: a world opened while the editor page already
+            // shows one leaves the PREVIOUS world's last frame on screen for
+            // the length of the load. A View with no scene bound presents
+            // NOTHING (the engine destroys its workspace with its scene), so
+            // after the teardown neither the world nor a cover can reach the
+            // screen — measured on the rig, the whole 128-511 ms gap of a warm
+            // Grand Showroom 2 open is byte-identical to the frame before it.
+            // The fix is engine-side: STALE-VIEW-1. When it lands, THIS is the
+            // number that changes, and the arm becomes an assertion.
+            if (!showroomGuid.isEmpty()) {
+                const double before = covers();
+                mcp.runScript(QStringLiteral("project.openAsync('%1')").arg(showroomGuid));
+                QElapsedTimer t; t.start();
+                while (t.elapsed() < 60000) {
+                    if (mcp.runScript(QStringLiteral("project.openState()"))
+                            .value("result").toString() == QLatin1String("idle")) break;
+                    QThread::msleep(20);
+                }
+                std::printf("info: [in-place open, preference OFF] loading covers %.0f -> %.0f "
+                            "(STALE-VIEW-1 owes this one: nothing can be presented between the "
+                            "teardown and the new world, so the previous world stays on screen)\n",
+                            before, covers());
+                std::fflush(stdout);
+            }
+        }
+
         // Leave the fixture open for the cases below.
         mcp.runScript(QStringLiteral("project.close()"));
         CHECK(mcp.runScript(QStringLiteral("project.open('%1')").arg(guid)).value("ok").toBool(),

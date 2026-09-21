@@ -1133,14 +1133,15 @@ public:
     /// not a number anything in this process knows. It is how many the LAST
     /// DRIVER FRAME built — a rate, zero as soon as a frame draws without
     /// compiling anything, which is exactly the moment the picture stops
-    /// changing for that reason. `shadersThisLoad`/`shadersExpected` are the
-    /// progress pair the indicator shows ("shaders 12/45").
+    /// changing for that reason. `shadersThisLoad` is the count since this
+    /// load began; there is deliberately NO denominator beside it, because the
+    /// only number available was the PREVIOUS SESSION's whole total (boot
+    /// included), which is a different quantity and read as progress.
     struct StreamingPending {
         unsigned shaders = 0;         ///< compiled by the last driver frame
         unsigned textures = 0;        ///< materials still drawing a fallback
         unsigned gi = 0;              ///< stages of the first lighting arm left
         unsigned shadersThisLoad = 0; ///< compiled since this load began
-        unsigned shadersExpected = 0; ///< the last saved run's total, 0 = unknown
         unsigned texturesThisLoad = 0;///< the most this load has waited on at once
         /// Anything at all still arriving — `shaders || textures || gi`.
         bool any() const { return shaders || textures || gi; }
@@ -1151,6 +1152,14 @@ public:
     /// whose whole job is drawing a panel needs a reading, or its test has to
     /// photograph the screen. "noscene" is not a preference and always shows.
     virtual QString coverState() const { return QStringLiteral("none"); }
+    /// HOW MANY TIMES A COVER HAS BEEN PRESENTED by this viewport, ever. The
+    /// preference's whole contract is "was this load covered", and `coverState`
+    /// — an instant — cannot answer it after the fact: a warm load is over
+    /// before a caller polling from outside the process gets a second reading
+    /// in. A caller differences this across a load instead. It counts the
+    /// PRESENTS, not the raises, because a cover that was never presented was
+    /// never on screen (that is the whole reason `presentCovered` exists).
+    virtual qulonglong coversPresented() const { return 0; }
     /// THE INDICATOR LINE this viewport is drawing at the bottom of the frame
     /// while a world streams in, or empty when it is drawing none. The same
     /// argument as `coverState`: a line whose whole job is to be read needs a

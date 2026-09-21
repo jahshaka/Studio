@@ -237,14 +237,30 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
                                 .arg(giArmStageName(owedBefore.giStage));
                     if (compiled)
                         cause += QStringLiteral(" (and %1 shader compilation(s))").arg(compiled);
+                } else if (after.giRebuilds != owedBefore.giRebuilds) {
+                    // A WHOLE ARM, NOT A STAGE (the Fable read, item 4). A
+                    // `Complete` frame — a scripted step, a capture, the first
+                    // frame after an explicit `world.refreshGi()` — builds the
+                    // arm end to end and never touches the stage machine, so
+                    // the stage counter above cannot see it and the old
+                    // sentence called the most expensive frame in the engine
+                    // "no first-time work".
+                    cause = QStringLiteral("a WHOLE lighting-arm rebuild (%1 in this frame, "
+                                           "not staged)")
+                                .arg(after.giRebuilds - owedBefore.giRebuilds);
+                    if (compiled)
+                        cause += QStringLiteral(" (and %1 shader compilation(s))").arg(compiled);
                 } else if (compiled) {
                     cause = QStringLiteral("%1 shader/PSO compilation(s) in this frame")
                                 .arg(compiled);
                 }
             }
             if (cause.isEmpty())
-                cause = QStringLiteral("no first-time work in this frame — neither the "
-                                       "lighting arm nor a shader compilation");
+                // NARROWED, and it says which things it looked at: a probe
+                // re-capture, a cascade flush and the shadow atlas are all
+                // real first-time-ish work this counter pair cannot see.
+                cause = QStringLiteral("no lighting-arm work and no shader compilation "
+                                       "in this frame");
             qWarning("[open-profile] slow frame: %.1f ms (%s)", ms, qUtf8Printable(cause));
         }
     });

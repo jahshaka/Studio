@@ -257,6 +257,7 @@ public:
     void endSceneLoad() override;
     StreamingPending streamingPending() const override;
     QString coverState() const override;
+    qulonglong coversPresented() const override { return mCoversPresented; }
     QString loadingIndicator() const override { return mStream.line; }
     void coverIfNotPresenting() override;
     void primeSceneGeometry() override;
@@ -606,6 +607,8 @@ private:
     /// machine alone cannot tell "no world open" from "a world is loading",
     /// because at beginSceneLoad time the OLD world is still bound (or none is).
     bool mSceneLoadPending = false;
+    /// Covers actually PRESENTED by this viewport, ever — `coversPresented()`.
+    qulonglong mCoversPresented = 0;
     /// The world's name, shown under "Loading world…" — beginSceneLoad's argument.
     QString mLoadingTitle;
     /// View::framesPresented() at the moment the current world was bound
