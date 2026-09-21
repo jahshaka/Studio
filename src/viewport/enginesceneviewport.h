@@ -288,6 +288,28 @@ public:
     /// guaranteed to be the one the compositor is showing.
     static constexpr unsigned long long kPresentsBeforeReveal = 2;
 
+    // ---- streaming a world in (SPECS/OPEN_COVER_SPEC.md §2.1) -------------
+    /// What the NEXT engine frame drawn for THIS viewport may put off. The
+    /// whole rule lives here because this widget is the only object that knows
+    /// all three of its terms: whether a world is still loading, whether it has
+    /// been revealed, and whether the engine still owes first-time work.
+    ///
+    /// THE CONTRACT, and it is the safety argument for the whole lane: only the
+    /// DRIVER's own ticks and the open runner's slice boundaries ever get
+    /// anything but `Complete`. A script's `editor.frame`, a screenshot, a
+    /// thumbnail, a preview, the selftest and every pixel suite render complete
+    /// frames — so no gate and neither selftest hash can move.
+    jahshaka::engine::FramePace driverFramePace() const;
+    /// A frame the OPEN RUNNER draws between two install slices (OPEN-FRAMES-1).
+    /// It advances the renderer's bookkeeping, which is why it exists, and it
+    /// must start no first-time work: nothing of this world is on screen.
+    void renderSliceBoundaryFrame() override;
+    /// How many DRIVER frames after a reveal may still stream. A bound, not a
+    /// budget: the engine's own `framePaceOwesWork` is what normally ends the
+    /// window, and this stops a scene whose textures never arrive from leaving
+    /// the frame-edge drain switched off for the life of the session.
+    static constexpr int kStreamFramesAfterReveal = 240;
+
 
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.
     /// One document->engine sync. `dt` >= 0 overrides the wall clock: that is
@@ -348,6 +370,8 @@ protected:
     void viewRecreated() override;
 
 private:
+    /// Driver frames left in the streaming window (kStreamFramesAfterReveal).
+    int mStreamFramesLeft = 0;
     /// Binds this widget's View to the scene, with the view-side state that
     /// belongs to the editor's own picture (shadows, the VR helper channel).
     void bindViewToScene();

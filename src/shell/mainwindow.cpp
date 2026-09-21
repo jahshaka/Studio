@@ -2183,6 +2183,68 @@ void MainWindow::openProjectAsync(bool playMode)
 	startOpenRun(playMode);
 }
 
+// THE RUNNER AND WHAT HAPPENS BETWEEN TWO OF ITS SLICES. Built once per window,
+// by whichever of the two routes — the open or the create — reaches it first.
+void MainWindow::startOpenRunnerIfNeeded()
+{
+	if (openRunner) return;
+	openRunner = new SceneOpenRunner(db, project, this);
+	connect(openRunner, &SceneOpenRunner::progress, this,
+	        [this](int percent, const QString &text) {
+		        if (pmContainer) pmContainer->showOpenProgress(percent, text);
+	        });
+	connect(openRunner, &SceneOpenRunner::finished, this, [this](bool) {
+		if (pmContainer) pmContainer->hideOpenProgress();
+	});
+	// THE INSTALL DRIVES ITS OWN FRAME (lane OPEN-FRAMES-1, 2026-09-15).
+	// Set once, on the runner this window keeps for its whole life.
+	//
+	// THE INSTALL HAS ALWAYS ASSUMED A FRAME BETWEEN ITS SLICES — that is
+	// the entire reason it runs one slice per event-loop turn — and it has
+	// never been entitled to one. The render tick is a 16 ms QTimer, and a
+	// chain of posted events (a script polling a verb, a user driving a
+	// panel, an MCP client) outranks a timer in Qt's dispatcher, so an open
+	// driven that way installs a whole world with NO frame rendered at all.
+	// The renderer's per-frame machinery then never turns: the texture
+	// worker's command buffer, the staging recycle, and the buffer
+	// manager's delayed-block release (Engine::advanceResources spells out
+	// which). Measured on this lane's build, a scripted open that renders
+	// no frame crashes 9 times in 12 with a corrupt heap; with one frame at
+	// every slice boundary, 0 in 12.
+	//
+	// SO THE BOUNDARY RENDERS THE FRAME, instead of hoping the timer fired.
+	// This is not an extra picture — it is the picture the tick would have
+	// drawn if it had been scheduled, drawn at exactly the moment the
+	// install expected one, and it costs one frame per slice (about a dozen
+	// over an open) on a path already behind the loading cover.
+	//
+	// MEASURED, NOT ASSUMED, AND THE CHEAPER THING WAS TRIED FIRST: the
+	// bare resource advance (Engine::advanceResources, no rendering) at the
+	// same boundaries took the same script from 9/12 to 6/12 — real, and
+	// not a cure. What a frame does beyond it is not yet named; the open
+	// pays for the whole frame until it is (the finding is in the lane's
+	// report and the pin's entry in SPECS/OGRE_UPSTREAM_ISSUES.md).
+	//
+	// WHEN THERE IS NO VIEWPORT TO RENDER (a headless shell, the engine
+	// still starting) the advance is still made: it is strictly less, but
+	// it is what that session can do, and it keeps the boundary's promise
+	// that SOMETHING turned the renderer's bookkeeping.
+	openRunner->setSliceBoundary([this]() {
+		LoadTimeline::Accumulate row(QStringLiteral("slice:boundaryFrame"));
+		if (sceneView && sceneView->canRenderFrames()) {
+			// ...AND IT STARTS NO FIRST-TIME WORK (OPEN_COVER_SPEC §2.1):
+			// the world it belongs to is still behind the cover, so a
+			// boundary frame that built the GI arm would be the block this
+			// lane removes, moved one stage earlier. The same frame in
+			// every other respect.
+			sceneView->renderSliceBoundaryFrame();
+			++openSliceBoundaryFrameCount;
+			return;
+		}
+		if (auto engine = EngineHost::instance().engine()) engine->advanceResources();
+	});
+}
+
 /// THE ONE OPEN (OPEN-ASSIMP-1). Plans the model parses, starts the worker and
 /// queues the install slices; the caller decides whether to wait.
 void MainWindow::startOpenRun(bool playMode)
@@ -2208,57 +2270,7 @@ void MainWindow::startOpenRun(bool playMode)
 	LoadTimeline::mark(QStringLiteral("plan"));
 	const QStringList modelPaths = plannedOpenModelPaths();
 
-	if (!openRunner) {
-		openRunner = new SceneOpenRunner(db, project, this);
-		connect(openRunner, &SceneOpenRunner::progress, this,
-		        [this](int percent, const QString &text) {
-			        if (pmContainer) pmContainer->showOpenProgress(percent, text);
-		        });
-		connect(openRunner, &SceneOpenRunner::finished, this, [this](bool) {
-			if (pmContainer) pmContainer->hideOpenProgress();
-		});
-		// THE INSTALL DRIVES ITS OWN FRAME (lane OPEN-FRAMES-1, 2026-09-15).
-		// Set once, on the runner this window keeps for its whole life.
-		//
-		// THE INSTALL HAS ALWAYS ASSUMED A FRAME BETWEEN ITS SLICES — that is
-		// the entire reason it runs one slice per event-loop turn — and it has
-		// never been entitled to one. The render tick is a 16 ms QTimer, and a
-		// chain of posted events (a script polling a verb, a user driving a
-		// panel, an MCP client) outranks a timer in Qt's dispatcher, so an open
-		// driven that way installs a whole world with NO frame rendered at all.
-		// The renderer's per-frame machinery then never turns: the texture
-		// worker's command buffer, the staging recycle, and the buffer
-		// manager's delayed-block release (Engine::advanceResources spells out
-		// which). Measured on this lane's build, a scripted open that renders
-		// no frame crashes 9 times in 12 with a corrupt heap; with one frame at
-		// every slice boundary, 0 in 12.
-		//
-		// SO THE BOUNDARY RENDERS THE FRAME, instead of hoping the timer fired.
-		// This is not an extra picture — it is the picture the tick would have
-		// drawn if it had been scheduled, drawn at exactly the moment the
-		// install expected one, and it costs one frame per slice (about a dozen
-		// over an open) on a path already behind the loading cover.
-		//
-		// MEASURED, NOT ASSUMED, AND THE CHEAPER THING WAS TRIED FIRST: the
-		// bare resource advance (Engine::advanceResources, no rendering) at the
-		// same boundaries took the same script from 9/12 to 6/12 — real, and
-		// not a cure. What a frame does beyond it is not yet named; the open
-		// pays for the whole frame until it is (the finding is in the lane's
-		// report and the pin's entry in SPECS/OGRE_UPSTREAM_ISSUES.md).
-		//
-		// WHEN THERE IS NO VIEWPORT TO RENDER (a headless shell, the engine
-		// still starting) the advance is still made: it is strictly less, but
-		// it is what that session can do, and it keeps the boundary's promise
-		// that SOMETHING turned the renderer's bookkeeping.
-		openRunner->setSliceBoundary([this]() {
-			if (sceneView && sceneView->canRenderFrames()) {
-				sceneView->renderFrames(1);
-				++openSliceBoundaryFrameCount;
-				return;
-			}
-			if (auto engine = EngineHost::instance().engine()) engine->advanceResources();
-		});
-	}
+	startOpenRunnerIfNeeded();
 
 	// ---- install: UI-thread slices, one per event-loop turn ----------------
 	//
@@ -5920,26 +5932,132 @@ void MainWindow::refreshClaudeChatContext()
     }
 }
 
+// A CREATE IS AN OPEN OF A WORLD NOBODY WROTE DOWN YET (SPECS/OPEN_COVER_SPEC.md
+// §2 C, lane OPEN-COVER-2a).
+//
+// This was ONE synchronous function, and it did every one of the open path's
+// stages back to back on the UI thread: the page switch (which presents the
+// NoScene cover inline and pays the panels' first paint), the document, the
+// initial save, the asset tray, the undo clear. Measured on a quiet box it
+// blocked for 244-451 ms and then handed the FIRST DRIVER FRAME the whole GI
+// arm — a second block of 298-443 ms — because a create never went anywhere
+// near `beginSceneLoad` and so never told the engine a world was arriving.
+//
+// So it runs through the SAME runner the open uses, in the same order, one
+// slice per event-loop turn with a frame at every boundary. Two things follow
+// for free and both are the point: the window answers between the slices, and
+// the engine is told a world is on its way (`openStageBegin`'s
+// `beginSceneLoad`), which is what puts the arm on the streaming path instead
+// of into the first frame the user sees.
+//
+// THE PAGE SWITCH MOVED TO THE END, with the open's reveal. It used to be first
+// — "to ensure the editor's context is created" — and that ordering is what put
+// the NoScene cover's inline presents and the panels' first paint inside the
+// verb. The open path has always bound its scene with no View yet on the first
+// world of a session (`primeSceneGeometry` says so and returns), and a create
+// is no different.
+//
+// AND THE CONTRACT IS UNCHANGED FOR BOTH CALLERS: this still returns with the
+// project open. The wait is `waitForOpen`, which PUMPS the event loop rather
+// than blocking it (the same drain `project.open` has used since OPEN-ASSIMP-1),
+// so `project.create` keeps its synchronous promise to scripts and the desktop's
+// Create button keeps a window that answers. `project.createAsync` — a create
+// that returns before the world is installed — is phase 2b.
 void MainWindow::newProject(const QString &filename, const QString &projectPath, bool empty)
 {
+    startCreateRun(filename, projectPath, empty);
+    waitForOpen();
+}
+
+void MainWindow::startCreateRun(const QString &filename, const QString &projectPath, bool empty)
+{
     if (projectService->isSceneOpen()) closeProject();
+    if (isOpeningProject()) {
+        qWarning("project create: an open was still in flight — draining it first");
+        openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+    }
+    if (!LoadTimeline::isRunning())
+        LoadTimeline::begin(QStringLiteral("create %1").arg(filename));
 
-	// this is to ensure the editor's context is created
-	switchSpace(WindowSpaces::EDITOR);
+    // The runner and its slice boundary are set up once, by whichever route
+    // reaches them first, so there is ONE definition of what a boundary does.
+    startOpenRunnerIfNeeded();
 
-    newScene(empty);
-    projectService->setSceneOpen(true);
-    ui->actionClose->setDisabled(false);
+    QVector<SceneOpenRunner::Slice> slices;
+    slices.append({ QStringLiteral("Preparing…"), 30, [this]() {
+        // The cover, the teardown and the bake scope — the open's own first
+        // slice, and the call that tells the engine a world is arriving.
+        openStageBegin();
+    } });
+    slices.append({ QStringLiteral("Creating the scene…"), 45, [this, empty]() {
+        LoadTimeline::mark(QStringLiteral("createDefaultScene"));
+        openPendingScene = createDefaultScene(empty);
+    } });
+    slices.append({ QStringLiteral("Binding the scene…"), 60, [this]() {
+        LoadTimeline::mark(QStringLiteral("setScene"));
+        auto created = openPendingScene;
+        openPendingScene.clear();
+        projectService->setSceneOpen(true);
+        ui->actionClose->setDisabled(false);
+        setScene(created);
+        sceneView->resetEditorCam();
+        // A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07) —
+        // the three settings the open path pushes out of the saved EditorData.
+        const EditorData defaults;
+        sceneView->setShowGrid(defaults.showGrid);
+        sceneView->setShowLightWires(defaults.showLightWires);
+        sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
+        if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
+        if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
+        if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
+        refreshClaudeChatContext();   // D1: rebind an open chat to the new project
+        if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project
+        if (services) services->announceSceneOpened();
+    } });
+    slices.append({ QStringLiteral("Building the asset panel…"), 75, [this]() {
+        LoadTimeline::mark(QStringLiteral("assetWidget.trigger"));
+        assetWidget->trigger();
+        undoService->clear();
+        updateWindowTitle();
+    } });
+    slices.append({ QStringLiteral("Uploading geometry…"), 80, [this]() {
+        LoadTimeline::mark(QStringLiteral("primeSceneSync"));
+        sceneView->primeSceneGeometry();
+    } });
+    slices.append({ QStringLiteral("Lighting the world…"), 90, [this]() {
+        LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
+        sceneView->primeSceneEnvironment();
+    } });
+    if (settings->getValue("shader_warmup_on_open", true).toBool()) {
+        slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
+            LoadTimeline::mark(QStringLiteral("warmUpShaders"));
+            const unsigned built = sceneView->warmUpShaders();
+            if (built) qInfo("scene create: precompiled %u shader(s) behind the cover", built);
+        } });
+    }
+    slices.append({ QStringLiteral("Precompiling shaders…"), 96, [this]() {
+        LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
+        sceneView->recordWarmUpSet();
+    } });
+    // THE INITIAL SAVE GOES LAST, AFTER THE WARM-UP, and the order is measured
+    // rather than tidy. It renders the project's TILE — an offscreen view of
+    // the new world — and on a cold shader cache that view's first frame
+    // compiles its whole PSO set: 460 ms of the create's 891 when the save ran
+    // before the warm-up, against 156 warm. Running it after `warmUpShaders`
+    // and `recordWarmUpSet` lets it find those permutations already built.
+    // Nothing downstream reads the row in between: the reveal below switches
+    // the page, and the desktop re-reads the tile when it is next shown.
+    slices.append({ QStringLiteral("Saving the scene…"), 97, [this, filename, projectPath]() {
+        LoadTimeline::mark(QStringLiteral("saveInitialScene"));
+        saveScene(filename, projectPath);
+    } });
+    slices.append({ QStringLiteral("Opening…"), 100, [this]() {
+        openStageReveal(false);
+    } });
 
-    saveScene(filename, projectPath);
-
-    assetWidget->trigger();
-
-    undoService->clear();
-    updateWindowTitle();
-	updateTopMenuStates(WindowSpaces::EDITOR);
-    refreshClaudeChatContext();   // D1: rebind an open chat to the new project
-    if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project
+    openRunner->setPlan(QStringList(), slices,
+                        filename.isEmpty() ? QStringLiteral("scene") : filename);
+    openRunner->start();
 }
 
 // ===========================================================================

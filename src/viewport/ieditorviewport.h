@@ -1005,6 +1005,13 @@ public:
     /// cannot have one — has to ask first. False on every viewport that does
     /// not implement renderFrames at all.
     virtual bool canRenderFrames() const { return false; }
+    /// A FRAME THE OPEN RUNNER DRAWS BETWEEN TWO INSTALL SLICES
+    /// (OPEN-FRAMES-1 + OPEN_COVER_SPEC §2.1). Identical to `renderFrames(1)`
+    /// except that it tells the engine this frame belongs to a world that is
+    /// not on screen yet, so the engine starts none of that world's first-time
+    /// work (the GI arm, the probe grid) in it. The default IS renderFrames(1):
+    /// a viewport with no engine has nothing to defer.
+    virtual void renderSliceBoundaryFrame() { renderFrames(1); }
 
     // ---- the "nothing is presenting" cover ----
     // Drawn by the ENGINE since owner decision D2 (STATS_OVERLAY_SPEC.md §6):
