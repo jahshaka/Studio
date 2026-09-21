@@ -342,4 +342,14 @@ void PlayBack::keyReleaseEvent(QKeyEvent *event)
 void PlayBack::clearInputState()
 {
 	iris::InputSystem::instance().clearKeys();
+	// ...AND THE OTHER HALF OF THE KEYBOARD (PLAY-SELECT-1 fix round, F3).
+	// keyPressEvent above writes BOTH stores — `InputSystem` (what the
+	// possessed avatar consumes) and `KeyboardState` (what the camera
+	// controllers poll) — and only one of them was being dropped here. A fly
+	// key held at the moment a run lost the keyboard (an eject, a stop, a
+	// focus loss) therefore stuck TRUE in KeyboardState with no release edge
+	// ever coming: the run's camera flew in that direction for the rest of the
+	// run, and the next Play inherited it, because nothing else in the tree
+	// clears that hash.
+	KeyboardState::reset();
 }

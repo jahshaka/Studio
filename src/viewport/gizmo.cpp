@@ -339,6 +339,11 @@ void Gizmo::applyGroupDelta()
 
 void Gizmo::createUndoAction()
 {
+	// ONE GESTURE, ONE LATCH: the transient flag is consumed here so the next
+	// drag records normally unless its host sets it again (a VR drag, which
+	// never sets it, would otherwise inherit a play drag's silence).
+	const bool transient = transientDrag;
+	transientDrag = false;
 	// A CANCEL RECORDS NOTHING (cancelDragging). Everything goes back to where
 	// the gesture found it — the group members through their captured start
 	// transforms, the primary through oldPos/oldRot/oldScale — and the undo
@@ -358,6 +363,13 @@ void Gizmo::createUndoAction()
 		}
 		return;
 	}
+	// A DRAG INSIDE A PLAY RUN RECORDS NOTHING EITHER, and unlike a cancel it
+	// KEEPS what it did (PLAY-SELECT-1): the object moved live while the
+	// simulation ran, and Stop is what puts it back — through PlayBack's
+	// snapshot, which is the one authority on what a run's edits were worth.
+	// An undo command here would survive that restore and rewind a node to a
+	// mid-run pose on the user's next Ctrl+Z.
+	if (transient) { groupStart.clear(); return; }
 	// ONE UNDO STEP for the whole group (EDITOR_MULTISELECT_SPEC §2.4): every
 	// member is put back to where the drag started and re-applied through its
 	// own TransformSceneNodeCommand, all inside one macro. N = 1 keeps today's
