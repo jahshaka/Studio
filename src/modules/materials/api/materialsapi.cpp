@@ -413,9 +413,19 @@ QVariantMap MaterialsApi::open(const QString &guidOrName, const QVariantMap &opt
     }
     out = mPage.open(guid, scope);
     if (out.isEmpty()) {
-        // The page's own rule: no tile, no open (a material the drawers do not
-        // hold — unlisted, or not in the project at the scope asked for).
-        fail(QStringLiteral("materials.open: no drawer holds '%1'%2")
+        // WHAT ACTUALLY HAPPENED (TABS-SMALL-1). This used to say "no drawer
+        // holds it", which is not a rule the page has: an open is not gated on
+        // a tile — it refills the drawer and carries on (EffectsPage::
+        // openDocument). The page answers with nothing for two reasons, and
+        // the message names both rather than sending the reader to look for a
+        // missing tile that was never the cause: there is no project open to
+        // take a project-scope copy from, or the definition carries no graph
+        // the node editor can draw (a values-only bundle, or a graph written
+        // on a master this build no longer has — that one also raises a scene
+        // issue, which `editor.issues()` reads).
+        fail(QStringLiteral("materials.open: the page did not open '%1'%2 — either no project is "
+                            "open (a project-scope copy needs one) or its definition carries no "
+                            "graph the node editor can draw (see editor.issues())")
                  .arg(guidOrName, scope.isEmpty() ? QString()
                                                   : QStringLiteral(" at scope '%1'").arg(scope)));
     }
