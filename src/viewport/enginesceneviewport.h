@@ -255,6 +255,10 @@ public:
     { return EngineViewWidget::viewCreationError(); }
     void beginSceneLoad(const QString &title = QString()) override;
     void endSceneLoad() override;
+    StreamingPending streamingPending() const override;
+    QString coverState() const override;
+    qulonglong coversPresented() const override { return mCoversPresented; }
+    QString loadingIndicator() const override { return mStream.line; }
     void coverIfNotPresenting() override;
     void primeSceneGeometry() override;
     void primeSceneEnvironment() override;
@@ -384,6 +388,49 @@ protected:
 private:
     /// Driver frames left in the streaming window (kStreamFramesAfterReveal).
     int mStreamFramesLeft = 0;
+    /// THE COVER PREFERENCE, LATCHED FOR THE LENGTH OF ONE LOAD
+    /// (services/loadingcover.h, OPEN_COVER_SPEC §3). Read ONCE, in
+    /// `beginSceneLoad`: a preference toggled mid-load must not make the panel
+    /// appear and disappear between two frames of the same load.
+    bool mCoverThisLoad = false;
+    /// The indicator's readings, sampled once per driver tick (see
+    /// `sampleStreamingWork`). Mutable state, not a computation: two of the
+    /// three numbers are DIFFERENCES across frames and there is exactly one
+    /// place per frame where a difference is meaningful.
+    struct StreamSample {
+        unsigned shadersLastFrame = 0;   ///< built by the frame just drawn
+        unsigned shadersAtSample = 0;    ///< the engine's total at the last sample
+        unsigned shadersAtLoad = 0;      ///< ...and when this load began
+        unsigned texturesPeak = 0;       ///< the most materials waited on at once
+        /// THE LINE ON SCREEN, and the frames it is held for. The counts
+        /// FLICKER — the shader term is a per-frame rate and the arm's stage
+        /// machine is idle between a stage finishing and the next being
+        /// staged — so a line drawn from the raw reading blinks off and on
+        /// again while a world is plainly still arriving (photographed: two
+        /// frames of "Loading New World - shaders 4", then one blank, then
+        /// "...lighting..."). It is therefore held for a short tail after the
+        /// last frame that owed anything, and the tail is what makes it
+        /// disappear ONCE, cleanly, when the world has settled.
+        QString  line;
+        int      holdTicks = 0;
+    };
+    /// How many frames the indicator survives its last owed work — ~0.2 s at
+    /// 60 Hz. A bound on the flicker, not a timer for the line: the line goes
+    /// when this runs out, which is a few frames after the world stops
+    /// changing.
+    static constexpr int kIndicatorHoldTicks = 12;
+    StreamSample mStream;
+    /// Reads `Engine::streamingWork()` and banks this frame's differences.
+    /// Called before EVERY frame this viewport draws, so the line describes
+    /// what the previous frame left owed. `driverFrame` is the safety rule:
+    /// see the definition.
+    void sampleStreamingWork(bool driverFrame);
+    /// Composes the line from the CURRENT reading — the counts are the
+    /// engine's and the world's name is the host's. Called once per drawn
+    /// frame by `sampleStreamingWork`, never by the overlay (which reads the
+    /// held line, so what is on screen and what `editor.viewportState()
+    /// .indicator` reports are the same string).
+    QString composeIndicatorLine(bool driverFrame) const;
     /// A world is on its way and none of it is on screen yet — the engine's
     /// half of `mSceneLoadPending`, and it needs to be its own flag because
     /// `clearScene` wipes that one while an open is in flight (see
@@ -560,6 +607,8 @@ private:
     /// machine alone cannot tell "no world open" from "a world is loading",
     /// because at beginSceneLoad time the OLD world is still bound (or none is).
     bool mSceneLoadPending = false;
+    /// Covers actually PRESENTED by this viewport, ever — `coversPresented()`.
+    qulonglong mCoversPresented = 0;
     /// The world's name, shown under "Loading world…" — beginSceneLoad's argument.
     QString mLoadingTitle;
     /// View::framesPresented() at the moment the current world was bound

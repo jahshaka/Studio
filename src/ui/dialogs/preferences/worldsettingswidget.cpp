@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 
 #include "services/apppaths.h"
+#include "services/loadingcover.h"
 
 #include "irisgl/core/irisutils.h"
 
@@ -530,6 +531,34 @@ void WorldSettingsWidget::configureViewport()
 	connect(captureSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [](int seconds) {
 		FrameMonitor::setPreferredSeconds(double(seconds));
 	});
+
+	// ---- the loading cover (SPECS/OPEN_COVER_SPEC.md §3) ------------------
+	// THE SAME CAPABILITY editor.loadingCover() drives — both call
+	// loadingcover::setEnabled and both write the one persisted key
+	// (services/loadingcover.h); the verb and its test landed before this row
+	// existed (SCRIPTING_SPEC §2.3: the UI calls the capability, it does not
+	// reimplement the default).
+	auto coverLabel = new QLabel("Cover The Viewport While Loading :");
+	setSizePolicyForWidgets(coverLabel);
+	auto coverCheckbox = new QCheckBox;
+	coverCheckbox->setToolTip(
+		"Draw a grey \"Loading world…\" panel over the viewport while a world opens, "
+		"instead of showing the world as it arrives. OFF by default: a world no longer "
+		"arrives in one frame — it appears at once and fills in over the next few "
+		"(shaders finish, textures swap in for their fallbacks, the lighting settles), "
+		"with one line at the bottom of the viewport saying what is still coming. Switch "
+		"it on to hide that and see nothing until the world is on screen. Takes effect at "
+		"the next load.");
+	auto coverLayout = new QHBoxLayout;
+	coverLayout->setContentsMargins(0, 0, 0, 0);
+	coverLayout->addStretch();
+	coverLayout->addWidget(coverCheckbox);
+	StyleSheet::setStyle({ coverLabel, coverCheckbox });
+	layout->addWidget(coverLabel, 10, 0);
+	layout->addLayout(coverLayout, 10, 2);
+	coverCheckbox->setChecked(loadingcover::enabled());
+	connect(coverCheckbox, &QCheckBox::toggled, this,
+	        [](bool on) { loadingcover::setEnabled(on); });
 
 	layout->setColumnStretch(1, 50);
 	layout->setRowStretch(layout->rowCount() + 1, 100);

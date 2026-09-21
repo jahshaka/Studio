@@ -60,6 +60,24 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "reports an arm that is not there yet. A script that asserts on it renders its own frames "
           "first (`editor.frame(n)`); a person never notices, because the frames are the app's own.",
           Needs::Document },
+        { "createAsync", "project.createAsync(name, {empty, location}) -> guid",
+          "THE CREATE, WITHOUT THE WAIT (SPECS/OPEN_COVER_SPEC.md §2 C/§4). Exactly what "
+          "project.create does — the same folder, the same DB row, the same default world, the "
+          "same slices in the same order — except that it returns as soon as the create is "
+          "under way instead of pumping the event loop until the world is installed. Poll "
+          "project.openState() for completion (it covers creates and opens alike: one runner "
+          "does both), with a frame in the loop, exactly as project.openAsync's doc says.\n\n"
+          "The guid is returned immediately and is real the moment this returns — the project "
+          "row is written before the first slice runs, which is why a create can be asynchronous "
+          "and still hand back an identity. What is NOT there yet is the world: scene.nodes() "
+          "reads the old world (or none) until project.openState() says 'idle'.\n\n"
+          "project.create keeps its synchronous contract for the scripts and suites written "
+          "against it, and the New Scene dialog keeps using it; this exists for a caller that "
+          "wants to drive the frames of a create itself — which is the only way to watch a "
+          "world stream in (editor.viewportState().pending). `empty` and `location` mean exactly "
+          "what they mean on project.create, and an open or create already in flight is REFUSED "
+          "by name rather than queued.",
+          Needs::Window },
         { "open", "project.open(guidOrName) -> bool",
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
           "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
@@ -204,10 +222,15 @@ QString ProjectApi::resolveGuid(const QString &guidOrName, QString *nameOut)
     return guid;
 }
 
-QString ProjectApi::create(const QString &name, const QVariantMap &options)
+// THE BODY BOTH CREATE VERBS SHARE (OPEN_COVER_SPEC §4). `async` is the only
+// thing that differs: whether the shell drains the runner before returning.
+// `verb` is what a refusal calls itself, so the message names the verb the
+// caller actually used.
+QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
+                               bool async, const QString &verb)
 {
     if (!host.mainWindow || !host.services || !host.services->project) { fail("project: not available in this session"); return QString(); }
-    if (name.trimmed().isEmpty()) { fail("project.create: a non-empty name is required"); return QString(); }
+    if (name.trimmed().isEmpty()) { fail(QStringLiteral("%1: a non-empty name is required").arg(verb)); return QString(); }
 
     // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{emtpy: true}`
     // silently making the template is exactly the class of bug the option maps
@@ -215,8 +238,8 @@ QString ProjectApi::create(const QString &name, const QVariantMap &options)
     static const QStringList known = { QStringLiteral("empty"), QStringLiteral("location") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
         if (known.contains(it.key())) continue;
-        fail(QStringLiteral("project.create: unknown option '%1' (known: %2)")
-                 .arg(it.key(), known.join(QStringLiteral(", "))));
+        fail(QStringLiteral("%1: unknown option '%2' (known: %3)")
+                 .arg(verb, it.key(), known.join(QStringLiteral(", "))));
         return QString();
     }
     const bool empty = options.value(QStringLiteral("empty"), false).toBool();
@@ -232,9 +255,9 @@ QString ProjectApi::create(const QString &name, const QVariantMap &options)
         // THE SERVICE'S OWN REASON, by name: "the location '/nope' does not
         // exist" is the answer a caller can act on, and it is the same
         // sentence the dialog shows.
-        fail(QStringLiteral("project.create: %1")
-                 .arg(why.isEmpty() ? QStringLiteral("the database rejected the project row")
-                                    : why));
+        fail(QStringLiteral("%1: %2")
+                 .arg(verb, why.isEmpty() ? QStringLiteral("the database rejected the project row")
+                                          : why));
         return QString();
     }
 
@@ -242,9 +265,32 @@ QString ProjectApi::create(const QString &name, const QVariantMap &options)
     // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
     // stack, and that clear is a no-op while the run's macro is open.
     host.endRunUndoMacro();
-    host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder(), empty);
+    if (async) host.mainWindow->newProjectAsync(name.trimmed(), host.project->getProjectFolder(), empty);
+    else       host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder(), empty);
     host.beginRunUndoMacro();
     return guid;
+}
+
+QString ProjectApi::create(const QString &name, const QVariantMap &options)
+{
+    return createInto(name, options, false, QStringLiteral("project.create"));
+}
+
+// THE SAME CREATE, WITHOUT THE DRAIN (§2 C/§4). One body, two verbs: the only
+// difference is whether MainWindow pumps the event loop until the runner is
+// done, and a second implementation of "make a project" is exactly the class of
+// drift the option map and the shell's stage list exist to prevent.
+QString ProjectApi::createAsync(const QString &name, const QVariantMap &options)
+{
+    if (!host.mainWindow) { fail("project.createAsync: this verb needs the editor window"); return QString(); }
+    // THE SAME RULE project.openAsync follows, and the same predicate: while
+    // project.openState() reads 'opening' a second one is refused, never
+    // queued. (project.create cannot refuse — its contract is a loaded world —
+    // so it drains instead, inside MainWindow::startCreateRun.)
+    if (openInFlight())
+        return (fail("project.createAsync: an open or create is already in flight "
+                     "(project.openState() reads 'opening' until it finishes)"), QString());
+    return createInto(name, options, true, QStringLiteral("project.createAsync"));
 }
 
 bool ProjectApi::open(const QString &guidOrName)

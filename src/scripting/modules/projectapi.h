@@ -35,6 +35,9 @@ public:
     QVector<VerbInfo> verbs() const override;
 
     Q_INVOKABLE QString create(const QString &name, const QVariantMap &options = QVariantMap());
+    /// The sliced create, WITHOUT the drain — see the verb's doc.
+    Q_INVOKABLE QString createAsync(const QString &name,
+                                    const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool open(const QString &guidOrName);
     Q_INVOKABLE bool openAsync(const QString &guidOrName,
                                const QVariantMap &options = QVariantMap());
@@ -73,6 +76,9 @@ private:
     /// that reports 'idle' accepts one. It is MainWindow::isOpeningProject(),
     /// i.e. "the scene-open runner has slices left", and a session without a
     /// window has no threaded open at all.
+    /// The body both create verbs share — see the definition.
+    QString createInto(const QString &name, const QVariantMap &options,
+                       bool async, const QString &verb);
     bool openInFlight() const;
 };
 

@@ -671,6 +671,10 @@ public slots:
     void newScene(bool empty = false);
 
     void newProject(const QString&, const QString&, bool empty = false);
+    /// THE SAME CREATE, WITHOUT THE DRAIN (OPEN_COVER_SPEC §2 C/§4,
+    /// `project.createAsync`): the slices are queued and this returns at once.
+    /// The caller polls `isOpeningProject()` — one runner serves both routes.
+    void newProjectAsync(const QString&, const QString&, bool empty = false);
     /// The BLOCKING open: returns with the world open, which is the contract
     /// `project.open()` and every headless script are written against.
     ///

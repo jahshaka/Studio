@@ -9,6 +9,24 @@
 #include "services/jahlog.h"
 #include "services/loadtimeline.h"
 #include "viewport/devicelossend.h"
+
+namespace {
+/// The stage names the slow-frame line uses (OPEN_COVER_SPEC §7). The engine's
+/// own words for the five stages of a world's first lighting arm — the point of
+/// the line is that a reader can look the stage up, so these are not prettified.
+const char *giArmStageName(jahshaka::engine::GiArmStage s)
+{
+    using S = jahshaka::engine::GiArmStage;
+    switch (s) {
+    case S::ProbeScout:  return "probe scout";
+    case S::ProbeFit:    return "probe fit";
+    case S::ProbeFinish: return "probe finish";
+    case S::Field:       return "irradiance field";
+    case S::None:        break;
+    }
+    return "cascades";
+}
+}   // namespace
 /// A frame this long is a visible hitch, not a frame.
 static const double kSlowFrameMs = 100.0;
 
@@ -121,6 +139,13 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // The cure is to make the timer the FASTER pacer (framepacing.h derives
         // the interval from the panel) or to take the blocking out of the loop
         // altogether (Unlimited = vsync off).
+        // WHAT THIS FRAME IS ABOUT TO SPEND, read before it spends it
+        // (OPEN_COVER_SPEC §7, lane OPEN-COVER-2b). Two counters, so a slow
+        // frame can name its own cause instead of guessing — see the warning
+        // at the bottom of this tick. Free when nothing is arriving: the whole
+        // read is a short loop over the live scenes and two atomics.
+        jahshaka::engine::StreamingWork owedBefore;
+        if (mEngine) owedBefore = mEngine->streamingWork();
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
         // THE LIVE STATE, not a lifetime counter (owner review answer Q3): the
         // tick that draws nothing no longer increments anything at all — it
@@ -190,10 +215,61 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
             // …and into the rolling minute, which is what the readout shows.
             mSlow.add(nowMs());
             LoadTimeline::add(QStringLiteral("frame:slow"), ms);
-            qWarning("[open-profile] slow frame: %.1f ms (shader/PSO compilation is the "
-                     "usual cause on the first frame of a world)", ms);
+            // NAME THE CAUSE, DO NOT GUESS IT (OPEN_COVER_SPEC §7). This line
+            // used to say "shader/PSO compilation is the usual cause on the
+            // first frame of a world" on EVERY slow frame — and OPEN-COVER-2a
+            // measured that it is usually wrong: on Grand Showroom 2 the first
+            // frame's 1,025 ms was 673 ms of PROBE GRID and 57 of cascades,
+            // with the compiles a distant third. The frame knows which it was:
+            // a streaming frame spends exactly one stage of the lighting arm,
+            // and the shader counter says whether anything was compiled.
+            QString cause;
+            if (mEngine) {
+                const jahshaka::engine::StreamingWork after = mEngine->streamingWork();
+                const unsigned compiled = after.shadersCompiled >= owedBefore.shadersCompiled
+                                              ? after.shadersCompiled - owedBefore.shadersCompiled
+                                              : 0u;
+                // The arm's stage is named by what the frame STARTED on: the
+                // machine has already advanced by the time we read it again.
+                if (after.giStagesLeft != owedBefore.giStagesLeft &&
+                    owedBefore.giStage != jahshaka::engine::GiArmStage::None) {
+                    cause = QStringLiteral("the world's first lighting arm, stage %1")
+                                .arg(giArmStageName(owedBefore.giStage));
+                    if (compiled)
+                        cause += QStringLiteral(" (and %1 shader compilation(s))").arg(compiled);
+                } else if (after.giRebuilds != owedBefore.giRebuilds) {
+                    // A WHOLE ARM, NOT A STAGE (the Fable read, item 4). A
+                    // `Complete` frame — a scripted step, a capture, the first
+                    // frame after an explicit `world.refreshGi()` — builds the
+                    // arm end to end and never touches the stage machine, so
+                    // the stage counter above cannot see it and the old
+                    // sentence called the most expensive frame in the engine
+                    // "no first-time work".
+                    cause = QStringLiteral("a WHOLE lighting-arm rebuild (%1 in this frame, "
+                                           "not staged)")
+                                .arg(after.giRebuilds - owedBefore.giRebuilds);
+                    if (compiled)
+                        cause += QStringLiteral(" (and %1 shader compilation(s))").arg(compiled);
+                } else if (compiled) {
+                    cause = QStringLiteral("%1 shader/PSO compilation(s) in this frame")
+                                .arg(compiled);
+                }
+            }
+            if (cause.isEmpty())
+                // NARROWED, and it says which things it looked at: a probe
+                // re-capture, a cascade flush and the shadow atlas are all
+                // real first-time-ish work this counter pair cannot see.
+                cause = QStringLiteral("no lighting-arm work and no shader compilation "
+                                       "in this frame");
+            qWarning("[open-profile] slow frame: %.1f ms (%s)", ms, qUtf8Printable(cause));
         }
     });
+}
+
+void EngineRenderDriver::resetWorst()
+{
+    mStats.worstMs = 0.0;
+    mStats.slowFrames = 0;
 }
 
 EngineRenderDriver::Stats EngineRenderDriver::stats() const

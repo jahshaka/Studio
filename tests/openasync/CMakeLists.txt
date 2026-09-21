@@ -10,7 +10,13 @@
 #   * the synchronous project.open still opens the same world unchanged,
 #   * EVERY shipped sample, opened through the synchronous verb, parses no
 #     model on the UI thread (app.openStats(); OPEN-ASSIMP-1),
-#   * quitting with an open in flight terminates the process cleanly.
+#   * quitting with an open in flight terminates the process cleanly,
+#   * AND (OPEN-COVER-2b) THE STREAMING ARM: with the loading cover off — the
+#     default — a create blocks no frame over 300 ms and draws no cover, the
+#     Showroom 2 open's worst frame is printed against the same 300 and
+#     asserted at 600 until PCC-BUDGET-1 lands, the watchdog reports no stall
+#     at its default 2,000 ms, app.openTimings() carries the CREATE's ledger,
+#     and project.createAsync hands back a guid before the world is installed.
 find_package(Qt6 REQUIRED COMPONENTS Core Network)
 add_executable(test_open_responsive test_open_responsive.cpp)
 set_target_properties(test_open_responsive PROPERTIES CXX_STANDARD 17
@@ -32,6 +38,11 @@ add_test(NAME open.responsive COMMAND test_open_responsive
 # 37-60 s inside a -j2 scoped gate. Six times the WORST of those is 360 s, above
 # the 300 s floor, so the floor is not enough for the work added — 400 is the
 # next value this tree uses.
+#
+# RE-MEASURED with OPEN-COVER-2b's streaming arm in (2026-09-21, this box): 66 s
+# solo on a cold-ish home, 38 s inside a -j2 scoped gate on a warm one. The arm
+# adds two creates, an asynchronous create and one Showroom 2 open, each with
+# its own control measurement and settle — about 45 s solo. 400 still stands.
 set_tests_properties(open.responsive PROPERTIES
     ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
     TIMEOUT 400 LABELS "openasync")

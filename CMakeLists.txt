@@ -270,6 +270,7 @@ set(SRCS
     src/services/shippedassets.cpp
     src/services/engineerrorpump.cpp
     src/services/framepacing.cpp
+    src/services/loadingcover.cpp
     src/services/outlinesettings.cpp
     src/services/nodenaming.cpp
     src/services/ogresamples.cpp

@@ -228,7 +228,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "a zero there means the frame loop is not running, not that the renderer is happy. Pass "
           "true to clear the record after reading it.",
           Needs::Document },
-        { "frameStats", "app.frameStats() -> {running, intervalMs, ticks, rendered, drawing, fpsDrawn, "
+        { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, ticks, rendered, drawing, fpsDrawn, "
                         "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews}",
           "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
           "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
@@ -250,7 +250,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "is how long the frame's work actually took, averaged over the last ~60 rendered ticks; "
           "`worstMs` is the worst single tick since startup and `slowFrames` counts the ticks that "
           "crossed the 100 ms hitch threshold (the ones that also log `[open-profile] slow frame`). "
-          "Read app.renderStats() beside this for the renderer's own view of the same frames.",
+          "Read app.renderStats() beside this for the renderer's own view of the same frames. `{reset:true}` reads the numbers and THEN forgets the two HIGH-WATER marks — `worstMs` and `slowFrames` — leaving the rolling averages, the tick counts and the windows alone. A running maximum answers \"has this process ever hitched\", which is not what a caller measuring ONE open or ONE create is asking: a boot's own compile frame (2 s on a cold cache) would swamp every reading taken after it for the life of the session. Read first, then forget — exactly app.openStats's rule.",
           Needs::Document },
         { "pacing", "app.pacing(mode?) -> {mode, modes, intervalMs, refreshHz, vsync, running}",
           "How fast the ONE render loop is allowed to tick, and whether the frame waits for the "
@@ -1230,13 +1230,17 @@ QVariantMap AppApi::scriptPolicy(const QString &mode)
     return out;
 }
 
-QVariantMap AppApi::frameStats()
+QVariantMap AppApi::frameStats(const QVariantMap &options)
 {
     // No engine guard, same reasoning as engineErrors: "the loop is not running"
     // is one of the answers this verb exists to give, so it must be readable
     // when there is no engine at all.
     QVariantMap out;
     EngineRenderDriver *driver = EngineHost::instance().driver();
+    // READ FIRST, THEN FORGET (`{reset:true}`, lane OPEN-COVER-2b): a caller
+    // measuring one open wants the numbers of the window it just closed, and
+    // the same call arms the next window — exactly app.openStats's rule.
+    const bool reset = options.value(QStringLiteral("reset")).toBool();
     const EngineRenderDriver::Stats s = driver ? driver->stats() : EngineRenderDriver::Stats{};
     out.insert("running", driver ? driver->isRunning() : false);
     out.insert("intervalMs", driver ? driver->intervalMs() : 0);
@@ -1252,6 +1256,7 @@ QVariantMap AppApi::frameStats()
     out.insert("slowFrames", QVariant::fromValue(s.slowFrames));
     auto engine = EngineHost::instance().engine();
     out.insert("enabledViews", engine ? engine->hasEnabledViews() : false);
+    if (reset && driver) driver->resetWorst();
     return out;
 }
 

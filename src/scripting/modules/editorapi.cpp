@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "services/selectioncost.h"
 #include "viewport/gizmomode.h"
 #include "viewport/ieditorviewport.h"
+#include "services/loadingcover.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/simulationclock.h"
 #include "viewport/previewframing.h"
@@ -647,9 +648,28 @@ QVector<VerbInfo> EditorApi::verbs() const
           "default install\" was true for as long as it was because nothing could ask. Read-only; "
           "the capabilities behind the buttons are their own verbs.",
           Needs::Window },
-        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen, engineScene, windowX, windowY, windowW, windowH, heldKeys, flying}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `windowX`/`windowY`/`windowW`/`windowH` are where the viewport WIDGET sits inside its top-level window, in window pixels — the conversion a suite synthesising a real click needs, since every pixel-taking verb here (gizmoHitTest, dropTargetAt, dropPointAt) speaks the viewport's coordinates and an X click speaks the window's; all four are 0 when the viewport has no window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it.",
+        { "viewportState", "editor.viewportState() -> {state, streaming, pending, cover, loadingCover, indicator, coversPresented, framesPresented, width, height, offscreen, engineScene, windowX, windowY, windowW, windowH, heldKeys, flying}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window. `engineScene` is whether the ONE engine scene the editor and the Player both draw exists yet: it is built when a page that draws it asks (the editor viewport being shown, the Player page being entered, a VR session beginning) and by nothing else, so this is how a caller tells \"the Player built it\" from \"it was already there\". `windowX`/`windowY`/`windowW`/`windowH` are where the viewport WIDGET sits inside its top-level window, in window pixels — the conversion a suite synthesising a real click needs, since every pixel-taking verb here (gizmoHitTest, dropTargetAt, dropPointAt) speaks the viewport's coordinates and an X click speaks the window's; all four are 0 when the viewport has no window. `heldKeys` is what the editor fly believes is held down, by name (\"Left\", \"PageUp\", \"Shift\" …), sorted, and `flying` is true while the fly keys are armed (the right mouse button held). Those two exist because a key STUCK in that set is otherwise invisible: the fly reads the set only while the right button is down, and Left and Right in it together cancel to no movement at all — which reads as \"the arrows are dead\" with nothing in any log to say why (ledger §356). The set is dropped whenever the right button goes down or up, so a stuck key can no longer outlive the gesture that reads it. `streaming` and `pending` are the OTHER question — not \"is a world bound\" but \"is the picture still filling in\" (SPECS/OPEN_COVER_SPEC.md §2.1): with the loading cover off a world appears at once and streams in over the frames that follow, and `pending` is what is still coming — `{shaders, textures, gi}`, with `streaming` true while any of them is non-zero. `gi` is stages of the world's FIRST lighting arm still to run (4 when one is staged, then 3, 2, 1, 0) and `textures` is materials still drawing a fallback because their pixels have not landed; both are read straight off the engine. `shaders` IS NOT A QUEUE and cannot be — a pipeline state object is generated when a renderable is first DRAWN, so how many are left is not a number anything in this process knows — it is how many the last DRIVER frame compiled, which falls to zero the moment a frame draws without compiling anything. Beside them `shadersThisLoad` and `texturesThisLoad` are the progress figures the on-screen indicator line shows; there is deliberately no denominator for the shaders, because the only number available was the PREVIOUS SESSION's whole total (boot included) and it reads as progress through THIS load, which it is not. `cover` is which cover is on screen right now (\"none\", \"loading\", \"noscene\") — and note that it is 'none' for a load in place too, which is a DEFECT and not a choice: a viewport with no world bound presents nothing at all, so neither the world nor a cover can reach the screen and the PREVIOUS world's last frame stays there for the length of the load (STALE-VIEW-1) — and `loadingCover` is the preference behind it (editor.loadingCover), and `indicator` is the line the viewport is drawing at the bottom of the frame while a world streams in (\"Loading Showroom 2 - shaders 12/45  textures 3/17  lighting...\" — ASCII only, because the overlay font has no other glyphs), empty when it is drawing none. `coversPresented` counts the covers this viewport has actually PRESENTED, ever: `cover` is an instant and a warm load is over before a caller outside the process gets a second reading in, so \"was THIS load covered\" is a difference of this across the load — which is the only way to see, after the fact, that a load in place was covered even with the preference off.",
           Needs::Document },
+        { "loadingCover", "editor.loadingCover([on]) -> bool",
+          "THE LOADING COVER, as a preference (SPECS/OPEN_COVER_SPEC.md §3). The cover is the "
+          "flat grey panel with \"Loading world…\" on it that the engine draws over the "
+          "viewport from the moment a world starts loading until its second present. It is "
+          "OFF by default: since OPEN-COVER-2a a world no longer arrives in one frame — the "
+          "create and the open run one slice per event-loop turn and the first lighting arm is "
+          "built one stage per frame of a world the user can already see — so the panel now "
+          "hides a world that is there. With it off the world appears at once and streams in "
+          "behind one line at the bottom of the viewport (editor.viewportState().pending says "
+          "what that line is counting). Switched ON, a load is covered exactly as it was: the "
+          "panel from the start of the load until two frames of the new world have presented, "
+          "and then the same stream-in. Nothing else about a load changes with this switch — "
+          "the slices, the pace rule and the present counting are the same either way, and "
+          "editor.viewportState().state reads the same \"loading\"/\"presenting\" in both. "
+          "Read ONCE per load, so toggling it while a world is arriving takes effect at the "
+          "NEXT one rather than making the panel flicker. The Player has no cover at all and "
+          "ignores it, and \"No world open\" is not a load and always shows. ONE THING IT CANNOT DO, said here because it is measured and surprising: a world opened while the editor page is already showing one leaves the PREVIOUS world's last frame on screen for the length of the load whatever this preference says. A viewport with no world bound PRESENTS NOTHING (the engine destroys the view's workspace with its scene), so after the teardown no cover can be put there either — that is also why \"No world open\" is never actually drawn. The fix is engine-side (a scene-less view drawing its own background, STALE-VIEW-1). Every Desktop route — every create, every tile — is unaffected: its viewport is hidden for the load and the frames it reveals are the new world's. With no argument "
+          "this reads; with one it writes and returns the new value.",
+          Needs::Window },
         { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes, giLightRefreshesAtRest, movableNodes, nodesVisited, materialBuilds, staticNodes, staticRepromotions, dirtyNodes, evictedNodes, verifierVisits, verifierCatches, pushes, walkMode}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
@@ -2658,6 +2678,18 @@ QVariantMap EditorApi::viewportState()
         out.insert("height", 0);
         out.insert("offscreen", true);
         out.insert("engineScene", false);
+        // THE SHAPE IS THE CONTRACT: a caller reading `.pending.gi` must not
+        // get an undefined in the session that has no viewport at all.
+        out.insert("streaming", false);
+        out.insert("pending", QVariantMap{ { QStringLiteral("shaders"), 0u },
+                                           { QStringLiteral("textures"), 0u },
+                                           { QStringLiteral("gi"), 0u },
+                                           { QStringLiteral("shadersThisLoad"), 0u },
+                                           { QStringLiteral("texturesThisLoad"), 0u } });
+        out.insert("cover", QStringLiteral("none"));
+        out.insert("loadingCover", loadingcover::enabled());
+        out.insert("indicator", QString());
+        out.insert("coversPresented", 0);
         return out;
     }
     // DOES THE ONE ENGINE SCENE EXIST YET? (SMOKE-FIX-1's fix round.) It is
@@ -2695,7 +2727,50 @@ QVariantMap EditorApi::viewportState()
     out.insert("windowY", inWindow.y());
     out.insert("windowW", inWindow.width());
     out.insert("windowH", inWindow.height());
+    // ---- what the world still owes while it streams in ------------------
+    // (SPECS/OPEN_COVER_SPEC.md §2.1/§4, lane OPEN-COVER-2b.) `state` above is
+    // deliberately UNCHANGED — it is the presentation state machine and its
+    // contract is scripting.e2e.presentation_state's — and these are the
+    // separate question "is the picture still filling in".
+    //
+    // `pending.shaders` IS NOT A QUEUE and cannot be: a pipeline state object
+    // is generated when a renderable is first DRAWN, so how many are left is
+    // not a number anything in this process knows. It is how many the last
+    // DRIVER frame compiled — a rate that falls to zero the moment a frame
+    // draws without compiling anything, which is the moment the picture stops
+    // changing for that reason. The two `*ThisLoad` figures beside it are the
+    // progress pair the indicator line shows.
+    const IEditorViewport::StreamingPending pending = host.viewport->streamingPending();
+    out.insert("streaming", pending.any());
+    out.insert("pending", QVariantMap{
+                              { QStringLiteral("shaders"), pending.shaders },
+                              { QStringLiteral("textures"), pending.textures },
+                              { QStringLiteral("gi"), pending.gi },
+                              { QStringLiteral("shadersThisLoad"), pending.shadersThisLoad },
+                              { QStringLiteral("texturesThisLoad"), pending.texturesThisLoad },
+                          });
+    // WHICH COVER IS ON SCREEN. The loading cover is a preference and a
+    // preference whose whole job is drawing a panel needs a reading, or its
+    // test has to photograph the screen.
+    out.insert("cover", host.viewport->coverState());
+    out.insert("loadingCover", loadingcover::enabled());
+    out.insert("indicator", host.viewport->loadingIndicator());
+    out.insert("coversPresented", QVariant::fromValue(host.viewport->coversPresented()));
     return out;
+}
+
+bool EditorApi::loadingCover(const QVariant &on)
+{
+    if (!host.mainWindow) {
+        fail("editor.loadingCover: this verb needs the editor window");
+        return false;
+    }
+    // ONE CAPABILITY (services/loadingcover.h): this verb, the Preferences row
+    // and the viewport all read and write the same key through the same two
+    // functions — the page does not reimplement the default and the viewport
+    // does not read QSettings itself.
+    if (on.isValid()) loadingcover::setEnabled(on.toBool());
+    return loadingcover::enabled();
 }
 
 QVariantMap EditorApi::mirrorStats()

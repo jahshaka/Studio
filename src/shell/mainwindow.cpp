@@ -5997,6 +5997,17 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath,
     waitForOpen();
 }
 
+// ...AND THE SAME CREATE WITHOUT THE WAIT (§2 C/§4, `project.createAsync`).
+// The ONE difference is the drain: the slices are the same slices, queued on
+// the same runner, and `isOpeningProject()` — which `project.openState()`
+// reads — covers a create exactly as it covers an open. It exists because a
+// caller that wants to WATCH a world arrive has to own the frames between the
+// slices, and `newProject` spends them itself inside `waitForOpen`.
+void MainWindow::newProjectAsync(const QString &filename, const QString &projectPath, bool empty)
+{
+    startCreateRun(filename, projectPath, empty);
+}
+
 void MainWindow::startCreateRun(const QString &filename, const QString &projectPath, bool empty)
 {
     if (projectService->isSceneOpen()) closeProject();

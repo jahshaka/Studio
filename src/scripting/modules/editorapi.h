@@ -116,6 +116,9 @@ public:
     Q_INVOKABLE bool dragAsset(const QString &guid, double x, double y,
                                const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap viewportState();
+    /// The loading cover, as a preference (services/loadingcover.h). No
+    /// argument reads; an argument writes and returns the new value.
+    Q_INVOKABLE bool loadingCover(const QVariant &on = QVariant());
     Q_INVOKABLE QVariantList toolbar();
     Q_INVOKABLE QVariantMap mirrorStats();
     /// THE SCENE-ERROR AREA (services/sceneissues.h). Document verbs: the store
