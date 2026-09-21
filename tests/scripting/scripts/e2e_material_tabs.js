@@ -206,9 +206,11 @@ assert(materials.activeTab().guid === minted.guid, "...and the new material is t
 var presetStill = materials.tabs().filter(function (t) { return t.guid === presetTab.guid; });
 assert(presetStill.length === 1 && presetStill[0].master === presetTab.guid,
        "the preset tab is still open on the preset — New took no tab over");
-assert(materials.masterOf(presetTab.guid) === presetTab.guid
-           && materials.members(presetTab.guid).length
-              === materials.members("Gold PBR").length,
+// AND THE PRESET ITSELF WAS NOT WRITTEN TO. Asked of the GRAPH, because a
+// preset nobody has used has no library row at all (seeding is on first USE):
+// it still reads as the shipped material, on its own reserved guid.
+var presetGraph = materials.loadGraph(presetTab.guid);
+assert(presetGraph.presetMaster === presetTab.guid && presetGraph.nodes >= 2,
        "and the preset itself was not written to");
 materials.closeTab(presetTab.guid);
 materials.closeTab(minted.guid);

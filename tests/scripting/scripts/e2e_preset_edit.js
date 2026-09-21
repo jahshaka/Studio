@@ -121,6 +121,18 @@ assert(Math.abs(material.get(cubeA).roughness - 0.13) < 1e-3,
 assert(materialRows().length === rowsAfterSeed + 2,
        "…and the save minted nothing beyond the plain material above");
 
+// ---- 3b. AND THE PRESET'S TILE NOW MEANS THE PROJECT'S COPY -------------
+//
+// Dropping the shipped tile again must not put a SECOND "Wood PBR" in the
+// tray beside the user's own, and must not paint the mesh with a picture they
+// have already changed.
+var cubeA2 = scene.addPrimitive("Cube");
+assert(material.apply(cubeA2, "Wood PBR") === true, "the preset applied again, by name");
+assert(projectMaterials().length === 1 && projectMaterials()[0] === copy,
+       "the project still holds ONE material — its own copy, not the master back again");
+assert(Math.abs(material.get(cubeA2).roughness - 0.13) < 1e-3,
+       "…and the new cube wears the EDITED picture (" + material.get(cubeA2).roughness + ")");
+
 // ---- 4. the master is untouched, and so is everybody else ---------------
 var projB = project.create("Preset Edit B " + Date.now());
 var cubeB = scene.addPrimitive("Cube");

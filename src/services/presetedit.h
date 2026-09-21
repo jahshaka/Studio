@@ -73,6 +73,13 @@ QString masterOf(Database *db, const QString &guid);
 /// a per-frame path.
 QStringList copiesOf(Database *db, const QString &masterGuid);
 
+/// THIS PROJECT'S OWN COPY of the shipped preset `masterGuid` — the one it
+/// PINS — or an empty string. It is what "Wood PBR" means inside a project
+/// that has edited it, so the apply and the hover preview resolve a preset
+/// through here: dropping the shipped tile again must not put a SECOND "Wood
+/// PBR" in the project beside the user's own.
+QString projectCopyOf(Database *db, Project *project, const QString &masterGuid);
+
 /// WHY AN EDIT OF `guid` CANNOT HAPPEN AT ALL, in the user's words, or an
 /// empty string when it can. Today there is exactly one reason: a shipped
 /// preset with no project open.

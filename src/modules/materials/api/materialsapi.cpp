@@ -402,14 +402,24 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
 {
     const QString wanted = guidOrName.trimmed();
     if (wanted.isEmpty()) return QString();
+    // A ROW BY GUID FIRST — the cheap, common case, and it must stay cheap:
+    // every open, every edit and every masterOf comes through here. A MATERIAL,
+    // not any row that answers to the guid (fix round F4): a texture's or a
+    // model's guid would be carried all the way to the page, where the read
+    // finds no graph and the open is refused with a message about a master node.
+    if (host.db) {
+        const auto row = host.db->fetchAsset(wanted);
+        if (!row.guid.isEmpty())
+            return row.type == static_cast<int>(ModelTypes::Material) ? wanted : QString();
+    }
     // THE OPEN PROJECT'S OWN MATERIAL WINS ON A NAME (PRESET-EDIT-1). A
     // project's copy of a preset keeps the PRESET'S NAME — the user sees one
     // material — so in a project that has edited "Wood PBR", that name means
-    // the project's copy and not the shipped master. Asked first, and only of
-    // the rows this project PINS, so nothing changes for a project that has
-    // not copied anything. (Everywhere else a preset name still means the
-    // preset: `material.apply('Wood PBR')` is the shipped one, addressed by
-    // the drag payload's guid in every gesture the user actually makes.)
+    // the project's copy and not the shipped master. Only the rows this project
+    // PINS, and only ones that record a master, so nothing changes for a project
+    // that has copied nothing. (Everywhere else a preset name still means the
+    // preset: `material.apply('Wood PBR')` is the shipped one, and every gesture
+    // the user actually makes carries a guid in its drag payload.)
     if (host.db && host.isProjectOpen()) {
         const QString projectGuid = host.project->getProjectGuid();
         for (const auto &asset : host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView)) {
@@ -419,17 +429,11 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
             if (host.db->isAssetPinnedBy(projectGuid, asset.guid)) return asset.guid;
         }
     }
-    // A SHIPPED PRESET BY NAME OR BY ITS RESERVED GUID (the drawer's own two
-    // spellings, and what every other materials.* verb accepts).
+    // A SHIPPED PRESET BY NAME, or by a reserved guid whose row has not been
+    // seeded yet (the drawer's own two spellings, and what every other
+    // materials.* verb accepts).
     if (MaterialPresetAssets::isPreset(wanted)) return MaterialPresetAssets::guidFor(wanted);
     if (!host.db) return QString();
-    // A MATERIAL, not any row that answers to the guid (fix round F4): a
-    // texture's or a model's guid would be carried all the way to the page,
-    // where the read finds no graph and the open is refused with a message
-    // about a master node.
-    const auto row = host.db->fetchAsset(wanted);
-    if (!row.guid.isEmpty())
-        return row.type == static_cast<int>(ModelTypes::Material) ? wanted : QString();
     // ...or a library material's NAME, which is what the user calls it.
     const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
     for (const auto &asset : assets) {

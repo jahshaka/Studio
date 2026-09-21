@@ -69,6 +69,16 @@ QStringList copiesOf(Database *db, const QString &masterGuid)
     return out;
 }
 
+QString projectCopyOf(Database *db, Project *project, const QString &masterGuid)
+{
+    if (!db || !project || project->getProjectGuid().isEmpty()) return QString();
+    if (MaterialBundle::shippedPresetName(masterGuid).isEmpty()) return QString();
+    const QString projectGuid = project->getProjectGuid();
+    for (const QString &candidate : copiesOf(db, masterGuid))
+        if (db->isAssetPinnedBy(projectGuid, candidate)) return candidate;
+    return QString();
+}
+
 QString refusal(Database *db, Project *project, const QString &guid)
 {
     Q_UNUSED(db);
