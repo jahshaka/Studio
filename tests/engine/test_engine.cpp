@@ -4429,12 +4429,13 @@ void hud_overlay_draws_where_it_says_when_allowed() {
 /// A VIEW WITH NO SCENE BOUND CLEARS ITS BACKGROUND AND STILL DRAWS ITS PANEL
 /// (lane STALE-VIEW-1; chain::buildBlank).
 ///
-/// THE DEFECT, measured on the rig before this existed: `detachScene()` destroyed
-/// the view's workspace, so a view with no scene presented NOTHING and the X
-/// server kept the last frame it was given — opening a world while the editor
-/// already showed one left the PREVIOUS world on screen (mean |difference| from
-/// the frame before the open: 0.01-0.10 per byte, i.e. the same picture), and
-/// the "No world open" panel, raised by every close, never reached a pixel.
+/// THE DEFECT, measured on the rig before this existed (spikes/stale-view-1/):
+/// `detachScene()` destroyed the view's workspace, so a view with no scene
+/// presented NOTHING and the X server kept the last frame it was given. In a
+/// load IN PLACE that is the one to two frames between the teardown and the
+/// moment the panel rebuild takes the window off screen; the bigger half is the
+/// other defect with the same cause — the "No world open" panel, raised by
+/// every close, never reached a pixel.
 ///
 /// Three assertions, in the order the bug happens: the old world's pixels are
 /// GONE the frame after the scene is detached, the background is what replaced
@@ -4494,8 +4495,41 @@ void a_scene_less_view_clears_and_still_draws_its_panel() {
               "the panel's captions must actually render on a scene-less view: %zu px",
               titlePixels);
 
-    // ---- and back: binding a scene replaces the clear with the world --------
+    // ---- AND AT MSAA, which is reasoned everywhere else and pinned here ----
+    // The clear-only chain's clear STORES its samples and its overlay pass
+    // carries the resolve (kMultiWorkspaceStore) — the same split, and the same
+    // trap, as the scene chain's two passes: a plain Store that never resolves
+    // leaves the whole frame black, and a discarding resolve on the clear
+    // leaves the overlay drawing into samples nobody reads. Neither is visible
+    // at 1x, which is why this arm exists.
+    for (const unsigned samples : { 2u, 4u }) {
+        v->setSampleCount(samples);
+        render(fx.e, 3);
+        const unsigned achieved = v->sampleCount();
+        Image aa; REQUIRE(v->readPixels(aa));
+        CHECK_MSG(near(centre(aa), noScene.coverFill, 6),
+                  "%ux (achieved %u): the panel must survive the resolve: %d %d %d",
+                  samples, achieved, centre(aa).r, centre(aa).g, centre(aa).b);
+        CHECK_MSG(near(px(aa, 4, aa.height - 4), noScene.coverFill, 6),
+                  "%ux (achieved %u): and so must the fill under it: %d %d %d",
+                  samples, achieved, px(aa, 4, aa.height - 4).r,
+                  px(aa, 4, aa.height - 4).g, px(aa, 4, aa.height - 4).b);
+    }
+    // ...and the background alone at the highest count, with the panel down:
+    // the clear IS the picture there, so a lost resolve is a black frame.
     v->setOverlay(ViewOverlayDesc());
+    render(fx.e, 3); Image aaBare; REQUIRE(v->readPixels(aaBare));
+    size_t aaNotBackground = 0;
+    for (unsigned y = 0; y < aaBare.height; ++y)
+        for (unsigned x = 0; x < aaBare.width; ++x)
+            if (!near(px(aaBare, x, y), kBlue, 4)) ++aaNotBackground;
+    CHECK_MSG(aaNotBackground == 0,
+              "at %ux every pixel must still be the view's background: %zu of %u are not",
+              v->sampleCount(), aaNotBackground, aaBare.width * aaBare.height);
+    v->setSampleCount(1);
+    render(fx.e, 2);
+
+    // ---- and back: binding a scene replaces the clear with the world --------
     Scene *s2 = fx.scene("blank-scene-2"); REQUIRE(s2);
     v->setScene(s2);
     populate(s2, kOrange);
