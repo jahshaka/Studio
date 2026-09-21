@@ -18,6 +18,7 @@
 //  * THE SILHOUETTE comes from an EMISSIVE GREEN subject, not from "the dark
 //    pixels": the studio has a dim floor half, so darkness is not a subject.
 //    Green against a neutral environment is separable at any exposure.
+#include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QColor>
@@ -331,6 +332,77 @@ int main(int argc, char **argv)
                 }
             std::printf("    thumbnail chrome: max channel %d\n", maxChannel);
             CHECK(maxChannel < 250, "the chrome thumbnail does not burn out either");
+
+            // THE TILE SHOWS THE SOFTBOXES TOO (PREVIEWENV-2 item b). The dock
+            // has had this assertion since MATPREVIEW-ENV-1 — two bright blobs,
+            // one per softbox, on either side of the sphere's upper half, which
+            // is the thing a single point light cannot do and the thing the
+            // owner's "burnt-out lights and weird mirrored reflections" was
+            // about. The TILE had only 'it does not clip': a tile lit by one
+            // lamp, or by none, would have passed everything above.
+            long tileLeft = 0, tileRight = 0;
+            for (int y = 0; y < chrome.height() / 2; ++y)
+                for (int x = 0; x < chrome.width(); ++x) {
+                    if (!mask[size_t(y) * chrome.width() + x]) continue;
+                    if (luma(chrome.pixel(x, y)) < 200) continue;
+                    (x < chrome.width() / 2 ? tileLeft : tileRight) += 1;
+                }
+            std::printf("    thumbnail highlights: %ld bright px left of centre, %ld right\n",
+                        tileLeft, tileRight);
+            CHECK(tileLeft > 5 && tileRight > 5,
+                  "both softboxes show as bright reflections in the TILE's sphere too");
+
+            // ---- 8. WHAT A TILE COSTS, TILE BY TILE (PREVIEWENV-2 item a) ---
+            //
+            // Every thumbnail used to re-upload the 512x256 studio equirect and
+            // make the engine re-capture and re-convolve it, because the render
+            // ended with `mirror->setSource(nullptr)` — which drops every cached
+            // texture and pushes setSky(SkyDesc()) — and the next tile bound a
+            // brand new document. The sky is the SAME sky for every preview
+            // surface in the process (previewenv::apply binds one session
+            // texture), so that was one upload, one capture and one convolution
+            // per tile for a picture that never changes.
+            //
+            // Printed per tile rather than asserted: this is a cost measurement
+            // on a machine, and a machine-speed assertion is not a contract.
+            // What IS asserted is that the tiles are IDENTICAL — the first one
+            // and the eighth, and two different materials interleaved — because
+            // the saving comes from keeping engine state across renders and the
+            // one thing that must not change is the picture.
+            {
+                const int kTiles = 8;
+                QImage first, firstAlt;
+                bool same = true, sameAlt = true;
+                for (int i = 0; i < kTiles; ++i) {
+                    const bool alt = (i % 2) != 0;
+                    QElapsedTimer tileTimer;
+                    tileTimer.start();
+                    const QImage tile = loan->renderMaterial(
+                        alt ? pbr(QColor(200, 120, 40), 0.0f, 0.4f)
+                            : pbr(QColor(118, 118, 118), 0.0f, 1.0f), QSize(128, 128));
+                    const double ms = double(tileTimer.nsecsElapsed()) / 1e6;
+                    // One line per tile: this binary shares stdout with Ogre's
+                    // own log, which interleaves with a partial line.
+                    std::printf("    tile %d (%s): %.2f ms\n", i + 1, alt ? "orange" : "grey", ms);
+                    if (alt) {
+                        if (firstAlt.isNull()) firstAlt = tile;
+                        else if (tile != firstAlt) sameAlt = false;
+                    } else {
+                        if (first.isNull()) first = tile;
+                        else if (tile != first) same = false;
+                    }
+                }
+                // THE PICTURE'S OWN FINGERPRINT, so a change to how the tiles
+                // are rendered can be A/B'd against this line by hand.
+                if (!first.isNull())
+                    std::printf("    tile sha256 (the 18%% grey tile): %s\n",
+                                QCryptographicHash::hash(
+                                    QByteArray(reinterpret_cast<const char *>(first.constBits()),
+                                               int(first.sizeInBytes())),
+                                    QCryptographicHash::Sha256).toHex().constData());
+                CHECK(!first.isNull() && same && !firstAlt.isNull() && sameAlt,
+                      "eight tiles of two interleaved materials are byte-identical per material");
+            }
         }
     }
     EngineThumbnailRenderer::shutdown();

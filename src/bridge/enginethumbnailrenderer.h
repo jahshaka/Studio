@@ -120,8 +120,10 @@ public:
 
 protected:
     void configureScene(jahshaka::engine::Scene *scene) override;
-    /// Nothing: the mirror's source is a THROWAWAY document, set per request
-    /// and cleared again so nothing leaks between thumbnails.
+    /// Nothing: the mirror's source is the ONE studio document, bound once and
+    /// emptied of its subject after every render (clearSubject), so nothing
+    /// leaks between thumbnails and the studio's own sky is not re-uploaded
+    /// for each one.
     void configureMirror(SceneMirror *mirror) override { (void)mirror; }
     void releaseSubject(bool sceneAlive) override;
 
@@ -132,16 +134,25 @@ private:
 
     bool ensureResources(QSize size);
     QImage render(iris::ScenePtr document, iris::CameraNodePtr camera, QSize size);
-    /// The preview scene every thumbnail shares: the ONE studio environment
-    /// (bridge/previewenvironment.h) and the camera. No light node — the
+    /// THE preview document, built on first use and kept for the session: the
+    /// ONE studio environment (bridge/previewenvironment.h), and a fresh
+    /// camera per request (framing is the subject's). No light node — the
     /// environment is the lighting.
-    static iris::ScenePtr buildPreviewScene(iris::CameraNodePtr &cameraOut);
+    ///
+    /// It is kept because a document SWAP is what made every tile re-upload
+    /// the studio sky: `SceneMirror::setSource` drops every cached texture and
+    /// pushes an empty sky, so binding a new document per request meant one
+    /// 512x256 upload, one environment capture and one convolution per tile
+    /// for a sky that never changes (PREVIEWENV-2 item a).
+    iris::ScenePtr studioDocument(iris::CameraNodePtr &cameraOut);
     /// Records `why`, logs it, and returns a null image (the one failure exit).
     QImage failed(const QString &why);
-    /// Drop everything the last borrower put in the scene. Runs when a loan
-    /// ends, so nothing of one caller's subject is alive for the next one.
+    /// Drop everything the last borrower put in the scene — the SUBJECT, not
+    /// the studio. Runs when a loan ends, so nothing of one caller's subject
+    /// is alive for the next one, and after every render for the same reason.
     void clearSubject();
 
+    iris::ScenePtr mStudio;  // the one preview document (studioDocument)
     iris::MeshPtr mSphere;   // preview sphere, loaded once
     QString mLastFailure;
 };

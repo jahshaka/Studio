@@ -448,6 +448,7 @@ set(SRCS
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
     src/services/thumbnailrebuild.cpp 
+    src/services/materialtile.cpp
     src/services/thumbnailstop.cpp 
     src/bridge/enginepreviewscene.cpp
     src/bridge/previewenvironment.cpp

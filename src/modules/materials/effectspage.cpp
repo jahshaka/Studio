@@ -61,6 +61,7 @@ For more information see the LICENSE file
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/sceneissues.h"
+#include "services/materialtile.h"
 #include "services/thumbnailrebuild.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
@@ -1182,7 +1183,8 @@ void EffectsPage::duplicateShader(QString guid)
 	// R9(a)): a duplicate inherits the source row's thumbnail, which is the
 	// wrong picture the moment that one was a preset's shipped icon. Before
 	// the drawers refill, so they show the render and not the inherited tile.
-	thumbrebuild::rebuildOne(dataBase, mProject, copy, EngineHost::instance().engine());
+	// (services/materialtile.h — one implementation, and a refusal is logged.)
+	materialtile::mint(dataBase, mProject, copy, "the module's Duplicate");
 	// THE DRAWERS FIRST, THEN THE OPEN (fix round F1): `loadGraph` finds its
 	// tile in the widgets, so opening the copy before the Custom list is
 	// refilled used to dereference a tile that did not exist.
@@ -2832,10 +2834,8 @@ void EffectsPage::configureConnections()
 		const QString copy = MaterialPresetAssets::customise(presetGuid, QString(),
 		                                                     dataBase, mProject, &error);
 		if (copy.isEmpty()) { irisLog("Customise: " + error); return; }
-		// THE TILE IS A RENDER OF THE COPY (owner review R9(a)): a customised
-		// preset used to keep the shipped preset's ICON, which is a picture of
-		// the preset and not a sphere for silver or glass.
-		thumbrebuild::rebuildOne(dataBase, mProject, copy, EngineHost::instance().engine());
+		// (The copy's TILE is a render of the copy — `customise` does it, for
+		// this door and the other two; PREVIEWENV-2 item c.)
 		refreshShaderGraph();
 		// It is the user's material now: show them where it landed. In a
 		// project it is the Project drawer (Customise pins it), otherwise
