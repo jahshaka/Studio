@@ -1018,10 +1018,18 @@ add_test(NAME gi.gather_spike COMMAND test_gi_gather_spike
 set_tests_properties(gi.gather_spike PROPERTIES TIMEOUT 600 LABELS "engine")
 
 # THE COST, at the resolution the spec's budget table is stated at.
+#
+# LABELLED `benchmark`, AND RUN_SERIAL, BECAUSE IT READS THE GPU'S CLOCK. The
+# MERGE and PUSH tiers exclude that label by construction (-LE benchmark), and
+# they must: this rig's GPU idles at 210 of 3105 MHz under Xvfb unless the
+# clocks are locked by hand, so a GPU-time number taken inside a -j4 gate is
+# not a measurement. The suite PRINTS its milliseconds and asserts only a
+# catastrophe ceiling; the numbers of record are taken by hand with the clocks
+# locked (spikes/gather-0/FINDINGS.md).
 add_test(NAME gi.gather_spike_cost COMMAND test_gi_gather_spike
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_spike_cost PROPERTIES
-                     TIMEOUT 600 LABELS "engine"
+                     TIMEOUT 600 LABELS "benchmark" RUN_SERIAL TRUE
                      ENVIRONMENT "JAH_GATHER_COST=1")
 
 # ...and the picture a machine WITHOUT ray queries draws, which this lane may

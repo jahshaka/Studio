@@ -104,31 +104,12 @@ static bool identical(const Image &a, const Image &b)
 }
 
 // ---------------------------------------------------------------------------
-// THE LEAK ROOM (gi.leak_room's fixture, rebuilt here so both arms and the
-// gather run in ONE process at ONE pose — the paired-arm rule).
-static NodeId addSlab(Scene *s, const Colour &albedo, const Vec3 &pos, const Vec3 &scale)
-{
-    const NodeId node = s->createNode();
-    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-    PbrParams p;
-    p.albedo = albedo;
-    p.metalness = 0.0f;
-    p.roughness = 0.9f;
-    const MaterialId mat = s->createPbrMaterial(p);
-    if (!node || !mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
-    s->setNodeTransform(node, pos, Quat(), scale);
-    return node;
-}
-
-static void meanRG(const Image &img, float &r, float &g)
-{
-    double sr = 0.0, sg = 0.0; int n = 0;
-    const unsigned x0 = img.width * 5u / 16u, x1 = img.width * 11u / 16u;
-    const unsigned y0 = img.height * 5u / 16u, y1 = img.height * 11u / 16u;
-    for (unsigned y = y0; y < y1; ++y)
-        for (unsigned x = x0; x < x1; ++x) { const Colour c = img.at(x, y); sr += c.r; sg += c.g; ++n; }
-    r = float(sr / n); g = float(sg / n);
-}
+// THE LEAK ROOM IS gi.leak_room's OWN FIXTURE, shared through
+// tests/support/enginetesthelpers.h (fix round, B1) rather than copied: this
+// suite's `field` arm is compared against gi.leak_room's asserted numbers, and
+// that comparison is only worth anything while the rooms are the same room.
+using enginetest::leakroom::addSlab;
+using enginetest::leakroom::meanRG;
 
 // ---------------------------------------------------------------------------
 static int costMain(Engine *e);
@@ -193,40 +174,17 @@ int main()
         const float T = thicknesses[a];
         Scene *s = e->createScene("leak" + std::to_string(a));
         view->setScene(s);
-        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
-        const Colour white(0.8f, 0.8f, 0.8f);
-        const float ho = 5.0f + T * 0.5f;
-        const float span = 10.0f + 2.0f * T;
-        addSlab(s, white, Vec3(0, -T * 0.5f, 0), Vec3(span, T, span));
-        addSlab(s, white, Vec3(0, 4.0f + T * 0.5f, 0), Vec3(span, T, span));
-        addSlab(s, white, Vec3(0, 2, -ho), Vec3(span, 4.0f, T));
-        addSlab(s, white, Vec3(0, 2, ho), Vec3(span, 4.0f, T));
-        addSlab(s, white, Vec3(-ho, 2, 0), Vec3(T, 4.0f, span));
-        addSlab(s, white, Vec3(ho, 2, 0), Vec3(T, 4.0f, span));
+        enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T);
 
-        const NodeId inside = s->createNode();
-        s->setNodeTransform(inside, Vec3(0.0f, 3.0f, 2.5f), Quat(), Vec3(1, 1, 1));
-        LightDesc li;
-        li.type = LightType::Point;
-        li.colour = Colour(0.0f, 1.0f, 0.0f);
-        li.intensity = 3.0f;
-        li.range = 14.0f;
-        li.castShadows = true;
-        s->setLight(inside, li);
-
-        const NodeId outside = s->createNode();
-        s->setNodeTransform(outside, Vec3(0.0f, 2.0f, -(ho + T * 0.5f + 1.0f)), Quat(),
-                            Vec3(1, 1, 1));
-        LightDesc lo;
-        lo.type = LightType::Point;
-        lo.colour = Colour(1.0f, 0.0f, 0.0f);
-        lo.intensity = 25.0f;
-        lo.range = 12.0f;
-        lo.castShadows = true;
-        s->setLight(outside, lo);
-
-        enginetest::testCameraLookAt(view, Vec3(3.6f, 2.0f, -2.0f), Vec3(3.6f, 2.0f, -5.0f));
-
+        // THE ACCOUNTING RULE, and why the gather arm runs with `ddgi` OFF
+        // (fix round, H3). A pixel gets exactly ONE diffuse-GI term. Arming
+        // the gather compiles the CONE diffuse out (the listener's
+        // `vct_disable_diffuse`), which is the half a host can do from
+        // outside; the irradiance field's own cage is inside upstream's body
+        // and still adds its term, so an armed scene with a bound field would
+        // shade TWO. Phase 0 measures with the field off in every arm — which
+        // is also what makes the three arms comparable; GATHER-1 owns the real
+        // answer, the cage-guard hook of ogre-patch 0085.
         const auto leakOf = [&](GiToggle ddgi, bool gather, const char *what) {
             GiParams gi;
             gi.mode = GiMode::Vct;
@@ -238,13 +196,15 @@ int main()
             s->setGlobalIllumination(gi);
             ProbeGatherSpikeResult gr;
             armGather(s, gather, gr);
-            lo.intensity = 25.0f; s->setLight(outside, lo); s->refreshGlobalIllumination();
+            enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
+            s->refreshGlobalIllumination();
             render(e, 16);
             Image img; view->readPixels(img);
             float onR = 0, onG = 0; meanRG(img, onR, onG);
             if (dumpDir && a == 0)
                 writePpm(img, std::string(dumpDir) + "/g0-leakroom-" + what + ".ppm");
-            lo.intensity = 0.0f; s->setLight(outside, lo); s->refreshGlobalIllumination();
+            enginetest::leakroom::setOutsideIntensity(s, room, 0.0f);
+            s->refreshGlobalIllumination();
             render(e, 16);
             view->readPixels(img);
             float offR = 0, offG = 0; meanRG(img, offR, offG);
@@ -444,6 +404,28 @@ int main()
               "...and with the frame term live the estimate moves frame to frame (it is what "
               "makes the temporal mean an integral)");
         armGather(s, false, fz);
+
+        // ---- D1: THE TIER CLOSES WHILE THE SPIKE IS ARMED ----------------
+        // `Engine::setRayTracing(false)` tears the whole tier down —
+        // `RayQueryTier::close()` destroys every gather texture — and it takes
+        // `updateRayQuery`'s early return with it, so the frame-head clear of
+        // the shader registration never runs again. Without the clear inside
+        // `close()` the next colour pass binds a DESTROYED TextureGpu, which
+        // is a validation error at best and a lost device at worst. Armed,
+        // then torn down, then drawn: the frames after must be ordinary.
+        ProbeGatherSpikeResult armed;
+        CHECK(armGather(s, true, armed), "armed again for the teardown case");
+        render(e, 8);
+        e->setRayTracing(false);
+        render(e, 8);
+        Image afterTeardown;
+        view->readPixels(afterTeardown);
+        CHECK(afterTeardown.width == kSize && afterTeardown.height == kSize,
+              "D1: the tier torn down while the spike is armed still draws a frame (the shader's "
+              "registration dies with the textures it names)");
+        e->setRayTracing(true);
+        render(e, 4);
+        armGather(s, false, fz);
         e->destroyScene(s);
     }
 
@@ -552,8 +534,13 @@ static int costMain(Engine *e)
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the room");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
 
+    // ONE GATHERING VIEW AT A TIME, and it is not tidiness (fix round, D3):
+    // `gatherStatsInto` answers for the FIRST GatherView it finds for the
+    // scene in an unordered_map keyed by listener POINTER, so with two views
+    // of one scene both gathering, which view's milliseconds come back is
+    // decided by the allocator's addresses. Every arm below therefore leaves
+    // exactly one view enabled.
     const auto measure = [&](View *v, unsigned stride, unsigned rays, const char *what) {
-        (void)v;
         ProbeGatherSpikeResult r;
         armGather(s, true, r, stride, rays);
         std::vector<float> trace, integrate;
@@ -599,6 +586,9 @@ static int costMain(Engine *e)
     // the seam. Stated as an equivalence, not as a VR measurement.
     View *vr = e->createOffscreenView("gathervr", 4320u, 2384u, Colour(0, 0, 0));
     if (vr) {
+        // ...and the 1080p view stands DOWN first (see the note on `measure`):
+        // with both enabled the "10.3 Mpx" rows could be the 1080p view's.
+        view->setEnabled(false);
         vr->setScene(s);
         vr->setShadows(true);
         armChain(vr);
@@ -606,14 +596,37 @@ static int costMain(Engine *e)
         render(e, 8);
         measure(vr, 16u, 64u, "10.3 Mpx (two Quest Pro eyes), 16 px, 64 rays");
         measure(vr, 16u, 32u, "10.3 Mpx (two Quest Pro eyes), 16 px, 32 rays");
+        // AND THE READING IS THE VR VIEW'S, asserted by its own size rather
+        // than assumed — the whole point of D3.
+        ProbeGatherSpikeResult who;
+        armGather(s, true, who, 16u, 64u);
+        render(e, 4);
+        armGather(s, true, who, 16u, 64u);
+        CHECK_MSG(who.targetW == 4320u && who.targetH == 2384u,
+                  "the VR rows above are the VR view's (%ux%u reported)", who.targetW,
+                  who.targetH);
+        ProbeGatherSpikeResult off;
+        armGather(s, false, off);
+        render(e, 2);
     }
-    // THE ONLY BAR, and it is the spec's own estimate for the whole block at
-    // High: 1.0-2.0 ms. A phase-0 trace plus a nearest integrate is the floor
-    // of that, so the bar is the estimate's ceiling — a number the spec already
-    // committed to in writing, not one invented here.
-    CHECK_MSG(high > 0.0f && high < 2.0f,
-              "1080p High (trace + integrate) is inside the spec's 1.0-2.0 ms estimate for the "
-              "whole block: %.4f ms", double(high));
+    // THE NUMBER IS PRINTED, NOT GATED — and that is a gate-system decision,
+    // not modesty (fix round, H2). A GPU-TIME assertion belongs to the
+    // nightly tier and nowhere else: this rig's GPU idles at 210 of 3105 MHz
+    // under Xvfb unless the clocks are LOCKED (the PHOTON-E2 fact), and a
+    // fifteen-fold spread on 0.13 ms sits exactly on the spec's 2.0 ms
+    // estimate. So this entry carries the `benchmark` label (out of the MERGE
+    // and PUSH tiers by construction) and RUN_SERIAL, and the only assertion
+    // left is a CATASTROPHE ceiling — two orders of magnitude of headroom —
+    // so a real regression still reds while a contended run never does. The
+    // measurement of record is the one taken by hand with the clocks locked;
+    // it is in spikes/gather-0/FINDINGS.md.
+    std::printf("\n   1080p High (trace + integrate) = %.4f ms, against SCREEN_PROBE_GATHER_SPEC "
+                "section 4's 1.0-2.0 ms estimate for the WHOLE block.\n"
+                "   NOT A BAR: lock the clocks (nvidia-smi --lock-gpu-clocks=2100,2550) before "
+                "believing any GPU number from this rig.\n", double(high));
+    CHECK_MSG(high > 0.0f && high < 20.0f,
+              "1080p High (trace + integrate) is not catastrophically wrong: %.4f ms "
+              "(a print, not the spec's bar — see the note)", double(high));
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
