@@ -1636,43 +1636,13 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
         }
 
         case WindowSpaces::EDITOR: {
-            ui->stackedWidget->setCurrentIndex(1);
-
-			applyDockVisibilityForSpace();
-			playerControls->setVisible(false);
-
-			applyColumnWidthsOnce();
-
-			this->sceneView->setWindowSpace(space);
-            playSceneBtn->show();
-            this->enterEditMode();
-            playbackService->setSceneMode(SceneMode::EditMode);
-
-            assetWidget->refresh();
-			isSceneOpen = true;
-			// The dropdown follows the VIEWPORT, and a scene open resets it to
-			// perspective (per-view camera memory is per scene session) — so
-			// re-read it here rather than leaving "Top" over a fresh scene.
-			setViewsButtonLabel(sceneView->cameraView());
-
-			sceneView->begin();
-			// The on-screen View could not be created at all: nothing will
-			// ever present into this page, so say why and go back to one that
-			// works, rather than leaving the user on a permanent blank
-			// (STATS_OVERLAY_SPEC.md §6.4 — this is where ViewportCover's
-			// Failed state went). `return`, not `break`: goToDesktop has
-			// already run a whole switchSpace(DESKTOP) inside that call, so
-			// falling through to this one's trailing
-			// updateTopMenuStates(EDITOR) would dress the menus for a page
-			// nobody is looking at.
-			if (bounceIfViewportIsDead()) return;
-			// The viewport's native window has just been mapped. Until the
-			// engine presents into it the X server shows whatever was on that
-			// part of the screen before — the page we just left. Present the
-			// cover NOW (synchronously; a queued driver tick would arrive
-			// after the rest of this open) unless the engine already owns
-			// those pixels.
-			sceneView->coverIfNotPresenting();
+			// The whole entry lives in enterEditorSpace() — the reveal of a load
+			// IN PLACE needs exactly this and never comes through here
+			// (VIEW-REBUILD-1). `return`, not `break`, when it bounces: goToDesktop
+			// has already run a whole switchSpace(DESKTOP) inside that call, so
+			// falling through to this one's trailing updateTopMenuStates(EDITOR)
+			// would dress the menus for a page nobody is looking at.
+			if (!enterEditorSpace()) return;
             break;
         }
 
@@ -1759,6 +1729,53 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 	// The scene-issue bar belongs to the EDITOR and is a top-level window that
 	// stays on top: it has to go NOW, not on the scanner's next tick (item 3).
 	updateSceneIssues();
+}
+
+// ENTERING THE EDITOR PAGE — switchSpace's EDITOR case, and the reveal's
+// (VIEW-REBUILD-1, 2026-09-21).
+//
+// Every line below used to run for a load in place too, because the open's
+// close half went to the Desktop first and the reveal came back. It no longer
+// does (MainWindow::CloseIntent), so the reveal calls this directly. Each call
+// here is idempotent on a page that never left — the page index, the dock
+// visibility (Qt returns early for a dock that is already visible), the edit
+// mode, `sceneView->begin()` — and two of them are the point: the views label,
+// which a scene open resets to perspective, and the cover/bounce check.
+bool MainWindow::enterEditorSpace()
+{
+    ui->stackedWidget->setCurrentIndex(1);
+
+	applyDockVisibilityForSpace();
+	playerControls->setVisible(false);
+
+	applyColumnWidthsOnce();
+
+	this->sceneView->setWindowSpace(WindowSpaces::EDITOR);
+    playSceneBtn->show();
+    this->enterEditMode();
+    playbackService->setSceneMode(SceneMode::EditMode);
+
+    assetWidget->refresh();
+	// The dropdown follows the VIEWPORT, and a scene open resets it to
+	// perspective (per-view camera memory is per scene session) — so
+	// re-read it here rather than leaving "Top" over a fresh scene.
+	setViewsButtonLabel(sceneView->cameraView());
+
+	sceneView->begin();
+	// The on-screen View could not be created at all: nothing will ever present
+	// into this page, so say why and go back to one that works, rather than
+	// leaving the user on a permanent blank (STATS_OVERLAY_SPEC.md §6.4 — this
+	// is where ViewportCover's Failed state went).
+	if (bounceIfViewportIsDead()) return false;
+	// The viewport's native window has just been mapped. Until the engine
+	// presents into it the X server shows whatever was on that part of the
+	// screen before — the page we just left. Present the cover NOW
+	// (synchronously; a queued driver tick would arrive after the rest of this
+	// open) unless the engine already owns those pixels. On a load in place the
+	// window never went away and the engine has been presenting its background
+	// all along (STALE-VIEW-1), so this is a no-op there.
+	sceneView->coverIfNotPresenting();
+    return true;
 }
 
 void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
@@ -1932,7 +1949,16 @@ void MainWindow::openStagePanels()
 void MainWindow::openStageReveal(bool playMode)
 {
 	LoadTimeline::mark(QStringLiteral("switchSpace"));
+	// THE PAGE THIS OPEN STARTED ON (VIEW-REBUILD-1). A load in place never
+	// leaves the editor any more, and switchSpace returns at once when the space
+	// it is asked for is already current — so the editor's own per-open dressing
+	// (the views label a fresh scene resets, the edit-mode chrome, the cover
+	// check) has to be asked for here, through the same function switchSpace
+	// calls. An open from the Desktop, a create and a play-mode open are
+	// unchanged: for them the page switch IS the reveal.
+	const bool alreadyInEditor = !playMode && currentSpace == WindowSpaces::EDITOR;
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	if (alreadyInEditor) enterEditorSpace();
 	// A REVEAL THAT ASKED FOR THE PLAYER AND DID NOT GET IT IS NOT A PLAYER
 	// REVEAL (SMOKE-FIX-1's fix round, F2). bounceFromPlayer can send this open
 	// to the editor instead, and everything below — the top bar's dressing, the
@@ -2372,7 +2398,14 @@ void MainWindow::startOpenRun(bool playMode)
 	openRunner->start();
 }
 
+// The close a user asked for: the world goes and the window lands on the
+// Desktop (VIEW-REBUILD-1 gave the other half of this function a name).
 void MainWindow::closeProject()
+{
+    closeProject(CloseIntent::ToDesktop);
+}
+
+void MainWindow::closeProject(CloseIntent intent)
 {
     // The borrowed material goes back before the scene it is borrowed from is
     // torn down (MATERIAL-PREVIEW-1).
@@ -2513,11 +2546,41 @@ void MainWindow::closeProject()
 		return;
 	}
 
+	// A CLOSE THAT IS THE FIRST HALF OF AN OPEN STAYS ON THE PAGE IT IS ON
+	// (VIEW-REBUILD-1). Everything above this line has already run — the
+	// autosave, the physics stop, the tile refresh, the undo clear, the asset
+	// list, removeScene() (which is what takes the world off the viewport),
+	// scene->cleanup(), the engine's reclaim — so the teardown is identical to a
+	// ToDesktop close. Only the last three lines are skipped, and each of them
+	// is about LEAVING:
+	//
+	//   switchSpace(DESKTOP)  would hide the editor page, and the page is a
+	//                         native X ancestor of the viewport's own window:
+	//                         measured 499-2,973 ms of an in-place open with the
+	//                         viewport UNVIEWABLE and the app's watermark on
+	//                         screen, five rect changes as the docks came back.
+	//   sceneView->end()      would disable the editor's View for the whole load
+	//                         — and a disabled view presents nothing, which is
+	//                         the stale frame STALE-VIEW-1 removed coming back
+	//                         through the other door. The view stays live and
+	//                         draws its background until the new world binds.
+	//
+	// THE PLAYER'S VIEW STILL ENDS, either way, and it is not a page statement:
+	// it is bound to the scene that has just been destroyed above, and the page
+	// it belongs to is not the page an open reveals into. Measured: without this
+	// line, `project.open` from the PLAYER space comes back to a BLACK player
+	// frame (scripting.e2e.space_switch's "the Player renders it, not a black
+	// frame"), because the Player's view kept its binding to the dead scene
+	// across the swap.
+	playerView->end();
+
+	// The reveal calls enterEditorSpace() itself when the page never left.
+	if (intent == CloseIntent::ReopenInPlace) return;
+
     switchSpace(WindowSpaces::DESKTOP);
 
 	if (sceneView->isInitialized())
 		sceneView->end();
-	playerView->end();
 }
 
 // (MainWindow::applyMaterialPreset is GONE, both overloads — MATERIAL-PREVIEW-1.

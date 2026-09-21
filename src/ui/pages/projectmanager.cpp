@@ -183,8 +183,11 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 		return;
 	}
 
-    // If we're opening a new scene, close the old one first
-    if (mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
+    // If we're opening a new scene, close the old one first — and the page the
+    // user is on stays, because this close is the first half of an open
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
+    if (mainWindow->studioServices()->project->isSceneOpen())
+        mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
 
 	// WHERE THIS PROJECT ACTUALLY IS (SMALL-UI-A fix round F1). This rebuilt
 	// the path from the DEFAULT projects root, so a project created at a chosen
@@ -372,7 +375,8 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         // one was simply dropped: no autosave under `auto_save`, no undo-stack
         // reset, the user's unsaved edits gone. It has to happen BEFORE the
         // re-point, because closeProject saves the project the pointer names.
-        if (mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
+        if (mainWindow->studioServices()->project->isSceneOpen())
+            mainWindow->closeProject(MainWindow::CloseIntent::ReopenInPlace);
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));

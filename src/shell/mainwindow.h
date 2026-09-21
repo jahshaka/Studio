@@ -258,7 +258,40 @@ public:
 	/// Rebuilds the camera switcher's list from the live document
 	/// (CAMERAS_SPEC D4). Connected to the menu's aboutToShow.
 	void rebuildCamerasMenu();
+    /// WHAT A CLOSE IS FOR (VIEW-REBUILD-1, 2026-09-21).
+    ///
+    /// `ToDesktop` is a close the user asked for: the world goes and the window
+    /// lands on the Desktop, which is the only page left that means anything.
+    ///
+    /// `ReopenInPlace` is the FIRST HALF OF AN OPEN — every close-then-open
+    /// caller (project.open, project.openAsync, a desktop tile, the
+    /// import-and-open) tears the current world down through this same function
+    /// before pointing the project at the next one. Measured on the rig
+    /// (spikes/view-rebuild-1/): the space switch that ends a ToDesktop close
+    /// hid the editor PAGE — a native X ancestor of the viewport's own window,
+    /// because Qt gives every ancestor of a WA_NativeWindow widget a window of
+    /// its own — so the viewport was UNVIEWABLE for 499-2,973 ms of an open in
+    /// place, its rect walked five times as the docks came back, and nothing
+    /// the engine drew (a cover, STALE-VIEW-1's background, the first frame of
+    /// the new world) could reach a window that is not on screen. The user saw
+    /// the app's watermark. The teardown is identical either way; only the page
+    /// stays.
+    enum class CloseIntent { ToDesktop, ReopenInPlace };
+    void closeProject(CloseIntent intent);
     void switchSpace(WindowSpaces space, bool force = false);
+    /// ENTERING THE EDITOR PAGE, the whole of it, in one place (VIEW-REBUILD-1).
+    ///
+    /// This is switchSpace's EDITOR case: the page, the docks, the toolbars,
+    /// the edit mode, the views label and `sceneView->begin()`. It lives on its
+    /// own because a load IN PLACE never leaves the editor — switchSpace
+    /// returns at once when the space is already current — and the reveal still
+    /// has to dress the editor for the world that just arrived. Two callers,
+    /// one body, so they cannot drift.
+    ///
+    /// Returns false when the viewport cannot draw at all and the window has
+    /// already been sent back to the Desktop (bounceIfViewportIsDead): the
+    /// caller must not go on dressing a page nobody is on.
+    bool enterEditorSpace();
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
     bool handleMousePress(QMouseEvent *event);
@@ -716,6 +749,7 @@ public slots:
     /// new world's blob, and a prewarm for neither, every mesh of it parsed on
     /// this thread. Returns true when nothing is (or is still) in flight.
     bool waitForOpen();
+
     void closeProject();
 
     /// Takes the editor's panels down for a page that is not the editor.
@@ -1188,7 +1222,6 @@ private:
 	QPushButton *cameraView = nullptr;
 	QtAwesome *fontIcons;
 
-	bool isSceneOpen = false;
 	materials::EffectsPage *shaderGraph = nullptr;   // the materials module's page
 	QVector<StudioModule*> modules;                  // audit §6.2: the shell's module list
 	MaterialsModule *materialsModule = nullptr;

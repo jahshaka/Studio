@@ -1092,6 +1092,25 @@ public:
     /// differences it across a load exactly as it differences `coversPresented`.
     /// Never reset.
     virtual qulonglong blankFramesPresented() const { return 0; }
+    /// IS THE VIEWPORT'S NATIVE WINDOW ON SCREEN, and how often has it left or
+    /// changed size (lane VIEW-REBUILD-1)?
+    ///
+    /// The third question this trio answers about "what is the user actually
+    /// seeing": `blankFramesPresented` says the teardown reached the screen,
+    /// `coversPresented` says a cover did — and NEITHER can reach a window that
+    /// is not mapped. Measured on the rig against the unmodified base
+    /// (spikes/view-rebuild-1/): a load IN PLACE hid the editor page for
+    /// 499-2,973 ms because the close half of the open switched to the Desktop
+    /// and the reveal switched back, and the page is a native X ancestor of this
+    /// widget's window, so the user watched the app's watermark while the engine
+    /// presented into nothing.
+    ///
+    /// `nativeHides` and `rectChanges` are never reset — a caller differences
+    /// them across an operation, exactly as it differences the other two — and a
+    /// load in place must move NEITHER. A page switch moves both, by design.
+    virtual bool nativeMapped() const { return false; }
+    virtual qulonglong nativeHides() const { return 0; }
+    virtual qulonglong rectChanges() const { return 0; }
     /// THE FLY'S HELD-KEY SET, by name ("Left", "PageUp", "Shift" …), sorted
     /// (ledger §356). A key stuck in it is otherwise INVISIBLE: Left and Right
     /// held together cancel to no movement at all, which reads as "the arrows
