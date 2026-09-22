@@ -273,11 +273,25 @@ int main(int argc, char **argv)
     // THE CUBE BEHIND THE CAMERA. Emissive, so the voxels hold a radiance that
     // owes nothing to a light's direction — the measurement is about the
     // reflection, not about the shading of the thing reflected.
+    //
+    // ITS RADIANCE IS 0.9 AND THAT IS THE INSTRUMENT'S LIMIT, NOT A TASTE
+    // (VOXEL-CLIP-1, 2026-09-22, measured). It used to be 4.0, which the emissive
+    // voxel store clipped to 1.0 (PFG_RGBA8_UNORM) — and ogre-patch 0087 makes
+    // that store a float, so the cube's radiance now reaches the cache whole. An
+    // offscreen view's readback is PFG_RGBA8_UNORM (OgreView::createRtt), so the
+    // RAYS arm of case 2 below is pinned at its ceiling the moment the reflected
+    // radiance passes 1.0 while the MARCH control keeps climbing: measured at
+    // radiance 4.0, rays 0.0840 against a control of 0.0720, a gap of 0.012 under
+    // a 0.02 bar — the presence test lost its headroom to the readback, with the
+    // engine carrying MORE light than before, not less. At radiance 1.0 the same
+    // arms read 0.0840 / 0.0535, a gap of 0.031. An emitter inside the readback's
+    // range is what makes case 2 a measurement; an HDR offscreen readback would
+    // let it go back above 1.0 and is worth having for its own sake.
     const NodeId cube = s->createNode();
     {
         PbrParams p;
         p.albedo = Colour(0.05f, 0.05f, 0.05f);
-        p.emissive = Colour(4.0f, 0.0f, 0.0f);
+        p.emissive = Colour(0.9f, 0.0f, 0.0f);
         p.roughness = 0.6f;
         const MaterialId mat = s->createPbrMaterial(p);
         const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
