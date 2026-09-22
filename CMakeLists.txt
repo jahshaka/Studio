@@ -944,25 +944,11 @@ if(NOT OGRE_PIN_HASH)
 endif()
 add_definitions("-DOGRE_PIN_HASH=\"${OGRE_PIN_HASH}\"")
 
-# The patch stack as FILENAMES, comma-separated: "0001-...,0002-...". The names
-# carry the number and the subject, which is what a reader of a bundle wants —
-# and a patch added or renumbered after this configure shows up as a stale
-# string, never as a wrong one, because the app also prints the configure time.
-# CONFIGURE_DEPENDS: without it the glob is evaluated once and a patch added
-# later leaves every capture bundle claiming a stale patch stack — provenance
-# that is quietly wrong is worse than none (review item, lane MON-P1b).
-file(GLOB _ogre_patch_files CONFIGURE_DEPENDS
-     "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-patches/[0-9][0-9][0-9][0-9]-*.patch")
-set(OGRE_PATCH_STACK "")
-foreach(_p ${_ogre_patch_files})
-    get_filename_component(_pn "${_p}" NAME)
-    if(OGRE_PATCH_STACK)
-        set(OGRE_PATCH_STACK "${OGRE_PATCH_STACK},${_pn}")
-    else()
-        set(OGRE_PATCH_STACK "${_pn}")
-    endif()
-endforeach()
-add_definitions("-DOGRE_PATCH_STACK=\"${OGRE_PATCH_STACK}\"")
+# (OGRE_PATCH_STACK — the 88 patch FILENAMES a capture bundle used to list — is
+# DELETED with the patch stack itself, 2026-09-22: the engine source is our fork
+# now, so OGRE_PIN_HASH above IS the whole provenance. A bundle that names the
+# fork commit names every engine change in it; `git -C irisgl/thirdparty/ogre-next
+# log` resolves it, and irisgl/docs/OGRE_BUILD.md maps the old numbers.)
 
 # For convenience, put the shared files built from IrisGL along with the final binary
 # (libassimp is IrisGL's PRIVATE runtime dependency — placed beside the binary so

@@ -984,12 +984,10 @@ void FrameMonitor::Bundle::writeMachine(bool early)
     machine.insert("studioCommit", QStringLiteral(GIT_COMMIT_HASH));
     machine.insert("studioCommitDate", QStringLiteral(GIT_COMMIT_DATE));
     machine.insert("irisglCommit", QStringLiteral(IRISGL_COMMIT_HASH));
+    // The ogre-next submodule's commit — since the fork (2026-09-22) that single
+    // sha IS every engine change in this build. The `ogrePatchStack` array that
+    // used to list 88 patch filenames beside it is deleted with the stack.
     machine.insert("ogrePin", QStringLiteral(OGRE_PIN_HASH));
-    QJsonArray patches;
-    for (const QString &p : QStringLiteral(OGRE_PATCH_STACK).split(QLatin1Char(','),
-                                                                  Qt::SkipEmptyParts))
-        patches.append(p);
-    machine.insert("ogrePatchStack", patches);
 #ifdef QT_DEBUG
     machine.insert("buildType", QStringLiteral("Debug"));
 #else

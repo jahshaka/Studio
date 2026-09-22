@@ -174,8 +174,11 @@ int main(int argc, char **argv)
     CHECK(!machine.value("studioCommit").toString().isEmpty(), "machine.json names the Studio commit");
     CHECK(!machine.value("irisglCommit").toString().isEmpty(), "machine.json names the irisgl commit");
     CHECK(!machine.value("ogrePin").toString().isEmpty(), "machine.json names the Ogre pin");
-    CHECK(machine.value("ogrePatchStack").toArray().size() > 20,
-          "machine.json lists the Ogre patch stack");
+    // (the `ogrePatchStack` array this used to check went with the patch stack,
+    //  2026-09-22: `ogrePin` above is the fork commit, i.e. the whole engine
+    //  provenance, and it is asserted non-empty one line up)
+    CHECK(machine.value("ogrePin").toString().size() >= 7,
+          "machine.json's Ogre pin is a commit, not a placeholder");
     CHECK(machine.value("session").toObject().contains(QStringLiteral("build id")),
           "machine.json carries the session header (build id)");
     CHECK(machine.value("display").toObject().value("width").toInt() > 0,
