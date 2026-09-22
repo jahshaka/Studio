@@ -78,12 +78,12 @@ static void armChain(View *view, int ssrRow = 2)
 /// stochastic estimator: at 64 rays and no temporal filter they differ on about
 /// half the pixels (the naked-noise print below). Every A/B of this suite
 /// differences two pictures, and a difference of two live frames measures that
-/// noise and nothing else — the far-term A/B did exactly that and its "53 %"
-/// was the suite's own 54 % noise (spikes/measure-1bd/FINDINGS.md). So every
+/// noise and nothing else (a far-term A/B once read its own noise as a 53 %
+/// effect: spikes/measure-1bd/FINDINGS.md). So every
 /// arm holds the frame term, and the ONE arm that must be live (the check that
 /// the frame index really is the sequence's input) says so explicitly.
 static void armGather(Scene *s, GiParams gi, bool on, unsigned stride = 16u,
-                      unsigned octRes = 8u, bool freeze = true, bool farOff = false,
+                      unsigned octRes = 8u, bool freeze = true, float rayLength = 0.0f,
                       int adaptiveCap = -1, bool jitterOff = false)
 {
     gi.gather = on ? GiToggle::On : GiToggle::Off;
@@ -92,7 +92,7 @@ static void armGather(Scene *s, GiParams gi, bool on, unsigned stride = 16u,
     t.probeStride = stride;
     t.octRes = octRes;
     t.freezeFrameIndex = freeze;
-    t.farTermOff = farOff;
+    t.rayLength = rayLength;
     t.adaptiveCap = adaptiveCap;
     t.jitterOff = jitterOff;
     s->setGatherTuning(t);
@@ -404,32 +404,46 @@ int main()
                   "(bar 1 %%) — every A/B below differences two FROZEN arms", floorD.moved,
                   floorD.total);
 
-        // ---- the far term's A/B (spec section 10 item 6), BOTH ARMS FROZEN ---
-        // THE MEASURED TRUTH (MEASURE-1b, spikes/measure-1bd/FINDINGS.md): the
-        // far term never fires. The ray's length is the outer cascade's full
-        // DIAGONAL, and a ray that long leaving a point inside a box ends
-        // outside it except on a set of measure zero — so the end point it
-        // asks the cascades about lies in no volume, `ok` is false and the sky
-        // answers whether the term is on or off. The earlier "53 % of pixels"
-        // was this pair taken with the frame index LIVE: two draws of the
-        // estimator, i.e. its own noise. This assertion states the finding; if
-        // it ever reds, the ray length or the term changed and the decision at
-        // OgreScreenProbeGather.cpp's `reach` has to be re-taken.
-        armGather(s, gatherGi, true, 16u, 8u, true, true);
-        render(e, 40);
-        Image farOff; view->readPixels(farOff);
-        armGather(s, gatherGi, true, 16u, 8u, true, false);
-        render(e, 40);
-        Image farOn; view->readPixels(farOn);
-        const Delta fd = deltaOf(farOn, farOff);
-        std::printf("   THE FAR TERM (the outer cascades' voxel at tMax, against the sky), "
-                    "frozen: %u of %u px moved (%.2f%%), mean %.2f/255, worst %u\n", fd.moved,
-                    fd.total, 100.0 * fd.moved / std::max(1u, fd.total), fd.meanMoved, fd.worst);
-        CHECK_MSG(fd.moved == 0u,
-                  "THE FAR TERM MOVES NO PIXEL at the shipped ray length (%u of %u px): the "
-                  "diagonal-long ray ends outside every cascade, so the term's voxel read "
-                  "is never ok and the sky answers either way", fd.moved, fd.total);
-        if (dumpDir) writePpm(farOff, std::string(dumpDir) + "/g1a-bounce-gather-farOff.ppm");
+        // ---- THE RAY'S LENGTH, A/B, BOTH ARMS FROZEN (PHOTON-GAFAR-1) -----
+        // The gather's ray is as long as the lit volume's inscribed radius —
+        // half the outer cascade's extent — and a miss is the sky. The decision
+        // was taken on a sweep (spikes/photon-gafar-1): against rays of the
+        // outer box's full DIAGONAL (the old length) the half extent moved at
+        // most 0.21 % of pixels by 1-2/255 on three fixtures x three tiers,
+        // and cost the same. This is that claim at this suite's pose: the
+        // shipped length against the diagonal, both frozen, inside the
+        // instrument's 1 % bar. If it reds, geometry beyond the lit volume now
+        // matters to the picture and the length has to be re-decided at
+        // OgreScreenProbeGather.cpp's `reach`, with the sweep.
+        {
+            const GiStatus g = s->giStatus();
+            const float outerHalf = g.cascades.empty() ? 0.0f : g.cascades.back().halfSize;
+            const float diagonal = std::sqrt(3.0f) * 2.0f * outerHalf;
+            CHECK_MSG(outerHalf > 0.0f, "the cascade chain reports its outer box (half %.2f m)",
+                      double(outerHalf));
+            armGather(s, gatherGi, true, 16u, 8u, true, diagonal);
+            render(e, 40);
+            Image longRays; view->readPixels(longRays);
+            armGather(s, gatherGi, true, 16u, 8u, true, outerHalf);
+            render(e, 40);
+            Image forced; view->readPixels(forced);
+            armGather(s, gatherGi, true);
+            render(e, 40);
+            Image shipped; view->readPixels(shipped);
+            const Delta ld = deltaOf(shipped, longRays), fdd = deltaOf(shipped, forced);
+            std::printf("   THE RAY'S LENGTH, frozen: the shipped (half extent %.2f m) against the "
+                        "diagonal (%.2f m) moves %u of %u px (%.2f%%), mean %.2f/255, worst %u\n",
+                        double(outerHalf), double(diagonal), ld.moved, ld.total,
+                        100.0 * ld.moved / std::max(1u, ld.total), ld.meanMoved, ld.worst);
+            CHECK_MSG(fdd.moved == 0u,
+                      "THE SHIPPED LENGTH IS THE OUTER HALF EXTENT: derived and forced %.2f m "
+                      "draw the same picture (%u px moved)", double(outerHalf), fdd.moved);
+            CHECK_MSG(ld.moved * 100u <= ld.total,
+                      "NOTHING BEYOND THE LIT VOLUME'S INSCRIBED RADIUS REACHES THE PICTURE: "
+                      "rays of the full diagonal move %u of %u px against the shipped length "
+                      "(bar 1 %%)", ld.moved, ld.total);
+            if (dumpDir) writePpm(longRays, std::string(dumpDir) + "/g1a-bounce-gather-diagonal.ppm");
+        }
 
         // ---- DETERMINISM (spec section 5) --------------------------------
         // With the sample sequence's frame term HELD, the whole estimator is a
@@ -565,7 +579,7 @@ int main()
         // placement job deleted (the lead's read). `adaptiveRequested` is what
         // the job actually asked for, and the cap is what it is doing something
         // TO.
-        armGather(s, gi, true, 16u, 8u, true, false, 0);
+        armGather(s, gi, true, 16u, 8u, true, 0.0f, 0);
         render(e, 16);
         const GatherStatus capped = gatherStatus(s);
         Image cappedImg; view->readPixels(cappedImg);
