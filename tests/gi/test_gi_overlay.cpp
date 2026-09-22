@@ -36,7 +36,7 @@
 // channel it rides is engine-side.
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <cmath>
 #include <cstdio>
 
@@ -104,7 +104,7 @@ int main(int argc, char **argv)
     const auto cubeAt = [&](const char *name, const iris::Vec3 &pos) {
         auto n = iris::MeshNode::create();
         n->setName(QString::fromLatin1(name));
-        n->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
+        n->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
         n->setLocalPos(pos);
         n->setMaterial(mat);
         doc->getRootNode()->addChild(n);

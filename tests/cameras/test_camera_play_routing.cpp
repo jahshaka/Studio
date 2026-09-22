@@ -25,7 +25,7 @@
 
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <cstdio>
 
 #include "irisgl/irisglfwd.h"
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     auto meshNode = iris::MeshNode::create();
     meshNode->setName("cube");
-    meshNode->setMesh(testmesh::load(":assets/models/cube.obj"));
+    meshNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
     CHECK(!!meshNode->getMesh(), "cube.obj loaded into the document");
     {   // normalise to unit radius, exactly like the mirror suite
         const float r = meshNode->getMeshRadius();

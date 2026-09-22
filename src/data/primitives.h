@@ -207,24 +207,31 @@ inline const Def *byGuid(const QString &guid)
     return nullptr;
 }
 
+/// ANY seed row with this name, Platform rows included — the RESOLVER's lookup
+/// (services/primitiveassets.h), as opposed to `byName` above, which answers what
+/// a USER may add. The two differ by exactly the Teapot: the samples' teapot is a
+/// baked asset that has to be resolvable, and `scene.addPrimitive("Teapot")` still
+/// has to say no (owner review R6).
+inline const Def *bySeedName(const QString &name)
+{
+    const QString wanted = name.trimmed().toLower();
+    for (const Def &def : all())
+        if (wanted == QString::fromLatin1(def.name).toLower()) return &def;
+    return nullptr;
+}
+
 /// THE SEED KEY LOOKUP: the row whose shipped mesh file is `meshKey`, or
-/// nullptr. This is how a document's mesh reference — the ":/..."/"app/..."
-/// string a scene has always stored for a built-in — reaches its baked asset
-/// (services/primitiveassets.h). Matched on the FILE NAME as well as the whole
-/// string, so the absolute app-folder form of a path resolves too (the
-/// thumbnail renderer and the material preview hold absolute paths).
+/// nullptr. This is how a document's mesh reference — the ":/..." string a scene
+/// has always stored for a built-in — reaches its baked asset
+/// (services/primitiveassets.h). An EXACT match: the key is a string the writer
+/// wrote from this table, and a by-file-name fallback would make two tables of
+/// one (it was written for the preview docks, which turned out to own their own
+/// furniture instead — bridge/previewmesh.h).
 inline const Def *bySeedMesh(const QString &meshKey)
 {
     if (meshKey.isEmpty()) return nullptr;
     for (const Def &def : all())
         if (meshKey == QLatin1String(def.mesh)) return &def;
-    const int slash = meshKey.lastIndexOf(QLatin1Char('/'));
-    const QString file = slash < 0 ? meshKey : meshKey.mid(slash + 1);
-    if (file.isEmpty()) return nullptr;
-    for (const Def &def : all()) {
-        const QString seed = QString::fromLatin1(def.mesh);
-        if (file == seed.mid(seed.lastIndexOf(QLatin1Char('/')) + 1)) return &def;
-    }
     return nullptr;
 }
 

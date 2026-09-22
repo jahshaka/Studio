@@ -14,9 +14,11 @@ For more information see the LICENSE file
 
 // A PREVIEW DOCK'S OWN FURNITURE (ATOM P2).
 //
-// The scene's meshes are baked library assets — the primitives, the Ground, the
-// Teapot (services/primitiveassets.h) — and `iris::Mesh::loadMesh` is deleted:
-// nothing in the product parses a model outside an import.
+// The SCENE's meshes are baked library assets — the primitives, the Ground, the
+// Teapot (services/primitiveassets.h) — and `iris::Mesh::loadMesh` is deleted
+// with its cache, its pin and the surface-card generation it ran at creation.
+// What is left of "parse a model file" is this: two docks' subjects, a thumbnail
+// tile's sphere and the avatar room's cube, parsed HERE and nowhere else.
 //
 // A PREVIEW SUBJECT IS NOT ONE OF THEM, measured rather than assumed. The asset
 // dock's high-poly sphere, the material dock's low-poly ball, the thumbnail
@@ -45,10 +47,20 @@ For more information see the LICENSE file
 namespace previewmesh
 {
 
-/// The first mesh of `resourcePath`, or of `appRelativePath` under the app
-/// folder when this binary carries no such resource. Null when neither is there
-/// (a headless test with neither the .qrc nor the app tree) — the caller draws
-/// nothing, which is what it did when the parse failed.
+/// The first mesh of `path` — a file or a ":/" resource. Null when it is not
+/// there: the caller draws nothing, which is what it did when a parse failed.
+/// ALSO THE ONE PARSE A TEST USES (`tests/` includes this header): a suite that
+/// needs some geometry on a node has no library, no store and no bake, and
+/// standing one up would be testing the library instead of the subject.
+inline iris::MeshPtr load(const QString &path)
+{
+    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+    return meshes.isEmpty() ? iris::MeshPtr() : meshes.first();
+}
+
+/// `resourcePath`, or `appRelativePath` under the app folder when this binary
+/// carries no such resource — a shipped mesh is BOTH, and which one a given
+/// binary has depends on the .qrc files its target lists.
 inline iris::MeshPtr load(const QString &resourcePath, const QString &appRelativePath)
 {
     QList<iris::MeshPtr> meshes;

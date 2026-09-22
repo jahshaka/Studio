@@ -1243,9 +1243,7 @@ void MainWindow::setupProjectDB()
     // the first time a library is opened, SYNCHRONOUSLY here — not on a worker,
     // because a library whose row count moves while a script runs is the defect
     // MaterialPresetSeeder's header describes. A library that already holds them
-    // pays one catalog query per row. The registration is for the preview docks,
-    // which are handed no database.
-    PrimitiveAssets::setLibrary(db);
+    // pays one catalog query per row.
     QStringList seedErrors;
     const int seeded = PrimitiveAssets::seedAll(db, &seedErrors);
     if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));

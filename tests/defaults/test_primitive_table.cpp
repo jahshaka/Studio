@@ -35,7 +35,7 @@ For more information see the LICENSE file
 
 #include <QCoreApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <QFile>
 #include <QGuiApplication>
 #include <QImage>
@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 
         check(QFile::exists(mesh), QStringLiteral("%1: the mesh %2 is shipped").arg(name, mesh));
 
-        iris::MeshPtr parsed = testmesh::load(mesh);
+        iris::MeshPtr parsed = previewmesh::load(mesh);
         check(!parsed.isNull() && parsed->numVerts > 0 && parsed->numFaces > 0,
               QStringLiteral("%1: it parses into real geometry (%2 verts, %3 faces)")
                   .arg(name)

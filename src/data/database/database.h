@@ -213,7 +213,7 @@ public:
     // SQLite autocommits every statement that runs outside a transaction, and
     // an autocommit is a real transaction: journal, write, fdatasync, journal
     // unlink. Adding a built-in primitive writes an asset row
-    // (SceneEditService::addBuiltinPrimitive -> createAssetEntry), so a script
+    // (SceneEditService::addPrimitive -> createAssetEntry), so a script
     // that adds 300 of them used to pay 300+ of them one at a time, on the UI
     // thread, interleaved with the engine work.
     //

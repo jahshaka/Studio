@@ -141,6 +141,47 @@ bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid
     }
 
     const QString bakeName = QFileInfo(bakePath).fileName();
+
+    // THE OLD GENERATION IS RETIRED FIRST (BAKE-RETIRE-1, 2026-09-22).
+    //
+    // A bake's file NAME is `<sourceOid16>-<settingsHash>.jmb`
+    // (MeshBake::fileNameFor) — it names the CONTENT and the SETTINGS and says
+    // nothing about the PRODUCER, because the producer lives in the fingerprint
+    // INSIDE the file. `asset_files`' primary key is (asset_guid, role, name)
+    // and `AssetCas::ingestFile` inserts OR IGNOREs. So after a kFormatVersion
+    // bump the rebuilt bake — new bytes, new oid, the SAME name — was SILENTLY
+    // DROPPED on any library that already had one: `planFor` kept answering
+    // with the stale oid, `MeshBake::read` refused its fingerprint, and every
+    // caller fell back to a parse... except the baked-asset callers that have no
+    // parse to fall back to, which is every shipped primitive since ATOM P2
+    // (they drew NOTHING, and `PrimitiveAssets::ensureSeeded` re-baked all
+    // fourteen into an object nothing linked, on every boot, forever). No gate
+    // saw it because every test home is fresh.
+    //
+    // DELETE + INSERT, not an UPDATE, and for the reason AssetCas::
+    // moveSourcePointer states at its own DELETE: the refcount triggers are
+    // AFTER INSERT and AFTER DELETE on asset_files, so this is what hands the
+    // superseded object back to `assets.gc` instead of inflating its refcount
+    // forever. Scoped to (this owner, 'bake', THIS name) and only when the oid
+    // really differs: a second row under another name is another SETTINGS
+    // variant of the same content and is nobody's business here
+    // (modelBakesNeeded's "two rows over one object with different settings are
+    // two different bakes").
+    for (const QString &ownerGuid : owners) {
+        QSqlQuery stale(conn);
+        stale.prepare("DELETE FROM asset_files WHERE asset_guid = ? AND role = ? "
+                      "AND name = ? AND oid <> ?");
+        stale.addBindValue(ownerGuid);
+        stale.addBindValue(iris::MeshBake::casRole());
+        stale.addBindValue(bakeName);
+        stale.addBindValue(staged && !staged->oid.isEmpty() ? staged->oid
+                                                            : AssetCas::hashFile(bakePath));
+        if (!stale.exec()) {
+            if (errorOut) *errorOut = stale.lastError().text();
+            return false;
+        }
+    }
+
     for (const QString &ownerGuid : owners) {
         QString oid;
         if (staged && !staged->oid.isEmpty()) {

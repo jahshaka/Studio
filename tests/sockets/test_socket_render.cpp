@@ -28,7 +28,7 @@
 
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <cmath>
 #include <cstdio>
 
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
     // four units down -Z from the socket's t=0 position.
     auto marker = iris::MeshNode::create();
     marker->setName("marker");
-    marker->setMesh(testmesh::load(":assets/models/cube.obj"));
+    marker->setMesh(previewmesh::load(":assets/models/cube.obj"));
     CHECK(!!marker->getMesh(), "the marker cube loaded");
     {
         const float r = marker->getMeshRadius();

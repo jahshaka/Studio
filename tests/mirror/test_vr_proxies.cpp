@@ -47,7 +47,7 @@
 //      for a controller whose shape we do not know.
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -92,7 +92,7 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     auto cube = iris::MeshNode::create();
     cube->setName("Cube");
-    cube->setMesh(testmesh::load(":/assets/models/cube.obj"));
+    cube->setMesh(previewmesh::load(":/assets/models/cube.obj"));
     auto grey = iris::DefaultMaterial::create();
     grey->setDiffuseColor(QColor(160, 160, 160));
     cube->setMaterial(grey);

@@ -2,7 +2,7 @@
 //
 // From 2026-08-31 to 2026-09-06 every Add-menu primitive silently lost its
 // selection outline: the "no outline for the built-in GROUND" rule was
-// implemented as `highlight->isBuiltIn`, which addBuiltinPrimitive sets on
+// implemented as `highlight->isBuiltIn`, which SceneNodeHelper::createBasicMeshNode sets on
 // every cube/sphere/capsule (and everything sample scenes are made of).
 // Selection, gizmo and properties kept working, so the loss read as "clicks
 // are broken" and cost a day of misattributed reports.

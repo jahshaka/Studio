@@ -23,9 +23,11 @@
 
 class SceneMirror;
 
-/// The legacy Display-menu primitives (widgets/scenewidget.h PreviewModel), on
-/// the SEEDED, BAKED primitives (services/primitiveassets.h — meshSeed in the
-/// .cpp names the row each one is).
+/// The legacy Display-menu primitives (widgets/scenewidget.h PreviewModel). The
+/// dock's own furniture, parsed once per process from the shipped mesh files
+/// (bridge/previewmesh.h — `meshFile` in the .cpp names each one); a preview
+/// subject is drawn at one distance in a small tile, so it is deliberately NOT a
+/// baked library asset the way a scene's meshes are.
 enum class PreviewMesh
 {
     Sphere,

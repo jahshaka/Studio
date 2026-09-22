@@ -4,7 +4,7 @@
 // identical to the first reproduces it (nothing leaks between requests).
 #include "../support/previewdump.h"
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -61,7 +61,7 @@ static QImage thumbnail(EngineThumbnailRenderer &r, QColor diffuse, QSize size)
 {
     // Exactly what ThumbnailGenerator's Mesh path builds: a MeshNode with a DefaultMaterial.
     auto node = iris::MeshNode::create();
-    node->setMesh(testmesh::load(":assets/models/cube.obj"));
+    node->setMesh(previewmesh::load(":assets/models/cube.obj"));
     auto mat = iris::DefaultMaterial::create();
     mat->setDiffuseColor(diffuse);
     node->setMaterial(mat);
@@ -154,7 +154,7 @@ int main(int argc, char **argv)
         // uniform-background thumbnail. The clip planes must follow the framing.
         {
             auto giant = iris::MeshNode::create();
-            giant->setMesh(testmesh::load(":assets/models/cube.obj"));
+            giant->setMesh(previewmesh::load(":assets/models/cube.obj"));
             auto gm = iris::DefaultMaterial::create();
             gm->setDiffuseColor(QColor(220, 30, 30));
             giant->setMaterial(gm);
@@ -182,7 +182,7 @@ int main(int argc, char **argv)
             CHECK(!mat.isNull(), "mesh-data factory returns a material");
 
             auto node = iris::MeshNode::create();
-            node->setMesh(testmesh::load(":assets/models/cube.obj"));
+            node->setMesh(previewmesh::load(":assets/models/cube.obj"));
             node->setMaterial(mat);
             QImage t = renderer.renderNode(node, size); show("textured cube", t);
             const QColor ct = centre(t);
@@ -212,7 +212,7 @@ int main(int argc, char **argv)
         // clipping of its own.
         {
             auto hot = iris::MeshNode::create();
-            hot->setMesh(testmesh::load(":assets/models/cube.obj"));
+            hot->setMesh(previewmesh::load(":assets/models/cube.obj"));
             auto hm = iris::DefaultMaterial::create();
             hm->setDiffuseColor(QColor(255, 255, 255));
             hot->setMaterial(hm);

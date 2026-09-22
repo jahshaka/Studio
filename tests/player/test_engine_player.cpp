@@ -5,7 +5,7 @@
 // picture (pixels); stopping must restore the transform.
 #include "irisgl/core/math/quat.h"
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -450,7 +450,7 @@ int main(int argc, char **argv)
 
     auto cube = iris::MeshNode::create();
     cube->setName("cube");
-    cube->setMesh(testmesh::load(":assets/models/cube.obj"));
+    cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
     auto orange = iris::DefaultMaterial::create();
     orange->setDiffuseColor(QColor(204, 76, 51));
     cube->setMaterial(orange);

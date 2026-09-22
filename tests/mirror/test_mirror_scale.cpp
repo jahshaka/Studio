@@ -39,7 +39,7 @@
 //      fingerprint fails here, which is the whole point.
 #include <QColor>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <QDir>
 #include <QImage>
 #include <QGuiApplication>
@@ -102,7 +102,7 @@ static void build(Arm &a, Engine *engine, const char *label, int count, int rows
     a.doc = iris::Scene::create();
 
     // ONE mesh asset, shared: this suite measures the WALK, not mesh loading.
-    auto mesh = testmesh::load(":assets/models/cube.obj");
+    auto mesh = previewmesh::load(":assets/models/cube.obj");
     iris::PbrMaterialPtr shared = iris::PbrMaterial::create();
 
     std::vector<iris::SceneNodePtr> groups;
@@ -270,7 +270,7 @@ int main(int argc, char **argv)
         auto probeDoc = iris::Scene::create();
         Scene *probeTarget = engine->createScene("fingerprint");
         auto probeMesh = iris::MeshNode::create();
-        probeMesh->setMesh(testmesh::load(":assets/models/cube.obj"));
+        probeMesh->setMesh(previewmesh::load(":assets/models/cube.obj"));
         auto probeMat = iris::PbrMaterial::create();
         probeMesh->setMaterial(probeMat);
         probeDoc->getRootNode()->addChild(probeMesh);

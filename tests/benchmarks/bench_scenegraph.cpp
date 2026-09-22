@@ -114,7 +114,7 @@
 
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <QByteArray>
 #include <QDateTime>
 #include <QFile>
@@ -418,7 +418,7 @@ static iris::MaterialPtr gMaterial;
 
 static void loadSharedAssets()
 {
-    gCube = testmesh::load(":assets/models/cube.obj");
+    gCube = previewmesh::load(":assets/models/cube.obj");
     auto mat = iris::DefaultMaterial::create();
     mat->setDiffuseColor(QColor(204, 96, 51));
     gMaterial = mat;
@@ -841,7 +841,7 @@ int main(int argc, char **argv)
         // policy. Loaded from the source tree because IrisGL's own qrc carries
         // only the 12-triangle cube.
         iris::MeshPtr dense =
-            testmesh::load(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
+            previewmesh::load(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
         CHECK(!dense.isNull(), "(f) the dense fixture mesh loaded");
         if (!dense.isNull()) {
             iris::MeshBake::buildLodChain(dense);

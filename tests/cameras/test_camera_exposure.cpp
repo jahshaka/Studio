@@ -39,7 +39,7 @@
 
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <QVariantList>
 
 #include <cmath>
@@ -401,7 +401,7 @@ struct Doc {
         scene = iris::Scene::create();
         auto meshNode = iris::MeshNode::create();
         meshNode->setName("cube");
-        meshNode->setMesh(testmesh::load(":assets/models/cube.obj"));
+        meshNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
         const float r = meshNode->getMeshRadius();
         meshNode->setLocalScale(iris::Vec3(1.0f / (r > 0.0f ? r : 1.0f),
                                            1.0f / (r > 0.0f ? r : 1.0f),

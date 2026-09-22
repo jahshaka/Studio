@@ -2146,11 +2146,31 @@ QVector<Database::AssetThumbnailState> Database::fetchAssetThumbnailStates(bool 
     QSqlQuery query;
     // `thumbnail IS NOT NULL AND length(thumbnail) > 0` is evaluated BY SQLITE:
     // the blobs never cross into this process (THUMBS-1 fix round F2).
+    //
+    // PLATFORM FURNITURE IS NOT SWEPT (ATOM P2, 2026-09-22). A row stamped
+    // `{"type": "platform"}` is the APP's own content, pinned or seeded behind
+    // the user's back and shown in no tile grid: the default floor's checker
+    // (services/shippedassets.h, Ownership::Platform) and, since the primitives
+    // became baked library assets, the fourteen shipped meshes — whose tiles are
+    // the PNG icons in `src/data/primitives.h`, and two of which (the Ground, the
+    // Teapot) have no tile at all. A sweep that considers them renders fourteen
+    // thumbnails nobody displays and then reports a library full of "missing"
+    // rows, which is what `scripting.e2e.thumbnails_order` caught. A thumbnail is
+    // for a row a user can SEE, and that is exactly what the stamp says.
+    //
+    // `instr` and not `json_extract`: no other query in this schema needs the
+    // JSON1 extension, and a build without it would fail this statement — which
+    // would stop EVERY rebuild instead of skipping a few rows. The quoted token
+    // is written by one place and read by two (services/assettray.h rule 4).
+    static const char *kNotPlatform = "instr(COALESCE(properties, ''), '\"platform\"') = 0";
     query.prepare(missingOnly
-                      ? "SELECT guid, type, 0 FROM assets "
-                        "WHERE thumbnail IS NULL OR length(thumbnail) = 0"
-                      : "SELECT guid, type, "
-                        "(thumbnail IS NOT NULL AND length(thumbnail) > 0) FROM assets");
+                      ? QStringLiteral("SELECT guid, type, 0 FROM assets "
+                                       "WHERE (thumbnail IS NULL OR length(thumbnail) = 0) AND %1")
+                            .arg(QLatin1String(kNotPlatform))
+                      : QStringLiteral("SELECT guid, type, "
+                                       "(thumbnail IS NOT NULL AND length(thumbnail) > 0) "
+                                       "FROM assets WHERE %1")
+                            .arg(QLatin1String(kNotPlatform)));
     executeAndCheckQuery(query, "FetchAssetThumbnailStates");
 
     QVector<AssetThumbnailState> rows;

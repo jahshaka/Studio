@@ -49,14 +49,6 @@ QHash<QString, iris::MeshPtr> &cache()
     return c;
 }
 
-/// The registered library (setLibrary), for the preview bridges that are handed
-/// none. Written once at startup, read on the UI thread.
-Database *&library()
-{
-    static Database *db = nullptr;
-    return db;
-}
-
 /// The row exists and its source bytes are in the store: the path to them.
 /// (The seed half has its own copy — one function, two translation units, and it
 /// is four lines: the alternative is a third TU for it.)
@@ -70,14 +62,12 @@ QString storedSource(QSqlDatabase conn, const QString &root, Database *db, const
 
 }   // namespace
 
-void setLibrary(Database *db)
-{
-    library() = db;
-}
-
 iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
 {
-    const primitives::Def *def = primitives::byName(nameOrSeedPath);
+    // bySeedName, not byName: this is the RESOLVER, and it must reach a Platform
+    // seed (the samples' Teapot) by its own name. What a user may ADD is byName's
+    // question and it is asked at the verb (SceneEditService::addPrimitive).
+    const primitives::Def *def = primitives::bySeedName(nameOrSeedPath);
     if (!def) def = primitives::bySeedMesh(nameOrSeedPath);
     if (!def || !def->guid) return iris::MeshPtr();
     const QString guid = QString::fromLatin1(def->guid);
@@ -95,7 +85,6 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
     // document, dock or verb asks here the rows are there; a binary that never
     // seeds (a preview-only test, a tool) gets an honest null instead of a link
     // dependency on the importer.
-    if (!db) db = library();
     const QString source = storedSource(QSqlDatabase::database(), AssetStorePaths::root(),
                                        db, guid);
     if (source.isEmpty()) {
@@ -124,7 +113,6 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
 
 bool allSeeded(Database *db)
 {
-    if (!db) db = library();
     if (!db) return false;
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();

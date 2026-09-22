@@ -129,7 +129,7 @@ int assetRowCount(const QStringList &guids)
     return found;
 }
 
-/// A built-in primitive exactly as SceneEditService::addBuiltinPrimitive makes
+/// A built-in primitive exactly as SceneEditService::addPrimitive makes
 /// one: a mesh node whose GUID names an Object row in the library.
 QString makePrimitiveRow(Database &db, const QString &projectGuid, int n)
 {

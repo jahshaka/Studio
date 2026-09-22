@@ -124,14 +124,32 @@ if [ "$RESET_CENSUS" != "$FRESH_CENSUS" ]; then
 fi
 
 # ---- 5. and on disk --------------------------------------------------------
-# The LAST call in reset.js is a reset of an empty library, so everything below
-# is measured on a library that has just been reset with nothing in it.
+# The LAST call in reset.js is a reset of a library with nothing of the USER'S in
+# it, so everything below is measured on a library that is exactly a first launch.
+#
+# "EXACTLY A FIRST LAUNCH" IS NOT "EMPTY" (ATOM P2). A first launch seeds the
+# shipped geometry — the twelve primitives, the Ground every new scene stands on
+# and the Teapot the samples name — as baked library assets, so its store holds a
+# source and a bake per row. The comparison is therefore against THE FRESH ROOT
+# this script measured in step 1, which is the claim the suite is actually making;
+# zero was only ever a spelling of "the same as a first launch", and it stopped
+# being one the day the app started shipping geometry it could not draw without.
+# WHAT A FIRST LAUNCH LEAVES, counted from the app's own line rather than pinned
+# to a number here: it logs "primitives: baked <n> shipped meshes" when it seeds,
+# and each seed row stores TWO objects — the shipped mesh it was baked from and the
+# bake. So this moves with src/data/primitives.h and still says something exact.
+# (A fresh root ALSO holds the material presets' maps, which a reset's async seeder
+# has not finished writing when the script exits, so the fresh root's total is not
+# the comparison to make — the census above is.)
+SEEDS="$(cat ./*.log 2>/dev/null | grep -o 'baked [0-9]* shipped' | grep -o '[0-9][0-9]*' \
+         | tail -1)"
+[ -n "$SEEDS" ] || SEEDS=0
 OBJECTS_AFTER="$(find "$ROOT/AssetStore/objects" -type f 2>/dev/null | wc -l)"
-[ "$OBJECTS_AFTER" = "0" ]
-check $? "the store's objects/ is empty ($OBJECTS_AFTER file(s))"
+[ "$SEEDS" -gt 0 ] && [ "$OBJECTS_AFTER" = "$((SEEDS * 2))" ]
+check $? "the store's objects/ holds nothing but the shipped seed ($OBJECTS_AFTER file(s) = 2 x $SEEDS)"
 SIDECARS_AFTER="$(find "$ROOT/AssetStore/sidecar" -type f 2>/dev/null | wc -l)"
-[ "$SIDECARS_AFTER" = "0" ]
-check $? "…and its sidecar/ too ($SIDECARS_AFTER)"
+[ "$SIDECARS_AFTER" = "$((SEEDS * 2))" ]
+check $? "…and its sidecar/ the same ($SIDECARS_AFTER)"
 # No PROJECT folders (a guid-named directory); the user's own folder is still
 # there and is counted by the assertions below, not by this one.
 PROJECTS_AFTER="$(ls -A "$ROOT/Projects" 2>/dev/null \

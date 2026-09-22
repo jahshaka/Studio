@@ -5,7 +5,7 @@
 
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <QColor>
 #include <QImage>
 #include <QJsonArray>
@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 
     auto cube = iris::MeshNode::create();
     cube->setName("cube");
-    cube->setMesh(testmesh::load(":assets/models/cube.obj"));
+    cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     auto pbr = iris::PbrMaterial::create();
     pbr->setBaseColor(QColor(180, 60, 40));
@@ -88,7 +88,7 @@ int main(int argc, char **argv)
 
     auto childCube = iris::MeshNode::create();
     childCube->setName("childCube");
-    childCube->setMesh(testmesh::load(":assets/models/cube.obj"));
+    childCube->setMesh(previewmesh::load(":assets/models/cube.obj"));
     childCube->setMaterial(pbr);
     cube->addChild(childCube);
     // AFTER the parenting on purpose: addChild(keepTransform=true) re-expresses
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
 
     auto hidden = iris::MeshNode::create();
     hidden->setName("hidden");
-    hidden->setMesh(testmesh::load(":assets/models/cube.obj"));
+    hidden->setMesh(previewmesh::load(":assets/models/cube.obj"));
     hidden->exportable = false;
     scene->rootNode->addChild(hidden);
 

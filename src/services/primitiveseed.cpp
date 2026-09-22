@@ -65,23 +65,42 @@ namespace {
 QString shippedFile(const primitives::Def &def, QTemporaryDir &holder, QString *errorOut)
 {
     const QString seed = QString::fromLatin1(def.mesh);
+    // TWO PLACES, ONE FILE. A shipped mesh is compiled into the app's resources
+    // AND copied beside the binary (the app folder IS the resource tree: ":/x/y"
+    // ships as "app/x/y"), and which of them a given binary has depends on the
+    // .qrc files its target lists — the same fact bridge/previewmesh.h states for
+    // the preview docks. The product always has the resource; a suite that links
+    // no .qrc reads the same bytes from the app folder, and the bytes are what the
+    // object id is made of, so the two routes cannot produce different content.
+    const QString onDisk = IrisUtils::getAbsoluteAssetPath(
+        seed.startsWith(QLatin1Char(':')) ? QStringLiteral("app") + seed.mid(1) : seed);
     if (!seed.startsWith(QLatin1Char(':'))) {
-        const QString onDisk = IrisUtils::getAbsoluteAssetPath(seed);
         if (QFileInfo(onDisk).isFile()) return onDisk;
         if (errorOut) *errorOut = QStringLiteral("the shipped file '%1' is not there").arg(onDisk);
         return QString();
     }
-    if (!holder.isValid()) {
-        if (errorOut) *errorOut = QStringLiteral("cannot create a staging directory");
-        return QString();
-    }
-    const QString name = seed.mid(seed.lastIndexOf(QLatin1Char('/')) + 1);
-    const QString out = QDir(holder.path()).filePath(name);
-    if (!QFile::copy(seed, out)) {
+    if (QFileInfo::exists(seed)) {
+        // A Qt resource cannot be handed to assimp (the pipeline's contract is a
+        // FILE: it sniffs by extension, scans the .obj for its `mtllib` sidecars
+        // and hashes the bytes), so it is copied ONCE into a private temporary
+        // directory under its own file name and imported from there. Where the
+        // copy sat is invisible afterwards; the NAME is preserved because it names
+        // the row.
+        if (!holder.isValid()) {
+            if (errorOut) *errorOut = QStringLiteral("cannot create a staging directory");
+            return QString();
+        }
+        const QString name = seed.mid(seed.lastIndexOf(QLatin1Char('/')) + 1);
+        const QString out = QDir(holder.path()).filePath(name);
+        if (QFile::copy(seed, out)) return out;
         if (errorOut) *errorOut = QStringLiteral("cannot extract the resource '%1'").arg(seed);
         return QString();
     }
-    return out;
+    if (QFileInfo(onDisk).isFile()) return onDisk;
+    if (errorOut)
+        *errorOut = QStringLiteral("neither the resource '%1' nor the file '%2' is there")
+                        .arg(seed, onDisk);
+    return QString();
 }
 
 /// The row exists and its source bytes are in the store: the path to them.
@@ -121,9 +140,19 @@ QString ensureSeeded(const primitives::Def &def, Database *db, QString *errorOut
     const QString have = storedSource(conn, root, db, guid);
     if (!have.isEmpty()) {
         if (!MeshBakeStore::isFresh(conn, root, have, guid)) {
+            // A FAILED RE-BAKE IS A FAILURE, not a seeded row with a warning
+            // attached. This used to set errorOut and still answer with the guid,
+            // so `seedAll` — which reports only an EMPTY return — counted the row
+            // as seeded and said nothing, and the caller then asked a mesh of an
+            // asset whose bake this build cannot read.
             QString bakeError;
-            if (!MeshBakeStore::bakeSource(conn, root, have, &bakeError, guid) && errorOut)
-                *errorOut = bakeError;
+            if (!MeshBakeStore::bakeSource(conn, root, have, &bakeError, guid)) {
+                if (errorOut)
+                    *errorOut = bakeError.isEmpty()
+                                    ? QStringLiteral("the bake could not be rebuilt for this build")
+                                    : bakeError;
+                return QString();
+            }
         }
         return guid;
     }

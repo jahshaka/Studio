@@ -20,7 +20,7 @@
 // Headless: offscreen Views, no widget, no database.
 #include "irisgl/core/math/quat.h"
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QGuiApplication>
@@ -73,7 +73,7 @@ public:
         mDocument->rootNode->addChild(light);
 
         auto cube = iris::MeshNode::create();
-        cube->setMesh(testmesh::load(":assets/models/cube.obj"));
+        cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
         auto mat = iris::DefaultMaterial::create();
         mat->setDiffuseColor(QColor(230, 40, 40));
         cube->setMaterial(mat);

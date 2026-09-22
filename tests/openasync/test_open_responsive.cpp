@@ -444,13 +444,14 @@ int main(int argc, char **argv)
         for (const Sample &sample : samples)
             if (QLatin1String(sample.name) == QLatin1String("Showroom 2")) showroomGuid = sample.guid;
 
-        // THE BUILT-IN PRIMITIVES ARE PINNED (iris::Mesh::pinLoadPaths). The
-        // load cache holds WEAK references, so before the pin every open
-        // after a close re-parsed the ground and the cubes ON THIS THREAD —
-        // measured 1-4 parses and 17-95 ms per sample open, the largest
-        // UI-thread parse left once a project's own models are on the worker.
-        // A REOPEN is what proves it: the first open of a session may parse a
-        // primitive (nothing has asked for it yet), the second may not.
+        // THE BUILT-IN PRIMITIVES ARE BAKED LIBRARY ASSETS (ATOM P2,
+        // jahshaka/src/services/primitiveassets.h), held for the life of the
+        // process after the first read. Before that they were parsed through a
+        // WEAK cache, so every open after a close re-parsed the ground and the
+        // cubes ON THIS THREAD — 1-4 parses and 17-95 ms per sample open, the
+        // largest UI-thread parse left once a project's own models are on the
+        // worker. A REOPEN is what proves it: the first open of a session may
+        // read a seed (nothing has asked for it yet), the second may not.
         const Sample &last = samples.last();
         if (!last.guid.isEmpty()) {
             mcp.runScript(QStringLiteral("app.openStats({reset:true})"));

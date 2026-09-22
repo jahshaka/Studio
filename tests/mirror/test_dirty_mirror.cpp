@@ -31,7 +31,7 @@
 // backstop anywhere in the system.
 #include <QColor>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <QGuiApplication>
 #include <cstdio>
 #include <functional>
@@ -97,8 +97,8 @@ void build(Rig &r, Engine *engine)
     r.engine = engine;
     r.target = engine->createScene("dirty");
     r.doc = iris::Scene::create();
-    r.cubeMesh  = testmesh::load(":assets/models/cube.obj");
-    r.planeMesh = testmesh::load(":assets/models/plane.obj");
+    r.cubeMesh  = previewmesh::load(":assets/models/cube.obj");
+    r.planeMesh = previewmesh::load(":assets/models/plane.obj");
 
     r.group = iris::SceneNode::create();
     r.group->setName(QStringLiteral("group"));

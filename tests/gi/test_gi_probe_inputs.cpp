@@ -28,7 +28,7 @@
 // transform) and the probe half is engine-side; the contract is the pair.
 #include <QGuiApplication>
 
-#include "tests/support/testmesh.h"
+#include "bridge/previewmesh.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -110,7 +110,7 @@ static iris::MeshNodePtr slab(const iris::ScenePtr &doc, const char *name,
 {
     auto n = iris::MeshNode::create();
     n->setName(QString::fromLatin1(name));
-    n->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
+    n->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj")));
     n->setLocalPos(pos);
     n->setLocalScale(scale);
     n->setMaterial(m);

@@ -70,20 +70,12 @@ namespace primitives { struct Def; }
 namespace PrimitiveAssets
 {
 
-/// THE OPEN LIBRARY, registered once by the shell when it opens one. The
-/// PREVIEW bridges (the asset and material docks, the thumbnail renderer) are
-/// handed no database — they render app furniture, not library content — and a
-/// seed has to reach the catalog to exist at all. Every caller that HAS a
-/// database still passes it; this is the fallback for the ones that do not, and
-/// it is the same object (one library, one default connection per thread).
-void setLibrary(Database *db);
-
 /// THE BAKED MESH for a seed, by its NAME ("Cube", "Ground") or by its seed
 /// PATH (":/content/primitives/cube.obj", an absolute app-folder path), held for
 /// the life of the process after the first read. RESOLVE ONLY: null when the
 /// library has not seeded that row or its bake cannot be read by this build — the
 /// caller renders nothing, exactly as it did when a parse failed.
-iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db = nullptr);
+iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db);
 
 /// The library row's guid for a seed, creating it if needed (the reserved guid
 /// from src/data/primitives.h). Empty on failure, with `errorOut` set.
