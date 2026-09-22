@@ -126,3 +126,19 @@ add_test(NAME rigperf.smoke COMMAND bench_rigperf --smoke
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 set_tests_properties(rigperf.smoke PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "benchmark-smoke")
+
+# MEASURE-1d's instrument (draw-call-bound or vertex-bound) — a TOOL, not a
+# suite, and EXCLUDE_FROM_ALL for the same reason the gi measure tools are: the
+# number is taken by code that is read, and no gate runs it.
+add_executable(atom_bound_measure EXCLUDE_FROM_ALL atom_bound_measure.cpp)
+set_target_properties(atom_bound_measure PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(atom_bound_measure PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(atom_bound_measure PRIVATE JahshakaEngine)
+add_dependencies(atom_bound_measure JahshakaEngineMedia)
