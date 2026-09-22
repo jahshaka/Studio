@@ -26,6 +26,26 @@ add_test(NAME gi.rt_reflect COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 300 LABELS "engine")
 
+# THE LAMP ARM — A RAY-TRACED MIRROR IS A RADIOMETER (PHOTON phase A, A1
+# section 1.2; lane FENCE-1). Same binary, its own fixture and its own process:
+# radiance is invariant along a ray, so a perfect mirror showing an emitter of
+# radiance L must read exactly L. Two rows, because the answer differs on the two
+# sides of 1.0 — the voxeliser's MATERIAL store holds emissive in a UNORM
+# texture, so an emitter authored above 1.0 is clipped on its way into the cache.
+#
+#   gi.rt_reflect_lamp        ORDINARY, gates: L = 0.9, inside the UNORM range.
+#   gi.rt_reflect_lamp_clip   LABEL `photon-target`: L = 3.0, which is
+#                             VOXEL-CLIP-1's WITNESS. Phase A's VOXEL-CLIP-1
+#                             deletes the label.
+add_test(NAME gi.rt_reflect_lamp COMMAND test_rt_reflect --lamp
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 300 LABELS "engine")
+
+add_test(NAME gi.rt_reflect_lamp_clip COMMAND test_rt_reflect --lamp --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
+                     TIMEOUT 300 LABELS "engine;photon-target")
+
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_norays PROPERTIES

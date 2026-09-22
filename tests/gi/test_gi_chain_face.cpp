@@ -24,6 +24,68 @@
 // what the shipped Sky Light pushes. Each measured with the chain ON and with
 // the single fitted volume (the arm before E2), and once more with the camera
 // moved, to answer "does the face travel with the camera".
+//
+// ===========================================================================
+// TWO ctest ROWS, ONE BINARY (PHOTON phase A, A1 §0/§1.2 — lane FENCE-1)
+// ===========================================================================
+//
+// WHAT THIS SUITE USED TO SAY, AND WHY IT IS WRONG TO SAY IT. The bars below
+// were a BRACKET AROUND A KNOWN ARTEFACT: "the chain's face steps no more than
+// E3 measured it stepping". That is a fence around today's picture, and a fence
+// around a defect has to be re-anchored by every part that reduces the defect —
+// which is exactly how 1.05 became 1.08 and 0.02 became 0.012 elsewhere. Under
+// forward-building (owner 2026-09-22) a suite states the CORRECT number.
+//
+// THE CORRECT NUMBER IS 1.0. The face between two cascades, and between the
+// outermost cascade and the world, is a boundary in a DATA STRUCTURE. The
+// ambient a surface receives is a property of the surface and the sky, not of
+// which cell size happens to store it, so a flat slab under an unchanging sky
+// must render one luminance across the whole picture and every face ratio must
+// be 1.000. Anything else is the renderer telling you where its cascades are.
+//
+// SO THERE ARE TWO ROWS:
+//
+//   gi.chain_face         ORDINARY, and it gates. It carries (a) the bracket,
+//                         renamed to what it actually is — "no regression while
+//                         red" — and (b) the "cascades follow the camera" arm,
+//                         which is a CORRECT claim and not a target at all.
+//                         Both print. The bracket is DELETED by the lane that
+//                         removes the target row's label.
+//   gi.chain_face_target  LABEL `photon-target`. Every face ratio = 1.0 +- 0.05,
+//                         under a real sky AND under a flat ambient. It RUNS in
+//                         every scoped selection and prints `target:` lines; it
+//                         does not decide a gate (scripts/gate-scope.py splits
+//                         the label out, the MERGE/PUSH tiers -LE it).
+//
+// TODAY'S MEASURED VALUES (this tree, 2026-09-22, RTX 4080 SUPER, all four
+// ambients, every face of every arm):
+//
+//     the chain's faces           0.859 .. 1.234   (worst |ratio-1| = 0.234)
+//     the single fitted volume    1.028 .. 1.057
+//
+//   and the shape of the error is not noise — it is three named mechanisms:
+//     * cascade 0's face is the irradiance field's convention meeting the
+//       cone's (1.128-1.204 under the 5 degree sun, 0.900-0.971 elsewhere);
+//     * the 128^3 -> 64^3 cell-size jump in the tier's cascade table reads
+//       0.859-0.948 at cascades 1 and 2;
+//     * the outermost face, cascade 3 to the WORLD, is the 2-band hemisphere
+//       pair meeting HlmsPbs's full 9 bands: 1.191-1.234, the largest of them.
+//
+// WHAT TURNS THE TARGET ROW GREEN: PHOTON P4 — ONE-READER (one `.any` piece for
+// the voxel radiance read, so the pixel path, the bounce job, the field's Gen
+// job and the ray hit cannot disagree), ONE-ENV (one sky cube and one cosine
+// convolution for EVERY escape, which is the outermost face's whole mechanism)
+// and F10-TABLES (the cell-size jump derived instead of tabulated). The lane
+// that lands them deletes the `photon-target` label from this file's CMake row
+// AND deletes the bracket from the ordinary row — removing the label is that
+// part's acceptance.
+//
+// THE BAR, DERIVED. +-0.05 is not a taste: `gi.volume_edge` already asserts
+// under 5 % for the single fitted volume under a flat ambient, i.e. 5 % is the
+// number this renderer has already been shown to reach on the easy case, so it
+// is what the hard case is held to. Below that lies the measurement's own
+// floor: the profile bands are 16 columns of a 512-wide picture and the slab is
+// dithered, so a face reads +-0.005 run to run.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -38,10 +100,38 @@
 using namespace jahshaka::engine;
 
 static int failures = 0;
+/// `--target` picks the TARGET row (gi.chain_face_target, label photon-target).
+/// One binary, two rows: the measurements are identical and only the assertions
+/// differ, so the two rows can never drift apart.
+static bool gTarget = false;
+
 #define CHECK(cond, msg)                                                        \
     do {                                                                        \
         if (cond) std::printf("ok: %s\n", msg);                                 \
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
+    } while (0)
+
+/// The ordinary row's assertions — skipped (but still printed) in the target row.
+#define CHECK_ORDINARY(cond, msg)                                               \
+    do {                                                                        \
+        if (gTarget) break;                                                     \
+        if (cond) std::printf("ok: %s\n", msg);                                 \
+        else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
+    } while (0)
+
+/// A TARGET line: the value and the bar, on every run of either row, so the
+/// distance to the bar is visible from any lane's scoped gate. It only counts a
+/// FAILURE in the target row.
+#define TARGET(value, bar, what)                                                \
+    do {                                                                        \
+        const double v_ = double(value), b_ = double(bar);                      \
+        const bool met_ = v_ <= b_;                                             \
+        std::printf("target: %.4f (bar %.4f) %s%s\n", v_, b_, what,             \
+                    met_ ? " -- MET" : "");                                    \
+        if (gTarget) {                                                          \
+            if (met_) std::printf("ok: %s\n", what);                            \
+            else { std::printf("FAIL: %s\n", what); ++failures; }               \
+        }                                                                       \
     } while (0)
 
 static const unsigned kSize = 512;
@@ -100,13 +190,20 @@ static float stepAt(const std::vector<float> &p, unsigned col, float &inside, fl
     return outside > 1e-6f ? inside / outside : 0.0f;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--target") == 0) gTarget = true;
+    std::printf("== gi.chain_face%s: %s\n", gTarget ? "_target" : "",
+                gTarget ? "THE TARGET ROW (label photon-target) -- every face ratio 1.0 +- 0.05, "
+                          "green after PHOTON P4 (ONE-READER + ONE-ENV + F10-TABLES)"
+                        : "the ORDINARY row -- no regression while red, and the cascades follow "
+                          "the camera");
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-chain-face-ogre.log";
+    cfg.logFile = gTarget ? "test-gi-chain-face-target-ogre.log" : "test-gi-chain-face-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -182,6 +279,20 @@ int main()
     const float kSingleFaceMax = 1.08f;      // measured 1.007-1.057 over four ambients
     const float kChainFaceMax  = 1.35f;      // measured 0.821-1.252 over four ambients
     const float kChainFaceMin  = 0.75f;
+    // THE TARGET. A face is a boundary in a data structure, not in the world:
+    // the ambient on a flat slab under an unchanging sky is one number, so every
+    // ratio is 1.000 and the bar is the deviation from it. 0.05 is the figure
+    // `gi.volume_edge` already holds the EASY case to (the single fitted volume
+    // under a flat ambient), so it is what the hard case is held to; the
+    // measurement's own floor is +-0.005 (16-column bands, a dithered slab).
+    const double kFaceTargetBar = 0.05;
+    const auto faceTargetName = [](const char *what, size_t cascade) {
+        static char buf[192];
+        std::snprintf(buf, sizeof(buf),
+                      "the face of cascade %zu is a boundary in a data structure and not in the "
+                      "world: |ratio - 1| under %.2f  [%s]", cascade, 0.05, what);
+        return buf;
+    };
     const auto measure = [&](const char *what, bool chain, const Amb &a, float camX, float orthoHalf) {
         r.camX = camX; r.orthoHalf = orthoHalf; placeCamera(r);
         GiParams gi;
@@ -208,8 +319,16 @@ int main()
                             "inner %.4f outer %.4f  step %.3fx (%+.1f/255)\n",
                             i, st.cascades[i].halfSize, st.cascades[i].centre.x, face, col, in, out,
                             ratio, (in - out) * 255.0f);
-                CHECK(ratio > kChainFaceMin && ratio < kChainFaceMax,
-                      "the chain's face steps no more than E3 measured it stepping");
+                // THE TARGET: 1.000, both ways, under every ambient.
+                TARGET(std::fabs(double(ratio) - 1.0), kFaceTargetBar,
+                       faceTargetName(what, i));
+                // ...and the bracket, which is what it always was: a fence
+                // around a KNOWN artefact, kept only so a regression toward the
+                // old 1.9x staircase reds while the target is red. DELETED by
+                // the lane that removes the target row's label.
+                CHECK_ORDINARY(ratio > kChainFaceMin && ratio < kChainFaceMax,
+                               "no regression while red: the chain's face steps no more than E3 "
+                               "measured it stepping");
             }
         } else {
             const float face = st.boundsMax.x;
@@ -219,8 +338,14 @@ int main()
             std::printf("   single volume x %.2f .. %.2f  face col %u  inner %.4f outer %.4f  "
                         "step %.3fx (%+.1f/255)\n", st.boundsMin.x, st.boundsMax.x, col, in, out,
                         ratio, (in - out) * 255.0f);
-            CHECK(ratio > 1.0f / kSingleFaceMax && ratio < kSingleFaceMax,
-                  "the SINGLE fitted volume's edge does not step, under a real sky either");
+            // The single fitted volume has the same target — it is the same
+            // claim about the same physics, on the arm that is already closest.
+            TARGET(std::fabs(double(ratio) - 1.0), kFaceTargetBar,
+                   "the SINGLE fitted volume's edge is not a boundary in the world either: "
+                   "|ratio - 1| under 0.05");
+            CHECK_ORDINARY(ratio > 1.0f / kSingleFaceMax && ratio < kSingleFaceMax,
+                           "no regression while red: the SINGLE fitted volume's edge does not "
+                           "step, under a real sky either");
         }
         // The whole profile, thinned, so a face nobody predicted is still visible.
         std::printf("   profile:");
@@ -256,8 +381,12 @@ int main()
             for (unsigned x = 40; x < kSize - 40; ++x) worst = std::max(worst, std::fabs(p0[x] - p1[x]));
             std::printf("   the same world columns changed by up to %.4f (%.1f/255) because the "
                         "chain moved under them\n", worst, worst * 255.0f);
-            CHECK(followed, "every cascade sits within one step of the camera, so its faces "
-                            "travel with the eye rather than staying in the world");
+            // A CORRECT CLAIM, not a target: the chain is camera-centred by
+            // design and nothing in P4 changes that. It gates on the ordinary
+            // row and survives the lane that deletes the bracket.
+            CHECK_ORDINARY(followed,
+                           "every cascade sits within one step of the camera, so its faces "
+                           "travel with the eye rather than staying in the world");
         }
         // ...and the inner faces, at 5x the magnification.
         measure((std::string(a.name) + ", chain, cam x=0, +-20 m").c_str(), true, a, 0.0f, 20.0f);
