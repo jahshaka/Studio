@@ -1176,3 +1176,29 @@ add_test(NAME gi.gather_trace COMMAND test_gi_gather_reference
 set_tests_properties(gi.gather_trace PROPERTIES
                      TIMEOUT 600 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_TRACE=1")
+
+# gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L (PHOTON
+# phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane VOXEL-CLIP-1,
+# ogre-patch 0087). The emissive VOXEL store was RGBA8_UNORM, so every emitter
+# above 1.0 entered the injection, the bounces, the field, the cones and the ray
+# hits clipped — read in the bytes (`giVoxelStats().peakEmissive`), because a
+# clipped emitter draws a picture that is merely dimmer.
+#
+# RUN_SERIAL like every cascade suite: it drives a full chain and downloads
+# whole volumes.
+add_executable(test_gi_voxel_emissive test_gi_voxel_emissive.cpp)
+set_target_properties(test_gi_voxel_emissive PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_emissive PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_emissive PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_emissive JahshakaEngineMedia)
+add_test(NAME gi.voxel_emissive COMMAND test_gi_voxel_emissive
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_emissive PROPERTIES
+    TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
