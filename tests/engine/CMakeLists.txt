@@ -184,6 +184,25 @@ add_test(NAME engine.gi_scan COMMAND test_engine_gi_scan
 # 1k-item arm voxelises once in a Debug build.
 set_tests_properties(engine.gi_scan PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# THE GPU SCENE'S TABLES (lane GPU-SCENE-1; ENGINE V2's V2-2 pulled forward into
+# phase A of the Atom and Photon builds). Its own binary because it reads the
+# device table back — which flushes the render system's recorded commands — and
+# because it drives a table GROW, so it wants a scene it can make big without
+# slowing every other arm in test_engine.
+add_executable(test_engine_gpu_scene test_engine_gpu_scene.cpp)
+set_target_properties(test_engine_gpu_scene PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_gpu_scene PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_gpu_scene PRIVATE JahshakaEngine)
+add_dependencies(test_engine_gpu_scene JahshakaEngineMedia)
+add_test(NAME engine.gpu_scene COMMAND test_engine_gpu_scene
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gpu_scene PROPERTIES TIMEOUT 300 LABELS "engine")
+
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
