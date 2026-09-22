@@ -290,6 +290,13 @@ public:
 
     void setPlanned(double seconds) { mPlannedSeconds = seconds; }
     void setRequest(const QString &label, double seconds) { mLabel = label; mRequested = seconds; }
+    /// THE FRAME-COUNTED WINDOW (PERF-CAPTURE-SCRIPT-1). A hard limit on the
+    /// records this bundle will write, so `frames: 60` means sixty lines in
+    /// frames.jsonl rather than "sixty-ish, depending on where the drain landed
+    /// and how many the engine's holding queue handed back at the stop".
+    void setFrameBudget(unsigned long long frames) { mRequestedFrames = frames; mFrameLimit = frames; }
+    unsigned long long frameBudget() const { return mRequestedFrames; }
+    bool frameBudgetSpent() const { return mFrameLimit > 0 && mFrameCount >= mFrameLimit; }
 
     unsigned long long frames() const { return mFrameCount; }
     unsigned long long events() const { return mEventCount; }
@@ -345,6 +352,9 @@ private:
     QElapsedTimer mWall;
     QDateTime mStartedAt;
     double  mPlannedSeconds = 0.0, mRequested = 0.0;
+    /// What was asked for, and what the writer still has room for. Both 0 on a
+    /// timed capture, which is the shape that writes every record it is given.
+    unsigned long long mRequestedFrames = 0, mFrameLimit = 0;
     QString mLabel;
     QString mOgreLog;
     qint64  mOgreLogStart = -1;
@@ -475,6 +485,14 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
         { "passes", passes },
         { "cacheWork", work },
     };
+    // THE FRAME-COUNTED WINDOW IS CLOSED AT THE WRITER (PERF-CAPTURE-SCRIPT-1),
+    // not only at the drain: the engine's holding queue hands its tail back
+    // AFTER the monitor goes off (finish() drains in a loop for exactly that
+    // reason), so a budget enforced only by "stop when the count is reached"
+    // would still let the tail past it. A record over the budget is NOT a
+    // truncation — nothing was cut, the window simply ended — so it is not
+    // counted in mFramesCut either.
+    if (mFrameLimit > 0 && mFrameCount >= mFrameLimit) return;
     if (append(mFrames, mFrameBytes, mCap / 2, line(o))) ++mFrameCount;
     else ++mFramesCut;
     if (mWantTrace) traceFrame(r);
@@ -1014,6 +1032,11 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         { "label", mLabel },
         { "requestedSeconds", mRequested },
         { "plannedSeconds", mPlannedSeconds },
+        // THE FRAME-COUNTED WINDOW (PERF-CAPTURE-SCRIPT-1): 0 on a timed
+        // capture, so a reader can tell which of the two windows this bundle
+        // was taken under without guessing from the numbers.
+        { "requestedFrames", double(mRequestedFrames) },
+        { "plannedFrames", double(mRequestedFrames) },
         { "actualSeconds", double(mWall.elapsed()) / 1000.0 },
         { "stoppedEarly", early },
         { "framesWritten", double(mFrameCount) },
@@ -1203,8 +1226,16 @@ bool FrameMonitor::start(const Request &request, QString *error)
     auto eng = engine();
     if (!eng) return fail(QStringLiteral("no engine is running"));
 
-    const double seconds = request.seconds > 0.0 ? qBound(0.1, request.seconds, 600.0)
-                                                 : preferredSeconds();
+    // THE TWO WINDOWS, and `frames` wins when both are given. A frame-counted
+    // capture arms NO wall-clock timer at all: the point of it is that the
+    // window does not end until the frames that were asked for have been drawn,
+    // however long the loop that draws them takes (PERF-CAPTURE-SCRIPT-1).
+    const unsigned long long frames = request.frames > 0
+                                          ? qMin<unsigned long long>(request.frames, 1000000ull)
+                                          : 0ull;
+    const double seconds = frames > 0 ? 0.0
+                           : request.seconds > 0.0 ? qBound(0.1, request.seconds, 600.0)
+                                                   : preferredSeconds();
 
     // The START snapshot comes FIRST, because it is what names the bundle: the
     // engine knows which scene is on screen and the caller usually does not.
@@ -1272,9 +1303,12 @@ bool FrameMonitor::start(const Request &request, QString *error)
     }
     mBundle->setRequest(label, request.seconds);
     mBundle->setPlanned(seconds);
+    mBundle->setFrameBudget(frames);
     if (haveSnapshot) mBundle->writeSnapshot(startSnapshot, QStringLiteral("snapshot_start.json"));
 
     mPlannedSeconds = seconds;
+    mPlannedFrames = frames;
+    mFramesDrawn = 0;
     mGpuSamplesTruncated = 0;
     mEngineFramesDropped = mEngineEventsDropped = 0;
     // A breakdown from the PREVIOUS capture must not be readable as this
@@ -1290,13 +1324,19 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mSinceTickEnd.start();
     connectDispatcher();
 
-    if (!mAutoStop) {
-        mAutoStop = new QTimer(this);
-        mAutoStop->setSingleShot(true);
-        mAutoStop->setTimerType(Qt::PreciseTimer);
-        connect(mAutoStop, &QTimer::timeout, this, [this] { finish(false); });
+    if (frames == 0) {
+        if (!mAutoStop) {
+            mAutoStop = new QTimer(this);
+            mAutoStop->setSingleShot(true);
+            mAutoStop->setTimerType(Qt::PreciseTimer);
+            connect(mAutoStop, &QTimer::timeout, this, [this] { finish(false); });
+        }
+        mAutoStop->start(int(seconds * 1000.0));
+    } else if (mAutoStop) {
+        // A frame-counted capture must not inherit a previous timed one's
+        // armed timer (the object is reused between captures).
+        mAutoStop->stop();
     }
-    mAutoStop->start(int(seconds * 1000.0));
     if (!mDrainTimer) {
         mDrainTimer = new QTimer(this);
         // A SLOW SAFETY NET, not the drain path: the driver's tick end drains
@@ -1315,11 +1355,16 @@ bool FrameMonitor::start(const Request &request, QString *error)
     eng->noteMonitorEvent(startedEvent);
 
     emit started(seconds);
-    // THE FIRST OF THE TWO TOASTS, and the only thing drawn for a capture.
+    // THE FIRST OF THE TWO TOASTS, and the only thing drawn for a capture. It
+    // names the window that is really running — a "Recording 0 s…" on a
+    // frame-counted capture would be a lie the owner would have to decode.
     emit toastRequested(tr("Render Monitor"),
-                        tr("Recording %1 s…").arg(seconds, 0, 'g', 3), 0);
+                        frames > 0 ? tr("Recording %1 frames…").arg(frames)
+                                   : tr("Recording %1 s…").arg(seconds, 0, 'g', 3), 0);
     JAH_LOG(JahLog::perf, Display,
-            QStringLiteral("[perf] capture started: %1 s -> %2").arg(seconds).arg(dir));
+            frames > 0
+                ? QStringLiteral("[perf] capture started: %1 frames -> %2").arg(frames).arg(dir)
+                : QStringLiteral("[perf] capture started: %1 s -> %2").arg(seconds).arg(dir));
     // THE CAPTURE'S OWN START COST, measured and TAGGED (item 6). Everything
     // after mSinceTickEnd.start() above — arming two timers, connecting the
     // dispatcher, and the START TOAST, which the shell really does show from
@@ -1384,6 +1429,8 @@ void FrameMonitor::finish(bool early)
         mBundle.reset();
     }
     mPhase = Phase::Idle;
+    mPlannedFrames = 0;
+    mFramesDrawn = 0;
 
     emit stopped(path);
     // THE SECOND TOAST NAMES THE BUNDLE — the owner's whole hand-off ("press
@@ -1476,6 +1523,13 @@ void FrameMonitor::drainAndCharge()
         eng->noteHostStage(std::string("host.monitor"), float(double(clock.nsecsElapsed()) / 1.0e6));
 }
 
+void FrameMonitor::finishIfFrameBudgetSpent()
+{
+    if (mPhase != Phase::Recording || mPlannedFrames == 0) return;
+    if (mFramesDrawn < mPlannedFrames) return;
+    finish(false);
+}
+
 void FrameMonitor::noteTickStart(bool willRender)
 {
     if (!gActive) return;
@@ -1552,10 +1606,18 @@ void FrameMonitor::noteTickEnd(bool rendered)
                                float(double(mStartWorkNs) / 1.0e6));
         }
     }
+    // A FRAME WAS DRAWN. This is the one place both drivers of the picture meet
+    // — EngineRenderDriver's tick end and the viewport's scripted
+    // `editor.frame` loop — which is what makes "N frames, whoever draws them"
+    // expressible at all (PERF-CAPTURE-SCRIPT-1).
+    ++mFramesDrawn;
     drainAndCharge();
     mSinceTickEnd.restart();
     mBlockedNs = 0;
     mBlockedAt = 0;
+    // ...and the window ends here, AFTER the drain, so the last frame inside it
+    // has had its chance to reach the bundle before finish() goes for the tail.
+    finishIfFrameBudgetSpent();
 }
 
 void FrameMonitor::noteToastShown(const QString &title, const QString &text, int holdMs)
@@ -1633,7 +1695,14 @@ QVariantMap FrameMonitor::status() const
     // otherwise — so `perf.stop()` can report what it just wrote.
     out["frames"] = mBundle ? double(mBundle->frames()) : mLastFrames;
     out["events"] = mBundle ? double(mBundle->events()) : mLastEvents;
-    if (mPhase == Phase::Recording && mSinceTickEnd.isValid())
+    // WHICH WINDOW IS RUNNING, and how much of it is left. `plannedFrames` is 0
+    // on a timed capture and `remainingMs` is absent on a frame-counted one:
+    // a frame-counted capture arms no timer, and reporting -1 there would read
+    // as "a timer that cannot say", which is a different thing.
+    out["plannedFrames"] = double(mPlannedFrames);
+    if (mPhase == Phase::Recording && mPlannedFrames > 0)
+        out["remainingFrames"] = double(mPlannedFrames - qMin(mPlannedFrames, mFramesDrawn));
+    if (mPhase == Phase::Recording && mPlannedFrames == 0 && mSinceTickEnd.isValid())
         out["remainingMs"] = mAutoStop ? mAutoStop->remainingTime() : -1;
 
     QVariantMap toast;
