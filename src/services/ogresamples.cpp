@@ -85,11 +85,6 @@ const QVector<Entry> &table()
           QStringLiteral("Offscreen screenshots here are 1x MSAA by design, so the tile picture "
                          "is the un-antialiased frame SMAA is there to rescue — open the port "
                          "and look at the viewport, or compare on-screen against on-screen.") },
-        { QStringLiteral("ImageVoxelizer"), QStringLiteral("Voxelizer (technique)"),
-          QStringLiteral("A TECHNIQUE COMPARISON, NOT A PICTURE ONE. Their sample voxelizes "
-                         "imported Ogre meshes, which we deliberately cannot read; this port "
-                         "puts a primitive Cornell box in the shared room under voxel cone "
-                         "tracing, so what lines up is the bounce and not the geometry.") },
     };
     return t;
 }

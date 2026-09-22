@@ -16,6 +16,14 @@
 // height. The frustum is made permissive on purpose — every instance must reach
 // the level walk, and a frustum rejection would silently shrink the sample.
 //
+// AND A ROTATED, NON-UNIFORMLY SCALED GROUP (A5b fix round): 100 more instances
+// at scale (1, 4, 1) under a 45 degree yaw and a 30 degree pitch. The largest axis
+// scale of such a transform is 4 - the longest COLUMN of the row-major 3x4 - while
+// every ROW is shorter, so a rule that read rows (the cull did, until this round)
+// divides by too small a scale and answers a COARSER level than the tolerance
+// permits. The CPU reference takes `worldMaxAxisScale` (Types.h), which is checked
+// against the authored 4 first, so the reference is the truth and not a twin.
+//
 // THE THRESHOLD CASES ARE COUNTED, NOT HIDDEN. The design asks for agreement to
 // 1e-4; the shader's output is an integer LEVEL, so the honest statement is
 // "every level agrees, and N of the 10,000 evaluations were within 1e-4 of a
@@ -112,18 +120,45 @@ int main()
         enginetest::setNodePosition(scene, n, Vec3(0.0f, 0.0f, -dist));
         enginetest::setNodeScale(scene, n, Vec3(s, s, s));
     }
+    const int kRotated = 100;
+    const float c1 = std::cos(0.5f * 45.0f * 3.14159265f / 180.0f);
+    const float s1 = std::sin(0.5f * 45.0f * 3.14159265f / 180.0f);
+    const float c2 = std::cos(0.5f * 30.0f * 3.14159265f / 180.0f);
+    const float s2 = std::sin(0.5f * 30.0f * 3.14159265f / 180.0f);
+    const Quat yawPitch(c1 * s2, c2 * s1, -s1 * s2, c1 * c2);   // yaw 45 then pitch 30
+    for (int i = 0; i < kRotated; ++i) {
+        const NodeId n = scene->createNode();
+        if (!scene->attachMesh(n, mesh, mat)) { std::printf("FAIL: attach\n"); return 1; }
+        const float dist = 2.0f + 3.0f * float(i);
+        scene->setNodeTransform(n, Vec3(0.0f, 0.0f, -dist), yawPitch, Vec3(1.0f, 4.0f, 1.0f));
+    }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
     for (int i = 0; i < 3; ++i) e->renderOneFrame();
 
     const unsigned slots = scene->gpuSceneStatus().slotCount;
-    CHECK(slots == unsigned(kInstances), "every instance is in the table");
+    CHECK(slots == unsigned(kInstances + kRotated), "every instance is in the table");
     std::vector<GpuSceneEntry> table;
     for (unsigned i = 0; i < slots; ++i) {
         GpuSceneEntry en;
         if (scene->gpuSceneEntry(i, en)) table.push_back(en);
     }
     CHECK(table.size() == slots, "the table reads back");
+    {
+        bool truth = table.size() == slots;
+        float rowMax = 0.0f;
+        for (unsigned i = unsigned(kInstances); truth && i < slots; ++i) {
+            truth = std::fabs(worldMaxAxisScale(table[i].world) - 4.0f) < 1.0e-4f;
+            for (int row = 0; row < 3; ++row) {
+                const float *w = &table[i].world[row * 4];
+                rowMax = std::max(rowMax, std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]));
+            }
+        }
+        char m[200];
+        std::snprintf(m, sizeof(m), "the rotated group's largest axis scale is the authored 4 by "
+                                    "COLUMN (the longest ROW reads %.4f)", rowMax);
+        CHECK(truth && rowMax < 3.99f, m);
+    }
 
     // THE 20 PARAMETER SETS. proj[1][1] of a 20 to 110 degree vertical lens, the
     // heights a desktop, a 4K and a VR eye render at, and tolerances from a
@@ -139,6 +174,7 @@ int main()
         sets.push_back({ tols[i % 4], p11, heights[i % 4] });
     }
 
+    unsigned mismatchedRotated = 0;
     unsigned evaluated = 0, mismatched = 0, nearThreshold = 0, histogram[8] = {};
     unsigned firstBadSlot = 0xFFFFFFFFu, firstBadGpu = 0, firstBadCpu = 0;
     for (const Params &ps : sets) {
@@ -168,11 +204,7 @@ int main()
         }
         for (unsigned slot = 0; slot < slots && slot < res.levels.size(); ++slot) {
             const GpuSceneEntry &en = table[slot];
-            float scale = 0.0f;
-            for (int row = 0; row < 3; ++row) {
-                const float *w = &en.world[row * 4];
-                scale = std::max(scale, std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]));
-            }
+            const float scale = worldMaxAxisScale(en.world);
             const float cx = 0.5f * (en.boundsMin[0] + en.boundsMax[0]);
             const float cy = 0.5f * (en.boundsMin[1] + en.boundsMax[1]);
             const float cz = 0.5f * (en.boundsMin[2] + en.boundsMax[2]);
@@ -194,6 +226,7 @@ int main()
                 if (b > 0.0f && std::fabs(allowed - b) / b < 1.0e-4f) ++nearThreshold;
             if (gpu != cpu) {
                 ++mismatched;
+                if (slot >= unsigned(kInstances)) ++mismatchedRotated;
                 if (firstBadSlot == 0xFFFFFFFFu) {
                     firstBadSlot = slot;
                     firstBadGpu = gpu;
@@ -214,6 +247,9 @@ int main()
     char msg[160];
     std::snprintf(msg, sizeof(msg), "10,000 evaluations asked for, %u made", evaluated);
     CHECK(evaluated >= 10000u, msg);
+    std::snprintf(msg, sizeof(msg), "the ROTATED NON-UNIFORM group agrees too (%u disagreements "
+                                    "of %u)", mismatchedRotated, unsigned(kRotated) * unsigned(sets.size()));
+    CHECK(mismatchedRotated == 0u, msg);
     CHECK(mismatched == 0u, "the GLSL currency and the C++ currency agree on every one");
     // The chain must actually be WALKED: a sweep that only ever answers 0 (or
     // only ever the coarsest) would pass an equality and prove nothing.
