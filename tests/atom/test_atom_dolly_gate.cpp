@@ -32,15 +32,18 @@
 //         at all 153 poses, which is what makes it a control.
 //   CHAIN the shipped bias of 1: the chain switches where the rule says.
 //
-//     bar(step) = 3 x max( ordinary mean over the CHAIN's non-switch steps,
-//                          REF's delta at THIS pose )
+//     (1) delta_chain(step)                      <= 3 x max(that mean, REF at this pose)
+//     (2) delta_chain(step) - delta_ref(step)    <= 3 x that mean
 //
-// and no step — switch or not — may exceed it. The brief's own number is the
-// FLOOR of that maximum (it is what keeps the far end, where a 0.25 m step is a
-// quarter of a pixel and any ratio would be fragile, honest), and the paired
-// reading is what makes the near end measurable at all. Three, not one, because
-// a pop that is not visible against three times the movement already on screen
-// is not a pop worth the word.
+// and no step — switch or not — may exceed either. (2) IS AT-A7r's own bar,
+// applied to the pop rather than to the picture: subtracting the control at the
+// same pose leaves the part of the step the CHAIN is responsible for, and three
+// times the walk's ordinary step is then a bound on the pop wherever the camera
+// moves at all. (1) is the same statement made robustly where the control is
+// sub-pixel (a 0.19-code step at 39.75 m, where a difference of two tiny numbers
+// is noise); it is the weaker of the two near the camera, which is why both
+// stand. Three, not one, because a pop that is not visible against three times
+// the movement already on screen is not a pop worth the word.
 //
 // FRAMES, NEVER TIME (the engine has no wall clock): 30 warm-up frames at the
 // start pose, then exactly ONE frame per 0.25 m step, 40 m down to 2 m.
@@ -345,15 +348,22 @@ int main()
         return 3.0 * std::max(ordinary, local);
     };
 
+    // THE EXCESS is the column the gate below is really about: how much of this
+    // step's movement the CHAIN added over the control's movement at the same
+    // pose. It is the pop, in codes, with the camera's own motion subtracted.
+    auto excessAt = [&](size_t i) {
+        return steps[i].delta - (i < ref.size() ? ref[i].delta : 0.0);
+    };
+
     std::printf("\n== the dolly (one frame per step; delta = mean |RGB| over the object's pixels) ==\n");
-    std::printf("   %-8s %-6s %-11s %-9s %-11s %-7s %-9s %s\n", "dist m", "level", "delta",
-                "codes/255", "ref(level 0)", "ratio", "mask px", "");
+    std::printf("   %-8s %-6s %-11s %-9s %-11s %-7s %-10s %-9s %s\n", "dist m", "level", "delta",
+                "codes/255", "ref(level 0)", "ratio", "excess", "mask px", "");
     for (size_t i = 0; i < steps.size(); ++i) {
         const Step &s = steps[i];
         const double r = i < ref.size() && ref[i].delta > 0.0 ? s.delta / ref[i].delta : 0.0;
-        std::printf("   %-8.2f %-6u %-11.6f %-9.2f %-11.6f %-7.2f %-9u%s\n", s.dist, s.level,
-                    s.delta, s.delta * 255.0, i < ref.size() ? ref[i].delta : 0.0, r, s.mask,
-                    s.switched ? "  <- SWITCH" : "");
+        std::printf("   %-8.2f %-6u %-11.6f %-9.2f %-11.6f %-7.2f %-10.2f %-9u%s\n", s.dist,
+                    s.level, s.delta, s.delta * 255.0, i < ref.size() ? ref[i].delta : 0.0, r,
+                    excessAt(i) * 255.0, s.mask, s.switched ? "  <- SWITCH" : "");
     }
 
     std::printf("\n   AT-A7r's own number: the mean of the %u non-switch steps is %.6f (%.2f "
@@ -400,6 +410,52 @@ int main()
     CHECK_MSG(over == 0u,
               "no step of the dolly exceeds 3x the ordinary movement at its own pose (%u over)",
               over);
+
+    // ---- AND THE BRIEF'S OWN BAR, ON THE EXCESS -----------------------------
+    //
+    // The assertion above bounds the step's WHOLE delta, which at the near end
+    // is dominated by the camera: at 2.00 m the control alone moves 12.81 codes,
+    // so 3x it is 38 codes of room and a pop adding 25 codes on top of the motion
+    // would pass there (deep-auditor, SHOULD-FIX 3d). The pop itself is the
+    // EXCESS over the control at the same pose — the camera's contribution
+    // subtracted, which is exactly the quantity AT-A7r's one-number bar was
+    // reaching for — and THAT is what 3x the walk's ordinary step bounds
+    // honestly, at every distance:
+    //
+    //     delta_chain(i) - delta_ref(i) <= 3 x mean(non-switch delta)
+    //
+    // Both assertions stand: this one is the strong statement wherever the
+    // control moves at all, and the one above is what keeps the sub-pixel far
+    // end (a 0.19-code step at 39.75 m) from being gated on the difference of
+    // two tiny numbers. MEASURED: the four switches' excesses are 1.33 / 0.19 /
+    // 0.25 / 0.05 codes against a bar of 5.99 — 4.5x of room at the worst.
+    const double excessBar = 3.0 * ordinary;
+    unsigned overExcess = 0;
+    double worstExcess = 0.0;
+    float worstExcessDist = 0.0f;
+    bool worstExcessSwitch = false;
+    for (size_t i = 0; i < steps.size(); ++i) {
+        const double x = excessAt(i);
+        if (x > worstExcess) {
+            worstExcess = x;
+            worstExcessDist = steps[i].dist;
+            worstExcessSwitch = steps[i].switched;
+        }
+        if (x > excessBar) {
+            ++overExcess;
+            std::printf("   OVER THE EXCESS BAR: %.2f m, level %u, excess %.2f codes vs %.2f%s\n",
+                        steps[i].dist, steps[i].level, x * 255.0, excessBar * 255.0,
+                        steps[i].switched ? " [switch]" : "");
+        }
+    }
+    std::printf("   worst EXCESS over the control %.2f codes at %.2f m%s, against a bar of %.2f "
+                "codes (3x the ordinary step)\n",
+                worstExcess * 255.0, worstExcessDist, worstExcessSwitch ? " [switch]" : "",
+                excessBar * 255.0);
+    CHECK_MSG(overExcess == 0u,
+              "THE POP ITSELF: no step adds more than 3x the ordinary step OVER the control at its "
+              "own pose (%u over; worst %.2f codes of %.2f)",
+              overExcess, worstExcess * 255.0, excessBar * 255.0);
 
     // ---- THE SCALED ARM (ATOM-RESUMES-1 item 1's acceptance) ----------------
     //

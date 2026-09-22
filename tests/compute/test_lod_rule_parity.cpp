@@ -306,38 +306,18 @@ int main()
         std::snprintf(smsg, sizeof(smsg), "the drawn levels span %u of the eight", sDistinct);
         CHECK(sDistinct >= 3u, smsg);
 
-        // THE SCALE INVARIANCE ITSELF, stated as physics rather than as
-        // agreement with a formula: the rule is homogeneous in (distance,
-        // scale), so an instance k times as large seen from k times as far
-        // subtends the same angle, shows the same deviation in pixels and must
-        // take the SAME level. A strategy that forgets the mesh-units divisor
-        // fails this at every k but 1.
-        unsigned invariantChecked = 0, invariantBad = 0;
-        for (float s = 0.25f; s <= 8.0f + 1e-3f; s *= 2.0f) {
-            for (float base = 2.0f; base <= 40.0f; base *= 2.0f) {
-                const float radius1 = 0.5f * std::sqrt(2.0f);
-                const float lvl1 = float(lodLevelForWorldError(
-                    kBounds,
-                    allowedWorldError(kLodBudgetPixels,
-                                      sampleFootprintPerspective(std::max(0.0f, base - radius1),
-                                                                 vr.projScaleY, vr.viewportHeight),
-                                      1.0f),
-                    kBounds.size() + 1u));
-                const float lvlS = float(lodLevelForWorldError(
-                    kBounds,
-                    allowedWorldError(kLodBudgetPixels,
-                                      sampleFootprintPerspective(std::max(0.0f, s * base - radius1 * s),
-                                                                 vr.projScaleY, vr.viewportHeight),
-                                      s),
-                    kBounds.size() + 1u));
-                ++invariantChecked;
-                if (lvl1 != lvlS) ++invariantBad;
-            }
-        }
-        std::snprintf(smsg, sizeof(smsg),
-                      "the rule is scale-invariant: %u of %u (scale, distance) pairs agree with "
-                      "their unscaled twin", invariantChecked - invariantBad, invariantChecked);
-        CHECK(invariantBad == 0u, smsg);
+        // NO SCALE-INVARIANCE ARM LIVES HERE (deleted in ATOM-RESUMES-1's fix
+        // round, deep-auditor NOTE 2b). It evaluated `lodLevelForWorldError` on
+        // `allowedWorldError` for k = 1 and k = s and compared the two — the C++
+        // formula against itself, which is an algebraic identity
+        // (`allowedWorldError(t, footprint(s*d), s)` IS `footprint(d)`) that can
+        // only fail on a float boundary and never touches the strategy. What
+        // states that physics against the RENDERER is the 500-instance block
+        // above (six octaves of scale, the drawn byte) and atom.dolly_gate's 10x
+        // arm (the same 152 poses at scale 10 and ten times the distance must
+        // draw the same level); and a change that dropped the divisor from
+        // `allowedWorldError` itself would red the GPU-vs-C++ sweep below, since
+        // the GLSL copy divides by the instance's scale on the device.
     }
 
     std::printf("\n== the parity ==\n   %u evaluations (%d instances x %zu parameter sets)\n",
