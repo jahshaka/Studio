@@ -1405,6 +1405,183 @@ static void surfaceCards()
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// 9. THE MEASURED BOUND (ATOM P1's AT-A5) — the `atom.error_bound` suite.
+//
+// THE CLAIM UNDER TEST, in one sentence: for every level of every shipped mesh,
+// no point of that level's surface lies further from level 0's surface than the
+// length the bake stored — measured INDEPENDENTLY of the bake's own sampler.
+//
+// INDEPENDENT IS THE WHOLE POINT. Re-running `twoSidedDistance` here would assert
+// that a function returns what it returned; instead this samples EIGHT TIMES as
+// densely, at DIFFERENT points (a different stratification count moves every
+// stratum, and the van der Corput index is the sample number, so no sample of the
+// dense set coincides with a sample of the bake's), and asks the same exact
+// nearest-surface query. A margin that pays for the sampling gap has to survive a
+// finer gap, and that is exactly what this measures.
+//
+// AND `lodBounds[k] >= lodErrors[k]` IS DELIBERATELY NOT ASSERTED. The quadric can
+// over-state as easily as it under-states — it is a different quantity, not a
+// looser version of this one — so the suite REPORTS the ratio and pins nothing.
+// The ratio table is the evidence AT-A5 was missing.
+static void errorBound()
+{
+    struct Row { QString path; };
+    const QVector<Row> subjects = {
+        { QStringLiteral("app/content/primitives/sphere.obj") },
+        { QStringLiteral("app/content/primitives/hp_sphere.obj") },
+        { QStringLiteral("app/content/primitives/capsule.obj") },
+        { QStringLiteral("app/content/primitives/torus.obj") },
+        { QStringLiteral("app/content/primitives/hemisphere.obj") },
+        { QStringLiteral("app/content/primitives/teapot.obj") },
+        { QStringLiteral("app/content/primitives/tube.obj") },
+        { QStringLiteral("app/models/ground.obj") },
+        { QStringLiteral("app/models/axis_sphere.obj") },
+        { QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb") },
+    };
+
+    int chained = 0;
+    std::printf("      %-34s %5s %9s %12s %12s %6s\n",
+                "mesh", "level", "tris", "quadric", "bound", "ratio");
+    for (const Row &r : subjects) {
+        iris::MeshBake::Model m =
+            iris::MeshBake::buildFromFile(fixture(r.path), QStringLiteral("atom-error-bound"));
+        if (!m.valid || m.meshes.isEmpty()) {
+            CHECK_LOUD(false, qUtf8Printable(r.path + ": bakes at all"));
+            continue;
+        }
+        for (const iris::MeshPtr &mesh : m.meshes) {
+            if (mesh.isNull() || mesh->lodIndices.isEmpty()) continue;
+            ++chained;
+            CHECK_LOUD(mesh->lodBounds.size() == mesh->lodIndices.size() &&
+                           mesh->lodErrors.size() == mesh->lodIndices.size(),
+                       qUtf8Printable(r.path + ": one bound and one quadric per level"));
+            // Monotone, because the one rule stops at the first level it cannot
+            // afford and that is only correct for a sorted array.
+            bool monotone = true;
+            for (int i = 1; i < mesh->lodBounds.size(); ++i)
+                if (mesh->lodBounds.at(i) < mesh->lodBounds.at(i - 1)) monotone = false;
+            CHECK_LOUD(monotone, qUtf8Printable(r.path + ": the bounds are non-decreasing"));
+
+            double worstRatio = 0.0;
+            const bool ok = iris::MeshBake::checkLodBounds(mesh, 8, &worstRatio);
+            CHECK_LOUD(ok, qUtf8Printable(
+                               QStringLiteral("%1: EVERY level is inside its stored bound under "
+                                              "an independent sampling 8x as dense (worst "
+                                              "measured/stored %2)")
+                                   .arg(r.path).arg(worstRatio, 0, 'f', 4)));
+            for (int i = 0; i < mesh->lodBounds.size(); ++i) {
+                const float q = mesh->lodErrors.at(i), b = mesh->lodBounds.at(i);
+                std::printf("      %-34s %5d %9d %12.6f %12.6f %6.2f\n",
+                            qUtf8Printable(QFileInfo(r.path).fileName()), i + 1,
+                            int(mesh->lodIndices.at(i).size() / 3), double(q), double(b),
+                            q > 0.0f ? double(b) / double(q) : 0.0);
+            }
+        }
+    }
+    CHECK_LOUD(chained >= 8, "the subject list really does carry chained meshes");
+}
+
+// ---------------------------------------------------------------------------
+// 10. THE SIGNED DISTANCE FIELD (ATOM P2 / SUB-S5-SDF) — the `meshbake.sdf` suite.
+//
+// WHAT A DISTANCE FIELD HAS TO GET RIGHT, and what each check is for:
+//
+//   * THE ZERO CROSSING IS THE SURFACE. A cell whose stored distance is d must
+//     really be about d from level 0's geometry — checked against the same exact
+//     nearest-surface query the bake's own grid answers, to WITHIN ONE CELL,
+//     which is the accuracy the design asks for and the accuracy the exact band
+//     is there to deliver.
+//   * THE SIGN. A closed convex mesh must read NEGATIVE at its centre and
+//     POSITIVE in the padded corner. That is the check that would have caught the
+//     first cut of this code, which derived the sign from the seed direction and
+//     therefore read every far cell as outside — losing the entire interior of
+//     anything thicker than the exact band.
+//   * THE RESOLUTION IS NOT FINER THAN THE GEOMETRY IS HONEST: the cell is at
+//     least four times level 1's measured bound whenever there is a chain.
+//   * IT SURVIVES THE FORMAT. Serialise, read back, compare every byte.
+//   * AND A SKINNED MESH GETS NONE, because a field baked against a bind pose is
+//     a lie, exactly as a card is.
+static void signedDistanceField()
+{
+    const QStringList subjects = {
+        QStringLiteral("app/content/primitives/sphere.obj"),
+        QStringLiteral("app/content/primitives/cube.obj"),
+        QStringLiteral("app/content/primitives/hp_sphere.obj"),
+        QStringLiteral("app/content/primitives/torus.obj"),
+    };
+    std::printf("      %-28s %12s %10s %10s %9s\n", "mesh", "dims", "cell", "scale", "bytes");
+    for (const QString &path : subjects) {
+        iris::MeshBake::Model m =
+            iris::MeshBake::buildFromFile(fixture(path), QStringLiteral("atom-sdf"));
+        if (!m.valid || m.meshes.isEmpty()) {
+            CHECK_LOUD(false, qUtf8Printable(path + ": bakes at all"));
+            continue;
+        }
+        const iris::MeshPtr mesh = m.meshes.first();
+        const iris::MeshSdf &f = mesh->sdf;
+        CHECK_LOUD(!f.isEmpty(), qUtf8Printable(path + ": carries a field"));
+        if (f.isEmpty()) continue;
+        std::printf("      %-28s %4dx%3dx%3d %10.5f %10.5f %9d\n",
+                    qUtf8Printable(QFileInfo(path).fileName()), f.dim[0], f.dim[1], f.dim[2],
+                    double(f.cell), double(f.scale), f.values.size());
+        CHECK_LOUD(f.values.size() == f.cellCount(),
+                   qUtf8Printable(path + ": one byte per cell, exactly"));
+        CHECK_LOUD(f.dim[0] <= iris::MeshSdf::kMaxDim && f.dim[1] <= iris::MeshSdf::kMaxDim &&
+                       f.dim[2] <= iris::MeshSdf::kMaxDim,
+                   qUtf8Printable(path + ": inside the format's ceiling"));
+        if (!mesh->lodBounds.isEmpty())
+            CHECK_LOUD(f.cell >= mesh->lodBounds.first() * 4.0f * 0.999f,
+                       qUtf8Printable(path + ": the cell is no finer than the geometry is honest"));
+
+        // THE ZERO CROSSING, against the geometry itself.
+        double worstCells = 0.0;
+        int probed = 0;
+        const bool accurate = iris::MeshBake::checkSdfAgainstSurface(mesh, &worstCells, &probed);
+        CHECK_LOUD(probed > 50, qUtf8Printable(path + ": the band really has cells in it"));
+        CHECK_LOUD(accurate,
+                   qUtf8Printable(QStringLiteral("%1: the field agrees with level 0's surface to "
+                                                 "within one cell (worst %2 cells over %3 probes)")
+                                      .arg(path).arg(worstCells, 0, 'f', 3).arg(probed)));
+
+        // THE SIGN. The padded corner is outside by construction; the centre of a
+        // closed mesh is inside.
+        CHECK_LOUD(f.distanceAt(0, 0, 0) > 0.0f,
+                   qUtf8Printable(path + ": the padded corner reads OUTSIDE"));
+        if (!path.contains(QStringLiteral("torus")))     // a torus centre is outside it
+            CHECK_LOUD(f.distanceAt(f.dim[0] / 2, f.dim[1] / 2, f.dim[2] / 2) < 0.0f,
+                       qUtf8Printable(path + ": the centre of a closed mesh reads INSIDE"));
+
+        // THE FORMAT.
+        const QByteArray blob = iris::MeshBake::serialize(m);
+        const iris::MeshBake::Model back = iris::MeshBake::deserialize(blob);
+        CHECK_LOUD(back.valid && !back.meshes.isEmpty(),
+                   qUtf8Printable(path + ": the bake with a field round-trips"));
+        if (back.valid && !back.meshes.isEmpty()) {
+            const iris::MeshSdf &g = back.meshes.first()->sdf;
+            CHECK_LOUD(g.dim[0] == f.dim[0] && g.dim[1] == f.dim[1] && g.dim[2] == f.dim[2] &&
+                           g.cell == f.cell && g.scale == f.scale && g.values == f.values,
+                       qUtf8Printable(path + ": every field byte survives the format"));
+        }
+    }
+
+    // A SKINNED MESH GETS NO FIELD (the same rule the cards obey).
+    iris::MeshBake::Model rig = iris::MeshBake::buildFromFile(
+        fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb")),
+        QStringLiteral("atom-sdf-skinned"));
+    if (rig.valid && !rig.meshes.isEmpty()) {
+        bool anySkinned = false, anyField = false;
+        for (const iris::MeshPtr &mesh : rig.meshes) {
+            if (mesh.isNull() || !mesh->hasSkeleton()) continue;
+            anySkinned = true;
+            if (!mesh->sdf.isEmpty()) anyField = true;
+        }
+        if (anySkinned)
+            CHECK_LOUD(!anyField, "a skinned mesh gets NO field (a bind-pose field is a lie)");
+    }
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -1415,6 +1592,23 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cards")) {
         std::printf("== 8. surface cards ==\n");
         surfaceCards();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    // `--error-bound` is atom.error_bound; `--sdf` is meshbake.sdf. Their own
+    // suites because they are their own claims (and each prints a table the
+    // design asked for).
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--error-bound")) {
+        std::printf("== 9. the measured bound ==\n");
+        errorBound();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--sdf")) {
+        std::printf("== 10. the signed distance field ==\n");
+        signedDistanceField();
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;

@@ -65,6 +65,14 @@ struct Input
     quint64 draws = 0;
     /// Frames over the 100 ms hitch threshold in the last minute.
     int     slowFramesLastMinute = 0;
+    /// ATOM's readout (P1): how many DRAWN objects have a baked LOD chain at all,
+    /// how many of those are currently on a level below the authored one, and the
+    /// deepest level anything is on. Row 5 exists only when `lodObjects > 0` — a
+    /// scene with no chained geometry has nothing to say and the overlay has one
+    /// corner to say it in.
+    int     lodObjects = 0;
+    int     lodCoarser = 0;
+    int     lodDeepest = 0;
 };
 
 /// A count with thousands separators, in the C locale so the rows read the
@@ -104,6 +112,14 @@ inline QStringList compose(const Input &in)
     // row: a bare "3 slow" is a lifetime total to anybody who reads it.
     rows << QStringLiteral("%1 draws   %2 slow frames (last min)")
                 .arg(grouped(in.draws)).arg(in.slowFramesLastMinute);
+    // Row 5 — THE CHAIN, WHERE IT CAN BE SEEN WORKING (ATOM P1's readout, the gap
+    // OWN-TRI left). `submittedTriangles` above says the scene shed triangles;
+    // this says which levels did the shedding, which is the difference between a
+    // number moving and a mechanism being observable. Only present when something
+    // in the frame HAS a chain.
+    if (in.lodObjects > 0)
+        rows << QStringLiteral("LOD %1/%2 objects coarser   deepest L%3")
+                    .arg(in.lodCoarser).arg(in.lodObjects).arg(in.lodDeepest);
     return rows;
 }
 
