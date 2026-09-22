@@ -40,6 +40,18 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
      selection when that is violated; this case asserts the positive half on a
      file with no area rule of its own (`src/io/scenereader.cpp`).
 
+  6. TARGET TESTS RUN AND DO NOT GATE (PHOTON phase A, A1 section 0; lane
+     FENCE-1). A suite labelled `photon-target` states the CORRECT number for a
+     term the renderer gets wrong today, so it is RED until its part lands. The
+     one thing that must never happen is a target deciding a lane's gate — and
+     the one thing that must never happen INSTEAD is a target quietly not
+     running, because then nobody sees the distance to the bar. So the tool
+     keeps them out of the gating ctest command, puts them in a SECOND command
+     of their own, and says both things in words. This case reads a file that
+     selects a target suite and asserts all three: the gating command does not
+     name it, the target section does, and the MERGE tier's -LE carries the
+     label. It is a rule of the tool, not a number.
+
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
@@ -118,6 +130,53 @@ def main(source, build):
     code, out, err = run([tool, "--files", "src/io/scenereader.cpp", "--build", build], source)
     check(code == 0 and "NOTHING to gate" not in out,
           "a source file with no precise rule still gates (exit %d)" % code)
+
+    # 6. TARGET TESTS: they run, they are reported, and they do not gate.
+    # tests/gi/test_gi_chain_face.cpp registers BOTH rows of the chain-face pair,
+    # so it selects a target suite and an ordinary one from one path.
+    #
+    # THE COMPARISONS ARE MADE ON UNESCAPED TEXT. The suite names inside a ctest
+    # -R regex are `re.escape`d, so `gi.chain_face` appears as `gi\.chain_face`
+    # and a plain substring test for the readable name fails on a correct
+    # command. Stripping backslashes is the whole of it.
+    def plain(text):
+        return text.replace("\\", "")
+
+    code, out, err = run([tool, "--files", "tests/gi/test_gi_chain_face.cpp",
+                          "--build", build], source)
+    check(code == 0, "a path that selects a target suite exits 0 (%d)" % code)
+    gating, target_cmd, merge = "", "", ""
+    for line in out.splitlines():
+        if not line.startswith("ctest -j"):
+            continue
+        if "NOT gating" in line:
+            target_cmd = line
+        elif "-LE" in line:
+            merge = line
+        elif not gating:
+            gating = line
+    check("gi.chain_face_target" in out,
+          "the target row is SELECTED (it must run, or nobody sees the distance to the bar)")
+    check("TARGET TESTS" in out and "do NOT decide this gate" in out,
+          "...and the tool says in words that it does not decide the gate")
+    check(gating != "" and "gi.chain_face_target" not in plain(gating),
+          "the GATING ctest command does not name the target row")
+    check("gi.chain_face|" in plain(gating) or "gi.chain_face)" in plain(gating),
+          "...while the ordinary row of the same pair IS in the gating command")
+    check(target_cmd != "" and "gi.chain_face_target" in plain(target_cmd)
+          and " -j1 " in target_cmd,
+          "the target suites get a ctest command of their own, at -j1")
+
+    # ...and the MERGE tier's own exclusion carries the label, from the same
+    # definition: a tier command that filters a label the tool does not know
+    # about (or the reverse) is how a stale exclusion survives a year. A path
+    # with no rule is what prints the tier command.
+    code2, out2, err2 = run([tool, "--files", "CMakeLists.txt", "--build", build], source)
+    for line in out2.splitlines():
+        if line.startswith("ctest -j4 ") and "-LE" in line:
+            merge = line
+    check("photon-target" in plain(merge) and "benchmark" in plain(merge),
+          "the MERGE tier's -LE carries photon-target beside the nightly labels")
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
