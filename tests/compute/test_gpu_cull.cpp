@@ -7,19 +7,19 @@
 //      instance, on the frustum alone. The CPU reference reads the same table
 //      through `gpuSceneEntry`, so the two answer the same question from the same
 //      bytes and a disagreement is the shader's and nothing else's.
-//   2. THE HZB MODE — that a request carrying the pyramid RUNS: the texture is
-//      bound, the permutation compiles, the chain answers, and the answer is
-//      still conservative (nothing the frustum kept is lost). THE OCCLUSION
-//      CLAIM ITSELF IS NOT YET ASSERTED AND THAT IS STATED RATHER THAN IMPLIED:
-//      measured 2026-09-22, the shader's `texelFetch` of the pyramid returns the
-//      FAR value everywhere, so no instance is ever rejected by depth. Ruled out
-//      so far: the pyramid's own content (chain.hzb asserts the reduction texel
-//      by texel on the same build) and a binding-number collision with the six
-//      UAV buffers (moving the texture to binding 6 changed nothing). What is
-//      left to test is the descriptor SET the macro cannot name and the resource
-//      LAYOUT the compositor leaves the pyramid in. It is the lane's first
-//      resume item; the arm below is written so that the day the read works,
-//      the two counters it prints move and the assertions to add are obvious.
+//   2. THE HZB MODE — with an occluding wall in front of the camera, every
+//      instance fully behind it is gone and no instance the wall does not cover
+//      is. THE FIXTURE IS CHECKED BEFORE THE CULL IS BLAMED: the pyramid's own
+//      mip 0 is read back and the texel at the wall's centre must be nearer than
+//      the far plane. That check exists because the first version of this suite
+//      read "nothing is ever culled" as a shader defect when the cause was the
+//      fixture — the wall's triangles were wound backwards and it drew nothing
+//      at all (see `chainedMesh`). A depth test can only be tested against a
+//      depth buffer that has something in it.
+//      The pyramid a cull reads must keep the FARTHEST depth per footprint
+//      (PostFxDesc::hzbFarthest): the closest-depth chain makes a texel that is
+//      half wall and half sky report the wall, and an object visible through the
+//      sky half is then culled.
 //   3. MODE 1 — the per-slot levels equal the CPU level rule's, which is the
 //      quality currency evaluated on the host (`allowedWorldError` +
 //      `lodLevelForWorldError`). `engine.lod_rule_parity` is the wide version of
@@ -29,15 +29,19 @@
 //      GPU wrote equals the survivor count.
 //   5. THE CHAIN IS GPU-DRIVEN AFTER JOB 1. Job 3's thread-group count is
 //      written by job 2 and read by `vkCmdDispatchIndirect`, and it is asserted
-//      at 0, 7 and 4,096 survivors — the three sizes `compute.indirect_dispatch`
-//      used to assert, which is what lets that probe and its three jobs be
-//      deleted. The host's own share is `requestMs` and it is printed.
+//      at 0, 7 and 4,096 survivors — an empty set, an arbitrary small count no
+//      host arithmetic could have predicted, and the worst case: the three shapes
+//      `compute.indirect_dispatch` asserted, which is what lets that probe and
+//      its three jobs be deleted. The seven is a cut placed between two sorted
+//      depths of the real table, and it is CHECKED to leave seven before the arm
+//      runs. The host's own share is `requestMs` and it is printed.
 //   6. THE COST at 8,001 instances, per job.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -76,7 +80,15 @@ static MeshData chainedMesh()
                 const unsigned b = unsigned(z * (N + 1) + x + step);
                 const unsigned c = unsigned((z + step) * (N + 1) + x + step);
                 const unsigned e = unsigned((z + step) * (N + 1) + x);
-                idx.insert(idx.end(), { a, b, c, a, c, e });
+                // WINDING: a,c,b and a,e,c — counter-clockwise seen from +Y,
+                // which is the normal this mesh declares. The first version of
+                // this fixture wound a,b,c (CCW from BELOW), so every triangle
+                // faced the wrong way; Ogre's front face is CCW in clip space
+                // and a one-sided datablock culls clockwise, so the occluding
+                // wall built from it DREW NOTHING and the depth pyramid was
+                // all-far. The cull then had nothing to occlude with, which read
+                // exactly like a broken shader. (ATOM-SUBSTRATE-1 fix round.)
+                idx.insert(idx.end(), { a, c, b, a, e, c });
             }
         return idx;
     };
@@ -204,7 +216,12 @@ int main()
         if (!scene->attachMesh(n, mesh, mat)) { std::printf("FAIL: attach %d\n", i); return 1; }
         const float fx2 = float(i % side) / float(side - 1) - 0.5f;
         const float fz = float(i / side) / float(side - 1) - 0.5f;
-        enginetest::setNodePosition(scene, n, Vec3(fx2 * 200.0f, 0.0f, fz * 200.0f));
+        // A PER-INSTANCE JITTER IN z, so that no two instances share a depth. It
+        // is what makes a "leave exactly N of them" cut expressible at all: on
+        // the unjittered grid 64 instances shared every z value, so no plane
+        // could ever leave seven and the arm below quietly asserted zero.
+        enginetest::setNodePosition(scene, n,
+                                    Vec3(fx2 * 200.0f, 0.0f, fz * 200.0f + float(i) * 1.0e-3f));
         const float s = 1.0f + 3.0f * float((i * 37) % 7) / 6.0f;   // 1..4, deterministic
         enginetest::setNodeScale(scene, n, Vec3(s, s, s));
     }
@@ -312,16 +329,18 @@ int main()
         hs->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.2f, 0.2f, 0.2f));
         const MeshId hm = hs->createMesh(chainedMesh());
         const MaterialId hmat = hs->createPbrMaterial(p);
-        // The wall: a big flat instance across the view at z = -10, pushed DOWN
-        // so it covers the lower half of the frame only.
+        // THE WALL: a flat instance stood up across the view at z = -10, 60 m
+        // wide and 6 m TALL, its top edge at y = 0. Sixty metres tall (the first
+        // version's scale) would have covered the "exposed" row as well, so that
+        // row's assertion would have gone red the moment the depth read worked.
         const NodeId wall = hs->createNode();
         hs->attachMesh(wall, hm, hmat);
-        // Stood UP (a quarter turn about x) so the flat mesh becomes a wall, and
-        // pushed DOWN so it covers the lower half of the frame only.
         hs->setNodeTransform(wall, Vec3(0.0f, -3.0f, -10.0f),
                              Quat(0.7071068f, 0.0f, 0.0f, 0.7071068f),
-                             Vec3(60.0f, 1.0f, 60.0f));
-        // Twelve hidden instances well behind the wall, in the lower half...
+                             Vec3(60.0f, 1.0f, 6.0f));
+        // Twelve instances well behind the wall and LOW, so they project inside
+        // its rectangle (the camera sits at y = 0 looking level, so a hidden row
+        // at y = -6 at z = -40 falls in the wall's lower half)...
         std::vector<NodeId> hidden, exposed;
         for (int i = 0; i < 12; ++i) {
             const NodeId n = hs->createNode();
@@ -330,7 +349,7 @@ int main()
             enginetest::setNodeScale(hs, n, Vec3(1.5f, 1.5f, 1.5f));
             hidden.push_back(n);
         }
-        // ...and twelve in the UPPER half, which the wall does not reach.
+        // ...and twelve well ABOVE its top edge, which it cannot cover.
         for (int i = 0; i < 12; ++i) {
             const NodeId n = hs->createNode();
             hs->attachMesh(n, hm, hmat);
@@ -344,10 +363,32 @@ int main()
 
         HzbStatus hst;
         CHECK(e->hzbStatus(hv, hst) && hst.built, "the fixture's view builds a pyramid");
+        CHECK(hst.primed, "and a presented frame has written it (not an uninitialised allocation)");
+        CHECK(hst.farthest, "the cull's pyramid keeps the FARTHEST depth of each footprint");
+
+        // THE FIXTURE IS PROVEN BEFORE THE CULL IS JUDGED. Mip 0 is the depth
+        // buffer: the wall must be IN it. Its centre projects to the middle
+        // column, a little below the middle row (the wall spans y = -6..0 with
+        // the camera level at y = 0), and that texel must read nearer than the
+        // far plane — otherwise the wall drew nothing and every assertion below
+        // would be about a fixture, not about a shader.
+        std::vector<float> mip0;
+        unsigned m0w = 0, m0h = 0;
+        CHECK(e->readHzbLevel(hv, 0u, mip0, m0w, m0h) && m0w && m0h, "mip 0 reads back");
+        const float farValue = hst.reverseDepth ? 0.0f : 1.0f;
+        unsigned nearTexels = 0;
+        if (!mip0.empty()) {
+            // A band across the middle of the lower half, where the wall is.
+            for (unsigned y = m0h / 2u; y < (m0h * 3u) / 4u; ++y)
+                for (unsigned x = m0w / 4u; x < (m0w * 3u) / 4u; ++x)
+                    if (std::fabs(mip0[size_t(y) * m0w + x] - farValue) > 1e-6f) ++nearTexels;
+        }
+        std::printf("   mip 0: %u of %u texels under the wall's band are nearer than the far "
+                    "plane\n", nearTexels, (m0h / 4u) * (m0w / 2u));
+        CHECK(nearTexels > 1000u, "THE WALL IS IN THE DEPTH BUFFER (the fixture really occludes)");
 
         const unsigned n = hs->gpuSceneStatus().slotCount;
         const std::vector<GpuSceneEntry> htable = readTable(hs, n);
-        // The slots of the three groups, found by node id.
         auto slotsOf = [&](const std::vector<NodeId> &ids) {
             std::vector<unsigned> out;
             for (unsigned i = 0; i < htable.size(); ++i)
@@ -375,19 +416,16 @@ int main()
         for (unsigned s : exposedSlots) (has(withHzb, s) ? exposedIn : exposedGone)++;
         std::printf("   frustum only %u survivors; with %u HZB levels %u\n", frustumOnly.survivors,
                     hst.levels, withHzb.survivors);
-        std::printf("   [OPEN, not asserted] behind the wall: %u culled, %u kept (of %zu); "
-                    "above it: %u kept, %u culled (of %zu)\n", hiddenGone, hiddenIn,
-                    hiddenSlots.size(), exposedIn, exposedGone, exposedSlots.size());
+        std::printf("   behind the wall: %u culled, %u kept (of %zu); above it: %u kept, %u culled "
+                    "(of %zu)\n", hiddenGone, hiddenIn, hiddenSlots.size(), exposedIn,
+                    exposedGone, exposedSlots.size());
         CHECK(!hiddenSlots.empty() && !exposedSlots.empty(), "both groups are in the table");
         CHECK(okH, "a request carrying the pyramid runs to an answer");
-        // WHAT THE MODE MUST NEVER DO, which IS asserted: reject something the
-        // frustum kept and the wall does not cover. A hierarchical depth test
-        // that is wrong in THIS direction loses visible geometry; one that is
-        // wrong in the other merely fails to save work, which is what the
-        // measurement above records today.
-        CHECK(exposedGone == 0u, "no instance the wall does not cover is ever rejected");
-        CHECK(withHzb.survivors <= frustumOnly.survivors,
-              "the depth test only ever removes, never adds");
+        CHECK(withHzb.survivors < frustumOnly.survivors, "the depth test removed something");
+        CHECK(hiddenIn == 0u, "every instance fully behind the wall is gone");
+        // THE ERROR A HIERARCHICAL TEST MAY NEVER MAKE. Wrong in this direction
+        // loses visible geometry; wrong the other way merely fails to save work.
+        CHECK(exposedGone == 0u, "and no instance the wall does not cover is ever rejected");
     }
 
     // ---- 5. the chain is GPU-driven: 0, 7 and 4,096 survivors --------------
@@ -407,22 +445,28 @@ int main()
         }
         {
             GpuCullRequest r = requestFor(e, view, 1.0f, 2u);
-            // Every plane infinitely permissive except one, positioned so that
-            // exactly the seven nearest instances pass. Found by bisection on
-            // the CPU reference, so the number is the fixture's and not a guess.
+            // SEVEN, and seven exactly. Every plane infinitely permissive except
+            // one half-space `z >= C`, with C placed BETWEEN the 7th and 8th
+            // largest positive-vertex z in the table — the positive vertex of
+            // that plane being each instance's own boundsMax.z. Sorting the
+            // table's real values is what makes the count a FACT about the
+            // fixture rather than a hope: a bisection on a field where 64
+            // instances share each depth can only ever land on a multiple of 64,
+            // which is how this arm came to assert 0 and call it 7.
             for (int i = 0; i < 24; ++i) r.planes[i] = 0.0f;
-            for (int i = 0; i < 6; ++i) r.planes[i * 4 + 3] = 1.0e9f;   // always inside
-            r.planes[0] = 0.0f; r.planes[1] = 0.0f; r.planes[2] = 1.0f;
-            float lo = -200.0f, hi = 200.0f;
-            for (int it = 0; it < 48; ++it) {
-                const float mid = 0.5f * (lo + hi);
-                r.planes[3] = -mid;         // z >= mid
-                const Reference cut = cpuCull(table, r, bounds, 4u);
-                if (cut.survivors.size() > 7u) lo = mid; else hi = mid;
-            }
-            r.planes[3] = -hi;
-            const Reference cut = cpuCull(table, r, bounds, 4u);
-            arms.push_back({ "a seven-instance cut", unsigned(cut.survivors.size()), r });
+            for (int i = 0; i < 6; ++i) r.planes[i * 4 + 3] = 1.0e9f;
+            std::vector<float> zs;
+            zs.reserve(table.size());
+            for (const GpuSceneEntry &en : table) zs.push_back(en.boundsMax[2]);
+            std::sort(zs.begin(), zs.end(), std::greater<float>());
+            const float cut = 0.5f * (zs[6] + zs[7]);
+            r.planes[0] = 0.0f; r.planes[1] = 0.0f; r.planes[2] = 1.0f; r.planes[3] = -cut;
+            const Reference cutRef = cpuCull(table, r, bounds, 4u);
+            std::printf("   the cut at z >= %.6f (between %.6f and %.6f) leaves %zu on the CPU\n",
+                        cut, zs[7], zs[6], cutRef.survivors.size());
+            CHECK(zs[6] > zs[7], "the 7th and 8th depths are distinct (the jitter did its job)");
+            CHECK(cutRef.survivors.size() == 7u, "the cut really does leave SEVEN instances");
+            arms.push_back({ "a seven-instance cut", 7u, r });
         }
         {
             GpuCullRequest r = requestFor(e, view, 1.0f, 2u);

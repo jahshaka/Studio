@@ -8,7 +8,9 @@
 # engine.gpu_cull — ATOM P3's substrate: the cull, the compaction and the
 # GPU-sized indirect chain over the GPU scene, with a CPU cull as the reference.
 # (It replaces compute.indirect_dispatch, whose three proof jobs this lane
-# deleted: the same claim is asserted here with real work behind it.)
+# deleted: the same claim — a dispatch sized by a count a compute shader wrote —
+# is asserted here over real instances, at an empty set, an arbitrary small one
+# and the whole table.)
 add_executable(test_gpu_cull test_gpu_cull.cpp)
 set_target_properties(test_gpu_cull PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
