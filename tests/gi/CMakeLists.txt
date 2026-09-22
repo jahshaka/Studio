@@ -1014,6 +1014,24 @@ target_compile_definitions(sc1b_measure PRIVATE
 target_link_libraries(sc1b_measure PRIVATE JahshakaEngine)
 add_dependencies(sc1b_measure JahshakaEngineMedia)
 
+# DIRECT-DIFFUSE-1's MEASUREMENT ARM (lane MEASURE-1a) — a TOOL, not a suite,
+# for the same reason: the mechanism behind "the direct term renders 66-69 % of
+# albedo*P/pi" is a number, and the number is taken by code that is read. It
+# states HlmsPbs's own closed form before every measurement and bisects the
+# light power so an 8-bit undithered picture still pins a ratio to ~0.1 %.
+add_executable(direct_diffuse_measure EXCLUDE_FROM_ALL direct_diffuse_measure.cpp)
+set_target_properties(direct_diffuse_measure PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(direct_diffuse_measure PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(direct_diffuse_measure PRIVATE JahshakaEngine)
+add_dependencies(direct_diffuse_measure JahshakaEngineMedia)
+
 # ---------------------------------------------------------------------------
 # gi.gather — THE SCREEN-PROBE GATHER, phase 1
 # (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 1).
