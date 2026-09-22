@@ -3348,6 +3348,20 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             in.submittedTriangles = haveRs ? quint64(rs.triangles) : 0;
             in.draws = haveRs ? quint64(rs.draws) : 0;
             in.slowFramesLastMinute = ds.slowFramesLastMinute;
+            // ATOM's per-object levels, summarised for one overlay line. Read off
+            // the Items (the byte the render queue indexes with), same source the
+            // `app.renderStats().perObject` verb reports row by row.
+            if (jahshaka::engine::Scene *es =
+                    const_cast<EngineSceneViewport *>(this)->engineScene()) {
+                std::vector<jahshaka::engine::ObjectLodDesc> lods;
+                es->objectLods(lods);
+                for (const jahshaka::engine::ObjectLodDesc &d : lods) {
+                    if (d.levels <= 1) continue;      // no chain: nothing to report
+                    ++in.lodObjects;
+                    if (d.level > 0) ++in.lodCoarser;
+                    in.lodDeepest = std::max(in.lodDeepest, int(d.level));
+                }
+            }
             mStatsLines = statsrows::compose(in);
         }
         for (const QString &line : mStatsLines) d.lines.push_back(line.toStdString());

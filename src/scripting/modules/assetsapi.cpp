@@ -721,15 +721,23 @@ QVariantList AssetsApi::meshLods(const QString &guid)
         row["level"] = 0;
         row["triangles"] = baseTriangles;
         row["error"] = 0.0;
+        row["bound"] = 0.0;
         row["switchPixels"] = 0.0;
         out.append(row);
-        const int levels = std::min(mesh->lodIndices.size(), mesh->lodErrors.size());
+        const int levels = std::min(std::min(mesh->lodIndices.size(), mesh->lodErrors.size()),
+                                    mesh->lodBounds.size());
         for (int i = 0; i < levels; ++i) {
             QVariantMap lod;
             lod["mesh"] = m;
             lod["level"] = i + 1;
             lod["triangles"] = int(mesh->lodIndices.at(i).size() / 3);
+            // BOTH LENGTHS (ATOM P1's AT-A5): `bound` is the MEASURED two-sided
+            // distance from level 0 — the length the renderer, the cascade and
+            // the card all select on — and `error` is what the simplifier
+            // claimed, which nothing selects on and which is reported so the two
+            // can be compared.
             lod["error"] = double(mesh->lodErrors.at(i));
+            lod["bound"] = double(mesh->lodBounds.at(i));
             // THE SCREEN SIZE, not a distance (ATOM-3 A1): the renderer's rule
             // is a PIXEL budget at the live lens and viewport, so a level has
             // no fixed switch distance any more — it has a size on screen.
@@ -739,7 +747,7 @@ QVariantList AssetsApi::meshLods(const QString &guid)
             // below that size the renderer takes this level, on any lens, at
             // any resolution, in either eye of a headset.
             const float r = mesh->getBoundingSphere().radius;
-            const float e = mesh->lodErrors.at(i);
+            const float e = mesh->lodBounds.at(i);
             lod["switchPixels"] = (r > 0.0f && e > 0.0f)
                                       ? double(jahshaka::engine::kLodBudgetPixels * r / e)
                                       : 0.0;

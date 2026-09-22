@@ -2,8 +2,15 @@
 // (SPECS/NANITE_SPEC.md §7.3, gate row 2).
 //
 // THE CLAIM UNDER TEST, in one sentence: the machine built a LOD chain at
-// import, the renderer picks a level from the BAKED GEOMETRIC ERROR, and a
-// level change costs no extra draw call.
+// import, the renderer picks a level from the BAKED, MEASURED GEOMETRIC BOUND,
+// and a level change costs no extra draw call.
+//
+// `bound` AND NOT `error` DRIVES EVERY NUMBER HERE (ATOM P1's AT-A5). The bake
+// stores two lengths per level: `bound`, the measured two-sided distance between
+// that level and level 0, which is what the renderer's thresholds ARE; and
+// `error`, the simplifier's own quadric, which nothing selects on. They differ by
+// up to 2x on a curved mesh and by 100x on a flat one, so a suite that computed a
+// switch bias from `error` would ask for a level and get another.
 //
 // It is the LOD BIAS that makes this assertable at all. The dial multiplies the
 // PIXEL BUDGET the strategy spends, so sweeping it walks the same camera through
@@ -59,8 +66,19 @@ for (var L = 1; L < levels.length; ++L) {
     assert(levels[L].triangles < levels[L - 1].triangles,
            "level " + L + " has fewer triangles than level " + (L - 1) +
            " (" + levels[L].triangles + " < " + levels[L - 1].triangles + ")");
-    assert(levels[L].error > levels[L - 1].error,
-           "level " + L + "'s error is larger (" + levels[L].error.toFixed(6) + ")");
+    // NON-DECREASING is the contract (`Mesh::lodBounds`), not strictly increasing:
+    // the running max that keeps the array sorted, and the precision floor under it,
+    // can both leave two levels on the same length — the flat default floor does
+    // exactly that, at its floor value, on all four of its levels.
+    assert(levels[L].bound >= levels[L - 1].bound,
+           "level " + L + "'s MEASURED BOUND is no smaller (" + levels[L].bound.toFixed(6) + ")");
+    // The simplifier's own number is reported beside it and NOTHING selects on it
+    // (ATOM P1's AT-A5). It is monotone too — the bake accumulates it — but it is
+    // not the currency, and on a flat mesh it is not even the same order of
+    // magnitude as the bound. Asserted as the diagnostic it is.
+    assert(levels[L].error >= levels[L - 1].error,
+           "...and the simplifier's quadric is non-decreasing too (" +
+           levels[L].error.toFixed(6) + ", a diagnostic, not the currency)");
     // Level 0 reports 0 ("not applicable — the authored geometry is what an
     // object of any size starts from"), so the ordering is asserted from the
     // first REAL threshold onwards.
@@ -73,9 +91,11 @@ for (var L = 1; L < levels.length; ++L) {
         assert(levels[L].switchPixels > 0,
                "level 1 has a real switch size (" + levels[L].switchPixels.toFixed(1) +
                " px radius)");
-    // The projection is linear in the error: twice the error, half the size.
-    var ratio = levels[L].switchPixels * levels[L].error;
-    var ratio1 = levels[1].switchPixels * levels[1].error;
+    // The projection is linear in the BOUND: twice the deviation, half the size.
+    // (`switchPixels` is derived from `bound`, because the bound is what the
+    // renderer's thresholds are — AT-A5.)
+    var ratio = levels[L].switchPixels * levels[L].bound;
+    var ratio1 = levels[1].switchPixels * levels[1].bound;
     assert(Math.abs(ratio / ratio1 - 1) < 1e-3,
            "every level's switch size comes from ONE budget (" + ratio.toFixed(3) + ")");
 }
@@ -127,7 +147,7 @@ for (var gy = 0; gy < 7; ++gy)
         LIMB.push({ x: 0.44 + gx * 0.02, y: 0.43 + gy * 0.02 });
 
 function measure(tag, bias) {
-    world.setLodBias(bias);
+    editor.setLodBias(bias);
     editor.frame(4);
     var rs = app.renderStats();
     var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
@@ -158,7 +178,7 @@ for (var k = 1; k < levels.length; ++k) {
     var vp = editor.viewportState();
     var proj11 = 1.0 / Math.tan(0.5 * editor.camera().fov * Math.PI / 180.0);
     var valueAtBiasOne = (EYE - 1.0) * 2.0 / (proj11 * vp.height);
-    var bias = (levels[k].error / valueAtBiasOne) * 1.05;
+    var bias = (levels[k].bound / valueAtBiasOne) * 1.05;
     readings.push(measure("level" + k, bias));
 }
 
@@ -189,16 +209,16 @@ assert(drop >= expected,
 // ---------------------------------------------------------------------------
 // 4. THE DIAL IS A DIAL: it reads back, it refuses nonsense, and 0 returns to
 //    the finest level from wherever it was.
-assert(world.lodBias() > 0, "world.lodBias reads back the applied value");
-world.setLodBias(0);
+assert(editor.lodBias() > 0, "editor.lodBias reads back the applied value");
+editor.setLodBias(0);
 editor.frame(4);
-assert(world.lodBias() === 0, "0 reads back as 0");
+assert(editor.lodBias() === 0, "0 reads back as 0");
 var back = app.renderStats();
 assert(back.submittedTriangles === pinned.triangles,
        "and the scene is back to its finest level, exactly (" + back.submittedTriangles + ")");
 
 var refused = null;
-try { world.setLodBias(-1); } catch (e) { refused = "" + e; }
+try { editor.setLodBias(-1); } catch (e) { refused = "" + e; }
 assert(refused !== null, "a negative bias is refused: " + refused);
 
 // ---------------------------------------------------------------------------
@@ -209,7 +229,7 @@ assert(refused !== null, "a negative bias is refused: " + refused);
 //    distance grows with proj[1][1]. Both are the SAME pixel error, which is
 //    what a headset eye and a thumbnail need and what the reference-projection
 //    rule could not give them.
-world.setLodBias(1);
+editor.setLodBias(1);
 // Ogre's world radius is the AABB's, and the fixture's is not a round number, so
 // it is SOLVED FOR from the three arms rather than assumed: the rule is
 //     switch distance = radius + c * proj[1][1] * viewport height
@@ -263,9 +283,9 @@ function switchDistance(fov) {
     // arm's far pose would measure the NEXT threshold instead — which is
     // exactly what a first version of this section did.
     var base = trianglesAt(RESET);
-    world.setLodBias(0);
+    editor.setLodBias(0);
     var finest = trianglesAt(RESET);
-    world.setLodBias(1);
+    editor.setLodBias(1);
     trianglesAt(RESET);
     assert(base === finest, "the sweep starts at the authored level (" + base + ")");
     var d = RESET, coarse = -1;
@@ -360,7 +380,7 @@ console.log("---- 6. a capture is exact ----");
     var vp6 = editor.viewportState();
     var proj6 = 1.0 / Math.tan(0.5 * editor.camera().fov * Math.PI / 180.0);
     var valueAtBiasOne6 = (EYE - 1.0) * 2.0 / (proj6 * vp6.height);
-    var threshold = levels[1].error / valueAtBiasOne6;
+    var threshold = levels[1].bound / valueAtBiasOne6;
     var park = threshold * 1.04;
     editor.setCamera({ position: { x: 0, y: 0, z: EYE }, lookAt: { x: 0, y: 0, z: 0 } });
 
@@ -371,9 +391,9 @@ console.log("---- 6. a capture is exact ----");
     // describe the capture's own frame, and the shot's probes are the primary
     // observable either way.
     function bandArm(tag, approachBias) {
-        world.setLodBias(approachBias);
+        editor.setLodBias(approachBias);
         editor.frame(4);
-        world.setLodBias(park);
+        editor.setLodBias(park);
         editor.frame(4);
         var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
         var rs = app.renderStats();          // AFTER the shot: the CAPTURE's frame
@@ -397,7 +417,7 @@ console.log("---- 6. a capture is exact ----");
     assert(fromBelow.triangles === fromAbove.triangles,
            "...and the CAPTURE's own frame drew the same level both ways (" +
            fromBelow.triangles + " triangles)");
-    world.setLodBias(0);
+    editor.setLodBias(0);
     editor.frame(4);
 }
 
