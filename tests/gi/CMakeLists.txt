@@ -1094,6 +1094,23 @@ target_compile_definitions(direct_diffuse_measure PRIVATE
 target_link_libraries(direct_diffuse_measure PRIVATE JahshakaEngine)
 add_dependencies(direct_diffuse_measure JahshakaEngineMedia)
 
+# GA-FAR's MEASUREMENT ARM (lane MEASURE-1b) — a TOOL, not a suite: it counts
+# how many of the gather's rays take rq_probe_gather.comp's else-branch and how
+# many of those can get a real far answer, by reproducing the shader's own ray
+# set on the CPU and tracing it through Engine::traceRays.
+add_executable(gather_far_measure EXCLUDE_FROM_ALL gather_far_measure.cpp)
+set_target_properties(gather_far_measure PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(gather_far_measure PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(gather_far_measure PRIVATE JahshakaEngine)
+add_dependencies(gather_far_measure JahshakaEngineMedia)
+
 # ---------------------------------------------------------------------------
 # gi.gather — THE SCREEN-PROBE GATHER, phase 1
 # (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 1).
