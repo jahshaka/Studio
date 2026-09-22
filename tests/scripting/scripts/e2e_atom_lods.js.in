@@ -2,8 +2,15 @@
 // (SPECS/NANITE_SPEC.md §7.3, gate row 2).
 //
 // THE CLAIM UNDER TEST, in one sentence: the machine built a LOD chain at
-// import, the renderer picks a level from the BAKED GEOMETRIC ERROR, and a
-// level change costs no extra draw call.
+// import, the renderer picks a level from the BAKED, MEASURED GEOMETRIC BOUND,
+// and a level change costs no extra draw call.
+//
+// `bound` AND NOT `error` DRIVES EVERY NUMBER HERE (ATOM P1's AT-A5). The bake
+// stores two lengths per level: `bound`, the measured two-sided distance between
+// that level and level 0, which is what the renderer's thresholds ARE; and
+// `error`, the simplifier's own quadric, which nothing selects on. They differ by
+// up to 2x on a curved mesh and by 100x on a flat one, so a suite that computed a
+// switch bias from `error` would ask for a level and get another.
 //
 // It is the LOD BIAS that makes this assertable at all. The dial multiplies the
 // PIXEL BUDGET the strategy spends, so sweeping it walks the same camera through
@@ -59,8 +66,15 @@ for (var L = 1; L < levels.length; ++L) {
     assert(levels[L].triangles < levels[L - 1].triangles,
            "level " + L + " has fewer triangles than level " + (L - 1) +
            " (" + levels[L].triangles + " < " + levels[L - 1].triangles + ")");
-    assert(levels[L].error > levels[L - 1].error,
-           "level " + L + "'s error is larger (" + levels[L].error.toFixed(6) + ")");
+    assert(levels[L].bound > levels[L - 1].bound,
+           "level " + L + "'s MEASURED BOUND is larger (" + levels[L].bound.toFixed(6) + ")");
+    // The simplifier's own number is reported beside it and NOTHING selects on it
+    // (ATOM P1's AT-A5). It is monotone too — the bake accumulates it — but it is
+    // not the currency, and on a flat mesh it is not even the same order of
+    // magnitude as the bound. Asserted as the diagnostic it is.
+    assert(levels[L].error >= levels[L - 1].error,
+           "...and the simplifier's quadric is non-decreasing too (" +
+           levels[L].error.toFixed(6) + ", a diagnostic, not the currency)");
     // Level 0 reports 0 ("not applicable — the authored geometry is what an
     // object of any size starts from"), so the ordering is asserted from the
     // first REAL threshold onwards.
@@ -73,9 +87,11 @@ for (var L = 1; L < levels.length; ++L) {
         assert(levels[L].switchPixels > 0,
                "level 1 has a real switch size (" + levels[L].switchPixels.toFixed(1) +
                " px radius)");
-    // The projection is linear in the error: twice the error, half the size.
-    var ratio = levels[L].switchPixels * levels[L].error;
-    var ratio1 = levels[1].switchPixels * levels[1].error;
+    // The projection is linear in the BOUND: twice the deviation, half the size.
+    // (`switchPixels` is derived from `bound`, because the bound is what the
+    // renderer's thresholds are — AT-A5.)
+    var ratio = levels[L].switchPixels * levels[L].bound;
+    var ratio1 = levels[1].switchPixels * levels[1].bound;
     assert(Math.abs(ratio / ratio1 - 1) < 1e-3,
            "every level's switch size comes from ONE budget (" + ratio.toFixed(3) + ")");
 }
@@ -158,7 +174,7 @@ for (var k = 1; k < levels.length; ++k) {
     var vp = editor.viewportState();
     var proj11 = 1.0 / Math.tan(0.5 * editor.camera().fov * Math.PI / 180.0);
     var valueAtBiasOne = (EYE - 1.0) * 2.0 / (proj11 * vp.height);
-    var bias = (levels[k].error / valueAtBiasOne) * 1.05;
+    var bias = (levels[k].bound / valueAtBiasOne) * 1.05;
     readings.push(measure("level" + k, bias));
 }
 
@@ -360,7 +376,7 @@ console.log("---- 6. a capture is exact ----");
     var vp6 = editor.viewportState();
     var proj6 = 1.0 / Math.tan(0.5 * editor.camera().fov * Math.PI / 180.0);
     var valueAtBiasOne6 = (EYE - 1.0) * 2.0 / (proj6 * vp6.height);
-    var threshold = levels[1].error / valueAtBiasOne6;
+    var threshold = levels[1].bound / valueAtBiasOne6;
     var park = threshold * 1.04;
     editor.setCamera({ position: { x: 0, y: 0, z: EYE }, lookAt: { x: 0, y: 0, z: 0 } });
 
