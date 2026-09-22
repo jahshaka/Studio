@@ -72,8 +72,18 @@ static void armChain(View *view, int ssrRow = 2)
 /// `gi` is passed by value on purpose: every arm of this suite states the whole
 /// GI configuration it is measuring, so no arm can inherit a row from the one
 /// before it.
+///
+/// THE FRAME INDEX IS FROZEN BY DEFAULT (PHOTON-GAFAR-1). The gather's sample
+/// sequence is keyed on the frame index, so two LIVE frames are two draws of a
+/// stochastic estimator: at 64 rays and no temporal filter they differ on about
+/// half the pixels (the naked-noise print below). Every A/B of this suite
+/// differences two pictures, and a difference of two live frames measures that
+/// noise and nothing else — the far-term A/B did exactly that and its "53 %"
+/// was the suite's own 54 % noise (spikes/measure-1bd/FINDINGS.md). So every
+/// arm holds the frame term, and the ONE arm that must be live (the check that
+/// the frame index really is the sequence's input) says so explicitly.
 static void armGather(Scene *s, GiParams gi, bool on, unsigned stride = 16u,
-                      unsigned octRes = 8u, bool freeze = false, bool farOff = false,
+                      unsigned octRes = 8u, bool freeze = true, bool farOff = false,
                       int adaptiveCap = -1, bool jitterOff = false)
 {
     gi.gather = on ? GiToggle::On : GiToggle::Off;
@@ -372,17 +382,53 @@ int main()
         std::printf("   floor red excess: off %.4f | cones %.4f | field %.4f | GATHER %.4f\n",
                     double(offRed), double(conesRed), double(fieldRed), double(gatherRed));
 
-        // ---- the far term's A/B (spec section 10 item 6) -----------------
-        armGather(s, gatherGi, true, 16u, 8u, false, true);
+        // ---- THE INSTRUMENT'S FLOOR, before any A/B is trusted -----------
+        // The same frozen arm, pushed twice exactly as an A/B pushes its two
+        // arms: whatever this pair moves is what the instrument moves on its
+        // own, and an A/B reading at or below it has measured nothing. The bar
+        // is 1 % of the frame; the frozen estimator is a pure function of the
+        // scene, so the honest reading is zero.
+        armGather(s, gatherGi, true);
+        render(e, 40);
+        Image floorA; view->readPixels(floorA);
+        armGather(s, gatherGi, true);
+        render(e, 40);
+        Image floorB; view->readPixels(floorB);
+        const Delta floorD = deltaOf(floorA, floorB);
+        std::printf("   THE A/B INSTRUMENT'S FLOOR (one frozen arm pushed twice): %u of %u px "
+                    "(%.2f%%) mean %.2f/255 worst %u\n", floorD.moved, floorD.total,
+                    100.0 * floorD.moved / std::max(1u, floorD.total), floorD.meanMoved,
+                    floorD.worst);
+        CHECK_MSG(floorD.moved * 100u <= floorD.total,
+                  "THE A/B INSTRUMENT IS QUIET: one frozen arm pushed twice moves %u of %u px "
+                  "(bar 1 %%) — every A/B below differences two FROZEN arms", floorD.moved,
+                  floorD.total);
+
+        // ---- the far term's A/B (spec section 10 item 6), BOTH ARMS FROZEN ---
+        // THE MEASURED TRUTH (MEASURE-1b, spikes/measure-1bd/FINDINGS.md): the
+        // far term never fires. The ray's length is the outer cascade's full
+        // DIAGONAL, and a ray that long leaving a point inside a box ends
+        // outside it except on a set of measure zero — so the end point it
+        // asks the cascades about lies in no volume, `ok` is false and the sky
+        // answers whether the term is on or off. The earlier "53 % of pixels"
+        // was this pair taken with the frame index LIVE: two draws of the
+        // estimator, i.e. its own noise. This assertion states the finding; if
+        // it ever reds, the ray length or the term changed and the decision at
+        // OgreScreenProbeGather.cpp's `reach` has to be re-taken.
+        armGather(s, gatherGi, true, 16u, 8u, true, true);
         render(e, 40);
         Image farOff; view->readPixels(farOff);
-        armGather(s, gatherGi, true, 16u, 8u, false, false);
+        armGather(s, gatherGi, true, 16u, 8u, true, false);
         render(e, 40);
         Image farOn; view->readPixels(farOn);
         const Delta fd = deltaOf(farOn, farOff);
-        std::printf("   THE FAR TERM (the outer cascades' voxel at tMax, against the sky): "
-                    "%u of %u px moved (%.1f%%), mean %.2f/255, worst %u\n", fd.moved, fd.total,
-                    100.0 * fd.moved / std::max(1u, fd.total), fd.meanMoved, fd.worst);
+        std::printf("   THE FAR TERM (the outer cascades' voxel at tMax, against the sky), "
+                    "frozen: %u of %u px moved (%.2f%%), mean %.2f/255, worst %u\n", fd.moved,
+                    fd.total, 100.0 * fd.moved / std::max(1u, fd.total), fd.meanMoved, fd.worst);
+        CHECK_MSG(fd.moved == 0u,
+                  "THE FAR TERM MOVES NO PIXEL at the shipped ray length (%u of %u px): the "
+                  "diagonal-long ray ends outside every cascade, so the term's voxel read "
+                  "is never ok and the sky answers either way", fd.moved, fd.total);
         if (dumpDir) writePpm(farOff, std::string(dumpDir) + "/g1a-bounce-gather-farOff.ppm");
 
         // ---- DETERMINISM (spec section 5) --------------------------------
@@ -400,7 +446,9 @@ int main()
               "DETERMINISM: with the frame term held, three consecutive frames of a still "
               "scene are byte-identical (no clock, no ordered atomic in the estimator)");
         // ...and with it LIVE the estimate moves, which is what says the frame
-        // index really is the sequence's input and nothing else is.
+        // index really is the sequence's input and nothing else is. (THE ONE
+        // LIVE ARM of this suite, and it is not an A/B: its print is the noise
+        // every live A/B would have measured instead of its subject.)
         armGather(s, gatherGi, true, 16u, 8u, false);
         render(e, 8);
         Image b1, b2;
@@ -517,7 +565,7 @@ int main()
         // placement job deleted (the lead's read). `adaptiveRequested` is what
         // the job actually asked for, and the cap is what it is doing something
         // TO.
-        armGather(s, gi, true, 16u, 8u, false, false, 0);
+        armGather(s, gi, true, 16u, 8u, true, false, 0);
         render(e, 16);
         const GatherStatus capped = gatherStatus(s);
         Image cappedImg; view->readPixels(cappedImg);

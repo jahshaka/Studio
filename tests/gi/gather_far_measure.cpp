@@ -270,7 +270,10 @@ static RayStats traceProbeRays(Scene *s, const std::vector<Probe> &probes, unsig
 }
 
 // ---------------------------------------------------------------------------
-struct Delta { unsigned moved = 0, total = 0, worst = 0; double meanMoved = 0; };
+/// `meanAll` is the worst-channel error averaged over EVERY pixel (moved or not):
+/// the sweep compares two arms' distance from one reference by it, because a
+/// "px moved" count cannot say which of two pictures is NEARER the reference.
+struct Delta { unsigned moved = 0, total = 0, worst = 0; double meanMoved = 0, meanAll = 0; };
 static Delta deltaOf(const Image &a, const Image &b)
 {
     Delta d;
@@ -284,6 +287,7 @@ static Delta deltaOf(const Image &a, const Image &b)
         if (w) { ++d.moved; sum += w; d.worst = std::max(d.worst, w); }
     }
     d.meanMoved = d.moved ? sum / d.moved : 0.0;
+    d.meanAll = d.total ? sum / d.total : 0.0;
     return d;
 }
 
@@ -410,6 +414,178 @@ static CameraDesc buildShowroom(Scene *s)
 }
 
 // ---------------------------------------------------------------------------
+// THE RAY-LENGTH SWEEP (lane PHOTON-GAFAR-1, `GAFAR_SWEEP=1`). The question the
+// cross-checks above leave open: how long does a gather ray NEED to be? Three
+// lengths per fixture and tier — the outer cascade's HALF extent, half its
+// diagonal, and the diagonal (the shipped derivation) — each with the far term
+// ON and OFF, in this process, at this pose, the GI configuration pushed ONCE
+// (a tuning push re-voxelises nothing, so every arm reads the same volumes and
+// the same TLAS; `arm()` above re-pushes the configuration and is NOT used here).
+//
+// Per arm:
+//   (a) THE PICTURE against today's arm (diagonal, far term on): px moved, mean
+//       over moved px, worst, and the mean over ALL px (`meanAll`) — the number
+//       that says which of two arms is NEARER the reference;
+//   (b) THE COST: the gather's own GPU timestamps (place + trace + integrate),
+//       on a second 1920x1080 view of the same scene (the 640x360 picture view
+//       stands down — one gathering view at a time, GATHER-0's D3), 120 frames
+//       of warm-up, then the arms INTERLEAVED in ten rounds of 36 frames with the
+//       first six of each block dropped (the timestamps come back frames late),
+//       300 frames per arm. CLOCKS ARE NOT LOCKED: the number is the RATIO to
+//       today's arm in the same rounds, never a millisecond;
+//   (c) THE RAYS on the CPU (the shader's own ray set against the same TLAS): the
+//       else-branch %, and of it the % whose end point lies inside a cascade box —
+//       the GEOMETRIC upper bound on `farOk` (the opacity half of `ok` is a GPU
+//       texture read nothing reads back); the pixel twin of `farOk` is (a)'s
+//       "far on vs far off" at the same length.
+// Every picture is frozen (`freezeFrameIndex`), and the instrument's own floor
+// is measured first: today's arm rendered twice must move 0 px.
+static void tune(Scene *s, float rayLength, bool farOff)
+{
+    GatherTuning t;
+    t.freezeFrameIndex = true;
+    t.rayLength = rayLength;
+    t.farTermOff = farOff;
+    s->setGatherTuning(t);
+}
+
+static int sweepMain(Engine *e, View *view)
+{
+    View *big = e->createOffscreenView("gafar-cost", 1920u, 1080u, Colour(0, 0, 0));
+    if (!big) { std::printf("FAIL: cost view: %s\n", e->lastError().c_str()); return 1; }
+    big->setShadows(true);
+    big->setEnabled(false);
+
+    struct Fix { const char *name; CameraDesc (*build)(Scene *); };
+    const Fix fixtures[3] = { { "open-sky", buildOpen }, { "closed-box", buildBox },
+                              { "showroom-shaped", buildShowroom } };
+    struct ArmDef { const char *name; int len; bool farOff; };
+    // len: 0 = the outer half extent, 1 = half the diagonal, 2 = the diagonal.
+    const ArmDef arms[6] = { { "diag+far", 2, false }, { "diag+sky", 2, true },
+                             { "hdiag+far", 1, false }, { "hdiag+sky", 1, true },
+                             { "half+far", 0, false }, { "half+sky", 0, true } };
+    std::printf("== GAFAR-1 SWEEP: ray length x far term, frozen frame, paired in one process ==\n");
+    int bad = 0;
+    for (const Fix &f : fixtures) {
+        for (int ti = 0; ti < 3; ++ti) {
+            const Tier &tier = kTiers[ti];
+            Scene *s = e->createScene(std::string("sweep-") + f.name + "-" + tier.name);
+            if (!s) { std::printf("FAIL: scene\n"); return 1; }
+            view->setEnabled(true);
+            view->setScene(s);
+            armChain(view, tier.ssrRow);
+            const CameraDesc cam = f.build(s);
+            view->setCamera(cam);
+            s->setGlobalIllumination(giAt(tier));
+            tune(s, 0.0f, false);
+            render(e, 90);
+
+            const GiStatus gs = s->giStatus();
+            std::vector<Box> boxes;
+            for (const auto &c : gs.cascades) {
+                Box b;
+                b.lo = { c.centre.x - c.halfSize, c.centre.y - c.halfSize, c.centre.z - c.halfSize };
+                b.hi = { c.centre.x + c.halfSize, c.centre.y + c.halfSize, c.centre.z + c.halfSize };
+                boxes.push_back(b);
+            }
+            const float outerHalf = gs.cascades.empty() ? 0.0f : gs.cascades.back().halfSize;
+            const float reach = std::sqrt(3.0f) * 2.0f * outerHalf;
+            const float len[3] = { outerHalf, 0.5f * reach, reach };
+            const GatherStatus gst = gs.gather;
+            const float bias = gs.cascades.empty() ? 0.02f
+                                                   : std::max(0.01f, 0.5f * gs.cascades[0].cell);
+            std::printf("\n-- %s %s: %zu cascades, outer half %.2f m; lengths %.2f / %.2f / %.2f m; "
+                        "gather on=%d running=%d stride %u octRes %u\n", f.name, tier.name,
+                        boxes.size(), double(outerHalf), double(len[0]), double(len[1]),
+                        double(len[2]), int(gst.on), int(gst.running), gst.stride, gst.octRes);
+
+            // ---- (a) the pictures -------------------------------------------
+            Image derived, ref, ref2, img[6];
+            tune(s, 0.0f, false);   render(e, 4); view->readPixels(derived);
+            for (int a = 0; a < 6; ++a) {
+                tune(s, len[arms[a].len], arms[a].farOff);
+                render(e, 4);
+                view->readPixels(img[a]);
+            }
+            tune(s, len[2], false); render(e, 4); view->readPixels(ref2);
+            ref = img[0];
+            const Delta floor = deltaOf(ref, ref2), der = deltaOf(ref, derived);
+            std::printf("   instrument floor: today's arm twice %u/%u px; derived vs forced "
+                        "diagonal %u px\n", floor.moved, floor.total, der.moved);
+            if (floor.moved * 100u > floor.total) {
+                std::printf("   !! the frozen instrument moved more than 1 %% on its own — "
+                            "this row is VOID\n");
+                ++bad;
+            }
+
+            // ---- (c) the rays -----------------------------------------------
+            RayStats rs[3];
+            unsigned tried = 0, dropped = 0;
+            const std::vector<Probe> probes =
+                placeProbes(s, cam, gst.stride ? gst.stride : 16u, tried, dropped);
+            for (int l = 0; l < 3; ++l)
+                rs[l] = traceProbeRays(s, probes, gst.octRes ? gst.octRes : 8u, len[l], bias, boxes);
+
+            // ---- (b) the cost -----------------------------------------------
+            view->setEnabled(false);
+            big->setScene(s);
+            armChain(big, tier.ssrRow);
+            big->setCamera(cam);
+            big->setEnabled(true);
+            tune(s, len[2], false);
+            render(e, 120);
+            std::vector<float> ms[6];
+            for (int round = 0; round < 10; ++round)
+                for (int a = 0; a < 6; ++a) {
+                    tune(s, len[arms[a].len], arms[a].farOff);
+                    for (int fr = 0; fr < 36; ++fr) {
+                        e->renderOneFrame();
+                        if (fr < 6) continue;
+                        const GatherStatus q = s->giStatus().gather;
+                        if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
+                            ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
+                    }
+                }
+            big->setEnabled(false);
+            float med[6];
+            for (int a = 0; a < 6; ++a) {
+                std::vector<float> v = ms[a];
+                std::sort(v.begin(), v.end());
+                med[a] = v.empty() ? -1.0f : v[v.size() / 2];
+            }
+
+            std::printf("   %-10s %7s %7s %6s %5s %8s | %9s | %7s %9s | %s\n", "arm", "len m", "moved",
+                        "mean", "worst", "meanAll", "ms ratio", "else%", "endIn%else", "far-vs-sky px");
+            for (int a = 0; a < 6; ++a) {
+                const Delta d = deltaOf(ref, img[a]);
+                const RayStats &r = rs[arms[a].len];
+                const double rays = double(r.rays ? r.rays : 1);
+                const Delta fs = deltaOf(img[a & ~1], img[a | 1]);   // far on vs off, same length
+                std::printf("   %-10s %7.2f %7u %6.2f %5u %8.4f | %9.3f | %7.2f %9.3f | %u (%.3f)"
+                            "   [n=%zu med %.4f ms]\n",
+                            arms[a].name, double(len[arms[a].len]), d.moved, d.meanMoved, d.worst,
+                            d.meanAll, med[0] > 0 ? double(med[a] / med[0]) : -1.0,
+                            100.0 * double(r.miss) / rays,
+                            r.miss ? 100.0 * double(r.endpointInAny) / double(r.miss) : 0.0,
+                            fs.moved, fs.meanAll, ms[a].size(), double(med[a]));
+            }
+            std::printf("   hit deciles of the DIAGONAL: ");
+            for (int b = 0; b < 10; ++b)
+                std::printf("%.2f%% ", 100.0 * double(rs[2].bins[b]) / double(rs[2].rays ? rs[2].rays : 1));
+            std::printf("(max hit %.2f m, hits beyond the half extent %.4f%% of rays)\n",
+                        rs[2].maxHitT, [&]() {
+                            // hits the half-extent arm loses = hits(diag) - hits(half)
+                            const double lost = double(rs[2].hit) - double(rs[0].hit);
+                            return 100.0 * lost / double(rs[2].rays ? rs[2].rays : 1);
+                        }());
+            std::fflush(stdout);
+            e->destroyScene(s);
+        }
+    }
+    return bad ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 int main()
 {
     std::string err;
@@ -428,6 +604,7 @@ int main()
         std::printf("FAIL: this machine has no ray queries — GA-FAR cannot be measured here\n");
         return 1;
     }
+    if (std::getenv("GAFAR_SWEEP")) return sweepMain(e, view);
 
     struct Fix { const char *name; CameraDesc (*build)(Scene *); };
     const Fix fixtures[3] = { { "open-sky", buildOpen }, { "closed-box", buildBox },
