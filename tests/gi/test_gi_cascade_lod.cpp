@@ -35,9 +35,12 @@
 //      were BOTH voxelised at the finer. Nothing is converted now — the compute
 //      shader reads each instance's own level through its geometry row — so the
 //      two instances take two levels and the outer cascade's bill falls from
-//      1,676 to 1,292 triangles on this fixture. The histogram reports what was
-//      SPENT (`voxelLevels`, read off the voxeliser) beside what was ASKED
-//      (`lodLevels`), and the two must agree.
+//      1,676 to 1,292 triangles on this fixture. The histogram is what was
+//      SPENT (`voxelLevels`), counted on the device by the gather that wrote
+//      the voxeliser's records (ATOM P4b); the CPU's REQUEST histogram
+//      (`lodLevels`) is deleted - nothing on the CPU decides a level any more.
+//      It counts PARTITIONS, which equal items on this fixture (every level is
+//      under the 2,001-index split).
 //   3. A MESH WITH NO CHAIN IS UNTOUCHED: the ground cube is level 0 in every
 //      cascade, which is what every scene built from primitives is today.
 //   4. IT IS CHEAPER, AND THE A/B IS IN ONE PROCESS: with
@@ -231,12 +234,12 @@ int main()
         std::printf("   cascade %zu: cell %.4f m, half %.1f m, items %d, attached %d, "
                     "levels %s, voxel triangles %lld\n",
                     i, st.cascades[i].cell, st.cascades[i].halfSize, st.cascades[i].items,
-                    st.cascades[i].attached, histText(st.cascades[i].lodLevels).c_str(),
+                    st.cascades[i].attached, histText(st.cascades[i].voxelLevels).c_str(),
                     st.cascades[i].voxelTriangles);
 
     // ---- 1. THE LEVEL PER CASCADE IS THE ARITHMETIC --------------------
     // The rule is `error < cell * kCascadeLodCellFraction`
-    // (lodLevelForWorldError at OgreScene::cascadeVoxelLod), so the expected
+    // (the gather's level rule - OgreScene::cascadeGatherInputs), so the expected
     // level of the unscaled instance is computable from the cascade's own
     // reported cell. THE FRACTION IS PINNED HERE ON PURPOSE: it is a measured
     // number (ATOM-3 A2), and a suite that re-derived it from the engine could
@@ -252,25 +255,25 @@ int main()
         for (int L = 0; L < 3; ++L) { if (!(errs[L] < budget)) break; expect = L + 1; }
         // Mesh B is the unscaled, unshared instance — the one whose level is
         // exactly this arithmetic; the histogram must contain it.
-        const bool present = countAt(st.cascades[i].lodLevels, size_t(expect)) > 0;
+        const bool present = countAt(st.cascades[i].voxelLevels, size_t(expect)) > 0;
         CHECK(present, ("cascade " + std::to_string(i) + " voxelises a level-" +
                         std::to_string(expect) + " item (budget " +
                         std::to_string(budget) + " m), " +
-                        histText(st.cascades[i].lodLevels)).c_str());
+                        histText(st.cascades[i].voxelLevels)).c_str());
     }
-    CHECK(maxLevel(st.cascades[0].lodLevels) == 0,
+    CHECK(maxLevel(st.cascades[0].voxelLevels) == 0,
           "CASCADE 0 TAKES THE AUTHORED GEOMETRY — nothing simplified at the finest cell");
-    CHECK(maxLevel(st.cascades.back().lodLevels) == 3,
+    CHECK(maxLevel(st.cascades.back().voxelLevels) == 3,
           ("THE OUTERMOST CASCADE TAKES THE COARSEST LEVEL THE CHAIN HAS (max level " +
-           std::to_string(maxLevel(st.cascades.back().lodLevels)) + ")").c_str());
-    CHECK(maxLevel(st.cascades[1].lodLevels) == 1 && maxLevel(st.cascades[2].lodLevels) == 2,
+           std::to_string(maxLevel(st.cascades.back().voxelLevels)) + ")").c_str());
+    CHECK(maxLevel(st.cascades[1].voxelLevels) == 1 && maxLevel(st.cascades[2].voxelLevels) == 2,
           "and the two middle cascades take exactly the levels their cells allow");
 
     // ---- 2. THE SCALE TERM REACHES THE DISPATCH -------------------------
     // Mesh C is instanced at 4x and carries 4x the world-space error per level,
     // so in the outermost cascade (budget 0.00732 m) it takes level 2 while mesh
     // B, unscaled and alone, takes level 3: two levels in ONE histogram.
-    const std::vector<int> &outer = st.cascades.back().lodLevels;
+    const std::vector<int> &outer = st.cascades.back().voxelLevels;
     CHECK(countAt(outer, 2) >= 1 && countAt(outer, 3) == 2,
           ("A SCALED INSTANCE TAKES A FINER LEVEL — the unscaled pair at the coarse end, "
            "the scaled ones below them: " + histText(outer)).c_str());
@@ -284,24 +287,15 @@ int main()
     // level 3 and charged the near level to an instance that did not need it.
     CHECK(countAt(outer, 2) == 2 && countAt(outer, 3) == 2,
           ("EACH INSTANCE OF A SHARED MESH TAKES ITS OWN LEVEL: " + histText(outer)).c_str());
-    // AND IT IS WHAT THE VOXELISER SPENT, not what the host decided: `voxelLevels`
-    // is read off the voxeliser's own queue after build(). IT COUNTS SUBMESH
-    // PARTITIONS, NOT ITEMS — the two units coincide on this fixture only because
-    // every relief level here is under the 2,001-index split (512 and 128 indices);
-    // a mesh over 667 triangles contributes several partitions for one item.
-    const std::vector<int> &spent = st.cascades.back().voxelLevels;
-    CHECK(countAt(spent, 2) == 2 && countAt(spent, 3) == 2,
-          ("and the voxeliser's OWN histogram says the same: " + histText(spent)).c_str());
-    // And it is what the voxeliser HOLDS, not what was asked — and since
-    // ogre-patch 0089 that sentence is literally true rather than nearly true
-    // (ATOM inventory row AT-A12). `voxelTriangles` used to be a CPU walk of each
-    // mesh's VAOs at the level just requested, i.e. this case asserted the host's
-    // own prediction against the host's own arithmetic; it is now
-    // `VctVoxelizer::getQueuedIndexCount()`, the sum of the `numIndices` that size
-    // the raster dispatches. The number below is UNCHANGED by that switch, which
-    // is the evidence the patch is worth having: the reading and the prediction
-    // agree exactly on this fixture, so from here on a disagreement means the
-    // voxeliser really did bind something else.
+    // IT COUNTS SUBMESH PARTITIONS, NOT ITEMS — the two units coincide on this
+    // fixture only because every relief level here is under the 2,001-index split
+    // (512 and 128 indices); a mesh over 667 triangles contributes several
+    // partitions for one item.
+    // And `voxelTriangles` is a READING too: the index total the gather counted as
+    // it wrote the records (ATOM P4b) - the numbers that size the raster
+    // dispatches. It was the voxeliser's CPU queue (AT-A12) and a CPU walk before
+    // that; the number below is UNCHANGED by both switches, so a disagreement
+    // means the voxeliser really did bind something else.
     // (the ground is 12, each relief level is 8192 / 2048 / 512 / 128)
     // TWO at level 2 and TWO at level 3 since ATOM P4 (it was 3 + 1, which cost
     // 1,676 — the per-instance level is 23 % less geometry on this fixture).
@@ -315,14 +309,14 @@ int main()
     // The ground cube has one VAO; it is counted at level 0 in every cascade,
     // which is why every cascade's histogram has a non-zero slot 0.
     bool groundEverywhere = true;
-    for (const auto &c : st.cascades) groundEverywhere = groundEverywhere && countAt(c.lodLevels, 0) > 0;
+    for (const auto &c : st.cascades) groundEverywhere = groundEverywhere && countAt(c.voxelLevels, 0) > 0;
     CHECK(groundEverywhere, "a mesh with NO chain stays at level 0 in every cascade");
 
     // ---- 5. THE LOD BIAS MUST NOT REACH THE VOXELS ---------------------
     std::vector<std::vector<int>> levelsAtBiasOne;
     std::vector<long long> trianglesAtBiasOne;
     for (const auto &c : st.cascades) {
-        levelsAtBiasOne.push_back(c.lodLevels);
+        levelsAtBiasOne.push_back(c.voxelLevels);
         trianglesAtBiasOne.push_back(c.voxelTriangles);
     }
     scene->setLodBias(200.0f);      // every drawn instance drops to its coarsest level
@@ -332,7 +326,7 @@ int main()
     GiStatus biased = scene->giStatus();
     bool biasMoved = false;
     for (size_t i = 0; i < biased.cascades.size() && i < levelsAtBiasOne.size(); ++i)
-        if (biased.cascades[i].lodLevels != levelsAtBiasOne[i] ||
+        if (biased.cascades[i].voxelLevels != levelsAtBiasOne[i] ||
             biased.cascades[i].voxelTriangles != trianglesAtBiasOne[i]) biasMoved = true;
     CHECK(!biasMoved, "THE LOD BIAS DOES NOT MOVE THE VOXELISER'S PICK (a dial over the picture)");
     scene->setLodBias(0.0f);        // and 0 pins the drawn level, which must not move it either
@@ -342,7 +336,7 @@ int main()
     GiStatus pinned = scene->giStatus();
     bool pinnedMoved = false;
     for (size_t i = 0; i < pinned.cascades.size() && i < levelsAtBiasOne.size(); ++i)
-        if (pinned.cascades[i].lodLevels != levelsAtBiasOne[i]) pinnedMoved = true;
+        if (pinned.cascades[i].voxelLevels != levelsAtBiasOne[i]) pinnedMoved = true;
     CHECK(!pinnedMoved, "and neither does bias 0, which pins what is DRAWN to the finest level");
     scene->setLodBias(1.0f);
     render(e, 2);
@@ -353,7 +347,7 @@ int main()
     GiStatus off = scene->giStatus();
     CHECK(off.cascades.size() == st.cascades.size(), "the same four cascades");
     bool allZero = true;
-    for (const auto &c : off.cascades) allZero = allZero && maxLevel(c.lodLevels) == 0;
+    for (const auto &c : off.cascades) allZero = allZero && maxLevel(c.voxelLevels) == 0;
     CHECK(allZero, "with the levels off EVERY cascade voxelises the authored geometry");
     long long onOuter = st.cascades.back().voxelTriangles;
     long long offOuter = off.cascades.back().voxelTriangles;
