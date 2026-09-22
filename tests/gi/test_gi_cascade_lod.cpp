@@ -285,9 +285,10 @@ int main()
     CHECK(countAt(outer, 2) == 2 && countAt(outer, 3) == 2,
           ("EACH INSTANCE OF A SHARED MESH TAKES ITS OWN LEVEL: " + histText(outer)).c_str());
     // AND IT IS WHAT THE VOXELISER SPENT, not what the host decided: `voxelLevels`
-    // is read off the voxeliser's own queue after build(). It counts submesh
-    // PARTITIONS rather than items, which is the same number here (one submesh,
-    // one partition per relief level at this index count) plus the ground.
+    // is read off the voxeliser's own queue after build(). IT COUNTS SUBMESH
+    // PARTITIONS, NOT ITEMS — the two units coincide on this fixture only because
+    // every relief level here is under the 2,001-index split (512 and 128 indices);
+    // a mesh over 667 triangles contributes several partitions for one item.
     const std::vector<int> &spent = st.cascades.back().voxelLevels;
     CHECK(countAt(spent, 2) == 2 && countAt(spent, 3) == 2,
           ("and the voxeliser's OWN histogram says the same: " + histText(spent)).c_str());

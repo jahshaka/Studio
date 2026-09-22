@@ -25,22 +25,36 @@
 //   2. AND BOTH ARE REALLY VOXELISED. The triangle reading is the sum of both
 //      meshes, and the scene is lit: a "cheaper" that dropped the 32-bit mesh
 //      would pass case 1 and fail here.
-//   3. A MESH WITH NO NORMALS AND NO UVs STILL VOXELISES. The engine's bake
-//      always writes both, but the row's layout word carries "absent" for each
-//      and the shader falls back to +Y and (0,0) — exactly what the download
-//      path did when its helper produced no data for a semantic. A hand-built
-//      mesh whose normals are generated is the closest the boundary allows; what
-//      is asserted is that the fallback path is reachable and lights.
-//   4. IT IS DETERMINISTIC ACROSS REBUILDS. Two rebuilds of the same still scene
-//      give the same triangle reading, the same dispatch count and the same
-//      picture — the resident read must not depend on which frame a buffer's
-//      address was taken in.
+//   3. A MESH BUILT WITH NO UV DATA VOXELISES AND LIGHTS. It does NOT exercise
+//      the row's "absent" branch and does not claim to: `buildMeshV2` writes the
+//      uv element either way (zeros), so the row still says float2. What it
+//      proves is that the shader reads the LAYOUT WORD for the uv offset rather
+//      than assuming a fixed one — a mesh whose uvs are all zero draws its
+//      albedo from texel (0,0) and is lit, where a mis-read offset would fetch a
+//      position or a tangent lane as a uv and the albedo would be wrong or NaN.
+//   4. IT IS DETERMINISTIC ACROSS TWO REAL REBUILDS. `refreshGlobalIllumination`
+//      only RE-INJECTS (DOCS/traps/ENGINE.md, VOXEL-CLIP-1), so this case forces
+//      actual re-voxelisations by TELEPORTING the camera a full cascade step and
+//      back — `CascadeStatus::rebuilds` is asserted to have MOVED, or the case
+//      would assert nothing at all, which is what it did before this fix round.
+//      What is compared is the geometry readings AND a readback of the volumes
+//      (`Scene::giVoxelStats`, which flushes the render system and downloads the
+//      light volume and the voxeliser's OWN emissive store): every field exactly
+//      equal, so a device address read in a different frame cannot move a voxel.
+//   5. A REFUSED SCENE BUILDS AND DOES NOT CRASH. `JAH_VCT_REFUSE_GEOMETRY` makes
+//      the voxeliser refuse every (mesh, level, submesh) — the state a device with
+//      NO buffer device addresses is in for the whole scene, and the state a mesh
+//      without a float3 position or with an unaligned stride is in for itself.
+//      Items are queued, no geometry row exists, and the build must clear the
+//      volumes and return: it used to walk into fillInstanceBuffers with a null
+//      instance buffer and segfault, so "GI is empty" was a crash.
 //
 // Its own binary like every GI suite (the voxel lighting binds process-wide).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -190,11 +204,11 @@ int main()
     std::printf("   mean luminance with the chain up: %.6f\n", luma);
     CHECK(luma > 0.02f, "and the scene is lit, so the resident read found real triangles");
 
-    // ---- 3. A MESH WHOSE UVs ARE ABSENT --------------------------------
-    // MeshData with no uvs: buildMeshV2 still writes the element (zeros), and the
-    // row's uv format says float2 — what this case really proves is that a mesh
-    // built without uv data voxelises and lights, i.e. the layout word is read
-    // rather than assumed.
+    // ---- 3. A MESH BUILT WITH NO UV DATA -------------------------------
+    // NOT the "absent" branch: buildMeshV2 writes the uv element either way, so the
+    // row says float2 and points at the real lane. What this proves is that the
+    // layout word's uv OFFSET is read — a mis-read offset would fetch a position or
+    // tangent lane as a uv, and the albedo would be wrong.
     MeshData bare = grid(4, 1.5f);
     bare.uvs.clear();
     const MeshId meshBare = scene->createMesh(bare);
@@ -210,23 +224,92 @@ int main()
            " == " + std::to_string(expectWithBare) + ")").c_str());
     CHECK(meanLuma(view) > 0.02f, "and the scene is still lit");
 
-    // ---- 4. DETERMINISTIC ACROSS REBUILDS -------------------------------
-    // The addresses are read at build time; a still scene rebuilt twice must give
-    // the same readings and the same picture.
+    // ---- 4. DETERMINISTIC ACROSS TWO REAL REBUILDS ----------------------
+    // `refreshGlobalIllumination()` alone only re-injects, so it is NOT used here:
+    // the camera is teleported a full cascade step away and back, which moves the
+    // chain's centre and forces a re-voxelisation, and `rebuilds` is asserted to
+    // have moved. Everything read is then compared exactly.
     const float lumaBefore = meanLuma(view);
-    scene->refreshGlobalIllumination();
-    render(e, 12);
+    const GiVoxelStats statsBefore = scene->giVoxelStats(0);
+    CHECK(statsBefore.available,
+          ("the voxel volumes read back (" + statsBefore.format + ", " +
+           std::to_string(statsBefore.voxels) + " voxels, " +
+           std::to_string(statsBefore.voxelsLit) + " lit)").c_str());
+    const unsigned long long buildsBefore = withBare.cascades[0].rebuilds;
+
+    enginetest::testCameraLookAt(view, Vec3(400.0f, 3.0f, 406.0f), Vec3(400.0f, 0.5f, 400.0f));
+    render(e, 16);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.5f, 0.0f));
+    render(e, 24);
+
     GiStatus again = scene->giStatus();
+    std::printf("   cascade 0 rebuilds: %llu -> %llu\n", buildsBefore, again.cascades[0].rebuilds);
+    CHECK(again.cascades[0].rebuilds > buildsBefore,
+          "the teleport really did re-voxelise (a refresh alone would not have)");
     bool same = again.cascades.size() == withBare.cascades.size();
     for (size_t i = 0; same && i < again.cascades.size(); ++i)
         same = again.cascades[i].voxelTriangles == withBare.cascades[i].voxelTriangles &&
                again.cascades[i].voxelDispatches == withBare.cascades[i].voxelDispatches &&
                again.cascades[i].voxelLevels == withBare.cascades[i].voxelLevels;
     CHECK(same, "the second build binds exactly the same geometry, level for level");
+
+    // THE READBACK, field for field. `peakEmissive`/`emissiveAtMax`/`emissiveAboveOne`
+    // are the VOXELISER's own emissive store (no normalisation); the rest is the light
+    // volume the cones read, which is a digest of what the voxeliser wrote.
+    const GiVoxelStats statsAfter = scene->giVoxelStats(0);
+    CHECK(statsAfter.available, "and the volumes read back again");
+    const bool volumesIdentical =
+        statsAfter.format == statsBefore.format && statsAfter.width == statsBefore.width &&
+        statsAfter.height == statsBefore.height && statsAfter.depth == statsBefore.depth &&
+        statsAfter.peak == statsBefore.peak && statsAfter.peakDirect == statsBefore.peakDirect &&
+        statsAfter.meanLit == statsBefore.meanLit &&
+        statsAfter.voxelsLit == statsBefore.voxelsLit &&
+        statsAfter.voxelsAtMax == statsBefore.voxelsAtMax &&
+        statsAfter.directAtMax == statsBefore.directAtMax &&
+        statsAfter.voxelsAboveOne == statsBefore.voxelsAboveOne &&
+        statsAfter.emissiveFormat == statsBefore.emissiveFormat &&
+        statsAfter.peakEmissive == statsBefore.peakEmissive &&
+        statsAfter.emissiveAtMax == statsBefore.emissiveAtMax &&
+        statsAfter.emissiveAboveOne == statsBefore.emissiveAboveOne;
+    std::printf("   volumes before: peak %.9g meanLit %.17g lit %lld aboveOne %lld\n",
+                statsBefore.peak, statsBefore.meanLit, statsBefore.voxelsLit,
+                statsBefore.voxelsAboveOne);
+    std::printf("   volumes after : peak %.9g meanLit %.17g lit %lld aboveOne %lld\n",
+                statsAfter.peak, statsAfter.meanLit, statsAfter.voxelsLit,
+                statsAfter.voxelsAboveOne);
+    CHECK(volumesIdentical,
+          "AND THE VOLUMES READ BACK IDENTICAL after the second voxelisation — every "
+          "field of giVoxelStats, the voxeliser's emissive store included");
     const float lumaAfter = meanLuma(view);
     std::printf("   mean luminance before %.6f, after %.6f\n", lumaBefore, lumaAfter);
     CHECK(std::fabs(lumaAfter - lumaBefore) < 0.002f,
           "and the picture is the same after the rebuild");
+
+    // ---- 5. A REFUSED SCENE BUILDS AND DOES NOT CRASH -------------------
+    // Every row refused = the no-buffer-device-address state for the whole scene.
+    // Reaching the end of this case at all is most of the assertion.
+    setenv("JAH_VCT_REFUSE_GEOMETRY", "1", 1);
+    scene->refreshGlobalIllumination();
+    enginetest::testCameraLookAt(view, Vec3(400.0f, 3.0f, 406.0f), Vec3(400.0f, 0.5f, 400.0f));
+    render(e, 16);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, 6.0f), Vec3(0.0f, 0.5f, 0.0f));
+    render(e, 24);
+    GiStatus refused = scene->giStatus();
+    std::printf("   refused build: triangles %lld, dispatches %lld, rebuilds %llu\n",
+                refused.cascades[0].voxelTriangles, refused.cascades[0].voxelDispatches,
+                refused.cascades[0].rebuilds);
+    CHECK(refused.cascades[0].rebuilds > again.cascades[0].rebuilds,
+          "A SCENE WHOSE EVERY MESH IS REFUSED BUILDS WITHOUT CRASHING");
+    CHECK(refused.cascades[0].voxelTriangles == 0 && refused.cascades[0].voxelDispatches == 0,
+          ("and reports no geometry and no dispatch (" +
+           std::to_string(refused.cascades[0].voxelTriangles) + " triangles, " +
+           std::to_string(refused.cascades[0].voxelDispatches) + " dispatches)").c_str());
+    unsetenv("JAH_VCT_REFUSE_GEOMETRY");
+    scene->refreshGlobalIllumination();
+    render(e, 16);
+    CHECK(scene->giStatus().cascades[0].voxelTriangles == 0 ||
+              scene->giStatus().cascades[0].voxelTriangles == expectWithBare,
+          "and the refusal is not sticky beyond the hook");
 
     scene->setGlobalIllumination(GiParams());
     render(e, 2);
