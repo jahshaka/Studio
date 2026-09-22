@@ -35,7 +35,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # (anything that renders), "*headless-scripts" the --headless ones, "*all-scripts" both.
 AREA_RULES = [
     # --- engine: anything that changes pixels or the boundary ---------------------------
-    (r"^irisgl/(engine/|thirdparty/ogre-patches/|scripts/build-ogre)",
+    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/build-ogre)",
      # `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING
      # from this list, so no engine change ever selected the ray-traced
      # reflection suites — DRAG-1 changed what the ray arm reads from the voxels
@@ -468,7 +468,9 @@ def main():
                 fallback.append(f"{p}: no suite owns this tests/ path")
             rationale.append((p, ", ".join(hit) or "no suite in that dir → fallback"))
             continue
-        if p.startswith(("src/", "irisgl/")) and not p.startswith("irisgl/thirdparty/ogre-next"):
+        # A pin bump of irisgl/thirdparty/ogre-next COUNTS as code moving (2026-09-22): since
+        # the fork, that gitlink is how every engine change — C++ and media alike — arrives.
+        if p.startswith(("src/", "irisgl/")):
             code_moved = True
         # 2. a source a compiled test target names
         for d, files in refs.items():

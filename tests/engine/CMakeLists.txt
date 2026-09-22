@@ -224,7 +224,7 @@ if(JAHSHAKA_ASAN)
     # test_engine and test_engine_asan both green with the new TU compiled in).
     jahshaka_engine_vr(JahshakaEngineAsan)
     target_compile_definitions(JahshakaEngineAsan PRIVATE
-        JAHSHAKA_OGRE_PATCH_SERIES="${JAHSHAKA_OGRE_PATCH_SERIES}")
+        JAHSHAKA_OGRE_FORK_COMMIT="${JAHSHAKA_OGRE_FORK_COMMIT}")
     set_target_properties(JahshakaEngineAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     target_compile_options(JahshakaEngineAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(JahshakaEngineAsan PUBLIC -fsanitize=address)

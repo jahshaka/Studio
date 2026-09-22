@@ -52,7 +52,6 @@ import sys
 NOT_A_COMPONENT = {
     "assimp-patches": "OUR OWN patch stack for assimp (irisgl/cmake/ApplyVendorPatches.cmake "
                       "applies it) — Jahshaka source, not a third party's",
-    "ogre-patches": "OUR OWN patch stack for Ogre-Next (build-ogre.sh applies it)",
     "ogre-next-install": "a BUILD OUTPUT — the engine's install prefix, produced by "
                          "build-ogre.sh from the ogre-next submodule beside it",
 }

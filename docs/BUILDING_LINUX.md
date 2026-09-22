@@ -124,12 +124,14 @@ before assimp is added to the build — you will see lines like
 
 on the first configure and `vendor patch already applied: …` on every one after. Nothing to
 run by hand; the assimp submodule simply ends up in the applied-not-committed state, exactly
-like Ogre-Next after `build-ogre.sh` — `git status` showing eight modified files under
-`irisgl/thirdparty/assimp` is the CORRECT state of a configured tree, not dirt to clean
-(`git -C irisgl/thirdparty/assimp checkout -- .` + a reconfigure puts it straight back).
-Two patch stacks, one law: `irisgl/thirdparty/ogre-patches/` (applied by `build-ogre.sh`,
-the out-of-tree engine build) and `irisgl/thirdparty/assimp-patches/` (applied by our own
-configure, because assimp is compiled by our build). The applier is chosen per tree: a git
+— `git status` showing eight modified files under `irisgl/thirdparty/assimp` is the CORRECT
+state of a configured tree, not dirt to clean (`git -C irisgl/thirdparty/assimp checkout -- .`
++ a reconfigure puts it straight back).
+ONE patch stack is left: `irisgl/thirdparty/assimp-patches/` (applied by our own configure,
+because assimp is compiled by our build). Ogre-Next has none — since 2026-09-22 its submodule
+is our FORK, `github.com/jahshaka/ogre-next` branch `jahshaka`, and `build-ogre.sh` only checks
+that the checkout is a descendant of the tag `jahshaka-stack-v1` before it builds
+(`irisgl/docs/OGRE_BUILD.md`). The applier is chosen per tree: a git
 checkout of the submodule uses `git apply`; a source tree without `.git` (a release
 tarball) — or one nested inside some other repository — goes through GNU `patch`
 (`patch -p1 --fuzz=0 -N`, same idempotency, same loud failure), so `patch` must be installed
