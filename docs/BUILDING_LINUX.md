@@ -62,8 +62,9 @@ git clone --recursive https://github.com/jahshaka/Studio.git jahshaka
 cd jahshaka
 ```
 
-`--recursive` brings IrisGL (with its assimp/bullet/zip submodules) and the pinned Ogre-Next
-source. If you cloned without it:
+`--recursive` brings IrisGL (with its assimp / bullet / zip / meshoptimizer submodules) and the
+engine: **Jahshaka's fork of Ogre-Next** (`github.com/jahshaka/ogre-next`, branch `jahshaka` —
+a public repo, so it clones with no key). If you cloned without it:
 
 ```bash
 git submodule update --init --recursive
@@ -71,18 +72,24 @@ git submodule update --init --recursive
 
 ## 3. Build Ogre-Next — once per machine
 
-IrisGL ships Ogre-Next as a pinned submodule plus a small set of Jahshaka patches. One script
-applies the patches, configures, builds and installs it (~10 minutes; installs to
-`~/Developer/engines/ogre-next-install` by default, override with `OGRE_PREFIX=`):
+The engine is the `irisgl/thirdparty/ogre-next` submodule, pinned at a commit on our fork's
+`jahshaka` branch (our changes to Ogre live there as commits — `DOCS/OGRE_NEXT_CHANGES.md` in the
+workspace repo logs each one). One script configures, builds and installs it into the tree's own
+`irisgl/thirdparty/ogre-next-install` (~10 minutes cold, ~3 with a warm ccache; `OGRE_PREFIX=`
+overrides the location):
 
 ```bash
 ./irisgl/scripts/build-ogre.sh
 ```
 
-You run this again whenever the Ogre pin, the patch stack **or the engine's build options**
-change. Details, other platforms, and the gotchas explained: `irisgl/docs/OGRE_BUILD.md`. The
-critical one: **if `libshaderc-dev` is missing, Ogre configures "successfully" without
-Vulkan** — the script checks and fails loudly for you.
+It refuses to build a checkout that is not a descendant of the tag `jahshaka-stack-v1` — that
+means the submodule is on upstream's `master` or was left behind by a merge; the fix it prints is
+`git -C irisgl submodule update --init thirdparty/ogre-next`. Run the script again whenever the
+pin **or the engine's build options** change (after a pull, when `git -C irisgl submodule status`
+shows the pin moved). Details, other platforms, and the gotchas: `irisgl/docs/OGRE_BUILD.md`.
+The critical one: **if `libshaderc-dev` is missing, Ogre configures "successfully" without
+Vulkan** — the script checks and fails loudly for you. The engine's shader cache is keyed on
+the fork commit, so the first launch after a pin bump rebuilds it once (slower, not different).
 
 > **Re-run this script after pulling — it is not optional.** The engine install carries
 > build-time switches that Studio compiles against, and the current one is

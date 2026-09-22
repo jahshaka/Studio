@@ -49,38 +49,58 @@ Jahshaka brings you the future of immersive digital content creation with the le
 
 ## Building From Source
 
-We have moved Master and new releases over to Qt 6.9 and are now developing on 6.9 we will update the build instructions shortly.
+Linux is the development platform (Ubuntu 26.04, GCC 15, Qt 6.10, an NVIDIA GPU with Vulkan 1.3+). The renderer is
+Vulkan-only, on our fork of Ogre-Next (`github.com/jahshaka/ogre-next`). macOS builds through MoltenVK
+(`docs/BUILDING_MACOS.md`); Windows is not yet built. The full guide with every dependency, the test suite and
+troubleshooting is `docs/BUILDING_LINUX.md`.
 
-### Requirements
-- Git
-- Cmake *(latest version recommended)*
-- Qt versions *5.7* to *5.9* are recommended *(other versions might work but aren't tested, versions that will break are 5.8 and 5.9.4)*
-- A C++ compiler with support for C++11 or later (choose a compiler for your OS when installing the Qt SDK. G++, MSVC and clang are all supported). If building on Windows, choose the default mingw compiler `MinGW 5.3.0 32 bit` as well as `msvc2017 64-bit` so you can build with Visual Studio as well which is what we recommend.
-- Qt Creator (also comes with the Qt SDK, latest version recommended) *AND OR* Microsoft Visual Studio 2017 Community Edition
+### 1. Dependencies (Ubuntu — install ALL of them before configuring anything)
 
-### Build steps
-Stable (usually months old releases are available by default), for up to date code (might include bugs), checkout the [`dev` branch](https://github.com/jahshaka/VR/tree/dev) instead of `master`
+```bash
+sudo apt-get install -y build-essential cmake ninja-build git python3 \
+     qt6-base-dev qt6-declarative-dev qt6-multimedia-dev qt6-svg-dev \
+     qt6-httpserver-dev qt6-websockets-dev libqt6concurrent6 libqt6sql6-sqlite \
+     libxrandr-dev libxaw7-dev rapidjson-dev libzzip-dev libsdl2-dev \
+     glslang-tools spirv-tools vulkan-tools libshaderc-dev libfreeimage-dev \
+     libxcb-randr0-dev libx11-xcb-dev libxcb1-dev libxcb-keysyms1-dev \
+     libx11-dev libxt-dev libgl1-mesa-dev libglu1-mesa-dev libfreetype-dev \
+     zlib1g-dev libvulkan-dev
+```
 
-- Clone the repo from the project page or download a zipped copy of the source for a specific version from the Releases tab
-- Fetch the submodules by opening a command window inside the project and using `git submodule update --init --recursive`
+Qt 6.10 or newer is required (`qt6-httpserver-dev` serves the in-app MCP endpoint). `libshaderc-dev` is the one
+you must not miss: without it the engine configures "successfully" with no Vulkan renderer.
 
-If you will be cloning the repo you can do both steps in one command by using `git clone --recurse-submodules -j8 git://github.com/jahshaka/VR.git`. See https://stackoverflow.com/a/4438292/996468
+### 2. Clone
 
-Again, if you want to build the latest code, you might want to do a `git checkout dev` at this point.
+```bash
+git clone --recursive https://github.com/jahshaka/Studio.git jahshaka
+cd jahshaka
+```
 
-**If using Qt Creator (on any platform)**
-- Make sure Cmake has been installed and properly added to your path.
-- Open the `CMakeLists.txt` file (it will run and configure the default build target).
-- Build the application.
+`--recursive` brings the IrisGL submodule, its vendored libraries, and the engine fork.
 
-**If using MSVC (recommended for x64 builds)**
-- There are several ways to go about this, the easiest is to use the `cmake-gui` tool.
-- Point to the folder where you have the source and a folder where you want to build by using the Browse Source and Browse Build buttons respectively.
-- Add Qt to cmake's prefix path by pressing Add Entry, for name enter `CMAKE_PREFIX_PATH`, type should be set to `PATH` and the value should point to where you installed Qt and the msvc tools for example `C:\Qt\5.9.2\msvc2017_64`.
-- Press Configure and for the generator select `Visual Studio 15 2017 Win64` and then Finish.
-- Now press Generate and finally you can use the Open Project button to launch visual studio with the solution opened.
-- Finally, you might want to change the build target from the default `ALL_BUILD` to `Jahshaka` in the Solution Explorer.
-- Build the application.
+### 3. Build the engine (once per tree, ~10 minutes cold)
+
+```bash
+./irisgl/scripts/build-ogre.sh
+```
+
+Builds our fork of Ogre-Next at its pinned commit into `irisgl/thirdparty/ogre-next-install`. Run it again after a
+pull that moved the engine pin (`git -C irisgl submodule update --init thirdparty/ogre-next` first).
+
+### 4. Build and run Jahshaka
+
+```bash
+cmake -S . -B build-linux -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DDISABLE_BREAKPAD=ON
+cmake --build build-linux -j$(nproc)
+
+cd build-linux/bin
+./Jahshaka                              # the editor
+./Jahshaka --engine-selftest out.png    # a 10-second proof the renderer works: exit 0 and four hash lines
+```
+
+Run the binary from `build-linux/bin` — media resolves from the binary's directory.
 
 If you encounter any issues building, please open an issue.
 
