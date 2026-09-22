@@ -354,10 +354,18 @@ QJsonArray McpTools::listTools() const
                     { "type", "string" },
                     { "enum", QJsonArray{ "start", "stop", "status", "mark" } },
                     { "description", "What to do (default \"start\")." } } },
+                { "frames", QJsonObject{
+                    { "type", "integer" },
+                    { "description", "Capture length for \"start\", COUNTED IN FRAMES whoever "
+                                     "draws them — the form a driven measurement wants, because "
+                                     "a gesture that steps frames itself gets no driver ticks "
+                                     "and a wall-clock window over it measures a clock against "
+                                     "an empty loop. Wins over \"seconds\"." } } },
                 { "seconds", QJsonObject{
                     { "type", "number" },
-                    { "description", "Capture length for \"start\" (default: the app's "
-                                     "capture-length preference, 20 s)." } } },
+                    { "description", "Capture length for \"start\" in wall-clock seconds — the "
+                                     "INTERACTIVE window (default: the app's capture-length "
+                                     "preference, 20 s). Ignored when \"frames\" is given." } } },
                 { "label", QJsonObject{
                     { "type", "string" },
                     { "description", "Names the bundle directory for \"start\" (the open "
@@ -1085,6 +1093,8 @@ QJsonObject McpTools::capturePerf(const QJsonObject &args)
                           true);
 
     FrameMonitor::Request request;
+    const double wantFrames = args.value(QLatin1String("frames")).toDouble(0.0);
+    request.frames = wantFrames >= 1.0 ? static_cast<unsigned long long>(wantFrames) : 0ull;
     request.seconds = args.value(QLatin1String("seconds")).toDouble(0.0);
     request.label = args.value(QLatin1String("label")).toString();
     request.outDir = args.value(QLatin1String("out")).toString();

@@ -2596,6 +2596,10 @@ IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
     out.directAtMax = qint64(st.directAtMax);
     out.voxels = qint64(st.voxels);
     out.voxelsAboveOne = qint64(st.voxelsAboveOne);
+    out.emissiveFormat = QString::fromStdString(st.emissiveFormat);
+    out.peakEmissive = st.peakEmissive;
+    out.emissiveAtMax = qint64(st.emissiveAtMax);
+    out.emissiveAboveOne = qint64(st.emissiveAboveOne);
     return out;
 }
 

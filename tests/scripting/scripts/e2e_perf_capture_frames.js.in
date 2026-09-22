@@ -1,0 +1,119 @@
+// The app half of scripting.e2e.perf_capture_frames (PERF-CAPTURE-SCRIPT-1,
+// lane FENCE-1). It RECORDS; perf_capture_frames.sh reads what it wrote and
+// judges it — the scripting engine has no file access, deliberately.
+//
+// WHAT WAS WRONG, MEASURED ON THIS TREE BEFORE THE FIX (not the ledger's
+// guess: the ledger said "perf.capture never starts under --script", and that
+// is not what happens). `perf.capture` starts perfectly well. The defect is
+// the WINDOW. Under `--script` the run policy is ScriptRunPolicy::Off, which
+// makes the render driver SKIP EVERY TICK for the whole run by design
+// (src/scripting/scriptengine.h) — the only frames drawn are the ones
+// `editor.frame(n)` renders. A wall-clock window over that fails two ways,
+// both reproduced on this binary:
+//
+//   C. a script that steps NO frames: 3 s window, zero driver ticks, the
+//      capture closed itself with frames.jsonl EMPTY and perf.stop() then
+//      answering {"stopped":false,"error":"no capture is running"} — which is
+//      exactly what reads as "it never started";
+//   B. a script that DOES step frames: a 1 s window over 300 stepped
+//      `editor.frame(1)` calls wrote 88 records and lost the other 212,
+//      silently, and again left perf.stop() refusing.
+//
+// So the window is counted in FRAMES, whoever draws them, and this suite is
+// that contract:
+//
+//   1. `perf.capture({frames: 60})` starts, reports frames: 60 and no seconds;
+//   2. stepping exactly 60 `editor.frame(1)` closes it BY ITSELF — the run
+//      never calls perf.stop(), which is the half arm C could not do;
+//   3. the bundle holds EXACTLY 60 frame records and machine.json says so
+//      (the .sh half counts the lines);
+//   4. the 61st stepped frame is NOT recorded: a window that overran would
+//      make "60 frames" a suggestion;
+//   5. AND THE OLD SHAPE IS STILL BROKEN THE SAME WAY, on purpose: arm C is
+//      re-run here as the regression control so the fix cannot be mistaken for
+//      the driver having started ticking under --script.
+//
+// Every number it learns that the files cannot state goes on one
+// PERFFRAMES line for the shell half.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+// Substituted by CMake (configure_file): the directories the shell half reads.
+var bundle = "@JAH_TEST_BUNDLE@";
+var control = "@JAH_TEST_BUNDLE@-seconds-control";
+
+var guid = project.create("Perf Frames " + Date.now(), { empty: true });
+assert(guid.length > 10, "project.create -> " + guid);
+
+// Something to draw. An empty world still renders, but a cube makes the records
+// carry real draws and the bundle worth reading.
+scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+scene.addLight("directional", { position: { x: 0, y: 6, z: 0 } });
+editor.frame(4);
+
+// ---- 1. the frame-counted window starts and says which window it is --------
+var started = perf.capture({ frames: 60, out: bundle, label: "perf-capture-frames" });
+assert(started.started === true, "perf.capture({frames:60}) started -> " + J(started));
+assert(started.frames === 60, "...and reports the FRAME window it is running: " + started.frames);
+assert(started.seconds === 0,
+       "...with no wall-clock window at all (seconds " + started.seconds + ")");
+var st = perf.status();
+assert(st.recording === true, "perf.status() says recording");
+assert(st.plannedFrames === 60, "status.plannedFrames is 60: " + st.plannedFrames);
+assert(st.remainingMs === undefined,
+       "a frame-counted capture arms NO timer, so there is no remainingMs: " + J(st.remainingMs));
+assert(st.remainingFrames === 60, "and 60 frames are still owed: " + st.remainingFrames);
+
+// ---- 2. it closes ITSELF on the 60th frame, with no perf.stop() ------------
+// THE FRAMES ARE THE CLOCK. Stepped one at a time so the drain that closes the
+// window lands on a frame boundary and the count is not the luck of a batch.
+for (var i = 0; i < 60; ++i) editor.frame(1);
+var after = perf.status();
+assert(after.recording === false,
+       "the capture closed ITSELF after the 60th frame, with no perf.stop(): phase " + after.phase);
+assert(after.frames === 60,
+       "...having recorded exactly 60 frames: " + after.frames);
+assert(after.lastBundle === bundle, "...into the bundle it was given: " + after.lastBundle);
+
+// ---- 4. and the 61st frame is not in it -----------------------------------
+// The window is over; drawing more must add nothing. (The shell half counts the
+// lines, which is the only reading that cannot be fooled by a counter.)
+editor.frame(1);
+assert(perf.status().frames === 60,
+       "a frame drawn after the window is not recorded: " + perf.status().frames);
+assert(perf.stop().stopped === false,
+       "and perf.stop() has nothing to stop — the window ended on its own");
+
+// ---- 5. THE CONTROL: the wall-clock window over a stepping script ----------
+// This is arm C, deliberately re-run, because it is the thing that must NOT
+// have changed: --script still gives the driver no ticks, so a TIMED capture
+// over a script that steps nothing still records nothing. If this ever comes
+// back non-zero, the driver started ticking under --script and the reason for
+// the frame window is gone — which is a finding, not a pass.
+var timed = perf.capture({ seconds: 1, out: control, label: "seconds-control" });
+assert(timed.started === true, "the timed control starts too -> " + J(timed));
+assert(timed.frames === 0, "...and reports no frame window: " + timed.frames);
+assert(timed.seconds === 1, "...but a one-second one: " + timed.seconds);
+// Spend the window WITHOUT drawing: verb calls only, so nothing renders.
+var spins = 0;
+var t0 = Date.now();
+while (Date.now() - t0 < 1400) { spins += world.giStatus().rebuilds + 1; }
+var timedStatus = perf.status();
+var timedFrames = timedStatus.recording ? timedStatus.frames : timedStatus.frames;
+if (timedStatus.recording) perf.stop();
+console.log("control: the timed window over a non-drawing script recorded " + timedFrames +
+            " frame(s) in " + spins + " verb calls");
+assert(timedFrames === 0,
+       "THE CONTROL HOLDS: a wall-clock capture over a script that draws nothing records " +
+       "nothing (" + timedFrames + ") — which is why the window is counted in frames");
+
+console.log("PERFFRAMES " + J({
+    bundle: bundle,
+    frames: after.frames,
+    control: control,
+    controlFrames: timedFrames,
+}));

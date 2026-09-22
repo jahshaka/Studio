@@ -859,6 +859,13 @@ public:
         qint64  directAtMax = 0;
         qint64  voxels = 0;
         qint64  voxelsAboveOne = 0;///< above 1.0 in store units — what an 8-bit store would clip
+        /// THE SOURCE the injection seeds the volumes above from (VOXEL-CLIP-1):
+        /// the voxeliser's emissive store, in SCENE RADIANCE (no normalisation).
+        /// `emissiveFormat` empty = this cascade has no voxeliser to read.
+        QString emissiveFormat;
+        float   peakEmissive = 0.0f;
+        qint64  emissiveAtMax = 0;    ///< on a UNORM emissive store this IS the clip
+        qint64  emissiveAboveOne = 0;
     };
     virtual GiVoxelStatsInfo giVoxelStats(int cascade) { (void)cascade; return {}; }
 

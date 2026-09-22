@@ -124,7 +124,30 @@ public:
     /// What a capture was asked for. Everything has a default; the verb, the
     /// key and the MCP tool all come through here.
     struct Request {
-        double  seconds = 0.0;      ///< 0 = the preference (20 s by default)
+        /// THE WINDOW, COUNTED IN FRAMES — the form every scripted capture uses
+        /// (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). 0 = count seconds instead.
+        ///
+        /// WHY, MEASURED: under `--script` the run policy is `ScriptRunPolicy::
+        /// Off`, which makes the render driver SKIP EVERY TICK for the whole run
+        /// BY DESIGN (scriptengine.h) — the only frames drawn are the ones
+        /// `editor.frame(n)` renders. So a wall-clock window over a scripted run
+        /// measures a clock against a loop that contains no driver frames at
+        /// all, and it fails in two measured ways: a script that steps nothing
+        /// records ZERO frames and closes itself (`perf.stop()` then answers "no
+        /// capture is running"), and a script that DOES step frames is cut off
+        /// mid-loop when the seconds run out (1 s / 300 stepped frames wrote 88
+        /// and lost 212). Counting frames is the same window for both the
+        /// driver's tick and a scripted `editor.frame`, because both end at
+        /// `noteTickEnd`.
+        ///
+        /// The bundle holds EXACTLY this many frame records: the writer refuses
+        /// the ones past the limit, so "60 frames" is a guarantee and not the
+        /// luck of where the drain landed.
+        unsigned long long frames = 0;
+        /// 0 = the preference (20 s by default). Ignored when `frames` is set;
+        /// this is the INTERACTIVE window — Ctrl+F4, the owner watching a live
+        /// loop — where the driver is the thing that draws.
+        double  seconds = 0.0;
         QString label;              ///< names the bundle directory; "" = the scene's name
         QString outDir;             ///< "" = <capture root>/<date>-<time>-<label>
         qint64  maxBytes = 0;       ///< 0 = the default cap (§4.8 "size-capped")
@@ -257,6 +280,17 @@ private:
     void drainAndCharge();
     /// One pass over the engine's two queues; returns how many records moved.
     unsigned drainOnce();
+    /// THE FRAME-COUNTED WINDOW'S END, counted at `noteTickEnd` — i.e. at
+    /// FRAMES DRAWN, whoever drew them, and NOT at records already drained.
+    /// The two differ: the engine publishes through a ring and a holding queue,
+    /// so the drain that runs at the end of frame N typically carries frame
+    /// N-3 (measured: 60 stepped frames leave 57 in the bundle and three in the
+    /// engine). A window that waited for the sixtieth RECORD would therefore
+    /// never close on a script that stepped exactly sixty frames. finish()
+    /// drains the tail in a loop, and the writer refuses anything past the
+    /// budget, so the bundle ends up holding exactly the frames that were
+    /// asked for.
+    void finishIfFrameBudgetSpent();
     void finish(bool early);
     void connectDispatcher();
     void disconnectDispatcher();
@@ -274,6 +308,9 @@ private:
     /// frames did that capture get" after the writer is gone.
     double  mLastFrames = 0.0, mLastEvents = 0.0;
     double  mPlannedSeconds = 0.0;
+    /// The frame-counted window's budget, 0 when the capture is timed, and how
+    /// many frames have been DRAWN inside it so far (one per rendered tick end).
+    unsigned long long mPlannedFrames = 0, mFramesDrawn = 0;
     /// The worst GPU-sample overflow the engine reported during this capture,
     /// and what the ENGINE dropped on its own side (ring records nobody drained
     /// in time, events past its queue's cap) — all three go into the bundle's

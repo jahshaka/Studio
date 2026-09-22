@@ -186,9 +186,26 @@ int main()
     }
     // THE PILLARS: bright, rough (outside the gate — they are reflected, they do
     // not reflect), spaced so floor shows between them.
-    const Colour cols[7] = { Colour(3.0f, 0.2f, 0.2f), Colour(0.2f, 3.0f, 0.2f), Colour(0.2f, 0.4f, 3.0f),
-                             Colour(3.0f, 2.4f, 0.2f), Colour(3.0f, 0.2f, 3.0f), Colour(0.2f, 2.8f, 2.8f),
-                             Colour(3.0f, 3.0f, 3.0f) };
+    // THE SAME SEVEN HUES AT A PEAK RADIANCE OF 1.0, and the reason is this
+    // suite's own units (VOXEL-CLIP-1, 2026-09-22, measured). They were authored
+    // at 3.0, which the emissive voxel store clipped to 1.0 until ogre-patch 0087
+    // made that store a float — so from 0087 on, a 3.0 pillar really does put
+    // three times the radiance into the floor's reflection, and EVERY BAR IN THIS
+    // SUITE IS AN ABSOLUTE CODE COUNT. All three moved by the same factor and
+    // none of them is about brightness: the still control 0.460 -> 1.137 codes
+    // (bar 1.0), the yaw 0.589 -> 1.294 (bar 1.5), the truck 1.070 -> 2.734
+    // (bar 2.5). The subject here is the REPROJECTION — whether a moving frame
+    // matches the frame the renderer settles to at the same pose — and at 3.0 the
+    // floor's brighter pixels also saturate the RGBA8 readback (the on-vs-off
+    // difference read 84.8 codes against 47.9), which makes a temporal-error
+    // measurement on them worth less, not more. So the fixture is authored where
+    // its instrument is linear and the bars keep the meaning they were calibrated
+    // with. gi.voxel_emissive and gi.rt_reflect_lamp_clip are what guard the
+    // store's range; this suite guards the reprojection.
+    const Colour cols[7] = { Colour(1.0f, 0.066f, 0.066f), Colour(0.066f, 1.0f, 0.066f),
+                             Colour(0.066f, 0.133f, 1.0f), Colour(1.0f, 0.8f, 0.066f),
+                             Colour(1.0f, 0.066f, 1.0f),   Colour(0.066f, 0.933f, 0.933f),
+                             Colour(1.0f, 1.0f, 1.0f) };
     for (int i = 0; i < 7; ++i) {
         const NodeId n = s->createNode();
         PbrParams p;

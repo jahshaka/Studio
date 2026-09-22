@@ -844,6 +844,28 @@ set_tests_properties(scripting.e2e.shipped_assets PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
+# (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle:
+# the app records, the shell half reads frames.jsonl and machine.json, because
+# "exactly 60 records" is a line count and not a counter the app reports about
+# itself. JAHSHAKA_PERF_ROOT: `out` is confined to the capture root, so the
+# suite says where its own root is.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-perf_capture_frames)
+file(MAKE_DIRECTORY ${_home}/run)
+set(JAH_TEST_BUNDLE ${_home}/perf/bundle)
+configure_file(scripts/e2e_perf_capture_frames.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js @ONLY)
+add_test(NAME scripting.e2e.perf_capture_frames
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/perf_capture_frames.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js
+                 ${JAH_TEST_BUNDLE}
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.perf_capture_frames PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_home}/perf"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 # Post-release fix (2026-08-31): an imported textured GLB RENDERS — texture
 # properties resolve to store files (no raw guid reaches Texture2D::load),
 # the Mesh member carries the model bytes (scene placement has geometry),
