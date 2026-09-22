@@ -2953,6 +2953,12 @@ QVariantMap WorldApi::tierTable()
             { QStringLiteral("vrChain"), vrChain },
             { QStringLiteral("voxelResolution"), int(facts.voxelResolution) },
             { QStringLiteral("probeFaceSize"), worldmodes::photonTierProbeFaceSize(t) },
+            // THE ATOM COLUMN (ATOM P3's SUB-ERROR): the tier's geometric
+            // tolerance in SAMPLES — the one dial of the level rule that is
+            // taste rather than arithmetic. Reported from `giQualityFacts` like
+            // every other derived column here, so there is no second copy to
+            // drift; `lodBias` (a session dial) multiplies it at the consumer.
+            { QStringLiteral("pixelTolerance"), double(facts.pixelTolerance) },
             { QStringLiteral("probeHdr"), facts.probeHdrDefault },
             { QStringLiteral("probeShadows"), facts.probeShadowsDefault },
             { QStringLiteral("description"), worldmodes::photonTierSentence(t) } });
