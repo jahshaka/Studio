@@ -1082,15 +1082,16 @@ static int costMain(Engine *e, const char *, const char *)
             median = tail[tail.size() / 2];
         }
         std::printf("    %-40s median(last 30) %.3f ms, min %.3f ms over %d readings "
-                    "(bar %.2f)\n", what, median, best, seen, bar);
+                    "(bar %.2f, %.1f %% of a 16.67 ms frame)\n", what, median, best, seen, bar,
+                    100.0f * median / 16.67f);
         CHECK_MSG(seen > 0, "%s: the timestamp pair was read back at all", what);
         CHECK_MSG(median >= 0.0f && median <= bar, "%s: %.3f ms (median of the last 30) against "
                   "a bar of %.2f ms", what, median, bar);
         return median;
     };
 
-    measureMs(2, "1080p FULL-res, mirror-heavy", 0.8f);
-    measureMs(1, "1080p HALF-res, mirror-heavy", 0.2f);
+    const float mirrorFull = measureMs(2, "1080p FULL-res, mirror-heavy", 0.8f);
+    const float mirrorHalf = measureMs(1, "1080p HALF-res, mirror-heavy", 0.2f);
 
     // ...AND THE FILTER'S OWN WORST CASE, which a box of MIRRORS does not
     // measure (round C). The spatial filter's radius is 0 on a mirror by
@@ -1099,13 +1100,76 @@ static int costMain(Engine *e, const char *, const char *)
     // kernel. Taking every wall to just below the cutoff saturates the radius
     // at kMaxRadius over the whole frame: a 7x7 gather per traced pixel, which
     // is the most this pass can ever be asked for.
+    float glossyFull = -1.0f, glossyHalf = -1.0f;
     {
         PbrParams glossy = mirror;
         glossy.roughness = 0.39f;                 // just inside the 0.40 gate
         CHECK(s->setPbrMaterial(mirrorMat, glossy), "the mirror box goes glossy");
         e->renderOneFrame();
-        measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 0.8f);
-        measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.2f);
+        glossyFull = measureMs(2, "1080p FULL-res, GLOSSY (max filter)", 0.8f);
+        glossyHalf = measureMs(1, "1080p HALF-res, GLOSSY (max filter)", 0.2f);
+    }
+
+    // ---- THE CLOCK-FREE HALF OF THE SAME MEASUREMENT (ATOM-RESUMES-1 item 4) --
+    //
+    // WHY THE FOUR NUMBERS ABOVE ARE NOT ENOUGH ON THEIR OWN. They are absolute
+    // GPU milliseconds, and a GPU millisecond on this rig is a reading about the
+    // DEVICE as much as about the pass: under Xvfb the card can sit at its idle
+    // clock (210 of 3105 MHz) and the identical pass has been measured at 0.46 ms
+    // in one run and 10.3 ms in another (DOCS/traps/GATE_AND_RIG.md, PHOTON-E2).
+    // A bar in milliseconds therefore states the BUDGET — 0.8 ms of a 16.67 ms
+    // frame is what the design may spend, and that claim is worth keeping — but it
+    // cannot by itself tell a regression in this pass from a slower box, and
+    // `gi.rt_reflect_cost`'s FULL-res glossy arm sits at 97 % of its bar, so a
+    // triager has to be able to tell those two apart.
+    //
+    // So the four arms, measured in ONE process at one pose minutes apart, are
+    // also held to each other. A ratio of two passes on the same device cancels
+    // the clock, the driver and the box:
+    //
+    //   THE FILTER against THE TRACE at the same resolution. The only difference
+    //   between the mirror arm and the glossy one is the spatial filter's radius
+    //   (0 on a mirror by design), so this ratio IS the filter's worst-case cost
+    //   in units of the trace it filters: a 7x7 gather per traced pixel.
+    //
+    //   HALF-res against FULL-res at the same roughness. The trace is one ray per
+    //   pixel of its own resolution, so a quarter of the pixels must cost
+    //   materially less — and never MORE, which is the regression a resolution
+    //   row that silently stopped applying would show.
+    //
+    // MEASURED on this box (2026-09-22, RTX 4080 SUPER / 595.84, Xvfb, Debug
+    // engine), solo and again while a 426-suite gate ran at -j2: the medians read
+    // 0.137 / 0.072 / 0.780 / 0.133 ms solo and 0.136-0.137 / 0.071-0.072 /
+    // 0.778-0.784 / 0.133 ms under load — a 0.8 % spread on the tightest arm.
+    // THE LEDGER'S CONCERN THAT THE 2 % MARGIN IS A CONTENTION RED RISK IS
+    // THEREFORE NOT BORNE OUT: sibling Vulkan suites do not move this pass's
+    // timestamps, so the row does NOT need RUN_SERIAL (it would cost gate
+    // wall-clock for nothing) and no bar is widened here. What the row needed was
+    // a reading that survives a clock change, and that is what these four
+    // assertions are. The bounds are the measured values with room: 5.7x -> 8x,
+    // 1.85x -> 3x, 0.53 -> 0.60, 0.17 -> 0.60.
+    if (mirrorFull > 0.0f && mirrorHalf > 0.0f && glossyFull > 0.0f && glossyHalf > 0.0f) {
+        const float filterFull = glossyFull / mirrorFull;
+        const float filterHalf = glossyHalf / mirrorHalf;
+        const float resMirror = mirrorHalf / mirrorFull;
+        const float resGlossy = glossyHalf / glossyFull;
+        std::printf("\n    the same four numbers as RATIOS (clock-free): filter/trace %.2fx full, "
+                    "%.2fx half; half/full %.2f mirror, %.2f glossy\n",
+                    filterFull, filterHalf, resMirror, resGlossy);
+        CHECK_MSG(filterFull <= 8.0f,
+                  "THE FILTER'S WORST CASE costs %.2fx the trace it filters at full res (bar 8x)",
+                  filterFull);
+        CHECK_MSG(filterHalf <= 3.0f,
+                  "...and %.2fx at half res, where the kernel covers four times the frame per "
+                  "traced pixel (bar 3x)", filterHalf);
+        CHECK_MSG(resMirror <= 0.60f,
+                  "A QUARTER OF THE RAYS COSTS LESS: the mirror arm's half-res pass is %.2f of its "
+                  "full-res one (bar 0.60)", resMirror);
+        CHECK_MSG(resGlossy <= 0.60f,
+                  "...and the glossy arm's is %.2f of its own full-res pass (bar 0.60)", resGlossy);
+    } else {
+        std::printf("FAIL: one of the four cost arms never read a timestamp back\n");
+        ++failures;
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

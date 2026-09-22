@@ -85,6 +85,19 @@ set_tests_properties(gi.reflect_motion_norays PROPERTIES
 
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture
 # builder, a different question (see costMain).
+#
+# NO RUN_SERIAL, AND THE MEASUREMENT IS THE REASON (ATOM-RESUMES-1 item 4,
+# 2026-09-22). The ledger flagged the FULL-res glossy arm's 2 % margin as a
+# contention red risk. Measured on this box, solo and again while a 426-suite
+# gate-scope ran at -j2: 0.780 ms solo against 0.778-0.784 ms under load, with the
+# other three arms identical to three decimals (0.137 / 0.072 / 0.133) — a 0.8 %
+# spread on the tightest arm. Sibling Vulkan suites do not move this pass's own
+# timestamp pair, so serialising the row would cost gate wall-clock and buy
+# nothing. What the row DID need was a reading that survives a clock change (a GPU
+# millisecond on an idle-clocked rig has been measured 20x apart for one pass):
+# costMain now also holds the four arms to EACH OTHER — the filter against the
+# trace it filters, and half-res against full-res — which is clock-free, and no
+# bar was widened.
 add_test(NAME gi.rt_reflect_cost COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_cost PROPERTIES
