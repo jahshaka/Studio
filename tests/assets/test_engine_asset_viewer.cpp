@@ -6,6 +6,8 @@
 // at the centre; a second material colour must show; the RTT preview must
 // match the view; release() must detach cleanly.
 #include "../support/previewdump.h"
+
+#include "bridge/previewmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -120,13 +122,13 @@ int main(int argc, char **argv)
         red->setDiffuseColor(QColor(204, 40, 30));
         auto body = iris::MeshNode::create();
         body->setName("cube");
-        body->setMesh(":assets/models/cube.obj");
+        body->setMesh(previewmesh::load(":assets/models/cube.obj"));
         CHECK(!!body->getMesh(), "cube.obj loaded into the document (no GL)");
         body->setMaterial(red);
         cube->addChild(body);
         auto marker = iris::MeshNode::create();
         marker->setName("marker");
-        marker->setMesh(":assets/models/cube.obj");
+        marker->setMesh(previewmesh::load(":assets/models/cube.obj"));
         marker->setMaterial(red);
         marker->setLocalScale(iris::Vec3(0.3f, 0.3f, 0.3f));
         marker->setLocalPos(iris::Vec3(1.6f, -0.7f, 1.6f));
@@ -200,7 +202,7 @@ int main(int argc, char **argv)
         // 5a. the framing math itself: world bounds include node scale.
         auto giant = iris::MeshNode::create();
         giant->setName("giant");
-        giant->setMesh(":assets/models/cube.obj");
+        giant->setMesh(previewmesh::load(":assets/models/cube.obj"));
         auto blue = iris::DefaultMaterial::create();
         blue->setDiffuseColor(QColor(30, 60, 220));
         giant->setMaterial(blue);
@@ -234,7 +236,7 @@ int main(int argc, char **argv)
         // inside the model; the world-space framing backs off ~15 units.
         auto scaled = iris::MeshNode::create();
         scaled->setName("scaled");
-        scaled->setMesh(":assets/models/cube.obj");
+        scaled->setMesh(previewmesh::load(":assets/models/cube.obj"));
         scaled->setMaterial(red);
         scaled->setLocalScale(iris::Vec3(3.0f, 3.0f, 3.0f));
         assets.setSubject(scaled, false, true);

@@ -120,11 +120,12 @@ public:
     /// where the mouse is"). Absent — the menus, the presets panel — keeps the
     /// funnel's own placement (in front of the camera, stepped clear of
     /// whatever already stands there).
-    /// Holds the SHIPPED primitive models for the life of the process
-    /// (iris::Mesh::pinLoadPaths) — see the definition for the measurement.
-    /// Called by the constructor; idempotent, and safe to call again.
-    static void pinBuiltinPrimitives();
-
+    ///
+    /// The primitive is a BAKED LIBRARY ASSET (ATOM P2,
+    /// services/primitiveassets.h): the node references the seeded asset exactly
+    /// as an imported model's node references its own, so it carries a real LOD
+    /// chain. (`pinBuiltinPrimitives` is DELETED with the run-time parse it held
+    /// the results of — PrimitiveAssets holds the baked meshes instead.)
     void addPrimitive(const QString &name,
                       const std::optional<iris::Vec3> &position = std::nullopt,
                       surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
@@ -514,10 +515,6 @@ signals:
     void materialApplied(const QString &presetType);
 
 private:
-    void addBuiltinPrimitive(const QString &meshPath, const QString &name,
-                             const std::optional<iris::Vec3> &position = std::nullopt,
-                             surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
-
     Database *db = nullptr;
     Project *project;
     UndoService *undo;

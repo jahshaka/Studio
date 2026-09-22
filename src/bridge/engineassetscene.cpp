@@ -10,6 +10,7 @@
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
+#include "bridge/previewmesh.h"
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/geometry/boundingsphere.h"
 #include "irisgl/document/assets/mesh.h"
@@ -78,7 +79,12 @@ void EngineAssetScene::buildDocument()
 
     // The floor is a resource of the app; headless tests have no floor, which is fine.
     auto floor = iris::MeshNode::create();
-    floor->setMesh(":/models/ground.obj");
+    // The dock's floor: the same shipped ground mesh, parsed here as furniture
+    // (see previewSphere below — no library behind a preview scene).
+    if (iris::MeshPtr ground = previewmesh::load(QStringLiteral(":/models/ground.obj"),
+                                                 QStringLiteral("app/models/ground.obj")))
+        floor->setMesh(ground);
+    floor->meshPath = QStringLiteral(":/models/ground.obj");
     if (floor->getMesh()) {
         floor->setLocalPos(iris::Vec3(0, -5, 0));   // legacy: below the default plane reset
         floor->setName(kFloorName);
@@ -148,9 +154,14 @@ void EngineAssetScene::configureView(View *view)
 iris::MeshPtr EngineAssetScene::previewSphere()
 {
     if (mSphere) return mSphere;
-    mSphere = iris::Mesh::loadMesh(":/content/primitives/hp_sphere.obj");
-    if (!mSphere) mSphere = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/hp_sphere.obj"));
-    if (!mSphere) mSphere = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
+    // THE DOCK'S OWN FURNITURE, parsed once per process (ATOM P2). `Mesh::loadMesh`
+    // is deleted; this is the importer's own parse entry point, called directly,
+    // with no card generation behind it and no library involved. A preview subject
+    // is drawn at ONE distance in a small tile: it has no use for a LOD chain, and
+    // making it a library asset would put the catalog and the import pipeline
+    // behind a dock's sphere.
+    mSphere = previewmesh::load(QStringLiteral(":/content/primitives/hp_sphere.obj"),
+                                QStringLiteral("app/content/primitives/hp_sphere.obj"));
     return mSphere;
 }
 

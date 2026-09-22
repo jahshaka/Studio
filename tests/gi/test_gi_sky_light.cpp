@@ -14,6 +14,8 @@
 // bound" is not an assertion anybody can trust — "the sphere's top is brighter
 // than its bottom and its hue is the sky's" is.
 #include <QGuiApplication>
+
+#include "bridge/previewmesh.h"
 #include <QImage>
 #include <chrono>
 #include <thread>
@@ -80,7 +82,7 @@ int main(int argc, char **argv)
 
     auto sphere = iris::MeshNode::create();
     sphere->setName("sphere");
-    sphere->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/sphere.obj"));
+    sphere->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/sphere.obj")));
     sphere->setLocalPos(iris::Vec3(0.0f, 0.0f, 0.0f));
     // Unit scale: the sphere then spans about +/-32 px of a 256x256 frame at
     // this pose, which leaves the sky visible around it for the disc cases.

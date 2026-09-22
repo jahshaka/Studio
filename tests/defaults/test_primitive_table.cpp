@@ -34,6 +34,8 @@ For more information see the LICENSE file
 // No engine, no display: resources, files and the document's own parser.
 
 #include <QCoreApplication>
+
+#include "bridge/previewmesh.h"
 #include <QFile>
 #include <QGuiApplication>
 #include <QImage>
@@ -74,7 +76,7 @@ int main(int argc, char **argv)
 
         check(QFile::exists(mesh), QStringLiteral("%1: the mesh %2 is shipped").arg(name, mesh));
 
-        iris::MeshPtr parsed = iris::Mesh::loadMesh(mesh);
+        iris::MeshPtr parsed = previewmesh::load(mesh);
         check(!parsed.isNull() && parsed->numVerts > 0 && parsed->numFaces > 0,
               QStringLiteral("%1: it parses into real geometry (%2 verts, %3 faces)")
                   .arg(name)
@@ -99,12 +101,16 @@ int main(int argc, char **argv)
         }
 
         if (def.guid) {
-            ++tiles;
+            // A GUID IS A LIBRARY ROW, AN ICON IS A TILE (ATOM P2). Every seed
+            // row has a reserved guid now — it is a baked library asset — while
+            // the Ground and the Teapot still have no tile, which is why the two
+            // are separate columns and no longer one test.
             const QString guid = QString::fromLatin1(def.guid);
             check(!guids.contains(guid), QStringLiteral("%1: its guid %2 is unique").arg(name, guid));
             guids.insert(guid);
-
-            check(def.icon != nullptr, QStringLiteral("%1: a tile row names an icon").arg(name));
+        }
+        if (def.icon) {
+            ++tiles;
             const QString icon = IrisUtils::getAbsoluteAssetPath(QString::fromLatin1(def.icon));
             check(QFile::exists(icon), QStringLiteral("%1: the tile icon exists (%2)").arg(name, icon));
             QImage thumb(icon);
@@ -112,10 +118,12 @@ int main(int argc, char **argv)
                   QStringLiteral("%1: ...and decodes (%2x%3)")
                       .arg(name).arg(thumb.width()).arg(thumb.height()));
         } else {
-            // The one row with no tile is Ground, and it must stay the only one:
-            // a row without a guid cannot be dragged, listed or dropped.
-            check(name == QLatin1String("Ground"),
-                  QStringLiteral("%1: only Ground may have no library guid").arg(name));
+            // The rows with no TILE are the Ground (100 m of floor: an Add-menu
+            // entry and a verb name, never something to drag out of a drawer)
+            // and the Platform seeds. Everything a user can drag has an icon.
+            check(name == QLatin1String("Ground") || def.kind == primitives::Kind::Platform,
+                  QStringLiteral("%1: only the Ground and a Platform seed may have no tile")
+                      .arg(name));
         }
     }
     check(tiles >= 12, QStringLiteral("at least twelve tiles (got %1)").arg(tiles));
@@ -177,15 +185,22 @@ int main(int argc, char **argv)
               && primitives::byName(QStringLiteral("  CUBE ")) != nullptr,
           "byName is case- and whitespace-insensitive");
 
-    // ---- 6: the teapot's mesh is still shipped, and still pinned ------------
+    // ---- 6: the teapot is a SEED, not a primitive (ATOM P2) -----------------
+    // Its mesh is still shipped — four sample scenes name this path in their
+    // blobs — and it is a Kind::Platform seed row, so it is BAKED like every
+    // other built-in and it is still not something a user can add.
     const QString teapot = QStringLiteral(":/content/primitives/teapot.obj");
     check(QFile::exists(teapot),
           "the teapot MESH is still shipped (four sample scenes name this path in their blobs)");
-    check(primitives::pinnedMeshPaths().contains(teapot),
-          "...and still pinned, so opening one of those samples does not re-parse it on the UI thread");
+    const primitives::Def *teapotSeed = primitives::bySeedMesh(teapot);
+    check(teapotSeed != nullptr && teapotSeed->kind == primitives::Kind::Platform,
+          "...and it is a Platform seed row, so the samples' teapot is a baked asset");
+    check(primitives::byName(QStringLiteral("Teapot")) == nullptr,
+          "...and byName still refuses it: a Platform seed is not a primitive a user may add");
     for (const primitives::Def &def : table)
-        check(primitives::pinnedMeshPaths().contains(QString::fromLatin1(def.mesh)),
-              QStringLiteral("%1's mesh is pinned").arg(QString::fromLatin1(def.name)));
+        check(primitives::bySeedMesh(QString::fromLatin1(def.mesh)) == &def,
+              QStringLiteral("%1's mesh resolves back to its own seed row")
+                  .arg(QString::fromLatin1(def.name)));
 
     // ...and the three retired MESHES are gone from the binary altogether.
     for (const char *gone : { ":/content/primitives/gear.obj",

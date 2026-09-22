@@ -228,25 +228,11 @@ if(Python3_Interpreter_FOUND)
     jah_no_display(document.reader_defaults)
 endif()
 
-# document.mesh_cache — ONE FILE IS PARSED ONCE (ADD-1). The parse cache behind
-# `Mesh::loadMesh`: the sharing, the weak references that make it not a leak,
-# the per-node skeleton clone that is the one thing a shared mesh could have
-# aliased, and the rule that a failed load is never cached. Document only: no
-# engine, no display.
-add_executable(test_mesh_cache test_mesh_cache.cpp)
-set_target_properties(test_mesh_cache PROPERTIES AUTOMOC OFF)
-target_include_directories(test_mesh_cache PRIVATE ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl
-    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_mesh_cache PRIVATE IrisGL Qt6::Gui)
-qt_add_resources(test_mesh_cache "mesh_cache_fixtures"
-    PREFIX "/document-fixtures" BASE fixtures FILES fixtures/commented_header.obj)
-add_test(NAME document.mesh_cache COMMAND test_mesh_cache
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(document.mesh_cache PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
-jah_no_display(document.mesh_cache)
+# (document.mesh_cache is DELETED — ATOM P2, 2026-09-22. It tested the parse
+# cache behind `Mesh::loadMesh`, and both are gone: nothing outside an import
+# parses a model, the shipped meshes are baked library assets, and what used to
+# be "one file is parsed once" is now "one asset is baked once"
+# (meshbake.primitives_baked).)
 
 # document.sky_write — ONE WRITER FOR THE REALISTIC SKY (SKY-SMALL /
 # SKY-WRITE-1). The dials exist twice in the document (typed fields the renderer

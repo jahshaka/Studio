@@ -30,6 +30,8 @@
 // was raised on leaves a hidden model's children drawn and voxelised with no
 // backstop anywhere in the system.
 #include <QColor>
+
+#include "bridge/previewmesh.h"
 #include <QGuiApplication>
 #include <cstdio>
 #include <functional>
@@ -95,8 +97,8 @@ void build(Rig &r, Engine *engine)
     r.engine = engine;
     r.target = engine->createScene("dirty");
     r.doc = iris::Scene::create();
-    r.cubeMesh  = iris::Mesh::loadMesh(":assets/models/cube.obj");
-    r.planeMesh = iris::Mesh::loadMesh(":assets/models/plane.obj");
+    r.cubeMesh  = previewmesh::load(":assets/models/cube.obj");
+    r.planeMesh = previewmesh::load(":assets/models/plane.obj");
 
     r.group = iris::SceneNode::create();
     r.group->setName(QStringLiteral("group"));

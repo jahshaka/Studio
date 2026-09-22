@@ -196,6 +196,7 @@ For more information see the LICENSE file
 #include "services/outlinesettings.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
+#include "services/primitiveassets.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
 #include "services/apppaths.h"
@@ -1237,6 +1238,16 @@ void MainWindow::setupProjectDB()
 	if (db->initializeDatabase(path)) {
 		db->createAllTables();
 	}
+    // THE SEEDS (services/primitiveassets.h). The primitives, the Ground and the
+    // samples' Teapot are baked library assets now: one import and one bake each,
+    // the first time a library is opened, SYNCHRONOUSLY here — not on a worker,
+    // because a library whose row count moves while a script runs is the defect
+    // MaterialPresetSeeder's header describes. A library that already holds them
+    // pays one catalog query per row.
+    QStringList seedErrors;
+    const int seeded = PrimitiveAssets::seedAll(db, &seedErrors);
+    if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));
+    for (const QString &line : seedErrors) irisLog("primitive seed: " + line);
 }
 
 void MainWindow::setupServices()

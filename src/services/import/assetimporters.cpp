@@ -110,7 +110,14 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
                                     ? request.projectGuid
                                     : (project ? project->getProjectGuid() : QString());
 
-    out.mainGuid = GUIDManager::generateGUID();
+    // THE CALLER'S GUID WHEN IT OWNS ONE (ImportRequest::reservedGuid): the
+    // shipped primitive seeds are the same library row in every library. The
+    // MESH MEMBER is minted either way — nothing outside the library names it
+    // (a document references a built-in by its seed path, an imported model by
+    // its own mesh row), so a reserved id for it would be a constant nobody
+    // reads.
+    out.mainGuid = request.reservedGuid.isEmpty() ? GUIDManager::generateGUID()
+                                                  : request.reservedGuid;
     out.meshGuid = GUIDManager::generateGUID();
 
     // THE IMPORT SETTINGS (SPECS/IMPORT_DIALOG_SPEC.md §3): the user's scale,

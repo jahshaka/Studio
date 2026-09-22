@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/mesh.h"
+#include "bridge/previewmesh.h"
 
 #include <QColor>
 
@@ -59,8 +60,11 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     // (the owner's "white planes at an angle", 2026-09-05). Axis-aligned cubes
     // cannot have that bug, and their bevelled edges catch the light the way
     // flat quads never did.
-    auto mesh = iris::Mesh::loadMesh(QStringLiteral(":/content/primitives/cube.obj"));
-    if (!mesh) return iris::SceneNodePtr();   // headless tests have no qrc models
+    // The room is the avatar dock's own furniture, like the other preview
+    // scenes': parsed once per process, no library behind it (bridge/previewmesh.h).
+    auto mesh = previewmesh::load(QStringLiteral(":/content/primitives/cube.obj"),
+                                  QStringLiteral("app/content/primitives/cube.obj"));
+    if (!mesh) return iris::SceneNodePtr();   // no library, no baked cube
 
     // Materials, shared by role.
     auto floorTile = iris::PbrMaterial::create();     // BLACK, glossy (owner flip)

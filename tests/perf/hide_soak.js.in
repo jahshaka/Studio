@@ -66,6 +66,18 @@ for (var i = 0; i < all.length; ++i)
 assert(subjects.length >= 3,
        "the Showroom gives the soak a set to hide (" + subjects.length + " meshes)");
 
+// EVERY OBJECT AT ITS FINEST LEVEL, for the length of the soak (ATOM P2).
+// This suite's invariant is EXACT EQUALITY of the frame's counters across 190
+// cycles, and since the shipped primitives became baked assets the Showroom's
+// cubes, spheres and cylinders carry LOD chains: each pass picks a level for
+// itself with its own hysteresis slot, levels share the vaoName and advance
+// numDraws (meshbake.cpp buildMeshV2), so an object that settles on a different
+// level between two readings moves `draws` by one while batches and instances
+// stay put — measured, 82 -> 86 with batches 56 = 56 and instances 431 = 431.
+// That is LOD selection, not the leak this suite is looking for. A bias of 0
+// pins every object at level 0 (editor.lodBias), so the equality stays honest
+// and the gesture under test is unchanged.
+editor.setLodBias(0);
 editor.frame(60, DT);          // warm the shaders and the caches
 app.renderStats();
 

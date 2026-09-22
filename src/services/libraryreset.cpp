@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 
 #include "app/firstrun.h"
+#include "irisgl/core/logger.h"
 #include "data/database/database.h"
 #include "io/assetrefs.h"
 #include "data/project.h"
@@ -24,6 +25,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/import/importbatchrunner.h"
 #include "services/materialpresetseeder.h"
+#include "services/primitiveassets.h"
 #include "services/thumbnailmanager.h"
 #include "services/thumbnailrebuild.h"
 
@@ -266,6 +268,24 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     if (seedPresets
         && (!FirstRun::isDrivenSession() || qEnvironmentVariableIsSet("JAHSHAKA_SEED_PRESETS")))
         MaterialPresetSeeder::instance().start(db);
+
+    // THE PRIMITIVES, ALWAYS AND SYNCHRONOUSLY (ATOM P2,
+    // services/primitiveassets.h). Unlike the material presets these are not a
+    // warm-up: the twelve primitives, the Ground every new scene stands on and
+    // the Teapot the samples name are BAKED LIBRARY ASSETS, and a catalog that
+    // was just dropped and recreated holds none of them — so a reset left the
+    // very next scene with a floor that had no geometry. It is not gated on the
+    // driven-session rule for the same reason the launch seed is not: these rows
+    // ARE the geometry, and a session that renders needs them whoever is driving.
+    // The held meshes go with the catalog they came from: the objects those
+    // MeshPtrs were read from have just been deleted.
+    PrimitiveAssets::clearCache();
+    QStringList seedErrors;
+    PrimitiveAssets::seedAll(db, &seedErrors);
+    for (const QString &line : seedErrors) {
+        irisLog("library reset: primitive seed: " + line);
+        if (result.error.isEmpty()) result.error = line;
+    }
 
     result.ok = result.error.isEmpty();
     return result;

@@ -1909,6 +1909,13 @@ add_script_e2e(new_scene e2e_new_scene.js)
 # four refused by name, plus the Mirror Room still opening with its teapot.
 add_script_e2e(primitives e2e_primitives.js)
 
+# scripting.e2e.add_primitive — ATOM P2's acceptance for the VERB: a primitive is a
+# baked library asset, so the node it adds reports a real LOD chain in
+# `app.renderStats().perObject` (a renderer reading, so the chain is proven all the
+# way through the mirror and the upload), and a bias of 0 pins every object at its
+# finest level. Needs the engine: no --headless.
+add_script_e2e(add_primitive e2e_add_primitive.js)
+
 # scripting.e2e.material_tabs — MATERIALS_TABS_SPEC §5: SEVERAL MATERIALS OPEN
 # AT ONCE. It needs the PAGE (the five tab verbs are the page's own entry
 # points), so no --headless; its own home, wiped before the run, because the

@@ -68,6 +68,16 @@ struct ImportRequest
 
     QString sourcePath;
     int typeHint = -1;          // ModelTypes value; -1 = sniff from the file
+    /// THE ROW'S GUID, WHEN THE CALLER OWNS IT (ATOM P2). Empty for every import
+    /// a person makes: the pipeline mints one. Non-empty ONLY for the shipped
+    /// SEEDS whose guid is reserved and persisted elsewhere — the primitives
+    /// (src/data/primitives.h: a favourite, a tile's drop payload and
+    /// `assets.builtins` all name it), which must therefore be the SAME row in
+    /// every library rather than whatever the minter happened to produce.
+    /// The store is content-addressed at the OBJECT level (a sha256), so the
+    /// ROW's identity was always free to be chosen; nothing else about the
+    /// import changes.
+    QString reservedGuid;
     int drawerId = -1;          // > 0: file the imported asset in this drawer
     QString projectGuid;        // stamps created rows (may be empty)
     QJsonObject settings;       // recorded per-import; part of the determinism key

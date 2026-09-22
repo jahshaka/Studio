@@ -9,6 +9,8 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_mesh_bake test_mesh_bake.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveseed.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
     # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
@@ -53,6 +55,14 @@ target_compile_definitions(test_mesh_bake PRIVATE
 target_link_libraries(test_mesh_bake PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 jah_links_assimp(test_mesh_bake)
+
+# THE APP FOLDER BESIDE THE BINARY. This target links no .qrc, and the seeder
+# reads a shipped mesh from the resources OR from the app folder — the same file
+# either way (services/primitiveseed.cpp says why). A symlink is what gives this
+# binary the second route; the app itself has both.
+if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/app)
+    file(CREATE_LINK ${CMAKE_SOURCE_DIR}/app ${CMAKE_CURRENT_BINARY_DIR}/app SYMBOLIC)
+endif()
 
 set(_bake_home ${CMAKE_CURRENT_BINARY_DIR}/bake-home)
 file(MAKE_DIRECTORY ${_bake_home})
@@ -115,6 +125,48 @@ add_test(NAME meshbake.sdf COMMAND test_mesh_bake --sdf
 set_tests_properties(meshbake.sdf PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
     TIMEOUT 300 LABELS "meshbake")
+
+# ATOM P2 — THE SEED AND WHAT IT OWES (the design's §2.3 acceptance).
+#
+#   meshbake.primitives_baked   a FRESH library seeded the way a launch seeds one
+#                               (PrimitiveAssets::seedAll): every row created with
+#                               its reserved guid and its platform mark, a chain of
+#                               >= 2 levels for every mesh the bake's floor lets it,
+#                               cards that name levels the chain HAS, an SDF and a
+#                               measured bound per level — and a SECOND seed that
+#                               bakes nothing.
+#   meshbake.rebake_generation  BAKE-RETIRE-1: a bake's file name is generation-
+#                               independent and the store ingests OR IGNORE, so a
+#                               re-bake after a kFormatVersion bump used to be
+#                               silently dropped and a baked asset with no parse
+#                               behind it drew NOTHING. The previous generation is
+#                               planted by hand — no test home is old enough to have
+#                               one — and the new one must win, with the superseded
+#                               object unlinked and reapable.
+#   meshbake.hemisphere_winding HEMISPHERE-CAP-1, as a property of EVERY shipped
+#                               mesh: no face may be wound against its own declared
+#                               vertex normals (the cap's 32 were).
+add_test(NAME meshbake.primitives_baked COMMAND test_mesh_bake --primitives-baked
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.primitives_baked PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "meshbake")
+
+add_test(NAME meshbake.rebake_generation COMMAND test_mesh_bake --rebake-generation
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.rebake_generation PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 180 LABELS "meshbake")
+
+add_test(NAME meshbake.hemisphere_winding COMMAND test_mesh_bake --hemisphere-winding
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.hemisphere_winding PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 120 LABELS "meshbake")
+
+jah_no_display(meshbake.primitives_baked)
+jah_no_display(meshbake.rebake_generation)
+jah_no_display(meshbake.hemisphere_winding)
 
 jah_no_display(meshbake.roundtrip)
 jah_no_display(meshbake.cards)
