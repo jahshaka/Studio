@@ -29,12 +29,15 @@
 //      instanced at scale 4, has four times the world-space error per level, so
 //      the outer cascade takes a FINER level for it — two levels in one
 //      histogram. It needs its OWN Ogre mesh to do so, which is case 2b:
-//   2b. THE LEVEL BELONGS TO THE MESH, NOT TO THE ITEM (round-1 F1). The
-//      voxeliser converts a mesh's geometry once for every item that shares it
-//      (ogre-patch 0064), so two instances of ONE mesh asking for different
-//      levels are both voxelised at the FINER — and the histogram has to report
-//      that, because a reading that claims a level the dispatch never spent is
-//      worse than no reading.
+//   2b. THE LEVEL BELONGS TO THE ITEM (ATOM P4 / AT-A10). It used to belong to
+//      the MESH: the voxeliser converted a mesh's geometry once for every item
+//      that shared it, so two instances of ONE mesh asking for different levels
+//      were BOTH voxelised at the finer. Nothing is converted now — the compute
+//      shader reads each instance's own level through its geometry row — so the
+//      two instances take two levels and the outer cascade's bill falls from
+//      1,676 to 1,292 triangles on this fixture. The histogram reports what was
+//      SPENT (`voxelLevels`, read off the voxeliser) beside what was ASKED
+//      (`lodLevels`), and the two must agree.
 //   3. A MESH WITH NO CHAIN IS UNTOUCHED: the ground cube is level 0 in every
 //      cascade, which is what every scene built from primitives is today.
 //   4. IT IS CHEAPER, AND THE A/B IS IN ONE PROCESS: with
@@ -180,8 +183,8 @@ int main()
     // holds is the whole of cases 2 and 2b:
     //   mesh A — `small` (scale 1) AND `twin` (scale 4). They ask for different
     //            levels, because the baked error is in MESH units and the 4x
-    //            instance's world-space error is four times as large; one mesh
-    //            entry carries one level, so BOTH are voxelised at the finer.
+    //            instance's world-space error is four times as large, and since
+    //            ATOM P4 each gets the level it asked for.
     //   mesh B — `solo` (scale 1), alone: free to take the unscaled answer.
     //   mesh C — `big` (scale 4), alone: free to take the scaled one, which is
     //            finer. B and C in one histogram are the scale term reaching
@@ -268,20 +271,26 @@ int main()
     // so in the outermost cascade (budget 0.00732 m) it takes level 2 while mesh
     // B, unscaled and alone, takes level 3: two levels in ONE histogram.
     const std::vector<int> &outer = st.cascades.back().lodLevels;
-    CHECK(countAt(outer, 2) >= 1 && countAt(outer, 3) == 1,
-          ("A SCALED INSTANCE TAKES A FINER LEVEL — one item at the coarse end, the "
-           "scaled ones below it: " + histText(outer)).c_str());
+    CHECK(countAt(outer, 2) >= 1 && countAt(outer, 3) == 2,
+          ("A SCALED INSTANCE TAKES A FINER LEVEL — the unscaled pair at the coarse end, "
+           "the scaled ones below them: " + histText(outer)).c_str());
 
-    // ---- 2b. THE LEVEL BELONGS TO THE MESH (round-1 F1) ------------------
+    // ---- 2b. THE LEVEL BELONGS TO THE ITEM (ATOM P4 / AT-A10) ------------
     // Mesh A is held by TWO items that ask for different levels (scale 1 and
-    // scale 4). The voxeliser converts a mesh once, finest request wins, so
-    // BOTH are voxelised at the 4x instance's level — the same level mesh C
-    // took. The histogram therefore has exactly one item at the coarse end
-    // (mesh B's) and THREE at the fine one (mesh A twice plus mesh C), and NOT
-    // two levels for mesh A.
-    CHECK(countAt(outer, 2) == 3,
-          ("THE FINEST REQUEST WINS FOR A SHARED MESH — both of mesh A's items and mesh C "
-           "at one level: " + histText(outer)).c_str());
+    // scale 4) and each gets its own: the 4x instance at level 2 beside mesh C,
+    // the 1x instance at level 3 beside mesh B. So the outer histogram is TWO at
+    // level 2 and TWO at level 3 — where the old rule (a mesh's geometry
+    // converted once, finest request winning) put three at level 2 and one at
+    // level 3 and charged the near level to an instance that did not need it.
+    CHECK(countAt(outer, 2) == 2 && countAt(outer, 3) == 2,
+          ("EACH INSTANCE OF A SHARED MESH TAKES ITS OWN LEVEL: " + histText(outer)).c_str());
+    // AND IT IS WHAT THE VOXELISER SPENT, not what the host decided: `voxelLevels`
+    // is read off the voxeliser's own queue after build(). It counts submesh
+    // PARTITIONS rather than items, which is the same number here (one submesh,
+    // one partition per relief level at this index count) plus the ground.
+    const std::vector<int> &spent = st.cascades.back().voxelLevels;
+    CHECK(countAt(spent, 2) == 2 && countAt(spent, 3) == 2,
+          ("and the voxeliser's OWN histogram says the same: " + histText(spent)).c_str());
     // And it is what the voxeliser HOLDS, not what was asked — and since
     // ogre-patch 0089 that sentence is literally true rather than nearly true
     // (ATOM inventory row AT-A12). `voxelTriangles` used to be a CPU walk of each
@@ -293,7 +302,9 @@ int main()
     // agree exactly on this fixture, so from here on a disagreement means the
     // voxeliser really did bind something else.
     // (the ground is 12, each relief level is 8192 / 2048 / 512 / 128)
-    const long long expectOuter = 12 + 3 * 512 + 128;
+    // TWO at level 2 and TWO at level 3 since ATOM P4 (it was 3 + 1, which cost
+    // 1,676 — the per-instance level is 23 % less geometry on this fixture).
+    const long long expectOuter = 12 + 2 * 512 + 2 * 128;
     CHECK(st.cascades.back().voxelTriangles == expectOuter,
           ("and the triangle reading is that histogram, exactly (" +
            std::to_string(st.cascades.back().voxelTriangles) + " == " +
