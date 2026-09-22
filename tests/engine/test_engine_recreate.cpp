@@ -100,6 +100,46 @@ static bool runOnce(int iteration) {
         CHECK(L.r > 0.05f, msg);
     }
 
+    // ---- meshbake.shadow_vao_alias: THE MIXED SHADOW-VAO LIST (ATOM P1's AT-A11,
+    // ogre-patch 0087). This suite is where the assertions live because this suite
+    // is what the double free killed: a MIXED list — an optimized shadow VAO at
+    // level 0 with the coarse levels aliasing the normal ones — used to read as
+    // fully independent in `SubMesh::destroyShadowMappingVaos`, so the aliased
+    // entries were destroyed here and again by `~SubMesh`, throwing on the FIRST
+    // MESH DESTROY AFTER AN IMPORT. The patch makes the alias test per entry; the
+    // check is that the shape really is mixed AND that the destroy below still
+    // comes back clean, three times over.
+    {
+        MeshData chained = enginetest::unitCubeMesh();
+        // Six levels over one vertex buffer. The INDEX LISTS need not be simpler
+        // than level 0 for this — the subject is the VAO LIST'S SHAPE, not the
+        // simplification — so each level is the cube's own list and the bounds are
+        // an ascending ladder, which is what the reader and the strategy require.
+        for (int L = 1; L <= 5; ++L) {
+            chained.lodIndices.push_back(chained.indices);
+            chained.lodErrors.push_back(0.01f * float(L));
+            chained.lodBounds.push_back(0.02f * float(L));
+        }
+        const MeshId cm = s->createMesh(chained);
+        std::snprintf(msg, sizeof msg, "iteration %d: a 6-level mesh is created", iteration);
+        CHECK(cm != 0, msg);
+        unsigned levels = 0, independent = 0;
+        const bool got = s->meshVaoShape(cm, levels, independent);
+        std::printf("    6-level mesh: levels %u, independent shadow VAOs %u\n", levels, independent);
+        std::snprintf(msg, sizeof msg,
+                      "iteration %d: the chain really is 6 levels deep", iteration);
+        CHECK(got && levels == 6, msg);
+        std::snprintf(msg, sizeof msg,
+                      "iteration %d: and it holds ONE shadow VAO set, not one per level"
+                      " (ogre-patch 0087)", iteration);
+        CHECK(got && independent == 1, msg);
+        // And it destroys cleanly — the exact operation that used to throw.
+        std::snprintf(msg, sizeof msg,
+                      "iteration %d: destroying the mixed-list mesh does not double free",
+                      iteration);
+        CHECK(s->destroyMesh(cm), msg);
+    }
+
     e->destroyView(v);
     e->destroyScene(s);
     e.reset();
