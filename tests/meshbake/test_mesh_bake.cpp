@@ -42,6 +42,8 @@
 // No engine, no display: all of this is document-side by construction.
 
 #include <QCoreApplication>
+
+#include "bridge/previewmesh.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -67,6 +69,9 @@
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
 #include "services/meshbakestore.h"
+#include "services/primitiveassets.h"
+#include "data/primitives.h"
+#include "bridge/previewmesh.h"
 #include "export/exportcontentsource.h"
 
 #include "irisgl/core/geometry/trimesh.h"
@@ -988,16 +993,18 @@ static void lodChain()
                "buildLodChain replaces the chain, it does not append to it");
 
     // (c) THE CONSUMER CONTRACT (the hand-off Photon reads): the coarsest level
-    // whose error is below a world-space cell size.
+    // whose MEASURED BOUND is below a world-space cell size. The rule reads
+    // `lodBounds` and not `lodErrors` since ATOM-BAKE-1 (AT-A5) — which this
+    // case now proves by giving the two arrays DIFFERENT numbers and asserting
+    // the answers follow the bounds.
     jahshaka::engine::MeshData data;
     data.positions.assign(9, 0.0f);
     data.indices = { 0, 1, 2 };
     data.lodIndices = { { 0, 1, 2 }, { 0, 1, 2 }, { 0, 1, 2 } };
-    data.lodErrors = { 0.01f, 0.05f, 0.20f };
-    CHECK_LOUD(data.lodLevelCount() == 4, "lodLevelCount counts level 0 too");
-    CHECK_LOUD(&data.lodLevelIndices(0) == &data.indices, "level 0 IS the mesh's own index list");
+    data.lodBounds = { 0.01f, 0.05f, 0.20f };
+    data.lodErrors = { 1.0f, 2.0f, 3.0f };   // deliberately absurd: nothing may read these
     CHECK_LOUD(data.lodForWorldError(0.005f) == 0,
-               "a cell finer than every level's error asks for the finest level");
+               "a cell finer than every level's bound asks for the finest level");
     CHECK_LOUD(data.lodForWorldError(0.02f) == 1, "a 2 cm cell takes the 1 cm level");
     CHECK_LOUD(data.lodForWorldError(0.10f) == 2, "a 10 cm cell takes the 5 cm level");
     CHECK_LOUD(data.lodForWorldError(10.0f) == 3, "a cell coarser than every level takes the coarsest");
@@ -1005,8 +1012,8 @@ static void lodChain()
                "a non-positive cell size means the finest, never a wrap-around");
     jahshaka::engine::MeshData plain;
     plain.indices = { 0, 1, 2 };
-    CHECK_LOUD(plain.lodLevelCount() == 1 && plain.lodForWorldError(100.0f) == 0,
-               "a mesh with no chain has exactly one level at every cell size");
+    CHECK_LOUD(plain.lodForWorldError(100.0f) == 0,
+               "a mesh with no chain is level 0 at every cell size");
 }
 
 // ---------------------------------------------------------------------------
@@ -1143,12 +1150,12 @@ static void surfaceCards()
             ++failures;
             continue;
         }
-        // Mesh::loadMesh is the PRIMITIVE's own path — it builds the cards at
-        // creation, which is the thing being tested for these meshes.
-        iris::Mesh::clearLoadCache();
+        // The cards are built HERE, from the parse, exactly as the BAKE builds
+        // them (ATOM P2 deleted the creation-time generator that used to run
+        // inside Mesh::loadMesh; the cards a primitive carries are its bake's).
         QElapsedTimer timer;
         timer.start();
-        const iris::MeshPtr mesh = iris::Mesh::loadMesh(path);
+        const iris::MeshPtr mesh = previewmesh::load(path);
         const double loadMs = double(timer.nsecsElapsed()) / 1e6;
         if (mesh.isNull()) {
             std::printf("FAIL: could not load %s\n", subject.path);
@@ -1192,9 +1199,12 @@ static void surfaceCards()
     // clamped to the mesh's own box in its plane, which is what makes this
     // exact rather than "the box plus a margin".
     {
-        iris::Mesh::clearLoadCache();
         const iris::MeshPtr cube =
-            iris::Mesh::loadMesh(fixture(QStringLiteral("app/content/primitives/cube.obj")));
+            previewmesh::load(fixture(QStringLiteral("app/content/primitives/cube.obj")));
+        // The cards are built HERE now: nothing builds them at creation since
+        // ATOM P2 deleted Mesh::loadMesh, and a primitive's real cards are its
+        // BAKE's (meshbake.primitives_baked).
+        if (!cube.isNull()) iris::MeshBake::buildCards(cube, iris::kDefaultMaxCards);
         CHECK_LOUD(!cube.isNull() && cube->cards.size() == 6,
                    "the cube gets exactly six cards — the 6-face box, not two per face");
         if (!cube.isNull() && cube->cards.size() == 6) {
@@ -1229,10 +1239,8 @@ static void surfaceCards()
     // model's bake a different object on every import.
     {
         const QString path = fixture(QStringLiteral("app/content/primitives/torus.obj"));
-        iris::Mesh::clearLoadCache();
-        const iris::MeshPtr first = iris::Mesh::loadMesh(path);
-        iris::Mesh::clearLoadCache();
-        const iris::MeshPtr second = iris::Mesh::loadMesh(path);
+        const iris::MeshPtr first = previewmesh::load(path);
+        const iris::MeshPtr second = previewmesh::load(path);
         bool same = !first.isNull() && !second.isNull()
                     && first->cards.size() == second->cards.size()
                     && first->cardCoverage == second->cardCoverage;
@@ -1249,6 +1257,7 @@ static void surfaceCards()
         // And the GENERATOR is idempotent: asking twice must replace the list,
         // never append to it.
         if (!first.isNull()) {
+            iris::MeshBake::buildCards(first, iris::kDefaultMaxCards);
             const int before = int(first->cards.size());
             iris::MeshBake::buildCards(first, iris::kDefaultMaxCards);
             CHECK_LOUD(int(first->cards.size()) == before,
@@ -1259,8 +1268,7 @@ static void surfaceCards()
     // (d) THE BUDGET, and monotonicity in it.
     {
         const QString path = fixture(QStringLiteral("app/content/primitives/star.obj"));
-        iris::Mesh::clearLoadCache();
-        const iris::MeshPtr mesh = iris::Mesh::loadMesh(path);
+        const iris::MeshPtr mesh = previewmesh::load(path);
         if (!mesh.isNull()) {
             iris::MeshBake::buildCards(mesh, 0);
             CHECK_LOUD(mesh->cards.isEmpty() && mesh->cardCoverage == 0.0f,
@@ -1346,7 +1354,7 @@ static void surfaceCards()
     // 2 M-triangle mesh is 144 x 2 M triangle setups. The ceiling took the
     // COARSEST BAKED LEVEL, which misses the two classes that have no chain at
     // all — a mesh whose topology stopped the simplifier, and EVERY mesh born
-    // through Mesh::loadMesh — and those are exactly the meshes a user's import
+    // outside an import — and those are exactly the meshes a user's import
     // and Preferences' bake-all hand to the UI thread.
     //
     // WHAT IS ASSERTED, and why it is shaped this way: the claim is a BOUND, so
@@ -1403,6 +1411,583 @@ static void surfaceCards()
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// 9. THE MEASURED BOUND (ATOM P1's AT-A5) — the `atom.error_bound` suite.
+//
+// THE CLAIM UNDER TEST, in one sentence: for every level of every shipped mesh,
+// no point of that level's surface lies further from level 0's surface than the
+// length the bake stored — measured INDEPENDENTLY of the bake's own sampler.
+//
+// WHAT THIS IS, SAID ACCURATELY (the lane's audit corrected the first wording).
+// It is a REGRESSION CHECK, not an independent derivation. The bake's maximum comes
+// from the REMOVED BASE VERTICES, computed EXACTLY — `meshopt_simplify` only ever
+// removes vertices, so the worst case sits on the ones the level no longer has, and
+// there is nothing to sample there. A check that walked them too would reproduce
+// that term bit for bit and pass by construction, which is what the first cut did:
+// its worst measured/stored came out at 0.8000 = 1/1.25 on seven of eight subjects,
+// i.e. it was reading back the bake's own maximum and dividing by the margin.
+//
+// So the dense set here is AREA-ONLY, eight times as dense, at strata the bake
+// never used (a different sample count moves every stratum, and the van der Corput
+// index is the sample number). That leaves the SAMPLING-GAP MARGIN exposed, which
+// is the one thing a margin should be judged on, and it exercises the whole
+// pipeline — sampler, grid resolution, precision floor, monotonicity — against
+// numbers the bake did not produce.
+//
+// AND WHAT IT MEASURES, STATED SO NOBODY READS MORE INTO A PASS: area-only at 8x
+// density NEVER EXCEEDS the stored bound on any shipped mesh, and on eight of ten
+// subjects it lands at exactly 0.8000 of it — which is 1/1.25, the margin, meaning
+// the dense sampling found precisely the same maximum the bake's 4096 samples did.
+// For smooth simplification the area maximum has already CONVERGED at 4096, so the
+// margin is headroom and not a necessity. `axis_sphere.obj` is the one subject where
+// density found more (0.8094, i.e. 1.2 % past the bake's own figure), and
+// `ground.obj` reads 0.2037 because its bound is the precision floor. So this suite
+// is a REGRESSION CHECK on a converged number, and the term that actually carries
+// the maximum on a hard mesh is the removed-vertex walk — measured at 13.08x the
+// area-only figure on `endlessplane.obj` (JAH_BAKE_BOUND_TERMS in meshbake.cpp
+// prints the split), which is exactly why that walk is in the bake and not here.
+//
+// AND `lodBounds[k] >= lodErrors[k]` IS DELIBERATELY NOT ASSERTED. The quadric can
+// over-state as easily as it under-states — it is a different quantity, not a
+// looser version of this one — so the suite REPORTS the ratio and pins nothing.
+// The ratio table is the evidence AT-A5 was missing.
+static void errorBound()
+{
+    struct Row { QString path; };
+    const QVector<Row> subjects = {
+        { QStringLiteral("app/content/primitives/sphere.obj") },
+        { QStringLiteral("app/content/primitives/hp_sphere.obj") },
+        { QStringLiteral("app/content/primitives/capsule.obj") },
+        { QStringLiteral("app/content/primitives/torus.obj") },
+        { QStringLiteral("app/content/primitives/hemisphere.obj") },
+        { QStringLiteral("app/content/primitives/teapot.obj") },
+        { QStringLiteral("app/content/primitives/tube.obj") },
+        { QStringLiteral("app/content/primitives/endlessplane.obj") },
+        { QStringLiteral("app/models/ground.obj") },
+        { QStringLiteral("app/models/axis_sphere.obj") },
+        { QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb") },
+    };
+
+    int chained = 0;
+    std::printf("      %-34s %5s %9s %12s %12s %6s\n",
+                "mesh", "level", "tris", "quadric", "bound", "ratio");
+    for (const Row &r : subjects) {
+        iris::MeshBake::Model m =
+            iris::MeshBake::buildFromFile(fixture(r.path), QStringLiteral("atom-error-bound"));
+        if (!m.valid || m.meshes.isEmpty()) {
+            CHECK_LOUD(false, qUtf8Printable(r.path + ": bakes at all"));
+            continue;
+        }
+        for (const iris::MeshPtr &mesh : m.meshes) {
+            if (mesh.isNull() || mesh->lodIndices.isEmpty()) continue;
+            ++chained;
+            CHECK_LOUD(mesh->lodBounds.size() == mesh->lodIndices.size() &&
+                           mesh->lodErrors.size() == mesh->lodIndices.size(),
+                       qUtf8Printable(r.path + ": one bound and one quadric per level"));
+            // Monotone, because the one rule stops at the first level it cannot
+            // afford and that is only correct for a sorted array.
+            bool monotone = true;
+            for (int i = 1; i < mesh->lodBounds.size(); ++i)
+                if (mesh->lodBounds.at(i) < mesh->lodBounds.at(i - 1)) monotone = false;
+            CHECK_LOUD(monotone, qUtf8Printable(r.path + ": the bounds are non-decreasing"));
+
+            double worstRatio = 0.0;
+            const bool ok = iris::MeshBake::checkLodBounds(mesh, 8, &worstRatio);
+            CHECK_LOUD(ok, qUtf8Printable(
+                               QStringLiteral("%1: EVERY level is inside its stored bound under "
+                                              "an independent sampling 8x as dense (worst "
+                                              "measured/stored %2)")
+                                   .arg(r.path).arg(worstRatio, 0, 'f', 4)));
+            for (int i = 0; i < mesh->lodBounds.size(); ++i) {
+                const float q = mesh->lodErrors.at(i), b = mesh->lodBounds.at(i);
+                std::printf("      %-34s %5d %9d %12.6f %12.6f %6.2f\n",
+                            qUtf8Printable(QFileInfo(r.path).fileName()), i + 1,
+                            int(mesh->lodIndices.at(i).size() / 3), double(q), double(b),
+                            q > 0.0f ? double(b) / double(q) : 0.0);
+            }
+        }
+    }
+    CHECK_LOUD(chained >= 8, "the subject list really does carry chained meshes");
+}
+
+// ---------------------------------------------------------------------------
+// 10. THE SIGNED DISTANCE FIELD (ATOM P2 / SUB-S5-SDF) — the `meshbake.sdf` suite.
+//
+// WHAT A DISTANCE FIELD HAS TO GET RIGHT, and what each check is for:
+//
+//   * THE ZERO CROSSING IS THE SURFACE. A cell whose stored distance is d must
+//     really be about d from level 0's geometry — checked against the same exact
+//     nearest-surface query the bake's own grid answers, to WITHIN ONE CELL,
+//     which is the accuracy the design asks for and the accuracy the exact band
+//     is there to deliver.
+//   * THE SIGN. A closed convex mesh must read NEGATIVE at its centre and
+//     POSITIVE in the padded corner. That is the check that would have caught the
+//     first cut of this code, which derived the sign from the seed direction and
+//     therefore read every far cell as outside — losing the entire interior of
+//     anything thicker than the exact band.
+//   * THE RESOLUTION IS NOT FINER THAN THE GEOMETRY IS HONEST: the cell is at
+//     least four times level 1's measured bound whenever there is a chain.
+//   * IT SURVIVES THE FORMAT. Serialise, read back, compare every byte.
+//   * AND A SKINNED MESH GETS NONE, because a field baked against a bind pose is
+//     a lie, exactly as a card is.
+static void signedDistanceField()
+{
+    // CONE AND PYRAMID ARE HERE FOR THE SIGN, and they are the shapes that would
+    // have caught the first cut of it: both have a convex feature sharper than a
+    // right angle (an apex, and in the wedge's case a spine), where the nearest
+    // point of an EXTERIOR cell is ON that feature and a single face normal there
+    // can face away from the cell — signing an outside point INSIDE. The fix is the
+    // angle-weighted pseudonormal (`surface::angleWeightAt`); the check is
+    // `checkSdfExteriorSign` below, because `checkSdfAgainstSurface` compares
+    // MAGNITUDES (|stored| against the exact distance) and is blind to it.
+    const QStringList subjects = {
+        QStringLiteral("app/content/primitives/sphere.obj"),
+        QStringLiteral("app/content/primitives/cube.obj"),
+        QStringLiteral("app/content/primitives/hp_sphere.obj"),
+        QStringLiteral("app/content/primitives/torus.obj"),
+        QStringLiteral("app/content/primitives/cone.obj"),
+        QStringLiteral("app/content/primitives/pyramid.obj"),
+        QStringLiteral("app/content/primitives/wedge.obj"),
+    };
+    std::printf("      %-28s %12s %10s %10s %9s\n", "mesh", "dims", "cell", "scale", "bytes");
+    for (const QString &path : subjects) {
+        iris::MeshBake::Model m =
+            iris::MeshBake::buildFromFile(fixture(path), QStringLiteral("atom-sdf"));
+        if (!m.valid || m.meshes.isEmpty()) {
+            CHECK_LOUD(false, qUtf8Printable(path + ": bakes at all"));
+            continue;
+        }
+        const iris::MeshPtr mesh = m.meshes.first();
+        const iris::MeshSdf &f = mesh->sdf;
+        CHECK_LOUD(!f.isEmpty(), qUtf8Printable(path + ": carries a field"));
+        if (f.isEmpty()) continue;
+        std::printf("      %-28s %4dx%3dx%3d %10.5f %10.5f %9d\n",
+                    qUtf8Printable(QFileInfo(path).fileName()), f.dim[0], f.dim[1], f.dim[2],
+                    double(f.cell), double(f.scale), f.values.size());
+        CHECK_LOUD(f.values.size() == f.cellCount(),
+                   qUtf8Printable(path + ": one byte per cell, exactly"));
+        CHECK_LOUD(f.dim[0] <= iris::MeshSdf::kMaxDim && f.dim[1] <= iris::MeshSdf::kMaxDim &&
+                       f.dim[2] <= iris::MeshSdf::kMaxDim,
+                   qUtf8Printable(path + ": inside the format's ceiling"));
+        if (!mesh->lodBounds.isEmpty())
+            CHECK_LOUD(f.cell >= mesh->lodBounds.first() * 4.0f * 0.999f,
+                       qUtf8Printable(path + ": the cell is no finer than the geometry is honest"));
+
+        // THE ZERO CROSSING, against the geometry itself.
+        double worstCells = 0.0;
+        int probed = 0;
+        const bool accurate = iris::MeshBake::checkSdfAgainstSurface(mesh, &worstCells, &probed);
+        CHECK_LOUD(probed > 50, qUtf8Printable(path + ": the band really has cells in it"));
+        CHECK_LOUD(accurate,
+                   qUtf8Printable(QStringLiteral("%1: the field agrees with level 0's surface to "
+                                                 "within one cell (worst %2 cells over %3 probes)")
+                                      .arg(path).arg(worstCells, 0, 'f', 3).arg(probed)));
+
+        // THE SIGN. The padded corner is outside by construction; the centre of a
+        // closed mesh is inside.
+        CHECK_LOUD(f.distanceAt(0, 0, 0) > 0.0f,
+                   qUtf8Printable(path + ": the padded corner reads OUTSIDE"));
+        // The box centre is inside a SOLID convex mesh and not otherwise: a torus
+        // centre is in its hole, and a WEDGE's is ON its diagonal face (the wedge is
+        // the half of a 2x2x2 cube cut through opposite edges, so the cube's centre
+        // lies in that plane and its true signed distance is zero — an honest
+        // ambiguity, not a defect). Both are excluded by name and by reason.
+        if (!path.contains(QStringLiteral("torus")) && !path.contains(QStringLiteral("wedge")))
+            CHECK_LOUD(f.distanceAt(f.dim[0] / 2, f.dim[1] / 2, f.dim[2] / 2) < 0.0f,
+                       qUtf8Printable(path + ": the centre of a solid convex mesh reads INSIDE"));
+
+        // ...AND EVERY EXTERIOR CELL READS POSITIVE. This is the assertion the
+        // pseudonormal exists for, and the one the magnitude check cannot make: a
+        // cell whose nearest point is on a sharp convex edge or an apex is where a
+        // face-normal sign flips. "Exterior" is decided WITHOUT the field — by ray
+        // parity through level 0's own triangles — so the field is judged against
+        // the geometry rather than against itself.
+        int outsideProbed = 0, outsideWrong = 0;
+        const bool signOk = iris::MeshBake::checkSdfExteriorSign(mesh, &outsideProbed,
+                                                                &outsideWrong);
+        CHECK_LOUD(outsideProbed > 100,
+                   qUtf8Printable(path + ": the exterior probe really has cells in it"));
+        CHECK_LOUD(signOk,
+                   qUtf8Printable(QStringLiteral("%1: EVERY exterior cell reads POSITIVE "
+                                                 "(%2 wrong of %3 probed)")
+                                      .arg(path).arg(outsideWrong).arg(outsideProbed)));
+
+        // THE FORMAT.
+        const QByteArray blob = iris::MeshBake::serialize(m);
+        const iris::MeshBake::Model back = iris::MeshBake::deserialize(blob);
+        CHECK_LOUD(back.valid && !back.meshes.isEmpty(),
+                   qUtf8Printable(path + ": the bake with a field round-trips"));
+        if (back.valid && !back.meshes.isEmpty()) {
+            const iris::MeshSdf &g = back.meshes.first()->sdf;
+            CHECK_LOUD(g.dim[0] == f.dim[0] && g.dim[1] == f.dim[1] && g.dim[2] == f.dim[2] &&
+                           g.cell == f.cell && g.scale == f.scale && g.values == f.values,
+                       qUtf8Printable(path + ": every field byte survives the format"));
+        }
+    }
+
+    // A SKINNED MESH GETS NO FIELD (the same rule the cards obey).
+    iris::MeshBake::Model rig = iris::MeshBake::buildFromFile(
+        fixture(QStringLiteral("tests/importer/fixtures/ticks_anim.glb")),
+        QStringLiteral("atom-sdf-skinned"));
+    if (rig.valid && !rig.meshes.isEmpty()) {
+        bool anySkinned = false, anyField = false;
+        for (const iris::MeshPtr &mesh : rig.meshes) {
+            if (mesh.isNull() || !mesh->hasSkeleton()) continue;
+            anySkinned = true;
+            if (!mesh->sdf.isEmpty()) anyField = true;
+        }
+        if (anySkinned)
+            CHECK_LOUD(!anyField, "a skinned mesh gets NO field (a bind-pose field is a lie)");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 11. EVERY SHIPPED MESH IS A BAKED LIBRARY ASSET — `meshbake.primitives_baked`
+//     (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_ASSET_DESIGN.md §2.3)
+// ---------------------------------------------------------------------------
+//
+// A FRESH LIBRARY, seeded exactly as a launch seeds one (PrimitiveAssets::
+// seedAll, which is what shell/mainwindow.cpp calls when it opens a library),
+// and then the four products the design owes for every row: a LOD CHAIN of at
+// least two levels for every mesh above 256 triangles, CARDS, an SDF, and a
+// measured lodBound per level. Plus the half that is easy to lose: a SECOND
+// seed of the same library bakes NOTHING.
+static void primitivesBaked()
+{
+    QTemporaryDir home;
+    QTemporaryDir storeRoot;
+    if (!home.isValid() || !storeRoot.isValid()) {
+        std::printf("FAIL: could not create the fixture store\n");
+        ++failures;
+        return;
+    }
+    AssetStorePaths::setRootOverride(storeRoot.path());
+    Database db;
+    CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
+               "fixture database opened");
+    db.createAllTables();
+    QSqlDatabase conn = QSqlDatabase::database();
+    AssetCas::ensureCasSchema(conn);
+
+    PrimitiveAssets::clearCache();
+    CHECK_LOUD(!PrimitiveAssets::allSeeded(&db), "a fresh library has seeded nothing");
+
+    QStringList errors;
+    QElapsedTimer timer;
+    timer.start();
+    const int created = PrimitiveAssets::seedAll(&db, &errors);
+    const double seedMs = double(timer.nsecsElapsed()) / 1e6;
+    for (const QString &line : errors) std::printf("info: seed error: %s\n", qUtf8Printable(line));
+    CHECK_LOUD(errors.isEmpty(), "the seed reported no failure");
+    CHECK_LOUD(created == primitives::all().size(),
+               qUtf8Printable(QStringLiteral("every seed row was created (%1 of %2) in %3 ms")
+                                  .arg(created).arg(primitives::all().size())
+                                  .arg(seedMs, 0, 'f', 0)));
+    CHECK_LOUD(PrimitiveAssets::allSeeded(&db), "…and allSeeded agrees");
+
+    std::printf("      %-12s %7s %6s %6s %6s %-9s %s\n", "seed", "tris", "levels", "cards",
+                "sdf", "bound[1]", "guid");
+    for (const primitives::Def &def : primitives::all()) {
+        const QString name = QString::fromLatin1(def.name);
+        const QString guid = QString::fromLatin1(def.guid);
+
+        // THE ROW IS THE RESERVED ONE (a favourite, a tile's drop payload and
+        // `assets.builtins` all name it).
+        const AssetRecord row = db.fetchAsset(guid);
+        CHECK(row.guid == guid || !row.name.isEmpty(),
+              qUtf8Printable(name + ": its library row is the reserved guid " + guid));
+        CHECK(QJsonDocument::fromJson(row.properties).object()
+                  .value(QStringLiteral("type")).toString() == QStringLiteral("platform"),
+              qUtf8Printable(name + ": the row is marked platform furniture"));
+
+        const iris::MeshPtr mesh = PrimitiveAssets::mesh(name, &db);
+        CHECK_LOUD(!mesh.isNull(),
+                   qUtf8Printable(name + ": the baked asset resolves to a mesh"));
+        if (!mesh) continue;
+
+        const int tris = mesh->numFaces;
+        const int levels = int(mesh->lodIndices.size()) + 1;
+        std::printf("      %-12s %7d %6d %6d %6s %-9.6g %s\n", qUtf8Printable(name), tris, levels,
+                    int(mesh->cards.size()), mesh->sdf.isEmpty() ? "no" : "yes",
+                    mesh->lodBounds.isEmpty() ? 0.0 : double(mesh->lodBounds.first()),
+                    qUtf8Printable(guid.right(4)));
+
+        // THE CHAIN, for a mesh big enough to have one. The bake's own floor is
+        // `kMinTriangles` x 2 = 512 (a level must be able to halve down to 128
+        // and still shed 15 %), so the design's "above 256 triangles" is
+        // asserted where the bake can honour it and the rest are reported.
+        if (tris > 512)
+            CHECK_LOUD(levels >= 2,
+                       qUtf8Printable(QStringLiteral("%1: %2 triangles -> a chain of %3 levels")
+                                          .arg(name).arg(tris).arg(levels)));
+        // Every level's bound is a real length and the list is non-decreasing.
+        CHECK(mesh->lodBounds.size() == mesh->lodIndices.size(),
+              qUtf8Printable(name + ": one measured bound per level"));
+        for (int L = 0; L < mesh->lodBounds.size(); ++L) {
+            CHECK(mesh->lodBounds[L] > 0.0f,
+                  qUtf8Printable(name + ": every bound is a positive length"));
+            if (L > 0)
+                CHECK(mesh->lodBounds[L] >= mesh->lodBounds[L - 1],
+                      qUtf8Printable(name + ": the bounds are non-decreasing"));
+        }
+        // CARDS and the SDF: every shipped mesh gets both (the generator refuses
+        // only a skinned mesh, and none of these is skinned).
+        CHECK_LOUD(!mesh->cards.isEmpty(), qUtf8Printable(name + ": it carries surface cards"));
+        for (const iris::MeshCard &card : mesh->cards)
+            CHECK(int(card.lodLevel) < levels,
+                  qUtf8Printable(name + ": every card names a level the chain HAS"));
+        CHECK_LOUD(!mesh->sdf.isEmpty(), qUtf8Printable(name + ": it carries an SDF"));
+    }
+
+    // A SECOND SEED BAKES NOTHING. `seedAll` answers with how many rows it
+    // CREATED, and the bake is re-checked per row against this build — so a zero
+    // here is the whole idempotence claim, and it is also what a second launch
+    // of the app on the same library does.
+    PrimitiveAssets::clearCache();
+    QStringList again;
+    const int secondPass = PrimitiveAssets::seedAll(&db, &again);
+    CHECK_LOUD(secondPass == 0 && again.isEmpty(),
+               qUtf8Printable(QStringLiteral("a second seed of the same library creates nothing "
+                                             "(%1 created, %2 error(s))")
+                                  .arg(secondPass).arg(again.size())));
+
+    AssetStorePaths::setRootOverride(QString());
+    PrimitiveAssets::clearCache();
+}
+
+// ---------------------------------------------------------------------------
+// 12. THE NEXT GENERATION WINS — `meshbake.rebake_generation` (BAKE-RETIRE-1)
+// ---------------------------------------------------------------------------
+//
+// A bake's file NAME is `<sourceOid16>-<settingsHash>.jmb`: it names the CONTENT
+// and the SETTINGS and says NOTHING about the producer, because the producer is
+// a fingerprint inside the file. `asset_files`' primary key is
+// (asset_guid, role, name) and the store ingests with INSERT OR IGNORE — so
+// before this lane, a re-bake after a `kFormatVersion` bump was SILENTLY DROPPED
+// on any library that already had one: the stale oid stayed linked, the reader
+// refused its fingerprint, and a baked asset with no parse to fall back on (every
+// shipped primitive since ATOM P2) drew NOTHING, forever, while the seeder rebuilt
+// it into an unlinked object on every boot. No suite saw it because every test
+// home is fresh, which is exactly why this one plants the previous generation by
+// hand.
+static void rebakeGeneration()
+{
+    QTemporaryDir home;
+    QTemporaryDir storeRoot;
+    if (!home.isValid() || !storeRoot.isValid()) {
+        std::printf("FAIL: could not create the fixture store\n");
+        ++failures;
+        return;
+    }
+    AssetStorePaths::setRootOverride(storeRoot.path());
+    Database db;
+    CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
+               "fixture database opened");
+    db.createAllTables();
+    QSqlDatabase conn = QSqlDatabase::database();
+    AssetCas::ensureCasSchema(conn);
+
+    Project project;
+    AssetImportService service(&db, &project);
+    ImportRequest request;
+    request.sourcePath = fixture(QStringLiteral("app/models/axis_cube.obj"));
+    const ImportResult imported = service.import(request);
+    CHECK_LOUD(imported.ok(), "the fixture imported through the ONE pipeline");
+    if (!imported.ok()) {
+        std::printf("info: import error: %s\n", qUtf8Printable(imported.error));
+        AssetStorePaths::setRootOverride(QString());
+        return;
+    }
+
+    const auto bakeRows = [&](const QString &guid) {
+        QSqlQuery q(conn);
+        q.prepare("SELECT oid, name FROM asset_files WHERE asset_guid = ? AND role = 'bake'");
+        q.addBindValue(guid);
+        QVector<QPair<QString, QString>> rows;
+        if (q.exec()) while (q.next())
+            rows.append({ q.value(0).toString(), q.value(1).toString() });
+        return rows;
+    };
+    const auto refcountOf = [&](const QString &oid) {
+        QSqlQuery q(conn);
+        q.prepare("SELECT refcount FROM files WHERE oid = ?");
+        q.addBindValue(oid);
+        return (q.exec() && q.next()) ? q.value(0).toInt() : -1;
+    };
+
+    auto rows = bakeRows(imported.assetGuid);
+    CHECK_LOUD(rows.size() == 1, "the import left exactly one bake row on the Object");
+    if (rows.isEmpty()) { AssetStorePaths::setRootOverride(QString()); return; }
+    const QString currentOid = rows.first().first;
+    const QString bakeName = rows.first().second;
+    const QString source = AssetCas::resolveSource(conn, storeRoot.path(), imported.assetGuid);
+    CHECK_LOUD(!source.isEmpty(), "the source object resolves");
+
+    // PLANT THE PREVIOUS GENERATION, UNDER EVERY OWNER. A real library holds it
+    // that way — `recordBake` writes the bake under the Object AND the Mesh
+    // member row — and it has to be both here, because `planFor` looks bake rows
+    // up BY NAME ACROSS OWNERS (it walks every generation newest first and lets
+    // the fingerprint decide): a fixture that spoiled only the Object row would
+    // still be served the fresh bake through the mesh row's.
+    //
+    // Rewriting the row rather than the file is the honest fixture: the name is
+    // generation-INDEPENDENT, which is the defect. The bytes are real so the
+    // refcount trigger has something to count, and the name is swapped in two
+    // statements — DELETE the current row FIRST, then rename the planted one, or
+    // the rename collides with the very key it is taking over.
+    const QString stalePath = QDir(home.path()).filePath(QStringLiteral("stale.jmb"));
+    {
+        QFile f(stalePath);
+        CHECK_LOUD(f.open(QIODevice::WriteOnly), "the stale generation's bytes were written");
+        f.write(QByteArray(4096, 'S'));
+    }
+    QString staleOid;
+    QString casError;
+    const QStringList owners{ imported.assetGuid, imported.meshGuid };
+    for (const QString &owner : owners) {
+        CHECK(AssetCas::ingestFile(conn, storeRoot.path(), stalePath, owner,
+                                   QStringLiteral("bake"), QStringLiteral("stale-generation.jmb"),
+                                   &staleOid, &casError),
+              "the stale generation was ingested as a bake object");
+        QSqlQuery drop(conn);
+        drop.prepare("DELETE FROM asset_files WHERE asset_guid = ? AND role = 'bake' AND name = ?");
+        drop.addBindValue(owner);
+        drop.addBindValue(bakeName);
+        CHECK(drop.exec(), "the current generation's row was removed");
+        QSqlQuery rename(conn);
+        rename.prepare("UPDATE asset_files SET name = ? WHERE asset_guid = ? AND role = 'bake' "
+                       "AND name = ?");
+        rename.addBindValue(bakeName);
+        rename.addBindValue(owner);
+        rename.addBindValue(QStringLiteral("stale-generation.jmb"));
+        CHECK(rename.exec(), "…and the planted one took its key");
+    }
+    rows = bakeRows(imported.assetGuid);
+    CHECK_LOUD(rows.size() == 1 && rows.first().first == staleOid
+                   && rows.first().second == bakeName,
+               "every owner now holds the PREVIOUS generation's bake under the current name");
+
+    // "CANNOT READ" IS `load` ANSWERING NULL, not `isFresh` answering false:
+    // freshness is a CATALOG question (is there a bake row under the name this
+    // content and these settings imply) and the planted row answers it YES —
+    // which is precisely why the silent drop was invisible. The fingerprint lives
+    // in the FILE, and that is what refuses.
+    MeshBakeStore::clear();
+    CHECK_LOUD(!MeshBakeStore::load(source, imported.assetGuid),
+               "…and this build cannot READ that bake (exactly a format bump)");
+
+    // THE RE-BAKE MUST SUPERSEDE IT.
+    QString bakeError;
+    CHECK_LOUD(MeshBakeStore::bakeSource(conn, storeRoot.path(), source, &bakeError,
+                                        imported.assetGuid),
+               "the re-bake ran");
+    if (!bakeError.isEmpty()) std::printf("info: bake error: %s\n", qUtf8Printable(bakeError));
+
+    for (const QString &owner : owners) {
+        rows = bakeRows(owner);
+        for (const auto &r : rows)
+            std::printf("      after the re-bake: %s | %s | %s\n", qUtf8Printable(owner.left(8)),
+                        qUtf8Printable(r.first.left(12)), qUtf8Printable(r.second));
+        CHECK_LOUD(rows.size() == 1,
+                   qUtf8Printable(QStringLiteral("ONE bake row survives the re-bake on %1 (got %2)")
+                                      .arg(owner.left(8)).arg(rows.size())));
+        CHECK_LOUD(!rows.isEmpty() && rows.first().first != staleOid,
+                   "…and it is the NEW generation's object, not the stale one");
+    }
+    CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), source, imported.assetGuid),
+               "…so this build can read the bake again");
+
+    // AND THE SUPERSEDED OBJECT IS REAPABLE: nothing links it any more, which is
+    // what hands it to `assets.gc` (the refcount triggers are AFTER INSERT and
+    // AFTER DELETE on asset_files — an UPDATE would have left it inflated).
+    QSqlQuery stillLinked(conn);
+    stillLinked.prepare("SELECT COUNT(*) FROM asset_files WHERE oid = ?");
+    stillLinked.addBindValue(staleOid);
+    int links = -1;
+    if (stillLinked.exec() && stillLinked.next()) links = stillLinked.value(0).toInt();
+    CHECK_LOUD(links == 0, qUtf8Printable(QStringLiteral("no asset_files row links the superseded "
+                                                         "object any more (got %1)").arg(links)));
+    CHECK_LOUD(refcountOf(staleOid) <= 0,
+               qUtf8Printable(QStringLiteral("…and its refcount is back to zero for gc (got %1)")
+                                  .arg(refcountOf(staleOid))));
+
+    AssetStorePaths::setRootOverride(QString());
+}
+
+// ---------------------------------------------------------------------------
+// 13. THE HEMISPHERE'S CAP IS WOUND THE RIGHT WAY — `meshbake.hemisphere_winding`
+//     (HEMISPHERE-CAP-1)
+// ---------------------------------------------------------------------------
+//
+// The cap's 32 faces were wound so their geometric normal pointed +Y while every
+// one of their vertex normals declared (0, -1, 0): the bottom of the hemisphere
+// faced INTO the object. Nothing in the bake fixes a wound-backwards face — the
+// card generator's coverage raster, the SDF's angle-weighted pseudonormal and any
+// back-face cull all read the winding — so the fix is the FILE, and this is the
+// check that keeps it fixed. It is a property of every shipped mesh, so every one
+// of them is measured, not just the hemisphere.
+static void windingAgreesWithNormals()
+{
+    for (const primitives::Def &def : primitives::all()) {
+        const QString name = QString::fromLatin1(def.name);
+        // The seed key is a Qt RESOURCE and this binary links no .qrc, so the
+        // same file is read from the source tree: ":/content/primitives/x.obj"
+        // ships as "app/content/primitives/x.obj" and ":/models/ground.obj" as
+        // "app/models/ground.obj" — one mapping, the one the app folder IS.
+        const QString seed = QString::fromLatin1(def.mesh);
+        const QString path = seed.startsWith(QLatin1Char(':'))
+                                 ? fixture(QStringLiteral("app") + seed.mid(1))
+                                 : fixture(seed);
+        const iris::MeshPtr mesh = previewmesh::load(path, QString());
+        CHECK_LOUD(!mesh.isNull(), qUtf8Printable(name + ": the shipped mesh parses"));
+        if (!mesh) continue;
+
+        // Positions and normals out of the vertex buffers, then the geometric
+        // normal of every triangle against the average of its three declared
+        // vertex normals. A face whose winding disagrees with its own normals is
+        // a face the renderer and the bake will read two different ways.
+        QVector<iris::Vec3> pos, nrm;
+        for (const iris::VertexBufferPtr &vb : mesh->getVertexBuffers()) {
+            const auto &attribs = vb->vertexLayout.getAttribs();
+            if (attribs.size() != 1) continue;
+            const int count = vb->dataSize / int(sizeof(float) * 3);
+            const float *f = reinterpret_cast<const float *>(vb->data);
+            if (attribs[0].usage == iris::VertexAttribUsage::Position) {
+                pos.resize(count);
+                for (int i = 0; i < count; ++i) pos[i] = iris::Vec3(f[i * 3], f[i * 3 + 1], f[i * 3 + 2]);
+            } else if (attribs[0].usage == iris::VertexAttribUsage::Normal) {
+                nrm.resize(count);
+                for (int i = 0; i < count; ++i) nrm[i] = iris::Vec3(f[i * 3], f[i * 3 + 1], f[i * 3 + 2]);
+            }
+        }
+        if (pos.isEmpty() || nrm.size() != pos.size()) {
+            std::printf("info: %s: no position/normal pair to measure\n", qUtf8Printable(name));
+            continue;
+        }
+        const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
+        if (!ib || ib->dataSize <= 0) {
+            std::printf("info: %s: no index buffer\n", qUtf8Printable(name));
+            continue;
+        }
+        const quint32 *idx = reinterpret_cast<const quint32 *>(ib->data);
+        const int tris = ib->dataSize / int(sizeof(quint32) * 3);
+        int disagreeing = 0;
+        for (int t = 0; t < tris; ++t) {
+            const quint32 a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2];
+            if (int(a) >= pos.size() || int(b) >= pos.size() || int(c) >= pos.size()) continue;
+            const iris::Vec3 geo = iris::Vec3::crossProduct(pos[b] - pos[a], pos[c] - pos[a]);
+            const iris::Vec3 declared = nrm[a] + nrm[b] + nrm[c];
+            if (geo.lengthSquared() < 1e-20f || declared.lengthSquared() < 1e-12f) continue;
+            if (iris::Vec3::dotProduct(geo, declared) <= 0.0f) ++disagreeing;
+        }
+        CHECK_LOUD(disagreeing == 0,
+                   qUtf8Printable(QStringLiteral("%1: %2 of %3 faces wound against their own "
+                                                 "declared normal")
+                                      .arg(name).arg(disagreeing).arg(tris)));
+    }
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -1413,6 +1998,46 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cards")) {
         std::printf("== 8. surface cards ==\n");
         surfaceCards();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    // `--error-bound` is atom.error_bound; `--sdf` is meshbake.sdf. Their own
+    // suites because they are their own claims (and each prints a table the
+    // design asked for).
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--error-bound")) {
+        std::printf("== 9. the measured bound ==\n");
+        errorBound();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--sdf")) {
+        std::printf("== 10. the signed distance field ==\n");
+        signedDistanceField();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    // ATOM P2's three: the seed's products, the generation the re-bake must
+    // supersede, and the winding every shipped mesh owes its own normals.
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--primitives-baked")) {
+        std::printf("== 11. every shipped mesh is a baked library asset ==\n");
+        primitivesBaked();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--rebake-generation")) {
+        std::printf("== 12. the next generation wins ==\n");
+        rebakeGeneration();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--hemisphere-winding")) {
+        std::printf("== 13. winding against declared normals ==\n");
+        windingAgreesWithNormals();
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;

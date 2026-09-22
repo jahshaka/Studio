@@ -35,8 +35,9 @@ if(OGRE_NEXT_PREFIX STREQUAL "$ENV{HOME}/Developer/engines/ogre-next-install")
     message(WARNING "Using the LEGACY SHARED engine install. Run irisgl/scripts/build-ogre.sh "
                     "to give this tree its own engine (per-tree installs are the law since 2026-09-06).")
 endif()
-# The source tree ships as an irisgl submodule (pinned upstream + our patches,
-# applied by the build script). The old external-checkout path is the fallback.
+# The source tree ships as an irisgl submodule — our FORK of ogre-next (branch
+# `jahshaka`), so the media staged from it is already ours. The old
+# external-checkout path is the fallback.
 if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/CMakeLists.txt")
     set(_ogre_src_default "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next")
 else()
@@ -44,13 +45,14 @@ else()
 endif()
 set(OGRE_NEXT_SOURCE "${_ogre_src_default}"
     CACHE PATH "Ogre-Next source tree (for the Hlms shader templates under Samples/Media)")
-# A stale cache from a pre-submodule configure staged UNPATCHED media silently
-# (found 2026-09-03: patch 0009 missing from bin/media while the build succeeded).
-# When the submodule exists, any cached value pointing elsewhere is force-corrected.
+# A stale cache from a pre-submodule configure staged UPSTREAM media silently
+# (found 2026-09-03: patch 0009 — now the fork's M26 commit — missing from
+# bin/media while the build succeeded). When the submodule exists, any cached
+# value pointing elsewhere is force-corrected.
 if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/CMakeLists.txt"
    AND NOT OGRE_NEXT_SOURCE STREQUAL "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next")
     message(WARNING "OGRE_NEXT_SOURCE pointed at '${OGRE_NEXT_SOURCE}' but the ogre-next "
-                    "submodule exists — forcing it to the submodule so patched media stages.")
+                    "submodule exists — forcing it to the submodule so OUR media stages.")
     set(OGRE_NEXT_SOURCE "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next"
         CACHE PATH "Ogre-Next source tree (for the Hlms shader templates under Samples/Media)" FORCE)
 endif()

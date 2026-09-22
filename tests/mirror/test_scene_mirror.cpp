@@ -5,6 +5,8 @@
 // operation the editor performs: move a parent, hide, show, remove.
 // No window; runs with DISPLAY reachable (Vulkan). QT_QPA_PLATFORM=offscreen.
 #include "irisgl/core/math/quat.h"
+
+#include "bridge/previewmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QImage>
@@ -81,7 +83,7 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(parent);
     auto meshNode = iris::MeshNode::create();
     meshNode->setName("cube");
-    meshNode->setMesh(":assets/models/cube.obj");
+    meshNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
     auto legacyOrange = iris::DefaultMaterial::create();
     legacyOrange->setDiffuseColor(QColor(204, 76, 51));   // the document decides the colour now
     meshNode->setMaterial(legacyOrange);
@@ -238,7 +240,7 @@ int main(int argc, char **argv)
 
     // ---- step 4: material colour comes from the DOCUMENT ----
     auto meshNode2 = iris::MeshNode::create();
-    meshNode2->setMesh(":assets/models/cube.obj");
+    meshNode2->setMesh(previewmesh::load(":assets/models/cube.obj"));
     meshNode2->setLocalScale(iris::Vec3(s, s, s));
     auto pbr = iris::PbrMaterial::create();
     pbr->setBaseColor(QColor(30, 80, 230));      // blue-ish
@@ -652,7 +654,7 @@ int main(int argc, char **argv)
         auto group = iris::SceneNode::create();
         auto makePart = [&](float x) {
             auto part = iris::MeshNode::create();
-            part->setMesh(":assets/models/cube.obj");
+            part->setMesh(previewmesh::load(":assets/models/cube.obj"));
             part->setLocalScale(iris::Vec3(s, s, s));
             part->setLocalPos(iris::Vec3(x, 0, 0));
             part->setMaterial(legacy);
@@ -919,7 +921,7 @@ int main(int argc, char **argv)
         floorMat->setValue("metallic", 0.0f);
         auto floorNode = iris::MeshNode::create();
         floorNode->setName("decal floor");
-        floorNode->setMesh(":assets/models/cube.obj");
+        floorNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
         floorNode->setMaterial(floorMat);
         CHECK(!!floorNode->getMesh(), "decal: floor mesh loaded");
         floorNode->setLocalScale(iris::Vec3(8.0f, 0.2f, 8.0f));
@@ -1529,7 +1531,7 @@ int main(int argc, char **argv)
         // spare — the whole assertion is a silhouette-area comparison.
         enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 5.5f), Vec3(0, 0, 0));
 
-        subject->setMesh(kCube);
+        subject->setMesh(previewmesh::load(kCube));
         CHECK(!!subject->getMesh(), "mesh swap: cube loaded");
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("subject = cube", img);
@@ -1541,7 +1543,7 @@ int main(int argc, char **argv)
         // Entry::meshPtr was written and never read, so this changed nothing in
         // the engine — which is why the mesh picker is commented out in the
         // properties panel and the material preview replaced whole nodes.
-        subject->setMesh(kPlane);
+        subject->setMesh(previewmesh::load(kPlane));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("subject = plane", img);
         const int planePx = litPixels(img);
@@ -1550,7 +1552,7 @@ int main(int argc, char **argv)
               "mesh swap reaches the engine (the edge-on plane covers far less than the cube)");
 
         // ...and back, so the swap is not a one-way accident.
-        subject->setMesh(kCube);
+        subject->setMesh(previewmesh::load(kCube));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
         CHECK(std::abs(litPixels(img) - cubePx) < cubePx / 40,
@@ -1568,7 +1570,7 @@ int main(int argc, char **argv)
         CHECK(litPixels(img) == 0, "mesh detach: nothing renders once the mesh is cleared");
 
         // Re-attaching after a detach must work (the entry is reused).
-        subject->setMesh(kCube);
+        subject->setMesh(previewmesh::load(kCube));
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img);
         CHECK(litPixels(img) > 1000, "mesh detach: giving the node a mesh again re-attaches it");
@@ -1597,7 +1599,7 @@ int main(int argc, char **argv)
             wlight->setLocalPos(iris::Vec3(0.0f, 8.0f, 0.0f));
             wdoc->getRootNode()->addChild(wlight);
             auto floor2 = iris::MeshNode::create();
-            floor2->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+            floor2->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
             floor2->setLocalScale(iris::Vec3(4, 4, 4));
             auto white = iris::PbrMaterial::create();
             white->setBaseColor(QColor(240, 240, 240));
@@ -1668,7 +1670,7 @@ int main(int argc, char **argv)
         gdoc->giUpdateBudget = 1;
         auto gfloor = iris::MeshNode::create();
         gfloor->setName("floor");
-        gfloor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+        gfloor->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         gfloor->setLocalScale(iris::Vec3(4, 4, 4));
         auto gmat = iris::PbrMaterial::create();
         gmat->setBaseColor(QColor(220, 220, 220));
@@ -1890,7 +1892,7 @@ int main(int argc, char **argv)
     {
         auto pdoc = iris::Scene::create();
         auto cube = iris::MeshNode::create();
-        cube->setMesh(":assets/models/cube.obj");
+        cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
         cube->setMaterial(iris::PbrMaterial::create());
         cube->setName("pick-cube");
         cube->setLocalPos(iris::Vec3(0, 0, 0));
@@ -1959,7 +1961,7 @@ int main(int argc, char **argv)
     {
         auto ldoc = iris::Scene::create();
         auto cube = iris::MeshNode::create();
-        cube->setMesh(":assets/models/cube.obj");
+        cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
         cube->setMaterial(iris::PbrMaterial::create());
         cube->setName("channels-cube");
         ldoc->getRootNode()->addChild(cube, false);
@@ -2040,7 +2042,7 @@ int main(int argc, char **argv)
         ldoc->giUpdateBudget = 1;
         auto lfloor = iris::MeshNode::create();
         lfloor->setName("lamp-floor");
-        lfloor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+        lfloor->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         lfloor->setLocalScale(iris::Vec3(4, 4, 4));
         lfloor->setMaterial(iris::PbrMaterial::create());
         ldoc->getRootNode()->addChild(lfloor, false);
@@ -2107,7 +2109,7 @@ int main(int argc, char **argv)
     {
         auto sdoc = iris::Scene::create();
         auto pre = iris::MeshNode::create();
-        pre->setMesh(":assets/models/cube.obj");
+        pre->setMesh(previewmesh::load(":assets/models/cube.obj"));
         pre->setMaterial(iris::PbrMaterial::create());
         pre->setName("static-before-attach");
         sdoc->getRootNode()->addChild(pre, false);
@@ -2115,7 +2117,7 @@ int main(int argc, char **argv)
         CHECK(pre->isStaticInGraph(), "static: marked before the mirror ever saw it");
 
         auto post = iris::MeshNode::create();
-        post->setMesh(":assets/models/cube.obj");
+        post->setMesh(previewmesh::load(":assets/models/cube.obj"));
         post->setMaterial(iris::PbrMaterial::create());
         post->setName("static-after-attach");
         post->setLocalPos(iris::Vec3(3, 0, 0));
@@ -2158,7 +2160,7 @@ int main(int argc, char **argv)
     {
         auto mdoc = iris::Scene::create();
         auto still = iris::MeshNode::create();
-        still->setMesh(":assets/models/cube.obj");
+        still->setMesh(previewmesh::load(":assets/models/cube.obj"));
         still->setMaterial(iris::PbrMaterial::create());
         still->setName("mobility-still");
         mdoc->getRootNode()->addChild(still, false);
@@ -2166,7 +2168,7 @@ int main(int argc, char **argv)
         auto carrier = iris::SceneNode::create();
         carrier->setName("mobility-carrier");
         auto rider = iris::MeshNode::create();
-        rider->setMesh(":assets/models/cube.obj");
+        rider->setMesh(previewmesh::load(":assets/models/cube.obj"));
         rider->setMaterial(iris::PbrMaterial::create());
         rider->setName("mobility-rider");
         rider->setLocalPos(iris::Vec3(3, 0, 0));
@@ -2267,7 +2269,7 @@ int main(int argc, char **argv)
         floorMat->setValue("metallic", 0.0f);
         auto floor = iris::MeshNode::create();
         floor->setName("sun floor");
-        floor->setMesh(":assets/models/cube.obj");
+        floor->setMesh(previewmesh::load(":assets/models/cube.obj"));
         floor->setMaterial(floorMat);
         floor->setLocalScale(iris::Vec3(8.0f, 0.2f, 8.0f));
         floor->setLocalPos(iris::Vec3(0, -1.1f, 0));
@@ -2392,10 +2394,12 @@ int main(int argc, char **argv)
     // scene of 64 spheres was 64 identical parses AND 64 identical v2 uploads
     // (measured through the app: 73 engine meshes for 68 scene nodes; 10 after).
     //
-    // Mesh::loadMesh caches its parse now (document.mesh_cache), which is only
-    // worth anything if this side really collapses. Both halves are asserted
-    // here: the document hands out one MeshPtr for one path, and the engine
-    // builds one mesh for it however many nodes carry it.
+    // ONE ASSET, MANY NODES is the document's model (ATOM P2: the built-ins are
+    // baked library assets and PrimitiveAssets hands every node that names one the
+    // same MeshPtr; node duplication has always shared it). Both halves are
+    // asserted here: the nodes really do hold one MeshPtr, and the engine builds
+    // ONE mesh for it however many nodes carry it — which is the half that used to
+    // be false.
     {
         auto sdoc2 = iris::Scene::create();
         SceneMirror smirror2(target);
@@ -2406,21 +2410,21 @@ int main(int argc, char **argv)
         jahshaka::engine::ObjectCounts before{};
         CHECK(engine->objectCounts(before), "census: the engine reports its object counts");
 
-        iris::MeshPtr shared;
+        // ONE mesh asset, read once — what the seed cache hands out.
+        iris::MeshPtr shared = previewmesh::load(":assets/models/cube.obj");
         QVector<iris::MeshNodePtr> copies;
         for (int i = 0; i < 16; ++i) {
             auto n2 = iris::MeshNode::create();
             n2->setName(QStringLiteral("shared-%1").arg(i));
-            n2->setMesh(":assets/models/cube.obj");    // the same path, every time
+            n2->setMesh(shared);
             n2->setMaterial(iris::PbrMaterial::create());
             n2->setLocalPos(iris::Vec3(0.0f, -50.0f - i, 0.0f));   // out of frame
             sdoc2->getRootNode()->addChild(n2, false);
-            if (i == 0) shared = n2->getMesh();
             copies.append(n2);
         }
         bool allShared = !shared.isNull();
         for (const auto &n2 : copies) if (n2->getMesh() != shared) allShared = false;
-        CHECK(allShared, "document: 16 nodes naming one file hold ONE iris::Mesh");
+        CHECK(allShared, "document: 16 nodes on one mesh asset hold ONE iris::Mesh");
 
         smirror2.sync();
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();

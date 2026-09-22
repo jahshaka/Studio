@@ -4,7 +4,7 @@
 // half of the same shape, on the CREATE side and on the command paths that
 // write several rows for one user action:
 //
-//   * SceneEditService::addBuiltinPrimitive writes an asset row per primitive
+//   * SceneEditService::addPrimitive writes an asset row per primitive
 //     (Database::createAssetEntry) with no transaction — SQLite autocommits it,
 //     and an autocommit is a real transaction: journal, write, fdatasync,
 //     unlink. A script that adds 300 primitives paid that 300+ times, one at a
@@ -126,7 +126,7 @@ Measured measure(Fn fn)
     return m;
 }
 
-/// An asset row exactly as SceneEditService::addBuiltinPrimitive writes one.
+/// An asset row exactly as SceneEditService::addPrimitive writes one.
 QString makePrimitiveRow(Database &db, const QString &projectGuid, int n)
 {
     const QString guid = GUIDManager::generateGUID();

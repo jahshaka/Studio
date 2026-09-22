@@ -76,6 +76,9 @@ public:
     Q_INVOKABLE bool setCameraMode(const QString &mode);
     Q_INVOKABLE QString gizmoSpace();
     Q_INVOKABLE bool setGizmoSpace(const QString &space);
+    /// ATOM's LOD dial — a SESSION value, not a property of the world (AT-A14).
+    Q_INVOKABLE double lodBias();
+    Q_INVOKABLE double setLodBias(double bias);
     Q_INVOKABLE bool fullscreen(const QVariant &on = QVariant());
     /// The editor's bottom TRAY and its tabs (smoke S1). Window verbs: the tray
     /// is a widget, so a --script/--headless run has none.

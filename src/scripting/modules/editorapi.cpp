@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "services/selectioncost.h"
 #include "viewport/gizmomode.h"
 #include "viewport/ieditorviewport.h"
+#include "jahshaka/engine/Engine.h"
 #include "services/loadingcover.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/simulationclock.h"
@@ -355,6 +356,25 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Switches the gizmos' drag space — the toolbar's Global Space / Local Space buttons, "
           "as a verb, and the buttons follow the switch. Applies to all three gizmos at once "
           "(they have never had separate spaces). Unknown values are refused.",
+          Needs::Engine },
+        { "lodBias", "editor.lodBias() -> number",
+          "ATOM's LOD dial, as this SESSION has it. 1 is the reference: a mesh draws a "
+          "coarser baked level once that level's MEASURED deviation from the authored "
+          "geometry reaches the view's pixel budget at the live lens and viewport height. "
+          "0 means every object is pinned at its finest level.",
+          Needs::Engine },
+        { "setLodBias", "editor.setLodBias(f) -> number",
+          "Sets ATOM's LOD dial for this session and returns the applied value. 1 is the "
+          "reference; larger takes coarser levels sooner (2 halves every switch distance); "
+          "0 PINS every object at its finest level, which is both how a test asserts one "
+          "level at a time and how a person turns automatic LOD off. Applies to the live "
+          "scene immediately — every mesh's switch thresholds are re-derived in place, with "
+          "no rebuild — and meshes with no baked chain (skinned, too small to simplify, "
+          "opened without a bake) are unaffected by any value. "
+          "A SESSION DIAL AND NOT A SCENE VALUE (ATOM inventory row AT-A14): it is a "
+          "measurement and debugging knob, it is never written to a project, and binding a "
+          "new scene returns it to 1. It was `world.setLodBias` until ATOM-BAKE-1, backed by "
+          "a document field that no reader or writer on disk ever touched.",
           Needs::Engine },
         { "fullscreen", "editor.fullscreen(on?) -> bool",
           "IMMERSIVE FULLSCREEN — the F11 state (EDITOR_SHORTCUTS_SPEC §3): the window goes "
@@ -1913,6 +1933,38 @@ bool EditorApi::setGizmoSpace(const QString &space)
     else if (wanted == QLatin1String("local")) host.viewport->setGizmoTransformToLocal();
     else host.viewport->setGizmoTransformToGlobal();
     return true;
+}
+
+// ATOM's LOD dial (AT-A14). THE ENGINE SCENE IS WHERE IT LIVES, because the
+// engine scene is where it is SPENT: `Scene::setLodBias` re-derives every mesh's
+// switch thresholds in place, and the Items hold a pointer to the array it
+// rewrites, so one call moves every instance with no rebuild. There is no
+// document field behind this and no mirror push in front of it — that shape was
+// the defect (a measurement knob in the document, with no reader or writer on
+// disk in either direction).
+double EditorApi::lodBias()
+{
+    if (!requireEngine()) return 0.0;
+    jahshaka::engine::Scene *scene = host.viewport->engineScene();
+    if (!scene) return fail(QStringLiteral("editor.lodBias: no engine scene")), 0.0;
+    return double(scene->lodBias());
+}
+
+double EditorApi::setLodBias(double bias)
+{
+    if (!requireEngine()) return 0.0;
+    jahshaka::engine::Scene *scene = host.viewport->engineScene();
+    if (!scene) return fail(QStringLiteral("editor.setLodBias: no engine scene")), 0.0;
+    if (!(bias >= 0.0) || bias > 1.0e6) {
+        fail(QStringLiteral("editor.setLodBias: the bias must be between 0 (pin the finest "
+                            "level) and 1e6"));
+        return double(scene->lodBias());
+    }
+    scene->setLodBias(float(bias));
+    // Step a frame so a script that sets the dial and then reads
+    // app.renderStats() sees the level it asked for.
+    host.viewport->renderFrames(1);
+    return double(scene->lodBias());
 }
 
 bool EditorApi::fullscreen(const QVariant &on)

@@ -685,6 +685,19 @@ add_test(NAME gi.chain_converge COMMAND test_gi_chain_converge
 set_tests_properties(gi.chain_converge PROPERTIES
     TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# gi.chain_converge_target — THE SAME BINARY, THE CORRECT CLAIM (PHOTON phase A,
+# A1 section 0; lane FENCE-1): after ONE at-rest sweep the picture is within 0.5
+# codes of the picture after TEN — the RESIDUAL, not the constant kAtRestSweeps.
+#
+# LABEL `photon-target`: it runs in every scoped selection and prints its value,
+# and it does not decide a gate. THE LANE THAT LANDS PHOTON P4's ONE-WRITER +
+# SWEEPS-3 DELETES `photon-target` FROM THIS ROW and deletes the
+# `restSweeps >= 3` assertion from gi.chain_converge above.
+add_test(NAME gi.chain_converge_target COMMAND test_gi_chain_converge --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.chain_converge_target PROPERTIES
+    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL ON)
+
 # THE SAME SCENE VOXELISES TO THE SAME PICTURE (ogre-patches 0061 and 0062): a
 # cascade SCROLLED to a place renders what a cascade BUILT at it renders, two
 # builds of one scene agree, and the attach order does not decide the answer.
@@ -919,6 +932,55 @@ add_test(NAME gi.chain_face COMMAND test_gi_chain_face
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL TRUE)
 
+# gi.chain_face_target — THE SAME BINARY, THE CORRECT BAR (PHOTON phase A, A1
+# §0; lane FENCE-1). Every face ratio = 1.0 +- 0.05 under a real sky AND under a
+# flat ambient: a face is a boundary in a data structure, not in the world.
+# Today 0.859-1.234 (worst |ratio-1| 0.234) — see the binary's header for the
+# three mechanisms and the derivation of the bar.
+#
+# LABEL `photon-target`: it RUNS in every scoped selection and PRINTS its value,
+# and it does NOT decide a gate (scripts/gate-scope.py splits the label out; the
+# MERGE and PUSH tiers -LE it). THE LANE THAT LANDS PHOTON P4 (ONE-READER +
+# ONE-ENV + F10-TABLES) DELETES `photon-target` FROM THIS ROW and deletes the
+# bracket from gi.chain_face above — that deletion IS the part's acceptance.
+add_test(NAME gi.chain_face_target COMMAND test_gi_chain_face --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.chain_face_target PROPERTIES
+    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
+
+# gi.field_follows_energy — `gi.field_follows`' EXISTENCE BAR, REPLACED BY ENERGY
+# (PHOTON phase A, A1 section 1.2; lane FENCE-1). A sunlit matte floor lights a
+# perpendicular matte wall; the wall's radiance at three heights against the
+# finite-rectangle transfer integral, with HlmsPbs BRDF_Default's own direct
+# diffuse (MEASURE-1a's pbsDirect, the 1/1.51 energyFactor) as the source and
+# Lambert's polygon formula as the kernel — both in double precision, and the
+# closed form cross-checked against a 512x512 quadrature of its own definition
+# inside the suite.
+#
+# ITS OWN BINARY AND PROCESS, like every GI suite: the voxel lighting and the
+# irradiance field bind process-wide to HlmsPbs, so this fixture cannot share a
+# process with gi.field_follows' room.
+#
+# LABEL `photon-target`. GREEN AFTER: VOXEL-CLIP-1 (phase A) for the source the
+# voxels hold and the field's integral in PHOTON P4 for the transport. The lane
+# that lands them DELETES `photon-target` from this row.
+add_executable(test_gi_field_energy test_gi_field_energy.cpp)
+set_target_properties(test_gi_field_energy PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_energy PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_energy PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_energy JahshakaEngineMedia)
+add_test(NAME gi.field_follows_energy COMMAND test_gi_field_energy
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_follows_energy PROPERTIES
+    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
+
 # gi.boot_textures — THE ARM WAITS FOR THE ALBEDO IT IS ABOUT TO VOXELISE
 # (BOOTVOX-1). The voxeliser reads a material's albedo and emissive maps, and a
 # scene that binds one and pushes its GI in the same frame used to voxelise
@@ -1014,6 +1076,24 @@ target_compile_definitions(sc1b_measure PRIVATE
 target_link_libraries(sc1b_measure PRIVATE JahshakaEngine)
 add_dependencies(sc1b_measure JahshakaEngineMedia)
 
+# DIRECT-DIFFUSE-1's MEASUREMENT ARM (lane MEASURE-1a) — a TOOL, not a suite,
+# for the same reason: the mechanism behind "the direct term renders 66-69 % of
+# albedo*P/pi" is a number, and the number is taken by code that is read. It
+# states HlmsPbs's own closed form before every measurement and bisects the
+# light power so an 8-bit undithered picture still pins a ratio to ~0.1 %.
+add_executable(direct_diffuse_measure EXCLUDE_FROM_ALL direct_diffuse_measure.cpp)
+set_target_properties(direct_diffuse_measure PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(direct_diffuse_measure PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(direct_diffuse_measure PRIVATE JahshakaEngine)
+add_dependencies(direct_diffuse_measure JahshakaEngineMedia)
+
 # ---------------------------------------------------------------------------
 # gi.gather — THE SCREEN-PROBE GATHER, phase 1
 # (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 1).
@@ -1096,3 +1176,29 @@ add_test(NAME gi.gather_trace COMMAND test_gi_gather_reference
 set_tests_properties(gi.gather_trace PROPERTIES
                      TIMEOUT 600 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_TRACE=1")
+
+# gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L (PHOTON
+# phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane VOXEL-CLIP-1,
+# ogre-patch 0087). The emissive VOXEL store was RGBA8_UNORM, so every emitter
+# above 1.0 entered the injection, the bounces, the field, the cones and the ray
+# hits clipped — read in the bytes (`giVoxelStats().peakEmissive`), because a
+# clipped emitter draws a picture that is merely dimmer.
+#
+# RUN_SERIAL like every cascade suite: it drives a full chain and downloads
+# whole volumes.
+add_executable(test_gi_voxel_emissive test_gi_voxel_emissive.cpp)
+set_target_properties(test_gi_voxel_emissive PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_emissive PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_emissive PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_emissive JahshakaEngineMedia)
+add_test(NAME gi.voxel_emissive COMMAND test_gi_voxel_emissive
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_emissive PROPERTIES
+    TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)

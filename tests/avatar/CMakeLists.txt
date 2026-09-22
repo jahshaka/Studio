@@ -62,6 +62,7 @@ set(AVATAR_LOAD_SOURCES
     # IMPORT-1: the preview parses the character with the ASSET's import
     # recipe, which MeshBakeStore resolves from the catalog.
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarsockets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
@@ -273,6 +274,7 @@ add_executable(test_avatar_assets test_avatar_assets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp   # BUNDLE-P4: the companion is minted through the bundle writer
     ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp

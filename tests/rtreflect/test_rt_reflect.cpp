@@ -145,14 +145,83 @@ static float measure(Engine *e, View *v, const char *what, int frames, Image *ou
 /// answered) can make the number flattering.
 static int costMain(Engine *e, const char *plugin, const char *media);
 
-int main()
+// ---------------------------------------------------------------------------
+/// THE LAMP ARM — A RAY-TRACED MIRROR IS A RADIOMETER (PHOTON phase A, A1
+/// section 1.2; lane FENCE-1). `--lamp` and `--lamp --target`, two ctest rows
+/// over one fixture in this one binary.
+///
+/// WHAT THE SUITE'S MAIN ARM SAYS TODAY, AND WHY IT IS NOT ENOUGH. Case 2 above
+/// asserts `red > redPlain + 0.02` — the traced reflection is UNMISTAKABLE
+/// rather than a tint. That is a presence test, and it has been re-anchored
+/// three times (0.05 -> 0.03 by DRAG-1's units fix, 0.03 -> 0.02 by PHOTON-M2's
+/// patch 0077) because both of its terms move whenever the units move. A
+/// presence test cannot see a units error at all: a mirror showing a third of
+/// the radiance it should still shows red.
+///
+/// THE PHYSICS, and it is the simplest statement in this file. RADIANCE IS
+/// INVARIANT ALONG A RAY. A perfect mirror (metalness 1, albedo 1 -> F0 = 1,
+/// roughness 0) redirects a ray without attenuating it, so the pixel where the
+/// mirror shows an emitter of radiance L must read EXACTLY L. There is no form
+/// factor, no cosine, no distance falloff and no albedo in that sentence — which
+/// is what makes it the cleanest possible probe of the voxel radiance's UNITS.
+///
+///     mirror pixel = L,  within +-10 %.
+///
+/// TWO ROWS, because the answer is different on the two sides of 1.0:
+///
+///   gi.rt_reflect_lamp        ORDINARY, and it gates: L = 0.9, inside the
+///                             voxel material store's old UNORM range, read
+///                             through a PERFECT mirror: pixel = L.
+///   gi.rt_reflect_lamp_clip   L = 3.0, which used to be clipped to 1.0 by the
+///                             EMISSIVE VOXEL STORE (PFG_RGBA8_UNORM) on its way
+///                             into the cache — ogre-patch 0087 makes that store
+///                             RGBA16F and the label came off with it
+///                             (VOXEL-CLIP-1, 2026-09-22).
+///                             ITS FORM HAD TO CHANGE TO BE ANSWERABLE, and the
+///                             reason is the INSTRUMENT: an offscreen view's
+///                             render target is PFG_RGBA8_UNORM
+///                             (OgreView::createRtt), so `readPixels` cannot
+///                             return anything above 1.0 and a PERFECT mirror
+///                             showing L = 3.0 reads exactly 1.0000 however much
+///                             radiance the chain carries — measured identical
+///                             before and after 0087, with the store proved by
+///                             the same process's readback to hold 3.0000. So
+///                             this row reads the same pixel through a GREY
+///                             mirror at L = 3.0 and at a reference L = 0.8 and
+///                             asserts the RATIO: 3.75 when the store carries
+///                             radiance, 1.25 when it clips at 1.0. The mirror's
+///                             reflectance and the grade cancel.
+///
+/// A CUBE, NOT A SPHERE, and the reason is the measurement rather than the
+/// drawing. The design named a spherical emitter; a sphere's surface is at every
+/// angle to the voxel grid, so its cells are partially covered and the store's
+/// coverage division leaves a residual — exactly the effect case 2's fractional
+/// bar exists to tolerate. An AXIS-ALIGNED slab several cells thick fills whole
+/// cells, so the coverage term is 1 and the only thing left in the number is the
+/// UNITS, which is what this arm is for. The residual is not being avoided: it
+/// is `gi.rt_reflect`'s own subject and F1-HITRES's.
+///
+/// THE CURRENCY IS MEASURED, not assumed: an emissive ramp of four known
+/// radiances is read where the pixel mapping says it is, and linear-vs-sRGB is
+/// decided from it. (`PostFxDesc::hdr` is false here, so the scene renders
+/// straight into the offscreen RTT at PFG_RGBA8_UNORM — linear and un-dithered.)
+static int lampMain(Engine *e, bool target);
+
+int main(int argc, char **argv)
 {
+    bool wantLamp = false, wantLampTarget = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--lamp") == 0) wantLamp = true;
+        if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
+    }
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-rt-reflect-norays-ogre.log"
-                                                  : "test-rt-reflect-ogre.log";
+    cfg.logFile = wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
+                                             : "test-rt-reflect-lamp-ogre.log")
+                  : getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-rt-reflect-norays-ogre.log"
+                                                    : "test-rt-reflect-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -160,6 +229,7 @@ int main()
 
     if (getenv("JAH_RT_REFLECT_COST"))
         return costMain(e, JAHSHAKA_TEST_PLUGIN_DIR, JAHSHAKA_TEST_MEDIA_DIR);
+    if (wantLamp) return lampMain(e, wantLampTarget);
 
     View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtreflect");
@@ -203,11 +273,25 @@ int main()
     // THE CUBE BEHIND THE CAMERA. Emissive, so the voxels hold a radiance that
     // owes nothing to a light's direction — the measurement is about the
     // reflection, not about the shading of the thing reflected.
+    //
+    // ITS RADIANCE IS 0.9 AND THAT IS THE INSTRUMENT'S LIMIT, NOT A TASTE
+    // (VOXEL-CLIP-1, 2026-09-22, measured). It used to be 4.0, which the emissive
+    // voxel store clipped to 1.0 (PFG_RGBA8_UNORM) — and ogre-patch 0087 makes
+    // that store a float, so the cube's radiance now reaches the cache whole. An
+    // offscreen view's readback is PFG_RGBA8_UNORM (OgreView::createRtt), so the
+    // RAYS arm of case 2 below is pinned at its ceiling the moment the reflected
+    // radiance passes 1.0 while the MARCH control keeps climbing: measured at
+    // radiance 4.0, rays 0.0840 against a control of 0.0720, a gap of 0.012 under
+    // a 0.02 bar — the presence test lost its headroom to the readback, with the
+    // engine carrying MORE light than before, not less. At radiance 1.0 the same
+    // arms read 0.0840 / 0.0535, a gap of 0.031. An emitter inside the readback's
+    // range is what makes case 2 a measurement; an HDR offscreen readback would
+    // let it go back above 1.0 and is worth having for its own sake.
     const NodeId cube = s->createNode();
     {
         PbrParams p;
         p.albedo = Colour(0.05f, 0.05f, 0.05f);
-        p.emissive = Colour(4.0f, 0.0f, 0.0f);
+        p.emissive = Colour(0.9f, 0.0f, 0.0f);
         p.roughness = 0.6f;
         const MaterialId mat = s->createPbrMaterial(p);
         const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
@@ -1025,5 +1109,294 @@ static int costMain(Engine *e, const char *, const char *)
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// THE LAMP ARM's implementation (see its declaration above for the physics).
+// ---------------------------------------------------------------------------
+namespace {
+
+/// The 8-bit picture's transfer, decided by MEASUREMENT.
+enum class LampTransfer { Linear, Srgb };
+double lampDecode(double v, LampTransfer t)
+{
+    if (t == LampTransfer::Linear) return v;
+    return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+}
+
+void lampBlockMean(const Image &img, int cx, int cy, int half, double out[3])
+{
+    double s[3] = { 0, 0, 0 };
+    int n = 0;
+    for (int y = cy - half; y <= cy + half; ++y)
+        for (int x = cx - half; x <= cx + half; ++x) {
+            if (x < 0 || y < 0 || x >= int(img.width) || y >= int(img.height)) continue;
+            const Colour c = img.at(unsigned(x), unsigned(y));
+            s[0] += c.r; s[1] += c.g; s[2] += c.b;
+            ++n;
+        }
+    for (int k = 0; k < 3; ++k) out[k] = n ? s[k] / n : 0.0;
+}
+
+}   // namespace
+
+static int lampMain(Engine *e, bool target)
+{
+    /// L = 0.9 was inside the emissive voxel store's old UNORM range; L = 3.0 was
+    /// not, and that is the clip row's whole content (ogre-patch 0087).
+    const double kL = target ? 3.0 : 0.9;
+    std::printf("== gi.rt_reflect_lamp%s: %s (L = %.2f)\n", target ? "_clip" : "",
+                target ? "THE CLIP ROW -- an emitter authored ABOVE the emissive voxel store's "
+                         "old 1.0 ceiling, measured as a RATIO against a reference below it"
+                       : "the ORDINARY row -- a perfect mirror reads the emitter's own radiance",
+                kL);
+
+    View *view = e->createOffscreenView("rtlamp", kSize, kSize, Colour(0, 0, 0));
+    Scene *s = e->createScene("rtlamp");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: this build/machine has no ray queries — the lamp arm is about the ray "
+                    "tier's units and skips cleanly\n");
+        return 0;
+    }
+
+    // NOTHING BUT THE EMITTER EMITS: no ambient, no sky, no light. Whatever the
+    // mirror shows came off the emitter.
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+
+    // THE MIRROR. metalness 1 with a white albedo is F0 = 1 at roughness 0: a
+    // ray is redirected and not attenuated, which is the entire measurement.
+    //
+    // ...EXCEPT IN THE TARGET ROW, AND THE REASON IS THE INSTRUMENT, NOT THE
+    // PHYSICS (VOXEL-CLIP-1, 2026-09-22, measured). An offscreen view's render
+    // target is `PFG_RGBA8_UNORM` (OgreView::createRtt), so `readPixels` cannot
+    // return a value above 1.0 AT ALL: with a perfect mirror and L = 3.0 the
+    // centre pixel reads exactly 1.0000 whatever the voxels hold — before patch
+    // 0087 and after it, with the emissive store proved to hold 3.0000 in the
+    // same process (the VOXEL CACHE line below). The old form of this row could
+    // therefore never go green, and its 0.333x was reading the readback's
+    // ceiling, not the voxel store's.
+    // SO THE TARGET ROW USES A GREY MIRROR of reflectance kTargetMirrorF0 and
+    // asserts LINEARITY across the old ceiling instead: the same pixel at a
+    // reference radiance below 1.0 and at L = 3.0 must be in the ratio of the
+    // two radiances. The mirror's exact reflectance and the whole grade CANCEL in
+    // that ratio, which is what makes it a statement about the store's range and
+    // nothing else — a clip at 1.0 reads 1.25 where the physics says 3.75.
+    static const float kTargetMirrorF0 = 0.25f;
+    PbrParams mirrorParams;
+    mirrorParams.albedo = target ? Colour(kTargetMirrorF0, kTargetMirrorF0, kTargetMirrorF0)
+                                 : Colour(1.0f, 1.0f, 1.0f);
+    mirrorParams.metalness = 1.0f;
+    mirrorParams.roughness = 0.0f;
+    const MaterialId mirrorMat = s->createPbrMaterial(mirrorParams);
+    const NodeId mirror = s->createNode();
+    CHECK(mirror && mirrorMat && s->attachMesh(mirror, cube, mirrorMat),
+          target ? "the grey mirror exists (metalness 1, albedo 0.25, roughness 0)"
+                 : "the perfect mirror exists (metalness 1, albedo 1 -> F0 = 1, roughness 0)");
+    enginetest::setNodeScale(s, mirror, Vec3(14.0f, 9.0f, 0.3f));
+    enginetest::setNodePosition(s, mirror, Vec3(0.0f, 2.0f, 5.0f));
+
+    // THE EMITTER, BEHIND THE CAMERA. Axis-aligned and 4 m thick, so it fills
+    // whole voxel cells and the store's coverage division is exactly 1 (see the
+    // declaration: a sphere would put the coverage residual into the number).
+    PbrParams lampParams;
+    lampParams.albedo = Colour(0.0f, 0.0f, 0.0f);       // it must not bounce anything back
+    lampParams.emissive = Colour(float(kL), float(kL), float(kL));
+    lampParams.roughness = 1.0f;
+    lampParams.workflow = PbrParams::Workflow::Specular;
+    lampParams.ior = 1.0f;
+    lampParams.specularColour = Colour(0.0f, 0.0f, 0.0f);
+    const MaterialId lampMat = s->createPbrMaterial(lampParams);
+    const NodeId lamp = s->createNode();
+    CHECK(lamp && lampMat && s->attachMesh(lamp, cube, lampMat), "the emitter exists");
+    enginetest::setNodeScale(s, lamp, Vec3(8.0f, 8.0f, 4.0f));
+    enginetest::setNodePosition(s, lamp, Vec3(0.0f, 2.0f, -12.0f));
+
+    // THE CALIBRATION CARD. ONE emissive slab a metre in front of the camera,
+    // large enough to fill the frame, read at the CENTRE pixel at four known
+    // radiances in turn. A ramp of four patches side by side was tried first and
+    // is the wrong instrument here: this fixture uses the perspective helper
+    // camera, so a patch's pixel has to be either projected by hand (one more
+    // thing that can be wrong) or SEARCHED for — and a search for "the brightest
+    // pixel in this column band" finds the mirror's own reflection of the
+    // emitter, which is exactly what it did (it read 0.4314 for a patch of
+    // radiance 0.05 and chose sRGB, decoding a correct 0.8980 down to 0.7835).
+    // A full-frame card cannot be mislocated: the centre pixel is the card.
+    const double kRamp[4] = { 0.05, 0.12, 0.30, 0.60 };
+    NodeId card = 0;
+    MaterialId cardMat = 0;
+    {
+        PbrParams p;
+        p.albedo = Colour(0.0f, 0.0f, 0.0f);
+        p.emissive = Colour(float(kRamp[0]), float(kRamp[0]), float(kRamp[0]));
+        p.roughness = 1.0f;
+        cardMat = s->createPbrMaterial(p);
+        card = s->createNode();
+        if (!card || !cardMat || !s->attachMesh(card, cube, cardMat)) {
+            std::printf("FAIL: calibration card\n");
+            ++failures;
+        }
+        enginetest::setNodeScale(s, card, Vec3(8.0f, 8.0f, 0.1f));
+        enginetest::setNodePosition(s, card, Vec3(0.0f, 2.0f, -5.0f));
+    }
+
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.testBoundsMin = Vec3(-14.0f, -6.0f, -16.0f);
+    gi.testBoundsMax = Vec3(14.0f, 12.0f, 7.0f);
+    CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the whole fixture");
+
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;                  // Epic: full-resolution rays, the tier under test
+    fx.hdr = false;              // the currency: linear RGBA8, no dither
+    view->setPostFx(fx);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
+    render(e, 48);
+
+    // ---- the transfer, measured -------------------------------------------
+    LampTransfer transfer = LampTransfer::Linear;
+    {
+        double linErr = 0.0, srgbErr = 0.0;
+        std::printf("   THE TRANSFER, from one full-frame emissive card at four radiances:\n");
+        for (int i = 0; i < 4; ++i) {
+            PbrParams p;
+            p.albedo = Colour(0.0f, 0.0f, 0.0f);
+            p.emissive = Colour(float(kRamp[i]), float(kRamp[i]), float(kRamp[i]));
+            p.roughness = 1.0f;
+            if (!s->setPbrMaterial(cardMat, p)) { std::printf("FAIL: card radiance\n"); ++failures; }
+            render(e, 8);
+            Image img;
+            view->readPixels(img);
+            double m[3];
+            lampBlockMean(img, int(kSize) / 2, int(kSize) / 2, 10, m);
+            linErr += std::fabs(lampDecode(m[0], LampTransfer::Linear) - kRamp[i]) / kRamp[i];
+            srgbErr += std::fabs(lampDecode(m[0], LampTransfer::Srgb) - kRamp[i]) / kRamp[i];
+            std::printf("     radiance %.2f -> pixel %.4f (as linear %.4f, as sRGB %.4f)\n",
+                        kRamp[i], m[0], lampDecode(m[0], LampTransfer::Linear),
+                        lampDecode(m[0], LampTransfer::Srgb));
+        }
+        linErr /= 4.0; srgbErr /= 4.0;
+        transfer = linErr < srgbErr ? LampTransfer::Linear : LampTransfer::Srgb;
+        std::printf("     mean relative error: linear %.1f %%, sRGB %.1f %%\n",
+                    100.0 * linErr, 100.0 * srgbErr);
+        CHECK_MSG(std::min(linErr, srgbErr) < 0.10,
+                  "THE PICTURE'S TRANSFER IS IDENTIFIED (%s, mean error %.1f %%) — the currency "
+                  "the number below is stated in",
+                  transfer == LampTransfer::Linear ? "linear" : "sRGB",
+                  100.0 * std::min(linErr, srgbErr));
+    }
+
+    // ---- the card goes, and the mirror is measured -------------------------
+    // It is an emitter inside the voxel volume, so it must leave before the
+    // measurement and the volume must be re-solved without it.
+    if (card) s->removeNode(card);
+    s->refreshGlobalIllumination();
+    render(e, 64);
+
+    const RayQueryStatus rq = s->rayQueryStatus();
+    std::printf("   rayQuery: available=%d enabled=%d reflect=%d rays=%d instances=%d\n",
+                int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays, rq.instances);
+    CHECK(rq.reflect, "the tier reports that this scene's views are tracing reflections");
+
+    // WHAT THE VOXELS HOLD, which is where the clip happens. Printed for both
+    // rows, because it is the mechanism the target row is a witness to.
+    {
+        const GiVoxelStats vs = s->giVoxelStats(0);
+        std::printf("   THE VOXEL CACHE (%s %dx%dx%d, multiplier %.4f): peak %.4f, peak direct "
+                    "%.4f over %lld lit voxels — the emitter's authored radiance is %.2f\n",
+                    vs.format.c_str(), vs.width, vs.height, vs.depth, double(vs.multiplier),
+                    double(vs.peak), double(vs.peakDirect), (long long)vs.voxelsLit, kL);
+    }
+
+    // The mirror's CENTRE: the camera is on the axis and so is the emitter, so
+    // the centre pixel's ray leaves the mirror straight back past the camera and
+    // into the emitter's front face.
+    Image img;
+    if (!view->readPixels(img)) { std::printf("FAIL: readPixels\n"); return 1; }
+    double m[3];
+    lampBlockMean(img, int(kSize) / 2, int(kSize) / 2, 10, m);
+    const double measured = lampDecode(m[0], transfer);
+    const double ratio = measured / kL;
+    if (!target)
+        std::printf("   THE MIRROR: centre pixel %.4f -> radiance %.4f against the emitter's L = "
+                    "%.2f -> %.3fx\n", m[0], measured, kL, ratio);
+    else
+        std::printf("   THE MIRROR: centre pixel %.4f at L = %.2f through a mirror of reflectance "
+                    "%.2f (the readback is RGBA8: a perfect mirror would saturate here)\n",
+                    m[0], kL, double(kTargetMirrorF0));
+
+    // ...and the same pixel with the rays OFF, printed as the control: without
+    // it "the mirror reads L" could be satisfied by anything else in the shot.
+    e->setRayTracing(false);
+    render(e, 64);
+    Image off;
+    view->readPixels(off);
+    double mo[3];
+    lampBlockMean(off, int(kSize) / 2, int(kSize) / 2, 10, mo);
+    e->setRayTracing(true);
+    render(e, 16);
+    std::printf("   (rays off, same pixel: %.4f -> radiance %.4f — the march has nothing behind "
+                "the camera to show)\n", mo[0], lampDecode(mo[0], transfer));
+
+    if (!target) {
+        const double err = std::fabs(ratio - 1.0);
+        std::printf("target: %.4f (bar 0.1000) RADIANCE IS INVARIANT ALONG A RAY: a perfect "
+                    "mirror showing an emitter of radiance %.2f reads %.2f%s\n", err, kL, kL,
+                    err <= 0.10 ? " -- MET" : "");
+        CHECK_MSG(err <= 0.10,
+                  "RADIANCE IS INVARIANT ALONG A RAY: the mirror reads %.4f against the "
+                  "emitter's L = %.2f (%.3fx, bar 0.9-1.1x)", measured, kL, ratio);
+    } else {
+        // ---- THE TARGET ROW: LINEARITY ACROSS THE OLD 1.0 CEILING ----------
+        // The same pixel, the same pose, the same grey mirror, at a REFERENCE
+        // radiance below the old ceiling. The mirror's reflectance, the DFG term
+        // and the whole grade are identical in both readings and cancel exactly
+        // in the ratio, so what is left is the only question worth asking: does
+        // the chain carry radiance ABOVE 1.0 proportionally, or does it saturate?
+        //   correct: pixel(3.0) / pixel(0.8) = 3.75
+        //   a store clipped at 1.0: 1.0 / 0.8 = 1.25
+        // (Measured before ogre-patch 0087: 1.25. After: 3.75.)
+        const double kRef = 0.8;
+        PbrParams refLamp = lampParams;
+        refLamp.emissive = Colour(float(kRef), float(kRef), float(kRef));
+        CHECK(s->setPbrMaterial(lampMat, refLamp), "the emitter is re-authored at the reference "
+                                                  "radiance");
+        s->refreshGlobalIllumination();
+        render(e, 64);
+        Image refImg;
+        if (!view->readPixels(refImg)) { std::printf("FAIL: readPixels (reference)\n"); return 1; }
+        double mr[3];
+        lampBlockMean(refImg, int(kSize) / 2, int(kSize) / 2, 10, mr);
+        const double refPix = lampDecode(mr[0], transfer);
+        std::printf("   THE REFERENCE: the same pixel at L = %.2f reads %.4f (implied mirror "
+                    "reflectance %.3f)\n", kRef, refPix, refPix / kRef);
+        {
+            const GiVoxelStats vs = s->giVoxelStats(0);
+            std::printf("   the voxel cache at the reference: emissive store %s peak %.4f, lit "
+                        "peak %.4f\n", vs.emissiveFormat.c_str(), double(vs.peakEmissive),
+                        double(vs.peak));
+        }
+        const double want = kL / kRef;
+        const double got = refPix > 1e-6 ? measured / refPix : 0.0;
+        const double err = std::fabs(got / want - 1.0);
+        std::printf("target: %.4f (bar 0.1000) RADIANCE IS INVARIANT ALONG A RAY AND THE STORE "
+                    "HAS NO CEILING AT 1.0: the mirror's pixel at L = %.2f over the same pixel at "
+                    "L = %.2f reads %.3f, and must read %.3f%s\n", err, kL, kRef, got, want,
+                    err <= 0.10 ? " -- MET" : "");
+        CHECK_MSG(err <= 0.10,
+                  "THE EMISSIVE STORE CARRIES RADIANCE ABOVE 1.0: %.4f / %.4f = %.3fx against "
+                  "the authored %.2f / %.2f = %.3fx (bar 10 %%; a store clipped at 1.0 reads "
+                  "%.3fx)", measured, refPix, got, kL, kRef, want, 1.0 / kRef);
+    }
+
+    std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
 }

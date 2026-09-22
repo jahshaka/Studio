@@ -17,11 +17,22 @@ For more information see the LICENSE file
 QVector<VerbInfo> PerfApi::verbs() const
 {
     return {
-        { "capture", "perf.capture({seconds, label, out, maxBytes, trace}?) -> {started, path, seconds}",
-          "Records the NEXT `seconds` of the render loop into a capture bundle — the monitor's "
-          "whole point, and what Ctrl+F4 does. FORWARD ONLY: nothing is recorded before this call, "
-          "there is no history to look back at, and the monitor is completely off until it. "
-          "`seconds` defaults to the Preferences > Viewport capture length (20 s); `label` names "
+        { "capture", "perf.capture({frames, seconds, label, out, maxBytes, trace}?) -> "
+                     "{started, path, frames, seconds}",
+          "Records the NEXT `frames` frames — or the next `seconds` — of the render loop into a "
+          "capture bundle: the monitor's whole point, and what Ctrl+F4 does. FORWARD ONLY: nothing "
+          "is recorded before this call, there is no history to look back at, and the monitor is "
+          "completely off until it. "
+          "`frames` IS THE WINDOW A SCRIPT WANTS, and it counts frames WHOEVER draws them — the "
+          "driver's tick or a scripted editor.frame(). Use it for every measurement: under "
+          "--script the render driver skips every tick by design (ScriptRunPolicy::Off), so a "
+          "wall-clock window measures a clock against a loop with no driver frames in it — a "
+          "script that steps nothing records ZERO frames and closes itself, and a script that "
+          "does step frames is cut off mid-loop when the seconds run out (measured: a 1 s window "
+          "over 300 stepped frames wrote 88). A frame-counted bundle holds EXACTLY that many "
+          "records and arms no timer at all. "
+          "`seconds` is the INTERACTIVE window (Ctrl+F4, the owner watching a live loop) and "
+          "defaults to the Preferences > Viewport capture length (20 s); `label` names "
           "the bundle directory (the open scene's name when omitted); `out` writes the bundle "
           "somewhere other than the default root (~/Developer/spikes/perf/<date>-<time>-<scene>); "
           "`maxBytes` caps its size (192 MB by default, and whatever the cap cut is reported in "
@@ -45,9 +56,11 @@ QVector<VerbInfo> PerfApi::verbs() const
           "would. Answers {stopped:false} when nothing is running — that is an answer, not an "
           "error. `path` names the bundle directory that was just written.",
           Needs::Engine },
-        { "status", "perf.status() -> {phase, recording, seconds, remainingMs, bundle, lastBundle, "
-                    "frames, events, root, toast, engine}",
-          "What the monitor is doing. `phase` is idle | recording | writing; `bundle` is the "
+        { "status", "perf.status() -> {phase, recording, seconds, plannedFrames, remainingFrames, "
+                    "remainingMs, bundle, lastBundle, frames, events, root, toast, engine}",
+          "What the monitor is doing. `phase` is idle | recording | writing. A frame-counted "
+          "capture reports `plannedFrames` and `remainingFrames` and carries NO `remainingMs` (it "
+          "arms no timer); a timed one is the other way round. `bundle` is the "
           "directory being written now and `lastBundle` the one written last, which is what an "
           "agent needs to go and read it. `engine` carries the engine's own MonitorStatus, "
           "including the four assertions behind 'zero cost when off' (attachedListeners, "
@@ -69,6 +82,11 @@ QVariantMap PerfApi::capture(const QVariantMap &options)
 {
     QVariantMap out;
     FrameMonitor::Request request;
+    // A NEGATIVE OR FRACTIONAL FRAME COUNT IS ZERO, not a wrapped unsigned:
+    // `frames: -1` must fall back to the timed window rather than ask for
+    // eighteen quintillion records.
+    const double wantFrames = options.value(QStringLiteral("frames"), 0.0).toDouble();
+    request.frames = wantFrames >= 1.0 ? static_cast<unsigned long long>(wantFrames) : 0ull;
     request.seconds = options.value(QStringLiteral("seconds"), 0.0).toDouble();
     request.label = options.value(QStringLiteral("label")).toString();
     // THE BUNDLE'S NAME, when the caller did not pick one: the open project,
@@ -89,9 +107,14 @@ QVariantMap PerfApi::capture(const QVariantMap &options)
         refuse(QStringLiteral("perf.capture: %1").arg(error));
         return out;
     }
+    const QVariantMap after = FrameMonitor::instance().status();
     out["started"] = true;
-    out["path"] = FrameMonitor::instance().status().value(QStringLiteral("bundle"));
-    out["seconds"] = FrameMonitor::instance().status().value(QStringLiteral("seconds"));
+    out["path"] = after.value(QStringLiteral("bundle"));
+    // BOTH WINDOWS ARE REPORTED, and the one that is not running reads 0: a
+    // caller that asked for frames must be able to see that frames is what it
+    // got, and `seconds: 20` beside it would say the opposite.
+    out["frames"] = after.value(QStringLiteral("plannedFrames"));
+    out["seconds"] = after.value(QStringLiteral("seconds"));
     return out;
 }
 

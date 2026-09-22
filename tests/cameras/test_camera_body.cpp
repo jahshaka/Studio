@@ -19,6 +19,8 @@
 // Runs with QT_QPA_PLATFORM=offscreen and a reachable DISPLAY (Vulkan).
 
 #include <QGuiApplication>
+
+#include "bridge/previewmesh.h"
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -183,7 +185,7 @@ int main(int argc, char **argv)
     // camera parked in front of it.
     auto cube = iris::MeshNode::create();
     cube->setName("subject");
-    cube->setMesh(":assets/models/cube.obj");
+    cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     {
         const float r = cube->getMeshRadius();

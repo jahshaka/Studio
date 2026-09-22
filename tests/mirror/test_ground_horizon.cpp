@@ -28,6 +28,8 @@
 // asserted here: a deleted floor must still take its horizon's material with
 // it, which is what the branch that survives exists for.
 #include <QGuiApplication>
+
+#include "bridge/previewmesh.h"
 #include <QColor>
 #include <cstdio>
 #include <cmath>
@@ -72,7 +74,7 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     auto floorNode = iris::MeshNode::create();
     floorNode->setName("Ground");
-    floorNode->setMesh(":/models/ground.obj");
+    floorNode->setMesh(previewmesh::load(":/models/ground.obj"));
     floorNode->defaultFloor = true;              // what makes it THE floor
     auto grey = iris::DefaultMaterial::create();
     grey->setDiffuseColor(QColor(200, 200, 200));
@@ -197,7 +199,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < 40; ++i) {
         auto prop = iris::MeshNode::create();
         prop->setName(QStringLiteral("Prop%1").arg(i));
-        prop->setMesh(":/models/ground.obj");
+        prop->setMesh(previewmesh::load(":/models/ground.obj"));
         prop->setMaterial(grey);
         prop->setVisible(false);          // in the entry map, out of every frame
         doc->getRootNode()->addChild(prop);
@@ -206,7 +208,7 @@ int main(int argc, char **argv)
 
     auto platform = iris::MeshNode::create();
     platform->setName("Platform");
-    platform->setMesh(":/assets/models/cube.obj");
+    platform->setMesh(previewmesh::load(":/assets/models/cube.obj"));
     platform->setMaterial(grey);
     platform->defaultFloor = true;        // the flag the setting is about
     platform->setLocalPos(iris::Vec3(0.0f, 0.0f, -6.0f));

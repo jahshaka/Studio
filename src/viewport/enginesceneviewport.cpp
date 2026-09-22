@@ -301,8 +301,8 @@ void EngineSceneViewport::pushEditorHelpers(bool helpers)
     // No selection outline for the World root (the whole scene would glow)
     // or for the built-in ground PLANE — owner ask 2026-08-31. The first
     // implementation tested `isBuiltIn`, which every Add-menu primitive
-    // carries (addBuiltinPrimitive sets it on cubes, spheres, capsules —
-    // and the sample scenes are assembled from exactly those), so every
+    // carries (SceneNodeHelper::createBasicMeshNode sets it on cubes, spheres,
+    // capsules — and the sample scenes are assembled from exactly those), so every
     // primitive silently lost its outline while selection/gizmo/panel kept
     // working (2026-09-06 sighting; cost a day of misattributed reports).
     // The exclusion is the GROUND MESH specifically, nothing wider.
@@ -2596,6 +2596,10 @@ IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
     out.directAtMax = qint64(st.directAtMax);
     out.voxels = qint64(st.voxels);
     out.voxelsAboveOne = qint64(st.voxelsAboveOne);
+    out.emissiveFormat = QString::fromStdString(st.emissiveFormat);
+    out.peakEmissive = st.peakEmissive;
+    out.emissiveAtMax = qint64(st.emissiveAtMax);
+    out.emissiveAboveOne = qint64(st.emissiveAboveOne);
     return out;
 }
 
@@ -3348,6 +3352,20 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             in.submittedTriangles = haveRs ? quint64(rs.triangles) : 0;
             in.draws = haveRs ? quint64(rs.draws) : 0;
             in.slowFramesLastMinute = ds.slowFramesLastMinute;
+            // ATOM's per-object levels, summarised for one overlay line. Read off
+            // the Items (the byte the render queue indexes with), same source the
+            // `app.renderStats().perObject` verb reports row by row.
+            if (jahshaka::engine::Scene *es =
+                    const_cast<EngineSceneViewport *>(this)->engineScene()) {
+                std::vector<jahshaka::engine::ObjectLodDesc> lods;
+                es->objectLods(lods);
+                for (const jahshaka::engine::ObjectLodDesc &d : lods) {
+                    if (d.levels <= 1) continue;      // no chain: nothing to report
+                    ++in.lodObjects;
+                    if (d.level > 0) ++in.lodCoarser;
+                    in.lodDeepest = std::max(in.lodDeepest, int(d.level));
+                }
+            }
             mStatsLines = statsrows::compose(in);
         }
         for (const QString &line : mStatsLines) d.lines.push_back(line.toStdString());

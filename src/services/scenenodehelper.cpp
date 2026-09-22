@@ -12,15 +12,20 @@ For more information see the LICENSE file
 #include "services/scenenodehelper.h"
 
 #include "data/guidmanager.h"
+#include "services/primitiveassets.h"
 
 iris::MeshNodePtr SceneNodeHelper::createBasicMeshNode(
-    const QString &meshPath,
+    const QString &meshSeed,
     const QString &meshName,
-    const QString &meshGuid
+    const QString &meshGuid,
+    Database *db
 )
 {
     iris::MeshNodePtr node = iris::MeshNode::create();
-    node->setMesh(meshPath);
+    // THE BAKED ASSET, and the seed path as the document's reference to it.
+    node->setMesh(PrimitiveAssets::mesh(meshSeed, db));
+    node->meshPath = meshSeed;
+    node->meshIndex = 0;
     node->setName(meshName);
     node->setGUID(meshGuid);
     node->setFaceCullingMode(iris::FaceCullingMode::None);

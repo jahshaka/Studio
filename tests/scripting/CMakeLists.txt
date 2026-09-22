@@ -844,6 +844,28 @@ set_tests_properties(scripting.e2e.shipped_assets PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
+# (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle:
+# the app records, the shell half reads frames.jsonl and machine.json, because
+# "exactly 60 records" is a line count and not a counter the app reports about
+# itself. JAHSHAKA_PERF_ROOT: `out` is confined to the capture root, so the
+# suite says where its own root is.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-perf_capture_frames)
+file(MAKE_DIRECTORY ${_home}/run)
+set(JAH_TEST_BUNDLE ${_home}/perf/bundle)
+configure_file(scripts/e2e_perf_capture_frames.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js @ONLY)
+add_test(NAME scripting.e2e.perf_capture_frames
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/perf_capture_frames.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js
+                 ${JAH_TEST_BUNDLE}
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.perf_capture_frames PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_home}/perf"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 # Post-release fix (2026-08-31): an imported textured GLB RENDERS — texture
 # properties resolve to store files (no raw guid reaches Texture2D::load),
 # the Mesh member carries the model bytes (scene placement has geometry),
@@ -1780,7 +1802,9 @@ set_tests_properties(scripting.e2e.screenshot_grades PROPERTIES
 
 # ATOM STAGE 1 — DETERMINISTIC LEVEL SELECTION (SPECS/NANITE_SPEC.md §7.3).
 # The import-time LOD chain, end to end: assets.meshLods reports what the bake
-# built, world.setLodBias walks the renderer through every level of it in ONE
+# built — BOTH lengths, the measured `bound` the renderer selects on and the
+# simplifier's `error` beside it — editor.setLodBias walks the renderer through
+# every level of it in ONE
 # camera pose, the triangle count falls at each step, the DRAW COUNT does not
 # move (finding B — the levels share a vertex buffer and an index pool, so they
 # share a vaoName and the render queue advances numDraws), and bias 0 returns to
@@ -1884,6 +1908,13 @@ add_script_e2e(new_scene e2e_new_scene.js)
 # "every name the drawer offers is a name the verb accepts", plus the retired
 # four refused by name, plus the Mirror Room still opening with its teapot.
 add_script_e2e(primitives e2e_primitives.js)
+
+# scripting.e2e.add_primitive — ATOM P2's acceptance for the VERB: a primitive is a
+# baked library asset, so the node it adds reports a real LOD chain in
+# `app.renderStats().perObject` (a renderer reading, so the chain is proven all the
+# way through the mirror and the upload), and a bias of 0 pins every object at its
+# finest level. Needs the engine: no --headless.
+add_script_e2e(add_primitive e2e_add_primitive.js)
 
 # scripting.e2e.material_tabs — MATERIALS_TABS_SPEC §5: SEVERAL MATERIALS OPEN
 # AT ONCE. It needs the PAGE (the five tab verbs are the page's own entry

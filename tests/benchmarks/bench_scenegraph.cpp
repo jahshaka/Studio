@@ -113,6 +113,8 @@
 // offscreen and QT_QPA_PLATFORM=offscreen, so nothing is ever shown.
 
 #include <QGuiApplication>
+
+#include "bridge/previewmesh.h"
 #include <QByteArray>
 #include <QDateTime>
 #include <QFile>
@@ -416,7 +418,7 @@ static iris::MaterialPtr gMaterial;
 
 static void loadSharedAssets()
 {
-    gCube = iris::Mesh::loadMesh(":assets/models/cube.obj");
+    gCube = previewmesh::load(":assets/models/cube.obj");
     auto mat = iris::DefaultMaterial::create();
     mat->setDiffuseColor(QColor(204, 96, 51));
     gMaterial = mat;
@@ -839,7 +841,7 @@ int main(int argc, char **argv)
         // policy. Loaded from the source tree because IrisGL's own qrc carries
         // only the 12-triangle cube.
         iris::MeshPtr dense =
-            iris::Mesh::loadMesh(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
+            previewmesh::load(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
         CHECK(!dense.isNull(), "(f) the dense fixture mesh loaded");
         if (!dense.isNull()) {
             iris::MeshBake::buildLodChain(dense);

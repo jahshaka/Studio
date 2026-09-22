@@ -109,6 +109,31 @@ assert(byTier.high.probeFaceSize === 512 && byTier.high.probeHdr === true &&
 assert(byTier.epic.bounces === 3 && byTier.high.bounces === 1,
        "Epic's one column over High is the bounce count");
 
+// ---- THE ATOM COLUMN (ATOM P3's SUB-ERROR) ---------------------------------
+//
+// The tier's GEOMETRIC TOLERANCE, in samples: the one input of the level rule
+// that is a matter of taste (the rest is the quality currency's arithmetic —
+// jahshaka/engine/Types.h). It is reported here from the engine's own
+// giQualityFacts, like every other derived column, so a tooltip and a suite read
+// one number.
+//
+// WHAT IT DOES AND DOES NOT DO TODAY, asserted so nobody has to guess: its only
+// consumer is a GPU cull request's level output. The SHIPPED draw path stays on
+// one pixel at every tier, because wiring the tier into it would move the
+// picture of every Low-tier scene — a lane with a pixel gate of its own.
+for (var tn2 in byTier)
+    assert(typeof byTier[tn2].pixelTolerance === "number" && byTier[tn2].pixelTolerance > 0,
+           tn2 + " declares a positive Atom tolerance");
+assert(Math.abs(byTier.low.pixelTolerance - 2.0) < 1e-6, "Low tolerates 2 px of deviation");
+assert(Math.abs(byTier.medium.pixelTolerance - 1.0) < 1e-6,
+       "Medium tolerates 1 px — the shipped kLodBudgetPixels, which is why it is the middle row");
+assert(Math.abs(byTier.high.pixelTolerance - 0.5) < 1e-6, "High halves it to 0.5 px");
+assert(byTier.epic.pixelTolerance === byTier.high.pixelTolerance,
+       "Epic shares High's tolerance: GiQuality is the RESOLUTION dial and Epic changes no resolution");
+assert(byTier.low.pixelTolerance > byTier.medium.pixelTolerance &&
+       byTier.medium.pixelTolerance > byTier.high.pixelTolerance,
+       "the column is monotone: a higher tier tolerates less geometric error");
+
 // ---- THE SAME TABLE'S VR COLUMN (lane V1-RIG item 4) ------------------------
 //
 // A headset renders the chain five times over for half the frame (2160x2376 per

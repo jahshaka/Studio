@@ -9,6 +9,8 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_mesh_bake test_mesh_bake.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveseed.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
     # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
@@ -54,6 +56,14 @@ target_link_libraries(test_mesh_bake PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia)
 jah_links_assimp(test_mesh_bake)
 
+# THE APP FOLDER BESIDE THE BINARY. This target links no .qrc, and the seeder
+# reads a shipped mesh from the resources OR from the app folder — the same file
+# either way (services/primitiveseed.cpp says why). A symlink is what gives this
+# binary the second route; the app itself has both.
+if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/app)
+    file(CREATE_LINK ${CMAKE_SOURCE_DIR}/app ${CMAKE_CURRENT_BINARY_DIR}/app SYMBOLIC)
+endif()
+
 set(_bake_home ${CMAKE_CURRENT_BINARY_DIR}/bake-home)
 file(MAKE_DIRECTORY ${_bake_home})
 add_test(NAME meshbake.roundtrip COMMAND test_mesh_bake
@@ -84,5 +94,81 @@ set_tests_properties(meshbake.cards PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
     TIMEOUT 180 LABELS "meshbake")
 
+# THE MEASURED LOD BOUND (ATOM P1's AT-A5) — `atom.error_bound`. Its own test name
+# because it is its own claim: for every level of every shipped mesh, an AREA-ONLY
+# sampling eight times as dense as the bake's finds no point of that level further
+# from level 0 than the length the bake stored. It also prints the bound-versus-
+# quadric ratio table, which is the evidence AT-A5 was missing.
+#
+# IT IS A REGRESSION CHECK, NOT AN INDEPENDENT DERIVATION, and the honest wording
+# matters: the bake's maximum comes from the REMOVED BASE VERTICES computed exactly,
+# so a check that walked them too would pass by construction. Area-only leaves the
+# sampling-gap margin exposed — and MEASURED, it never exceeds the stored bound on
+# any shipped mesh, landing at exactly 0.8000 (= 1/1.25, the margin) on eight of ten
+# subjects because the area maximum has already converged at the bake's own 4096
+# samples. So a pass here means "nothing in the sampler, the grid, the floor or the
+# monotonicity has regressed", which is what it is for.
+# In tests/meshbake because the subject is the BAKE and needs no engine; the name
+# is the design's (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_ASSET_DESIGN.md §1.1).
+add_test(NAME atom.error_bound COMMAND test_mesh_bake --error-bound
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.error_bound PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 600 LABELS "meshbake")
+
+# THE SIGNED DISTANCE FIELD (ATOM P2 / SUB-S5-SDF) — `meshbake.sdf`. The zero
+# crossing against level 0's real surface, the sign inside and outside, the
+# resolution's tie to the chain's honesty, the format round trip, and the refusal
+# for a skinned mesh.
+add_test(NAME meshbake.sdf COMMAND test_mesh_bake --sdf
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.sdf PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "meshbake")
+
+# ATOM P2 — THE SEED AND WHAT IT OWES (the design's §2.3 acceptance).
+#
+#   meshbake.primitives_baked   a FRESH library seeded the way a launch seeds one
+#                               (PrimitiveAssets::seedAll): every row created with
+#                               its reserved guid and its platform mark, a chain of
+#                               >= 2 levels for every mesh the bake's floor lets it,
+#                               cards that name levels the chain HAS, an SDF and a
+#                               measured bound per level — and a SECOND seed that
+#                               bakes nothing.
+#   meshbake.rebake_generation  BAKE-RETIRE-1: a bake's file name is generation-
+#                               independent and the store ingests OR IGNORE, so a
+#                               re-bake after a kFormatVersion bump used to be
+#                               silently dropped and a baked asset with no parse
+#                               behind it drew NOTHING. The previous generation is
+#                               planted by hand — no test home is old enough to have
+#                               one — and the new one must win, with the superseded
+#                               object unlinked and reapable.
+#   meshbake.hemisphere_winding HEMISPHERE-CAP-1, as a property of EVERY shipped
+#                               mesh: no face may be wound against its own declared
+#                               vertex normals (the cap's 32 were).
+add_test(NAME meshbake.primitives_baked COMMAND test_mesh_bake --primitives-baked
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.primitives_baked PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "meshbake")
+
+add_test(NAME meshbake.rebake_generation COMMAND test_mesh_bake --rebake-generation
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.rebake_generation PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 180 LABELS "meshbake")
+
+add_test(NAME meshbake.hemisphere_winding COMMAND test_mesh_bake --hemisphere-winding
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.hemisphere_winding PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 120 LABELS "meshbake")
+
+jah_no_display(meshbake.primitives_baked)
+jah_no_display(meshbake.rebake_generation)
+jah_no_display(meshbake.hemisphere_winding)
+
 jah_no_display(meshbake.roundtrip)
 jah_no_display(meshbake.cards)
+jah_no_display(atom.error_bound)
+jah_no_display(meshbake.sdf)

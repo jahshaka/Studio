@@ -12,11 +12,51 @@ carries the rules.
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
 | **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`); `--timeout 120` is the default for rows that set none. (The trailing `-E "^gi\.ddgi_raster$"` this command used to carry is GONE, 2026-09-18: that suite was deleted with the irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD, so the regex excluded nothing. `CLAUDE.md`'s copy of the command still carries it and is the lead's to trim — the two differ by a filter that matches no suite, which changes no selection.) **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
-| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 (the moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
+| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, the rigperf bench, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under `glibc's built-in malloc checks + MALLOC_PERTURB_ (the real checker is an opt-in — it aborts under the NVIDIA GLX library)`; ~110 s, RUN_SERIAL, labelled `benchmark` because that label IS the nightly marker the MERGE/PUSH commands exclude — read one failure as "run it again", three as a regression of the open's slice-boundary drive) — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box, and whenever a batch touched the open path, the scene teardown or the engine's resource handling | the lead |
 
 Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
 its selection; the lead's merge audit reads that line.
+
+### 1b. TARGET TESTS — the `photon-target` label (PHOTON phase A, A1 §0; lane FENCE-1)
+
+Today's picture is wrong in known, measured ways. A suite that FENCES today's picture has to
+be re-anchored by every part that fixes one of them — which is how `gi.chain_face` came to
+bracket a staircase and `gi.field_follows` came to assert an existence bar re-anchored
+downwards. Under forward-building a suite states the CORRECT number, and a suite that cannot
+pass until its part lands is a **target test**:
+
+- it carries the ctest label **`photon-target`**, and its header states the PART that turns it
+  green and today's measured value;
+- it is EXCLUDED FROM PASS/FAIL, never from the run. `scripts/gate-scope.sh` selects it,
+  prints it in a `TARGET TESTS` section, and runs it in a SECOND ctest invocation at `-j1`
+  (it is a measurement; a measurement sharing the GPU with three siblings prints a number
+  nobody can use) whose exit code is reported and discarded. The MERGE and PUSH tiers drop it
+  with `-LE`, which is the only shape ctest offers for "these do not decide the tier";
+- every run prints `target: <value> (bar <bar>) <what>`, so the distance to the bar is visible
+  from any lane's scoped gate and a target that goes green EARLY is noticed rather than
+  sitting red for a month;
+- **removing the label — one line in the suite's CMake row — IS the part's acceptance.** The
+  lane that fixes the term deletes the label and, where an ordinary row carries a "no
+  regression while red" bracket beside it, deletes the bracket too.
+
+The label's definition lives in ONE place, `TARGET_LABELS` in `scripts/gate-scope.py`, and the
+MERGE tier's `-LE` alternation is built from it, so the tool and the tier command cannot
+disagree. `source.gate_scope_rules` case 6 is the guard.
+
+A suite that mixes a target claim with correct claims becomes **two ctest rows over one
+binary** (`--target`), never one labelled suite: a ctest label is per SUITE, so labelling the
+whole thing would exclude the correct assertions from pass/fail as well. The rows registered
+today are `gi.chain_face_target`, `gi.chain_converge_target` and `gi.field_follows_energy`.
+`gi.rt_reflect_lamp_clip` was the fourth and **VOXEL-CLIP-1 took its label off** (2026-09-22,
+ogre-patch 0087) — with a note worth keeping, because it is about the INSTRUMENT: a target test
+has to be answerable through the thing that reads it. That row asked a PERFECT mirror to read
+radiance 3.0 out of an offscreen view whose render target is `PFG_RGBA8_UNORM`
+(`OgreView::createRtt`), so its pixel was pinned at exactly 1.0000 before the patch and after
+it — the 0.333x it printed was the readback's ceiling, not the voxel store's. It now reads the
+same pixel through a GREY mirror at L = 3.0 and at L = 0.8 and asserts the RATIO (3.75 correct,
+1.25 under a clip): the mirror's reflectance and the whole grade cancel, and the claim is about
+the store alone. Measured 1.255x unpatched / 3.745x patched.
 
 `-j4` is the ceiling on this box (RTX 4080 16 GB: ~1.6 GB of VRAM per Vulkan boot since the
 probe-shadow merge of 2026-09-10, ~3 GB before; boots are CPU-bound too — expect ~1.6× over
@@ -201,3 +241,44 @@ suites share one live instance (−340 suite-seconds).
   batch (irisgl first), and runs NIGHTLY on a quiet box.
 - **gate-runner**: runs the tier it is given, never picks, restores what it touched, kills
   only its own pids.
+
+## 7. The four selftest hashes (lane FENCE-1, PHOTON phase A)
+
+`./build-linux/bin/Jahshaka --engine-selftest out.png` prints FOUR `sha256` lines and writes
+four files. They are the cheapest early warning in the tree — seconds, one process — and a
+push quotes all four.
+
+| line | file | what it fences | grade |
+|---|---|---|---|
+| `pose 1` | `out.png` | the default scene from the camera that has never moved | Plain |
+| `pose 2` | `out.pose2.png` | the same scene after the camera moves +5 m in x, turns, and settles 240 frames — the cascade scroll, the field's follow, the settle | Plain |
+| `pose B1 (rays)` | `out.B1.png` | fixture B **with** the ray tier | Viewport |
+| `pose B2 (no rays)` | `out.B2.png` | the same fixture after `world.rayTracing("off")` | Viewport |
+
+At Studio `fence-1` (2026-09-22), five consecutive runs on the rig (Xvfb `:NN`
+`1920x1080x24`, `--data-root`; run 1 cache-cold, runs 2-5 warm) printed identical numbers:
+
+```
+pose 1        777eb2f12a15811a75a0fda1e7c746acbf07a030fca69e658c3132ebc3ffa7be
+pose 2        c2c2b19f6c95351fbe6163b2036256fb240054e176dff87afe0e014fdf241d74
+pose B1 rays  78349e56270c69fbb393c86507c38a209571b519f04229c035cd3e5b819be023
+pose B2 none  541dce5a0f285cc84268011b837b3fcb28514dea138b282d142de797c70951a0
+```
+
+**WHY FIXTURE B EXISTS.** The default scene has no reflective pixel, no cascade crossing, no
+emissive above 1.0 and nothing ray-traced, so no PHOTON defect and no PHOTON regression can
+move poses 1 or 2. Fixture B is built in the same process THROUGH THE SCRIPTING VERBS (never a
+shipped sample): an empty project, the realistic sky at a fixed sun, one directional light, a
+60 x 60 m glossy floor, seven pillars of which one is emissive at radiance 3.0 and one is a
+mirror, and a matte wall at z = -9 so the floor's bounce has a receiver beyond cascade 0's 5 m
+face. `world.photon({tier:"high"})`, the `ssr` row forced to `hq`, camera (0,5,14) -> (0,1,0),
+300 frames on the fixed clock per pose.
+
+**THE GRADE IS LOAD-BEARING, and it had to be discovered.** `takeScreenshot(w, h)` is the
+PLAIN grade — no post-processing at all — and the ray tier rides the SSR chain's prepass, so a
+Plain-grade fixture B hashed IDENTICALLY with rays on and off (0 of 65,536 pixels different,
+measured). B1/B2 are the VIEWPORT grade: the whole chain with the exposure RE-SEEDED from the
+description rather than inherited from the on-screen view's temporal filter, so it is
+deterministic by construction. At that grade the rays move 30,448 of 65,536 pixels, worst
+78/255 — and the runner asserts B1 != B2 whenever the machine has ray queries (equal hashes on
+a machine WITHOUT them is the correct answer and is said so, not asserted away).

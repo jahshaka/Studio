@@ -16,6 +16,7 @@ add_executable(test_asset_delete test_asset_delete.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     # database.cpp's link closure (Project, guids, asset helpers)

@@ -9,12 +9,20 @@
 // speedup — and NOTHING IN THIS ENGINE READS IT YET. It is shared Photon
 // infrastructure and it is off everywhere until a spike asks for it.
 //
-// WHICH WAY IS CLOSE. Ogre's Vulkan render system runs REVERSE-Z at this pin
-// (near = 1, far = 0 — `RenderSystem::isReverseDepth`, which our shadow-map
-// clear material has always branched on), so the closest depth of a footprint
-// is its MAXIMUM stored value and the reduction is a max. The suite reads the
-// convention out of HzbStatus rather than assuming it, and asserts the
-// reduction in the direction that convention implies.
+// WHICH DEPTH A LEVEL KEEPS IS THE CHAIN'S OWN REQUEST (PostFxDesc::hzbFarthest,
+// ATOM-SUBSTRATE-1's fix round) and the DEFAULT IS THE FARTHEST, because that is
+// the only direction an occlusion cull can be conservative against: a
+// closest-depth level makes a texel that is half wall and half sky report the
+// wall, and an object seen through the sky half is culled. A stackless
+// screen-space trace wants the opposite and asks for its own build; nothing
+// reads that one today, and this suite drives BOTH so neither can rot.
+//
+// WHICH WAY IS CLOSE is a separate question with its own answer: Ogre's Vulkan
+// render system runs REVERSE-Z at this pin (near = 1, far = 0 —
+// `RenderSystem::isReverseDepth`, which our shadow-map clear material has always
+// branched on), so the FARTHEST sample of a footprint is its MINIMUM stored value
+// and the nearest is its maximum. The suite reads both conventions out of
+// HzbStatus rather than assuming either.
 //
 // WHAT IS ASSERTED:
 //   1. THE SHAPE. The pyramid exists, has the mip count the resolution implies
@@ -25,11 +33,12 @@
 //      seed pass could be writing anything and every test below would still
 //      pass.
 //   3. THE REDUCTION, texel by texel, against an EXACTLY COMPUTED FOOTPRINT.
-//      Every mip-3 texel must be exactly the closest depth of the mip-0 region
-//      it covers — neither farther (a level that claimed something is farther
-//      than it really is would cull geometry that is actually visible: the one
-//      error a hierarchical depth test must never make) nor closer (an
-//      over-conservative level rejects less than it could).
+//      Every mip-3 texel must be EXACTLY the extreme its chain asked for — the
+//      farthest, or the closest on a closest-depth build — of the mip-0 region it
+//      covers. An equality in both directions, because either error is real: a
+//      level that overstates its region rejects geometry that is visible (the one
+//      error a hierarchical depth test must never make) and one that understates
+//      it rejects less than it could.
 //
 //      The footprint is DERIVED, not assumed to be 8x8, by composing the
 //      reducer's own coverage rule level by level — which is what lets the
@@ -70,7 +79,8 @@ static int failures = 0;
 /// A cube on the ground, seen by a perspective camera. Deliberately not the
 /// matte default floor: what matters here is that the depth buffer has BOTH a
 /// near region and untouched far pixels, so the reduction has something to do.
-static View *buildScene(Engine *e, const char *name, unsigned w, unsigned h, Scene *&sceneOut)
+static View *buildScene(Engine *e, const char *name, unsigned w, unsigned h, Scene *&sceneOut,
+                        bool farthest = true)
 {
     View *view = e->createOffscreenView(name, w, h, Colour(0, 0, 0));
     Scene *scene = e->createScene(name);
@@ -79,6 +89,7 @@ static View *buildScene(Engine *e, const char *name, unsigned w, unsigned h, Sce
 
     PostFxDesc fx;
     fx.hzb = true;             // the only thing this view asks the chain for
+    fx.hzbFarthest = farthest;
     view->setPostFx(fx);
 
     scene->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.2f, 0.2f, 0.2f));
@@ -96,10 +107,25 @@ static View *buildScene(Engine *e, const char *name, unsigned w, unsigned h, Sce
     return view;
 }
 
-/// "at least as close as", in the engine's own convention.
-static bool atLeastAsClose(float a, float b, bool reverseZ)
+/// Is `a` at least as EXTREME as `b` in the direction this chain keeps? With
+/// reverse-Z a farther sample is a smaller number, so "at least as far" is <=.
+static bool atLeastAsExtreme(float a, float b, bool reverseZ, bool farthest)
 {
-    return reverseZ ? a >= b - 1e-6f : a <= b + 1e-6f;
+    const bool nearerIsLarger = reverseZ;
+    const bool wantLarger = farthest ? !nearerIsLarger : nearerIsLarger;
+    return wantLarger ? a >= b - 1e-6f : a <= b + 1e-6f;
+}
+
+/// The seed of a running extreme, and the pick, in one place.
+static float extremeSeed(bool reverseZ, bool farthest)
+{
+    const bool wantLarger = farthest ? !reverseZ : reverseZ;
+    return wantLarger ? 0.0f : 1.0f;
+}
+static float pickExtreme(float a, float b, bool reverseZ, bool farthest)
+{
+    const bool wantLarger = farthest ? !reverseZ : reverseZ;
+    return wantLarger ? std::max(a, b) : std::min(a, b);
 }
 
 /// WHICH MIP-0 TEXELS A LEVEL-`level` TEXEL COVERS, one axis, composed level by
@@ -143,6 +169,8 @@ static void coverage(unsigned size0, unsigned level, std::vector<unsigned> &begi
 static void checkPyramid(Engine *e, View *view, const char *what, unsigned w, unsigned h,
                          unsigned expectLevels)
 {
+    // The direction under test comes from the chain itself, never from a guess
+    // here: HzbStatus::farthest is what the reduce job was compiled with.
     std::printf("\n== %s (%ux%u) ==\n", what, w, h);
     HzbStatus st;
     char msg[192];
@@ -151,8 +179,10 @@ static void checkPyramid(Engine *e, View *view, const char *what, unsigned w, un
         ++failures;
         return;
     }
-    std::printf("   %ux%u, %u levels, reverse-Z %d\n", st.width, st.height, st.levels,
-                st.reverseDepth ? 1 : 0);
+    std::printf("   %ux%u, %u levels, reverse-Z %d, keeps the %s depth, primed %d\n", st.width,
+                st.height, st.levels, st.reverseDepth ? 1 : 0,
+                st.farthest ? "FARTHEST" : "closest", st.primed ? 1 : 0);
+    CHECK(st.primed, "a presented frame has written the pyramid");
     CHECK(st.width == w && st.height == h, "mip 0 is the view's own resolution");
     std::snprintf(msg, sizeof(msg), "%ux%u gives %u levels", w, h, expectLevels);
     CHECK(st.levels == expectLevels, msg);
@@ -171,13 +201,13 @@ static void checkPyramid(Engine *e, View *view, const char *what, unsigned w, un
     // ---- mip 0 really is the depth buffer --------------------------------
     const float farValue = st.reverseDepth ? 0.0f : 1.0f;
     size_t nearer = 0, atFar = 0;
-    float closest0 = st.reverseDepth ? 0.0f : 1.0f;
+    float extreme0 = extremeSeed(st.reverseDepth, st.farthest);
     for (float d : mip0) {
         if (std::fabs(d - farValue) < 1e-6f) ++atFar; else ++nearer;
-        closest0 = st.reverseDepth ? std::max(closest0, d) : std::min(closest0, d);
+        extreme0 = pickExtreme(extreme0, d, st.reverseDepth, st.farthest);
     }
-    std::printf("   mip0: %zu texels nearer than the far plane, %zu at it; closest %.6f\n",
-                nearer, atFar, closest0);
+    std::printf("   mip0: %zu texels nearer than the far plane, %zu at it; the %s of them %.6f\n",
+                nearer, atFar, st.farthest ? "farthest" : "closest", extreme0);
     CHECK(nearer > 500u, "mip 0 carries the geometry's depth (not a blank buffer)");
     CHECK(atFar > 100u, "mip 0 carries untouched far pixels too (so there IS a reduction to do)");
 
@@ -192,31 +222,31 @@ static void checkPyramid(Engine *e, View *view, const char *what, unsigned w, un
             const unsigned spanX = ex[x] - bx[x] + 1u, spanY = ey[y] - by[y] + 1u;
             minSpanX = std::min(minSpanX, spanX); maxSpanX = std::max(maxSpanX, spanX);
             minSpanY = std::min(minSpanY, spanY); maxSpanY = std::max(maxSpanY, spanY);
-            float foot = st.reverseDepth ? 0.0f : 1.0f;
+            float foot = extremeSeed(st.reverseDepth, st.farthest);
             for (unsigned fy = by[y]; fy <= ey[y]; ++fy)
-                for (unsigned fx = bx[x]; fx <= ex[x]; ++fx) {
-                    const float d = mip0[size_t(fy) * w0 + fx];
-                    foot = st.reverseDepth ? std::max(foot, d) : std::min(foot, d);
-                }
+                for (unsigned fx = bx[x]; fx <= ex[x]; ++fx)
+                    foot = pickExtreme(foot, mip0[size_t(fy) * w0 + fx], st.reverseDepth,
+                                       st.farthest);
             const float got = mip3[size_t(y) * w3 + x];
-            if (!atLeastAsClose(got, foot, st.reverseDepth)) ++tooFar;
-            if (!atLeastAsClose(foot, got, st.reverseDepth)) ++tooClose;
+            if (!atLeastAsExtreme(got, foot, st.reverseDepth, st.farthest)) ++tooFar;
+            if (!atLeastAsExtreme(foot, got, st.reverseDepth, st.farthest)) ++tooClose;
         }
     }
     std::printf("   mip3 footprints span %u..%u x %u..%u mip-0 texels; %zu too far, "
                 "%zu too close (of %u)\n", minSpanX, maxSpanX, minSpanY, maxSpanY, tooFar,
                 tooClose, w3 * h3);
-    CHECK(tooFar == 0, "every mip-3 texel is at least as close as the closest of its footprint");
-    CHECK(tooClose == 0, "and no closer than it — the reduction is exactly the closest depth");
+    CHECK(tooFar == 0, "every mip-3 texel is at least as extreme as its footprint's own extreme");
+    CHECK(tooClose == 0, "and no more extreme than it — the reduction is exactly that extreme");
     // The interior of ANY view reduces exactly 8 mip-0 texels per axis: seeing a
     // 9 or a 10 here is the over-conservative reducer coming back.
     CHECK(minSpanX == 8u && minSpanY == 8u,
           "the interior footprint is exactly 8 texels per axis (no neighbour absorbed)");
 
     // ---- the top level is the whole frame ---------------------------------
-    std::printf("   top level %.6f vs the frame's closest %.6f\n", top[0], closest0);
-    CHECK(std::fabs(top[0] - closest0) < 1e-6f,
-          "the 1x1 level is the closest depth anywhere in the picture");
+    std::printf("   top level %.6f vs the frame's own %s %.6f\n", top[0],
+                st.farthest ? "farthest" : "closest", extreme0);
+    CHECK(std::fabs(top[0] - extreme0) < 1e-6f,
+          "the 1x1 level is that extreme over the whole picture");
 }
 
 int main()
@@ -252,6 +282,21 @@ int main()
     View *odd = buildScene(e, "hzb255", 255u, 135u, oddScene);
     for (int i = 0; i < 4; ++i) e->renderOneFrame();
     checkPyramid(e, odd, "255x135, odd levels", 255u, 135u, 8u);
+
+    // =====================================================================
+    // THE OTHER DIRECTION. Nothing reads the closest-depth chain today (Photon's
+    // screen trace will), so it is driven here or it rots: the same equality, on
+    // the same fixture, with `hzbFarthest` off.
+    // =====================================================================
+    Scene *nearScene = nullptr;
+    View *nearView = buildScene(e, "hzbnear", 256u, 256u, nearScene, /*farthest=*/false);
+    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    checkPyramid(e, nearView, "256x256, the CLOSEST-depth build", 256u, 256u, 9u);
+    {
+        HzbStatus nst;
+        CHECK(e->hzbStatus(nearView, nst) && !nst.farthest,
+              "the closest-depth build reports itself as one");
+    }
 
     // =====================================================================
     // 1920x1080: the level count and THE COST, from patch 0027's GPU
@@ -311,6 +356,51 @@ int main()
         // (FramePass::gpuMs is negative when unmeasured, never faked as 0).
         std::printf("   HZB GPU cost: NOT MEASURED on this build/device "
                     "(no timestamp samples came back)\n");
+    }
+
+    // =====================================================================
+    // AND THE COST AT 4K (the design asked for both). 3840x2160 is four times
+    // 1080p's pixels and one more level; the build is bandwidth-bound in its seed,
+    // so this is the number that says whether the per-mip chain scales.
+    // =====================================================================
+    std::printf("\n== 3840x2160: levels and cost ==\n");
+    Scene *uhdScene = nullptr;
+    View *uhd = buildScene(e, "hzb4k", 3840u, 2160u, uhdScene);
+    for (int i = 0; i < 4; ++i) e->renderOneFrame();
+    HzbStatus ust;
+    CHECK(e->hzbStatus(uhd, ust) && ust.built, "the 4K view built a pyramid");
+    std::printf("   %ux%u, %u levels\n", ust.width, ust.height, ust.levels);
+    CHECK(ust.levels == 12u, "3840x2160 gives 12 levels (3840..1)");
+    {
+        e->setFrameMonitor(MonitorLevel::Review);
+        for (int i = 0; i < 24; ++i) e->renderOneFrame();
+        e->setFrameMonitor(MonitorLevel::Off);
+        std::vector<FrameRecord> recs;
+        while (e->takeFrameRecords(recs) > 0) {}
+        const std::string ws = "hzb4k/Workspace";
+        float best = -1.0f;
+        unsigned measured = 0, passes = 0;
+        for (const FrameRecord &r : recs) {
+            float sum = 0.0f; unsigned n = 0; bool complete = true;
+            for (const FramePass &pp : r.passes) {
+                if (pp.workspace != ws) continue;
+                if (pp.pass.rfind("Jahshaka HZB", 0) != 0) continue;
+                ++n;
+                if (pp.gpuMs < 0.0f) complete = false; else sum += pp.gpuMs;
+            }
+            if (!n) continue;
+            passes = std::max(passes, n);
+            if (!complete) continue;
+            ++measured;
+            if (best < 0.0f || sum < best) best = sum;
+        }
+        std::printf("   HZB passes per frame: %u (expected %u); frames with GPU samples: %u\n",
+                    passes, ust.levels, measured);
+        if (best >= 0.0f)
+            std::printf("   HZB GPU cost at 3840x2160: %.4f ms (best of %u measured frames)\n",
+                        best, measured);
+        else
+            std::printf("   HZB GPU cost at 4K: NOT MEASURED on this build/device\n");
     }
 
     std::printf("\n%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);

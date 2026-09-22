@@ -105,10 +105,21 @@ console.log("SECOND_STAGING=" + second.removed.staging);
 assert(second.removed.staging === 0, "…with no staging temps left to find");
 var third = app.resetLibrary();
 assert(third.ok === true, "a third reset on an empty library succeeds");
-assert(third.removed.objects === 0 && third.removed.sidecars === 0
-       && third.removed.projects === 0 && third.removed.thumbnails === 0
-       && third.removed.staging === 0,
-       "…and removes nothing at all (it is already a first launch)");
+// THE STEADY STATE, not zero (ATOM P2). A reset ends as a FIRST LAUNCH, and a
+// first launch holds the shipped geometry: the twelve primitives, the Ground and
+// the Teapot as baked library assets (a source and a bake object each). So a reset
+// of a library with nothing of the user's in it removes exactly what the last one
+// seeded and seeds it again — the invariant is that the number stops moving, and
+// that nothing of the user's is in it.
+var fourth = app.resetLibrary();
+assert(fourth.ok === true, "a fourth reset succeeds");
+assert(fourth.removed.objects === third.removed.objects
+       && fourth.removed.sidecars === third.removed.sidecars,
+       "…and removes the same as the one before it: the seed, and nothing else ("
+       + third.removed.objects + " object(s), " + third.removed.sidecars + " sidecar(s))");
+assert(fourth.removed.projects === 0 && fourth.removed.thumbnails === 0
+       && fourth.removed.staging === 0,
+       "…with no project, thumbnail or staging temp left to take");
 
 // {restart: true} IS REFUSED IN A DRIVEN SESSION, and this assertion is the
 // box safety one: a --script run respawns with `--script` still in its

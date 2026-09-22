@@ -73,6 +73,8 @@
 // Needs a display (Vulkan); no window (offscreen view + offscreen QPA).
 
 #include <QGuiApplication>
+
+#include "bridge/previewmesh.h"
 #include <QColor>
 #include <cmath>
 #include <cstdio>
@@ -156,7 +158,7 @@ int main(int argc, char **argv)
     // they are here so the caster walk has a caster.)
     auto floorNode = iris::MeshNode::create();
     floorNode->setName("floor");
-    floorNode->setMesh(":assets/models/cube.obj");
+    floorNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
     auto grey = iris::DefaultMaterial::create();
     grey->setDiffuseColor(QColor(120, 120, 120));
     floorNode->setMaterial(grey);
@@ -169,7 +171,7 @@ int main(int argc, char **argv)
 
     auto box = iris::MeshNode::create();
     box->setName("box");
-    box->setMesh(":assets/models/cube.obj");
+    box->setMesh(previewmesh::load(":assets/models/cube.obj"));
     auto white = iris::DefaultMaterial::create();
     white->setDiffuseColor(QColor(210, 210, 210));
     box->setMaterial(white);
