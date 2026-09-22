@@ -2,8 +2,7 @@
 #include "irisgl/core/math/vec.h"
 #include "bridge/enginematerialpreviewscene.h"
 
-#include "irisgl/core/irisutils.h"
-#include "irisgl/import/graphicshelper.h"
+#include "bridge/previewmesh.h"
 
 #include <QFileInfo>
 #include <algorithm>
@@ -35,17 +34,17 @@ const char *kSubjectName = "matpreview-primitive";
 /// their `app/content/primitives/` twins exactly) — those six duplicate files are
 /// DELETED and the dock reads the shipped ones, which is the same geometry it
 /// always drew. The low-poly ball is its own mesh and stays where it is.
-const char *meshFile(PreviewMesh mesh)
+QString meshFile(PreviewMesh mesh)
 {
     switch (mesh) {
-    case PreviewMesh::Sphere:   return "app/shadergraph/lowpoly_sphere.obj";
-    case PreviewMesh::Cube:     return "app/content/primitives/cube.obj";
-    case PreviewMesh::Plane:    return "app/content/primitives/plane.obj";
-    case PreviewMesh::Cylinder: return "app/content/primitives/cylinder.obj";
-    case PreviewMesh::Capsule:  return "app/content/primitives/capsule.obj";
-    case PreviewMesh::Torus:    return "app/content/primitives/torus.obj";
+    case PreviewMesh::Sphere:   return QStringLiteral("app/shadergraph/lowpoly_sphere.obj");
+    case PreviewMesh::Cube:     return QStringLiteral("app/content/primitives/cube.obj");
+    case PreviewMesh::Plane:    return QStringLiteral("app/content/primitives/plane.obj");
+    case PreviewMesh::Cylinder: return QStringLiteral("app/content/primitives/cylinder.obj");
+    case PreviewMesh::Capsule:  return QStringLiteral("app/content/primitives/capsule.obj");
+    case PreviewMesh::Torus:    return QStringLiteral("app/content/primitives/torus.obj");
     }
-    return "app/shadergraph/lowpoly_sphere.obj";
+    return QStringLiteral("app/shadergraph/lowpoly_sphere.obj");
 }
 
 } // namespace
@@ -163,12 +162,11 @@ iris::MeshPtr EngineMaterialPreviewScene::meshFor(PreviewMesh mesh)
 {
     auto &slot = mMeshes[int(mesh)];
     if (slot) return slot;
-    // Parsed once per process through the importer's own parse entry point
-    // (`Mesh::loadMesh` is deleted, ATOM P2): dock furniture, no cards, no
-    // library. `mMeshes` is the cache — one parse per shape per session.
-    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(
-        IrisUtils::getAbsoluteAssetPath(QString::fromLatin1(meshFile(mesh))));
-    if (!meshes.isEmpty()) slot = meshes.first();
+    // Parsed once per process (bridge/previewmesh.h): dock furniture, no cards,
+    // no library. `mMeshes` is the cache — one parse per shape per session.
+    const QString file = meshFile(mesh);
+    slot = previewmesh::load(QStringLiteral(":/") + file.mid(file.indexOf(QLatin1Char('/')) + 1),
+                             file);
     return slot;
 }
 

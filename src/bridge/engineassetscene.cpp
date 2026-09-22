@@ -10,7 +10,7 @@
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
 #include "irisgl/core/irisutils.h"
-#include "irisgl/import/graphicshelper.h"
+#include "bridge/previewmesh.h"
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/geometry/boundingsphere.h"
 #include "irisgl/document/assets/mesh.h"
@@ -81,11 +81,9 @@ void EngineAssetScene::buildDocument()
     auto floor = iris::MeshNode::create();
     // The dock's floor: the same shipped ground mesh, parsed here as furniture
     // (see previewSphere below — no library behind a preview scene).
-    {
-        const QList<iris::MeshPtr> grounds = iris::GraphicsHelper::loadAllMeshesFromFile(
-            QStringLiteral(":/models/ground.obj"));
-        if (!grounds.isEmpty()) floor->setMesh(grounds.first());
-    }
+    if (iris::MeshPtr ground = previewmesh::load(QStringLiteral(":/models/ground.obj"),
+                                                 QStringLiteral("app/models/ground.obj")))
+        floor->setMesh(ground);
     floor->meshPath = QStringLiteral(":/models/ground.obj");
     if (floor->getMesh()) {
         floor->setLocalPos(iris::Vec3(0, -5, 0));   // legacy: below the default plane reset
@@ -162,9 +160,8 @@ iris::MeshPtr EngineAssetScene::previewSphere()
     // is drawn at ONE distance in a small tile: it has no use for a LOD chain, and
     // making it a library asset would put the catalog and the import pipeline
     // behind a dock's sphere.
-    const QList<iris::MeshPtr> spheres = iris::GraphicsHelper::loadAllMeshesFromFile(
-        QStringLiteral(":/content/primitives/hp_sphere.obj"));
-    if (!spheres.isEmpty()) mSphere = spheres.first();
+    mSphere = previewmesh::load(QStringLiteral(":/content/primitives/hp_sphere.obj"),
+                                QStringLiteral("app/content/primitives/hp_sphere.obj"));
     return mSphere;
 }
 

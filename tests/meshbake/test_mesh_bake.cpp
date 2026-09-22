@@ -1198,6 +1198,10 @@ static void surfaceCards()
     {
         const iris::MeshPtr cube =
             testmesh::load(fixture(QStringLiteral("app/content/primitives/cube.obj")));
+        // The cards are built HERE now: nothing builds them at creation since
+        // ATOM P2 deleted Mesh::loadMesh, and a primitive's real cards are its
+        // BAKE's (meshbake.primitives_baked).
+        if (!cube.isNull()) iris::MeshBake::buildCards(cube, iris::kDefaultMaxCards);
         CHECK_LOUD(!cube.isNull() && cube->cards.size() == 6,
                    "the cube gets exactly six cards — the 6-face box, not two per face");
         if (!cube.isNull() && cube->cards.size() == 6) {
@@ -1250,6 +1254,7 @@ static void surfaceCards()
         // And the GENERATOR is idempotent: asking twice must replace the list,
         // never append to it.
         if (!first.isNull()) {
+            iris::MeshBake::buildCards(first, iris::kDefaultMaxCards);
             const int before = int(first->cards.size());
             iris::MeshBake::buildCards(first, iris::kDefaultMaxCards);
             CHECK_LOUD(int(first->cards.size()) == before,

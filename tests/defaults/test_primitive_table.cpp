@@ -101,12 +101,16 @@ int main(int argc, char **argv)
         }
 
         if (def.guid) {
-            ++tiles;
+            // A GUID IS A LIBRARY ROW, AN ICON IS A TILE (ATOM P2). Every seed
+            // row has a reserved guid now — it is a baked library asset — while
+            // the Ground and the Teapot still have no tile, which is why the two
+            // are separate columns and no longer one test.
             const QString guid = QString::fromLatin1(def.guid);
             check(!guids.contains(guid), QStringLiteral("%1: its guid %2 is unique").arg(name, guid));
             guids.insert(guid);
-
-            check(def.icon != nullptr, QStringLiteral("%1: a tile row names an icon").arg(name));
+        }
+        if (def.icon) {
+            ++tiles;
             const QString icon = IrisUtils::getAbsoluteAssetPath(QString::fromLatin1(def.icon));
             check(QFile::exists(icon), QStringLiteral("%1: the tile icon exists (%2)").arg(name, icon));
             QImage thumb(icon);
@@ -114,10 +118,12 @@ int main(int argc, char **argv)
                   QStringLiteral("%1: ...and decodes (%2x%3)")
                       .arg(name).arg(thumb.width()).arg(thumb.height()));
         } else {
-            // The one row with no tile is Ground, and it must stay the only one:
-            // a row without a guid cannot be dragged, listed or dropped.
-            check(name == QLatin1String("Ground"),
-                  QStringLiteral("%1: only Ground may have no library guid").arg(name));
+            // The rows with no TILE are the Ground (100 m of floor: an Add-menu
+            // entry and a verb name, never something to drag out of a drawer)
+            // and the Platform seeds. Everything a user can drag has an icon.
+            check(name == QLatin1String("Ground") || def.kind == primitives::Kind::Platform,
+                  QStringLiteral("%1: only the Ground and a Platform seed may have no tile")
+                      .arg(name));
         }
     }
     check(tiles >= 12, QStringLiteral("at least twelve tiles (got %1)").arg(tiles));

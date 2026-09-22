@@ -390,6 +390,11 @@ int main(int argc, char **argv)
         // MeshNode — meshPath/meshIndex are deliberately read-only
         auto refMesh = iris::MeshNode::create();
         refMesh->setMesh(testmesh::load(":assets/models/sky.obj"));
+        // `meshPath` is the document's REFERENCE to the asset, written by whoever
+        // knows what it should be (ATOM P2 deleted setMesh(QString), which parsed
+        // a file inside a setter): a seed key for a built-in, a mesh row's guid
+        // for an import. It is still read-only through the property bag.
+        refMesh->meshPath = QStringLiteral(":assets/models/sky.obj");
         advertises(refMesh, { "meshPath", "meshIndex", "faceCullingMode", "name" }, "MeshNode");
         roundTrip(refMesh, "faceCullingMode", int(iris::FaceCullingMode::Front), "MeshNode");
         readOnly(refMesh, "meshPath", QString("/somewhere/else.obj"), "MeshNode");

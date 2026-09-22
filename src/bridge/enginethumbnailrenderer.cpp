@@ -26,7 +26,7 @@
 #include "irisgl/core/properties/property.h"
 #include <QFileInfo>
 #include "io/builtinmaterials.h"
-#include "irisgl/import/graphicshelper.h"
+#include "bridge/previewmesh.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/offscreenrenderscope.h"
 #include "bridge/previewenvironment.h"
@@ -380,9 +380,8 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
         // parse entry point (ATOM P2 deleted `Mesh::loadMesh`; a thumbnail sphere
         // is furniture, not library content, and needs no chain for a 256-pixel
         // tile).
-        const QList<iris::MeshPtr> spheres = iris::GraphicsHelper::loadAllMeshesFromFile(
-            IrisUtils::getAbsoluteAssetPath("app/content/primitives/sphere.obj"));
-        if (!spheres.isEmpty()) mSphere = spheres.first();
+        mSphere = previewmesh::load(QStringLiteral(":/content/primitives/sphere.obj"),
+                                    QStringLiteral("app/content/primitives/sphere.obj"));
         if (!mSphere)
             return failed(QStringLiteral("the preview sphere (app/content/primitives/sphere.obj) "
                                          "could not be loaded"));
