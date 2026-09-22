@@ -47,8 +47,16 @@ disagree. `source.gate_scope_rules` case 6 is the guard.
 A suite that mixes a target claim with correct claims becomes **two ctest rows over one
 binary** (`--target`), never one labelled suite: a ctest label is per SUITE, so labelling the
 whole thing would exclude the correct assertions from pass/fail as well. The rows registered
-today are `gi.chain_face_target`, `gi.chain_converge_target`, `gi.field_follows_energy` and
-`gi.rt_reflect_lamp_clip`.
+today are `gi.chain_face_target`, `gi.chain_converge_target` and `gi.field_follows_energy`.
+`gi.rt_reflect_lamp_clip` was the fourth and **VOXEL-CLIP-1 took its label off** (2026-09-22,
+ogre-patch 0087) — with a note worth keeping, because it is about the INSTRUMENT: a target test
+has to be answerable through the thing that reads it. That row asked a PERFECT mirror to read
+radiance 3.0 out of an offscreen view whose render target is `PFG_RGBA8_UNORM`
+(`OgreView::createRtt`), so its pixel was pinned at exactly 1.0000 before the patch and after
+it — the 0.333x it printed was the readback's ceiling, not the voxel store's. It now reads the
+same pixel through a GREY mirror at L = 3.0 and at L = 0.8 and asserts the RATIO (3.75 correct,
+1.25 under a clip): the mirror's reflectance and the whole grade cancel, and the claim is about
+the store alone. Measured 1.255x unpatched / 3.745x patched.
 
 `-j4` is the ceiling on this box (RTX 4080 16 GB: ~1.6 GB of VRAM per Vulkan boot since the
 probe-shadow merge of 2026-09-10, ~3 GB before; boots are CPU-bound too — expect ~1.6× over
