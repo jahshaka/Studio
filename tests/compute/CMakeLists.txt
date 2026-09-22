@@ -62,3 +62,24 @@ add_dependencies(test_hzb JahshakaEngineMedia)
 add_test(NAME chain.hzb COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# engine.voxel_reader_parity — THE ONE VOXEL READER (PHOTON-READER-1): the same
+# cones through the same bound cascade chain, marched by a FRAGMENT program and
+# by an Hlms COMPUTE job both built from jah_voxel_{sample,march,parity}.glsl,
+# compared bit for bit (Engine::voxelReaderParity), on the anisotropic chain
+# and the isotropic single volume.
+add_executable(test_voxel_reader_parity test_voxel_reader_parity.cpp)
+set_target_properties(test_voxel_reader_parity PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_voxel_reader_parity PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_voxel_reader_parity PRIVATE JahshakaEngine)
+add_dependencies(test_voxel_reader_parity JahshakaEngineMedia)
+add_test(NAME engine.voxel_reader_parity COMMAND test_voxel_reader_parity
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.voxel_reader_parity PROPERTIES TIMEOUT 180 LABELS "engine")
