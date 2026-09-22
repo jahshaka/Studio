@@ -165,6 +165,7 @@ add_executable(test_thumbnail_sweep test_thumbnail_sweep.cpp
     ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
     ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/materialhelper.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pieceemitter.cpp

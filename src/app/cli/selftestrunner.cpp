@@ -112,7 +112,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     const iris::ScenePtr scene = window.getScene();
     const iris::MeshNodePtr ground = findDefaultGround(scene);
     if (ground && qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_BREAK_GROUND"))
-        ground->setMesh(QStringLiteral(":/models/selftest-broken-ground.obj"));
+        ground->setMesh(iris::MeshPtr());   // a mesh path and no mesh: the parse/seed failure
     const iris::MeshPtr groundMesh = ground ? ground->getMesh() : iris::MeshPtr();
     if (!groundMesh || groundMesh->numVerts <= 0) {
         std::fprintf(stderr, "engine-selftest: the default scene's ground did not load (%s) — "

@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/physicsproperties.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "services/primitiveassets.h"
 #include "services/shippedassets.h"
 
 namespace defaultfloor {
@@ -110,7 +111,16 @@ iris::PbrMaterialPtr createMaterial(Database *db, Project *project, QString *til
 iris::MeshNodePtr createNode(Database *db, Project *project)
 {
     auto node = iris::MeshNode::create();
-    node->setMesh(meshPath());
+    // THE FLOOR IS A BAKED LIBRARY ASSET (ATOM P2, services/primitiveassets.h):
+    // the 100 m ground plane has a real LOD chain, cards and an SDF like any
+    // imported model, seeded from the app's own `ground.obj` the first time a
+    // scene stands on it. The document still stores the seed PATH — every place
+    // that recognises this floor by `meshPath` (the viewport's outline, the
+    // scene extents, the self-test's "is this the default scene") is unchanged,
+    // and so is every scene ever saved.
+    node->setMesh(PrimitiveAssets::mesh(meshPath(), db));
+    node->meshPath = meshPath();
+    node->meshIndex = 0;
     // 1e-4 ABOVE THE ORIGIN, "to prevent z-fighting with the default plane
     // reset" (iKlsR). GIZMO-2 round 2 was asked to delete it — the editor grid's
     // fight with this plane is settled on the GRID's side now (the grid is a

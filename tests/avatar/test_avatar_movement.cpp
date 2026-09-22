@@ -11,6 +11,8 @@
 // render system). Framework-free; non-zero exit on failure.
 
 #include <QGuiApplication>
+
+#include "bridge/previewmesh.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -735,7 +737,7 @@ static void gateCollisionContent()
     section("collision content (§6.3 option C) — a plain mesh is solid, and only when it must be");
 
     // A real mesh with real triangles: the bundled 2x2x2 cube.
-    auto mesh = iris::Mesh::loadMesh(":assets/models/cube.obj");
+    auto mesh = previewmesh::load(":assets/models/cube.obj");
     CHECK(!!mesh && mesh->getTriMesh() && !mesh->getTriMesh()->triangles.isEmpty(),
           "collision: the bundled cube.obj loads with triangles");
     if (!mesh) return;

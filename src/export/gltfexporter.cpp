@@ -98,9 +98,10 @@ struct Ctx
     // 2026-09-15). Keyed on the geometry alone, two nodes that share an
     // iris::Mesh but wear different materials collapsed into ONE glTF mesh and
     // the second node silently rendered with the first node's material. That
-    // was always reachable (node duplication has always shared a MeshPtr) and
-    // became the common case the moment Mesh::loadMesh started sharing its
-    // parse: five cubes with five materials exported as one.
+    // was always reachable (node duplication has always shared a MeshPtr) and is
+    // the ordinary case now that the shipped meshes are baked library assets held
+    // for the life of the process (ATOM P2): five cubes with five materials
+    // exported as one.
     QHash<QPair<iris::Mesh *, int>, int> meshIndex;
     QHash<iris::Material *, int> materialIndex;
     QHash<QString, int> imageIndex;      // signature -> images[] index
@@ -1389,7 +1390,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // stand still (AVATAR_ASSET_SPEC §5.6, verified 2026-09-09):
         //
         //   * `Mesh::getSkeletalAnimations` — the clips that came out of the
-        //     MODEL FILE, filled once by Mesh::loadMesh at parse time.
+        //     MODEL FILE, filled once when the model was parsed (at import, or
+        //     read back from its bake).
         //   * the SCENE NODES' own animation lists — every clip loaded from
         //     another file (`avatar.loadClip`, the definition's clips at
         //     spawn) is attached with `SceneNode::addAnimation` and NEVER

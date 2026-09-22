@@ -46,6 +46,8 @@
 //
 // Plus the shape contract itself: playerView->postFx() == editorView->postFx().
 #include "irisgl/core/math/quat.h"
+
+#include "bridge/previewmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -223,7 +225,7 @@ int main(int argc, char **argv)
 
     auto cube = iris::MeshNode::create();
     cube->setName("cube");
-    cube->setMesh(":assets/models/cube.obj");
+    cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
     auto grey = iris::DefaultMaterial::create();
     grey->setDiffuseColor(QColor(230, 230, 230));
     cube->setMaterial(grey);
@@ -239,7 +241,7 @@ int main(int argc, char **argv)
     // belong to whichever SCENE armed last.
     auto floor = iris::MeshNode::create();
     floor->setName("mirror floor");
-    floor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+    floor->setMesh(previewmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
     {
         auto mirrorMat = iris::DefaultMaterial::create();
         mirrorMat->setDiffuseColor(QColor(30, 30, 34));

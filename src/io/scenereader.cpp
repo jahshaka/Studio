@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include "services/lightbindings.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
+#include "services/primitiveassets.h"
 
 #include <functional>
 #include <QSqlDatabase>
@@ -1440,19 +1441,20 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
                              << "did not resolve to a file — the node loads with no mesh";
     }
     if (!source.isEmpty()) {
-        // A ":"-prefixed source is a BUILT-IN PRIMITIVE and MeshNode loads it
-        // from the resource itself (below). getMesh used to run on it too —
-        // and assimp cannot open a Qt resource path, so every primitive in
-        // every scene cost a failed parse whose result was then thrown away
-        // (measured 2026-09-15: 5 of them per open of the Mirror Room sample,
-        // 6 per Showroom). They were cheap; they were also counted as UI-thread
-        // parses, which is the one number this path is not allowed to dirty.
+        // A ":"-prefixed source is a BUILT-IN: a SEED KEY, resolved to the
+        // baked library asset behind it (ATOM P2, services/primitiveassets.h).
+        // It used to be a file assimp re-parsed per node on the UI thread — and
+        // getMesh ran on it too, so every primitive in every scene also cost a
+        // failed catalog lookup whose result was thrown away (measured
+        // 2026-09-15: 5 per open of the Mirror Room sample, 6 per Showroom).
+        // The eight shipped samples name five primitives, the Ground and the
+        // Teapot between them; each of them arrives with its LOD chain now.
         auto mesh = source.startsWith(":")
-                        ? iris::MeshPtr()
+                        ? PrimitiveAssets::mesh(source, handle)
                         : getMesh(source, meshIndex, nodeObj["mesh"].toString());
 
         if (source.startsWith(":")) {
-            meshNode->setMesh(source);
+            meshNode->setMesh(mesh);
 			meshNode->meshPath = source;
             // A ":"-prefixed source IS a built-in primitive (addBuiltinPrimitive's
             // meshes). The flag was only ever set at creation and lost on reopen,

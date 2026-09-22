@@ -1431,11 +1431,14 @@ QVariantList AssetsApi::builtins()
         for (auto it = map.constBegin(); it != map.constEnd(); ++it)
             out.append(QVariantMap{ { "guid", it.key() }, { "name", it.value() }, { "kind", kind } });
     };
-    // The primitives come from the ONE table (src/data/primitives.h); rows
-    // with no library guid (Ground) are not library builtins and are not
-    // listed — `scene.addPrimitive("Ground")` is how that one is reached.
+    // The primitives come from the ONE table (src/data/primitives.h). What is
+    // listed is what a user can DRAG: a row with a TILE. Since ATOM P2 every seed
+    // row has a library guid — the Ground and the Teapot are baked library assets
+    // too — so the tile, not the guid, is the predicate: the Ground is reached by
+    // `scene.addPrimitive("Ground")` and the Teapot is not offered at all (owner
+    // review R6), exactly as before.
     for (const primitives::Def &def : primitives::all()) {
-        if (!def.guid) continue;
+        if (!def.guid || !def.icon || def.kind != primitives::Kind::Primitive) continue;
         out.append(QVariantMap{ { "guid", QString::fromLatin1(def.guid) },
                                 { "name", QString::fromLatin1(def.name) },
                                 { "kind", QStringLiteral("primitive") } });
