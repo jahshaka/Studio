@@ -988,16 +988,18 @@ static void lodChain()
                "buildLodChain replaces the chain, it does not append to it");
 
     // (c) THE CONSUMER CONTRACT (the hand-off Photon reads): the coarsest level
-    // whose error is below a world-space cell size.
+    // whose MEASURED BOUND is below a world-space cell size. The rule reads
+    // `lodBounds` and not `lodErrors` since ATOM-BAKE-1 (AT-A5) — which this
+    // case now proves by giving the two arrays DIFFERENT numbers and asserting
+    // the answers follow the bounds.
     jahshaka::engine::MeshData data;
     data.positions.assign(9, 0.0f);
     data.indices = { 0, 1, 2 };
     data.lodIndices = { { 0, 1, 2 }, { 0, 1, 2 }, { 0, 1, 2 } };
-    data.lodErrors = { 0.01f, 0.05f, 0.20f };
-    CHECK_LOUD(data.lodLevelCount() == 4, "lodLevelCount counts level 0 too");
-    CHECK_LOUD(&data.lodLevelIndices(0) == &data.indices, "level 0 IS the mesh's own index list");
+    data.lodBounds = { 0.01f, 0.05f, 0.20f };
+    data.lodErrors = { 1.0f, 2.0f, 3.0f };   // deliberately absurd: nothing may read these
     CHECK_LOUD(data.lodForWorldError(0.005f) == 0,
-               "a cell finer than every level's error asks for the finest level");
+               "a cell finer than every level's bound asks for the finest level");
     CHECK_LOUD(data.lodForWorldError(0.02f) == 1, "a 2 cm cell takes the 1 cm level");
     CHECK_LOUD(data.lodForWorldError(0.10f) == 2, "a 10 cm cell takes the 5 cm level");
     CHECK_LOUD(data.lodForWorldError(10.0f) == 3, "a cell coarser than every level takes the coarsest");
@@ -1005,8 +1007,8 @@ static void lodChain()
                "a non-positive cell size means the finest, never a wrap-around");
     jahshaka::engine::MeshData plain;
     plain.indices = { 0, 1, 2 };
-    CHECK_LOUD(plain.lodLevelCount() == 1 && plain.lodForWorldError(100.0f) == 0,
-               "a mesh with no chain has exactly one level at every cell size");
+    CHECK_LOUD(plain.lodForWorldError(100.0f) == 0,
+               "a mesh with no chain is level 0 at every cell size");
 }
 
 // ---------------------------------------------------------------------------

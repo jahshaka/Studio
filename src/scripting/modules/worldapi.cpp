@@ -347,12 +347,6 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "setAntiAliasing", "world.setAntiAliasing(samples) -> int",
           "Sets the scene's anti-aliasing: 1 (off), 2, 4 or 8 MSAA samples. Returns the achieved sample count (the driver may clamp; with no engine viewport, the requested value).",
           Needs::Document },
-        { "lodBias", "world.lodBias() -> number",
-          "Reads the scene's LOD dial (ATOM stage 1). 1 is the reference: a mesh swaps to a coarser baked level where that level's geometric error reaches one pixel of screen error at the reference projection (1080 lines, 45 degree vertical field of view).",
-          Needs::Document },
-        { "setLodBias", "world.setLodBias(f) -> number",
-          "Sets the scene's LOD dial and returns the applied value. 1 is the reference; larger swaps to coarser levels earlier (2 halves every switch distance); 0 PINS every object at its finest level, which is both how a test asserts one level at a time and how a user turns automatic LOD off. Applies to the live scene immediately — the switch distances are re-derived in place, with no mesh rebuild. Meshes with no baked LOD chain (every skinned mesh, anything too small to simplify, and anything opened without a bake) are unaffected by any value.",
-          Needs::Document },
         { "shadowResolution", "world.shadowResolution() -> int",
           "Reads the shadow-map atlas base resolution in pixels. With the engine viewport live this is the value the renderer is actually using; otherwise the scene's setting, or 0 when it is on Auto with no shadow-casting light to derive from.",
           Needs::Document },
@@ -1925,30 +1919,6 @@ int WorldApi::setAntiAliasing(int samples)
         return host.viewport->sampleCount();
     }
     return samples;
-}
-
-double WorldApi::lodBias()
-{
-    auto scene = sceneOrFail(QStringLiteral("world.lodBias"));
-    if (!scene) return 0.0;
-    return double(scene->lodBias);
-}
-
-double WorldApi::setLodBias(double bias)
-{
-    auto scene = sceneOrFail(QStringLiteral("world.setLodBias"));
-    if (!scene) return 0.0;
-    if (!(bias >= 0.0) || bias > 1.0e6) {
-        fail(QStringLiteral("world.setLodBias: the bias must be between 0 (pin the finest level) and 1e6"));
-        return double(scene->lodBias);
-    }
-    scene->lodBias = float(bias);
-    // The mirror pushes it on the next sync, exactly like every other scene
-    // value; step a frame when there is a viewport so a script that sets the
-    // dial and then reads app.renderStats() sees the level it asked for.
-    if (host.isEngineReady() && host.viewport)
-        host.viewport->renderFrames(1);
-    return double(scene->lodBias);
 }
 
 int WorldApi::shadowResolution()

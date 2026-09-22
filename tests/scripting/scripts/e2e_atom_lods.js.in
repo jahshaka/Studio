@@ -127,7 +127,7 @@ for (var gy = 0; gy < 7; ++gy)
         LIMB.push({ x: 0.44 + gx * 0.02, y: 0.43 + gy * 0.02 });
 
 function measure(tag, bias) {
-    world.setLodBias(bias);
+    editor.setLodBias(bias);
     editor.frame(4);
     var rs = app.renderStats();
     var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
@@ -189,16 +189,16 @@ assert(drop >= expected,
 // ---------------------------------------------------------------------------
 // 4. THE DIAL IS A DIAL: it reads back, it refuses nonsense, and 0 returns to
 //    the finest level from wherever it was.
-assert(world.lodBias() > 0, "world.lodBias reads back the applied value");
-world.setLodBias(0);
+assert(editor.lodBias() > 0, "editor.lodBias reads back the applied value");
+editor.setLodBias(0);
 editor.frame(4);
-assert(world.lodBias() === 0, "0 reads back as 0");
+assert(editor.lodBias() === 0, "0 reads back as 0");
 var back = app.renderStats();
 assert(back.submittedTriangles === pinned.triangles,
        "and the scene is back to its finest level, exactly (" + back.submittedTriangles + ")");
 
 var refused = null;
-try { world.setLodBias(-1); } catch (e) { refused = "" + e; }
+try { editor.setLodBias(-1); } catch (e) { refused = "" + e; }
 assert(refused !== null, "a negative bias is refused: " + refused);
 
 // ---------------------------------------------------------------------------
@@ -209,7 +209,7 @@ assert(refused !== null, "a negative bias is refused: " + refused);
 //    distance grows with proj[1][1]. Both are the SAME pixel error, which is
 //    what a headset eye and a thumbnail need and what the reference-projection
 //    rule could not give them.
-world.setLodBias(1);
+editor.setLodBias(1);
 // Ogre's world radius is the AABB's, and the fixture's is not a round number, so
 // it is SOLVED FOR from the three arms rather than assumed: the rule is
 //     switch distance = radius + c * proj[1][1] * viewport height
@@ -263,9 +263,9 @@ function switchDistance(fov) {
     // arm's far pose would measure the NEXT threshold instead — which is
     // exactly what a first version of this section did.
     var base = trianglesAt(RESET);
-    world.setLodBias(0);
+    editor.setLodBias(0);
     var finest = trianglesAt(RESET);
-    world.setLodBias(1);
+    editor.setLodBias(1);
     trianglesAt(RESET);
     assert(base === finest, "the sweep starts at the authored level (" + base + ")");
     var d = RESET, coarse = -1;
@@ -371,9 +371,9 @@ console.log("---- 6. a capture is exact ----");
     // describe the capture's own frame, and the shot's probes are the primary
     // observable either way.
     function bandArm(tag, approachBias) {
-        world.setLodBias(approachBias);
+        editor.setLodBias(approachBias);
         editor.frame(4);
-        world.setLodBias(park);
+        editor.setLodBias(park);
         editor.frame(4);
         var shot = editor.screenshot("atom_lod_" + tag + ".png", 480, 270, LIMB, "plain");
         var rs = app.renderStats();          // AFTER the shot: the CAPTURE's frame
@@ -397,7 +397,7 @@ console.log("---- 6. a capture is exact ----");
     assert(fromBelow.triangles === fromAbove.triangles,
            "...and the CAPTURE's own frame drew the same level both ways (" +
            fromBelow.triangles + " triangles)");
-    world.setLodBias(0);
+    editor.setLodBias(0);
     editor.frame(4);
 }
 
