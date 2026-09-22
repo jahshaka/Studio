@@ -25,6 +25,8 @@
 //
 // Document only: the headless NULL render system, no display, no pixels.
 #include <QGuiApplication>
+
+#include "tests/support/testmesh.h"
 #include <cstdio>
 
 #include "irisgl/irisglfwd.h"
@@ -170,7 +172,7 @@ int main(int argc, char **argv)
     // A rig WITH A CLIP moves; a rig without one renders at rest and does not.
     {
         auto rigged = iris::MeshNode::create();
-        rigged->setMesh(":assets/models/cube.obj");
+        rigged->setMesh(testmesh::load(":assets/models/cube.obj"));
         root->addChild(rigged, false);
         rigged->skeleton = iris::Skeleton::create();
         CHECK(is(rigged, "static/default"),

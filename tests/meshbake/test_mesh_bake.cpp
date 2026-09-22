@@ -42,6 +42,8 @@
 // No engine, no display: all of this is document-side by construction.
 
 #include <QCoreApplication>
+
+#include "tests/support/testmesh.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -1145,12 +1147,12 @@ static void surfaceCards()
             ++failures;
             continue;
         }
-        // Mesh::loadMesh is the PRIMITIVE's own path — it builds the cards at
-        // creation, which is the thing being tested for these meshes.
-        iris::Mesh::clearLoadCache();
+        // The cards are built HERE, from the parse, exactly as the BAKE builds
+        // them (ATOM P2 deleted the creation-time generator that used to run
+        // inside Mesh::loadMesh; the cards a primitive carries are its bake's).
         QElapsedTimer timer;
         timer.start();
-        const iris::MeshPtr mesh = iris::Mesh::loadMesh(path);
+        const iris::MeshPtr mesh = testmesh::load(path);
         const double loadMs = double(timer.nsecsElapsed()) / 1e6;
         if (mesh.isNull()) {
             std::printf("FAIL: could not load %s\n", subject.path);
@@ -1194,9 +1196,8 @@ static void surfaceCards()
     // clamped to the mesh's own box in its plane, which is what makes this
     // exact rather than "the box plus a margin".
     {
-        iris::Mesh::clearLoadCache();
         const iris::MeshPtr cube =
-            iris::Mesh::loadMesh(fixture(QStringLiteral("app/content/primitives/cube.obj")));
+            testmesh::load(fixture(QStringLiteral("app/content/primitives/cube.obj")));
         CHECK_LOUD(!cube.isNull() && cube->cards.size() == 6,
                    "the cube gets exactly six cards — the 6-face box, not two per face");
         if (!cube.isNull() && cube->cards.size() == 6) {
@@ -1231,10 +1232,8 @@ static void surfaceCards()
     // model's bake a different object on every import.
     {
         const QString path = fixture(QStringLiteral("app/content/primitives/torus.obj"));
-        iris::Mesh::clearLoadCache();
-        const iris::MeshPtr first = iris::Mesh::loadMesh(path);
-        iris::Mesh::clearLoadCache();
-        const iris::MeshPtr second = iris::Mesh::loadMesh(path);
+        const iris::MeshPtr first = testmesh::load(path);
+        const iris::MeshPtr second = testmesh::load(path);
         bool same = !first.isNull() && !second.isNull()
                     && first->cards.size() == second->cards.size()
                     && first->cardCoverage == second->cardCoverage;
@@ -1261,8 +1260,7 @@ static void surfaceCards()
     // (d) THE BUDGET, and monotonicity in it.
     {
         const QString path = fixture(QStringLiteral("app/content/primitives/star.obj"));
-        iris::Mesh::clearLoadCache();
-        const iris::MeshPtr mesh = iris::Mesh::loadMesh(path);
+        const iris::MeshPtr mesh = testmesh::load(path);
         if (!mesh.isNull()) {
             iris::MeshBake::buildCards(mesh, 0);
             CHECK_LOUD(mesh->cards.isEmpty() && mesh->cardCoverage == 0.0f,

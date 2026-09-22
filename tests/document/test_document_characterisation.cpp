@@ -19,6 +19,8 @@
 //
 // Runs under QT_QPA_PLATFORM=offscreen. Framework-free; non-zero exit on failure.
 #include "irisgl/core/math/mat4.h"
+
+#include "tests/support/testmesh.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
@@ -95,7 +97,7 @@ int main(int argc, char **argv)
 
     // --- MeshNode + mesh from a bundled OBJ: previously fine on CPU, buffers upload at draw
     auto meshNode = iris::MeshNode::create();
-    meshNode->setMesh(":assets/models/sky.obj");
+    meshNode->setMesh(testmesh::load(":assets/models/sky.obj"));
     CHECK(!!meshNode->getMesh(), "mesh loaded from resources without GL");
     scene->getRootNode()->addChild(meshNode);
 
@@ -387,7 +389,7 @@ int main(int argc, char **argv)
 
         // MeshNode — meshPath/meshIndex are deliberately read-only
         auto refMesh = iris::MeshNode::create();
-        refMesh->setMesh(QString(":assets/models/sky.obj"));
+        refMesh->setMesh(testmesh::load(":assets/models/sky.obj"));
         advertises(refMesh, { "meshPath", "meshIndex", "faceCullingMode", "name" }, "MeshNode");
         roundTrip(refMesh, "faceCullingMode", int(iris::FaceCullingMode::Front), "MeshNode");
         readOnly(refMesh, "meshPath", QString("/somewhere/else.obj"), "MeshNode");
@@ -821,11 +823,11 @@ int main(int argc, char **argv)
         QFile probe(res);
         CHECK(probe.open(QIODevice::ReadOnly) && probe.read(200).indexOf("mtllib") < 0,
               "fixture: the resource exists and its first 200 bytes hold no format keyword");
-        auto mesh = iris::Mesh::loadMesh(res);
+        auto mesh = testmesh::load(res);
         CHECK(!mesh.isNull() && mesh->numVerts > 0,
               "an OBJ resource with 300+ bytes of leading comments LOADS (extension hint)");
         auto node = iris::MeshNode::create();
-        node->setMesh(res);
+        node->setMesh(testmesh::load(res));
         CHECK(!node->getMesh().isNull(),
               "...through MeshNode::setMesh too — the default scene's ground path");
     }
@@ -1021,7 +1023,7 @@ int main(int argc, char **argv)
         CHECK(px.save(texPath), "dup: fixture texture written");
 
         auto source = iris::MeshNode::create();
-        source->setMesh(":assets/models/cube.obj");
+        source->setMesh(testmesh::load(":assets/models/cube.obj"));
         source->faceCullingMode = iris::FaceCullingMode::None;
         auto pbr = iris::PbrMaterial::create();
         pbr->setName(QStringLiteral("Red Paint"));

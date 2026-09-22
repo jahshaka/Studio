@@ -23,8 +23,9 @@
 
 class SceneMirror;
 
-/// The legacy Display-menu primitives (widgets/scenewidget.h PreviewModel),
-/// loaded from the same app/shadergraph/*.obj meshes.
+/// The legacy Display-menu primitives (widgets/scenewidget.h PreviewModel), on
+/// the SEEDED, BAKED primitives (services/primitiveassets.h — meshSeed in the
+/// .cpp names the row each one is).
 enum class PreviewMesh
 {
     Sphere,

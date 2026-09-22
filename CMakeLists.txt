@@ -283,6 +283,8 @@ set(SRCS
     src/services/loadtimeline.cpp
     src/services/uistep.cpp
     src/services/meshbakestore.cpp
+    src/services/primitiveassets.cpp
+    src/services/primitiveseed.cpp
     src/services/mainthreadheartbeat.cpp
     src/services/mainthreadwatchdog.cpp
     src/shell/shutdownorder.cpp

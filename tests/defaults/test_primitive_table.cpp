@@ -34,6 +34,8 @@ For more information see the LICENSE file
 // No engine, no display: resources, files and the document's own parser.
 
 #include <QCoreApplication>
+
+#include "tests/support/testmesh.h"
 #include <QFile>
 #include <QGuiApplication>
 #include <QImage>
@@ -74,7 +76,7 @@ int main(int argc, char **argv)
 
         check(QFile::exists(mesh), QStringLiteral("%1: the mesh %2 is shipped").arg(name, mesh));
 
-        iris::MeshPtr parsed = iris::Mesh::loadMesh(mesh);
+        iris::MeshPtr parsed = testmesh::load(mesh);
         check(!parsed.isNull() && parsed->numVerts > 0 && parsed->numFaces > 0,
               QStringLiteral("%1: it parses into real geometry (%2 verts, %3 faces)")
                   .arg(name)
@@ -177,15 +179,22 @@ int main(int argc, char **argv)
               && primitives::byName(QStringLiteral("  CUBE ")) != nullptr,
           "byName is case- and whitespace-insensitive");
 
-    // ---- 6: the teapot's mesh is still shipped, and still pinned ------------
+    // ---- 6: the teapot is a SEED, not a primitive (ATOM P2) -----------------
+    // Its mesh is still shipped — four sample scenes name this path in their
+    // blobs — and it is a Kind::Platform seed row, so it is BAKED like every
+    // other built-in and it is still not something a user can add.
     const QString teapot = QStringLiteral(":/content/primitives/teapot.obj");
     check(QFile::exists(teapot),
           "the teapot MESH is still shipped (four sample scenes name this path in their blobs)");
-    check(primitives::pinnedMeshPaths().contains(teapot),
-          "...and still pinned, so opening one of those samples does not re-parse it on the UI thread");
+    const primitives::Def *teapotSeed = primitives::bySeedMesh(teapot);
+    check(teapotSeed != nullptr && teapotSeed->kind == primitives::Kind::Platform,
+          "...and it is a Platform seed row, so the samples' teapot is a baked asset");
+    check(primitives::byName(QStringLiteral("Teapot")) == nullptr,
+          "...and byName still refuses it: a Platform seed is not a primitive a user may add");
     for (const primitives::Def &def : table)
-        check(primitives::pinnedMeshPaths().contains(QString::fromLatin1(def.mesh)),
-              QStringLiteral("%1's mesh is pinned").arg(QString::fromLatin1(def.name)));
+        check(primitives::bySeedMesh(QString::fromLatin1(def.mesh)) == &def,
+              QStringLiteral("%1's mesh resolves back to its own seed row")
+                  .arg(QString::fromLatin1(def.name)));
 
     // ...and the three retired MESHES are gone from the binary altogether.
     for (const char *gone : { ":/content/primitives/gear.obj",

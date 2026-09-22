@@ -5,6 +5,8 @@
 // runs offscreen like the document suite.
 
 #include "irisgl/core/math/quat.h"
+
+#include "tests/support/testmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
@@ -85,7 +87,7 @@ int main(int argc, char **argv)
     // textured PBR cube (tests tangents, texture transform, metal/rough pack)
     auto cube = iris::MeshNode::create();
     cube->setName("cube");
-    cube->setMesh(":assets/models/cube.obj");
+    cube->setMesh(testmesh::load(":assets/models/cube.obj"));
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     auto pbr = iris::PbrMaterial::create();
     pbr->setBaseColor(QColor(200, 40, 40));
@@ -117,7 +119,7 @@ int main(int argc, char **argv)
     // glass sphere (transmission)
     auto glass = iris::MeshNode::create();
     glass->setName("glass");
-    glass->setMesh(":assets/models/cube.obj");
+    glass->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto glassMat = iris::PbrMaterial::create();
     glassMat->setAlphaMode(3);
     glassMat->setAlpha(0.2f);
@@ -129,7 +131,7 @@ int main(int argc, char **argv)
     // rides extras.jah.blendMode for the viewer)
     auto additive = iris::MeshNode::create();
     additive->setName("additive");
-    additive->setMesh(":assets/models/cube.obj");
+    additive->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto additiveMat = iris::PbrMaterial::create();
     additiveMat->setAlphaMode(4);
     additiveMat->setAlpha(0.6f);
@@ -143,7 +145,7 @@ int main(int argc, char **argv)
     // again: every mode the document declares is checked here.
     auto refractive = iris::MeshNode::create();
     refractive->setName("refractive");
-    refractive->setMesh(":assets/models/cube.obj");
+    refractive->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto refractiveMat = iris::PbrMaterial::create();
     refractiveMat->setAlphaMode(6);
     refractiveMat->setAlpha(0.25f);
@@ -153,7 +155,7 @@ int main(int argc, char **argv)
 
     auto modulate = iris::MeshNode::create();
     modulate->setName("modulate");
-    modulate->setMesh(":assets/models/cube.obj");
+    modulate->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto modulateMat = iris::PbrMaterial::create();
     modulateMat->setAlphaMode(5);
     modulateMat->setAlpha(0.3f);   // ignored: modulate has no alpha semantics

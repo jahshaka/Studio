@@ -2,6 +2,9 @@
 #include "irisgl/core/math/vec.h"
 #include "bridge/enginematerialpreviewscene.h"
 
+#include "irisgl/core/irisutils.h"
+#include "irisgl/import/graphicshelper.h"
+
 #include <QFileInfo>
 #include <algorithm>
 #include <cmath>
@@ -26,19 +29,23 @@ namespace {
 
 const char *kSubjectName = "matpreview-primitive";
 
-// The legacy SceneWidget's primitives (MaterialHelper::assetPath ->
-// app/shadergraph/<file>); app/content/primitives is the fallback.
+/// THE DOCK'S SUBJECT MESHES. Five of the six used to be loaded from
+/// `app/shadergraph/`, where they sat as BYTE-IDENTICAL copies of the shipped
+/// primitives (measured: cube, cone, plane, cylinder, capsule and torus matched
+/// their `app/content/primitives/` twins exactly) — those six duplicate files are
+/// DELETED and the dock reads the shipped ones, which is the same geometry it
+/// always drew. The low-poly ball is its own mesh and stays where it is.
 const char *meshFile(PreviewMesh mesh)
 {
     switch (mesh) {
-    case PreviewMesh::Sphere:   return "lowpoly_sphere.obj";
-    case PreviewMesh::Cube:     return "cube.obj";
-    case PreviewMesh::Plane:    return "plane.obj";
-    case PreviewMesh::Cylinder: return "cylinder.obj";
-    case PreviewMesh::Capsule:  return "capsule.obj";
-    case PreviewMesh::Torus:    return "torus.obj";
+    case PreviewMesh::Sphere:   return "app/shadergraph/lowpoly_sphere.obj";
+    case PreviewMesh::Cube:     return "app/content/primitives/cube.obj";
+    case PreviewMesh::Plane:    return "app/content/primitives/plane.obj";
+    case PreviewMesh::Cylinder: return "app/content/primitives/cylinder.obj";
+    case PreviewMesh::Capsule:  return "app/content/primitives/capsule.obj";
+    case PreviewMesh::Torus:    return "app/content/primitives/torus.obj";
     }
-    return "lowpoly_sphere.obj";
+    return "app/shadergraph/lowpoly_sphere.obj";
 }
 
 } // namespace
@@ -156,11 +163,12 @@ iris::MeshPtr EngineMaterialPreviewScene::meshFor(PreviewMesh mesh)
 {
     auto &slot = mMeshes[int(mesh)];
     if (slot) return slot;
-    const QString file = meshFile(mesh);
-    QString path = IrisUtils::getAbsoluteAssetPath("app/shadergraph/" + file);
-    if (!QFileInfo(path).isFile())
-        path = IrisUtils::getAbsoluteAssetPath("app/content/primitives/" + file);
-    slot = iris::Mesh::loadMesh(path);
+    // Parsed once per process through the importer's own parse entry point
+    // (`Mesh::loadMesh` is deleted, ATOM P2): dock furniture, no cards, no
+    // library. `mMeshes` is the cache — one parse per shape per session.
+    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(
+        IrisUtils::getAbsoluteAssetPath(QString::fromLatin1(meshFile(mesh))));
+    if (!meshes.isEmpty()) slot = meshes.first();
     return slot;
 }
 

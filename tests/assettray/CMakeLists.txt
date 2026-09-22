@@ -28,6 +28,7 @@ add_executable(test_assettray test_assettray.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     ${CMAKE_SOURCE_DIR}/src/services/projectassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp

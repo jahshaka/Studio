@@ -112,7 +112,6 @@ SceneEditService::SceneEditService(Database *db,
       db(db), project(project), undo(undo), selection(selection),
       viewport(viewport), sceneProvider(std::move(sceneProvider))
 {
-    pinBuiltinPrimitives();
 }
 
 void SceneEditService::notifyNodeInserted(const iris::SceneNodePtr &node) { emit nodeInserted(node); }
@@ -120,12 +119,27 @@ void SceneEditService::notifyNodeRemoved(const iris::SceneNodePtr &node) { emit 
 void SceneEditService::notifyHierarchyChanged() { emit hierarchyChanged(); }
 void SceneEditService::notifyTransformChanged() { emit transformRefreshRequested(); }
 
-void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QString &name,
-                                           const std::optional<iris::Vec3> &position,
-                                           surfaceplacement::Placement placement)
+void SceneEditService::addPrimitive(const QString &text,
+                                    const std::optional<iris::Vec3> &position,
+                                    surfaceplacement::Placement placement)
 {
+    // ONE TABLE (src/data/primitives.h). The node takes the row's NAME as its
+    // own — there is no separate "node name" column any more: the two were
+    // equal for every row but Capsule, where the second copy said "Plane" and
+    // had done since the original addCapsule() (the render audit's A10).
+    //
+    // AND THE MESH IS THE SEEDED, BAKED ASSET (ATOM P2): the same geometry an
+    // imported model gets, with its LOD chain, its cards and its SDF, resolved
+    // through the seed key the document stores. `addBuiltinPrimitive` is gone —
+    // it was this function's body with a mesh PATH for an argument, and the path
+    // now comes out of the same table the name does.
+    const primitives::Def *def = primitives::byName(text);
+    if (!def) return;
+    const QString name = QString::fromLatin1(def->name);
+
     const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(meshPath, name, nodeGuid);
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        QString::fromLatin1(def->mesh), name, nodeGuid, db);
     QJsonObject props;
     props["type"] = "builtin";
     db->createAssetEntry(
@@ -172,34 +186,6 @@ void SceneEditService::addHemisphere() { addPrimitive(QStringLiteral("Hemisphere
 // (addTeapot / addSponge / addSteps / addGear are DELETED — owner review R6:
 // PRIMITIVES ONLY. The four slots were dead in MainWindow too; nothing but
 // this line ever called them.)
-
-void SceneEditService::pinBuiltinPrimitives()
-{
-    // THE SHIPPED MODELS ARE HELD (irisgl/document/assets/mesh.h pinLoadPaths;
-    // OPEN-ASSIMP-1). Every world the user opens stands on these — a ground,
-    // some cubes — and the mesh cache holds WEAK references, so closing a
-    // world dropped them and the next open re-parsed them ON THE UI THREAD:
-    // measured 1-4 parses and 17-95 ms per open of a shipped sample, which is
-    // the largest UI-thread parse left once a project's own models are on the
-    // worker. They are a few kilobytes each, compiled into the binary, and
-    // there is a fixed number of them — the one case where holding the parse
-    // is right. Registering does not parse: the first add or load does.
-    iris::Mesh::pinLoadPaths(primitives::pinnedMeshPaths());
-}
-
-void SceneEditService::addPrimitive(const QString &text,
-                                    const std::optional<iris::Vec3> &position,
-                                    surfaceplacement::Placement placement)
-{
-    // ONE TABLE (src/data/primitives.h). The node takes the row's NAME as its
-    // own — there is no separate "node name" column any more: the two were
-    // equal for every row but Capsule, where the second copy said "Plane" and
-    // had done since the original addCapsule() (the render audit's A10).
-    if (const primitives::Def *def = primitives::byName(text)) {
-        addBuiltinPrimitive(QLatin1String(def->mesh), QLatin1String(def->name), position,
-                            placement);
-    }
-}
 
 void SceneEditService::addPointLight()
 {
@@ -525,7 +511,7 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/plane.obj",
         baseName.isEmpty() ? QStringLiteral("Image Plane") : baseName,
-        nodeGuid);
+        nodeGuid, db);
 
     // plane.obj is a 2x2 XZ quad — 0.5 * the aspect-normalized extents caps
     // the long side at exactly 1 m.

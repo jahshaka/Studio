@@ -9,6 +9,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_mesh_bake test_mesh_bake.cpp
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/primitiveassets.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
     # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)

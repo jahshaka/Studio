@@ -35,6 +35,8 @@
 // Needs a display (Vulkan); no window (offscreen view + offscreen QPA).
 
 #include "irisgl/core/math/quat.h"
+
+#include "tests/support/testmesh.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QImage>
@@ -106,7 +108,7 @@ int main(int argc, char **argv)
     // background. A mesh the document can name is the only floor that exists.
     auto floorNode = iris::MeshNode::create();
     floorNode->setName("floor");
-    floorNode->setMesh(":assets/models/cube.obj");
+    floorNode->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto grey = iris::DefaultMaterial::create();
     grey->setDiffuseColor(QColor(90, 90, 90));
     floorNode->setMaterial(grey);
@@ -127,7 +129,7 @@ int main(int argc, char **argv)
 
     auto box = iris::MeshNode::create();
     box->setName("box");
-    box->setMesh(":assets/models/cube.obj");
+    box->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto green = iris::DefaultMaterial::create();
     green->setDiffuseColor(QColor(0, 220, 0));
     box->setMaterial(green);

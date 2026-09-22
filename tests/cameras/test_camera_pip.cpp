@@ -46,6 +46,8 @@
 
 #include <QGuiApplication>
 
+#include "tests/support/testmesh.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -210,7 +212,7 @@ int main(int argc, char **argv)
     // feature recovers, and a value of 8 would clip in both.
     auto cube = iris::MeshNode::create();
     cube->setName("hot cube");
-    cube->setMesh(":assets/models/cube.obj");
+    cube->setMesh(testmesh::load(":assets/models/cube.obj"));
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     {
         const float r = cube->getMeshRadius();

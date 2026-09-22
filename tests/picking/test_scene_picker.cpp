@@ -1,5 +1,7 @@
 // ScenePicker characterisation: picking on the document, no renderer, no GL.
 #include "irisgl/core/math/mat4.h"
+
+#include "tests/support/testmesh.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
@@ -25,7 +27,7 @@ static int failures = 0;
 static iris::MeshNodePtr cubeAt(iris::ScenePtr doc, const iris::Vec3 &pos, const char *name, iris::SceneNodePtr parent = nullptr) {
     auto n = iris::MeshNode::create();
     n->setName(name);
-    n->setMesh(":assets/models/cube.obj");
+    n->setMesh(testmesh::load(":assets/models/cube.obj"));
     const float r = n->getMeshRadius(); const float s = r > 0 ? 1.0f / r : 1.0f;
     n->setLocalScale(iris::Vec3(s, s, s));
     n->setLocalPos(pos);
@@ -239,7 +241,7 @@ int main(int argc, char **argv) {
         // From the source tree: only cube.obj and sky.obj live in the qrc, and
         // a CLOSED mesh cannot show the defect — its far side is front-facing
         // from behind. An open surface is the whole point.
-        pnode->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+        pnode->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         pdoc->getRootNode()->addChild(pnode);
         pdoc->getRootNode()->update(0.0f);
 
