@@ -15,6 +15,15 @@
 //
 // So the claim here is ENERGY, and it has a closed form.
 //
+// WHY IT IS STILL RED AFTER THE ONE VOXEL READER (PHOTON-READER-1, 2026-09-23):
+// the reader moved none of these numbers (1.692x / 1.594x / 0.919x before and
+// after), because the gap is not in the transport. The light injection stores
+// the Lambertian radiance rho * E / pi while `pbsDirect` - what the floor
+// actually shows - carries HlmsPbs' 1/1.51 energyFactor, so the voxels hold the
+// floor about 1.5x brighter than it renders: MEASURE-1a's decision (b), which
+// ONE-ENV owes (the energyFactor on the indirect). The SHAPE miss (2.84 against
+// 1.55) is the integrator's, and remains after that.
+//
 // ===========================================================================
 // THE PHYSICS, WRITTEN OUT
 // ===========================================================================
