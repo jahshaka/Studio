@@ -55,9 +55,6 @@ public:
     Q_INVOKABLE QVariantMap shadowStatus();
     Q_INVOKABLE int antiAliasing();
     Q_INVOKABLE int setAntiAliasing(int samples);
-    /// ATOM stage 1 (SPECS/NANITE_SPEC.md §7): the scene's LOD dial.
-    Q_INVOKABLE double lodBias();
-    Q_INVOKABLE double setLodBias(double bias);
     Q_INVOKABLE int shadowResolution();
     Q_INVOKABLE int setShadowResolution(int pixels);
     /// THE SCENE'S SKYLIGHT, resolved (SKY_LIGHT_SPEC.md §2).

@@ -124,6 +124,13 @@ static MeshData reliefMesh()
     d.lodIndices.push_back(build(2));
     d.lodIndices.push_back(build(4));
     d.lodIndices.push_back(build(8));
+    // BOTH ARRAYS, and `lodBounds` is the one that is READ (ATOM P1's AT-A5):
+    // the view's thresholds selects on the MEASURED two-sided distance, and the
+    // simplifier's own number is carried beside it as a diagnostic nothing reads.
+    // The fixture's three lengths ARE the bounds — they are what the suite's
+    // arithmetic is written against — and `lodErrors` is given the same values so
+    // the fixture states a chain that a real bake could have produced.
+    d.lodBounds = { kErr1, kErr2, kErr3 };
     d.lodErrors = { kErr1, kErr2, kErr3 };
     return d;
 }

@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
+#include "jahshaka/engine/Engine.h"
 #include "services/framepacing.h"
 #include "services/framemonitor.h"
 #include "services/scenestats.h"
@@ -265,7 +266,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, draws, perPass:[{name, triangles, draws}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
+        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
@@ -284,6 +285,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "(Ctrl+F4 / perf.start): the per-pass counters cost clock reads and listeners on every "
           "workspace, so nothing pays for them when nobody is looking, and the list is empty "
           "otherwise. "
+          "`perObject` is ATOM's readout: one row per drawn object with the LOD LEVEL it is "
+          "actually on (`level`), how many its mesh has (`levels`, 1 = no baked chain) and what "
+          "that level's buffers really hold (`triangles`). It is read off the Items — the byte "
+          "the render queue indexes their VAO list with — and never re-derived from the camera, "
+          "so it is the decision and not a second opinion about it. ONE CAVEAT, stated because "
+          "it is real: that byte is one slot per object and every pass which updates LOD lists "
+          "writes it (a planar reflector's mirrored camera, a PiP inset, a probe face, a "
+          "thumbnail), so in a frame that drew only the main view it is the main view's level, "
+          "and in a frame that also drew a mirror it may be the mirror's. "
           "The timings come from Ogre's own FrameStats, which our render loop feeds: `fps`/`frameMs` are "
           "the rolling average, `lastMs` the latest (noisy) sample, `p95Ms`/`p99Ms` the percentiles, "
           "`bestMs`/`worstMs` the extremes. READ THE HONESTY NOTE ON app.frameStats: `fps` here measures "
@@ -1340,6 +1350,29 @@ QVariantMap AppApi::renderStats()
     // The per-pass breakdown of that total, from the render monitor's own pass
     // rows. Empty unless a capture is recording — see the verb's doc.
     out.insert("perPass", FrameMonitor::instance().lastFramePasses());
+    // PER OBJECT, WHICH LEVEL IT DREW (ATOM P1's readout, the gap OWN-TRI left).
+    // The chain could not be SEEN working before this: `submittedTriangles` said
+    // the scene shed triangles and nothing said which object took which level.
+    // Read off the Items, not re-derived — see `ObjectLodDesc` for what `level`
+    // can and cannot promise when a frame also rendered a mirror.
+    {
+        QVariantList rows;
+        if (jahshaka::engine::Scene *es = host.viewport ? host.viewport->engineScene() : nullptr) {
+            std::vector<jahshaka::engine::ObjectLodDesc> lods;
+            es->objectLods(lods);
+            rows.reserve(int(lods.size()));
+            for (const jahshaka::engine::ObjectLodDesc &d : lods) {
+                QVariantMap row;
+                row.insert("id", QVariant::fromValue(qulonglong(d.node)));
+                row.insert("name", QString::fromStdString(d.name));
+                row.insert("level", int(d.level));
+                row.insert("levels", int(d.levels));
+                row.insert("triangles", QVariant::fromValue(qulonglong(d.triangles)));
+                rows.append(row);
+            }
+        }
+        out.insert("perObject", rows);
+    }
     out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
     out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
     out.insert("incompletePsoRequests", s.incompletePsoRequests);

@@ -13,7 +13,7 @@
 // sampled at four densities), which makes the level boundaries EXACT arithmetic
 // against the tier's cell table instead of whatever meshoptimizer happened to
 // achieve on a model — and it is the engine boundary's own contract
-// (MeshData::lodIndices / lodErrors), so it tests the shipped path.
+// (MeshData::lodIndices / lodBounds), so it tests the shipped path.
 // `scripting.e2e.atom_lods` covers the real bake end to end.
 //
 // THE CASES:
@@ -107,6 +107,13 @@ static MeshData reliefMesh()
     d.lodIndices.push_back(build(2));
     d.lodIndices.push_back(build(4));
     d.lodIndices.push_back(build(8));
+    // BOTH ARRAYS, and `lodBounds` is the one that is READ (ATOM P1's AT-A5):
+    // the cascade's rule selects on the MEASURED two-sided distance, and the
+    // simplifier's own number is carried beside it as a diagnostic nothing reads.
+    // The fixture's three lengths ARE the bounds — they are what the suite's
+    // arithmetic is written against — and `lodErrors` is given the same values so
+    // the fixture states a chain that a real bake could have produced.
+    d.lodBounds = { kErr1, kErr2, kErr3 };
     d.lodErrors = { kErr1, kErr2, kErr3 };
     return d;
 }
@@ -275,9 +282,17 @@ int main()
     CHECK(countAt(outer, 2) == 3,
           ("THE FINEST REQUEST WINS FOR A SHARED MESH — both of mesh A's items and mesh C "
            "at one level: " + histText(outer)).c_str());
-    // And it is what the voxeliser HOLDS, not what was asked: the triangles
-    // reconcile exactly with that histogram (the ground is 12, each relief
-    // level is 8192 / 2048 / 512 / 128).
+    // And it is what the voxeliser HOLDS, not what was asked — and since
+    // ogre-patch 0089 that sentence is literally true rather than nearly true
+    // (ATOM inventory row AT-A12). `voxelTriangles` used to be a CPU walk of each
+    // mesh's VAOs at the level just requested, i.e. this case asserted the host's
+    // own prediction against the host's own arithmetic; it is now
+    // `VctVoxelizer::getQueuedIndexCount()`, the sum of the `numIndices` that size
+    // the raster dispatches. The number below is UNCHANGED by that switch, which
+    // is the evidence the patch is worth having: the reading and the prediction
+    // agree exactly on this fixture, so from here on a disagreement means the
+    // voxeliser really did bind something else.
+    // (the ground is 12, each relief level is 8192 / 2048 / 512 / 128)
     const long long expectOuter = 12 + 3 * 512 + 128;
     CHECK(st.cascades.back().voxelTriangles == expectOuter,
           ("and the triangle reading is that histogram, exactly (" +
