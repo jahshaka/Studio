@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -102,6 +103,11 @@ int main()
     PbrParams p; p.albedo = Colour(0.7f, 0.7f, 0.7f); p.roughness = 0.6f;
     const MaterialId mat = scene->createPbrMaterial(p);
     const int kInstances = 500;
+    // WHAT EACH NODE IS, so the DRAW PATH's answer can be checked against the
+    // rule without going through the GPU table (the strategy arm below reads
+    // `objectLods()`, which is keyed by NodeId).
+    struct Placed { float dist, scale; };
+    std::unordered_map<unsigned long long, Placed> placed;
     for (int i = 0; i < kInstances; ++i) {
         const NodeId n = scene->createNode();
         if (!scene->attachMesh(n, mesh, mat)) { std::printf("FAIL: attach\n"); return 1; }
@@ -111,6 +117,7 @@ int main()
         const float s = 0.25f * std::pow(2.0f, float(i % 6));
         enginetest::setNodePosition(scene, n, Vec3(0.0f, 0.0f, -dist));
         enginetest::setNodeScale(scene, n, Vec3(s, s, s));
+        placed[(unsigned long long)n] = { dist, s };
     }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
@@ -201,6 +208,136 @@ int main()
                 }
             }
         }
+    }
+
+    // ---- THE THIRD COPY: THE DRAW PATH'S OWN STRATEGY -----------------------
+    //
+    // The two copies above are the ones a compute shader forces on us. The
+    // STRATEGY (`JahWorldErrorLodStrategy`, irisgl/engine/src/OgreMesh.cpp) is a
+    // third evaluation of the same rule, in Ogre's own four-wide SoA loop, and
+    // it is the one that decides which VAO is DRAWN — so a drift there is a
+    // drift in the picture, not in a report. It was measurably NOT the same rule
+    // until ATOM-RESUMES-1 item 1: it carried no `meshToWorldScale`, so a
+    // 10x-scaled instance took a level whose real deviation was ten times what
+    // it asked for, and nothing compared it with anything.
+    //
+    // ITS PARAMETERS ARE THE VIEW'S, not a sweep's: the strategy reads the
+    // pass's own projection and render-target height, which is exactly what
+    // `fillCullView` reports for this view, and its tolerance is the shipped
+    // `kLodBudgetPixels` (the tier column is not wired into the draw path —
+    // GiQualityFacts::pixelTolerance, scripting.e2e.tier_table_atom). So this
+    // arm holds the SAME (distance x scale) fixture to the same rule at one
+    // parameter set, read through `objectLods()` — the byte the render queue
+    // indexes the VAO list with.
+    {
+        // The level is written by the LOD walk of a rendered frame; the cull
+        // sweep above renders none, so the reading is taken from a fresh one.
+        for (int i = 0; i < 2; ++i) e->renderOneFrame();
+        GpuCullRequest vr;
+        if (!e->fillCullView(view, vr)) { std::printf("FAIL: fillCullView (view)\n"); return 1; }
+        std::vector<ObjectLodDesc> drawn;
+        scene->objectLods(drawn);
+        CHECK(drawn.size() == size_t(kInstances), "every instance reports a drawn level");
+
+        unsigned sEvaluated = 0, sMismatched = 0, sHist[8] = {}, sNearThreshold = 0;
+        // Per SCALE, because the defect this arm exists for is a scale defect:
+        // the table prints one row per octave so a disagreement names the scale
+        // it happens at instead of a slot number.
+        struct Row { unsigned n, bad, levelMin, levelMax; };
+        std::unordered_map<int, Row> byScale;
+        for (const ObjectLodDesc &d : drawn) {
+            auto it = placed.find((unsigned long long)d.node);
+            if (it == placed.end()) continue;
+            const float s = it->second.scale;
+            // Ogre's own quantity: the distance to the bounding SPHERE, whose
+            // radius is the mesh's (the unit square's half-diagonal) times the
+            // largest axis scale — `MovableObject::updateAllBounds`.
+            const float radius = 0.5f * std::sqrt(2.0f) * s;
+            const float dist = std::max(0.0f, it->second.dist - radius);
+            const float footprint = sampleFootprintPerspective(dist, vr.projScaleY,
+                                                               vr.viewportHeight);
+            const float allowed = allowedWorldError(kLodBudgetPixels, footprint, s);
+            const unsigned rule =
+                unsigned(lodLevelForWorldError(kBounds, allowed, kBounds.size() + 1u));
+            ++sEvaluated;
+            if (d.level < 8u) ++sHist[d.level];
+            for (float b : kBounds)
+                if (b > 0.0f && std::fabs(allowed - b) / b < 1.0e-4f) ++sNearThreshold;
+            const int octave = int(std::lround(std::log2(double(s))));
+            Row &row = byScale[octave];
+            if (!row.n) { row.levelMin = 8u; row.levelMax = 0u; }
+            ++row.n;
+            row.levelMin = std::min(row.levelMin, d.level);
+            row.levelMax = std::max(row.levelMax, d.level);
+            if (d.level != rule) {
+                ++sMismatched;
+                ++row.bad;
+                if (sMismatched <= 3u)
+                    std::printf("   STRATEGY DISAGREES: scale %.2f at %.1f m, drawn %u, rule %u "
+                                "(allowed %.6g)\n", s, it->second.dist, d.level, rule, allowed);
+            }
+        }
+        std::printf("\n== the strategy (the DRAWN level), at this view's own "
+                    "%.0f px / proj11 %.4f / %.1f px tolerance ==\n",
+                    vr.viewportHeight, vr.projScaleY, kLodBudgetPixels);
+        std::printf("   %-8s %-6s %-14s %s\n", "scale", "count", "levels drawn", "disagreements");
+        std::vector<int> octaves;
+        for (const auto &kv : byScale) octaves.push_back(kv.first);
+        std::sort(octaves.begin(), octaves.end());
+        for (int o : octaves) {
+            const Row &row = byScale[o];
+            std::printf("   %-8.2f %-6u %u..%-12u %u\n", std::pow(2.0, double(o)), row.n,
+                        row.levelMin, row.levelMax, row.bad);
+        }
+        std::printf("   levels taken: ");
+        for (int i = 0; i < 8; ++i) std::printf("%u:%u ", i, sHist[i]);
+        std::printf("\n   %u evaluations, %u within 1e-4 of a level boundary\n", sEvaluated,
+                    sNearThreshold);
+        char smsg[192];
+        std::snprintf(smsg, sizeof(smsg),
+                      "the STRATEGY agrees with the currency on all %u drawn instances", sEvaluated);
+        CHECK(sMismatched == 0u, smsg);
+        // THE FIXTURE MUST EXERCISE THE SCALE TERM, or this is an equality over
+        // one octave: five octaves of scale, each of which must reach the walk.
+        CHECK(byScale.size() >= 5u, "the drawn set spans at least five octaves of scale");
+        // ...AND THE CHAIN MUST BE WALKED, exactly as in the GPU arm.
+        unsigned sDistinct = 0;
+        for (int i = 0; i < 8; ++i) if (sHist[i]) ++sDistinct;
+        std::snprintf(smsg, sizeof(smsg), "the drawn levels span %u of the eight", sDistinct);
+        CHECK(sDistinct >= 3u, smsg);
+
+        // THE SCALE INVARIANCE ITSELF, stated as physics rather than as
+        // agreement with a formula: the rule is homogeneous in (distance,
+        // scale), so an instance k times as large seen from k times as far
+        // subtends the same angle, shows the same deviation in pixels and must
+        // take the SAME level. A strategy that forgets the mesh-units divisor
+        // fails this at every k but 1.
+        unsigned invariantChecked = 0, invariantBad = 0;
+        for (float s = 0.25f; s <= 8.0f + 1e-3f; s *= 2.0f) {
+            for (float base = 2.0f; base <= 40.0f; base *= 2.0f) {
+                const float radius1 = 0.5f * std::sqrt(2.0f);
+                const float lvl1 = float(lodLevelForWorldError(
+                    kBounds,
+                    allowedWorldError(kLodBudgetPixels,
+                                      sampleFootprintPerspective(std::max(0.0f, base - radius1),
+                                                                 vr.projScaleY, vr.viewportHeight),
+                                      1.0f),
+                    kBounds.size() + 1u));
+                const float lvlS = float(lodLevelForWorldError(
+                    kBounds,
+                    allowedWorldError(kLodBudgetPixels,
+                                      sampleFootprintPerspective(std::max(0.0f, s * base - radius1 * s),
+                                                                 vr.projScaleY, vr.viewportHeight),
+                                      s),
+                    kBounds.size() + 1u));
+                ++invariantChecked;
+                if (lvl1 != lvlS) ++invariantBad;
+            }
+        }
+        std::snprintf(smsg, sizeof(smsg),
+                      "the rule is scale-invariant: %u of %u (scale, distance) pairs agree with "
+                      "their unscaled twin", invariantChecked - invariantBad, invariantChecked);
+        CHECK(invariantBad == 0u, smsg);
     }
 
     std::printf("\n== the parity ==\n   %u evaluations (%d instances x %zu parameter sets)\n",
