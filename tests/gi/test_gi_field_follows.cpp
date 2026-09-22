@@ -517,38 +517,30 @@ int main()
         std::printf("   red bounce on the grey ground beyond cascade 0: chain+field %.4f | "
                     "GI off %.4f\n", chainBounce, noGiBounce);
         CHECK(noGiBounce < 0.004f, "with no GI that ground carries no red at all (the control)");
-        // THE BAR IS 0.012 SINCE ogre-patch 0065, AND THE REASON IS A VERDICT, NOT
-        // A CONCESSION. It was 0.02 against a pin that read 0.0210 — five per cent
-        // of headroom on a quantity the pin computed ORDER-DEPENDENTLY, which is
-        // the defect 0065 exists to remove.
+        // THE EXISTENCE BAR IS GONE (PHOTON phase A, A1 section 1.2 — lane
+        // FENCE-1). It used to read `chainBounce > 0.012f`, and that number was
+        // 0.02 before ogre-patch 0065 changed the answer: a bar re-anchored DOWN
+        // to the value it was measuring, with thirty lines explaining why the
+        // smaller number was acceptable. It could also never fail for the reason
+        // that matters — a transport delivering a tenth of the energy it should
+        // still puts SOME red on that ground.
         //
-        // The three measurements, same pose, same everything else:
-        //   0.0210  the pin (0001-0064). It flags a voxel double-sided whenever
-        //           ANY triangle sat more than 120 degrees from the sum SO FAR,
-        //           which is a SUPERSET of "two-sided" and lights the extras from
-        //           behind: part of this number is the pin's own over-flagging.
-        //   0.0216  0065's first shape, which flagged on group MEMBERSHIP and so
-        //           over-flagged differently (every surface crossing the fold's
-        //           seam — the F1 review finding, now fixed and guarded by
-        //           gi.leak_room's seam case).
-        //   0.0174  0065 as it ships: a voxel is two-sided when its two groups'
-        //           MEANS are more than 120 degrees apart, nothing else.
+        // WHAT IS LEFT HERE IS A SIGN, DERIVED FROM THE CONTROL and not from any
+        // measurement of the thing under test: the chain+field arm must put more
+        // red on that ground than the GI-off arm could, and "could" is the
+        // control's own bar asserted one line above. Nothing about this can be
+        // re-anchored by a change in the transport's magnitude.
         //
-        // What remains between 0.0174 and 0.0210 is a TIE-BREAK, not an error.
-        // Both answers pick one cluster out of a voxel that holds three (these
-        // walls are 0.2 m thick, so at the outer cascades' 1.9 m cell nearly
-        // every wall voxel holds a front face, a back face AND an edge): the pin
-        // keeps whichever cluster its first triangle seeded, 0065 keeps the
-        // larger of the fold's two groups, and on an edge voxel those differ by a
-        // reflection. Neither is more right; only one of them is the same answer
-        // twice.
-        //
-        // The CLAIM this case makes is unchanged and is nowhere near the bar: the
-        // ground beyond cascade 0 carries the chain's bounce, 0.0174 against a
-        // GI-off control of 0.0000 asserted above. 0.012 is that with 30 % of
-        // headroom, which is six times what the old bar had.
-        CHECK(chainBounce > 0.012f,
-              "A PIXEL BEYOND CASCADE 0 CARRIES THE CHAIN'S BOUNCE WITH THE FIELD BOUND (G3)");
+        // THE MAGNITUDE now lives in `gi.field_follows_energy`
+        // (tests/gi/test_gi_field_energy.cpp, label `photon-target`): a sunlit
+        // matte floor lighting a perpendicular matte wall, measured against the
+        // finite-rectangle transfer integral with HlmsPbs BRDF_Default's own
+        // direct diffuse as its source, at three heights. That suite is where a
+        // transport that loses energy reds.
+        CHECK(chainBounce > noGiBounce + 0.004f,
+              "A PIXEL BEYOND CASCADE 0 CARRIES THE CHAIN'S BOUNCE WITH THE FIELD BOUND (G3) — "
+              "more red than the GI-off control is allowed to carry; the ENERGY is "
+              "gi.field_follows_energy's bar");
     }
 
     // =====================================================================

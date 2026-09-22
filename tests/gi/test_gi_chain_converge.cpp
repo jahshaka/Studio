@@ -28,22 +28,86 @@
 //
 // Its own binary like every GI suite: the voxel lighting binds process-wide to
 // HlmsPbs, so this scene must not share a process with another arm's.
+//
+// ===========================================================================
+// TWO ctest ROWS, ONE BINARY (PHOTON phase A, A1 section 0 / 1.2 — lane FENCE-1)
+// ===========================================================================
+// `restSweeps >= 3` pins a CONSTANT (`kAtRestSweeps`, EnginePrivate.h:4609) and
+// nothing else. It is green on a renderer that needs one pass and on one that
+// needs thirty, and it would RED on a renderer that reached its fixed point in
+// two — an improvement. A suite about convergence must measure the RESIDUAL, so:
+//
+//   gi.chain_converge         ORDINARY, and it gates: the history test (a lamp
+//                             that travelled renders what the same lamp jumped
+//                             there renders), the idempotence of a second tick,
+//                             the single volume's bit-exactness, the field's
+//                             re-convergence — and the constant, renamed to what
+//                             it is ("no regression while red") and DELETED by
+//                             the lane that removes the target row's label.
+//   gi.chain_converge_target  LABEL `photon-target`: after ONE at-rest sweep the
+//                             picture is within 0.5 codes of the picture after
+//                             TEN. Runs everywhere, prints its value, gates
+//                             nothing. GREEN AFTER PHOTON P4's ONE-WRITER +
+//                             SWEEPS-3 (one injectCascade(i, mode); the at-rest
+//                             sweep count DERIVED, not measured).
+//
+// TODAY'S VALUE, MEASURED ON THIS TREE (2026-09-22, RTX 4080 SUPER): the
+// residual is **0.00/255** — the target is ALREADY MET on this fixture, and that
+// is a finding, not a pass to be quiet about. Both arms walk the lamp with the
+// engine's moving pass first, so it is not the trivial "one iteration from the
+// fixed point" reading; this room simply converges in one at-rest sweep, which
+// means `kAtRestSweeps = 3` spends two sweeps per tick here for nothing. The
+// room that does NOT converge in one is `scripting.e2e.movable_lamp_rest`'s
+// (4/255 at two passes, 0/255 at three — spikes/lamprest-2), which is where the
+// lane that DERIVES the count should take its reading. The target row stays
+// registered and labelled: it is the fence that reds if a change makes this
+// fixture stop converging, and the label comes off with the derivation.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
 using namespace jahshaka::engine;
 
 static int failures = 0;
+/// `--target` picks the TARGET row (gi.chain_converge_target, label
+/// photon-target). One binary, two rows: the measurements are identical and only
+/// the assertions differ, so the rows can never drift apart.
+static bool gTarget = false;
+
 #define CHECK(cond, msg)                                                        \
     do {                                                                        \
         if (cond) std::printf("ok: %s\n", msg);                                 \
         else { std::printf("FAIL: %s\n", msg); ++failures; }                     \
+    } while (0)
+
+/// The ordinary row's assertions — skipped (but still measured and printed) in
+/// the target row.
+#define CHECK_ORDINARY(cond, msg)                                               \
+    do {                                                                        \
+        if (gTarget) break;                                                     \
+        if (cond) std::printf("ok: %s\n", msg);                                 \
+        else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
+    } while (0)
+
+/// A TARGET line: the value and the bar, printed on every run of either row, so
+/// the distance to the bar is visible from any lane's scoped gate. It counts a
+/// FAILURE only in the target row.
+#define TARGET(value, bar, what)                                                \
+    do {                                                                        \
+        const double v_ = double(value), b_ = double(bar);                      \
+        const bool met_ = v_ <= b_;                                             \
+        std::printf("target: %.4f (bar %.4f) %s%s\n", v_, b_, what,             \
+                    met_ ? " -- MET" : "");                                    \
+        if (gTarget) {                                                          \
+            if (met_) std::printf("ok: %s\n", what);                            \
+            else { std::printf("FAIL: %s\n", what); ++failures; }               \
+        }                                                                       \
     } while (0)
 
 static const unsigned kSize = 128;
@@ -86,13 +150,20 @@ static float meanOf(const Image &img)
     return float(sum / double(kSize * kSize) * 255.0);
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--target") == 0) gTarget = true;
+    std::printf("== gi.chain_converge%s: %s\n", gTarget ? "_target" : "",
+                gTarget ? "THE TARGET ROW (label photon-target) -- the RESIDUAL, not the "
+                          "constant; green after PHOTON P4 (ONE-WRITER + SWEEPS-3)"
+                        : "the ORDINARY row -- the history test and the fixed-point idempotence");
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test-gi-chain-converge-ogre.log";
+    cfg.logFile = gTarget ? "test-gi-chain-converge-target-ogre.log"
+                          : "test-gi-chain-converge-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -194,15 +265,88 @@ int main()
     std::printf("   passes: moving %d, at rest %d\n", movingSweeps, restSweeps);
     CHECK(movingSweeps == 1,
           "a tick taken WHILE something is moving spends exactly one injection pass");
-    CHECK(restSweeps >= 3,
-          "AN AT-REST TICK ITERATES TO THE CHAIN'S FIXED POINT (three passes or "
-          "more; two leaves the history it started from in the picture)");
+    CHECK_ORDINARY(restSweeps >= 3,
+                   "no regression while red: an at-rest tick spends three passes or more (the "
+                   "CONSTANT kAtRestSweeps, which is what the residual arm below replaces — "
+                   "DELETED by the lane that removes the target row's label)");
     // ...and the diagnostic that re-measures it is wired to the same place.
     ::setenv("JAHSHAKA_GI_SWEEPS", "5", 1);
     scene->refreshGiLighting(false);
     const int forced = scene->giStatus().chainSweeps;
     ::unsetenv("JAHSHAKA_GI_SWEEPS");
     CHECK(forced == 5, "JAHSHAKA_GI_SWEEPS re-measures the count (the lane's instrument)");
+
+    // ---- 1b. THE RESIDUAL — THE TARGET (PHOTON phase A, A1 section 1.2) ----
+    //
+    // WHAT THE ASSERTION ABOVE ACTUALLY SAYS, and why it is the wrong claim:
+    // `restSweeps >= 3` pins a CONSTANT (`kAtRestSweeps`, EnginePrivate.h) and
+    // nothing else. It is green on a renderer that needs one pass and on a
+    // renderer that needs thirty; it would red on a renderer that reached its
+    // fixed point in two, which is an IMPROVEMENT. A suite about convergence
+    // must measure the RESIDUAL.
+    //
+    // THE CORRECT CLAIM: after ONE at-rest sweep the picture is already what ten
+    // sweeps give. Ten is the reference because three, four and six were
+    // measured identical (spikes/lamprest-2) — the fixed point is reached well
+    // before ten, so ten IS the fixed point for this fixture, measured rather
+    // than assumed. The bar is 0.5 codes: half a quantisation step of the 8-bit
+    // picture, i.e. the tightest statement the instrument can make.
+    //
+    // BOTH ARMS START FROM THE SAME PERTURBED HISTORY, and that is the whole
+    // difficulty. One Jacobi iteration taken from the FIXED POINT stays at the
+    // fixed point, so "one sweep against ten" measured from a settled chain
+    // reads 0.00/255 on any renderer whatever — measured, and it is how this arm
+    // was first written. The residual only exists relative to a state that is
+    // NOT converged, so each arm walks the lamp with the engine's MOVING pass
+    // (one coarse injection per step, which is what the mirror really spends
+    // while something moves) and only then takes its at-rest sweeps.
+    //
+    // THIS IS A TARGET. Green after PHOTON P4's ONE-WRITER + SWEEPS-3 (one
+    // `injectCascade(i, mode)` and an at-rest sweep count DERIVED rather than
+    // measured); the lane that lands them deletes `photon-target` from the
+    // target row AND deletes the `restSweeps >= 3` assertion above.
+    //
+    // `JAHSHAKA_GI_SWEEPS` is the instrument and stays: it is the only way to
+    // ask the engine for a sweep count the table does not offer, and the arm
+    // above proves it is wired to the thing it claims to set.
+    {
+        const auto walkThenSweeps = [&](int sweeps, Image &img) {
+            lampAt(-3.0f);
+            scene->refreshGiLighting(false);       // a settled start, same for both arms
+            render(e, 2);
+            for (int i = 1; i <= 6; ++i) {         // the same walk, same steps
+                lampAt(-3.0f + 6.0f * float(i) / 6.0f);
+                scene->refreshGiLighting(true);    // the MOVING pass: one coarse injection
+                render(e, 1);
+            }
+            char buf[16];
+            std::snprintf(buf, sizeof(buf), "%d", sweeps);
+            ::setenv("JAHSHAKA_GI_SWEEPS", buf, 1);
+            scene->refreshGiLighting(false);       // the at-rest tick, at THIS sweep count
+            const int spent = scene->giStatus().chainSweeps;
+            ::unsetenv("JAHSHAKA_GI_SWEEPS");
+            shot(img);
+            return spent;
+        };
+        Image tenSweeps, oneSweep;
+        const int ten = walkThenSweeps(10, tenSweeps);
+        const int one = walkThenSweeps(1, oneSweep);
+        const float residual = worstDiff(oneSweep, tenSweeps);
+        std::printf("   THE RESIDUAL after the same walk: one sweep (%d) against ten (%d) — "
+                    "worst pixel %.2f/255, means %.2f vs %.2f\n", one, ten, residual,
+                    meanOf(oneSweep), meanOf(tenSweeps));
+        TARGET(residual, 0.5,
+               "ONE at-rest sweep already IS the chain's fixed point: after the same walk, the "
+               "picture after one sweep is within half a quantisation step of the picture after "
+               "ten");
+        // ...and the SHIPPED count's own residual, printed beside it: the distance
+        // the shipped tick still has to travel, which is the number the lane that
+        // derives the count will be reading.
+        Image shipped;
+        const int shippedSweeps = walkThenSweeps(0, shipped);   // 0 = leave the table alone
+        std::printf("   (the SHIPPED count (%d) after the same walk: residual %.2f/255 against "
+                    "ten)\n", shippedSweeps, worstDiff(shipped, tenSweeps));
+    }
 
     // ---- 2. THE SHIPPED COUNT REACHES THE FIXED POINT --------------------
     Image jump, travel;

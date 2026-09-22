@@ -174,8 +174,29 @@ ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
 # would drop the product-contract cache suites (code review 2026-09-10). `--timeout 120` is
 # ctest's DEFAULT for the rows that set no TIMEOUT (46 of them) — a hang costs 2 min, not 25.
 NIGHTLY_LABELS = {"benchmark", "shadercache-attack"}
+
+# TARGET TESTS (PHOTON phase A, A1 §0; the label's ONE definition lives here).
+#
+# A target test states the CORRECT number for a term the renderer gets wrong
+# today, and it cannot pass until the PART named in its header lands. It is not
+# a disabled test and it is not a bracket around an artefact: it RUNS in every
+# scoped selection and PRINTS its value ("target: <value> (bar <bar>)"), so the
+# distance to the bar is visible on every lane and a target that goes green
+# early is noticed instead of sitting red for a month. What it does not do is
+# decide a gate: the lane that fixes the term DELETES the label from the
+# suite's CMake, and that deletion IS the part's acceptance.
+#
+# So the exclusion is from PASS/FAIL, never from the run. gate-scope runs the
+# gating suites first (their exit code is the gate's), then the target suites in
+# a second ctest invocation whose result is reported and discarded. The MERGE
+# and PUSH tiers drop them with -LE, which is the only shape ctest offers for
+# "do not let these decide the tier"; their values are read from a lane's scoped
+# run, where they are printed.
+TARGET_LABELS = {"photon-target"}
+
+NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET_LABELS))
 MERGE_TIER = ('ctest -j4 --timeout 120 --output-on-failure '
-              '-LE "^(benchmark|shadercache-attack)$" -E "^gi\\.ddgi_raster$"')
+              f'-LE "^({NIGHTLY_LABEL_RE})$" -E "^gi\\.ddgi_raster$"')
 
 
 def sh(cmd, cwd=ROOT):
@@ -474,16 +495,29 @@ def main():
     # irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD.)
     nightly = [n for n in selected if inv[n]["labels"] & NIGHTLY_LABELS]
     for n in nightly: selected.pop(n)
+    # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS): they run, they
+    # print their value, and their exit code is not the gate's.
+    targets = sorted(n for n in selected if inv[n]["labels"] & TARGET_LABELS)
+    selected_targets = {n: selected.pop(n) for n in targets}
     names = sorted(selected)
     est = sum(costs.get(n, 10.0) for n in names)
     serial = sum(costs.get(n, 10.0) for n in names if inv[n]["serial"])
     wall = max(est / float(a.jobs), serial) + 5
-    regex = "^(" + "|".join(re.escape(n) for n in names) + ")$"
-    cmd = f"ctest -j{a.jobs} --timeout 120 --output-on-failure --no-tests=error -R '{regex}'"
+
+    def ctest_for(suites, jobs):
+        rx = "^(" + "|".join(re.escape(n) for n in suites) + ")$"
+        return f"ctest -j{jobs} --timeout 120 --output-on-failure --no-tests=error -R '{rx}'"
+
+    cmd = ctest_for(names, a.jobs) if names else ""
+    # The targets run SERIALLY (-j1): they are measurements, and a measurement
+    # sharing the GPU with three siblings prints a number nobody can use.
+    target_cmd = ctest_for(targets, 1) if targets else ""
 
     if a.json:
-        print(json.dumps({"paths": paths, "suites": names, "fallback": fallback, "estimated_seconds": est,
-                          "estimated_wall": wall, "command": MERGE_TIER if fallback else cmd}, indent=1))
+        print(json.dumps({"paths": paths, "suites": names, "targets": targets, "fallback": fallback,
+                          "estimated_seconds": est, "estimated_wall": wall,
+                          "command": MERGE_TIER if fallback else cmd,
+                          "target_command": target_cmd}, indent=1))
         return
     print(f"gate-scope: {len(paths)} touched path(s)")
     for p, why in rationale: print(f"  {p}\n      -> {why}")
@@ -496,7 +530,11 @@ def main():
     if skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
     if nightly: print(f"\n(nightly-tier suites left out: {sorted(nightly)})")
-    if not names:
+    if targets:
+        print(f"\nTARGET TESTS (label {'/'.join(sorted(TARGET_LABELS))}) — they RUN and PRINT their "
+              f"value, and they do NOT decide this gate:")
+        for n in targets: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected_targets[n]}")
+    if not names and not targets:
         # THE ONLY HONEST EMPTY SELECTION is a change that moved no code: docs,
         # a spec, a data file, a scratch script. A change that DID move code
         # cannot select nothing, because ALWAYS_ON_CODE adds the smoke pair to
@@ -515,11 +553,26 @@ def main():
         print("\nSCOPED tier: NOTHING to gate — every touched path is docs/scripts/data with no owning suite "
               "(a code path always adds app.startup_quiet + api.contract)")
         return
-    print(f"\nSCOPED tier: {len(names)} suite(s), ~{est:.0f} suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} "
-          f"(serial islands {serial:.0f} s); costs from scripts/gate-times.txt + the build dir's last run, 10 s assumed otherwise")
-    for n in names: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
-    print(f"\n{cmd}")
-    if a.run: sys.exit(subprocess.call(cmd, cwd=build, shell=True))
+    if names:
+        print(f"\nSCOPED tier: {len(names)} suite(s), ~{est:.0f} suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} "
+              f"(serial islands {serial:.0f} s); costs from scripts/gate-times.txt + the build dir's last run, 10 s assumed otherwise")
+        for n in names: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
+        print(f"\n{cmd}")
+    else:
+        print("\nSCOPED tier: every selected suite is a TARGET test — this change gates on nothing "
+              "of its own, and the targets below still run and report.")
+    if target_cmd: print(f"\n{target_cmd}    # target tests: reported, NOT gating")
+    if a.run:
+        rc = subprocess.call(cmd, cwd=build, shell=True) if cmd else 0
+        if target_cmd:
+            # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown
+            # away: a target is red until its part lands, and a lane that had to
+            # go green on one could not merge anything.
+            print("\n=== target tests (label %s): reported, not gating ==="
+                  % "/".join(sorted(TARGET_LABELS)))
+            trc = subprocess.call(target_cmd, cwd=build, shell=True)
+            print("=== target tests exited %d — NOT part of this gate's verdict ===" % trc)
+        sys.exit(rc)
 
 
 if __name__ == "__main__":

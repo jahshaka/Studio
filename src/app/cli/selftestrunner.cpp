@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "scripting/scriptengine.h"
 #include "shell/mainwindow.h"
 #include "viewport/ieditorviewport.h"
 
@@ -76,6 +77,132 @@ int countNodes(const iris::SceneNodePtr &node)
     for (const auto &child : node->children()) n += countNodes(child);
     return n;
 }
+
+/// `out.png` -> `out.B1.png` — the same rule posePath() uses, for any tag.
+QString taggedPath(const QString &outPng, const QString &tag)
+{
+    const QFileInfo fi(outPng);
+    const QString suffix = fi.completeSuffix();
+    const QString base = suffix.isEmpty() ? outPng : outPng.left(outPng.size() - suffix.size() - 1);
+    return base + QStringLiteral(".") + tag + QStringLiteral(".")
+           + (suffix.isEmpty() ? QStringLiteral("png") : suffix);
+}
+
+// ---------------------------------------------------------------------------
+// POSE PAIR B — A FENCE THAT CAN SEE LIGHTING (PHOTON phase A, A1 section 1.1;
+// lane FENCE-1)
+// ---------------------------------------------------------------------------
+//
+// WHY. Poses 1 and 2 are the DEFAULT SCENE. It has no reflective pixel, no
+// cascade crossing, no emissive above 1.0 and no ray-traced anything, so not one
+// defect the PHOTON build exists to fix — and not one regression it could
+// introduce — can move either hash. Six lanes in a row have had to prove "the
+// hashes are exact" about code whose subject the hashes cannot see.
+//
+// WHAT FIXTURE B IS, and every element is there for a term:
+//   * an EMPTY project (never a shipped sample: a sample is content that moves
+//     for content reasons, and a fence must not);
+//   * the realistic sky + ONE directional light, which is the sun role — the
+//     environment term and the direct term;
+//   * a 60 x 60 m GLOSSY floor (metallic 1, roughness 0.2): the reflection
+//     terms. The default Ground cannot take a reflective look, so it is a
+//     `plane` primitive (DOCS/traps/ENGINE.md, "a moved camera is not a new
+//     view" — the fixture that shows reflection defects is a glossy FLOOR at a
+//     grazing angle with occluders standing on it);
+//   * seven 1 x 3 x 1 m pillars across the view, of which #4 is EMISSIVE at
+//     radiance 3.0 (above the voxel material store's 1.0 clip — VOXEL-CLIP-1's
+//     witness in a hash) and #7 is a MIRROR (metallic 1, roughness 0);
+//   * a matte white wall 12 x 4 m at z = -9, so a bounce off the sunlit floor
+//     has a receiver BEYOND cascade 0's face (cascade 0's half-extent is 5 m at
+//     every tier — `giQualityFacts`);
+//   * `world.photon({enabled:true, tier:"high"})` and a camera at (0,5,14)
+//     looking at (0,1,0): the view spans cascade 0's face, the floor mirrors the
+//     pillars and the sky, the mirror pillar holds a reflection, the emissive
+//     lights the floor.
+//
+// TWO HASHES, because the ray tier is half the renderer: B1 with rays, then
+// `world.rayTracing("off")` and B2. On a machine with no ray query B1 == B2 is
+// LEGAL and said so; otherwise identical hashes mean the rays did nothing.
+//
+// BUILT THROUGH THE SCRIPTING VERBS, in this process, API-first: the fixture is
+// a sequence of verbs the editor itself offers, so it cannot drift from what the
+// application can express, and every verb it needs already existed.
+const char *const kFixtureBScript = R"JS(
+var g = project.create("selftest-fixture-B", { empty: true });
+if (!g || g.length < 10) throw new Error("project.create refused");
+
+// The sun FIRST: the realistic sky takes its sun position from the scene's sun
+// (the first directional light), so the light has to exist before the sky is
+// asked for. A fixed rotation, because a fence may not depend on a default.
+var sun = scene.addLight("directional", { position: { x: 0, y: 12, z: 0 },
+                                          rotation: { x: -52, y: 28, z: 0 },
+                                          intensity: 3.0 });
+if (!sun) throw new Error("scene.addLight(directional) refused");
+if (!world.sky("realistic", { density: 0.35, diffusion: 1.6, power: 1.0, sunHaze: 2.5 }))
+    throw new Error("world.sky(realistic) refused");
+
+// THE GLOSSY FLOOR, 60 x 60 m, lifted 2 cm so it is unambiguously above y = 0.
+var floor = scene.addPrimitive("plane", { position: { x: 0, y: 0.02, z: 0 },
+                                         scale: { x: 60, y: 1, z: 60 } });
+if (!material.set(floor, { baseColor: "#d8d8d8", metallic: 1.0, roughness: 0.2 }))
+    throw new Error("material.set(floor) refused");
+
+// SEVEN PILLARS at x = -12 .. 12 step 4, z = -2. #4 (index 3) is the emissive
+// above the clip; #7 (index 6) is the mirror.
+var cols = ["#ff3030", "#30ff30", "#3060ff", "#ffffff", "#ff30ff", "#20e0e0", "#ffffff"];
+for (var i = 0; i < 7; ++i) {
+    var c = scene.addPrimitive("cube", { position: { x: -12 + i * 4, y: 1.5, z: -2 },
+                                        scale: { x: 1, y: 3, z: 1 } });
+    if (i === 3) {
+        if (!material.set(c, { baseColor: "#101010", roughness: 0.9,
+                               emissiveColor: "#ffffff", emissiveIntensity: 3.0 }))
+            throw new Error("material.set(emissive pillar) refused");
+    } else if (i === 6) {
+        if (!material.set(c, { baseColor: "#ffffff", metallic: 1.0, roughness: 0.0 }))
+            throw new Error("material.set(mirror pillar) refused");
+    } else {
+        if (!material.set(c, { baseColor: cols[i], roughness: 0.6 }))
+            throw new Error("material.set(pillar) refused");
+    }
+}
+
+// THE MATTE WALL at z = -9: a receiver for the floor's bounce BEYOND cascade 0's
+// 5 m half-extent.
+var wall = scene.addPrimitive("cube", { position: { x: 0, y: 2, z: -9 },
+                                       scale: { x: 12, y: 4, z: 0.3 } });
+if (!material.set(wall, { baseColor: "#f0f0f0", metallic: 0.0, roughness: 1.0 }))
+    throw new Error("material.set(wall) refused");
+
+var ph = world.photon({ enabled: true, tier: "high" });
+if (!ph || ph.enabled !== true || ph.tier !== "high")
+    throw new Error("world.photon(high) did not take: " + JSON.stringify(ph));
+// SCREEN-SPACE REFLECTIONS ON, EXPLICITLY, AND IT IS LOAD-BEARING: the RAY tier
+// rides the SSR chain's prepass (`gi.rt_reflect` case 6, "with the view's SSR row
+// OFF there is no trace at all, whatever the machine can do"). The `ssr` row's
+// own tier column is the WORLD MODE's, not Photon's, so a Photon tier does not
+// set it and the fixture must — measured: without this line B1 and B2 hashed
+// identically on a machine with ray queries.
+var ssr = world.override({ id: "ssr", value: "hq" });
+if (world.settings().ssr.valueId !== "hq")
+    throw new Error("world.override(ssr=hq) did not take: " + JSON.stringify(ssr));
+if (world.rayTracing("auto") !== "auto") throw new Error("world.rayTracing(auto) refused");
+editor.setCamera({ position: { x: 0, y: 5, z: 14 }, lookAt: { x: 0, y: 1, z: 0 } });
+
+// SETTLE IN FRAMES, on the fixed clock, and generously: the cascade scheduler
+// spends one cascade per frame, the incremental settle pays one injection per
+// frame after that, and the ray tier's history has its own warm-up. 300 frames
+// is many times what any of them owes.
+editor.frame(300);
+"ok"
+)JS";
+
+/// Part two: the rays come off and the picture settles again. A separate
+/// evaluation because the screenshot between them is the RUNNER's.
+const char *const kFixtureBNoRaysScript = R"JS(
+if (world.rayTracing("off") !== "off") throw new Error("world.rayTracing(off) refused");
+editor.frame(300);
+"ok"
+)JS";
 
 }   // namespace
 
@@ -285,6 +412,144 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: the two poses hash IDENTICALLY — the camera move "
                              "did not take\n");
         return 1;
+    }
+
+    // ---- POSE PAIR B (lane FENCE-1) ---------------------------------------
+    // See kFixtureBScript's header for what the fixture is and why each element
+    // of it is there. It runs LAST and writes its own files, so it cannot move
+    // poses 1 and 2: both are saved, read and hashed above.
+    ScriptEngine *scripting = window.scripting();
+    if (!scripting) {
+        std::fprintf(stderr, "engine-selftest: no scripting host — fixture B is built through the "
+                             "verbs and cannot be built without one\n");
+        return 1;
+    }
+    const auto runFixtureStep = [&](const char *source, const char *what) {
+        // ScriptRunPolicy::Off, like `--script`: the driver takes no tick of its
+        // own, so the ONLY frames drawn are the ones `editor.frame(n)` asks for.
+        // That is what makes a hash of this fixture a statement about a frame
+        // count rather than about how fast this box happens to be.
+        const ScriptResult r = scripting->evaluate(QString::fromUtf8(source),
+                                                  QStringLiteral("selftest-fixture-B"), true, 0,
+                                                  ScriptRunPolicy::Off);
+        if (!r.ok) {
+            std::fprintf(stderr, "engine-selftest: fixture B (%s) failed: %s\n", what,
+                         qPrintable(r.toString()));
+            if (!r.stack.isEmpty()) std::fprintf(stderr, "%s\n", qPrintable(r.stack));
+        }
+        return r.ok;
+    };
+    // A REAL VIEWPORT FIRST. Pose 2 leaves the window at 700x520 and the
+    // viewport at 726x131 — the two deliberate resizes above are a swapchain
+    // test, and what they leave behind is a 131-pixel-tall view. Fixture B is
+    // about SCREEN-SPACE reflections and a ray prepass that rides them, so it
+    // gets a window of a stated size, and the size is part of the fence.
+    window.resize(1280, 800);
+    for (int frame = 0; frame < 12; ++frame) {
+        app.processEvents(QEventLoop::AllEvents, 50);
+        QThread::msleep(16);
+    }
+    std::fprintf(stderr, "engine-selftest: fixture B renders at %dx%d (window 1280x800)\n",
+                 window.viewport()->renderTargetSize().width(),
+                 window.viewport()->renderTargetSize().height());
+
+    if (!runFixtureStep(kFixtureBScript, "build + settle")) return 1;
+    app.processEvents();
+
+    // THE GRADE IS PART OF THE FENCE, and this is the one thing about fixture B
+    // that had to be discovered rather than designed.
+    //
+    // `takeScreenshot(w, h)` is the PLAIN grade — "NO POST-PROCESSING AT ALL:
+    // 1x MSAA, linear radiance clipped to 8 bits" (ieditorviewport.h). Poses 1
+    // and 2 are Plain shots, and that is right for them: they are an exactly
+    // reproducible measuring instrument. But Plain has no post chain, so it has
+    // no SSR prepass, and the RAY tier rides that prepass — measured on this
+    // tree: a Plain-grade fixture B with a glossy floor, a mirror pillar and the
+    // ray tier on hashed IDENTICALLY with rays on and off, 0 of 65,536 pixels
+    // different. A Plain hash structurally cannot see the half of this renderer
+    // PHOTON's P3 and P5 exist to change.
+    //
+    // So B1/B2 are the VIEWPORT grade: the scene's whole chain — SSAO, SSR, the
+    // ray tier, bloom, SMAA, the looks stack, HDR and the tonemap — with the
+    // exposure RE-SEEDED from the description rather than carried over from the
+    // on-screen view. `Scene` would have been the other candidate and is the
+    // wrong one here: it pins the shot to the on-screen view's MEASURED exposure,
+    // which is a temporal filter's state, and a fence may not depend on one.
+    // Viewport is deterministic by construction (`resetExposureHistory`).
+    const QString b1Png = taggedPath(outPng, QStringLiteral("B1"));
+    QImage imgB1 = window.viewport()->takeScreenshot(256, 256,
+                                                     IEditorViewport::ScreenshotGrade::Viewport);
+    if (imgB1.isNull() || !imgB1.save(b1Png, "PNG")) {
+        std::fprintf(stderr, "engine-selftest: could not take or save pose B1 (%s)\n",
+                     qPrintable(b1Png));
+        return 1;
+    }
+    const QString hashB1 = fileSha256(b1Png);
+    std::fprintf(stderr, "engine-selftest: pose B1 (rays) sha256 %s (%s)\n",
+                 qPrintable(hashB1), qPrintable(b1Png));
+
+    if (!runFixtureStep(kFixtureBNoRaysScript, "rays off + settle")) return 1;
+    app.processEvents();
+
+    const QString b2Png = taggedPath(outPng, QStringLiteral("B2"));
+    QImage imgB2 = window.viewport()->takeScreenshot(256, 256,
+                                                     IEditorViewport::ScreenshotGrade::Viewport);
+    if (imgB2.isNull() || !imgB2.save(b2Png, "PNG")) {
+        std::fprintf(stderr, "engine-selftest: could not take or save pose B2 (%s)\n",
+                     qPrintable(b2Png));
+        return 1;
+    }
+    const QString hashB2 = fileSha256(b2Png);
+    std::fprintf(stderr, "engine-selftest: pose B2 (no rays) sha256 %s (%s)\n",
+                 qPrintable(hashB2), qPrintable(b2Png));
+
+    // HOW MUCH THE RAYS MOVED, in pixels and codes. The hashes say "different";
+    // this says whether the difference is a reflection or a rounding, which is
+    // what a reviewer needs from a fence they cannot look at.
+    int movedPixels = 0, worstCode = 0;
+    if (imgB1.size() == imgB2.size()) {
+        for (int y = 0; y < imgB1.height(); ++y)
+            for (int x = 0; x < imgB1.width(); ++x) {
+                const QColor a = imgB1.pixelColor(x, y), b = imgB2.pixelColor(x, y);
+                const int d = qMax(qMax(qAbs(a.red() - b.red()), qAbs(a.green() - b.green())),
+                                   qAbs(a.blue() - b.blue()));
+                if (d > 0) ++movedPixels;
+                worstCode = qMax(worstCode, d);
+            }
+    }
+    const QColor centreB1 = imgB1.pixelColor(imgB1.width() / 2, imgB1.height() / 2);
+    const QColor centreB2 = imgB2.pixelColor(imgB2.width() / 2, imgB2.height() / 2);
+    std::fprintf(stderr, "engine-selftest: pose B (glossy floor, cascade crossing, emissive 3.0, "
+                         "mirror pillar; 300 frames each): centre B1 (%d,%d,%d), B2 (%d,%d,%d); "
+                         "the rays moved %d of %d pixels, worst %d/255\n",
+                 centreB1.red(), centreB1.green(), centreB1.blue(),
+                 centreB2.red(), centreB2.green(), centreB2.blue(),
+                 movedPixels, imgB1.width() * imgB1.height(), worstCode);
+    if (!isPicture(imgB1) || !isPicture(imgB2)) {
+        std::fprintf(stderr, "engine-selftest: fixture B rendered the CLEAR COLOUR — the fixture "
+                             "did not reach the screen\n");
+        return 1;
+    }
+    // IDENTICAL B1/B2 MEANS THE RAYS DID NOTHING — unless this machine has none,
+    // in which case it is the correct answer and is said so rather than asserted
+    // away. The engine is the authority on whether the tier is live: a host-side
+    // guess would be a second source of truth.
+    // THE ENGINE IS THE AUTHORITY, read the same way the `machine.rayTracing`
+    // scene issue reads it (src/services/sceneissues.cpp): the process latch
+    // (`--no-ray-query` / JAHSHAKA_NO_RAY_QUERY) keeps the extensions off the
+    // device entirely, so a run under it IS a machine without the hardware.
+    bool raysLive = false;
+    if (const auto eng = EngineHost::instance().engine())
+        raysLive = eng->rayTracing() && eng->rayQueryAvailable();
+    if (!hashB1.isEmpty() && hashB1 == hashB2) {
+        if (raysLive) {
+            std::fprintf(stderr, "engine-selftest: pose B1 and B2 hash IDENTICALLY while this "
+                                 "machine HAS ray queries — the ray tier moved no pixel of a "
+                                 "fixture built to show it\n");
+            return 1;
+        }
+        std::fprintf(stderr, "engine-selftest: pose B1 == B2, and this machine has no ray query — "
+                             "that is the correct answer, not a failure\n");
     }
     return 0;
 }
