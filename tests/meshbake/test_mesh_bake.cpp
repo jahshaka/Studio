@@ -1413,13 +1413,34 @@ static void surfaceCards()
 // no point of that level's surface lies further from level 0's surface than the
 // length the bake stored — measured INDEPENDENTLY of the bake's own sampler.
 //
-// INDEPENDENT IS THE WHOLE POINT. Re-running `twoSidedDistance` here would assert
-// that a function returns what it returned; instead this samples EIGHT TIMES as
-// densely, at DIFFERENT points (a different stratification count moves every
-// stratum, and the van der Corput index is the sample number, so no sample of the
-// dense set coincides with a sample of the bake's), and asks the same exact
-// nearest-surface query. A margin that pays for the sampling gap has to survive a
-// finer gap, and that is exactly what this measures.
+// WHAT THIS IS, SAID ACCURATELY (the lane's audit corrected the first wording).
+// It is a REGRESSION CHECK, not an independent derivation. The bake's maximum comes
+// from the REMOVED BASE VERTICES, computed EXACTLY — `meshopt_simplify` only ever
+// removes vertices, so the worst case sits on the ones the level no longer has, and
+// there is nothing to sample there. A check that walked them too would reproduce
+// that term bit for bit and pass by construction, which is what the first cut did:
+// its worst measured/stored came out at 0.8000 = 1/1.25 on seven of eight subjects,
+// i.e. it was reading back the bake's own maximum and dividing by the margin.
+//
+// So the dense set here is AREA-ONLY, eight times as dense, at strata the bake
+// never used (a different sample count moves every stratum, and the van der Corput
+// index is the sample number). That leaves the SAMPLING-GAP MARGIN exposed, which
+// is the one thing a margin should be judged on, and it exercises the whole
+// pipeline — sampler, grid resolution, precision floor, monotonicity — against
+// numbers the bake did not produce.
+//
+// AND WHAT IT MEASURES, STATED SO NOBODY READS MORE INTO A PASS: area-only at 8x
+// density NEVER EXCEEDS the stored bound on any shipped mesh, and on eight of ten
+// subjects it lands at exactly 0.8000 of it — which is 1/1.25, the margin, meaning
+// the dense sampling found precisely the same maximum the bake's 4096 samples did.
+// For smooth simplification the area maximum has already CONVERGED at 4096, so the
+// margin is headroom and not a necessity. `axis_sphere.obj` is the one subject where
+// density found more (0.8094, i.e. 1.2 % past the bake's own figure), and
+// `ground.obj` reads 0.2037 because its bound is the precision floor. So this suite
+// is a REGRESSION CHECK on a converged number, and the term that actually carries
+// the maximum on a hard mesh is the removed-vertex walk — measured at 13.08x the
+// area-only figure on `endlessplane.obj` (JAH_BAKE_BOUND_TERMS in meshbake.cpp
+// prints the split), which is exactly why that walk is in the bake and not here.
 //
 // AND `lodBounds[k] >= lodErrors[k]` IS DELIBERATELY NOT ASSERTED. The quadric can
 // over-state as easily as it under-states — it is a different quantity, not a
@@ -1436,6 +1457,7 @@ static void errorBound()
         { QStringLiteral("app/content/primitives/hemisphere.obj") },
         { QStringLiteral("app/content/primitives/teapot.obj") },
         { QStringLiteral("app/content/primitives/tube.obj") },
+        { QStringLiteral("app/content/primitives/endlessplane.obj") },
         { QStringLiteral("app/models/ground.obj") },
         { QStringLiteral("app/models/axis_sphere.obj") },
         { QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb") },
@@ -1505,11 +1527,22 @@ static void errorBound()
 //     a lie, exactly as a card is.
 static void signedDistanceField()
 {
+    // CONE AND PYRAMID ARE HERE FOR THE SIGN, and they are the shapes that would
+    // have caught the first cut of it: both have a convex feature sharper than a
+    // right angle (an apex, and in the wedge's case a spine), where the nearest
+    // point of an EXTERIOR cell is ON that feature and a single face normal there
+    // can face away from the cell — signing an outside point INSIDE. The fix is the
+    // angle-weighted pseudonormal (`surface::angleWeightAt`); the check is
+    // `checkSdfExteriorSign` below, because `checkSdfAgainstSurface` compares
+    // MAGNITUDES (|stored| against the exact distance) and is blind to it.
     const QStringList subjects = {
         QStringLiteral("app/content/primitives/sphere.obj"),
         QStringLiteral("app/content/primitives/cube.obj"),
         QStringLiteral("app/content/primitives/hp_sphere.obj"),
         QStringLiteral("app/content/primitives/torus.obj"),
+        QStringLiteral("app/content/primitives/cone.obj"),
+        QStringLiteral("app/content/primitives/pyramid.obj"),
+        QStringLiteral("app/content/primitives/wedge.obj"),
     };
     std::printf("      %-28s %12s %10s %10s %9s\n", "mesh", "dims", "cell", "scale", "bytes");
     for (const QString &path : subjects) {
@@ -1549,9 +1582,30 @@ static void signedDistanceField()
         // closed mesh is inside.
         CHECK_LOUD(f.distanceAt(0, 0, 0) > 0.0f,
                    qUtf8Printable(path + ": the padded corner reads OUTSIDE"));
-        if (!path.contains(QStringLiteral("torus")))     // a torus centre is outside it
+        // The box centre is inside a SOLID convex mesh and not otherwise: a torus
+        // centre is in its hole, and a WEDGE's is ON its diagonal face (the wedge is
+        // the half of a 2x2x2 cube cut through opposite edges, so the cube's centre
+        // lies in that plane and its true signed distance is zero — an honest
+        // ambiguity, not a defect). Both are excluded by name and by reason.
+        if (!path.contains(QStringLiteral("torus")) && !path.contains(QStringLiteral("wedge")))
             CHECK_LOUD(f.distanceAt(f.dim[0] / 2, f.dim[1] / 2, f.dim[2] / 2) < 0.0f,
-                       qUtf8Printable(path + ": the centre of a closed mesh reads INSIDE"));
+                       qUtf8Printable(path + ": the centre of a solid convex mesh reads INSIDE"));
+
+        // ...AND EVERY EXTERIOR CELL READS POSITIVE. This is the assertion the
+        // pseudonormal exists for, and the one the magnitude check cannot make: a
+        // cell whose nearest point is on a sharp convex edge or an apex is where a
+        // face-normal sign flips. "Exterior" is decided WITHOUT the field — by ray
+        // parity through level 0's own triangles — so the field is judged against
+        // the geometry rather than against itself.
+        int outsideProbed = 0, outsideWrong = 0;
+        const bool signOk = iris::MeshBake::checkSdfExteriorSign(mesh, &outsideProbed,
+                                                                &outsideWrong);
+        CHECK_LOUD(outsideProbed > 100,
+                   qUtf8Printable(path + ": the exterior probe really has cells in it"));
+        CHECK_LOUD(signOk,
+                   qUtf8Printable(QStringLiteral("%1: EVERY exterior cell reads POSITIVE "
+                                                 "(%2 wrong of %3 probed)")
+                                      .arg(path).arg(outsideWrong).arg(outsideProbed)));
 
         // THE FORMAT.
         const QByteArray blob = iris::MeshBake::serialize(m);

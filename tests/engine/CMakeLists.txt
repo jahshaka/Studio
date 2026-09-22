@@ -76,6 +76,16 @@ target_compile_definitions(test_engine_recreate PRIVATE
 target_link_libraries(test_engine_recreate PRIVATE JahshakaEngine)
 add_dependencies(test_engine_recreate JahshakaEngineMedia)
 add_test(NAME test_engine_recreate COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# meshbake.shadow_vao_alias — THE MIXED SHADOW-VAO LIST (ATOM P1's AT-A11,
+# ogre-patch 0088), as its own ctest name so gate-scope can select it: a 6-level
+# mesh must hold ONE optimized shadow VAO with its coarse levels aliasing the
+# normal ones, must destroy without the double free the pin used to throw, and
+# `createMesh` must REFUSE a hand-built level that names a vertex the mesh has not.
+# The same arm also runs inside test_engine_recreate's three cycles, because a
+# destroy that used to throw belongs in the suite that destroys three engines.
+add_test(NAME meshbake.shadow_vao_alias COMMAND test_engine_recreate --shadow-vao
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.shadow_vao_alias PROPERTIES TIMEOUT 300 LABELS "engine")
 set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 120)
 
 # Decals (DECALS_SPEC.md): pixel-asserted projected textures, and the permanent

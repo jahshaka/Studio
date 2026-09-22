@@ -283,7 +283,7 @@ int main()
           ("THE FINEST REQUEST WINS FOR A SHARED MESH — both of mesh A's items and mesh C "
            "at one level: " + histText(outer)).c_str());
     // And it is what the voxeliser HOLDS, not what was asked — and since
-    // ogre-patch 0088 that sentence is literally true rather than nearly true
+    // ogre-patch 0089 that sentence is literally true rather than nearly true
     // (ATOM inventory row AT-A12). `voxelTriangles` used to be a CPU walk of each
     // mesh's VAOs at the level just requested, i.e. this case asserted the host's
     // own prediction against the host's own arithmetic; it is now

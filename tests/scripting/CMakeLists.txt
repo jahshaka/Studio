@@ -1780,7 +1780,9 @@ set_tests_properties(scripting.e2e.screenshot_grades PROPERTIES
 
 # ATOM STAGE 1 — DETERMINISTIC LEVEL SELECTION (SPECS/NANITE_SPEC.md §7.3).
 # The import-time LOD chain, end to end: assets.meshLods reports what the bake
-# built, world.setLodBias walks the renderer through every level of it in ONE
+# built — BOTH lengths, the measured `bound` the renderer selects on and the
+# simplifier's `error` beside it — editor.setLodBias walks the renderer through
+# every level of it in ONE
 # camera pose, the triangle count falls at each step, the DRAW COUNT does not
 # move (finding B — the levels share a vertex buffer and an index pool, so they
 # share a vaoName and the render queue advances numDraws), and bias 0 returns to

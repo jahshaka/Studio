@@ -66,8 +66,12 @@ for (var L = 1; L < levels.length; ++L) {
     assert(levels[L].triangles < levels[L - 1].triangles,
            "level " + L + " has fewer triangles than level " + (L - 1) +
            " (" + levels[L].triangles + " < " + levels[L - 1].triangles + ")");
-    assert(levels[L].bound > levels[L - 1].bound,
-           "level " + L + "'s MEASURED BOUND is larger (" + levels[L].bound.toFixed(6) + ")");
+    // NON-DECREASING is the contract (`Mesh::lodBounds`), not strictly increasing:
+    // the running max that keeps the array sorted, and the precision floor under it,
+    // can both leave two levels on the same length — the flat default floor does
+    // exactly that, at its floor value, on all four of its levels.
+    assert(levels[L].bound >= levels[L - 1].bound,
+           "level " + L + "'s MEASURED BOUND is no smaller (" + levels[L].bound.toFixed(6) + ")");
     // The simplifier's own number is reported beside it and NOTHING selects on it
     // (ATOM P1's AT-A5). It is monotone too — the bake accumulates it — but it is
     // not the currency, and on a flat mesh it is not even the same order of

@@ -85,10 +85,19 @@ set_tests_properties(meshbake.cards PROPERTIES
     TIMEOUT 180 LABELS "meshbake")
 
 # THE MEASURED LOD BOUND (ATOM P1's AT-A5) — `atom.error_bound`. Its own test name
-# because it is its own claim: for every level of every shipped mesh, an
-# INDEPENDENT sampling eight times as dense as the bake's finds no point of that
-# level further from level 0 than the length the bake stored. It also prints the
-# bound-versus-quadric ratio table, which is the evidence AT-A5 was missing.
+# because it is its own claim: for every level of every shipped mesh, an AREA-ONLY
+# sampling eight times as dense as the bake's finds no point of that level further
+# from level 0 than the length the bake stored. It also prints the bound-versus-
+# quadric ratio table, which is the evidence AT-A5 was missing.
+#
+# IT IS A REGRESSION CHECK, NOT AN INDEPENDENT DERIVATION, and the honest wording
+# matters: the bake's maximum comes from the REMOVED BASE VERTICES computed exactly,
+# so a check that walked them too would pass by construction. Area-only leaves the
+# sampling-gap margin exposed — and MEASURED, it never exceeds the stored bound on
+# any shipped mesh, landing at exactly 0.8000 (= 1/1.25, the margin) on eight of ten
+# subjects because the area maximum has already converged at the bake's own 4096
+# samples. So a pass here means "nothing in the sampler, the grid, the floor or the
+# monotonicity has regressed", which is what it is for.
 # In tests/meshbake because the subject is the BAKE and needs no engine; the name
 # is the design's (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_ASSET_DESIGN.md §1.1).
 add_test(NAME atom.error_bound COMMAND test_mesh_bake --error-bound
