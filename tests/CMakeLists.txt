@@ -213,6 +213,55 @@ function(jah_links_assimp _t)
     target_link_libraries(${_t} PRIVATE assimp)
 endfunction()
 
+# THE GPU-TIMING LOCK (lane DEVPROCESS-1, docs/TESTING_GATE.md §4). A suite that measures TIME
+# or GPU BUDGET prints a number that reads as a red when another lane's gate or app shares the
+# GPU with it; RUN_SERIAL serialises only inside ONE ctest process, and every lane is its own
+# ctest process. So these suites — and only these — are REGISTERED THROUGH
+# scripts/gpu-exclusive.sh, one box-wide flock on /tmp/jah-gpu-timing.lock; every other suite
+# shares the GPU freely. The list is the known contention-sensitive class of TESTING_GATE §4
+# plus app.watchdog_stall (DOCS/traps/GATE_AND_RIG.md) — a suite joins it by a verdict, never
+# by convenience. RUN_SERIAL stays wherever a suite already carries it.
+set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
+set(JAH_GPU_EXCLUSIVE_SUITES
+    open.responsive app.engine_selftest_validation app.input_keys threading.newproject_stall
+    scenegraph.benchmark shadergraph.bake_output claude.chat scripting.e2e.space_switch
+    scripting.e2e.sun_light ui.media_lazy gi.budget scripting.e2e.reflection_map
+    app.watchdog_stall)
+# The wrapper waits at most this long for the lock (its default, JAH_GPU_LOCK_WAIT), and the wait
+# counts against ctest's TIMEOUT — so a wrapped suite's TIMEOUT is ITS OWN run budget (the value
+# its site measured and documented) PLUS this wait, set here from RUN_TIMEOUT and never again at
+# the site. Widening by exactly the wait keeps every run budget the suite's own verdict.
+set(JAH_GPU_LOCK_WAIT_S 900)
+
+# jah_gpu_exclusive_test(NAME <suite> RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
+#                        [WORKING_DIRECTORY <dir>])
+# add_test() through the lock. `set_tests_properties` cannot change a registered COMMAND, so the
+# wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
+# $<TARGET_FILE:...> (it is an argument of the wrapper now, and add_test resolves target names
+# only in the command position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
+function(jah_gpu_exclusive_test)
+    cmake_parse_arguments(G "" "NAME;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
+                            "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
+    endif()
+    if(NOT G_RUN_TIMEOUT OR NOT G_COMMAND)
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): RUN_TIMEOUT and COMMAND are required")
+    endif()
+    list(POP_FRONT G_COMMAND _exe)
+    if(TARGET ${_exe})
+        set(_exe "$<TARGET_FILE:${_exe}>")
+    endif()
+    set(_wd)
+    if(G_WORKING_DIRECTORY)
+        set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
+    endif()
+    add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" "${_exe}" ${G_COMMAND} ${_wd})
+    math(EXPR _timeout "${G_RUN_TIMEOUT} + ${JAH_GPU_LOCK_WAIT_S}")
+    set_tests_properties(${G_NAME} PROPERTIES TIMEOUT ${_timeout})
+    set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
+endfunction()
+
 function(jah_no_display)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION
@@ -326,3 +375,20 @@ add_subdirectory(update)
 # libopenxr-dev and the Vulkan render system exist; SKIPS where monado-service is
 # not installed. Nothing here runs on a box with no VR stack.
 add_subdirectory(vr)
+
+# The lock's tooling suite (devprocess.gpu_lock) and the list's closure: every suite the list
+# names is registered through the lock (app.input_keys is optional — it needs xdotool/curl/jq/
+# Xvfb and is absent without them).
+add_subdirectory(tooling)
+get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
+foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)
+    if(NOT _t IN_LIST _gpu_registered AND NOT _t STREQUAL "app.input_keys")
+        # FATAL on the box the list was measured on; a port that skips a suite is told, not stopped.
+        set(_sev WARNING)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            set(_sev FATAL_ERROR)
+        endif()
+        message(${_sev} "JAH_GPU_EXCLUSIVE_SUITES names ${_t}, but it was not registered through "
+                            "jah_gpu_exclusive_test() — it would run WITHOUT the GPU-timing lock")
+    endif()
+endforeach()

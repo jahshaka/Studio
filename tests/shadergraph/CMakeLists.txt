@@ -201,8 +201,9 @@ target_include_directories(test_bake_output PRIVATE
    ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_bake_output PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
-add_test(NAME shadergraph.bake_output COMMAND test_bake_output WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadergraph.bake_output PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME shadergraph.bake_output RUN_TIMEOUT 120 COMMAND test_bake_output WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadergraph.bake_output PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "shadergraph")
 
 # Fuzzy matcher for the tab-search node palette: pure QString logic.
 add_executable(test_fuzzy_search test_fuzzy_search.cpp)

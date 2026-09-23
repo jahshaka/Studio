@@ -199,10 +199,11 @@ target_compile_definitions(test_gi_budget PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_budget PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(test_gi_budget JahshakaEngineMedia)
-add_test(NAME gi.budget COMMAND test_gi_budget
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME gi.budget RUN_TIMEOUT 300 COMMAND test_gi_budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.budget PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 300 LABELS "engine")
+                     LABELS "engine")
 
 # gi.probe_inputs — THE PROBE CACHE'S INPUTS (ENGINE_CACHE_POLICY_SPEC P1 + P7).
 # Reflection probes re-capture only when something they can see changes; this

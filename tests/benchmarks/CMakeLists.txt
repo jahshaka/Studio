@@ -65,7 +65,8 @@ target_compile_definitions(bench_scenegraph PRIVATE
 target_link_libraries(bench_scenegraph PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_scenegraph JahshakaEngineMedia)
 
-add_test(NAME scenegraph.benchmark COMMAND bench_scenegraph --assert
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME scenegraph.benchmark RUN_TIMEOUT 1200 COMMAND bench_scenegraph --assert
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # RUN_SERIAL: wall-clock measurements — a parallel ctest schedule distorts the
 # scale-1000/200 regress clause into random reds (2026-09-05 gate: the violating
@@ -74,7 +75,7 @@ add_test(NAME scenegraph.benchmark COMMAND bench_scenegraph --assert
 # box still can — a red here under external load is retried on a quiet box
 # before it is believed (gate protocol).
 set_tests_properties(scenegraph.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 1200 LABELS "benchmark"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "benchmark"
     RUN_SERIAL TRUE)
 
 add_test(NAME scenegraph.smoke COMMAND bench_scenegraph --smoke

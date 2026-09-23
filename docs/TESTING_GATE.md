@@ -170,6 +170,24 @@ class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
 
+**THE GPU-TIMING LOCK (lane DEVPROCESS-1, 2026-09-23).** Measured: VRAM is not the constraint
+(2.3 GB of 16 GB with three GPU processes live) — GPU TIME is, and `RUN_SERIAL` serialises
+only inside one ctest process while every lane is its own. THE RULE: **a suite that measures
+time or GPU budget runs under the GPU lock; everything else shares the GPU; at most three
+app-spawning lanes; a measurement lane (debug-runner) takes the lock around every
+`perf.capture` run via the wrapper.** The lock is `scripts/gpu-exclusive.sh <command…>` — one
+box-wide `flock` on `/tmp/jah-gpu-timing.lock` (a lock file in RAM is fine: the lock lives in
+the kernel and dies with its holder), a bounded 900 s wait (exit 75, the command never runs),
+the command exec'd in place so a ctest timeout still kills the suite itself. The suites above
+plus `app.watchdog_stall` — thirteen, listed once in `JAH_GPU_EXCLUSIVE_SUITES`
+(`tests/CMakeLists.txt`) — are REGISTERED through it by `jah_gpu_exclusive_test()`, whose
+`RUN_TIMEOUT` is the suite's own budget and whose TIMEOUT is that plus the 900 s wait; configure
+fails if a listed suite is registered any other way. Only those suites take it: a lane's
+pixel/logic suites, gate-scope's `-j1` target run and the rc-gate's ctest line still overlap
+freely. `ctest -N -V | grep -c gpu-exclusive` = 13. Its guard is `devprocess.gpu_lock` (label
+`tooling`). A contention verdict on one of the thirteen now needs a sibling that was NOT under
+the lock (an app on `:0`, a measurement run outside the wrapper) — say which.
+
 ## 5. Why the full gate cost 25 minutes, and what the cleanup changed
 
 **CURRENT COUNTS (2026-09-18, the last three PUSH-tier gates — ledger §680, §689, §707):

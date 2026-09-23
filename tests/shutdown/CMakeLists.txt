@@ -37,7 +37,8 @@ target_compile_definitions(test_watchdog_stall PRIVATE
 
 set(_watchdog_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-watchdog)
 file(MAKE_DIRECTORY ${_watchdog_home}/run)
-add_test(NAME app.watchdog_stall COMMAND test_watchdog_stall
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME app.watchdog_stall RUN_TIMEOUT 300 COMMAND test_watchdog_stall
          WORKING_DIRECTORY ${_watchdog_home}/run)
 # RUN_SERIAL: this is a pure TIMING gate — it blocks the UI thread for 3 s and
 # for 100 ms and asserts the watchdog counted exactly one stall and exactly
@@ -51,7 +52,7 @@ add_test(NAME app.watchdog_stall COMMAND test_watchdog_stall
 set_tests_properties(app.watchdog_stall PROPERTIES
     ENVIRONMENT "HOME=${_watchdog_home};JAHSHAKA_DATA_ROOT=${_watchdog_home}/.local/share/Jahshaka"
     RUN_SERIAL TRUE
-    TIMEOUT 300 LABELS "shutdown")
+    LABELS "shutdown")
 
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog
 # are pure thread-interaction contracts, and shutdown is where read-after-destroy

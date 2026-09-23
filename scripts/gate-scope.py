@@ -164,6 +164,8 @@ AREA_RULES = [
     # together). Without this line an edit to the scoping tool selected NOTHING
     # and its own guard never ran — the rule class GATE-SCOPE-2 audited.
     (r"^scripts/gate-scope", ["hygiene"], []),
+    # THE GPU-TIMING LOCK's wrapper (DEVPROCESS-1): its own tooling suite, devprocess.gpu_lock.
+    (r"^scripts/gpu-exclusive", ["tooling"], []),
     (r"^scripts/", [], []),
 ]
 
