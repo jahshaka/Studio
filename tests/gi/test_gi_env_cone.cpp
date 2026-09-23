@@ -122,6 +122,45 @@ int main()
                           100.0 * kBar, a.name, elevDeg);
             CHECK(counted == dirs.size() && mean < kBar, msg);
         }
+        // THE SKY'S IRRADIANCE AT AN UPWARD NORMAL, three ways, PRINTED (the
+        // measurement behind the field-against-cones step of gi.chain_face): the
+        // TRUTH is the cosine-weighted mean of the cube's radiance over the upper
+        // hemisphere (64 cosine-stratified directions, each a 0.05 cone's
+        // reference); against it the nine-band SH's irradiance / pi at +Y and the
+        // pixel's six-cone set (weights .25 / 5 x .15, tan 0.577) through the lookup.
+        {
+            std::vector<EnvironmentConeQuery> q;
+            const double g = 2.39996323;
+            for (int k = 0; k < 64; ++k) {
+                const double u = (k + 0.5) / 64.0, c = std::sqrt(1.0 - u), sn = std::sqrt(u);
+                q.push_back(EnvironmentConeQuery{ Vec3(float(sn * std::cos(g * k)), float(c),
+                                                       float(sn * std::sin(g * k))), 0.05f });
+            }
+            std::vector<EnvironmentConeAnswer> ans;
+            e->environmentCones(scene, q, ans);
+            double truth = 0.0;
+            for (const auto &x : ans) truth += lum(x.reference);
+            truth /= double(ans.size() ? ans.size() : 1);
+            const double six[6][3] = { { 0, 1, 0 }, { 0.866025, 0.5, 0 }, { 0.267617, 0.5, 0.823639 },
+                                       { -0.700629, 0.5, 0.509037 }, { -0.700629, 0.5, -0.509037 },
+                                       { 0.267617, 0.5, -0.823639 } };
+            const double w6[6] = { 0.25, 0.15, 0.15, 0.15, 0.15, 0.15 };
+            std::vector<EnvironmentConeQuery> q6;
+            for (const auto &d : six)
+                q6.push_back(EnvironmentConeQuery{ Vec3(float(d[0]), float(d[1]), float(d[2])), 0.577f });
+            std::vector<EnvironmentConeAnswer> a6;
+            e->environmentCones(scene, q6, a6);
+            double cones = 0.0;
+            for (size_t i = 0; i < a6.size(); ++i) cones += w6[i] * lum(a6[i].lookup);
+            float sh[27] = { 0 };
+            scene->skyAmbientSh(sh);
+            // +Y: 1, y = 1, z = 0, x = 0 -> c0 + c1 + c6 (3z^2 - 1 = -1) x -1 + c8 (x^2 - y^2 = -1) x -1
+            float shUp[3];
+            for (int c = 0; c < 3; ++c) shUp[c] = sh[c] + sh[3 + c] - sh[18 + c] - sh[24 + c];
+            std::printf("   IRRADIANCE AT +Y (luminance, radiance units): truth %.4f | SH %.4f (%.2fx) "
+                        "| six cones %.4f (%.2fx)\n", truth, lum(shUp), lum(shUp) / truth, cones,
+                        cones / truth);
+        }
     }
 
     view->setScene(nullptr);
