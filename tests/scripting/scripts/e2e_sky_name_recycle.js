@@ -46,9 +46,13 @@ project.create("Sky name recycle " + Date.now());
 world.sky("color", { color: { r: 10, g: 40, b: 200 } });
 editor.frame(3);
 
+// SINCE ATOM-S3-PARITY every host-uploaded texture IS a one-slice 2D array (the
+// PBS/Unlit texture2DArray declaration, VUID-07752), so an equirect sky takes it
+// DIRECTLY and no copy - and therefore no name - exists to burn. The guard is now the
+// stronger statement: no sky-array copy at all, however many times the sky changes.
 var first = skyArrays();
 console.log("after the first sky: " + JSON.stringify(first));
-assert(first.names.length >= 1, "a host-uploaded equirect sky owns a sky-array copy");
+assert(first.names.length === 0, "a host-uploaded equirect sky needs no sky-array copy (it is an array)");
 
 // Sixty changes of colour and type — every one of them a fresh upload and a
 // fresh array copy, with the previous one destroyed.
@@ -64,13 +68,7 @@ editor.frame(3);
 
 var after = skyArrays();
 console.log("after 60 more: " + JSON.stringify(after));
-assert(after.names.length >= 1, "the sky still owns its array copy");
-// THE NUMBER: a recycled pool never needs more slots than there are sky arrays
-// alive at one moment (one per scene with a host-uploaded sky, and this session
-// has the editor's). Eight is generous room for the editor's own scene plus any
-// preview scene alive beside it; before the fix this read 209.
-assert(after.worst < 8,
-       "the sky-array name pool is RECYCLED: highest live slot " + after.worst + " after 61 skies");
+assert(after.names.length === 0, "no sky-array name was ever taken after 61 skies (before the recycle fix: 209)");
 // ...and no texture piled up either: the copies really were destroyed.
 assert(after.count <= first.count,
        "no texture leak beside the name (" + first.count + " -> " + after.count + ")");
