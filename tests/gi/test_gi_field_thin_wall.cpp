@@ -37,8 +37,9 @@
 //   1. THE NOISE OF ONE INTEGRATION at 1 and 2 rays a texel (the target set to 1, the
 //      light re-injected M times: M independent integrations): its mean against the
 //      truth (unbiased) and its relative standard deviation sigma - the number the
-//      target sample count K is derived from (K = ceil((sigma / 0.05)^2): the
-//      converged mean's standard error 5 %).
+//      target sample count K is derived from (K = ceil((2 sigma / e)^2), e the
+//      envelope's trilinear edge uncertainty 1 - ((n-1)/n)^2: the converged mean's
+//      two-sigma error inside what the store itself can resolve).
 //   2. THE SAME SET NOT ROTATED (JAHSHAKA_GI_FIELD_STATIC): its reading does not move
 //      from integration to integration - that is the aliasing, stated as a number.
 //   3. CONVERGENCE at the shipped K and budget 1: the frames until the field owes
@@ -218,7 +219,7 @@ static Reading readProbe(Fixture &f, double lat, double hx, double hy)
     return rd;
 }
 
-/// A fresh chain with the wall at (lat, hx, hy), built and converged at `budget`.
+/// A fresh chain with the wall at (lat, hx, hy), built at `budget` and rendered `frames`.
 static void buildWith(Fixture &f, double lat, double hx, double hy, int budget, int frames = 16)
 {
     GiParams off; off.mode = GiMode::Off;
@@ -230,6 +231,16 @@ static void buildWith(Fixture &f, double lat, double hx, double hy, int budget, 
     render(f.e, 2);
     f.scene->setGlobalIllumination(fieldGi(budget));
     render(f.e, frames);
+}
+
+/// ...and CONVERGED: built at budget 1, rendered until the field owes nothing (every
+/// probe at the target sample count). Returns the frames it took (-1: it never did).
+static int buildConverged(Fixture &f, double lat, double hx, double hy)
+{
+    buildWith(f, lat, hx, hy, 1, 1);
+    int frames = 1;
+    for (; frames < 4000 && f.scene->giStatus().ifdRefinesOwed > 0u; ++frames) render(f.e, 1);
+    return f.scene->giStatus().ifdRefinesOwed == 0u ? frames : -1;
 }
 
 static bool setup(Fixture &f, Engine *e)
@@ -310,8 +321,8 @@ static int runWall(Fixture &f, double sigma)
     const double lats[3] = { 0.0, f.sp[0] / 3.0, 2.0 * f.sp[0] / 3.0 };
     double K = 1.0, se = 2.0 * sigma;
     for (double lat : lats) {
-        buildWith(f, lat, 0.4, 0.4, 0);
-        // The shipped target (the paused field converges all of it at the build).
+        const int frames = buildConverged(f, lat, 0.4, 0.4);
+        CHECK_MSG(frames > 0, "the field converged (%d frames at budget 1)", frames);
         K = double(std::max(1u, f.scene->giStatus().ifdTargetSamples));
         se = 2.0 * sigma / std::sqrt(K);
         const Reading r = readProbe(f, lat, 0.4, 0.4);
@@ -335,7 +346,7 @@ static int runWall(Fixture &f, double sigma)
                   "[%.3f, %.3f] (the trilinear edge of an %d-%d-cell envelope, +-2 sigma/sqrt(K) = "
                   "%.3f at K %.0f)", r.ratio, lo, hi, n, nx, se, K);
     }
-    buildWith(f, 0.0, 2.0, 2.0, 0);
+    buildConverged(f, 0.0, 2.0, 2.0);
     const Reading big = readProbe(f, 0.0, 2.0, 2.0);
     const int nb = big.cellsX;
     std::printf("   a 4 m wall: %lld lit voxels (predicted %lld); probe against its envelope %.3f\n", big.lit,
@@ -375,23 +386,28 @@ static int runAlias(Fixture &f)
         CHECK_MSG(std::fabs(arms[i].n.mean - 1.0) <= 3.0 * arms[i].n.sd / std::sqrt(double(M)) + 0.17,
                   "ONE ROTATED RAY IS UNBIASED within its standard error and the envelope's edge: mean "
                   "%.3f of the truth over %d integrations (lateral %.3f)", arms[i].n.mean, M, arms[i].lat);
-    const int kDerived = int(std::ceil((sigma1 / 0.05) * (sigma1 / 0.05)));
+    // THE TARGET, DERIVED FROM THE STORE: the smallest K whose two-sigma error sits
+    // inside the envelope's own trilinear edge uncertainty, 1 - ((n-1)/n)^2.
+    const Reading envelope = readProbe(f, lat, 0.4, 0.4);
+    const int nCells = std::min(envelope.cellsX, envelope.cellsY);
+    const double edgeTol = 1.0 - edgeLo(nCells);
+    const int kDerived = int(std::ceil((2.0 * sigma1 / edgeTol) * (2.0 * sigma1 / edgeTol)));
     CHECK_MSG(arms[4].n.sd < 1e-6 && arms[0].n.sd > 0.0,
               "THE STATIC SET ALIASES: its reading never moves (sigma %.2g) - %.3f of the truth, "
               "whatever the integration count - where the rotated set's mean converges", arms[4].n.sd,
               arms[4].n.mean);
-    std::printf("   K DERIVED: ceil((worst sigma %.3f / 0.05)^2) = %d samples (the converged mean's standard "
-                "error 5 %% on this fixture, the field's hardest case: a source of one ray's solid "
-                "angle)\n", sigma1, kDerived);
+    std::printf("   K DERIVED: ceil((2 x worst sigma %.3f / %.3f)^2) = %d samples (the converged mean's "
+                "two-sigma error inside the store's own edge uncertainty on the field's hardest case, a "
+                "source of one ray's solid angle; %d cells)\n", sigma1, edgeTol, kDerived, nCells);
 
     // ---- 3. CONVERGENCE AT THE SHIPPED K, budget 1 ---------------------------
-    buildWith(f, lat, 0.4, 0.4, 1, 1);
-    int frames = 0;
-    for (; frames < 4000 && f.scene->giStatus().ifdRefinesOwed > 0u; ++frames) render(f.e, 1);
+    // A build's own pass is the first sample everywhere; its K - 1 refinements run
+    // at the budget until the field owes nothing.
+    const int frames = buildConverged(f, lat, 0.4, 0.4);
     const GiStatus st = f.scene->giStatus();
     const Reading conv = readProbe(f, lat, 0.4, 0.4);
-    std::printf("   budget 1: the field owes nothing after %d frames (K = %u samples a probe, %u probes a "
-                "frame); converged reading %.3f of the truth (count %.0f)\n", frames, st.ifdTargetSamples,
+    std::printf("   budget 1: the field owes nothing %d frames after its build (K = %u samples a probe, %u "
+                "probes a frame); converged reading %.3f of the truth (count %.0f)\n", frames, st.ifdTargetSamples,
                 unsigned(st.ifdProbesPerFrame), conv.ratio, conv.count);
     CHECK_MSG(int(st.ifdTargetSamples) >= kDerived,
               "THE SHIPPED TARGET COVERS THE DERIVED ONE (%u >= %d)", st.ifdTargetSamples, kDerived);
@@ -414,10 +430,10 @@ static int runAlias(Fixture &f)
 
     // ---- 4. 1 RAY AGAINST 2 RAYS, and the cost -------------------------------
     ::setenv("JAHSHAKA_GI_FIELD_RAYS", "2", 1);
-    buildWith(f, lat, 0.4, 0.4, 0);
+    buildConverged(f, lat, 0.4, 0.4);
     const Reading two = readProbe(f, lat, 0.4, 0.4);
     ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
-    buildWith(f, lat, 0.4, 0.4, 0);
+    buildConverged(f, lat, 0.4, 0.4);
     const Reading one = readProbe(f, lat, 0.4, 0.4);
     const double K = double(st.ifdTargetSamples);
     const double joint = 2.0 * std::sqrt(sigma1 * sigma1 / K + sigma2 * sigma2 / K);
