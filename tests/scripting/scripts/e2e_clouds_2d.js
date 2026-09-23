@@ -157,7 +157,7 @@ function groundShot(tag) {
 // ONE ARM, run on three surfaces: the default ground (it receives the sun's shadow
 // map), the same ground with receiveShadows OFF (the fix round's F2: upstream
 // leaves the first-light shadow piece undefined for it, and the sheet's
-// transmittance must reach it all the same).
+// transmittance must reach it all the same), and a sun with no shadow map.
 function shadowArm(tag) {
     world.clouds({ enabled: false });
     node.setProperty(sunInfo.light, "intensity", 2.0);
@@ -192,6 +192,13 @@ assert(material.set(groundNode, { receiveShadows: false }) === true,
 assert(material.get(groundNode).receiveShadows === false, "...and reads back so");
 shadowArm("noreceive");
 assert(material.set(groundNode, { receiveShadows: true }) === true, "the ground receives again");
+// ...and a SUN THAT CASTS NO SHADOW MAP: it is drawn in the non-caster
+// directional loop, reached through the fork's custom_ps_darkenNonCasterDirectional.
+var sunShadowType = node.property(sunInfo.light, "shadowMapType");
+node.setProperty(sunInfo.light, "shadowMapType", 0);
+assert(node.property(sunInfo.light, "shadowMapType") === 0, "the sun casts no shadow map");
+shadowArm("nocast");
+node.setProperty(sunInfo.light, "shadowMapType", sunShadowType);
 world.clouds({ coverage: 0, shadow: 1 });
 var clearShadow = groundShot("clear_shadow1");
 world.clouds({ shadow: 0 });
