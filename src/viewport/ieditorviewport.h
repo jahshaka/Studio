@@ -658,11 +658,15 @@ public:
         /// WHERE THE FIELD IS — the corners of the volume its probes span. The
         /// scene's fitted box in the single-volume arm; cascade 0's box, which
         /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).
-        /// `ifdFollows` counts the re-placements onto cascade 0 since the last
+        /// `ifdFollows` counts the follows of cascade 0 (scrolls + re-placements) since the last
         /// build: 0 while standing still, one per cascade-0 step while walking.
         QVector3D ifdMin;
         QVector3D ifdMax;
         quint64   ifdFollows = 0;
+        /// ...split (PHOTON-WRITER-1): window scrolls (the probes that stayed in
+        /// the field's window kept) and whole re-placements (a jump or a resize).
+        quint64   ifdScrolls = 0;
+        quint64   ifdReplacements = 0;
         /// THE PROBE CACHE (ENGINE_CACHE_POLICY_SPEC P1/P6/P7): probes
         /// re-capture only while stale. Captures the last rendered frame made,
         /// probes still owed a capture, the input that last staled the grid

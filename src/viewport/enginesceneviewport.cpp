@@ -2644,6 +2644,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.ifdMin               = q(st.ifdMin);
     out.ifdMax               = q(st.ifdMax);
     out.ifdFollows           = quint64(st.ifdFollows);
+    out.ifdScrolls           = quint64(st.ifdScrolls);
+    out.ifdReplacements      = quint64(st.ifdReplacements);
     out.probeCapturesLastFrame = st.probeCapturesLastFrame;
     out.probeCapturesDeferred  = quint64(st.probeCapturesDeferred);
     out.staleProbes            = st.staleProbes;

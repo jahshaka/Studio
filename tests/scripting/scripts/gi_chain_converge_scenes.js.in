@@ -17,7 +17,16 @@ function digests() {
     for (var i = 0; i < n; ++i) d.push(world.giVoxelStats({ cascade: i }).lightDigest);
     return d;
 }
-function proof(label, tier, perturb) {
+function sameBytes(a, b) {
+    var differ = 0;
+    for (var i = 0; i < a.length; ++i) if (a[i] !== b[i]) ++differ;
+    return differ;
+}
+// `away` puts the light somewhere else and lets the chain settle there; `back`
+// JUMPS it in one step to where the walk ended (the strong form of the proof,
+// PHOTON-WRITER-1 fix round: one sweep from a far-away state lands on the bytes
+// the walk left).
+function proof(label, tier, perturb, away, back) {
     label = label + "@" + tier;
     world.mode({ mode: tier });
     editor.frame(150);
@@ -39,6 +48,18 @@ function proof(label, tier, perturb) {
     assert(readable, label + ": every cascade's light volumes read back");
     assert(differ === 0, label + ": ONE AT-REST SWEEP IS THE FIXED POINT -- a second sweep " +
            "changes no byte of any cascade's light [" + differ + " of " + one.length + " differ]");
+    away();
+    editor.frame(150);
+    var awayBytes = digests();
+    assert(sameBytes(one, awayBytes) > 0, label + ": the light away changed the chain (the jump is " +
+           "not vacuous)");
+    back();
+    editor.frame(150);
+    var jumped = digests();
+    console.log("CONVERGE " + label + ": jumped  " + JSON.stringify(jumped));
+    var jd = sameBytes(one, jumped);
+    assert(jd === 0, label + ": THE SAME LIGHT REACHED BY A JUMP LEAVES THE BYTES THE WALK LEFT " +
+           "[" + jd + " of " + one.length + " cascades differ]");
 }
 
 // ---- the default scene: its sun, turned while the mirror ticks ------------
@@ -51,8 +72,10 @@ function turnSun() {
         editor.frame(1);
     }
 }
-proof("default", "high", turnSun);
-proof("default", "epic", turnSun);
+function sunAway() { node.transform(sun, { rotation: { x: -60, y: -35, z: 0 } }); editor.frame(1); }
+function sunBack() { node.transform(sun, { rotation: { x: -25, y: -35, z: 0 } }); editor.frame(1); }
+proof("default", "high", turnSun, sunAway, sunBack);
+proof("default", "epic", turnSun, sunAway, sunBack);
 
 // ---- Showroom 2: its first lamp, walked while the mirror ticks ------------
 var imported = project.importArchive("@JAH_CONVERGE_SHOWROOM@");
@@ -71,6 +94,14 @@ function walkLamp() {
         editor.frame(1);
     }
 }
-proof("showroom2", "high", walkLamp);
-proof("showroom2", "epic", walkLamp);
+function lampAway() {
+    node.transform(lamp, { position: { x: lp.x - 3.0, y: lp.y, z: lp.z } });
+    editor.frame(1);
+}
+function lampBack() {
+    node.transform(lamp, { position: { x: lp.x + 0.02 * walked, y: lp.y, z: lp.z } });
+    editor.frame(1);
+}
+proof("showroom2", "high", walkLamp, lampAway, lampBack);
+proof("showroom2", "epic", walkLamp, lampAway, lampBack);
 console.log("gi.chain_converge_scenes: all assertions passed");

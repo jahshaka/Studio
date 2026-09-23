@@ -220,7 +220,8 @@ int main()
     }
 
     // ---- 3 + 4. ONE WALK, TWO WAYS, ONE PROCESS ------------------------------
-    // Six cascade-0 steps out and back, at the shipped budget, from a
+    // Six cascade-0 steps out, three jumps (a teleport, a headset-shaped jump, back)
+    // and the walk home, at the shipped budget, from a
     // from-scratch build at the same pose - once with the field SCROLLING, once
     // with every step RE-PLACING the whole field on the same lattice
     // (`JAHSHAKA_GI_FIELD_NO_SCROLL`, the behaviour the scroll replaced). The chain
@@ -233,7 +234,22 @@ int main()
     // differs by the chain's own path, scroll or no scroll.) The monitor's
     // ifd.follow rows of the two walks are the step frame before and after.
     struct Arm { Image back; float scrollGpu = -1.0f, scrollCpu = -1.0f; unsigned units = 0;
-                 unsigned long long follows = 0; std::vector<float> gpu; };
+                 unsigned long long follows = 0, replacements = 0; std::vector<float> gpu;
+                 float worstCentreErr = 0.0f; bool fieldBound = true; };
+    // A JUMP: the camera lands `p` in ONE frame (a teleport, or a headset re-centred
+    // far away), then the scene settles; the field must be where cascade 0 is.
+    const auto jumpTo = [&](Arm &arm, const Vec3 &p) {
+        view->setCamera(enginetest::testCameraDescLookAt(p, Vec3(p.x, p.y - 1.0f, p.z - 8.0f)));
+        render(e, 60);
+        const GiStatus js = scene->giStatus();
+        arm.fieldBound = arm.fieldBound && js.ifdBound;
+        if (!js.cascades.empty()) {
+            const float cx = 0.5f * (js.ifdMin.x + js.ifdMax.x) - js.cascades[0].centre.x;
+            const float cy = 0.5f * (js.ifdMin.y + js.ifdMax.y) - js.cascades[0].centre.y;
+            const float cz = 0.5f * (js.ifdMin.z + js.ifdMax.z) - js.cascades[0].centre.z;
+            arm.worstCentreErr = std::max(arm.worstCentreErr, std::sqrt(cx * cx + cy * cy + cz * cz));
+        }
+    };
     const auto walk = [&](bool noScroll) {
         Arm arm;
         if (noScroll) ::setenv("JAHSHAKA_GI_FIELD_NO_SCROLL", "1", 1);
@@ -248,12 +264,20 @@ int main()
         render(e, 8);
         engine->takeFrameRecords(drop);
         const unsigned long long f0 = scene->giStatus().ifdFollows;
+        const unsigned long long r0 = scene->giStatus().ifdReplacements;
         float x2 = 0.0f;
         for (int f = 0; f < 800 && scene->giStatus().ifdFollows < f0 + 6u; ++f) {
             x2 += 0.1f;
             camAt(x2);
             render(e, 1);
         }
+        // THE JUMPS (the lead's fix round item 1): three cascade-0 boxes along the
+        // walk in one frame, then a headset-shaped jump (far, sideways and up),
+        // then back to where the walk stopped - each keeps nothing of the window,
+        // so each must RE-PLACE the field onto cascade 0; the walk home scrolls again.
+        jumpTo(arm, Vec3(x2 + 30.0f, 2.0f, 5.0f));
+        jumpTo(arm, Vec3(x2 - 20.0f, 9.0f, 45.0f));
+        jumpTo(arm, Vec3(x2, 2.0f, 5.0f));
         for (int f = 0; f < 800 && x2 > 0.0f; ++f) {
             x2 = std::max(0.0f, x2 - 0.1f);
             camAt(x2);
@@ -262,11 +286,15 @@ int main()
         render(e, 240);                          // the settle and the progressive walk
         view->readPixels(arm.back);
         arm.follows = scene->giStatus().ifdFollows - f0;
+        arm.replacements = scene->giStatus().ifdReplacements - r0;
         std::vector<FrameRecord> recs;
         engine->takeFrameRecords(recs);
         for (const FrameRecord &r : recs)
             for (const CacheWork &w : r.cacheWork) {
                 if (w.detail != "ifd.follow") continue;
+                // The re-placed walk's every step is the whole field; the scrolled
+                // walk's jumps are too, and they are not what its step frame costs.
+                if (!noScroll && w.units == total) continue;
                 if (w.gpuMs > 0.0f) arm.gpu.push_back(w.gpuMs);
                 if (w.gpuMs > arm.scrollGpu) arm.scrollGpu = w.gpuMs;
                 arm.units = std::max(arm.units, w.units);
@@ -281,7 +309,18 @@ int main()
     std::printf("   the same walk (%llu / %llu follows): the return pose, scrolled against re-placed, "
                 "%.2f/255\n", scrolled.follows, replaced.follows, returnDiff);
     CHECK(scrolled.follows >= 6u && replaced.follows >= 6u,
-          "both walks stepped the field out three steps and back");
+          "both walks stepped the field out six steps and back");
+    std::printf("   the jumps: %llu whole re-placements in the scrolled walk; the field's centre "
+                "stood within %.3f m of cascade 0's after each (the lattice snap is under one "
+                "spacing)\n", scrolled.replacements, scrolled.worstCentreErr);
+    CHECK_MSG(scrolled.replacements >= 3u && scrolled.fieldBound,
+              "A JUMP RE-PLACES THE FIELD (a teleport of three cascade-0 boxes, a headset-shaped "
+              "jump, the way back: %llu re-placements) and it stays bound",
+              scrolled.replacements);
+    CHECK_MSG(scrolled.worstCentreErr < 0.4f,
+              "...AND THE FIELD FOLLOWS CASCADE 0 THERE (its centre within %.3f m, under one probe "
+              "spacing) - it is not left at the place the camera jumped from",
+              scrolled.worstCentreErr);
     CHECK_MSG(returnDiff <= 1.0f,
               "THE RETURN POSE RENDERS WHAT A FIELD THAT NEVER SCROLLED RENDERS THERE (%.2f/255): "
               "the window's modulo puts every probe where it belongs", returnDiff);
