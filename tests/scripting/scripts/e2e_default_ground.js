@@ -295,9 +295,16 @@ var withFloor = 0, withoutFloor = 0;
 for (var h = 0; h < hc.length; h++) {
     withFloor += Math.round(lum(obl2.probes[h]));
     withoutFloor += hc[h];
-    assert(hc[h] <= Math.round(lum(obl2.probes[h])),
+    // ONE CODE OF SLACK, and why (PHOTON-ENV-1): the sky's share of the ground's
+    // light now carries the diffuse lobe's energy factor (1/1.51 at the ground's
+    // roughness 1, the direct lobe's own), so the far corners of the matte
+    // ground read within a code of the 0.117-radiance sky that lights them
+    // (measured 29-30 against 30). Nothing is BRIGHTER without the floor beyond
+    // the readback's quantisation; the frame as a whole losing the lit ground
+    // is asserted below.
+    assert(hc[h] <= Math.round(lum(obl2.probes[h])) + 1,
            "...no corner got BRIGHTER when the ground went away, corner " + h +
-           " (" + hc[h] + " <= " + Math.round(lum(obl2.probes[h])) + ")");
+           " (" + hc[h] + " <= " + Math.round(lum(obl2.probes[h])) + " + 1)");
 }
 assert(withoutFloor < withFloor,
        "...and the frame as a whole lost the lit ground (" + withoutFloor + " < " +

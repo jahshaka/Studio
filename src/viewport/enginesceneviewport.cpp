@@ -2600,6 +2600,7 @@ IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
     out.peakEmissive = st.peakEmissive;
     out.emissiveAtMax = qint64(st.emissiveAtMax);
     out.emissiveAboveOne = qint64(st.emissiveAboveOne);
+    out.lightDigest = QString::fromStdString(st.lightDigest);
     return out;
 }
 
@@ -2643,6 +2644,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.ifdMin               = q(st.ifdMin);
     out.ifdMax               = q(st.ifdMax);
     out.ifdFollows           = quint64(st.ifdFollows);
+    out.ifdScrolls           = quint64(st.ifdScrolls);
+    out.ifdReplacements      = quint64(st.ifdReplacements);
     out.probeCapturesLastFrame = st.probeCapturesLastFrame;
     out.probeCapturesDeferred  = quint64(st.probeCapturesDeferred);
     out.staleProbes            = st.staleProbes;
@@ -2706,8 +2709,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);
     out.cascadeDeferrals    = quint64(st.cascadeDeferrals);
     out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
-    out.chainSweeps          = st.chainSweeps;
     out.chainSettles         = st.chainSettles;
+    out.chainInjectionRefusals   = double(st.chainInjectionRefusals);
+    out.chainInjectionsPeakFrame = int(st.chainInjectionsPeakFrame);
     out.dragMovers           = st.dragMovers;
     out.dragMoverGestures    = double(st.dragMoverGestures);
     out.cards.built             = st.cards.built;

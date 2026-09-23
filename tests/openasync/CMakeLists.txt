@@ -28,7 +28,8 @@ target_compile_definitions(test_open_responsive PRIVATE
 
 set(_open_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open)
 file(MAKE_DIRECTORY ${_open_home}/run)
-add_test(NAME open.responsive COMMAND test_open_responsive
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME open.responsive RUN_TIMEOUT 400 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_home}/run)
 # TIMEOUT 400, from the MEASUREMENT and not from an estimate. OPEN-ASSIMP-1
 # added the seven remaining shipped samples (import + a synchronous open each,
@@ -45,7 +46,7 @@ add_test(NAME open.responsive COMMAND test_open_responsive
 # its own control measurement and settle — about 45 s solo. 400 still stands.
 set_tests_properties(open.responsive PROPERTIES
     ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
-    TIMEOUT 400 LABELS "openasync")
+    LABELS "openasync")
 
 # The race lane (scripts/sanitize.sh tsan): a threaded open racing a main-thread
 # heartbeat is exactly what TSan is for. Note the 500 ms gap budget above is a

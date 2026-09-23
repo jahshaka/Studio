@@ -658,11 +658,15 @@ public:
         /// WHERE THE FIELD IS — the corners of the volume its probes span. The
         /// scene's fitted box in the single-volume arm; cascade 0's box, which
         /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).
-        /// `ifdFollows` counts the re-placements onto cascade 0 since the last
+        /// `ifdFollows` counts the follows of cascade 0 (scrolls + re-placements) since the last
         /// build: 0 while standing still, one per cascade-0 step while walking.
         QVector3D ifdMin;
         QVector3D ifdMax;
         quint64   ifdFollows = 0;
+        /// ...split (PHOTON-WRITER-1): window scrolls (the probes that stayed in
+        /// the field's window kept) and whole re-placements (a jump or a resize).
+        quint64   ifdScrolls = 0;
+        quint64   ifdReplacements = 0;
         /// THE PROBE CACHE (ENGINE_CACHE_POLICY_SPEC P1/P6/P7): probes
         /// re-capture only while stale. Captures the last rendered frame made,
         /// probes still owed a capture, the input that last staled the grid
@@ -748,12 +752,15 @@ public:
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;
-        /// Injection passes the last light tick spent over the chain (LAMPREST-2).
-        int     chainSweeps = 0;
         /// Post-rebuild chain settles (LAMPREST-3): how many at-rest injections
         /// the cascade scheduler has run because a rebuild left the chain one
         /// Jacobi pass from its fixed point.
         long long chainSettles = 0;
+        /// THE ONE WRITER (PHOTON-WRITER-1): second injections of one volume in
+        /// one frame the latch refused (0 is the invariant), and the most
+        /// injections any one frame has spent.
+        double    chainInjectionRefusals = 0.0;
+        int       chainInjectionsPeakFrame = 0;
         /// MOVER-1: how many objects ride the mover channel because they are
         /// being dragged right now, and how many such gestures have ENDED.
         int       dragMovers = 0;
@@ -863,6 +870,9 @@ public:
         /// the voxeliser's emissive store, in SCENE RADIANCE (no normalisation).
         /// `emissiveFormat` empty = this cascade has no voxeliser to read.
         QString emissiveFormat;
+        /// THE BYTES (PHOTON-WRITER-1): a hash of every light volume a reader
+        /// samples, 16 hex digits — equal exactly when byte-identical.
+        QString lightDigest;
         float   peakEmissive = 0.0f;
         qint64  emissiveAtMax = 0;    ///< on a UNORM emissive store this IS the clip
         qint64  emissiveAboveOne = 0;

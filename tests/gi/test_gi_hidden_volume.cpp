@@ -109,7 +109,21 @@ static void hiddenGeometry(Engine *engine, View *view)
     std::printf("   floor no-panel  r=%.3f g=%.3f | panel visible r=%.3f g=%.3f\n",
                 noPanel.r, noPanel.g, withPanel.r, withPanel.g);
     const float bounceOn = (withPanel.r - withPanel.g) - (noPanel.r - noPanel.g);
-    CHECK(bounceOn > 0.02f, "the visible panel bounces red onto the floor");
+    // THE BAR: the 0.02 it was set at for a LAMBERTIAN panel and floor, times what
+    // the two surfaces' normalised Disney lobes really reflect at roughness 0.9
+    // (PHOTON-WRITER-1): the panel's voxels hold its directional albedo for the
+    // light (square on, cos 1) and the floor reflects the bounce with its own at
+    // the camera's view angle — both computed from the lobe
+    // (enginetest::disneyDiffuseAlbedo), not measured and re-anchored.
+    const Vec3 floorPt = enginetest::groundPointForPixel(Vec3(0.0f, 4.0f, 6.0f),
+                                                         Vec3(0.0f, 0.0f, -0.5f), fx, fy, 128u);
+    const double vx = 0.0 - floorPt.x, vy = 4.0 - floorPt.y, vz = 6.0 - floorPt.z;
+    const double floorV = vy / std::sqrt(vx * vx + vy * vy + vz * vz);
+    const float bounceBar = float(0.02 * enginetest::disneyDiffuseAlbedo(1.0, 0.9) *
+                                  enginetest::disneyDiffuseAlbedo(floorV, 0.9));
+    std::printf("   bounce %.4f against the bar %.4f (0.02 x the panel's and the floor's lobe "
+                "albedo; floor cos theta_v %.3f)\n", bounceOn, bounceBar, floorV);
+    CHECK(bounceOn > bounceBar, "the visible panel bounces red onto the floor");
 
     // HIDE IT. The engine must drop kGiGeometryBit and invalidate; the mirror's
     // stability window is a host concern, so the suite asks for the re-solve

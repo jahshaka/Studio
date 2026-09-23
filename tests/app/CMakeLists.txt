@@ -37,13 +37,13 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # self-test with its ground deliberately broken and requires exit 1: the
 # self-test used to pass a groundless default scene because the sky alone
 # satisfies its centre-pixel check (engine_selftest.sh says why, in full).
-add_test(NAME app.engine_selftest_validation
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME app.engine_selftest_validation RUN_TIMEOUT 180
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
 set_tests_properties(app.engine_selftest_validation PROPERTIES
     ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
-    TIMEOUT 180
     LABELS "app")
 
 # app.startup_quiet — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
@@ -115,7 +115,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # PORT 0 = EPHEMERAL. The app prints "MCP: port N" and the script reads
         # it back; two suites both naming 8751 is what made -j4 unsafe
         # (TEST_GATE_AUDIT.md §4.1).
-        add_test(NAME app.input_keys
+        # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+        jah_gpu_exclusive_test(NAME app.input_keys RUN_TIMEOUT 600
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/input_keys.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ik_home}/run)
@@ -126,7 +127,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_tests_properties(app.input_keys PROPERTIES
             ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
-            TIMEOUT 600
             LABELS "app")
     else()
         message(STATUS "app.input_keys skipped: needs xdotool, curl, jq and Xvfb")

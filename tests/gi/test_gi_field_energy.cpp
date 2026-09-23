@@ -15,6 +15,22 @@
 //
 // So the claim here is ENERGY, and it has a closed form.
 //
+// WHY IT IS STILL RED AFTER THE SOURCE WAS MADE RIGHT (PHOTON-WRITER-1,
+// 2026-09-23). The voxels used to hold the floor as a LAMBERTIAN emitter,
+// rho E / pi, while the floor renders the normalised Disney diffuse — 1.5x
+// brighter than its own picture at roughness 1 (1.694x / 1.591x / 0.912x here).
+// Now the material store carries the roughness and the light injection stores
+// what the surface renders (the lobe's directional albedo at the lamp's angle,
+// jahDiffuseAlbedo), and the wall's environment lobe reflects with the same
+// function at its view angle instead of the constant energy factor (equation (4)
+// below says so): 1.168x / 1.100x / 0.627x. The mean fell by the source's own
+// factor; what is left is THE SHAPE, which the source never touched (2.870 before,
+// 2.877 after, against the transfer's 1.545): the wall stands 7 m from the camera,
+// OUTSIDE cascade 0, so it is lit by the chain's cone march, and the cones read
+// the floor too bright at 0.4 m (the first coarse samples sit on it) and too dark
+// at 2.8 m (the aperture's over-occlusion over the long grazing path). That is
+// the cone transport's, not the source's — the row stays a target for it.
+//
 // ===========================================================================
 // THE PHYSICS, WRITTEN OUT
 // ===========================================================================
@@ -85,12 +101,14 @@
 //    integral in (2) so the closed form cannot be silently mis-transcribed.
 //
 // 4. WHAT THE WALL RENDERS. The wall's light is an ENVIRONMENT term, and
-//    BRDF_EnvMap (200.BRDFs_piece_ps.any:305) carries no energyFactor and no
-//    scatter terms — MEASURE-1a measured that path exact. HlmsPbs consumes a
-//    diffuse-GI irradiance as `envColourD` = E/pi and multiplies it by the
-//    albedo, so with no other light on the wall the pixel is, in linear radiance,
+//    BRDF_EnvMap (200.BRDFs_piece_ps.any) carries no scatter terms and — since
+//    PHOTON-ENV-1 — the diffuse lobe's energy factor, the direct lobe's own
+//    (`jahDiffuseEnergyFactor`, 1/1.51 on this roughness-1 wall; MEASURE-1a
+//    decision b). HlmsPbs consumes a diffuse-GI irradiance as `envColourD` =
+//    E/pi and multiplies it by the albedo and that factor, so with no other
+//    light on the wall the pixel is, in linear radiance,
 //
-//        L_wall(h) = rho_w * E(h) / pi,                                    (4)
+//        L_wall(h) = energyFactor(1) * rho_w * E(h) / pi,                  (4)
 //
 //    with E(h) the transfer integral of (2) carrying (1) as its source:
 //
@@ -636,13 +654,20 @@ int main()
             // (4)+(4a) from the AUTHORED numbers, with pbsDirect inside the
             // integral — the asserted bar.
             const double eExact = transferIntegral(p, n, 512, false, kFloorAlbedo, kSunPower, 1.0);
-            const double expected = kWallAlbedo * eExact / kPi;
+            // THE WALL'S LOBE IS ITS DIRECTIONAL ALBEDO (PHOTON-WRITER-1:
+            // BRDF_EnvMap reflects the environment with the normalised Disney
+            // lobe's integral, jahDiffuseAlbedo). The camera looks straight at the
+            // wall (orthographic, along its normal): cos theta_v = 1, roughness 1.
+            const double kWallEnergyFactor = enginetest::disneyDiffuseAlbedo(1.0, 1.0);
+            const double expected = kWallEnergyFactor * kWallAlbedo * eExact / kPi;
+            const double expectedOldAccounting = kWallAlbedo * eExact / kPi;
             // ...the LAMBERTIAN closed form, so the lobe's share is visible...
-            const double expectedLambert =
-                kWallAlbedo * omega * pbsDirectLambertLimit(kFloorAlbedo, kSunPower, 1.0) / kPi;
+            const double expectedLambert = kWallEnergyFactor * kWallAlbedo * omega *
+                                           pbsDirectLambertLimit(kFloorAlbedo, kSunPower, 1.0) / kPi;
             // ...and the same claim with the floor's MEASURED radiance in place
             // of (1), which takes the source term out of the comparison.
-            const double expectedFromFloor = kWallAlbedo * floorMeasured * omega / kPi;
+            const double expectedFromFloor =
+                kWallEnergyFactor * kWallAlbedo * floorMeasured * omega / kPi;
             double px, py, m[3];
             wallToPixel(0.0, kHeights[i], px, py);
             blockMean(img, px, py, 8, m);
@@ -652,9 +677,12 @@ int main()
                                                                   : 0.0;
             std::printf("     h = %.1f m (px %.0f,%.0f): F = %.4f  measured %.4f  |  EXACT (4a) "
                         "%.4f -> %.3fx  |  Lambertian %.4f  |  from the MEASURED floor %.4f -> "
-                        "%.3fx\n",
+                        "%.3fx  |  the wall Lambertian (the old accounting, not the claim) "
+                        "%.4f -> %.3fx\n",
                         kHeights[i], px, py, omega / kPi, measured, expected, ratio,
-                        expectedLambert, expectedFromFloor, ratioFromFloor);
+                        expectedLambert, expectedFromFloor, ratioFromFloor,
+                        expectedOldAccounting,
+                        expectedOldAccounting > 0.0 ? measured / expectedOldAccounting : 0.0);
             const double err = std::fabs(ratio - 1.0);
             std::printf("target: %.4f (bar 0.1500) the wall's reflected radiance at h = %.1f m is "
                         "the floor's bounce through the finite-rectangle transfer: "

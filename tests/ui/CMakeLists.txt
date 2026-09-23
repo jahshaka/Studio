@@ -123,10 +123,11 @@ target_include_directories(test_media_lazy PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_media_lazy
     PRIVATE IrisGL Qt6::Widgets Qt6::Multimedia Qt6::Test)
-add_test(NAME ui.media_lazy COMMAND test_media_lazy
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME ui.media_lazy RUN_TIMEOUT 120 COMMAND test_media_lazy
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.media_lazy PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "ui")
 
 # ui.engine_view_winid — the View is rebuilt when Qt hands the widget a NEW
 # native window (deep audit area 7). The ONE suite that drives EngineViewWidget

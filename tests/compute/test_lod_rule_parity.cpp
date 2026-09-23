@@ -32,8 +32,13 @@
 // numbers are printed.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "cluster_draw.h"
+#include "cluster_fixtures.h"
+
+#include <QCoreApplication>
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -89,8 +94,132 @@ static MeshData chainedMesh()
     return d;
 }
 
-int main()
+// ---- THE FOURTH COPY: THE CLUSTER CUT (ATOM stage 2, lane ATOM-CLUSTER-1) --------
+//
+// The cut's rule is the same currency applied PER GROUP of a mesh's cluster DAG
+// (Types.h `clusterGroupAllowed` / `clusterGroupAffordable` / `clusterDrawn`), and
+// its GLSL twin is the product piece media/Hlms/Jahshaka/JahClusterCut.glsl — the
+// piece stage 3's GPU cut will include. There is no product job running it yet,
+// so the device half runs through a TEST job (tests/atom/media) the cluster
+// harness dispatches over the DAG's own tables: one thread per (view, cluster),
+// each writing whether the rule draws that cluster. It must pick THE SAME SET as
+// the C++ `clusterCut`, bit for bit, over the shipped meshes (their DAGs baked by
+// the product's own bake) at 20 distances x 6 scales x 3 tolerances, with the
+// instance ROTATED and scaled NON-UNIFORMLY so the rows of its transform and the
+// level rule's column scale are exercised, not just the translation. Answers
+// within 1e-4 of a threshold are counted over every evaluation, as the three
+// older copies count them, and a disagreement at one is reported apart (float
+// ordering between two compilers) but still fails.
+static void clusterCutParity(Engine *e)
 {
+    std::printf("\n== the fourth copy: the CLUSTER CUT, C++ against the GLSL piece ==\n");
+    clusterdraw::GpuCut gpu;
+    std::string err;
+    if (!gpu.init(e, err)) { std::printf("FAIL: the parity job: %s\n", err.c_str()); ++failures; return; }
+
+    const std::string prim = std::string(JAHSHAKA_TEST_SOURCE_DIR) + "/app/content/primitives/";
+    std::vector<std::pair<std::string, iris::MeshPtr>> meshes;
+    for (const char *name : { "hp_sphere.obj", "torus.obj", "teapot.obj", "capsule.obj" }) {
+        const auto ms = clusterfix::loadModel(prim + name);
+        if (!ms.empty()) meshes.push_back({ name, ms.front() });
+    }
+    const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
+    if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
+    meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
+
+    // The instance: rotated 30 degrees about Y then 20 about X, scaled NON-UNIFORMLY
+    // (1 : 0.6 : 1.3 along its own axes, times the sweep's scale), placed `dist`
+    // metres down -Z; the eye at the origin. Non-uniform under a rotation is the
+    // case where the longest ROW and the longest COLUMN differ, so both halves must
+    // take the scale the level rule takes — `worldMaxAxisScale` here, its twin
+    // `jahWorldMaxAxisScale` on the device (JahLevelRule_piece_cs.any), from the
+    // same rows.
+    const float cy = std::cos(0.5236f), sy = std::sin(0.5236f), cx = std::cos(0.3491f), sx = std::sin(0.3491f);
+    const float R[3][3] = { { cy, 0.0f, sy }, { sx * sy, cx, -sx * cy }, { -cx * sy, sx, cx * cy } };
+    const float axis[3] = { 1.0f, 0.6f, 1.3f };
+    const float tols[3] = { 0.5f, 1.0f, 4.0f };
+    const float scales[6] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f };
+    unsigned long long evaluated = 0, mismatched = 0, nearThreshold = 0, nearMismatched = 0, drawnTotal = 0;
+    size_t meshesRun = 0;
+    for (const auto &m : meshes) {
+        clusterfix::Fixture f;
+        if (!clusterfix::bake(f, m.second, m.first) || f.data.clusters.empty()) continue;
+        ++meshesRun;
+        std::vector<ClusterCutView> views;
+        for (int di = 0; di < 20; ++di) {
+            const float dist = std::pow(500.0f, float(di) / 19.0f);   // 1 m .. 500 m
+            for (float sc : scales)
+                for (float tol : tols) {
+                    ClusterCutView v;
+                    for (int r = 0; r < 3; ++r) {
+                        for (int c = 0; c < 3; ++c) v.worldRow[r][c] = R[r][c] * axis[c] * sc;
+                        v.worldRow[r][3] = r == 2 ? -dist : 0.0f;
+                    }
+                    v.scale = worldMaxAxisScale(&v.worldRow[0][0]);
+                    v.tolerance = tol;
+                    v.projScaleY = 1.0f / std::tan(30.0f * 3.14159265f / 180.0f);
+                    v.viewportHeight = 1080.0f;
+                    views.push_back(v);
+                }
+        }
+        std::vector<unsigned char> drawn;
+        if (!gpu.run(f.data.clusterGroups, f.data.clusters, views, drawn, err)) {
+            std::printf("FAIL: %s: the device run: %s\n", m.first.c_str(), err.c_str());
+            ++failures;
+            continue;
+        }
+        const size_t nc = f.data.clusters.size();
+        unsigned long long meshBad = 0, meshNear = 0, meshNearBad = 0;
+        size_t distinct = 0;
+        std::vector<unsigned> cut, previous;
+        for (size_t vi = 0; vi < views.size(); ++vi) {
+            clusterCut(f.data.clusterGroups, f.data.clusters, views[vi], cut);
+            if (cut != previous) ++distinct;
+            previous = cut;
+            std::vector<unsigned char> cpu(nc, 0);
+            for (unsigned c : cut) cpu[c] = 1;
+            for (size_t c = 0; c < nc; ++c) {
+                ++evaluated;
+                drawnTotal += cpu[c];
+                // NEAR A THRESHOLD, counted over EVERY evaluation (as the three
+                // older copies count it): either of the two groups the answer reads
+                // is afforded within 1e-4 of its error.
+                bool near = false;
+                for (int g : { f.data.clusters[c].group, f.data.clusters[c].refined }) {
+                    if (g < 0) continue;
+                    const MeshClusterGroup &gr = f.data.clusterGroups[size_t(g)];
+                    const float a = clusterGroupAllowed(gr, views[vi]);
+                    if (gr.error < FLT_MAX && std::fabs(a - gr.error) <= 1.0e-4f * gr.error) near = true;
+                }
+                if (near) ++meshNear;
+                if (cpu[c] == drawn[vi * nc + c]) continue;
+                if (near) ++meshNearBad; else ++meshBad;
+            }
+        }
+        mismatched += meshBad;
+        nearThreshold += meshNear;
+        nearMismatched += meshNearBad;
+        std::printf("   %-16s %4zu clusters %3zu groups, %zu views, %4zu distinct cuts: %llu disagreements "
+                    "(+%llu at a threshold); %llu answers within 1e-4 of a threshold\n", m.first.c_str(), nc,
+                    f.data.clusterGroups.size(), views.size(), distinct, meshBad, meshNearBad, meshNear);
+        char msg[160];
+        std::snprintf(msg, sizeof(msg), "%s: the sweep reaches %zu distinct cuts", m.first.c_str(), distinct);
+        CHECK(distinct >= 4u, msg);
+    }
+    char msg[200];
+    std::snprintf(msg, sizeof(msg), "the cluster cut ran on %zu shipped meshes", meshesRun);
+    CHECK(meshesRun >= 5u, msg);
+    std::snprintf(msg, sizeof(msg),
+                  "THE GLSL CUT AND THE C++ CUT PICK THE SAME CLUSTERS: %llu (view, cluster) answers, "
+                  "%llu drawn, %llu disagreements (%llu of them at a threshold); %llu answers within 1e-4 "
+                  "of a threshold",
+                  evaluated, drawnTotal, mismatched + nearMismatched, nearMismatched, nearThreshold);
+    CHECK(mismatched == 0u && nearMismatched == 0u, msg);
+}
+
+int main(int argc, char **argv)
+{
+    QCoreApplication app(argc, argv);
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -377,6 +506,8 @@ int main()
     for (int i = 0; i < 8; ++i) if (histogram[i]) ++distinct;
     std::snprintf(msg, sizeof(msg), "the sweep reached %u distinct levels of the eight", distinct);
     CHECK(distinct >= 5u, msg);
+
+    clusterCutParity(e);
 
     std::printf("\n%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;

@@ -636,13 +636,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // FIELD-RASTER-CRUD, and the voxel source is the only one there is.)
         scene->giDdgiIntensity = float(
             qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(scene->giDdgiIntensity), 64.0));
-        // The ambient sky-visibility strength (the Photon ambient fix). Absent
-        // in every document written before it: the fallback 1.0 turns the fix
-        // ON for them, deliberately — it corrects a term those documents were
-        // MISSING, and the sealed-room invariance gate is what says that is
-        // safe for the scenes it cannot change.
-        scene->giDdgiAmbient = float(
-            qBound(0.0, sceneObj.value("giDdgiAmbient").toDouble(scene->giDdgiAmbient), 8.0));
         // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
         // document written before the unification — those are DERIVED from the
         // fields above, below, once the World Mode is known.

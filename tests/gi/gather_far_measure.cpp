@@ -3,9 +3,11 @@
 //
 // THE CODE UNDER MEASUREMENT:
 //   irisgl/engine/src/rayquery/rq_probe_gather.comp — maxT = p.knobs.y; origin =
-//       posW + n*bias; the query is gl_RayFlagsOpaqueEXT over [bias, maxT]; a
-//       committed triangle is shaded from the cascades (black where they cannot
-//       shade it), a miss reads the SKY.
+//       posW + n*bias; the NEAR query (mask 0x0F) is gl_RayFlagsOpaqueEXT over
+//       [bias, maxT]; a ray that escapes it runs the FAR query (mask 0x10, the
+//       coarse copies, ATOM-FARBLAS-1) over [maxT, far plane]; a committed
+//       triangle is shaded from the cascades (black where they cannot shade it),
+//       a miss of both reads the SKY.
 //   irisgl/engine/src/OgreScreenProbeGather.cpp (`reach`) — maxT = the outer
 //       cascade's HALF extent (the lit volume's inscribed radius) under the
 //       camera's far plane, unless tuning.rayLength overrides.
@@ -36,6 +38,7 @@
 // point lies, the hit deciles of maxT, and the cross-check that rendering with
 // tuning.rayLength forced to the maxT this tool derives is pixel-identical to
 // the engine's own derivation (freezeFrameIndex on). SWEEP MODE: see sweepMain.
+// FAR-BLAS MODE (`FARBLAS=1`, ATOM-FARBLAS-1): see farBlasMain.
 //
 // Build: `ninja -C build-linux gather_far_measure`; run on a rig display with
 // DISPLAY set (a Vulkan engine cannot boot without one).
@@ -435,6 +438,8 @@ static void tune(Scene *s, float rayLength)
     s->setGatherTuning(t);
 }
 
+static int farBlasMain(Engine *e, View *view);
+
 static int sweepMain(Engine *e, View *view)
 {
     View *big = e->createOffscreenView("gafar-cost", 1920u, 1080u, Colour(0, 0, 0));
@@ -585,6 +590,7 @@ int main()
         return 1;
     }
     if (std::getenv("GAFAR_SWEEP")) return sweepMain(e, view);
+    if (std::getenv("FARBLAS")) return farBlasMain(e, view);
 
     struct Fix { const char *name; CameraDesc (*build)(Scene *); };
     const Fix fixtures[3] = { { "open-sky", buildOpen }, { "closed-box", buildBox },
@@ -691,4 +697,118 @@ int main()
                     r.maxTab.moved);
     }
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// THE FAR BLAS (lane ATOM-FARBLAS-1, `FARBLAS=1`; A5b §4). The gather's rays
+// trace the NEAR copies to the outer half extent and, when they escape, the FAR
+// copies (each mesh's coarsest level) on to the far plane. Two questions, per
+// fixture and tier (`FARBLAS_TIER=High` picks one), in this process at this pose:
+//   (a) THE PICTURE against the old long-ray reference — a NEAR-ONLY trace (the
+//       fine geometry) to the outer box's diagonal (207.85 m at a 60 m half
+//       extent), the far query off. The shipped arm (half + far) and the
+//       pre-lane arm (half + sky) are each differenced against it; the far
+//       field must land within the instrument's noise of the reference;
+//   (b) THE COST: the gather's own GPU timestamps with the far query ON vs OFF
+//       (and the reference), interleaved in 10 rounds of 36 frames with the
+//       first six of each block dropped, on a 1920x1080 view — CLOCKS NOT
+//       LOCKED, so the RATIO is the number, never a millisecond.
+// Every picture is frozen; the instrument floor is the reference arm twice.
+// THE FIXTURES' PRIMITIVES CARRY NO CHAIN (enginetest's unit cube), so here the
+// coarse copy IS the fine one and (a) isolates the far QUERY; the coarse
+// GEOMETRY's own effect is gi.far_blas's analytic case.
+static void tuneFar(Scene *s, float rayLength, bool farOff)
+{
+    GatherTuning t;
+    t.freezeFrameIndex = true;
+    t.rayLength = rayLength;
+    t.farQueryOff = farOff;
+    s->setGatherTuning(t);
+}
+
+static int farBlasMain(Engine *e, View *view)
+{
+    View *big = e->createOffscreenView("farblas-cost", 1920u, 1080u, Colour(0, 0, 0));
+    if (!big) { std::printf("FAIL: cost view: %s\n", e->lastError().c_str()); return 1; }
+    big->setShadows(true);
+    big->setEnabled(false);
+    struct Fix { const char *name; CameraDesc (*build)(Scene *); };
+    const Fix fixtures[2] = { { "open-sky", buildOpen }, { "showroom-shaped", buildShowroom } };
+    const char *tierOnly = std::getenv("FARBLAS_TIER");
+    std::printf("== FARBLAS-1: the far query, frozen frame, paired in one process ==\n");
+    int bad = 0;
+    for (const Fix &f : fixtures) {
+        for (int ti = 0; ti < 3; ++ti) {
+            const Tier &tier = kTiers[ti];
+            if (tierOnly && std::string(tierOnly) != tier.name) continue;
+            Scene *s = e->createScene(std::string("farblas-") + f.name + "-" + tier.name);
+            if (!s) { std::printf("FAIL: scene\n"); return 1; }
+            view->setEnabled(true);
+            view->setScene(s);
+            armChain(view, tier.ssrRow);
+            const CameraDesc cam = f.build(s);
+            view->setCamera(cam);
+            s->setGlobalIllumination(giAt(tier));
+            tuneFar(s, 0.0f, false);
+            render(e, 90);
+            const GiStatus gs = s->giStatus();
+            const float outerHalf = gs.cascades.empty() ? 0.0f : gs.cascades.back().halfSize;
+            const float diag = std::sqrt(3.0f) * 2.0f * outerHalf;
+            std::printf("\n-- %s %s: outer half %.2f m, reference length %.2f m, far plane %.1f\n",
+                        f.name, tier.name, double(outerHalf), double(diag), double(cam.farClip));
+
+            // ---- (a) the pictures
+            Image ship, nofar, ref, ref2;
+            tuneFar(s, 0.0f, false); render(e, 4); view->readPixels(ship);
+            tuneFar(s, 0.0f, true);  render(e, 4); view->readPixels(nofar);
+            tuneFar(s, diag, true);  render(e, 4); view->readPixels(ref);
+            tuneFar(s, diag, true);  render(e, 4); view->readPixels(ref2);
+            const Delta floor = deltaOf(ref, ref2), dShip = deltaOf(ref, ship),
+                        dNo = deltaOf(ref, nofar);
+            std::printf("   instrument floor (reference twice) %u/%u px\n", floor.moved, floor.total);
+            std::printf("   vs the near-only %.0f m reference: half+FAR %u px (mean %.2f, worst %u, "
+                        "meanAll %.4f) | half+SKY %u px (mean %.2f, worst %u, meanAll %.4f)\n",
+                        double(diag), dShip.moved, dShip.meanMoved, dShip.worst, dShip.meanAll,
+                        dNo.moved, dNo.meanMoved, dNo.worst, dNo.meanAll);
+            if (floor.moved) ++bad;
+
+            // ---- (b) the cost
+            view->setEnabled(false);
+            big->setScene(s);
+            armChain(big, tier.ssrRow);
+            big->setCamera(cam);
+            big->setEnabled(true);
+            tuneFar(s, 0.0f, false);
+            render(e, 120);
+            std::vector<float> ms[3];
+            for (int round = 0; round < 10; ++round)
+                for (int a = 0; a < 3; ++a) {
+                    if (a == 0) tuneFar(s, 0.0f, false);
+                    else if (a == 1) tuneFar(s, 0.0f, true);
+                    else tuneFar(s, diag, true);
+                    for (int fr = 0; fr < 36; ++fr) {
+                        e->renderOneFrame();
+                        if (fr < 6) continue;
+                        const GatherStatus q = s->giStatus().gather;
+                        if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
+                            ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
+                    }
+                }
+            big->setEnabled(false);
+            float med[3];
+            for (int a = 0; a < 3; ++a) {
+                std::vector<float> v = ms[a];
+                std::sort(v.begin(), v.end());
+                med[a] = v.empty() ? -1.0f : v[v.size() / 2];
+            }
+            std::printf("   gather GPU ms (median of %zu/%zu/%zu): far ON %.4f | far OFF %.4f | "
+                        "near-only %.0f m %.4f -> ratio ON/OFF %.3f, ON/ref %.3f\n",
+                        ms[0].size(), ms[1].size(), ms[2].size(), double(med[0]), double(med[1]),
+                        double(diag), double(med[2]), med[1] > 0 ? double(med[0] / med[1]) : -1.0,
+                        med[2] > 0 ? double(med[0] / med[2]) : -1.0);
+            std::fflush(stdout);
+            e->destroyScene(s);
+        }
+    }
+    return bad ? 1 : 0;
 }

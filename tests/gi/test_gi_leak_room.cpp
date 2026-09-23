@@ -144,7 +144,14 @@ int main()
     // 0.50 m). The absolute leak at the corrected brightness is a QUALITY
     // question for the irradiance field's occlusion, reported to the lead by
     // PHOTON-M2 rather than hidden by a bar.
-    const float bars[4] = { 0.068f, 0.071f, 0.093f, 0.325f };
+    //
+    // THE 0.10 m BAR IS 0.10 (PHOTON-READER-1, the lead's verdict): the field's
+    // probe rays now walk the whole chain, so past cascade 0's box they read
+    // cascade 1, whose 15.6 cm cells cannot hold a 10 cm wall (0.0963 measured;
+    // the cascade-0-only march stopped there and discarded the escape, which read
+    // as opacity - 0.0830). The 0.50 / 0.20 / 0.05 m walls leak LESS than before
+    // (0.0534 / 0.0553 / 0.2617), which is what says the walk is right.
+    const float bars[4] = { 0.068f, 0.071f, 0.100f, 0.325f };
 
     std::string err;
     EngineConfig cfg;

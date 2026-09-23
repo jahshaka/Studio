@@ -234,14 +234,15 @@ add_test(NAME threading.freshhome.newproject_stall
 set_tests_properties(threading.freshhome.newproject_stall PROPERTIES
     FIXTURES_SETUP threading_home_newproject_stall LABELS "threading")
 
-add_test(NAME threading.newproject_stall
+# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
+jah_gpu_exclusive_test(NAME threading.newproject_stall RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.js
          WORKING_DIRECTORY ${_thr_home_stall}/run)
 set_tests_properties(threading.newproject_stall PROPERTIES
     ENVIRONMENT "HOME=${_thr_home_stall};JAHSHAKA_DATA_ROOT=${_thr_home_stall}/.local/share/Jahshaka"
     FIXTURES_REQUIRED threading_home_newproject_stall
-    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 300)
+    LABELS "threading" RUN_SERIAL TRUE)
 
 # threading.texture_wait_watchdog — the give-up path itself, under the engine's
 # JAH_TEXTURE_WAIT_FAULT hook (the script's header says why a hook is the only

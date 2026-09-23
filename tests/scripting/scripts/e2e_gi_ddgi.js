@@ -111,28 +111,15 @@ assert(world.gi({ ddgiIntensity: 2.5 }), "world.gi({ddgiIntensity:2.5})");
 editor.frame(3);
 assert(Math.abs(world.get().gi.ddgiIntensity - 2.5) < 1e-4, "the document echoes intensity 2.5");
 
-// ---- phase C2: the ambient sky-visibility dial ---------------------------
-// The Photon ambient fix's one knob. The PIXEL contract is gi.ddgi_ambient's
-// (recovery on an open scene, invariance in a sealed one); what belongs here is
-// that the verb exists, round-trips through the document, and refuses nonsense
-// — the API-first half.
-assert(Math.abs(world.get().gi.ddgiAmbient - 1.0) < 1e-6,
-       "ddgiAmbient defaults to 1.0 — the fix is ON, because it corrects a term every "
-       + "DDGI scene was MISSING");
-assert(world.gi({ ddgiAmbient: 0 }), "world.gi({ddgiAmbient:0})");
-editor.frame(3);
-st = world.giStatus();
-assert(st.ifdBound === true,
-       "ambient 0 leaves the field BOUND — like the intensity, it is a shader scalar and "
-       + "0 is exactly 'DDGI as it behaved before the fix'");
-assert(Math.abs(world.get().gi.ddgiAmbient) < 1e-6, "the document echoes ambient 0");
-assert(world.gi({ ddgiAmbient: 1 }), "world.gi({ddgiAmbient:1}) — back to the reconstruction");
-editor.frame(3);
-assert(Math.abs(world.get().gi.ddgiAmbient - 1.0) < 1e-4, "the document echoes ambient 1");
+// ---- phase C2: there is no ambient dial -----------------------------------
+// PHOTON-ENV-1: the field carries the SKY itself (every probe ray that escapes
+// the voxels reads the environment in its own direction), so the read-time
+// ambient term and its 'ddgiAmbient' dial are gone. The key is REFUSED, like
+// every key world.gi does not know.
 var threw = "";
-try { world.gi({ ddgiAmbient: 9 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("ddgiAmbient") >= 0,
-       "world.gi refuses an out-of-range ddgiAmbient: " + threw);
+assert(world.get().gi.ddgiAmbient === undefined, "the document no longer carries ddgiAmbient");
+try { world.gi({ ddgiAmbient: 1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("ddgiAmbient") >= 0, "world.gi refuses the retired ddgiAmbient key: " + threw);
 
 // ---- phase D: refusals and the tri-state --------------------------------
 try { world.gi({ ddgiIntensity: 100 }); } catch (e) { threw = String(e); }

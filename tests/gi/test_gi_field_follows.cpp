@@ -118,8 +118,8 @@ static GiParams fieldGi()
     return gi;
 }
 
-int main()
-{
+int main() {
+
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -370,6 +370,14 @@ int main()
         singleVolumeGround = nearGroundLum(img);
         const float singleWholeBand = groundLum(img);
 
+        // THE RAW AMBIENT on the same band (GI off): with no lamp in this scene the
+        // near ground's light IS the ambient times what it sees of the sky.
+        GiParams giOff; giOff.mode = GiMode::Off;
+        CHECK(scene->setGlobalIllumination(giOff), "GI off, for the raw ambient");
+        render(e, 8);
+        view->readPixels(img);
+        const float rawGround = nearGroundLum(img);
+
         CHECK(scene->setGlobalIllumination(fieldGi()), "back to the chain");
         render(e, 8);
         view->readPixels(img);
@@ -390,8 +398,41 @@ int main()
         // room at very different probe spacings. What must hold is that the
         // near ground is lit by the SAME light — not that two different
         // samplings of it agree to the bit.
-        CHECK(std::fabs(chain - singleVolumeGround) < 0.25f * singleVolumeGround,
-              "the chain's field lights the near ground like the fitted field did");
+        // AGAINST THE FIXTURE'S OWN TRUTH (PHOTON-READER-1): the band's mean
+        // cosine-weighted sky visibility with the walls as the only occluders,
+        // computed here exactly, against what the chain's field gives of the raw
+        // ambient. The single volume is PRINTED, not the bar: it was never the truth.
+        std::vector<enginetest::AnalyticBox> walls;
+        for (int i = 0; i < 24; ++i)
+            walls.push_back({ Vec3(float(i) * 6.0f - 2.5f, 0.0f, -6.1f),
+                              Vec3(float(i) * 6.0f + 2.5f, 6.0f, -5.9f) });
+        float truth = 0.0f; unsigned samples = 0;
+        for (unsigned y = kSize * 7u / 8u; y < kSize; y += 4u)
+            for (unsigned x = kSize / 4u; x < kSize * 3u / 4u; x += 8u) {
+                const Vec3 g = enginetest::groundPointForPixel(Vec3(0.0f, 2.0f, 6.0f),
+                                                               Vec3(0.0f, 1.0f, 0.0f), x, y, kSize);
+                truth += enginetest::cosineSkyVisibilityUp(Vec3(g.x, 1e-4f, g.z), walls, 64);
+                ++samples;
+            }
+        truth = samples ? truth / float(samples) : 0.0f;
+        const float measured = rawGround > 0.0f ? chain / rawGround : 0.0f;
+        const float singleFrac = rawGround > 0.0f ? singleVolumeGround / rawGround : 0.0f;
+        std::printf("   ANALYTIC: the near ground sees %.3f of the sky; of the raw ambient "
+                    "(%.4f) the chain's field gives %.3f (= %.3f of the truth), the single "
+                    "volume's %.3f\n", truth, rawGround, measured,
+                    truth > 0.0f ? measured / truth : 0.0f, singleFrac);
+        // GATED SINCE PHOTON-WRITER-1 (it was the target row
+        // gi.field_follows_ground_target: 0.737 at READER-1, 0.662 at ENV-1). The
+        // two mechanisms, measured: the field's probe rays marched as CONES,
+        // whose composite over-occludes the grazing directions over a floor
+        // (0.662 -> 0.729 as rays), and the reader's backface floor of 0.2, which
+        // handed the probe layer UNDER the thin ground slab a sixth of a front
+        // probe's weight (0.729 -> 0.927 without it). Probe relocation was not the
+        // mechanism: nothing here stands inside geometry.
+        std::printf("   ground: %.4f of the analytic truth (bar 0.90)\n",
+                    truth > 0.0f ? measured / truth : 0.0f);
+        CHECK(measured >= 0.90f * truth,
+                  "the chain's field gives the near ground >= 90% of its ANALYTIC sky visibility");
         CHECK(std::fabs(chainAgain - chain) < 0.05f * std::max(chain, 1e-4f),
               "...and the arm is reproducible across a re-solve");
         (void)chainGroundAtStart;
