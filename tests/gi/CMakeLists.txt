@@ -763,6 +763,13 @@ add_test(NAME gi.field_follows COMMAND test_gi_field_follows
 # once (the VRAM-contention class, CLAUDE.md) plus a 14 MB probe atlas, and the
 # walk renders a frame at a time.
 set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# gi.field_follows_ground_target — case 3's honest red (the chain's field reads 0.737 of the near
+# ground's ANALYTIC sky visibility; probe relocation is the fix — PHOTON-WRITER-1) as a TARGET ROW:
+# the suite above prints the value; this row gates on it and carries the label until the part lands.
+add_test(NAME gi.field_follows_ground_target COMMAND test_gi_field_follows --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_follows_ground_target PROPERTIES
+    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL ON)
 
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
