@@ -86,6 +86,13 @@ add_executable(cluster_config_measure EXCLUDE_FROM_ALL cluster_config_measure.cp
     ${_cluster_fixture_sources})
 jah_cluster_target(cluster_config_measure)
 
+# far_blas_measure — ATOM-FARBLAS-1's numbers: the far BLAS's memory per shipped
+# mesh and the lattice's TLAS size / build / refit. A TOOL (EXCLUDE_FROM_ALL).
+add_executable(far_blas_measure EXCLUDE_FROM_ALL far_blas_measure.cpp
+    ${_cluster_fixture_sources})
+jah_cluster_target(far_blas_measure)
+add_dependencies(far_blas_measure JahshakaEngineMedia)
+
 # atom.cluster_cut — THE RULE SELECTS ONE CUT (B2 §2): the bake's two
 # monotonicities, the provenance partition, exactly-one-cut at 64 thresholds and
 # from 40 (eye, tolerance) pairs, monotone refinement, and the format's round trip
