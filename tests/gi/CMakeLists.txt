@@ -1082,10 +1082,10 @@ add_test(NAME gi.stream_edit COMMAND test_gi_stream_edit
 set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
 # SURFACE-CACHE phase 2 (SURFACE-CACHE-1b) — the capture Component's gates.
-# FOUR ctest names (gi.card_lighting: PHOTON-CARDS-1's lit card) out of ONE binary, selected by argv: four different scenes
+# FIVE ctest names (gi.card_lighting + _indirect: PHOTON-CARDS-1's lit card) out of ONE binary, selected by argv: five different scenes
 # are needed and a GI arm binds process-wide state (sVctBindingOwner), so they
 # must not share a process — while the fixture scaffolding is the same in all
-# four. NO RUN_SERIAL on the shadow case (PHOTON-CARDS-1): it carried one for
+# five. NO RUN_SERIAL on the shadow case (PHOTON-CARDS-1): it carried one for
 # "a shadow atlas per capture" with no measured reason; three copies of it and
 # gi.card_budget run side by side on one display were all green.
 add_executable(test_gi_cards test_gi_cards.cpp)
@@ -1112,6 +1112,9 @@ set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 300 LABELS "engine")
 add_test(NAME gi.card_lighting COMMAND test_gi_cards lighting
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_lighting PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.card_lighting_indirect COMMAND test_gi_cards lighting_indirect
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # SURFACE-CACHE-1b's MEASUREMENT ARM — a TOOL, not a suite (no add_test): the
 # numbers in the lane's report are taken by code that is read, and re-taking

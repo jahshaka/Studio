@@ -211,11 +211,12 @@ static int caseCapture()
     // shadow/roughness pair RG16 -> RG8).
     // ...and THE SIXTH LAYER, radiance (PHOTON-CARDS-1): four more bytes where
     // the device stores R11G11B10F from a compute job (RGBA16F's eight else).
+    // ...and the cached INDIRECT half beside it, in the same format.
     const unsigned radBytes = c0.radianceFormat == "R11G11B10F" ? 4u : 8u;
-    CHECK_MSG(c0.bytesPerTexel == 16u + radBytes,
+    CHECK_MSG(c0.bytesPerTexel == 16u + 2u * radBytes,
               "the card texel is %u bytes (albedo 4 + normal 4 + depth 2 + emissive 4 +"
-              " shadow/rough 2 + radiance %u, %s), measured %u",
-              16u + radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
+              " shadow/rough 2 + radiance %u + indirect %u, %s), measured %u",
+              16u + 2u * radBytes, radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
     CHECK_MSG(c0.pageSize == 128u && c0.pages == 256u,
               "the atlas is 2k square = %u pages of %u texels", c0.pages, c0.pageSize);
     CHECK_MSG(c0.instancesResident == 2u, "both crates are resident (%u)", c0.instancesResident);
@@ -854,8 +855,8 @@ static int caseLighting()
     if (!makeFixture(f, "cardlighting")) return 1;
     Scene *s = f.s;
     // NO AMBIENT and nothing emissive on the subjects: the radiance is the
-    // direct term alone, and the indirect half is not built yet (the stop point
-    // before the one environment) — the fixture could not see it anyway.
+    // direct term plus the floor's bounce, and the direct half is read as the
+    // radiance less the card's cached indirect half.
     s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
 
     const float kRough = 0.7f;
@@ -935,18 +936,22 @@ static int caseLighting()
         const double N[3] = { n.x, n.y, n.z };
         // pbsDirect's closed form x the stored shadow term, on the ATLAS's own
         // kD (an 8-bit store: its quantisation is the atlas's, not the light's).
-        // The radiance is read from its R11G11B10F store, which this device
-        // fills by TRUNCATION (measured: 0.50829 is stored as 0.5), so a
-        // channel carries up to one mantissa step of the format below the light
-        // — 1/64 on red and green, 1/32 on blue; the fixture's values sit under
-        // the 2 % bar with that in them.
+        // The radiance is read from its R11G11B10F store, whose mantissa step
+        // is 1/64 on red and green and 1/32 on blue; the job rounds to nearest
+        // (JahCardLight_cs.glsl, jahCardRound), so a channel carries at most
+        // half a step (1.6 % on blue) inside the 2 % bar.
         for (int k = 0; k < 3; ++k) {
             const double want = pbsDiffuse(t.albedo[k], curE, kRough, N, L, N) * double(t.shadow);
-            const double got = t.radiance[k];
+            // THE DIRECT HALF: the radiance less its cached indirect half (the
+            // floor's bounce is real here; gi.card_lighting_indirect holds it to
+            // the pixel).
+            const double got = double(t.radiance[k]) - double(t.indirect[k]);
             const double rel = want > 1e-6 ? std::fabs(got - want) / want : std::fabs(got);
-            CHECK_MSG(want > 1e-6 ? rel <= 0.02 : got < 1e-3,
-                      "%s channel %d: radiance %.5f, pbsDirect x shadow (%.3f) = %.5f (%.2f%%)",
-                      what, k, got, double(t.shadow), want, 100.0 * rel);
+            CHECK_MSG(want > 1e-6 ? rel <= 0.02 : std::fabs(got) < 2e-3,
+                      "%s channel %d: direct half %.5f (radiance %.5f - indirect %.5f),"
+                      " pbsDirect x shadow (%.3f) = %.5f (%.2f%%)",
+                      what, k, got, t.radiance[k], t.indirect[k], double(t.shadow), want,
+                      100.0 * rel);
         }
         if (expectShadowed)
             CHECK_MSG(t.shadow < 0.1f, "%s: the stored shadow term is dark (%.3f)", what, t.shadow);
@@ -984,8 +989,9 @@ static int caseLighting()
         if (s->readCardAt(Vec3(-4.0f, 4.0f, 0.3f), Vec3(0, 1, 0), t) && t.ok) {
             const double N[3] = { 0.0, 1.0, 0.0 };
             const double want = pbsDiffuse(t.albedo[1], 2.0 * E, kRough, N, down, N) * t.shadow;
-            CHECK_MSG(std::fabs(t.radiance[1] - want) <= 0.02 * want,
-                      "the crate top doubled with the light (%.5f, want %.5f)", t.radiance[1], want);
+            const double got = double(t.radiance[1]) - double(t.indirect[1]);
+            CHECK_MSG(std::fabs(got - want) <= 0.02 * want,
+                      "the crate top's direct half doubled with the light (%.5f, want %.5f)", got, want);
         }
     }
     const float ang = 3.14159265f / 3.0f;
@@ -1001,6 +1007,220 @@ static int caseLighting()
 }
 
 // ---------------------------------------------------------------------------
+// gi.card_lighting_indirect — THE LIT CARD's INDIRECT half against the pixel
+// ---------------------------------------------------------------------------
+//
+// The card's indirect is the pixel's own diffuse GI (the one voxel reader's
+// six-cone march + the one environment at each escape, through BRDF_EnvMap's
+// envColourD x diffuse x pi x the energy factor) evaluated from the texel, so
+// at the same world point the two must agree. The fixture is the field-energy
+// one (tests/gi/test_gi_field_energy.cpp): a matte floor under a vertical sun
+// and a matte WALL standing on its edge, facing it — the sun is perpendicular
+// to the wall, so the wall's pixel is its indirect term and nothing else
+// (F0 = 0: the Specular workflow at ior 1.0 with a black specular colour, so no
+// environment specular either), read LINEAR through an hdr-off offscreen view.
+// The irradiance field is OFF (it routes the pixel's diffuse at every shipped
+// tier: the trap file's rule), and so are the rays and the gather — the pixel's
+// diffuse is then exactly the cone march this job ports.
+static int caseLightingIndirect()
+{
+    const unsigned kPx = 256u;
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test-cardlightingindirect-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->setFixedFrameDelta(1.0f / 60.0f);
+    Engine *e = engine.get();
+    View *view = e->createOffscreenView("cardind", kPx, kPx, Colour(0, 0, 0));
+    Scene *s = e->createScene("cardind");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 0;
+    fx.hdr = false;      // linear RGBA8, no tonemap, no dither (field_energy's currency)
+    view->setPostFx(fx);
+    view->setShadows(true);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    const MeshId plain = s->createMesh(enginetest::unitCubeMesh());
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = boxCards(0.5f);
+    const MeshId carded = s->createMesh(md);
+    const auto matte = [&](float albedo) {
+        PbrParams p;
+        p.albedo = Colour(albedo, albedo, albedo);
+        p.roughness = 1.0f;
+        p.workflow = PbrParams::Workflow::Specular;
+        p.ior = 1.0f;
+        p.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        return s->createPbrMaterial(p);
+    };
+    // The floor: top at y = 0, x in [-6, 6], z in [-12, 0].
+    const NodeId floorNode = s->createNode();
+    CHECK(floorNode && s->attachMesh(floorNode, plain, matte(0.8f)), "the matte floor exists");
+    s->setNodeTransform(floorNode, Vec3(0.0f, -0.15f, -6.0f), Quat(), Vec3(12.0f, 0.3f, 12.0f));
+    // The wall, carded: 12 x 4 m, its FRONT face at z = 0 facing -Z (the floor).
+    const NodeId wall = s->createNode();
+    CHECK(wall && s->attachMesh(wall, carded, matte(0.7f)), "the carded matte wall exists");
+    s->setNodeTransform(wall, Vec3(0.0f, 2.0f, 0.15f), Quat(), Vec3(12.0f, 4.0f, 0.3f));
+    const double kSunPower = 12.0;
+    const NodeId sun = enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0f), float(kSunPower));
+    CHECK(sun != 0, "the sun is straight down: the wall's only light is the floor's bounce");
+
+    GiParams gi = baseGi();
+    gi.ddgi = GiToggle::Off;
+    gi.gather = GiToggle::Off;
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds (the chain, no field, no gather)");
+    s->setRayTracing(RayTracingMode::Off);
+    // Straight at the wall's face from the floor's side, orthographic.
+    CameraDesc cam;
+    cam.position = Vec3(0.0f, 2.0f, -10.0f);
+    cam.orientation = Quat{ 0.0f, 1.0f, 0.0f, 0.0f };   // -Z forward turned to +Z
+    cam.orthographic = true;
+    cam.orthoSize = 3.0f;
+    cam.farClip = 200.0f;
+    view->setCamera(cam);
+    render(e, 60);
+
+    const CardCacheStatus st = s->giStatus().cards;
+    std::printf("    indirect: on %d, %llu marches (budget %u texels), %llu relights\n",
+                int(st.indirectOn), (unsigned long long)st.indirectRelights,
+                st.indirectBudgetTexels, (unsigned long long)st.relights);
+    CHECK_MSG(st.indirectOn && st.indirectRelights > 0ull,
+              "the relight job marched the chain (%llu marches)",
+              (unsigned long long)st.indirectRelights);
+
+    Image img;
+    CHECK(view->readPixels(img), "the view reads back");
+    // World (x, y) on the wall's face -> pixel: screen right is world -X after
+    // the half turn, screen down is world -Y.
+    const auto toPixel = [&](double wx, double wy, double &px, double &py) {
+        px = (-wx / 3.0 * 0.5 + 0.5) * kPx;
+        py = (-(wy - 2.0) / 3.0 * 0.5 + 0.5) * kPx;
+    };
+    const double heights[3] = { 0.8, 1.6, 2.8 };
+    const double xs[2] = { -1.5, 1.5 };
+    for (double x : xs)
+        for (double h : heights) {
+            double px, py, m[3];
+            toPixel(x, h, px, py);
+            // A 9 x 9 block: the pixel side's 8-bit quantisation averaged down.
+            double sum[3] = { 0, 0, 0 };
+            int n = 0;
+            for (int y = int(py) - 4; y <= int(py) + 4; ++y)
+                for (int xx = int(px) - 4; xx <= int(px) + 4; ++xx) {
+                    const Colour c = img.at(unsigned(xx), unsigned(y));
+                    sum[0] += c.r; sum[1] += c.g; sum[2] += c.b;
+                    ++n;
+                }
+            for (int k = 0; k < 3; ++k) m[k] = sum[k] / n;
+            CardSample t;
+            const bool ok = s->readCardAt(Vec3(float(x), float(h), 0.0f), Vec3(0, 0, -1), t) && t.ok;
+            if (!ok) {
+                CHECK_MSG(false, "the card answers on the wall at (%.1f, %.1f)", x, h);
+                continue;
+            }
+            const double rel = m[0] > 1e-4 ? std::fabs(t.indirect[0] - m[0]) / m[0] : 1.0;
+            std::printf("    wall (%+.1f, %.1f): pixel %.4f %.4f %.4f | card indirect %.4f %.4f %.4f"
+                        " | radiance %.4f | %.2f%%\n",
+                        x, h, m[0], m[1], m[2], t.indirect[0], t.indirect[1], t.indirect[2],
+                        t.radiance[0], 100.0 * rel);
+            CHECK_MSG(m[0] > 0.05 && m[0] < 0.95,
+                      "the pixel is lit and inside the readback's linear range (%.4f)", m[0]);
+            CHECK_MSG(rel <= 0.05,
+                      "at (%+.1f, %.1f) the card's indirect %.4f equals the pixel diffuse %.4f"
+                      " within 5 %% (%.2f %%) — the two marches are one piece",
+                      x, h, t.indirect[0], m[0], 100.0 * rel);
+            // ...and the card's radiance is that indirect and nothing else (no
+            // direct: the sun is perpendicular; no emissive).
+            CHECK_MSG(std::fabs(t.radiance[0] - t.indirect[0]) <= 0.02 * t.indirect[0] + 1e-3,
+                      "the wall's radiance is its indirect half (%.4f vs %.4f)", t.radiance[0],
+                      t.indirect[0]);
+        }
+
+    // THE COMPARISON, as a function: the card's indirect against the pixel at
+    // the three heights of x = -1.5, both read NOW.
+    const auto compareAll = [&](const char *what) {
+        Image im;
+        view->readPixels(im);
+        for (double h : heights) {
+            double px, py;
+            toPixel(-1.5, h, px, py);
+            double sum = 0.0;
+            int n = 0;
+            for (int y = int(py) - 4; y <= int(py) + 4; ++y)
+                for (int xx = int(px) - 4; xx <= int(px) + 4; ++xx) {
+                    sum += im.at(unsigned(xx), unsigned(y)).r;
+                    ++n;
+                }
+            const double m = sum / n;
+            CardSample t;
+            if (!s->readCardAt(Vec3(-1.5f, float(h), 0.0f), Vec3(0, 0, -1), t) || !t.ok) {
+                CHECK_MSG(false, "%s: the card answers at h %.1f", what, h);
+                continue;
+            }
+            const double rel = m > 1e-4 ? std::fabs(t.indirect[0] - m) / m : 1.0;
+            CHECK_MSG(m > 0.02 && rel <= 0.05,
+                      "%s, h %.1f: card indirect %.4f, pixel diffuse %.4f (%.2f %%, bar 5 %%)",
+                      what, h, t.indirect[0], m, 100.0 * rel);
+        }
+    };
+
+    // THE INDIRECT HALF HAS ITS OWN TRIGGER: the sun's intensity rises by
+    // half — a light write, so the chain re-injects (the light tick) and the
+    // wall's INDIRECT is marched again; the shadow signature does not move, so
+    // nothing is recaptured.
+    const unsigned long long capturesBefore = s->giStatus().cards.captures;
+    const unsigned long long indBefore = s->giStatus().cards.invalidIndirect;
+    CardSample before;
+    s->readCardAt(Vec3(-1.5f, 1.6f, 0.0f), Vec3(0, 0, -1), before);
+    {
+        LightDesc l;
+        l.type = LightType::Directional;
+        l.colour = Colour(1.0f, 1.0f, 1.0f);
+        l.intensity = float(1.5 * kSunPower / 3.14159265358979323846);
+        CHECK(s->setLight(sun, l), "the sun brightens by half");
+    }
+    // An engine-level scene re-injects when told to (the mirror's light-move
+    // refresh, in the app): the refresh is the chain's re-injection.
+    s->refreshGlobalIllumination();
+    render(e, 60);
+    {
+        const CardCacheStatus a = s->giStatus().cards;
+        CardSample after;
+        s->readCardAt(Vec3(-1.5f, 1.6f, 0.0f), Vec3(0, 0, -1), after);
+        std::printf("    the sun x1.5: wall indirect %.4f -> %.4f (x%.3f); invalidIndirect"
+                    " %llu -> %llu; captures +%llu\n",
+                    before.indirect[0], after.indirect[0],
+                    before.indirect[0] > 0.0f ? after.indirect[0] / before.indirect[0] : 0.0f,
+                    (unsigned long long)indBefore, (unsigned long long)a.invalidIndirect,
+                    (unsigned long long)(a.captures - capturesBefore));
+        CHECK_MSG(a.invalidIndirect > indBefore, "the re-injection reached the cache as an INDIRECT"
+                  " change (%llu -> %llu)", (unsigned long long)indBefore,
+                  (unsigned long long)a.invalidIndirect);
+        CHECK_MSG(std::fabs(after.indirect[0] / std::max(before.indirect[0], 1e-6f) - 1.5f) < 0.075f,
+                  "the wall's indirect followed the sun, x1.5 within 5 %% (%.4f -> %.4f)",
+                  before.indirect[0], after.indirect[0]);
+        CHECK_MSG(a.captures == capturesBefore, "...and nothing was recaptured (+%llu)",
+                  (unsigned long long)(a.captures - capturesBefore));
+    }
+    compareAll("after the re-injection");
+
+    // THE ESCAPE READS THE ONE ENVIRONMENT: a sky ambient (no cube: the
+    // environment is then its SH — jahEnvCone's no-cube branch), and the card
+    // and the pixel still agree.
+    s->setAmbient(Colour(0.30f, 0.35f, 0.45f), Colour(0.10f, 0.08f, 0.06f));
+    render(e, 90);
+    compareAll("with a sky ambient (the escape's environment)");
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
     const std::string which = argc > 1 ? argv[1] : "capture";
@@ -1009,6 +1229,7 @@ int main(int argc, char **argv)
     else if (which == "shadow") rc = caseShadow();
     else if (which == "budget") rc = caseBudget();
     else if (which == "lighting") rc = caseLighting();
+    else if (which == "lighting_indirect") rc = caseLightingIndirect();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;
