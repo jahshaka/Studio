@@ -14,12 +14,17 @@
 // WHAT THIS SUITE ASSERTS, each a measurement:
 //   1. THE KEPT PROBES ARE BYTE-IDENTICAL across the step frame: both atlases
 //      (irradiance, depth moments) read back just before and just after it, every
-//      tile of a probe that never left the window compared byte for byte.
+//      tile of a probe that never left the window compared byte for byte. (With the
+//      field's history - PHOTON-FIELD-ROTATE-1 - a kept probe that already holds its
+//      target sample count is skipped by every refinement the step owes, so its
+//      bytes stand; the paused field converges its whole target at the build.)
 //   2. THE STEP FRAME INTEGRATES EXACTLY THE ENTERED PLANES: the follow's work
 //      (GiStatus::ifdScrollProbes, and the monitor row's units) equals the
 //      planes the window's offset says entered — not the field.
 //   3. THE MODULO PUTS EVERY PROBE WHERE IT BELONGS: one walk of six steps out
 //      and back, taken twice in this process from the same from-scratch build -
+//      each settled until its field has CONVERGED (the field is a mean over rotated
+//      integrations: "the same picture" is the converged value, not one pass's bytes) -
 //      the field scrolling, and the field re-placed whole on the same lattice at
 //      every step (`JAHSHAKA_GI_FIELD_NO_SCROLL`, the behaviour replaced) - and the
 //      return pose renders the same picture both ways (the pose BEFORE a walk is
@@ -28,7 +33,8 @@
 //   4. THE COST, in ONE process: the two walks' ifd.follow rows are the step
 //      frame after and before - printed as GPU ms (the median of the rows the
 //      monitor timed), their ratio and their share of the VR frame (11.1 ms);
-//      asserted only as "the scroll is cheaper".
+//      asserted only as "the scroll is cheaper". A third walk at two rays a texel
+//      prices the step frame the old kIfdRaysPerPixel = 2 paid (a ratio).
 //
 // The field is PAUSED (update budget 0) for 1 and 2: no progressive walk runs
 // between the two readbacks, so the only work in the step frame is the scroll's.
@@ -235,7 +241,7 @@ int main()
     // ifd.follow rows of the two walks are the step frame before and after.
     struct Arm { Image back; float scrollGpu = -1.0f, scrollCpu = -1.0f; unsigned units = 0;
                  unsigned long long follows = 0, replacements = 0; std::vector<float> gpu;
-                 float worstCentreErr = 0.0f; bool fieldBound = true; };
+                 float worstCentreErr = 0.0f; bool fieldBound = true; bool settled = false; };
     // A JUMP: the camera lands `p` in ONE frame (a teleport, or a headset re-centred
     // far away), then the scene settles; the field must be where cascade 0 is.
     const auto jumpTo = [&](Arm &arm, const Vec3 &p) {
@@ -250,9 +256,10 @@ int main()
             arm.worstCentreErr = std::max(arm.worstCentreErr, std::sqrt(cx * cx + cy * cy + cz * cz));
         }
     };
-    const auto walk = [&](bool noScroll) {
+    const auto walk = [&](bool noScroll, const char *rays) {
         Arm arm;
         if (noScroll) ::setenv("JAHSHAKA_GI_FIELD_NO_SCROLL", "1", 1);
+        if (rays) ::setenv("JAHSHAKA_GI_FIELD_RAYS", rays, 1);
         GiParams offGi; offGi.mode = GiMode::Off;
         scene->setGlobalIllumination(offGi);
         render(e, 2);
@@ -283,7 +290,14 @@ int main()
             camAt(x2);
             render(e, 1);
         }
-        render(e, 240);                          // the settle and the progressive walk
+        // THE SETTLE, READ UNTIL IT STOPS (PHOTON-FIELD-ROTATE-1): the field is a mean
+        // over rotated integrations now, and "the same picture" means the CONVERGED
+        // field - every probe at its target sample count, the field owing nothing -
+        // not the bytes of one pass (two walks integrate different ray rotations).
+        render(e, 240);
+        for (int f = 0; f < 3000 && scene->giStatus().ifdRefinesOwed > 0u; ++f) render(e, 1);
+        arm.settled = scene->giStatus().ifdRefinesOwed == 0u;
+        render(e, 2);
         view->readPixels(arm.back);
         arm.follows = scene->giStatus().ifdFollows - f0;
         arm.replacements = scene->giStatus().ifdReplacements - r0;
@@ -301,10 +315,15 @@ int main()
                 arm.scrollCpu = std::max(arm.scrollCpu, w.ms);
             }
         if (noScroll) ::unsetenv("JAHSHAKA_GI_FIELD_NO_SCROLL");
+        if (rays) ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
         return arm;
     };
-    const Arm scrolled = walk(false);
-    const Arm replaced = walk(true);
+    const Arm scrolled = walk(false, nullptr);
+    const Arm replaced = walk(true, nullptr);
+    // THE STEP FRAME AT TWO RAYS A TEXEL (PHOTON-FIELD-ROTATE-1): the same walk with
+    // the field's rays doubled (`JAHSHAKA_GI_FIELD_RAYS`, the setting the deleted
+    // kIfdRaysPerPixel = 2 shipped), for the step cost's ratio in this process.
+    const Arm twoRays = walk(false, "2");
     const float returnDiff = worstDiff(scrolled.back, replaced.back);
     std::printf("   the same walk (%llu / %llu follows): the return pose, scrolled against re-placed, "
                 "%.2f/255\n", scrolled.follows, replaced.follows, returnDiff);
@@ -321,6 +340,9 @@ int main()
               "...AND THE FIELD FOLLOWS CASCADE 0 THERE (its centre within %.3f m, under one probe "
               "spacing) - it is not left at the place the camera jumped from",
               scrolled.worstCentreErr);
+    CHECK(scrolled.settled && replaced.settled,
+          "both walks' fields CONVERGED before the return pose was read (every probe at its target "
+          "sample count)");
     CHECK_MSG(returnDiff <= 1.0f,
               "THE RETURN POSE RENDERS WHAT A FIELD THAT NEVER SCROLLED RENDERS THERE (%.2f/255): "
               "the window's modulo puts every probe where it belongs", returnDiff);
@@ -346,6 +368,13 @@ int main()
         CHECK_MSG(scrollMed < replacedMed,
                   "A SCROLL COSTS THE STEP FRAME LESS THAN RE-PLACING THE FIELD (median %.2f against "
                   "%.2f ms GPU)", scrollMed, replacedMed);
+    const float twoMed = median(twoRays.gpu);
+    std::printf("   THE STEP FRAME AT 1 AND 2 RAYS A TEXEL, one process: median %.2f ms GPU (%zu rows) "
+                "against %.2f (%zu rows): one ray costs %.2f of two\n", scrollMed, scrolled.gpu.size(),
+                twoMed, twoRays.gpu.size(), twoMed > 0.0f ? scrollMed / twoMed : -1.0f);
+    if (scrollMed > 0.0f && twoMed > 0.0f)
+        CHECK_MSG(scrollMed < twoMed, "ONE RAY A TEXEL COSTS THE STEP FRAME LESS THAN TWO (%.2f against "
+                  "%.2f ms GPU)", scrollMed, twoMed);
 
     GiParams off; off.mode = GiMode::Off;
     scene->setGlobalIllumination(off);
