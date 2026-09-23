@@ -1085,7 +1085,9 @@ set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_S
 # THREE ctest names out of ONE binary, selected by argv: three different scenes
 # are needed and a GI arm binds process-wide state (sVctBindingOwner), so they
 # must not share a process — while the fixture scaffolding is the same in all
-# three. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
+# three. NO RUN_SERIAL on the shadow case (PHOTON-CARDS-1): it carried one for
+# "a shadow atlas per capture" with no measured reason; three copies of it and
+# gi.card_budget run side by side on one display were all green.
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1103,7 +1105,7 @@ add_test(NAME gi.card_capture COMMAND test_gi_cards capture
 set_tests_properties(gi.card_capture PROPERTIES TIMEOUT 300 LABELS "engine")
 add_test(NAME gi.card_shadow COMMAND test_gi_cards shadow
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 300 LABELS "engine")
 add_test(NAME gi.card_budget COMMAND test_gi_cards budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 300 LABELS "engine")

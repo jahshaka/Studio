@@ -551,25 +551,19 @@ static int caseShadow()
 
     GiParams gi = baseGi();
     gi.cardResidencyRadius = 40.0f;
-    // A BUDGET THAT HOLDS THE WHOLE RESIDENT SET IN ONE FRAME, and the reason
-    // is a MEASURED limitation the capture still carries. The pin's shadow node
-    // caches its light list AND its casters box per (camera, compositor-manager
-    // frame count) — a hand-driven workspace never bumps that count — so every
-    // card captured after a frame's FIRST reuses the first card's fit and reads
-    // a flat 1.0 wherever that fit does not reach.
-    //
-    // TWO ATTEMPTS ARE RECORDED AT THE CAPTURE, both MEASURED and both failed:
-    // a separate wide cull camera, and ALTERNATING TWO capture cameras (which
-    // defeats `mLastCamera == newCamera` and gives every card its own camera —
-    // shipped anyway, because a per-card camera is strictly closer to correct
-    // and costs nothing). Neither restored the profile at the shipped
-    // three-cards-a-frame budget: the casters box is fitted under the pass's
-    // subject-only visibility mask, which is the half neither attempt moves.
-    // Phase 3 owns a card's lighting and is where this belongs.
+    // THE SHIPPED BUDGET — the High tier's own, no override. This case used to
+    // run with a budget that captured the whole resident set in ONE frame,
+    // because only a frame that followed a hand-driven scene-graph update
+    // (the GI build's) had a light list at all: the capture ran before the
+    // frame's `updateSceneGraph`, after the previous frame's `clearFrameData`
+    // had emptied the manager's global light list, so every later capture saw
+    // NO light and read a flat 1.0 (PHOTON-CARDS-1 §1.1, measured: 93 of 96
+    // captures). The capture now runs inside Ogre's frame, so the profile
+    // below is asserted at the budget a user runs (five cards a frame at
+    // High: the floor's forty-eight cards land over ten frames).
     //
     // This case is about the CONTENT of a card; `gi.card_budget` is the one
     // about the cadence.
-    gi.cardBudgetTexels = 64u * 128u * 128u;
     CHECK(s->setGlobalIllumination(gi), "GI builds");
     enginetest::testCameraLookAt(f.view, Vec3(0.0f, 6.0f, -10.0f), Vec3(0.0f, 0.0f, 0.0f));
     render(f.e, 32);
@@ -595,14 +589,30 @@ static int caseShadow()
     const Vec3 pShadow(2.0f, 0.0f, 0.0f), pLit(-2.0f, 0.0f, 0.0f);
 
     std::printf("    shadow across the floor's top face (z = 0):\n      ");
+    float profile[9];
     for (int i = -4; i <= 4; ++i) {
         CardSample row;
-        if (s->readCardAt(Vec3(float(i), 0.0f, 0.0f), up, row) && row.ok)
+        profile[i + 4] = -1.0f;
+        if (s->readCardAt(Vec3(float(i), 0.0f, 0.0f), up, row) && row.ok) {
             std::printf("x%+d:%.2f ", i, row.shadow);
-        else
+            profile[i + 4] = row.shadow;
+        } else {
             std::printf("x%+d:---- ", i);
+        }
     }
     std::printf("\n");
+    // THE PROFILE, AT THE SHIPPED BUDGET: lit / the crate's penumbra / the
+    // footprint / the penumbra / lit at x = 0..+4 — the crate covers x in
+    // [1, 3] and the two edge values are the shadow filter straddling its
+    // faces. Every card of the floor is captured in a different frame at this
+    // budget, so this is the per-card fit, not the first card's.
+    {
+        const float want[5] = { 1.00f, 0.57f, 0.00f, 0.52f, 1.00f };
+        for (int k = 0; k < 5; ++k)
+            CHECK_MSG(std::fabs(profile[4 + k] - want[k]) <= 0.1f,
+                      "the floor's shadow term at x = +%d is %.2f (want %.2f +- 0.10)", k,
+                      profile[4 + k], want[k]);
+    }
 
     CardSample inShadow, inLight;
     const bool gotShadow = s->readCardAt(pShadow, up, inShadow);
@@ -637,27 +647,51 @@ static int caseShadow()
     }
 
     // AND THE SHADOW MOVES WITH THE LIGHT. A light write throws every card back
-    // on the queue; after the sun tilts, the same texel's term must change.
-    {
-        // Tilt the sun 40 degrees about Z so the shadow slides in -X: the texel
-        // under the crate comes out into the light.
-        const float ang = 0.7f;   // radians
-        Quat q(0.0f, 0.0f, std::sin(ang * 0.5f), std::cos(ang * 0.5f));
-        s->setNodeTransform(sun, Vec3(0, 0, 0), q, Vec3(1, 1, 1));
-    }
+    // on the queue; after the sun tilts, the crate's shadow slides off its
+    // footprint and falls on floor that was lit.
+    //
+    // THE POINT IS BESIDE THE CRATE, NOT UNDER IT. The floor under a crate that
+    // STANDS on it is occluded from every sun above the horizon, so "the term
+    // under the crate changes with the tilt" is not physics — the case used to
+    // assert exactly that, and passed only because the re-captures after the
+    // tilt saw an empty light list and read 1.0.
+    const float ang = 0.7f;   // radians, about Z
+    const Quat tilt(0.0f, 0.0f, std::sin(ang * 0.5f), std::cos(ang * 0.5f));
+    // Where the light now goes: the document light points down -Y, rotated.
+    const Vec3 d0(0.0f, -1.0f, 0.0f);
+    const Vec3 dir(d0.x * std::cos(ang) - d0.y * std::sin(ang), d0.x * std::sin(ang) + d0.y * std::cos(ang),
+                   0.0f);
+    // The crate's 2 m top throws its shadow `shift` metres along x; the probe
+    // is halfway across the part of that band that lay outside the footprint.
+    const float shift = 2.0f * dir.x / -dir.y;
+    const float side = shift > 0.0f ? 1.0f : -1.0f;
+    const Vec3 pSlide(2.0f + side * (1.0f + 0.5f * std::fabs(shift)), 0.0f, 0.0f);
+    CardSample beforeTilt;
+    const bool gotBefore = s->readCardAt(pSlide, up, beforeTilt) && beforeTilt.ok;
+    s->setNodeTransform(sun, Vec3(0, 0, 0), tilt, Vec3(1, 1, 1));
     const unsigned long long lightBefore = st.cards.invalidLight;
     render(f.e, 40);
     st = s->giStatus();
     CHECK_MSG(st.cards.invalidLight > lightBefore, "the light write reached the cache (%llu)",
               (unsigned long long)st.cards.invalidLight);
     CardSample afterTilt;
-    if (s->readCardAt(pShadow, up, afterTilt) && afterTilt.ok) {
-        std::printf("    after the sun tilts: shadow %.4f (was %.4f)\n", afterTilt.shadow,
-                    inShadow.shadow);
-        CHECK_MSG(std::fabs(afterTilt.shadow - inShadow.shadow) > 0.2f,
-                  "the card's shadow term FOLLOWED the light (%.4f -> %.4f)", inShadow.shadow,
-                  afterTilt.shadow);
+    if (gotBefore && s->readCardAt(pSlide, up, afterTilt) && afterTilt.ok) {
+        std::printf("    at x %+.2f (the shadow slides %.2f m): shadow %.4f before the tilt, %.4f"
+                    " after\n",
+                    pSlide.x, shift, beforeTilt.shadow, afterTilt.shadow);
+        CHECK_MSG(beforeTilt.shadow > 0.9f && afterTilt.shadow < 0.1f,
+                  "the card's shadow term FOLLOWED the light: lit floor beside the crate went"
+                  " dark when the shadow slid over it (%.4f -> %.4f)",
+                  beforeTilt.shadow, afterTilt.shadow);
+    } else {
+        CHECK(false, "the cache answers beside the crate before and after the tilt");
     }
+    // ...and under the crate the floor stays dark: it is occluded by the crate
+    // itself from every sun above the horizon.
+    CardSample under;
+    if (s->readCardAt(pShadow, up, under) && under.ok)
+        CHECK_MSG(under.shadow < 0.1f, "the floor UNDER the crate is still shadowed (%.4f)",
+                  under.shadow);
     return failures ? 1 : 0;
 }
 
