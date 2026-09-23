@@ -4447,6 +4447,8 @@ void MainWindow::setupToolBar()
 	options.insert("color-active", QColor(255, 255, 255));
   
     toolBar = new QToolBar("Tool Bar");
+	// Named: DockState's snapshot of `viewPort` matches toolbars by objectName.
+	toolBar->setObjectName(QString::fromLatin1(DockState::kEditorToolBarName));
 	toolBar->setIconSize(QSize(16, 16));
 
 	QAction *actionUndo = new QAction;

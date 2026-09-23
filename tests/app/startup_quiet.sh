@@ -54,6 +54,13 @@ assert_absent "invalid parameters in SMAA\.material" \
 assert_absent "qt\.multimedia\.ffmpeg: Using Qt multimedia" \
     "Qt Multimedia is not constructed at boot (Lane 6a)"
 
+assert_absent "'objectName' not set for QToolBar" \
+    "every toolbar in a saved window state is named (the editor toolbar, SMALL-FIXES-1)"
+if ! grep -q "startup_quiet: editor layout snapshot taken" boot2.log; then
+    echo "startup_quiet: FAIL — the editor layout snapshot the toolbar check needs never ran"
+    fail=1
+fi
+
 # A boot that printed nothing at all would pass everything above; make sure the
 # script actually ran.
 if ! grep -q "startup_quiet: booted" boot2.log; then

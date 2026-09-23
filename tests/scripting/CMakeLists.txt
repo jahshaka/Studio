@@ -724,13 +724,18 @@ set(STORE_MOVE_TARGET ${_home}/store-moved)
 set(STORE_EMPTY_TARGET ${_home}/store-empty)
 set(STAMP e2e)
 configure_file(scripts/e2e_store_root.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js @ONLY)
-file(MAKE_DIRECTORY ${_home}/run)
-file(MAKE_DIRECTORY ${STORE_EMPTY_TARGET})
+# The home is WIPED before every run: a crashed run cannot reach the script's
+# own exit reset, and would leave a moved store + a stale assets/storeRoot here.
+add_test(NAME scripting.e2e.store_root.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run' '${STORE_EMPTY_TARGET}'")
+set_tests_properties(scripting.e2e.store_root.fresh_home PROPERTIES
+    FIXTURES_SETUP storeRootFreshHome LABELS "scripting")
 add_test(NAME scripting.e2e.store_root
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.store_root PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED storeRootFreshHome
     LABELS "scripting"
     TIMEOUT 120)
 

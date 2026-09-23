@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include <QSettings>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QToolBar>
 #include <cstdio>
 
 #include "shell/dockstate.h"
@@ -335,6 +336,36 @@ int main(int argc, char **argv)
         app.processEvents();
         CHECK(relaunched.timeline->isHidden(),
               "tabs: a tab closed from its X IS hidden — the predicate tells the two apart");
+    }
+
+    // ---- THE EDITOR TOOLBAR COMES BACK WHERE IT WAS (SMALL-FIXES-1) --------
+    // It lives in the same nested window as the docks and is matched by the
+    // same objectName rule. (Measured while writing this: Qt 6.10 also restores
+    // a LONE unnamed toolbar, matching the empty name against the empty name —
+    // what the shell's unnamed bar cost was the saveState() warning on every
+    // snapshot, which app.startup_quiet now greps, and an ambiguity the day a
+    // second toolbar joins it.)
+    {
+        auto build = [](QMainWindow &w) {
+            w.setCentralWidget(new QWidget(&w));
+            auto *bar = new QToolBar(QStringLiteral("Tool Bar"), &w);
+            bar->setObjectName(QString::fromLatin1(DockState::kEditorToolBarName));
+            w.addToolBar(Qt::TopToolBarArea, bar);
+            return bar;
+        };
+        QSettings settings(iniPath, QSettings::IniFormat);
+        QMainWindow saver;
+        QToolBar *moved = build(saver);
+        saver.addToolBar(Qt::LeftToolBarArea, moved);   // the user drags it to the left edge
+        DockState::save(&saver, &settings, "toolbarState");
+        QMainWindow relaunched;
+        QToolBar *back = build(relaunched);
+        CHECK(relaunched.toolBarArea(back) == Qt::TopToolBarArea,
+              "toolbar: a fresh window builds it on the top edge");
+        CHECK(DockState::restore(&relaunched, &settings, "toolbarState"),
+              "toolbar: the saved state restores");
+        CHECK(relaunched.toolBarArea(back) == Qt::LeftToolBarArea,
+              "toolbar: the editor toolbar comes back on the edge it was moved to");
     }
 
     std::printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
