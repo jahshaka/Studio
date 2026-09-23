@@ -975,6 +975,17 @@ add_test(NAME gi.chain_face_target COMMAND test_gi_chain_face --target
 set_tests_properties(gi.chain_face_target PROPERTIES
     TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
 
+# gi.chain_face_sky_target — THE LOW SUN'S CASCADE-0 FACE (PHOTON-ENV-1). The same
+# binary, gating ONLY that arm's bracket: with the sky carried into the field, the
+# chain's probe rays over-occlude grazing directions on the coarse outer floor and
+# a low sun is brightest at the horizon (the physics gap of
+# gi.field_follows_ground_target). PHOTON-WRITER-1 (B4) REMOVES `photon-target`
+# from this row when it lands; gi.chain_face prints the value meanwhile.
+add_test(NAME gi.chain_face_sky_target COMMAND test_gi_chain_face --sky-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.chain_face_sky_target PROPERTIES
+    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
+
 # gi.field_follows_energy — `gi.field_follows`' EXISTENCE BAR, REPLACED BY ENERGY
 # (PHOTON phase A, A1 section 1.2; lane FENCE-1). A sunlit matte floor lights a
 # perpendicular matte wall; the wall's radiance at three heights against the
