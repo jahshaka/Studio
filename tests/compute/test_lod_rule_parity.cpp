@@ -270,7 +270,10 @@ int main()
         if (!e->fillCullView(view, vr)) { std::printf("FAIL: fillCullView (view)\n"); return 1; }
         std::vector<ObjectLodDesc> drawn;
         scene->objectLods(drawn);
-        CHECK(drawn.size() == size_t(kInstances), "every instance reports a drawn level");
+        // The rotated group is attached and drawn too (A5b's fix round added it
+        // after this block was written on another lane — the phase A merge
+        // joined them): every instance of BOTH groups reports a level.
+        CHECK(drawn.size() == size_t(kInstances + kRotated), "every instance reports a drawn level");
 
         unsigned sEvaluated = 0, sMismatched = 0, sHist[8] = {}, sNearThreshold = 0;
         // Per SCALE, because the defect this arm exists for is a scale defect:
