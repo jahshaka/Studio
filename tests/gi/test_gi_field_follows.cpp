@@ -118,9 +118,7 @@ static GiParams fieldGi()
     return gi;
 }
 
-int main(int argc, char **argv) {
-    bool targetMode = false;
-    for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--target") targetMode = true;
+int main() {
 
     std::string err;
     EngineConfig cfg;
@@ -423,19 +421,17 @@ int main(int argc, char **argv) {
                     "(%.4f) the chain's field gives %.3f (= %.3f of the truth), the single "
                     "volume's %.3f\n", truth, rawGround, measured,
                     truth > 0.0f ? measured / truth : 0.0f, singleFrac);
-        // RED TODAY, AND IT SAYS SO (PHOTON-READER-1): 0.737 of the truth. The
-        // mechanism measured on gi.ddgi_ambient's fixture is the field's probe rays
-        // losing grazing sky to coarse mips near the ground; here the loss is larger
-        // and its per-probe breakdown is still owed. Probe relocation (and a thinner
-        // field cone) is the next physics item - the fix, not a bar.
-        // THE TARGET ROW (the lead, 2026-09-23): this suite prints the number and
-        // gates only under `--target` (ctest row gi.field_follows_ground_target,
-        // label photon-target) until PHOTON-WRITER-1's probe relocation lands and
-        // removes the label — the same convention as gi.chain_face_target.
-        std::printf("target: %.4f (bar 0.9000) the chain's field gives the near ground >= 90%% of its "
-                    "ANALYTIC sky visibility\n", truth > 0.0f ? measured / truth : 0.0f);
-        if (targetMode)
-            CHECK(measured >= 0.90f * truth,
+        // GATED SINCE PHOTON-WRITER-1 (it was the target row
+        // gi.field_follows_ground_target: 0.737 at READER-1, 0.662 at ENV-1). The
+        // two mechanisms, measured: the field's probe rays marched as CONES,
+        // whose composite over-occludes the grazing directions over a floor
+        // (0.662 -> 0.729 as rays), and the reader's backface floor of 0.2, which
+        // handed the probe layer UNDER the thin ground slab a sixth of a front
+        // probe's weight (0.729 -> 0.927 without it). Probe relocation was not the
+        // mechanism: nothing here stands inside geometry.
+        std::printf("   ground: %.4f of the analytic truth (bar 0.90)\n",
+                    truth > 0.0f ? measured / truth : 0.0f);
+        CHECK(measured >= 0.90f * truth,
                   "the chain's field gives the near ground >= 90% of its ANALYTIC sky visibility");
         CHECK(std::fabs(chainAgain - chain) < 0.05f * std::max(chain, 1e-4f),
               "...and the arm is reproducible across a re-solve");

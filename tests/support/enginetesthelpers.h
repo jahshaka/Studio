@@ -314,6 +314,38 @@ inline bool rayHitsBox(const Vec3 &o, const Vec3 &d, const AnalyticBox &b)
     return t0 <= t1;
 }
 
+/// THE DIFFUSE LOBE'S DIRECTIONAL ALBEDO, BY DIRECT INTEGRATION (PHOTON-WRITER-1):
+/// HlmsPbs's normalised Disney diffuse (200.BRDFs_piece_ps.any: energyFactor =
+/// lerp(1, 1/1.51, r), fd90 = 0.5 r + 2 r (V.H)^2, lightScatter and viewScatter)
+/// integrated over a uniform incoming hemisphere, as a fraction of a Lambertian
+/// surface's reflection — for a view at cos theta_v = `v`. The suites' reference
+/// for what the renderer's jahDiffuseAlbedo (a fit to Ogre's DFG table) must
+/// reproduce: computed here from the lobe, not copied from the fit.
+inline double disneyDiffuseAlbedo(double v, double r, int n = 64)
+{
+    v = std::min(1.0, std::max(0.0, v));
+    r = std::min(1.0, std::max(1e-4, r));
+    const double V[3] = { std::sqrt(std::max(0.0, 1.0 - v * v)), v, 0.0 };
+    const double ef = 1.0 + (1.0 / 1.51 - 1.0) * r;
+    double sum = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double ct = std::sqrt((double(i) + 0.5) / double(n));    // cosine-weighted
+        const double st = std::sqrt(std::max(0.0, 1.0 - ct * ct));
+        for (int j = 0; j < 2 * n; ++j) {
+            const double ph = 2.0 * 3.14159265358979323846 * (double(j) + 0.5) / double(2 * n);
+            const double L[3] = { st * std::cos(ph), ct, st * std::sin(ph) };
+            double H[3] = { L[0] + V[0], L[1] + V[1], L[2] + V[2] };
+            const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+            const double vdh = hl > 0.0 ? std::max(0.0, (V[0] * H[0] + V[1] * H[1] + V[2] * H[2]) / hl) : 0.0;
+            const double fd90 = 0.5 * r + 2.0 * vdh * vdh * r;
+            const double ls = 1.0 + (fd90 - 1.0) * std::pow(1.0 - ct, 5.0);
+            const double vs = 1.0 + (fd90 - 1.0) * std::pow(1.0 - v, 5.0);
+            sum += ls * vs * ef;
+        }
+    }
+    return sum / double(n * 2 * n);
+}
+
 inline float cosineSkyVisibilityUp(const Vec3 &p, const std::vector<AnalyticBox> &boxes,
                                    int n = 200)
 {

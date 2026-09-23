@@ -1,67 +1,33 @@
-// gi.chain_converge — THE CHAIN'S AT-REST INJECTION LANDS ON ITS FIXED POINT
-// (PHOTON_SPEC §7, lane LAMPREST-2; the engine-level twin of
-// scripting.e2e.movable_lamp_rest).
+// gi.chain_converge — ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT, BYTE FOR
+// BYTE (PHOTON_SPEC §7; lanes LAMPREST-2, FENCE-1, PHOTON-WRITER-1 SWEEPS-3; the
+// engine-level twin of scripting.e2e.movable_lamp_rest).
 //
-// WHAT IS BEING PINNED, and why it is not obvious. Re-injecting a cascade
-// chain's lights is not a function of the lights alone: each cascade's
-// injection reads the cascades outside it AND the volume it is injecting into,
-// so ONE pass is one Jacobi iteration from whatever the volumes happened to
-// hold. A lamp that came to rest after travelling has a different history from
-// the same lamp jumped to the same place, and a tick that stops short of the
-// fixed point leaves that history in the picture — measured at 4/255 in this
-// room with the two passes the engine used to spend, and at 0/255 with three.
-// (Three, four and six passes all produce the same picture, which is what says
-// three is the fixed point rather than a lucky number: spikes/lamprest-2.)
+// THE CLAIM, DERIVED (EnginePrivate.h, beside kAtRestSweeps). A chain's radiance
+// is the fixed point of L_i = D_i + rho * G_i(L_i, L_{i+1..N}): each cascade's
+// bounce reads its OWN volume and the ones OUTSIDE it, never the ones inside
+// (TRIANGULAR). `VctLighting::update` rebuilds a cascade's light from its direct
+// term every time (the bounce passes are new = direct + rho * G(total), started
+// from the direct term the same dispatch wrote), so one injection of cascade i
+// is a function of its voxels, the lights, the environment and the CURRENT
+// light of cascades i+1..N-1 — of nothing it held before. Swept OUTERMOST FIRST,
+// every cascade reads outer cascades that are already final: ONE sweep is the
+// fixed point, and a second sweep can change no byte unless a hidden INWARD
+// coupling exists.
 //
-// So the observable is a HISTORY test: the same lamp, the same pose, reached two
-// ways, must render the same picture. `JAHSHAKA_GI_SWEEPS` — the diagnostic the
-// engine reads per tick — lets this suite prove the count is doing the work
-// rather than asserting a constant: at ONE pass the two histories must visibly
-// disagree, at the shipped count they must not.
+// THE PROOF IS A MEASUREMENT OF BYTES, not of a picture: from a perturbed
+// history (a lamp walked with the moving tick), one at-rest tick, then a
+// second — every cascade's light volumes (the total and the three anisotropic
+// axes) hashed raw (GiVoxelStats::lightDigest) after each. They must be EQUAL,
+// per cascade, at Medium and at High. And the history test in bytes: a lamp
+// that travelled and came to rest leaves the SAME bytes as the same lamp jumped
+// there. (The default scene and Showroom 2 take the same proof through the
+// verbs: gi.chain_converge_scenes.)
 //
-// THE FIELD IS DELIBERATELY OFF for the history cases. The irradiance field is
-// an INTEGRAL of the chain and amplifies whatever the chain held at the instant
-// it integrated; its own re-integration has a defect of its own (LAMPREST-2's
-// FINDINGS), and a suite about the chain must not be hostage to it. Case 4
-// covers the field's own rule — that it re-converges when the chain's radiance
-// changed — on the terms that are stable.
+// THE FIELD IS DELIBERATELY OFF for the history cases (an integral of the chain,
+// with its own re-convergence rule — case 5 covers it).
 //
 // Its own binary like every GI suite: the voxel lighting binds process-wide to
 // HlmsPbs, so this scene must not share a process with another arm's.
-//
-// ===========================================================================
-// TWO ctest ROWS, ONE BINARY (PHOTON phase A, A1 section 0 / 1.2 — lane FENCE-1)
-// ===========================================================================
-// `restSweeps >= 3` pins a CONSTANT (`kAtRestSweeps`, EnginePrivate.h:4609) and
-// nothing else. It is green on a renderer that needs one pass and on one that
-// needs thirty, and it would RED on a renderer that reached its fixed point in
-// two — an improvement. A suite about convergence must measure the RESIDUAL, so:
-//
-//   gi.chain_converge         ORDINARY, and it gates: the history test (a lamp
-//                             that travelled renders what the same lamp jumped
-//                             there renders), the idempotence of a second tick,
-//                             the single volume's bit-exactness, the field's
-//                             re-convergence — and the constant, renamed to what
-//                             it is ("no regression while red") and DELETED by
-//                             the lane that removes the target row's label.
-//   gi.chain_converge_target  LABEL `photon-target`: after ONE at-rest sweep the
-//                             picture is within 0.5 codes of the picture after
-//                             TEN. Runs everywhere, prints its value, gates
-//                             nothing. GREEN AFTER PHOTON P4's ONE-WRITER +
-//                             SWEEPS-3 (one injectCascade(i, mode); the at-rest
-//                             sweep count DERIVED, not measured).
-//
-// TODAY'S VALUE, MEASURED ON THIS TREE (2026-09-22, RTX 4080 SUPER): the
-// residual is **0.00/255** — the target is ALREADY MET on this fixture, and that
-// is a finding, not a pass to be quiet about. Both arms walk the lamp with the
-// engine's moving pass first, so it is not the trivial "one iteration from the
-// fixed point" reading; this room simply converges in one at-rest sweep, which
-// means `kAtRestSweeps = 3` spends two sweeps per tick here for nothing. The
-// room that does NOT converge in one is `scripting.e2e.movable_lamp_rest`'s
-// (4/255 at two passes, 0/255 at three — spikes/lamprest-2), which is where the
-// lane that DERIVES the count should take its reading. The target row stays
-// registered and labelled: it is the fence that reds if a change makes this
-// fixture stop converging, and the label comes off with the derivation.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -75,39 +41,11 @@
 using namespace jahshaka::engine;
 
 static int failures = 0;
-/// `--target` picks the TARGET row (gi.chain_converge_target, label
-/// photon-target). One binary, two rows: the measurements are identical and only
-/// the assertions differ, so the rows can never drift apart.
-static bool gTarget = false;
 
 #define CHECK(cond, msg)                                                        \
     do {                                                                        \
         if (cond) std::printf("ok: %s\n", msg);                                 \
         else { std::printf("FAIL: %s\n", msg); ++failures; }                     \
-    } while (0)
-
-/// The ordinary row's assertions — skipped (but still measured and printed) in
-/// the target row.
-#define CHECK_ORDINARY(cond, msg)                                               \
-    do {                                                                        \
-        if (gTarget) break;                                                     \
-        if (cond) std::printf("ok: %s\n", msg);                                 \
-        else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
-    } while (0)
-
-/// A TARGET line: the value and the bar, printed on every run of either row, so
-/// the distance to the bar is visible from any lane's scoped gate. It counts a
-/// FAILURE only in the target row.
-#define TARGET(value, bar, what)                                                \
-    do {                                                                        \
-        const double v_ = double(value), b_ = double(bar);                      \
-        const bool met_ = v_ <= b_;                                             \
-        std::printf("target: %.4f (bar %.4f) %s%s\n", v_, b_, what,             \
-                    met_ ? " -- MET" : "");                                    \
-        if (gTarget) {                                                          \
-            if (met_) std::printf("ok: %s\n", what);                            \
-            else { std::printf("FAIL: %s\n", what); ++failures; }               \
-        }                                                                       \
     } while (0)
 
 static const unsigned kSize = 128;
@@ -152,18 +90,13 @@ static float meanOf(const Image &img)
 
 int main(int argc, char **argv)
 {
-    for (int i = 1; i < argc; ++i)
-        if (std::strcmp(argv[i], "--target") == 0) gTarget = true;
-    std::printf("== gi.chain_converge%s: %s\n", gTarget ? "_target" : "",
-                gTarget ? "THE TARGET ROW (label photon-target) -- the RESIDUAL, not the "
-                          "constant; green after PHOTON P4 (ONE-WRITER + SWEEPS-3)"
-                        : "the ORDINARY row -- the history test and the fixed-point idempotence");
+    (void)argc; (void)argv;
+    std::printf("== gi.chain_converge: one at-rest sweep is the chain's fixed point, byte for byte\n");
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = gTarget ? "test-gi-chain-converge-target-ogre.log"
-                          : "test-gi-chain-converge-ogre.log";
+    cfg.logFile = "test-gi-chain-converge-ogre.log";
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->setFixedFrameDelta(1.0f / 60.0f);
@@ -281,151 +214,97 @@ int main(int argc, char **argv)
     CHECK(st.vctBound, "...and the shader is sampling it");
     if (st.cascades.size() < 2 || !st.vctBound) { std::printf("FAILED: no chain\n"); return 1; }
 
+    // THE CHAIN'S BYTES, per cascade (the one-sweep proof's instrument).
+    const auto digests = [&]() {
+        std::vector<std::string> d;
+        const size_t n = scene->giStatus().cascades.size();
+        for (size_t i = 0; i < n; ++i) d.push_back(scene->giVoxelStats(int(i)).lightDigest);
+        return d;
+    };
+    const auto join = [](const std::vector<std::string> &d) {
+        std::string s;
+        for (const std::string &x : d) s += (s.empty() ? "" : " ") + x.substr(0, 8);
+        return s;
+    };
     // THE TWO HISTORIES. `jumped` is the lamp put at its pose and re-injected
     // once at rest — what a re-solve leaves. `travelled` is the same pose
-    // reached in steps, each step injected with the MOVING pass the engine
-    // spends while something is moving (one pass, no bounces, coarse march),
-    // and then ONE at-rest tick: the mirror's O2 cadence, exactly.
+    // reached in steps, each step injected with the MOVING tick the engine
+    // spends while something is moving, and then ONE at-rest tick: the mirror's
+    // O2 cadence, exactly. (Under a chain the host's tick is owed and runs at the
+    // frame's writer point, so every tick below renders the frame that runs it.)
+    const auto rest = [&]() { scene->refreshGiLighting(false); render(e, 1); };
     const auto jumped = [&](float x, Image &img) {
         lampAt(x);
-        scene->refreshGiLighting(false);
+        rest();
         shot(img);
     };
     const auto travelled = [&](float from, float to, Image &img) {
         lampAt(from);
-        scene->refreshGiLighting(false);
+        rest();
         render(e, 2);
         for (int i = 1; i <= 6; ++i) {
             lampAt(from + (to - from) * float(i) / 6.0f);
-            scene->refreshGiLighting(true);      // the moving pass
+            scene->refreshGiLighting(true);      // the moving tick
             render(e, 1);
         }
-        scene->refreshGiLighting(false);         // the one at-rest tick it owes
+        rest();                                  // the one at-rest tick it owes
         shot(img);
     };
 
-    // ---- 1. THE COUNT THE TICK SPENDS ------------------------------------
-    // The number itself, reported by the renderer (GiStatus::chainSweeps), so a
-    // lane that quietly puts the at-rest tick back to one pass reds HERE as well
-    // as in scripting.e2e.movable_lamp_rest — which is the suite that measures
-    // the picture the count is FOR (that room reds at two passes and is green at
-    // three, 8/8, measured). This one measures the rule.
-    lampAt(-3.0f);
-    scene->refreshGiLighting(true);
-    const int movingSweeps = scene->giStatus().chainSweeps;
-    scene->refreshGiLighting(false);
-    const int restSweeps = scene->giStatus().chainSweeps;
-    std::printf("   passes: moving %d, at rest %d\n", movingSweeps, restSweeps);
-    CHECK(movingSweeps == 1,
-          "a tick taken WHILE something is moving spends exactly one injection pass");
-    CHECK_ORDINARY(restSweeps >= 3,
-                   "no regression while red: an at-rest tick spends three passes or more (the "
-                   "CONSTANT kAtRestSweeps, which is what the residual arm below replaces — "
-                   "DELETED by the lane that removes the target row's label)");
-    // ...and the diagnostic that re-measures it is wired to the same place.
-    ::setenv("JAHSHAKA_GI_SWEEPS", "5", 1);
-    scene->refreshGiLighting(false);
-    const int forced = scene->giStatus().chainSweeps;
-    ::unsetenv("JAHSHAKA_GI_SWEEPS");
-    CHECK(forced == 5, "JAHSHAKA_GI_SWEEPS re-measures the count (the lane's instrument)");
+    // ---- 1. THE PROOF: SWEEP 1 == SWEEP 2, BYTE FOR BYTE, PER CASCADE -----
+    // From a PERTURBED history (one iteration taken from the fixed point stays
+    // there on any renderer, so the proof must start somewhere else): the walk,
+    // one at-rest tick, the bytes; a second at-rest tick, the bytes again.
+    const auto proof = [&](const char *tier) {
+        Image scratch;
+        travelled(-3.0f, 3.0f, scratch);
+        const std::vector<std::string> one = digests();
+        rest();
+        const std::vector<std::string> two = digests();
+        bool readable = !one.empty() && one.size() == two.size();
+        size_t differ = 0;
+        for (size_t i = 0; i < one.size(); ++i) {
+            if (one[i].empty() || two[i].empty()) readable = false;
+            else if (one[i] != two[i]) ++differ;
+        }
+        std::printf("   %s: sweep 1 [%s]\n   %s: sweep 2 [%s] -- %zu of %zu cascades differ\n",
+                    tier, join(one).c_str(), tier, join(two).c_str(), differ, one.size());
+        CHECK(readable, (std::string(tier) + ": every cascade's light volumes read back").c_str());
+        CHECK(readable && differ == 0,
+              (std::string(tier) + ": ONE AT-REST SWEEP IS THE FIXED POINT -- a second sweep "
+                                   "changes no byte of any cascade's light").c_str());
+        return one;
+    };
+    const std::vector<std::string> medium = proof("Medium");
 
-    // ---- 1b. THE RESIDUAL — THE TARGET (PHOTON phase A, A1 section 1.2) ----
-    //
-    // WHAT THE ASSERTION ABOVE ACTUALLY SAYS, and why it is the wrong claim:
-    // `restSweeps >= 3` pins a CONSTANT (`kAtRestSweeps`, EnginePrivate.h) and
-    // nothing else. It is green on a renderer that needs one pass and on a
-    // renderer that needs thirty; it would red on a renderer that reached its
-    // fixed point in two, which is an IMPROVEMENT. A suite about convergence
-    // must measure the RESIDUAL.
-    //
-    // THE CORRECT CLAIM: after ONE at-rest sweep the picture is already what ten
-    // sweeps give. Ten is the reference because three, four and six were
-    // measured identical (spikes/lamprest-2) — the fixed point is reached well
-    // before ten, so ten IS the fixed point for this fixture, measured rather
-    // than assumed. The bar is 0.5 codes: half a quantisation step of the 8-bit
-    // picture, i.e. the tightest statement the instrument can make.
-    //
-    // BOTH ARMS START FROM THE SAME PERTURBED HISTORY, and that is the whole
-    // difficulty. One Jacobi iteration taken from the FIXED POINT stays at the
-    // fixed point, so "one sweep against ten" measured from a settled chain
-    // reads 0.00/255 on any renderer whatever — measured, and it is how this arm
-    // was first written. The residual only exists relative to a state that is
-    // NOT converged, so each arm walks the lamp with the engine's MOVING pass
-    // (one coarse injection per step, which is what the mirror really spends
-    // while something moves) and only then takes its at-rest sweeps.
-    //
-    // THIS IS A TARGET. Green after PHOTON P4's ONE-WRITER + SWEEPS-3 (one
-    // `injectCascade(i, mode)` and an at-rest sweep count DERIVED rather than
-    // measured); the lane that lands them deletes `photon-target` from the
-    // target row AND deletes the `restSweeps >= 3` assertion above.
-    //
-    // `JAHSHAKA_GI_SWEEPS` is the instrument and stays: it is the only way to
-    // ask the engine for a sweep count the table does not offer, and the arm
-    // above proves it is wired to the thing it claims to set.
-    {
-        const auto walkThenSweeps = [&](int sweeps, Image &img) {
-            lampAt(-3.0f);
-            scene->refreshGiLighting(false);       // a settled start, same for both arms
-            render(e, 2);
-            for (int i = 1; i <= 6; ++i) {         // the same walk, same steps
-                lampAt(-3.0f + 6.0f * float(i) / 6.0f);
-                scene->refreshGiLighting(true);    // the MOVING pass: one coarse injection
-                render(e, 1);
-            }
-            char buf[16];
-            std::snprintf(buf, sizeof(buf), "%d", sweeps);
-            ::setenv("JAHSHAKA_GI_SWEEPS", buf, 1);
-            scene->refreshGiLighting(false);       // the at-rest tick, at THIS sweep count
-            const int spent = scene->giStatus().chainSweeps;
-            ::unsetenv("JAHSHAKA_GI_SWEEPS");
-            shot(img);
-            return spent;
-        };
-        Image tenSweeps, oneSweep;
-        const int ten = walkThenSweeps(10, tenSweeps);
-        const int one = walkThenSweeps(1, oneSweep);
-        const float residual = worstDiff(oneSweep, tenSweeps);
-        std::printf("   THE RESIDUAL after the same walk: one sweep (%d) against ten (%d) — "
-                    "worst pixel %.2f/255, means %.2f vs %.2f\n", one, ten, residual,
-                    meanOf(oneSweep), meanOf(tenSweeps));
-        TARGET(residual, 0.5,
-               "ONE at-rest sweep already IS the chain's fixed point: after the same walk, the "
-               "picture after one sweep is within half a quantisation step of the picture after "
-               "ten");
-        // ...and the SHIPPED count's own residual, printed beside it: the distance
-        // the shipped tick still has to travel, which is the number the lane that
-        // derives the count will be reading.
-        Image shipped;
-        const int shippedSweeps = walkThenSweeps(0, shipped);   // 0 = leave the table alone
-        std::printf("   (the SHIPPED count (%d) after the same walk: residual %.2f/255 against "
-                    "ten)\n", shippedSweeps, worstDiff(shipped, tenSweeps));
-    }
-
-    // ---- 2. THE SHIPPED COUNT REACHES THE FIXED POINT --------------------
+    // ---- 2. THE HISTORY TEST, IN BYTES ------------------------------------
+    // A lamp that travelled and came to rest leaves the SAME bytes as the same
+    // lamp jumped there (and so the same picture).
     Image jump, travel;
-    jumped(3.0f, jump);
     travelled(-3.0f, 3.0f, travel);
+    const std::vector<std::string> travelBytes = digests();
+    jumped(-3.0f, jump);
+    jumped(3.0f, jump);
+    const std::vector<std::string> jumpBytes = digests();
     const float delta = worstDiff(jump, travel);
-    std::printf("   SHIPPED  : jumped mean %.2f, travelled mean %.2f, worst %.2f/255\n",
-                meanOf(jump), meanOf(travel), delta);
-    CHECK(delta <= 1.5f,
-          "A LAMP THAT TRAVELLED AND CAME TO REST RENDERS WHAT THE SAME LAMP "
-          "JUMPED THERE RENDERS (the at-rest injection is at its fixed point)");
-    // NOTE, and it is the honest reading: in THIS room the two histories agree
-    // even at one pass (measured 0.00/255) — a sealed box lit by a lamp in open
-    // sight is dominated by its direct term, and how many passes a scene needs
-    // is a property of the scene. The room that needs three is the movable-lamp
-    // room of scripting.e2e.movable_lamp_rest, which is where the count is
-    // measured; what this case pins is that the property HOLDS at the shipped
-    // count, on a chain, through the engine's own re-injection path.
+    std::printf("   history: jumped [%s], travelled [%s]; picture worst %.2f/255\n",
+                join(jumpBytes).c_str(), join(travelBytes).c_str(), delta);
+    CHECK(!jumpBytes.empty() && jumpBytes == travelBytes,
+          "A LAMP THAT TRAVELLED AND CAME TO REST LEAVES THE BYTES THE SAME LAMP JUMPED THERE "
+          "LEAVES (every cascade)");
+    CHECK(delta == 0.0f, "...and so the same picture");
 
-    // ---- 3. AND IT IS A FIXED POINT: another tick moves nothing -----------
-    Image again;
-    scene->refreshGiLighting(false);
-    shot(again);
-    const float idem = worstDiff(jump, again);
-    std::printf("   another at-rest tick moves the picture by %.2f/255\n", idem);
-    CHECK(idem <= 1.5f, "a second at-rest tick over an unchanged scene changes nothing");
+    // ---- 3. THE SAME PROOF AT HIGH -----------------------------------------
+    {
+        GiParams high = gi;
+        high.quality = GiQuality::High;
+        CHECK(scene->setGlobalIllumination(high), "the High chain builds");
+        render(e, 6);
+        CHECK(scene->giStatus().cascades.size() >= 2, "...and it is a chain");
+        proof("High");
+        CHECK(scene->setGlobalIllumination(gi), "back to the Medium chain");
+        render(e, 6);
+    }
 
     // ---- 4. THE SINGLE VOLUME IS NOT AN ITERATION AND STAYS BIT-EXACT ----
     GiParams single = gi;
@@ -441,8 +320,6 @@ int main(int argc, char **argv)
     shot(s2);
     const float singleDelta = worstDiff(s1, s2);
     std::printf("   single volume: two at-rest re-injections differ by %.2f/255\n", singleDelta);
-    CHECK(scene->giStatus().chainSweeps == 1,
-          "...and it reports ONE pass, because it is not an iteration");
     CHECK(singleDelta == 0.0f,
           "THE SINGLE VOLUME IS BIT-EXACT across re-injections (one injection "
           "overwrites its light voxels and there is nothing outside it to read)");

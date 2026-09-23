@@ -41,10 +41,16 @@ for (var i = 0; i < ns.length; ++i)
 
 // A closed 5 m cube of albedo 0.791 (#e6e6e6) with one point lamp inside: the
 // rig PHOTON-M1/M2/M3 measured, so the numbers here are the measured ones.
+// ROUGHNESS 0 (PHOTON-WRITER-1): a voxel holds what its surface renders now - the
+// normalised Disney diffuse lobe's albedo, 0.69 of a Lambertian surface under the
+// lamp and 0.70 of the bounce at roughness 1 - and at roughness 1 this room's fixed
+// point (peak 0.78) no longer reaches the ceiling the float store exists to exceed.
+// At roughness 0 the lobe is 0.95 / 0.905 of Lambertian and the claim below is
+// exercised again (peak 1.24, 6,647 voxels above 1, measured).
 var S = 5.0, T = 0.2;
 function box(px, py, pz, sx, sy, sz) {
     var id = scene.addPrimitive("cube", { position: { x: px, y: py, z: pz }, scale: { x: sx, y: sy, z: sz } });
-    material.set(id, { baseColor: "#e6e6e6", roughness: 1.0, metallic: 0.0 });
+    material.set(id, { baseColor: "#e6e6e6", roughness: 0.0, metallic: 0.0 });
     return id;
 }
 box(0, 0, 0, S, T, S); box(0, S, 0, S, T, S);
