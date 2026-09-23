@@ -1125,17 +1125,19 @@ static int caseLightingIndirect()
                 CHECK_MSG(false, "the card answers on the wall at (%.1f, %.1f)", x, h);
                 continue;
             }
-            const double rel = m[0] > 1e-4 ? std::fabs(t.indirect[0] - m[0]) / m[0] : 1.0;
             std::printf("    wall (%+.1f, %.1f): pixel %.4f %.4f %.4f | card indirect %.4f %.4f %.4f"
-                        " | radiance %.4f | %.2f%%\n",
+                        " | radiance %.4f\n",
                         x, h, m[0], m[1], m[2], t.indirect[0], t.indirect[1], t.indirect[2],
-                        t.radiance[0], 100.0 * rel);
+                        t.radiance[0]);
             CHECK_MSG(m[0] > 0.05 && m[0] < 0.95,
                       "the pixel is lit and inside the readback's linear range (%.4f)", m[0]);
-            CHECK_MSG(rel <= 0.05,
-                      "at (%+.1f, %.1f) the card's indirect %.4f equals the pixel diffuse %.4f"
-                      " within 5 %% (%.2f %%) — the two marches are one piece",
-                      x, h, t.indirect[0], m[0], 100.0 * rel);
+            for (int k = 0; k < 3; ++k) {
+                const double rel = m[k] > 1e-4 ? std::fabs(t.indirect[k] - m[k]) / m[k] : 1.0;
+                CHECK_MSG(rel <= 0.05,
+                          "at (%+.1f, %.1f) channel %d: the card's indirect %.4f equals the pixel"
+                          " diffuse %.4f within 5 %% (%.2f %%) — the two marches are one piece",
+                          x, h, k, t.indirect[k], m[k], 100.0 * rel);
+            }
             // ...and the card's radiance is that indirect and nothing else (no
             // direct: the sun is perpendicular; no emissive).
             CHECK_MSG(std::fabs(t.radiance[0] - t.indirect[0]) <= 0.02 * t.indirect[0] + 1e-3,
@@ -1151,25 +1153,82 @@ static int caseLightingIndirect()
         for (double h : heights) {
             double px, py;
             toPixel(-1.5, h, px, py);
-            double sum = 0.0;
+            double m[3] = { 0.0, 0.0, 0.0 };
             int n = 0;
             for (int y = int(py) - 4; y <= int(py) + 4; ++y)
                 for (int xx = int(px) - 4; xx <= int(px) + 4; ++xx) {
-                    sum += im.at(unsigned(xx), unsigned(y)).r;
+                    const Colour c = im.at(unsigned(xx), unsigned(y));
+                    m[0] += c.r; m[1] += c.g; m[2] += c.b;
                     ++n;
                 }
-            const double m = sum / n;
+            for (double &v : m) v /= n;
             CardSample t;
             if (!s->readCardAt(Vec3(-1.5f, float(h), 0.0f), Vec3(0, 0, -1), t) || !t.ok) {
                 CHECK_MSG(false, "%s: the card answers at h %.1f", what, h);
                 continue;
             }
-            const double rel = m > 1e-4 ? std::fabs(t.indirect[0] - m) / m : 1.0;
-            CHECK_MSG(m > 0.02 && rel <= 0.05,
-                      "%s, h %.1f: card indirect %.4f, pixel diffuse %.4f (%.2f %%, bar 5 %%)",
-                      what, h, t.indirect[0], m, 100.0 * rel);
+            // ALL THREE CHANNELS: the sky ambient is chromatic.
+            for (int k = 0; k < 3; ++k) {
+                const double rel = m[k] > 1e-4 ? std::fabs(t.indirect[k] - m[k]) / m[k] : 1.0;
+                CHECK_MSG(m[k] > 0.02 && rel <= 0.05,
+                          "%s, h %.1f, channel %d: card indirect %.4f, pixel diffuse %.4f (%.2f %%,"
+                          " bar 5 %%)", what, h, k, t.indirect[k], m[k], 100.0 * rel);
+            }
         }
     };
+
+    // A DRAGGED LIGHT IS NOT A RE-INJECTION (audit F2). A light written every
+    // frame for thirty frames, with nothing scheduling the chain's refresh,
+    // leaves the voxels where they are — so the card must not re-march its
+    // indirect against them. Then the refresh + settle lands, and the
+    // indirect is re-marched in ONE burst (the resident set once, over
+    // however many frames its budget takes).
+    {
+        const NodeId lamp = s->createNode();
+        LightDesc pl;
+        pl.type = LightType::Point;
+        pl.colour = Colour(1.0f, 0.9f, 0.8f);
+        pl.intensity = 0.5f;
+        pl.range = 6.0f;
+        pl.castShadows = false;
+        s->setNodeTransform(lamp, Vec3(0.0f, 1.0f, -3.0f), Quat(), Vec3(1, 1, 1));
+        CHECK(lamp && s->setLight(lamp, pl), "a lamp stands in front of the wall");
+        s->refreshGlobalIllumination();
+        render(e, 90);   // its arrival lands and settles
+        const CardCacheStatus d0 = s->giStatus().cards;
+        for (int i = 0; i < 30; ++i) {
+            s->setNodeTransform(lamp, Vec3(-1.5f + 0.1f * float(i), 1.0f, -3.0f), Quat(),
+                                Vec3(1, 1, 1));
+            render(e, 1);
+        }
+        const CardCacheStatus d1 = s->giStatus().cards;
+        std::printf("    a 30-frame lamp drag with no refresh: indirect marches %llu -> %llu,"
+                    " re-injections seen %llu -> %llu\n",
+                    (unsigned long long)d0.indirectRelights, (unsigned long long)d1.indirectRelights,
+                    (unsigned long long)d0.invalidIndirect, (unsigned long long)d1.invalidIndirect);
+        CHECK_MSG(d1.indirectRelights == d0.indirectRelights,
+                  "a dragged light re-marched NO card's indirect (%llu -> %llu marches) — the"
+                  " signature follows the chain, not the write",
+                  (unsigned long long)d0.indirectRelights, (unsigned long long)d1.indirectRelights);
+        s->refreshGlobalIllumination();
+        render(e, 90);
+        const CardCacheStatus d2 = s->giStatus().cards;
+        std::printf("    ...then the refresh + settle: re-injections seen %llu -> %llu, marches"
+                    " %llu -> %llu (%u cards resident)\n",
+                    (unsigned long long)d1.invalidIndirect, (unsigned long long)d2.invalidIndirect,
+                    (unsigned long long)d1.indirectRelights, (unsigned long long)d2.indirectRelights,
+                    d2.cardsResident);
+        CHECK_MSG(d2.invalidIndirect == d1.invalidIndirect + 1ull,
+                  "the refresh + settle reached the cards as exactly ONE re-injection burst"
+                  " (%llu -> %llu)", (unsigned long long)d1.invalidIndirect,
+                  (unsigned long long)d2.invalidIndirect);
+        CHECK_MSG(d2.indirectRelights > d1.indirectRelights,
+                  "...and re-marched the indirect (%llu -> %llu)",
+                  (unsigned long long)d1.indirectRelights, (unsigned long long)d2.indirectRelights);
+        s->removeNode(lamp);
+        s->refreshGlobalIllumination();
+        render(e, 90);
+    }
 
     // THE INDIRECT HALF HAS ITS OWN TRIGGER: the sun's intensity rises by
     // half — a light write, so the chain re-injects (the light tick) and the
@@ -1217,6 +1276,42 @@ static int caseLightingIndirect()
     s->setAmbient(Colour(0.30f, 0.35f, 0.45f), Colour(0.10f, 0.08f, 0.06f));
     render(e, 90);
     compareAll("with a sky ambient (the escape's environment)");
+
+    // AN EMISSIVE CARD TEXEL: radiance = direct + indirect + emissive. A small
+    // emissive tile on the wall's face (its own carded instance, lit only by
+    // the floor's bounce and the sky); the emissive term is the radiance less
+    // the cached indirect less the (zero: the sun is perpendicular) direct.
+    {
+        const NodeId tile = s->createNode();
+        PbrParams p;
+        // DARK and BRIGHT: the emissive dominates the texel, so the subtraction
+        // below is not a difference of two nearly equal packed floats (the
+        // radiance store's half-step is 1.2 % of 0.3 on blue).
+        p.albedo = Colour(0.05f, 0.05f, 0.05f);
+        p.emissive = Colour(0.60f, 0.45f, 0.30f);
+        p.roughness = 1.0f;
+        p.workflow = PbrParams::Workflow::Specular;
+        p.ior = 1.0f;
+        p.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        const MaterialId m = s->createPbrMaterial(p);
+        CHECK(tile && m && s->attachMesh(tile, carded, m), "an emissive tile stands on the wall");
+        s->setNodeTransform(tile, Vec3(2.5f, 1.2f, -0.1f), Quat(), Vec3(0.8f, 0.8f, 0.2f));
+        render(e, 90);
+        CardSample t;
+        if (s->readCardAt(Vec3(2.5f, 1.2f, -0.2f), Vec3(0, 0, -1), t) && t.ok) {
+            const float want[3] = { 0.60f, 0.45f, 0.30f };
+            for (int k = 0; k < 3; ++k) {
+                const double em = double(t.radiance[k]) - double(t.indirect[k]);
+                const double rel = std::fabs(em - want[k]) / want[k];
+                CHECK_MSG(rel <= 0.02,
+                          "the emissive tile, channel %d: radiance %.4f - indirect %.4f = %.4f,"
+                          " the authored emissive %.3f (%.2f %%, bar 2 %%)",
+                          k, t.radiance[k], t.indirect[k], em, want[k], 100.0 * rel);
+            }
+        } else {
+            CHECK(false, "the card answers on the emissive tile");
+        }
+    }
     return failures ? 1 : 0;
 }
 
