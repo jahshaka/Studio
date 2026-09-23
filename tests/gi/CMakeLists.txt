@@ -758,6 +758,26 @@ add_test(NAME gi.field_follows COMMAND test_gi_field_follows
 # once (the VRAM-contention class, CLAUDE.md) plus a 14 MB probe atlas, and the
 # walk renders a frame at a time.
 set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# gi.field_scroll — THE IRRADIANCE FIELD SCROLLS (PHOTON-WRITER-1, FIELD-SCROLL):
+# a cascade-0 step keeps the probes that stay in the field's toroidal window byte
+# for byte and integrates only the planes that entered; three steps out and back
+# render the same picture; the step frame's GPU cost against a whole re-placement,
+# in one process. RUN_SERIAL like every cascade suite.
+add_executable(test_gi_field_scroll test_gi_field_scroll.cpp)
+set_target_properties(test_gi_field_scroll PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_scroll PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_scroll PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_scroll JahshakaEngineMedia)
+add_test(NAME gi.field_scroll COMMAND test_gi_field_scroll
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_scroll PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and
