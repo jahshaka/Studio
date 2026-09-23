@@ -483,9 +483,21 @@ int main()
         view->readPixels(img);
         const Colour inside = img.at(56, 54);
         show("mirror INSIDE the probe boxes", inside);
-        CHECK(inside.b > inside.g + 0.08f && inside.b > inside.r + 0.08f,
-              "4c: the mirror inside the grid reflects the BLUE sky a probe photographed —\n"
-              "          the probes own every pixel their boxes contain, unchanged");
+        // THE PROBE'S PHOTOGRAPH IS IN THE PIXEL (PHOTON-ENV-1). Inside a probe
+        // box the mirror is upstream's PCC/VCT blend, and the voxel cone's
+        // specular escape now reads THE ENVIRONMENT — this fixture's IBL cube,
+        // GREEN by construction (the two-toned sky makes the drawn sky and the
+        // environment disagree on purpose). So the tracer no longer isolates one
+        // path: the pixel carries the probe's blue AND the cone's escape green
+        // (measured 0.48 / 0.53 / 0.60; patch 0048's flat-ambient escape was the
+        // sky's own SH, blue, which is why it read saturated blue before). What
+        // is asserted is the probe's share: blue that only the probe's
+        // photograph holds (the environment alone reads b 0.02 — the outside
+        // mirror below), dominant over red. Case 13 proves the same share
+        // FOLLOWS a re-capture.
+        CHECK(inside.b > 0.30f && inside.b > inside.r + 0.08f,
+              "4c: the mirror inside the grid carries the BLUE sky a probe photographed —\n"
+              "          blue no other path holds, over the cone's escape to the environment");
 
         enginetest::testCameraLookAt(view, Vec3(0.0f, 2.6f, 30.0f), Vec3(0.0f, 1.4f, 25.0f));
         render(engine.get(), 6);
@@ -825,8 +837,12 @@ int main()
         // mirror is a probe photograph of the sky, a GREEN one is the IBL cube
         // bound straight to the datablock — so it is asserted as the dominance
         // rather than as the old saturation.
-        CHECK(blue.b > blue.g + 0.08f && blue.b > blue.r + 0.08f,
-              "13: the mirror shows the BLUE sky a probe photographed, not the green IBL cube");
+        // PHOTON-ENV-1: the cone's escape reads the fixture's GREEN environment
+        // (4c's note), so the probe's blue is asserted as a share: blue only the
+        // photograph holds, over red. The positive control below is the stronger
+        // statement — it moves with the PROBE.
+        CHECK(blue.b > 0.30f && blue.b > blue.r + 0.08f,
+              "13: the mirror carries the BLUE sky a probe photographed, not only the green IBL cube");
 
         // THE POSITIVE CONTROL: the capture is live and re-captures on a sky
         // change. Without this, "nothing happened" below could mean "nothing
@@ -839,7 +855,10 @@ int main()
             render(engine.get(), 20);
             const Colour r = mirrorPx();
             show("mirror, sky turned red", r);
-            CHECK(r.r > r.b + 0.08f && r.r > r.g + 0.08f,
+            // BY DIFFERENCE (PHOTON-ENV-1): the cone's escape to the fixture's
+            // green environment is the same in both states, so what the sky
+            // change moves is the probe's photograph alone — red up, blue down.
+            CHECK(r.r > blue.r + 0.08f && blue.b > r.b + 0.08f,
                   "13: a sky change re-captures the probes and the mirror follows it");
             s->setSky(sky);
             render(engine.get(), 20);

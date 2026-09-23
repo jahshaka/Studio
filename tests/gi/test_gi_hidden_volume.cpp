@@ -109,7 +109,11 @@ static void hiddenGeometry(Engine *engine, View *view)
     std::printf("   floor no-panel  r=%.3f g=%.3f | panel visible r=%.3f g=%.3f\n",
                 noPanel.r, noPanel.g, withPanel.r, withPanel.g);
     const float bounceOn = (withPanel.r - withPanel.g) - (noPanel.r - noPanel.g);
-    CHECK(bounceOn > 0.02f, "the visible panel bounces red onto the floor");
+    // 0.0139 = the 0.02 this bar was set at, times the floor's diffuse energy
+    // factor (roughness 0.9: lerp( 1, 1/1.51, 0.9 ) = 0.694). The panel's bounce
+    // reaches the floor through envColourD, which carries the factor the direct
+    // lobe always had since PHOTON-ENV-1 (measured +0.0197 against +0.029 before).
+    CHECK(bounceOn > 0.0139f, "the visible panel bounces red onto the floor");
 
     // HIDE IT. The engine must drop kGiGeometryBit and invalidate; the mirror's
     // stability window is a host concern, so the suite asks for the re-solve

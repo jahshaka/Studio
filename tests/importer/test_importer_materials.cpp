@@ -494,11 +494,19 @@ int main(int argc, char **argv)
                     // brighter in it. The claim the case exists for is the
                     // RELATIVE one below (lit, and far above the full-metal
                     // reading), which moved not at all.
-                    CHECK(fixedLuma > 65.0 && fixedLuma < 77.0,
+                    // RE-PINNED AGAIN (PHOTON-ENV-1): 71.0 -> 62.1. The studio
+                    // lights this quad through the ENVIRONMENT lobe, which now
+                    // carries the diffuse energy factor (lerp( 1, 1/1.51,
+                    // roughness ): 0.667 at this quad's 0.98) — its diffuse
+                    // reading moves and the full-metal one (a specular lobe,
+                    // 45.6 before and after) does not, so the relative bar is
+                    // re-derived from the same two readings: 1.36x, fenced at
+                    // 1.25x ("clearly brighter", not "tuned to it").
+                    CHECK(fixedLuma > 56.0 && fixedLuma < 68.0,
                           "5: the imported spec-gloss material is LIT, at the re-pinned value "
-                          "(71.0 +/- 6 in the studio environment; 39.4 under the old hand rig)");
-                    CHECK(fixedLuma > brokenLuma * 1.5,
-                          "5: ... and is far brighter than the full-metal reading it used to get");
+                          "(62.1 +/- 6 in the studio environment with the diffuse energy factor)");
+                    CHECK(fixedLuma > brokenLuma * 1.25,
+                          "5: ... and is clearly brighter than the full-metal reading it used to get");
                 }
 
                 auto unlitNode = meshNodeNamed(imported, "unlit");

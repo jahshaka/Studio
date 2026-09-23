@@ -104,7 +104,31 @@ static Slab buildSlab(Engine *e, const char *name, const Colour &upper, const Co
     o.scene = e->createScene(name);
     o.view->setScene(o.scene);
     o.scene->setAmbient(upper, lower);
-    const NodeId slab = enginetest::addTestCube(o.scene, Colour(0.8f, 0.8f, 0.8f), 0.0f, 0.9f);
+    // MATTE (the ground's recipe, GF1: Specular workflow, ior 1.0, black kS —
+    // F0 = 0), because the subject is the DIFFUSE ambient and nothing else.
+    // With the default 4 % specular the slab also carried a specular
+    // environment term, and that term is NOT continuous across the edge: outside
+    // the voxel volume the specular cone escapes whole, inside it the cone's
+    // directional alpha reads the slab's own voxels (the specular walk's escape
+    // is the raw directional composite — jah_voxel_march.glsl, the age-carry
+    // note), and GI off has no specular environment at all without a sky cube.
+    // That step was ~3.7 % of this reading; once the environment lobe carries
+    // the diffuse energy factor (PHOTON-ENV-1) the diffuse share is 0.69 of what
+    // it was and the same step is 5.4 % — a finding about the specular escape,
+    // measured here and moved out of this suite's subject.
+    NodeId slab = 0;
+    {
+        PbrParams p;
+        p.albedo = Colour(0.8f, 0.8f, 0.8f);
+        p.roughness = 0.9f;
+        p.workflow = PbrParams::Workflow::Specular;
+        p.ior = 1.0f;
+        p.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        slab = o.scene->createNode();
+        o.scene->attachMesh(slab, o.scene->createMesh(enginetest::unitCubeMesh()),
+                            o.scene->createPbrMaterial(p));
+        enginetest::poseRegistry()[o.scene][slab] = enginetest::NodePose{};
+    }
     enginetest::setNodePosition(o.scene, slab, Vec3(0.0f, -0.05f, 0.0f));
     enginetest::setNodeScale(o.scene, slab, Vec3(96.0f, 0.1f, 96.0f));
     // Straight down: a -90 degree pitch about X, which the lookAt helper cannot

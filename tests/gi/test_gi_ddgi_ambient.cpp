@@ -362,7 +362,16 @@ int main()
         // unpatched march kept 4.3%; the patch's min3-one-mip-finer escape
         // keeps 65.2% (measured), deliberately short of the isotropic path's
         // 93% because the exact route floods sealed rooms (build record).
-        CHECK(kept > 0.50f && kept < 0.80f,
+        // RE-ANCHORED 0.50-0.80 -> 0.70-0.90 (PHOTON-ENV-1), and the ESCAPE did
+        // not move: what moved is the environment each cone reads. The cones
+        // used to fill their escape with ONE value — the hemisphere pair's pole
+        // at the normal (0.40 here) times the summed escape; each cone now reads
+        // the environment in its own direction (jahEnvCone: the SH's radiance,
+        // de-convolved), and the cone that escapes MOST — the zenith one — reads
+        // the brightest sky (0.475 of this hemisphere; the 60-degree ones 0.36).
+        // Measured 0.814 (the pole-value arithmetic gave 0.652). The fence still
+        // rejects the unpatched march (4 %) and the exact route (~93 %).
+        CHECK(kept > 0.70f && kept < 0.90f,
               "FENCE: with patch 0021 anisotropic voxel cone tracing keeps most of the "
               "ambient (65% measured; 4% unpatched; the exact 95% route is rejected)");
 
