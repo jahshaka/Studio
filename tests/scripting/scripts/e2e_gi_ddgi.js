@@ -48,8 +48,7 @@ console.log("gi defaults = " + JSON.stringify(gi));
 assert(gi.tier === "epic", "a new scene is born at the Epic tier: " + gi.tier);
 assert(gi.ddgi === true, "and Epic, like every voxel tier, turns the irradiance field on");
 assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
-       "ddgiIntensity defaults to 1.0 (the renderer's raw brightness, measured to be the "
-       + "right one: the field lands at ~86% of the cone-traced diffuse it replaces)");
+       "ddgiIntensity defaults to 1.0 (the field's own physical answer, untrimmed)");
 
 // The rest of this suite is about the VERB, so the scene is put on plain VCT
 // with the field explicitly OFF. It used to reach that state through the Low
