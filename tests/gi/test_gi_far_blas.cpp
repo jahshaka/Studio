@@ -22,15 +22,28 @@
 //      and a mesh whose near level IS its coarsest shares it (no second build).
 //   2. PAST THE NEAR LENGTH A FAR RAY HITS THE COARSE LEVEL: the hit names the
 //      same slot the near ray names, and lies beyond `reach`; within it the near
-//      ray hits the fine level. A near ray never sees a far copy (0xFF == 0x0F),
-//      and a far ray starting at `reach` cannot hit a near object's far copy.
+//      ray hits the fine level.
 //   3. THE NEAR COPY FOLLOWS THE RAY RULE: a chained mesh whose bound is below
 //      any footprint is traced at its coarsest level by a NEAR ray too.
+//   5. THE MASKS KEEP THE COPIES APART, on a fixture where leaking would change
+//      the answer: a THREE-level cube whose level 1 has lost its +X face (a tiny
+//      bound: the rule's near level) and whose level 2 is the whole cube again
+//      (its coarsest: the far copy). From +X, a 0xFF ray answers the near copy's
+//      missing face (one cube width further) — it would answer the whole cube's
+//      +X face if a far copy leaked into a near launch — and a far-only ray
+//      answers the whole cube, which no near copy of it is.
+//   6. A STILL SCENE HOLDS THE RULE'S LEVEL (audit F1): a chained mesh added to a
+//      scene that then stands still for three frames is in the TLAS at the
+//      level the rule chose on the frame it arrived — not at level 0 until some
+//      unrelated edit happens to rebuild the structure.
 //   4. THE GATHER'S FAR QUERY FIRES, AND ONLY FOR ESCAPING RAYS: with nothing
 //      beyond the near length the far query on and off draw the same bytes
 //      (frozen frames); with a wall beyond it, the far query darkens the floor
 //      the wall hides the sky from — the picture a near-only trace to the far
 //      plane draws — where the far query off reads the sky through the wall.
+//      WHAT THAT DARKENING IS: a far hit lies outside every cascade and is shaded
+//      BLACK until the surface cards reach it (CARDS-2) — today the far query
+//      buys OCCLUSION only (the sky stops leaking through distant geometry).
 //
 // SKIPPED, NOT FAILED, without ray-query hardware.
 #include "jahshaka/engine/Engine.h"
@@ -70,20 +83,40 @@ static Hit hitAt(const std::vector<float> &h, size_t i)
     return Hit{ h[i * 4 + 0], int(h[i * 4 + 1]), h[i * 4 + 3] > 0.5f };
 }
 
+/// The unit cube's triangles minus its +X face.
+static std::vector<unsigned> withoutPlusX(const MeshData &d)
+{
+    std::vector<unsigned> out;
+    for (size_t t = 0; t + 2 < d.indices.size(); t += 3) {
+        bool plusX = true;
+        for (int k = 0; k < 3; ++k)
+            if (d.positions[size_t(d.indices[t + size_t(k)]) * 3u] < 0.49f) plusX = false;
+        if (plusX) continue;
+        out.insert(out.end(), { d.indices[t], d.indices[t + 1], d.indices[t + 2] });
+    }
+    return out;
+}
+
+/// THREE levels: level 1 = the cube minus its +X face with a tiny bound (the
+/// rule's near level at any footprint), level 2 = the whole cube again with a
+/// half-metre bound (the coarsest: the far copy's level). Case 5's fixture.
+static MeshData splitCube()
+{
+    MeshData d = enginetest::unitCubeMesh();
+    d.lodIndices.push_back(withoutPlusX(d));
+    d.lodBounds.push_back(1e-7f);
+    d.lodIndices.push_back(d.indices);
+    d.lodBounds.push_back(0.5f);
+    return d;
+}
+
 /// A unit cube whose ONE coarser level has lost its +X face (two triangles).
 /// `bound` is that level's measured distance from level 0 in mesh units: large
 /// keeps the ray rule at level 0 for the near copy, tiny sends it to level 1.
 static MeshData chainedCube(float bound)
 {
     MeshData d = enginetest::unitCubeMesh();
-    std::vector<unsigned> level1;
-    for (size_t t = 0; t + 2 < d.indices.size(); t += 3) {
-        bool plusX = true;
-        for (int k = 0; k < 3; ++k)
-            if (d.positions[size_t(d.indices[t + size_t(k)]) * 3u] < 0.49f) plusX = false;
-        if (plusX) continue;
-        level1.insert(level1.end(), { d.indices[t], d.indices[t + 1], d.indices[t + 2] });
-    }
+    const std::vector<unsigned> level1 = withoutPlusX(d);
     d.lodIndices.push_back(level1);
     d.lodBounds.push_back(bound);
     return d;
@@ -222,15 +255,14 @@ int main()
                   "two coarse structures: the wall's far level, and ONE the cheap cube's near "
                   "and far copies share (%d)", st.levelBlasCount);
         // THE LEVEL-0 STRUCTURES: the floor's (no chain — its near and far copies
-        // are one structure, no second build) and the wall's near one. A third is
-        // the cheap cube's level 0, built on the frames BEFORE the ray rule first
-        // answered for its slot (the table's first scan lands after the rule's
-        // first walk) and evicted once nothing references it; it is not asked
-        // for by any copy now.
+        // are one structure, no second build) and the wall's near one. EXACTLY
+        // two: the cheap cube's level 0 is never asked for, because the writer
+        // reads the rule's answer the frame the rule gives it (audit F1 — the
+        // old one-frame lag built it on the first frame and held it ~10 s).
         const int level0 = st.blasCount - st.levelBlasCount;
-        CHECK_MSG(level0 == 2 || level0 == 3,
+        CHECK_MSG(level0 == 2,
                   "level-0 structures: the floor's one (shared by its two copies) and the "
-                  "wall's near one, plus at most the pre-rule transient (%d)", level0);
+                  "wall's near one, and no other (%d)", level0);
     }
 
     // =====================================================================
@@ -242,20 +274,18 @@ int main()
         std::vector<float> rays, hits;
         pushRay(rays, o, Vec3{ -1, 0, 0 }, 0.001f, kFar, kRayMaskNearField);     // 0 near -> wall
         pushRay(rays, o, Vec3{ -1, 0, 0 }, reach, kFar, kRayMaskFar);            // 1 far  -> wall
-        pushRay(rays, o, Vec3{ -1, 0, 0 }, 0.001f, kFar, 0xFFu);                 // 2 0xFF == near
-        pushRay(rays, o, Vec3{ 0, -1, 0 }, 0.001f, kFar, kRayMaskNearField);     // 3 near -> floor
-        pushRay(rays, o, Vec3{ 0, -1, 0 }, reach, kFar, kRayMaskFar);            // 4 far past floor
+        pushRay(rays, o, Vec3{ 0, -1, 0 }, 0.001f, kFar, kRayMaskNearField);     // 2 near -> floor
         pushRay(rays, Vec3{ 10.0f, 0.5f, -6.0f }, Vec3{ -1, 0, 0 }, 0.001f, 50.0f,
-                kRayMaskNearField);                                              // 5 near -> cheap
-        CHECK_MSG(s->traceRays(rays, hits) && hits.size() == 6u * 4u, "the batch traced");
-        if (hits.size() == 24u) {
-            const Hit nearWall = hitAt(hits, 0), farWall = hitAt(hits, 1), all = hitAt(hits, 2),
-                      nearFloor = hitAt(hits, 3), farFloor = hitAt(hits, 4), cheap = hitAt(hits, 5);
+                kRayMaskNearField);                                              // 3 near -> cheap
+        CHECK_MSG(s->traceRays(rays, hits) && hits.size() == 4u * 4u, "the batch traced");
+        if (hits.size() == 16u) {
+            const Hit nearWall = hitAt(hits, 0), farWall = hitAt(hits, 1),
+                      nearFloor = hitAt(hits, 2), cheap = hitAt(hits, 3);
             const float fine = -wallX - 1.0f, coarse = -wallX + 1.0f;
-            std::printf("   near wall %.4f (fine %.4f)  far wall %.4f (coarse %.4f)  0xFF %.4f  "
-                        "near floor %.4f  far floor hit %d  cheap %.4f\n",
+            std::printf("   near wall %.4f (fine %.4f)  far wall %.4f (coarse %.4f)  "
+                        "near floor %.4f  cheap %.4f\n",
                         double(nearWall.t), double(fine), double(farWall.t), double(coarse),
-                        double(all.t), double(nearFloor.t), int(farFloor.hit), double(cheap.t));
+                        double(nearFloor.t), double(cheap.t));
             CHECK_MSG(nearWall.hit && std::fabs(nearWall.t - fine) < 0.01f,
                       "a NEAR ray hits the wall's FINE level: its +X face at %.3f m (%.3f)",
                       double(fine), double(nearWall.t));
@@ -266,14 +296,10 @@ int main()
             CHECK_MSG(farWall.index == nearWall.index,
                       "...and names the SAME slot the near ray names (%d, %d)", farWall.index,
                       nearWall.index);
-            CHECK_MSG(all.hit && all.t == nearWall.t && all.index == nearWall.index,
-                      "0xFF traces the near field only — a near launch never sees a far copy");
             CHECK_MSG(nearFloor.hit && std::fabs(nearFloor.t - 5.0f) < 0.01f &&
                           nearFloor.index != nearWall.index,
                       "within the near length a near ray hits the floor at 5 m (%.4f)",
                       double(nearFloor.t));
-            CHECK_MSG(!farFloor.hit,
-                      "a far ray starting at the near length cannot hit a near object's far copy");
             CHECK_MSG(cheap.hit && std::fabs(cheap.t - 10.5f) < 0.01f,
                       "THE NEAR COPY FOLLOWS THE RAY RULE: a bound below every footprint traces "
                       "the coarsest level, through the missing face to 10.5 m (%.4f)",
@@ -295,6 +321,43 @@ int main()
                   "with a wall beyond the near length the far query DARKENS the picture — the "
                   "escaping rays hit it instead of reading the sky (%u px, %.3f/255)",
                   d.moved, d.meanSigned);
+    }
+
+    // =====================================================================
+    // 5 + 6. THE MASKS ON A DISCRIMINATING FIXTURE, AND A STILL SCENE
+    // =====================================================================
+    {
+        const MeshId splitMesh = s->createMesh(splitCube());
+        // Case 5's cube at (0, 0.5, 12); case 6's cheap cube at (0, 0.5, -12).
+        const NodeId splitNode = place(s, splitMesh, mat, Vec3{ 0.0f, 0.5f, 12.0f }, Vec3{ 1, 1, 1 });
+        const NodeId stillNode = place(s, cheapMesh, mat, Vec3{ 0.0f, 0.5f, -12.0f }, Vec3{ 1, 1, 1 });
+        CHECK_MSG(splitMesh && splitNode && stillNode, "the three-level cube and the still cube exist");
+        // THE SCENE STANDS STILL FROM HERE: the attach is the last edit; three
+        // frames with no transform, no camera move, nothing.
+        render(e, 3);
+        std::vector<float> rays, hits;
+        pushRay(rays, Vec3{ 10.0f, 0.5f, 12.0f }, Vec3{ -1, 0, 0 }, 0.001f, 50.0f, 0xFFu);  // 0
+        pushRay(rays, Vec3{ 10.0f, 0.5f, 12.0f }, Vec3{ -1, 0, 0 }, 0.001f, 50.0f,
+                kRayMaskFar);                                                                // 1
+        pushRay(rays, Vec3{ 10.0f, 0.5f, -12.0f }, Vec3{ -1, 0, 0 }, 0.001f, 50.0f,
+                kRayMaskNearField);                                                          // 2
+        CHECK_MSG(s->traceRays(rays, hits) && hits.size() == 3u * 4u, "the batch traced");
+        if (hits.size() == 12u) {
+            const Hit all = hitAt(hits, 0), far = hitAt(hits, 1), still = hitAt(hits, 2);
+            std::printf("   split cube: 0xFF %.4f, far-only %.4f; still cube near %.4f\n",
+                        double(all.t), double(far.t), double(still.t));
+            CHECK_MSG(all.hit && std::fabs(all.t - 10.5f) < 0.01f,
+                      "0xFF traces the NEAR copies only: the rule's level (no +X face) answers "
+                      "10.5 m — a leaked far copy (the whole cube) would answer 9.5 (%.4f)",
+                      double(all.t));
+            CHECK_MSG(far.hit && std::fabs(far.t - 9.5f) < 0.01f && far.index == all.index,
+                      "a far-only ray answers the COARSEST level (the whole cube, 9.5 m), which "
+                      "no near copy is, naming the same slot (%.4f)", double(far.t));
+            CHECK_MSG(still.hit && std::fabs(still.t - 10.5f) < 0.01f,
+                      "A STILL SCENE HOLDS THE RULE'S LEVEL: three frames after its attach the "
+                      "cube is traced at level 1 (10.5 m), not level 0 (9.5) (%.4f)",
+                      double(still.t));
+        }
     }
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
