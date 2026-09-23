@@ -699,7 +699,8 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "reusedLastRefresh", s.gi.reusedLastRefresh },
             { "ifdBound", s.gi.ifdBound },
             { "ifdProbes", s.gi.ifdProbes },
-            { "ifdConverged", s.gi.ifdConverged },
+            { "ifdRefinesOwed", int(s.gi.ifdRefinesOwed) },
+            { "giAtRest", s.gi.giAtRest },
             // THE CACHE'S OWN HISTORY (audit D6). The snapshot described what
             // the GI arm IS and never what it has been DOING, so a bundle could
             // not answer the one question the cache policy exists for: how much

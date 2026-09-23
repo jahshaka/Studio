@@ -884,6 +884,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           Needs::Engine },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
+          "A SCREENSHOT IS THE PICTURE AT REST: before the editor camera's shot the verb renders frames at dt 0 (the document's clock does not move) until world.giStatus().giAtRest is true - no GI rebuild, settle or irradiance-field refinement still owed - at most 2000 frames, so two shots of a still scene are the same picture. "
           "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
           "\"plain\" (also spelled \"raw\", or false) is NO POST-PROCESSING AT ALL — 1x MSAA, linear radiance clipped to 8 bits, the same pixels on every machine and in every frame. This is the picture the pixel suites assert and what this verb has always returned. IT CARRIES NO SCREEN-SPACE REFLECTIONS, NO AMBIENT OCCLUSION, NO BLOOM, NO SMAA AND NO TONEMAP, BY DESIGN, and that is worth knowing before using this verb to diagnose a picture: two plain shots taken with reflections on and off are bit-identical, which says nothing about the renderer (a 2026-09-15 diagnosis read exactly that as \"screenshots have lost SSR\"). Ask for \"scene\" when the question is about what the user sees. "
           "\"tonemap\" is the THUMBNAIL picture: the deterministic filmic grade only (the scene's exposure as a constant; no bloom, no ambient occlusion, no SMAA, no reflections), so a bright scene does not clip to white and a sweep of hundreds stays cheap. "
@@ -3047,6 +3048,20 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
                      .arg(g.toString(), IEditorViewport::gradeWords()));
             return out;
         }
+    }
+
+    // A SCREENSHOT IS THE EDITOR'S PICTURE AT REST (PHOTON-FIELD-ROTATE-1; the
+    // product rule): GI that still owes work - a rebuild, a settle injection, the
+    // irradiance field's refinement passes - would photograph a picture that is
+    // still moving, and two shots of one still scene would differ. Frames are
+    // stepped at dt 0 (the document's clock does not move: animation, physics and
+    // particles stay at the instant the script asked for) until the ONE settle
+    // predicate, world.giStatus().giAtRest, holds - bounded, because a scene whose
+    // lights move every frame never comes to rest.
+    if (!playerHasTheScreen()) {
+        static const int kScreenshotSettleFrames = 2000;
+        for (int i = 0; i < kScreenshotSettleFrames && !host.viewport->giStatus().giAtRest; ++i)
+            host.viewport->renderFrames(1, 0.0f);
     }
 
     // The player page owns the screen: photograph IT, through the player's own

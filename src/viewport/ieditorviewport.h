@@ -648,13 +648,15 @@ public:
         /// refused for reasons no caller can see (no voxel volume to feed the
         /// field, DDGI media not staged, a construction that threw), so a
         /// scene asking for it and a scene getting it are two different
-        /// readings. `ifdConverged` is false only while a progressive
-        /// re-converge after a light move is still in flight — a field is
-        /// converged on the frame it binds.
+        /// readings. `ifdTargetSamples` / `ifdRefinesOwed` are the field's
+        /// convergence schedule (engine Types.h), and `giAtRest` is THE settle
+        /// predicate: nothing the scene's GI owes will change the picture.
         bool ifdBound = false;
         int  ifdProbes = 0;
-        bool ifdConverged = false;
         int  ifdProbesPerFrame = 0;
+        unsigned ifdTargetSamples = 0;
+        unsigned ifdRefinesOwed = 0;
+        bool giAtRest = true;
         /// WHERE THE FIELD IS — the corners of the volume its probes span. The
         /// scene's fitted box in the single-volume arm; cascade 0's box, which
         /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).

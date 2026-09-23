@@ -308,7 +308,7 @@ int main()
     CHECK(b.scene->setGlobalIllumination(on), "DDGI arms");
     const GiStatus st = b.scene->giStatus();
     CHECK(st.ifdBound, "the field is bound (the leak has a source)");
-    std::printf("   field: %d probes, converged %d\n", st.ifdProbes, int(st.ifdConverged));
+    std::printf("   field: %d probes, GI at rest %d\n", st.ifdProbes, int(st.giAtRest));
     const Reading ddgiOn = measure(e, b);
     showStats("roof, field ON", ddgiOn.roof);
     showStats("cube 2 m above, field ON", ddgiOn.cubeA);

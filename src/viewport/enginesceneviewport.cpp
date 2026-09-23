@@ -2636,7 +2636,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.reusedLastRefresh    = st.reusedLastRefresh;
     out.ifdBound             = st.ifdBound;
     out.ifdProbes            = st.ifdProbes;
-    out.ifdConverged         = st.ifdConverged;
+    out.ifdTargetSamples     = st.ifdTargetSamples;
+    out.ifdRefinesOwed       = st.ifdRefinesOwed;
+    out.giAtRest             = st.giAtRest;
     out.ifdProbesPerFrame    = st.ifdProbesPerFrame;
     out.ifdMin               = q(st.ifdMin);
     out.ifdMax               = q(st.ifdMax);

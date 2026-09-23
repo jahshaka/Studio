@@ -69,6 +69,22 @@ static void show(const char *what, const Colour &c)
 /// FNV-1a over the whole frame, quantized to 8 bits per channel — the same
 /// "byte-identical" question the spike asked across its 8 processes, in the
 /// form a subprocess can print and its parent can compare.
+/// Every probe of the field holds at least one sample: the event's own pass is done
+/// (the refinements it owes are what `ifdRefinesOwed` has left, below the target).
+static bool fieldWhole(const GiStatus &s)
+{
+    return s.ifdProbes > 0 && s.ifdRefinesOwed < s.ifdTargetSamples;
+}
+
+/// THE ONE SETTLE PREDICATE, waited on in frames (GiStatus::giAtRest). Returns the
+/// frames it took, -1 if it never came.
+static int settleGi(Engine *e, Scene *s, int cap = 4000)
+{
+    int n = 0;
+    for (; n < cap && !s->giStatus().giAtRest; ++n) e->renderOneFrame();
+    return s->giStatus().giAtRest ? n : -1;
+}
+
 static unsigned long long frameHash(const Image &img)
 {
     unsigned long long h = 1469598103934665603ull;
@@ -169,6 +185,7 @@ static int runHashChild()
     gi.ddgi = GiToggle::On;
     if (!r.scene->setGlobalIllumination(gi)) { std::printf("HASH ERROR gi\n"); return 1; }
     render(engine.get(), 4);
+    if (settleGi(engine.get(), r.scene) < 0) { std::printf("HASH ERROR rest\n"); return 1; }
     Image img;
     r.view->readPixels(img);
     std::printf("HASH %llu\n", frameHash(img));
@@ -236,7 +253,8 @@ int main(int argc, char **argv)
     {
         GiStatus st = r.scene->giStatus();
         CHECK(st.vctBound && !st.ifdBound, "plain VCT binds no irradiance field");
-        CHECK(st.ifdProbes == 0 && st.ifdProbesPerFrame == 0 && !st.ifdConverged,
+        CHECK(st.ifdProbes == 0 && st.ifdProbesPerFrame == 0 && st.ifdTargetSamples == 0 &&
+                  st.ifdRefinesOwed == 0,
               "giStatus reports no field at all with ddgi off");
     }
 
@@ -252,12 +270,13 @@ int main(int argc, char **argv)
     show("floor  DDGI intensity 1.0", rawFloor);
     show("far    DDGI intensity 1.0", rawFar);
     GiStatus st = r.scene->giStatus();
-    std::printf("   giStatus: ifdBound=%d ifdProbes=%d ifdConverged=%d ifdProbesPerFrame=%d\n",
-                int(st.ifdBound), st.ifdProbes, int(st.ifdConverged), st.ifdProbesPerFrame);
+    std::printf("   giStatus: ifdBound=%d ifdProbes=%d ifdRefinesOwed=%u/%u ifdProbesPerFrame=%d\n",
+                int(st.ifdBound), st.ifdProbes, st.ifdRefinesOwed, st.ifdTargetSamples,
+                st.ifdProbesPerFrame);
     CHECK(st.ifdBound, "the irradiance field is BOUND to the PBR shader");
     CHECK(st.vctBound, "VCT stays bound (the field replaces its diffuse, not the whole arm)");
     CHECK(st.ifdProbes == 8192, "the field holds 8192 probes");
-    CHECK(st.ifdConverged, "a field is CONVERGED on the frame it binds (built in one dispatch)");
+    CHECK(fieldWhole(st), "a field is WHOLE on the frame it binds (every probe sampled by the build)");
     CHECK(st.ifdProbesPerFrame > 0 && (st.ifdProbesPerFrame & (st.ifdProbesPerFrame - 1)) == 0,
           "the re-converge batch is a power of two (so it divides the field exactly)");
     CHECK(st.ifdProbes % st.ifdProbesPerFrame == 0,
@@ -379,8 +398,16 @@ int main(int argc, char **argv)
     CHECK(zeroFloor.r < calFloor.r - 0.02f, "intensity 0 is darker than the calibrated default");
 
     // ---- 3. determinism ---------------------------------------------------
+    // "Converged" is the ONE settle predicate (giAtRest): the field is a mean over
+    // rotated samples and refines for K passes after a build, so two frames are
+    // byte-identical once it owes nothing - not three frames after the build.
     CHECK(r.scene->setGlobalIllumination(ddgi), "re-push the calibrated params");
     render(e);
+    {
+        const int n = settleGi(e, r.scene);
+        std::printf("   GI came to rest %d frames after the re-push\n", n);
+        CHECK(n >= 0, "GI comes to rest after a build (the field's refinements paid)");
+    }
     r.view->readPixels(img);
     const unsigned long long h1 = frameHash(img);
     render(e);
@@ -389,6 +416,7 @@ int main(int argc, char **argv)
     CHECK(h1 == h2, "a converged bound field renders byte-identical frames");
     CHECK(r.scene->setGlobalIllumination(ddgi), "re-push identical DDGI params again");
     render(e);
+    CHECK(settleGi(e, r.scene) >= 0, "...and GI comes to rest again");
     r.view->readPixels(img);
     CHECK(frameHash(img) == h1,
           "rebuilding the field from identical params reproduces the frame byte for byte");
@@ -415,8 +443,8 @@ int main(int argc, char **argv)
         const bool ok = r.scene->setGlobalIllumination(gb);
         render(e, 2);
         st = r.scene->giStatus();
-        std::printf("   budget %3d -> ifdProbesPerFrame %d (converged %d)\n",
-                    b, st.ifdProbesPerFrame, int(st.ifdConverged));
+        std::printf("   budget %3d -> ifdProbesPerFrame %d (refines owed %u of target %u)\n",
+                    b, st.ifdProbesPerFrame, st.ifdRefinesOwed, st.ifdTargetSamples);
         CHECK(ok && st.ifdBound, ("the field survives update budget " + std::to_string(b)).c_str());
         if (b == 0) {
             CHECK(st.ifdProbesPerFrame == 0,
@@ -448,7 +476,8 @@ int main(int argc, char **argv)
         r.view->readPixels(img);
         CHECK(frameHash(img) == p1, "a PAUSED field renders frame N+1 byte-identical to frame N");
         st = r.scene->giStatus();
-        CHECK(st.ifdConverged, "a paused field is still converged (the build converged it)");
+        CHECK(fieldWhole(st) && st.giAtRest && st.ifdRefinesOwed == 0,
+              "a paused field is whole and AT REST (it targets one sample and owes nothing)");
     }
 
     // ---- 5. the exact convergence frame count ----------------------------
@@ -463,20 +492,35 @@ int main(int argc, char **argv)
         const int batch = st.ifdProbesPerFrame;
         const int probes = st.ifdProbes;
         const int expected = (probes + batch - 1) / batch;
-        CHECK(st.ifdConverged, "converged before the light moves");
+        CHECK(fieldWhole(st), "whole before the light moves");
+        CHECK(settleGi(e, r.scene) >= 0, "...and at rest");
         CHECK(r.scene->refreshGiLighting(true), "refreshGiLighting (the light-only cheap path)");
         st = r.scene->giStatus();
-        CHECK(!st.ifdConverged, "the cheap path re-arms convergence (reset, not rebuild)");
+        CHECK(!fieldWhole(st), "the cheap path re-arms the field's pass (reset, not rebuild)");
+        CHECK(!st.giAtRest, "A LIGHT WRITE TAKES GI OUT OF REST");
         int frames = 0;
         while (frames < expected + 8) {
             e->renderOneFrame();
             ++frames;
-            if (r.scene->giStatus().ifdConverged) break;
+            if (fieldWhole(r.scene->giStatus())) break;
         }
         std::printf("   re-converge took %d frames at %d probes/frame (expected %d)\n",
                     frames, batch, expected);
         CHECK(frames == expected,
               "the re-converge takes EXACTLY ceil(probes / batch) frames");
+        // ...and GI is AT REST again only after the K - 1 refinement passes the
+        // change owes, counted in frames: each pass is ceil(probes / batch) frames.
+        const int k = int(r.scene->giStatus().ifdTargetSamples);
+        int more = 0;
+        while (more < (k + 2) * expected && !r.scene->giStatus().giAtRest) {
+            e->renderOneFrame();
+            ++more;
+        }
+        std::printf("   at rest %d frames after the pass (K = %d: %d refinement passes of %d frames)\n",
+                    more, k, k - 1, expected);
+        CHECK(r.scene->giStatus().giAtRest && more >= (k - 1) * expected - 1 &&
+                  more <= (k - 1) * expected + 2,
+              "GI COMES BACK TO REST AFTER THE K - 1 REFINEMENTS, counted in frames");
     }
 
     // ---- 5b. EPIC'S BOUNCES COLUMN (the Photon tier table, option (b)) ------
@@ -545,8 +589,8 @@ int main(int argc, char **argv)
     r.scene->refreshGlobalIllumination();
     render(e, 3);
     st = r.scene->giStatus();
-    CHECK(st.ifdBound && st.ifdConverged,
-          "a full refresh under a live field rebuilds it, bound and converged");
+    CHECK(st.ifdBound && fieldWhole(st),
+          "a full refresh under a live field rebuilds it, bound and whole");
     // (b) a rebuild over the refreshed arm.
     CHECK(r.scene->setGlobalIllumination(ddgi), "a rebuild over the refreshed arm succeeds");
     render(e, 2);

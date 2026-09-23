@@ -388,6 +388,21 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         return 1;
     }
     window.viewport()->renderFrames(240, 1.0f / 60.0f);
+    // ...AND UNTIL GI IS AT REST (PHOTON-FIELD-ROTATE-1): the 240 frames move the
+    // document; the ONE settle predicate then decides when the picture has stopped
+    // moving - the cascade steps, the chain's settle and the irradiance field's
+    // refinement passes all paid. At dt 0, so the document's clock stays where
+    // the 240 frames left it. (Pose 2 used to be captured at a fixed frame count
+    // with a 23-40 frame margin over the field's convergence - determinism by
+    // luck, not by construction.)
+    int restFrames = 0;
+    for (; restFrames < 4000 && !window.viewport()->giStatus().giAtRest; ++restFrames)
+        window.viewport()->renderFrames(1, 0.0f);
+    if (!window.viewport()->giStatus().giAtRest) {
+        std::fprintf(stderr, "engine-selftest: pose 2's GI never came to rest (%d frames)\n",
+                     restFrames);
+        return 1;
+    }
     app.processEvents();
     QImage img2 = window.viewport()->takeScreenshot(256, 256);
     if (img2.isNull() || !img2.save(pose2Png, "PNG")) {
@@ -400,7 +415,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     const QString hash2 = fileSha256(pose2Png);
     std::fprintf(stderr, "engine-selftest: pose 2 sha256 %s (%s)\n",
                  qPrintable(hash2), qPrintable(pose2Png));
-    std::fprintf(stderr, "engine-selftest: pose 2 (camera +5 m in x, turned, 240 frames settled): "
+    std::fprintf(stderr, "engine-selftest: pose 2 (camera +5 m in x, turned, 240 frames + GI at rest): "
                          "%dx%d image, centre pixel (%d,%d,%d) -> %s\n",
                  img2.width(), img2.height(), centre2.red(), centre2.green(), centre2.blue(),
                  differs2 ? "PASS" : "FAIL");

@@ -202,9 +202,9 @@ static void measure(Engine *e, Slab &o, const char *what, float &inside, float &
     outside = bandLum(img, edgeCol - 18u, edgeCol - 3u);
     inside  = bandLum(img, edgeCol + 3u, edgeCol + 18u);
     std::printf("   %-28s volume x %.2f .. %.2f (edge col %u)  outside %.4f  inside %.4f  "
-                "step %.2fx  [ifd %d probes %d conv %d]\n", what, st.boundsMin.x, st.boundsMax.x,
+                "step %.2fx  [ifd %d probes %d atRest %d]\n", what, st.boundsMin.x, st.boundsMax.x,
                 edgeCol, outside, inside, outside > 1e-5f ? inside / outside : 0.0f,
-                st.ifdBound ? 1 : 0, st.ifdProbes, st.ifdConverged ? 1 : 0);
+                st.ifdBound ? 1 : 0, st.ifdProbes, st.giAtRest ? 1 : 0);
 }
 
 int main(int argc, char **argv)

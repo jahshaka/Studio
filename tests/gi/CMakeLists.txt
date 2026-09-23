@@ -338,6 +338,18 @@ add_dependencies(test_gi_ddgi_ambient JahshakaEngineMedia)
 add_test(NAME gi.ddgi_ambient COMMAND test_gi_ddgi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.cone_corner_target — THE CONE'S CORNER OVER-READ (PHOTON-FIELD-ROTATE-1, F2):
+# gi.ddgi_ambient's corner used to compare the field with the cone reference; it is
+# anchored on the fixture's ANALYTIC now, and the cone reference - which reads a
+# 2.2 m wall's foot at 93.9 % of open floor against the analytic 82 % (+11.7
+# points: the cone's footprint against a wall edge) - is this row, against the same
+# analytic and the same bar. LABEL `photon-target`: it runs in every scoped
+# selection and PRINTS its value, and it does NOT decide a gate. The lane that
+# makes the cone read a corner right deletes the label.
+add_test(NAME gi.cone_corner_target COMMAND test_gi_ddgi_ambient --cone-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_corner_target PROPERTIES TIMEOUT 180
+                     LABELS "engine;photon-target")
 
 # gi.hidden_volume — WHAT THE AUTOMATIC LIT VOLUME MAY CONTAIN (SMOKE_FIX S12 +
 # S14): a hidden object stops bouncing light and stops defining the volume, and

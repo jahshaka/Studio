@@ -40,6 +40,13 @@
 
 using namespace jahshaka::engine;
 
+/// Every probe of the irradiance field holds at least one sample (the event's own
+/// pass is done; `ifdRefinesOwed` counts the passes left, the running one included).
+static bool fieldWhole(const GiStatus &s)
+{
+    return s.ifdProbes > 0 && s.ifdRefinesOwed < s.ifdTargetSamples;
+}
+
 static int failures = 0;
 
 #define CHECK(cond, msg)                                                        \
@@ -334,18 +341,18 @@ int main(int argc, char **argv)
     CHECK(scene->setGlobalIllumination(withField), "the chain builds again with the field on");
     render(e, 6);
     st = scene->giStatus();
-    std::printf("   field: bound %d, probes %d, converged %d\n",
-                int(st.ifdBound), st.ifdProbes, int(st.ifdConverged));
+    std::printf("   field: bound %d, probes %d, whole %d\n",
+                int(st.ifdBound), st.ifdProbes, int(fieldWhole(st)));
     CHECK(st.ifdBound && st.ifdProbes > 0, "the irradiance field is bound");
-    CHECK(st.ifdConverged, "...and converged on the frame it bound");
+    CHECK(fieldWhole(st), "...and whole on the frame it bound");
     Image fieldA, fieldB;
     jumped(-3.0f, fieldA);
-    CHECK(scene->giStatus().ifdConverged, "the field is converged after an at-rest injection");
+    CHECK(fieldWhole(scene->giStatus()), "the field is whole after an at-rest injection");
     jumped(3.0f, fieldB);
     const float moved = worstDiff(fieldA, fieldB);
     std::printf("   the lamp moved 6 m: the picture moved %.2f/255\n", moved);
     CHECK(moved > 4.0f, "A LIGHT THAT MOVED REACHES THE FIELD (it re-integrated)");
-    CHECK(scene->giStatus().ifdConverged, "...and the field is converged again");
+    CHECK(fieldWhole(scene->giStatus()), "...and the field is whole again");
 
     // ---- 6. A CAMERA WALK THAT COMES BACK LEAVES THE CHAIN WHERE IT WAS ---
     // (LAMPREST-3.) A cascade rebuild ends with ONE injection of THAT cascade
@@ -477,12 +484,12 @@ int main(int argc, char **argv)
     render(e, 60);
     shot(fieldAfter);
     const GiStatus fieldSt = scene->giStatus();
-    std::printf("   with the field on: %.2f/255, converged %d (settles %lld -> %lld)\n",
-                worstDiff(fieldBefore, fieldAfter), int(fieldSt.ifdConverged),
+    std::printf("   with the field on: %.2f/255, whole %d (settles %lld -> %lld)\n",
+                worstDiff(fieldBefore, fieldAfter), int(fieldWhole(fieldSt)),
                 fieldSettles, fieldSt.chainSettles);
     CHECK(fieldSt.chainSettles > fieldSettles, "the walk owed a settle with the field on too");
-    CHECK(fieldSt.ifdConverged,
-          "THE FIELD IS CONVERGED AFTER THE SETTLE — its last step re-integrates "
+    CHECK(fieldWhole(fieldSt),
+          "THE FIELD IS WHOLE AFTER THE SETTLE — its last step re-integrates "
           "the field over a chain that has finished moving");
     CHECK(worstDiff(fieldBefore, fieldAfter) <= 1.5f,
           "...and the picture with the field on comes back to where it was");
