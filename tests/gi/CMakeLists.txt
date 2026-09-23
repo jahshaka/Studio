@@ -1271,3 +1271,47 @@ add_test(NAME gi.voxel_feed COMMAND test_gi_voxel_feed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_feed PROPERTIES
     TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
+
+# gi.env_cone — THE ONE ENVIRONMENT'S CONE LOOKUP, MEASURED (PHOTON-ENV-1).
+# jahEnvCone reads the GGX-prefiltered sky chain at the mip whose lobe matches a
+# cone; this suite measures it against a 64-direction integral of the cube over
+# the same cone on the shipped (analytic) sky at the renderer's three apertures
+# (Engine::environmentCones: one job built from the shared file). Its own binary:
+# one engine per process.
+add_executable(test_gi_env_cone test_gi_env_cone.cpp)
+set_target_properties(test_gi_env_cone PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_env_cone PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_env_cone PRIVATE JahshakaEngine)
+add_dependencies(test_gi_env_cone JahshakaEngineMedia)
+add_test(NAME gi.env_cone COMMAND test_gi_env_cone
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_cone PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# gi.env_one — ONE ENVIRONMENT, FOUR READERS, ONE NUMBER (PHOTON-ENV-1): a matte
+# box under a uniform sky reads rho L energyFactor(1) outside any volume, through
+# the voxel cones' escape, through the irradiance field and through the gather's
+# ray misses; no Sky Light is no environment for any of them; the SH lookup is
+# camera-independent; a sun disc in the probes reaches neither the SH nor the
+# cube. Its own binary: the field and the voxel lighting bind process-wide.
+add_executable(test_gi_env_one test_gi_env_one.cpp)
+set_target_properties(test_gi_env_one PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_env_one PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_env_one PRIVATE JahshakaEngine)
+add_dependencies(test_gi_env_one JahshakaEngineMedia)
+add_test(NAME gi.env_one COMMAND test_gi_env_one
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)

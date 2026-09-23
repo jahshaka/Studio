@@ -313,12 +313,12 @@ void apply(const iris::ScenePtr &scene)
 void pushAmbient(jahshaka::engine::Scene *scene)
 {
     if (!scene) return;
-    // BOTH HALVES (Engine.h, setEnvironmentLightScale): the nine bands are the
+    // BOTH HALVES (Engine.h, setEnvironmentLight): the nine bands are the
     // environment's diffuse contribution, the gain is its specular one. A host
     // that pushes only the first leaves a mirror reflecting an environment that
     // lights nothing.
     scene->setAmbientSh(ambientSh());
-    scene->setEnvironmentLightScale(1.0f);
+    scene->setEnvironmentLight(jahshaka::engine::Colour(1.0f, 1.0f, 1.0f, 1.0f));
 }
 
 QVariantMap describe()
