@@ -767,11 +767,11 @@ int main(int argc, char **argv)
     CHECK(shownRowCount(panel) == 0,
           "properties_filter: a text nothing matches leaves no ROW on screen (and says so "
           "in the counts), rather than showing everything");
-    // NINE since the World panel grew its VR section (lane VR-WORLD-1): World,
-    // Sky, World Mode, Photon, Post Process, Anti-Aliasing, Shadows, VR, Fog.
-    CHECK(visibleSections(panel).size() == 9,
+    // TEN since the World panel grew its Clouds section (CLOUDS-2D-1): World,
+    // Sky, Clouds, World Mode, Photon, Post Process, Anti-Aliasing, Shadows, VR, Fog.
+    CHECK(visibleSections(panel).size() == 10,
           QStringLiteral("properties_filter: ...while every section header stays, greyed "
-                         "and closed (%1 of 9)").arg(visibleSections(panel).size())
+                         "and closed (%1 of 10)").arg(visibleSections(panel).size())
               .toUtf8().constData());
     panel->setPropertiesFilter(Tab::World, QString());
     turn();

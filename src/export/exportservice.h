@@ -32,6 +32,8 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 
+namespace jahshaka { namespace engine { class Scene; } }
+
 class ExportService
 {
 public:
@@ -58,9 +60,13 @@ public:
 
     /// Exports `scene` into `outDir` (created if missing). `sceneName` titles
     /// the viewer page. Pure document consumer — safe headless.
+    /// `renderer` is the scene's live engine scene when there is one: the one
+    /// thing it is used for is baking the sky's cloud layer into the exported
+    /// sky image (CLOUDS-2D-1) — null (headless) exports without the layer.
     static WebExportResult exportWeb(const iris::ScenePtr &scene,
                                      const QString &sceneName,
-                                     const QString &outDir);
+                                     const QString &outDir,
+                                     jahshaka::engine::Scene *renderer = nullptr);
 
     /// GLB payloads above this refuse to inline into index.html (audit §3).
     static constexpr qint64 kInlineCeilingBytes = 75ll * 1024 * 1024;

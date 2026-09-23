@@ -11,6 +11,11 @@ For more information see the LICENSE file
 
 #include "export/exportservice.h"
 
+#include <cstring>
+#include <vector>
+
+#include "jahshaka/engine/Engine.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -49,7 +54,7 @@ QString buildViewerHtml(const QString &tpl, const QString &bundle, const QString
     return html;
 }
 
-QByteArray readmeText(const QString &sceneName, bool inlined)
+QByteArray readmeText(const QString &sceneName, bool inlined, bool cloudsBaked)
 {
     QString t;
     t += QStringLiteral("%1 — Jahshaka web export\n").arg(sceneName);
@@ -72,7 +77,13 @@ QByteArray readmeText(const QString &sceneName, bool inlined)
         "scene.glb    The scene as standard binary glTF 2.0 — usable in any glTF\n"
         "             tool (Blender, three.js editor, gltf-viewer.donmccurdy.com).\n\n"
         "NOT EXPORTED\n"
-        "------------\n"
+        "------------\n");
+    if (cloudsBaked)
+        t += QStringLiteral(
+            "The sky's cloud layer is BAKED into the sky image: a still picture of the\n"
+            "editor's sky, not a live layer. The clouds do not move and cast no shadow\n"
+            "in the viewer.\n\n");
+    t += QStringLiteral(
         "Planar reflections (objects marked \"Planar Reflector\" in the editor) are\n"
         "recorded in the file as extras.jah.planarReflector, but the viewer ignores\n"
         "them: those surfaces render with their ordinary material.\n\n"
@@ -87,7 +98,8 @@ QByteArray readmeText(const QString &sceneName, bool inlined)
 
 ExportService::WebExportResult ExportService::exportWeb(const iris::ScenePtr &scene,
                                                         const QString &sceneName,
-                                                        const QString &outDir)
+                                                        const QString &outDir,
+                                                        jahshaka::engine::Scene *renderer)
 {
     WebExportResult r;
     if (outDir.trimmed().isEmpty()) { r.error = QStringLiteral("no output directory given"); return r; }
@@ -99,7 +111,22 @@ ExportService::WebExportResult ExportService::exportWeb(const iris::ScenePtr &sc
     }
 
     const QString title = sceneName.isEmpty() ? QStringLiteral("Jahshaka Scene") : sceneName;
-    GltfExporter::Result g = GltfExporter::exportScene(scene, title);
+    // THE SKY BAKE (CLOUDS-2D-1): the engine renders the environment capture's
+    // picture — the sky and its cloud layer — into a lat-long image.
+    GltfExporter::SkyBaker bakeSky;
+    if (renderer)
+        bakeSky = [renderer](int w, int h) {
+            std::vector<unsigned char> rgba;
+            if (w <= 0 || h <= 0 ||
+                !renderer->renderSkyEquirect(unsigned(w), unsigned(h), 512u, 1.0f, rgba))
+                return QImage();
+            QImage img(w, h, QImage::Format_RGBA8888);
+            for (int y = 0; y < h; ++y)
+                std::memcpy(img.scanLine(y), &rgba[size_t(y) * size_t(w) * 4u], size_t(w) * 4u);
+            return img;
+        };
+    GltfExporter::Result g = GltfExporter::exportScene(scene, title, bakeSky);
+    const bool cloudsBaked = g.cloudsBaked;
     if (!g.ok) { r.error = g.error; return r; }
 
     r.dir = dir.absolutePath();
@@ -159,7 +186,7 @@ ExportService::WebExportResult ExportService::exportWeb(const iris::ScenePtr &sc
         return r;
     }
 
-    writeFile(dir.filePath(QStringLiteral("README.txt")), readmeText(title, r.inlined));
+    writeFile(dir.filePath(QStringLiteral("README.txt")), readmeText(title, r.inlined, cloudsBaked));
 
     // ambient audio: copy beside the export for the (future) served viewer.
     if (!g.audioSourcePath.isEmpty() && QFileInfo::exists(g.audioSourcePath)) {

@@ -97,6 +97,25 @@ QVector<sceneprops::Field> buildFields()
             s->sunDiscSize = float(qBound(double(iris::kMinSunDiscSize), v.toDouble(),
                                           double(iris::kMaxSunDiscSize)));
         });
+    // THE CLOUD LAYER (CLOUDS-2D-1), whole — one value, like the sky block, so
+    // one gesture or one world.clouds call is one step. The weather map rides
+    // beside the block as the PATH of the pixels that were loaded for its guid:
+    // this table has no asset resolver, and restoring a guid without its
+    // pixels would leave the renderer showing the other map.
+    add("clouds", [](const ScenePtr &s) {
+            QVariantMap m = s->clouds.toJson().toVariantMap();
+            if (s->cloudWeatherMap) m.insert("weatherPath", s->cloudWeatherMap->source);
+            return QVariant(m);
+        },
+        [](const ScenePtr &s, const QVariant &v) {
+            const QVariantMap m = v.toMap();
+            s->clouds = iris::CloudLayer::fromJson(QJsonObject::fromVariantMap(m));
+            const QString path = m.value("weatherPath").toString();
+            if (s->clouds.weatherMapGuid.isEmpty() || path.isEmpty())
+                s->cloudWeatherMap.reset();
+            else if (!s->cloudWeatherMap || s->cloudWeatherMap->source != path)
+                s->cloudWeatherMap = iris::Texture2D::load(path, false);
+        });
     // HARDWARE RAY TRACING (ledger §425) — the project's own state, as the
     // enum's int. Auto is 0, so a blob that lost the value restores the
     // documented default rather than the most restrictive state; anything

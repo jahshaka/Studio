@@ -156,6 +156,11 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // does. `vr.locomotion` overrides are a SESSION's and are never written.
     vrworld::write(scene, sceneObj);
     sceneObj["skyData"] = skyDefs;
+    // THE CLOUD LAYER (CLOUDS-2D-1) — written ONLY when it is not the default,
+    // so a scene nobody gave clouds is byte-for-byte the file it was before the
+    // layer existed (the reader reads an absent block as the default).
+    if (scene->clouds != iris::CloudLayer())
+        sceneObj["clouds"] = scene->clouds.toJson();
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;

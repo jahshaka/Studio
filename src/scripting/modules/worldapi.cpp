@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include <functional>
 #include "services/vrworld.h"
 #include "services/worldmodes.h"
+#include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/Types.h"
 #include "services/looks.h"
 #include "commands/scenelookscommand.h"
@@ -359,6 +360,11 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "sunDisc", "world.sunDisc({visible, inProbes, size}) -> {visible, inProbes, size}",
           "THE SUN DISC — the bright disc drawn in the sky where the scene's sun light points. It is the SUN's, not the sky's: one mechanism, drawn over EVERY sky type (colour, gradient, realistic, equirect, cubemap), and it moves when the light is rotated. `visible` (default true) is the scene-level switch. `size` is its ANGULAR DIAMETER IN DEGREES, 0.1 to 10, default 2.12: the real sun is 0.53 degrees across, but a photograph's sun looks several times larger because glare in the lens and in the eye spreads the saturated core, so the default is four times the physical angle. THE SIZE COSTS NO LIGHT: the disc's radiance is normalised per solid angle, so a wider disc spreads the SAME energy over more of the sky — bloom and an `inProbes` capture read the same total at every size, and only the sun light's own colour and intensity say how bright it is. NOTE for image skies: an equirect or cubemap sky usually has a sun PAINTED into it, and the disc will only line up with it if you aim the sun light at it — otherwise the scene shows two suns, so either align the light or turn the disc off here. `inProbes` (default FALSE) says whether reflection-probe captures contain it: off, because the sun's energy already reaches glossy surfaces through the directional light's own specular highlight, and capturing the disc as well paints a SECOND sun on everything the probes light. Turn it on if you want probe-lit mirrors to show the disc. A sun that has set draws no disc at all. Called with no argument it reads. One undo step.",
           Needs::Document },
+        { "clouds", "world.clouds({enabled?, coverage?, density?, speed?, direction?, altitude?, shadow?, weatherMap?}) -> {enabled, coverage, density, speed, direction, altitude, shadow, weatherMap, drawsOver, live}",
+          "THE 2D CLOUD LAYER — one sheet of cloud at a fixed altitude, drawn over the sky (HDRP's Cloud Layer is the model). OFF by default, and a scene whose layer is at the defaults writes nothing into its file. It is drawn over the COLOUR, GRADIENT and REALISTIC skies only: an equirectangular or cubemap sky is a photograph with its own clouds in it, and the layer is not drawn over one (`drawsOver` says whether the current sky takes it). It is part of the SKY: the Sky Light's ambient and every reflection see it, because the renderer's environment capture photographs it — so an overcast sky changes the scene's ambient light, and a full overcast changes the exposure too (correct: the key moves). It also SHADOWS THE GROUND: the sun's light on a surface is multiplied by the fraction of the beam that crosses the sheet, where the sun ray from that surface meets it (a material that receives no shadows, and a sun that casts none, are not shaded — as for every shadow). It runs at every quality tier and in VR — it is the VR cloud. There is no parallax inside it and the camera never enters it; volumetric clouds are a separate, parked program. "
+          "`enabled` (default false) switches it. `coverage` 0..1 (default 0.5) is how much of the sky is cloud — 0 clear, 1 an overcast deck. `density` 0..4 (default 1) is how opaque a covered patch is: its underside darkness and its shadow. `speed` 0..100 metres per second of SCENE time (default 10): the renderer's own clock, so a paused scene holds its clouds still and a scripted frame is reproducible. `direction` 0..360 degrees (default 0) is the heading the wind blows TOWARDS, from +X turning towards -Z. `altitude` 500..8000 metres (default 2000) is the ALTITUDE LOOK: the sheet lies over a curved earth, so a low layer fills the sky to the horizon and a high one stays overhead, and a low sun throws the ground shadow sideways by altitude / tan(elevation). `shadow` 0..1 (default 1) scales how much of the sheet's transmittance reaches the sun's light on the ground. `weatherMap` is an image asset guid (assets.list({type:\"texture\"})) whose red channel scales the coverage over one 16 km tile of the sheet — white lets clouds form, black keeps the sky clear — or \"\" to clear it. Values outside a dial's band are clamped, and the answer reports what the scene holds. An unknown key, a value that is not a number, or a weatherMap that is not a stored texture asset is refused and nothing is written. One undo step. "
+          "`live` is what the renderer is doing with it (absent without an engine viewport): `drawn`, and `reason` when not (\"off\", \"imageSky\", \"noSky\", \"media\"); `fieldBakes`, how many times the layer's optical-depth field has been rebuilt (a coverage, density or weather-map change rebuilds it; wind and shadow never do); `changeCaptures` and `scrollCaptures`, the environment re-captures it has asked for — at once on a change that moves the sky's picture, and every `capturePeriodFrames` drawn frames while it scrolls (the ambient follows a moving sheet on that cadence, never per frame); `clockTicks`, the drawn frames the sheet's clock has advanced (one per frame, never more); `scroll`, the sheet's current offset in metres; and `skyMean`, the environment capture's mean radiance (its SH band 0, linear, before the Sky Light scales it) — the number that moves when the clouds change the sky's light.",
+          Needs::Document },
         { "rayTracing", "world.rayTracing([\"off\"|\"auto\"|\"on\"]) -> \"off\"|\"auto\"|\"on\"",
           "HARDWARE RAY TRACING FOR THIS PROJECT, saved with the scene and travelling with it (owner, 2026-09-15). Three states, and the first thing to know is that NOTHING can force ray hardware onto a machine that has none: this row says what the project was authored for, and the renderer meets it with what the machine can do. \"off\" never traces, even where the GPU can — what a scene that must look and cost the SAME everywhere asks for. \"auto\" (the default) traces where the machine can and falls back silently everywhere else: the same file looks right on a ray-capable desktop and on a Mac, and nobody has to think about it. \"on\" means the scene was AUTHORED for rays: it renders exactly like auto — traces where it can, falls back where it cannot — and additionally raises a scene issue in the editor's error bar (\"this project expects hardware ray tracing; this machine has none\") so the author learns that this machine is not showing them what they built. On and auto therefore render the same picture; on is the one that TELLS YOU when the machine falls short. Called with no argument it reads the project's state. Any other word is refused, loudly, rather than guessed at. One undo step, and it dirties the project like any other document edit — it is NOT an application preference (it used to be one for two days: a machine-wide switch meant the same project rendered differently depending on a setting that was not in it). What the machine actually answered is world.giStatus().rayQuery — 'available' is the device's own answer, 'enabled' whether the renderer is using it — and --no-ray-query is the diagnostic switch that makes a ray-capable box render the no-rays picture for one run.",
           Needs::Document },
@@ -478,7 +484,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "not here either: it is a world row, world.sunDisc({size}). On any other sky "
           "it is inert. It is read and written with node.property / node.setProperty.",
           Needs::Document },
-        { "get", "world.get() -> {skyLight, sunDisc, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
+        { "get", "world.get() -> {skyLight, sunDisc, clouds, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
@@ -1759,6 +1765,107 @@ QVariantMap WorldApi::sunDisc(const QVariantMap &params)
 }
 
 // ---------------------------------------------------------------------------
+// THE 2D CLOUD LAYER (CLOUDS-2D-1; SPECS/CLOUDS_ASSESSMENT.md option C0)
+// ---------------------------------------------------------------------------
+// The whole authoring surface of the layer: the World panel's Clouds rows call
+// exactly this document field through the same sceneprops key ("clouds").
+QVariantMap WorldApi::clouds(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.clouds"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        static const QStringList known = {
+            QStringLiteral("enabled"),   QStringLiteral("coverage"), QStringLiteral("density"),
+            QStringLiteral("speed"),     QStringLiteral("direction"), QStringLiteral("altitude"),
+            QStringLiteral("shadow"),    QStringLiteral("weatherMap")
+        };
+        const QString refusal = refuseUnknownKeys(QStringLiteral("world.clouds"), params, known);
+        if (!refusal.isEmpty()) { fail(refusal); return out; }
+        // VALIDATED BEFORE ANYTHING IS WRITTEN (world.vr's rule): a call with
+        // one bad value writes none of the good ones.
+        iris::CloudLayer c = scene->clouds;
+        QString weatherPath = scene->cloudWeatherMap ? scene->cloudWeatherMap->source : QString();
+        if (params.contains(QStringLiteral("enabled")))
+            c.enabled = params.value(QStringLiteral("enabled")).toBool();
+        const struct { const char *key; float *field; } numbers[] = {
+            { "coverage", &c.coverage }, { "density", &c.density }, { "speed", &c.speed },
+            { "direction", &c.direction }, { "altitude", &c.altitude }, { "shadow", &c.shadow },
+        };
+        for (const auto &n : numbers) {
+            const QString key = QString::fromLatin1(n.key);
+            if (!params.contains(key)) continue;
+            bool ok = false;
+            const double v = params.value(key).toDouble(&ok);
+            if (!ok || !std::isfinite(v)) {
+                fail(QStringLiteral("world.clouds: '%1' must be a number").arg(key));
+                return out;
+            }
+            *n.field = float(v);
+        }
+        if (params.contains(QStringLiteral("weatherMap"))) {
+            const QVariant ref = params.value(QStringLiteral("weatherMap"));
+            if (ref.isNull() || ref.toString().isEmpty()) {
+                c.weatherMapGuid.clear();
+                weatherPath.clear();
+            } else {
+                if (!requireProject()) return out;
+                QString guid, path;
+                if (!resolveTexture(ref, guid, path)) {
+                    fail(QStringLiteral("world.clouds: 'weatherMap' must be a texture asset guid with "
+                                        "stored bytes (assets.list({type:\"texture\"}) lists them), "
+                                        "or \"\" to clear it"));
+                    return out;
+                }
+                c.weatherMapGuid = guid;
+                weatherPath = path;
+            }
+        }
+        c = iris::CloudLayer::clamped(c);
+        QVariantMap value = c.toJson().toVariantMap();
+        if (!c.weatherMapGuid.isEmpty() && !weatherPath.isEmpty())
+            value.insert(QStringLiteral("weatherPath"), weatherPath);
+        WorldEdit edit(scene, { QStringLiteral("clouds") });
+        sceneprops::set(scene, QStringLiteral("clouds"), value);
+        edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("Clouds"));
+    }
+    const iris::CloudLayer &c = scene->clouds;
+    out[QStringLiteral("enabled")] = c.enabled;
+    out[QStringLiteral("coverage")] = double(c.coverage);
+    out[QStringLiteral("density")] = double(c.density);
+    out[QStringLiteral("speed")] = double(c.speed);
+    out[QStringLiteral("direction")] = double(c.direction);
+    out[QStringLiteral("altitude")] = double(c.altitude);
+    out[QStringLiteral("shadow")] = double(c.shadow);
+    out[QStringLiteral("weatherMap")] = c.weatherMapGuid;
+    out[QStringLiteral("drawsOver")] = scene->skyType != iris::SkyType::EQUIRECTANGULAR &&
+                                       scene->skyType != iris::SkyType::CUBEMAP;
+    if (host.isEngineReady() && host.viewport) {
+        if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
+            const jahshaka::engine::CloudStatus st = es->cloudStatus();
+            QVariantMap live;
+            live[QStringLiteral("drawn")] = st.drawn;
+            // The document's own reason first: the renderer never hears of a
+            // layer the mirror keeps off a photograph.
+            live[QStringLiteral("reason")] =
+                (c.enabled && !out.value(QStringLiteral("drawsOver")).toBool())
+                    ? QStringLiteral("imageSky") : QString::fromStdString(st.reason);
+            live[QStringLiteral("fieldBakes")] = st.fieldBakes;
+            live[QStringLiteral("changeCaptures")] = st.changeCaptures;
+            live[QStringLiteral("scrollCaptures")] = st.scrollCaptures;
+            live[QStringLiteral("capturePeriodFrames")] = st.capturePeriodFrames;
+            live[QStringLiteral("clockTicks")] = st.clockTicks;
+            live[QStringLiteral("scroll")] = QVariantList{ double(st.scroll[0]), double(st.scroll[1]) };
+            float sh[27];
+            if (es->skyAmbientSh(sh))
+                live[QStringLiteral("skyMean")] = QVariantList{ double(sh[0]), double(sh[1]), double(sh[2]) };
+            out[QStringLiteral("live")] = live;
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // HARDWARE RAY TRACING (owner, 2026-09-15; ledger §425)
 // ---------------------------------------------------------------------------
 // A PROJECT fact, not an application preference — see the verb's doc text and
@@ -2320,6 +2427,7 @@ QVariantMap WorldApi::get()
 
     out["skyLight"] = skyLight();
     out["sunDisc"] = sunDisc(QVariantMap());
+    out["clouds"] = clouds(QVariantMap());
     out["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     out["gravity"] = scene->gravity;
     out["shadows"] = scene->shadowEnabled;

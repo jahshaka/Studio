@@ -1100,6 +1100,11 @@ set_tests_properties(gi.card_lighting PROPERTIES TIMEOUT 300 LABELS "engine")
 add_test(NAME gi.card_lighting_indirect COMMAND test_gi_cards lighting_indirect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 300 LABELS "engine")
+# CLOUDS-2D-2: the card relight's direct sun crosses the 2D cloud sheet by the
+# pixel's own factor (half at shadow 0.5 under an opaque deck, none at 1).
+add_test(NAME gi.card_clouds COMMAND test_gi_cards clouds
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_clouds PROPERTIES TIMEOUT 300 LABELS "engine")
 # PHOTON-CARDS-2 part A: the pixel's diffuse cones and the card job's are ONE
 # text (JahVoxelCones) — their answers at a point, 1 % apart at most.
 add_test(NAME gi.cone_integrator_parity COMMAND test_gi_cards cone_parity
