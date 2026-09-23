@@ -386,6 +386,17 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// key, a number that is not one, or a mode name this build does not know
 	// leaves the CONSTRUCTOR's value standing.
 	vrworld::read(scene, sceneObj);
+	// THE CLOUD LAYER (CLOUDS-2D-1). An absent block — every scene written
+	// before the layer existed, and every scene that never turned it on — is
+	// the constructor's layer, OFF; CloudLayer::fromJson gives each absent key
+	// inside a present block the constructor's value too (the reader-defaults
+	// law). The weather map is resolved here, like the sky's own image.
+	scene->clouds = iris::CloudLayer::fromJson(sceneObj.value("clouds").toObject());
+	if (!scene->clouds.weatherMapGuid.isEmpty()) {
+		const QString weather = resolveAssetPath(scene->clouds.weatherMapGuid);
+		if (QFileInfo(weather).isFile())
+			scene->cloudWeatherMap = iris::Texture2D::load(weather, false);
+	}
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
 	auto volume = sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume);
 	scene->setAmbientMusicVolume(volume);

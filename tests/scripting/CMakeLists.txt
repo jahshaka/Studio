@@ -425,6 +425,12 @@ add_script_e2e(presentation_state e2e_presentation_state.js)
 # directional light to the realistic sky's sun, the light follows the dials,
 # unlinking gives manual control back, and the link is a document field.
 add_script_e2e(sun_light e2e_sun_light.js GPU_EXCLUSIVE)   # DEVPROCESS-1: the GPU-timing lock
+# THE 2D CLOUD LAYER (CLOUDS-2D-1): the world.clouds block (defaults, clamps,
+# refusals, undo, save/reopen), coverage 0 byte-identical to no layer, the
+# environment SH moving with the coverage, the ground shadow against the sun's
+# measured direct term, the scroll and its capture cadence, an image sky
+# ignoring the block, and the export bake.
+add_script_e2e(clouds_2d e2e_clouds_2d.js)
 # SUN_AND_LIGHT_DEFAULTS_SPEC Q1b/Q1c: THE SCENE-ERROR AREA. The general
 # facility (raise / never repeat / dismiss / clear / scan) and its two first
 # customers — two directional lights fighting to be the sun, and a light whose
