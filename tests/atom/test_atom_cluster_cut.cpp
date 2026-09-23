@@ -332,6 +332,41 @@ static void roundTrip()
     CHECK(!refused.valid, "a blob whose DAG error FALLS from a child to its parent is refused");
 }
 
+// ---- 7. the measurement's local soup is EXACT ----------------------------------
+// Term 1 of the group measurement queries a LOCAL level-0 soup around the group
+// (meshbake.cpp, the fix for the whole-mesh grid's cost on long thin meshes) and
+// falls back to the whole-mesh grid past its reach; the claim is that the result is
+// the whole-mesh answer. Bake the dragon and the 40 m round bar both ways and hold
+// every group's measured error to the reference within 1e-4 (relative).
+static void localSoupIsExact(const std::vector<clusterfix::Named> &meshes)
+{
+    std::printf("\n-- the measurement's local soup against the whole-mesh reference\n");
+    for (const clusterfix::Named &n : meshes) {
+        if (n.name != "matcaps-dragon" && n.name != "round-bar-40m") continue;
+        iris::MeshBake::ClusterDagStats local, reference;
+        reference.referenceMeasure = true;
+        iris::MeshBake::buildClusterDag(n.mesh, &reference);
+        const iris::MeshClusterDag ref = n.mesh->clusterDag;
+        iris::MeshBake::buildClusterDag(n.mesh, &local);
+        const iris::MeshClusterDag &dag = n.mesh->clusterDag;
+        size_t worstGroup = 0, identical = 0;
+        double worst = 0.0;
+        const bool same = dag.groups.size() == ref.groups.size();
+        for (int g = 0; same && g < dag.groups.size(); ++g) {
+            const float a = dag.groups[g].error, b = ref.groups[g].error;
+            if (a == b) { ++identical; continue; }
+            const double rel = std::fabs(double(a) - double(b)) / std::max(double(b), 1e-30);
+            if (rel > worst) { worst = rel; worstGroup = size_t(g); }
+        }
+        std::printf("   %s: measure %.1f ms local (%d fallbacks) vs %.1f ms whole-mesh; %zu of %d group "
+                    "errors bit-identical, worst relative difference %.3g (group %zu)\n", n.name.c_str(),
+                    local.measureMs, local.localFallbacks, reference.measureMs, identical,
+                    int(dag.groups.size()), worst, worstGroup);
+        CHECK(same && worst <= 1.0e-4, "%s: every group's measured error equals the whole-mesh reference "
+              "within 1e-4 (worst %.3g)", n.name.c_str(), worst);
+    }
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -355,6 +390,7 @@ int main(int argc, char **argv)
         oneMesh(f);
     }
     CHECK(withDag >= 10u, "%zu meshes carry a DAG (the eleven shipped subjects + the two bars)", withDag);
+    localSoupIsExact(meshes);
     roundTrip();
     std::printf("\n%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;

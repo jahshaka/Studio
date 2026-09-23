@@ -140,8 +140,153 @@ static Sphere boundsOf(const MeshData &d)
     return s;
 }
 
+// ---- THE FOLD TEST: is an inside-colour pixel a hole, or the surface folded? ------
+//
+// Through a CLOSED surface no view ray can reach a back face without first
+// crossing a front face — unless the surface FOLDS (a simplified sheet crossing
+// another: a region of winding number -1). Through a HOLE it can. The two look the
+// same on the screen (the inside copy's colour), so each such pixel is decided on
+// the CPU: cast the pixel's own ray WATERTIGHT against the cut's triangles, take
+// the first hit, and evaluate the GENERALISED WINDING NUMBER of the cut just in
+// FRONT of it and just BEHIND it. The ray has crossed nothing before its first
+// hit, so in front of it the winding is the eye's (0) — unless the ray got inside
+// without a crossing, through a HOLE (then ~1). Crossing a back face from the
+// eye's region steps DOWN by one: -1 behind it is a FOLD. A front and a back
+// sheet crossed at (nearly) one depth — a contour, an intersection curve — is a
+// TIE the rasteriser broke the other way. The cut being closed (atom.cluster_cut
+// counts its open edges: zero) makes the winding an integer, so none of this is
+// a judgement call.
+struct RayCam { Vec3 eye, f, r, u; float p11 = 1.0f; unsigned w = 1, h = 1; };
+
+static RayCam rayCam(const Vec3 &eye, const Vec3 &target, float p11, unsigned w, unsigned h)
+{
+    RayCam c;
+    c.eye = eye; c.p11 = p11; c.w = w; c.h = h;
+    const float fx = target.x - eye.x, fy = target.y - eye.y, fz = target.z - eye.z;
+    const float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
+    c.f = Vec3(fx / fl, fy / fl, fz / fl);
+    Vec3 r(c.f.y * 0.0f - c.f.z * 1.0f, c.f.z * 0.0f - c.f.x * 0.0f, c.f.x * 1.0f - c.f.y * 0.0f);   // f x up
+    const float rl = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z);
+    c.r = Vec3(r.x / rl, r.y / rl, r.z / rl);
+    c.u = Vec3(c.r.y * c.f.z - c.r.z * c.f.y, c.r.z * c.f.x - c.r.x * c.f.z, c.r.x * c.f.y - c.r.y * c.f.x);
+    return c;
+}
+
+/// +1 when the ray reached the INSIDE before its first hit (winding ~1 in front
+/// of it: a HOLE), -1 when its first hit is a back face with winding -1 behind it
+/// (a FOLD), 0 when the ray hits a FRONT face first, or a front and a back sheet
+/// at (nearly) the same depth — the surface IS there along the pixel's ray,
+/// and the rasteriser's back-face fragment won a depth tie the ray does not see
+/// (at a contour, where a front and a back triangle meet at the rim at equal
+/// depth, or on an intersection curve of two interpenetrating parts).
+static int foldOrHole(const RayCam &c, unsigned px, unsigned py, const std::vector<float> &pos,
+                      const std::vector<unsigned> &idx, float extent, double *windingOut)
+{
+    const float nx = (2.0f * (float(px) + 0.5f) / float(c.w) - 1.0f) / c.p11;
+    const float ny = (1.0f - 2.0f * (float(py) + 0.5f) / float(c.h)) / c.p11;
+    double d[3] = { c.f.x + c.r.x * nx + c.u.x * ny, c.f.y + c.r.y * nx + c.u.y * ny,
+                    c.f.z + c.r.z * nx + c.u.z * ny };
+    const double dl = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    for (double &v : d) v /= dl;
+    const double o[3] = { c.eye.x, c.eye.y, c.eye.z };
+    // WATERTIGHT ray-triangle intersection (Woop, Benthin & Wald 2013): a shared
+    // edge's function is computed from the same two vertices on both sides, so it
+    // is exactly negated and a ray through the edge hits exactly one of the two
+    // triangles. A plain Moller-Trumbore can let a ray that grazes a CONTOUR slip
+    // between the front and the back triangle sharing the rim edge, and then reads
+    // a closed surface as open — which is what the first cut of this test did.
+    int kz = 0;
+    if (std::fabs(d[1]) > std::fabs(d[kz])) kz = 1;
+    if (std::fabs(d[2]) > std::fabs(d[kz])) kz = 2;
+    int kx = (kz + 1) % 3, ky = (kx + 1) % 3;
+    if (d[kz] < 0.0) std::swap(kx, ky);
+    const double Sx = d[kx] / d[kz], Sy = d[ky] / d[kz], Sz = 1.0 / d[kz];
+    double bestT = 1e300; int bestSide = 0;
+    for (size_t t = 0; t + 2 < idx.size(); t += 3) {
+        const float *a = &pos[idx[t] * 3], *b = &pos[idx[t + 1] * 3], *cc = &pos[idx[t + 2] * 3];
+        const double A[3] = { a[0] - o[0], a[1] - o[1], a[2] - o[2] };
+        const double B[3] = { b[0] - o[0], b[1] - o[1], b[2] - o[2] };
+        const double C[3] = { cc[0] - o[0], cc[1] - o[1], cc[2] - o[2] };
+        const double Ax = A[kx] - Sx * A[kz], Ay = A[ky] - Sy * A[kz];
+        const double Bx = B[kx] - Sx * B[kz], By = B[ky] - Sy * B[kz];
+        const double Cx = C[kx] - Sx * C[kz], Cy = C[ky] - Sy * C[kz];
+        const double U = Cx * By - Cy * Bx, V = Ax * Cy - Ay * Cx, W = Bx * Ay - By * Ax;
+        if ((U < 0.0 || V < 0.0 || W < 0.0) && (U > 0.0 || V > 0.0 || W > 0.0)) continue;
+        const double det = U + V + W;
+        if (det == 0.0) continue;
+        const double T = U * (Sz * A[kz]) + V * (Sz * B[kz]) + W * (Sz * C[kz]);
+        const double tt = T / det;
+        if (!(tt > 0.0) || tt >= bestT) continue;
+        bestT = tt;
+        // The FRONT (CCW) side faces the ray when the geometric normal opposes it.
+        const double e1[3] = { b[0] - a[0], b[1] - a[1], b[2] - a[2] };
+        const double e2[3] = { cc[0] - a[0], cc[1] - a[1], cc[2] - a[2] };
+        const double n[3] = { e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
+                              e1[0] * e2[1] - e1[1] * e2[0] };
+        bestSide = (n[0] * d[0] + n[1] * d[1] + n[2] * d[2]) < 0.0 ? 1 : -1;
+    }
+    if (bestT >= 1e300 || bestSide > 0) { if (windingOut) *windingOut = 0.0; return 0; }
+    const double eps = 1e-4 * double(extent);
+    const auto windingAt = [&](double tt) {
+        const double x[3] = { o[0] + d[0] * tt, o[1] + d[1] * tt, o[2] + d[2] * tt };
+        double w = 0.0;   // Van Oosterom & Strackee solid angles, / 4 pi
+        for (size_t t = 0; t + 2 < idx.size(); t += 3) {
+            double A[3], B[3], C[3];
+            for (int k = 0; k < 3; ++k) {
+                A[k] = pos[idx[t] * 3 + k] - x[k];
+                B[k] = pos[idx[t + 1] * 3 + k] - x[k];
+                C[k] = pos[idx[t + 2] * 3 + k] - x[k];
+            }
+            const double la = std::sqrt(A[0] * A[0] + A[1] * A[1] + A[2] * A[2]);
+            const double lb = std::sqrt(B[0] * B[0] + B[1] * B[1] + B[2] * B[2]);
+            const double lc = std::sqrt(C[0] * C[0] + C[1] * C[1] + C[2] * C[2]);
+            const double det = A[0] * (B[1] * C[2] - B[2] * C[1]) - A[1] * (B[0] * C[2] - B[2] * C[0]) +
+                               A[2] * (B[0] * C[1] - B[1] * C[0]);
+            const double den = la * lb * lc + (A[0] * B[0] + A[1] * B[1] + A[2] * B[2]) * lc +
+                               (A[0] * C[0] + A[1] * C[1] + A[2] * C[2]) * lb +
+                               (B[0] * C[0] + B[1] * C[1] + B[2] * C[2]) * la;
+            w += 2.0 * std::atan2(det, den);
+        }
+        return w / (4.0 * 3.14159265358979323846);
+    };
+    // THE WINDING JUST IN FRONT OF the first hit decides a HOLE: the ray has
+    // crossed nothing yet, so in front of the hit it is still in the eye's region
+    // (winding 0) unless it got INSIDE without a crossing — through a hole (then
+    // it is ~1 there). Behind the hit, -1 is a FOLD. Anything else is a front and
+    // a back sheet crossed at (nearly) the same depth — a tie.
+    const double before = windingAt(std::max(bestT - eps, 0.0));
+    const double after = windingAt(bestT + eps);
+    if (windingOut) *windingOut = before;
+    if (before > 0.5) return 1;
+    return after < -0.5 ? -1 : 0;
+}
+
+/// Writes an 8x enlargement of the 40x40 pixels around (cx, cy) as a PPM.
+static void dumpCrop(const Image &img, unsigned cx, unsigned cy, const std::string &path)
+{
+    const int half = 20, zoom = 8;
+    FILE *fp = std::fopen(path.c_str(), "wb");
+    if (!fp) return;
+    std::fprintf(fp, "P6 %d %d 255\n", 2 * half * zoom, 2 * half * zoom);
+    for (int y = 0; y < 2 * half * zoom; ++y)
+        for (int x = 0; x < 2 * half * zoom; ++x) {
+            const int sx = int(cx) - half + x / zoom, sy = int(cy) - half + y / zoom;
+            unsigned char rgb[3] = { 0, 0, 0 };
+            if (sx >= 0 && sy >= 0 && sx < int(img.width) && sy < int(img.height)) {
+                const size_t i = (size_t(sy) * img.width + size_t(sx)) * 4u;
+                rgb[0] = img.rgba[i]; rgb[1] = img.rgba[i + 1]; rgb[2] = img.rgba[i + 2];
+            }
+            // Mark the centre pixel's outline in green.
+            if ((x / zoom == half && y / zoom == half) && (x % zoom == 0 || y % zoom == 0 ||
+                x % zoom == zoom - 1 || y % zoom == zoom - 1)) { rgb[0] = 0; rgb[1] = 255; rgb[2] = 0; }
+            std::fwrite(rgb, 1, 3, fp);
+        }
+    std::fclose(fp);
+}
+
 // ---- A. the crack sweep -------------------------------------------------------
-struct SweepResult { size_t worstCracks = 0; std::string worstAt; size_t evaluatedSteps = 0; size_t worstInside = 0; };
+struct SweepResult { size_t worstCracks = 0; std::string worstAt; size_t evaluatedSteps = 0;
+                     size_t folds = 0, holes = 0, unexplained = 0; bool controlDone = false; };
 
 static void crackSweep(Rig &r, const clusterfix::Fixture &f, const float dirIn[3], SweepResult &total,
                        const float *eyeIn = nullptr, const float *targetIn = nullptr)
@@ -216,8 +361,9 @@ static void crackSweep(Rig &r, const clusterfix::Fixture &f, const float dirIn[3
         return true;
     }();
     std::printf("   level 0 is %s\n", watertight ? "WATERTIGHT (inside colour counts)" : "OPEN (background only)");
-    std::printf("   %-12s %-10s %-9s %-10s %-9s %-9s %-9s\n", "allowed", "triangles", "erode px",
-                "evaluated", "inside", "bg-crack", "in-crack");
+    std::printf("   %-12s %-10s %-9s %-10s %-9s %-9s %-9s %s\n", "allowed", "triangles", "erode px",
+                "evaluated", "inside", "bg-crack", "in-crack", "(folds/holes/other)");
+    const RayCam cam = rayCam(r.eye, target, r.p11, kSize, kSize);
 
     // The nearest the surface comes to the eye, for the erosion radius.
     const float dNear = std::max(dist - s.r, 1e-3f);
@@ -260,34 +406,107 @@ static void crackSweep(Rig &r, const clusterfix::Fixture &f, const float dirIn[3
         frame(r, img);
         const std::vector<unsigned char> px = classify(img);
         size_t evaluated = 0, bgCracks = 0, inCracks = 0, insideTotal = 0;
+        std::vector<size_t> inPixels;
         for (size_t i = 0; i < px.size(); ++i) {
             insideTotal += px[i] == Inside;
             if (!mask[i] || depthIn[i] <= st.erode) continue;
             ++evaluated;
             if (px[i] == Background) ++bgCracks;
-            if (px[i] == Inside) ++inCracks;
+            // NEW against level 0 by construction: `mask` is level 0's SURFACE,
+            // so a pixel that already showed the inside colour at level 0 (the
+            // Physics model's interpenetrating parts) is not in it.
+            if (px[i] == Inside) { ++inCracks; inPixels.push_back(i); }
         }
-        // THE GATE IS THE DESIGN'S: background inside the silhouette. The inside
-        // colour is printed, not gated — a closed level 0 can still show back
-        // faces where its parts INTERPENETRATE (the Physics model shows 319 px of
-        // them at level 0) or where simplification FOLDS a thin feature, and
-        // neither is a crack; a crack between clusters is an OPEN EDGE of the cut,
-        // which atom.cluster_cut counts exactly (zero, on every mesh, at every
-        // threshold).
-        const size_t cracks = bgCracks;
-        total.worstInside = std::max(total.worstInside, watertight ? inCracks : size_t(0));
+        // THE GATE. On an OPEN level 0 only the background inside the silhouette
+        // is a crack (a simplified rim legitimately exposes the far side). On a
+        // CLOSED one the background is unreachable — a crack there shows the far
+        // side's INSIDE — so the inside colour is the signal, and each such pixel
+        // is decided by the pixel's own WATERTIGHT ray against the cut: a HOLE (a
+        // back face first, winding back near 0 behind it — the ray got inside
+        // without crossing the surface) is a crack; a FOLD (winding -1 behind: a
+        // simplified sheet crossing another, inside the group's measured error)
+        // and a DEPTH TIE (a front face first: the surface is there along the ray,
+        // and the rasteriser's back fragment won a tie at a contour or on an
+        // intersection curve) are not, and are counted.
+        size_t folds = 0, holes = 0, other = 0;
+        if (watertight && !inPixels.empty()) {
+            std::vector<unsigned> cutIdx;
+            for (unsigned c : st.cut)
+                cutIdx.insert(cutIdx.end(), f.data.clusterIndices.begin() + f.data.clusters[c].firstIndex,
+                              f.data.clusterIndices.begin() + f.data.clusters[c].firstIndex +
+                                  f.data.clusters[c].indexCount);
+            for (size_t k = 0; k < inPixels.size(); ++k) {
+                const unsigned x = unsigned(inPixels[k] % kSize), y = unsigned(inPixels[k] / kSize);
+                double w = 0.0;
+                const int v = foldOrHole(cam, x, y, f.data.positions, cutIdx, f.extent, &w);
+                if (v < 0) ++folds; else if (v > 0) ++holes; else ++other;
+                if (k < 2) std::printf("      pixel (%u, %u): %s, winding %.3f in front of the first hit\n", x, y,
+                                       v < 0 ? "FOLD" : (v > 0 ? "HOLE" : "TIE (front and back sheet at one depth)"), w);
+                if (k == 0)
+                    if (const char *dump = std::getenv("CLUSTER_CRACK_DUMP"))
+                        dumpCrop(img, x, y, std::string(dump) + "/" + f.name + "-" + st.label + "-crop.ppm");
+            }
+        }
+        const size_t cracks = bgCracks + (watertight ? holes : 0u);
+        total.folds += folds;
+        total.holes += holes;
+        total.unexplained += other;
         if (evaluated > 1000) ++nonVacuous;
         worst = std::max(worst, cracks);
         if (cracks > total.worstCracks) {
             total.worstCracks = cracks;
             total.worstAt = f.name + " @ " + st.label;
         }
-        std::printf("   %-12s %-10zu %-9d %-10zu %-9zu %-9zu %-9zu\n", st.label.c_str(), st.tris, st.erode,
-                    evaluated, insideTotal, bgCracks, inCracks);
+        std::printf("   %-12s %-10zu %-9d %-10zu %-9zu %-9zu %-9zu %zu/%zu/%zu\n", st.label.c_str(), st.tris,
+                    st.erode, evaluated, insideTotal, bgCracks, inCracks, folds, holes, other);
     }
     total.evaluatedSteps += nonVacuous;
-    CHECK(worst == 0, "%s: NO CRACK at any of the %zu cuts (worst %zu px)", f.name.c_str(), steps.size(),
-          worst);
+
+    // THE DETECTOR'S POSITIVE CONTROL, once, on a closed fixture: a cut with ONE
+    // leaf cluster facing the eye REMOVED is a real hole, and the test above must
+    // call its pixels HOLES — or its zero on every real cut proves nothing.
+    if (watertight && !total.controlDone) {
+        std::vector<unsigned> leaves;
+        int nearest = -1;
+        float nearestD = FLT_MAX;
+        for (size_t c = 0; c < clusters.size(); ++c) {
+            if (clusters[c].refined >= 0) continue;
+            leaves.push_back(unsigned(c));
+            const float dx = clusters[c].centre[0] - r.eye.x, dy = clusters[c].centre[1] - r.eye.y,
+                        dz = clusters[c].centre[2] - r.eye.z;
+            const float dd = dx * dx + dy * dy + dz * dz;
+            if (dd < nearestD) { nearestD = dd; nearest = int(c); }
+        }
+        std::vector<unsigned> holed, cutIdx;
+        for (unsigned c : leaves)
+            if (int(c) != nearest) {
+                holed.push_back(c);
+                cutIdx.insert(cutIdx.end(), f.data.clusterIndices.begin() + clusters[c].firstIndex,
+                              f.data.clusterIndices.begin() + clusters[c].firstIndex + clusters[c].indexCount);
+            }
+        body.setCut(holed);
+        back.setCut(holed);
+        frame(r, img);
+        const std::vector<unsigned char> px = classify(img);
+        size_t candidates = 0, holes = 0, judged = 0;
+        for (size_t i = 0; i < px.size(); ++i) {
+            if (!mask[i] || px[i] != Inside) continue;
+            ++candidates;
+            if (candidates % 7 != 1 || judged >= 40) continue;   // a sample: the winding is O(triangles)
+            ++judged;
+            double w = 0.0;
+            if (foldOrHole(cam, unsigned(i % kSize), unsigned(i / kSize), f.data.positions, cutIdx, f.extent,
+                           &w) > 0)
+                ++holes;
+        }
+        CHECK(candidates > 0 && judged > 0 && holes == judged,
+              "%s: THE POSITIVE CONTROL — one leaf cluster removed shows %zu inside-colour px, and all %zu "
+              "judged are HOLES (%zu)", f.name.c_str(), candidates, judged, holes);
+        total.controlDone = true;
+    }
+    CHECK(worst == 0, "%s: NO CRACK at any of the %zu cuts (worst %zu px; %s)", f.name.c_str(),
+          steps.size(), worst, watertight ? "closed: background + inside colour that is not a fold"
+                                          : "open: background");
     CHECK(nonVacuous >= 8, "%s: %zu of the cuts were judged over more than 1,000 interior pixels",
           f.name.c_str(), nonVacuous);
     body.destroy();
@@ -395,9 +614,10 @@ int main(int argc, char **argv)
     const float dirs[][3] = { { 0.45f, 0.35f, 1.0f }, { -0.8f, 0.5f, -0.3f } };
     for (const auto &f : fx)
         for (int d = 0; d < 2; ++d) crackSweep(r, f, dirs[d], sweep);
-    std::printf("\n   THE CRACK SWEEP'S WORST STEP: %zu px of background (%s); the most back-face "
-                "pixels a closed fixture showed inside its silhouette: %zu\n", sweep.worstCracks,
-                sweep.worstAt.empty() ? "none" : sweep.worstAt.c_str(), sweep.worstInside);
+    std::printf("\n   THE CRACK SWEEP'S WORST STEP: %zu crack px (%s); inside-colour pixels on the closed "
+                "fixtures: %zu folds, %zu holes, %zu ties (a front and a back sheet at one depth)\n", sweep.worstCracks,
+                sweep.worstAt.empty() ? "none" : sweep.worstAt.c_str(), sweep.folds, sweep.holes,
+                sweep.unexplained);
 
     // ---- B. the dolly through the cut -------------------------------------------
     const clusterfix::Fixture *sphere = nullptr;

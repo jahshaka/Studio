@@ -171,7 +171,7 @@ bool GpuCut::init(Engine *, std::string &err)
     Ogre::ResourceGroupManager::getSingleton().addResourceLocation(
         CLUSTER_TEST_MEDIA_DIR, "FileSystem", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
     mJob = hc->createComputeJob(name, "Test/ClusterCutParity", "JahClusterCutParity_cs",
-                                { "CrossPlatformSettings_piece_all", "JahClusterCut.glsl" });
+                                { "CrossPlatformSettings_piece_all", "JahLevelRule_piece_cs.any", "JahClusterCut.glsl" });
     if (!mJob) { err = "createComputeJob"; return false; }
     mJob->setThreadsPerGroup(64u, 1u, 1u);
     mJob->setNumUavUnits(5u);
@@ -208,7 +208,7 @@ bool GpuCut::run(const std::vector<MeshClusterGroup> &groups, const std::vector<
         ParityView p;
         std::memcpy(p.row, s.worldRow, sizeof(p.row));
         p.eyeScale[0] = s.eye[0]; p.eyeScale[1] = s.eye[1]; p.eyeScale[2] = s.eye[2];
-        p.eyeScale[3] = s.scale;
+        p.eyeScale[3] = 0.0f;   // the device derives the scale from the rows
         p.lod[0] = s.tolerance; p.lod[1] = s.projScaleY; p.lod[2] = s.viewportHeight; p.lod[3] = 0.0f;
         v[i] = p;
     }

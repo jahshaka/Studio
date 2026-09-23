@@ -1,16 +1,19 @@
 // A TEST JOB, not product media (tests/atom/media, registered by the cluster
-// harness only): runs the cluster cut's GLSL half — the product piece
+// harness only): runs the cluster cut's GLSL half — the product pieces
+// JahLevelRule_piece_cs.any (the one currency and the column scale) and
 // JahClusterCut.glsl, included by name — over one mesh's DAG tables for N views,
 // one thread per (view, cluster), and writes 1 where the rule draws the cluster.
 // engine.lod_rule_parity compares that set with the C++ half's (Types.h
 // clusterCut) to the bit.
 @insertpiece( SetCrossPlatformSettings )
+@insertpiece( JahLevelRuleScale )
+@insertpiece( JahLevelRuleCurrency )
 @insertpiece( JahClusterCut )
 
 struct ParityView
 {
 	vec4 row[3];        // the instance's 3x4 transform, ROW i in element i
-	vec4 eyeScale;      // xyz the eye, w the instance's largest axis scale
+	vec4 eyeScale;      // xyz the eye, w unused (the scale is derived here, from the rows)
 	vec4 lod;           // x tolerance (samples), y proj[1][1], z viewport height
 };
 
@@ -27,9 +30,10 @@ layout( local_size_x = @value( threads_per_group_x ),
 bool jahParityAffordable( uint g, uint v )
 {
 	ParityView pv = views[v];
+	// The level rule's scale: the longest COLUMN of the rows (the cull's own helper).
+	float scale = jahWorldMaxAxisScale( pv.row[0], pv.row[1], pv.row[2] );
 	float allowed = jahClusterGroupAllowed( groups[g].sphere, pv.row[0], pv.row[1], pv.row[2],
-											pv.eyeScale.w, pv.eyeScale.xyz, pv.lod.x, pv.lod.y,
-											pv.lod.z );
+											scale, pv.eyeScale.xyz, pv.lod.x, pv.lod.y, pv.lod.z );
 	return jahClusterGroupAffordable( groups[g].error.x, allowed );
 }
 
