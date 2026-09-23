@@ -158,8 +158,14 @@ int main()
     // leak into B through the PROCESS-WIDE PCC binding (the accepted v1: the
     // last scene to enable owns it) got brighter with A's un-clipped bounce.
     // The subject here is "B's own sky reaches B's mirror", i.e. green dominates,
-    // not the size of the leak; 0.05 keeps the subject and admits the leak.
-    CHECK(withGrid.g > withGrid.r + 0.05f && withGrid.g > withGrid.b + 0.05f,
+    // not the size of the leak. 0.03 since PHOTON-ENV-1 (measured 0.047): B's
+    // mirror runs A's specular cone (the process-wide VCT binding), and its
+    // escape now sees B's environment weighted by the share of the cone A's
+    // voxels did NOT stop. Patch 0048's hand-out used to hand B the sky at a
+    // weight that carried the volume's decode multiplier and was then
+    // SATURATED — the full sky whatever the cone escaped (0.33 green) — a units
+    // defect, deleted with the hand-out.
+    CHECK(withGrid.g > withGrid.r + 0.03f && withGrid.g > withGrid.b + 0.03f,
           "...and it still shows B's OWN sky, which reaches it through the pass-level\n"
           "          sky slot (ogre-patch 0048) instead of through its datablock");
 

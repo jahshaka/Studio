@@ -47,7 +47,13 @@ static Colour centre(const Image &i) { return i.at(i.width / 2, i.height / 2); }
 static Colour corner(const Image &i) { return i.at(2, 2); }
 static bool isBlue(const Colour &c) { return c.b > 0.8f && c.r < 0.15f && c.g < 0.15f; }
 // The document material is orange/red: red must dominate and be clearly lit.
-static bool isMaterial(const Colour &c) { return c.r > 0.12f && c.r > c.b * 1.5f && c.r > c.g * 1.5f; }
+// "Clearly lit" is 0.08, a margin over the blue clear colour's red of 0: the
+// centre pixel is a face the sun does not reach, lit by the ambient alone, and
+// that face reads 30/255 since the environment lobe carries the diffuse energy
+// factor the direct lobe always had (PHOTON-ENV-1: 1/1.51 at roughness 1) and
+// the SH is evaluated at the camera-independent normal. Red dominance is the
+// discriminator; the floor only says "not the background".
+static bool isMaterial(const Colour &c) { return c.r > 0.08f && c.r > c.b * 1.5f && c.r > c.g * 1.5f; }
 static void show(const char *tag, const Image &i) {
     const Colour c = centre(i), k = corner(i);
     std::printf("    %-28s centre %3.0f %3.0f %3.0f   corner %3.0f %3.0f %3.0f\n", tag,

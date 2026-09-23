@@ -679,8 +679,7 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "updateBudget", s.giParams.updateBudget },
             { "rayMarchStepScale", double(s.giParams.rayMarchStepScale) },
             { "ddgi", QLatin1String(toggleName(s.giParams.ddgi)) },
-            { "ddgiIntensity", double(s.giParams.ddgiIntensity) },
-            { "ddgiAmbient", double(s.giParams.ddgiAmbient) } } },
+            { "ddgiIntensity", double(s.giParams.ddgiIntensity) } } },
         { "gi", QJsonObject{
             { "mode", QLatin1String(giModeName(s.gi.mode)) },
             { "probeCount", s.gi.probeCount },

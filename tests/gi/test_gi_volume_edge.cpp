@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -58,6 +59,35 @@ static int failures = 0;
     do {                                                                        \
         if (cond) std::printf("ok: %s\n", msg);                                 \
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
+    } while (0)
+
+/// gi.volume_edge_spec_target (PHOTON-ENV-1, audit F4): the SAME cases on a slab
+/// WITH the default 4 % specular. The specular environment steps at the volume's
+/// face: outside it the voxel specular cone escapes whole and reads the one
+/// environment, inside it the cone's escape rides the raw directional composite,
+/// which reads the slab's own voxels at a coarse mip and over-states occlusion
+/// (jah_voxel_march.glsl's age-carry note). OWNED BY PHOTON-PCC-1 / REFLECT-1:
+/// three reflection sources (rays, probes, the cone) make the cone's step
+/// irrelevant at the ray tiers; that lane REMOVES `photon-target` from the row.
+/// In the target row only the two STEP assertions gate (printed as target lines
+/// in either row's arithmetic); the GI-on-against-GI-off brightness checks are
+/// the diffuse subject's and are printed, not gated, there.
+static bool gTarget = false;
+#define STEP_CHECK(step, msg)                                                   \
+    do {                                                                        \
+        const double e_ = std::fabs(double(step) - 1.0);                        \
+        if (gTarget) {                                                          \
+            std::printf("target: %.4f (bar 0.0500) %s%s\n", e_, msg,             \
+                        e_ < 0.05 ? " -- MET" : "");                            \
+            if (e_ < 0.05) std::printf("ok: %s\n", msg);                        \
+            else { std::printf("FAIL: %s\n", msg); ++failures; }                \
+        } else CHECK(e_ < 0.05, msg);                                           \
+    } while (0)
+#define DIFFUSE_CHECK(cond, msg)                                                \
+    do {                                                                        \
+        if (gTarget) { std::printf("(printed in the target row) %s: %s\n", msg, \
+                                   (cond) ? "holds" : "does not hold"); break; } \
+        CHECK(cond, msg);                                                       \
     } while (0)
 
 static void render(Engine *e, int frames = 6)
@@ -104,7 +134,34 @@ static Slab buildSlab(Engine *e, const char *name, const Colour &upper, const Co
     o.scene = e->createScene(name);
     o.view->setScene(o.scene);
     o.scene->setAmbient(upper, lower);
-    const NodeId slab = enginetest::addTestCube(o.scene, Colour(0.8f, 0.8f, 0.8f), 0.0f, 0.9f);
+    // MATTE (the ground's recipe, GF1: Specular workflow, ior 1.0, black kS —
+    // F0 = 0), because the subject is the DIFFUSE ambient and nothing else.
+    // With the default 4 % specular the slab also carried a specular
+    // environment term, and that term is NOT continuous across the edge: outside
+    // the voxel volume the specular cone escapes whole, inside it the cone's
+    // directional alpha reads the slab's own voxels (the specular walk's escape
+    // is the raw directional composite — jah_voxel_march.glsl, the age-carry
+    // note), and GI off has no specular environment at all without a sky cube.
+    // That step was ~3.7 % of this reading; once the environment lobe carries
+    // the diffuse energy factor (PHOTON-ENV-1) the diffuse share is 0.69 of what
+    // it was and the same step is 5.4 % — a finding about the specular escape,
+    // measured here and moved out of this suite's subject.
+    // (The target row, gi.volume_edge_spec_target, restores that 4 % specular.)
+    NodeId slab = 0;
+    {
+        PbrParams p;
+        p.albedo = Colour(0.8f, 0.8f, 0.8f);
+        p.roughness = 0.9f;
+        if (!gTarget) {
+            p.workflow = PbrParams::Workflow::Specular;
+            p.ior = 1.0f;
+            p.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        }
+        slab = o.scene->createNode();
+        o.scene->attachMesh(slab, o.scene->createMesh(enginetest::unitCubeMesh()),
+                            o.scene->createPbrMaterial(p));
+        enginetest::poseRegistry()[o.scene][slab] = enginetest::NodePose{};
+    }
     enginetest::setNodePosition(o.scene, slab, Vec3(0.0f, -0.05f, 0.0f));
     enginetest::setNodeScale(o.scene, slab, Vec3(96.0f, 0.1f, 96.0f));
     // Straight down: a -90 degree pitch about X, which the lookAt helper cannot
@@ -150,8 +207,10 @@ static void measure(Engine *e, Slab &o, const char *what, float &inside, float &
                 st.ifdBound ? 1 : 0, st.ifdProbes, st.ifdConverged ? 1 : 0);
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    for (int i = 1; i < argc; ++i)
+        if (std::string(argv[i]) == "--target") gTarget = true;
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -194,8 +253,7 @@ int main()
         const float step = outside > 1e-5f ? inside / outside : 0.0f;
 
         // 1. THE STEP. 3.4x before the fix.
-        CHECK(step > 0.95f && step < 1.05f,
-              "the ambient does not step across the volume boundary (within 5%)");
+        STEP_CHECK(step, "the ambient does not step across the volume boundary (within 5%)");
         // 2. WHICH CONVENTION SURVIVED: the GI-off one, on both sides.
         //
         // RE-ANCHORED 5 % -> 10 % BY PHOTON-M2 (patch 0077), measured +7.9 %
@@ -212,10 +270,10 @@ int main()
         // there and the two arms cannot agree to better than it: what this
         // assertion guards is the 3.4x convention error it was written for, and
         // 10 % still guards that with a factor of 30 to spare.
-        CHECK(std::fabs(outside - flatGiOff) < 0.10f * flatGiOff,
-              "outside the volume, turning GI on does not change the flat ambient");
-        CHECK(std::fabs(inside - flatGiOff) < 0.08f * flatGiOff,
-              "inside the volume, turning GI on does not change the flat ambient");
+        DIFFUSE_CHECK(std::fabs(outside - flatGiOff) < 0.10f * flatGiOff,
+                      "outside the volume, turning GI on does not change the flat ambient");
+        DIFFUSE_CHECK(std::fabs(inside - flatGiOff) < 0.08f * flatGiOff,
+                      "inside the volume, turning GI on does not change the flat ambient");
 
         // UNBIND before case 2 measures anything: VctLighting binds
         // PROCESS-WIDE to HlmsPbs (sVctBindingOwner), and while it is bound
@@ -250,10 +308,9 @@ int main()
         float inside = 0.0f, outside = 0.0f;
         measure(e, o, "hemisphere ambient, GI on", inside, outside);
         const float step = outside > 1e-5f ? inside / outside : 0.0f;
-        CHECK(step > 0.95f && step < 1.05f,
-              "a hemisphere ambient does not step across the boundary either");
-        CHECK(std::fabs(outside - giOff) < 0.05f * giOff,
-              "and it renders at the same brightness with GI on as with GI off");
+        STEP_CHECK(step, "a hemisphere ambient does not step across the boundary either");
+        DIFFUSE_CHECK(std::fabs(outside - giOff) < 0.05f * giOff,
+                      "and it renders at the same brightness with GI on as with GI off");
     }
 
     std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);

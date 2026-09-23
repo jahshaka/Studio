@@ -77,6 +77,11 @@ static int failures = 0;
 
 static void render(Engine *e, int frames) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
+/// The diffuse lobe's energy factor at perceptual roughness 1 (every floor here
+/// is roughness 1): what the environment lobe multiplies envColourD by since
+/// PHOTON-ENV-1, the same factor as the direct lobe's.
+static const double kEnergyFactor1 = 1.0 / 1.51;
+
 static const unsigned kSize = 512u;
 /// HALF the vertical extent of the orthographic camera, in world units. An
 /// ORTHOGRAPHIC top-down camera is what makes a world point and a pixel the
@@ -378,16 +383,20 @@ int main()
     // ---- CALIBRATION 3: THE ENVIRONMENT PATH, which is the one that matters
     // A FLAT AMBIENT of known radiance, with GI off, arrives at the pixel by
     // exactly the route the gather's answer does: it is written into
-    // `envColourD` and multiplied by the albedo (kD * pi). So a floor under an
-    // ambient of A renders `albedo * A`, and measuring that calibrates the
-    // whole currency — the kD, the pi, the transfer and the readback — in one
-    // number, on the path the measurement below actually uses.
+    // `envColourD` and multiplied by the albedo (kD * pi) AND BY THE DIFFUSE
+    // LOBE'S ENERGY FACTOR (PHOTON-ENV-1: `jahDiffuseEnergyFactor`,
+    // lerp( 1, 1/1.51, roughness ) — 1/1.51 on this roughness-1 floor, the
+    // factor the direct lobe has always carried; MEASURE-1a decision b). So a
+    // floor under an ambient of A renders `albedo * energyFactor * A`, and
+    // measuring that calibrates the whole currency — the kD, the pi, the energy
+    // factor, the transfer and the readback — in one number, on the path the
+    // measurement below actually uses; every reading below is divided by the
+    // same albedo * energyFactor to come back to E / pi.
     //
-    // The DIRECT path is printed beside it, not gated, for a reason worth the
-    // line: a directional light of power P on a horizontal matte floor should
-    // render `albedo * P / pi` and renders about 78 % of that on this fixture
-    // (both shadow arms below). That is a finding about the DIRECT term and it
-    // is recorded here rather than argued about, because nothing this lane
+    // The DIRECT path is printed beside it, not gated: a directional light of
+    // power P on a horizontal matte floor renders MEASURE-1a's pbsDirect, the
+    // normalised Disney lobe — energyFactor(1) = 0.662 of `albedo * P / pi` at
+    // normal incidence, less the shadow arm's own loss. Nothing this lane
     // measures goes through it — the gather's answer is an environment term.
     {
         GiParams off = gi;
@@ -408,14 +417,14 @@ int main()
         // reaches `envColourD` is A/pi and the floor renders albedo * A / pi.
         // Measured here rather than asserted from the header, which is the
         // whole point of a calibration.
-        const double expected = double(kFloorAlbedo) * double(kAmbient) /
+        const double expected = double(kFloorAlbedo) * kEnergyFactor1 * double(kAmbient) /
                                 3.14159265358979323846;
         std::printf("   THE ENVIRONMENT PATH: a %.2f-albedo floor under a flat ambient of %.2f "
                     "renders %.4f; the arithmetic says %.4f (%.1f %%)\n", double(kFloorAlbedo),
                     double(kAmbient), lit, expected, 100.0 * (lit / expected - 1.0));
         CHECK_MSG(std::fabs(lit / expected - 1.0) < 0.08,
                   "THE ENVIRONMENT PATH IS CALIBRATED: %.4f against %.4f, within 8 %% — a pixel "
-                  "of this floor IS albedo * envColourD", lit, expected);
+                  "of this floor IS albedo * energyFactor(1) * envColourD", lit, expected);
 
         // ...and the direct term, both shadow arms, printed.
         s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -504,7 +513,7 @@ int main()
         }
         out.assign(points.size(), 0.0);
         for (size_t i = 0; i < points.size(); ++i)
-            out[i] = acc[i] / kFrames / double(kFloorAlbedo);   // back to E/pi
+            out[i] = acc[i] / kFrames / (double(kFloorAlbedo) * kEnergyFactor1);   // back to E/pi
         (void)what;
     };
     std::vector<double> gatherE, conesE, fieldE;
@@ -827,7 +836,9 @@ static int traceMain(Engine *e)
         blockMean(shot, px, py, 5, m);
         measured += decode(m[0], transfer);
     }
-    measured = measured / kFrames / double(kFloorAlbedo);
+    // Back to E/pi through the floor's albedo AND the environment lobe's energy
+    // factor (roughness 1: 1/1.51 — PHOTON-ENV-1), as the reference arms.
+    measured = measured / kFrames / (double(kFloorAlbedo) * kEnergyFactor1);
     std::printf("\n   THE PROBE ON THE LIT WALL: the floor a metre out reads E/pi = %.5f; the "
                 "closed form for that wall at that point is %.5f (%.0f %% of it)\n", measured,
                 analytic, 100.0 * measured / std::max(analytic, 1e-9));

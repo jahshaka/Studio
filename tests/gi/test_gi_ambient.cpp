@@ -132,11 +132,12 @@ int main()
         CHECK(ratio > 0.5f && ratio < 2.0f,
               "the VCT scene's ambient matches the non-VCT scene's within tolerance");
 
-        // 3. THE SHADER VARIANT MUST NOT FLIP UNDER A COLOUR DRAG. A flat pair
-        //    (upper == lower) turns `vct_ambient_sphere` off and recompiles
-        //    everything; the engine adds an epsilon to keep the variant pinned,
-        //    and this is what proves it. The drag deliberately PASSES THROUGH
-        //    exactly-equal hemispheres, which is the case that used to flip.
+        // 3. AN AMBIENT DRAG IS NOT A SHADER VARIANT. A flat pair (upper ==
+        //    lower) used to turn the VCT arm's hemisphere-pair variant off and
+        //    recompile everything (an epsilon pinned it); the pair is gone
+        //    (PHOTON-ENV-1: every escape reads the one environment, whose SH is
+        //    pass data), and this proves no other variant took its place. The
+        //    drag deliberately PASSES THROUGH exactly-equal hemispheres.
         const unsigned before = engine->shaderCacheStats().compiledThisRun;
         for (int i = 0; i <= 8; ++i) {
             const float t = float(i) / 8.0f;             // 0.40 -> 0.10, passing 0.25 == lower
@@ -147,7 +148,7 @@ int main()
         const unsigned after = engine->shaderCacheStats().compiledThisRun;
         std::printf("   ambient drag through the flat point: %u shader compiles\n", after - before);
         CHECK(after == before,
-              "dragging the ambient THROUGH upper == lower compiles no shaders (the epsilon holds)");
+              "dragging the ambient THROUGH upper == lower compiles no shaders");
 
         GiParams off;
         s->setGlobalIllumination(off);

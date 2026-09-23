@@ -379,6 +379,16 @@ add_dependencies(test_gi_volume_edge JahshakaEngineMedia)
 add_test(NAME gi.volume_edge COMMAND test_gi_volume_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.volume_edge PROPERTIES TIMEOUT 180 LABELS "engine")
+# gi.volume_edge_spec_target — THE SAME BINARY ON A SPECULAR SLAB (PHOTON-ENV-1,
+# audit F4): the voxel specular cone's escape (the raw directional composite,
+# which reads the slab's own voxels at a coarse mip) against the environment
+# outside the volume steps at the face. Owned by PHOTON-PCC-1 / REFLECT-1 (three
+# reflection sources make the cone's step irrelevant at the ray tiers); that lane
+# REMOVES `photon-target` from this row.
+add_test(NAME gi.volume_edge_spec_target COMMAND test_gi_volume_edge --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.volume_edge_spec_target PROPERTIES TIMEOUT 180
+                     LABELS "engine;photon-target")
 
 # gi.mobility — MOVERS LEAVE THE STILL-WORLD LAYER (REALTIME_REFLECTIONS_SPEC
 # §3.3, lane R2). A movable object is drawn by the per-frame layers (view,
@@ -975,6 +985,17 @@ add_test(NAME gi.chain_face_target COMMAND test_gi_chain_face --target
 set_tests_properties(gi.chain_face_target PROPERTIES
     TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
 
+# gi.chain_face_sky_target — THE LOW SUN'S CASCADE-0 FACE (PHOTON-ENV-1). The same
+# binary, gating ONLY that arm's bracket: with the sky carried into the field, the
+# chain's probe rays over-occlude grazing directions on the coarse outer floor and
+# a low sun is brightest at the horizon (the physics gap of
+# gi.field_follows_ground_target). PHOTON-WRITER-1 (B4) REMOVES `photon-target`
+# from this row when it lands; gi.chain_face prints the value meanwhile.
+add_test(NAME gi.chain_face_sky_target COMMAND test_gi_chain_face --sky-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.chain_face_sky_target PROPERTIES
+    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
+
 # gi.field_follows_energy — `gi.field_follows`' EXISTENCE BAR, REPLACED BY ENERGY
 # (PHOTON phase A, A1 section 1.2; lane FENCE-1). A sunlit matte floor lights a
 # perpendicular matte wall; the wall's radiance at three heights against the
@@ -1290,3 +1311,47 @@ add_test(NAME gi.voxel_feed COMMAND test_gi_voxel_feed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_feed PROPERTIES
     TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
+
+# gi.env_cone — THE ONE ENVIRONMENT'S CONE LOOKUP, MEASURED (PHOTON-ENV-1).
+# jahEnvCone reads the GGX-prefiltered sky chain at the mip whose lobe matches a
+# cone; this suite measures it against a 64-direction integral of the cube over
+# the same cone on the shipped (analytic) sky at the renderer's three apertures
+# (Engine::environmentCones: one job built from the shared file). Its own binary:
+# one engine per process.
+add_executable(test_gi_env_cone test_gi_env_cone.cpp)
+set_target_properties(test_gi_env_cone PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_env_cone PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_env_cone PRIVATE JahshakaEngine)
+add_dependencies(test_gi_env_cone JahshakaEngineMedia)
+add_test(NAME gi.env_cone COMMAND test_gi_env_cone
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_cone PROPERTIES TIMEOUT 120 LABELS "engine")
+
+# gi.env_one — ONE ENVIRONMENT, FOUR READERS, ONE NUMBER (PHOTON-ENV-1): a matte
+# box under a uniform sky reads rho L energyFactor(1) outside any volume, through
+# the voxel cones' escape, through the irradiance field and through the gather's
+# ray misses; no Sky Light is no environment for any of them; the SH lookup is
+# camera-independent; a sun disc in the probes reaches neither the SH nor the
+# cube. Its own binary: the field and the voxel lighting bind process-wide.
+add_executable(test_gi_env_one test_gi_env_one.cpp)
+set_target_properties(test_gi_env_one PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_env_one PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_env_one PRIVATE JahshakaEngine)
+add_dependencies(test_gi_env_one JahshakaEngineMedia)
+add_test(NAME gi.env_one COMMAND test_gi_env_one
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)

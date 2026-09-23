@@ -796,7 +796,11 @@ var FIDELITY = {
                                  { x: 0.512, y: 0.111 } ]); // cubemap sky: park foliage
         assert(p[0].r > p[0].b + 40 && p[0].g > p[0].b + 30, "World: gold dragon is gold " + fmt(p[0]));
         assert(bright(p[1]) > 100, "World: silver dragon renders bright " + fmt(p[1]));
-        assert(bright(p[2]) > 70, "World: glass dragon area is translucent-bright " + fmt(p[2]));
+        // PHOTON-ENV-1: what shows through the glass is the matte floor, whose
+        // sky share now carries the diffuse energy factor (MEASURE-1a decision
+        // b); measured (64,69,72) = 68.3 mean. The bar is the measurement less
+        // 20 %, the same margin as the Physics teapot's and for the same reason.
+        assert(bright(p[2]) > 55, "World: glass dragon area is translucent-bright " + fmt(p[2]));
         assert(p[3].g > p[3].b + 15 && p[3].g > 40, "World: cubemap sky shows the park foliage " + fmt(p[3]));
     },
     "Physics": function () {
@@ -818,7 +822,15 @@ var FIDELITY = {
         // teapot, a few percent dimmer for the indirect bounce; 110 keeps this a
         // real "bright and neutral" assertion while no longer being tuned to a
         // GI-off world.
-        assert(bright(p[2]) > 110 && isNeutral(p[2], 35), "Physics: teapot is bright white " + fmt(p[2]));
+        // RE-BASELINED AGAIN (PHOTON-ENV-1): the teapot's sky and bounce reach
+        // it through the environment lobe, which carries the diffuse energy
+        // factor the sun's lobe always had (1/1.51 at matte roughness —
+        // MEASURE-1a decision b). Measured (107,108,96) = 103.7 mean. THE BAR IS
+        // THE MEASUREMENT LESS 20 %: this sample is not open-to-open
+        // pixel-deterministic (Epic GI + autoRefresh; DOCS/traps/ENGINE.md), and
+        // a fifth is the swing its probes have been seen to take, while an
+        // unlit or grey-fallback teapot reads under half of it.
+        assert(bright(p[2]) > 83 && isNeutral(p[2], 35), "Physics: teapot is bright white " + fmt(p[2]));
     }
 };
 

@@ -28,6 +28,27 @@
 #include <cstdio>
 #include <vector>
 
+/// THE GREY CARD A ROUGH 18 % SPHERE LANDS ON (PHOTON-ENV-1). The studio's
+/// exposure keys an 18 % LAMBERTIAN card to the display's grey-card band,
+/// 105-130 (display codes). The renderer's matte diffuse is the normalised
+/// Disney lobe, whose energy factor at perceptual roughness 1 is 1/1.51, and
+/// since PHOTON-ENV-1 the ENVIRONMENT lobe carries it too (it always did for
+/// the direct lobe — MEASURE-1a decision b), so a roughness-1 18 % sphere lit
+/// by the studio alone reflects 0.662 of the card: the band is the card's,
+/// scaled by that factor in LINEAR light and re-encoded. Whether the meter
+/// should key on the renderer's own lobe instead is an exposure decision.
+static double greyCardDisplay(double displayCode, double linearScale)
+{
+    const double v = displayCode / 255.0;
+    const double lin = v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+    const double l = lin * linearScale;
+    const double e = l <= 0.0031308 ? l * 12.92 : 1.055 * std::pow(l, 1.0 / 2.4) - 0.055;
+    return 255.0 * e;
+}
+static const double kRoughEnergyFactor = 1.0 / 1.51;
+static const double kGreyLo = greyCardDisplay(105.0, kRoughEnergyFactor);
+static const double kGreyHi = greyCardDisplay(130.0, kRoughEnergyFactor);
+
 #include "../support/previewdump.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -266,8 +287,10 @@ int main(int argc, char **argv)
         previewGreyMean = meanOver(grey, mask);
         std::printf("    18%% grey diffuse sphere: mean %.1f/255 over the silhouette (display)\n",
                     previewGreyMean);
-        CHECK(previewGreyMean >= 105.0 && previewGreyMean <= 130.0,
-              "the 18% grey sphere lands on the grey card (105-130)");
+        std::printf("    (the grey card at energyFactor(1): %.1f-%.1f)\n", kGreyLo, kGreyHi);
+        CHECK(previewGreyMean >= kGreyLo && previewGreyMean <= kGreyHi,
+              "the rough 18% grey sphere lands on the grey card scaled by the diffuse lobe's "
+              "energy factor (105-130 x 1/1.51 in linear light)");
 
         // ---- 6. the subject is inside the frame at every dock shape ----
         struct Shape { const char *name; int w, h; };
@@ -314,8 +337,8 @@ int main(int argc, char **argv)
             const double thumbMean = meanOver(grey, mask);
             std::printf("    thumbnail 18%% grey: mean %.1f/255 (preview %.1f) — difference %.1f\n",
                         thumbMean, previewGreyMean, std::fabs(thumbMean - previewGreyMean));
-            CHECK(thumbMean >= 105.0 && thumbMean <= 130.0,
-                  "the thumbnail's 18% grey sphere lands on the grey card too");
+            CHECK(thumbMean >= kGreyLo && thumbMean <= kGreyHi,
+                  "the thumbnail's 18% grey sphere lands on the same card too");
             CHECK(std::fabs(thumbMean - previewGreyMean) <= 5.0,
                   "the thumbnail and the preview of one material agree within 5/255");
 

@@ -15,14 +15,30 @@
 //
 // So the claim here is ENERGY, and it has a closed form.
 //
-// WHY IT IS STILL RED AFTER THE ONE VOXEL READER (PHOTON-READER-1, 2026-09-23):
-// the reader moved none of these numbers (1.692x / 1.594x / 0.919x before and
-// after), because the gap is not in the transport. The light injection stores
-// the Lambertian radiance rho * E / pi while `pbsDirect` - what the floor
-// actually shows - carries HlmsPbs' 1/1.51 energyFactor, so the voxels hold the
-// floor about 1.5x brighter than it renders: MEASURE-1a's decision (b), which
-// ONE-ENV owes (the energyFactor on the indirect). The SHAPE miss (2.84 against
-// 1.55) is the integrator's, and remains after that.
+// WHY IT IS STILL RED AFTER THE ONE ENVIRONMENT (PHOTON-ENV-1, 2026-09-23): the
+// gap is not in the transport and not in the wall's lobe. The light injection
+// stores the Lambertian radiance rho * E / pi while `pbsDirect` - what the floor
+// actually shows - carries the 1/1.51 energyFactor, so the voxels hold the floor
+// about 1.5x brighter than it renders. ONE-ENV put the energy factor on the
+// ENVIRONMENT lobe (MEASURE-1a decision b), which the WALL's reflection of the
+// bounce now carries — and so does equation (4) below, because the closed form
+// is the renderer's physics on both ends. Written that way the ratio is where
+// READER-1 left it (1.69x / 1.59x / 0.92x): the remaining excess is the SOURCE
+// (the voxel's emission is Lambertian, the surface's is the Disney lobe), and
+// the fix is on the injection side (a voxel emitting what its surface renders:
+// the energy factor at LightInjection and at the bounce's rho * G, which needs
+// the roughness the voxel store does not hold). The old accounting — the wall
+// Lambertian, the injection's 1.51 excess cancelling the wall lobe's 1/1.51 at
+// roughness 1 — is printed beside it and is NOT the claim. The SHAPE miss is
+// the integrator's, and remains after both.
+//
+// THE NEXT ITEM, AND WHOSE IT IS (the lead, PHOTON-ENV-1 fix round): the voxel's
+// emission must be what its surface renders — ROUGHNESS INTO THE VOXEL MATERIAL
+// STORE, and the light injection's diffuse (and the bounce's rho * G) carrying
+// the same `jahDiffuseEnergyFactor` the pixel's direct and environment lobes do.
+// That is ONE-WRITER's lane (B4), not the environment's; this row stays a target
+// until it lands. The environment lane's own claim is the wall side, and it is
+// what equation (4) now states.
 //
 // ===========================================================================
 // THE PHYSICS, WRITTEN OUT
@@ -94,12 +110,14 @@
 //    integral in (2) so the closed form cannot be silently mis-transcribed.
 //
 // 4. WHAT THE WALL RENDERS. The wall's light is an ENVIRONMENT term, and
-//    BRDF_EnvMap (200.BRDFs_piece_ps.any:305) carries no energyFactor and no
-//    scatter terms — MEASURE-1a measured that path exact. HlmsPbs consumes a
-//    diffuse-GI irradiance as `envColourD` = E/pi and multiplies it by the
-//    albedo, so with no other light on the wall the pixel is, in linear radiance,
+//    BRDF_EnvMap (200.BRDFs_piece_ps.any) carries no scatter terms and — since
+//    PHOTON-ENV-1 — the diffuse lobe's energy factor, the direct lobe's own
+//    (`jahDiffuseEnergyFactor`, 1/1.51 on this roughness-1 wall; MEASURE-1a
+//    decision b). HlmsPbs consumes a diffuse-GI irradiance as `envColourD` =
+//    E/pi and multiplies it by the albedo and that factor, so with no other
+//    light on the wall the pixel is, in linear radiance,
 //
-//        L_wall(h) = rho_w * E(h) / pi,                                    (4)
+//        L_wall(h) = energyFactor(1) * rho_w * E(h) / pi,                  (4)
 //
 //    with E(h) the transfer integral of (2) carrying (1) as its source:
 //
@@ -645,13 +663,17 @@ int main()
             // (4)+(4a) from the AUTHORED numbers, with pbsDirect inside the
             // integral — the asserted bar.
             const double eExact = transferIntegral(p, n, 512, false, kFloorAlbedo, kSunPower, 1.0);
-            const double expected = kWallAlbedo * eExact / kPi;
+            // THE WALL'S LOBE CARRIES THE ENERGY FACTOR (PHOTON-ENV-1: BRDF_EnvMap).
+            const double kWallEnergyFactor = 1.0 / 1.51;         // roughness 1
+            const double expected = kWallEnergyFactor * kWallAlbedo * eExact / kPi;
+            const double expectedOldAccounting = kWallAlbedo * eExact / kPi;
             // ...the LAMBERTIAN closed form, so the lobe's share is visible...
-            const double expectedLambert =
-                kWallAlbedo * omega * pbsDirectLambertLimit(kFloorAlbedo, kSunPower, 1.0) / kPi;
+            const double expectedLambert = kWallEnergyFactor * kWallAlbedo * omega *
+                                           pbsDirectLambertLimit(kFloorAlbedo, kSunPower, 1.0) / kPi;
             // ...and the same claim with the floor's MEASURED radiance in place
             // of (1), which takes the source term out of the comparison.
-            const double expectedFromFloor = kWallAlbedo * floorMeasured * omega / kPi;
+            const double expectedFromFloor =
+                kWallEnergyFactor * kWallAlbedo * floorMeasured * omega / kPi;
             double px, py, m[3];
             wallToPixel(0.0, kHeights[i], px, py);
             blockMean(img, px, py, 8, m);
@@ -661,9 +683,12 @@ int main()
                                                                   : 0.0;
             std::printf("     h = %.1f m (px %.0f,%.0f): F = %.4f  measured %.4f  |  EXACT (4a) "
                         "%.4f -> %.3fx  |  Lambertian %.4f  |  from the MEASURED floor %.4f -> "
-                        "%.3fx\n",
+                        "%.3fx  |  the wall Lambertian (the old accounting, not the claim) "
+                        "%.4f -> %.3fx\n",
                         kHeights[i], px, py, omega / kPi, measured, expected, ratio,
-                        expectedLambert, expectedFromFloor, ratioFromFloor);
+                        expectedLambert, expectedFromFloor, ratioFromFloor,
+                        expectedOldAccounting,
+                        expectedOldAccounting > 0.0 ? measured / expectedOldAccounting : 0.0);
             const double err = std::fabs(ratio - 1.0);
             std::printf("target: %.4f (bar 0.1500) the wall's reflected radiance at h = %.1f m is "
                         "the floor's bounce through the finite-rectangle transfer: "
