@@ -16,6 +16,7 @@
 //    testCameraDescLookAt hands back the same CameraDesc unpushed, for a
 //    suite that needs to vary one field of it (projection, clips, lens).
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <vector>
@@ -285,5 +286,71 @@ inline void meanRG(const Image &img, float &r, float &g)
 }
 
 }  // namespace leakroom
+
+// ---------------------------------------------------------------------------
+// THE ANALYTIC SKY VISIBILITY OF A FIXTURE (PHOTON-READER-1). What a surface
+// point with an upward (+Y) normal can see of the sky, cosine-weighted, when the
+// only occluders are axis-aligned boxes: the quantity the irradiance field's
+// stored escape and the cones' escape weight both estimate. Exact up to the
+// quadrature (a stratified NxN cosine-distributed grid over the hemisphere).
+// ---------------------------------------------------------------------------
+struct AnalyticBox { Vec3 mn, mx; };
+
+inline bool rayHitsBox(const Vec3 &o, const Vec3 &d, const AnalyticBox &b)
+{
+    float t0 = 0.0f, t1 = 1e30f;
+    const float O[3] = { o.x, o.y, o.z }, D[3] = { d.x, d.y, d.z };
+    const float A[3] = { b.mn.x, b.mn.y, b.mn.z }, B[3] = { b.mx.x, b.mx.y, b.mx.z };
+    for (int a = 0; a < 3; ++a) {
+        if (std::fabs(D[a]) < 1e-12f) {
+            if (O[a] < A[a] || O[a] > B[a]) return false;
+            continue;
+        }
+        float ta = (A[a] - O[a]) / D[a], tb = (B[a] - O[a]) / D[a];
+        if (ta > tb) { const float t = ta; ta = tb; tb = t; }
+        t0 = std::max(t0, ta);
+        t1 = std::min(t1, tb);
+    }
+    return t0 <= t1;
+}
+
+inline float cosineSkyVisibilityUp(const Vec3 &p, const std::vector<AnalyticBox> &boxes,
+                                   int n = 200)
+{
+    unsigned open = 0, total = 0;
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j) {
+            const float u1 = (float(i) + 0.5f) / float(n), u2 = (float(j) + 0.5f) / float(n);
+            const float r = std::sqrt(u1), ph = 6.28318530718f * u2;
+            const Vec3 d(r * std::cos(ph), std::sqrt(1.0f - u1), r * std::sin(ph));
+            bool hit = false;
+            for (const AnalyticBox &b : boxes)
+                if (rayHitsBox(p, d, b)) { hit = true; break; }
+            open += hit ? 0u : 1u;
+            ++total;
+        }
+    return total ? float(open) / float(total) : 0.0f;
+}
+
+/// Where the pixel (px, py) of a square `size` x `size` view from
+/// testCameraLookAt(pos, target) at `fovDeg` meets the plane y = planeY.
+inline Vec3 groundPointForPixel(const Vec3 &pos, const Vec3 &target, unsigned px, unsigned py,
+                                unsigned size, float planeY = 0.0f, float fovDeg = 45.0f)
+{
+    Vec3 f(target.x - pos.x, target.y - pos.y, target.z - pos.z);
+    float l = std::sqrt(f.x * f.x + f.y * f.y + f.z * f.z);
+    f = Vec3(f.x / l, f.y / l, f.z / l);
+    Vec3 r(-f.z, 0.0f, f.x);                                   // f x (0,1,0)
+    l = std::sqrt(r.x * r.x + r.z * r.z);
+    r = Vec3(r.x / l, 0.0f, r.z / l);
+    const Vec3 u(r.y * f.z - r.z * f.y, r.z * f.x - r.x * f.z, r.x * f.y - r.y * f.x);
+    const float t = std::tan(fovDeg * 0.5f * 3.14159265f / 180.0f);
+    const float nx = 2.0f * (float(px) + 0.5f) / float(size) - 1.0f;
+    const float ny = 1.0f - 2.0f * (float(py) + 0.5f) / float(size);
+    const Vec3 d(f.x + (r.x * nx + u.x * ny) * t, f.y + (r.y * nx + u.y * ny) * t,
+                 f.z + (r.z * nx + u.z * ny) * t);
+    const float s = (planeY - pos.y) / d.y;
+    return Vec3(pos.x + d.x * s, planeY, pos.z + d.z * s);
+}
 
 }  // namespace enginetest
