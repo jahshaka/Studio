@@ -300,10 +300,9 @@ int main(int argc, char **argv)
     // against six 60-degree cones whose escape estimate is a deliberate
     // under-estimate (patch 0021's min3: 65 % of an open floor's ambient against
     // 93 % isotropic). The field reads HIGHER, by 1.14x on the bounce in a
-    // closed room and by 1.85x on this open scene's floor. NOT the sky-visibility
-    // ambient (the lead's correction from the Fable read at merge: this fixture's
-    // ambient is BLACK, and `ifdSkyVis / sumIfdWeight` is a weighted MEAN
-    // visibility in [0,1], not a unit error); the plausible mechanism is the cone
+    // closed room and by 1.85x on this open scene's floor. NOT the sky (this
+    // fixture's ambient is BLACK, so no probe ray and no cone reads any
+    // environment); the plausible mechanism is the cone
     // estimator's coarse-mip dilution of the 0.9 m wall seen from the far patch
     // at grazing — a 60-degree cone's 7 m footprint averages the wall with the
     // empty voxels around it while the field's narrow rays do not; a closed room

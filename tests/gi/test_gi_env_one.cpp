@@ -16,8 +16,9 @@
 //       the environment in its own direction at its own aperture
 //       (jah_environment.glsl's jahEnvCone). With nothing in the volume but
 //       the fixture, the escape is (close to) 1, so (b) = (a) within 2 %.
-//   (c) THE IRRADIANCE FIELD: its sky term at a probe in the open (the SH at
-//       the normal times the probe cage's stored escape). Within 2 % of (a).
+//   (c) THE IRRADIANCE FIELD: its probes' escaping rays read the environment
+//       and the cosine integration carries it into the atlas. Within 2 % of
+//       (a); and (c2) it holds a sky above its old UNORM ceiling.
 //   (d) THE GATHER'S RAY MISS: every miss reads the environment at the ray's
 //       own footprint and returns L; the gathered irradiance of an open top
 //       face is then L and the pixel (a). Within 2 %. (Skipped cleanly on a
@@ -119,8 +120,10 @@ int main()
     view->setScene(s);
 
     // ---- THE FIXTURE: one matte box, nothing else ---------------------------
+    NodeId boxNode = 0;
     {
         const NodeId n = s->createNode();
+        boxNode = n;
         const MeshId m = s->createMesh(enginetest::unitCubeMesh());
         PbrParams p;
         p.albedo = Colour(float(kRho), float(kRho), float(kRho));
@@ -284,6 +287,49 @@ int main()
                   "(%.4f against %.4f)", rd, ra);
     } else {
         std::printf("ok: (d) no ray queries on this machine — the gather arm skips cleanly\n");
+    }
+
+    // ---- (c2) THE FIELD HOLDS A SKY BRIGHTER THAN ITS OLD CEILING ---------------
+    // The irradiance atlas stores radiance over the voxels' decode multiplier
+    // (D_max / pi, D_max the brightest LIGHT; 1 in a scene with no light), and it
+    // was R10G10B10A2_UNORM: a sky above radiance 1.0 clipped there the moment the
+    // sky entered the atlas. It is RGBA16_FLOAT now. A Sky Light at 4 makes the
+    // environment 4 L = 2.06; a dark box (rho 0.2) keeps the pixel readable (the
+    // readback is 8-bit UNORM). The field must read the SH's number, not the
+    // clipped one (rho x 1.0 x energyFactor = 0.132).
+    {
+        PbrParams dark;
+        dark.albedo = Colour(0.2f, 0.2f, 0.2f);
+        dark.roughness = 1.0f;
+        dark.workflow = PbrParams::Workflow::Specular;
+        dark.ior = 1.0f;
+        dark.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        CHECK(s->setNodeMaterial(boxNode, s->createPbrMaterial(dark)), "the box goes dark (rho 0.2)");
+        skyLightOn(4.0f);
+        GiParams offG; offG.mode = GiMode::Off;
+        s->setGlobalIllumination(offG);
+        render(e, 6);
+        const double shBright = readTop(4);
+        GiParams g = base;
+        g.ddgi = GiToggle::On;
+        s->setGlobalIllumination(g);
+        render(e, 40);
+        const double fieldBright = readTop(4);
+        const double clipped = 0.2 * 1.0 * kEnergyFactor1;
+        std::printf("   (c2) Sky Light 4 (environment %.3f): SH %.4f, field %.4f (%.3f of it); an "
+                    "atlas clipped at 1.0 would read %.4f\n", 4.0 * L, shBright, fieldBright,
+                    fieldBright / shBright, clipped);
+        CHECK_MSG(std::fabs(fieldBright / shBright - 1.0) < 0.03 && fieldBright > 1.5 * clipped,
+                  "(c2) the field holds a sky twice its old ceiling (%.4f against the SH's %.4f)",
+                  fieldBright, shBright);
+        PbrParams back;
+        back.albedo = Colour(float(kRho), float(kRho), float(kRho));
+        back.roughness = 1.0f;
+        back.workflow = PbrParams::Workflow::Specular;
+        back.ior = 1.0f;
+        back.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        s->setNodeMaterial(boxNode, s->createPbrMaterial(back));
+        skyLightOn(1.0f);
     }
 
     // ---- (e) ONE GATE ----------------------------------------------------------

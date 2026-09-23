@@ -1,4 +1,14 @@
-// gi.ddgi_ambient — THE PHOTON AMBIENT FIX, end to end.
+// gi.ddgi_ambient — THE SKY INSIDE THE IRRADIANCE FIELD, end to end.
+//
+// SINCE PHOTON-ENV-1 THE FIELD CARRIES THE SKY ITSELF: every probe ray that
+// escapes the voxels reads the one environment in its direction, and the
+// cosine integration puts it in the irradiance atlas beside the bounce. The
+// read-time "ambient x sky visibility" term this suite was written for, and its
+// dial (ddgiAmbient, whose 0 was "DDGI before the fix"), are deleted, so the
+// A/Bs below compare the field against the cone reference and the ANALYTIC sky
+// visibility, and the sealed-room invariance is stated as "the sky on against
+// the sky off" (setAmbient black), which is the physics the dial stood in for.
+// The history below is kept because it is why each case exists.
 //
 // WHAT WAS WRONG, in one paragraph, because the mechanism is three upstream
 // facts stacked on each other (SPECS/OGRE_UPSTREAM_ISSUES.md; GI_UNIFIED_SPEC.md
@@ -232,81 +242,52 @@ int main()
               "the reference DARKENS the corner (its cones see the wall) — "
               "without that there would be nothing to measure the proxy against");
 
-        // ---- THE GAP: bind the field with the fix OFF. DDGI exactly as it
-        //      behaved before this lane.
-        GiParams gap = ref;
-        gap.ddgi = GiToggle::On;
-        gap.ddgiAmbient = 0.0f;
-        CHECK(s->setGlobalIllumination(gap), "DDGI binds with the ambient fix off");
+        // ---- THE FIELD. It carries the sky its probes' rays escape to.
+        GiParams fix = ref;
+        fix.ddgi = GiToggle::On;
+        CHECK(s->setGlobalIllumination(fix), "DDGI binds over the open scene");
         render(e, 6);
-        o.view->readPixels(img);
-        const Colour gapOpen = img.at(kOpenX, kOpenY);
-        show("open   DDGI, fix off", gapOpen);
         {
             const GiStatus st = s->giStatus();
             CHECK(st.ifdBound && st.vctBound && st.ifdConverged,
-                  "the field is bound and converged (so the gap is not a build failure)");
+                  "the field is bound and converged");
         }
-        const float lost = 1.0f - lum(gapOpen) / lum(refOpen);
-        std::printf("   THE GAP: DDGI without the fix loses %.1f%% of the open-floor ambient\n",
-                    lost * 100.0f);
-        CHECK(lost > 0.15f, "binding a field without the fix really does lose the ambient");
-
-        // ---- THE FIX.
-        GiParams fix = gap;
-        fix.ddgiAmbient = 1.0f;
-        CHECK(s->setGlobalIllumination(fix), "DDGI binds with the ambient fix on");
-        render(e, 6);
         o.view->readPixels(img);
         const Colour fixOpen = img.at(kOpenX, kOpenY);
         const Colour fixCorner = img.at(kCornerX, kCornerY);
-        show("open   DDGI, fix on", fixOpen);
-        show("corner DDGI, fix on", fixCorner);
-        // The recovered ambient must carry the ambient's HUE, not a grey: the
-        // pair is blue-tinted (0.44 blue against 0.40 red/green) and a term
-        // that came from anywhere else would not be.
+        show("open   DDGI", fixOpen);
+        show("corner DDGI", fixCorner);
+        // The field's sky carries the ambient's HUE, not a grey: the pair is
+        // blue-tinted (0.44 blue against 0.40 red/green).
         CHECK(fixOpen.b > fixOpen.r * 1.02f,
-              "the recovered term carries the AMBIENT's hue (blue-tinted, like the pair)");
+              "the field's sky carries the AMBIENT's hue (blue-tinted, like the pair)");
 
         const float recovery = lum(fixOpen) / lum(refOpen);
-        std::printf("   RECOVERY: open floor is %.1f%% of the pre-DDGI VCT ambient reading "
+        std::printf("   RECOVERY: open floor is %.1f%% of the cone-traced (VCT) reading "
                     "(and %.1f%% of the raw ambient)\n",
                     recovery * 100.0f, 100.0f * lum(fixOpen) / lum(giOffOpen));
         CHECK(recovery > 0.90f && recovery < 1.10f,
-              "RECOVERY: the fix lands within 10% of the ambient DDGI replaced");
+              "RECOVERY: the field's sky lands within 10% of the cones' — two integrals of one "
+              "environment through one voxel reader");
 
-        // ---- CASE 4: THE CORNER — the multi-tap gate. A floor patch at the
-        //      foot of the wall has half its hemisphere bricked up. The cone
-        //      reference darkens it (measured above: refCorner / refOpen); the
-        //      proxy must darken it too, and by about as much. Both are stated
-        //      as the corner's fraction of open floor, technique by technique,
-        //      so the assertion compares SHAPES and not absolute brightness
-        //      (the recovery assertion above already pins that).
-        //
-        //      The tolerance is measured, not wished (build record, rayon2 S1):
-        //      the reference darkens this corner by 14 points, the shipped
-        //      proxy lands 3.5 points below the reference, the old binary
-        //      single tap sat 14 points ABOVE it, and an identical rebuild is
-        //      stable to 0/255 — so 8 points is more than twice the measured
-        //      error and still rejects the old behaviour.
+        // ---- CASE 4: THE CORNER. A floor patch at the foot of the wall has
+        //      half its hemisphere bricked up. The cone reference darkens it;
+        //      the field must darken it too, and by about as much. Both are
+        //      stated as the corner's fraction of open floor, technique by
+        //      technique, so the assertion compares SHAPES. 8 points is the
+        //      measured tolerance of the build record (rayon2 S1).
         const float refCornerFrac = lum(refCorner) / lum(refOpen);
         const float fixCornerFrac = lum(fixCorner) / lum(fixOpen);
-        const float cornerRecovery = lum(fixCorner) / lum(refCorner);
         std::printf("   CORNER: the reference lights the wall foot at %.1f%% of open floor, "
-                    "the proxy at %.1f%% (%+.1f points); corner recovery %.1f%% against "
-                    "%.1f%% on open floor\n",
+                    "the field at %.1f%% (%+.1f points)\n",
                     refCornerFrac * 100.0f, fixCornerFrac * 100.0f,
-                    (fixCornerFrac - refCornerFrac) * 100.0f,
-                    cornerRecovery * 100.0f, recovery * 100.0f);
+                    (fixCornerFrac - refCornerFrac) * 100.0f);
         const float kCornerTolerancePoints = 8.0f;
         CHECK(fixCornerFrac < 0.95f,
-              "the proxy DARKENS the wall foot against open floor (the single-tap build "
-              "could not — it looked along the normal only)");
+              "the field DARKENS the wall foot against open floor");
         CHECK(std::fabs(fixCornerFrac - refCornerFrac) * 100.0f < kCornerTolerancePoints,
-              "CORNER: the proxy's wall-foot darkening lands within the measured tolerance "
+              "CORNER: the field's wall-foot darkening lands within the measured tolerance "
               "of the cone reference's");
-
-        CHECK(lum(fixOpen) - lum(gapOpen) > 0.01f, "the dial moves the picture");
 
         o.view->setScene(nullptr);
         e->destroyScene(s);
@@ -377,16 +358,14 @@ int main()
 
         GiParams fix = ref;
         fix.ddgi = GiToggle::On;
-        fix.ddgiAmbient = 1.0f;
-        CHECK(s->setGlobalIllumination(fix), "DDGI + the fix on the shipped tier");
+        CHECK(s->setGlobalIllumination(fix), "DDGI on the shipped tier");
         render(e, 6);
         o.view->readPixels(img);
         const Colour fixOpen = img.at(kOpenX, kOpenY);
-        show("open   DDGI + fix", fixOpen);
+        show("open   DDGI", fixOpen);
         const float vsRaw = lum(fixOpen) / lum(giOffOpen);
-        std::printf("   the fix lands at %.1f%% of the raw ambient (was %.1f%% without a field, "
-                    "%.1f%% with a field and the fix off)\n",
-                    vsRaw * 100.0f, kept * 100.0f, 0.0f);
+        std::printf("   the field lands at %.1f%% of the raw ambient (the cones alone %.1f%%)\n",
+                    vsRaw * 100.0f, kept * 100.0f);
         // AGAINST THE FIXTURE'S OWN TRUTH, NOT THE RAW AMBIENT (PHOTON-READER-1): the
         // wall really hides part of this floor point's sky, so the correct answer is
         // its cosine-weighted sky visibility, computed here exactly. What the field
@@ -403,7 +382,7 @@ int main()
                     "field gives %.3f of the raw ambient = %.3f of the truth\n",
                     openPoint.x, openPoint.z, truth, vsRaw, truth > 0.0f ? vsRaw / truth : 0.0f);
         CHECK(vsRaw >= 0.90f * truth && vsRaw <= 1.05f,
-              "on the shipped tier the fix lands at >= 90% of the floor's ANALYTIC sky visibility");
+              "on the shipped tier the field lands at >= 90% of the floor's ANALYTIC sky visibility");
 
         o.view->setScene(nullptr);
         e->destroyScene(s);
@@ -415,12 +394,12 @@ int main()
     // fix must add achromatic ambient WITHOUT eating the red bounce the field
     // is there to carry.
     // =====================================================================
-    std::printf("\n== case 3: the bounce survives the fix ==\n");
+    std::printf("\n== case 3: the bounce survives the sky ==\n");
     {
         View *view = e->createOffscreenView("ddgiamb_lit", 128, 128, Colour(0, 0, 0));
         Scene *s = e->createScene("ddgiamb_lit");
         view->setScene(s);
-        s->setAmbient(kAmbientUpper, kAmbientLower);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
 
         addSlab(s, Colour(1.0f, 1.0f, 1.0f), Vec3(0.0f, -0.05f, 0.0f), Vec3(14.0f, 0.1f, 14.0f));
         addSlab(s, Colour(1.0f, 0.05f, 0.05f), Vec3(0.0f, 3.0f, -3.0f), Vec3(12.0f, 6.0f, 0.9f));
@@ -437,30 +416,32 @@ int main()
         enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 6.0f), Vec3(0.0f, 0.0f, -0.5f));
         const unsigned fx = 64, fy = 96;      // gi.ddgi's floor probe
 
-        GiParams gap = vctBase();
-        gap.ddgi = GiToggle::On;
-        gap.ddgiAmbient = 0.0f;
-        CHECK(s->setGlobalIllumination(gap), "the lit room binds a field with the fix off");
+        // THE SKY OFF (a black ambient: no environment for any reader), then ON.
+        GiParams field = vctBase();
+        field.ddgi = GiToggle::On;
+        CHECK(s->setGlobalIllumination(field), "the lit room binds a field, no sky");
         render(e, 6);
         Image img; view->readPixels(img);
         const Colour litGap = img.at(fx, fy);
-        show("lit floor  DDGI, fix off", litGap);
+        show("lit floor  DDGI, no sky", litGap);
 
-        GiParams fix = gap;
-        fix.ddgiAmbient = 1.0f;
-        CHECK(s->setGlobalIllumination(fix), "the lit room binds a field with the fix on");
-        render(e, 6);
+        s->setAmbient(kAmbientUpper, kAmbientLower);
+        render(e, 30);          // the field re-integrates (its rays now see a sky)
         view->readPixels(img);
         const Colour litFix = img.at(fx, fy);
-        show("lit floor  DDGI, fix on", litFix);
+        show("lit floor  DDGI, sky", litFix);
 
         const float bounceGap = litGap.r - litGap.g;
         const float bounceFix = litFix.r - litFix.g;
-        std::printf("   red bounce: %.4f without the fix, %.4f with it (%.1f%%)\n",
+        std::printf("   red bounce: %.4f without the sky, %.4f with it (%.1f%%)\n",
                     bounceGap, bounceFix, 100.0f * bounceFix / bounceGap);
         CHECK(bounceGap > 0.02f, "there is a red bounce to preserve");
+        // The sky is achromatic here and enters the SAME atlas texel as the
+        // bounce: it must add to it, never replace it. 35 % is the build
+        // record's allowance (the sky also brightens the wall, whose red bounce
+        // then rises a little — a second bounce of the sky, which is physics).
         CHECK(std::fabs(bounceFix - bounceGap) < 0.35f * bounceGap,
-              "the fix preserves the red bounce (it adds ambient, it does not replace GI)");
+              "the sky preserves the red bounce (it adds light, it does not replace GI)");
         CHECK(lum(litFix) > lum(litGap), "and it does brighten the lit room's floor");
 
         view->setScene(nullptr);
@@ -469,9 +450,9 @@ int main()
     }
 
     // =====================================================================
-    // CASE 5 — SEALED-ROOM INVARIANCE. THE assertion that says this is a
-    // visibility proxy and not a blanket ambient: a closed room has no sky, so
-    // turning the fix on must change NOTHING there. Stated over the WHOLE
+    // CASE 5 — SEALED-ROOM INVARIANCE. THE assertion that says the sky enters
+    // the field by VISIBILITY and not as a blanket ambient: a closed room has no
+    // sky, so turning the sky on must change NOTHING there. Stated over the WHOLE
     // FRAME, in 8-bit steps, because a per-pixel probe could sit on the one
     // surface that happens not to move — and guarded against the vacuous
     // version of itself (a black or a blown-out frame cannot move either).
@@ -481,7 +462,7 @@ int main()
         View *view = e->createOffscreenView("ddgiamb_room", 128, 128, Colour(0, 0, 0));
         Scene *s = e->createScene("ddgiamb_room");
         view->setScene(s);
-        s->setAmbient(kAmbientUpper, kAmbientLower);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));      // the sky OFF first
 
         // gi.pcc_mirror's closed room: interior x,z in [-4,4], y in [0,5],
         // 0.4-thick shell, and no way in for sky.
@@ -515,8 +496,7 @@ int main()
         room.testBoundsMin = Vec3(-5.0f, -1.0f, -5.0f);
         room.testBoundsMax = Vec3(5.0f, 6.0f, 5.0f);
         room.ddgi = GiToggle::On;
-        room.ddgiAmbient = 0.0f;
-        CHECK(s->setGlobalIllumination(room), "the sealed room binds a field with the fix off");
+        CHECK(s->setGlobalIllumination(room), "the sealed room binds a field, no sky");
         render(e, 6);
         Image off1; view->readPixels(off1);
 
@@ -546,40 +526,21 @@ int main()
                     control, control * 255.0f);
         CHECK(control * 255.0f <= 1.0f, "CONTROL: an identical rebuild is stable to 1/255");
 
-        GiParams roomFix = room;
-        roomFix.ddgiAmbient = 1.0f;
-        CHECK(s->setGlobalIllumination(roomFix), "the sealed room binds a field with the fix on");
-        render(e, 6);
+        s->setAmbient(kAmbientUpper, kAmbientLower);          // the sky ON
+        render(e, 30);           // every probe re-integrated under the sky
         Image on1; view->readPixels(on1);
         unsigned wx = 0, wy = 0;
         const float delta = maxChannelDelta(off2, on1, &wx, &wy);
         std::printf("   INVARIANCE: worst pixel moves %.5f (%.2f/255) at (%u,%u)\n",
                     delta, delta * 255.0f, wx, wy);
-        show("sealed room floor, fix off", off2.at(64, 104));
-        show("sealed room floor, fix on ", on1.at(64, 104));
+        show("sealed room floor, no sky", off2.at(64, 104));
+        show("sealed room floor, sky    ", on1.at(64, 104));
         // THE BAR IS ONE QUANTISATION STEP, NOT ZERO (PHOTON-READER-1, the lead's
-        // verdict): the sky term is now the escape the probes' rays MEASURED in the
-        // voxel march, and the voxel representation leaks a sliver of it through
-        // the anisotropic volumes' coarse mips (a hit-based escape - cards or rays -
-        // is the true zero); the fitted knee that forced 0 is deleted.
+        // verdict): the escape is what the voxel march measures, and the voxel
+        // representation leaks a sliver of it through the anisotropic volumes'
+        // coarse mips (a hit-based escape — cards or rays — is the true zero).
         CHECK(delta * 255.0f <= 1.0f + 1e-3f,
-              "SEALED-ROOM INVARIANCE: no pixel moves more than 1/255 with the fix on");
-
-        // AND AT EIGHT TIMES THE STRENGTH. A term that were present but merely
-        // small would show up here; zero times eight is still zero, and only a
-        // visibility fraction that is genuinely ZERO in this room can survive
-        // the dial being pushed to its ceiling.
-        GiParams roomLoud = room;
-        roomLoud.ddgiAmbient = 8.0f;
-        CHECK(s->setGlobalIllumination(roomLoud), "the sealed room at ddgiAmbient 8");
-        render(e, 6);
-        Image on8; view->readPixels(on8);
-        const float delta8 = maxChannelDelta(off2, on8, &wx, &wy);
-        std::printf("   INVARIANCE at 8x strength: worst pixel moves %.5f (%.2f/255) at (%u,%u)\n",
-                    delta8, delta8 * 255.0f, wx, wy);
-        // A READING, NOT A BAR (the 1x assertion above is the bar). Printed: at eight times the strength the representation's
-        // leak above is eight times as visible, which is the same fact, not a
-        // second one (the old assertion here fenced the deleted knee).
+              "SEALED-ROOM INVARIANCE: no pixel moves more than 1/255 with the sky on");
 
         view->setScene(nullptr);
         e->destroyScene(s);

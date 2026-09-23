@@ -299,7 +299,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giDdgi"] = scene->giDdgi;
     sceneObj["giGather"] = scene->giGather;
     sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
-    sceneObj["giDdgiAmbient"] = scene->giDdgiAmbient;
     // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
     // and spelled out here for the same reason (this file must not pull the
     // services layer into a dozen headless test targets): an ordinal would

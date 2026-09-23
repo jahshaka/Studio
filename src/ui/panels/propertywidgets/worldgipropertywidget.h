@@ -156,7 +156,6 @@ private:
     RowPtr<HFloatSliderWidget> updateBudget;
     RowPtr<CheckBoxWidget> ddgiToggle;
     RowPtr<HFloatSliderWidget> ddgiIntensity;
-    RowPtr<HFloatSliderWidget> ddgiAmbient;
     RowPtr<QPushButton> advancedButton;
     RowPtr<QPushButton> resetAdvancedButton;
     /// Disclosure state, per session (the panel is rebuilt on every edit).

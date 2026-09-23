@@ -32,6 +32,14 @@
 // roughness 1 — is printed beside it and is NOT the claim. The SHAPE miss is
 // the integrator's, and remains after both.
 //
+// THE NEXT ITEM, AND WHOSE IT IS (the lead, PHOTON-ENV-1 fix round): the voxel's
+// emission must be what its surface renders — ROUGHNESS INTO THE VOXEL MATERIAL
+// STORE, and the light injection's diffuse (and the bounce's rho * G) carrying
+// the same `jahDiffuseEnergyFactor` the pixel's direct and environment lobes do.
+// That is ONE-WRITER's lane (B4), not the environment's; this row stays a target
+// until it lands. The environment lane's own claim is the wall side, and it is
+// what equation (4) now states.
+//
 // ===========================================================================
 // THE PHYSICS, WRITTEN OUT
 // ===========================================================================

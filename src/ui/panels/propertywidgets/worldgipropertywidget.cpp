@@ -112,7 +112,7 @@ void WorldGiPropertyWidget::rebuild()
     quality = nullptr; bounces = nullptr;
     pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr; reflectionsText.clear();
     updateBudget = nullptr; ddgiToggle = nullptr;
-    ddgiIntensity = nullptr; ddgiAmbient = nullptr;
+    ddgiIntensity = nullptr;
     advancedButton = nullptr; resetAdvancedButton = nullptr;
     editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
     if (!scene) return;
@@ -401,19 +401,6 @@ void WorldGiPropertyWidget::rebuild()
                    "contributing nothing."));
             wirePlainRow(ddgiIntensity, QStringLiteral("giDdgiIntensity"), tr("Field Intensity"),
                          [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 64.0f)); });
-            ddgiAmbient = this->addFloatValueSlider(tr("Ambient Fill"), 0.0f, 4.0f,
-                                                    qBound(0.0f, scene->giDdgiAmbient, 4.0f));
-            ddgiAmbient->setToolTip(
-                tr("How strongly the ambient the field would otherwise swallow is rebuilt. "
-                   "Inside the lit volume the ordinary ambient term is switched off — the "
-                   "cone-traced bounce carried it instead, weighted by how much sky each "
-                   "surface could see — and the field replacing that bounce used to take the "
-                   "ambient with it, flattening open scenes.\n\n"
-                   "1.0 rebuilds it from the field's own depth probes and is the default; 0 "
-                   "leaves it out, which is how this behaved before the fix. A sealed room "
-                   "sees no difference either way: it has no sky to see."));
-            wirePlainRow(ddgiAmbient, QStringLiteral("giDdgiAmbient"), tr("Ambient Fill"),
-                         [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 8.0f)); });
         }
 
         break;

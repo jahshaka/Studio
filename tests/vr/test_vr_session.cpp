@@ -106,6 +106,10 @@ void setFixtureSky(Scene *scene, bool on) {
     scene->setSky(sky);
 }
 
+/// The fixture's red pillar (buildScene): case 10 hides it, because it stands in
+/// the wearer's DIRECT view in front of that case's mirror.
+static NodeId gFixturePillar = 0;
+
 void buildScene(Scene *scene) {
     addDirectionalLight(scene, Vec3{ -0.4f, -1.0f, -0.55f }, 3.14159f);
     // A NEAR SILHOUETTE AGAINST A FAR SURFACE, AND BOTH TALL. The parallax the
@@ -117,6 +121,7 @@ void buildScene(Scene *scene) {
     // called it stereo). A pillar in front of a wall, both spanning several
     // metres vertically, is in frame from any head height.
     const NodeId pillar = addTestCube(scene, Colour{ 0.80f, 0.25f, 0.15f, 1.0f }, 0.0f, 0.45f);
+    gFixturePillar = pillar;
     setNodePosition(scene, pillar, Vec3{ 0.35f, 1.0f, -1.0f });
     setNodeScale(scene, pillar, Vec3{ 0.25f, 4.0f, 0.25f });
     const NodeId wall = addTestCube(scene, Colour{ 0.20f, 0.55f, 0.85f, 1.0f }, 0.0f, 0.55f);
@@ -1830,18 +1835,40 @@ int main() {
         // in the mirror sits about 22 degrees right of the view axis, which is
         // the whole point: inside each eye's own frustum, outside the left half
         // of a head-wide one.
+        // THE REFLECTED OBJECT IS THINNER THAN A VOXEL, and that is the whole of
+        // the re-authoring (PHOTON-ENV-1). The two reflection sources read the
+        // SAME voxel radiance (a ray's hit is shaded from the cascades), so over
+        // a large, well-voxelised object they agree — measured +4.65 against
+        // +4.90 over the old 1.2 m cube, i.e. the old fixture could not tell a
+        // ray from a cone at all; it passed only while a ray MISS read a stale,
+        // ungated raw sky integral that painted the mirror's upper half red.
+        // What a ray has and a cone does not is GEOMETRY: the ray stops on the
+        // pillar's triangles and reads the voxel there divided by its opacity —
+        // the pillar's own radiance (jah_rq_hit.glsl's opacity divide); the
+        // roughness-0 cone marches mip 0 of the anisotropic volume, whose texel is
+        // two cells (0.25 m at High over this 16 m box), and reads the pillar
+        // DILUTED by its coverage of that texel: a 5 cm pillar covers at most a
+        // fifth of it. So the ray's image of the pillar is the pillar's radiance
+        // and the cone's is a fraction of it — the ratio is a statement about
+        // coverage, not a tuned number. Emissive 1.0 (not above): the voxeliser's
+        // emissive store is UNORM and clips anything brighter to 1.0
+        // (gi.gather_reference), which would compress exactly the ratio measured.
         const NodeId red = scene->createNode();
         {
             PbrParams rp;
-            rp.albedo = Colour{ 0.05f, 0.05f, 0.05f, 1.0f };
-            rp.emissive = Colour{ 6.0f, 0.0f, 0.0f, 1.0f };
-            rp.roughness = 0.6f;
+            rp.albedo = Colour{ 0.0f, 0.0f, 0.0f, 1.0f };
+            rp.emissive = Colour{ 1.0f, 0.0f, 0.0f, 1.0f };
+            rp.roughness = 1.0f;
             const MaterialId m = scene->createPbrMaterial(rp);
             const MeshId mesh = scene->createMesh(enginetest::unitCubeMesh());
             REQUIRE(red && m && mesh && scene->attachMesh(red, mesh, m));
         }
-        setNodePosition(scene, red, Vec3{ 1.6f, 0.2f, 1.6f });
-        setNodeScale(scene, red, Vec3{ 1.2f, 1.2f, 1.2f });
+        // BEHIND the wearer and to their right (the old cube's side, so its
+        // virtual image is still off axis, inside each eye's own frustum), tall
+        // enough to cross any head height a runtime chooses.
+        setNodePosition(scene, red, Vec3{ 1.0f, 0.0f, 1.2f });
+        setNodeScale(scene, red, Vec3{ 0.05f, 8.0f, 0.05f });
+        if (gFixturePillar) scene->setNodeVisible(gFixturePillar, false);
         // THE VOXELS A HIT IS SHADED FROM have to reach the cube AND the mirror.
         {
             GiParams gi;
@@ -1871,6 +1898,47 @@ int main() {
                 }
             return n ? sum / double(n) : 0.0;
         };
+        /// THE BRIGHTEST COLUMN'S red excess: the mean over the frame's height
+        /// of each column, maxed over the columns. A thin vertical pillar's
+        /// image is a few columns wide wherever the head is, and a whole-frame
+        /// mean would average it with a mirror full of grey.
+        const auto peakColumn = [](const unsigned char *px, unsigned w, unsigned hgt) {
+            if (!w || !hgt) return 0.0;
+            const unsigned ay = unsigned(0.02f * float(hgt)), by = unsigned(0.98f * float(hgt));
+            double best = -1e9;
+            for (unsigned x = unsigned(0.02f * float(w)); x < unsigned(0.98f * float(w)); ++x) {
+                double sum = 0.0; unsigned n = 0;
+                for (unsigned y = ay; y < by; ++y) {
+                    const size_t i = (size_t(y) * w + x) * 4u;
+                    sum += double(px[i]) - 0.5 * (double(px[i + 1]) + double(px[i + 2]));
+                    ++n;
+                }
+                if (n) best = std::max(best, sum / double(n));
+            }
+            return best;
+        };
+        /// THE IMAGE'S WIDTH, in columns: how many columns' red excess reaches
+        /// half the brightest column's (the full width at half maximum of the
+        /// pillar's reflected image, over the frame's height).
+        const auto redWidth = [](const unsigned char *px, unsigned w, unsigned hgt) {
+            if (!w || !hgt) return 0;
+            const unsigned ay = unsigned(0.02f * float(hgt)), by = unsigned(0.98f * float(hgt));
+            std::vector<double> col(w, 0.0);
+            double best = 0.0;
+            for (unsigned x = unsigned(0.02f * float(w)); x < unsigned(0.98f * float(w)); ++x) {
+                double sum = 0.0; unsigned n = 0;
+                for (unsigned y = ay; y < by; ++y) {
+                    const size_t i = (size_t(y) * w + x) * 4u;
+                    sum += double(px[i]) - 0.5 * (double(px[i + 1]) + double(px[i + 2]));
+                    ++n;
+                }
+                col[x] = n ? sum / double(n) : 0.0;
+                best = std::max(best, col[x]);
+            }
+            int wide = 0;
+            for (unsigned x = 0; x < w; ++x) if (best > 0.0 && col[x] >= 0.5 * best) ++wide;
+            return wide;
+        };
         /// The same over an Image (a control render is one eye's worth).
         const auto redExcessImg = [&redExcess](const Image &img, float x0, float x1,
                                                float y0, float y1) {
@@ -1888,6 +1956,7 @@ int main() {
         const float kAx0 = 0.02f, kAx1 = 0.98f, kAy0 = 0.02f, kAy1 = 0.98f;
 
         double offLeftEye = 0.0, offRightEye = 0.0;
+        int offLeftWidth = 0, offRightWidth = 0;
         // ---- (a) THE ROW OFF: the phase-2 headset, in this fixture ---------
         {
             VrConfig cfg;
@@ -1900,9 +1969,29 @@ int main() {
                 Image img; Half l, r;
                 if (CHECK_MSG(engine->vrView() && engine->vrView()->readPixels(img) &&
                                   splitEyes(img, l, r), "and it draws both eyes")) {
-                    offLeftEye = redExcess(l, kAx0, kAx1, kAy0, kAy1);
-                    offRightEye = redExcess(r, kAx0, kAx1, kAy0, kAy1);
-                    std::printf("    ROW OFF: the mirror reads %+.2f (left eye) and %+.2f "
+                    offLeftEye = peakColumn(l.px.data(), l.w, l.h);
+                    offRightEye = peakColumn(r.px.data(), r.w, r.h);
+                    offLeftWidth = redWidth(l.px.data(), l.w, l.h);
+                    offRightWidth = redWidth(r.px.data(), r.w, r.h);
+                    std::printf("    (whole-frame mean, row off: %+.2f / %+.2f; image width %d / %d "
+                                "columns)\n",
+                                redExcess(l, kAx0, kAx1, kAy0, kAy1),
+                                redExcess(r, kAx0, kAx1, kAy0, kAy1),
+                                redWidth(l.px.data(), l.w, l.h), redWidth(r.px.data(), r.w, r.h));
+                    if (const char *dir = std::getenv("JAH_VR_DUMP")) {
+                        for (unsigned eye = 0; eye < 2u; ++eye) {
+                            const Half &hh = eye ? r : l;
+                            char path[512];
+                            std::snprintf(path, sizeof(path), "%s/reflect-off-eye%u.ppm", dir, eye);
+                            if (FILE *f = std::fopen(path, "wb")) {
+                                std::fprintf(f, "P6\n%u %u\n255\n", hh.w, hh.h);
+                                for (size_t i = 0; i < size_t(hh.w) * hh.h; ++i)
+                                    std::fwrite(&hh.px[i * 4], 1, 3, f);
+                                std::fclose(f);
+                            }
+                        }
+                    }
+                    std::printf("    ROW OFF: the brightest column reads %+.2f (left eye) and %+.2f "
                                 "(right eye) 255ths of red over grey — the cone-traced answer "
                                 "alone, which is the phase-2 headset\n", offLeftEye, offRightEye);
                 }
@@ -1977,11 +2066,17 @@ int main() {
                             std::fclose(f);
                         }
                     }
-                    const double on = redExcess(half, kAx0, kAx1, kAy0, kAy1);
-                    const double ctl = redExcessImg(mono, kAx0, kAx1, kAy0, kAy1);
+                    const double on = peakColumn(half.px.data(), half.w, half.h);
+                    const double ctl = peakColumn(mono.rgba.data(), mono.width, mono.height);
+                    std::printf("    (whole-frame mean, row on eye %u: %+.2f; control %+.2f; image "
+                                "width %d, control %d columns)\n", eye,
+                                redExcess(half, kAx0, kAx1, kAy0, kAy1),
+                                redExcessImg(mono, kAx0, kAx1, kAy0, kAy1),
+                                redWidth(half.px.data(), half.w, half.h),
+                                redWidth(mono.rgba.data(), mono.width, mono.height));
                     const double off = eye ? offRightEye : offLeftEye;
                     const PictureDiff d = pictureDiff(mono.rgba, half.px);
-                    std::printf("    ROW ON eye %u: the mirror reads %+.2f (its mono control "
+                    std::printf("    ROW ON eye %u: the brightest column reads %+.2f (its mono control "
                                 "%+.2f, the row-off picture %+.2f); eye vs control mean %.3f, "
                                 "%.3f%% of bytes over 8, worst %d\n", eye, on, ctl, off,
                                 d.meanAbs, 100.0 * d.fractionOver, d.worst);
@@ -1989,36 +2084,37 @@ int main() {
                     // THERE: the same fixture, the same eye, measured with the
                     // row off a moment ago. That difference is the owner's
                     // observation, in numbers.
-                    CHECK_MSG(on > off * 1.5 && on > off + 8.0,
-                              "EYE %u SHOWS THE RAY-TRACED REFLECTION: the mirror reads %+.2f "
-                              "of red against %+.2f with the reflection row off — the headset's "
-                              "own A/B, in one session and one fixture", eye, on, off);
-                    // (c) AND IT IS THIS EYE'S OWN ANSWER, which is the
-                    // statement no band can make. The control is a mono render
+                    // WHAT A RAY HAS AND A CONE DOES NOT IS GEOMETRY (the fixture's note):
+                    // the ray's image of the 5 cm pillar is the pillar's own width, the
+                    // roughness-0 cone's is the anisotropic volume's mip-0 texel (two
+                    // cells, 0.25 m here) — FIVE times wider at the same distance.
+                    // Measured 3 columns against 9. The bar is the geometry's with room
+                    // for the pixel grid: the ray's image at most HALF as wide. And a
+                    // narrower image of the same radiance concentrates it, so its
+                    // brightest column is at least as red as the cone's.
+                    const int onWidth = redWidth(half.px.data(), half.w, half.h);
+                    const int ctlWidth = redWidth(mono.rgba.data(), mono.width, mono.height);
+                    const int offWidth = eye ? offRightWidth : offLeftWidth;
+                    CHECK_MSG(onWidth > 0 && 2 * onWidth <= offWidth && on >= off,
+                              "EYE %u SHOWS THE RAY-TRACED REFLECTION: the pillar's image is %d "
+                              "columns wide at %+.2f of red against the cone's %d columns at "
+                              "%+.2f with the reflection row off — the headset's own A/B, in one "
+                              "session and one fixture", eye, onWidth, on, offWidth, off);
+                    // (c) AND IT IS THIS EYE'S OWN ANSWER. The control is a mono render
                     // at this eye's exact pose and projection through the SAME
                     // reflection source (the session's PostFxDesc, which
-                    // `vrEyeScreenshot` copies — `ssrScreenMarch` included,
-                    // which is what makes the two comparable at all), so the
-                    // two pictures may differ only by the last bits of two
-                    // chains' arithmetic. The bar is the reverse-Z detector's
-                    // own, measured on the same fixture.
-                    //
-                    // THIS IS THE ASSERTION THE LANE EXISTS FOR, and it FAILS
-                    // BEFORE the fix: tracing the stereo target through ONE
-                    // camera for both halves — the shape before this lane,
-                    // reproducible on demand with `JAH_R5_MONO_EYES=1` — reads
-                    // a mean of 2.702/255 and 5.6 % of bytes over 8 in the LEFT
-                    // eye and 6.258 with 12.8 % in the RIGHT one (measured, one
-                    // run each side). The asymmetry is itself the explanation:
-                    // the rendering camera carries the LEFT eye's projection
-                    // (OgreVrSession.cpp's F2), so a one-camera trace is nearly
-                    // right for the left half and wrong for the other one —
-                    // which is exactly the kind of defect that looks like
-                    // "reflections are a bit odd in there" instead of a bug.
-                    CHECK_MSG(ctl > off + 8.0,
-                              "the control at this eye's pose shows it too (%+.2f against the "
-                              "row-off %+.2f) — the desktop-shaped render the owner compared "
-                              "against", ctl, off);
+                    // `vrEyeScreenshot` copies — `ssrScreenMarch` included), so the two
+                    // pictures may differ only by the last bits of two chains'
+                    // arithmetic. THIS IS THE ASSERTION THE LANE EXISTS FOR: tracing the
+                    // stereo target through ONE camera for both halves (reproducible
+                    // with `JAH_R5_MONO_EYES=1`) read a mean of 2.702/255 at 5.6 % of
+                    // bytes over 8 in the LEFT eye and 6.258 at 12.8 % in the RIGHT one
+                    // (the rendering camera carries the left eye's projection,
+                    // OgreVrSession.cpp's F2).
+                    CHECK_MSG(ctlWidth > 0 && 2 * ctlWidth <= offWidth && ctl >= off,
+                              "the control at this eye's pose shows it too (%d columns at %+.2f "
+                              "against the row-off %d at %+.2f) — the desktop-shaped render the "
+                              "owner compared against", ctlWidth, ctl, offWidth, off);
                     // THE MEAN IS THE PRIMARY BAR and the fraction the
                     // secondary, which is the other way round from the
                     // reverse-Z detector above — because the two chains here
@@ -2050,6 +2146,7 @@ int main() {
         }
         scene->removeNode(mirror);
         scene->removeNode(red);
+        if (gFixturePillar) scene->setNodeVisible(gFixturePillar, true);
     }
 
     // =======================================================================
