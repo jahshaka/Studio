@@ -334,9 +334,9 @@ static int caseCapture()
     // Nothing else in this suite exercises v: a card's +Z face is uniform, so
     // an upside-down atlas rect would read identically. This arm makes the
     // card's two v halves DIFFERENT and asserts the read agrees with the
-    // capture — which is what keeps the GPU record phase 4 is told to port
-    // (`CardGpuRec::uvScaleBias`, whose scale.y is negative) honest against the
-    // CPU read (`sampleCard`, which flips v).
+    // capture — which is what keeps the CPU read (`sampleCard`, which flips v)
+    // honest; the ray job's GLSL pick (jah_rq_card.glsl) uses the same integer
+    // rule and gi.card_read_parity holds it to this read.
     {
         const NodeId tall = s->createNode();
         PbrParams p;
@@ -1121,9 +1121,33 @@ static int caseLighting()
 // The irradiance field is OFF (it routes the pixel's diffuse at every shipped
 // tier: the trap file's rule), and so are the rays and the gather — the pixel's
 // diffuse is then exactly the cone march this job ports.
+/// THE CARD'S INDIRECT CONVENTION against a head-on pixel (PHOTON-CARDS-2 audit
+/// F4). The pixel's environment lobe reflects envColourD x kD x pi x A(NdotV, r),
+/// the Disney lobe's DIRECTIONAL albedo at its own view angle; a card texel is
+/// read from every direction and stores the lobe's HEMISPHERICAL mean,
+/// A_hemi(r) = 2 x integral of A(mu, r) mu dmu (the bounce job's convention). So
+/// a pixel seen head-on (NdotV = 1) and the card at the same point differ by
+/// exactly A_hemi(r) / A(1, r) — 1.020 at r = 1 — and the suites compare the card
+/// to the pixel times that ratio. Both halves by direct integration of the lobe
+/// (enginetest::disneyDiffuseAlbedo), never by the shader's fit.
+static double hemiOverHeadOn(double r)
+{
+    const int n = 64;
+    double hemi = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double mu = (double(i) + 0.5) / double(n);
+        hemi += 2.0 * enginetest::disneyDiffuseAlbedo(mu, r) * mu / double(n);
+    }
+    return hemi / enginetest::disneyDiffuseAlbedo(1.0, r);
+}
+
 static int caseLightingIndirect()
 {
     const unsigned kPx = 256u;
+    // The walls are roughness 1 and read head-on: the pixel re-expressed in the
+    // card's hemispherical convention (hemiOverHeadOn's comment).
+    const double kConv = hemiOverHeadOn(1.0);
+    std::printf("    the card's hemispherical-mean albedo over the head-on pixel's, r = 1: %.4f\n", kConv);
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -1217,7 +1241,7 @@ static int caseLightingIndirect()
                     sum[0] += c.r; sum[1] += c.g; sum[2] += c.b;
                     ++n;
                 }
-            for (int k = 0; k < 3; ++k) m[k] = sum[k] / n;
+            for (int k = 0; k < 3; ++k) m[k] = sum[k] / n * kConv;
             CardSample t;
             const bool ok = s->readCardAt(Vec3(float(x), float(h), 0.0f), Vec3(0, 0, -1), t) && t.ok;
             if (!ok) {
@@ -1260,7 +1284,7 @@ static int caseLightingIndirect()
                     m[0] += c.r; m[1] += c.g; m[2] += c.b;
                     ++n;
                 }
-            for (double &v : m) v /= n;
+            for (double &v : m) v = v / n * kConv;
             CardSample t;
             if (!s->readCardAt(Vec3(-1.5f, float(h), 0.0f), Vec3(0, 0, -1), t) || !t.ok) {
                 CHECK_MSG(false, "%s: the card answers at h %.1f", what, h);
@@ -1270,7 +1294,7 @@ static int caseLightingIndirect()
             for (int k = 0; k < 3; ++k) {
                 const double rel = m[k] > 1e-4 ? std::fabs(t.indirect[k] - m[k]) / m[k] : 1.0;
                 CHECK_MSG(m[k] > 0.02 && rel <= 0.05,
-                          "%s, h %.1f, channel %d: card indirect %.4f, pixel diffuse %.4f (%.2f %%,"
+                          "%s, h %.1f, channel %d: card indirect %.4f, pixel diffuse x A_hemi/A(1) %.4f (%.2f %%,"
                           " bar 5 %%)", what, h, k, t.indirect[k], m[k], 100.0 * rel);
             }
         }
@@ -1421,9 +1445,10 @@ static int caseLightingIndirect()
 // PHOTON-CARDS-2 part A: the diffuse cone integrator is ONE text
 // (jah_voxel_cones.glsl, the piece JahVoxelCones) that the pixel shader, the
 // bounce job and the card job all insert, and the card's environment lobe is
-// the pixel's (jahDiffuseAlbedo at V = N). So at the same world point, seen
-// head-on (NdotV = 1), the card's cached indirect and the pixel's diffuse are
-// the same arithmetic over the same volumes, and this holds them to 1 %.
+// the pixel's albedo at its hemispherical mean (hemiOverHeadOn). So at the same
+// world point, seen head-on (NdotV = 1), the card's cached indirect and the
+// pixel's diffuse times A_hemi/A(1) are the same arithmetic over the same
+// volumes, and this holds them to 1 %.
 //
 // TWO WALLS in one scene (one GI arm per process — the trap file's rule): one
 // facing -Z, where the cone frame is a world-axis frame, and one turned 30
@@ -1442,6 +1467,7 @@ static int caseLightingIndirect()
 static int caseConeParity()
 {
     const unsigned kPx = 256u;
+    const double kConv = hemiOverHeadOn(1.0);   // the card's convention (hemiOverHeadOn)
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -1539,7 +1565,7 @@ static int caseConeParity()
                         m[0] += c.r; m[1] += c.g; m[2] += c.b;
                         ++cnt;
                     }
-                for (double &v : m) v /= cnt;
+                for (double &v : m) v = v / cnt * kConv;
                 const Vec3 local = rotY(a.theta, Vec3(float(x), float(h) - 2.0f, -0.15f));
                 const Vec3 w(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
                 CardSample t;
@@ -1553,12 +1579,12 @@ static int caseConeParity()
                     const double store = t.indirect[k] > 0.0f
                                              ? 0.5 * std::ldexp(1.0, std::ilogb(double(t.indirect[k])) - bits)
                                              : 0.0;
-                    const double tol = 0.01 * m[k] + store + 0.5 / 255.0;
+                    const double tol = 0.01 * m[k] + store + kConv * 0.5 / 255.0;
                     const double diff = std::fabs(double(t.indirect[k]) - m[k]);
                     const double rel = m[k] > 1e-4 ? diff / m[k] : 1.0;
                     worst = std::max(worst, rel);
                     CHECK_MSG(m[k] > 0.05 && m[k] < 0.95 && diff <= tol,
-                              "%s (%+.1f, %.1f) channel %d: card indirect %.4f, pixel diffuse %.4f"
+                              "%s (%+.1f, %.1f) channel %d: card indirect %.4f, pixel diffuse x A_hemi/A(1) %.4f"
                               " (%.2f %%; bar 1 %% + half the store's step %.4f + half a code)",
                               a.name, x, h, k, t.indirect[k], m[k], 100.0 * rel, store);
                 }
@@ -1576,8 +1602,10 @@ static int caseConeParity()
 // FIRST, through jah_rq_card.glsl — `SurfaceCache::readAt` ported to GLSL. The
 // CPU `readAt` stays as the reference, and this holds the port to it: 1,000
 // random points on the crate's six faces, each asked of both with the same
-// facing direction (a random direction on the face's own hemisphere — the ray
-// job passes the reversed ray, which is exactly that), must pick the SAME card
+// facing direction — the face's GEOMETRIC normal, which is what the ray job
+// hands its pick now (rebuilt from the hit triangle, jah_rq_geom.glsl; the
+// oblique-hit arm of gi.rt_reflect_hitres holds that reconstruction), and what
+// the CPU reference has always taken — must pick the SAME card
 // and the SAME atlas texel, agree on whether the card is lit, and return the
 // same radiance (both decode the one R11G11B10F texel).
 //
@@ -1639,9 +1667,12 @@ static int caseReadParity()
               "the crate's cards are captured, lit and marched (%u resident, %llu marches)",
               st.cardsResident, (unsigned long long)st.indirectRelights);
 
-    // THE 1,000 HITS: a face, a point on it inset a hair from its edges, and a
-    // facing direction on that face's hemisphere. THE POINT SITS 0.1 mm INSIDE
-    // THE FACE, and not on it, for a measured reason: a box's face plane is
+    // THE 1,000 HITS: a face, a point on it inset a hair from its edges, and the
+    // face's normal as the facing (with it only the face's own card can face the
+    // hit — the side cards' facing is 0). THE POINT SITS 0.1 mm INSIDE
+    // THE FACE, and not on it, for a reason measured while the facing was the
+    // reversed ray (kept: it costs nothing and the depth rule reads the plane):
+    // a box's face plane is
     // EXACTLY the edge of its four neighbours' cards (each side card spans the
     // box along this face's axis), so a point on the plane projects to v = 0 of
     // them to the last bit — and 3 of the first 1,000 such hits, all inside the
@@ -1691,7 +1722,8 @@ static int caseReadParity()
         }
         CardReadQuery cq;
         cq.position = toWorld(Vec3(l[0], l[1], l[2]));
-        cq.facing = dirWorld(Vec3(d[0], d[1], d[2]));
+        (void)d;   // the hemisphere direction is drawn to keep the sequence; the facing is the normal
+        cq.facing = dirWorld(Vec3(n[0], n[1], n[2]));
         cq.node = crate;
         q.push_back(cq);
     }

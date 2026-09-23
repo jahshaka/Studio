@@ -209,6 +209,7 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// straight into the offscreen RTT at PFG_RGBA8_UNORM — linear and un-dithered.)
 static int lampMain(Engine *e, bool target);
 static int hitresMain(Engine *e);
+static int footprintSweepMain(Engine *e);
 
 int main(int argc, char **argv)
 {
@@ -218,6 +219,9 @@ int main(int argc, char **argv)
         if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
         if (std::strcmp(argv[i], "--hitres") == 0) wantHitres = true;
     }
+    bool wantSweep = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--footprint-sweep") == 0) wantSweep = true;
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -236,6 +240,7 @@ int main(int argc, char **argv)
         return costMain(e, JAHSHAKA_TEST_PLUGIN_DIR, JAHSHAKA_TEST_MEDIA_DIR);
     if (wantLamp) return lampMain(e, wantLampTarget);
     if (wantHitres) return hitresMain(e);
+    if (wantSweep) return footprintSweepMain(e);
 
     View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtreflect");
@@ -1776,5 +1781,218 @@ static int hitresMain(Engine *e)
     std::printf("    (the voxel read of the same row: worst %.2f %% on the face, %d smeared pixels in"
                 " the edge bands — the mirror band's banding, F1-HITRES's subject)\n",
                 100.0 * voxels.worstFace, voxels.smeared);
+
+    // ---- THE OBLIQUE HIT AT A BOX'S EDGE (PHOTON-CARDS-2 fix round, audit F3) ----
+    //
+    // The card pick FACES the hit's GEOMETRIC normal, which the reflection
+    // rebuilds from the hit triangle (jah_rq_geom.glsl: the GPU scene's geometry
+    // rows by the hit's instance, geometry and primitive). While it faced the
+    // REVERSED RAY, a hit on a crate's TOP within two card texels (+1 mm) of the
+    // top/front edge at more than 45 degrees of incidence went to the FRONT card
+    // (it faces the ray more squarely and its depth test passes there) — a stripe
+    // of the front's lighting along the top's edge — and past 87 degrees the top
+    // card failed the facing test outright.
+    //
+    // MEASURED ON THE HIT PATH ITSELF, not through a picture: Engine::
+    // cardReadParity's TRACED questions run the reflection's own sequence — trace
+    // the TLAS (near copies), take the instance from the hit, rebuild the normal,
+    // pick — at rays aimed at the top 0.3-1.5 card texels behind its front edge at
+    // 60 degrees of incidence, and anywhere on the top at 88. Every one must hit
+    // the top, rebuild +Y, and pick the TOP card (the CPU reference's pick at the
+    // hit with the surface normal); the reversed ray's pick at the same points is
+    // printed (the stripe it drew). A picture was the first instrument and the
+    // wrong one: the mirror's R10G10B10A2 G-buffer normal shifts the whole
+    // reflected image by ~20 rows, non-uniformly, which swamps a 5-row stripe.
+    {
+        s->removeNode(panel);
+        PbrParams cp;
+        cp.albedo = Colour(0.6f, 0.55f, 0.5f);
+        cp.roughness = 1.0f;
+        const NodeId crate = s->createNode();
+        CHECK(crate && s->attachMesh(crate, carded, s->createPbrMaterial(cp)), "the carded crate exists");
+        // 2 m cube, its top at y = 2, its front (+Z) face at z = 0.
+        s->setNodeTransform(crate, Vec3(0.0f, 1.0f, -1.0f), Quat(), Vec3(2.0f, 2.0f, 2.0f));
+        s->setGiTuning(gi);                          // the cache on again
+        s->refreshGlobalIllumination();
+        render(e, 150);
+        const float kTexel = 2.0f / 128.0f;          // a 2 m card at 64 texels a metre
+        std::vector<CardReadQuery> q;
+        std::vector<Vec3> at;
+        for (const float incidenceDeg : { 60.0f, 88.0f }) {
+            const float a = incidenceDeg * 3.14159265f / 180.0f;
+            const Vec3 dir(0.0f, -std::cos(a), -std::sin(a));   // travelling -Z, down
+            for (int ix = 0; ix < 5; ++ix)
+                for (int id = 0; id < 4; ++id) {
+                    const float behind = incidenceDeg < 70.0f ? kTexel * (0.3f + 0.4f * float(id))
+                                                              : 0.05f + 0.4f * float(id);
+                    const Vec3 p(-0.8f + 0.4f * float(ix), 2.0f, -behind);
+                    CardReadQuery cq;
+                    cq.trace = true;
+                    cq.position = Vec3(p.x - 2.0f * dir.x, p.y - 2.0f * dir.y, p.z - 2.0f * dir.z);
+                    cq.facing = dir;
+                    q.push_back(cq);
+                    at.push_back(p);
+                }
+        }
+        std::vector<CardReadPick> picks;
+        const bool ran = e->cardReadParity(s, q, picks);
+        CHECK_MSG(ran && picks.size() == q.size(), "the traced hit path ran (%s)",
+                  ran ? "ok" : e->lastError().c_str());
+        if (ran && picks.size() == q.size()) {
+            for (int arm = 0; arm < 2; ++arm) {
+                int hits = 0, topPicks = 0, normalsUp = 0, rayWouldPickFront = 0;
+                for (size_t i = size_t(arm) * 20u; i < size_t(arm + 1) * 20u; ++i) {
+                    const CardReadPick &g = picks[i];
+                    CardSample top, byRay;
+                    s->readCardAt(at[i], Vec3(0, 1, 0), top, crate);
+                    const Vec3 back(-q[i].facing.x, -q[i].facing.y, -q[i].facing.z);
+                    s->readCardAt(at[i], back, byRay, crate);
+                    hits += g.hit ? 1 : 0;
+                    normalsUp += (g.hit && g.hitNormal[1] > 0.999f) ? 1 : 0;
+                    topPicks += (g.ok && top.ok && g.card == top.card) ? 1 : 0;
+                    rayWouldPickFront += (!byRay.ok || byRay.card != top.card) ? 1 : 0;
+                }
+                const float inc = arm == 0 ? 60.0f : 88.0f;
+                std::printf("    %.0f degrees of incidence, %s: %d/20 hit the top, %d rebuilt +Y, %d picked the"
+                            " TOP card; the reversed ray would have picked another card (or none) at %d\n",
+                            inc, arm == 0 ? "0.3-1.5 texels behind the front edge" : "5-125 cm onto the top",
+                            hits, normalsUp, topPicks, rayWouldPickFront);
+                CHECK_MSG(hits == 20 && normalsUp == 20 && topPicks == 20,
+                          "at %.0f degrees of incidence every hit on the top reads the TOP card (%d/20)", inc,
+                          topPicks);
+            }
+        }
+    }
     return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+/// THE FOOTPRINT SWEEP — the measurement kCardFootprintTexels stands on
+/// (PHOTON-CARDS-2 fix round, audit F2). A TOOL, not a ctest row: `test_rt_reflect
+/// --footprint-sweep`, gi.rt_reflect's own fixture (the mirror wall, the carded
+/// emissive cube behind the camera), the wall's roughness swept.
+///
+/// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
+/// each arm in its own view warmed 60 frames (the temporal mean at its floor):
+///   card  the card read ALONE (the gate open, JAHSHAKA_CARD_FOOTPRINT_K huge):
+///         the per-pixel standard deviation of two CONSECUTIVE frames — the
+///         noise one texel-exact sample per frame leaves after the mean, which
+///         grows with the footprint (the speckle);
+///   voxel the voxel read ALONE (the gate shut, K = 0): its distance from the
+///         card arm's 60-frame mean (the converged answer the card read is
+///         unbiased towards) — the prefiltered read's bias, cells and coverage.
+/// Where the card's noise crosses the voxel's bias is where a texel-exact read
+/// stops paying; the footprint there, in card texels, is k. (A YOUNG view was
+/// the first instrument and says nothing: its two frames are the warm-up's fade
+/// from the probe, identical in both arms to four decimals.)
+static int footprintSweepMain(Engine *e)
+{
+    const unsigned kPx = 192u;
+    // The device exists once a view does (the startup-order law).
+    View *anchor = e->createOffscreenView("fpsweep-anchor", 16u, 16u, Colour(0, 0, 0));
+    Scene *s = e->createScene("fpsweep");
+    if (anchor && s) anchor->setScene(s);
+    if (!s || !e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("no ray queries — nothing to sweep\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
+    PbrParams wallParams;
+    wallParams.albedo = Colour(1.0f, 1.0f, 1.0f);
+    wallParams.metalness = 1.0f;
+    wallParams.roughness = 0.3f;
+    const MaterialId wallMat = s->createPbrMaterial(wallParams);
+    const NodeId wall = s->createNode();
+    s->attachMesh(wall, s->createMesh(enginetest::unitCubeMesh()), wallMat);
+    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
+    enginetest::setNodePosition(s, wall, Vec3(0.0f, 2.0f, 5.0f));
+    MeshData md = enginetest::unitCubeMesh();
+    for (unsigned a = 0; a < 6u; ++a) {
+        MeshCardDesc c;
+        c.axis = static_cast<unsigned char>(a);
+        c.origin = Vec3(0, 0, 0);
+        c.halfU = 0.5f;
+        c.halfV = 0.5f;
+        c.halfDepth = 0.52f;
+        md.cards.push_back(c);
+    }
+    PbrParams cp;
+    cp.albedo = Colour(0.05f, 0.05f, 0.05f);
+    cp.emissive = Colour(0.9f, 0.0f, 0.0f);
+    cp.roughness = 0.6f;
+    const NodeId cube = s->createNode();
+    s->attachMesh(cube, s->createMesh(md), s->createPbrMaterial(cp));
+    enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
+    enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.0f, -11.0f));
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.testBoundsMin = Vec3(-14.0f, -2.0f, -14.0f);
+    gi.testBoundsMax = Vec3(14.0f, 10.0f, 7.0f);
+    gi.cards = GiToggle::On;
+    gi.cardResidencyRadius = 40.0f;
+    s->setGlobalIllumination(gi);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdr = false;
+    int serial = 0;
+    const auto shots = [&](int frames, Image &a, Image &b) {
+        View *v = e->createOffscreenView(("fpsweep" + std::to_string(serial++)).c_str(), kPx, kPx,
+                                         Colour(0, 0, 0));
+        v->setScene(s);
+        v->setPostFx(fx);
+        enginetest::testCameraLookAt(v, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
+        render(e, frames);
+        v->readPixels(a);
+        render(e, 1);
+        v->readPixels(b);
+        e->destroyView(v);
+    };
+    {   // settle the scene once (GI, the cube's cards)
+        Image w0, w1;
+        shots(120, w0, w1);
+    }
+    const double kCubeT = 16.0;                     // the wall to the cube, metres
+    const double kTexel = 1.5 / 128.0;              // the 3 m cube's cards split to 1.5 m pages
+    const double kN = 32.0;                         // the temporal mean's memory (1 / kReflectHistoryFloor)
+    std::printf("perceptual  alpha   footprint(texels)  card 2-frame std   voxel |. - card mean|   (mean"
+                " over the cube's reflection, red, 0..1)\n");
+    double prevDiff = 0.0, prevF = 0.0, crossing = -1.0;
+    bool havePrev = false;
+    for (const float rough : { 0.03f, 0.05f, 0.07f, 0.09f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f }) {
+        wallParams.roughness = rough;
+        s->setPbrMaterial(wallMat, wallParams);
+        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "1e9", 1);
+        Image c0, c1, v0, v1;
+        shots(60, c0, c1);
+        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "0", 1);
+        shots(60, v0, v1);
+        double ec = 0.0, ev = 0.0;
+        int n = 0;
+        for (unsigned y = 0; y < kPx; ++y)
+            for (unsigned x = 0; x < kPx; ++x) {
+                const Colour a = c0.at(x, y), b = c1.at(x, y);
+                const double mean = 0.5 * (double(a.r) + double(b.r));
+                if (mean - std::max(double(a.g), double(a.b)) < 0.08) continue;   // the cube's reflection
+                ec += std::fabs(double(a.r) - double(b.r)) / std::sqrt(2.0);
+                ev += std::fabs(double(v1.at(x, y).r) - mean);
+                ++n;
+            }
+        if (n) { ec /= n; ev /= n; }
+        const double alpha = double(rough) * double(rough);
+        const double f = 2.0 * kCubeT * alpha / std::sqrt(kN) / kTexel;
+        std::printf("  %.2f     %.4f   %8.1f           %.4f             %.4f        (%d px)\n", rough, alpha,
+                    f, ec, ev, n);
+        const double diff = ec - ev;
+        if (havePrev && prevDiff < 0.0 && diff >= 0.0 && crossing < 0.0)
+            crossing = prevF + (f - prevF) * (-prevDiff) / (diff - prevDiff);
+        prevDiff = diff; prevF = f; havePrev = true;
+    }
+    unsetenv("JAHSHAKA_CARD_FOOTPRINT_K");
+    std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
+                crossing);
+    return 0;
 }
