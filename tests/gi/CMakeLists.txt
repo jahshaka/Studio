@@ -338,6 +338,18 @@ add_dependencies(test_gi_ddgi_ambient JahshakaEngineMedia)
 add_test(NAME gi.ddgi_ambient COMMAND test_gi_ddgi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.cone_corner_target — THE CONE'S CORNER OVER-READ (PHOTON-FIELD-ROTATE-1, F2):
+# gi.ddgi_ambient's corner used to compare the field with the cone reference; it is
+# anchored on the fixture's ANALYTIC now, and the cone reference - which reads a
+# 2.2 m wall's foot at 93.9 % of open floor against the analytic 82 % (+11.7
+# points: the cone's footprint against a wall edge) - is this row, against the same
+# analytic and the same bar. LABEL `photon-target`: it runs in every scoped
+# selection and PRINTS its value, and it does NOT decide a gate. The lane that
+# makes the cone read a corner right deletes the label.
+add_test(NAME gi.cone_corner_target COMMAND test_gi_ddgi_ambient --cone-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_corner_target PROPERTIES TIMEOUT 180
+                     LABELS "engine;photon-target")
 
 # gi.hidden_volume — WHAT THE AUTOMATIC LIT VOLUME MAY CONTAIN (SMOKE_FIX S12 +
 # S14): a hidden object stops bouncing light and stops defining the volume, and
@@ -779,6 +791,34 @@ add_dependencies(test_gi_field_scroll JahshakaEngineMedia)
 add_test(NAME gi.field_scroll COMMAND test_gi_field_scroll
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_scroll PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# gi.field_thin_wall — THE FIELD'S ESTIMATOR ON A ONE-VOXEL EMISSIVE WALL
+# (PHOTON-FIELD-ROTATE-1 part 1): a probe's reading of a one-voxel-thick
+# emissive wall at four probe spacings, three lateral offsets, against the
+# analytic irradiance of the wall's voxelised extent. Its own binary like every
+# GI suite; RUN_SERIAL like every cascade suite.
+add_executable(test_gi_field_thin_wall test_gi_field_thin_wall.cpp)
+set_target_properties(test_gi_field_thin_wall PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_thin_wall PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_thin_wall PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_thin_wall JahshakaEngineMedia)
+add_test(NAME gi.field_thin_wall COMMAND test_gi_field_thin_wall wall
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# gi.field_alias — ONE RAY THAT DOES NOT ALIAS (PHOTON-FIELD-ROTATE-1 part 2): the
+# same fixture and binary; the noise of one integration at 1 and 2 rays (rotated)
+# and at 1 ray static, the target sample count derived from it, convergence at
+# budget 1 and a field that stops at rest, 1 ray against 2 converged, and the cost
+# of one whole-field integration at 1 and 2 rays in one process.
+add_test(NAME gi.field_alias COMMAND test_gi_field_thin_wall alias
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and

@@ -14,12 +14,17 @@
 // WHAT THIS SUITE ASSERTS, each a measurement:
 //   1. THE KEPT PROBES ARE BYTE-IDENTICAL across the step frame: both atlases
 //      (irradiance, depth moments) read back just before and just after it, every
-//      tile of a probe that never left the window compared byte for byte.
+//      tile of a probe that never left the window compared byte for byte. (With the
+//      field's history - PHOTON-FIELD-ROTATE-1 - a kept probe that already holds its
+//      target sample count is skipped by every refinement the step owes, so its
+//      bytes stand; the paused field converges its whole target at the build.)
 //   2. THE STEP FRAME INTEGRATES EXACTLY THE ENTERED PLANES: the follow's work
 //      (GiStatus::ifdScrollProbes, and the monitor row's units) equals the
 //      planes the window's offset says entered — not the field.
 //   3. THE MODULO PUTS EVERY PROBE WHERE IT BELONGS: one walk of six steps out
 //      and back, taken twice in this process from the same from-scratch build -
+//      each settled until its field has CONVERGED (the field is a mean over rotated
+//      integrations: "the same picture" is the converged value, not one pass's bytes) -
 //      the field scrolling, and the field re-placed whole on the same lattice at
 //      every step (`JAHSHAKA_GI_FIELD_NO_SCROLL`, the behaviour replaced) - and the
 //      return pose renders the same picture both ways (the pose BEFORE a walk is
@@ -28,7 +33,13 @@
 //   4. THE COST, in ONE process: the two walks' ifd.follow rows are the step
 //      frame after and before - printed as GPU ms (the median of the rows the
 //      monitor timed), their ratio and their share of the VR frame (11.1 ms);
-//      asserted only as "the scroll is cheaper".
+//      asserted only as "the scroll is cheaper". A third walk at two rays a texel
+//      prices the step frame the old kIfdRaysPerPixel = 2 paid (a ratio).
+//   5. A JUMP WITHOUT A HITCH (PHOTON-FIELD-ROTATE-1 part 3): each of the three jumps
+//      re-places the field in SLABS of the budget's probes a frame (never the whole
+//      field in one frame), each slab frame's field GPU work at most 1.5x the step
+//      frame's and no jump frame at the tier's 16.7 ms, and the frame whose probes
+//      were all invalidated shows the reader's fallback, not black.
 //
 // The field is PAUSED (update budget 0) for 1 and 2: no progressive walk runs
 // between the two readbacks, so the only work in the step frame is the scroll's.
@@ -235,12 +246,76 @@ int main()
     // ifd.follow rows of the two walks are the step frame before and after.
     struct Arm { Image back; float scrollGpu = -1.0f, scrollCpu = -1.0f; unsigned units = 0;
                  unsigned long long follows = 0, replacements = 0; std::vector<float> gpu;
-                 float worstCentreErr = 0.0f; bool fieldBound = true; };
+                 float worstCentreErr = 0.0f; bool fieldBound = true; bool settled = false;
+                 std::vector<FrameRecord> records;
+                 // THE JUMPS, per jump (PHOTON-FIELD-ROTATE-1 part 3): the frames that
+                 // integrated a re-placement's slab, the worst frame's field GPU ms (timed
+                 // rows) and wall ms, and the picture's mean luminance on the frame after
+                 // the re-placement (every probe invalid: the cone fallback) against 60
+                 // frames later.
+                 struct Jump { unsigned slabFrames = 0, slabProbes = 0, timed = 0, worstFrameProbes = 0,
+                               fieldProbes = 0; float worstFieldGpu = -1.0f;
+                               float worstTotalMs = 0.0f; float meanDuring = 0.0f, meanAfter = 0.0f; };
+                 std::vector<Jump> jumps; };
+    const auto meanLum = [](const Image &img) {
+        double s = 0.0;
+        for (unsigned y = 0; y < img.height; ++y)
+            for (unsigned x = 0; x < img.width; ++x) {
+                const Colour c = img.at(x, y);
+                s += (c.r + c.g + c.b) / 3.0;
+            }
+        return float(s / double(std::max(1u, img.width * img.height)));
+    };
     // A JUMP: the camera lands `p` in ONE frame (a teleport, or a headset re-centred
     // far away), then the scene settles; the field must be where cascade 0 is.
     const auto jumpTo = [&](Arm &arm, const Vec3 &p) {
+        std::vector<FrameRecord> pre;
+        engine->takeFrameRecords(pre);
+        arm.records.insert(arm.records.end(), pre.begin(), pre.end());
+        const unsigned long long replacedBefore = scene->giStatus().ifdReplacements;
         view->setCamera(enginetest::testCameraDescLookAt(p, Vec3(p.x, p.y - 1.0f, p.z - 8.0f)));
-        render(e, 60);
+        Arm::Jump j;
+        Image during, after;
+        bool sawDuring = false;
+        for (int f = 0; f < 60; ++f) {
+            render(e, 1);
+            // The frame the field was re-placed on: every probe is invalid until its
+            // slab lands, and the picture must be the fallback's, not black.
+            if (!sawDuring && scene->giStatus().ifdReplacements != replacedBefore) {
+                view->readPixels(during);
+                sawDuring = true;
+            }
+        }
+        view->readPixels(after);
+        j.meanDuring = sawDuring ? meanLum(during) : -1.0f;
+        j.meanAfter = meanLum(after);
+        std::vector<FrameRecord> recs;
+        engine->takeFrameRecords(recs);
+        for (const FrameRecord &r : recs) {
+            float fieldGpu = 0.0f;
+            bool slab = false, timedAll = true;
+            unsigned frameProbes = 0;
+            for (const CacheWork &w : r.cacheWork) {
+                if (w.detail.compare(0, 4, "ifd.") != 0) continue;
+                if (w.detail == "ifd.replace") { slab = true; j.slabProbes += w.units; }
+                // Probes a frame's PROGRESSIVE field work integrated: a slab, or the
+                // chain's settle re-integration that restarted it as a change. (A
+                // scroll's follow is the step frame itself - the reference - and a
+                // refinement skips converged probes.)
+                if (w.detail == "ifd.replace" || w.detail == "ifd.converge")
+                    frameProbes += w.units;
+                if (w.gpuMs >= 0.0f) fieldGpu += w.gpuMs;
+                else timedAll = false;
+            }
+            j.worstFrameProbes = std::max(j.worstFrameProbes, frameProbes);
+            j.fieldProbes += frameProbes;
+            if (!slab) continue;
+            ++j.slabFrames;
+            j.worstTotalMs = std::max(j.worstTotalMs, r.totalMs);
+            if (timedAll) { ++j.timed; j.worstFieldGpu = std::max(j.worstFieldGpu, fieldGpu); }
+        }
+        arm.records.insert(arm.records.end(), recs.begin(), recs.end());
+        arm.jumps.push_back(j);
         const GiStatus js = scene->giStatus();
         arm.fieldBound = arm.fieldBound && js.ifdBound;
         if (!js.cascades.empty()) {
@@ -250,9 +325,10 @@ int main()
             arm.worstCentreErr = std::max(arm.worstCentreErr, std::sqrt(cx * cx + cy * cy + cz * cz));
         }
     };
-    const auto walk = [&](bool noScroll) {
+    const auto walk = [&](bool noScroll, const char *rays) {
         Arm arm;
         if (noScroll) ::setenv("JAHSHAKA_GI_FIELD_NO_SCROLL", "1", 1);
+        if (rays) ::setenv("JAHSHAKA_GI_FIELD_RAYS", rays, 1);
         GiParams offGi; offGi.mode = GiMode::Off;
         scene->setGlobalIllumination(offGi);
         render(e, 2);
@@ -283,12 +359,20 @@ int main()
             camAt(x2);
             render(e, 1);
         }
-        render(e, 240);                          // the settle and the progressive walk
+        // THE SETTLE, READ UNTIL IT STOPS (PHOTON-FIELD-ROTATE-1): the field is a mean
+        // over rotated integrations now, and "the same picture" means the CONVERGED
+        // field - every probe at its target sample count, the field owing nothing -
+        // not the bytes of one pass (two walks integrate different ray rotations).
+        render(e, 240);
+        for (int f = 0; f < 3000 && scene->giStatus().ifdRefinesOwed > 0u; ++f) render(e, 1);
+        arm.settled = scene->giStatus().ifdRefinesOwed == 0u;
+        render(e, 2);
         view->readPixels(arm.back);
         arm.follows = scene->giStatus().ifdFollows - f0;
         arm.replacements = scene->giStatus().ifdReplacements - r0;
         std::vector<FrameRecord> recs;
         engine->takeFrameRecords(recs);
+        recs.insert(recs.begin(), arm.records.begin(), arm.records.end());
         for (const FrameRecord &r : recs)
             for (const CacheWork &w : r.cacheWork) {
                 if (w.detail != "ifd.follow") continue;
@@ -301,10 +385,15 @@ int main()
                 arm.scrollCpu = std::max(arm.scrollCpu, w.ms);
             }
         if (noScroll) ::unsetenv("JAHSHAKA_GI_FIELD_NO_SCROLL");
+        if (rays) ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
         return arm;
     };
-    const Arm scrolled = walk(false);
-    const Arm replaced = walk(true);
+    const Arm scrolled = walk(false, nullptr);
+    const Arm replaced = walk(true, nullptr);
+    // THE STEP FRAME AT TWO RAYS A TEXEL (PHOTON-FIELD-ROTATE-1): the same walk with
+    // the field's rays doubled (`JAHSHAKA_GI_FIELD_RAYS`, the setting the deleted
+    // kIfdRaysPerPixel = 2 shipped), for the step cost's ratio in this process.
+    const Arm twoRays = walk(false, "2");
     const float returnDiff = worstDiff(scrolled.back, replaced.back);
     std::printf("   the same walk (%llu / %llu follows): the return pose, scrolled against re-placed, "
                 "%.2f/255\n", scrolled.follows, replaced.follows, returnDiff);
@@ -321,6 +410,9 @@ int main()
               "...AND THE FIELD FOLLOWS CASCADE 0 THERE (its centre within %.3f m, under one probe "
               "spacing) - it is not left at the place the camera jumped from",
               scrolled.worstCentreErr);
+    CHECK(scrolled.settled && replaced.settled,
+          "both walks' fields CONVERGED before the return pose was read (every probe at its target "
+          "sample count)");
     CHECK_MSG(returnDiff <= 1.0f,
               "THE RETURN POSE RENDERS WHAT A FIELD THAT NEVER SCROLLED RENDERS THERE (%.2f/255): "
               "the window's modulo puts every probe where it belongs", returnDiff);
@@ -346,6 +438,49 @@ int main()
         CHECK_MSG(scrollMed < replacedMed,
                   "A SCROLL COSTS THE STEP FRAME LESS THAN RE-PLACING THE FIELD (median %.2f against "
                   "%.2f ms GPU)", scrollMed, replacedMed);
+    // ---- 5. A JUMP WITHOUT A HITCH (PHOTON-FIELD-ROTATE-1 part 3) -----------------
+    // A jump used to integrate the whole field in one frame (8,192 probes). It is
+    // integrated in slabs of the budget's probes a frame now (ifdProbesPerFrame -
+    // 1,024 at budget 1: eight frames), each frame's field work compared with the
+    // step frame's (the scroll's follow, the frame the field already had to afford):
+    // the VR budget's share of a jump frame may be at most 1.5x a step frame's.
+    const unsigned slabProbes = unsigned(scene->giStatus().ifdProbesPerFrame);
+    const unsigned expectFrames = slabProbes ? (total + slabProbes - 1u) / slabProbes : 0u;
+    std::printf("   THE JUMPS (%u-probe slabs, %u frames a whole field; the step frame's median %.2f ms "
+                "GPU):\n", slabProbes, expectFrames, scrollMed);
+    bool slabsRight = scrolled.jumps.size() == 3u, underBudget = true, noBlack = true;
+    for (size_t i = 0; i < scrolled.jumps.size(); ++i) {
+        const Arm::Jump &j = scrolled.jumps[i];
+        const float ratio = (scrollMed > 0.0f && j.worstFieldGpu >= 0.0f) ? j.worstFieldGpu / scrollMed : -1.0f;
+        std::printf("     jump %zu: %u slab frames (%u probes; %u probes integrated in the window, at most %u "
+                    "in one frame), worst field GPU %.2f ms over %u timed frames = "
+                    "%.2f x the step frame (%.1f %% of the VR frame against the step's %.1f %%); worst "
+                    "frame %.2f ms wall; picture mean on the re-placement frame %.4f, 60 frames later "
+                    "%.4f\n", i, j.slabFrames, j.slabProbes, j.fieldProbes, j.worstFrameProbes, j.worstFieldGpu,
+                    j.timed, ratio,
+                    100.0f * j.worstFieldGpu / 11.1f, 100.0f * scrollMed / 11.1f, j.worstTotalMs,
+                    j.meanDuring, j.meanAfter);
+        // Every frame integrates at most one slab; the re-placement's slabs (and a
+        // light settle that restarted them as a change) cover the whole field.
+        if (j.slabFrames == 0u || j.worstFrameProbes > slabProbes || j.fieldProbes < total)
+            slabsRight = false;
+        if (ratio > 1.5f || j.worstTotalMs >= 1000.0f / 60.0f) underBudget = false;
+        if (!(j.meanDuring >= 0.5f * j.meanAfter)) noBlack = false;
+    }
+    CHECK_MSG(slabsRight, "A JUMP IS INTEGRATED IN SLABS: no frame of any jump integrated more than one "
+              "slab of %u probes (a whole field is %u frames), and each jump integrated the whole field",
+              slabProbes, expectFrames);
+    CHECK(underBudget, "NO FRAME OF THE JUMPS COSTS MORE THAN THE TIER'S BUDGET: each slab frame's field "
+                       "work is at most 1.5x the step frame's, and no jump frame reaches 16.7 ms");
+    CHECK(noBlack, "THE RE-PLACED FIELD NEVER SHOWS BLACK: on the frame the probes were invalidated the "
+                   "picture is the fallback's (at least half the settled mean)");
+    const float twoMed = median(twoRays.gpu);
+    std::printf("   THE STEP FRAME AT 1 AND 2 RAYS A TEXEL, one process: median %.2f ms GPU (%zu rows) "
+                "against %.2f (%zu rows): one ray costs %.2f of two\n", scrollMed, scrolled.gpu.size(),
+                twoMed, twoRays.gpu.size(), twoMed > 0.0f ? scrollMed / twoMed : -1.0f);
+    if (scrollMed > 0.0f && twoMed > 0.0f)
+        CHECK_MSG(scrollMed < twoMed, "ONE RAY A TEXEL COSTS THE STEP FRAME LESS THAN TWO (%.2f against "
+                  "%.2f ms GPU)", scrollMed, twoMed);
 
     GiParams off; off.mode = GiMode::Off;
     scene->setGlobalIllumination(off);

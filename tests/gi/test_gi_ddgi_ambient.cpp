@@ -54,10 +54,11 @@
 //     PBS ambient would flood a sealed room with light that has no way in.
 //
 // Plus: the bounce must survive the fix (case 3), and THE CORNER (case 4) —
-// a floor patch at the foot of a wall must be darkened by the proxy the way
-// the cone reference darkens it, within a measured tolerance: this is the
-// assertion the multi-tap build (rayon2 S1) exists for, and the one the
-// single-tap build could only print.
+// a floor patch at the foot of a wall must be darkened as the fixture's ANALYTIC
+// says (sky-only: this engine injects no ambient into the voxels), within a bar
+// derived from the voxel envelope and the field's converged error. It used to be
+// compared with the cone reference, which over-reads a corner (+11.7 points): the
+// cone's corner is the target row gi.cone_corner_target (PHOTON-FIELD-ROTATE-1).
 //
 // Its own binary, like every GI suite here: the field and the voxel lighting
 // bind PROCESS-WIDE to HlmsPbs, so these scenes must not share a process with
@@ -159,6 +160,41 @@ struct OpenScene {
 };
 static const unsigned kOpenX = 64, kOpenY = 118;      // floor, well clear of the wall
 static const unsigned kCornerX = 64, kCornerY = 74;   // floor, at the wall's foot
+static const Vec3 kCamPos(0.0f, 3.0f, 7.0f), kCamTarget(0.0f, 0.0f, -1.0f);
+
+/// THE ANALYTIC CORNER (PHOTON-FIELD-ROTATE-1, F2): the irradiance an upward floor
+/// point receives from the hemisphere ambient with the wall in the way, as a
+/// fraction of the same point's with nothing in the way... computed for the two
+/// pixels and returned as corner / open. Cosine-weighted directions over the upper
+/// hemisphere, the ambient's radiance lerp( lower, upper, 0.5 + 0.5 y ) in
+/// luminance, and a ray that meets the wall reads NOTHING: this engine injects no
+/// ambient into the voxels (the environment is read only where a ray escapes), so a
+/// bounce off the wall is not part of the physics being rendered here - the
+/// "wall bounce" brackets (0.875-0.926) describe a picture this engine does not
+/// make. `grow` inflates the wall by that many metres on every face (the voxel
+/// envelope's one cell).
+static double analyticCorner(float grow)
+{
+    const enginetest::AnalyticBox wall{ Vec3(-6.0f - grow, 0.0f - grow, -2.2f - grow),
+                                        Vec3(6.0f + grow, 4.0f + grow, -1.8f + grow) };
+    const auto irr = [&](const Vec3 &p) {
+        const int N = 360;
+        double sum = 0.0;
+        for (int i = 0; i < N; ++i)
+            for (int j = 0; j < N; ++j) {
+                const double u = (i + 0.5) / N, v = (j + 0.5) / N;
+                const double r = std::sqrt(u), phi = 2.0 * M_PI * v;
+                const Vec3 d(float(r * std::cos(phi)), float(std::sqrt(1.0 - u)), float(r * std::sin(phi)));
+                if (enginetest::rayHitsBox(p, d, wall)) continue;
+                const double t = 0.5 + 0.5 * d.y;
+                sum += (1.0 - t) * lum(kAmbientLower) + t * lum(kAmbientUpper);
+            }
+        return sum / double(N * N);
+    };
+    const Vec3 corner = enginetest::groundPointForPixel(kCamPos, kCamTarget, kCornerX, kCornerY, 128);
+    const Vec3 open = enginetest::groundPointForPixel(kCamPos, kCamTarget, kOpenX, kOpenY, 128);
+    return irr(corner) / irr(open);
+}
 
 static OpenScene buildOpenScene(Engine *e, const char *name)
 {
@@ -169,12 +205,15 @@ static OpenScene buildOpenScene(Engine *e, const char *name)
     o.scene->setAmbient(kAmbientUpper, kAmbientLower);
     addSlab(o.scene, Colour(0.9f, 0.9f, 0.9f), Vec3(0.0f, -0.05f, 0.0f), Vec3(16.0f, 0.1f, 16.0f));
     addSlab(o.scene, Colour(0.9f, 0.9f, 0.9f), Vec3(0.0f, 2.0f, -2.0f), Vec3(12.0f, 4.0f, 0.4f));
-    enginetest::testCameraLookAt(o.view, Vec3(0.0f, 3.0f, 7.0f), Vec3(0.0f, 0.0f, -1.0f));
+    enginetest::testCameraLookAt(o.view, kCamPos, kCamTarget);
     return o;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    // --cone-target: gi.cone_corner_target, the cone reference's corner against the
+    // same analytic (a photon-target row: it prints and does not gate).
+    const bool coneTarget = argc > 1 && std::string(argv[1]) == "--cone-target";
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -248,9 +287,13 @@ int main()
         CHECK(s->setGlobalIllumination(fix), "DDGI binds over the open scene");
         render(e, 6);
         {
+            // THE CONVERGED FIELD: the one settle predicate, in frames.
+            int n = 0;
+            for (; n < 4000 && !s->giStatus().giAtRest; ++n) render(e, 1);
             const GiStatus st = s->giStatus();
-            CHECK(st.ifdBound && st.vctBound && st.ifdConverged,
-                  "the field is bound and converged");
+            CHECK(st.ifdBound && st.vctBound && st.giAtRest,
+                  "the field is bound and GI at rest (every refinement paid)");
+            std::printf("   (at rest after %d more frames)\n", n);
         }
         o.view->readPixels(img);
         const Colour fixOpen = img.at(kOpenX, kOpenY);
@@ -270,28 +313,53 @@ int main()
               "RECOVERY: the field's sky lands within 10% of the cones' — two integrals of one "
               "environment through one voxel reader");
 
-        // ---- CASE 4: THE CORNER. A floor patch at the foot of the wall has
-        //      half its hemisphere bricked up. The cone reference darkens it;
-        //      the field must darken it too, and by about as much. Both are
-        //      stated as the corner's fraction of open floor, technique by
-        //      technique, so the assertion compares SHAPES. 8 points is the
-        //      measured tolerance of the build record (rayon2 S1).
+        // ---- CASE 4: THE CORNER, AGAINST THE ANALYTIC (PHOTON-FIELD-ROTATE-1, F2).
+        //      A floor patch at the foot of the wall has part of its sky bricked up;
+        //      the corner's fraction of open floor is compared with the ANALYTIC
+        //      fraction for this fixture - never with another estimator (the cone
+        //      reference over-reads a corner and is its own target row,
+        //      gi.cone_corner_target). THE BAR, derived: the wall as authored and the
+        //      wall as the voxels hold it (grown by one cell on every face - the
+        //      conservative raster's envelope) bracket the physics the field
+        //      integrates, widened by twice the field's own converged standard error
+        //      on an ordinary lit room (one sample's 2 % over sqrt(K) samples) and
+        //      by the reader's half-code quantisation of the two pixels (0.5/255 over
+        //      each reading).
+        const float cell = s->giStatus().voxelMetres;
+        const double anaAuthored = analyticCorner(0.0f);
+        const double anaEnvelope = analyticCorner(cell);
+        const double k = std::max(1u, s->giStatus().ifdTargetSamples);
+        const double quant = 0.5 / 255.0 / lum(fixCorner) + 0.5 / 255.0 / lum(fixOpen);
+        const double tol = 2.0 * 0.02 / std::sqrt(k) + quant;
+        const double lo = std::min(anaAuthored, anaEnvelope) - tol, hi = std::max(anaAuthored, anaEnvelope) + tol;
         const float refCornerFrac = lum(refCorner) / lum(refOpen);
         const float fixCornerFrac = lum(fixCorner) / lum(fixOpen);
-        std::printf("   CORNER: the reference lights the wall foot at %.1f%% of open floor, "
-                    "the field at %.1f%% (%+.1f points)\n",
-                    refCornerFrac * 100.0f, fixCornerFrac * 100.0f,
-                    (fixCornerFrac - refCornerFrac) * 100.0f);
-        const float kCornerTolerancePoints = 8.0f;
+        std::printf("   CORNER: the analytic lights the wall foot at %.1f%% of open floor (the voxel "
+                    "envelope, cell %.3f m: %.1f%%); the field %.1f%% (%+.1f points), the cone "
+                    "reference %.1f%% (%+.1f points); bar %.1f-%.1f%%\n",
+                    anaAuthored * 100.0, cell, anaEnvelope * 100.0, fixCornerFrac * 100.0f,
+                    (fixCornerFrac - anaAuthored) * 100.0, refCornerFrac * 100.0f,
+                    (refCornerFrac - anaAuthored) * 100.0, lo * 100.0, hi * 100.0);
         CHECK(fixCornerFrac < 0.95f,
               "the field DARKENS the wall foot against open floor");
-        CHECK(std::fabs(fixCornerFrac - refCornerFrac) * 100.0f < kCornerTolerancePoints,
-              "CORNER: the field's wall-foot darkening lands within the measured tolerance "
-              "of the cone reference's");
+        if (coneTarget) {
+            CHECK(refCornerFrac >= lo && refCornerFrac <= hi,
+                  "CONE CORNER (target): the cone reference's wall-foot darkening lands on the "
+                  "analytic within the field's bar");
+        } else {
+            CHECK(fixCornerFrac >= lo && fixCornerFrac <= hi,
+                  "CORNER: the field's wall-foot darkening lands on the ANALYTIC corner of this "
+                  "fixture within the derived bar");
+        }
 
         o.view->setScene(nullptr);
         e->destroyScene(s);
         e->destroyView(o.view);
+    }
+
+    if (coneTarget) {
+        std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
+        return failures ? 1 : 0;
     }
 
     // =====================================================================

@@ -72,13 +72,13 @@ function snapshot() {
 // camera-centred cascades on at every tier the irradiance field re-places itself
 // when cascade 0 moves — which is what `focusSelection` does — and re-converges
 // progressively at the update budget. This waits for the renderer to say it is
-// done: the field converged and no probe still owes a capture. The cap is a
+// done: GI at rest (the one settle predicate) and no probe still owes a capture. The cap is a
 // guard, not a budget.
 function settle() {
     for (var i = 0; i < 40; i++) {
         editor.frame(10, 1 / 60);
         var st = world.giStatus();
-        if (st.ifdConverged !== false && !st.staleProbes) return i;
+        if (st.giAtRest !== false && !st.staleProbes) return i;
     }
     return -1;
 }

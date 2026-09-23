@@ -48,8 +48,7 @@ console.log("gi defaults = " + JSON.stringify(gi));
 assert(gi.tier === "epic", "a new scene is born at the Epic tier: " + gi.tier);
 assert(gi.ddgi === true, "and Epic, like every voxel tier, turns the irradiance field on");
 assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
-       "ddgiIntensity defaults to 1.0 (the renderer's raw brightness, measured to be the "
-       + "right one: the field lands at ~86% of the cone-traced diffuse it replaces)");
+       "ddgiIntensity defaults to 1.0 (the field's own physical answer, untrimmed)");
 
 // The rest of this suite is about the VERB, so the scene is put on plain VCT
 // with the field explicitly OFF. It used to reach that state through the Low
@@ -69,8 +68,9 @@ assert(st.live === true, "giStatus is LIVE (the engine viewport answered)");
 assert(st.vctBound === true, "VCT is bound");
 assert(st.ifdBound === false,
        "and no field is bound — the pin, written through");
-assert(st.ifdProbes === 0 && st.ifdProbesPerFrame === 0 && st.ifdConverged === false,
-       "no field means no probes, no batch, and nothing converged");
+assert(st.ifdProbes === 0 && st.ifdProbesPerFrame === 0 && st.ifdTargetSamples === 0
+       && st.ifdRefinesOwed === 0,
+       "no field means no probes, no batch, and no convergence schedule");
 
 // ---- phase B: on --------------------------------------------------------
 assert(world.gi({ ddgi: true }), "world.gi({ddgi:true})");
@@ -81,8 +81,8 @@ assert(st.ifdBound === true, "the irradiance field is BOUND to the PBR shader");
 assert(st.vctBound === true,
        "VCT stays bound — the field replaces its DIFFUSE, not the whole arm");
 assert(st.ifdProbes === 8192, "the field holds 8192 probes");
-assert(st.ifdConverged === true,
-       "a field is converged on the frame it binds (the build converges it in one dispatch)");
+assert(st.ifdRefinesOwed < st.ifdTargetSamples,
+       "a field is WHOLE on the frame it binds (the build samples every probe in one dispatch)");
 assert(st.ifdProbesPerFrame > 0 && st.ifdProbes % st.ifdProbesPerFrame === 0,
        "the re-converge batch divides the field exactly — every dispatch is the same size, "
        + "which is what keeps the renderer clear of a zero-work-group dispatch");

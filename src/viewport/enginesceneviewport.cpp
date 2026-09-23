@@ -2554,8 +2554,9 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // scene's particle time scale. A frame that bought no step (a 144 Hz
     // panel's odd frames, a paused scene) freezes the flame for that frame,
     // exactly as it freezes the falling crate.
+    mLastFrameDelta = simulated * (mScene ? mScene->particleTimeScale : 1.0f);
     if (mEngine)
-        mEngine->setFixedFrameDelta(simulated * (mScene ? mScene->particleTimeScale : 1.0f));
+        mEngine->setFixedFrameDelta(mLastFrameDelta);
 }
 
 QImage EngineSceneViewport::takeScreenshot(QSize dimension)
@@ -2636,7 +2637,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.reusedLastRefresh    = st.reusedLastRefresh;
     out.ifdBound             = st.ifdBound;
     out.ifdProbes            = st.ifdProbes;
-    out.ifdConverged         = st.ifdConverged;
+    out.ifdTargetSamples     = st.ifdTargetSamples;
+    out.ifdRefinesOwed       = st.ifdRefinesOwed;
+    out.giAtRest             = st.giAtRest;
     out.ifdProbesPerFrame    = st.ifdProbesPerFrame;
     out.ifdMin               = q(st.ifdMin);
     out.ifdMax               = q(st.ifdMax);
@@ -3154,6 +3157,26 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // (fps audit F5, bridge/offscreenrenderscope.h). The shot view is
     // offscreen, so it is untouched.
     OffscreenRenderScope quiet(mEngine.get());
+    // THE PICTURE AT REST, WITHOUT PRESENTING (PHOTON-FIELD-ROTATE-1). With the
+    // on-screen views quiet, the shot view is the only enabled view of this scene,
+    // so it is the one that drives the scene's GI this frame (the engine's driver
+    // pass falls from "on-screen" to "any enabled view", OgreEngine.cpp's
+    // per-frame loop): the chain's tick, the settle and the field's refinements all
+    // advance through it, and it sits at the editor camera's pose, so the chain is
+    // placed exactly where the on-screen view placed it. Nothing is presented.
+    // The engine's clock is FROZEN for these frames (particles, shader time and
+    // texture animation stay at the instant the script asked for; the document's
+    // clock is not stepped at all) and handed back before the shot's own frames.
+    if (mShotSettleFrames > 0) {
+        const int cap = mShotSettleFrames;
+        mShotSettleFrames = 0;
+        if (view() && view()->scene() && !view()->scene()->giStatus().giAtRest) {
+            mEngine->setFixedFrameDelta(0.0f);
+            for (int i = 0; i < cap && !view()->scene()->giStatus().giAtRest; ++i)
+                mEngine->renderOneFrame();
+            mEngine->setFixedFrameDelta(mLastFrameDelta);
+        }
+    }
     // Plus whatever the texture load-request counter still owes
     // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
     renderStableFrames(mEngine.get());

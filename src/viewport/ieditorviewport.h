@@ -482,6 +482,11 @@ public:
     virtual QImage takeScreenshot(int width, int height, ScreenshotGrade grade) {
         (void)grade; return takeScreenshot(width, height);
     }
+    /// THE NEXT SCREENSHOT IS TAKEN AT REST (PHOTON-FIELD-ROTATE-1): before its
+    /// readback it renders frames - OFFSCREEN, through the shot's own view, with
+    /// the on-screen views quiet, so nothing is presented - until the scene's
+    /// GiStatus::giAtRest, at most `maxFrames`. Consumed by that one screenshot.
+    virtual void settleGiBeforeNextScreenshot(int maxFrames) { (void)maxFrames; }
 
     /// THE SCRIPT SPELLINGS, in ONE place — "plain" (and "raw", the spelling
     /// the pixel suites were written with), "tonemap", "scene", "viewport".
@@ -648,13 +653,15 @@ public:
         /// refused for reasons no caller can see (no voxel volume to feed the
         /// field, DDGI media not staged, a construction that threw), so a
         /// scene asking for it and a scene getting it are two different
-        /// readings. `ifdConverged` is false only while a progressive
-        /// re-converge after a light move is still in flight — a field is
-        /// converged on the frame it binds.
+        /// readings. `ifdTargetSamples` / `ifdRefinesOwed` are the field's
+        /// convergence schedule (engine Types.h), and `giAtRest` is THE settle
+        /// predicate: nothing the scene's GI owes will change the picture.
         bool ifdBound = false;
         int  ifdProbes = 0;
-        bool ifdConverged = false;
         int  ifdProbesPerFrame = 0;
+        unsigned ifdTargetSamples = 0;
+        unsigned ifdRefinesOwed = 0;
+        bool giAtRest = true;
         /// WHERE THE FIELD IS — the corners of the volume its probes span. The
         /// scene's fitted box in the single-volume arm; cascade 0's box, which
         /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).

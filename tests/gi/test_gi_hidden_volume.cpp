@@ -298,9 +298,9 @@ static void hiddenParentBounce(Engine *engine, View *view)
     const Colour withModel = img.at(kFloorX, kFloorY);
     const GiStatus shownSt = s->giStatus();
     std::printf("   floor no-model r=%.3f g=%.3f | root shown r=%.3f g=%.3f "
-                "(probes %d, ifd converged %d)\n",
+                "(probes %d, GI at rest %d)\n",
                 noModel.r, noModel.g, withModel.r, withModel.g,
-                shownSt.probeCount, int(shownSt.ifdConverged));
+                shownSt.probeCount, int(shownSt.giAtRest));
     // NO ASSERTION ABOUT THE PROBE COUNT HERE ANY MORE (R5-ROOM, 2026-09-15),
     // and the verdict is that the line was about the retired rule rather than
     // about this case: it read "pinned bounds stand the enclosure rule down, so
