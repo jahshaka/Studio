@@ -34,9 +34,10 @@
 //   sqrt(K), sigma measured per integration).
 //
 // PART 2 (`alias`): ONE RAY THAT DOES NOT ALIAS.
-//   1. THE NOISE OF ONE INTEGRATION at 1 and 2 rays a texel (the target set to 1, the
-//      light re-injected M times: M independent integrations): its mean against the
-//      truth (unbiased) and its relative standard deviation sigma - the number the
+//   1. THE NOISE OF ONE SAMPLE at 1 and 2 rays a texel (a probe's sample m is rotated
+//      by a hash of its world lattice point and m, so the M samples are read out of
+//      the probe's own mean as it refines at budget 1): their mean against the
+//      truth (unbiased) and their relative standard deviation sigma - the number the
 //      target sample count K is derived from (K = ceil((2 sigma / e)^2), e the
 //      envelope's trilinear edge uncertainty 1 - ((n-1)/n)^2: the converged mean's
 //      two-sigma error inside what the store itself can resolve).
@@ -143,6 +144,7 @@ struct Fixture {
     double O[3] = { 0, 0, 0 };     ///< cascade 0's voxel origin
     double cell = 0.0;
     double D = 0.0;                ///< the wall's near face, from the probe
+    double multiplier = 0.0;       ///< cascade 0's decode multiplier, cached per build
 };
 
 /// One reading of the probe: the four texels around +z against their truths.
@@ -161,13 +163,20 @@ struct Reading {
 
 static const int kPoleTexel[4][2] = { { 2, 2 }, { 3, 2 }, { 2, 3 }, { 3, 3 } };
 
-static Reading readProbe(Fixture &f, double lat, double hx, double hy)
+static Reading readProbe(Fixture &f, double lat, double hx, double hy, bool voxels = true)
 {
     Reading rd;
     GiFieldAtlas at;
     if (!f.scene->giFieldAtlas(at) || !at.available) return rd;
-    const GiVoxelStats vs = f.scene->giVoxelStats(0);
-    if (!vs.available || vs.multiplier <= 0.0f) return rd;
+    GiVoxelStats vs;
+    if (voxels) {
+        vs = f.scene->giVoxelStats(0);
+        if (!vs.available || vs.multiplier <= 0.0f) return rd;
+        f.multiplier = vs.multiplier;
+    } else {
+        if (f.multiplier <= 0.0) return rd;
+        vs.multiplier = float(f.multiplier);
+    }
     unsigned s3[3];
     for (int k = 0; k < 3; ++k) s3[k] = (unsigned(f.loc[k]) + at.windowOffset[k]) % f.N[k];
     const unsigned slot = s3[0] + s3[1] * f.N[0] + s3[2] * f.N[0] * f.N[1];
@@ -294,17 +303,28 @@ static bool setup(Fixture &f, Engine *e)
 static double edgeLo(int n) { return double(n - 1) * (n - 1) / (double(n) * n); }
 static double edgeHi(int n) { return double(n + 1) * (n + 1) / (double(n) * n); }
 
-/// The noise of ONE integration: the target at 1, the light re-injected `m` times.
+/// THE NOISE OF ONE SAMPLE. A probe's sample m is rotated by a function of its lattice
+/// point and m, so the samples are read out of the probe's own mean as it refines: the
+/// field built at budget 1 with a target of `k`, the probe read every frame, and each
+/// time its count steps from c to c + 1 its new sample is (c + 1) x_{c+1} - c x_c.
 struct Noise { double mean = 0, sd = 0; int n = 0; };
-static Noise integrationNoise(Fixture &f, double lat, int m)
+static Noise sampleNoise(Fixture &f, double lat, int k)
 {
     Noise out;
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%d", k);
+    ::setenv("JAHSHAKA_GI_FIELD_SAMPLES", buf, 1);
+    buildWith(f, lat, 0.4, 0.4, 1, 0);
+    ::unsetenv("JAHSHAKA_GI_FIELD_SAMPLES");
     std::vector<double> v;
-    for (int i = 0; i < m; ++i) {
-        f.scene->refreshGiLighting(false);
-        render(f.e, 3);
-        const Reading r = readProbe(f, lat, 0.4, 0.4);
-        if (r.ok) v.push_back(r.ratio);
+    Reading prev = readProbe(f, lat, 0.4, 0.4, true);
+    if (prev.ok && prev.count >= 1.0) v.push_back(prev.ratio * prev.count);
+    for (int fr = 0; fr < (k + 2) * 10 && (int)v.size() < k; ++fr) {
+        render(f.e, 1);
+        const Reading r = readProbe(f, lat, 0.4, 0.4, false);
+        if (!r.ok || r.count <= prev.count) continue;
+        if (r.count == prev.count + 1.0) v.push_back(r.count * r.ratio - prev.count * prev.ratio);
+        prev = r;
     }
     out.n = int(v.size());
     if (v.size() < 2) return out;
@@ -369,16 +389,13 @@ static int runAlias(Fixture &f)
     const int M = 48;
     for (NoiseArm &a : arms) {
         ::setenv("JAHSHAKA_GI_FIELD_RAYS", a.rays, 1);
-        ::setenv("JAHSHAKA_GI_FIELD_SAMPLES", "1", 1);
         if (a.fixed) ::setenv("JAHSHAKA_GI_FIELD_STATIC", "1", 1);
-        buildWith(f, a.lat, 0.4, 0.4, 0);
-        a.n = integrationNoise(f, a.lat, M);
+        a.n = sampleNoise(f, a.lat, M);
         ::unsetenv("JAHSHAKA_GI_FIELD_STATIC");
         std::printf("   %s ray%s a texel, %s set, lateral %.3f: %d integrations, mean %.3f of the truth, "
                     "sigma %.3f\n", a.rays, a.rays[0] == '1' ? "" : "s", a.fixed ? "STATIC" : "rotated",
                     a.lat, a.n.n, a.n.mean, a.n.sd);
     }
-    ::unsetenv("JAHSHAKA_GI_FIELD_SAMPLES");
     ::unsetenv("JAHSHAKA_GI_FIELD_RAYS");
     const double sigma1 = std::max(arms[0].n.sd, std::max(arms[1].n.sd, arms[2].n.sd));
     const double sigma2 = arms[3].n.sd;
@@ -458,51 +475,63 @@ static int runAlias(Fixture &f)
         f.view->setScene(room);
         enginetest::leakroom::build(room, f.view, 0.2f);
         render(f.e, 4);
-        ::setenv("JAHSHAKA_GI_FIELD_SAMPLES", "1", 1);
-        const bool built = room->setGlobalIllumination(fieldGi(0));
-        render(f.e, 16);
+        ::setenv("JAHSHAKA_GI_FIELD_SAMPLES", "17", 1);
+        const bool built = room->setGlobalIllumination(fieldGi(1));
+        ::unsetenv("JAHSHAKA_GI_FIELD_SAMPLES");
         std::printf("   the room: GI %s (%s), field %s, %d probes\n", built ? "built" : "REFUSED", f.e->lastError().c_str(),
                     room->giStatus().ifdBound ? "bound" : "UNBOUND", room->giStatus().ifdProbes);
-        std::vector<double> sum, sq;
+        // Every probe's samples out of its own refining mean (read after each whole
+        // pass: a probe whose count stepped by one gave up exactly one sample).
+        std::vector<double> prevMean, prevCount, sum, sq, cnt;
         int reads = 0;
-        for (int i = 0; i < 16; ++i) {
-            room->refreshGiLighting(false);
-            render(f.e, 3);
+        for (int pass = 0; pass <= 17 && room->giStatus().ifdRefinesOwed > 0u; ++pass) {
             GiFieldAtlas at;
-            if (!room->giFieldAtlas(at) || !at.available) continue;
-            const unsigned total = at.probes[0] * at.probes[1] * at.probes[2];
-            const unsigned B = at.irradBordered, W = at.irradWidth;
-            if (sum.empty()) { sum.assign(total, 0.0); sq.assign(total, 0.0); }
-            for (unsigned slot = 0; slot < total; ++slot) {
-                const unsigned x0 = (slot * B) % W, y0 = ((slot * B) / W) * B;
-                double m = 0.0;
-                for (unsigned y = 1; y + 1 < B; ++y)
-                    for (unsigned x = 1; x + 1 < B; ++x) {
-                        const unsigned short *p = reinterpret_cast<const unsigned short *>(
-                            &at.irradiance[(size_t(y0 + y) * W + x0 + x) * at.irradBytesPerTexel]);
-                        m += (halfToFloat(p[0]) + halfToFloat(p[1]) + halfToFloat(p[2])) / 3.0;
+            if (room->giFieldAtlas(at) && at.available) {
+                const unsigned total = at.probes[0] * at.probes[1] * at.probes[2];
+                const unsigned B = at.irradBordered, W = at.irradWidth;
+                if (sum.empty()) {
+                    prevMean.assign(total, 0.0); prevCount.assign(total, 0.0);
+                    sum.assign(total, 0.0); sq.assign(total, 0.0); cnt.assign(total, 0.0);
+                }
+                for (unsigned slot = 0; slot < total; ++slot) {
+                    const unsigned x0 = (slot * B) % W, y0 = ((slot * B) / W) * B;
+                    double m = 0.0, c = 0.0;
+                    for (unsigned y = 1; y + 1 < B; ++y)
+                        for (unsigned x = 1; x + 1 < B; ++x) {
+                            const unsigned short *p = reinterpret_cast<const unsigned short *>(
+                                &at.irradiance[(size_t(y0 + y) * W + x0 + x) * at.irradBytesPerTexel]);
+                            m += (halfToFloat(p[0]) + halfToFloat(p[1]) + halfToFloat(p[2])) / 3.0;
+                            c = halfToFloat(p[3]);
+                        }
+                    m /= double((B - 2) * (B - 2));
+                    if (c == prevCount[slot] + 1.0) {
+                        const double sample = c * m - prevCount[slot] * prevMean[slot];
+                        sum[slot] += sample;
+                        sq[slot] += sample * sample;
+                        cnt[slot] += 1.0;
                     }
-                m /= double((B - 2) * (B - 2));
-                sum[slot] += m;
-                sq[slot] += m * m;
+                    prevMean[slot] = m;
+                    prevCount[slot] = c;
+                }
+                ++reads;
             }
-            ++reads;
+            render(f.e, 8);
         }
-        ::unsetenv("JAHSHAKA_GI_FIELD_SAMPLES");
         double peak = 0.0;
-        for (size_t i = 0; i < sum.size(); ++i) peak = std::max(peak, sum[i] / std::max(1, reads));
+        for (size_t i = 0; i < sum.size(); ++i) if (cnt[i] > 0) peak = std::max(peak, sum[i] / cnt[i]);
         std::vector<double> rel;
-        for (size_t i = 0; i < sum.size() && reads > 1; ++i) {
-            const double mean = sum[i] / reads;
+        for (size_t i = 0; i < sum.size(); ++i) {
+            if (cnt[i] < 4) continue;
+            const double mean = sum[i] / cnt[i];
             if (mean < 0.01 * peak) continue;               // the unlit and the buried
-            const double var = std::max(0.0, (sq[i] - reads * mean * mean) / (reads - 1));
+            const double var = std::max(0.0, (sq[i] - cnt[i] * mean * mean) / (cnt[i] - 1));
             rel.push_back(std::sqrt(var) / mean);
         }
         std::sort(rel.begin(), rel.end());
         const double med = rel.empty() ? -1 : rel[rel.size() / 2];
         const double p95 = rel.empty() ? -1 : rel[size_t(double(rel.size()) * 0.95)];
-        std::printf("   THE LEAK ROOM, one integration: %zu lit probes over %d integrations - relative "
-                    "sigma median %.4f, 95th percentile %.4f\n", rel.size(), reads, med, p95);
+        std::printf("   THE LEAK ROOM, one sample: %zu lit probes, %d reads - relative sigma median %.4f, "
+                    "95th percentile %.4f\n", rel.size(), reads, med, p95);
         CHECK_MSG(!rel.empty() && med >= 0.0, "the room's probes were measured (%zu)", rel.size());
         GiParams off; off.mode = GiMode::Off;
         room->setGlobalIllumination(off);
@@ -533,11 +562,8 @@ int main(int argc, char **argv)
     if (!failures) {
         if (mode == "alias") runAlias(f);
         else {
-            // The estimator's per-integration sigma at the shipped ray count, for the bar.
-            ::setenv("JAHSHAKA_GI_FIELD_SAMPLES", "1", 1);
-            buildWith(f, 0.0, 0.4, 0.4, 0);
-            const Noise nz = integrationNoise(f, 0.0, 24);
-            ::unsetenv("JAHSHAKA_GI_FIELD_SAMPLES");
+            // The estimator's per-sample sigma at the shipped ray count, for the bar.
+            const Noise nz = sampleNoise(f, 0.0, 24);
             std::printf("   one integration: sigma %.3f of the truth (%d integrations)\n", nz.sd, nz.n);
             runWall(f, nz.sd);
         }
