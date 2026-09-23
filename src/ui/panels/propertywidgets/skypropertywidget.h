@@ -94,6 +94,11 @@ public:
 
     void hideEvent(QHideEvent *event) override;
 
+signals:
+    /// The Scene binding has (re)built its rows for a sky type — the Clouds
+    /// blade re-reads whether the layer may be drawn over it.
+    void skyTypeApplied();
+
 public slots:
     void skyTypeChanged(int index);
     void onSlotChanged(QString value, QString guid, int index);

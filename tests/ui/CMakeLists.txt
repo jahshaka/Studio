@@ -442,6 +442,7 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
@@ -620,6 +621,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
@@ -751,6 +753,7 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
@@ -892,6 +895,7 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp

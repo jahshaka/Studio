@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
+#include "ui/panels/propertywidgets/worldcloudspropertywidget.h"
 #include "ui/panels/propertywidgets/lightpropertywidget.h"
 #include "ui/panels/propertywidgets/decalpropertywidget.h"
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
@@ -81,6 +82,12 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	skyPropView->setPanelTitle("Sky");
 	skyPropView->setDatabase(db);
 	skyPropView->expand();
+
+	// THE CLOUD LAYER (CLOUDS-2D-1), directly under the Sky it is drawn over.
+	cloudsPropView = new WorldCloudsPropertyWidget();
+	cloudsPropView->setPanelTitle("Clouds");
+	connect(skyPropView, &SkyPropertyWidget::skyTypeApplied,
+	        cloudsPropView, &WorldCloudsPropertyWidget::refreshRows);
 
 	// World Modes (POST_CHAIN_SPEC §9.6) sits FIRST among the quality sections:
 	// it is the tier every one of them resolves through.
@@ -273,7 +280,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
 {
     return {
-        fogPropView, worldPropView, skyPropView,
+        fogPropView, worldPropView, skyPropView, cloudsPropView,
         worldModesPropView, worldGiPropView, worldPostFxPropView,
         worldAaPropView, worldShadowPropView, worldVrPropView, transformPropView,
         mobilityPropView, componentsPropView,
@@ -828,6 +835,7 @@ void SceneNodePropertiesWidget::bindScene(const QSharedPointer<iris::Scene> &sce
     // showing a LIBRARY sky asset since the last time the world was shown (one
     // implementation, two bindings).
     skyPropView->setScene(scene);
+    cloudsPropView->setScene(scene);
 }
 
 // THE CHEAP HALF: the blades are permanent children and already bound, so a
@@ -837,6 +845,7 @@ void SceneNodePropertiesWidget::mountWorldBlades()
 {
     mount(worldPropView);
     mount(skyPropView);
+    mount(cloudsPropView);
     mount(worldModesPropView);
     mount(worldGiPropView);
     mount(worldPostFxPropView);
@@ -1130,6 +1139,7 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     // rows needs the stack — not just the two that had it.
     if (worldGiPropView) worldGiPropView->setServices(services);
     if (worldPropView) worldPropView->setServices(services);
+    if (cloudsPropView) cloudsPropView->setServices(services);
     if (fogPropView) fogPropView->setServices(services);
     if (worldAaPropView) worldAaPropView->setServices(services);
     if (worldShadowPropView) worldShadowPropView->setServices(services);
@@ -1172,6 +1182,7 @@ void SceneNodePropertiesWidget::setDatabase(Database *db)
     // wild pointer, and its "Background Ambience" row (which is shown only
     // when the project HAS music assets) could never appear.
     if (worldPropView) worldPropView->setDatabase(db);
+    if (cloudsPropView) cloudsPropView->setDatabase(db);
     if (skyPropView) skyPropView->setDatabase(db);
     if (emitterPropView) emitterPropView->setDatabase(db);
     if (shaderPropView) shaderPropView->setDatabase(db);
@@ -1188,6 +1199,7 @@ void SceneNodePropertiesWidget::setProject(Project *project)
     // helpers forward to the controls they build).
     this->project = project;
     if (worldPropView)    worldPropView->setProject(project);
+    if (cloudsPropView)   cloudsPropView->setProject(project);
     if (skyPropView)      skyPropView->setProject(project);
     if (emitterPropView)  emitterPropView->setProject(project);
     if (shaderPropView)   shaderPropView->setProject(project);

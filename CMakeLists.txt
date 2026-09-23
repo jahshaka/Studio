@@ -386,6 +386,7 @@ set(SRCS
     src/io/scenewriter.cpp 
     src/services/thumbnailmanager.cpp 
     src/ui/panels/propertywidgets/fogpropertywidget.cpp 
+    src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp 
     src/io/assetiobase.cpp 
     src/io/materialpresetreader.cpp
     src/io/materialpresets.cpp

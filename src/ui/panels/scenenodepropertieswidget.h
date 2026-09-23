@@ -52,6 +52,7 @@ class Project;
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class ShaderPropertyWidget;
 class SkyPropertyWidget;
+class WorldCloudsPropertyWidget;
 class WorldGiPropertyWidget;
 class WorldAaPropertyWidget;
 class WorldModesPropertyWidget;
@@ -369,6 +370,8 @@ private:
 	/// serves both bindings — the world's sky while the world is selected, a
 	/// library sky asset while one is — because a selection is exclusive.
 	SkyPropertyWidget *skyPropView;
+	/// The Clouds blade, under the Sky blade (CLOUDS-2D-1).
+	WorldCloudsPropertyWidget *cloudsPropView = nullptr;
 	MeshPropertyWidget* meshPropView;
     /// MOVEMENT (REALTIME_REFLECTIONS_SPEC §3.3): the per-object mobility row,
     /// mounted for EVERY node kind — a lamp on a swinging arm needs it as much

@@ -386,6 +386,9 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	}
 
 	loading = false;
+	// THE CLOUDS BLADE BELOW follows the sky type (CLOUDS-2D-1): its rows are
+	// disabled over an image sky, which carries its own clouds.
+	if (binding == Binding::Scene) emit skyTypeApplied();
 }
 
 // ONE UNDO STEP PER SKY GESTURE (debt L6). The sky is recorded WHOLE — type,
