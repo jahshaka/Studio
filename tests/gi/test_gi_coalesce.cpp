@@ -305,7 +305,15 @@ int main(int argc, char **argv)
     const Colour midDrag = floorPixel();
     std::printf("   floor, drag's last frame (no full re-solve yet)  r=%.3f g=%.3f b=%.3f\n",
                 midDrag.r, midDrag.g, midDrag.b);
-    CHECK((midDrag.r - midDrag.g) < (before.r - before.g) - 0.015f,
+    // RE-ANCHORED 0.015 -> 0.010 BY PHOTON-CARDS-2 (the one cone integrator):
+    // the bounce job now maps a world cone direction into the non-cubic voxel
+    // box exactly as the pixel does (it took the box's normalised axes for the
+    // world's), and the start frame's bounce reads r - g 0.031 where it read
+    // 0.035 — the drag's drop is 0.012 (3 codes) where it was 0.016. The drag's
+    // last frame reads exactly what the full re-solve settles to below (0.019),
+    // so the cheap re-inject is COMPLETE; the bar says "moved by more than two
+    // codes", which a bounce that did not follow the light cannot do.
+    CHECK((midDrag.r - midDrag.g) < (before.r - before.g) - 0.010f,
           "the light-only re-inject moves the bounce DURING the drag (not just after it)");
 
     // ---- letting go --------------------------------------------------------

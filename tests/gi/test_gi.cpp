@@ -213,7 +213,16 @@ int main()
         show("floor with hybrid", hyFloor);
         CHECK(hyFloor.r > baseFloor.r + 0.02f,
               "hybrid keeps the VCT red bounce on the floor");
-        CHECK((hyFloor.r - hyFloor.g) > (baseFloor.r - baseFloor.g) + 0.02f,
+        // RE-ANCHORED 0.02 -> 0.015 BY PHOTON-CARDS-2 (the one cone integrator),
+        // and it is the BOUNCE JOB's geometry that moved, measured: the job used
+        // to take the volume's normalised axes for the world's, which bends every
+        // cone of a non-cubic box, and it now maps a world direction into the box
+        // exactly as the pixel's cones do. With the job's old frame and the new
+        // mapping the floor reads the NEW numbers, so the mapping is the whole of
+        // it: r - g 6/255 -> 5/255 here (0.412 -> 0.408; VCT arm 0.514 -> 0.506).
+        // Without GI the floor carries 0 codes of red excess; 4 codes is still
+        // "measurable red bounce, not overall brightness".
+        CHECK((hyFloor.r - hyFloor.g) > (baseFloor.r - baseFloor.g) + 0.015f,
               "the hybrid raise is red bounce, not overall brightness");
 
         GiParams offHybrid;
