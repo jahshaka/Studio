@@ -582,7 +582,11 @@ QVariantMap ProjectApi::exportWeb(const QString &dir)
     if (outDir.isEmpty())
         outDir = QDir(host.project->getProjectFolder()).filePath(QStringLiteral("exports/web"));
 
-    const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir);
+    // The live renderer, when there is one, bakes the sky's cloud layer into
+    // the exported sky image (CLOUDS-2D-1); headless exports go without it.
+    jahshaka::engine::Scene *renderer =
+        (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
+    const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir, renderer);
     if (!r.ok) { fail(QStringLiteral("project.exportWeb: %1").arg(r.error)); return out; }
 
     out["dir"] = r.dir;

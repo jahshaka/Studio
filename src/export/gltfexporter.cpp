@@ -93,6 +93,7 @@ struct Ctx
     BinBuilder bin;
     QStringList warnings;
     QStringList extensions;
+    bool cloudsBaked = false;   // CLOUDS-2D-1: the sky image carries the cloud layer
     // dedupe
     // A glTF MESH CARRIES ITS MATERIAL, so the key is the pair (ADD-1,
     // 2026-09-15). Keyed on the geometry alone, two nodes that share an
@@ -815,9 +816,36 @@ QString imageToDataUri(const QImage &img, bool preferJpeg)
         .arg(jpeg ? "jpeg" : "png", QString::fromLatin1(bytes.toBase64()));
 }
 
-QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c)
+QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExporter::SkyBaker &bakeSky)
 {
     QJsonObject sky;
+    // THE CLOUD LAYER IS BAKED, NOT LIVE (CLOUDS-2D-1). The viewer has no cloud
+    // layer and three.js none to adopt, and the export must not lie: a sky the
+    // layer is drawn over leaves as ONE equirect PICTURE of that sky with its
+    // clouds in it — rendered by the engine's own environment capture, so it
+    // is what the editor's sky looks like — static, unlit by the viewer's
+    // lights, and casting no shadow, which the sky's `note` and the README
+    // say. An image sky is never drawn over (it carries its own clouds), and
+    // without a renderer (a headless export) the layer is left out and a
+    // warning says so.
+    const bool imageSky = scene->skyType == iris::SkyType::EQUIRECTANGULAR ||
+                          scene->skyType == iris::SkyType::CUBEMAP;
+    if (scene->clouds.enabled && !imageSky) {
+        const QImage baked = bakeSky ? bakeSky(2048, 1024) : QImage();
+        if (!baked.isNull()) {
+            sky["type"] = "equirect";
+            sky["source"] = "baked";
+            sky["cloudsBaked"] = true;
+            sky["note"] = QStringLiteral("The sky and its cloud layer are baked into this image: a still "
+                                         "picture of the editor's sky, not a live layer — the clouds do "
+                                         "not move and cast no shadow in the viewer.");
+            sky["image"] = imageToDataUri(baked.convertToFormat(QImage::Format_RGB888), true);
+            c.cloudsBaked = true;
+            return sky;
+        }
+        c.warnings.append(QStringLiteral("the cloud layer was not exported: baking it into the sky "
+                                         "needs a renderer, and this export has none"));
+    }
     switch (scene->skyType) {
     case iris::SkyType::SINGLE_COLOR:
         sky["type"] = "color";
@@ -967,7 +995,8 @@ QJsonObject orientationShimNode(const QString &name)
 
 // ---- the exporter ----------------------------------------------------------
 
-GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, const QString &sceneName)
+GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, const QString &sceneName,
+                                              const SkyBaker &bakeSky)
 {
     Result res;
     if (!scene || !scene->rootNode) {
@@ -1490,7 +1519,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
 
     // ---- scene-level extras (jah sidecar) ----
     QJsonObject jahScene;
-    jahScene["sky"] = buildSkyExtras(scene, c);
+    jahScene["sky"] = buildSkyExtras(scene, c, bakeSky);
     if (scene->fogEnabled) {
         // The viewer gets THREE.FogExp2, whose curve is exp(-(rho*d)^2) against our
         // 2^(-density*d). The shapes differ, so the export matches the two where it
@@ -1663,6 +1692,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     res.glb = glb;
     res.json = root;
     res.warnings = c.warnings;
+    res.cloudsBaked = c.cloudsBaked;
     res.extensionsUsed = c.extensions;
     res.nodeCount = c.nodes.size();
     res.meshCount = c.meshes.size();

@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "modules/publish/publishrecord.h"
 #include "scripting/scriptengine.h"
 #include "export/exportservice.h"
+#include "viewport/ieditorviewport.h"
 #include "export/previewlauncher.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
@@ -425,8 +426,11 @@ void PublishPage::onProcess()
 
     // The same seam the `project.exportWeb` verb drives (API-first rule).
     // Always the project's stable path — a re-Process updates it in place.
+    // The live renderer bakes the sky's cloud layer into the sky image
+    // (CLOUDS-2D-1) — the same argument the verb passes.
     const auto r = ExportService::exportWeb(scene, host.project ? host.project->getProjectName()
-                                                                : QString(), dir);
+                                                                : QString(), dir,
+                                            host.viewport ? host.viewport->engineScene() : nullptr);
     if (!r.ok) {
         setStatus(QStringLiteral("Export failed: %1").arg(r.error), true);
         refreshState();
