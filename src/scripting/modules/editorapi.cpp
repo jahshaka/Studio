@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/editorapi.h"
 
+#include <QKeySequence>
+#include <QKeyEvent>
 #include <QDockWidget>
 #include <QDir>
 #include <QFileInfo>
@@ -839,6 +841,17 @@ QVector<VerbInfo> EditorApi::verbs() const
           "gesture the owner performs with a mouse; everything it reaches is the viewport's own "
           "handler, so it cannot drift from what a person gets.",
           Needs::Engine },
+        { "key", "editor.key(name, action='tap') -> bool",
+          "A KEY ON THE EDITOR VIEWPORT, the way the viewport receives one once the window system "
+          "has delivered it: its ShortcutOverride, then the KeyPress and/or KeyRelease, posted to "
+          "the viewport widget itself — the route a held fly key takes to the camera controller, "
+          "and while playing to the run (PLAY-FLY-1's repro). `name` is a Qt key name ('W', 'Up', "
+          "'Shift+W'); `action` is 'press' (held until a 'release'), 'release', or 'tap' (both, the "
+          "default). A held key moves the camera on every frame after it (editor.frame). It does "
+          "NOT pass through the window system or Qt's shortcut map — whether a REAL key arrives is "
+          "app.input_keys' question (xdotool on a private display). Refused with no viewport or "
+          "an unknown key name.",
+          Needs::Window },
         { "dragAssetToTray", "editor.dragAssetToTray(guidOrGuids, folderGuid, {action}) -> bool",
           "DROPS TILES ON A FOLDER TILE IN THE EDITOR'S ASSET TRAY, for real (DRAWERS-1): it "
           "posts the same QDragEnter/QDragMove/QDrop events the tray's own drag posts, aimed at "
@@ -2508,6 +2521,36 @@ bool EditorApi::frame(int n, double dt)
                fail(QStringLiteral("editor.frame: the player space is active but its view is not "
                                    "ready to render; show the page or use player.frame"));
     host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
+    return true;
+}
+
+bool EditorApi::key(const QString &name, const QString &action)
+{
+    QWidget *target = host.viewport ? host.viewport->asWidget() : nullptr;
+    if (!target) return fail("editor.key: no editor viewport in this session");
+    const QKeySequence seq = QKeySequence::fromString(name, QKeySequence::PortableText);
+    if (seq.isEmpty() || seq[0].key() == Qt::Key_unknown)
+        return fail(QStringLiteral("editor.key: unknown key '%1'").arg(name));
+    const QString act = action.isEmpty() ? QStringLiteral("tap") : action.toLower();
+    if (act != QLatin1String("press") && act != QLatin1String("release")
+        && act != QLatin1String("tap"))
+        return fail(QStringLiteral("editor.key: action must be 'press', 'release' or 'tap' "
+                                   "(got '%1')").arg(action));
+    const Qt::Key k = seq[0].key();
+    const Qt::KeyboardModifiers mods = seq[0].keyboardModifiers();
+    if (act != QLatin1String("release")) {
+        // THE OVERRIDE FIRST, as Qt's shortcut map asks it of the focus widget:
+        // it is where the viewport claims a key for the run while playing.
+        QKeyEvent over(QEvent::ShortcutOverride, k, mods);
+        over.ignore();
+        QApplication::sendEvent(target, &over);
+        QKeyEvent press(QEvent::KeyPress, k, mods);
+        QApplication::sendEvent(target, &press);
+    }
+    if (act != QLatin1String("press")) {
+        QKeyEvent release(QEvent::KeyRelease, k, mods);
+        QApplication::sendEvent(target, &release);
+    }
     return true;
 }
 

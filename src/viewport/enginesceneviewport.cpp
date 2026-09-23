@@ -2215,7 +2215,6 @@ void EngineSceneViewport::setEditorData(EditorData *data)
     // The controller must steer the SAME camera the view renders; without this a
     // project load leaves the mouse driving the old, no-longer-rendered camera.
     if (mCamController) mCamController->setCamera(mEditorCam);
-    if (mPlayback && mScene && mEditorCam) mScene->setCamera(mEditorCam);
 }
 
 // ---------------------------------------------------------------------------
@@ -2309,6 +2308,15 @@ void EngineSceneViewport::adoptEditorCamera(iris::CameraNodePtr camera)
     if (!camera) return;
     mEditorCam = camera;
     mEditorCam->setFramingAspect(freecam::kFreeCameraFramingAspect);
+    // …AND THE DOCUMENT'S EXPLORER IS THIS CAMERA (PLAY-FLY-1). Play flies
+    // `Scene::renderCamera(Scene::camera)` (PlayBack::playCamera) while this
+    // view renders mEditorCam; they must be one node. A NEW scene broke that:
+    // setScene() bound Scene::camera to the old explorer and resetEditorCam()
+    // then minted a fresh one here without telling the scene — so play-in-
+    // place flew a camera nobody rendered and the fly keys looked dead in every
+    // scene made with New/project.create. One place, since every assignment to
+    // mEditorCam comes through here.
+    if (mScene) mScene->setCamera(mEditorCam);
 }
 
 void EngineSceneViewport::setPipEnabled(bool on)
@@ -2462,7 +2470,8 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // the document (Scene::advance, right after the movement step, so it never
     // lags the character by a frame); what the document cannot know is which
     // camera this viewport DRAWS with — `Scene::camera` and `viewCamera()` are
-    // not always the same node in this tree (measured; reported upward). So the
+    // not the same node while piloting (a new scene's stale explorer was the
+    // other case, closed in adoptEditorCamera by PLAY-FLY-1). So the
     // host hands its own camera in, once per frame, after the playback update
     // and before applyCamera reads it.
     //
@@ -2479,7 +2488,16 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // overwritten by the arm every frame has a dead fly. The arm keeps its
     // saved pose latched while it stands down, so un-ejecting takes the shot
     // back and Stop still returns the explorer to where play found it.
-    if (mScene && mScene->getPossession() && !mPilot && !mPlayEjected)
+    //
+    // ...AND ONLY A CAMERA THE DOCUMENT DOES NOT ALREADY DRIVE (PLAY-FLY-1).
+    // Since adoptEditorCamera keeps Scene::camera on the explorer, the view
+    // camera IS the node the arm writes (and saves, and restores on stop) in
+    // Scene::advance. Handing it in again made the possession save it a SECOND
+    // time — after the arm had moved it — and restore that stale pose over the
+    // document's correct one at Stop (scripting.e2e.possession's "the explorer
+    // camera is restored").
+    if (mScene && mScene->getPossession() && !mPilot && !mPlayEjected
+        && viewCamera() != mScene->camera)
         mScene->getPossession()->applyToViewCamera(viewCamera());
     // Emitters used to be ticked here, one document node at a time, because the
     // document owned a CPU particle simulator. It does not any more

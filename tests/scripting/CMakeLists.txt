@@ -260,6 +260,10 @@ add_script_e2e(editor_controls e2e_editor_controls.js)
 add_script_e2e(gizmo_rings e2e_gizmo_rings.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).
 add_script_e2e(desktops e2e_desktops.js)
+# PLAY-FLY-1: the play-in-place FLY, driven by a held key through the viewport's
+# own key path (editor.key) — the camera must move monotonically along the key's
+# axis over 30 frames. Engine up: play runs in the editor viewport.
+add_script_e2e(play_fly e2e_play_fly.js)
 # STATS_OVERLAY_SPEC phase 1 — the DATA half of the engine-drawn stats overlay,
 # landed and tested before a pixel of it exists (the API-first rule). Pins the
 # shape of app.renderStats(), the LAZY geometry counters, the invariants between
