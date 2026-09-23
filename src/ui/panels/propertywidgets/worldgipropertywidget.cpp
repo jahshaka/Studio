@@ -272,9 +272,12 @@ void WorldGiPropertyWidget::rebuild()
     modeSelector->addItem(tr("Voxel + Reflections"));
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
     modeSelector->setToolTip(tr("Which technique Photon uses, if you want to choose it yourself. "
-                                "Voxel Lighting cone-traces the bounce out of a voxelization of "
-                                "the lit volume; Voxel + Reflections adds the parallax-corrected "
-                                "probe grid."));
+                                "Voxel Lighting voxelizes the lit world around the camera: the "
+                                "irradiance field's probes gather the bounced light and the sky "
+                                "from those voxels and light every diffuse surface, and cones "
+                                "traced through the voxels give the glossy reflections (with the "
+                                "Irradiance Field turned off, the cones carry the bounce too). "
+                                "Voxel + Reflections adds the parallax-corrected probe grid."));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldGiPropertyWidget::modeChanged);
 
@@ -395,10 +398,10 @@ void WorldGiPropertyWidget::rebuild()
             ddgiIntensity = this->addFloatValueSlider(tr("Field Intensity"), 0.0f, 4.0f,
                                                       qBound(0.0f, scene->giDdgiIntensity, 4.0f));
             ddgiIntensity->setToolTip(
-                tr("How brightly the field's diffuse is applied. 1.0 is the renderer's raw value "
-                   "and the calibrated default (measured at 86% of the cone-traced diffuse it "
-                   "replaces). Raise it to trim a room brighter; 0 leaves the field bound and "
-                   "contributing nothing."));
+                tr("How brightly the field's diffuse is applied. 1.0 is the field's own physical "
+                   "answer and the default: the bounced light and the sky its probes see, in the "
+                   "same units as the lights themselves. Raise it to trim a room brighter; 0 "
+                   "leaves the field bound and contributing nothing."));
             wirePlainRow(ddgiIntensity, QStringLiteral("giDdgiIntensity"), tr("Field Intensity"),
                          [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 64.0f)); });
         }
