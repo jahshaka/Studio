@@ -85,6 +85,24 @@ set_tests_properties(gi.reflect_motion_norays PROPERTIES
 
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture
 # builder, a different question (see costMain).
+#
+# NO RUN_SERIAL, AND THE MEASUREMENT IS THE REASON (ATOM-RESUMES-1 item 4,
+# 2026-09-22). The ledger flagged the FULL-res glossy arm's 2 % margin as a
+# contention red risk. Measured on this box, solo and again while a 426-suite
+# gate-scope ran at -j2: 0.780 ms solo against 0.778-0.784 ms under load, with the
+# other three arms identical to three decimals (0.137 / 0.072 / 0.133) — a 0.8 %
+# spread on the tightest arm. Sibling Vulkan suites do not move this pass's own
+# timestamp pair, so serialising the row would cost gate wall-clock and buy
+# nothing.
+#
+# WHAT DOES MOVE IT IS THE DEVICE STATE, measured in the fix round: with the SM
+# clock LOCKED at 2550 MHz (the rig's own recipe for a GPU number) the card is
+# capped at 82 % of its 3105 MHz ceiling and every arm is ~7 % slower —
+# 0.833-0.834 ms full-res glossy in three runs, which RED the old 0.80 ms bar
+# while the ratios moved by at most 0.49 -> 0.53. So the full-res bar is now
+# 0.90 ms (the worst of the two states x 1.08) and the four ratio bars are the
+# worst of the two states x ~1.3; three of them are TIGHTER than the first
+# version's. The arithmetic and both states' numbers are in costMain.
 add_test(NAME gi.rt_reflect_cost COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_cost PROPERTIES

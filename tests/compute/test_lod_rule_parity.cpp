@@ -16,6 +16,14 @@
 // height. The frustum is made permissive on purpose — every instance must reach
 // the level walk, and a frustum rejection would silently shrink the sample.
 //
+// AND A ROTATED, NON-UNIFORMLY SCALED GROUP (A5b fix round): 100 more instances
+// at scale (1, 4, 1) under a 45 degree yaw and a 30 degree pitch. The largest axis
+// scale of such a transform is 4 - the longest COLUMN of the row-major 3x4 - while
+// every ROW is shorter, so a rule that read rows (the cull did, until this round)
+// divides by too small a scale and answers a COARSER level than the tolerance
+// permits. The CPU reference takes `worldMaxAxisScale` (Types.h), which is checked
+// against the authored 4 first, so the reference is the truth and not a twin.
+//
 // THE THRESHOLD CASES ARE COUNTED, NOT HIDDEN. The design asks for agreement to
 // 1e-4; the shader's output is an integer LEVEL, so the honest statement is
 // "every level agrees, and N of the 10,000 evaluations were within 1e-4 of a
@@ -29,6 +37,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -102,6 +111,11 @@ int main()
     PbrParams p; p.albedo = Colour(0.7f, 0.7f, 0.7f); p.roughness = 0.6f;
     const MaterialId mat = scene->createPbrMaterial(p);
     const int kInstances = 500;
+    // WHAT EACH NODE IS, so the DRAW PATH's answer can be checked against the
+    // rule without going through the GPU table (the strategy arm below reads
+    // `objectLods()`, which is keyed by NodeId).
+    struct Placed { float dist, scale; };
+    std::unordered_map<unsigned long long, Placed> placed;
     for (int i = 0; i < kInstances; ++i) {
         const NodeId n = scene->createNode();
         if (!scene->attachMesh(n, mesh, mat)) { std::printf("FAIL: attach\n"); return 1; }
@@ -111,19 +125,47 @@ int main()
         const float s = 0.25f * std::pow(2.0f, float(i % 6));
         enginetest::setNodePosition(scene, n, Vec3(0.0f, 0.0f, -dist));
         enginetest::setNodeScale(scene, n, Vec3(s, s, s));
+        placed[(unsigned long long)n] = { dist, s };
+    }
+    const int kRotated = 100;
+    const float c1 = std::cos(0.5f * 45.0f * 3.14159265f / 180.0f);
+    const float s1 = std::sin(0.5f * 45.0f * 3.14159265f / 180.0f);
+    const float c2 = std::cos(0.5f * 30.0f * 3.14159265f / 180.0f);
+    const float s2 = std::sin(0.5f * 30.0f * 3.14159265f / 180.0f);
+    const Quat yawPitch(c1 * s2, c2 * s1, -s1 * s2, c1 * c2);   // yaw 45 then pitch 30
+    for (int i = 0; i < kRotated; ++i) {
+        const NodeId n = scene->createNode();
+        if (!scene->attachMesh(n, mesh, mat)) { std::printf("FAIL: attach\n"); return 1; }
+        const float dist = 2.0f + 3.0f * float(i);
+        scene->setNodeTransform(n, Vec3(0.0f, 0.0f, -dist), yawPitch, Vec3(1.0f, 4.0f, 1.0f));
     }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
     for (int i = 0; i < 3; ++i) e->renderOneFrame();
 
     const unsigned slots = scene->gpuSceneStatus().slotCount;
-    CHECK(slots == unsigned(kInstances), "every instance is in the table");
+    CHECK(slots == unsigned(kInstances + kRotated), "every instance is in the table");
     std::vector<GpuSceneEntry> table;
     for (unsigned i = 0; i < slots; ++i) {
         GpuSceneEntry en;
         if (scene->gpuSceneEntry(i, en)) table.push_back(en);
     }
     CHECK(table.size() == slots, "the table reads back");
+    {
+        bool truth = table.size() == slots;
+        float rowMax = 0.0f;
+        for (unsigned i = unsigned(kInstances); truth && i < slots; ++i) {
+            truth = std::fabs(worldMaxAxisScale(table[i].world) - 4.0f) < 1.0e-4f;
+            for (int row = 0; row < 3; ++row) {
+                const float *w = &table[i].world[row * 4];
+                rowMax = std::max(rowMax, std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]));
+            }
+        }
+        char m[200];
+        std::snprintf(m, sizeof(m), "the rotated group's largest axis scale is the authored 4 by "
+                                    "COLUMN (the longest ROW reads %.4f)", rowMax);
+        CHECK(truth && rowMax < 3.99f, m);
+    }
 
     // THE 20 PARAMETER SETS. proj[1][1] of a 20 to 110 degree vertical lens, the
     // heights a desktop, a 4K and a VR eye render at, and tolerances from a
@@ -139,6 +181,7 @@ int main()
         sets.push_back({ tols[i % 4], p11, heights[i % 4] });
     }
 
+    unsigned mismatchedRotated = 0;
     unsigned evaluated = 0, mismatched = 0, nearThreshold = 0, histogram[8] = {};
     unsigned firstBadSlot = 0xFFFFFFFFu, firstBadGpu = 0, firstBadCpu = 0;
     for (const Params &ps : sets) {
@@ -168,11 +211,7 @@ int main()
         }
         for (unsigned slot = 0; slot < slots && slot < res.levels.size(); ++slot) {
             const GpuSceneEntry &en = table[slot];
-            float scale = 0.0f;
-            for (int row = 0; row < 3; ++row) {
-                const float *w = &en.world[row * 4];
-                scale = std::max(scale, std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]));
-            }
+            const float scale = worldMaxAxisScale(en.world);
             const float cx = 0.5f * (en.boundsMin[0] + en.boundsMax[0]);
             const float cy = 0.5f * (en.boundsMin[1] + en.boundsMax[1]);
             const float cz = 0.5f * (en.boundsMin[2] + en.boundsMax[2]);
@@ -194,6 +233,7 @@ int main()
                 if (b > 0.0f && std::fabs(allowed - b) / b < 1.0e-4f) ++nearThreshold;
             if (gpu != cpu) {
                 ++mismatched;
+                if (slot >= unsigned(kInstances)) ++mismatchedRotated;
                 if (firstBadSlot == 0xFFFFFFFFu) {
                     firstBadSlot = slot;
                     firstBadGpu = gpu;
@@ -201,6 +241,116 @@ int main()
                 }
             }
         }
+    }
+
+    // ---- THE THIRD COPY: THE DRAW PATH'S OWN STRATEGY -----------------------
+    //
+    // The two copies above are the ones a compute shader forces on us. The
+    // STRATEGY (`JahWorldErrorLodStrategy`, irisgl/engine/src/OgreMesh.cpp) is a
+    // third evaluation of the same rule, in Ogre's own four-wide SoA loop, and
+    // it is the one that decides which VAO is DRAWN — so a drift there is a
+    // drift in the picture, not in a report. It was measurably NOT the same rule
+    // until ATOM-RESUMES-1 item 1: it carried no `meshToWorldScale`, so a
+    // 10x-scaled instance took a level whose real deviation was ten times what
+    // it asked for, and nothing compared it with anything.
+    //
+    // ITS PARAMETERS ARE THE VIEW'S, not a sweep's: the strategy reads the
+    // pass's own projection and render-target height, which is exactly what
+    // `fillCullView` reports for this view, and its tolerance is the shipped
+    // `kLodBudgetPixels` (the tier column is not wired into the draw path —
+    // GiQualityFacts::pixelTolerance, scripting.e2e.tier_table_atom). So this
+    // arm holds the SAME (distance x scale) fixture to the same rule at one
+    // parameter set, read through `objectLods()` — the byte the render queue
+    // indexes the VAO list with.
+    {
+        // The level is written by the LOD walk of a rendered frame; the cull
+        // sweep above renders none, so the reading is taken from a fresh one.
+        for (int i = 0; i < 2; ++i) e->renderOneFrame();
+        GpuCullRequest vr;
+        if (!e->fillCullView(view, vr)) { std::printf("FAIL: fillCullView (view)\n"); return 1; }
+        std::vector<ObjectLodDesc> drawn;
+        scene->objectLods(drawn);
+        CHECK(drawn.size() == size_t(kInstances), "every instance reports a drawn level");
+
+        unsigned sEvaluated = 0, sMismatched = 0, sHist[8] = {}, sNearThreshold = 0;
+        // Per SCALE, because the defect this arm exists for is a scale defect:
+        // the table prints one row per octave so a disagreement names the scale
+        // it happens at instead of a slot number.
+        struct Row { unsigned n, bad, levelMin, levelMax; };
+        std::unordered_map<int, Row> byScale;
+        for (const ObjectLodDesc &d : drawn) {
+            auto it = placed.find((unsigned long long)d.node);
+            if (it == placed.end()) continue;
+            const float s = it->second.scale;
+            // Ogre's own quantity: the distance to the bounding SPHERE, whose
+            // radius is the mesh's (the unit square's half-diagonal) times the
+            // largest axis scale — `MovableObject::updateAllBounds`.
+            const float radius = 0.5f * std::sqrt(2.0f) * s;
+            const float dist = std::max(0.0f, it->second.dist - radius);
+            const float footprint = sampleFootprintPerspective(dist, vr.projScaleY,
+                                                               vr.viewportHeight);
+            const float allowed = allowedWorldError(kLodBudgetPixels, footprint, s);
+            const unsigned rule =
+                unsigned(lodLevelForWorldError(kBounds, allowed, kBounds.size() + 1u));
+            ++sEvaluated;
+            if (d.level < 8u) ++sHist[d.level];
+            for (float b : kBounds)
+                if (b > 0.0f && std::fabs(allowed - b) / b < 1.0e-4f) ++sNearThreshold;
+            const int octave = int(std::lround(std::log2(double(s))));
+            Row &row = byScale[octave];
+            if (!row.n) { row.levelMin = 8u; row.levelMax = 0u; }
+            ++row.n;
+            row.levelMin = std::min(row.levelMin, d.level);
+            row.levelMax = std::max(row.levelMax, d.level);
+            if (d.level != rule) {
+                ++sMismatched;
+                ++row.bad;
+                if (sMismatched <= 3u)
+                    std::printf("   STRATEGY DISAGREES: scale %.2f at %.1f m, drawn %u, rule %u "
+                                "(allowed %.6g)\n", s, it->second.dist, d.level, rule, allowed);
+            }
+        }
+        std::printf("\n== the strategy (the DRAWN level), at this view's own "
+                    "%.0f px / proj11 %.4f / %.1f px tolerance ==\n",
+                    vr.viewportHeight, vr.projScaleY, kLodBudgetPixels);
+        std::printf("   %-8s %-6s %-14s %s\n", "scale", "count", "levels drawn", "disagreements");
+        std::vector<int> octaves;
+        for (const auto &kv : byScale) octaves.push_back(kv.first);
+        std::sort(octaves.begin(), octaves.end());
+        for (int o : octaves) {
+            const Row &row = byScale[o];
+            std::printf("   %-8.2f %-6u %u..%-12u %u\n", std::pow(2.0, double(o)), row.n,
+                        row.levelMin, row.levelMax, row.bad);
+        }
+        std::printf("   levels taken: ");
+        for (int i = 0; i < 8; ++i) std::printf("%u:%u ", i, sHist[i]);
+        std::printf("\n   %u evaluations, %u within 1e-4 of a level boundary\n", sEvaluated,
+                    sNearThreshold);
+        char smsg[192];
+        std::snprintf(smsg, sizeof(smsg),
+                      "the STRATEGY agrees with the currency on all %u drawn instances", sEvaluated);
+        CHECK(sMismatched == 0u, smsg);
+        // THE FIXTURE MUST EXERCISE THE SCALE TERM, or this is an equality over
+        // one octave: five octaves of scale, each of which must reach the walk.
+        CHECK(byScale.size() >= 5u, "the drawn set spans at least five octaves of scale");
+        // ...AND THE CHAIN MUST BE WALKED, exactly as in the GPU arm.
+        unsigned sDistinct = 0;
+        for (int i = 0; i < 8; ++i) if (sHist[i]) ++sDistinct;
+        std::snprintf(smsg, sizeof(smsg), "the drawn levels span %u of the eight", sDistinct);
+        CHECK(sDistinct >= 3u, smsg);
+
+        // NO SCALE-INVARIANCE ARM LIVES HERE (deleted in ATOM-RESUMES-1's fix
+        // round, deep-auditor NOTE 2b). It evaluated `lodLevelForWorldError` on
+        // `allowedWorldError` for k = 1 and k = s and compared the two — the C++
+        // formula against itself, which is an algebraic identity
+        // (`allowedWorldError(t, footprint(s*d), s)` IS `footprint(d)`) that can
+        // only fail on a float boundary and never touches the strategy. What
+        // states that physics against the RENDERER is the 500-instance block
+        // above (six octaves of scale, the drawn byte) and atom.dolly_gate's 10x
+        // arm (the same 152 poses at scale 10 and ten times the distance must
+        // draw the same level); and a change that dropped the divisor from
+        // `allowedWorldError` itself would red the GPU-vs-C++ sweep below, since
+        // the GLSL copy divides by the instance's scale on the device.
     }
 
     std::printf("\n== the parity ==\n   %u evaluations (%d instances x %zu parameter sets)\n",
@@ -214,6 +364,9 @@ int main()
     char msg[160];
     std::snprintf(msg, sizeof(msg), "10,000 evaluations asked for, %u made", evaluated);
     CHECK(evaluated >= 10000u, msg);
+    std::snprintf(msg, sizeof(msg), "the ROTATED NON-UNIFORM group agrees too (%u disagreements "
+                                    "of %u)", mismatchedRotated, unsigned(kRotated) * unsigned(sets.size()));
+    CHECK(mismatchedRotated == 0u, msg);
     CHECK(mismatched == 0u, "the GLSL currency and the C++ currency agree on every one");
     // The chain must actually be WALKED: a sweep that only ever answers 0 (or
     // only ever the coarsest) would pass an equality and prove nothing.

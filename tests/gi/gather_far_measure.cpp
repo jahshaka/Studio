@@ -1,29 +1,23 @@
-// GA-FAR (lane MEASURE-1b) — a TOOL, not a suite. It answers ONE question with
-// numbers: of the screen-probe gather's rays, how many take the else-branch of
-// rq_probe_gather.comp (no committed hit inside `maxT`), and of those how many
-// get a REAL far answer (`farOk` true — the outer cascades hold radiance at the
-// ray's end point) rather than the sky.
+// GA-FAR (lanes MEASURE-1b, PHOTON-GAFAR-1) — a TOOL, not a suite. It answers
+// with numbers how long the screen-probe gather's rays need to be.
 //
-// THE CODE UNDER MEASUREMENT, quoted so an arm confirms or falsifies it:
-//   irisgl/engine/src/rayquery/rq_probe_gather.comp:150-192
-//       maxT = p.knobs.y; origin = posW + n*bias; the query is
-//       gl_RayFlagsOpaqueEXT over [bias, maxT]; a committed triangle takes
-//       jahVoxelRadiance(origin+dir*tHit); NO committed hit takes
-//       jahVoxelRadiance(origin+dir*maxT) (gated on p.plane.z<0.5 =
-//       !tuning.farTermOff) and the SKY where that answers ok=false.
-//   irisgl/engine/src/OgreScreenProbeGather.cpp:683-691
-//       reach = |voxelSize| of the OUTERMOST cascade (the volume's diagonal:
-//       VctVoxelizerSourceBase::getVoxelSize() = mRegionToVoxelize.getSize()),
-//       maxT = min(farClip, max(reach, 50)) unless tuning.rayLength overrides.
-//   irisgl/engine/src/rayquery/include/jah_rq_hit.glsl:56-131
-//       ok is false unless the point is INSIDE a bound cascade's box AND that
-//       cascade's opacity there is > 0.02.
+// THE CODE UNDER MEASUREMENT:
+//   irisgl/engine/src/rayquery/rq_probe_gather.comp — maxT = p.knobs.y; origin =
+//       posW + n*bias; the query is gl_RayFlagsOpaqueEXT over [bias, maxT]; a
+//       committed triangle is shaded from the cascades (black where they cannot
+//       shade it), a miss reads the SKY.
+//   irisgl/engine/src/OgreScreenProbeGather.cpp (`reach`) — maxT = the outer
+//       cascade's HALF extent (the lit volume's inscribed radius) under the
+//       camera's far plane, unless tuning.rayLength overrides.
 //
-// SO THE ARITHMETIC TO TEST: maxT is the outer box's own diagonal, and the
-// farthest two points of a box are its opposite corners — a ray of length equal
-// to the diagonal, starting inside the box, lands OUTSIDE it except in a
-// measure-zero corner case. If that holds, `farOk` is false for essentially
-// every miss and the else-branch IS the sky.
+// THE HISTORY THE NUMBERS SETTLED: maxT used to be the outer box's full
+// DIAGONAL and a missed ray read the outer cascades at its end point (a "far
+// term") before the sky. MEASURE-1b showed that end point lay in no cascade, so
+// the term never fired (spikes/measure-1bd/FINDINGS.md); PHOTON-GAFAR-1's sweep
+// (`GAFAR_SWEEP=1`, below) showed that at a length where it could fire it moved
+// the picture AWAY from the long-ray reference, and that the ray's length costs
+// nothing measurable — so the term was deleted and the length set to the half
+// extent (spikes/photon-gafar-1).
 //
 // THE INSTRUMENT. The gather's rays are traced in a compute shader whose atlas
 // is a raw VkImage with no readback path, so this tool does not read the
@@ -38,14 +32,10 @@
 // normal would be invented). The gather jitters the probe inside its cell and
 // this tool does not; a fraction over thousands of probes does not depend on it.
 //
-// TWO INDEPENDENT CROSS-CHECKS, in the same process:
-//   * maxT: rendering with tuning.rayLength = the maxT this tool computed must
-//     produce a pixel-identical picture to the derived one (freezeFrameIndex on,
-//     so a still frame is byte-deterministic).
-//   * the far term: farTermOff on vs off. If farOk is never true the two
-//     pictures are IDENTICAL — the arm is an empirical zero, not an argument.
-//     A control arm with rayLength forced short (the endpoint then lands INSIDE
-//     the volume) must move pixels, which proves the arm can see the far term.
+// DEFAULT MODE: per fixture and tier, the else-branch %, where a miss's end
+// point lies, the hit deciles of maxT, and the cross-check that rendering with
+// tuning.rayLength forced to the maxT this tool derives is pixel-identical to
+// the engine's own derivation (freezeFrameIndex on). SWEEP MODE: see sweepMain.
 //
 // Build: `ninja -C build-linux gather_far_measure`; run on a rig display with
 // DISPLAY set (a Vulkan engine cannot boot without one).
@@ -270,7 +260,10 @@ static RayStats traceProbeRays(Scene *s, const std::vector<Probe> &probes, unsig
 }
 
 // ---------------------------------------------------------------------------
-struct Delta { unsigned moved = 0, total = 0, worst = 0; double meanMoved = 0; };
+/// `meanAll` is the worst-channel error averaged over EVERY pixel (moved or not):
+/// the sweep compares two arms' distance from one reference by it, because a
+/// "px moved" count cannot say which of two pictures is NEARER the reference.
+struct Delta { unsigned moved = 0, total = 0, worst = 0; double meanMoved = 0, meanAll = 0; };
 static Delta deltaOf(const Image &a, const Image &b)
 {
     Delta d;
@@ -284,6 +277,7 @@ static Delta deltaOf(const Image &a, const Image &b)
         if (w) { ++d.moved; sum += w; d.worst = std::max(d.worst, w); }
     }
     d.meanMoved = d.moved ? sum / d.moved : 0.0;
+    d.meanAll = d.total ? sum / d.total : 0.0;
     return d;
 }
 
@@ -318,13 +312,12 @@ static GiParams giAt(const Tier &t)
     gi.gather = GiToggle::On;
     return gi;
 }
-static void arm(Scene *s, const Tier &tier, float rayLength, bool farOff)
+static void arm(Scene *s, const Tier &tier, float rayLength)
 {
     s->setGlobalIllumination(giAt(tier));
     GatherTuning t;                    // every zero = what the tier derives
     t.freezeFrameIndex = true;         // a still frame is byte-deterministic
     t.rayLength = rayLength;
-    t.farTermOff = farOff;
     s->setGatherTuning(t);
 }
 
@@ -410,6 +403,169 @@ static CameraDesc buildShowroom(Scene *s)
 }
 
 // ---------------------------------------------------------------------------
+// THE RAY-LENGTH SWEEP (lane PHOTON-GAFAR-1, `GAFAR_SWEEP=1`). The question the
+// cross-checks above leave open: how long does a gather ray NEED to be? Three
+// lengths per fixture and tier — the outer cascade's HALF extent (the shipped
+// derivation), half its diagonal, and the diagonal (the old one) — in this
+// process, at this pose, the GI configuration pushed ONCE
+// (a tuning push re-voxelises nothing, so every arm reads the same volumes and
+// the same TLAS; `arm()` above re-pushes the configuration and is NOT used here).
+//
+// Per arm:
+//   (a) THE PICTURE against the diagonal (the longest-ray reference): px moved,
+//       mean over moved px, worst, and the mean over ALL px (`meanAll`) — the
+//       number that says which of two arms is NEARER the reference;
+//   (b) THE COST: the gather's own GPU timestamps (place + trace + integrate),
+//       on a second 1920x1080 view of the same scene (the 640x360 picture view
+//       stands down — one gathering view at a time, GATHER-0's D3), 120 frames
+//       of warm-up, then the arms INTERLEAVED in ten rounds of 36 frames with the
+//       first six of each block dropped (the timestamps come back frames late),
+//       300 frames per arm. CLOCKS ARE NOT LOCKED: the number is the RATIO to
+//       the diagonal's arm in the same rounds, never a millisecond;
+//   (c) THE RAYS on the CPU (the shader's own ray set against the same TLAS): the
+//       else-branch %, the % of a miss's end points inside a cascade box, and
+//       the hits the length loses against the diagonal.
+// Every picture is frozen (`freezeFrameIndex`), and the instrument's own floor
+// is measured first: the reference arm rendered twice must move 0 px.
+static void tune(Scene *s, float rayLength)
+{
+    GatherTuning t;
+    t.freezeFrameIndex = true;
+    t.rayLength = rayLength;
+    s->setGatherTuning(t);
+}
+
+static int sweepMain(Engine *e, View *view)
+{
+    View *big = e->createOffscreenView("gafar-cost", 1920u, 1080u, Colour(0, 0, 0));
+    if (!big) { std::printf("FAIL: cost view: %s\n", e->lastError().c_str()); return 1; }
+    big->setShadows(true);
+    big->setEnabled(false);
+
+    struct Fix { const char *name; CameraDesc (*build)(Scene *); };
+    const Fix fixtures[3] = { { "open-sky", buildOpen }, { "closed-box", buildBox },
+                              { "showroom-shaped", buildShowroom } };
+    // 0 = the outer half extent, 1 = half the diagonal, 2 = the diagonal.
+    const char *armName[3] = { "half", "hdiag", "diag" };
+    std::printf("== GAFAR-1 SWEEP: ray length, frozen frame, paired in one process ==\n");
+    int bad = 0;
+    for (const Fix &f : fixtures) {
+        for (int ti = 0; ti < 3; ++ti) {
+            const Tier &tier = kTiers[ti];
+            Scene *s = e->createScene(std::string("sweep-") + f.name + "-" + tier.name);
+            if (!s) { std::printf("FAIL: scene\n"); return 1; }
+            view->setEnabled(true);
+            view->setScene(s);
+            armChain(view, tier.ssrRow);
+            const CameraDesc cam = f.build(s);
+            view->setCamera(cam);
+            s->setGlobalIllumination(giAt(tier));
+            tune(s, 0.0f);
+            render(e, 90);
+
+            const GiStatus gs = s->giStatus();
+            std::vector<Box> boxes;
+            for (const auto &c : gs.cascades) {
+                Box b;
+                b.lo = { c.centre.x - c.halfSize, c.centre.y - c.halfSize, c.centre.z - c.halfSize };
+                b.hi = { c.centre.x + c.halfSize, c.centre.y + c.halfSize, c.centre.z + c.halfSize };
+                boxes.push_back(b);
+            }
+            const float outerHalf = gs.cascades.empty() ? 0.0f : gs.cascades.back().halfSize;
+            const float reach = std::sqrt(3.0f) * 2.0f * outerHalf;
+            const float len[3] = { outerHalf, 0.5f * reach, reach };
+            const GatherStatus gst = gs.gather;
+            const float bias = gs.cascades.empty() ? 0.02f
+                                                   : std::max(0.01f, 0.5f * gs.cascades[0].cell);
+            std::printf("\n-- %s %s: %zu cascades, outer half %.2f m; lengths %.2f / %.2f / %.2f m; "
+                        "gather on=%d running=%d stride %u octRes %u\n", f.name, tier.name,
+                        boxes.size(), double(outerHalf), double(len[0]), double(len[1]),
+                        double(len[2]), int(gst.on), int(gst.running), gst.stride, gst.octRes);
+
+            // ---- (a) the pictures -------------------------------------------
+            Image derived, ref, ref2, img[3];
+            tune(s, 0.0f);   render(e, 4); view->readPixels(derived);
+            for (int a = 0; a < 3; ++a) {
+                tune(s, len[a]);
+                render(e, 4);
+                view->readPixels(img[a]);
+            }
+            tune(s, len[2]); render(e, 4); view->readPixels(ref2);
+            ref = img[2];
+            const Delta floor = deltaOf(ref, ref2), der = deltaOf(img[0], derived);
+            std::printf("   instrument floor: the diagonal's arm twice %u/%u px; derived vs forced "
+                        "half extent %u px\n", floor.moved, floor.total, der.moved);
+            if (floor.moved * 100u > floor.total) {
+                std::printf("   !! the frozen instrument moved more than 1 %% on its own — "
+                            "this row is VOID\n");
+                ++bad;
+            }
+
+            // ---- (c) the rays -----------------------------------------------
+            RayStats rs[3];
+            unsigned tried = 0, dropped = 0;
+            const std::vector<Probe> probes =
+                placeProbes(s, cam, gst.stride ? gst.stride : 16u, tried, dropped);
+            for (int l = 0; l < 3; ++l)
+                rs[l] = traceProbeRays(s, probes, gst.octRes ? gst.octRes : 8u, len[l], bias, boxes);
+
+            // ---- (b) the cost -----------------------------------------------
+            view->setEnabled(false);
+            big->setScene(s);
+            armChain(big, tier.ssrRow);
+            big->setCamera(cam);
+            big->setEnabled(true);
+            tune(s, len[2]);
+            render(e, 120);
+            std::vector<float> ms[3];
+            for (int round = 0; round < 10; ++round)
+                for (int a = 0; a < 3; ++a) {
+                    tune(s, len[a]);
+                    for (int fr = 0; fr < 36; ++fr) {
+                        e->renderOneFrame();
+                        if (fr < 6) continue;
+                        const GatherStatus q = s->giStatus().gather;
+                        if (q.placeMs >= 0.0f && q.traceMs >= 0.0f && q.integrateMs >= 0.0f)
+                            ms[a].push_back(q.placeMs + q.traceMs + q.integrateMs);
+                    }
+                }
+            big->setEnabled(false);
+            float med[3];
+            for (int a = 0; a < 3; ++a) {
+                std::vector<float> v = ms[a];
+                std::sort(v.begin(), v.end());
+                med[a] = v.empty() ? -1.0f : v[v.size() / 2];
+            }
+
+            std::printf("   %-6s %7s %7s %6s %5s %8s | %9s | %7s %10s %9s\n", "arm", "len m",
+                        "moved", "mean", "worst", "meanAll", "ms ratio", "else%", "endIn%else",
+                        "hitsLost%");
+            for (int a = 0; a < 3; ++a) {
+                const Delta d = deltaOf(ref, img[a]);
+                const RayStats &r = rs[a];
+                const double rays = double(r.rays ? r.rays : 1);
+                std::printf("   %-6s %7.2f %7u %6.2f %5u %8.4f | %9.3f | %7.2f %10.3f %9.4f"
+                            "   [n=%zu med %.4f ms]\n",
+                            armName[a], double(len[a]), d.moved, d.meanMoved, d.worst, d.meanAll,
+                            med[2] > 0 ? double(med[a] / med[2]) : -1.0,
+                            100.0 * double(r.miss) / rays,
+                            r.miss ? 100.0 * double(r.endpointInAny) / double(r.miss) : 0.0,
+                            100.0 * (double(rs[2].hit) - double(r.hit)) /
+                                double(rs[2].rays ? rs[2].rays : 1),
+                            ms[a].size(), double(med[a]));
+            }
+            std::printf("   hit deciles of the DIAGONAL: ");
+            for (int b = 0; b < 10; ++b)
+                std::printf("%.2f%% ", 100.0 * double(rs[2].bins[b]) / double(rs[2].rays ? rs[2].rays : 1));
+            std::printf("(max hit %.2f m)\n", rs[2].maxHitT);
+            std::fflush(stdout);
+            e->destroyScene(s);
+        }
+    }
+    return bad ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 int main()
 {
     std::string err;
@@ -428,6 +584,7 @@ int main()
         std::printf("FAIL: this machine has no ray queries — GA-FAR cannot be measured here\n");
         return 1;
     }
+    if (std::getenv("GAFAR_SWEEP")) return sweepMain(e, view);
 
     struct Fix { const char *name; CameraDesc (*build)(Scene *); };
     const Fix fixtures[3] = { { "open-sky", buildOpen }, { "closed-box", buildBox },
@@ -436,15 +593,14 @@ int main()
     std::printf("== GA-FAR: the gather's else-branch, per tier and scene ==\n");
     std::printf("%-16s %-7s %4s %8s %8s %9s %7s %8s %8s %8s %8s %8s\n",
                 "scene", "tier", "casc", "outerHS", "reach", "maxT", "probes",
-                "rays", "miss%", "farOk%", "last10%", "meanHit");
+                "rays", "miss%", "endIn%", "last10%", "meanHit");
 
     struct Row {
         std::string scene, tier;
         unsigned cascades = 0, probes = 0;
         float outerHalf = 0, reach = 0, maxT = 0, cell = 0;
         RayStats st;
-        Delta farAb, maxTab, shortAb;
-        float shortLen = 0;
+        Delta maxTab;
         unsigned stride = 0, octRes = 0, gatherProbes = 0;
     };
     std::vector<Row> rows;
@@ -458,7 +614,7 @@ int main()
             armChain(view, tier.ssrRow);
             const CameraDesc cam = f.build(s);
             view->setCamera(cam);
-            arm(s, tier, 0.0f, false);
+            arm(s, tier, 0.0f);
             render(e, 90);                      // cascades build one per frame; then settle
 
             Row r;
@@ -478,7 +634,10 @@ int main()
                 const float sz = 2.0f * r.outerHalf;
                 r.reach = std::sqrt(3.0f) * sz;             // |voxelSize| of the outer cascade
             }
-            r.maxT = std::min(cam.farClip > 0 ? cam.farClip : 1000.0f, std::max(r.reach, 50.0f));
+            // THE ENGINE'S DERIVATION (OgreScreenProbeGather.cpp `reach`): the
+            // outer half extent under the far plane, 50 m with no cascades.
+            r.maxT = std::min(cam.farClip > 0 ? cam.farClip : 1000.0f,
+                              r.outerHalf > 0.0f ? r.outerHalf : 50.0f);
             const GatherStatus gst = gs.gather;
             r.stride = gst.stride; r.octRes = gst.octRes; r.gatherProbes = gst.probes;
             const float bias = gs.cascades.empty() ? 0.02f
@@ -490,19 +649,11 @@ int main()
             r.probes = unsigned(probes.size());
             r.st = traceProbeRays(s, probes, gst.octRes ? gst.octRes : 8u, r.maxT, bias, boxes);
 
-            // ---- the two cross-checks, in this process, at this pose.
-            Image derived, forced, farOff, shortOn, shortOff;
-            arm(s, tier, 0.0f, false);      render(e, 4); view->readPixels(derived);
-            arm(s, tier, r.maxT, false);    render(e, 4); view->readPixels(forced);
-            arm(s, tier, 0.0f, true);       render(e, 4); view->readPixels(farOff);
+            // ---- the cross-check, in this process, at this pose.
+            Image derived, forced;
+            arm(s, tier, 0.0f);      render(e, 4); view->readPixels(derived);
+            arm(s, tier, r.maxT);    render(e, 4); view->readPixels(forced);
             r.maxTab = deltaOf(derived, forced);
-            r.farAb = deltaOf(derived, farOff);
-            // The control: a ray length well inside the volume MUST make the far
-            // term fire, or the arm is blind.
-            r.shortLen = std::max(2.0f, 0.25f * r.outerHalf);
-            arm(s, tier, r.shortLen, false); render(e, 4); view->readPixels(shortOn);
-            arm(s, tier, r.shortLen, true);  render(e, 4); view->readPixels(shortOff);
-            r.shortAb = deltaOf(shortOn, shortOff);
 
             const double rays = double(r.st.rays ? r.st.rays : 1);
             std::printf("%-16s %-7s %4u %8.2f %8.2f %9.2f %7u %8llu %8.2f %8.4f %8.3f %8.2f\n",
@@ -520,13 +671,8 @@ int main()
             for (int b = 0; b < 10; ++b)
                 std::printf("%.2f%% ", 100.0 * double(r.st.bins[b]) / rays);
             std::printf("(max hit %.2f m)\n", r.st.maxHitT);
-            std::printf("    A/B maxT(derived vs forced %.2f): %u/%u px moved | "
-                        "A/B far term on/off: %u/%u px, mean %.2f, worst %u | "
-                        "control rayLength %.2f on/off: %u/%u px, mean %.2f, worst %u\n",
-                        double(r.maxT), r.maxTab.moved, r.maxTab.total,
-                        r.farAb.moved, r.farAb.total, r.farAb.meanMoved, r.farAb.worst,
-                        double(r.shortLen), r.shortAb.moved, r.shortAb.total,
-                        r.shortAb.meanMoved, r.shortAb.worst);
+            std::printf("    A/B maxT(derived vs forced %.2f): %u/%u px moved\n",
+                        double(r.maxT), r.maxTab.moved, r.maxTab.total);
             std::fflush(stdout);
             rows.push_back(r);
             e->destroyScene(s);   // the suites destroy the view's scene directly
@@ -536,13 +682,13 @@ int main()
     std::printf("\n== THE ANSWER ==\n");
     for (const Row &r : rows) {
         const double rays = double(r.st.rays ? r.st.rays : 1);
-        std::printf("%-16s %-7s else-branch %.2f%% of rays; of those %.4f%% end INSIDE a cascade "
-                    "box (outer only: %.4f%%) => a real far answer is possible for %.4f%% of all "
-                    "rays; far-term A/B moved %u px\n",
+        std::printf("%-16s %-7s else-branch (the sky) %.2f%% of rays; of those %.4f%% end "
+                    "INSIDE a cascade box (outer only: %.4f%%); derived-vs-forced maxT moved "
+                    "%u px\n",
                     r.scene.c_str(), r.tier.c_str(), 100.0 * double(r.st.miss) / rays,
                     r.st.miss ? 100.0 * double(r.st.endpointInAny) / double(r.st.miss) : 0.0,
                     r.st.miss ? 100.0 * double(r.st.endpointInOuter) / double(r.st.miss) : 0.0,
-                    100.0 * double(r.st.endpointInAny) / rays, r.farAb.moved);
+                    r.maxTab.moved);
     }
     return 0;
 }

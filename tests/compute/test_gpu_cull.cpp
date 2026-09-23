@@ -133,12 +133,8 @@ static Reference cpuCull(const std::vector<GpuSceneEntry> &table, const GpuCullR
         if (!(r.pixelTolerance > 0.0f)) continue;
         // THE LEVEL, in the currency's words, from the same quantities the
         // shader derives: the AABB centre, the instance's largest axis scale out
-        // of the world rows, and the mesh's local sphere radius.
-        float scale = 0.0f;
-        for (int row = 0; row < 3; ++row) {
-            const float *w = &e.world[row * 4];
-            scale = std::max(scale, std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]));
-        }
+        // (the longest COLUMN of the world matrix, worldMaxAxisScale), and the mesh's local sphere radius.
+        const float scale = worldMaxAxisScale(e.world);
         if (!(scale > 0.0f)) continue;
         const float cx = 0.5f * (e.boundsMin[0] + e.boundsMax[0]);
         const float cy = 0.5f * (e.boundsMin[1] + e.boundsMax[1]);

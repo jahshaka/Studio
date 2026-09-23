@@ -1128,23 +1128,19 @@ int main()
     }
 
     // =====================================================================
-    // CASE 13 — A FAILURE ON THE OTHER SIDE OF THE VOXELISER SWAP
+    // CASE 13 — A FAILURE AFTER THE BUILD
     // =====================================================================
-    // A cascade whose material cache is stale gets a REPLACEMENT voxeliser, and
-    // between the replacement's `build()` and the end of the rebuild there are
-    // two more things that can throw — the ambient push and `VctLighting::update`'s
-    // own dispatch (the VK_ERROR_OUT_OF_DEVICE_MEMORY class is real on this box).
-    // By then `setVoxelizer` has already pointed the lighting at the replacement
-    // and registered its texture listeners on it, so the failure path may NOT
-    // delete it: doing that is a use-after-free on the next frame's
-    // `fillConstBufferData`, which walks every cascade's voxeliser for its
-    // origin and cell size (round-2 F1; this is what the ASan twin catches).
-    //
-    // The swap is COMMITTED instead — the replacement's voxels are correct and
-    // current for the new placement and only the light injection is missing — so
-    // the cascade keeps the new placement, keeps the replacement, and the next
-    // frame re-runs the injection.
-    std::printf("\n== case 13: a failure AFTER the voxeliser swap ==\n");
+    // Between a cascade's successful `build()` and the end of its rebuild there
+    // are two more things that can throw — the ambient push and
+    // `VctLighting::update`'s own dispatch (the VK_ERROR_OUT_OF_DEVICE_MEMORY class
+    // is real on this box). By then the volumes on the GPU are correct and current
+    // for the NEW placement and only the light injection is missing, so the cascade
+    // keeps the new placement and the next frame re-runs the rebuild. (This case
+    // used to guard a REPLACEMENT voxeliser swapped in for a material edit; that
+    // path is deleted since the A5b fix round - a material edit is now a dirty
+    // rebuild of the same voxeliser - and the case keeps guarding the post-build
+    // failure, driven by a material edit exactly as before.)
+    std::printf("\n== case 13: a failure AFTER the build ==\n");
     {
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the fault");
         render(e, 16);
@@ -1156,18 +1152,18 @@ int main()
         enginetest::setNodePosition(scene, fnode, Vec3(0.0f, 0.5f, 1.0f));
         render(e, 24);
         const GiStatus pre = scene->giStatus();
-        // A material edit: every cascade now needs a replacement voxeliser.
+        // A material edit: every cascade now owes a rebuild in place.
         fp.albedo = Colour(0.9f, 0.2f, 0.2f);
-        CHECK(scene->setPbrMaterial(fmat, fp), "a material edit arms the replacements");
+        CHECK(scene->setPbrMaterial(fmat, fp), "a material edit dirties every cascade");
         setenv("JAH_GI_CASCADE_FAULT_POST", "0", 1);
         scene->refreshGlobalIllumination();
         render(e, 2);
         const GiStatus bad = scene->giStatus();
-        std::printf("   post-swap fault: c0 rebuilds %llu -> %llu, pending %d, vctBound %d\n",
+        std::printf("   post-build fault: c0 rebuilds %llu -> %llu, pending %d, vctBound %d\n",
                     pre.cascades[0].rebuilds, bad.cascades[0].rebuilds, bad.cascades[0].pending,
                     int(bad.vctBound));
         CHECK(bad.cascades[0].rebuilds == pre.cascades[0].rebuilds,
-              "a rebuild that threw after the swap is NOT counted as one");
+              "a rebuild that threw after the build is NOT counted as one");
         CHECK(bad.vctBound && bad.cascades.size() == pre.cascades.size(),
               "...and the chain is still up and still bound");
         Image live;

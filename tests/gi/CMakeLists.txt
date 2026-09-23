@@ -548,6 +548,26 @@ add_test(NAME gi.cascade_lod COMMAND test_gi_cascade_lod
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_lod PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
+# gi.voxel_resident — ATOM P4: the voxeliser reads the RASTER's own vertex and
+# index buffers through their device addresses, so the vertex format and the index
+# width stopped being shader permutations and bucket keys (one dispatch for a
+# 16-bit and a 32-bit mesh sharing a material).
+add_executable(test_gi_voxel_resident test_gi_voxel_resident.cpp)
+set_target_properties(test_gi_voxel_resident PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_resident PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_resident PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_resident JahshakaEngineMedia)
+add_test(NAME gi.voxel_resident COMMAND test_gi_voxel_resident
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_resident PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
 # gi.material_swap — MATERIAL-SWAP-GI-1: Scene::setNodeMaterial swaps the datablock
 # on the live Item and invalidates the item's OWN box, so under the chain only
 # the cascades that contain it re-voxelise; the old path (attachMesh) rebuilds
@@ -1218,4 +1238,29 @@ add_dependencies(test_gi_voxel_emissive JahshakaEngineMedia)
 add_test(NAME gi.voxel_emissive COMMAND test_gi_voxel_emissive
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_emissive PROPERTIES
+    TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)
+
+# gi.voxel_feed — THE VOXELISER IS FED ON THE DEVICE (ATOM P4b, SPECS/atom/
+# A5b_VOXELISER_FEED_AND_FAR_BLAS_DESIGN.md §2-§3). The gather jobs' own counts
+# (attach set, enclosed set, one record per partition that reaches a cascade's
+# box, triangles, levels, overflow) held to a CPU reference computed from the
+# fixture; a hide leaves the next gather by itself; and a from-scratch rebuild of
+# a still scene copies nothing into the GPU scene's tables.
+#
+# RUN_SERIAL like every cascade suite.
+add_executable(test_gi_voxel_feed test_gi_voxel_feed.cpp)
+set_target_properties(test_gi_voxel_feed PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_feed PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_feed PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_feed JahshakaEngineMedia)
+add_test(NAME gi.voxel_feed COMMAND test_gi_voxel_feed
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_feed PROPERTIES
     TIMEOUT 600 LABELS "engine" RUN_SERIAL ON)

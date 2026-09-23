@@ -1023,6 +1023,22 @@ set_tests_properties(scripting.e2e.world_modes PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# world.tierTable(): WHAT A TIER PHYSICALLY IS — the chain, the VR column and the
+# ATOM column (the tier's geometric tolerance in samples, A4 §3). Its own suite
+# since ATOM-RESUMES-1: it reads the RENDERER's tables (worldmodes::kPhotonTable
+# + the engine's giQualityFacts) where world_modes reads the registry, and the
+# block was moved out of that script whole rather than copied. Own home, like
+# every suite in this family.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tier_table_atom)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.tier_table_atom
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tier_table_atom.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.tier_table_atom PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1): the catalogue, the six verbs, the
 # one-instance-per-look rule, clamping, undo and the save/open round trip. The
 # pixel half of the program is the looks.engine suite; these are all document

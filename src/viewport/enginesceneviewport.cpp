@@ -2697,8 +2697,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         ci.items      = c.items;
         ci.attached   = c.attached;
         ci.lastCpuMs  = c.lastCpuMs;
-        ci.lodLevels.reserve(int(c.lodLevels.size()));
-        for (int n : c.lodLevels) ci.lodLevels.append(n);
+        ci.voxelLevels.reserve(int(c.voxelLevels.size()));
+        for (int n : c.voxelLevels) ci.voxelLevels.append(n);
         ci.voxelTriangles = qint64(c.voxelTriangles);
         ci.voxelDispatches = qint64(c.voxelDispatches);
         out.cascades.append(ci);
