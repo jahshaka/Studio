@@ -936,22 +936,38 @@ static int caseLighting()
         const double N[3] = { n.x, n.y, n.z };
         // pbsDirect's closed form x the stored shadow term, on the ATLAS's own
         // kD (an 8-bit store: its quantisation is the atlas's, not the light's).
-        // The radiance is read from its R11G11B10F store, whose mantissa step
-        // is 1/64 on red and green and 1/32 on blue; the job rounds to nearest
-        // (JahCardLight_cs.glsl, jahCardRound), so a channel carries at most
-        // half a step (1.6 % on blue) inside the 2 % bar.
+        // THE BAR KNOWS THE STORE (the phase B merge, 2026-09-23): the direct
+        // half is the difference of TWO stored terms, the Radiance texel and
+        // the Indirect texel, each in the atlas's format — R11G11B10F carries 6
+        // mantissa bits on red and green and 5 on blue, so one step is 1/64
+        // and 1/32 of the value's octave (2.0-3.1 % on blue) — and the store
+        // truncates after the job's pre-scale, so a channel can sit a whole
+        // step off, twice. A relative 2 % bar alone had NO room on blue: the
+        // base read 1.95 % and WRITER-1's darker indirect (a quarter less)
+        // moved the difference to 2.12 % with the stored radiance unchanged.
+        // The physics bar stays 2 %; the store's quantum of each stored term is
+        // added to it, computed from the format the status reports, never
+        // assumed. (RGBA16F: 10 bits, a 0.1 % step — the same rule, no room
+        // needed.)
+        const auto storeQuantum = [&st](double v, int k) -> double {
+            if (!(v > 0.0)) return 0.0;
+            const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
+            return std::ldexp(1.0, std::ilogb(v) - bits);
+        };
         for (int k = 0; k < 3; ++k) {
             const double want = pbsDiffuse(t.albedo[k], curE, kRough, N, L, N) * double(t.shadow);
             // THE DIRECT HALF: the radiance less its cached indirect half (the
             // floor's bounce is real here; gi.card_lighting_indirect holds it to
             // the pixel).
             const double got = double(t.radiance[k]) - double(t.indirect[k]);
+            const double quantum = storeQuantum(t.radiance[k], k) + storeQuantum(t.indirect[k], k);
+            const double tol = 0.02 * want + quantum;
             const double rel = want > 1e-6 ? std::fabs(got - want) / want : std::fabs(got);
-            CHECK_MSG(want > 1e-6 ? rel <= 0.02 : std::fabs(got) < 2e-3,
+            CHECK_MSG(want > 1e-6 ? std::fabs(got - want) <= tol : std::fabs(got) < 2e-3,
                       "%s channel %d: direct half %.5f (radiance %.5f - indirect %.5f),"
-                      " pbsDirect x shadow (%.3f) = %.5f (%.2f%%)",
+                      " pbsDirect x shadow (%.3f) = %.5f (%.2f%%; bar 2%% + store quantum %.5f)",
                       what, k, got, t.radiance[k], t.indirect[k], double(t.shadow), want,
-                      100.0 * rel);
+                      100.0 * rel, quantum);
         }
         if (expectShadowed)
             CHECK_MSG(t.shadow < 0.1f, "%s: the stored shadow term is dark (%.3f)", what, t.shadow);
