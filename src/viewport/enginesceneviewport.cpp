@@ -2600,6 +2600,7 @@ IEditorViewport::GiVoxelStatsInfo EngineSceneViewport::giVoxelStats(int cascade)
     out.peakEmissive = st.peakEmissive;
     out.emissiveAtMax = qint64(st.emissiveAtMax);
     out.emissiveAboveOne = qint64(st.emissiveAboveOne);
+    out.lightDigest = QString::fromStdString(st.lightDigest);
     return out;
 }
 
@@ -2706,7 +2707,6 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cascadeFullRebuilds = quint64(st.cascadeFullRebuilds);
     out.cascadeDeferrals    = quint64(st.cascadeDeferrals);
     out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
-    out.chainSweeps          = st.chainSweeps;
     out.chainSettles         = st.chainSettles;
     out.chainInjectionRefusals   = double(st.chainInjectionRefusals);
     out.chainInjectionsPeakFrame = int(st.chainInjectionsPeakFrame);

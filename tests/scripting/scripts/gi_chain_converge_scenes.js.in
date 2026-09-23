@@ -1,0 +1,76 @@
+// gi.chain_converge_scenes — ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT, on the
+// default scene and on Showroom 2, at High and at Epic (Epic bounces: the chain's
+// own-volume coupling is live there) (PHOTON-WRITER-1 SWEEPS-3; the room half
+// and the derivation are gi.chain_converge / EnginePrivate.h).
+//
+// From a PERTURBED history (a lamp moved with the mirror's moving ticks, then
+// left to come to rest), every cascade's light volumes are hashed raw
+// (world.giVoxelStats's lightDigest); one more at-rest sweep (world.refreshGi)
+// must change NO byte of any of them.
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+app.engineErrors(true);
+function digests() {
+    var n = world.giStatus().cascades.length, d = [];
+    for (var i = 0; i < n; ++i) d.push(world.giVoxelStats({ cascade: i }).lightDigest);
+    return d;
+}
+function proof(label, tier, perturb) {
+    label = label + "@" + tier;
+    world.mode({ mode: tier });
+    editor.frame(150);
+    var n = world.giStatus().cascades.length;
+    assert(n >= 2, label + ": a cascade chain [" + n + " cascades]");
+    perturb();
+    editor.frame(150);
+    var one = digests();
+    world.refreshGi();
+    editor.frame(30);
+    var two = digests();
+    var differ = 0, readable = true;
+    for (var i = 0; i < one.length; ++i) {
+        if (!one[i] || !two[i]) readable = false;
+        else if (one[i] !== two[i]) ++differ;
+    }
+    console.log("CONVERGE " + label + ": sweep 1 " + JSON.stringify(one));
+    console.log("CONVERGE " + label + ": sweep 2 " + JSON.stringify(two));
+    assert(readable, label + ": every cascade's light volumes read back");
+    assert(differ === 0, label + ": ONE AT-REST SWEEP IS THE FIXED POINT -- a second sweep " +
+           "changes no byte of any cascade's light [" + differ + " of " + one.length + " differ]");
+}
+
+// ---- the default scene: its sun, turned while the mirror ticks ------------
+project.create("chain converge default " + Date.now());
+var sun = world.sun().light;
+node.setProperty(sun, "mobility", "movable");
+function turnSun() {
+    for (var f = 1; f <= 30; ++f) {
+        node.transform(sun, { rotation: { x: -40 + 0.5 * f, y: -35, z: 0 } });
+        editor.frame(1);
+    }
+}
+proof("default", "high", turnSun);
+proof("default", "epic", turnSun);
+
+// ---- Showroom 2: its first lamp, walked while the mirror ticks ------------
+var imported = project.importArchive("@JAH_CONVERGE_SHOWROOM@");
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+var lamp = null;
+scene.nodes().forEach(function (n) { if (n.name === "Light0") lamp = n.id; });
+assert(lamp !== null, "Showroom 2's Light0");
+node.setProperty(lamp, "mobility", "movable");
+var lp = node.info(lamp).position;
+var walked = 0;
+function walkLamp() {
+    for (var f = 1; f <= 30; ++f) {
+        ++walked;
+        node.transform(lamp, { position: { x: lp.x + 0.02 * walked, y: lp.y, z: lp.z } });
+        editor.frame(1);
+    }
+}
+proof("showroom2", "high", walkLamp);
+proof("showroom2", "epic", walkLamp);
+console.log("gi.chain_converge_scenes: all assertions passed");

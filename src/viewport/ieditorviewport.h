@@ -748,8 +748,6 @@ public:
         quint64 cascadeFullRebuilds = 0;
         quint64 cascadeDeferrals = 0;
         quint64 cascadeDirtyMajority = 0;
-        /// Injection passes the last light tick spent over the chain (LAMPREST-2).
-        int     chainSweeps = 0;
         /// Post-rebuild chain settles (LAMPREST-3): how many at-rest injections
         /// the cascade scheduler has run because a rebuild left the chain one
         /// Jacobi pass from its fixed point.
@@ -868,6 +866,9 @@ public:
         /// the voxeliser's emissive store, in SCENE RADIANCE (no normalisation).
         /// `emissiveFormat` empty = this cascade has no voxeliser to read.
         QString emissiveFormat;
+        /// THE BYTES (PHOTON-WRITER-1): a hash of every light volume a reader
+        /// samples, 16 hex digits — equal exactly when byte-identical.
+        QString lightDigest;
         float   peakEmissive = 0.0f;
         qint64  emissiveAtMax = 0;    ///< on a UNORM emissive store this IS the clip
         qint64  emissiveAboveOne = 0;

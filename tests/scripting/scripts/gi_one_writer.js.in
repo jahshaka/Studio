@@ -56,6 +56,9 @@ var g1 = world.giStatus();
 console.log("ONEWRITER drag: refusals " + g1.chainInjectionRefusals + ", peak " +
             g1.chainInjectionsPeakFrame + ", settles " + g1.chainSettles +
             ", c0 rebuilds " + g1.cascades[0].rebuilds);
+assert(g1.chainInjectionsPeakFrame <= n,
+       "NO FRAME OF THE DRAG OR ITS SETTLE INJECTED MORE THAN THE CHAIN'S " + n +
+       " CASCADES (the at-rest tick is one sweep) [peak " + g1.chainInjectionsPeakFrame + "]");
 assert(g1.chainInjectionRefusals === refusals0,
        "A DRAG AND ITS SETTLE NEVER ASK FOR A SECOND INJECTION OF ONE CASCADE IN ONE FRAME " +
        "[refusals " + refusals0 + " -> " + g1.chainInjectionRefusals + "]");
@@ -80,6 +83,9 @@ console.log("ONEWRITER lamp+walk: refusals " + g2.chainInjectionRefusals + ", pe
             g2.cascades[0].rebuilds);
 assert(g2.cascades[0].rebuilds > c0before,
        "the walk crossed cascade-0 steps (the scroll rebuilds competed with the lamp's ticks)");
+assert(g2.chainInjectionsPeakFrame <= n,
+       "...nor any frame of the lamp's walk and its rest tick [peak " +
+       g2.chainInjectionsPeakFrame + "]");
 assert(g2.chainInjectionRefusals === refusals0,
        "A LAMP TICK AND A SCROLL REBUILD NEVER INJECT ONE CASCADE TWICE IN ONE FRAME " +
        "[refusals " + refusals0 + " -> " + g2.chainInjectionRefusals + "]");

@@ -689,14 +689,12 @@ add_test(NAME gi.cascade_bounce_bindings COMMAND test_gi_cascade_bounce_bindings
 set_tests_properties(gi.cascade_bounce_bindings PROPERTIES
     TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
-# THE CHAIN'S AT-REST INJECTION LANDS ON ITS FIXED POINT (LAMPREST-2). A
-# re-injection of a cascade chain is one Jacobi iteration of its coupled
-# radiance — each cascade reads the ones outside it and the volume it is
-# injecting into — so a tick that stops short leaves the state it started from in
-# the picture: measured at 4/255 in this room with two passes and at 0/255 with
-# three, the engine's shipped count. The suite is a HISTORY test (the same lamp,
-# the same pose, reached two ways) and it drives the engine's own
-# JAHSHAKA_GI_SWEEPS diagnostic to prove the count is what makes it pass.
+# ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT, BYTE FOR BYTE (PHOTON-WRITER-1
+# SWEEPS-3; derived in EnginePrivate.h beside kAtRestSweeps): from a perturbed
+# history, a second at-rest sweep changes no byte of any cascade's light volumes
+# (GiVoxelStats::lightDigest), at Medium and at High; a lamp that travelled
+# leaves the bytes the same lamp jumped there leaves. (The old _target row's
+# claim - one sweep within half a code of ten - is this row's assertion now.)
 # RUN_SERIAL like every cascade suite.
 add_executable(test_gi_chain_converge test_gi_chain_converge.cpp)
 set_target_properties(test_gi_chain_converge PROPERTIES
@@ -714,19 +712,6 @@ add_test(NAME gi.chain_converge COMMAND test_gi_chain_converge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_converge PROPERTIES
     TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
-
-# gi.chain_converge_target — THE SAME BINARY, THE CORRECT CLAIM (PHOTON phase A,
-# A1 section 0; lane FENCE-1): after ONE at-rest sweep the picture is within 0.5
-# codes of the picture after TEN — the RESIDUAL, not the constant kAtRestSweeps.
-#
-# LABEL `photon-target`: it runs in every scoped selection and prints its value,
-# and it does not decide a gate. THE LANE THAT LANDS PHOTON P4's ONE-WRITER +
-# SWEEPS-3 DELETES `photon-target` FROM THIS ROW and deletes the
-# `restSweeps >= 3` assertion from gi.chain_converge above.
-add_test(NAME gi.chain_converge_target COMMAND test_gi_chain_converge --target
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.chain_converge_target PROPERTIES
-    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL ON)
 
 # THE SAME SCENE VOXELISES TO THE SAME PICTURE (ogre-patches 0061 and 0062): a
 # cascade SCROLLED to a place renders what a cascade BUILT at it renders, two
