@@ -195,8 +195,13 @@ NIGHTLY_LABELS = {"benchmark", "shadercache-attack"}
 TARGET_LABELS = {"photon-target"}
 
 NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET_LABELS))
-MERGE_TIER = ('ctest -j4 --timeout 120 --output-on-failure '
-              f'-LE "^({NIGHTLY_LABEL_RE})$" -E "^gi\\.ddgi_raster$"')
+# The MERGE tier at a given ctest parallelism. -j4 is the tier's contract on a quiet box
+# (docs/TESTING_GATE.md §1); a lane beside other live lanes asks for -j2 with `-j 2`, and
+# the fallback must honour that as the scoped command does (DEVPROCESS-1 item 2: the
+# fallback used to print and RUN a hardcoded -j4 whatever the caller asked).
+def merge_tier(jobs=4):
+    return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
+            f'-LE "^({NIGHTLY_LABEL_RE})$"')
 
 
 def sh(cmd, cwd=ROOT):
@@ -518,7 +523,7 @@ def main():
     if a.json:
         print(json.dumps({"paths": paths, "suites": names, "targets": targets, "fallback": fallback,
                           "estimated_seconds": est, "estimated_wall": wall,
-                          "command": MERGE_TIER if fallback else cmd,
+                          "command": merge_tier(a.jobs) if fallback else cmd,
                           "target_command": target_cmd}, indent=1))
         return
     print(f"gate-scope: {len(paths)} touched path(s)")
@@ -526,8 +531,8 @@ def main():
     if fallback:
         print("\nFALLBACK → MERGE TIER (a touched path has no precise rule):")
         for f in fallback: print(f"  {f}")
-        print(f"\n{MERGE_TIER}")
-        if a.run: sys.exit(subprocess.call(MERGE_TIER, cwd=build, shell=True))
+        print(f"\n{merge_tier(a.jobs)}")
+        if a.run: sys.exit(subprocess.call(merge_tier(a.jobs), cwd=build, shell=True))
         return
     if skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
