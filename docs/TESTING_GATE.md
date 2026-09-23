@@ -47,7 +47,10 @@ disagree. `source.gate_scope_rules` case 6 is the guard.
 A suite that mixes a target claim with correct claims becomes **two ctest rows over one
 binary** (`--target`), never one labelled suite: a ctest label is per SUITE, so labelling the
 whole thing would exclude the correct assertions from pass/fail as well. The rows registered
-today are `gi.chain_face_target`, `gi.chain_converge_target` and `gi.field_follows_energy`.
+today are `gi.chain_face_target`, `gi.chain_face_sky_target`, `gi.field_follows_ground_target`,
+`gi.field_follows_energy` and `gi.volume_edge_spec_target`. `gi.chain_converge_target` is GONE
+(PHOTON-WRITER-1): its claim - one at-rest sweep is the fixed point - is now the ordinary row's
+byte-equality assertion.
 `gi.rt_reflect_lamp_clip` was the fourth and **VOXEL-CLIP-1 took its label off** (2026-09-22,
 ogre-patch 0087) — with a note worth keeping, because it is about the INSTRUMENT: a target test
 has to be answerable through the thing that reads it. That row asked a PERFECT mirror to read
