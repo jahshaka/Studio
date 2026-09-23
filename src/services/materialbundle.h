@@ -167,6 +167,10 @@ inline QString shippedPresetName(const QString &guid)
 /// through this, so there is one answer to "is this a copy, and of what".
 QString presetMasterOf(const QByteArray &rowProperties);
 
+/// The row-properties key that link lives under — ONE spelling for the writer
+/// (PresetCopyCommand) and the reader (presetMasterOf).
+inline constexpr QLatin1StringView kPresetMasterKey{"presetMaster"};
+
 /// A PROJECT'S COPY of a shipped preset — THE ONE PREDICATE every library view
 /// folds by (PRESET-FOLD-1): the Assets page's grid, `assets.list({scope:
 /// 'store'})` and the material picker's browse list (assettray::libraryHidden)

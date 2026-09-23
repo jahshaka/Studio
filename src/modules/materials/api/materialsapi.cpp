@@ -432,7 +432,8 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
         for (const auto &asset : host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView)) {
             if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
             if (asset.name.compare(wanted, Qt::CaseInsensitive) != 0) continue;
-            if (presetedit::masterOf(host.db, asset.guid).isEmpty()) continue;
+            // The row already carries its properties: no query per row.
+            if (MaterialBundle::presetMasterOf(asset.properties).isEmpty()) continue;
             if (host.db->isAssetPinnedBy(projectGuid, asset.guid)) return asset.guid;
         }
     }

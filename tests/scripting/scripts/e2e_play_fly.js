@@ -31,6 +31,12 @@ function rotate(q, v) {
 project.create("Play fly " + Date.now());
 assert(!scene.activeCamera(), "no scene camera is active: play renders the free viewer (" + J(scene.activeCamera()) + ")");
 editor.frame(10);
+// WHILE EDITING, W is the translate tool's SHORTCUT: a real press fires it and
+// never reaches the viewport, so the verb refuses rather than take a path no
+// user can (SMALL-FIXES-1 F5).
+var refusal = "";
+try { editor.key("W"); } catch (e) { refusal = e.message; }
+assert(/shortcut tool\.translate/.test(refusal), "editing: editor.key('W') is refused — " + refusal);
 assert(editor.play() === true, "editor.play()");
 assert(editor.playing() === true, "the viewport is playing");
 assert(editor.playInputOwner() === "editor" || editor.playInputOwner() === "controller",

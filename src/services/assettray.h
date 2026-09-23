@@ -149,6 +149,9 @@ QVector<AssetRecord> libraryList(Database *db, bool showMembers = false,
 /// The guids `libraryList` drops out of `records` (the raw grid rows).
 QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records,
                           bool showMembers = false, bool includeCopies = false);
+/// Exactly the rows the "Show member textures" switch toggles (rule 6 only):
+/// what libraryHidden drops with the switch off and keeps with it on.
+QStringList libraryMembers(Database *db, const QVector<AssetRecord> &records);
 
 }   // namespace assettray
 

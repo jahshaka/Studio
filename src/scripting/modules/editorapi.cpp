@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include <cmath>
 
 #include "scripting/modules/moduleshared.h"
+#include "services/shortcutregistry.h"
 #include "services/selectioncost.h"
 #include "viewport/gizmomode.h"
 #include "viewport/ieditorviewport.h"
@@ -843,11 +844,13 @@ QVector<VerbInfo> EditorApi::verbs() const
           Needs::Engine },
         { "key", "editor.key(name, action='tap') -> bool",
           "A KEY ON THE EDITOR VIEWPORT, the way the viewport receives one once the window system "
-          "has delivered it: its ShortcutOverride, then the KeyPress and/or KeyRelease, posted to "
+          "has delivered it: its ShortcutOverride, then the KeyPress and/or KeyRelease, sent to "
           "the viewport widget itself — the route a held fly key takes to the camera controller, "
           "and while playing to the run (PLAY-FLY-1's repro). `name` is a Qt key name ('W', 'Up', "
           "'Shift+W'); `action` is 'press' (held until a 'release'), 'release', or 'tap' (both, the "
-          "default). A held key moves the camera on every frame after it (editor.frame). It does "
+          "default). A key the viewport does not claim that is an editor SHORTCUT is REFUSED with "
+          "the shortcut's id (a real press would fire the shortcut and never reach the viewport: W "
+          "is tool.translate while editing, the run's Move while playing). A held key moves the camera on every frame after it (editor.frame). It does "
           "NOT pass through the window system or Qt's shortcut map — whether a REAL key arrives is "
           "app.input_keys' question (xdotool on a private display). Refused with no viewport or "
           "an unknown key name.",
@@ -2544,6 +2547,20 @@ bool EditorApi::key(const QString &name, const QString &action)
         QKeyEvent over(QEvent::ShortcutOverride, k, mods);
         over.ignore();
         QApplication::sendEvent(target, &over);
+        // A KEY THE VIEWPORT DID NOT CLAIM, THAT IS AN EDITOR SHORTCUT, NEVER
+        // REACHES IT: Qt's shortcut map fires the shortcut instead (W is
+        // tool.translate while editing). Sending the KeyPress anyway would
+        // drive a path no user can take — refuse, and name the shortcut.
+        if (!over.isAccepted() && host.mainWindow) {
+            const QKeySequence chord(seq[0]);
+            if (const auto *reg = host.mainWindow->findChild<ShortcutRegistry *>()) {
+                for (const ShortcutRegistry::Entry &e : reg->entries()) {
+                    if (!e.shortcut || e.sequence.isEmpty() || e.sequence != chord) continue;
+                    return fail(QStringLiteral("editor.key: '%1' is the shortcut %2 here, not a "
+                                               "viewport key").arg(name, e.id));
+                }
+            }
+        }
         QKeyEvent press(QEvent::KeyPress, k, mods);
         QApplication::sendEvent(target, &press);
     }

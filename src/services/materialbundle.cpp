@@ -53,7 +53,7 @@ QString presetMasterOf(const QByteArray &rowProperties)
 {
     if (rowProperties.isEmpty()) return QString();
     const QString recorded = QJsonDocument::fromJson(rowProperties).object()
-                                 .value(QStringLiteral("presetMaster")).toString();
+                                 .value(kPresetMasterKey).toString();
     return shippedPresetName(recorded).isEmpty() ? QString() : recorded;
 }
 

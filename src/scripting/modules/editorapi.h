@@ -110,8 +110,9 @@ public:
     Q_INVOKABLE bool simulate(bool enabled = true);
     Q_INVOKABLE bool frame(int n = 1, double dt = -1.0);
     /// A KEY ON THE EDITOR VIEWPORT, as delivered (PLAY-FLY-1): the
-    /// ShortcutOverride, then KeyPress and/or KeyRelease, posted to the viewport
-    /// widget. `action` is 'press', 'release' or 'tap'.
+    /// ShortcutOverride, then KeyPress and/or KeyRelease, sent to the viewport
+    /// widget. `action` is 'press', 'release' or 'tap'. An unclaimed key that is an
+    /// editor shortcut is refused (it would never reach the viewport).
     Q_INVOKABLE bool key(const QString &name, const QString &action = QStringLiteral("tap"));
     Q_INVOKABLE QVariantMap warmUpShaders();
     Q_INVOKABLE QVariant dropPointAt(double x, double y);

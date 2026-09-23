@@ -213,11 +213,9 @@ mapGuids.forEach(function (g) {
 
 // THE SYMPTOM: the maps are tiles in the tray, beside the bundle's own tile.
 //
-// A user import taking a stamp OFF is not a pin change and not a seeder pass, so
-// it still does not repopulate the panel on its own (a residual of TRAY-REPOP-1,
-// reported): one pin change brings the panel up to date here, which is what
-// makes the re-stamp's fold visible IN THE PANEL below.
-assert(assets.addToProject(tinyTex) === tinyTex, "restamp: a pin change repopulates the panel");
+// THE PANEL SHOWS IT TOO, WITH NO CLICK: taking a stamp off announces through
+// ProjectMembership like a pin does (TRAY-REPOP-1's last half) — nothing else
+// happened between the imports above and this read.
 var loose = guidsOf(verbRows());
 mapGuids.forEach(function (g) {
     assert(loose.indexOf(g) >= 0, "restamp: the map stands in the tray as a LOOSE TILE");

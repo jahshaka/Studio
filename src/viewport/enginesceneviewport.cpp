@@ -2466,39 +2466,18 @@ void EngineSceneViewport::syncFrame(float dtOverride)
             simulated = mScene->advance(dt);
     }
     }
-    // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5). The arm is COMPUTED in
-    // the document (Scene::advance, right after the movement step, so it never
-    // lags the character by a frame); what the document cannot know is which
-    // camera this viewport DRAWS with — `Scene::camera` and `viewCamera()` are
-    // not the same node while piloting (a new scene's stale explorer was the
-    // other case, closed in adoptEditorCamera by PLAY-FLY-1). So the
-    // host hands its own camera in, once per frame, after the playback update
-    // and before applyCamera reads it.
-    //
-    // Called whether or not anything is possessed: with nothing possessed it
-    // restores the camera once and then does nothing, which is what returns the
-    // explorer to its exact pre-play pose on stop.
-    //
-    // PILOTING WINS — a user flying a scene camera asked for that shot — and
-    // while piloting the arm is not applied at all, so the eventual restore
-    // still puts the explorer back where play found it.
-    //
-    // ...AND AN EJECTED RUN DOES NOT HOLD THE CAMERA EITHER (PLAY-SELECT-1).
-    // Ejecting means the editor has the input, and an editor whose fly is
-    // overwritten by the arm every frame has a dead fly. The arm keeps its
-    // saved pose latched while it stands down, so un-ejecting takes the shot
-    // back and Stop still returns the explorer to where play found it.
-    //
-    // ...AND ONLY A CAMERA THE DOCUMENT DOES NOT ALREADY DRIVE (PLAY-FLY-1).
-    // Since adoptEditorCamera keeps Scene::camera on the explorer, the view
-    // camera IS the node the arm writes (and saves, and restores on stop) in
-    // Scene::advance. Handing it in again made the possession save it a SECOND
-    // time — after the arm had moved it — and restore that stale pose over the
-    // document's correct one at Stop (scripting.e2e.possession's "the explorer
-    // camera is restored").
-    if (mScene && mScene->getPossession() && !mPilot && !mPlayEjected
-        && viewCamera() != mScene->camera)
-        mScene->getPossession()->applyToViewCamera(viewCamera());
+    // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5) NEEDS NO HAND-OFF HERE.
+    // The arm is computed AND APPLIED in the document (Scene::advance ->
+    // AvatarPossession::updateFollowCamera writes Scene::camera, saves its
+    // pre-arm pose once and restores it at Stop), and Scene::camera IS this
+    // view's explorer on every path (setScene, adoptEditorCamera — PLAY-FLY-1).
+    // The host used to hand viewCamera() in as well (applyToViewCamera); with
+    // the two nodes one that second save captured the ARM's pose and restored
+    // it over the document's at Stop, and while PILOTING it was skipped anyway —
+    // the arm writes the explorer, never the piloted camera, so the shot the
+    // user is flying stays theirs (scripting.e2e.possession's pilot arm). The
+    // Player keeps its own call (engineplayerscene.cpp), where the render
+    // camera is a different node.
     // Emitters used to be ticked here, one document node at a time, because the
     // document owned a CPU particle simulator. It does not any more
     // (PARTICLES_FX2_SPEC): the engine simulates every particle inside

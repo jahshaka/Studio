@@ -15,6 +15,18 @@ function throws(fn, msg) {
     if (!threw) throw new Error("assert failed (no error): " + msg);
 }
 
+// ---- THE GRID IS BUILT ONCE PER DESKTOP ENTRY (SMALL-FIXES-1 F2) ----
+// A person's boot built it twice: the ProjectManager constructor, then the
+// Desktop entry the boot makes. Every build writes one "desktop: grid built"
+// line. A script boot shows the EDITOR page without entering any space, so it
+// must have built NONE (the constructor's build is gone); a Desktop entry then
+// builds exactly one (below) — a person's boot is those two: construct, then
+// enter the Desktop (main.cpp goToDesktop).
+function gridBuilds() {
+    return log.tail(2000).filter(function (l) { return l.indexOf("desktop: grid built") >= 0; }).length;
+}
+assert(gridBuilds() === 0, "a script boot (editor page) has built no Desktop grid: " + gridBuilds());
+
 // ---- registry: the desktop module is present and documented ----
 var mods = api.verbs().filter(function (m) { return m.module === "desktop"; });
 assert(mods.length === 1, "desktop module registered");
@@ -30,7 +42,10 @@ var g3 = project.create("Slider C " + t);
 assert(g1.length > 10 && g2.length > 10 && g3.length > 10, "three projects created");
 
 app.desktop(1);
+var buildsBefore = gridBuilds();
 app.space("desktop");
+assert(gridBuilds() - buildsBefore === 1,
+       "a Desktop entry builds the grid exactly ONCE (" + (gridBuilds() - buildsBefore) + ")");
 
 // ---- view mode: valid value, forced reset, round-trip, validation ----
 var mode = desktop.viewMode();

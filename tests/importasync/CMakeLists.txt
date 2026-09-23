@@ -10,6 +10,7 @@ add_executable(test_import_async test_import_async.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
     # the member stamp: the import spine clears it for a User-intent import (IMPORT-INTENT-1)
     ${CMAKE_SOURCE_DIR}/src/services/memberstamp.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/projectmembership.cpp
     # IMPORT-1: the service's reimport drops MeshBakeStore's caches and keys
     # the bake on the asset's import settings.
     ${CMAKE_SOURCE_DIR}/src/services/meshbakestore.cpp
