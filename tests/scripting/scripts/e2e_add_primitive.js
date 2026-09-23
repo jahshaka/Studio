@@ -18,13 +18,11 @@
 // `lodLevelCount` is `lodIndices.size() + 1`, so they read as one level and every
 // consumer treats them as fine at every distance.
 //
-// THE ROWS ARE KEYED BY TRIANGLE COUNT, NOT BY NAME, and that is a finding rather
-// than a preference: `perObject[].name` is documented as the object's name but is
-// filled from the Ogre Item's name (irisgl/engine/src/OgreMesh.cpp objectLods),
-// which the mirror never sets — every row comes back with an EMPTY name. The
-// authored triangle count identifies each shipped primitive uniquely (960, 768,
-// 1,536, 1,024 for the four below), so the claim is asserted exactly; the empty
-// name is reported for whoever owns the readout.
+// THE ROWS ARE KEYED BY TRIANGLE COUNT: the authored count identifies each shipped
+// primitive uniquely (960, 768, 1,536, 1,024 for the four below). The NAME is the
+// last arm's subject: the engine's Items are unnamed, and `app.renderStats()`
+// resolves each row to the DOCUMENT node's name through the mirror
+// (SMALL-FIXES-1 — every row came back with an empty name before).
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -97,5 +95,39 @@ var coarse = 0;
 for (var q = 0; q < pinned.length; ++q) if (pinned[q].level !== 0) ++coarse;
 assert(coarse === 0,
        "at bias 0 every one of the " + pinned.length + " objects draws level 0 (its finest)");
+
+// EVERY OBJECT'S ROW CARRIES THE DOCUMENT'S NAME (SMALL-FIXES-1). Three
+// primitives get names nobody else has; each must come back on its own row, and
+// every mesh node of the document must be named in the readout — the measurement
+// lanes read ATOM's per-object LOD by name. (The readout also lists the editor's
+// own drawn helpers — light icons, the sun disc, the horizon — which mirror no
+// document node and so carry no name; they are counted, not named.)
+var NAMED = { "Sphere": "Probe Alpha", "Torus": "Probe Beta", "Capsule": "Probe Gamma" };
+var renamed = {};
+for (var prim in NAMED) {
+    var nid = scene.find(prim);
+    assert(!!nid, "the " + prim + " is in the scene to rename");
+    assert(node.rename(nid, NAMED[prim]) === NAMED[prim], prim + " renamed '" + NAMED[prim] + "'");
+    renamed[NAMED[prim]] = CHAINED[prim];
+}
+editor.frame(2);
+var meshNames = scene.nodes().filter(function (n) { return n.type === "mesh"; })
+                             .map(function (n) { return n.name; });
+var named = app.renderStats().perObject;
+var rowNames = named.filter(function (row) { return row.name !== ""; })
+                    .map(function (row) { return row.name; });
+console.log("perObject names: " + J(rowNames) + " (+" + (named.length - rowNames.length)
+            + " editor helper rows); document meshes: " + J(meshNames));
+assert(rowNames.length === meshNames.length,
+       "one NAMED row per document mesh node (" + rowNames.length + " named rows, "
+       + meshNames.length + " mesh nodes)");
+meshNames.forEach(function (nm) {
+    assert(rowNames.indexOf(nm) >= 0, "the mesh node '" + nm + "' has its row, by name");
+});
+for (var nm in renamed) {
+    var hit = named.filter(function (row) { return row.name === nm; });
+    assert(hit.length === 1 && hit[0].triangles === renamed[nm],
+           "'" + nm + "' is exactly one row, the one drawing its " + renamed[nm] + " triangles");
+}
 
 console.log("PASS");

@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "services/framepacing.h"
 #include "services/framemonitor.h"
@@ -288,7 +289,11 @@ QVector<VerbInfo> AppApi::verbs() const
           "otherwise. "
           "`perObject` is ATOM's readout: one row per drawn object with the LOD LEVEL it is "
           "actually on (`level`), how many its mesh has (`levels`, 1 = no baked chain) and what "
-          "that level's buffers really hold (`triangles`). It is read off the Items — the byte "
+          "that level's buffers really hold (`triangles`); `id` is the engine node and `name` "
+          "the DOCUMENT node's name it mirrors (resolved through the scene mirror; an editor "
+          "helper the renderer also draws — a light icon, the sun disc — mirrors no node and "
+          "reads ''). It is read "
+          "off the Items — the byte "
           "the render queue indexes their VAO list with — and never re-derived from the camera, "
           "so it is the decision and not a second opinion about it. ONE CAVEAT, stated because "
           "it is real: that byte is one slot per object and every pass which updates LOD lists "
@@ -1362,10 +1367,24 @@ QVariantMap AppApi::renderStats()
             std::vector<jahshaka::engine::ObjectLodDesc> lods;
             es->objectLods(lods);
             rows.reserve(int(lods.size()));
+            // THE NAME IS THE DOCUMENT'S. The engine's Items are created
+            // unnamed, so `ObjectLodDesc::name` is empty for every row; the
+            // mirror knows which engine node mirrors which document node, and
+            // ONE reverse map per call turns a row's engine id into the name
+            // the user gave it (never a walk per row).
+            QHash<jahshaka::engine::NodeId, QString> docNames;
+            if (SceneMirror *mirror = host.viewport->sceneMirror(); mirror && doc) {
+                docNames.reserve(doc->nodes.size());
+                for (const iris::SceneNodePtr &n : std::as_const(doc->nodes)) {
+                    if (!n) continue;
+                    const jahshaka::engine::NodeId id = mirror->engineNode(n.data());
+                    if (id) docNames.insert(id, n->getName());
+                }
+            }
             for (const jahshaka::engine::ObjectLodDesc &d : lods) {
                 QVariantMap row;
                 row.insert("id", QVariant::fromValue(qulonglong(d.node)));
-                row.insert("name", QString::fromStdString(d.name));
+                row.insert("name", docNames.value(d.node, QString::fromStdString(d.name)));
                 row.insert("level", int(d.level));
                 row.insert("levels", int(d.levels));
                 row.insert("triangles", QVariant::fromValue(qulonglong(d.triangles)));
