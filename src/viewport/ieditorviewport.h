@@ -482,6 +482,11 @@ public:
     virtual QImage takeScreenshot(int width, int height, ScreenshotGrade grade) {
         (void)grade; return takeScreenshot(width, height);
     }
+    /// THE NEXT SCREENSHOT IS TAKEN AT REST (PHOTON-FIELD-ROTATE-1): before its
+    /// readback it renders frames - OFFSCREEN, through the shot's own view, with
+    /// the on-screen views quiet, so nothing is presented - until the scene's
+    /// GiStatus::giAtRest, at most `maxFrames`. Consumed by that one screenshot.
+    virtual void settleGiBeforeNextScreenshot(int maxFrames) { (void)maxFrames; }
 
     /// THE SCRIPT SPELLINGS, in ONE place — "plain" (and "raw", the spelling
     /// the pixel suites were written with), "tonemap", "scene", "viewport".

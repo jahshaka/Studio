@@ -199,6 +199,7 @@ public:
     QImage takeScreenshot(int width = 1920, int height = 1080) override;
     QImage takeScreenshot(QSize dimension) override;
     QImage takeScreenshot(int width, int height, ScreenshotGrade grade) override;
+    void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
     int sampleCount() const override
     { return view() ? int(view()->sampleCount()) : 1; }
     bool isOffscreen() const override
@@ -626,6 +627,11 @@ private:
     /// driver's ticks, editor.frame(), and presentCovered itself. Deliberately
     /// not View::framesPresented, which resets on every scene bind.
     qulonglong mFrameEpoch = 0;
+    /// settleGiBeforeNextScreenshot's cap, consumed by the next takeScreenshot.
+    int mShotSettleFrames = 0;
+    /// The frame delta syncFrame last pushed (the settle freezes the engine's
+    /// clock for its frames and hands this back).
+    float mLastFrameDelta = 1.0f / 60.0f;
     /// A world is on its way but nothing of it has presented yet. Set by
     /// beginSceneLoad and cleared when the view starts presenting: the state
     /// machine alone cannot tell "no world open" from "a world is loading",
