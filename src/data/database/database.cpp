@@ -2600,7 +2600,7 @@ QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& fi
 {
 	QSqlQuery query;
 	// LIBRARY LISTING (the Effects page's shader library): unlisted rows out.
-	query.prepare("SELECT guid, type, name, thumbnail, asset FROM assets "
+	query.prepare("SELECT guid, type, name, thumbnail, asset, properties FROM assets "
 	              "WHERE view_filter = ? AND listed = 1");
 	query.addBindValue(filter);
 	executeAndCheckQuery(query, "fetchAssetsByViewFilter");
@@ -2615,6 +2615,9 @@ QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& fi
 			data.name = record.value(2).toString();
 			data.thumbnail = query.value(3).toByteArray();
 			data.asset = record.value(4).toByteArray();
+			// The row's own facts (a project's copy of a preset is one —
+			// the Custom drawer folds it, PRESET-FOLD-1).
+			data.properties = record.value(5).toByteArray();
 		}
 
 		tileData.push_back(data);

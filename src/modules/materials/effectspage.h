@@ -257,6 +257,9 @@ public:
 	/// `materials.projectDrawer()` verb, through the page delegate — the one
 	/// route the module's verbs take. Empty with no drawer.
 	QVariantList projectDrawerTiles() const;
+	/// WHAT THE CUSTOM DRAWER IS SHOWING, in order (PRESET-FOLD-1): the
+	/// `materials.customDrawer()` verb, through the page delegate.
+	QVariantList customDrawerTiles() const;
 
     ~EffectsPage();
 

@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
 #include "services/loadtimeline.h"
+#include "services/materialbundle.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/meshbake.h"
@@ -71,6 +72,16 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     QSqlDatabase conn = QSqlDatabase::database();
     const QString root = AssetStorePaths::root();
     const QString projectGuid = project->getProjectGuid();
+
+    // ANOTHER PROJECT'S COPY OF A PRESET IS NOT PINNABLE (PRESET-FOLD-1): it
+    // would become this project's copy too, and two projects would edit one
+    // material. The library views never offer it (they show the master); a
+    // verb or a stale drag that names it gets the reason.
+    const QString foreign = MaterialBundle::foreignCopyRefusal(db, guid, projectGuid);
+    if (!foreign.isEmpty()) {
+        result.error = foreign;
+        return result;
+    }
 
     // The membership = the asset plus its dependency closure, each pinned at
     // its CURRENT source content. No files move; no rows clone.

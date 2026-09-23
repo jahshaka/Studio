@@ -1889,16 +1889,19 @@ void AssetView::addLibraryTileForAsset(const QString &guid)
 
 void AssetView::applyShowMembers(bool on)
 {
-	// The fold's own set, from the same rule the grid was built with: with the
-	// switch OFF these are the rows the listing drops; ON, the rows to add.
-	const QStringList folded =
-	    assettray::libraryHidden(db, db->fetchAssetsForAssetView(), /*showMembers=*/false);
+	// THE SWITCH'S OWN SET: what the listing drops with it OFF and keeps with
+	// it ON — the bundle members and nothing else. (A legacy Shader row and a
+	// project's copy of a preset are dropped either way, so the difference
+	// leaves them out without naming them.)
+	const QVector<AssetRecord> rows = db->fetchAssetsForAssetView();
+	const QStringList hiddenOff = assettray::libraryHidden(db, rows, /*showMembers=*/false);
+	const QStringList hiddenOn = assettray::libraryHidden(db, rows, /*showMembers=*/true);
+	QStringList folded;
+	for (const QString &guid : hiddenOff)
+		if (!hiddenOn.contains(guid)) folded.append(guid);
 	if (on) {
 		for (const QString &guid : folded) {
 			if (fastGrid->tileByGuid(guid)) continue;
-			// A legacy Shader row is in the fold set for rule 2b and is never
-			// offered — only the bundle's pictures come back.
-			if (db->fetchAsset(guid).type == static_cast<int>(ModelTypes::Shader)) continue;
 			addLibraryTileForAsset(guid);
 		}
 	} else {

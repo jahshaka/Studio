@@ -141,11 +141,14 @@ QStringList hidden(Database *db, const QString &projectGuid,
 /// material, while only materials use it; `showMembers` turns that one rule
 /// off — the page's "Show member textures" switch). The Assets page, the
 /// material picker's browse list and assets.list({scope:'store'}) read this,
-/// so the page and the verb cannot disagree about what is a tile.
-QVector<AssetRecord> libraryList(Database *db, bool showMembers = false);
+/// so the page and the verb cannot disagree about what is a tile. Rule 7
+/// (PRESET-FOLD-1): a PROJECT'S COPY of a shipped preset (MaterialBundle::
+/// isProjectCopy) folds under the master's tile; `includeCopies` lists them.
+QVector<AssetRecord> libraryList(Database *db, bool showMembers = false,
+                                 bool includeCopies = false);
 /// The guids `libraryList` drops out of `records` (the raw grid rows).
 QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records,
-                          bool showMembers = false);
+                          bool showMembers = false, bool includeCopies = false);
 
 }   // namespace assettray
 

@@ -159,6 +159,35 @@ inline QString shippedPresetName(const QString &guid)
     return Constants::Reserved::DefaultMaterials.value(guid);
 }
 
+/// THE SHIPPED PRESET BEHIND A PROJECT'S COPY, read off the row's own
+/// `properties` — the `presetMaster` link the copy-on-write writes
+/// (PresetCopyCommand, PRESET-EDIT-1) — or empty for every row that is not a
+/// project's copy. A link to anything that is not a reserved preset guid is no
+/// link. No query: the caller holds the row. `presetedit::masterOf` reads
+/// through this, so there is one answer to "is this a copy, and of what".
+QString presetMasterOf(const QByteArray &rowProperties);
+
+/// A PROJECT'S COPY of a shipped preset — THE ONE PREDICATE every library view
+/// folds by (PRESET-FOLD-1): the Assets page's grid, `assets.list({scope:
+/// 'store'})` and the material picker's browse list (assettray::libraryHidden)
+/// and the Materials module's Custom drawer. A copy is "Wood PBR" inside its own
+/// project's views (the tray, the Project drawer) and nowhere else; everywhere
+/// else the master's tile stands for it.
+inline bool isProjectCopy(const QByteArray &rowProperties)
+{
+    return !presetMasterOf(rowProperties).isEmpty();
+}
+
+/// WHY `projectGuid` MAY NOT PIN `guid`, in the user's words, or empty when it
+/// may. One reason: `guid` is ANOTHER project's copy of a shipped preset
+/// (pinned by some project and not by this one). Pinned here it would become
+/// this project's copy too (`presetedit::projectCopyOf` answers the first copy
+/// a project pins) and two projects would edit one material; the answer is the
+/// master, and this project makes its own copy on its first edit. An UNPINNED
+/// copy is allowed: that is the copy-on-write's own pin, one line after the
+/// mint. `ProjectAssets::addToProject` asks this.
+QString foreignCopyRefusal(Database *db, const QString &guid, const QString &projectGuid);
+
 /// THE RESERVED GUID whose preset is called `name` (case-insensitively), or an
 /// empty string. The mirror of `shippedPresetName`, and it exists because a
 /// preset is reached BY NAME from a script, a drag payload and the tray: a
