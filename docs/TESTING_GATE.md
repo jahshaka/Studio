@@ -11,7 +11,7 @@ carries the rules.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`); `--timeout 120` is the default for rows that set none. (The trailing `-E "^gi\.ddgi_raster$"` this command used to carry is GONE, 2026-09-18: that suite was deleted with the irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD, so the regex excluded nothing. `CLAUDE.md`'s copy of the command still carries it and is the lead's to trim — the two differ by a filter that matches no suite, which changes no selection.) **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`); `--timeout 120` is the default for rows that set none. **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
 | **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, the rigperf bench, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under `glibc's built-in malloc checks + MALLOC_PERTURB_ (the real checker is an opt-in — it aborts under the NVIDIA GLX library)`; ~110 s, RUN_SERIAL, labelled `benchmark` because that label IS the nightly marker the MERGE/PUSH commands exclude — read one failure as "run it again", three as a regression of the open's slice-boundary drive) — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box, and whenever a batch touched the open path, the scene teardown or the engine's resource handling | the lead |
 
@@ -99,7 +99,9 @@ zero and stays there.
 ## 3. The SCOPED tier — `scripts/gate-scope.sh`
 
 `-j N` / `--jobs N` sets the ctest parallelism (default 4, the tier's contract). A lane gating beside other live lanes runs `-j 2`
-(the concurrency law); the printed command and the wall estimate follow the value, so a lane never has to re-type the selection.
+(the concurrency law); the printed command and the wall estimate follow the value, so a lane never has to re-type the selection —
+AND SO DOES THE FALLBACK: a range that falls back to the MERGE tier prints, reports (`--json` `command`) and `--run`s the tier at
+the same `-j` (DEVPROCESS-1; it used to hardcode `-j4`). The lead's `rc-gate.sh` reads `JAH_GATE_JOBS` (default 4) for its build and ctest.
 
 ```
 scripts/gate-scope.sh <base>..<tip>            # a lane: its base commit .. its tip
@@ -167,6 +169,24 @@ sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM c
 class; L8's gate, 2026-09-11). Every failure in a gate report carries a verdict
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
+
+**THE GPU-TIMING LOCK (lane DEVPROCESS-1, 2026-09-23).** Measured: VRAM is not the constraint
+(2.3 GB of 16 GB with three GPU processes live) — GPU TIME is, and `RUN_SERIAL` serialises
+only inside one ctest process while every lane is its own. THE RULE: **a suite that measures
+time or GPU budget runs under the GPU lock; everything else shares the GPU; at most three
+app-spawning lanes; a measurement lane (debug-runner) takes the lock around every
+`perf.capture` run via the wrapper.** The lock is `scripts/gpu-exclusive.sh <command…>` — one
+box-wide `flock` on `/tmp/jah-gpu-timing.lock` (a lock file in RAM is fine: the lock lives in
+the kernel and dies with its holder), a bounded 900 s wait (exit 75, the command never runs),
+the command exec'd in place so a ctest timeout still kills the suite itself. The suites above
+plus `app.watchdog_stall` — thirteen, listed once in `JAH_GPU_EXCLUSIVE_SUITES`
+(`tests/CMakeLists.txt`) — are REGISTERED through it by `jah_gpu_exclusive_test()`, whose
+`RUN_TIMEOUT` is the suite's own budget and whose TIMEOUT is that plus the 900 s wait; configure
+fails if a listed suite is registered any other way. Only those suites take it: a lane's
+pixel/logic suites, gate-scope's `-j1` target run and the rc-gate's ctest line still overlap
+freely. `ctest -N -V | grep -c gpu-exclusive` = 13. Its guard is `devprocess.gpu_lock` (label
+`tooling`). A contention verdict on one of the thirteen now needs a sibling that was NOT under
+the lock (an app on `:0`, a measurement run outside the wrapper) — say which.
 
 ## 5. Why the full gate cost 25 minutes, and what the cleanup changed
 

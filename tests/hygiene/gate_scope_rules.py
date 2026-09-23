@@ -52,9 +52,14 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
      name it, the target section does, and the MERGE tier's -LE carries the
      label. It is a rule of the tool, not a number.
 
+  7. THE FALLBACK HONOURS -j (lane DEVPROCESS-1). `--json -j2` on a path that
+     falls back reports a MERGE-tier `command` at -j2, and the printed tier line
+     follows `-j` too; `--run` runs that same string.
+
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -177,6 +182,24 @@ def main(source, build):
             merge = line
     check("photon-target" in plain(merge) and "benchmark" in plain(merge),
           "the MERGE tier's -LE carries photon-target beside the nightly labels")
+
+    # 7. THE FALLBACK HONOURS -j (DEVPROCESS-1 item 2). A lane beside other live
+    # lanes runs `-j 2`; the fallback to the MERGE tier used to print and RUN a
+    # hardcoded -j4 regardless. A path with no rule is what falls back.
+    code, out, err = run([tool, "--files", "CMakeLists.txt", "--build", build, "--json", "-j", "2"], source)
+    try:
+        doc = json.loads(out)
+    except ValueError:
+        doc = {}
+    check(code == 0 and doc.get("fallback"), "a path with no rule falls back (exit %d)" % code)
+    command = doc.get("command", "")
+    check(command.startswith("ctest -j2 ") and "-j4" not in command,
+          "the fallback's JSON command carries the requested -j2 (%r)" % command[:40])
+    check("ddgi_raster" not in command and " -E " not in command,
+          "...and excludes no suite by name (the dead gi.ddgi_raster filter is deleted)")
+    code, out, err = run([tool, "--files", "CMakeLists.txt", "--build", build, "-j", "3"], source)
+    check(any(l.startswith("ctest -j3 ") and "-LE" in l for l in out.splitlines()),
+          "...and so does the printed MERGE tier line (-j3)")
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
