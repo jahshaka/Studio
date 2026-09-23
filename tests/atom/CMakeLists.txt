@@ -100,3 +100,24 @@ set_tests_properties(atom.cluster_cut PROPERTIES
     TIMEOUT 600 LABELS "meshbake")
 jah_no_display(atom.cluster_cut)
 
+# atom.cluster_crack — THE CUT, RENDERED (B2 §3): the uploaded stream checked
+# against the bake, a crack sweep (level 0 -> the root, and the view-dependent cut
+# at four tolerances) on the 20k sphere, the two shipped high-poly models and
+# three primitives, the dolly through the cut against the level-0 control, and
+# the 40 m bar's triangle numbers against the chain. Draws through the TEST
+# HARNESS (cluster_draw.*, route B2) — the product draws no cut in stage 2 — so it
+# reaches EnginePrivate.h and links Ogre, as tests/shadow's spike does.
+add_executable(test_atom_cluster_crack test_atom_cluster_crack.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cluster_draw.cpp ${_cluster_fixture_sources})
+jah_cluster_target(test_atom_cluster_crack)
+target_include_directories(test_atom_cluster_crack PRIVATE
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_compile_definitions(test_atom_cluster_crack PRIVATE
+    CLUSTER_TEST_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
+target_link_libraries(test_atom_cluster_crack PRIVATE OgreNext)
+add_dependencies(test_atom_cluster_crack JahshakaEngineMedia)
+add_test(NAME atom.cluster_crack COMMAND test_atom_cluster_crack
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.cluster_crack PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 600 LABELS "engine")
