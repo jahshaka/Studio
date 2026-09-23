@@ -940,19 +940,19 @@ static int caseLighting()
         // half is the difference of TWO stored terms, the Radiance texel and
         // the Indirect texel, each in the atlas's format — R11G11B10F carries 6
         // mantissa bits on red and green and 5 on blue, so one step is 1/64
-        // and 1/32 of the value's octave (2.0-3.1 % on blue) — and the store
-        // truncates after the job's pre-scale, so a channel can sit a whole
-        // step off, twice. A relative 2 % bar alone had NO room on blue: the
-        // base read 1.95 % and WRITER-1's darker indirect (a quarter less)
-        // moved the difference to 2.12 % with the stored radiance unchanged.
-        // The physics bar stays 2 %; the store's quantum of each stored term is
-        // added to it, computed from the format the status reports, never
-        // assumed. (RGBA16F: 10 bits, a 0.1 % step — the same rule, no room
-        // needed.)
+        // and 1/32 of the value's octave (2.0-3.1 % on blue). The job ROUNDS
+        // TO NEAREST before the truncating store (PHOTON-CARDS-2 A2: half a
+        // step added to the float's own bits), so each stored term sits at
+        // most HALF a step off — the constant pre-scale it replaced left blue a
+        // whole step high at the top of an octave (2.12 % on the tilted crate
+        // top, 0.09 % after). The physics bar stays 2 %; half the store's
+        // quantum of each stored term is added to it, computed from the format
+        // the status reports, never assumed. (RGBA16F: 10 bits, a 0.1 % step —
+        // the same rule, no room needed.)
         const auto storeQuantum = [&st](double v, int k) -> double {
             if (!(v > 0.0)) return 0.0;
             const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
-            return std::ldexp(1.0, std::ilogb(v) - bits);
+            return 0.5 * std::ldexp(1.0, std::ilogb(v) - bits);
         };
         for (int k = 0; k < 3; ++k) {
             const double want = pbsDiffuse(t.albedo[k], curE, kRough, N, L, N) * double(t.shadow);
@@ -965,7 +965,7 @@ static int caseLighting()
             const double rel = want > 1e-6 ? std::fabs(got - want) / want : std::fabs(got);
             CHECK_MSG(want > 1e-6 ? std::fabs(got - want) <= tol : std::fabs(got) < 2e-3,
                       "%s channel %d: direct half %.5f (radiance %.5f - indirect %.5f),"
-                      " pbsDirect x shadow (%.3f) = %.5f (%.2f%%; bar 2%% + store quantum %.5f)",
+                      " pbsDirect x shadow (%.3f) = %.5f (%.2f%%; bar 2%% + half the store quanta %.5f)",
                       what, k, got, t.radiance[k], t.indirect[k], double(t.shadow), want,
                       100.0 * rel, quantum);
         }
@@ -1434,11 +1434,11 @@ static int caseLightingIndirect()
 // off (the field routes the pixel's diffuse at every shipped tier), read LINEAR
 // through an hdr-off offscreen view, orthographic and head-on.
 //
-// THE BAR IS 1 % PLUS THE TWO STORES' OWN QUANTA, both computed rather than
-// assumed: the card's Indirect layer is R11G11B10F (6 mantissa bits on red and
-// green, 5 on blue — the store truncates after the job's rounding pre-scale, so
-// one step of the value's octave), and the pixel is 8-bit (half a code; a 9 x 9
-// mean of a smooth region does not average a flat quantisation away).
+// THE BAR IS 1 % PLUS THE TWO STORES' OWN HALF-QUANTA, both computed rather
+// than assumed: the card's Indirect layer is R11G11B10F (6 mantissa bits on red
+// and green, 5 on blue; the job rounds to nearest, so half a step of the value's
+// octave), and the pixel is 8-bit (half a code; a 9 x 9 mean of a smooth region
+// does not average a flat quantisation away).
 static int caseConeParity()
 {
     const unsigned kPx = 256u;
@@ -1551,7 +1551,7 @@ static int caseConeParity()
                 for (int k = 0; k < 3; ++k) {
                     const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
                     const double store = t.indirect[k] > 0.0f
-                                             ? std::ldexp(1.0, std::ilogb(double(t.indirect[k])) - bits)
+                                             ? 0.5 * std::ldexp(1.0, std::ilogb(double(t.indirect[k])) - bits)
                                              : 0.0;
                     const double tol = 0.01 * m[k] + store + 0.5 / 255.0;
                     const double diff = std::fabs(double(t.indirect[k]) - m[k]);
@@ -1559,7 +1559,7 @@ static int caseConeParity()
                     worst = std::max(worst, rel);
                     CHECK_MSG(m[k] > 0.05 && m[k] < 0.95 && diff <= tol,
                               "%s (%+.1f, %.1f) channel %d: card indirect %.4f, pixel diffuse %.4f"
-                              " (%.2f %%; bar 1 %% + store %.4f + half a code)",
+                              " (%.2f %%; bar 1 %% + half the store's step %.4f + half a code)",
                               a.name, x, h, k, t.indirect[k], m[k], 100.0 * rel, store);
                 }
             }
