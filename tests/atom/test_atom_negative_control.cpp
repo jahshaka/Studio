@@ -46,6 +46,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "validation_probe.h"
+
 #include <cstdio>
 #include <algorithm>
 #include <cstring>
@@ -507,6 +509,9 @@ int main()
     CHECK(provider != nullptr && root.getCompositorManager2()->getCompositorPassProvider() == provider,
           "the engine's CompositorPassProvider is installed (registerHlms)");
     if (!provider) return 1;
+
+    // THE POSITIVE CONTROL for the validation entries (validation_probe.h).
+    CHECK(atomtest::validationProbe(), "the validation layer is ACTIVE when the entry asks for it");
 
     Ours ours;
     const bool built = createOurs(device, ours);

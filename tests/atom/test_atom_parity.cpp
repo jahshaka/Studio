@@ -43,6 +43,7 @@
 
 #include "EnginePrivate.h"
 #include "HlmsAtom.h"
+#include "validation_probe.h"
 
 #include <Compositor/OgreCompositorManager2.h>
 #include <Compositor/OgreCompositorNodeDef.h>
@@ -215,6 +216,7 @@ static std::vector<unsigned char> smoothTexture(int kind)
 struct Cell {
     std::string name;
     NodeId node = 0;
+    MaterialId material = 0;
     unsigned slot = 0xFFFFFFFFu;
     const Geometry *geom = nullptr;
     float world[12] = {};
@@ -477,6 +479,7 @@ int main()
     Ogre::HlmsManager *hm = root.getHlmsManager();
     auto *atom = dynamic_cast<HlmsAtom *>(hm->getHlms(HlmsAtom::kType));
     CHECK(atom != nullptr, "HlmsAtom is registered beside HlmsPbs (HLMS_USER0)");
+    CHECK(atomtest::validationProbe(), "the validation layer is ACTIVE when the entry asks for it");
     if (!atom) return 1;
 
     // ---- the textures (single mip, magnified) --------------------------------
@@ -522,6 +525,7 @@ int main()
             scene->setNodeTransform(c.node, Vec3(-2.2f + 1.1f * float(k), 0.45f + 1.0f * float(textured), 0.0f),
                                     Quat(), Vec3(1, 1, 1));
             scene->attachMesh(c.node, sphere, m);
+            c.material = m;
             c.geom = &sphereGeom;
             cells.push_back(c);
         }
@@ -535,6 +539,7 @@ int main()
         c.node = scene->createNode();
         scene->setNodeTransform(c.node, Vec3(0.0f, -0.05f, -3.0f), Quat(), Vec3(1, 1, 1));
         scene->attachMesh(c.node, sheet, m);
+        c.material = m;
         c.geom = &sheetGeom;
         cells.push_back(c);
     }
@@ -820,22 +825,49 @@ int main()
     struct LightArm { const char *name; bool sun, point, spot; };
     const LightArm lightArms[4] = { { "sun", true, false, false }, { "point", false, true, false },
                                     { "spot", false, false, true }, { "all", true, true, true } };
-    struct PhotonArm { const char *name; bool gi, gather; };
-    const PhotonArm photonArms[3] = { { "direct", false, false }, { "vct+field", true, false },
-                                      { "vct+field+gather", true, true } };
+    // THE PCC ARM is the product's configuration whenever a probe grid exists (the
+    // VCT+probes hybrid binds a ParallaxCorrectedCubemap to HlmsPbs, OgreGi.cpp): the
+    // decode must read the same probes with the same two blend distances.
+    // Probes keep only what they see enclosed (an open scene is sky), so the PCC is
+    // measured in a CLOSED ROOM, against the same room without probes: the pair of
+    // arms isolates the probes' own term.
+    struct PhotonArm { const char *name; bool gi, gather, pcc, room; int liveVs; };
+    const PhotonArm photonArms[5] = { { "direct", false, false, false, false, -1 },
+                                      { "vct+field", true, false, false, false, 0 },
+                                      { "vct+field+gather", true, true, false, false, 1 },
+                                      { "room/vct+field", true, false, false, true, 1 },
+                                      { "room/vct+field+pcc", true, false, true, true, 3 } };
+    bool roomBuilt = false;
     std::printf("  cards-at-hits column: HOLE — lands with PHOTON-CARDS-2 (no stub)\n");
 
     std::vector<unsigned char> ref, dec, prevRef, prevDec;
-    std::vector<unsigned char> lastRefOfPhoton[3];
+    std::vector<unsigned char> lastRefOfPhoton[5];
     int cellFails = 0, cellsRun = 0;
     const char *outDir = std::getenv("ATOM_PARITY_OUT");
     // ATOM_PARITY_QUICK=1: the first cell row only (a diagnosis arm, never the gate).
     const bool quick = std::getenv("ATOM_PARITY_QUICK") != nullptr;
-    for (int pi = 0; pi < (quick ? 1 : 3); ++pi) {
+    for (int pi = 0; pi < (quick ? 1 : 5); ++pi) {
         const PhotonArm &P = photonArms[pi];
+        if (P.room && !roomBuilt) {
+            // Floor, ceiling and four walls around the fixture and the camera; matte.
+            // Not in the id buffer (the grid compares the cells only).
+            const struct { Vec3 pos, scale; } slabs[6] = {
+                { Vec3(0.0f, -0.35f, -1.0f), Vec3(17.0f, 0.2f, 21.0f) },
+                { Vec3(0.0f, 5.0f, -1.0f), Vec3(17.0f, 0.2f, 21.0f) },
+                { Vec3(-8.5f, 2.3f, -1.0f), Vec3(0.2f, 5.6f, 21.0f) },
+                { Vec3(8.5f, 2.3f, -1.0f), Vec3(0.2f, 5.6f, 21.0f) },
+                { Vec3(0.0f, 2.3f, -11.5f), Vec3(17.0f, 5.6f, 0.2f) },
+                { Vec3(0.0f, 2.3f, 9.5f), Vec3(17.0f, 5.6f, 0.2f) } };
+            for (const auto &sl : slabs) {
+                const NodeId n = enginetest::addTestCube(scene, Colour(0.55f, 0.35f, 0.30f), 0.0f, 0.9f);
+                enginetest::setNodePosition(scene, n, sl.pos);
+                enginetest::setNodeScale(scene, n, sl.scale);
+            }
+            roomBuilt = true;
+        }
         GiParams gi;
         if (P.gi) {
-            gi.mode = GiMode::Vct;
+            gi.mode = P.pcc ? GiMode::VctPccHybrid : GiMode::Vct;
             gi.quality = GiQuality::Medium;
             gi.cascades = true;
             gi.ddgi = GiToggle::On;
@@ -924,12 +956,30 @@ int main()
             if (li == 3) lastRefOfPhoton[pi] = ref;
         }
         // THE COLUMN IS LIVE: each Photon term must move the compared picture.
-        if (pi > 0 && !lastRefOfPhoton[pi - 1].empty()) {
+        if (P.liveVs >= 0 && !lastRefOfPhoton[P.liveVs].empty() && !lastRefOfPhoton[pi].empty()) {
+            const std::vector<unsigned char> &was = lastRefOfPhoton[P.liveVs], &now = lastRefOfPhoton[pi];
             double sum = 0.0;
-            for (size_t i = 0; i < ref.size(); i += 4) sum += maxDiff(&lastRefOfPhoton[pi][i], &lastRefOfPhoton[pi - 1][i]);
-            const double meanMove = sum / double(ref.size() / 4u);
+            for (size_t i = 0; i < now.size(); i += 4) sum += maxDiff(&now[i], &was[i]);
+            const double meanMove = sum / double(now.size() / 4u);
             CHECK_MSG(meanMove > 0.25, "the '%s' column is LIVE in the compared picture (mean move %.3f codes vs '%s')",
-                      P.name, meanMove, photonArms[pi - 1].name);
+                      P.name, meanMove, photonArms[P.liveVs].name);
+            if (P.pcc) {
+                // ...and on the GLOSSY METAL cell itself: the probes are in the
+                // reflection the grid compares there, not only somewhere in the frame.
+                double msum = 0.0;
+                size_t mn = 0;
+                for (size_t ci = 0; ci < cells.size(); ++ci) {
+                    if (cells[ci].name != "metal/const") continue;
+                    for (size_t p = 0; p < ids0.size(); ++p)
+                        if ((ids0[p] & AtomId::kSlotMask) == cells[ci].slot && ids0[p] != AtomId::kEmpty) {
+                            msum += maxDiff(&now[p * 4u], &was[p * 4u]);
+                            ++mn;
+                        }
+                }
+                const double metalMove = mn ? msum / double(mn) : 0.0;
+                CHECK_MSG(metalMove > 0.25, "[%s] the probes reach the glossy metal cell (mean move %.3f codes over %zu px)",
+                          P.name, metalMove, mn);
+            }
         }
         if (P.gi) {
             const GiStatus st = scene->giStatus();
@@ -944,10 +994,47 @@ int main()
                           P.name, int(st.gather.on), int(st.gather.running), st.gather.probes,
                           st.gather.targetW, st.gather.targetH, st.gather.error.c_str());
         }
-        CHECK(!detail::atomRelayGaps().pccUnrelayed,
-              "the grid's configuration is inside what tellEveryHlms relays (no PCC bound)");
+        {
+            auto *pbs = static_cast<Ogre::HlmsPbs *>(hm->getHlms(Ogre::HLMS_PBS));
+            const bool samePcc = atom->getParallaxCorrectedCubemap() == pbs->getParallaxCorrectedCubemap() &&
+                                 atom->getPccVctMinDistance() == pbs->getPccVctMinDistance() &&
+                                 atom->getPccVctMaxDistance() == pbs->getPccVctMaxDistance() &&
+                                 atom->getMaxSpecIblMipmap() == pbs->getMaxSpecIblMipmap();
+            CHECK_MSG(samePcc && (!P.pcc || pbs->getParallaxCorrectedCubemap()),
+                      "[%s] tellEveryHlms: HlmsAtom holds PBS's PCC (%s), its distances (%.3f, %.3f) and IBL mips (%.0f)",
+                      P.name, pbs->getParallaxCorrectedCubemap() ? "bound" : "none", pbs->getPccVctMinDistance(),
+                      pbs->getPccVctMaxDistance(), pbs->getMaxSpecIblMipmap());
+        }
     }
     CHECK_MSG(cellFails == 0, "the parity grid: %d of %d cells inside the bar", cellsRun - cellFails, cellsRun);
+
+    // ---- A MATERIAL DIES DURING THE GRID -------------------------------------
+    // Its decode twin must die with it (forgetDecodeTwinOf at every destruction
+    // site): a twin keeps the PBS datablock's pointer and binds its pool. The owner
+    // detaches the draw that wears the twin first (Ogre asserts on a datablock with
+    // linked renderables); the other decodes keep drawing — under validation (the
+    // `_validation` entry) that is a frame with no fault and no report.
+    {
+        Cell &victim = cells[cells.size() - 2];   // emissive/tex
+        const uint32_t word = gs.entry(victim.slot).raster[0];
+        Ogre::HlmsPbsDatablock *pbsDb = pbsByWord.count(word) ? pbsByWord[word] : nullptr;
+        std::string terr;
+        Ogre::HlmsPbsDatablock *twin = pbsDb ? atom->decodeTwinFor(pbsDb, terr) : nullptr;
+        const size_t twinsBefore = atom->decodeTwinCount();
+        for (auto it = decodes.begin(); it != decodes.end(); ++it)
+            if ((*it)->getDatablock() == twin) {
+                decodeNode->detachObject(*it);
+                delete *it;
+                decodes.erase(it);
+                break;
+            }
+        const bool destroyed = scene->destroyMaterial(victim.material);
+        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        readTarget(decTex, dec);
+        CHECK_MSG(twin && destroyed && atom->decodeTwinCount() + 1 == twinsBefore,
+                  "a destroyed material takes its decode twin with it (%zu -> %zu twins), and the decode "
+                  "keeps drawing (8 frames)", twinsBefore, atom->decodeTwinCount());
+    }
 
     // ---- teardown: our workspaces and draws die while Root lives --------------
     if (refWs) cm->removeWorkspace(refWs);

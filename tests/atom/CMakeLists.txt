@@ -155,12 +155,6 @@ endfunction()
 # against HlmsAtom's decode over a hand-made id buffer, per cell mean <= 1.0 code
 # and <= 0.5 % of interior pixels beyond 8 codes, a grazing cell included. It reads
 # until every arm is stable (frames, never time) and prints the whole grid.
-add_executable(test_atom_parity test_atom_parity.cpp)
-jah_atom_engine_target(test_atom_parity)
-add_test(NAME engine.atom_parity COMMAND test_atom_parity
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# 132 cells in 12 arms, each read until stable: ~21 s on the RTX rig.
-set_tests_properties(engine.atom_parity PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # engine.atom_negative_control — stage 0's P-B, permanent: our own compute + graphics
 # pipeline recorded into Ogre's frame from the engine's PASS_CUSTOM provider, and
@@ -184,13 +178,33 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
             VERBATIM)
         list(APPEND _atom_neg_headers "${_atom_neg_gen}/atom_negative_${_stage}_spv.h")
     endforeach()
+    add_executable(test_atom_parity test_atom_parity.cpp)
+    jah_atom_engine_target(test_atom_parity)
+    target_include_directories(test_atom_parity PRIVATE
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
+        ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(test_atom_parity PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
+    add_test(NAME engine.atom_parity COMMAND test_atom_parity
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    # 220 cells in 20 arms, each read until stable, plus a material destroyed mid-grid.
+    set_tests_properties(engine.atom_parity PROPERTIES TIMEOUT 300 LABELS "engine")
+    # ...its quick arm (one row, the destroyed material included) UNDER THE LAYER.
+    if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+        add_test(NAME engine.atom_parity_validation COMMAND test_atom_parity
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(engine.atom_parity_validation PROPERTIES
+            TIMEOUT 600 LABELS "engine"
+            ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
+            FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
+    endif()
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
         "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
         "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
         ${Vulkan_INCLUDE_DIRS})
-    target_link_libraries(test_atom_negative_control PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES})
+    target_link_libraries(test_atom_negative_control PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
     add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 300 LABELS "engine")
@@ -205,20 +219,22 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
             TIMEOUT 600 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
     endif()
     # ...and both UNDER THE VALIDATION LAYER, failing on any report: our recorder's
-    # barriers and the provider's restoration are what the layer reads.
+    # barriers and the provider's restoration are what the layer reads. Each asserts
+    # the layer is ACTIVE (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into
+    # the layer's library), so a machine without the layer cannot read as green.
     if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
         add_test(NAME engine.atom_negative_control_validation COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_negative_control_validation PROPERTIES
             TIMEOUT 600 LABELS "engine"
-            ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
+            ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         if(EXISTS "${_lvp_icd}")
             add_test(NAME engine.atom_negative_control_validation_lavapipe COMMAND test_atom_negative_control
                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
             set_tests_properties(engine.atom_negative_control_validation_lavapipe PROPERTIES
                 TIMEOUT 900 LABELS "engine"
-                ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd}"
+                ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd};JAH_ATOM_EXPECT_VALIDATION=1"
                 FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         endif()
     endif()
