@@ -379,6 +379,16 @@ add_dependencies(test_gi_volume_edge JahshakaEngineMedia)
 add_test(NAME gi.volume_edge COMMAND test_gi_volume_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.volume_edge PROPERTIES TIMEOUT 180 LABELS "engine")
+# gi.volume_edge_spec_target — THE SAME BINARY ON A SPECULAR SLAB (PHOTON-ENV-1,
+# audit F4): the voxel specular cone's escape (the raw directional composite,
+# which reads the slab's own voxels at a coarse mip) against the environment
+# outside the volume steps at the face. Owned by PHOTON-PCC-1 / REFLECT-1 (three
+# reflection sources make the cone's step irrelevant at the ray tiers); that lane
+# REMOVES `photon-target` from this row.
+add_test(NAME gi.volume_edge_spec_target COMMAND test_gi_volume_edge --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.volume_edge_spec_target PROPERTIES TIMEOUT 180
+                     LABELS "engine;photon-target")
 
 # gi.mobility — MOVERS LEAVE THE STILL-WORLD LAYER (REALTIME_REFLECTIONS_SPEC
 # §3.3, lane R2). A movable object is drawn by the per-frame layers (view,

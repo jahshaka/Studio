@@ -20,6 +20,7 @@
 // over 26 directions below 5 % at each, at two sun heights (noon-ish and a low
 // sun, whose horizon glow is the sky's sharpest feature).
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <cmath>
 #include <cstdio>
@@ -161,6 +162,87 @@ int main()
                         "| six cones %.4f (%.2fx)\n", truth, lum(shUp), lum(shUp) / truth, cones,
                         cones / truth);
         }
+    }
+
+    // ===========================================================================
+    // THE SPECULAR ENVIRONMENT, OUTSIDE AND INSIDE A VOXEL VOLUME, AT ONE ROUGHNESS
+    // (PHOTON-ENV-1, audit F3). The convolution stores perceptual roughness r at
+    // mip (N - 1) r (2 - r) (CompositorPassIblSpecular::lodToPerceptualRoughness);
+    // HlmsPbs's envSpecularRoughness read N r (2 - r) — one mip rougher — until
+    // this round, and jah_environment.glsl's jahEnvLobe reads (N - 1) r (2 - r).
+    // Inside a voxel volume the specular environment is exactly ONE term: the
+    // datablock's cube where it carries one (HlmsPbs's CubemapGlobal), the cone's
+    // escape where it does not — the cone's escape was added ON TOP of the cube
+    // before (measured 1.95 / 1.60 / 1.81x at roughness 0.25 / 0.5 / 0.8). A white
+    // metal plate facing a camera straight above it reflects the zenith: outside
+    // any volume and inside one (nothing above it) the pixel must agree within 1 %
+    // at every roughness — a rougher-by-one-mip reader or a second copy of the sky
+    // is a specular step at the volume's face.
+    // ===========================================================================
+    {
+        SkyDesc sky;
+        sky.mode = SkyMode::Atmosphere;
+        sky.atmosphere.hasSun = true;
+        sky.atmosphere.sunDir[0] = std::cos(0.61f);
+        sky.atmosphere.sunDir[1] = std::sin(0.61f);
+        sky.atmosphere.sunDir[2] = 0.0f;
+        scene->setSky(sky);
+        for (int f = 0; f < 10; ++f) e->renderOneFrame();
+        float sh[27] = { 0 };
+        scene->skyAmbientSh(sh);
+        scene->setAmbientSh(sh);
+        scene->setEnvironmentLight(Colour(1, 1, 1, 1));
+        const MeshId cube = scene->createMesh(enginetest::unitCubeMesh());
+        const NodeId plate = scene->createNode();
+        scene->setNodeTransform(plate, Vec3(0.0f, -0.05f, 0.0f), Quat(), Vec3(4.0f, 0.1f, 4.0f));
+        enginetest::testCameraLookAt(view, Vec3(0.02f, 3.0f, 0.02f), Vec3(0.0f, 0.0f, 0.0f));
+        const auto centre = [&]() {
+            double acc = 0.0;
+            for (int f = 0; f < 4; ++f) {
+                e->renderOneFrame();
+                Image img;
+                view->readPixels(img);
+                double s2 = 0.0; int n = 0;
+                for (unsigned y = 28; y < 36; ++y)
+                    for (unsigned x = 28; x < 36; ++x) {
+                        const Colour c = img.at(x, y);
+                        s2 += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; ++n;
+                    }
+                acc += s2 / n;
+            }
+            return acc / 4.0;
+        };
+        for (float rough : { 0.1f, 0.25f, 0.5f, 0.8f }) {
+            PbrParams p;
+            p.albedo = Colour(1, 1, 1);
+            p.metalness = 1.0f;
+            p.roughness = rough;
+            scene->attachMesh(plate, cube, scene->createPbrMaterial(p));
+            GiParams off; off.mode = GiMode::Off;
+            scene->setGlobalIllumination(off);
+            for (int f = 0; f < 6; ++f) e->renderOneFrame();
+            const double outside = centre();
+            GiParams vct;
+            vct.mode = GiMode::Vct;
+            vct.quality = GiQuality::Low;          // isotropic: the escape is the composite
+            vct.numBounces = 1;
+            vct.ddgi = GiToggle::Off;
+            vct.gather = GiToggle::Off;
+            vct.testBoundsMin = Vec3(-4.0f, -2.0f, -4.0f);
+            vct.testBoundsMax = Vec3(4.0f, 4.0f, 4.0f);
+            scene->setGlobalIllumination(vct);
+            for (int f = 0; f < 20; ++f) e->renderOneFrame();
+            const double inside = centre();
+            std::printf("   SPECULAR ENVIRONMENT at roughness %.2f: outside a volume %.4f, inside "
+                        "%.4f (%.3fx)\n", rough, outside, inside, inside / outside);
+            char msg[200];
+            std::snprintf(msg, sizeof msg, "one roughness, one mip: the volume's specular escape "
+                          "reads what PBS reads outside it within 1 %% (roughness %.2f: %.4f / %.4f)",
+                          rough, inside, outside);
+            CHECK(std::fabs(inside / outside - 1.0) < 0.01, msg);
+        }
+        GiParams off; off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
     }
 
     view->setScene(nullptr);

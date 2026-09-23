@@ -169,6 +169,59 @@ int main(int argc, char **argv)
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
 
+    // ---- 0. A BOOT PAYS NO ENVIRONMENT SETTLE (PHOTON-ENV-1 audit F7) -----
+    // The bounce injection reads the environment where its cones escape, so a
+    // chain built BEFORE its scene's sky has landed is built over no sky and is
+    // owed a settle the frame the cube arrives (noteEnvironmentChanged) — on
+    // EVERY boot of a sky + bounce + chain scene. The first build therefore
+    // waits for the sky's capture and convolution (OgreScene::
+    // giEnvironmentPending, the same shape as the albedo wait), and this case
+    // is the boot the way the mirror drives it: the sky and the arm pushed
+    // before the first frame, the sky's own SH pushed as the ambient on every
+    // frame it is valid. Measured before the wait: 1 settle per boot; after: 0.
+    // Its own scene, torn down before the room below is built.
+    {
+        View *bv = e->createOffscreenView("boot", kSize, kSize, Colour(0, 0, 0));
+        Scene *bs = e->createScene("boot");
+        bv->setScene(bs);
+        addSlab(bs, Colour(0.8f, 0.8f, 0.8f), Vec3(0.0f, -0.25f, 0.0f), Vec3(12.0f, 0.5f, 12.0f));
+        addSlab(bs, Colour(0.8f, 0.8f, 0.8f), Vec3(0.0f, 1.0f, -3.0f), Vec3(4.0f, 2.0f, 0.5f));
+        const unsigned char skyPx[4] = { 150, 170, 200, 255 };
+        SkyDesc sky;
+        sky.mode = SkyMode::Equirectangular;
+        sky.equirect = bs->createTexture(1, 1, skyPx, true);
+        CHECK(sky.equirect && bs->setSky(sky), "boot: the sky binds");
+        bs->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
+        enginetest::testCameraLookAt(bv, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
+        GiParams bg;
+        bg.mode = GiMode::Vct;
+        bg.quality = GiQuality::Medium;
+        bg.numBounces = 4;
+        bg.ddgi = GiToggle::Off;
+        bg.updateBudget = 0;
+        bg.cascades = true;
+        CHECK(bs->setGlobalIllumination(bg), "boot: the arm is armed before the first frame");
+        int builtAt = -1;
+        for (int f = 0; f < 40; ++f) {
+            float sh[27];
+            if (bs->skyAmbientSh(sh)) bs->setAmbientSh(sh);     // the mirror's push
+            e->renderOneFrame();
+            if (builtAt < 0 && !bs->giStatus().cascades.empty()) builtAt = f;
+        }
+        const GiStatus bst = bs->giStatus();
+        std::printf("   boot: the chain built on frame %d; settles after 40 frames: %lld\n",
+                    builtAt, bst.chainSettles);
+        CHECK(builtAt >= 0 && bst.cascades.size() >= 2, "boot: the chain is built");
+        CHECK(bst.chainSettles == 0,
+              "A BOOT PAYS NO ENVIRONMENT SETTLE: the first chain is built over the "
+              "sky it will read, not before it (audit F7)");
+        GiParams off; off.mode = GiMode::Off;
+        bs->setGlobalIllumination(off);
+        e->renderOneFrame();
+        e->destroyView(bv);
+        e->destroyScene(bs);
+    }
+
     View *view = e->createOffscreenView("converge", kSize, kSize, Colour(0, 0, 0));
     Scene *scene = e->createScene("converge");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
