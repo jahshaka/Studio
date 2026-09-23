@@ -49,6 +49,31 @@ QJsonObject parseDefinition(const QByteArray &bytes)
 
 namespace MaterialBundle {
 
+QString presetMasterOf(const QByteArray &rowProperties)
+{
+    if (rowProperties.isEmpty()) return QString();
+    const QString recorded = QJsonDocument::fromJson(rowProperties).object()
+                                 .value(kPresetMasterKey).toString();
+    return shippedPresetName(recorded).isEmpty() ? QString() : recorded;
+}
+
+QString foreignCopyRefusal(Database *db, const QString &guid, const QString &projectGuid)
+{
+    if (!db || guid.isEmpty()) return QString();
+    const QString master = presetMasterOf(db->fetchAsset(guid).properties);
+    if (master.isEmpty()) return QString();
+    const QVector<AssetPinRecord> pins = db->fetchAssetPins(guid);
+    if (pins.isEmpty()) return QString();
+    QString owner;
+    for (const AssetPinRecord &pin : pins) {
+        if (pin.projectGuid == projectGuid) return QString();
+        if (owner.isEmpty()) owner = pin.projectName;
+    }
+    return QObject::tr("'%1' here is project '%2''s own copy of the shipped preset. Add the "
+                       "preset itself: this project makes its own copy on its first edit.")
+        .arg(shippedPresetName(master), owner);
+}
+
 const QSet<QString> &textureSlots()
 {
     // Built ONCE from the material's own property list — including the twelve

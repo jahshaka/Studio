@@ -460,6 +460,19 @@ QVariantList EffectsPage::projectDrawerTiles() const
 	return assetWidget ? assetWidget->shownTiles() : QVariantList();
 }
 
+QVariantList EffectsPage::customDrawerTiles() const
+{
+	QVariantList out;
+	if (!effects) return out;
+	for (int i = 0; i < effects->count(); ++i) {
+		const QListWidgetItem *item = effects->item(i);
+		if (!item) continue;
+		out.append(QVariantMap{ { QStringLiteral("guid"), item->data(MODEL_GUID_ROLE).toString() },
+		                        { QStringLiteral("name"), item->text() } });
+	}
+	return out;
+}
+
 bool EffectsPage::activateMaterialTab(const QVariant &tabOrGuid)
 {
 	return activateTab(indexForRef(tabOrGuid));
@@ -2126,7 +2139,6 @@ void EffectsPage::updateAssetDock()
 			// is in the PROJECT drawer, and a row in both drawers is the same
 			// guid meaning two things in one window.
 			{
-				const QJsonObject props = QJsonDocument::fromJson(asset.properties).object();
 				const QJsonObject blob = QJsonDocument::fromJson(asset.asset).object();
 				const bool companion = !blob.value(QStringLiteral("companionOf")).toString().isEmpty()
 				                       && !blob.contains(QStringLiteral("shadergraph"));
@@ -2137,6 +2149,12 @@ void EffectsPage::updateAssetDock()
 				// in Presets, read-only, and its Customise copy — an
 				// ordinary guid — is what lands here.
 				if (!MaterialBundle::shippedPresetName(asset.guid).isEmpty()) continue;
+				// NOR A PROJECT'S COPY OF ONE (PRESET-FOLD-1): the open
+				// project's own copy is in the PROJECT drawer (the pin test
+				// below), and another project's is that project's — listing it
+				// here put a second "Wood PBR" with the master's picture in
+				// every other project's Custom drawer.
+				if (MaterialBundle::isProjectCopy(asset.properties)) continue;
 				if (mProject && !mProject->getProjectGuid().isEmpty()
 				    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), asset.guid))
 					continue;

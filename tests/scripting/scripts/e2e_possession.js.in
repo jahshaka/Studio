@@ -125,6 +125,10 @@ var badRefused = false;
 try { avatar.possess(scene.root()); } catch (e) { badRefused = true; }
 assert(badRefused, "possessing a node with no avatar component is refused");
 
+// A scene camera to PILOT during the possessed run (the pilot arm below).
+var shotCam = scene.addCamera({ position: { x: 8, y: 3, z: 8 } });
+assert(!!shotCam, "a scene camera to pilot: " + shotCam);
+
 // ---- P3 through the verbs: play auto-possesses the FIRST avatar ------------
 
 assert(editor.play(), "editor.play with 'third-person' and two avatars");
@@ -160,6 +164,20 @@ assert(Math.abs(camDuring.x - a0x()) < 0.01 && camDuring.z < camBefore.z - 1.0 &
        "the spring arm took over the camera the viewport RENDERS through " +
        "(over the character at x=" + a0x().toFixed(2) + ", not the explorer's " +
        JSON.stringify(camBefore) + ")");
+
+// PILOTING WINS (CAMERAS_SPEC D8): the arm drives the EXPLORER, never the scene
+// camera the user is flying. The host's own hand-off is gone (SMALL-FIXES-1 F1);
+// this is the arm that says piloting still keeps the shot the user's.
+var shotBefore = node.info(shotCam).position;
+assert(editor.pilot(shotCam), "editor.pilot(scene camera) during the possessed run");
+editor.frame(30, 1 / 60);
+var shotAfter = node.info(shotCam).position;
+assert(Math.abs(shotAfter.x - shotBefore.x) + Math.abs(shotAfter.y - shotBefore.y)
+       + Math.abs(shotAfter.z - shotBefore.z) < 1e-4,
+       "the PILOTED camera is not moved by the follow arm (" + JSON.stringify(shotBefore)
+       + " -> " + JSON.stringify(shotAfter) + ")");
+assert(editor.pilot(null), "eject the pilot");
+editor.frame(2, 1 / 60);
 
 var a0 = planarPos(avatarA), b0 = planarPos(avatarB);
 avatar.input({ move: { x: 0, y: 1 } });

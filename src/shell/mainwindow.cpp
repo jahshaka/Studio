@@ -1631,14 +1631,15 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
     previousSpace = currentSpace;
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
-			if (projectService->isSceneOpen()) {
-				//if (settings->getValue("auto_save", true).toBool()) saveScene();
-				//saveScene();
-				if (sceneView->isInitialized())
-					updateCurrentSceneThumbnail();
-				pmContainer->populateDesktop(true);
-			}
-			
+			if (projectService->isSceneOpen() && sceneView->isInitialized())
+				updateCurrentSceneThumbnail();
+			// THE GRID IS REBUILT ON EVERY ENTRY (TRAY-REPOP-1). It used to be
+			// rebuilt only while a scene was open — and closeProject clears
+			// that flag BEFORE it switches here, so every close came back to a
+			// grid that had never seen the projects created or imported since
+			// boot (measured: 3 projects in the library, 0 tiles). One query.
+			pmContainer->populateDesktop(true);
+
 			ui->stackedWidget->setCurrentIndex(0);
 
             hideEditorPanels();
@@ -2498,11 +2499,9 @@ void MainWindow::closeProject(CloseIntent intent)
 
     // The desktop's tiles carry the open marker (dark blue caption bar,
     // "[ Open ]" caption, Close instead of Play/Edit). Refresh them the moment
-    // the flag goes false: NEITHER exit path below rebuilds the grid — closing
-    // while already on the desktop returns early, and switchSpace(DESKTOP)'s
-    // repopulate is gated on a scene being open, which it no longer is. Found
-    // by scripting.e2e.desktops' open-flag assertion (2026-09-08); the stale
-    // marker predates the blue bar, it was just less visible.
+    // the flag goes false: closing while already on the desktop returns early
+    // below and never reaches switchSpace(DESKTOP)'s rebuild. Found by
+    // scripting.e2e.desktops' open-flag assertion (2026-09-08).
     if (pmContainer) pmContainer->refreshOpenTiles();
 
     playbackService->setPlaying(false);
@@ -4447,6 +4446,8 @@ void MainWindow::setupToolBar()
 	options.insert("color-active", QColor(255, 255, 255));
   
     toolBar = new QToolBar("Tool Bar");
+	// Named: DockState's snapshot of `viewPort` matches toolbars by objectName.
+	toolBar->setObjectName(QString::fromLatin1(DockState::kEditorToolBarName));
 	toolBar->setIconSize(QSize(16, 16));
 
 	QAction *actionUndo = new QAction;

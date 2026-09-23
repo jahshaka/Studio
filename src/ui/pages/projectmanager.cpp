@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QActionGroup>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QFontDatabase>
@@ -42,6 +43,7 @@ For more information see the LICENSE file
 // include/assimp/Importer.hpp` — bypassing assimp's own include directory.
 // ENGINEERING_DEBT_SPEC item 5, shape 3.)
 #include "irisgl/core/irisutils.h"
+#include "irisgl/core/logger.h"
 #include "zip.h"
 
 #include "data/constants.h"
@@ -160,7 +162,10 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
 
     setupDesktopControls();
 
-    populateDesktop();
+    // NO populate here (SMALL-FIXES-1 F2): the grid is built on every Desktop
+    // ENTRY (MainWindow::switchSpace), and a person's boot enters the Desktop
+    // (main.cpp goToDesktop) — building it here too made every boot build it
+    // twice.
 
     QGridLayout *layout = new QGridLayout();
     layout->addWidget(dynamicGrid);
@@ -702,6 +707,8 @@ void ProjectManager::addImportedTileToDesktop(const QString &guid)
 
 void ProjectManager::populateDesktop(bool reset)
 {
+    QElapsedTimer timer;
+    timer.start();
     if (reset) dynamicGrid->resetView();
 
     int i = 0;
@@ -711,6 +718,10 @@ void ProjectManager::populateDesktop(bool reset)
     }
 
     checkForEmptyState();
+    // ONE LINE PER BUILD: the count scripting.e2e.desktops reads (log.tail) to
+    // prove a Desktop entry builds the grid once, and what one build costs.
+    irisLog(QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms")
+                .arg(i).arg(currentDesktop).arg(timer.elapsed()));
 }
 
 void ProjectManager::refreshOpenTiles()

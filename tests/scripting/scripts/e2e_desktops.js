@@ -15,6 +15,18 @@ function throws(fn, msg) {
     if (!threw) throw new Error("assert failed (no error): " + msg);
 }
 
+// ---- THE GRID IS BUILT ONCE PER DESKTOP ENTRY (SMALL-FIXES-1 F2) ----
+// A person's boot built it twice: the ProjectManager constructor, then the
+// Desktop entry the boot makes. Every build writes one "desktop: grid built"
+// line. A script boot shows the EDITOR page without entering any space, so it
+// must have built NONE (the constructor's build is gone); a Desktop entry then
+// builds exactly one (below) — a person's boot is those two: construct, then
+// enter the Desktop (main.cpp goToDesktop).
+function gridBuilds() {
+    return log.tail(2000).filter(function (l) { return l.indexOf("desktop: grid built") >= 0; }).length;
+}
+assert(gridBuilds() === 0, "a script boot (editor page) has built no Desktop grid: " + gridBuilds());
+
 // ---- registry: the desktop module is present and documented ----
 var mods = api.verbs().filter(function (m) { return m.module === "desktop"; });
 assert(mods.length === 1, "desktop module registered");
@@ -30,7 +42,10 @@ var g3 = project.create("Slider C " + t);
 assert(g1.length > 10 && g2.length > 10 && g3.length > 10, "three projects created");
 
 app.desktop(1);
+var buildsBefore = gridBuilds();
 app.space("desktop");
+assert(gridBuilds() - buildsBefore === 1,
+       "a Desktop entry builds the grid exactly ONCE (" + (gridBuilds() - buildsBefore) + ")");
 
 // ---- view mode: valid value, forced reset, round-trip, validation ----
 var mode = desktop.viewMode();
@@ -126,6 +141,35 @@ assert(opened.length === 1 && opened[0].guid === g2,
 project.close();
 assert(desktop.tiles().every(function (t) { return t.open === false; }),
        "closing the project clears the flag on every tile");
+
+// ---- desktop_tiles: PROJECTS IMPORTED AFTER BOOT ARE TILES AFTER A CLOSE
+// (TRAY-REPOP-1). The repro, measured before the fix: export one project, import
+// the archive twice, open one import, close it — the grid came back with NO tile
+// at all for them (0 tiles over 3 projects on a fresh home): the scripted import
+// added no tile, and the Desktop entry after a close rebuilt the grid only while
+// a scene was open, which closeProject had just cleared.
+var src = project.create("Tiles src " + t);
+var archive = project.current().folder + "-tiles.jah";
+var exported = project.exportArchive(archive);
+assert(exported && exported.path, "desktop_tiles: the source project is exported");
+project.close();
+var imports = [project.importArchive(exported.path), project.importArchive(exported.path)];
+imports.forEach(function (r, i) {
+    assert(r && r.guid, "desktop_tiles: import " + (i + 1) + " -> " + (r && r.guid));
+});
+function tileGuids() { return desktop.tiles().map(function (x) { return x.guid; }); }
+imports.forEach(function (r) {
+    assert(tileGuids().indexOf(r.guid) >= 0, "desktop_tiles: the import is a tile at once");
+});
+assert(project.open(imports[0].guid) === true, "desktop_tiles: one import opened");
+assert(project.close() === true, "desktop_tiles: …and closed");
+var onDesktop = project.list({ desktop: 1 }).map(function (p) { return p.guid; });
+imports.concat([{ guid: src }]).forEach(function (r) {
+    assert(tileGuids().indexOf(r.guid) >= 0, "desktop_tiles: " + r.guid + " is a tile after the close");
+});
+assert(desktop.tiles().length === onDesktop.length,
+       "desktop_tiles: the grid after the close is every project on the desktop ("
+       + desktop.tiles().length + " tiles, " + onDesktop.length + " projects)");
 
 // leave the desktop in rows mode for whoever runs next
 assert(desktop.setViewMode("rows") === true, "restored rows mode");

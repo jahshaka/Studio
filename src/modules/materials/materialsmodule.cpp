@@ -153,6 +153,7 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
         // materials.projectDrawer — what the module's Project drawer is
         // showing, straight off the widget (DRAWERS-1).
         pageDelegate.projectDrawer = [effectsPage]() { return effectsPage->projectDrawerTiles(); };
+        pageDelegate.customDrawer = [effectsPage]() { return effectsPage->customDrawerTiles(); };
         materialsApi->setPageDelegate(pageDelegate);
     }
     engine.addModule(materialsApi);

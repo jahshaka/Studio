@@ -354,12 +354,12 @@ MODE=$(js 'editor.gizmoMode()')
 # avatar consumes) and KeyboardState (what the camera controllers poll) — and
 # only the first was being cleared when a run lost the keyboard. What this
 # suite can SEE is the InputSystem half: hold a Move key, eject, and the run's
-# input must read empty. The KeyboardState half has no reading from here (its
-# only consumer is the play-mode fly, and that fly does not move the camera in
-# this build at all — measured below and reported upward: `input.state().move`
-# reads 1 with the key held and editor.camera() does not move a millimetre, for
-# an arrow and for W alike, which is a Player-side defect this lane does not
-# own).
+# input must read empty. The KeyboardState half is read through its consumer,
+# the play-mode fly: a REAL held key must move the camera the view renders.
+# (It did not move a millimetre until PLAY-FLY-1: in a new scene the run flew a
+# camera nobody rendered — scripting.e2e.play_fly is the frame-counted guard;
+# this is the real-X half.) The camera is put back afterwards: the sections
+# below frame the ball and the cube from where the run started.
 A=$(js 'JSON.stringify(editor.camera().position)')
 xdotool keydown Up; sleep 0.5
 MOVE=$(js 'JSON.stringify(input.state().move)')
@@ -367,7 +367,11 @@ MOVE=$(js 'JSON.stringify(input.state().move)')
     && ok "the held key reached the RUN (input.state().move $MOVE)" \
     || bad "the held key never reached the run ($MOVE) — the hand-over means nothing"
 B=$(js 'JSON.stringify(editor.camera().position)')
-note "the run's camera under a held fly key: $A -> $B (see the note above)"
+FLOWN=$(jq -rn --argjson a "$A" --argjson b "$B" \
+          'if ((($a.x-$b.x)*($a.x-$b.x) + ($a.y-$b.y)*($a.y-$b.y) + ($a.z-$b.z)*($a.z-$b.z)) > 0.0001) then "yes" else "no" end')
+[ "$FLOWN" = "yes" ] \
+    && ok "A REAL HELD FLY KEY MOVES THE CAMERA THE RUN RENDERS ($A -> $B)" \
+    || bad "the play-mode fly is dead: the camera did not move under a held key ($A -> $B)"
 
 key j                                    # EJECT with the key still down
 xdotool keyup Up; sleep 0.3              # the release the RUN will never see
@@ -381,6 +385,8 @@ MOVE=$(js 'JSON.stringify(input.state().move)')
 [ "$(printf '%s' "$MOVE" | jq -r '(.x|fabs) + (.y|fabs)')" = "0" ] \
     && ok "...and the run did not inherit it when it took the keyboard back ($MOVE)" \
     || bad "the run took the keyboard back still believing the key was down ($MOVE)"
+js "editor.setCamera({position: $A})" > /dev/null \
+    || bad "could not put the camera back where the run started"
 
 # ##########################################################################
 # SECTION 3c — A GESTURE CANNOT SURVIVE THE HAND-OVER (fix round F2)

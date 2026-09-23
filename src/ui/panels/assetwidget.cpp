@@ -414,6 +414,20 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		membershipRefreshPending = true;
 		QTimer::singleShot(0, this, [this]() { flushPendingRefresh(); });
 	});
+
+	// …AND A PASS OF THE PRESET SEEDER (TRAY-REPOP-1). A re-stamp folds loose
+	// map tiles into their bundles and a seed stamps the maps it mints; neither
+	// is a pin change, so neither reached the panel above. The seeder's
+	// `finished` is the one signal for both, coalesced on the same flag. A pass
+	// that ends before this panel exists needs no replay: the panel's first
+	// populate (a project open) reads the library as the pass left it.
+	connect(&MaterialPresetSeeder::instance(), &MaterialPresetSeeder::finished, this,
+	        [this](int) {
+		if (!project || project->getProjectGuid().isEmpty()) return;
+		if (membershipRefreshPending) return;
+		membershipRefreshPending = true;
+		QTimer::singleShot(0, this, [this]() { flushPendingRefresh(); });
+	});
 }
 
 void AssetWidget::flushPendingRefresh()
