@@ -1415,6 +1415,160 @@ static int caseLightingIndirect()
 }
 
 // ---------------------------------------------------------------------------
+// gi.cone_integrator_parity — THE PIXEL'S CONE ANSWER = THE CARD JOB'S
+// ---------------------------------------------------------------------------
+//
+// PHOTON-CARDS-2 part A: the diffuse cone integrator is ONE text
+// (jah_voxel_cones.glsl, the piece JahVoxelCones) that the pixel shader, the
+// bounce job and the card job all insert, and the card's environment lobe is
+// the pixel's (jahDiffuseAlbedo at V = N). So at the same world point, seen
+// head-on (NdotV = 1), the card's cached indirect and the pixel's diffuse are
+// the same arithmetic over the same volumes, and this holds them to 1 %.
+//
+// TWO WALLS in one scene (one GI arm per process — the trap file's rule): one
+// facing -Z, where the cone frame is a world-axis frame, and one turned 30
+// degrees about Y, where Frisvad's frame and the view-to-volume mapping of the
+// pixel's cones are exercised off the axes. The fixture is
+// gi.card_lighting_indirect's: a matte floor under a vertical sun, the walls lit
+// only by its bounce, F0 = 0 (no specular), the field, the gather and the rays
+// off (the field routes the pixel's diffuse at every shipped tier), read LINEAR
+// through an hdr-off offscreen view, orthographic and head-on.
+//
+// THE BAR IS 1 % PLUS THE TWO STORES' OWN QUANTA, both computed rather than
+// assumed: the card's Indirect layer is R11G11B10F (6 mantissa bits on red and
+// green, 5 on blue — the store truncates after the job's rounding pre-scale, so
+// one step of the value's octave), and the pixel is 8-bit (half a code; a 9 x 9
+// mean of a smooth region does not average a flat quantisation away).
+static int caseConeParity()
+{
+    const unsigned kPx = 256u;
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test-coneparity-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->setFixedFrameDelta(1.0f / 60.0f);
+    Engine *e = engine.get();
+    View *view = e->createOffscreenView("coneparity", kPx, kPx, Colour(0, 0, 0));
+    Scene *s = e->createScene("coneparity");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 0;
+    fx.hdr = false;
+    view->setPostFx(fx);
+    view->setShadows(true);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    const MeshId plain = s->createMesh(enginetest::unitCubeMesh());
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = boxCards(0.5f);
+    const MeshId carded = s->createMesh(md);
+    const auto matte = [&](float albedo) {
+        PbrParams p;
+        p.albedo = Colour(albedo, albedo, albedo);
+        p.roughness = 1.0f;
+        p.workflow = PbrParams::Workflow::Specular;
+        p.ior = 1.0f;
+        p.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        return s->createPbrMaterial(p);
+    };
+    // One floor under both walls: top at y = 0, x in [-15, 15], z in [-12, 0].
+    const NodeId floorNode = s->createNode();
+    CHECK(floorNode && s->attachMesh(floorNode, plain, matte(0.8f)), "the matte floor exists");
+    s->setNodeTransform(floorNode, Vec3(0.0f, -0.15f, -6.0f), Quat(), Vec3(30.0f, 0.3f, 12.0f));
+
+    // THE TWO WALLS: 8 x 4 m, carded, their front face 0.15 m ahead of their
+    // centre; wall A at x = -7 facing -Z, wall B at x = +7 turned by 30 degrees.
+    struct Arm { const char *name; float cx; float theta; NodeId node = 0; };
+    Arm arms[2] = { { "wall facing -Z", -7.0f, 0.0f }, { "wall turned 30 degrees", 7.0f, 30.0f } };
+    const auto rotY = [](float deg, const Vec3 &v) {
+        const float t = deg * 3.14159265f / 180.0f;
+        return Vec3(v.x * std::cos(t) + v.z * std::sin(t), v.y, -v.x * std::sin(t) + v.z * std::cos(t));
+    };
+    const auto quatY = [](float deg) {
+        const float h = 0.5f * deg * 3.14159265f / 180.0f;
+        return Quat(0.0f, std::sin(h), 0.0f, std::cos(h));
+    };
+    for (Arm &a : arms) {
+        a.node = s->createNode();
+        CHECK_MSG(a.node && s->attachMesh(a.node, carded, matte(0.7f)), "%s exists", a.name);
+        s->setNodeTransform(a.node, Vec3(a.cx, 2.0f, 0.15f), quatY(a.theta), Vec3(8.0f, 4.0f, 0.3f));
+    }
+    const NodeId sun = enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0f), 12.0f);
+    CHECK(sun != 0, "the sun is straight down: the walls' only light is the floor's bounce");
+
+    GiParams gi = baseGi();
+    gi.ddgi = GiToggle::Off;
+    gi.gather = GiToggle::Off;
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds (the chain, no field, no gather)");
+    s->setRayTracing(RayTracingMode::Off);
+
+    const double heights[3] = { 0.8, 1.6, 2.8 };
+    const double xs[2] = { -1.5, 1.5 };
+    double worst = 0.0;
+    for (const Arm &a : arms) {
+        // The camera straight at the front face, orthographic, turned with it.
+        CameraDesc cam;
+        const Vec3 off = rotY(a.theta, Vec3(0.0f, 0.0f, -10.15f));
+        cam.position = Vec3(a.cx + off.x, 2.0f, 0.15f + off.z);
+        cam.orientation = quatY(a.theta + 180.0f);
+        cam.orthographic = true;
+        cam.orthoSize = 3.0f;
+        cam.farClip = 200.0f;
+        view->setCamera(cam);
+        render(e, 90);
+        Image img;
+        CHECK(view->readPixels(img), "the view reads back");
+        const Vec3 n = rotY(a.theta, Vec3(0.0f, 0.0f, -1.0f));
+        for (double x : xs)
+            for (double h : heights) {
+                // Local (x, h) on the face -> the pixel: screen right is the
+                // wall's -x after the half turn, screen down is -y.
+                const double px = (-x / 3.0 * 0.5 + 0.5) * kPx;
+                const double py = (-(h - 2.0) / 3.0 * 0.5 + 0.5) * kPx;
+                double m[3] = { 0, 0, 0 };
+                int cnt = 0;
+                for (int y = int(py) - 4; y <= int(py) + 4; ++y)
+                    for (int xx = int(px) - 4; xx <= int(px) + 4; ++xx) {
+                        const Colour c = img.at(unsigned(xx), unsigned(y));
+                        m[0] += c.r; m[1] += c.g; m[2] += c.b;
+                        ++cnt;
+                    }
+                for (double &v : m) v /= cnt;
+                const Vec3 local = rotY(a.theta, Vec3(float(x), float(h) - 2.0f, -0.15f));
+                const Vec3 w(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
+                CardSample t;
+                if (!s->readCardAt(w, n, t) || !t.ok) {
+                    CHECK_MSG(false, "%s: the card answers at (%+.1f, %.1f)", a.name, x, h);
+                    continue;
+                }
+                const CardCacheStatus st = s->giStatus().cards;
+                for (int k = 0; k < 3; ++k) {
+                    const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
+                    const double store = t.indirect[k] > 0.0f
+                                             ? std::ldexp(1.0, std::ilogb(double(t.indirect[k])) - bits)
+                                             : 0.0;
+                    const double tol = 0.01 * m[k] + store + 0.5 / 255.0;
+                    const double diff = std::fabs(double(t.indirect[k]) - m[k]);
+                    const double rel = m[k] > 1e-4 ? diff / m[k] : 1.0;
+                    worst = std::max(worst, rel);
+                    CHECK_MSG(m[k] > 0.05 && m[k] < 0.95 && diff <= tol,
+                              "%s (%+.1f, %.1f) channel %d: card indirect %.4f, pixel diffuse %.4f"
+                              " (%.2f %%; bar 1 %% + store %.4f + half a code)",
+                              a.name, x, h, k, t.indirect[k], m[k], 100.0 * rel, store);
+                }
+            }
+    }
+    std::printf("    worst relative difference over both walls: %.2f %%\n", 100.0 * worst);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
     const std::string which = argc > 1 ? argv[1] : "capture";
@@ -1424,6 +1578,7 @@ int main(int argc, char **argv)
     else if (which == "budget") rc = caseBudget();
     else if (which == "lighting") rc = caseLighting();
     else if (which == "lighting_indirect") rc = caseLightingIndirect();
+    else if (which == "cone_parity") rc = caseConeParity();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;
