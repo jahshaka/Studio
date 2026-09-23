@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
 #include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/presetrestamp.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
@@ -2019,11 +2020,11 @@ QVariantMap AssetsApi::restampSeed()
 {
     QVariantMap out;
     if (!host.db) { fail("assets: not available in this session"); return out; }
-    // THE SAME CALL THE LAUNCH MAKES (services/materialpresetseeder.h runs it
-    // beside its own pass), so the verb the test drives and the route a user
-    // takes are one function over one shipped set.
-    const presetrestamp::Report report =
-        presetrestamp::restamp(host.db, MaterialPresetAssets::allGuids());
+    // THE SAME PASS THE LAUNCH MAKES (services/materialpresetseeder.h runs it
+    // beside its own seed), so the verb the test drives and the route a user
+    // takes are one function over one shipped set — and it ends in the
+    // seeder's `finished`, which is what repopulates the tray.
+    const presetrestamp::Report report = MaterialPresetSeeder::instance().restamp(host.db);
     if (!report.error.isEmpty()) {
         fail(QStringLiteral("assets.restampSeed: %1").arg(report.error));
         return out;

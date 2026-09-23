@@ -127,6 +127,35 @@ project.close();
 assert(desktop.tiles().every(function (t) { return t.open === false; }),
        "closing the project clears the flag on every tile");
 
+// ---- desktop_tiles: PROJECTS IMPORTED AFTER BOOT ARE TILES AFTER A CLOSE
+// (TRAY-REPOP-1). The repro, measured before the fix: export one project, import
+// the archive twice, open one import, close it — the grid came back with NO tile
+// at all for them (0 tiles over 3 projects on a fresh home): the scripted import
+// added no tile, and the Desktop entry after a close rebuilt the grid only while
+// a scene was open, which closeProject had just cleared.
+var src = project.create("Tiles src " + t);
+var archive = project.current().folder + "-tiles.jah";
+var exported = project.exportArchive(archive);
+assert(exported && exported.path, "desktop_tiles: the source project is exported");
+project.close();
+var imports = [project.importArchive(exported.path), project.importArchive(exported.path)];
+imports.forEach(function (r, i) {
+    assert(r && r.guid, "desktop_tiles: import " + (i + 1) + " -> " + (r && r.guid));
+});
+function tileGuids() { return desktop.tiles().map(function (x) { return x.guid; }); }
+imports.forEach(function (r) {
+    assert(tileGuids().indexOf(r.guid) >= 0, "desktop_tiles: the import is a tile at once");
+});
+assert(project.open(imports[0].guid) === true, "desktop_tiles: one import opened");
+assert(project.close() === true, "desktop_tiles: …and closed");
+var onDesktop = project.list({ desktop: 1 }).map(function (p) { return p.guid; });
+imports.concat([{ guid: src }]).forEach(function (r) {
+    assert(tileGuids().indexOf(r.guid) >= 0, "desktop_tiles: " + r.guid + " is a tile after the close");
+});
+assert(desktop.tiles().length === onDesktop.length,
+       "desktop_tiles: the grid after the close is every project on the desktop ("
+       + desktop.tiles().length + " tiles, " + onDesktop.length + " projects)");
+
 // leave the desktop in rows mode for whoever runs next
 assert(desktop.setViewMode("rows") === true, "restored rows mode");
 console.log("desktop slider verbs e2e: all checks passed");

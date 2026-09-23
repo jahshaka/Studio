@@ -178,7 +178,7 @@ QVector<VerbInfo> ProjectApi::verbs() const
           Needs::Document },
         { "importArchive", "project.importArchive(path) -> {guid, name, assets, objects}",
           "Imports a project archive as a NEW project: rows, objects ingested CAS-first, fresh pins. "
-          "Does not open it.",
+          "Does not open it; its tile is on the Desktop when this returns (the grid is rebuilt).",
           Needs::Document },
         { "exportArchiveAsync", "project.exportArchiveAsync(path) -> bool",
           "Exports the open project as an archive WITHOUT blocking the UI thread: the catalog reads happen "
@@ -823,6 +823,9 @@ QVariantMap ProjectApi::importArchive(const QString &path)
     ProjectArchiver archiver(host.db, nullptr);
     const auto r = archiver.importArchive(path);
     if (!r.ok()) { fail(QStringLiteral("project.importArchive: %1").arg(r.error)); return out; }
+    // THE NEW PROJECT IS A TILE NOW, as project.moveToDesktop's move is — the
+    // Desktop page's own import adds its tile itself; this verb added none.
+    if (host.projectManager) host.projectManager->populateDesktop(true);
     out["guid"] = r.projectGuid;
     out["name"] = r.worldName;
     out["assets"] = r.assets;

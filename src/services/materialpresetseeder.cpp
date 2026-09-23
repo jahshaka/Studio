@@ -63,6 +63,9 @@ bool MaterialPresetSeeder::start(Database *db)
         // that one repair, by CONTENT: 16-27 ms the once, 3-6 ms on every
         // launch after it (services/presetrestamp.h measures both).
         restampExistingMaps(db);
+        // …AND IT IS A PASS LIKE ANY OTHER: queued, so a listener built after
+        // this call (the tray is, at boot) still hears it.
+        QMetaObject::invokeMethod(this, [this]() { emit finished(0); }, Qt::QueuedConnection);
         return false;
     }
 
@@ -227,15 +230,22 @@ void MaterialPresetSeeder::importMapsThenRows()
     mRunner->start();
 }
 
-void MaterialPresetSeeder::restampExistingMaps(Database *db)
+presetrestamp::Report MaterialPresetSeeder::restamp(Database *db)
+{
+    const presetrestamp::Report report = restampExistingMaps(db);
+    emit finished(0);
+    return report;
+}
+
+presetrestamp::Report MaterialPresetSeeder::restampExistingMaps(Database *db)
 {
     // `db`, not `mDb`: the "nothing to seed" call happens BEFORE a run is set
     // up, so the member is still null there (it is set when a run starts).
-    if (!db) return;
+    if (!db) return presetrestamp::Report();
     // The shipped set is the table's, in its order (MaterialPresetAssets::
     // allGuids) — the same order the seed mints in, so the first preset that
     // names a picture owns it. The pass logs its own line.
-    presetrestamp::restamp(db, MaterialPresetAssets::allGuids());
+    return presetrestamp::restamp(db, MaterialPresetAssets::allGuids());
 }
 
 void MaterialPresetSeeder::seedNextRow()
