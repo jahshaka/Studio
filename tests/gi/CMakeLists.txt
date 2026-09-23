@@ -1139,6 +1139,25 @@ target_link_libraries(gather_far_measure PRIVATE JahshakaEngine)
 add_dependencies(gather_far_measure JahshakaEngineMedia)
 
 # ---------------------------------------------------------------------------
+# gi.far_blas — THE FAR FIELD'S GEOMETRY IN THE ONE TLAS (ATOM-FARBLAS-1, A5b §4):
+# every traced object twice (a near copy over the ray rule's level, a far copy over
+# the coarsest), the masks that keep the two apart, and the gather's far query.
+add_executable(test_gi_far_blas test_gi_far_blas.cpp)
+set_target_properties(test_gi_far_blas PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_far_blas PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_far_blas PRIVATE JahshakaEngine)
+add_dependencies(test_gi_far_blas JahshakaEngineMedia)
+add_test(NAME gi.far_blas COMMAND test_gi_far_blas
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.far_blas PROPERTIES TIMEOUT 300 LABELS "engine")
+
 # gi.gather — THE SCREEN-PROBE GATHER, phase 1
 # (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 1).
 #

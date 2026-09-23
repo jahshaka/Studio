@@ -103,6 +103,15 @@ set_tests_properties(gi.reflect_motion_norays PROPERTIES
 # 0.90 ms (the worst of the two states x 1.08) and the four ratio bars are the
 # worst of the two states x ~1.3; three of them are TIGHTER than the first
 # version's. The arithmetic and both states' numbers are in costMain.
+#
+# THE FOUR MILLISECOND BARS ARE `target:` PRINTS SINCE ATOM-FARBLAS-1 (2026-09-23):
+# inside a -j2 scoped gate beside two sibling lanes' gates the full-res glossy
+# arm read 1.213 ms (0.90 bar) AND the filter/trace ratio 8.76x (7.5x bar); solo
+# 3/3 green. The measurement above ("siblings do not move it") was one load; this
+# one moved it. A ratio of two passes cancels the CLOCK, not a sibling's
+# contention inside one of the two windows — so the ratio bars keep gating, and
+# a red of theirs gets the SOLO-RETRY verdict (docs/TESTING_GATE.md §4) before
+# anything else.
 add_test(NAME gi.rt_reflect_cost COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_cost PROPERTIES
