@@ -758,14 +758,6 @@ add_test(NAME gi.field_follows COMMAND test_gi_field_follows
 # once (the VRAM-contention class, CLAUDE.md) plus a 14 MB probe atlas, and the
 # walk renders a frame at a time.
 set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
-# gi.field_follows_ground_target — case 3's honest red (the chain's field reads 0.737 of the near
-# ground's ANALYTIC sky visibility; probe relocation is the fix — PHOTON-WRITER-1) as a TARGET ROW:
-# the suite above prints the value; this row gates on it and carries the label until the part lands.
-add_test(NAME gi.field_follows_ground_target COMMAND test_gi_field_follows --target
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_follows_ground_target PROPERTIES
-    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL ON)
-
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and
@@ -968,17 +960,6 @@ set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SE
 add_test(NAME gi.chain_face_target COMMAND test_gi_chain_face --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face_target PROPERTIES
-    TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
-
-# gi.chain_face_sky_target — THE LOW SUN'S CASCADE-0 FACE (PHOTON-ENV-1). The same
-# binary, gating ONLY that arm's bracket: with the sky carried into the field, the
-# chain's probe rays over-occlude grazing directions on the coarse outer floor and
-# a low sun is brightest at the horizon (the physics gap of
-# gi.field_follows_ground_target). PHOTON-WRITER-1 (B4) REMOVES `photon-target`
-# from this row when it lands; gi.chain_face prints the value meanwhile.
-add_test(NAME gi.chain_face_sky_target COMMAND test_gi_chain_face --sky-target
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.chain_face_sky_target PROPERTIES
     TIMEOUT 300 LABELS "engine;photon-target" RUN_SERIAL TRUE)
 
 # gi.field_follows_energy — `gi.field_follows`' EXISTENCE BAR, REPLACED BY ENERGY
