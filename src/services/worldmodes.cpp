@@ -365,6 +365,32 @@ QVector<Row> buildRows()
         out.append(r);
     }
     {
+        // THE SURFACE CACHE (PHOTON-CARDS-2): a reflection ray's hit reads the
+        // hit surface's card first, so the cache is worth its capture exactly
+        // where the ray tier runs — and the ray tier rides the SSR row above
+        // (off at Low and Medium). So the column is OFF there and AUTO at High
+        // and Epic (the engine resolves Auto against the machine's rays: a GPU
+        // without them captures nothing even at Epic).
+        Row r;
+        r.id = QStringLiteral("giCards");
+        r.label = QStringLiteral("Surface Cache (Hit Lighting)");
+        r.group = QStringLiteral("Reflections");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),  0 },
+                      { QStringLiteral("auto"), QStringLiteral("Auto"), -1 },
+                      { QStringLiteral("on"),   QStringLiteral("On"),   1 } };
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = -1; r.tier[3] = -1;
+        r.cost = QStringLiteral("Photographs of the surfaces around the camera, lit, that a "
+                                "traced reflection reads at the point it hits — a mirror shows a "
+                                "surface's own lighting instead of the voxels' 15 cm cells. Costs "
+                                "a 100 MB atlas and a few card captures a frame; Auto turns it on "
+                                "only where reflection rays run, and a wide glossy lobe keeps "
+                                "reading the voxels (a card texel would speckle there).");
+        r.get = [](const iris::ScenePtr &s) { return s->giCards; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->giCards = v; };
+        out.append(r);
+    }
+    {
         // THE ROUGHNESS CUTOFF (PHOTON_SPEC §7 R5; owner, ledger §426). It
         // belongs beside the reflection rows because it is the one number that
         // says where reflections stop being worth computing per pixel at all —

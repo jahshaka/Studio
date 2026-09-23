@@ -334,9 +334,9 @@ static int caseCapture()
     // Nothing else in this suite exercises v: a card's +Z face is uniform, so
     // an upside-down atlas rect would read identically. This arm makes the
     // card's two v halves DIFFERENT and asserts the read agrees with the
-    // capture — which is what keeps the GPU record phase 4 is told to port
-    // (`CardGpuRec::uvScaleBias`, whose scale.y is negative) honest against the
-    // CPU read (`sampleCard`, which flips v).
+    // capture — which is what keeps the CPU read (`sampleCard`, which flips v)
+    // honest; the ray job's GLSL pick (jah_rq_card.glsl) uses the same integer
+    // rule and gi.card_read_parity holds it to this read.
     {
         const NodeId tall = s->createNode();
         PbrParams p;
@@ -940,19 +940,19 @@ static int caseLighting()
         // half is the difference of TWO stored terms, the Radiance texel and
         // the Indirect texel, each in the atlas's format — R11G11B10F carries 6
         // mantissa bits on red and green and 5 on blue, so one step is 1/64
-        // and 1/32 of the value's octave (2.0-3.1 % on blue) — and the store
-        // truncates after the job's pre-scale, so a channel can sit a whole
-        // step off, twice. A relative 2 % bar alone had NO room on blue: the
-        // base read 1.95 % and WRITER-1's darker indirect (a quarter less)
-        // moved the difference to 2.12 % with the stored radiance unchanged.
-        // The physics bar stays 2 %; the store's quantum of each stored term is
-        // added to it, computed from the format the status reports, never
-        // assumed. (RGBA16F: 10 bits, a 0.1 % step — the same rule, no room
-        // needed.)
+        // and 1/32 of the value's octave (2.0-3.1 % on blue). The job ROUNDS
+        // TO NEAREST before the truncating store (PHOTON-CARDS-2 A2: half a
+        // step added to the float's own bits), so each stored term sits at
+        // most HALF a step off — the constant pre-scale it replaced left blue a
+        // whole step high at the top of an octave (2.12 % on the tilted crate
+        // top, 0.09 % after). The physics bar stays 2 %; half the store's
+        // quantum of each stored term is added to it, computed from the format
+        // the status reports, never assumed. (RGBA16F: 10 bits, a 0.1 % step —
+        // the same rule, no room needed.)
         const auto storeQuantum = [&st](double v, int k) -> double {
             if (!(v > 0.0)) return 0.0;
             const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
-            return std::ldexp(1.0, std::ilogb(v) - bits);
+            return 0.5 * std::ldexp(1.0, std::ilogb(v) - bits);
         };
         for (int k = 0; k < 3; ++k) {
             const double want = pbsDiffuse(t.albedo[k], curE, kRough, N, L, N) * double(t.shadow);
@@ -965,7 +965,7 @@ static int caseLighting()
             const double rel = want > 1e-6 ? std::fabs(got - want) / want : std::fabs(got);
             CHECK_MSG(want > 1e-6 ? std::fabs(got - want) <= tol : std::fabs(got) < 2e-3,
                       "%s channel %d: direct half %.5f (radiance %.5f - indirect %.5f),"
-                      " pbsDirect x shadow (%.3f) = %.5f (%.2f%%; bar 2%% + store quantum %.5f)",
+                      " pbsDirect x shadow (%.3f) = %.5f (%.2f%%; bar 2%% + half the store quanta %.5f)",
                       what, k, got, t.radiance[k], t.indirect[k], double(t.shadow), want,
                       100.0 * rel, quantum);
         }
@@ -1121,9 +1121,33 @@ static int caseLighting()
 // The irradiance field is OFF (it routes the pixel's diffuse at every shipped
 // tier: the trap file's rule), and so are the rays and the gather — the pixel's
 // diffuse is then exactly the cone march this job ports.
+/// THE CARD'S INDIRECT CONVENTION against a head-on pixel (PHOTON-CARDS-2 audit
+/// F4). The pixel's environment lobe reflects envColourD x kD x pi x A(NdotV, r),
+/// the Disney lobe's DIRECTIONAL albedo at its own view angle; a card texel is
+/// read from every direction and stores the lobe's HEMISPHERICAL mean,
+/// A_hemi(r) = 2 x integral of A(mu, r) mu dmu (the bounce job's convention). So
+/// a pixel seen head-on (NdotV = 1) and the card at the same point differ by
+/// exactly A_hemi(r) / A(1, r) — 1.020 at r = 1 — and the suites compare the card
+/// to the pixel times that ratio. Both halves by direct integration of the lobe
+/// (enginetest::disneyDiffuseAlbedo), never by the shader's fit.
+static double hemiOverHeadOn(double r)
+{
+    const int n = 64;
+    double hemi = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double mu = (double(i) + 0.5) / double(n);
+        hemi += 2.0 * enginetest::disneyDiffuseAlbedo(mu, r) * mu / double(n);
+    }
+    return hemi / enginetest::disneyDiffuseAlbedo(1.0, r);
+}
+
 static int caseLightingIndirect()
 {
     const unsigned kPx = 256u;
+    // The walls are roughness 1 and read head-on: the pixel re-expressed in the
+    // card's hemispherical convention (hemiOverHeadOn's comment).
+    const double kConv = hemiOverHeadOn(1.0);
+    std::printf("    the card's hemispherical-mean albedo over the head-on pixel's, r = 1: %.4f\n", kConv);
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -1217,7 +1241,7 @@ static int caseLightingIndirect()
                     sum[0] += c.r; sum[1] += c.g; sum[2] += c.b;
                     ++n;
                 }
-            for (int k = 0; k < 3; ++k) m[k] = sum[k] / n;
+            for (int k = 0; k < 3; ++k) m[k] = sum[k] / n * kConv;
             CardSample t;
             const bool ok = s->readCardAt(Vec3(float(x), float(h), 0.0f), Vec3(0, 0, -1), t) && t.ok;
             if (!ok) {
@@ -1260,7 +1284,7 @@ static int caseLightingIndirect()
                     m[0] += c.r; m[1] += c.g; m[2] += c.b;
                     ++n;
                 }
-            for (double &v : m) v /= n;
+            for (double &v : m) v = v / n * kConv;
             CardSample t;
             if (!s->readCardAt(Vec3(-1.5f, float(h), 0.0f), Vec3(0, 0, -1), t) || !t.ok) {
                 CHECK_MSG(false, "%s: the card answers at h %.1f", what, h);
@@ -1270,7 +1294,7 @@ static int caseLightingIndirect()
             for (int k = 0; k < 3; ++k) {
                 const double rel = m[k] > 1e-4 ? std::fabs(t.indirect[k] - m[k]) / m[k] : 1.0;
                 CHECK_MSG(m[k] > 0.02 && rel <= 0.05,
-                          "%s, h %.1f, channel %d: card indirect %.4f, pixel diffuse %.4f (%.2f %%,"
+                          "%s, h %.1f, channel %d: card indirect %.4f, pixel diffuse x A_hemi/A(1) %.4f (%.2f %%,"
                           " bar 5 %%)", what, h, k, t.indirect[k], m[k], 100.0 * rel);
             }
         }
@@ -1415,6 +1439,354 @@ static int caseLightingIndirect()
 }
 
 // ---------------------------------------------------------------------------
+// gi.cone_integrator_parity — THE PIXEL'S CONE ANSWER = THE CARD JOB'S
+// ---------------------------------------------------------------------------
+//
+// PHOTON-CARDS-2 part A: the diffuse cone integrator is ONE text
+// (jah_voxel_cones.glsl, the piece JahVoxelCones) that the pixel shader, the
+// bounce job and the card job all insert, and the card's environment lobe is
+// the pixel's albedo at its hemispherical mean (hemiOverHeadOn). So at the same
+// world point, seen head-on (NdotV = 1), the card's cached indirect and the
+// pixel's diffuse times A_hemi/A(1) are the same arithmetic over the same
+// volumes, and this holds them to 1 %.
+//
+// TWO WALLS in one scene (one GI arm per process — the trap file's rule): one
+// facing -Z, where the cone frame is a world-axis frame, and one turned 30
+// degrees about Y, where Frisvad's frame and the view-to-volume mapping of the
+// pixel's cones are exercised off the axes. The fixture is
+// gi.card_lighting_indirect's: a matte floor under a vertical sun, the walls lit
+// only by its bounce, F0 = 0 (no specular), the field, the gather and the rays
+// off (the field routes the pixel's diffuse at every shipped tier), read LINEAR
+// through an hdr-off offscreen view, orthographic and head-on.
+//
+// THE BAR IS 1 % PLUS THE TWO STORES' OWN HALF-QUANTA, both computed rather
+// than assumed: the card's Indirect layer is R11G11B10F (6 mantissa bits on red
+// and green, 5 on blue; the job rounds to nearest, so half a step of the value's
+// octave), and the pixel is 8-bit (half a code; a 9 x 9 mean of a smooth region
+// does not average a flat quantisation away).
+static int caseConeParity()
+{
+    const unsigned kPx = 256u;
+    const double kConv = hemiOverHeadOn(1.0);   // the card's convention (hemiOverHeadOn)
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test-coneparity-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->setFixedFrameDelta(1.0f / 60.0f);
+    Engine *e = engine.get();
+    View *view = e->createOffscreenView("coneparity", kPx, kPx, Colour(0, 0, 0));
+    Scene *s = e->createScene("coneparity");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 0;
+    fx.hdr = false;
+    view->setPostFx(fx);
+    view->setShadows(true);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    const MeshId plain = s->createMesh(enginetest::unitCubeMesh());
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = boxCards(0.5f);
+    const MeshId carded = s->createMesh(md);
+    const auto matte = [&](float albedo) {
+        PbrParams p;
+        p.albedo = Colour(albedo, albedo, albedo);
+        p.roughness = 1.0f;
+        p.workflow = PbrParams::Workflow::Specular;
+        p.ior = 1.0f;
+        p.specularColour = Colour(0.0f, 0.0f, 0.0f);
+        return s->createPbrMaterial(p);
+    };
+    // One floor under both walls: top at y = 0, x in [-15, 15], z in [-12, 0].
+    const NodeId floorNode = s->createNode();
+    CHECK(floorNode && s->attachMesh(floorNode, plain, matte(0.8f)), "the matte floor exists");
+    s->setNodeTransform(floorNode, Vec3(0.0f, -0.15f, -6.0f), Quat(), Vec3(30.0f, 0.3f, 12.0f));
+
+    // THE TWO WALLS: 8 x 4 m, carded, their front face 0.15 m ahead of their
+    // centre; wall A at x = -7 facing -Z, wall B at x = +7 turned by 30 degrees.
+    struct Arm { const char *name; float cx; float theta; NodeId node = 0; };
+    Arm arms[2] = { { "wall facing -Z", -7.0f, 0.0f }, { "wall turned 30 degrees", 7.0f, 30.0f } };
+    const auto rotY = [](float deg, const Vec3 &v) {
+        const float t = deg * 3.14159265f / 180.0f;
+        return Vec3(v.x * std::cos(t) + v.z * std::sin(t), v.y, -v.x * std::sin(t) + v.z * std::cos(t));
+    };
+    const auto quatY = [](float deg) {
+        const float h = 0.5f * deg * 3.14159265f / 180.0f;
+        return Quat(0.0f, std::sin(h), 0.0f, std::cos(h));
+    };
+    for (Arm &a : arms) {
+        a.node = s->createNode();
+        CHECK_MSG(a.node && s->attachMesh(a.node, carded, matte(0.7f)), "%s exists", a.name);
+        s->setNodeTransform(a.node, Vec3(a.cx, 2.0f, 0.15f), quatY(a.theta), Vec3(8.0f, 4.0f, 0.3f));
+    }
+    const NodeId sun = enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0f), 12.0f);
+    CHECK(sun != 0, "the sun is straight down: the walls' only light is the floor's bounce");
+
+    GiParams gi = baseGi();
+    gi.ddgi = GiToggle::Off;
+    gi.gather = GiToggle::Off;
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds (the chain, no field, no gather)");
+    s->setRayTracing(RayTracingMode::Off);
+
+    const double heights[3] = { 0.8, 1.6, 2.8 };
+    const double xs[2] = { -1.5, 1.5 };
+    double worst = 0.0;
+    for (const Arm &a : arms) {
+        // The camera straight at the front face, orthographic, turned with it.
+        CameraDesc cam;
+        const Vec3 off = rotY(a.theta, Vec3(0.0f, 0.0f, -10.15f));
+        cam.position = Vec3(a.cx + off.x, 2.0f, 0.15f + off.z);
+        cam.orientation = quatY(a.theta + 180.0f);
+        cam.orthographic = true;
+        cam.orthoSize = 3.0f;
+        cam.farClip = 200.0f;
+        view->setCamera(cam);
+        render(e, 90);
+        Image img;
+        CHECK(view->readPixels(img), "the view reads back");
+        const Vec3 n = rotY(a.theta, Vec3(0.0f, 0.0f, -1.0f));
+        for (double x : xs)
+            for (double h : heights) {
+                // Local (x, h) on the face -> the pixel: screen right is the
+                // wall's -x after the half turn, screen down is -y.
+                const double px = (-x / 3.0 * 0.5 + 0.5) * kPx;
+                const double py = (-(h - 2.0) / 3.0 * 0.5 + 0.5) * kPx;
+                double m[3] = { 0, 0, 0 };
+                int cnt = 0;
+                for (int y = int(py) - 4; y <= int(py) + 4; ++y)
+                    for (int xx = int(px) - 4; xx <= int(px) + 4; ++xx) {
+                        const Colour c = img.at(unsigned(xx), unsigned(y));
+                        m[0] += c.r; m[1] += c.g; m[2] += c.b;
+                        ++cnt;
+                    }
+                for (double &v : m) v = v / cnt * kConv;
+                const Vec3 local = rotY(a.theta, Vec3(float(x), float(h) - 2.0f, -0.15f));
+                const Vec3 w(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
+                CardSample t;
+                if (!s->readCardAt(w, n, t, a.node) || !t.ok) {
+                    CHECK_MSG(false, "%s: the card answers at (%+.1f, %.1f)", a.name, x, h);
+                    continue;
+                }
+                const CardCacheStatus st = s->giStatus().cards;
+                for (int k = 0; k < 3; ++k) {
+                    const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
+                    const double store = t.indirect[k] > 0.0f
+                                             ? 0.5 * std::ldexp(1.0, std::ilogb(double(t.indirect[k])) - bits)
+                                             : 0.0;
+                    const double tol = 0.01 * m[k] + store + kConv * 0.5 / 255.0;
+                    const double diff = std::fabs(double(t.indirect[k]) - m[k]);
+                    const double rel = m[k] > 1e-4 ? diff / m[k] : 1.0;
+                    worst = std::max(worst, rel);
+                    CHECK_MSG(m[k] > 0.05 && m[k] < 0.95 && diff <= tol,
+                              "%s (%+.1f, %.1f) channel %d: card indirect %.4f, pixel diffuse x A_hemi/A(1) %.4f"
+                              " (%.2f %%; bar 1 %% + half the store's step %.4f + half a code)",
+                              a.name, x, h, k, t.indirect[k], m[k], 100.0 * rel, store);
+                }
+            }
+    }
+    std::printf("    worst relative difference over both walls: %.2f %%\n", 100.0 * worst);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// gi.card_read_parity — THE RAY JOB'S CARD READ = THE CPU REFERENCE
+// ---------------------------------------------------------------------------
+//
+// PHOTON-CARDS-2 part B (SC-1d): a reflection ray's hit reads the surface cache
+// FIRST, through jah_rq_card.glsl — `SurfaceCache::readAt` ported to GLSL. The
+// CPU `readAt` stays as the reference, and this holds the port to it: 1,000
+// random points on the crate's six faces, each asked of both with the same
+// facing direction — the face's GEOMETRIC normal, which is what the ray job
+// hands its pick now (rebuilt from the hit triangle, jah_rq_geom.glsl; the
+// oblique-hit arm of gi.rt_reflect_hitres holds that reconstruction), and what
+// the CPU reference has always taken — must pick the SAME card
+// and the SAME atlas texel, agree on whether the card is lit, and return the
+// same radiance (both decode the one R11G11B10F texel).
+//
+// The GPU half is Engine::cardReadParity: the SAME include behind the SAME
+// four bindings, in a test-only job, dispatched once, the picks read back
+// (flushCommands first — the AsyncTextureTicket rule's cousin: the captures,
+// the relight and the table uploads are recorded, not yet submitted).
+//
+// ...and THE ROW'S TOGGLE COSTS NO GI REBUILD: `cards` travels through
+// setGiTuning, the atlas is freed and built again by the frame, and
+// giStatus().rebuilds does not move.
+static int caseReadParity()
+{
+    Fixture f;
+    if (!makeFixture(f, "cardreadparity")) return 1;
+    Engine *e = f.e;
+    Scene *s = f.s;
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray-query device here — the card read's GPU half does not exist;"
+                    " gi.card_read_parity skips cleanly\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.20f, 0.22f, 0.25f), Colour(0.10f, 0.08f, 0.06f));
+    PbrParams cp;
+    cp.albedo = Colour(0.6f, 0.5f, 0.4f);
+    cp.roughness = 0.7f;
+    const MaterialId crateMat = s->createPbrMaterial(cp);
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = boxCards(0.5f);
+    const MeshId mesh = s->createMesh(md);
+    const NodeId crate = s->createNode();
+    CHECK(crate && crateMat && mesh && s->attachMesh(crate, mesh, crateMat), "the carded crate exists");
+    // A 2 x 1.5 x 1 crate, turned 20 degrees about Y: its cards are world
+    // rectangles off the world axes, so the read's three dot products are not
+    // three component picks.
+    const float kTurn = 20.0f * 3.14159265f / 180.0f;
+    s->setNodeTransform(crate, Vec3(0.5f, 1.2f, 0.0f),
+                        Quat(0.0f, std::sin(0.5f * kTurn), 0.0f, std::cos(0.5f * kTurn)),
+                        Vec3(2.0f, 1.5f, 1.0f));
+    const NodeId floorNode = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.8f, 0.8f, 0.8f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        const MeshId plain = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(floorNode && mat && plain && s->attachMesh(floorNode, plain, mat), "the floor exists");
+        s->setNodeTransform(floorNode, Vec3(0.0f, -0.1f, 0.0f), Quat(), Vec3(10.0f, 0.2f, 10.0f));
+    }
+    enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, 0.3f), 2.0f);
+    f.view->setShadows(true);
+
+    GiParams gi = baseGi();
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds");
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 4.0f, -8.0f), Vec3(0.5f, 1.0f, 0.0f));
+    render(e, 90);
+    const CardCacheStatus st = s->giStatus().cards;
+    CHECK_MSG(st.built && st.cardsResident >= 6u && st.indirectRelights >= 6u,
+              "the crate's cards are captured, lit and marched (%u resident, %llu marches)",
+              st.cardsResident, (unsigned long long)st.indirectRelights);
+
+    // THE 1,000 HITS: a face, a point on it inset a hair from its edges, and the
+    // face's normal as the facing (with it only the face's own card can face the
+    // hit — the side cards' facing is 0). THE POINT SITS 0.1 mm INSIDE
+    // THE FACE, and not on it, for a reason measured while the facing was the
+    // reversed ray (kept: it costs nothing and the depth rule reads the plane):
+    // a box's face plane is
+    // EXACTLY the edge of its four neighbours' cards (each side card spans the
+    // box along this face's axis), so a point on the plane projects to v = 0 of
+    // them to the last bit — and 3 of the first 1,000 such hits, all inside the
+    // two-texel edge band where a side card legitimately passes the depth test,
+    // went to the side card on one side and the face card on the other on
+    // nothing but the rounding of a v of 0.000000 (CPU dv against the half
+    // extent, GPU one fused row). Both answers are legal there; neither is a
+    // question about the port. A tenth of a millimetre is 6.7e-5 of the card's
+    // v — six hundred float epsilons clear of the edge — and still inside the
+    // depth test's own millimetre, so every card that competes still competes.
+    // (A ray's hit lands within float rounding of the surface on either side; a
+    // side card answering the edge band in place of the face's own card is the
+    // same surface within two texels.)
+    const Vec3 half(1.0f, 0.75f, 0.5f);
+    const auto toWorld = [&](const Vec3 &l) {
+        const float c = std::cos(kTurn), sn = std::sin(kTurn);
+        return Vec3(0.5f + l.x * c + l.z * sn, 1.2f + l.y, -l.x * sn + l.z * c);
+    };
+    const auto dirWorld = [&](const Vec3 &l) {
+        const float c = std::cos(kTurn), sn = std::sin(kTurn);
+        return Vec3(l.x * c + l.z * sn, l.y, -l.x * sn + l.z * c);
+    };
+    unsigned rng = 12345u;
+    const auto rnd = [&rng]() {
+        rng = rng * 1664525u + 1013904223u;
+        return float(rng >> 8) / float(1u << 24);
+    };
+    std::vector<CardReadQuery> q;
+    for (int i = 0; i < 1000; ++i) {
+        const int face = int(rnd() * 6.0f) % 6;
+        const int ax = face / 2;
+        const float sign = (face & 1) ? -1.0f : 1.0f;
+        float l[3];
+        const float h[3] = { half.x, half.y, half.z };
+        for (int k = 0; k < 3; ++k) l[k] = (rnd() * 2.0f - 1.0f) * h[k] * 0.98f;
+        l[ax] = sign * (h[ax] - 1e-4f);
+        float n[3] = { 0, 0, 0 };
+        n[ax] = sign;
+        // A direction on the face's hemisphere, at least 10 degrees off grazing.
+        float d[3];
+        for (;;) {
+            for (int k = 0; k < 3; ++k) d[k] = rnd() * 2.0f - 1.0f;
+            const float len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+            if (len < 1e-3f || len > 1.0f) continue;
+            for (float &c : d) c /= len;
+            if (d[0] * n[0] + d[1] * n[1] + d[2] * n[2] > 0.17f) break;
+        }
+        CardReadQuery cq;
+        cq.position = toWorld(Vec3(l[0], l[1], l[2]));
+        (void)d;   // the hemisphere direction is drawn to keep the sequence; the facing is the normal
+        cq.facing = dirWorld(Vec3(n[0], n[1], n[2]));
+        cq.node = crate;
+        q.push_back(cq);
+    }
+    std::vector<CardReadPick> gpu;
+    const bool ran = e->cardReadParity(s, q, gpu);
+    CHECK_MSG(ran && gpu.size() == q.size(), "the ray job's card read ran over %zu hits (%s)",
+              q.size(), ran ? "ok" : e->lastError().c_str());
+    if (!ran) return 1;
+    unsigned same = 0, cpuOk = 0, gpuOk = 0, litBoth = 0, firstBad = ~0u;
+    double worstRad = 0.0;
+    for (size_t i = 0; i < q.size(); ++i) {
+        CardSample t;
+        const bool okCpu = s->readCardAt(q[i].position, q[i].facing, t, crate) && t.ok;
+        const CardReadPick &g = gpu[i];
+        cpuOk += okCpu ? 1u : 0u;
+        gpuOk += g.ok ? 1u : 0u;
+        bool match = okCpu == g.ok;
+        if (match && okCpu) {
+            match = t.card == g.card && t.texelX == g.texelX && t.texelY == g.texelY && t.lit == g.lit;
+            if (match && g.lit) {
+                ++litBoth;
+                for (int k = 0; k < 3; ++k)
+                    worstRad = std::max(worstRad, std::fabs(double(t.radiance[k]) - double(g.radiance[k])));
+            }
+        }
+        if (match) ++same;
+        else if (firstBad == ~0u) {
+            firstBad = unsigned(i);
+            std::printf("    first disagreement, hit %zu at (%.4f %.4f %.4f): CPU ok %d card %d texel"
+                        " (%u, %u) lit %d | GPU ok %d card %d texel (%u, %u) lit %d\n",
+                        i, q[i].position.x, q[i].position.y, q[i].position.z, int(okCpu), t.card,
+                        t.texelX, t.texelY, int(t.lit), int(g.ok), g.card, g.texelX, g.texelY,
+                        int(g.lit));
+        }
+    }
+    std::printf("    %u of %zu hits answered by the CPU, %u by the GPU; %u lit on both\n", cpuOk,
+                q.size(), gpuOk, litBoth);
+    CHECK_MSG(cpuOk >= 990u, "the reference answers the crate's own surface (%u / 1000)", cpuOk);
+    CHECK_MSG(same == q.size(), "the GLSL and the CPU pick the same card and texel for every hit"
+              " (%u / %zu)", same, q.size());
+    CHECK_MSG(litBoth > 0u && worstRad <= 1e-6,
+              "...and read the same radiance off it (worst difference %.2e over %u lit hits)",
+              worstRad, litBoth);
+
+    // THE TOGGLE: off and on again through the tuning door — the atlas goes and
+    // comes back, and not one GI rebuild is paid for it.
+    const unsigned long long rebuildsBefore = s->giStatus().rebuilds;
+    GiParams off = gi;
+    off.cards = GiToggle::Off;
+    CHECK(s->setGiTuning(off), "cards off through setGiTuning");
+    render(e, 3);
+    const bool freed = !s->giStatus().cards.built;
+    CHECK(s->setGiTuning(gi), "cards on again");
+    render(e, 30);
+    const GiStatus after = s->giStatus();
+    CHECK_MSG(freed && after.cards.built, "the toggle freed the atlas and built it again (%d -> %d)",
+              int(!freed), int(after.cards.built));
+    CHECK_MSG(after.rebuilds == rebuildsBefore, "...with no GI rebuild (rebuilds %llu -> %llu)",
+              (unsigned long long)rebuildsBefore, (unsigned long long)after.rebuilds);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
     const std::string which = argc > 1 ? argv[1] : "capture";
@@ -1424,6 +1796,8 @@ int main(int argc, char **argv)
     else if (which == "budget") rc = caseBudget();
     else if (which == "lighting") rc = caseLighting();
     else if (which == "lighting_indirect") rc = caseLightingIndirect();
+    else if (which == "cone_parity") rc = caseConeParity();
+    else if (which == "read_parity") rc = caseReadParity();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;

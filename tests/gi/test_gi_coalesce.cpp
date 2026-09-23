@@ -305,7 +305,16 @@ int main(int argc, char **argv)
     const Colour midDrag = floorPixel();
     std::printf("   floor, drag's last frame (no full re-solve yet)  r=%.3f g=%.3f b=%.3f\n",
                 midDrag.r, midDrag.g, midDrag.b);
-    CHECK((midDrag.r - midDrag.g) < (before.r - before.g) - 0.015f,
+    // RE-ANCHORED 0.015 -> 0.010 BY PHOTON-CARDS-2 (the one cone integrator):
+    // the bounce job now maps a world cone direction into the non-cubic voxel
+    // box exactly as the pixel does (it took the box's normalised axes for the
+    // world's), and the start frame's bounce reads r - g 0.031 where it read
+    // 0.035 — the drag's drop is 0.012 (3 codes) where it was 0.016. The drag's
+    // last frame reads exactly what the full re-solve settles to below (0.019),
+    // and THAT is asserted as a CHECK further down (the completeness row, 1.5
+    // codes): this one only says "moved by more than two codes", which a bounce
+    // that did not follow the light cannot do.
+    CHECK((midDrag.r - midDrag.g) < (before.r - before.g) - 0.010f,
           "the light-only re-inject moves the bounce DURING the drag (not just after it)");
 
     // ---- letting go --------------------------------------------------------
@@ -419,8 +428,12 @@ int main(int argc, char **argv)
     // the answer the full re-solve then confirms. The expensive rebuild is
     // buying correctness for everything ELSE that may have changed, not for the
     // light — which is exactly why deferring it to the end of the drag is safe.
-    CHECK(std::fabs((after.r - after.g) - (midDrag.r - midDrag.g)) < 0.01f,
-          "the full re-solve agrees with what the cheap path had already drawn");
+    // THE RE-INJECT IS COMPLETE, not merely present (PHOTON-CARDS-2 audit F5): the
+    // drag's last frame and the settled re-solve agree within 1.5 codes of r - g
+    // (measured: equal to the code). The old 0.01 (2.5 codes) was looser than the
+    // presence bar above it, so a cheap path that stopped halfway could pass both.
+    CHECK(std::fabs((after.r - after.g) - (midDrag.r - midDrag.g)) <= 1.5f / 255.0f,
+          "the full re-solve agrees with what the cheap path had already drawn (1.5 codes)");
 
     // ---- the explicit refresh does NOT wait (P1d) --------------------------
     // world.refreshGi() bumps the document serial. It is a demand, not a hint:

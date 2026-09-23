@@ -20,13 +20,15 @@
 //   1. THE OFF ARM SEES NOTHING. With rays off the wall carries no more red
 //      than a wall with no reflection at all. This is both the control and the
 //      fallback contract.
-//   2. THE ON ARM SEES THE CUBE. With rays on the wall carries red, and the
-//      amount is at least 0.6 of what the cube's own lit albedo would give —
-//      the voxel bias, stated: a voxel stores radiance PRE-MULTIPLIED by the
-//      surface's coverage of the cell and the shader divides that back out, but
-//      a surface thinner than a cell or at a grazing angle to the grid keeps a
-//      residual of its empty neighbours, so the bar is a fraction and not
-//      equality.
+//   2. THE ON ARM SEES THE CUBE. With rays on the wall carries red, clearly
+//      above the no-ray control. The cube is CARDED (PHOTON-CARDS-2), so the
+//      hit reads the cube's own surface-cache card — its lit radiance at the
+//      card's texel, not a voxel's coverage-divided average — and the
+//      radiometric statement of that read lives in the F1-HITRES row
+//      (`--hitres`, an un-tonemapped perfect mirror held to the card's closed
+//      form pixel by pixel). The lamp rows below keep an UNCARDED emitter on
+//      purpose: they measure the voxel store's units, which is still the answer
+//      for every hit no card describes.
 //   3. IT IS REALLY THE CUBE. Move the cube far away and the red goes; bring it
 //      back and the red returns. A reflection, not a tint.
 //   4. A GLOSSY SURFACE CONVERGES AND HOLDS STILL. At roughness 0.3 one ray per
@@ -206,19 +208,26 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// decided from it. (`PostFxDesc::hdr` is false here, so the scene renders
 /// straight into the offscreen RTT at PFG_RGBA8_UNORM — linear and un-dithered.)
 static int lampMain(Engine *e, bool target);
+static int hitresMain(Engine *e);
+static int footprintSweepMain(Engine *e);
 
 int main(int argc, char **argv)
 {
-    bool wantLamp = false, wantLampTarget = false;
+    bool wantLamp = false, wantLampTarget = false, wantHitres = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--lamp") == 0) wantLamp = true;
         if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
+        if (std::strcmp(argv[i], "--hitres") == 0) wantHitres = true;
     }
+    bool wantSweep = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--footprint-sweep") == 0) wantSweep = true;
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
+    cfg.logFile = wantHitres ? "test-rt-reflect-hitres-ogre.log"
+                  : wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
                                              : "test-rt-reflect-lamp-ogre.log")
                   : getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-rt-reflect-norays-ogre.log"
                                                     : "test-rt-reflect-ogre.log";
@@ -230,6 +239,8 @@ int main(int argc, char **argv)
     if (getenv("JAH_RT_REFLECT_COST"))
         return costMain(e, JAHSHAKA_TEST_PLUGIN_DIR, JAHSHAKA_TEST_MEDIA_DIR);
     if (wantLamp) return lampMain(e, wantLampTarget);
+    if (wantHitres) return hitresMain(e);
+    if (wantSweep) return footprintSweepMain(e);
 
     View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtreflect");
@@ -294,9 +305,21 @@ int main(int argc, char **argv)
         p.emissive = Colour(0.9f, 0.0f, 0.0f);
         p.roughness = 0.6f;
         const MaterialId mat = s->createPbrMaterial(p);
-        const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+        // CARDED (PHOTON-CARDS-2): the six box cards the bake gives a cube, so
+        // the mirror's hit reads the cube's surface-cache card first.
+        MeshData md = enginetest::unitCubeMesh();
+        for (unsigned a = 0; a < 6u; ++a) {
+            MeshCardDesc c;
+            c.axis = static_cast<unsigned char>(a);
+            c.origin = Vec3(0, 0, 0);
+            c.halfU = 0.5f;
+            c.halfV = 0.5f;
+            c.halfDepth = 0.52f;
+            md.cards.push_back(c);
+        }
+        const MeshId mesh = s->createMesh(md);
         CHECK(cube && mat && mesh && s->attachMesh(cube, mesh, mat),
-              "the emissive cube exists (behind the camera)");
+              "the emissive cube exists (behind the camera), carded");
     }
     enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
     enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.0f, -11.0f));
@@ -1505,4 +1528,471 @@ static int lampMain(Engine *e, bool target)
 
     std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+/// F1-HITRES — A MIRROR'S HIT IS SHADED FROM THE HIT SURFACE'S CARD
+/// (PHOTON-CARDS-2 part B, SC-1d; `--hitres`, the row gi.rt_reflect_hitres).
+///
+/// THE DEFECT IT CLOSES. A reflection ray's hit used to be shaded from the
+/// Photon voxels alone, and a MIRROR reads their finest mip — still two cells
+/// (15.6 cm at High's 7.8 cm cascade 0). So a mirror showed every reflected
+/// surface as a mosaic of voxel cells: the reflected panel's edge smeared over
+/// two cells and its face banded along the cell boundaries. A hit now asks the
+/// surface cache FIRST (jah_rq_card.glsl): the card of the hit instance holds
+/// the surface's lit radiance at the card's own texel pitch.
+///
+/// THE CLOSED FORM, AND WHERE IT COMES FROM. A perfect mirror (metalness 1,
+/// albedo 1 -> F0 = 1, roughness 0) redirects a ray without attenuating it, so
+/// the mirror pixel whose ray lands on the panel at P reads the panel's
+/// outgoing radiance at P — which is what the panel's CARD stores at P (the
+/// panel's albedo x its lighting, the CardLight job's arithmetic; gi.card_lighting
+/// holds that to pbsDirect). The pixel's P is geometry: the mirror is the plane
+/// z = kMirrorZ, so the ray through a pixel, unfolded, meets the panel's plane
+/// mirrored to z = 2 kMirrorZ - kPanelZ. So the suite computes, per pixel of a
+/// row through the panel, where the ray lands and reads the card there — the
+/// closed form — and holds the picture to it:
+///
+///     |pixel - card(P)| <= 2 % of the card + half a store quantum + 1.5 codes
+///
+/// on every face pixel of the row more than 2.5 pixels inside the panel's edge,
+/// the background black more than 2.5 pixels outside it, and IN that band every
+/// pixel is one or the other — the panel's value or black, nothing between: the
+/// step is sharp. WHY THE BAND IS 2.5 PIXELS AND NOT ONE, measured: the mirror's
+/// reflected direction is built from the G-buffer normal, which is
+/// R10G10B10A2 — a half step of 1/1023 per component, doubled by the
+/// reflection, over the 5.8 m from the mirror to the panel is up to ~1.1 cm a
+/// component, and the edge's position in this 512-pixel row jitters by one or
+/// two pixels from row to row (dark and bright pixels interleave there in BOTH
+/// arms). That is where the edge lands, not how sharp it is. With the voxels
+/// (the cache turned off through the tuning door, same process) the same row
+/// is printed: the worst error on the face and the smeared pixels — the banding
+/// this replaces, as numbers.
+///
+/// NO SHADOW, NO SKY, NO FLOOR: the panel is lit by one non-casting sun, the
+/// environment is black, so the card's radiance is its direct term and the
+/// background is exactly 0.
+static int hitresMain(Engine *e)
+{
+    std::printf("== gi.rt_reflect_hitres: F1-HITRES -- a mirror's hit reads the card\n");
+    const unsigned kPx = 512u;
+    View *view = e->createOffscreenView("rthitres", kPx, kPx, Colour(0, 0, 0));
+    Scene *s = e->createScene("rthitres");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: this build/machine has no ray queries — F1-HITRES is about the ray "
+                    "tier's hit and skips cleanly\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    MeshData md = enginetest::unitCubeMesh();
+    for (unsigned a = 0; a < 6u; ++a) {
+        MeshCardDesc c;
+        c.axis = static_cast<unsigned char>(a);
+        c.origin = Vec3(0, 0, 0);
+        c.halfU = 0.5f;
+        c.halfV = 0.5f;
+        c.halfDepth = 0.52f;
+        md.cards.push_back(c);
+    }
+    const MeshId carded = s->createMesh(md);
+
+    // THE MIRROR, in front of the camera: its front face is the plane z = 2.85.
+    const float kMirrorZ = 2.85f;
+    PbrParams mp;
+    mp.albedo = Colour(1.0f, 1.0f, 1.0f);
+    mp.metalness = 1.0f;
+    mp.roughness = 0.0f;
+    const NodeId mirror = s->createNode();
+    CHECK(mirror && s->attachMesh(mirror, cube, s->createPbrMaterial(mp)),
+          "the perfect mirror exists (metalness 1, albedo 1, roughness 0)");
+    s->setNodeTransform(mirror, Vec3(0.0f, 1.5f, 3.0f), Quat(), Vec3(8.0f, 6.0f, 0.3f));
+
+    // THE PANEL, behind the camera, facing the mirror: 2 x 2 m, carded, matte;
+    // its front face is the plane z = -2.95.
+    const float kPanelZ = -2.95f;
+    PbrParams pp;
+    pp.albedo = Colour(0.5f, 0.45f, 0.4f);
+    pp.roughness = 1.0f;
+    pp.workflow = PbrParams::Workflow::Specular;
+    pp.ior = 1.0f;
+    pp.specularColour = Colour(0.0f, 0.0f, 0.0f);
+    const NodeId panel = s->createNode();
+    CHECK(panel && s->attachMesh(panel, carded, s->createPbrMaterial(pp)), "the carded panel exists");
+    s->setNodeTransform(panel, Vec3(0.0f, 1.5f, -3.0f), Quat(), Vec3(2.0f, 2.0f, 0.1f));
+
+    // ONE SUN, NOT CASTING, from above the mirror's side: the panel's face is
+    // lit uniformly (cos 30 degrees) and nothing shadows it.
+    {
+        const NodeId sun = s->createNode();
+        LightDesc l;
+        l.type = LightType::Directional;
+        l.colour = Colour(1.0f, 1.0f, 1.0f);
+        l.intensity = 1.0f;
+        l.castShadows = false;
+        // The light travels along the node's -Y; turn -Y to (0, -0.5, -0.866).
+        const float a = 60.0f * 3.14159265f / 180.0f;    // about X
+        s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(std::sin(0.5f * a), 0.0f, 0.0f, std::cos(0.5f * a)),
+                            Vec3(1, 1, 1));
+        CHECK(sun && s->setLight(sun, l), "a non-casting sun lights the panel's face");
+    }
+
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.testBoundsMin = Vec3(-8.0f, -3.0f, -8.0f);
+    gi.testBoundsMax = Vec3(8.0f, 6.0f, 8.0f);
+    gi.cards = GiToggle::On;
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "the voxel arm and the surface cache build");
+
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdr = false;
+    view->setPostFx(fx);
+    const float kFov = 45.0f;
+    CameraDesc cam;
+    cam.position = Vec3(0.0f, 1.5f, 0.0f);
+    cam.orientation = Quat(0.0f, 1.0f, 0.0f, 0.0f);     // -Z forward turned to +Z
+    cam.fovDegrees = kFov;
+    view->setCamera(cam);
+    render(e, 120);
+
+    const double tanH = std::tan(0.5 * double(kFov) * 3.14159265358979 / 180.0);
+    const double zImage = 2.0 * double(kMirrorZ) - double(kPanelZ);   // the panel, unfolded
+    const unsigned row = kPx / 2u;
+    // WHERE A PIXEL'S RAY LANDS on the panel's plane (world x; y is the row's).
+    const auto landX = [&](unsigned px) {
+        const double ndc = (double(px) + 0.5) / double(kPx) * 2.0 - 1.0;
+        return -ndc * tanH * zImage;   // screen right is world -X after the half turn
+    };
+    const double yRow = 1.5 - (((double(row) + 0.5) / double(kPx) * 2.0 - 1.0) * tanH * zImage);
+
+    // THE CLOSED FORM, per pixel of the row: where its ray lands on the panel,
+    // and the card's radiance there (0 off the panel). Read once, with the
+    // cache on; the voxel arm below is held to the same numbers.
+    const CardCacheStatus st = s->giStatus().cards;
+    CHECK_MSG(st.built && st.indirectRelights > 0ull, "the panel's cards are captured, lit and marched"
+              " (%u resident, %llu marches)", st.cardsResident, (unsigned long long)st.indirectRelights);
+    const double pixW = 2.0 * tanH * zImage / double(kPx);          // one pixel on the panel, metres
+    struct Want { bool face = false; bool edge = false; double v[3] = { 0, 0, 0 }; double q[3] = { 0, 0, 0 }; };
+    std::vector<Want> want(kPx);
+    double plateau = 0.0;
+    for (unsigned px = 0; px < kPx; ++px) {
+        const double x = landX(px);
+        const double inside = 1.0 - std::fabs(x);                    // metres inside the panel's edge
+        Want &w = want[px];
+        if (std::fabs(inside) <= 2.5 * pixW) { w.edge = true; continue; }   // the edge band
+        if (inside < 0.0) continue;                                   // the black background
+        CardSample t;
+        if (!s->readCardAt(Vec3(float(x), float(yRow), kPanelZ), Vec3(0, 0, 1), t, panel) || !t.ok ||
+            !t.lit)
+            continue;
+        w.face = true;
+        for (int k = 0; k < 3; ++k) {
+            w.v[k] = t.radiance[k];
+            const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
+            w.q[k] = t.radiance[k] > 0.0f ? 0.5 * std::ldexp(1.0, std::ilogb(double(t.radiance[k])) - bits)
+                                          : 0.0;
+            plateau = std::max(plateau, w.v[k]);
+        }
+    }
+    struct Profile { int face = 0; double worstFace = 0.0; double worstBack = 0.0; int strays = 0;
+                     int smeared = 0; };
+    const auto measureRow = [&](const char *what) {
+        Profile pr;
+        Image img;
+        if (!view->readPixels(img)) { CHECK(false, "readPixels"); return pr; }
+        // The panel's value beside each edge band: the nearest face pixel's.
+        const auto nearestFace = [&](unsigned px) -> const Want * {
+            for (unsigned d = 1; d < 8u; ++d) {
+                if (px >= d && want[px - d].face) return &want[px - d];
+                if (px + d < kPx && want[px + d].face) return &want[px + d];
+            }
+            return nullptr;
+        };
+        for (unsigned px = 0; px < kPx; ++px) {
+            const Want &w = want[px];
+            const Colour c = img.at(px, row);
+            const double v[3] = { c.r, c.g, c.b };
+            if (w.edge) {
+                // THE BAND: the panel's value or black, nothing between.
+                const Want *f = nearestFace(px);
+                if (!f) continue;
+                bool black = true, panelValue = true;
+                for (int k = 0; k < 3; ++k) {
+                    black = black && v[k] <= 2.0 / 255.0;
+                    panelValue = panelValue && std::fabs(v[k] - f->v[k]) <= 0.02 * f->v[k] + f->q[k] + 1.5 / 255.0;
+                }
+                if (!black && !panelValue) ++pr.smeared;
+                continue;
+            }
+            if (!w.face) {
+                // THE BACKGROUND: black, and no bright pixel may live out here.
+                const double lum = (v[0] + v[1] + v[2]) / 3.0;
+                pr.worstBack = std::max(pr.worstBack, std::max(v[0], std::max(v[1], v[2])));
+                if (lum > 0.1 * plateau) ++pr.strays;
+                continue;
+            }
+            ++pr.face;
+            for (int k = 0; k < 3; ++k) {
+                const double excess = std::fabs(v[k] - w.v[k]) - w.q[k] - 1.5 / 255.0;
+                pr.worstFace = std::max(pr.worstFace, std::max(0.0, excess) / std::max(w.v[k], 1e-4));
+            }
+        }
+        // THE EDGE PROFILES, printed: four pixels either side of each band's
+        // outer pixel, the picture's red over the closed form's (0 off the panel).
+        for (unsigned px = 1; px + 1 < kPx; ++px) {
+            if (!(want[px].edge && !want[px - 1].edge)) continue;
+            std::printf("      edge band from px %u:", px);
+            for (int d = -2; d <= 7; ++d) {
+                const int q = int(px) + d;
+                if (q < 0 || q >= int(kPx)) continue;
+                std::printf(" %.3f/%.3f", img.at(unsigned(q), row).r, want[size_t(q)].v[0]);
+            }
+            std::printf("\n");
+        }
+        std::printf("    %-22s %d face pixels: worst error beyond the stores' half-quanta %.2f %% of"
+                    " the card; %d smeared pixels in the edge bands; background max %.4f, %d bright\n",
+                    what, pr.face, 100.0 * pr.worstFace, pr.smeared, pr.worstBack, pr.strays);
+        return pr;
+    };
+    const Profile cards = measureRow("hits read the card");
+    CHECK_MSG(cards.face > 100 && cards.worstFace <= 0.02,
+              "F1-HITRES: every face pixel of the row equals the card's radiance where its ray lands"
+              " (%d pixels, worst %.2f %% beyond the quanta; bar 2 %%)", cards.face,
+              100.0 * cards.worstFace);
+    CHECK_MSG(cards.smeared == 0 && cards.strays == 0 && cards.worstBack <= 2.0 / 255.0,
+              "F1-HITRES: the panel's edge is a STEP — every pixel of the edge bands is the panel's"
+              " value or black (%d smeared), the background beyond them black (max %.4f, %d bright)",
+              cards.smeared, cards.worstBack, cards.strays);
+
+    // THE SAME ROW FROM THE VOXELS — the cache off through the tuning door —
+    // printed, for the record: this is the banding the card read replaces.
+    GiParams off = gi;
+    off.cards = GiToggle::Off;
+    s->setGiTuning(off);
+    render(e, 30);
+    const Profile voxels = measureRow("hits read the voxels");
+    std::printf("    (the voxel read of the same row: worst %.2f %% on the face, %d smeared pixels in"
+                " the edge bands — the mirror band's banding, F1-HITRES's subject)\n",
+                100.0 * voxels.worstFace, voxels.smeared);
+
+    // ---- THE OBLIQUE HIT AT A BOX'S EDGE (PHOTON-CARDS-2 fix round, audit F3) ----
+    //
+    // The card pick FACES the hit's GEOMETRIC normal, which the reflection
+    // rebuilds from the hit triangle (jah_rq_geom.glsl: the GPU scene's geometry
+    // rows by the hit's instance, geometry and primitive). While it faced the
+    // REVERSED RAY, a hit on a crate's TOP within two card texels (+1 mm) of the
+    // top/front edge at more than 45 degrees of incidence went to the FRONT card
+    // (it faces the ray more squarely and its depth test passes there) — a stripe
+    // of the front's lighting along the top's edge — and past 87 degrees the top
+    // card failed the facing test outright.
+    //
+    // MEASURED ON THE HIT PATH ITSELF, not through a picture: Engine::
+    // cardReadParity's TRACED questions run the reflection's own sequence — trace
+    // the TLAS (near copies), take the instance from the hit, rebuild the normal,
+    // pick — at rays aimed at the top 0.3-1.5 card texels behind its front edge at
+    // 60 degrees of incidence, and anywhere on the top at 88. Every one must hit
+    // the top, rebuild +Y, and pick the TOP card (the CPU reference's pick at the
+    // hit with the surface normal); the reversed ray's pick at the same points is
+    // printed (the stripe it drew). A picture was the first instrument and the
+    // wrong one: the mirror's R10G10B10A2 G-buffer normal shifts the whole
+    // reflected image by ~20 rows, non-uniformly, which swamps a 5-row stripe.
+    {
+        s->removeNode(panel);
+        PbrParams cp;
+        cp.albedo = Colour(0.6f, 0.55f, 0.5f);
+        cp.roughness = 1.0f;
+        const NodeId crate = s->createNode();
+        CHECK(crate && s->attachMesh(crate, carded, s->createPbrMaterial(cp)), "the carded crate exists");
+        // 2 m cube, its top at y = 2, its front (+Z) face at z = 0.
+        s->setNodeTransform(crate, Vec3(0.0f, 1.0f, -1.0f), Quat(), Vec3(2.0f, 2.0f, 2.0f));
+        s->setGiTuning(gi);                          // the cache on again
+        s->refreshGlobalIllumination();
+        render(e, 150);
+        const float kTexel = 2.0f / 128.0f;          // a 2 m card at 64 texels a metre
+        std::vector<CardReadQuery> q;
+        std::vector<Vec3> at;
+        for (const float incidenceDeg : { 60.0f, 88.0f }) {
+            const float a = incidenceDeg * 3.14159265f / 180.0f;
+            const Vec3 dir(0.0f, -std::cos(a), -std::sin(a));   // travelling -Z, down
+            for (int ix = 0; ix < 5; ++ix)
+                for (int id = 0; id < 4; ++id) {
+                    const float behind = incidenceDeg < 70.0f ? kTexel * (0.3f + 0.4f * float(id))
+                                                              : 0.05f + 0.4f * float(id);
+                    const Vec3 p(-0.8f + 0.4f * float(ix), 2.0f, -behind);
+                    CardReadQuery cq;
+                    cq.trace = true;
+                    cq.position = Vec3(p.x - 2.0f * dir.x, p.y - 2.0f * dir.y, p.z - 2.0f * dir.z);
+                    cq.facing = dir;
+                    q.push_back(cq);
+                    at.push_back(p);
+                }
+        }
+        std::vector<CardReadPick> picks;
+        const bool ran = e->cardReadParity(s, q, picks);
+        CHECK_MSG(ran && picks.size() == q.size(), "the traced hit path ran (%s)",
+                  ran ? "ok" : e->lastError().c_str());
+        if (ran && picks.size() == q.size()) {
+            for (int arm = 0; arm < 2; ++arm) {
+                int hits = 0, topPicks = 0, normalsUp = 0, rayWouldPickFront = 0;
+                for (size_t i = size_t(arm) * 20u; i < size_t(arm + 1) * 20u; ++i) {
+                    const CardReadPick &g = picks[i];
+                    CardSample top, byRay;
+                    s->readCardAt(at[i], Vec3(0, 1, 0), top, crate);
+                    const Vec3 back(-q[i].facing.x, -q[i].facing.y, -q[i].facing.z);
+                    s->readCardAt(at[i], back, byRay, crate);
+                    hits += g.hit ? 1 : 0;
+                    normalsUp += (g.hit && g.hitNormal[1] > 0.999f) ? 1 : 0;
+                    topPicks += (g.ok && top.ok && g.card == top.card) ? 1 : 0;
+                    rayWouldPickFront += (!byRay.ok || byRay.card != top.card) ? 1 : 0;
+                }
+                const float inc = arm == 0 ? 60.0f : 88.0f;
+                std::printf("    %.0f degrees of incidence, %s: %d/20 hit the top, %d rebuilt +Y, %d picked the"
+                            " TOP card; the reversed ray would have picked another card (or none) at %d\n",
+                            inc, arm == 0 ? "0.3-1.5 texels behind the front edge" : "5-125 cm onto the top",
+                            hits, normalsUp, topPicks, rayWouldPickFront);
+                CHECK_MSG(hits == 20 && normalsUp == 20 && topPicks == 20,
+                          "at %.0f degrees of incidence every hit on the top reads the TOP card (%d/20)", inc,
+                          topPicks);
+            }
+        }
+    }
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+/// THE FOOTPRINT SWEEP — the measurement kCardFootprintTexels stands on
+/// (PHOTON-CARDS-2 fix round, audit F2). A TOOL, not a ctest row: `test_rt_reflect
+/// --footprint-sweep`, gi.rt_reflect's own fixture (the mirror wall, the carded
+/// emissive cube behind the camera), the wall's roughness swept.
+///
+/// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
+/// each arm in its own view warmed 60 frames (the temporal mean at its floor):
+///   card  the card read ALONE (the gate open, JAHSHAKA_CARD_FOOTPRINT_K huge):
+///         the per-pixel standard deviation of two CONSECUTIVE frames — the
+///         noise one texel-exact sample per frame leaves after the mean, which
+///         grows with the footprint (the speckle);
+///   voxel the voxel read ALONE (the gate shut, K = 0): its distance from the
+///         card arm's 60-frame mean (the converged answer the card read is
+///         unbiased towards) — the prefiltered read's bias, cells and coverage.
+/// Where the card's noise crosses the voxel's bias is where a texel-exact read
+/// stops paying; the footprint there, in card texels, is k. (A YOUNG view was
+/// the first instrument and says nothing: its two frames are the warm-up's fade
+/// from the probe, identical in both arms to four decimals.)
+static int footprintSweepMain(Engine *e)
+{
+    const unsigned kPx = 192u;
+    // The device exists once a view does (the startup-order law).
+    View *anchor = e->createOffscreenView("fpsweep-anchor", 16u, 16u, Colour(0, 0, 0));
+    Scene *s = e->createScene("fpsweep");
+    if (anchor && s) anchor->setScene(s);
+    if (!s || !e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("no ray queries — nothing to sweep\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
+    PbrParams wallParams;
+    wallParams.albedo = Colour(1.0f, 1.0f, 1.0f);
+    wallParams.metalness = 1.0f;
+    wallParams.roughness = 0.3f;
+    const MaterialId wallMat = s->createPbrMaterial(wallParams);
+    const NodeId wall = s->createNode();
+    s->attachMesh(wall, s->createMesh(enginetest::unitCubeMesh()), wallMat);
+    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
+    enginetest::setNodePosition(s, wall, Vec3(0.0f, 2.0f, 5.0f));
+    MeshData md = enginetest::unitCubeMesh();
+    for (unsigned a = 0; a < 6u; ++a) {
+        MeshCardDesc c;
+        c.axis = static_cast<unsigned char>(a);
+        c.origin = Vec3(0, 0, 0);
+        c.halfU = 0.5f;
+        c.halfV = 0.5f;
+        c.halfDepth = 0.52f;
+        md.cards.push_back(c);
+    }
+    PbrParams cp;
+    cp.albedo = Colour(0.05f, 0.05f, 0.05f);
+    cp.emissive = Colour(0.9f, 0.0f, 0.0f);
+    cp.roughness = 0.6f;
+    const NodeId cube = s->createNode();
+    s->attachMesh(cube, s->createMesh(md), s->createPbrMaterial(cp));
+    enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
+    enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.0f, -11.0f));
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.testBoundsMin = Vec3(-14.0f, -2.0f, -14.0f);
+    gi.testBoundsMax = Vec3(14.0f, 10.0f, 7.0f);
+    gi.cards = GiToggle::On;
+    gi.cardResidencyRadius = 40.0f;
+    s->setGlobalIllumination(gi);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdr = false;
+    int serial = 0;
+    const auto shots = [&](int frames, Image &a, Image &b) {
+        View *v = e->createOffscreenView(("fpsweep" + std::to_string(serial++)).c_str(), kPx, kPx,
+                                         Colour(0, 0, 0));
+        v->setScene(s);
+        v->setPostFx(fx);
+        enginetest::testCameraLookAt(v, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
+        render(e, frames);
+        v->readPixels(a);
+        render(e, 1);
+        v->readPixels(b);
+        e->destroyView(v);
+    };
+    {   // settle the scene once (GI, the cube's cards)
+        Image w0, w1;
+        shots(120, w0, w1);
+    }
+    const double kCubeT = 16.0;                     // the wall to the cube, metres
+    const double kTexel = 1.5 / 128.0;              // the 3 m cube's cards split to 1.5 m pages
+    const double kN = 32.0;                         // the temporal mean's memory (1 / kReflectHistoryFloor)
+    std::printf("perceptual  alpha   footprint(texels)  card 2-frame std   voxel |. - card mean|   (mean"
+                " over the cube's reflection, red, 0..1)\n");
+    double prevDiff = 0.0, prevF = 0.0, crossing = -1.0;
+    bool havePrev = false;
+    for (const float rough : { 0.03f, 0.05f, 0.07f, 0.09f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f }) {
+        wallParams.roughness = rough;
+        s->setPbrMaterial(wallMat, wallParams);
+        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "1e9", 1);
+        Image c0, c1, v0, v1;
+        shots(60, c0, c1);
+        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "0", 1);
+        shots(60, v0, v1);
+        double ec = 0.0, ev = 0.0;
+        int n = 0;
+        for (unsigned y = 0; y < kPx; ++y)
+            for (unsigned x = 0; x < kPx; ++x) {
+                const Colour a = c0.at(x, y), b = c1.at(x, y);
+                const double mean = 0.5 * (double(a.r) + double(b.r));
+                if (mean - std::max(double(a.g), double(a.b)) < 0.08) continue;   // the cube's reflection
+                ec += std::fabs(double(a.r) - double(b.r)) / std::sqrt(2.0);
+                ev += std::fabs(double(v1.at(x, y).r) - mean);
+                ++n;
+            }
+        if (n) { ec /= n; ev /= n; }
+        const double alpha = double(rough) * double(rough);
+        const double f = 2.0 * kCubeT * alpha / std::sqrt(kN) / kTexel;
+        std::printf("  %.2f     %.4f   %8.1f           %.4f             %.4f        (%d px)\n", rough, alpha,
+                    f, ec, ev, n);
+        const double diff = ec - ev;
+        if (havePrev && prevDiff < 0.0 && diff >= 0.0 && crossing < 0.0)
+            crossing = prevF + (f - prevF) * (-prevDiff) / (diff - prevDiff);
+        prevDiff = diff; prevF = f; havePrev = true;
+    }
+    unsetenv("JAHSHAKA_CARD_FOOTPRINT_K");
+    std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
+                crossing);
+    return 0;
 }
