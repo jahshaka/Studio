@@ -1003,6 +1003,89 @@ static int caseLighting()
     const double tilted[3] = { -std::sin(double(ang)), std::cos(double(ang)), 0.0 };
     check("crate top, sun 60 degrees off", Vec3(-4.0f, 4.0f, 0.3f), Vec3(0, 1, 0), tilted, false);
     check("crate -X side, sun 60 degrees off", Vec3(-5.0f, 3.0f, 0.3f), Vec3(-1, 0, 0), tilted, false);
+
+    // 4. A LAMP NO CAMERA SEES, LIGHTING A SURFACE NO CAMERA SEES. A card lights
+    //    what a ray HITS, off screen, so its lights are the SCENE's and never
+    //    the frame's camera-culled list. A carded panel 30 m BEHIND the view
+    //    camera, its lit face turned away from it, and a point lamp in front of
+    //    that face — outside the view's frustum and outside every capture
+    //    camera's (each looks INTO its own card's box, no deeper than it). The
+    //    card's direct term must be pbsDirect for the lamp; and the same number
+    //    again with the camera turned round to see both.
+    const NodeId panel = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.6f, 0.6f, 0.6f);
+        p.roughness = kRough;
+        const MaterialId mat = s->createPbrMaterial(p);
+        CHECK(panel && mat && s->attachMesh(panel, mesh, mat), "a carded panel stands behind the camera");
+        s->setNodeTransform(panel, Vec3(0.0f, 1.5f, -30.0f), Quat(), Vec3(2.0f, 2.0f, 0.2f));
+    }
+    const NodeId lamp = s->createNode();
+    const Vec3 lampPos(0.0f, 1.5f, -33.0f);
+    const double kLampRange = 8.0;
+    LightDesc pl;
+    pl.type = LightType::Point;
+    pl.colour = Colour(1.0f, 1.0f, 1.0f);
+    pl.intensity = 1.0f;
+    pl.range = float(kLampRange);
+    pl.castShadows = false;
+    s->setNodeTransform(lamp, lampPos, Quat(), Vec3(1, 1, 1));
+    CHECK(lamp && s->setLight(lamp, pl), "a point lamp in front of the panel's far face, behind the camera");
+    render(f.e, 60);
+    // (Measured: with the relight reading the frame's camera-culled light list,
+    // this arm reads a direct term of 0 — no rendered camera holds the lamp.)
+    pl.intensity = 1.5f;
+    s->setLight(lamp, pl);
+    render(f.e, 30);
+    // The panel's -Z face is at z = -30.1; the texel read, and the closed form
+    // for the lamp: E = intensity * pi (the engine's power scale) times the
+    // authored-range curve 1 / (0.5 + (0.5 / R^2) d^2) (OgreScene::setLight:
+    // setAttenuation(R, 0.5, 0, 0.5 / R^2)) times patch 0018's fade (R - d) / R.
+    const Vec3 pt(0.3f, 1.7f, -30.1f);
+    const auto lampDirect = [&](const CardSample &t, double outL[3], double &E) {
+        const double dx = lampPos.x - pt.x, dy = lampPos.y - pt.y, dz = lampPos.z - pt.z;
+        const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
+        outL[0] = dx / d; outL[1] = dy / d; outL[2] = dz / d;
+        const double atten = 1.0 / (0.5 + (0.5 / (kLampRange * kLampRange)) * d * d) *
+                             std::max((kLampRange - d) / kLampRange, 0.0);
+        E = double(pl.intensity) * 3.14159265358979323846 * atten;
+        (void)t;
+    };
+    const double Nback[3] = { 0.0, 0.0, -1.0 };
+    const auto lampArm = [&](const char *what, double &outDirect) {
+        CardSample t;
+        outDirect = -1.0;
+        if (!s->readCardAt(pt, Vec3(0, 0, -1), t) || !t.ok) {
+            CHECK_MSG(false, "%s: the card answers on the panel's far face", what);
+            return;
+        }
+        double L[3], E;
+        lampDirect(t, L, E);
+        const double want = pbsDiffuse(t.albedo[1], E, kRough, Nback, L, Nback);
+        const double got = double(t.radiance[1]) - double(t.indirect[1]);
+        outDirect = got;
+        const double rel = want > 1e-6 ? std::fabs(got - want) / want : 1.0;
+        CHECK_MSG(want > 0.02 && rel <= 0.05,
+                  "%s: the off-screen card's direct term %.5f is pbsDirect for the off-screen lamp"
+                  " %.5f within 5 %% (%.2f %%)", what, got, want, 100.0 * rel);
+    };
+    double behind = -1.0, seen = -1.0;
+    lampArm("lamp and panel behind the camera", behind);
+    CHECK_MSG(s->giStatus().cards.lightsDropped == 0u,
+              "no light was dropped from the relight's list (%u)", s->giStatus().cards.lightsDropped);
+    // ...and with the camera turned round to see both, the relight asked for
+    // by a light write (twice the intensity, then back), the same number.
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 2.0f, -22.0f), Vec3(0.0f, 1.5f, -32.0f));
+    pl.intensity = 2.0f;
+    s->setLight(lamp, pl);
+    render(f.e, 20);
+    pl.intensity = 1.5f;
+    s->setLight(lamp, pl);
+    render(f.e, 40);
+    lampArm("camera turned to see both", seen);
+    CHECK_MSG(behind > 0.0 && std::fabs(seen - behind) <= 0.02 * behind,
+              "the off-screen relight equals the on-screen one (%.5f vs %.5f)", behind, seen);
     return failures ? 1 : 0;
 }
 
