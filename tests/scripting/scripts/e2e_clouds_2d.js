@@ -199,6 +199,45 @@ node.setProperty(sunInfo.light, "shadowMapType", 0);
 assert(node.property(sunInfo.light, "shadowMapType") === 0, "the sun casts no shadow map");
 shadowArm("nocast");
 node.setProperty(sunInfo.light, "shadowMapType", sunShadowType);
+// ---- THE BOUNCE SEES THE SAME SHADOW (CLOUDS-2D-2) ----------------------------
+// The voxel light injection darkens a directional light's DIRECT term by the same
+// transmittance the pixel's takes, at the voxel's world centre. ONE bounce, so the
+// light volume holds the injection alone (no bounce, no sky — the sky is never
+// injected): its peak (the lit ground under the sun) must drop by the factor the ground pixel's
+// direct term dropped by above — 0.5 at half strength under an opaque deck
+// (0.5 + 0.5 e^-tau, tau ~ 60: exactly 0.5 to 1e-20) — within the 8-bit direct
+// store's step at that peak (bar 0.02). And coverage 0 must leave the injection
+// byte-identical to no layer (the light volume's digest).
+world.gi({ mode: "vct", bounces: 1 });
+world.clouds({ enabled: false });
+// A lit box — the innermost cascade's surface (the ground is a coarser cascade's).
+var litBox = scene.addPrimitive("cube", { position: { x: 0, y: 0.5, z: 0 } });
+editor.frame(90, 1 / 60);
+function voxels(tag) {
+    editor.frame(30, 1 / 60);
+    var v = world.giVoxelStats({ cascade: 0 });
+    assert(v.available === true, tag + ": the voxel light volume reads back");
+    console.log("voxels " + tag + " peak " + v.peak + " meanLit " + v.meanLit + " digest " + v.lightDigest);
+    return v;
+}
+var vClear = voxels("nolayer");
+assert(vClear.peak > 0.05, "the sun lights the voxels (" + vClear.peak + ")");
+world.clouds({ enabled: true, coverage: 0, density: 4, speed: 0, shadow: 1 });
+var vZero = voxels("coverage0");
+assert(vZero.lightDigest === vClear.lightDigest,
+       "coverage 0: the injection is byte-identical to no layer (" + vZero.lightDigest + ")");
+world.clouds({ coverage: 1, shadow: 0.5 });
+var vHalf = voxels("deck_shadow05");
+near(vHalf.peak / vClear.peak, 0.5, 0.02,
+     "an opaque deck at half strength halves the voxels' direct sun, as it halved the ground pixel's");
+world.clouds({ shadow: 1 });
+var vFull = voxels("deck_shadow1");
+assert(vFull.peak <= 0.01 * vClear.peak,
+       "an opaque deck at full strength removes the voxels' direct sun (" + vFull.peak + ")");
+near(vHalf.meanLit / vClear.meanLit, 0.5, 0.02, "...and so is their mean over the lit voxels");
+node.remove(litBox);
+world.gi({ mode: "off" });
+
 world.clouds({ coverage: 0, shadow: 1 });
 var clearShadow = groundShot("clear_shadow1");
 world.clouds({ shadow: 0 });

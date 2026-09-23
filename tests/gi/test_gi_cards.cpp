@@ -1787,6 +1787,95 @@ static int caseReadParity()
 }
 
 // ---------------------------------------------------------------------------
+// gi.card_clouds (CLOUDS-2D-2): the card relight's direct sun crosses the 2D
+// cloud sheet by the pixel's own factor. An opaque deck (coverage 1, density
+// 4: tau ~ 60 a column, exp(-tau) ~ 1e-26) at shadow strength s leaves
+// 1 - s + s exp(-tau) = 1 - s of the sun; the crate top's DIRECT HALF must
+// follow: exactly half at s = 0.5 (bar 2 % + the store's quanta, the lighting
+// case's bar), nothing at s = 1, and all of it with the layer off.
+// ---------------------------------------------------------------------------
+static int caseClouds()
+{
+    Fixture f;
+    if (!makeFixture(f, "cardclouds")) return 1;
+    Scene *s = f.s;
+    s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
+    PbrParams cp;
+    cp.albedo = Colour(0.6f, 0.5f, 0.4f);
+    cp.roughness = 0.7f;
+    const MaterialId crateMat = s->createPbrMaterial(cp);
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = boxCards(0.5f);
+    const MeshId mesh = s->createMesh(md);
+    const NodeId crate = s->createNode();
+    CHECK(crate && crateMat && mesh && s->attachMesh(crate, mesh, crateMat), "the matte crate exists");
+    enginetest::setNodeScale(s, crate, Vec3(2.0f, 2.0f, 2.0f));
+    enginetest::setNodePosition(s, crate, Vec3(0.0f, 3.0f, 0.0f));
+    const NodeId sun = s->createNode();
+    LightDesc l;
+    l.type = LightType::Directional;
+    l.colour = Colour(1.0f, 1.0f, 1.0f);
+    l.intensity = float(2.0 / 3.14159265358979323846);
+    l.castShadows = true;
+    s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(), Vec3(1, 1, 1));   // straight down
+    CHECK(sun && s->setLight(sun, l), "a shadow-casting sun points straight down");
+    f.view->setShadows(true);
+    // A SKY to draw the sheet over (the layer needs one): the analytic sky.
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[0] = 0.0f; sky.atmosphere.sunDir[1] = 1.0f; sky.atmosphere.sunDir[2] = 0.0f;
+    CHECK(s->setSky(sky), "the analytic sky");
+    GiParams gi = baseGi();
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds");
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 8.0f, -10.0f), Vec3(0.0f, 3.0f, 0.0f));
+    render(f.e, 40);
+
+    const auto directTop = [&](const char *what) {
+        CardSample t;
+        if (!s->readCardAt(Vec3(0.0f, 4.0f, 0.3f), Vec3(0, 1, 0), t) || !t.ok) {
+            CHECK_MSG(false, "%s: the cache answers on the crate top", what);
+            return -1.0;
+        }
+        const double d = double(t.radiance[1]) - double(t.indirect[1]);
+        std::printf("    %s: direct half %.5f (radiance %.5f - indirect %.5f), shadow %.3f\n", what, d,
+                    t.radiance[1], t.indirect[1], double(t.shadow));
+        return d;
+    };
+    const double clear = directTop("no layer");
+    CHECK_MSG(clear > 0.05, "the sun lights the crate top (%.5f)", clear);
+
+    const auto setClouds = [&](bool on, float strength) {
+        SkyDesc d = sky;
+        d.clouds.enabled = on;
+        d.clouds.coverage = 1.0f;
+        d.clouds.density = 4.0f;
+        d.clouds.shadow = strength;
+        d.clouds.hasSun = true;
+        d.clouds.sunDir[0] = 0.0f; d.clouds.sunDir[1] = 1.0f; d.clouds.sunDir[2] = 0.0f;
+        d.clouds.sunIrradiance = Colour(2.0f, 2.0f, 2.0f, 1.0f);
+        CHECK(s->setSky(d), "the cloud layer pushed");
+        render(f.e, 30);
+    };
+    setClouds(true, 0.5f);
+    const double half = directTop("opaque deck, shadow 0.5");
+    // Two stored terms, each within half an R11G11B10F step (1/64 of the octave).
+    const double bar = 0.02 * 0.5 * clear + 2.0 * std::ldexp(1.0, std::ilogb(clear) - 6) * 0.5;
+    CHECK_MSG(std::fabs(half - 0.5 * clear) <= bar,
+              "half the shadow strength halves the card's direct sun: %.5f vs %.5f (bar %.5f)",
+              half, 0.5 * clear, bar);
+    setClouds(true, 1.0f);
+    const double full = directTop("opaque deck, shadow 1");
+    CHECK_MSG(std::fabs(full) <= 2e-3, "an opaque deck removes the card's direct sun (%.5f)", full);
+    setClouds(false, 1.0f);
+    const double back = directTop("layer off again");
+    CHECK_MSG(std::fabs(back - clear) <= bar, "...and the layer off gives it back (%.5f vs %.5f)",
+              back, clear);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
     const std::string which = argc > 1 ? argv[1] : "capture";
@@ -1798,6 +1887,7 @@ int main(int argc, char **argv)
     else if (which == "lighting_indirect") rc = caseLightingIndirect();
     else if (which == "cone_parity") rc = caseConeParity();
     else if (which == "read_parity") rc = caseReadParity();
+    else if (which == "clouds") rc = caseClouds();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;
