@@ -12,8 +12,9 @@
 //   * the GROUND SHADOW: a sheet of transmittance ~0 (full coverage, density 4)
 //     removes the sun's DIRECT term from a named ground pixel within 3/255 — measured
 //     against the direct term of the same pixel with no clouds at all — half the
-//     shadow strength removes half of it, and a clear sheet removes nothing, byte
-//     for byte;
+//     shadow strength removes half of it, on a material that receives shadow maps
+//     and on one that does not, and a clear sheet removes nothing, byte for byte;
+//   * the CLOCK: a 60-frame sun drag over the realistic sky ticks it 60 times;
 //   * the SCROLL: the sheet moves by the wind times the scene clock (editor.frame's
 //     fixed steps), and re-captures the environment on its cadence, not per frame;
 //   * an IMAGE SKY ignores the block (a photograph carries its own clouds);
@@ -153,31 +154,44 @@ function groundShot(tag) {
     editor.frame(6, 1 / 60);
     return editor.screenshot("clouds_2d_ground_" + tag + ".png", 320, 180, groundPts, "plain").probes;
 }
-node.setProperty(sunInfo.light, "intensity", 2.0);
-var sunOn = groundShot("sun");
-node.setProperty(sunInfo.light, "intensity", 0.0);
-var sunOff = groundShot("nosun");
-node.setProperty(sunInfo.light, "intensity", 2.0);
-var direct = sunOn.map(function (p, i) { return { r: p.r - sunOff[i].r, g: p.g - sunOff[i].g, b: p.b - sunOff[i].b }; });
-assert(direct[0].r + direct[0].g + direct[0].b > 30,
-       "the named ground pixel carries a measurable direct term: " + JSON.stringify(direct[0]));
-
-world.clouds({ enabled: true, coverage: 1, density: 4, speed: 0, shadow: 0 });
-var noShadow = groundShot("shadow0");
-world.clouds({ shadow: 1 });
-var full = groundShot("shadow1");
-world.clouds({ shadow: 0.5 });
-var half = groundShot("shadow05");
-for (var k = 0; k < groundPts.length; k++) {
-    var chans = ["r", "g", "b"];
-    for (var ch = 0; ch < 3; ch++) {
-        var c = chans[ch];
-        near(noShadow[k][c] - full[k][c], direct[k][c], 2,
-             "ground point " + k + "." + c + ": an opaque sheet removes the sun's direct term");
-        near(noShadow[k][c] - half[k][c], direct[k][c] * 0.5, 2,
-             "ground point " + k + "." + c + ": half the shadow strength removes half of it");
+// ONE ARM, run on three surfaces: the default ground (it receives the sun's shadow
+// map), the same ground with receiveShadows OFF (the fix round's F2: upstream
+// leaves the first-light shadow piece undefined for it, and the sheet's
+// transmittance must reach it all the same).
+function shadowArm(tag) {
+    world.clouds({ enabled: false });
+    node.setProperty(sunInfo.light, "intensity", 2.0);
+    var sunOn = groundShot(tag + "_sun");
+    node.setProperty(sunInfo.light, "intensity", 0.0);
+    var sunOff = groundShot(tag + "_nosun");
+    node.setProperty(sunInfo.light, "intensity", 2.0);
+    var direct = sunOn.map(function (p, i) { return { r: p.r - sunOff[i].r, g: p.g - sunOff[i].g, b: p.b - sunOff[i].b }; });
+    assert(direct[0].r + direct[0].g + direct[0].b > 30,
+           tag + ": the named ground pixel carries a measurable direct term: " + JSON.stringify(direct[0]));
+    world.clouds({ enabled: true, coverage: 1, density: 4, speed: 0, shadow: 0 });
+    var noShadow = groundShot(tag + "_shadow0");
+    world.clouds({ shadow: 1 });
+    var full = groundShot(tag + "_shadow1");
+    world.clouds({ shadow: 0.5 });
+    var half = groundShot(tag + "_shadow05");
+    for (var k = 0; k < groundPts.length; k++) {
+        var chans = ["r", "g", "b"];
+        for (var ch = 0; ch < 3; ch++) {
+            var c = chans[ch];
+            near(noShadow[k][c] - full[k][c], direct[k][c], 2,
+                 tag + " point " + k + "." + c + ": an opaque sheet removes the sun's direct term");
+            near(noShadow[k][c] - half[k][c], direct[k][c] * 0.5, 2,
+                 tag + " point " + k + "." + c + ": half the shadow strength removes half of it");
+        }
     }
 }
+shadowArm("ground");
+var groundNode = scene.find("Ground");
+assert(material.set(groundNode, { receiveShadows: false }) === true,
+       "the ground stops receiving shadow maps");
+assert(material.get(groundNode).receiveShadows === false, "...and reads back so");
+shadowArm("noreceive");
+assert(material.set(groundNode, { receiveShadows: true }) === true, "the ground receives again");
 world.clouds({ coverage: 0, shadow: 1 });
 var clearShadow = groundShot("clear_shadow1");
 world.clouds({ shadow: 0 });
@@ -202,6 +216,28 @@ world.clouds({ speed: 0 });
 editor.frame(1, 1 / 60);
 var still = world.clouds().live;
 assert(still.capturePeriodFrames === 0, "a still layer schedules no scroll captures");
+
+// ---- the clock ticks ONCE per drawn frame, whatever else moves (F1) --------------
+// A dragged sun over the REALISTIC sky changes the sky and the sheet's look on every
+// frame; neither may advance the sheet's clock or its capture cadence.
+world.sky("realistic", {});
+world.clouds({ coverage: 0.5, density: 1, shadow: 1, speed: 0 });
+editor.frame(2, 1 / 60);
+world.clouds({ speed: 20, direction: 0 });   // a wind that starts restarts the period
+editor.frame(1, 1 / 60);
+var d0 = world.clouds().live;
+for (var f = 0; f < 60; f++) {
+    node.transform(sunInfo.light, { rotation: { x: -30 - f * 0.25, y: 25 + f * 0.5, z: 0 } });
+    editor.frame(1, 1 / 60);
+}
+var d1 = world.clouds().live;
+assert(d1.clockTicks - d0.clockTicks === 60,
+       "60 drawn frames of a sun drag tick the clock 60 times (" + (d1.clockTicks - d0.clockTicks) + ")");
+near((d0.scroll[0] - d1.scroll[0] + 16000) % 16000, 60 * 20 / 60, 0.02,
+     "...and move the sheet 60 frames' worth, not 180 (metres)");
+assert(d1.fieldBakes === d0.fieldBakes, "a sun drag re-bakes no field (" + d0.fieldBakes + " -> " + d1.fieldBakes + ")");
+assert(d1.scrollCaptures === d0.scrollCaptures, "a sun drag adds no scroll capture");
+world.clouds({ speed: 0 });
 
 // ---- an image sky ignores the block --------------------------------------------
 world.skyPreset("cove");

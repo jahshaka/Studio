@@ -1182,7 +1182,6 @@ void SceneNodePropertiesWidget::setDatabase(Database *db)
     // wild pointer, and its "Background Ambience" row (which is shown only
     // when the project HAS music assets) could never appear.
     if (worldPropView) worldPropView->setDatabase(db);
-    if (cloudsPropView) cloudsPropView->setDatabase(db);
     if (skyPropView) skyPropView->setDatabase(db);
     if (emitterPropView) emitterPropView->setDatabase(db);
     if (shaderPropView) shaderPropView->setDatabase(db);

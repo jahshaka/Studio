@@ -18,7 +18,6 @@ For more information see the LICENSE file
 
 namespace iris { class Scene; struct CloudLayer; }
 #include <functional>
-class Database;
 class Project;
 class LabelWidget;
 class TexturePickerWidget;
@@ -39,8 +38,7 @@ public:
     WorldCloudsPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
     void setServices(StudioServices *s) { services = s; }
-    /// The weather-map picker resolves an asset guid to its pinned bytes.
-    void setDatabase(Database *d) { db = d; }
+    /// The weather-map picker resolves an asset guid to the project's pin.
     void setProject(Project *p) { project = p; }
 
 public slots:
@@ -55,7 +53,6 @@ private:
 
     QSharedPointer<iris::Scene> scene;
     StudioServices *services = nullptr;
-    Database *db = nullptr;
     Project *project = nullptr;
     bool loading = false;
     panelundo::SceneRows rows;
