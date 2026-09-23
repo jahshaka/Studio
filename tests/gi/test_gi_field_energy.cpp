@@ -15,30 +15,21 @@
 //
 // So the claim here is ENERGY, and it has a closed form.
 //
-// WHY IT IS STILL RED AFTER THE ONE ENVIRONMENT (PHOTON-ENV-1, 2026-09-23): the
-// gap is not in the transport and not in the wall's lobe. The light injection
-// stores the Lambertian radiance rho * E / pi while `pbsDirect` - what the floor
-// actually shows - carries the 1/1.51 energyFactor, so the voxels hold the floor
-// about 1.5x brighter than it renders. ONE-ENV put the energy factor on the
-// ENVIRONMENT lobe (MEASURE-1a decision b), which the WALL's reflection of the
-// bounce now carries — and so does equation (4) below, because the closed form
-// is the renderer's physics on both ends. Written that way the ratio is where
-// READER-1 left it (1.69x / 1.59x / 0.92x): the remaining excess is the SOURCE
-// (the voxel's emission is Lambertian, the surface's is the Disney lobe), and
-// the fix is on the injection side (a voxel emitting what its surface renders:
-// the energy factor at LightInjection and at the bounce's rho * G, which needs
-// the roughness the voxel store does not hold). The old accounting — the wall
-// Lambertian, the injection's 1.51 excess cancelling the wall lobe's 1/1.51 at
-// roughness 1 — is printed beside it and is NOT the claim. The SHAPE miss is
-// the integrator's, and remains after both.
-//
-// THE NEXT ITEM, AND WHOSE IT IS (the lead, PHOTON-ENV-1 fix round): the voxel's
-// emission must be what its surface renders — ROUGHNESS INTO THE VOXEL MATERIAL
-// STORE, and the light injection's diffuse (and the bounce's rho * G) carrying
-// the same `jahDiffuseEnergyFactor` the pixel's direct and environment lobes do.
-// That is ONE-WRITER's lane (B4), not the environment's; this row stays a target
-// until it lands. The environment lane's own claim is the wall side, and it is
-// what equation (4) now states.
+// WHY IT IS STILL RED AFTER THE SOURCE WAS MADE RIGHT (PHOTON-WRITER-1,
+// 2026-09-23). The voxels used to hold the floor as a LAMBERTIAN emitter,
+// rho E / pi, while the floor renders the normalised Disney diffuse — 1.5x
+// brighter than its own picture at roughness 1 (1.694x / 1.591x / 0.912x here).
+// Now the material store carries the roughness and the light injection stores
+// what the surface renders (the lobe's directional albedo at the lamp's angle,
+// jahDiffuseAlbedo), and the wall's environment lobe reflects with the same
+// function at its view angle instead of the constant energy factor (equation (4)
+// below says so): 1.168x / 1.100x / 0.627x. The mean fell by the source's own
+// factor; what is left is THE SHAPE, which the source never touched (2.870 before,
+// 2.877 after, against the transfer's 1.545): the wall stands 7 m from the camera,
+// OUTSIDE cascade 0, so it is lit by the chain's cone march, and the cones read
+// the floor too bright at 0.4 m (the first coarse samples sit on it) and too dark
+// at 2.8 m (the aperture's over-occlusion over the long grazing path). That is
+// the cone transport's, not the source's — the row stays a target for it.
 //
 // ===========================================================================
 // THE PHYSICS, WRITTEN OUT
@@ -663,8 +654,11 @@ int main()
             // (4)+(4a) from the AUTHORED numbers, with pbsDirect inside the
             // integral — the asserted bar.
             const double eExact = transferIntegral(p, n, 512, false, kFloorAlbedo, kSunPower, 1.0);
-            // THE WALL'S LOBE CARRIES THE ENERGY FACTOR (PHOTON-ENV-1: BRDF_EnvMap).
-            const double kWallEnergyFactor = 1.0 / 1.51;         // roughness 1
+            // THE WALL'S LOBE IS ITS DIRECTIONAL ALBEDO (PHOTON-WRITER-1:
+            // BRDF_EnvMap reflects the environment with the normalised Disney
+            // lobe's integral, jahDiffuseAlbedo). The camera looks straight at the
+            // wall (orthographic, along its normal): cos theta_v = 1, roughness 1.
+            const double kWallEnergyFactor = enginetest::disneyDiffuseAlbedo(1.0, 1.0);
             const double expected = kWallEnergyFactor * kWallAlbedo * eExact / kPi;
             const double expectedOldAccounting = kWallAlbedo * eExact / kPi;
             // ...the LAMBERTIAN closed form, so the lobe's share is visible...

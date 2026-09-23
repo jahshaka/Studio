@@ -3,11 +3,15 @@
 // THE CLAIM. A matte surface (albedo rho, perceptual roughness 1) under a
 // UNIFORM sky of radiance L, lit by nothing but the Sky Light at 1, reflects
 //
-//     rho * L * energyFactor(1),      energyFactor(r) = lerp( 1, 1/1.51, r )
+//     rho * L * A(v, 1)
 //
-// — the Disney diffuse lobe's own normalisation (200.BRDFs_piece_ps.any, the
-// piece `jahDiffuseEnergyFactor`), the SAME factor the direct lobe carries
-// (MEASURE-1a decision b), so the sky, a bounce and the sun sit on one scale.
+// where A is the normalised Disney diffuse lobe's DIRECTIONAL ALBEDO at the view
+// angle v — the lobe the direct light is shaded with (MEASURE-1a decision b),
+// integrated over the uniform sky (PHOTON-WRITER-1: the renderer's
+// jahDiffuseAlbedo; this suite computes it from the lobe by direct integration,
+// enginetest::disneyDiffuseAlbedo). It replaced the constant energy factor
+// lerp(1, 1/1.51, r) the environment lobe carried (0.662 at r = 1, against the
+// lobe's own 0.688 at normal view and 0.97 at a grazing one).
 // Four readers of the environment must each give that number:
 //
 //   (a) OUTSIDE ANY VOLUME: HlmsPbs's SH lookup at the normal. For a uniform
@@ -77,7 +81,6 @@ static double srgbToLinear(double v) { return v <= 0.04045 ? v / 12.92 : std::po
 static const unsigned kSize = 128u;
 static const double kRho = 0.8;           // the box's albedo (linear)
 static const unsigned char kSkyByte = 190; // the sky's sRGB byte -> L
-static const double kEnergyFactor1 = 1.0 / 1.51;
 
 /// The mean of a block of pixels (green channel: the fixture is grey).
 static double blockMean(const Image &img, unsigned cx, unsigned cy, int half)
@@ -166,6 +169,13 @@ int main()
     const Vec3 topFace(0.0f, 0.5f, 0.0f);
     const auto lookAtTop = [&](const Vec3 &from) { enginetest::testCameraLookAt(view, from, topFace); };
     const Vec3 kTopCam(0.35f, 3.2f, 1.4f);
+    // THE LOBE AT A POSE: the top face's normal is +Y, so cos theta_v is the
+    // camera's elevation seen from the face's centre (the pixel read is there).
+    const auto lobeAt = [&](const Vec3 &cam) {
+        const double dx = cam.x - topFace.x, dy = cam.y - topFace.y, dz = cam.z - topFace.z;
+        return enginetest::disneyDiffuseAlbedo(dy / std::sqrt(dx * dx + dy * dy + dz * dz), 1.0);
+    };
+    const double kEnergyFactor1 = lobeAt(kTopCam);
 
     // THE PICTURE'S TRANSFER, read off the sky itself: the corner pixel is the
     // sky, radiance L exactly.
@@ -206,7 +216,7 @@ int main()
     base.testBoundsMax = Vec3(4.0f, 4.0f, 4.0f);
 
     const double closedForm = kRho * L * kEnergyFactor1;
-    std::printf("\n   THE ONE NUMBER: rho L energyFactor(1) = %.3f x %.4f x %.4f = %.4f\n", kRho, L,
+    std::printf("\n   THE ONE NUMBER: rho L A(v, 1) = %.3f x %.4f x %.4f = %.4f\n", kRho, L,
                 kEnergyFactor1, closedForm);
 
     // ---- (a) OUTSIDE ANY VOLUME ------------------------------------------------
@@ -218,7 +228,7 @@ int main()
     std::printf("   (a) the SH at the normal:        %.4f  (%.3f of the closed form)\n", ra,
                 ra / closedForm);
     CHECK_MSG(std::fabs(ra / closedForm - 1.0) < 0.02,
-              "(a) outside any volume the matte top reads rho L energyFactor(1) within 2 %% "
+              "(a) outside any volume the matte top reads rho L A(v, 1) within 2 %% "
               "(%.4f against %.4f)", ra, closedForm);
 
     // ---- (b) THE VOXEL CONES ---------------------------------------------------
@@ -356,14 +366,17 @@ int main()
         float sh[27] = { 0.0f };
         for (int c = 0; c < 3; ++c) { sh[c] = 0.30f; sh[3 + c] = 0.20f; }
         s->setAmbientSh(sh);
-        const double expected = kRho * (0.30 + 0.20) * kEnergyFactor1;
+        // THE LOOKUP, not the lobe: the lobe is view-dependent by physics (its
+        // directional albedo), so each pose's read is divided by the lobe at that
+        // pose and what is left is the irradiance the SH lookup handed the pixel.
+        const double expected = kRho * (0.30 + 0.20);
         const Vec3 poses[3] = { Vec3(0.0f, 3.2f, 1.6f), Vec3(2.2f, 2.4f, 1.3f),
                                 Vec3(-1.6f, 2.9f, -2.0f) };
         double reads[3];
         for (int i = 0; i < 3; ++i) {
             lookAtTop(poses[i]);
             render(e, 4);
-            reads[i] = readTop(2);
+            reads[i] = readTop(2) / lobeAt(poses[i]);
         }
         std::printf("   (f) the top under a y-band SH from three poses: %.4f %.4f %.4f "
                     "(closed form %.4f)\n", reads[0], reads[1], reads[2], expected);
