@@ -8,7 +8,7 @@
 #   SampleName   one of the ports: PbsMaterials LocalCubemaps Refractions Hdr
 #                AreaApproxLights IesProfiles ShadowMapFromCode
 #                PlanarReflections ScreenSpaceReflections Tutorial_SSAO
-#                Tutorial_SMAA Decals ImageVoxelizer
+#                Tutorial_SMAA Decals
 #   outdir       where the three PNGs go (default: a mktemp dir, printed)
 #
 # ENVIRONMENT (all optional):
@@ -57,7 +57,7 @@ for a in "$@"; do [ "$a" = "--ours-only" ] && OURS_ONLY=1; done
 
 ALL_PORTS="PbsMaterials LocalCubemaps Refractions Hdr AreaApproxLights IesProfiles
            ShadowMapFromCode PlanarReflections ScreenSpaceReflections Tutorial_SSAO
-           Tutorial_SMAA Decals ImageVoxelizer"
+           Tutorial_SMAA Decals"
 
 # --all: every port, then ONE contact sheet of the lot (the thing to put in
 # front of somebody). Each pair is still written on its own, full size.

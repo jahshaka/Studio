@@ -115,11 +115,10 @@ int main(int argc, char **argv)
     // cubeZ owns max Z. Their union is x [6,10], y [-1,3], z [-6,-2] — the box
     // this suite used to TYPE — and no cube is anywhere near its (10, 3, -2)
     // corner or its (8, 1, -4) centre, which are the two points probed below.
-    // (Three cubes rather than one also keeps the voxelizer fed: measured on
-    // this pin, `VctVoxelizer::build` over a region containing no geometry at
-    // all leaves its AabbWorldSpace compute job with no thread groups set and
-    // throws, so the whole GI arm silently fails to build and there is no
-    // volume to draw at all.)
+    // (Three cubes rather than one was first chosen to keep the voxelizer fed
+    // against a pin whose `build` threw over an empty region; the device-side
+    // feed (ATOM-VOXEL-2) builds an empty volume instead, and the fixture keeps
+    // its three cubes because the probed box is their union.)
     auto cubeX = cubeAt("cubeX", iris::Vec3(9.5f, -0.5f, -5.5f));
     cubeAt("cubeY", iris::Vec3(6.5f, 2.5f, -5.5f));
     cubeAt("cubeZ", iris::Vec3(6.5f, -0.5f, -2.5f));

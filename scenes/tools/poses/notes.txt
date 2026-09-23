@@ -14,4 +14,3 @@ ScreenSpaceReflections	Their live roughness keys are a material row here. The ro
 Tutorial_SSAO	Their SSAO uniforms are compositor-side; ours are two scene numbers (reach and power) plus an on/half/off row.
 Tutorial_SMAA	Offscreen screenshots here are 1x MSAA BY DESIGN, so our tile is the un-antialiased frame SMAA is there to rescue. Compare on-screen against on-screen, never across.
 Decals	Their decal images are their media; ours are our brick maps. Their wire AABB is drawn only on selection here.
-ImageVoxelizer	A TECHNIQUE COMPARISON, NOT A PICTURE ONE: their sample voxelizes imported Ogre meshes, which we deliberately cannot read. The port puts a primitive Cornell box in the shared room under voxel cone tracing, so what lines up is the bounce, not the geometry.

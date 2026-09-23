@@ -81,7 +81,7 @@ console.log("probe line luminance range at bind: " + lo.toFixed(1) + " .. " + hi
 assert(hi - lo > 15, "the GPU-skinned character is visible on the probe line");
 
 assert(editor.play(), "editor.play");
-editor.frame(40);                                // advance the document clock
+editor.frame(40, 1 / 60);                        // advance the document clock on the FIXED step (40/60 s of the 1 s clip; without dt it read the wall clock, the -j2 flake)
 var moved = editor.screenshot("skinning_moved.png", 256, 256, probes);
 editor.stop();
 

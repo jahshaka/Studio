@@ -720,10 +720,10 @@ public:
             int       attached = 0;
             float     lastCpuMs = -1.0f;
             /// ATOM stage 1's far-field proxy, as this cascade spent it: the
-            /// histogram of BAKED LOD LEVELS it voxelised (entry L = objects at
-            /// level L, 0 the authored geometry) and the triangles those levels
-            /// add up to.
-            QVector<int> lodLevels;
+            /// histogram of BAKED LOD LEVELS its attach set took (entry L =
+            /// partitions at level L, 0 the authored geometry; counted on the
+            /// device) and the triangles those levels add up to.
+            QVector<int> voxelLevels;
             qint64    voxelTriangles = 0;
             /// How many compute dispatches that rebuild cost — the MATERIAL-COUNT
             /// half of its bill (ogre-patch 0065; engine GiStatus::CascadeStatus).

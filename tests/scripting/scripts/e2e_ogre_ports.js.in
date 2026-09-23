@@ -1,5 +1,5 @@
 // scripting.e2e.ogre_ports — THE PORTS THEMSELVES (SPECS/OGRE_SAMPLES_TAB_SPEC.md
-// §3): the thirteen archives the Ogre-Samples tab opens, imported into a virgin
+// §3): the twelve archives the Ogre-Samples tab opens, imported into a virgin
 // home, opened, rendered and measured.
 //
 // The companion suite scripting.e2e.ogre_samples is the VERB half (the curated
@@ -8,10 +8,10 @@
 // renders a picture that is neither black nor blown out, with the lights, the
 // world settings and the materials its authoring script put there.
 //
-// ONE SESSION, THIRTEEN ARCHIVES, on purpose: eight of the ports share one base
-// scene and three share the room, so importing them back to back into one
-// library is also the cross-archive dedup case — and it costs a thirteenth of
-// what thirteen app launches would.
+// ONE SESSION, TWELVE ARCHIVES, on purpose: eight of the ports share one base
+// scene and two share the room, so importing them back to back into one
+// library is also the cross-archive dedup case — and it costs a twelfth of
+// what twelve app launches would.
 //
 // WHAT IS *NOT* ASSERTED, deliberately:
 //   * exact pixels. Several of these scenes carry GI, refraction or planar
@@ -167,18 +167,6 @@ var PORTS = [
                  "Decals: and their bytes travelled inside the archive");
           assert(Math.abs(node.property(scene.find("Decal"), "depth") - 10) < 1e-3,
                  "Decals: their 10 m projection depth survived");
-      } },
-    { name: "ImageVoxelizer", nodes: 35, lights: 5, gi: "vct",
-      names: ["Room00_Cream", "Cornell Red Wall", "Cornell Green Wall",
-              "Cornell Tall Block", "Cornell Lamp"],
-      check: function () {
-          var st = world.giStatus();
-          assert(st.mode === "vct", "Voxelizer: still cone-tracing voxels (" + st.mode + ")");
-          assert(st.voxelMetres > 0, "Voxelizer: a voxel size was resolved (" + st.voxelMetres + " m)");
-          // The Cornell box IS the substitution: its two coloured walls are
-          // what makes the bounce readable, so they are named in the document.
-          var red = material.get(scene.find("Cornell Red Wall"));
-          assert(red.baseColor === "#cc1111", "Voxelizer: the red wall is still red");
       } }
 ];
 
