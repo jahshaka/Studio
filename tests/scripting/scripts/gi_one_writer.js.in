@@ -1,0 +1,86 @@
+// gi.one_writer — ONE WRITER PER VOXEL VOLUME, AT MOST ONE INJECTION PER FRAME
+// (PHOTON-WRITER-1; render audit F3 / F13; B4 design §1 and §4).
+//
+// Every write to a voxel volume's light goes through one engine function
+// (`injectCascade`) and a latch refuses a second injection of one cascade in
+// one frame — the structural form of DRAG-1's rule ("a volume's radiance must
+// not depend on which path last injected it"). This suite drives the gestures
+// that used to put two writers on one volume in one frame, on the most
+// expensive shipped scene, and reads the engine's own books:
+//
+//   * a DRAG of a still object (the scheduler rebuilds cascade 0 every frame
+//     while the mirror's cadence ticks the chain every few frames) and its
+//     settle;
+//   * a LAMP moving while the CAMERA walks across cascade-0 steps (a moving
+//     tick and a scroll rebuild competing for one cascade in one frame), and
+//     its rest tick;
+//
+// and asserts `chainInjectionRefusals` never moved (no path asked twice) and
+// `chainInjectionsPeakFrame` never exceeded the chain's cascade count (a frame
+// injects each cascade at most once — the at-rest tick is one sweep).
+// Fresh home per run (ctest fixture).
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+var SHOWROOM = "@JAH_ONE_WRITER_SHOWROOM@";
+app.engineErrors(true);
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+editor.frame(180);
+var g0 = world.giStatus();
+assert(g0.live === true && g0.cascades.length >= 2,
+       "Showroom 2 runs a cascade chain [" + g0.cascades.length + " cascades]");
+var n = g0.cascades.length;
+var refusals0 = g0.chainInjectionRefusals;
+console.log("ONEWRITER boot: cascades " + n + ", refusals " + refusals0 +
+            ", peak " + g0.chainInjectionsPeakFrame);
+
+function byName(name) {
+    var all = scene.nodes();
+    for (var i = 0; i < all.length; ++i) if (all[i].name === name) return all[i].id;
+    return null;
+}
+var torus = byName("GoldTorus");
+assert(torus !== null, "the scene's GoldTorus is there to drag");
+
+// ---- 1. A DRAG OF A STILL OBJECT, AND ITS SETTLE --------------------------
+var p0 = node.info(torus).position;
+for (var f = 1; f <= 45; ++f) {
+    node.transform(torus, { position: { x: p0.x + 0.04 * f, y: p0.y, z: p0.z } });
+    editor.frame(1);
+}
+editor.frame(150);
+var g1 = world.giStatus();
+console.log("ONEWRITER drag: refusals " + g1.chainInjectionRefusals + ", peak " +
+            g1.chainInjectionsPeakFrame + ", settles " + g1.chainSettles +
+            ", c0 rebuilds " + g1.cascades[0].rebuilds);
+assert(g1.chainInjectionRefusals === refusals0,
+       "A DRAG AND ITS SETTLE NEVER ASK FOR A SECOND INJECTION OF ONE CASCADE IN ONE FRAME " +
+       "[refusals " + refusals0 + " -> " + g1.chainInjectionRefusals + "]");
+
+// ---- 2. A MOVING LAMP WHILE THE CAMERA WALKS ACROSS CASCADE-0 STEPS -------
+var lamp = byName("Light0");
+assert(lamp !== null, "the scene's Light0 is there to move");
+node.setProperty(lamp, "mobility", "movable");
+editor.frame(30);
+var lp = node.info(lamp).position;
+var c0before = world.giStatus().cascades[0].rebuilds;
+for (var w = 1; w <= 120; ++w) {
+    node.transform(lamp, { position: { x: lp.x + 0.02 * w, y: lp.y, z: lp.z } });
+    editor.setCamera({ position: { x: 0.1 * w, y: 2.0, z: 8.0 },
+                       lookAt: { x: 0.1 * w, y: 1.0, z: 0.0 } });
+    editor.frame(1);
+}
+editor.frame(150);
+var g2 = world.giStatus();
+console.log("ONEWRITER lamp+walk: refusals " + g2.chainInjectionRefusals + ", peak " +
+            g2.chainInjectionsPeakFrame + ", c0 rebuilds " + c0before + " -> " +
+            g2.cascades[0].rebuilds);
+assert(g2.cascades[0].rebuilds > c0before,
+       "the walk crossed cascade-0 steps (the scroll rebuilds competed with the lamp's ticks)");
+assert(g2.chainInjectionRefusals === refusals0,
+       "A LAMP TICK AND A SCROLL REBUILD NEVER INJECT ONE CASCADE TWICE IN ONE FRAME " +
+       "[refusals " + refusals0 + " -> " + g2.chainInjectionRefusals + "]");
+console.log("gi.one_writer: all assertions passed");

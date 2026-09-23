@@ -754,6 +754,11 @@ public:
         /// the cascade scheduler has run because a rebuild left the chain one
         /// Jacobi pass from its fixed point.
         long long chainSettles = 0;
+        /// THE ONE WRITER (PHOTON-WRITER-1): second injections of one volume in
+        /// one frame the latch refused (0 is the invariant), and the most
+        /// injections any one frame has spent.
+        double    chainInjectionRefusals = 0.0;
+        int       chainInjectionsPeakFrame = 0;
         /// MOVER-1: how many objects ride the mover channel because they are
         /// being dragged right now, and how many such gestures have ENDED.
         int       dragMovers = 0;

@@ -2708,6 +2708,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.cascadeDirtyMajority = quint64(st.cascadeDirtyMajority);
     out.chainSweeps          = st.chainSweeps;
     out.chainSettles         = st.chainSettles;
+    out.chainInjectionRefusals   = double(st.chainInjectionRefusals);
+    out.chainInjectionsPeakFrame = int(st.chainInjectionsPeakFrame);
     out.dragMovers           = st.dragMovers;
     out.dragMoverGestures    = double(st.dragMoverGestures);
     out.cards.built             = st.cards.built;

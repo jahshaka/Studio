@@ -310,10 +310,15 @@ int main(int argc, char **argv)
     // as in scripting.e2e.movable_lamp_rest — which is the suite that measures
     // the picture the count is FOR (that room reds at two passes and is green at
     // three, 8/8, measured). This one measures the rule.
+    // (Under a chain the host's tick is OWED and runs at the frame's writer
+    // point, after the scheduler's rebuild — PHOTON-WRITER-1 — so each reading
+    // below renders the frame that runs it.)
     lampAt(-3.0f);
     scene->refreshGiLighting(true);
+    render(e, 1);
     const int movingSweeps = scene->giStatus().chainSweeps;
     scene->refreshGiLighting(false);
+    render(e, 1);
     const int restSweeps = scene->giStatus().chainSweeps;
     std::printf("   passes: moving %d, at rest %d\n", movingSweeps, restSweeps);
     CHECK(movingSweeps == 1,
@@ -325,6 +330,7 @@ int main(int argc, char **argv)
     // ...and the diagnostic that re-measures it is wired to the same place.
     ::setenv("JAHSHAKA_GI_SWEEPS", "5", 1);
     scene->refreshGiLighting(false);
+    render(e, 1);
     const int forced = scene->giStatus().chainSweeps;
     ::unsetenv("JAHSHAKA_GI_SWEEPS");
     CHECK(forced == 5, "JAHSHAKA_GI_SWEEPS re-measures the count (the lane's instrument)");
@@ -376,6 +382,7 @@ int main(int argc, char **argv)
             std::snprintf(buf, sizeof(buf), "%d", sweeps);
             ::setenv("JAHSHAKA_GI_SWEEPS", buf, 1);
             scene->refreshGiLighting(false);       // the at-rest tick, at THIS sweep count
+            render(e, 1);                          // ...which runs at the writer point
             const int spent = scene->giStatus().chainSweeps;
             ::unsetenv("JAHSHAKA_GI_SWEEPS");
             shot(img);
