@@ -53,6 +53,13 @@ add_test(NAME gi.rt_reflect_lamp_clip COMMAND test_rt_reflect --lamp --target
 set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
                      TIMEOUT 300 LABELS "engine")
 
+# F1-HITRES (PHOTON-CARDS-2 part B): a perfect mirror's hit reads the hit
+# surface's CARD — the reflected panel's row held to the card's closed form pixel
+# by pixel, its edge a two-pixel step (the voxel read's numbers printed beside).
+add_test(NAME gi.rt_reflect_hitres COMMAND test_rt_reflect --hitres
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 300 LABELS "engine")
+
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_norays PROPERTIES

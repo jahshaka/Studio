@@ -1543,7 +1543,7 @@ static int caseConeParity()
                 const Vec3 local = rotY(a.theta, Vec3(float(x), float(h) - 2.0f, -0.15f));
                 const Vec3 w(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
                 CardSample t;
-                if (!s->readCardAt(w, n, t) || !t.ok) {
+                if (!s->readCardAt(w, n, t, a.node) || !t.ok) {
                     CHECK_MSG(false, "%s: the card answers at (%+.1f, %.1f)", a.name, x, h);
                     continue;
                 }
@@ -1569,6 +1569,192 @@ static int caseConeParity()
 }
 
 // ---------------------------------------------------------------------------
+// gi.card_read_parity — THE RAY JOB'S CARD READ = THE CPU REFERENCE
+// ---------------------------------------------------------------------------
+//
+// PHOTON-CARDS-2 part B (SC-1d): a reflection ray's hit reads the surface cache
+// FIRST, through jah_rq_card.glsl — `SurfaceCache::readAt` ported to GLSL. The
+// CPU `readAt` stays as the reference, and this holds the port to it: 1,000
+// random points on the crate's six faces, each asked of both with the same
+// facing direction (a random direction on the face's own hemisphere — the ray
+// job passes the reversed ray, which is exactly that), must pick the SAME card
+// and the SAME atlas texel, agree on whether the card is lit, and return the
+// same radiance (both decode the one R11G11B10F texel).
+//
+// The GPU half is Engine::cardReadParity: the SAME include behind the SAME
+// four bindings, in a test-only job, dispatched once, the picks read back
+// (flushCommands first — the AsyncTextureTicket rule's cousin: the captures,
+// the relight and the table uploads are recorded, not yet submitted).
+//
+// ...and THE ROW'S TOGGLE COSTS NO GI REBUILD: `cards` travels through
+// setGiTuning, the atlas is freed and built again by the frame, and
+// giStatus().rebuilds does not move.
+static int caseReadParity()
+{
+    Fixture f;
+    if (!makeFixture(f, "cardreadparity")) return 1;
+    Engine *e = f.e;
+    Scene *s = f.s;
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray-query device here — the card read's GPU half does not exist;"
+                    " gi.card_read_parity skips cleanly\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.20f, 0.22f, 0.25f), Colour(0.10f, 0.08f, 0.06f));
+    PbrParams cp;
+    cp.albedo = Colour(0.6f, 0.5f, 0.4f);
+    cp.roughness = 0.7f;
+    const MaterialId crateMat = s->createPbrMaterial(cp);
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = boxCards(0.5f);
+    const MeshId mesh = s->createMesh(md);
+    const NodeId crate = s->createNode();
+    CHECK(crate && crateMat && mesh && s->attachMesh(crate, mesh, crateMat), "the carded crate exists");
+    // A 2 x 1.5 x 1 crate, turned 20 degrees about Y: its cards are world
+    // rectangles off the world axes, so the read's three dot products are not
+    // three component picks.
+    const float kTurn = 20.0f * 3.14159265f / 180.0f;
+    s->setNodeTransform(crate, Vec3(0.5f, 1.2f, 0.0f),
+                        Quat(0.0f, std::sin(0.5f * kTurn), 0.0f, std::cos(0.5f * kTurn)),
+                        Vec3(2.0f, 1.5f, 1.0f));
+    const NodeId floorNode = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.8f, 0.8f, 0.8f);
+        const MaterialId mat = s->createPbrMaterial(p);
+        const MeshId plain = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(floorNode && mat && plain && s->attachMesh(floorNode, plain, mat), "the floor exists");
+        s->setNodeTransform(floorNode, Vec3(0.0f, -0.1f, 0.0f), Quat(), Vec3(10.0f, 0.2f, 10.0f));
+    }
+    enginetest::addDirectionalLight(s, Vec3(-0.4f, -1.0f, 0.3f), 2.0f);
+    f.view->setShadows(true);
+
+    GiParams gi = baseGi();
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "GI builds");
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 4.0f, -8.0f), Vec3(0.5f, 1.0f, 0.0f));
+    render(e, 90);
+    const CardCacheStatus st = s->giStatus().cards;
+    CHECK_MSG(st.built && st.cardsResident >= 6u && st.indirectRelights >= 6u,
+              "the crate's cards are captured, lit and marched (%u resident, %llu marches)",
+              st.cardsResident, (unsigned long long)st.indirectRelights);
+
+    // THE 1,000 HITS: a face, a point on it inset a hair from its edges, and a
+    // facing direction on that face's hemisphere. THE POINT SITS 0.1 mm INSIDE
+    // THE FACE, and not on it, for a measured reason: a box's face plane is
+    // EXACTLY the edge of its four neighbours' cards (each side card spans the
+    // box along this face's axis), so a point on the plane projects to v = 0 of
+    // them to the last bit — and 3 of the first 1,000 such hits, all inside the
+    // two-texel edge band where a side card legitimately passes the depth test,
+    // went to the side card on one side and the face card on the other on
+    // nothing but the rounding of a v of 0.000000 (CPU dv against the half
+    // extent, GPU one fused row). Both answers are legal there; neither is a
+    // question about the port. A tenth of a millimetre is 6.7e-5 of the card's
+    // v — six hundred float epsilons clear of the edge — and still inside the
+    // depth test's own millimetre, so every card that competes still competes.
+    // (A ray's hit lands within float rounding of the surface on either side; a
+    // side card answering the edge band in place of the face's own card is the
+    // same surface within two texels.)
+    const Vec3 half(1.0f, 0.75f, 0.5f);
+    const auto toWorld = [&](const Vec3 &l) {
+        const float c = std::cos(kTurn), sn = std::sin(kTurn);
+        return Vec3(0.5f + l.x * c + l.z * sn, 1.2f + l.y, -l.x * sn + l.z * c);
+    };
+    const auto dirWorld = [&](const Vec3 &l) {
+        const float c = std::cos(kTurn), sn = std::sin(kTurn);
+        return Vec3(l.x * c + l.z * sn, l.y, -l.x * sn + l.z * c);
+    };
+    unsigned rng = 12345u;
+    const auto rnd = [&rng]() {
+        rng = rng * 1664525u + 1013904223u;
+        return float(rng >> 8) / float(1u << 24);
+    };
+    std::vector<CardReadQuery> q;
+    for (int i = 0; i < 1000; ++i) {
+        const int face = int(rnd() * 6.0f) % 6;
+        const int ax = face / 2;
+        const float sign = (face & 1) ? -1.0f : 1.0f;
+        float l[3];
+        const float h[3] = { half.x, half.y, half.z };
+        for (int k = 0; k < 3; ++k) l[k] = (rnd() * 2.0f - 1.0f) * h[k] * 0.98f;
+        l[ax] = sign * (h[ax] - 1e-4f);
+        float n[3] = { 0, 0, 0 };
+        n[ax] = sign;
+        // A direction on the face's hemisphere, at least 10 degrees off grazing.
+        float d[3];
+        for (;;) {
+            for (int k = 0; k < 3; ++k) d[k] = rnd() * 2.0f - 1.0f;
+            const float len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+            if (len < 1e-3f || len > 1.0f) continue;
+            for (float &c : d) c /= len;
+            if (d[0] * n[0] + d[1] * n[1] + d[2] * n[2] > 0.17f) break;
+        }
+        CardReadQuery cq;
+        cq.position = toWorld(Vec3(l[0], l[1], l[2]));
+        cq.facing = dirWorld(Vec3(d[0], d[1], d[2]));
+        cq.node = crate;
+        q.push_back(cq);
+    }
+    std::vector<CardReadPick> gpu;
+    const bool ran = e->cardReadParity(s, q, gpu);
+    CHECK_MSG(ran && gpu.size() == q.size(), "the ray job's card read ran over %zu hits (%s)",
+              q.size(), ran ? "ok" : e->lastError().c_str());
+    if (!ran) return 1;
+    unsigned same = 0, cpuOk = 0, gpuOk = 0, litBoth = 0, firstBad = ~0u;
+    double worstRad = 0.0;
+    for (size_t i = 0; i < q.size(); ++i) {
+        CardSample t;
+        const bool okCpu = s->readCardAt(q[i].position, q[i].facing, t, crate) && t.ok;
+        const CardReadPick &g = gpu[i];
+        cpuOk += okCpu ? 1u : 0u;
+        gpuOk += g.ok ? 1u : 0u;
+        bool match = okCpu == g.ok;
+        if (match && okCpu) {
+            match = t.card == g.card && t.texelX == g.texelX && t.texelY == g.texelY && t.lit == g.lit;
+            if (match && g.lit) {
+                ++litBoth;
+                for (int k = 0; k < 3; ++k)
+                    worstRad = std::max(worstRad, std::fabs(double(t.radiance[k]) - double(g.radiance[k])));
+            }
+        }
+        if (match) ++same;
+        else if (firstBad == ~0u) {
+            firstBad = unsigned(i);
+            std::printf("    first disagreement, hit %zu at (%.4f %.4f %.4f): CPU ok %d card %d texel"
+                        " (%u, %u) lit %d | GPU ok %d card %d texel (%u, %u) lit %d\n",
+                        i, q[i].position.x, q[i].position.y, q[i].position.z, int(okCpu), t.card,
+                        t.texelX, t.texelY, int(t.lit), int(g.ok), g.card, g.texelX, g.texelY,
+                        int(g.lit));
+        }
+    }
+    std::printf("    %u of %zu hits answered by the CPU, %u by the GPU; %u lit on both\n", cpuOk,
+                q.size(), gpuOk, litBoth);
+    CHECK_MSG(cpuOk >= 990u, "the reference answers the crate's own surface (%u / 1000)", cpuOk);
+    CHECK_MSG(same == q.size(), "the GLSL and the CPU pick the same card and texel for every hit"
+              " (%u / %zu)", same, q.size());
+    CHECK_MSG(litBoth > 0u && worstRad <= 1e-6,
+              "...and read the same radiance off it (worst difference %.2e over %u lit hits)",
+              worstRad, litBoth);
+
+    // THE TOGGLE: off and on again through the tuning door — the atlas goes and
+    // comes back, and not one GI rebuild is paid for it.
+    const unsigned long long rebuildsBefore = s->giStatus().rebuilds;
+    GiParams off = gi;
+    off.cards = GiToggle::Off;
+    CHECK(s->setGiTuning(off), "cards off through setGiTuning");
+    render(e, 3);
+    const bool freed = !s->giStatus().cards.built;
+    CHECK(s->setGiTuning(gi), "cards on again");
+    render(e, 30);
+    const GiStatus after = s->giStatus();
+    CHECK_MSG(freed && after.cards.built, "the toggle freed the atlas and built it again (%d -> %d)",
+              int(!freed), int(after.cards.built));
+    CHECK_MSG(after.rebuilds == rebuildsBefore, "...with no GI rebuild (rebuilds %llu -> %llu)",
+              (unsigned long long)rebuildsBefore, (unsigned long long)after.rebuilds);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
     const std::string which = argc > 1 ? argv[1] : "capture";
@@ -1579,6 +1765,7 @@ int main(int argc, char **argv)
     else if (which == "lighting") rc = caseLighting();
     else if (which == "lighting_indirect") rc = caseLightingIndirect();
     else if (which == "cone_parity") rc = caseConeParity();
+    else if (which == "read_parity") rc = caseReadParity();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;
