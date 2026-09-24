@@ -1881,7 +1881,7 @@ int main(int argc, char **argv)
                   "GI preview: a COMMITTED material edit after the preview still re-solves, once");
         }
 
-        // Leave the process-wide HlmsPbs VCT binding as we found it.
+        // Leave the scene's GI as we found it.
         gdoc->giMode = iris::GiMode::OFF;
         mirror.sync();
         mirror.applyEnvironment(view, engine.get());

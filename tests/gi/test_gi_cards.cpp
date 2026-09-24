@@ -3,7 +3,7 @@
 //
 // THREE CTEST NAMES, ONE BINARY, selected by argv — because the three questions
 // need three different scenes and a GI arm binds process-wide state
-// (sVctBindingOwner), so they must not share a process, while the fixture
+// (before PHOTON-SCENE-SWITCH-1), so they must not share a process, while the fixture
 // scaffolding is the same in all three.
 //
 //   gi.card_capture  the cache captures what it says it captures, and an edit

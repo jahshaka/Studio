@@ -8,7 +8,7 @@
 // gi.modes' hybrid case only ever asserted the VCT floor bounce, which
 // survives that bail untouched. Two things close the hole:
 //   1. Scene::giStatus() reports what GI ACHIEVED (probe count, whether this
-//      scene's probe/VCT bindings are live on the process-wide HlmsPbs), so
+//      scene's probe/VCT bindings are live in its passes), so
 //      the silent bail is an assertion failure here;
 //   2. a mirror pixel that must actually contain the red wall's hue.
 //

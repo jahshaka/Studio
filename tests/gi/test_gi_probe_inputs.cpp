@@ -618,13 +618,15 @@ int main(int argc, char **argv)
     }
 
     // =======================================================================
-    // P10 — THE BINDING RE-ASSERT (Scene::reassertGiBinding)
+    // P10 — A SECOND SCENE'S HYBRID TAKES NOTHING FROM THIS ONE
     // =======================================================================
-    // HlmsPbs' GI binding is process-wide: the last scene to BUILD owns it. A
-    // second scene building its own hybrid takes it from this one; the host
-    // used to take it back by re-pushing GI, i.e. a from-scratch rebuild. The
-    // verb re-points the binding and rebuilds nothing.
-    std::printf("-- P10: the binding re-assert\n");
+    // The GI binding is per scene and per PASS (PHOTON-SCENE-SWITCH-1,
+    // SceneGiBinding): a second scene building its own hybrid binds its arms in
+    // its own passes, and this scene's passes go on binding this scene's — with
+    // no re-assert verb, no host re-push and nothing rebuilt on either side.
+    // (It used to be "the last scene to BUILD owns the process-wide binding",
+    // taken back by a verb on every page return.)
+    std::printf("-- P10: a second scene's hybrid\n");
     {
         const Colour ref = mirrorPixel();
         Scene *other = engine->createScene("probe_inputs_other");
@@ -660,31 +662,24 @@ int main(int argc, char **argv)
         gi.pccProbesX = gi.pccProbesZ = 2; gi.pccProbesY = 1;
         gi.testBoundsMin = Vec3(-3.0f, -1.0f, -3.0f);
         gi.testBoundsMax = Vec3(3.0f, 4.0f, 3.0f);
+        const unsigned long long rebuilds = escene->giStatus().rebuilds;
         CHECK(other->setGlobalIllumination(gi), "P10: the second scene builds its own hybrid");
-        const GiStatus stolen = escene->giStatus();
-        CHECK(!stolen.pccBound && !stolen.vctBound && other->giStatus().pccBound,
-              "P10: ...and takes the process-wide binding (last builder wins)");
-        const unsigned long long rebuilds = stolen.rebuilds;
-        const unsigned long long otherRebuilds = other->giStatus().rebuilds;
-        CHECK(escene->reassertGiBinding(), "P10: re-assert re-points the binding");
-        const GiStatus back = escene->giStatus();
-        CHECK(back.pccBound && back.vctBound, "P10: this scene's probes and voxels are bound again");
-        CHECK(!other->giStatus().pccBound && !other->giStatus().vctBound,
-              "P10: ...and the other scene's are not");
-        CHECK(back.rebuilds == rebuilds && other->giStatus().rebuilds == otherRebuilds,
-              "P10: nothing was rebuilt on either side");
-        CHECK(!escene->reassertGiBinding(), "P10: a second re-assert is a no-op (already the owner)");
+        const GiStatus kept = escene->giStatus();
+        CHECK(kept.pccBound && kept.vctBound && other->giStatus().pccBound && other->giStatus().vctBound,
+              "P10: ...and BOTH scenes' passes bind their own probes and voxels");
+        CHECK(kept.rebuilds == rebuilds, "P10: nothing of this scene was rebuilt");
         frames(4);
         const Colour after = mirrorPixel();
-        std::printf("   mirror before the takeover r=%.3f g=%.3f b=%.3f, after the re-assert "
+        std::printf("   mirror before the second hybrid r=%.3f g=%.3f b=%.3f, after "
                     "r=%.3f g=%.3f b=%.3f\n", ref.r, ref.g, ref.b, after.r, after.g, after.b);
         CHECK(std::fabs(after.r - ref.r) < 0.05f && std::fabs(after.g - ref.g) < 0.05f &&
               std::fabs(after.b - ref.b) < 0.05f,
-              "P10: the reflection is this scene's own again, with no rebuild");
+              "P10: the reflection is still this scene's own");
         engine->destroyScene(other);
         frames(2);
-        CHECK(escene->giStatus().pccBound && escene->giStatus().vctBound,
-              "P10: destroying the non-owner leaves this scene's binding alone");
+        CHECK(escene->giStatus().pccBound && escene->giStatus().vctBound &&
+                  escene->giStatus().rebuilds == rebuilds,
+              "P10: destroying the other scene leaves this scene's binding alone");
     }
 
     doc->giMode = iris::GiMode::OFF;
