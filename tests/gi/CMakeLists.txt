@@ -1563,3 +1563,43 @@ set_tests_properties(gi.sun_contact_norays PROPERTIES
 add_test(NAME gi.sun_contact_lattice COMMAND test_gi_sun_contact --lattice
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sun_contact_lattice PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# gi.skin_rays — THE GPU SKIN CACHE AND THE SKINNED BLAS (PHOTON P5, RY-R4;
+# PHOTON-SKIN-1)
+#
+# A two-bone column bent by a clip: rays down meet the POSED arm (analytic to a
+# millimetre) one frame after the pose push, never the bind pose; still frames
+# and a walk re-skin nothing; a contact ray (the sun-contact job's mask and
+# range) is occluded by the posed arm; the GPU scene names the row override; a
+# removed character gives its cache back. `--mirror` is the reflection against
+# the raster; the no-rays row asserts nothing of the tier exists.
+# `test_gi_skin_rays --cost [--chars N --rings R]` is the paired-arm cost
+# measurement (by hand, under scripts/gpu-exclusive.sh).
+add_executable(test_gi_skin_rays test_gi_skin_rays.cpp)
+set_target_properties(test_gi_skin_rays PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_skin_rays PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_skin_rays PRIVATE JahshakaEngine)
+add_dependencies(test_gi_skin_rays JahshakaEngineMedia)
+add_test(NAME gi.skin_rays COMMAND test_gi_skin_rays
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.skin_rays PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and THE MIRROR, its own process: the rigged column bent by its clip, a
+# static control and a static MOVER, each reflected in a perfect mirror against
+# its raster through the reflected camera. Asserted: no T-pose ghost, and the
+# static baseline within 3 px; printed: how much of the posed arm a hit can SHADE
+# (the voxels hold the rig's bind pose — PHOTON-SKIN-1's finding).
+add_test(NAME gi.skin_rays_mirror COMMAND test_gi_skin_rays --mirror
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.skin_rays_mirror PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.skin_rays_norays COMMAND test_gi_skin_rays
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.skin_rays_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
