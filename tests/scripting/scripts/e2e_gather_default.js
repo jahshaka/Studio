@@ -69,7 +69,7 @@ if (!rt || !rt.available) {
     var stOn = world.giStatus();
     assert(stOn.gather.running && stOn.gather.settled && stOn.giAtRest,
            "the viewport's gather runs and is SETTLED at rest (history age " +
-           stOn.gather.historyAge + ", lighting age " + stOn.gather.lightingAge + ", N " +
+           stOn.gather.historyAge + ", rest frames " + stOn.gather.restFrames + ", N " +
            stOn.gather.settleFrames + ")");
     // editor.screenshot waits for its own shot view's history (giAtRest's
     // settled term): the shot is the settled gather's, not a two-frame estimate.

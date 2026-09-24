@@ -353,20 +353,30 @@ static int stableMain(Engine *e)
 
     // THE FLOOR'S DOOR (GatherTuning::historyFrames): a 4-frame memory, same room
     // — the trade moves both ways, and the door is what makes it measurable.
+    // BOTH MEMORIES WITH THE REST OFF (PHOTON-GATHER-1d): at rest the shipped
+    // view holds one rest mean whatever its floor, so the floor's flicker is read
+    // with the rest door shut — the trade is the history's, in the frames a
+    // moving or relit view shows.
     {
+        GatherTuning t10;
+        t10.restOff = true;
+        s->setGatherTuning(t10);
+        render(e, 60);
+        const StableReading long10 = stableReading(e, view, 60);
         GatherTuning t;
         t.historyFrames = 4u;
+        t.restOff = true;
         s->setGatherTuning(t);
         render(e, 60);
         const StableReading short4 = stableReading(e, view, 60);
         const int lag4 = lagOf(true, 4u);
         s->setGatherTuning(GatherTuning());
         std::printf("     memory 4: mean |step| %.3f (10: %.3f), lamp-off lag %d frames (10: %d)\n",
-                    short4.meanStep, with.meanStep, lag4, lagHistory);
-        CHECK_MSG(short4.meanStep > with.meanStep && lag4 < lagHistory,
+                    short4.meanStep, long10.meanStep, lag4, lagHistory);
+        CHECK_MSG(short4.meanStep > long10.meanStep && lag4 < lagHistory,
                   "THE FLOOR IS THE TRADE: a 4-frame memory flickers more (mean step %.3f against "
                   "%.3f) and follows the lamp sooner (%d frames against %d)",
-                  short4.meanStep, with.meanStep, lag4, lagHistory);
+                  short4.meanStep, long10.meanStep, lag4, lagHistory);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
@@ -442,6 +452,16 @@ static int motionMain(Engine *e)
     }
     buildShowroom(s);
     CHECK(s->setGlobalIllumination(gatherGi()), "the chain builds over the room");
+    // THE HISTORY UNDER MOTION, WITH THE REST DOOR SHUT (PHOTON-GATHER-1d): a
+    // camera that stops hands its picture over from the history to the rest
+    // mean — one fixed N-sample draw — and holds it, so "where the moving frame
+    // settles" would be a DIFFERENT estimator from the history these bars were
+    // derived on. Every barred arm runs with GatherTuning::restOff, from the
+    // view's birth (so its sample sequence is the one the bars were measured
+    // on); the shipped rest's own settle is RECORDED at the end.
+    GatherTuning historyOnly;
+    historyOnly.restOff = true;
+    s->setGatherTuning(historyOnly);
 
     // THE GATHER IS IN THE PICTURE AT ALL: the settled room with the gather
     // differs from the same room with the gather off (two frames with no
@@ -507,10 +527,20 @@ static int motionMain(Engine *e)
     {
         GatherTuning t;
         t.historyValidationOff = true;
+        t.restOff = true;
         s->setGatherTuning(t);
         truckAcceptAll = runMove(e, view, truckPose, "truck, every texel accepted (door)");
         truckAcceptAllTile = gLastTile;
         s->setGatherTuning(GatherTuning());
+    }
+    // THE SHIPPED REST'S SETTLE, recorded and not barred: the turn settling to the
+    // rest mean (measured 1.742 codes in the worst tile here, and 2.842 when the
+    // same turn ran first — the rest mean's own draw — against the history's
+    // 1.337: a 16-frame fade in one probe cell when the camera stops).
+    {
+        const float yawRest = runMove(e, view, yawPose, "yaw, settling to the REST MEAN (shipped)");
+        std::printf("     (recorded, no bar: the shipped rest's settle %.3f codes, worst tile %.3f)\n",
+                    double(yawRest), double(gLastTile));
     }
 
     // THE BARS, from this suite's own numbers (RTX 4080 SUPER; the run is

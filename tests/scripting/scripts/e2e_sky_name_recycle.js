@@ -64,7 +64,13 @@ for (var k = 0; k < 60; k++) {
 }
 // Back to a host-uploaded sky, so there is a live array to look at.
 world.sky("color", { color: { r: 200, g: 40, b: 10 } });
-editor.frame(3);
+// SIX frames, not three (PHOTON-GATHER-1d): a sky change rebuilds the view's
+// workspace, and where the screen-probe gather runs (on by default at High and
+// Epic) the old chain's irradiance texture goes through the ray tier's retire
+// bin, which frees it once the frames in flight (3) that may still read it have
+// retired. Counted at the third frame it is still there (measured: 101 -> 102 at
+// +3, 101 -> 101 at +6); a texture that really leaked is there at any frame.
+editor.frame(6);
 
 var after = skyArrays();
 console.log("after 60 more: " + JSON.stringify(after));

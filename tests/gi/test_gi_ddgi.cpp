@@ -549,15 +549,24 @@ int main(int argc, char **argv)
             ++frames;
         }
         st = r.scene->giStatus();
-        std::printf("   at rest %d frames after the write: lighting age %u, history age %u (N %u)\n",
-                    frames, st.gather.lightingAge, st.gather.historyAge, st.gather.settleFrames);
-        CHECK(st.giAtRest && st.gather.settled && st.gather.historyAge >= st.gather.settleFrames,
-              "GI comes back to rest with the history settled");
-        CHECK_MSG(st.gather.lightingAge == st.gather.settleFrames,
-                  "THE HISTORY'S TERM IS THE ONE THAT HELD IT: GI came to rest on exactly the frame the "
-                  "lighting had held for N (lighting age %u, N %u) — the injection landed %d frames "
-                  "before rest", st.gather.lightingAge, st.gather.settleFrames,
-                  frames - int(st.gather.lightingAge));
+        std::printf("   at rest %d frames after the write: rest frames %u, history age %u (N %u)\n",
+                    frames, st.gather.restFrames, st.gather.historyAge, st.gather.settleFrames);
+        CHECK(st.giAtRest && st.gather.settled && st.gather.restFrames >= st.gather.settleFrames,
+              "GI comes back to rest with the history settled (N rest frames)");
+        CHECK_MSG(st.gather.restFrames == st.gather.settleFrames,
+                  "THE HISTORY'S TERM IS THE ONE THAT HELD IT: GI came to rest on exactly the N-th frame "
+                  "at rest (rest frames %u, N %u) — the lighting stopped moving %d frames after the write",
+                  st.gather.restFrames, st.gather.settleFrames, frames - int(st.gather.restFrames));
+        // AND AT REST THE PICTURE HOLDS: the answer IS the rest mean, nothing is
+        // dispatched, and the next frames are byte-identical.
+        {
+            Image a, b;
+            r.view->readPixels(a);
+            render(e, 3);
+            r.view->readPixels(b);
+            CHECK(frameHash(a) == frameHash(b),
+                  "A SETTLED GATHER HOLDS: three more still frames are byte-identical");
+        }
         // THE YOUNG VIEW: a second view of the scene, drawn alone for two frames,
         // is a history two frames old — not settled, and neither is GI.
         View *young = e->createOffscreenView("ddgi-young", 128, 128, Colour(0, 0, 0));
@@ -572,9 +581,11 @@ int main(int argc, char **argv)
               "A YOUNG VIEW IS NOT AT REST: a two-frame history shows the raw estimate, so a shot "
               "that does not wait photographs it");
         const int youngFrames = settleGi(e, r.scene);
-        CHECK_MSG(youngFrames >= 0 && youngFrames + 2 == int(r.scene->giStatus().gather.settleFrames),
-                  "...and it settles through its own frames: %d more, N %u", youngFrames,
-                  r.scene->giStatus().gather.settleFrames);
+        // Its first frame is its birth (no previous camera to be still against),
+        // then N frames at rest.
+        CHECK_MSG(youngFrames >= 0 && youngFrames + 2 == int(r.scene->giStatus().gather.settleFrames) + 1,
+                  "...and it settles through its own frames: its birth, then N at rest (%d more, N %u)",
+                  youngFrames, r.scene->giStatus().gather.settleFrames);
         e->destroyView(young);
         r.view->setEnabled(true);
         CHECK(r.scene->setGlobalIllumination(ddgi), "back to the section's field");

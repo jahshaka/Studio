@@ -844,10 +844,11 @@ public:
             float placeMs = -1.0f, traceMs = -1.0f, integrateMs = -1.0f;
             float cpuMs = -1.0f;     ///< the CPU cost of RECORDING the three jobs
             /// THE SETTLED HISTORY (PHOTON-GATHER-1d; engine GatherStatus): the
-            /// pixel history ran, its age, the frames the lighting has held, the
-            /// N a settle needs, and whether both reach it (giAtRest's term).
+            /// pixel history ran, its age, the consecutive frames at rest (the
+            /// camera, the lighting and the scene still), the N the rest mean
+            /// takes, and whether the rest reached it (giAtRest's term).
             bool  temporal = false;
-            int   historyAge = 0, lightingAge = 0, settleFrames = 0;
+            int   historyAge = 0, restFrames = 0, settleFrames = 0;
             bool  settled = true;
             QString error;           ///< why it is not running, when it is not
         };

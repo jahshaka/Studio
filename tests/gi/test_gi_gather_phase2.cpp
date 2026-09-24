@@ -216,6 +216,9 @@ static int planeMain(Engine *e, bool targetRow)
     CHECK(s->setGlobalIllumination(gi), "the chain builds");
     GatherTuning t;
     t.readback = true;
+    // THE ESTIMATOR'S MEAN, NOT ONE HELD DRAW (PHOTON-GATHER-1d): a still view
+    // holds one N-sample rest mean; the rest door keeps every frame live.
+    t.restOff = true;
     s->setGatherTuning(t);
     render(e, 40);
 

@@ -488,6 +488,22 @@ static void latticeArm(Engine *e, const char *dumpDir)
     for (NodeId n : nodes) s->setNodeCastShadow(n, false);
     shot(false, SunContactResolution::Full, noCast);
     for (NodeId n : nodes) s->setNodeCastShadow(n, true);
+    // ...AND THE FLOOR BEHIND THE GLASS, the pane hidden: what the pane TRANSMITS
+    // (PHOTON-GATHER-1d, F2's second half — a blended fragment writes nothing into
+    // the prepass, so the floor behind the pane is drawn, and it IS in the
+    // sphere's contact shadow).
+    Image paneLessShort, paneLessFull;
+    s->setNodeVisible(pane, false);
+    shot(true, SunContactResolution::Full, paneLessFull);
+    {
+        SunContactDesc sc;
+        sc.enabled = true;
+        sc.range = kSunContactMinRange;
+        s->setSunContact(sc);
+        render(e, kSettleFrames);
+        view->readPixels(paneLessShort);
+    }
+    s->setNodeVisible(pane, true);
     if (dumpDir) {
         savePpm(off, std::string(dumpDir) + "/lattice_off.ppm");
         savePpm(onFull, std::string(dumpDir) + "/lattice_on_full.ppm");
@@ -559,25 +575,30 @@ static void latticeArm(Engine *e, const char *dumpDir)
     CHECK_MSG(leakOn == 0 && leakHalf == 0, "THE CONTACT UNDER EVERY SPHERE IS CLOSED (full %u, half %u lit px)",
               leakOn, leakHalf);
     // ---- THE GLASS (F1): the pane over the middle row's feet must show the
-    // map's answer, never the floor's contact ray read through the glass.
+    // map's answer for ITS OWN shading, never the floor's contact ray read through
+    // the glass. What it may show of the row is the FLOOR behind it — in the
+    // sphere's contact shadow, and drawn since a blended fragment writes nothing
+    // into the prepass (PHOTON-GATHER-1d F2) — transmitted at (1 - alpha).
     {
-        unsigned darkened = 0; double sum = 0.0;
+        const float kTransmit = 1.0f - 0.35f;   // the pane's alpha, above
+        unsigned darkened = 0; double sum = 0.0, sumFloor = 0.0;
         for (unsigned y = 0; y < kSize; ++y)
             for (unsigned x = 0; x < kSize; ++x) {
                 if (gKind[size_t(y) * kSize + x] != PaneContact) continue;
-                // Against the SHORTEST range (both arms carry the prepass, whose
-                // own treatment of a blended pane is not this row's): a ray
-                // answer read through the glass darkens the pane in the full
-                // range arm only.
+                // Against the SHORTEST range: the row's darkening of the pane
+                // pixel, and of the floor there with the pane hidden.
                 const float dl = luma(onShort, x, y) - luma(onFull, x, y);
+                const float dFloor = luma(paneLessShort, x, y) - luma(paneLessFull, x, y);
                 sum += std::max(0.0f, dl);
-                if (dl > 4.0f) ++darkened;
+                sumFloor += std::max(0.0f, dFloor);
+                if (dl - kTransmit * dFloor > 4.0f) ++darkened;
             }
-        std::printf("      glass over the contact: %u pane px, %u darkened by the row > 4 codes (mean %.4f)\n",
-                    nPane, darkened, nPane ? sum / nPane : 0.0);
+        std::printf("      glass over the contact: %u pane px, the row darkens the pane %.4f and the bare "
+                    "floor %.4f (mean codes); %u pane px darker than the transmitted floor by > 4 codes\n",
+                    nPane, nPane ? sum / nPane : 0.0, nPane ? sumFloor / nPane : 0.0, darkened);
         CHECK_MSG(nPane > 100, "the pane covers the middle row's contact (%u px)", nPane);
         CHECK_MSG(darkened == 0, "GLASS KEEPS THE MAP'S ANSWER: no pane pixel over the contact is darkened by the "
-                                 "row (%u)", darkened);
+                                 "row beyond the floor it transmits (%u)", darkened);
     }
     s->setSunContact(SunContactDesc());
     view->setScene(nullptr);

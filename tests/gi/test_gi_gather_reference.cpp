@@ -498,6 +498,10 @@ int main()
         g.gather = gather ? GiToggle::On : GiToggle::Off;
         s->setGlobalIllumination(g);
         GatherTuning t;
+        // THE ESTIMATOR'S MEAN, NOT ONE HELD DRAW (PHOTON-GATHER-1d): a still
+        // view holds one N-sample rest mean, so the frames below would all be
+        // that draw; the rest door keeps every frame the history's.
+        t.restOff = true;
         s->setGatherTuning(t);
         s->refreshGlobalIllumination();
         render(e, 40);
