@@ -1644,6 +1644,34 @@ set_tests_properties(gi.sun_contact_legs_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
+# gi.hit_shade — A RAY HIT IS A PIXEL OF A SECOND VISIBILITY BUFFER
+# (PHOTON-HIT-SHADE-1; SPECS/atom/D2_HIT_SHADING_DESIGN.md)
+#
+# A hit no cache can shade (a mover, a rigged item, a static hit neither card
+# nor cascade answers, the gather's far copies) is appended to the hit list and
+# shaded by HlmsAtom's decode: (a) a MOVER crate's reflection in a perfect
+# mirror covers the static control's fraction of its silhouette in its raster
+# colour; (b) the gather's bounce off a MOVER emitter meets the closed form;
+# (d) a hit outside the frustum takes no clustered light; (e) the sun at a hit is
+# the shadow ray. The rigged arm (c) is gi.skin_rays_mirror's.
+# `test_gi_hit_shade --cost` is the paired-arm cost measurement (by hand, under
+# scripts/gpu-exclusive.sh).
+add_executable(test_gi_hit_shade test_gi_hit_shade.cpp)
+set_target_properties(test_gi_hit_shade PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_hit_shade PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_hit_shade PRIVATE JahshakaEngine)
+add_dependencies(test_gi_hit_shade JahshakaEngineMedia)
+add_test(NAME gi.hit_shade COMMAND test_gi_hit_shade
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 600 LABELS "engine")
+
 # gi.skin_rays — THE GPU SKIN CACHE AND THE SKINNED BLAS (PHOTON P5, RY-R4;
 # PHOTON-SKIN-1)
 #
@@ -1672,9 +1700,10 @@ add_test(NAME gi.skin_rays COMMAND test_gi_skin_rays
 set_tests_properties(gi.skin_rays PROPERTIES TIMEOUT 300 LABELS "engine")
 # ...and THE MIRROR, its own process: the rigged column bent by its clip, a
 # static control and a static MOVER, each reflected in a perfect mirror against
-# its raster through the reflected camera. Asserted: no T-pose ghost, and the
-# static baseline within 3 px; printed: how much of the posed arm a hit can SHADE
-# (the voxels hold the rig's bind pose — PHOTON-SKIN-1's finding).
+# its raster through the reflected camera. Asserted: no T-pose ghost, the static
+# baseline within 3 px, and the rigged and the MOVER arms SHADED over at least the
+# control's fraction of their silhouettes (the hit decode, PHOTON-HIT-SHADE-1 —
+# gi.hit_shade's arm (c)).
 add_test(NAME gi.skin_rays_mirror COMMAND test_gi_skin_rays --mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.skin_rays_mirror PROPERTIES TIMEOUT 300 LABELS "engine")
