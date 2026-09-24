@@ -76,12 +76,12 @@ endif()
 
 # ENV-RAY-MATCH (PHOTON P3): a silver floor under the realistic sky, the
 # environment lobe (rays off) against the ray tier's sky (rays on) for the same
-# pixels, read as radiance. 3.25 codes at roughness 0.2 (exact at a mirror): the
-# split-sum lookup along R against the VNDF lobe's off-specular lean — the fork's
-# media (see envRayMatchMain). LABEL `photon-target` until that lookup moves.
+# pixels, read as radiance, at five roughnesses. Every environment reader looks
+# along jahEnvDominantDir; the bars are per roughness (0.5 code up to r = 0.05,
+# the measured split-sum residual + 25 % above) — see envRayMatchMain.
 add_test(NAME gi.env_ray_match COMMAND test_rt_reflect --env-ray-match
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
+set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 300 LABELS "engine")
 
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

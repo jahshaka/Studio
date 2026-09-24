@@ -1567,25 +1567,72 @@ static int caseConeParity(bool offAxisTarget)
         cam.orthoSize = 3.0f;
         cam.farClip = 200.0f;
         view->setCamera(cam);
-        render(e, 90);
+        render(e, std::getenv("JAH_CONE_PARITY_FRAMES") ? std::atoi(std::getenv("JAH_CONE_PARITY_FRAMES")) : 90);
+        {
+            const CardCacheStatus cs = s->giStatus().cards;
+            std::printf("    %s: indirect marches %llu, relights %llu\n", a.name,
+                        (unsigned long long)cs.indirectRelights, (unsigned long long)cs.relights);
+        }
         ImageF img;
         CHECK(view->readPixelsHdr(img), "the view reads its radiance back");
         const Vec3 n = rotY(a.theta, Vec3(0.0f, 0.0f, -1.0f));
-        for (double x : xs)
-            for (double h : heights) {
-                // Local (x, h) on the face -> the pixel: screen right is the
-                // wall's -x after the half turn, screen down is -y.
-                const double px = (-x / 3.0 * 0.5 + 0.5) * kPx;
-                const double py = (-(h - 2.0) / 3.0 * 0.5 + 0.5) * kPx;
-                double m[3] = { 0, 0, 0 };
-                int cnt = 0;
-                for (int y = int(py) - 4; y <= int(py) + 4; ++y)
-                    for (int xx = int(px) - 4; xx <= int(px) + 4; ++xx) {
-                        const Colour c = img.at(unsigned(xx), unsigned(y));
-                        m[0] += c.r; m[1] += c.g; m[2] += c.b;
-                        ++cnt;
+        const auto worldAt = [&](double lx, double lh) {
+            const Vec3 local = rotY(a.theta, Vec3(float(lx), float(lh) - 2.0f, -0.15f));
+            return Vec3(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
+        };
+        for (double x0 : xs)
+            for (double h0 : heights) {
+                double x = x0, h = h0;
+                // THE TEXEL-CENTRE ARM (JAH_CONE_PARITY_CENTRES, a diagnostic):
+                // the card's value belongs to its texel's CENTRE, so move the
+                // sample there — the texel's boundaries found by walking the
+                // wall until readCardAt's texel index changes — and read the
+                // pixel at that point too. A bias that is the nearest-texel
+                // read's vanishes here.
+                if (std::getenv("JAH_CONE_PARITY_CENTRES")) {
+                    CardSample c0;
+                    if (s->readCardAt(worldAt(x, h), n, c0, a.node) && c0.ok) {
+                        const double stepM = 0.002;
+                        const auto walk = [&](double dxs, double dhs, bool alongX) {
+                            double d = 0.0;
+                            for (int i = 1; i < 200; ++i) {
+                                CardSample ci;
+                                const bool okc = s->readCardAt(worldAt(x + dxs * i, h + dhs * i), n, ci, a.node) && ci.ok;
+                                if (!okc || (alongX ? ci.texelX != c0.texelX : ci.texelY != c0.texelY)) break;
+                                d = i * stepM;
+                            }
+                            return d + 0.5 * stepM;
+                        };
+                        const double left = walk(-stepM, 0.0, true), right = walk(stepM, 0.0, true);
+                        const double down = walk(0.0, -stepM, false), up = walk(0.0, stepM, false);
+                        x += 0.5 * (right - left);
+                        h += 0.5 * (up - down);
+                        std::printf("    %s (%+.1f, %.1f): texel %u,%u spans %.4f x %.4f m, its centre is "
+                                    "(%+.4f, %.4f)\n", a.name, x0, h0, c0.texelX, c0.texelY,
+                                    left + right, down + up, x, h);
                     }
-                for (double &v : m) v = v / cnt * kConv;
+                }
+                // Local (x, h) on the face -> the pixel: screen right is the
+                // wall's -x after the half turn, screen down is -y. The 9 x 9
+                // block is taken at the point's FRACTIONAL pixel position
+                // (bilinear between the four integer-centred blocks around it).
+                const double px = (-x / 3.0 * 0.5 + 0.5) * kPx - 0.5;
+                const double py = (-(h - 2.0) / 3.0 * 0.5 + 0.5) * kPx - 0.5;
+                double m[3] = { 0, 0, 0 };
+                {
+                    const int ix = int(std::floor(px)), iy = int(std::floor(py));
+                    const double fx = px - ix, fy = py - iy;
+                    for (int oy = 0; oy < 2; ++oy)
+                        for (int ox = 0; ox < 2; ++ox) {
+                            const double wgt = (ox ? fx : 1.0 - fx) * (oy ? fy : 1.0 - fy);
+                            for (int y = iy + oy - 4; y <= iy + oy + 4; ++y)
+                                for (int xx = ix + ox - 4; xx <= ix + ox + 4; ++xx) {
+                                    const Colour c = img.at(unsigned(xx), unsigned(y));
+                                    m[0] += wgt * c.r / 81.0; m[1] += wgt * c.g / 81.0; m[2] += wgt * c.b / 81.0;
+                                }
+                        }
+                }
+                for (double &v : m) v = v * kConv;
                 const Vec3 local = rotY(a.theta, Vec3(float(x), float(h) - 2.0f, -0.15f));
                 const Vec3 w(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
                 CardSample t;
