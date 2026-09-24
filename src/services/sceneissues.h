@@ -134,6 +134,10 @@ public:
     ///     is about the PROJECT rather than an object, so it names no node —
     ///     and the entire reason the On state exists, since On and Auto render
     ///     the same picture and differ only in whether the author is told.
+    ///   * `texture.missing` — a material's texture file is gone from disk
+    ///     (the document keeps the path; the mirror binds nothing). One issue
+    ///     per mesh node, naming each missing slot and file; it clears when
+    ///     the file returns or the slot is re-linked.
     int scan(const iris::ScenePtr &scene);
 
 signals:

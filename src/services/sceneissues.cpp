@@ -12,10 +12,15 @@ For more information see the LICENSE file
 #include "services/sceneissues.h"
 
 #include <QDateTime>
+#include <QFileInfo>
+#include <QHash>
 #include <QVector>
 
 #include <algorithm>
 
+#include "irisgl/document/assets/livetextures.h"
+#include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/materials/material.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -77,6 +82,42 @@ void collectBlockers(const iris::SceneNodePtr &node, QList<iris::SceneNodePtr> &
         if (!isGround) out.append(node);
     }
     for (const auto &child : node->children()) collectBlockers(child, out);
+}
+
+/// Every mesh node under `node` that holds a material — the nodes whose
+/// texture files the mirror loads.
+void collectMaterialNodes(const iris::SceneNodePtr &node, QList<iris::MeshNode *> &out)
+{
+    if (!node) return;
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto *mesh = static_cast<iris::MeshNode *>(node.data());
+        if (mesh->getMaterial()) out.append(mesh);
+    }
+    for (const auto &child : node->children()) collectMaterialNodes(child, out);
+}
+
+/// A texture slot's name as the material panel's rows say it ("u_baseColorMap"
+/// is "Base Color"); an unknown slot keeps its own name without the prefix.
+QString textureSlotName(const QString &slot)
+{
+    static const QHash<QString, QString> kNames = {
+        { QStringLiteral("u_baseColorMap"), QStringLiteral("Base Color") },
+        { QStringLiteral("u_diffuseTexture"), QStringLiteral("Base Color") },
+        { QStringLiteral("u_normalMap"), QStringLiteral("Normal") },
+        { QStringLiteral("u_normalTexture"), QStringLiteral("Normal") },
+        { QStringLiteral("u_metallicMap"), QStringLiteral("Metallic") },
+        { QStringLiteral("u_roughnessMap"), QStringLiteral("Roughness") },
+        { QStringLiteral("u_emissiveMap"), QStringLiteral("Emissive") },
+        { QStringLiteral("u_detail0Map"), QStringLiteral("Detail 1") },
+        { QStringLiteral("u_detail1Map"), QStringLiteral("Detail 2") },
+        { QStringLiteral("u_detail0NormalMap"), QStringLiteral("Detail 1 Normal") },
+        { QStringLiteral("u_detail1NormalMap"), QStringLiteral("Detail 2 Normal") },
+        { QStringLiteral("u_detailWeightMap"), QStringLiteral("Detail Weight") },
+        { QStringLiteral("u_reflectionMap"), QStringLiteral("Reflection") },
+    };
+    const auto it = kNames.constFind(slot);
+    if (it != kNames.constEnd()) return it.value();
+    return slot.startsWith(QLatin1String("u_")) ? slot.mid(2) : slot;
 }
 
 /// Does a sphere touch an axis-aligned box?
@@ -404,6 +445,54 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         live << issue.id;
     }
 
+    // ---- texture.missing: a material's texture file is gone from disk -----
+    // The document KEEPS a material's path when its file disappears (moved,
+    // deleted, a project opened on another machine), and the mirror's answer
+    // to a path that does not exist is to bind nothing — the surface renders
+    // untextured and the only trace was one engine error string nobody reads
+    // (TEXTURE-FAIL-ISSUE-1). The same existence test the mirror makes
+    // (SceneMirror::textureFor: a Qt resource and a live texture have no file
+    // and are not ours to judge), over every texture slot of every material a
+    // mesh node holds; ONE line per node, naming each slot and its file, so
+    // the user fixes the object, not a list of paths. Each path is asked of
+    // the filesystem once per pass: materials are shared, and this runs at
+    // 1 Hz on the UI thread.
+    {
+        QList<iris::MeshNode *> meshes;
+        collectMaterialNodes(scene->getRootNode(), meshes);
+        QHash<QString, bool> exists;
+        for (iris::MeshNode *mesh : std::as_const(meshes)) {
+            const iris::MaterialPtr material = mesh->getMaterial();
+            QStringList missing;
+            for (auto it = material->textures.constBegin(); it != material->textures.constEnd();
+                 ++it) {
+                if (!it.value()) continue;
+                const QString &path = it.value()->source;
+                if (path.isEmpty() || path.startsWith(QLatin1Char(':')) ||
+                    iris::LiveTextures::isLiveRef(path))
+                    continue;
+                auto known = exists.constFind(path);
+                if (known == exists.constEnd()) known = exists.insert(path, QFileInfo::exists(path));
+                if (known.value()) continue;
+                missing << tr("%1 (%2)").arg(textureSlotName(it.key()), QFileInfo(path).fileName());
+            }
+            if (missing.isEmpty()) continue;
+            SceneIssue issue;
+            issue.kind = QStringLiteral("texture.missing");
+            issue.node = mesh->getGUID();
+            issue.nodeName = mesh->getName();
+            issue.message = (missing.size() == 1
+                ? tr("\"%1\" uses a texture file that is missing: %2.")
+                : tr("\"%1\" uses texture files that are missing: %2."))
+                                .arg(mesh->getName(), missing.join(QStringLiteral(", ")));
+            issue.action = tr("Re-import the missing file, or re-link the material's texture to a "
+                              "file that exists. Until then the surface renders without it.");
+            issue.id = issue.kind + QLatin1Char(':') + issue.node;
+            raise(issue);
+            live << issue.id;
+        }
+    }
+
     // ---- clear what the scene no longer justifies -------------------------
     // Only the kinds this scanner owns: an issue raised by a verb or by another
     // producer is not ours to forget.
@@ -411,7 +500,8 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                                        QStringLiteral("sky.duplicate"),
                                        QStringLiteral("rays.absent"),
                                        QStringLiteral("vr.colour"),
-                                       QStringLiteral("exposure.legacy") };
+                                       QStringLiteral("exposure.legacy"),
+                                       QStringLiteral("texture.missing") };
     bool removed = false;
     for (int i = mIssues.size() - 1; i >= 0; --i) {
         if (!kScanned.contains(mIssues[i].kind)) continue;

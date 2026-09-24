@@ -441,6 +441,29 @@ add_script_e2e(sun_contact e2e_sun_contact.js)
 # shadows are off standing over something it lights straight through. Plus the
 # case that is deliberately NOT an issue: a scene with no directional light.
 add_script_e2e(scene_issues e2e_scene_issues.js)
+# TEXTURE-FAIL-ISSUE-1 (SMALL-FIXES-3): a material's texture file deleted on
+# disk under a running editor is a `texture.missing` scene issue — raised
+# within two scans, one per object, cleared when the file returns. A harness,
+# not a --script run: the file has to vanish from OUTSIDE the app (no verb
+# deletes files), so the app runs under MCP and this process removes and
+# restores it (tests/support/mcpharness.h, the ui.shot_aspect shape).
+add_executable(test_texture_missing test_texture_missing.cpp)
+set_target_properties(test_texture_missing PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_texture_missing PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_include_directories(test_texture_missing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_texture_missing PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_texmiss_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-texture_missing)
+file(MAKE_DIRECTORY ${_texmiss_home}/run)
+add_test(NAME scripting.e2e.texture_missing COMMAND test_texture_missing
+         WORKING_DIRECTORY ${_texmiss_home}/run)
+set_tests_properties(scripting.e2e.texture_missing PROPERTIES
+    ENVIRONMENT "HOME=${_texmiss_home};JAHSHAKA_DATA_ROOT=${_texmiss_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "scripting")
+jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
+jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 # THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18) — the
 # World panel's VR section as a verb: `world.vr` reads and writes six document
 # fields (the fly speed in m/s, the fly direction, the turn and its step or
