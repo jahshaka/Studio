@@ -88,6 +88,24 @@ QString taggedPath(const QString &outPng, const QString &tag)
            + (suffix.isEmpty() ? QStringLiteral("png") : suffix);
 }
 
+/// THE SHOT WAITS FOR THE GATHER'S SETTLED HISTORY (PHOTON-GATHER-1d). A shot is
+/// its own offscreen view, and where the screen-probe gather runs that view has a
+/// pixel history of its own that starts young — a two-frame shot would photograph
+/// the raw estimate. So, exactly where the gather runs, the shot settles through
+/// its own view until GiStatus::giAtRest (whose fourth term is that history) holds,
+/// as editor.screenshot does. Where it does not run nothing is rendered and the
+/// shot is the one it always was — which is what keeps the gather-off arm's four
+/// lines byte-identical to the pre-gather picture.
+void settleShotIfGathering(MainWindow &window)
+{
+    ScriptEngine *host = window.scripting();
+    if (!host) return;
+    const ScriptResult r =
+        host->evaluate(QStringLiteral("world.giStatus().gather.running === true"),
+                       QStringLiteral("selftest-gather-running"), true, 0, ScriptRunPolicy::Off);
+    if (r.ok && r.value.toBool()) window.viewport()->settleGiBeforeNextScreenshot(2000);
+}
+
 // ---------------------------------------------------------------------------
 // POSE PAIR B — A FENCE THAT CAN SEE LIGHTING (PHOTON phase A, A1 section 1.1;
 // lane FENCE-1)
@@ -272,6 +290,26 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: SUN CONTACT ARM - world.sunContact is ON\n");
     }
 
+    // THE GATHER-OFF ARM (PHOTON-GATHER-1d): `JAHSHAKA_SELFTEST_GATHER_OFF` pins
+    // world.gi({gather:false}) on the default scene and on fixture B — the A/B the
+    // gather's default-on is quoted against: with it, the four hash lines are the
+    // pre-gather picture byte for byte. A MEASUREMENT switch, the sun contact
+    // arm's shape: read here and nowhere else.
+    const bool gatherOffArm = qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_GATHER_OFF");
+    if (gatherOffArm) {
+        ScriptEngine *armHost = window.scripting();
+        const ScriptResult r = armHost
+            ? armHost->evaluate(QStringLiteral("world.gi({ gather: false }) ? 'ok' : "
+                                               "(function(){ throw new Error('refused'); })()"),
+                                QStringLiteral("selftest-gather-off"), true, 0, ScriptRunPolicy::Off)
+            : ScriptResult();
+        if (!armHost || !r.ok) {
+            std::fprintf(stderr, "engine-selftest: the gather-off arm could not pin the row off\n");
+            return 1;
+        }
+        std::fprintf(stderr, "engine-selftest: GATHER-OFF ARM - world.gi({gather:false})\n");
+    }
+
     // Pump the render loop for ~30 frames (the driver ticks every 16 ms).
     QElapsedTimer clock;
     clock.start();
@@ -340,6 +378,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                  widgetAfterSecond.width(), widgetAfterSecond.height());
 #endif
 
+    settleShotIfGathering(window);
     QImage img = window.viewport()->takeScreenshot(256, 256);
     if (img.isNull()) {
         std::fprintf(stderr, "engine-selftest: takeScreenshot returned a null image after %lld ms\n",
@@ -424,6 +463,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         return 1;
     }
     app.processEvents();
+    settleShotIfGathering(window);
     QImage img2 = window.viewport()->takeScreenshot(256, 256);
     if (img2.isNull() || !img2.save(pose2Png, "PNG")) {
         std::fprintf(stderr, "engine-selftest: could not take or save the second pose (%s)\n",
@@ -493,6 +533,8 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     QByteArray fixtureB(kFixtureBScript);
     if (sunContactArm)
         fixtureB.replace("editor.frame(300);", "world.sunContact({ enabled: true });\neditor.frame(300);");
+    if (gatherOffArm)
+        fixtureB.replace("editor.frame(300);", "world.gi({ gather: false });\neditor.frame(300);");
     if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
     app.processEvents();
 
@@ -517,6 +559,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // which is a temporal filter's state, and a fence may not depend on one.
     // Viewport is deterministic by construction (`resetExposureHistory`).
     const QString b1Png = taggedPath(outPng, QStringLiteral("B1"));
+    settleShotIfGathering(window);
     QImage imgB1 = window.viewport()->takeScreenshot(256, 256,
                                                      IEditorViewport::ScreenshotGrade::Viewport);
     if (imgB1.isNull() || !imgB1.save(b1Png, "PNG")) {
@@ -532,6 +575,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     app.processEvents();
 
     const QString b2Png = taggedPath(outPng, QStringLiteral("B2"));
+    settleShotIfGathering(window);
     QImage imgB2 = window.viewport()->takeScreenshot(256, 256,
                                                      IEditorViewport::ScreenshotGrade::Viewport);
     if (imgB2.isNull() || !imgB2.save(b2Png, "PNG")) {

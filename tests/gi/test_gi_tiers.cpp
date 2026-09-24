@@ -253,12 +253,7 @@ static void testTierTable()
         worldmodes::setPhoton(s, true, PhotonTier::Medium);
         CHECK(giBounces(s) == 1, "Medium after Epic is back to 1 bounce");
     }
-    // The intensity is NOT tiered: 1.0 is the calibrated default and a scene
-    // that trimmed it must keep the trim across a tier switch.
     auto s = freshScene();
-    s->giDdgiIntensity = 2.5f;
-    worldmodes::setPhoton(s, true, PhotonTier::Epic);
-    CHECK(s->giDdgiIntensity == 2.5f, "a tier switch never regrades the field's intensity");
     // Nor is the update budget (owner decision D5: its own visible row).
     s->giUpdateBudget = 0;
     worldmodes::setPhoton(s, true, PhotonTier::Low);
@@ -424,7 +419,6 @@ static void testNewSceneDefault()
     CHECK(giMode(s) == 2 && giQuality(s) == 2 && giDdgi(s) == 1,
           "which is the hybrid, high quality, irradiance field on");
     CHECK(giBounces(s) == 3, "with three bounces (Epic's column)");
-    CHECK(s->giDdgiIntensity == 1.0f, "at the calibrated intensity 1.0");
 }
 
 // ---------------------------------------------------------------------------

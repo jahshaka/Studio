@@ -27,6 +27,11 @@
 // with its own re-convergence rule — case 5 covers it).
 //
 // Its own binary like every GI suite.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -133,6 +138,7 @@ int main(int argc, char **argv)
         bs->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
         enginetest::testCameraLookAt(bv, Vec3(0.0f, 1.6f, 5.2f), Vec3(0.0f, 0.8f, -5.0f));
         GiParams bg;
+        bg.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
         bg.mode = GiMode::Vct;
         bg.quality = GiQuality::Medium;
         bg.numBounces = 4;
@@ -206,6 +212,7 @@ int main(int argc, char **argv)
 
     // ---- the arm ---------------------------------------------------------
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 4;

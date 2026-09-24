@@ -70,24 +70,8 @@ static MeshData texturedCubeMesh()
     return d;
 }
 
-/// THE SIX-FACE BOX CARD LIST for a unit cube of half-extent `h`, in MESH
-/// space — the shape the bake's generator produces for a convex mesh, written
-/// by hand here so an engine suite needs no document and no .jmb.
-static std::vector<MeshCardDesc> boxCards(float h, float margin = 0.02f)
-{
-    std::vector<MeshCardDesc> cards;
-    for (unsigned a = 0; a < 6u; ++a) {
-        MeshCardDesc c;
-        c.axis = static_cast<unsigned char>(a);
-        c.lodLevel = 0;
-        c.origin = Vec3(0, 0, 0);
-        c.halfU = h;
-        c.halfV = h;
-        c.halfDepth = h + margin;
-        cards.push_back(c);
-    }
-    return cards;
-}
+/// The six-face card list for a unit cube: the shared helper.
+using enginetest::boxCards;
 
 static float dot3(const Vec3 &a, const Vec3 &b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 static Vec3 cross3(const Vec3 &a, const Vec3 &b) {
@@ -1962,6 +1946,71 @@ static int caseClouds()
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// gi.card_blend (PHOTON-GATHER-1d fix round): a card subject wearing a BLENDED
+// material. Cards hold opaque surfaces: the capture's prepass piece and the
+// gather's F2 discard both fill `custom_ps_posExecution`, so a blended subject
+// in a capture was "piece already defined" — a shader that does not compile, a
+// black frame. The candidate walk (OgreScene's card pass) drops an item with a
+// blended sub-item; the discard also refuses to fire in a capture. The arm: a
+// Blend crate beside an opaque one, the gather on — the frame renders, the
+// opaque crate is carded, the Blend crate holds no card.
+// ---------------------------------------------------------------------------
+static int caseBlend()
+{
+    Fixture f;
+    if (!makeFixture(f, "cardblend")) return 1;
+    Scene *s = f.s;
+    f.view->setOffscreenContract(OffscreenContract::StillPicture);
+    s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
+    NodeId crate[2] = { 0, 0 };
+    for (int i = 0; i < 2; ++i) {
+        crate[i] = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.6f, 0.45f, 0.25f);
+        p.roughness = 0.6f;
+        if (i == 1) { p.alphaMode = PbrAlphaMode::Blend; p.alpha = 0.5f; }
+        const MaterialId mat = s->createPbrMaterial(p);
+        MeshData md = texturedCubeMesh();
+        md.cards = boxCards(0.5f);
+        const MeshId mesh = s->createMesh(md);
+        CHECK(crate[i] && mat && mesh && s->attachMesh(crate[i], mesh, mat), "a carded crate exists");
+        enginetest::setNodeScale(s, crate[i], Vec3(2.0f, 2.0f, 2.0f));
+        enginetest::setNodePosition(s, crate[i], Vec3(i == 0 ? -2.0f : 2.0f, 1.0f, 0.0f));
+    }
+    GiParams gi = baseGi();
+    gi.gather = GiToggle::On;
+    CHECK(s->setGlobalIllumination(gi), "GI builds with the card row and the gather on");
+    enginetest::testCameraLookAt(f.view, Vec3(0.0f, 2.0f, -8.0f), Vec3(0.0f, 1.0f, 0.0f));
+    render(f.e, 24);
+    const GiStatus st = s->giStatus();
+    CHECK_MSG(st.cards.instancesResident == 1u && st.cards.cardsResident == 6u,
+              "only the opaque crate is carded (%u instances, %u cards)",
+              st.cards.instancesResident, st.cards.cardsResident);
+    CardSample opaque, blended;
+    CHECK(s->readCardTexel(crate[0], 4u, 0.5f, 0.5f, opaque) && opaque.ok,
+          "the opaque crate's +Z card reads back");
+    CHECK(!s->readCardTexel(crate[1], 4u, 0.5f, 0.5f, blended) || !blended.ok,
+          "the Blend crate holds no card");
+    CHECK_MSG(st.gather.running, "the gather runs in this view (running %d)", int(st.gather.running));
+    // THE FRAME RENDERS: the Blend crate's own pixels are lit (a shader that
+    // failed to compile draws nothing, and the view's clear is black).
+    Image img;
+    CHECK(f.view->readPixels(img) && img.width == 192u, "the view reads its picture back");
+    double sum = 0.0;
+    unsigned n = 0;
+    for (unsigned y = 70; y < 110 && y < img.height; ++y)
+        for (unsigned x = 30; x < 70 && x < img.width; ++x) {
+            const unsigned char *px = &img.rgba[(size_t(y) * img.width + x) * 4u];
+            sum += double(px[0]) + double(px[1]) + double(px[2]);
+            ++n;
+        }
+    CHECK_MSG(n && sum / n > 3.0, "the Blend crate's pixels are lit, no black frame (mean %.2f summed codes)",
+              n ? sum / n : 0.0);
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string which = argc > 1 ? argv[1] : "capture";
@@ -1975,6 +2024,7 @@ int main(int argc, char **argv)
     else if (which == "cone_parity_offaxis") rc = caseConeParity(true);
     else if (which == "read_parity") rc = caseReadParity();
     else if (which == "clouds") rc = caseClouds();
+    else if (which == "blend") rc = caseBlend();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }
     std::printf("\n%s: %d failure(s)\n", which.c_str(), failures);
     return rc;

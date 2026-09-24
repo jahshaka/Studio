@@ -86,6 +86,11 @@
 // is what the hard case is held to. Below that lies the measurement's own
 // floor: the profile bands are 16 columns of a 512-wide picture and the slab is
 // dithered, so a face reads +-0.005 run to run.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -302,6 +307,7 @@ int main(int argc, char **argv)
     const auto measure = [&](const char *what, bool chain, const Amb &a, float camX, float orthoHalf) {
         r.camX = camX; r.orthoHalf = orthoHalf; placeCamera(r);
         GiParams gi;
+        gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
         gi.mode = GiMode::Vct;
         gi.quality = GiQuality::High;
         gi.numBounces = 1;

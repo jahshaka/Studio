@@ -315,6 +315,8 @@ static int pictureMode(Engine *e, View *view)
     std::fflush(stdout);
 
     View *big = e->createOffscreenView("farblas-cost", 1920u, 1080u, Colour(0, 0, 0));
+
+    if (big) big->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!big) return 1;
     big->setShadows(true);
     view->setEnabled(false);
@@ -357,6 +359,7 @@ int main(int argc, char **argv)
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
     View *view = e->createOffscreenView("farblas", 640u, 360u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("FAIL: this machine has no ray queries\n");

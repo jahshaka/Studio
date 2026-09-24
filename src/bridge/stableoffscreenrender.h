@@ -78,4 +78,31 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
     return rendered;
 }
 
+/// THE STILL PICTURE'S SETTLE (PHOTON-GATHER-1d fix round;
+/// View::setOffscreenContract). An offscreen view that declares StillPicture
+/// gathers where its scene does, and its first frames are the gather's raw
+/// estimate — so where the scene gathers, the caller draws one frame (the
+/// view's history is born) and then renders until GiStatus::giAtRest, the ONE
+/// settle predicate the screenshot verbs wait on, at most `cap` frames, with the
+/// engine's clock frozen (a photograph does not advance the world). A scene
+/// that does not gather takes the path it always took. Returns frames rendered.
+inline unsigned settleStillPicture(jahshaka::engine::Engine *engine,
+                                   jahshaka::engine::Scene *scene, unsigned cap = 2000u)
+{
+    if (!engine || !scene || !scene->giStatus().gather.on) return 0u;
+    const float delta = engine->fixedFrameDelta();
+    engine->setFixedFrameDelta(0.0f);
+    unsigned n = 0u;
+    auto frame = [&] {
+        if (framemonitor::active())
+            engine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
+        engine->renderOneFrame();
+        ++n;
+    };
+    frame();
+    while (n < cap && !scene->giStatus().giAtRest) frame();
+    engine->setFixedFrameDelta(delta);
+    return n;
+}
+
 #endif   // STABLEOFFSCREENRENDER_H

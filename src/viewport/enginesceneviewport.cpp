@@ -927,9 +927,14 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);
     // The native window exists now: bind a View to it, then the engine scene.
-    if (!view() && mEngine)
+    if (!view() && mEngine) {
+        // THE EDITOR'S PICTURE: an offscreen fallback of the viewport still
+        // gathers (it drives the scene's GI, and its pictures are the
+        // screenshot verbs', taken at rest).
+        setFallbackContract(jahshaka::engine::OffscreenContract::StillPicture);
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
+    }
     // …and bind it, whether the scene is born here or was born earlier for the
     // Player (ensureEngineScene returns early then, so the bind is its own call).
     ensureEngineScene();
@@ -2779,6 +2784,12 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.traceMs      = st.gather.traceMs;
     out.gather.integrateMs  = st.gather.integrateMs;
     out.gather.cpuMs        = st.gather.cpuMs;
+    out.gather.temporal     = st.gather.temporal;
+    out.gather.historyAge   = int(std::min(st.gather.historyAge, 1u << 30));
+    out.gather.restFrames   = int(std::min(st.gather.restFrames, 1u << 30));
+    out.gather.sinceRestart = int(std::min(st.gather.sinceRestart, 1u << 30));
+    out.gather.settleFrames = int(st.gather.settleFrames);
+    out.gather.settled      = st.gather.settled;
     out.gather.error        = QString::fromStdString(st.gather.error);
     return out;
 }
@@ -3028,6 +3039,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                                              unsigned(width), unsigned(height),
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
+    // A STILL PICTURE (View::setOffscreenContract): it gathers, and the settle
+    // below waits for giAtRest before the readback.
+    shot->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // THE USER'S PICTURE OPENS NEITHER HELPER CHANNEL (VR-4-FIX finding 2).
     //
     // `pushEditorHelpers(false)` below takes away the furniture the MIRROR
@@ -3188,13 +3202,40 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // The engine's clock is FROZEN for these frames (particles, shader time and
     // texture animation stay at the instant the script asked for; the document's
     // clock is not stepped at all) and handed back before the shot's own frames.
+    // ...AND A GATHERING SCENE SETTLES WHOEVER ASKED (the fix round): the
+    // shot view is a StillPicture, so a shot the script did not ask to settle
+    // (the Screenshot button, a preview tile) still waits for its own history
+    // — at the verb's cap — rather than photographing the raw estimate.
+    {
+        jahshaka::engine::Scene *sc0 = view() ? view()->scene() : nullptr;
+        if (mShotSettleFrames <= 0 && sc0 && sc0->giStatus().gather.on) mShotSettleFrames = 2000;
+    }
     if (mShotSettleFrames > 0) {
         const int cap = mShotSettleFrames;
         mShotSettleFrames = 0;
-        if (view() && view()->scene() && !view()->scene()->giStatus().giAtRest) {
+        // ...AND THE SHOT'S OWN GATHER HISTORY (PHOTON-GATHER-1d). Where the
+        // screen-probe gather runs, the shot view has a pixel history of its own
+        // that starts young, and giAtRest cannot see it until the view has drawn
+        // once (its settled term reads the views that drew the latest frame). So
+        // a gathering scene draws the shot's first frame unconditionally and then
+        // waits for the ONE predicate as always; a scene that does not gather
+        // takes exactly the path it always took.
+        jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
+        const bool gathering = sc && sc->giStatus().gather.on;
+        if (sc && (gathering || !sc->giStatus().giAtRest)) {
             mEngine->setFixedFrameDelta(0.0f);
-            for (int i = 0; i < cap && !view()->scene()->giStatus().giAtRest; ++i)
+            // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
+            // settle renders through the shot view, outside the driver's tick,
+            // and the frame monitor must not read them as driven frames.
+            const auto frame = [this] {
+                if (framemonitor::active())
+                    mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
                 mEngine->renderOneFrame();
+            };
+            int i = 0;
+            if (gathering) { frame(); ++i; }
+            for (; i < cap && !sc->giStatus().giAtRest; ++i)
+                frame();
             mEngine->setFixedFrameDelta(mLastFrameDelta);
         }
     }

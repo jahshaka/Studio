@@ -135,9 +135,49 @@ static double projectedSolidAngle(const double p[3], const double n[3], const do
     return std::fabs(0.5 * sum);
 }
 
+/// THE COMPLETE CLOSED FORM of a floating emissive panel over the floor (fix
+/// round of 1b, audit F1): the panel (x in [-halfW, halfW], y in [y0, y1], its
+/// front face at z = front, 0.2 m thick) lights a floor point through its FRONT
+/// face and its BOTTOM face, each counted where it FACES the point (Lambert's
+/// routine returns |the projected solid angle| from either side, so a back face
+/// is excluded by its normal); the ends face away from every point at x = 0, the
+/// back and the top away from the floor in front. Averaged over one probe cell
+/// around the point, as the reading is (the probes jitter inside their cells).
+/// E/pi of the emitter's radiance `le`; `frontOnly` the front face's share.
+static double panelClosedForm(double z, double stride, double le, double halfW, double y0,
+                              double y1, double front, double &frontOnly)
+{
+    struct Face { double v[4][3]; double n[3]; };
+    const double zb = front - 0.2;
+    const Face faces[4] = {
+        { { { -halfW, y0, front }, { halfW, y0, front }, { halfW, y1, front }, { -halfW, y1, front } }, { 0, 0, 1 } },
+        { { { -halfW, y0, zb }, { halfW, y0, zb }, { halfW, y0, front }, { -halfW, y0, front } }, { 0, -1, 0 } },
+        { { { halfW, y0, zb }, { halfW, y1, zb }, { halfW, y1, front }, { halfW, y0, front } }, { 1, 0, 0 } },
+        { { { -halfW, y0, zb }, { -halfW, y1, zb }, { -halfW, y1, front }, { -halfW, y0, front } }, { -1, 0, 0 } },
+    };
+    const double up[3] = { 0.0, 1.0, 0.0 };
+    double acc = 0.0, accFront = 0.0;
+    for (int sy = 0; sy < 8; ++sy)
+        for (int sx = 0; sx < 8; ++sx) {
+            const double q[3] = { ((sx + 0.5) / 8.0 - 0.5) * stride, 0.0,
+                                  z + ((sy + 0.5) / 8.0 - 0.5) * stride };
+            for (int f = 0; f < 4; ++f) {
+                double d = 0.0;
+                for (int k = 0; k < 3; ++k) d += faces[f].n[k] * (q[k] - faces[f].v[0][k]);
+                if (d <= 0.0) continue;
+                const double e = le * projectedSolidAngle(q, up, faces[f].v, 4) / 3.14159265358979;
+                acc += e;
+                if (f == 0) accFront += e;
+            }
+        }
+    frontOnly = accFront / 64.0;
+    return acc / 64.0;
+}
+
 static int planeMain(Engine *e, bool targetRow)
 {
     View *view = e->createOffscreenView("plane", kPlaneSize, kPlaneSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *s = e->createScene("plane");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -177,6 +217,9 @@ static int planeMain(Engine *e, bool targetRow)
     CHECK(s->setGlobalIllumination(gi), "the chain builds");
     GatherTuning t;
     t.readback = true;
+    // THE ESTIMATOR'S MEAN, NOT ONE HELD DRAW (PHOTON-GATHER-1d): a still view
+    // holds one N-sample rest mean; the rest door keeps every frame live.
+    t.restOff = true;
     s->setGatherTuning(t);
     render(e, 40);
 
@@ -224,32 +267,8 @@ static int planeMain(Engine *e, bool targetRow)
     // measured here (x = 0), the back and the top face away from the floor in
     // front. Averaged over one probe cell around the point, as the reading is
     // (the probes jitter inside their cells; gi.gather_reference's rule).
-    struct Face { double v[4][3]; double n[3]; };
-    const double zb = kFront - 0.2;
-    const Face faces[4] = {
-        { { { -kHalfW, kY0, kFront }, { kHalfW, kY0, kFront }, { kHalfW, kH, kFront }, { -kHalfW, kH, kFront } }, { 0, 0, 1 } },
-        { { { -kHalfW, kY0, zb }, { kHalfW, kY0, zb }, { kHalfW, kY0, kFront }, { -kHalfW, kY0, kFront } }, { 0, -1, 0 } },
-        { { { kHalfW, kY0, zb }, { kHalfW, kH, zb }, { kHalfW, kH, kFront }, { kHalfW, kY0, kFront } }, { 1, 0, 0 } },
-        { { { -kHalfW, kY0, zb }, { -kHalfW, kH, zb }, { -kHalfW, kH, kFront }, { -kHalfW, kY0, kFront } }, { -1, 0, 0 } },
-    };
-    const double up[3] = { 0.0, 1.0, 0.0 };
     const auto closedAt = [&](double z, double &frontOnly) {
-        double acc = 0.0, accFront = 0.0;
-        for (int sy = 0; sy < 8; ++sy)
-            for (int sx = 0; sx < 8; ++sx) {
-                const double q[3] = { ((sx + 0.5) / 8.0 - 0.5) * stride, 0.0,
-                                      z + ((sy + 0.5) / 8.0 - 0.5) * stride };
-                for (int f = 0; f < 4; ++f) {
-                    double d = 0.0;
-                    for (int k = 0; k < 3; ++k) d += faces[f].n[k] * (q[k] - faces[f].v[0][k]);
-                    if (d <= 0.0) continue;
-                    const double e = kLe * projectedSolidAngle(q, up, faces[f].v, 4) / 3.14159265358979;
-                    acc += e;
-                    if (f == 0) accFront += e;
-                }
-            }
-        frontOnly = accFront / 64.0;
-        return acc / 64.0;
+        return panelClosedForm(z, stride, kLe, kHalfW, kY0, kH, kFront, frontOnly);
     };
     std::printf("   stride %.3f m; the red channel of the gather's E/pi:\n", double(stride));
     double got[6] = {}, closed[6] = {};
@@ -306,6 +325,7 @@ static int deterministicMain(Engine *e)
     std::vector<unsigned> adaptive;
     for (int run = 0; run < 3; ++run) {
         View *view = e->createOffscreenView("det" + std::to_string(run), kSize, kSize, Colour(0, 0, 0));
+        if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
         Scene *s = e->createScene("det" + std::to_string(run));
         if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
         view->setScene(s);
@@ -368,6 +388,212 @@ static int deterministicMain(Engine *e)
     return failures ? 1 : 0;
 }
 
+// ===========================================================================
+// gi.gather_cards — THE HIT LIT FROM THE CARD (PHOTON-GATHER-1d, GA-1e)
+// ===========================================================================
+//
+// The gather's hits read `jahHitRadiance` — the reflection trace's own
+// function: the hit instance's surface CARD wherever one describes the point
+// (the gather passes NO footprint gate — the fix round's decision; the
+// reflection keeps its k = 4), the voxel cascades beyond. This suite puts
+// gi.gather_plane's red emissive panel and white floor on CARDED meshes (the
+// six-face box list every convex bake produces) and reads the floor's red E/pi
+// in front of the panel in three arms, one process, the history OFF:
+//   * the VOXEL arm — the surface cache off (`cards` Off): every hit reads the
+//     cascades, the picture before GA-1e; the frame index frozen;
+//   * the CARD arm — the cache on; the frame index frozen, the shipped stride;
+//   * THE ESTIMATOR arm (the fix round's near-foot chase) — the card arm at a
+//     4-px probe stride with the frame index LIVE, 64 frames averaged: what each
+//     probe measures, apart from the 16-px interpolation and from one frozen
+//     draw's noise, against the closed form averaged over ITS cell. Barred
+//     0.90..1.05 over the profile: the ray start lifted by half a voxel (the
+//     defect it found) read 1.069 at the foot and 0.888 at 1.6 m; with the
+//     start at an epsilon it reads 0.94..1.00.
+// It reports the bounce's COLOUR (the panel emits (0.9, 0.2, 0.05): the floor's
+// G/R must be the emitter's 0.222 in every arm — a read that mixes the black
+// floor's voxels in darkens the bounce, it must not change its hue) and its EDGE
+// (the distance from the panel's face at which the red falls to half its peak),
+// and the three arms against the complete closed form.
+static int cardsMain(Engine *e)
+{
+    View *view = e->createOffscreenView("cards", kPlaneSize, kPlaneSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
+    Scene *s = e->createScene("cards");
+    if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(s);
+    view->setShadows(true);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    view->setPostFx(fx);
+    view->setCamera(topDownCamera());
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine — gi.gather_cards skips cleanly\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    const auto carded = [&](const PbrParams &p, const Vec3 &pos, const Vec3 &scale) {
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = enginetest::boxCards(0.5f);
+        const NodeId n = s->createNode();
+        const MeshId mesh = s->createMesh(md);
+        const MaterialId m = s->createPbrMaterial(p);
+        if (!n || !mesh || !m || !s->attachMesh(n, mesh, m)) return NodeId(0);
+        s->setNodeTransform(n, pos, Quat(), scale);
+        return n;
+    };
+    const float kLeR = 0.9f, kLeG = 0.2f, kLeB = 0.05f;
+    const float kHalfW = 3.0f, kY0 = 0.2f, kH = 0.9f, kFront = 0.1f;
+    CHECK(carded(matte(Colour(0.9f, 0.9f, 0.9f)), Vec3(0.0f, -0.25f, 0.0f), Vec3(40.0f, 0.5f, 40.0f)) &&
+              carded(matte(Colour(0.0f, 0.0f, 0.0f), Colour(kLeR, kLeG, kLeB)),
+                     Vec3(0.0f, 0.5f * (kY0 + kH), 0.0f), Vec3(kHalfW * 2.0f, kH - kY0, 0.2f)),
+          "the carded floor and panel exist");
+    GiParams gi = chainGi();
+    gi.cards = GiToggle::On;
+    CHECK(s->setGlobalIllumination(gi), "the chain builds");
+    GatherTuning t;
+    t.readback = true;
+    t.freezeFrameIndex = true;
+    s->setGatherTuning(t);
+    setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
+
+    const float stride = 16.0f * (2.0f * kOrthoHalf / float(kPlaneSize));
+    // The profile: from just in front of the panel out to three strides.
+    std::vector<float> zs;
+    for (float d = 0.05f; d <= 1.6f; d += 0.05f) zs.push_back(kFront + d);
+    struct ArmResult { std::vector<double> r, g; unsigned cards = 0; bool ran = false; };
+    const auto readArm = [&](const char *what, GiToggle cards, unsigned probeStride, int liveFrames) {
+        ArmResult a;
+        GiParams g = gi;
+        g.cards = cards;
+        s->setGiTuning(g);
+        GatherTuning at = t;
+        at.probeStride = probeStride;
+        at.freezeFrameIndex = liveFrames <= 1;
+        s->setGatherTuning(at);
+        render(e, 150);   // captures + relights (a card's indirect is marched before it is read)
+        unsigned lastFrame = ~0u;
+        GatherStatus st;
+        for (int f = 0; f < 20; ++f) {
+            e->renderOneFrame();
+            st = s->giStatus().gather;
+            if (!st.irradiance.empty() && st.irradianceFrame != lastFrame) break;
+        }
+        a.ran = st.running && !st.irradiance.empty();
+        a.cards = s->giStatus().cards.cardsResident;
+        // THE LIVE AVERAGE: `liveFrames` distinct read-back frames, summed.
+        if (liveFrames > 1 && a.ran) {
+            std::vector<double> acc(st.irradiance.size(), 0.0);
+            int got = 0;
+            unsigned lf = st.irradianceFrame;
+            for (int f = 0; f < 8 * liveFrames && got < liveFrames; ++f) {
+                e->renderOneFrame();
+                const GatherStatus q = s->giStatus().gather;
+                if (q.irradiance.size() != acc.size() || q.irradianceFrame == lf) continue;
+                lf = q.irradianceFrame;
+                for (size_t i = 0; i < acc.size(); ++i) acc[i] += q.irradiance[i];
+                ++got;
+            }
+            for (size_t i = 0; i < acc.size(); ++i) st.irradiance[i] = float(acc[i] / std::max(got, 1));
+        }
+        // A ROW ACROSS THE PANEL'S MIDDLE TWO THIRDS (x in [-2, 2] m, eight probe
+        // cells) at each distance: one frozen frame's estimate is one draw per
+        // probe, and the row averages eight of them — in every arm the same
+        // eight, the frame index frozen, so the arms stay paired.
+        int x0 = 0, x1 = 0, unused = 0;
+        worldToPixel(-2.0f, 0.0f, x0, unused);
+        worldToPixel(2.0f, 0.0f, x1, unused);
+        for (float z : zs) {
+            int cx, cy;
+            worldToPixel(0.0f, z, cx, cy);
+            double sr = 0.0, sg = 0.0;
+            unsigned n = 0;
+            for (int y = cy - 1; y <= cy + 1; ++y)
+                for (int x = x0; x <= x1; ++x) {
+                    if (st.irradiance.empty()) break;
+                    const float *v = &st.irradiance[(size_t(y) * st.irradianceW + x) * 4u];
+                    sr += v[0];
+                    sg += v[1];
+                    ++n;
+                }
+            a.r.push_back(n ? sr / n : 0.0);
+            a.g.push_back(n ? sg / n : 0.0);
+        }
+        std::printf("   %-44s ran %d, %u cards resident\n", what, int(a.ran), a.cards);
+        return a;
+    };
+    const ArmResult vox = readArm("the VOXEL arm (cache off)", GiToggle::Off, 0u, 1);
+    const ArmResult card = readArm("the CARD arm (cache on, ungated)", GiToggle::On, 0u, 1);
+    const unsigned kFineStride = 4u;
+    const ArmResult open = readArm("the ESTIMATOR arm (cards, 4 px, 64 live frames)", GiToggle::On,
+                                   kFineStride, 64);
+    const float fineStride = float(kFineStride) * (2.0f * kOrthoHalf / float(kPlaneSize));
+    unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+    CHECK(vox.ran && card.ran && open.ran, "all three arms ran the gather and read it back");
+    CHECK_MSG(vox.cards == 0u && card.cards > 0u && open.cards > 0u,
+              "the cache is off in the voxel arm and resident in the card arms (%u / %u / %u cards)",
+              vox.cards, card.cards, open.cards);
+
+    std::printf("\n   the floor's red E/pi in front of the panel (d = distance from its face):\n");
+    std::printf("      d (m)   CLOSED     VOXEL ratio      CARD ratio   CLOSED(4px) ESTIMATOR ratio\n");
+    double worstHue = 0.0, maxDiff = 0.0, estLo = 1e9, estHi = 0.0;
+    for (size_t i = 0; i < zs.size(); ++i) {
+        double frontOnly = 0.0, fo4 = 0.0;
+        const double c = panelClosedForm(zs[i], stride, kLeR, kHalfW, kY0, kH, kFront, frontOnly);
+        const double c4 = panelClosedForm(zs[i], fineStride, kLeR, kHalfW, kY0, kH, kFront, fo4);
+        const double est = c4 > 0.0 ? open.r[i] / c4 : 0.0;
+        estLo = std::min(estLo, est);
+        estHi = std::max(estHi, est);
+        if (i % 3 == 0 || i + 1 == zs.size())
+            std::printf("     %5.2f  %8.5f  %8.5f %5.3f  %8.5f %5.3f  %8.5f %8.5f %5.3f\n",
+                        double(zs[i] - kFront), c, vox.r[i], vox.r[i] / c, card.r[i], card.r[i] / c,
+                        c4, open.r[i], est);
+        for (const ArmResult *a : { &vox, &card, &open }) {
+            if (a->r[i] <= 1e-4) continue;
+            worstHue = std::max(worstHue, std::fabs(a->g[i] / a->r[i] - double(kLeG / kLeR)));
+        }
+        maxDiff = std::max(maxDiff, std::fabs(card.r[i] - vox.r[i]) / std::max(vox.r[i], 1e-6));
+    }
+    // THE EDGE: the distance from the face at which the red falls to half its
+    // PEAK along the profile.
+    const auto edge = [&](const ArmResult &a) {
+        const double half = 0.5 * *std::max_element(a.r.begin(), a.r.end());
+        for (size_t i = 1; i < a.r.size(); ++i)
+            if (a.r[i] <= half) {
+                const double f = (a.r[i - 1] - half) / std::max(a.r[i - 1] - a.r[i], 1e-9);
+                return double(zs[i - 1] - kFront) + f * double(zs[i] - zs[i - 1]);
+            }
+        return double(zs.back() - kFront);
+    };
+    double frontClosed = 0.0;
+    std::vector<double> closedProfile;
+    for (float z : zs) {
+        double fo = 0.0;
+        closedProfile.push_back(panelClosedForm(z, stride, kLeR, kHalfW, kY0, kH, kFront, fo));
+    }
+    ArmResult closedArm;
+    closedArm.r = closedProfile;
+    (void)frontClosed;
+    const double eVox = edge(vox), eCard = edge(card), eClosed = edge(closedArm);
+    std::printf("   THE EDGE (where the red falls to half its peak): closed form %.3f m, voxel %.3f m, card %.3f m\n",
+                eClosed, eVox, eCard);
+    std::printf("   THE COLOUR: the worst |G/R - %.3f| over the profile in any arm: %.4f\n",
+                double(kLeG / kLeR), worstHue);
+    std::printf("   the card arm against the voxel arm: largest relative difference %.2f %%\n",
+                100.0 * maxDiff);
+    CHECK_MSG(worstHue <= 0.02,
+              "THE BOUNCE KEEPS THE EMITTER'S COLOUR in every arm (G/R within 0.02 of %.3f; worst %.4f)",
+              double(kLeG / kLeR), worstHue);
+    CHECK_MSG(estLo >= 0.90 && estHi <= 1.05,
+              "THE ESTIMATOR MEASURES THE SURFACE: at a 4-px stride, 64 live frames averaged, the floor's "
+              "red reads %.3f..%.3f of the closed form over its own cell (bar 0.90..1.05; a ray start lifted "
+              "half a voxel off the surface read 0.888..1.069)", estLo, estHi);
+    CHECK_MSG(maxDiff > 0.005,
+              "THE CARD IS READ: the card arm differs from the voxel arm somewhere on the profile "
+              "(largest %.2f %%)", 100.0 * maxDiff);
+    std::printf("%s\n", failures ? "FAILED" : "PASSED");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "";
@@ -382,6 +608,7 @@ int main(int argc, char **argv)
     Engine *e = engine.get();
     if (mode == "plane") return planeMain(e, argc > 2 && std::string(argv[2]) == "--target");
     if (mode == "deterministic") return deterministicMain(e);
-    std::printf("FAIL: unknown mode '%s' (plane | deterministic)\n", mode.c_str());
+    if (mode == "cards") return cardsMain(e);
+    std::printf("FAIL: unknown mode '%s' (plane | deterministic | cards)\n", mode.c_str());
     return 1;
 }

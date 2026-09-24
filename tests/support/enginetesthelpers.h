@@ -53,6 +53,25 @@ inline MeshData unitCubeMesh()
     return d;
 }
 
+/// THE SIX-FACE BOX CARD LIST for a unit cube of half-extent `h`, in MESH space —
+/// the shape the bake's generator produces for a convex mesh, written by hand so
+/// an engine suite needs no document and no .jmb (gi.card_*, gi.gather_cards).
+inline std::vector<MeshCardDesc> boxCards(float h, float margin = 0.02f)
+{
+    std::vector<MeshCardDesc> cards;
+    for (unsigned a = 0; a < 6u; ++a) {
+        MeshCardDesc c;
+        c.axis = static_cast<unsigned char>(a);
+        c.lodLevel = 0;
+        c.origin = Vec3(0, 0, 0);
+        c.halfU = h;
+        c.halfV = h;
+        c.halfDepth = h + margin;
+        cards.push_back(c);
+    }
+    return cards;
+}
+
 /// Per-node transform state so position/scale/rotation helpers compose the way
 /// the deleted verbs did (each verb overwrote only its component).
 struct NodePose { Vec3 pos{0,0,0}; Quat rot; Vec3 scale{1,1,1}; };   // Quat defaults to identity

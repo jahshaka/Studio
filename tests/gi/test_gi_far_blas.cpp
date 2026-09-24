@@ -171,6 +171,7 @@ int main()
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
     View *view = e->createOffscreenView("farblas", 256u, 256u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }
     view->setShadows(true);
     PostFxDesc fx;

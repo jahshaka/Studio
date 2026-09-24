@@ -1259,6 +1259,18 @@ int photonBounces(PhotonTier t)   { return kPhotonTable[tierIndex(t)].bounces; }
 int photonProbeSize(PhotonTier t) { return kPhotonTable[tierIndex(t)].probeSize; }
 int photonCascades(PhotonTier t)  { return kPhotonTable[tierIndex(t)].cascades; }
 
+// THE GATHER COLUMN IS A PROJECTION, NOT A COPY (PHOTON-GATHER-1d): the engine's
+// tier table holds the gather row (Types.h GiGatherFacts — on/off, stride,
+// octahedral resolution, adaptive cap) and this reads it for the tier's quality
+// and Epic fact, so the column cannot drift from what the renderer does.
+jahshaka::engine::GiGatherFacts photonGather(PhotonTier t)
+{
+    return jahshaka::engine::giQualityFacts(
+               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
+               jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic)
+        .gather;
+}
+
 // ---------------------------------------------------------------------------
 // WHAT A TIER IS, IN WORDS, GENERATED (render audit A5).
 //
@@ -1284,8 +1296,11 @@ QString metres(float v)
 /// The engine's physical facts for a tier's quality column.
 jahshaka::engine::GiQualityFacts factsFor(PhotonTier t)
 {
+    // The tier's Epic fact rides along (the gather's density is the one row the
+    // quality column cannot carry — GiParams::epicTier).
     return jahshaka::engine::giQualityFacts(
-        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)));
+        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
+        jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic);
 }
 
 }   // namespace
@@ -1337,8 +1352,21 @@ QString photonTierSentence(PhotonTier t)
                    .arg(facts.voxelResolution);
     }
 
-    out += photonDdgi(t) ? QStringLiteral("; the irradiance field ON")
-                         : QStringLiteral("; no irradiance field");
+    // THE DIFFUSE, from the gather row (PHOTON-GATHER-1d): where rays run, the
+    // screen-probe gather IS the diffuse and the field its fallback; below it the
+    // field (and the cones) are the diffuse.
+    const jahshaka::engine::GiGatherFacts gather = photonGather(t);
+    if (gather.on) {
+        out += QStringLiteral("; the diffuse from the screen-probe gather where rays run "
+                              "(%1 rays a probe, a probe per %2x%2 px)")
+                   .arg(gather.octRes * gather.octRes)
+                   .arg(gather.stride);
+        out += photonDdgi(t) ? QStringLiteral(", the irradiance field its fallback")
+                             : QStringLiteral(", no irradiance field");
+    } else {
+        out += photonDdgi(t) ? QStringLiteral("; the irradiance field ON")
+                             : QStringLiteral("; no irradiance field");
+    }
     out += QStringLiteral("; %1 light bounce%2")
                .arg(photonBounces(t))
                .arg(photonBounces(t) == 1 ? QString() : QStringLiteral("s"));

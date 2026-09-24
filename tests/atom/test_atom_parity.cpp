@@ -461,6 +461,8 @@ int main()
     Engine *e = engine.get();
 
     View *view = e->createOffscreenView("parity", kW, kH, Colour(0, 0, 0));
+
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *scene = e->createScene("parity");
     view->setScene(scene);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f));

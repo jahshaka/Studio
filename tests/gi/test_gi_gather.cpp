@@ -146,6 +146,7 @@ using enginetest::leakroom::meanRG;
 
 // ---------------------------------------------------------------------------
 static int costMain(Engine *e);
+static int shippedCostMain(Engine *e);
 static int noRaysMain(Engine *e);
 
 int main()
@@ -162,6 +163,7 @@ int main()
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
 
+    if (std::getenv("JAH_GATHER_COST_SHIPPED")) return shippedCostMain(e);
     if (std::getenv("JAH_GATHER_COST")) return costMain(e);
     if (std::getenv("JAHSHAKA_NO_RAY_QUERY")) return noRaysMain(e);
     // THE ESTIMATOR, NOT ITS MEAN (PHOTON-GATHER-1c): every arm of this suite is
@@ -177,6 +179,7 @@ int main()
 
     const unsigned kSize = 256u;
     View *view = e->createOffscreenView("gather", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }
     // Offscreen views ship with shadows OFF; the leak measurement is nothing
     // without them (the outside lamp would light the room through the wall).
@@ -288,11 +291,36 @@ int main()
     // floor probes on either side of a wall, the hit-distance test does for
     // every direction that hits the wall. Accepted: "at or below phase 1" is
     // missed by the letter, by 0.3 %, with the mechanism named.
-    for (int a = 0; a < 4; ++a)
-        CHECK_MSG(rows[a].gather <= rows[a].field + 0.002f,
+    // ...AND THE RAY START AT THE SURFACE (PHOTON-GATHER-1d's audit round), the
+    // bar DERIVED (the lead's ruling). The gather's read of this leak is a
+    // smooth function of how far off the floor its rays start — the 0.05 m wall
+    // measured at a start of 4 / 2 / 1 / 0.5 / <= 0.2 cm: 0.0764 / 0.0768 /
+    // 0.0770 / 0.0771 / 0.0772 — a sensitivity S = (0.0772 - 0.0764) / 0.039 m
+    // = 0.021 per metre, never a hole. So the gather's excess over the field is
+    // accounted for term by term:
+    //   0.0020  phase 1's accepted filter leak (the same-plane neighbour across a
+    //           thin wall, above; measured with the lifted start),
+    // + 0.0008  S x the start's MOVE, 4 cm -> the surface (0.021 x 0.039 m) — a
+    //           deterministic shift, the physics of the fix, not noise,
+    // + 0.00004 S x the start's own uncertainty (its epsilon, <= 2 mm here),
+    // + the store's quantum, half float: the reading x 2^-10 (~0.00008).
+    // = the field + ~0.0029 at the 0.05 m wall (measured +0.0024: 0.0772 vs
+    // 0.0748). Both columns are the VOXEL read's leak through a sub-voxel wall
+    // (the slabs carry no cards), so VOXEL-4's store will move both numbers; the
+    // bar is the field's own read plus these terms and survives it.
+    const float kSensitivity = (0.0772f - 0.0764f) / 0.039f;       // per metre of start height
+    const float kStartMove = 0.039f, kStartUncertainty = 0.002f;
+    for (int a = 0; a < 4; ++a) {
+        const float bar = rows[a].field + 0.002f + kSensitivity * (kStartMove + kStartUncertainty) +
+                          rows[a].gather / 1024.0f;
+        CHECK_MSG(rows[a].gather <= bar,
                   "the ray gather leaks no more than the field through the %.2f m wall "
-                  "(%.4f vs %.4f)", double(thicknesses[a]), double(rows[a].gather),
-                  double(rows[a].field));
+                  "(%.4f vs %.4f; bar %.4f = the field + 0.0020 phase 1's filter leak + %.4f the "
+                  "start's move and uncertainty x %.3f/m + %.5f quantum)",
+                  double(thicknesses[a]), double(rows[a].gather), double(rows[a].field), double(bar),
+                  double(kSensitivity * (kStartMove + kStartUncertainty)), double(kSensitivity),
+                  double(rows[a].gather / 1024.0f));
+    }
     CHECK_MSG(rows[0].greenGather > 0.02f,
               "the room is lit by its own lamp under the gather (green %.4f) — a black room "
               "leaks nothing and proves nothing", double(rows[0].greenGather));
@@ -688,6 +716,7 @@ int main()
 static int noRaysMain(Engine *e)
 {
     View *view = e->createOffscreenView("gathernorays", 256u, 256u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *s = e->createScene("gathernorays");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -728,6 +757,7 @@ static int noRaysMain(Engine *e)
 static int costMain(Engine *e)
 {
     View *view = e->createOffscreenView("gathercost", 1920u, 1080u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *s = e->createScene("gathercost");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -914,6 +944,7 @@ static int costMain(Engine *e)
     // trace is per PROBE and the integrate per PIXEL, and neither knows about
     // the seam. Stated as an equivalence, not as a VR measurement.
     View *vr = e->createOffscreenView("gathervr", 4320u, 2384u, Colour(0, 0, 0));
+    if (vr) vr->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (vr) {
         // ...and the 1080p view stands DOWN first (see the note on `measure`):
         // with both enabled the "10.3 Mpx" rows could be the 1080p view's.
@@ -958,4 +989,99 @@ static int costMain(Engine *e)
               "(a print, not the spec's bar — see the note)", double(high));
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// THE SHIPPED GATHER'S ABSOLUTE COST (PHOTON-GATHER-1d fix round, item 8) — a
+// MEASUREMENT, run by hand under scripts/gpu-exclusive.sh with
+// JAH_GATHER_COST_SHIPPED=1 (no ctest registers it): 1080p, the tier's own
+// stride and rays (High 16 px, Epic 8 px, 64 rays), the frame index LIVE and the
+// rest door shut (a still view would hold and dispatch nothing), in a carded
+// room, the card read ON against OFF — the two arms paired in one process. The
+// four jobs' GPU timestamps, median of 60 frames after 60 of warm-up.
+static int shippedCostMain(Engine *e)
+{
+    View *view = e->createOffscreenView("gathershipped", 1920u, 1080u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);
+    Scene *s = e->createScene("gathershipped");
+    if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(s);
+    view->setShadows(true);
+    armChain(view);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.02f, 0.02f, 0.03f), Colour(0.01f, 0.01f, 0.02f));
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = enginetest::boxCards(0.5f);
+    const MeshId cubeMesh = s->createMesh(md);
+    PbrParams wallP;
+    wallP.albedo = Colour(0.8f, 0.78f, 0.75f);
+    wallP.roughness = 0.9f;
+    const MaterialId wallMat = s->createPbrMaterial(wallP);
+    const Vec3 walls[6][2] = {
+        { Vec3(24, 12, 0.4f), Vec3(0, 4, 12) }, { Vec3(24, 12, 0.4f), Vec3(0, 4, -12) },
+        { Vec3(0.4f, 12, 24), Vec3(12, 4, 0) }, { Vec3(0.4f, 12, 24), Vec3(-12, 4, 0) },
+        { Vec3(24, 0.4f, 24), Vec3(0, -1, 0) }, { Vec3(24, 0.4f, 24), Vec3(0, 10, 0) } };
+    for (const auto &w : walls) {
+        const NodeId n = s->createNode();
+        if (!n || !s->attachMesh(n, cubeMesh, wallMat)) { std::printf("FAIL: wall\n"); return 1; }
+        enginetest::setNodeScale(s, n, w[0]);
+        enginetest::setNodePosition(s, n, w[1]);
+    }
+    for (int i = 0; i < 120; ++i) {
+        const NodeId n = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.2f + 0.005f * float(i), 0.3f, 0.8f - 0.004f * float(i));
+        p.emissive = Colour(0.0f, 0.0f, float(i % 5) * 0.4f);
+        p.roughness = 0.6f;
+        const MaterialId m = s->createPbrMaterial(p);
+        if (!n || !m || !s->attachMesh(n, cubeMesh, m)) { std::printf("FAIL: prop\n"); return 1; }
+        enginetest::setNodeScale(s, n, Vec3(1.2f, 0.8f + 0.02f * float(i % 9), 1.2f));
+        enginetest::setNodePosition(s, n, Vec3(-10.0f + 1.7f * float(i % 13), 0.2f + 0.6f * float(i % 7),
+                                               -10.0f + 2.1f * float(i % 11)));
+    }
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
+    const auto median = [](std::vector<float> v) {
+        if (v.empty()) return -1.0f;
+        std::sort(v.begin(), v.end());
+        return v[v.size() / 2];
+    };
+    std::printf("   tier   cards  stride rays probes(+adaptive)  place  trace  filter integrate  TOTAL ms  "
+                "(cards resident)\n");
+    for (int epic = 0; epic < 2; ++epic)
+        for (int cards = 1; cards >= 0; --cards) {
+            GiParams gi;
+            gi.mode = GiMode::Vct;
+            gi.quality = GiQuality::High;
+            gi.epicTier = epic != 0;
+            gi.ddgi = GiToggle::Off;
+            gi.numBounces = epic ? 3 : 1;
+            gi.cascades = true;
+            gi.cards = cards ? GiToggle::On : GiToggle::Off;
+            gi.gather = GiToggle::On;
+            s->setGlobalIllumination(gi);
+            GatherTuning t;
+            t.restOff = true;
+            s->setGatherTuning(t);
+            render(e, 60);
+            std::vector<float> pl, tr, fi, in, tot;
+            for (int i = 0; i < 60; ++i) {
+                e->renderOneFrame();
+                const GatherStatus q = gatherStatus(s);
+                if (q.placeMs < 0.0f || q.traceMs < 0.0f || q.filterMs < 0.0f || q.integrateMs < 0.0f)
+                    continue;
+                pl.push_back(q.placeMs); tr.push_back(q.traceMs); fi.push_back(q.filterMs);
+                in.push_back(q.integrateMs);
+                tot.push_back(q.placeMs + q.traceMs + q.filterMs + q.integrateMs);
+            }
+            const GatherStatus q = gatherStatus(s);
+            std::printf("   %-6s %-5s  %4u  %4u  %6u(+%u)      %.3f  %.3f  %.3f   %.3f     %.3f   (%u)\n",
+                        epic ? "Epic" : "High", cards ? "ON" : "off", q.stride, q.raysPerProbe, q.probes,
+                        q.adaptive, double(median(pl)), double(median(tr)), double(median(fi)),
+                        double(median(in)), double(median(tot)), s->giStatus().cards.cardsResident);
+        }
+    return 0;
 }

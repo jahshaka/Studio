@@ -268,6 +268,11 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
             return false;
         }
         own->setEnabled(false);
+        // A THUMBNAIL IS A STILL PICTURE (View::setOffscreenContract): it
+        // gathers where its studio scene does and the render settles on
+        // giAtRest (bridge/stableoffscreenrender.h), so a stored tile is never
+        // the gather's raw first frames.
+        own->setOffscreenContract(OffscreenContract::StillPicture);
         adoptView(own);
     }
     if (!engineScene() && !attach(view())) {
@@ -479,6 +484,7 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // are streamed since P2, so "two frames" alone is no longer a guarantee that
     // everything the thumbnail draws is resident — see bridge/
     // stableoffscreenrender.h for upstream's recipe and why the minimum stays 2.
+    settleStillPicture(engine.get(), view()->scene());
     renderStableFrames(engine.get());
     Image img;
     const bool ok = view()->readPixels(img);

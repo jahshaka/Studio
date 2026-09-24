@@ -1149,6 +1149,10 @@ set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 300 LABELS "en
 add_test(NAME gi.card_clouds COMMAND test_gi_cards clouds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_clouds PROPERTIES TIMEOUT 300 LABELS "engine")
+# gi.card_blend (PHOTON-GATHER-1d fix round): a Blend material on a card subject renders, holds no card.
+add_test(NAME gi.card_blend COMMAND test_gi_cards blend
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_blend PROPERTIES TIMEOUT 300 LABELS "engine")
 # PHOTON-CARDS-2 part A: the pixel's diffuse cones and the card job's are ONE
 # text (JahVoxelCones) — their answers at a point, 1 % apart at most.
 add_test(NAME gi.cone_integrator_parity COMMAND test_gi_cards cone_parity
@@ -1448,7 +1452,10 @@ target_compile_definitions(test_gi_gather_findings PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_gather_findings PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_findings JahshakaEngineMedia)
-foreach(_finding glass nest sky plane_weight)
+# ...and gi.gather_letterbox (PHOTON-GATHER-1d): the gather's eye basis
+# expanded to the target under a constrained-aspect camera (the shared helper);
+# gi.gather_edge (the fix round, GA-EDGE): a silhouette pixel belongs to its surface.
+foreach(_finding glass nest sky plane_weight letterbox edge)
     add_test(NAME gi.gather_${_finding} COMMAND test_gi_gather_findings ${_finding}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_finding} PROPERTIES TIMEOUT 600 LABELS "engine")
@@ -1470,7 +1477,9 @@ target_compile_definitions(test_gi_gather_phase2 PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_gather_phase2 PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_phase2 JahshakaEngineMedia)
-foreach(_arm plane deterministic)
+# ...and gi.gather_cards (PHOTON-GATHER-1d, GA-1e): the hit lit from the card —
+# the plane fixture on carded meshes, the voxel / card / ungated arms paired.
+foreach(_arm plane deterministic cards)
     add_test(NAME gi.gather_${_arm} COMMAND test_gi_gather_phase2 ${_arm}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")

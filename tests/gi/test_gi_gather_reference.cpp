@@ -179,6 +179,8 @@ int main()
     if (std::getenv("JAH_GATHER_TRACE")) return traceMain(e);
 
     View *view = e->createOffscreenView("ref", kSize, kSize, Colour(0, 0, 0));
+
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: no ray queries on this machine — gi.gather_reference is about the "
@@ -498,6 +500,10 @@ int main()
         g.gather = gather ? GiToggle::On : GiToggle::Off;
         s->setGlobalIllumination(g);
         GatherTuning t;
+        // THE ESTIMATOR'S MEAN, NOT ONE HELD DRAW (PHOTON-GATHER-1d): a still
+        // view holds one N-sample rest mean, so the frames below would all be
+        // that draw; the rest door keeps every frame the history's.
+        t.restOff = true;
         s->setGatherTuning(t);
         s->refreshGlobalIllumination();
         render(e, 40);
@@ -632,6 +638,84 @@ int main()
                   double(points[i].x), rg, lo, hi, 100.0 * se);
     }
 
+    // THE HELD DRAW (the fix round's item 7): a still view HOLDS one N-sample rest
+    // mean (GatherStatus::settled), so the SHIPPED still picture is one draw of
+    // a 16-sample mean, not the estimator's mean the gate above reads. Its floor
+    // is barred here: against the closed form, at every point, within 3 sigma of
+    // a 16-sample mean — k sigma / 4 with k = 3, sigma the single-frame spread
+    // — MEASURED here with each frame its own estimate (the lever, 48 frames:
+    // the 192-frame arm's frames are the history's, whose frames are
+    // correlated) — plus that arm's own measured bias, which no number of
+    // samples removes.
+    {
+        std::vector<double> sigmaRaw(points.size(), 0.0);
+        {
+            GiParams g = gi;
+            g.ddgi = GiToggle::Off;
+            g.gather = GiToggle::On;
+            s->setGlobalIllumination(g);
+            GatherTuning lever;
+            lever.restOff = true;
+            s->setGatherTuning(lever);
+            setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
+            s->refreshGlobalIllumination();
+            render(e, 20);
+            std::vector<double> a1(points.size(), 0.0), a2(points.size(), 0.0);
+            const int kN = 48;
+            for (int f = 0; f < kN; ++f) {
+                e->renderOneFrame();
+                ImageF img;
+                view->readPixelsHdr(img);
+                for (size_t i = 0; i < points.size(); ++i) {
+                    double px, py, m[3];
+                    worldToPixel(points[i].x, points[i].z, px, py);
+                    blockMean(img, px, py, 5, m);
+                    a1[i] += m[0];
+                    a2[i] += m[0] * m[0];
+                }
+            }
+            unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+            for (size_t i = 0; i < points.size(); ++i) {
+                const double mean = a1[i] / kN;
+                sigmaRaw[i] = mean > 0.0 ? std::sqrt(std::max(0.0, a2[i] / kN - mean * mean)) / mean : 0.0;
+            }
+        }
+        GiParams g = gi;
+        g.ddgi = GiToggle::Off;
+        g.gather = GiToggle::On;
+        s->setGlobalIllumination(g);
+        s->setGatherTuning(GatherTuning());          // the shipped rest: rest mean, then the hold
+        s->refreshGlobalIllumination();
+        int f = 0;
+        for (; f < 400; ++f) {
+            e->renderOneFrame();
+            const GatherStatus gs = s->giStatus().gather;
+            if (gs.restFrames > gs.settleFrames) break;
+        }
+        const GatherStatus gs = s->giStatus().gather;
+        CHECK_MSG(gs.restFrames > gs.settleFrames,
+                  "the still view HOLDS its rest mean (rest frames %u > N %u, %d frames)", gs.restFrames,
+                  gs.settleFrames, f);
+        e->renderOneFrame();
+        ImageF img;
+        view->readPixelsHdr(img);
+        for (size_t i = 0; i < points.size(); ++i) {
+            double px, py, m[3];
+            worldToPixel(points[i].x, points[i].z, px, py);
+            blockMean(img, px, py, 5, m);
+            const double held = m[0] / (double(kFloorAlbedo) * kEnergyFactor1 * envPathScale);
+            const double a = points[i].analytic;
+            const double sigma = sigmaRaw[i];                     // one frame, relative
+            const double bias = a > 0 ? std::fabs(gatherE[i] / a - 1.0) : 0.0;
+            const double bar = bias + 3.0 * sigma / 4.0;
+            const double rh = a > 0 ? held / a : 0.0;
+            CHECK_MSG(std::fabs(rh - 1.0) <= bar,
+                      "THE HELD DRAW AT x = %.2f m: the still picture reads %.3f of the closed form "
+                      "(bar 1 +- %.3f: the estimator's bias %.3f + 3 sigma/4, sigma %.1f %% a frame)",
+                      double(points[i].x), rh, bar, bias, 100.0 * sigma);
+        }
+    }
+
     // ...and the other two estimators are PRINTED, never gated: this lane does
     // not own the cones or the field, and a bar on them here would be a bar
     // nobody agreed to. The numbers are the finding.
@@ -762,6 +846,7 @@ int main()
 static int traceMain(Engine *e)
 {
     View *view = e->createOffscreenView("trace", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: no ray queries on this machine — gi.gather_trace skips cleanly\n");
