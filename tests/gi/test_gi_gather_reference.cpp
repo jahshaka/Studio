@@ -35,8 +35,9 @@
 //
 // WHAT IS CALIBRATED RATHER THAN ASSUMED. Three things, all measured inside the
 // suite and all printed:
-//   1. THE TRANSFER of the 8-bit picture (linear or sRGB) — from a ramp of
-//      EMISSIVE patches of known radiance, whose pixels are that radiance.
+//   1. THE READBACK — the view's scene RADIANCE in float (HDR-READBACK-1),
+//      checked against a ramp of EMISSIVE patches of known radiance, whose
+//      pixels are that radiance.
 //   2. THE BRDF PATH — a directional light of known intensity on the same
 //      floor renders `albedo * intensity` (the engine's powerScale = I*pi
 //      against HlmsPbs's kD = albedo/pi), which is an independent check of
@@ -122,14 +123,6 @@ static double projectedSolidAngle(const double p[3], const double n[3],
     return std::fabs(0.5 * sum);
 }
 
-/// The 8-bit picture's transfer, decided by measurement (see the header).
-enum class Transfer { Linear, Srgb };
-static double decode(double v, Transfer t)
-{
-    if (t == Transfer::Linear) return v;
-    return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
-}
-
 /// The camera: straight down, orthographic. Built by hand because the lookAt
 /// helper's +Y up is degenerate for a view that looks along -Y.
 static CameraDesc topDownCamera()
@@ -154,7 +147,7 @@ static void worldToPixel(float wx, float wz, double &px, double &py)
 }
 
 /// The mean of a block of pixels, per channel, in the picture's own units.
-static void blockMean(const Image &img, double cx, double cy, int half, double out[3])
+static void blockMean(const ImageF &img, double cx, double cy, int half, double out[3])
 {
     double s[3] = { 0, 0, 0 };
     int n = 0;
@@ -199,6 +192,7 @@ int main()
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 0;
+    fx.hdrReadback = true;   // every number below is read as RADIANCE (HDR-READBACK-1)
     view->setPostFx(fx);
     view->setShadows(true);
 
@@ -214,8 +208,7 @@ int main()
     const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
     // A BRIGHT floor, and it costs nothing here: the emitter's albedo is zero
     // and the floor is planar, so there is no second bounce to speak of (the
-    // arm at the end of this file measures exactly that and finds 0.3 %). What
-    // it buys is signal — the picture is 8 bits.
+    // arm at the end of this file measures exactly that and finds 0.3 %).
     const float kFloorAlbedo = 0.9f;
     const auto makeFloor = [&](float albedo) {
         PbrParams p;
@@ -240,13 +233,10 @@ int main()
     // voxeliser holds it), its BOTTOM face at y = 3.
     const float kEmitHalf = 2.0f;
     const float kEmitBottom = 3.0f;
-    // ...AND ITS RADIANCE IS BELOW ONE, WHICH IS NOT A STYLE CHOICE. The
-    // voxeliser's material store holds albedo and emissive in a UNORM texture,
-    // so a surface authored brighter than 1.0 is CLIPPED to 1.0 on its way into
-    // the cache — measured by the readback printed below (an emitter authored
-    // at 3.0 puts a peak of exactly 1.0000 into a 16-bit FLOAT lit volume). A
-    // reference measurement may not be built on a number the thing being
-    // measured cannot hold; 0.9 is inside it with room to spare.
+    // Its radiance is 0.9 for continuity with every number this suite has
+    // printed since it existed — not for a ceiling any more: the emissive voxel
+    // store is float since ogre-patch 0087 and the picture is read as radiance
+    // (HDR-READBACK-1), so nothing between the emitter and the number clips.
     const float kEmitRadiance = 0.9f;
     {
         const NodeId n = s->createNode();
@@ -273,10 +263,12 @@ int main()
     CHECK(s->setGlobalIllumination(gi), "the cascade chain builds over the fixture");
     render(e, 30);
 
-    // ---- CALIBRATION 1: THE TRANSFER --------------------------------------
+    // ---- CALIBRATION 1: THE READBACK --------------------------------------
     // Four emissive patches of known radiance, read where they are. An
-    // emissive surface renders its own radiance, so the pixel IS the transfer
-    // of a known number.
+    // emissive surface that reflects nothing (F0 = 0, black albedo — the
+    // floor's own recipe) renders its own radiance, so each pixel must BE the
+    // number it was authored at. It was the transfer's identification while
+    // the picture was 8 bits; read as radiance it is the instrument's check.
     const double kRamp[4] = { 0.05, 0.12, 0.30, 0.60 };
     {
         for (int i = 0; i < 4; ++i) {
@@ -285,6 +277,9 @@ int main()
             p.albedo = Colour(0.0f, 0.0f, 0.0f);
             p.emissive = Colour(float(kRamp[i]), float(kRamp[i]), float(kRamp[i]));
             p.roughness = 1.0f;
+            p.workflow = PbrParams::Workflow::Specular;
+            p.ior = 1.0f;
+            p.specularColour = Colour(0.0f, 0.0f, 0.0f);
             const MaterialId m = s->createPbrMaterial(p);
             if (!n || !m || !s->attachMesh(n, cube, m)) { std::printf("FAIL: ramp\n"); ++failures; }
             // On the floor, out along -Z where no measurement is taken.
@@ -293,51 +288,31 @@ int main()
         }
         s->refreshGlobalIllumination();
         render(e, 30);
-        Image img;
-        view->readPixels(img);
-        double linErr = 0.0, srgbErr = 0.0;
-        std::printf("\n   THE TRANSFER, from a ramp of emissive patches:\n");
+        ImageF img;
+        CHECK(view->readPixelsHdr(img), "the view reads its radiance back");
+        double worst = 0.0;
+        std::printf("\n   THE READBACK, from a ramp of emissive patches:\n");
         for (int i = 0; i < 4; ++i) {
             double px, py;
             worldToPixel(-6.0f + 3.0f * float(i), -6.0f, px, py);
             double m[3];
             blockMean(img, px, py, 6, m);
-            const double asLin = decode(m[0], Transfer::Linear);
-            const double asSrgb = decode(m[0], Transfer::Srgb);
-            linErr += std::fabs(asLin - kRamp[i]) / kRamp[i];
-            srgbErr += std::fabs(asSrgb - kRamp[i]) / kRamp[i];
-            std::printf("     radiance %.2f -> pixel %.4f (as linear %.4f, as sRGB %.4f)\n",
-                        kRamp[i], m[0], asLin, asSrgb);
+            const double rel = std::fabs(m[0] - kRamp[i]) / kRamp[i];
+            worst = std::max(worst, rel);
+            std::printf("     radiance %.2f -> %.5f (%.2f %% off)\n", kRamp[i], m[0], 100.0 * rel);
         }
-        linErr /= 4.0; srgbErr /= 4.0;
-        std::printf("     mean relative error: linear %.1f %%, sRGB %.1f %%\n", 100.0 * linErr,
-                    100.0 * srgbErr);
-        CHECK_MSG(std::min(linErr, srgbErr) < 0.06,
-                  "THE PICTURE'S TRANSFER IS IDENTIFIED (%s, mean error %.1f %%) — the currency "
-                  "every number below is stated in",
-                  linErr < srgbErr ? "linear" : "sRGB", 100.0 * std::min(linErr, srgbErr));
+        CHECK_MSG(worst < 0.01,
+                  "THE READBACK IS THE RADIANCE (worst %.2f %%, bar 1 %%) — the currency every "
+                  "number below is stated in", 100.0 * worst);
     }
-    const Transfer transfer = [&]() {
-        Image img;
-        view->readPixels(img);
-        double lin = 0.0, srgb = 0.0;
-        for (int i = 0; i < 4; ++i) {
-            double px, py, m[3];
-            worldToPixel(-6.0f + 3.0f * float(i), -6.0f, px, py);
-            blockMean(img, px, py, 6, m);
-            lin += std::fabs(decode(m[0], Transfer::Linear) - kRamp[i]) / kRamp[i];
-            srgb += std::fabs(decode(m[0], Transfer::Srgb) - kRamp[i]) / kRamp[i];
-        }
-        return lin < srgb ? Transfer::Linear : Transfer::Srgb;
-    }();
 
     // ---- CALIBRATION 2: THE MAPPING ---------------------------------------
     // The emitter's silhouette, found in the picture, against where the mapping
     // says it is. Nothing below means anything if a "floor point" is not the
     // pixel it claims to be.
     {
-        Image img;
-        view->readPixels(img);
+        ImageF img;
+        view->readPixelsHdr(img);
         int minX = int(kSize), maxX = -1, minY = int(kSize), maxY = -1;
         for (unsigned y = 0; y < img.height; ++y)
             for (unsigned x = 0; x < img.width; ++x) {
@@ -389,7 +364,7 @@ int main()
     // factor the direct lobe has always carried; MEASURE-1a decision b). So a
     // floor under an ambient of A renders `albedo * energyFactor * A`, and
     // measuring that calibrates the whole currency — the kD, the pi, the energy
-    // factor, the transfer and the readback — in one number, on the path the
+    // factor and the float readback — in one number, on the path the
     // measurement below actually uses; every reading below is divided by the
     // same albedo * energyFactor to come back to E / pi.
     //
@@ -405,12 +380,12 @@ int main()
         const float kAmbient = 0.25f;
         s->setAmbient(Colour(kAmbient, kAmbient, kAmbient), Colour(kAmbient, kAmbient, kAmbient));
         render(e, 20);
-        Image img;
-        view->readPixels(img);
+        ImageF img;
+        view->readPixelsHdr(img);
         double px, py, m[3];
         worldToPixel(5.0f, 5.0f, px, py);
         blockMean(img, px, py, 8, m);
-        const double lit = decode(m[0], transfer);
+        const double lit = m[0];
         // THE ENGINE'S AMBIENT IS AN IRRADIANCE, not a radiance: `setAmbient`
         // hands HlmsPbs the same 1/pi pair the voxel path uses (ENGINE-4 item
         // 1, "one ambient convention inside and outside the volume"), so what
@@ -432,9 +407,9 @@ int main()
         for (int arm = 0; arm < 2; ++arm) {
             view->setShadows(arm == 0);
             render(e, 20);
-            view->readPixels(img);
+            view->readPixelsHdr(img);
             blockMean(img, px, py, 8, m);
-            const double d = decode(m[0], transfer);
+            const double d = m[0];
             std::printf("   (the direct term, shadows %s: %.4f against albedo * P / pi = "
                         "%.4f, %.0f %%)\n", arm == 0 ? "on " : "off", d,
                         double(kFloorAlbedo) * 0.25 / 3.14159265358979323846,
@@ -496,19 +471,18 @@ int main()
         // frame to frame by construction (the probe's position and its 64 ray
         // directions are keyed on the frame index), so one frame is one sample
         // of a random variable whose MEAN is the quantity. Forty-eight frames
-        // of a still scene is the measurement; it also dithers the 8-bit
-        // quantisation, which is worth more than it sounds at these values.
+        // of a still scene is the measurement.
         std::vector<double> acc(points.size(), 0.0);
         const int kFrames = 48;
         for (int f = 0; f < kFrames; ++f) {
             e->renderOneFrame();
-            Image img;
-            view->readPixels(img);
+            ImageF img;
+            view->readPixelsHdr(img);
             for (size_t i = 0; i < points.size(); ++i) {
                 double px, py, m[3];
                 worldToPixel(points[i].x, points[i].z, px, py);
                 blockMean(img, px, py, 5, m);
-                acc[i] += decode(m[0], transfer);
+                acc[i] += m[0];
             }
         }
         out.assign(points.size(), 0.0);
@@ -706,6 +680,7 @@ static int traceMain(Engine *e)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 0;
+    fx.hdrReadback = true;   // every number below is read as RADIANCE (HDR-READBACK-1)
     view->setPostFx(fx);
     view->setShadows(true);
 
@@ -740,8 +715,8 @@ static int traceMain(Engine *e)
         s->setNodeTransform(n, Vec3(0.0f, kWallTop * 0.5f, kWallZ - 0.1f), Quat(),
                             Vec3(kWallHalfX * 2.0f, kWallTop, 0.2f));
     }
-    // ONE emissive patch, to identify the picture's transfer (the reference
-    // suite's calibration, in its smallest form).
+    // ONE emissive patch, the readback's check (the reference suite's
+    // calibration, in its smallest form).
     const double kRampRadiance = 0.40;
     {
         const NodeId n = s->createNode();
@@ -765,18 +740,16 @@ static int traceMain(Engine *e)
     view->setCamera(topDownCamera());
     render(e, 40);
 
-    Image img;
-    view->readPixels(img);
-    Transfer transfer = Transfer::Linear;
     {
+        ImageF img;
+        view->readPixelsHdr(img);
         double px, py, m[3];
         worldToPixel(-6.0f, 5.0f, px, py);
         blockMean(img, px, py, 6, m);
-        const double lin = std::fabs(decode(m[0], Transfer::Linear) - kRampRadiance);
-        const double srgb = std::fabs(decode(m[0], Transfer::Srgb) - kRampRadiance);
-        transfer = lin < srgb ? Transfer::Linear : Transfer::Srgb;
-        std::printf("   transfer: %s (patch of radiance %.2f read %.4f)\n",
-                    transfer == Transfer::Linear ? "linear" : "sRGB", kRampRadiance, m[0]);
+        std::printf("   the readback: a patch of radiance %.2f reads %.5f\n", kRampRadiance, m[0]);
+        CHECK_MSG(std::fabs(m[0] - kRampRadiance) < 0.01 * kRampRadiance,
+                  "THE READBACK IS THE RADIANCE: %.5f against %.2f (bar 1 %%)", m[0],
+                  kRampRadiance);
     }
 
     // ---- the wall's own radiance, read head-on ----------------------------
@@ -786,11 +759,11 @@ static int traceMain(Engine *e)
                                                         Vec3(0.0f, 2.0f, kWallZ));
         view->setCamera(c);
         render(e, 20);
-        Image wall;
-        view->readPixels(wall);
+        ImageF wall;
+        view->readPixelsHdr(wall);
         double m[3];
         blockMean(wall, kSize * 0.5, kSize * 0.5, 40, m);
-        wallRed = decode(m[0], transfer);
+        wallRed = m[0];
         std::printf("   the wall renders red %.4f (authored albedo %.2f under a light of "
                     "radiance 1.0)\n", wallRed, double(kWallAlbedo.r));
         // A FLOOR, NOT A FORMULA: the bar only asks whether the wall is lit,
@@ -829,12 +802,12 @@ static int traceMain(Engine *e)
     const int kFrames = 48;
     for (int f = 0; f < kFrames; ++f) {
         e->renderOneFrame();
-        Image shot;
-        view->readPixels(shot);
+        ImageF shot;
+        view->readPixelsHdr(shot);
         double px, py, m[3];
         worldToPixel(0.0f, kAtZ, px, py);
         blockMean(shot, px, py, 5, m);
-        measured += decode(m[0], transfer);
+        measured += m[0];
     }
     // Back to E/pi through the floor's albedo AND the environment lobe's energy
     // factor (roughness 1: 1/1.51 — PHOTON-ENV-1), as the reference arms.

@@ -34,16 +34,12 @@ set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 300 LABELS "engine")
 # 1.0 was clipped on its way into the cache (ogre-patch 0087).
 #
 #   gi.rt_reflect_lamp        L = 0.9, a PERFECT mirror: pixel = L.
-#   gi.rt_reflect_lamp_clip   L = 3.0, a GREY mirror, and the claim is the RATIO
-#                             against the same pixel at L = 0.8 (3.75, not 1.25).
-#                             THE LABEL `photon-target` CAME OFF HERE
-#                             (VOXEL-CLIP-1, 2026-09-22) — and the row's FORM had
-#                             to change with it, because an offscreen view's
-#                             readback is PFG_RGBA8_UNORM and a perfect mirror at
-#                             L = 3.0 reads exactly 1.0 whatever the voxels hold:
-#                             the old form could never have gone green. Measured
-#                             on the two engines: 1.255x unpatched, 3.745x
-#                             patched (see the suite's header).
+#   gi.rt_reflect_lamp_clip   L = 3.0, the same perfect mirror: pixel = L.
+#                             Both read the view's RADIANCE through
+#                             View::readPixelsHdr (HDR-READBACK-1); the round in
+#                             which the 8-bit readback forced this row into a grey
+#                             mirror's ratio against a reference below 1.0 is over
+#                             and that form is deleted.
 add_test(NAME gi.rt_reflect_lamp COMMAND test_rt_reflect --lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 300 LABELS "engine")
