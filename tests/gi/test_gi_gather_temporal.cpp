@@ -286,6 +286,12 @@ static int stableMain(Engine *e)
     CHECK_MSG(with.worstStep < 2u,
               "A STILL VIEW IS STILL: no sampled pixel of the room moves by 2/255 or more frame to "
               "frame after the warm-up (worst %u codes, bar < 2)", with.worstStep);
+    // ...AND BY MARGIN, NOT BY WHICH PIXELS WERE SAMPLED: the fraction of ALL the
+    // region's pixels whose worst step reached 2 codes (measured 0.35 %; each
+    // frame alone 89 %).
+    CHECK_MSG(with.overTwo < 0.01,
+              "...over the whole region, %.2f %% of the pixels ever step by 2/255 (bar < 1 %%)",
+              100.0 * with.overTwo);
     CHECK_MSG(without.worstStep >= 2u && without.meanStep > 2.0 * with.meanStep,
               "...AND THE HISTORY IS WHAT STILLS IT: each frame's estimate alone moves the same "
               "pixels by up to %u codes (mean %.3f against %.3f with the history)",
@@ -298,8 +304,11 @@ static int stableMain(Engine *e)
     // chain's own settle, which the history cannot beat). The difference is the
     // history's lag, and it is bounded by its floor: a 1/10 blend leaves 0.9^k
     // of a step after k frames.
-    const auto lagOf = [&](bool history) {
+    const auto lagOf = [&](bool history, unsigned historyFrames) {
         setNoTemporal(!history);
+        GatherTuning t;
+        t.historyFrames = historyFrames;
+        s->setGatherTuning(t);
         LightDesc on;
         on.type = LightType::Point;
         on.colour = Colour(1.0f, 0.97f, 0.92f);
@@ -327,19 +336,38 @@ static int stableMain(Engine *e)
         s->setLight(gCentreLamp, on);
         s->refreshGlobalIllumination();
         setNoTemporal(false);
-        std::printf("     the middle lamp OFF, %s: the first frame within 1 code (mean) of the settled "
+        std::printf("     the middle lamp OFF, %s (memory %u): the first frame within 1 code (mean) of the settled "
                     "picture is frame %d (the first frame after the switch is %.2f codes from it; the "
                     "whole switch %.2f codes)\n",
-                    history ? "WITH the history" : "each frame alone ", arrived, double(step),
+                    history ? "WITH the history" : "each frame alone ",
+                    historyFrames ? historyFrames : 10u, arrived, double(step),
                     double(whole));
         return arrived;
     };
-    const int lagHistory = lagOf(true);
-    const int lagAlone = lagOf(false);
+    const int lagHistory = lagOf(true, 0u);
+    const int lagAlone = lagOf(false, 0u);
     CHECK_MSG(lagHistory >= 0 && lagAlone >= 0 && lagHistory <= lagAlone + 30,
               "THE HISTORY FOLLOWS A LIGHTING CHANGE: within 1 code %d frames after the switch, "
               "against %d for each frame alone (the chain's own settle) — the history's lag at most "
               "30 frames (its 1/10 floor leaves 0.9^30 = 4 %% of a step)", lagHistory, lagAlone);
+
+    // THE FLOOR'S DOOR (GatherTuning::historyFrames): a 4-frame memory, same room
+    // — the trade moves both ways, and the door is what makes it measurable.
+    {
+        GatherTuning t;
+        t.historyFrames = 4u;
+        s->setGatherTuning(t);
+        render(e, 60);
+        const StableReading short4 = stableReading(e, view, 60);
+        const int lag4 = lagOf(true, 4u);
+        s->setGatherTuning(GatherTuning());
+        std::printf("     memory 4: mean |step| %.3f (10: %.3f), lamp-off lag %d frames (10: %d)\n",
+                    short4.meanStep, with.meanStep, lag4, lagHistory);
+        CHECK_MSG(short4.meanStep > with.meanStep && lag4 < lagHistory,
+                  "THE FLOOR IS THE TRADE: a 4-frame memory flickers more (mean step %.3f against "
+                  "%.3f) and follows the lamp sooner (%d frames against %d)",
+                  short4.meanStep, with.meanStep, lag4, lagHistory);
+    }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
@@ -370,6 +398,19 @@ static Pose truckPose(int frame)
     return { Vec3(x, 1.8f, 10.0f), Vec3(x - 1.0f, 1.2f, -6.0f) };
 }
 
+/// THE WORST 16 x 16 TILE's mean absolute difference over the region: a smear at
+/// a disocclusion edge (a history that accepts what it should reject) is a few
+/// tiles' worth, which a whole-region mean dilutes away.
+static float worstTile(const Image &a, const Image &b, unsigned y0, unsigned y1)
+{
+    float worst = 0.0f;
+    for (unsigned ty = y0; ty + 16u <= y1; ty += 16u)
+        for (unsigned tx = 0; tx + 16u <= kW; tx += 16u)
+            worst = std::max(worst, meanDiff(a, b, tx, tx + 16u, ty, ty + 16u));
+    return worst;
+}
+
+static float gLastTile = 0.0f;
 static float runMove(Engine *e, View *view, Pose (*poseAt)(int), const char *what)
 {
     const Pose rest = poseAt(0);
@@ -385,7 +426,8 @@ static float runMove(Engine *e, View *view, Pose (*poseAt)(int), const char *wha
     render(e, kSettleFrames);
     view->readPixels(settled);
     const float err = meanDiff(moving, settled, 0u, kW, kH / 3u, kH);
-    std::printf("     %-40s %.3f codes\n", what, err);
+    gLastTile = worstTile(moving, settled, kH / 3u, kH);
+    std::printf("     %-40s %.3f codes (worst 16 x 16 tile %.3f)\n", what, err, double(gLastTile));
     return err;
 }
 
@@ -425,10 +467,14 @@ static int motionMain(Engine *e)
     }
 
     std::printf("   moving frame against the frame it settles to, the room's lower two thirds:\n");
-    // THE CONTROL: a still camera, the same two read-backs 45 frames apart —
-    // the history's own noise floor (a live frame index and a blend floor keep
-    // it moving by a fraction of a code).
-    float still = 0.0f;
+    // THE CONTROL: a still camera, the same two read-backs 45 frames apart. Its
+    // 0.125 codes are the FLOORED EMA'S OWN NOISE, not a settling: past its
+    // tenth frame the history is an EMA at 0.1 whose state keeps a steady-state
+    // error of sqrt(0.1 / 1.9) = 0.23 of one frame's sigma, so two states 45
+    // frames apart differ by ~sqrt(2) x that after 8-bit rounding. A floored
+    // history never reaches zero here; this number is the floor the motion rows
+    // sit on.
+    float still = 0.0f, stillTile = 0.0f;
     {
         const Pose rest = truckPose(0);
         enginetest::testCameraLookAt(view, rest.pos, rest.target);
@@ -438,10 +484,14 @@ static int motionMain(Engine *e)
         render(e, kSettleFrames);
         view->readPixels(b);
         still = meanDiff(a, b, 0u, kW, kH / 3u, kH);
-        std::printf("     %-40s %.3f codes\n", "still camera (the control)", still);
+        stillTile = worstTile(a, b, kH / 3u, kH);
+        std::printf("     %-40s %.3f codes (worst 16 x 16 tile %.3f)\n", "still camera (the control)",
+                    still, double(stillTile));
     }
     const float yaw = runMove(e, view, yawPose, "yaw 1.5 deg/frame");
+    const float yawTile = gLastTile;
     const float truck = runMove(e, view, truckPose, "truck 0.1 m/frame");
+    const float truckTile = gLastTile;
     // THE LEVER'S ARM: every frame its own estimate — what a history that
     // rejected everything under motion would show.
     setNoTemporal(true);
@@ -457,12 +507,26 @@ static int motionMain(Engine *e)
     //     each frame alone (the lever)            0.532   0.506
     //     NOT reprojected (the previous
     //     camera forced to this one)              0.745   0.354
+    //     NOT VALIDATED (every reprojected
+    //     texel accepted: distance and
+    //     normal tests off)                       0.203   0.587
+    //   the worst 16 x 16 tile of the same differences:
+    //     the history                    1.092    1.337   1.902
+    //     each frame alone                        3.414   7.014
+    //     not validated                           1.490   8.504
     //
     // Each motion bar sits at the MIDPOINT between the measured 0.174 and the
     // nearest broken arm, the un-reprojected slide's 0.354: half of a missing
     // reprojection reds it, and so does a history that rejects everything under
     // motion (0.51-0.53, twice the bar). The control's bar is the same 0.26 less
     // the motion's own excess over it (0.05): 0.21.
+    // THE TILE BARS catch what a whole-region mean dilutes — a history that
+    // stops VALIDATING smears only along disocclusion edges: the truck's worst
+    // tile at 4.0 (the good 1.90 against 8.50 not validated and 7.01 rejecting
+    // everything; the region mean alone catches it too, 0.587). A YAW cannot
+    // test validation at all — under a pure turn every depth on a pixel's ray
+    // reprojects to one place, nothing is disoccluded (0.203 not validated) — so
+    // its tile bar, 2.4, is the midpoint to the reject-everything arm (3.41).
     const float kStillBar = 0.21f;
     const float kYawBar = 0.26f;
     const float kTruckBar = 0.26f;
@@ -474,6 +538,15 @@ static int motionMain(Engine *e)
     CHECK_MSG(truck < kTruckBar,
               "A SLIDING CAMERA: the moving room is within %.2f codes of the settled one (%.3f; each "
               "frame alone %.3f)", kTruckBar, truck, truckAlone);
+    const float kTruckTileBar = 4.0f, kYawTileBar = 2.4f;
+    CHECK_MSG(truckTile < kTruckTileBar,
+              "NO SMEAR AT A DISOCCLUSION EDGE: the sliding camera's worst 16 x 16 tile is %.3f codes "
+              "from the settled one (bar %.1f; a history that accepts every texel reads 8.50)",
+              truckTile, kTruckTileBar);
+    CHECK_MSG(yawTile < kYawTileBar,
+              "...and the turning camera's worst tile %.3f (bar %.1f; each frame alone 3.41)", yawTile,
+              kYawTileBar);
+    (void)stillTile;
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
