@@ -252,6 +252,26 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     std::fprintf(stderr, "engine-selftest: default scene: %d nodes, ground %d vertices\n",
                  countNodes(scene->getRootNode()) - 1, groundMesh->numVerts);
 
+    // THE SUN CONTACT ARM (PHOTON-RAYS-1): `JAHSHAKA_SELFTEST_SUN_CONTACT` turns
+    // world.sunContact on for the default scene and for fixture B, so the four
+    // hash lines of the row ON can be quoted beside the shipped (off) four. A
+    // MEASUREMENT switch, not a mode: read here and nowhere else, and without
+    // it this function runs exactly the verbs it always ran.
+    const bool sunContactArm = qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_SUN_CONTACT");
+    if (sunContactArm) {
+        ScriptEngine *armHost = window.scripting();
+        const ScriptResult r = armHost
+            ? armHost->evaluate(QStringLiteral("world.sunContact({enabled:true}).enabled ? 'ok' : "
+                                               "(function(){ throw new Error('refused'); })()"),
+                                QStringLiteral("selftest-sun-contact"), true, 0, ScriptRunPolicy::Off)
+            : ScriptResult();
+        if (!armHost || !r.ok) {
+            std::fprintf(stderr, "engine-selftest: the sun contact arm could not turn the row on\n");
+            return 1;
+        }
+        std::fprintf(stderr, "engine-selftest: SUN CONTACT ARM - world.sunContact is ON\n");
+    }
+
     // Pump the render loop for ~30 frames (the driver ticks every 16 ms).
     QElapsedTimer clock;
     clock.start();
@@ -468,7 +488,12 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                  window.viewport()->renderTargetSize().width(),
                  window.viewport()->renderTargetSize().height());
 
-    if (!runFixtureStep(kFixtureBScript, "build + settle")) return 1;
+    // The arm's row, set before the fixture's 300 settling frames so B1/B2 are
+    // taken after the same frame count as the shipped pair.
+    QByteArray fixtureB(kFixtureBScript);
+    if (sunContactArm)
+        fixtureB.replace("editor.frame(300);", "world.sunContact({ enabled: true });\neditor.frame(300);");
+    if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
     app.processEvents();
 
     // THE GRADE IS PART OF THE FENCE, and this is the one thing about fixture B
