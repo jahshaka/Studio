@@ -127,6 +127,12 @@ QVector<sceneprops::Field> buildFields()
                           : (i == int(iris::RayTracingMode::On))   ? iris::RayTracingMode::On
                                                                    : iris::RayTracingMode::Auto;
         });
+    // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1), whole — one value, so one
+    // world.sunContact call is one undo step.
+    add("sunContact", [](const ScenePtr &s) { return QVariant(s->sunContact.toJson().toVariantMap()); },
+        [](const ScenePtr &s, const QVariant &v) {
+            s->sunContact = iris::SunContact::fromJson(QJsonObject::fromVariantMap(v.toMap()));
+        });
     // THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1), 0..2.
     add("ssrMarch", [](const ScenePtr &s) { return QVariant(s->ssrMarch); },
         [](const ScenePtr &s, const QVariant &v) { s->ssrMarch = qBound(0, v.toInt(), 2); });

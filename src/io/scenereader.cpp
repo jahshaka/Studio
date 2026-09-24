@@ -392,6 +392,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// inside a present block the constructor's value too (the reader-defaults
 	// law). The weather map is resolved here, like the sky's own image.
 	scene->clouds = iris::CloudLayer::fromJson(sceneObj.value("clouds").toObject());
+	// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): an absent block is the
+	// constructor's row, OFF (the reader-defaults law, fromJson's own).
+	scene->sunContact = iris::SunContact::fromJson(sceneObj.value("sunContact").toObject());
 	if (!scene->clouds.weatherMapGuid.isEmpty()) {
 		const QString weather = resolveAssetPath(scene->clouds.weatherMapGuid);
 		if (QFileInfo(weather).isFile())

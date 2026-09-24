@@ -64,6 +64,9 @@ public:
     /// THE 2D CLOUD LAYER (CLOUDS-2D-1; iris::CloudLayer). Reads with no
     /// argument; every key is validated before anything is written.
     Q_INVOKABLE QVariantMap clouds(const QVariantMap &params = QVariantMap());
+    /// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact). Reads with no
+    /// argument; every key is validated before anything is written.
+    Q_INVOKABLE QVariantMap sunContact(const QVariantMap &params = QVariantMap());
     /// HARDWARE RAY TRACING, a property of the PROJECT (ledger §425). Reads
     /// with no argument; refuses anything but "off", "auto" and "on".
     Q_INVOKABLE QString rayTracing(const QString &mode = QString());
