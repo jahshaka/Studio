@@ -1403,3 +1403,28 @@ add_dependencies(test_gi_env_one JahshakaEngineMedia)
 add_test(NAME gi.env_one COMMAND test_gi_env_one
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# ---------------------------------------------------------------------------
+# THE GATHER'S FOUR CORRECTNESS FINDINGS (PHOTON-GATHER-1b item 1; C2 design
+# section 1.1) — one binary, the mode on the command line: GA-GLASS (a blended
+# fragment reads no probe irradiance), GA-NEST (the registration is the PASS's,
+# not the scene's), GA-SKY (ONE-ENV's miss: the open floor's probe irradiance is
+# the disc-free sky's SH irradiance), GA-CAGE (the crushed-cage guard at a
+# fence's edge, its leak printed).
+add_executable(test_gi_gather_findings test_gi_gather_findings.cpp)
+set_target_properties(test_gi_gather_findings PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_findings PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_findings PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_findings JahshakaEngineMedia)
+foreach(_finding glass nest sky cage)
+    add_test(NAME gi.gather_${_finding} COMMAND test_gi_gather_findings ${_finding}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_finding} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
