@@ -732,19 +732,92 @@ static int planeWeightMain(Engine *e)
                 "crosses the edge onto the wall\n", 100.0 * weight);
     CHECK_MSG(face.n > 0u && edge.n > 0u && bare.n > 0u, "the three regions are covered (%u %u %u)",
               face.n, edge.n, bare.n);
-    // ONE-SIDED (the fix round): the guard is that the FENCE's excess does not
-    // cross the edge onto the wall. The wall there may read LESS than the bare
-    // wall, and physically does: the fence stands 1-3 cm proud of the wall and
-    // the emitter lies 61-81 degrees off the wall's normal, so the fence hides
-    // ALL of it from the wall within 7 cm of the edge and 26 % at 10 cm (a Monte
-    // Carlo of this geometry, spikes/photon-gather-1d). The two-sided bar held
-    // only while every probe's rays started half a voxel (4 cm) off its
-    // surface — IN FRONT of the fence — which hid the fence from the wall.
-    CHECK_MSG(edge.r - bare.r <= 0.05 * bare.r + 0.10 * std::fabs(excess),
-              "THE PLANE WEIGHT: the fence's excess does not cross its edge onto the wall — %.4f "
-              "against the bare wall's %.4f (bar: at most 5 %% of it + 10 %% of the fence's excess "
-              "%.4f above; below is the fence's own occlusion)",
-              edge.r, bare.r, excess);
+    // TWO-SIDED, AGAINST THE FENCE'S PREDICTED OCCLUSION (the lead's ruling on
+    // the audit round). The fence stands 1-3 cm proud of the wall and the red
+    // emitter lies 61-81 degrees off the wall's normal, so the fence HIDES part
+    // of the emitter from the wall beside its edge: all of it within 7 cm, 26 %
+    // at 10 cm, 4 % at 20 cm (fence_occlusion_mc.py beside this file, the same
+    // Monte Carlo; the two-sided bar this suite had before held only while every
+    // probe's rays started half a voxel — 4 cm — off its surface, IN FRONT of the
+    // fence). The PREDICTION for the measured pixels: the bare wall's reading
+    // less the emitter light the fence takes away, 0.9 (the emitter's red
+    // radiance) x the drop in the fraction of cosine-weighted directions that
+    // reach the emitter's wall-facing face — averaged over the region's wall
+    // points, each spread over its probe cell (a pixel reads the probes of the
+    // cells around it). The other light (the sun's bounce, the ambient) is the
+    // same in both arms to first order and cancels in the bare reading.
+    // THE TOLERANCE, derived: one probe's 64 rays read the emitter's fraction f
+    // as a binomial, sigma_probe = 0.9 sqrt(f (1 - f) / 64); the region's pixels
+    // average the n probes of the cells that feed them, so the reading's sigma
+    // is sigma_probe / sqrt(n); the bar is 3 of those plus the store's quantum
+    // (half float: the reading x 2^-10).
+    double predicted = 0.0, tolerance = 0.0, fBare = 0.0, fFence = 0.0;
+    {
+        const Vec3 camPos(1.0f, 1.6f, 1.5f), camTarget(0.0f, 1.5f, -3.0f);
+        const auto wallPoint = [&](float px, float py, Vec3 &out) {
+            Vec3 f(camTarget.x - camPos.x, camTarget.y - camPos.y, camTarget.z - camPos.z);
+            float l = std::sqrt(f.x * f.x + f.y * f.y + f.z * f.z);
+            f = Vec3(f.x / l, f.y / l, f.z / l);
+            Vec3 r(-f.z, 0.0f, f.x);
+            l = std::sqrt(r.x * r.x + r.z * r.z);
+            r = Vec3(r.x / l, 0.0f, r.z / l);
+            const Vec3 u(r.y * f.z - r.z * f.y, r.z * f.x - r.x * f.z, r.x * f.y - r.y * f.x);
+            const float t = std::tan(45.0f * 0.5f * 3.14159265f / 180.0f);
+            const float nx = 2.0f * px / float(kSize) - 1.0f, ny = 1.0f - 2.0f * py / float(kSize);
+            const Vec3 d(f.x + (r.x * nx + u.x * ny) * t, f.y + (r.y * nx + u.y * ny) * t,
+                         f.z + (r.z * nx + u.z * ny) * t);
+            const float sz = (-2.9f - camPos.z) / d.z;
+            out = Vec3(camPos.x + d.x * sz, camPos.y + d.y * sz, -2.9f);
+            return out.x > 0.0f;                    // x <= 0 is the fence's face, not the wall's
+        };
+        uint32_t rng = 12345u;
+        const auto uni = [&rng]() { rng = rng * 1664525u + 1013904223u; return double(rng >> 8) / 16777216.0; };
+        const auto fraction = [&](const Vec3 &p, bool fence) {
+            const int kDirs = 4000;
+            int hit = 0;
+            for (int k = 0; k < kDirs; ++k) {
+                const double u = uni(), v = uni(), rr = std::sqrt(u), th = 6.283185307 * v;
+                const double dx = rr * std::cos(th), dy = rr * std::sin(th), dz = std::sqrt(1.0 - u);
+                const double t = (-2.35 - p.z) / dz;
+                const double x = p.x + t * dx, y = p.y + t * dy;
+                if (x < -4.0 || x > -1.0 || y < 0.5 || y > 2.5) continue;
+                if (fence) {
+                    const double t1 = (-2.89 - p.z) / dz, t2 = (-2.87 - p.z) / dz;
+                    const double x1 = p.x + t1 * dx, x2 = p.x + t2 * dx;
+                    const double y1 = p.y + t1 * dy;
+                    if (std::min(x1, x2) <= 0.0 && y1 >= 0.0 && y1 <= 3.0) continue;
+                }
+                ++hit;
+            }
+            return double(hit) / kDirs;
+        };
+        const float rx0 = edgeX0 * kSize, rx1 = edgeX1 * kSize, ry0 = y0 * kSize, ry1 = y1 * kSize;
+        const float kStride = 16.0f;
+        int n = 0;
+        for (int k = 0; k < 96; ++k) {
+            const float px = float(rx0 + (rx1 - rx0) * uni()) + kStride * float(uni() - 0.5);
+            const float py = float(ry0 + (ry1 - ry0) * uni()) + kStride * float(uni() - 0.5);
+            Vec3 w;
+            if (!wallPoint(px, py, w)) continue;
+            fBare += fraction(w, false);
+            fFence += fraction(w, true);
+            ++n;
+        }
+        if (n) { fBare /= n; fFence /= n; }
+        predicted = bare.r - 0.9 * (fBare - fFence);
+        const double sigmaProbe = 0.9 * std::sqrt(std::max(fBare * (1.0 - fBare), 0.0) / 64.0);
+        const double cells = (std::ceil((rx1 - rx0) / kStride) + 1.0) * (std::ceil((ry1 - ry0) / kStride) + 1.0);
+        tolerance = 3.0 * sigmaProbe / std::sqrt(cells) + bare.r / 1024.0;
+        std::printf("   THE FENCE'S OCCLUSION, predicted: the emitter's cosine-weighted fraction over the "
+                    "region %.4f bare, %.4f fenced (%.0f %% hidden); the wall at the edge predicted %.4f, "
+                    "measured %.4f (bare %.4f); tolerance %.4f = 3 x %.4f / sqrt(%.0f probes) + quantum\n",
+                    fBare, fFence, fBare > 0 ? 100.0 * (1.0 - fFence / fBare) : 0.0, predicted, edge.r,
+                    bare.r, tolerance, sigmaProbe, cells);
+    }
+    CHECK_MSG(std::fabs(edge.r - predicted) <= tolerance,
+              "THE PLANE WEIGHT AND THE FENCE'S SHADOW: the wall beside the fence's edge reads %.4f "
+              "against the %.4f its geometry predicts (the bare wall %.4f less the emitter light the "
+              "fence hides; bar +- %.4f)", edge.r, predicted, bare.r, tolerance);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }

@@ -291,20 +291,36 @@ int main()
     // floor probes on either side of a wall, the hit-distance test does for
     // every direction that hits the wall. Accepted: "at or below phase 1" is
     // missed by the letter, by 0.3 %, with the mechanism named.
-    // ...AND THE RAY START AT THE SURFACE (PHOTON-GATHER-1d's audit round): the
-    // rays used to start half a voxel (4 cm) off the floor; at the surface the
-    // 0.05 m wall reads 0.0772 against the field's 0.0748 (+3.2 %; 0.0764 with
-    // the old lift — a smooth function of the start height, 0.0768 at 2 cm,
-    // never a hole). Both columns are the VOXEL read's leak through a sub-voxel
-    // wall (this room's slabs carry no cards, so every hit reads the cascades),
-    // so the bar compares two voxel reads RELATIVELY: the gather at most 5 %
-    // over the field (the old +0.002 absolute was 2.7 % at this wall, set on the
-    // lifted start).
-    for (int a = 0; a < 4; ++a)
-        CHECK_MSG(rows[a].gather <= rows[a].field * 1.05f,
+    // ...AND THE RAY START AT THE SURFACE (PHOTON-GATHER-1d's audit round), the
+    // bar DERIVED (the lead's ruling). The gather's read of this leak is a
+    // smooth function of how far off the floor its rays start — the 0.05 m wall
+    // measured at a start of 4 / 2 / 1 / 0.5 / <= 0.2 cm: 0.0764 / 0.0768 /
+    // 0.0770 / 0.0771 / 0.0772 — a sensitivity S = (0.0772 - 0.0764) / 0.039 m
+    // = 0.021 per metre, never a hole. So the gather's excess over the field is
+    // accounted for term by term:
+    //   0.0020  phase 1's accepted filter leak (the same-plane neighbour across a
+    //           thin wall, above; measured with the lifted start),
+    // + 0.0008  S x the start's MOVE, 4 cm -> the surface (0.021 x 0.039 m) — a
+    //           deterministic shift, the physics of the fix, not noise,
+    // + 0.00004 S x the start's own uncertainty (its epsilon, <= 2 mm here),
+    // + the store's quantum, half float: the reading x 2^-10 (~0.00008).
+    // = the field + ~0.0029 at the 0.05 m wall (measured +0.0024: 0.0772 vs
+    // 0.0748). Both columns are the VOXEL read's leak through a sub-voxel wall
+    // (the slabs carry no cards), so VOXEL-4's store will move both numbers; the
+    // bar is the field's own read plus these terms and survives it.
+    const float kSensitivity = (0.0772f - 0.0764f) / 0.039f;       // per metre of start height
+    const float kStartMove = 0.039f, kStartUncertainty = 0.002f;
+    for (int a = 0; a < 4; ++a) {
+        const float bar = rows[a].field + 0.002f + kSensitivity * (kStartMove + kStartUncertainty) +
+                          rows[a].gather / 1024.0f;
+        CHECK_MSG(rows[a].gather <= bar,
                   "the ray gather leaks no more than the field through the %.2f m wall "
-                  "(%.4f vs %.4f; bar the field + 5 %%)", double(thicknesses[a]), double(rows[a].gather),
-                  double(rows[a].field));
+                  "(%.4f vs %.4f; bar %.4f = the field + 0.0020 phase 1's filter leak + %.4f the "
+                  "start's move and uncertainty x %.3f/m + %.5f quantum)",
+                  double(thicknesses[a]), double(rows[a].gather), double(rows[a].field), double(bar),
+                  double(kSensitivity * (kStartMove + kStartUncertainty)), double(kSensitivity),
+                  double(rows[a].gather / 1024.0f));
+    }
     CHECK_MSG(rows[0].greenGather > 0.02f,
               "the room is lit by its own lamp under the gather (green %.4f) — a black room "
               "leaks nothing and proves nothing", double(rows[0].greenGather));
