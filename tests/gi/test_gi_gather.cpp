@@ -269,6 +269,15 @@ int main()
     // wall is sub-voxel at every cascade cell size. This is the assertion, and
     // it is stated as a comparison rather than a bar because a bar on a
     // measurement nobody has taken before is a number invented, not measured.
+    //
+    // AGAINST PHASE 1 (PHOTON-GATHER-1b, audit F8): 0.0367 / 0.0381 / 0.0457 /
+    // 0.0764 against phase 1's 0.0367 / 0.0382 / 0.0458 / 0.0762 — the 0.05 m
+    // wall reads +0.0002 (+0.3 %), deterministic (the frame index frozen). Its
+    // mechanism: the filter's same-plane neighbour across a thin wall, in the
+    // directions BOTH probes see far away — the plane test cannot separate two
+    // floor probes on either side of a wall, the hit-distance test does for
+    // every direction that hits the wall. Accepted: "at or below phase 1" is
+    // missed by the letter, by 0.3 %, with the mechanism named.
     for (int a = 0; a < 4; ++a)
         CHECK_MSG(rows[a].gather <= rows[a].field + 0.002f,
                   "the ray gather leaks no more than the field through the %.2f m wall "
@@ -348,12 +357,12 @@ int main()
         render(e, 40);
         const GatherStatus stats = gatherStatus(s);
         std::printf("\n   gather: %u x %u probes (%u) + %u adaptive (cap %u) x %u rays = %llu "
-                    "rays/frame over %ux%u, place %.4f ms, trace %.4f ms, integrate %.4f ms, "
-                    "record %.4f ms CPU, VRAM %llu bytes\n",
+                    "rays/frame over %ux%u, place %.4f ms, trace %.4f ms, filter %.4f ms, "
+                    "integrate %.5f ms, record %.4f ms CPU, VRAM %llu bytes\n",
                     stats.probesX, stats.probesY, stats.probes, stats.adaptive, stats.adaptiveCap,
                     stats.raysPerProbe, (unsigned long long)stats.raysPerFrame, stats.targetW,
                     stats.targetH, double(stats.placeMs), double(stats.traceMs),
-                    double(stats.integrateMs), double(stats.cpuMs),
+                    double(stats.filterMs), double(stats.integrateMs), double(stats.cpuMs),
                     (unsigned long long)stats.atlasBytes);
         CHECK(stats.on && stats.running,
               "the scene reports the gather ON and a view RUNNING it (giStatus().gather)");
@@ -774,14 +783,29 @@ static int costMain(Engine *e)
     // of one scene both gathering, which view's milliseconds come back is
     // decided by the allocator's addresses. Every arm below therefore leaves
     // exactly one view enabled.
-    const auto measure = [&](View *, unsigned stride, unsigned octRes, const char *what) {
+    // THE ARMS' EXTRA KNOBS (PHOTON-GATHER-1b): the SH bands the integrate
+    // evaluates (9 shipped; 4 = the memory-traffic arm the SH9 record is priced
+    // against) and the filter in probe space off (the arm that prices it).
+    struct Knobs { unsigned shBands = 0u; bool filterOff = false; };
+    const auto measure = [&](View *, unsigned stride, unsigned octRes, const char *what,
+                             Knobs k = Knobs()) {
         armGather(s, gi, true, stride, octRes);
-        std::vector<float> place, trace, integrate;
+        {
+            GatherTuning t;
+            t.probeStride = stride;
+            t.octRes = octRes;
+            t.freezeFrameIndex = true;
+            t.shBands = k.shBands;
+            t.filterOff = k.filterOff;
+            s->setGatherTuning(t);
+        }
+        std::vector<float> place, trace, filter, integrate;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
             const GatherStatus q = gatherStatus(s);
             if (q.placeMs >= 0.0f) place.push_back(q.placeMs);
             if (q.traceMs >= 0.0f) trace.push_back(q.traceMs);
+            if (q.filterMs >= 0.0f) filter.push_back(q.filterMs);
             if (q.integrateMs >= 0.0f) integrate.push_back(q.integrateMs);
         }
         const GatherStatus fin = gatherStatus(s);
@@ -791,22 +815,55 @@ static int costMain(Engine *e)
             std::sort(tail.begin(), tail.end());
             return tail[tail.size() / 2];
         };
-        const float pm = median(place), tm = median(trace), im = median(integrate);
-        std::printf("   %-34s %u probes (+%u adaptive) x %u rays = %llu rays: PLACE %.4f, "
-                    "TRACE %.4f, INTEGRATE %.4f ms, sum %.4f, CPU %.4f ms, VRAM %.2f MB\n",
+        const float pm = median(place), tm = median(trace), fm = median(filter),
+                    im = median(integrate);
+        std::printf("   %-44s %u probes (+%u adaptive) x %u rays = %llu rays: PLACE %.4f, "
+                    "TRACE %.4f, FILTER %.4f, INTEGRATE %.4f ms, sum %.4f, CPU %.4f ms, VRAM "
+                    "%.2f MB\n",
                     what, fin.probes, fin.adaptive, fin.raysPerProbe,
-                    (unsigned long long)fin.raysPerFrame, double(pm), double(tm), double(im),
-                    double(pm + tm + im), double(fin.cpuMs),
+                    (unsigned long long)fin.raysPerFrame, double(pm), double(tm), double(fm),
+                    double(im), double(pm + tm + fm + im), double(fin.cpuMs),
                     double(fin.atlasBytes) / (1024.0 * 1024.0));
-        CHECK_MSG(pm > 0.0f && tm > 0.0f && im > 0.0f, "%s: all three stages were timed", what);
+        CHECK_MSG(pm > 0.0f && tm > 0.0f && fm > 0.0f && im > 0.0f,
+                  "%s: all four stages were timed", what);
         armGather(s, gi, false);
         render(e, 2);
-        return pm + tm + im;
+        return pm + tm + fm + im;
     };
     const float high = measure(view, 16u, 8u, "1080p, 16 px probes, 64 rays (High)");
-    measure(view, 16u, 6u, "1080p, 16 px probes, 36 rays (Medium)");
-    measure(view, 8u, 8u, "1080p, 8 px probes, 64 rays (Epic)");
     measure(view, 32u, 8u, "1080p, 32 px probes, 64 rays");
+    // THE FILTER'S PRICE, PAIRED IN ONE PROCESS (fix round, audit F3): each tier
+    // measured with the filter in probe space ON and OFF, interleaved over three
+    // rounds, and the ratio of the medians quoted. OFF still runs the SH reduce
+    // and the five-probe integrate, so the ratio is what the neighbourhood taps
+    // (now a per-workgroup table in shared memory) cost on top of the rest.
+    Knobs nof; nof.filterOff = true;
+    const auto paired = [&](View *v, unsigned stride, unsigned octRes, const char *tier) {
+        std::vector<float> on, off;
+        for (int round = 0; round < 3; ++round) {
+            on.push_back(measure(v, stride, octRes, (std::string(tier) + ", filter ON").c_str()));
+            off.push_back(measure(v, stride, octRes, (std::string(tier) + ", filter OFF").c_str(), nof));
+        }
+        std::sort(on.begin(), on.end());
+        std::sort(off.begin(), off.end());
+        std::printf("   PAIRED %-10s block %.4f ms with the filter, %.4f without: ratio %.3f\n", tier,
+                    double(on[1]), double(off[1]), double(on[1] / std::max(off[1], 1e-6f)));
+    };
+    paired(view, 16u, 8u, "High");
+    paired(view, 8u, 8u, "Epic");
+    paired(view, 16u, 6u, "Medium");
+    // THE SH9 RECORD'S PRICE (PHOTON-GATHER-1b item 3's premise): the same Epic
+    // arm with the integrate reading 3 of the record's 7 SH vec4s (L0-L1)
+    // against all 7, paired and interleaved in this process — the INTEGRATE
+    // column is the memory traffic's cost.
+    {
+        Knobs sh4; sh4.shBands = 4u;
+        Knobs sh9; sh9.shBands = 9u;
+        for (int round = 0; round < 3; ++round) {
+            measure(view, 8u, 8u, "Epic, SH9 integrate", sh9);
+            measure(view, 8u, 8u, "Epic, SH4 integrate (L0-L1 only)", sh4);
+        }
+    }
 
     // ---- THE VR EYE SIZE, as ONE mono target of the same pixel count ------
     // Two Quest Pro eyes are 10.26 Mpx (SCREEN_PROBE_GATHER_SPEC section 4's
@@ -828,6 +885,7 @@ static int costMain(Engine *e)
         render(e, 8);
         measure(vr, 16u, 8u, "10.3 Mpx (two Quest Pro eyes), 16 px, 64 rays");
         measure(vr, 16u, 6u, "10.3 Mpx (two Quest Pro eyes), 16 px, 36 rays");
+        paired(vr, 16u, 8u, "VR 10.3Mpx");
         // AND THE READING IS THE VR VIEW'S, asserted by its own size rather
         // than assumed — the whole point of GATHER-0's D3.
         armGather(s, gi, true, 16u, 8u);

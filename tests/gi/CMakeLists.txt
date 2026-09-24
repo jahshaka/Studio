@@ -1310,6 +1310,15 @@ add_dependencies(test_gi_gather_reference JahshakaEngineMedia)
 add_test(NAME gi.gather_reference COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_reference PROPERTIES TIMEOUT 900 LABELS "engine")
+# ...and the brief's 1.00 +- 0.05 at every point against the COMPLETE closed form —
+# a TARGET row (photon-target: prints, does not gate). The residual that survives
+# the complete form (-5 % past 3.6 m) is the hits' voxel read, named by exclusion
+# in the suite; GA-1e's card read is predicted to close it.
+add_test(NAME gi.gather_reference_target COMMAND test_gi_gather_reference
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_reference_target PROPERTIES
+                     TIMEOUT 900 LABELS "engine;photon-target"
+                     ENVIRONMENT "JAH_GATHER_REFERENCE_TARGET=1")
 
 # ...and the TRACE's own bar, in R5's form: a probe a metre from a lit red wall
 # reads at least 0.6 of that wall's albedo times its lighting, in the wall's
@@ -1414,3 +1423,82 @@ add_dependencies(test_gi_env_one JahshakaEngineMedia)
 add_test(NAME gi.env_one COMMAND test_gi_env_one
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# ---------------------------------------------------------------------------
+# THE GATHER'S FOUR CORRECTNESS FINDINGS (PHOTON-GATHER-1b item 1; C2 design
+# section 1.1) — one binary, the mode on the command line: GA-GLASS (a blended
+# fragment reads no probe irradiance), GA-NEST (the registration is the PASS's,
+# not the scene's), GA-SKY (ONE-ENV's miss: the open floor's probe irradiance is
+# the disc-free sky's SH irradiance), gi.gather_plane_weight (the gather's plane
+# weight at a 2 cm fence's edge, its leak printed; the field's own crushed-cage
+# guard is unreachable while the gather runs — the suite's header says why).
+add_executable(test_gi_gather_findings test_gi_gather_findings.cpp)
+set_target_properties(test_gi_gather_findings PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_findings PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_findings PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_findings JahshakaEngineMedia)
+foreach(_finding glass nest sky plane_weight)
+    add_test(NAME gi.gather_${_finding} COMMAND test_gi_gather_findings ${_finding}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_finding} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
+
+# THE GATHER'S PHASE-2 ACCEPTANCE (PHOTON-GATHER-1b item 5; C2 design section
+# 1.4): gi.gather_plane (no bounce crosses a plane edge; the floor two strides
+# out at the closed form) and gi.gather_deterministic (three cold 60-frame
+# stills, the probeIrradiance readback byte-identical).
+add_executable(test_gi_gather_phase2 test_gi_gather_phase2.cpp)
+set_target_properties(test_gi_gather_phase2 PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_phase2 PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_phase2 PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_phase2 JahshakaEngineMedia)
+foreach(_arm plane deterministic)
+    add_test(NAME gi.gather_${_arm} COMMAND test_gi_gather_phase2 ${_arm}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
+# ...and the plane fixture's COMPLETE closed form at the brief's 5 % — a TARGET
+# row (label photon-target: it runs in every scoped selection, prints its value
+# and does not decide a gate). What survives the complete form (-11 % at two
+# strides) is the hits' voxel read, named by exclusion in the suite; the card
+# read at the hit (GA-1e) is predicted to close it.
+add_test(NAME gi.gather_plane_target COMMAND test_gi_gather_phase2 plane --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_plane_target PROPERTIES TIMEOUT 600
+                     LABELS "engine;photon-target")
+
+# gi.settle_partial — THE OWED SETTLE INJECTS ONLY THE STALE CASCADES
+# (PHOTON-GATHER-1b item 6; WRITER-1's debt, audit F5): a cascade re-voxelised in
+# the frame of an at-rest tick owes the cascades INSIDE it (k, ..., 0), not the
+# chain's whole sweep — and the partial settle is the whole sweep's fixed point
+# (light voxels byte-identical, picture 0/255). Counted on the render monitor's
+# `vct.light.settle` rows.
+add_executable(test_gi_settle_partial test_gi_settle_partial.cpp)
+set_target_properties(test_gi_settle_partial PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_settle_partial PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_settle_partial PRIVATE JahshakaEngine)
+add_dependencies(test_gi_settle_partial JahshakaEngineMedia)
+add_test(NAME gi.settle_partial COMMAND test_gi_settle_partial
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.settle_partial PROPERTIES TIMEOUT 600 LABELS "engine")
