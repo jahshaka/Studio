@@ -80,6 +80,14 @@ AREA_RULES = [
     (r"^irisgl/core/",
      ["document", "math", "input", "gizmo", "cameras", "hygiene", "*headless-scripts"], []),
     (r"^irisgl/docs/", [], []),                                   # documentation: no suite at all
+    # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what
+    # the engine's shaders SEE — the engine family, not the whole tier (DEVPROCESS-2, 2026-09-24:
+    # eight lane gates fell back to the MERGE tier this phase on paths like this one).
+    (r"^irisgl/cmake/WrapHlmsPiece",
+     ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
+      "compute", "hdr", "sky", "pieces", "vr", "mirror", "cameras", "samples", "picking", "skeletal",
+      "particles", "thumbnails", "materialpreview", "player", "sockets", "threading", "perf", "gizmo",
+      "assets", "log", "shutdown", "openasync", "*vulkan-scripts"], []),
     (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name
@@ -389,6 +397,25 @@ def cmake_list_only(rng, relpath):
                or (subdir_ok and _SUBDIR_ENTRY.match(l)) for l in lines)
 
 
+def header_included_by_dir(name, d):
+    """True when a source under tests/<d>/ includes the header `name` (by basename)."""
+    pat = re.compile(r'^\s*#\s*include\s*[<"](?:[^">]*/)?' + re.escape(name) + r'[">]', re.M)
+    # `d` is the inventory's dir key as ctest's backtrace spells it, relative to the BUILD
+    # dir ("../../../tests/gi"); a bare "gi" or "tests/gi" is accepted too. Walk the source dir.
+    rel = d.split("tests/", 1)[1] if "tests/" in d else d
+    if not rel or rel.startswith(".."): return False
+    root = os.path.join(ROOT, "tests", rel)
+    for dirpath, _, files in os.walk(root):
+        for f in files:
+            if f.endswith((".cpp", ".h", ".hpp")):
+                try:
+                    with open(os.path.join(dirpath, f), errors="replace") as fh:
+                        if pat.search(fh.read()): return True
+                except OSError:
+                    pass
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
@@ -468,6 +495,18 @@ def main():
             if p in script_suites: add(script_suites[p], f"{p}: script"); hit.append("script")
             elif base in script_base: add(script_base[base], f"{p}: script"); hit.append("script")
             elif d in by_dir: add(by_dir[d], f"{p}: tests/{d}"); hit.append(f"tests/{d}")
+            elif p.endswith((".h", ".hpp")) and (len(parts) == 2 or d == "support"):
+                # A SHARED TEST HEADER (tests/enginetesthelpers.h, tests/support/*.h): its owners
+                # are exactly the dirs whose sources include it — scanned, never guessed
+                # (DEVPROCESS-2, 2026-09-24: this path used to fall back to the whole MERGE tier).
+                name = os.path.basename(p)
+                owners = sorted(dd for dd in by_dir if header_included_by_dir(name, dd))
+                if owners:
+                    for dd in owners: add(by_dir[dd], f"{p}: included by tests/{dd}")
+                    hit.append("included by " + ", ".join(f"tests/{dd}" for dd in owners))
+                    code_moved = True
+                else:
+                    fallback.append(f"{p}: a tests/ header no suite source includes")
             else:
                 # tests/CMakeLists.txt, tests/support/*.h (included by ~40 test sources), a
                 # dir with no registered suite: nothing precise owns it → merge tier, loudly
