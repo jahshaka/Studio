@@ -22,9 +22,10 @@ For more information see the LICENSE file
 // Why a harness and not a --script suite: the condition is a file vanishing
 // from disk UNDER a running editor, and no verb deletes a file (none should).
 // So the app runs under MCP and this process does what the outside world does:
-// removes the file, waits, puts it back. It reads the issue through BOTH
-// doors: editor.checkScene (one scan per call — "within 2 scans") and the
-// editor's own 1 Hz scanner (editor.issues after a wait, with no scan asked).
+// removes the file and puts it back, and reads the issue through
+// editor.checkScene — one scanner pass per call, so "within 2 scans" is a count
+// of passes, never a wait. (The editor's 1 Hz timer that calls the same pass
+// is the app's wiring and is not timed here: tests count passes, not seconds.)
 
 #include "../support/mcpharness.h"
 
@@ -34,7 +35,6 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QThread>
 
 using namespace shutdownharness;
 
@@ -78,6 +78,24 @@ int scansUntil(McpClient &mcp, int want, int limit, QJsonArray *last)
     for (int pass = 1; pass <= limit; ++pass) {
         *last = scanOnce(mcp);
         if (last->size() == want) return pass;
+    }
+    return limit + 1;
+}
+
+QString messageOf(const QJsonArray &issues)
+{
+    return issues.isEmpty() ? QString() : issues.at(0).toObject().value("message").toString();
+}
+
+/// Scans until the one texture.missing issue's message does (`present`) or
+/// does not contain `text`, at most `limit` passes. Returns the passes taken
+/// (limit + 1 = never).
+int scansUntilMessage(McpClient &mcp, const QString &text, bool present, int limit,
+                      QJsonArray *last)
+{
+    for (int pass = 1; pass <= limit; ++pass) {
+        *last = scanOnce(mcp);
+        if (last->size() == 1 && messageOf(*last).contains(text) == present) return pass;
     }
     return limit + 1;
 }
@@ -163,28 +181,33 @@ int main(int argc, char **argv)
     live = scanOnce(mcp);
     CHECK(live.size() == 1, "a second scan raises nothing new (never repeats)");
 
-    // ---- 3. a second slot missing on the SAME node: still one line ------------
+    // ---- 3. a second slot missing on the SAME node: one line, named afresh ------
+    // The wording follows the disk (SceneIssues::update): the same issue, the
+    // same row, its message now naming BOTH files.
     CHECK(QFile::remove(normal), "delete the normal map too");
-    live = scanOnce(mcp);
+    const int bothPasses = scansUntilMessage(mcp, QStringLiteral("brick_normal.png"), true, 2, &live);
+    std::printf("info: message after %d scan(s): %s\n", bothPasses,
+                live.isEmpty() ? "" : qUtf8Printable(live.at(0).toObject().value("message").toString()));
     CHECK(live.size() == 1, "two missing slots on one object are ONE issue, not one per slot");
+    CHECK(bothPasses <= 2 && messageOf(live).contains(QLatin1String("brick_colour.png")) &&
+          messageOf(live).contains(QLatin1String("Normal (brick_normal.png)")),
+          "...and within 2 scans its message names BOTH missing files");
 
-    // ---- 4. the editor's own 1 Hz scanner, no scan asked ------------------------
-    CHECK(writeImage(base, QColor(180, 60, 40)) && writeImage(normal, QColor(128, 128, 255)),
-          "put both files back");
-    QThread::msleep(2500);   // two ticks of the editor's scanner, and a margin
-    live = missingIn(readJson(mcp, QStringLiteral("editor.issues()")).toArray());
-    CHECK(live.isEmpty(), "restoring the files clears it — by the editor's own scanner");
-    CHECK(QFile::remove(base), "delete the base colour file again");
-    QThread::msleep(2500);
-    live = missingIn(readJson(mcp, QStringLiteral("editor.issues()")).toArray());
+    // ---- 4. one of the two restored: still one line, naming only the other -------
+    CHECK(writeImage(base, QColor(180, 60, 40)), "put the base colour file back");
+    const int onePasses = scansUntilMessage(mcp, QStringLiteral("brick_colour.png"), false, 2, &live);
+    std::printf("info: message after %d scan(s): %s\n", onePasses,
+                live.isEmpty() ? "" : qUtf8Printable(live.at(0).toObject().value("message").toString()));
     CHECK(live.size() == 1 && live.at(0).toObject().value("node").toString() == textured,
-          "...and the editor's scanner raises it again when the file goes");
+          "one file back, one still missing: the issue stays, on the same object");
+    CHECK(onePasses <= 2 && messageOf(live).contains(QLatin1String("brick_normal.png")),
+          "...and within 2 scans it names only the file still missing");
 
     // ---- 5. restore: cleared within 2 scans ---------------------------------------
-    CHECK(writeImage(base, QColor(180, 60, 40)), "restore the file");
+    CHECK(writeImage(normal, QColor(128, 128, 255)), "put the normal map back");
     const int clearPasses = scansUntil(mcp, 0, 2, &live);
     std::printf("info: cleared after %d scan(s)\n", clearPasses);
-    CHECK(clearPasses <= 2, "restoring the file clears the issue within 2 scans");
+    CHECK(clearPasses <= 2, "restoring the last file clears the issue within 2 scans");
 
     // ---- 6. the plain cube never raised anything ------------------------------------
     bool plainEver = false;

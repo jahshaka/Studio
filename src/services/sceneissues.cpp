@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QDateTime>
 #include <QFileInfo>
+#include <QFileSystemWatcher>
 #include <QHash>
 #include <QVector>
 
@@ -185,6 +186,60 @@ bool SceneIssues::clear(const QString &id)
     mIssues.removeAt(i);
     emit changed();
     return true;
+}
+
+bool SceneIssues::update(const QString &id, const QString &message)
+{
+    const int i = indexOf(id);
+    if (i < 0) return false;
+    if (mIssues[i].message == message) return true;
+    mIssues[i].message = message;
+    emit changed();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// texture.missing's VIEW OF THE DISK
+// ---------------------------------------------------------------------------
+// The scan runs at 1 Hz on the UI thread, and a stat of a path on a stale
+// network mount blocks for the mount's timeout — so a path is asked of the
+// filesystem when it is NEW to this cache, and after that only when its
+// directory CHANGES (a QFileSystemWatcher on every distinct directory that
+// holds a texture: a file deleted or put back is a directory change, so the
+// next scan re-asks — raise and clear stay within ONE scan of the event).
+//
+// A SLOW FULL RE-CHECK every kTextureRecheckScans passes (60 = one minute at
+// the editor's 1 Hz) forgets the whole cache: the backstop for what a watcher
+// cannot see — a network filesystem whose remote changes produce no local
+// event, a directory that did not exist to be watched (its file then shows up
+// within a minute), and a watcher the system refused (inotify limits). It is
+// also when the cache sheds paths no material names any more.
+static constexpr int kTextureRecheckScans = 60;
+
+bool SceneIssues::textureExists(const QString &path)
+{
+    const auto known = mTextureExists.constFind(path);
+    if (known != mTextureExists.constEnd()) return known.value();
+    const QFileInfo info(path);
+    const bool exists = info.exists();
+    mTextureExists.insert(path, exists);
+    const QString dir = info.absolutePath();
+    if (!mTextureDirs) {
+        mTextureDirs = new QFileSystemWatcher(this);
+        connect(mTextureDirs, &QFileSystemWatcher::directoryChanged, this,
+                [this](const QString &changed) { forgetTextureDir(changed); });
+    }
+    if (!mTextureDirs->directories().contains(dir) && QFileInfo(dir).isDir())
+        mTextureDirs->addPath(dir);
+    return exists;
+}
+
+void SceneIssues::forgetTextureDir(const QString &dir)
+{
+    for (auto it = mTextureExists.begin(); it != mTextureExists.end();) {
+        if (QFileInfo(it.key()).absolutePath() == dir) it = mTextureExists.erase(it);
+        else ++it;
+    }
 }
 
 int SceneIssues::clearKind(const QString &kind)
@@ -454,13 +509,18 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // (SceneMirror::textureFor: a Qt resource and a live texture have no file
     // and are not ours to judge), over every texture slot of every material a
     // mesh node holds; ONE line per node, naming each slot and its file, so
-    // the user fixes the object, not a list of paths. Each path is asked of
-    // the filesystem once per pass: materials are shared, and this runs at
-    // 1 Hz on the UI thread.
+    // the user fixes the object, not a list of paths. The disk is asked
+    // through textureExists (above): once per new path, again only when its
+    // directory changes or the minute's full re-check comes round.
     {
+        if (++mScansSinceRecheck >= kTextureRecheckScans) {
+            mScansSinceRecheck = 0;
+            mTextureExists.clear();
+            if (mTextureDirs && !mTextureDirs->directories().isEmpty())
+                mTextureDirs->removePaths(mTextureDirs->directories());
+        }
         QList<iris::MeshNode *> meshes;
         collectMaterialNodes(scene->getRootNode(), meshes);
-        QHash<QString, bool> exists;
         for (iris::MeshNode *mesh : std::as_const(meshes)) {
             const iris::MaterialPtr material = mesh->getMaterial();
             QStringList missing;
@@ -471,9 +531,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 if (path.isEmpty() || path.startsWith(QLatin1Char(':')) ||
                     iris::LiveTextures::isLiveRef(path))
                     continue;
-                auto known = exists.constFind(path);
-                if (known == exists.constEnd()) known = exists.insert(path, QFileInfo::exists(path));
-                if (known.value()) continue;
+                if (textureExists(path)) continue;
                 missing << tr("%1 (%2)").arg(textureSlotName(it.key()), QFileInfo(path).fileName());
             }
             if (missing.isEmpty()) continue;
@@ -488,7 +546,11 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             issue.action = tr("Re-import the missing file, or re-link the material's texture to a "
                               "file that exists. Until then the surface renders without it.");
             issue.id = issue.kind + QLatin1Char(':') + issue.node;
-            raise(issue);
+            // THE WORDING FOLLOWS THE DISK: a second slot going missing, or one
+            // of two coming back, is the same issue said again — updated in
+            // place, never a second row (raise() of a live id is a no-op).
+            if (indexOf(issue.id) >= 0) update(issue.id, issue.message);
+            else raise(issue);
             live << issue.id;
         }
     }
