@@ -406,19 +406,17 @@ int main()
         // all and its room renders 2,2,2), and it must be EXACT.
         CHECK(ambientOne > 0.95f * ambientSingle,
               "a camera-centred cascade carries the ambient exactly like the fitted volume");
-        // A CHAIN LOSES SOME OF IT, and the number is pinned here rather than
-        // wished away: Ogre's cascade continuation restarts its march distance
-        // in every cascade, so each hop re-samples the surface the cone stands
-        // on. Jahshaka ogre-patch 0033 fixes the two accumulators that doubled
-        // per hop and re-applies the self-occlusion bias at every entry, which
-        // takes a four-cascade chain from 0.00x (black) to 0.51x; the residual
-        // needs the travelled distance carried across the hop, which is
-        // PHOTON P1's and is recorded in OGRE_UPSTREAM_ISSUES. With the
-        // irradiance field on, the field replaces this term INSIDE cascade 0
-        // only (E1, G3-a): beyond it the ring keeps the cone term, residual
-        // and all — the field variant of this case measures exactly that.
-        CHECK(ambientChain > 0.40f * ambientSingle,
-              "a four-cascade chain keeps the measured share of the ambient (>=0.40x, was 0.00x)");
+        // A CHAIN READS THE OPEN GROUND AS ONE VOLUME DOES (PHOTON-VOXEL-4, SUITES-REANCHOR-1).
+        // The ground is open: in every cascade the four cones leave the one surface they stand on
+        // and see nothing else, so the chain's own quadrature of it - the same cones over the
+        // chain's stores, each march handed to the next cascade - is the single volume's,
+        // exactly. The bar is the pictures' quantum: two block means of 8-bit
+        // pixels, half a code each. (It was >= 0.40x of the single volume: the leaky store's
+        // per-hop re-sampling of the starting surface took a chain to 0.51x; the split store's
+        // origin rule reads the surface once, by where it lies, and the chain reads 1.00x.)
+        const float kQuantum = 1.0f / 255.0f;
+        CHECK(std::fabs(ambientChain - ambientSingle) <= kQuantum,
+              "a four-cascade chain reads the open ground's ambient as the single volume does (within one code)");
         CHECK(ambientChain > 0.02f, "and it is a lit picture, not a black one");
 
         // ---- THE FIELD VARIANT (PHOTON_SPEC §13 G3, audit B1's own test) ----
@@ -447,8 +445,8 @@ int main()
                     ambientOff > 0.0f ? fieldChain / ambientOff : 0.0f,
                     singleFieldBound ? "y" : "n", fst.ifdBound ? "y" : "n", fst.ifdProbes);
         CHECK(singleFieldBound && fst.ifdBound, "both arms really have a field bound");
-        CHECK(fieldChain > 0.40f * fieldSingle,
-              "A PIXEL BEYOND CASCADE 0 KEEPS THE CHAIN'S BOUNCE WITH THE FIELD BOUND (>=0.40x)");
+        CHECK(std::fabs(fieldChain - fieldSingle) <= kQuantum,
+              "A PIXEL BEYOND CASCADE 0 READS THE CHAIN AS THE SINGLE VOLUME WITH THE FIELD BOUND (within one code)");
         CHECK(fieldChain > 0.02f, "...and it is a lit picture, not a black one");
     }
 

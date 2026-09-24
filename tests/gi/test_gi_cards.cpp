@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -1624,6 +1625,17 @@ static int caseConeParity(bool offAxisTarget)
                     continue;
                 }
                 const CardCacheStatus st = s->giStatus().cards;
+                {
+                    // THE CARD'S NORMAL (C1 F8): the cone basis the relight builds from the
+                    // stored shading normal, against the face's own (an axis of the card's view).
+                    const double nl = std::sqrt(double(t.normal[0]) * t.normal[0] + double(t.normal[1]) * t.normal[1] +
+                                                double(t.normal[2]) * t.normal[2]);
+                    const double ax = std::max(std::fabs(double(t.normal[0])), std::max(std::fabs(double(t.normal[1])),
+                                                                                        std::fabs(double(t.normal[2]))));
+                    std::printf("    %s (%+.1f, %.1f): the card's stored normal (%.4f, %.4f, %.4f), %.3f deg off "
+                                "the face's\n", a.name, x, h, t.normal[0], t.normal[1], t.normal[2],
+                                nl > 0 ? std::acos(std::min(1.0, ax / nl)) * 180.0 / M_PI : -1.0);
+                }
                 for (int k = 0; k < 3; ++k) {
                     const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
                     const double store = t.indirect[k] > 0.0f
@@ -1658,6 +1670,73 @@ static int caseConeParity(bool offAxisTarget)
             }
     }
     std::printf("    worst relative difference on the axis-aligned wall: %.2f %%\n", 100.0 * worst);
+    if (!offAxisTarget) {
+        // THE RESIDUAL'S ATTRIBUTION (PHOTON-VOXEL-4): THE CARD'S NORMAL (C1 F8). The card's
+        // relight builds its cone frame from the STORED shading normal - 8-bit, 0.32 degrees off
+        // the face's on this wall (printed above) - and the pixel from the exact one. The
+        // four-cone set's axes lie at exactly 45 degrees between the normal's axis and a lateral
+        // one, so the reader's plane axis is decided by a tie the stored normal's tilt breaks, and
+        // the read of one geometry depends on the frame's rotation (CARDS-3's measurement: the
+        // wall foot's BAR 1 moves -0.066 / -0.103 / -0.117 as the set turns 0 / 23 / 45 degrees,
+        // gi.voxel_lab). The engine's own reader, the same four cones from one wall point, framed
+        // by the exact normal and by the normal tilted as the store holds it: the difference is
+        // the residual's size. Printed; the bar above stays 1 % plus the stores' quanta.
+        const Arm &a = arms[0];
+        GiVoxelVolume v;
+        if (a.theta == 0.0f && s->giVoxelVolume(0, v) && v.available) {
+            const double size[3] = { double(v.cell[0]) * v.width, double(v.cell[1]) * v.height, double(v.cell[2]) * v.depth };
+            const double res[3] = { double(v.width), double(v.height), double(v.depth) };
+            const double pw[3] = { a.cx - 1.5, 1.6, 0.0 };   // the -Z face at (-1.5, 1.6)
+            const double four[4][3] = { { 0.707107, 0.0, 0.707107 }, { 0.0, 0.707107, 0.707107 },
+                                        { -0.707107, 0.0, 0.707107 }, { 0.0, -0.707107, 0.707107 } };
+            const auto readWith = [&](double tx, double ty, double out[3]) {
+                // jahConeBasisWorld: Frisvad about the cubemap frame (world z negated)
+                double n[3] = { tx, ty, 1.0 };   // the world normal (0,0,-1) with z negated, tilted
+                const double nl = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+                for (double &c : n) c /= nl;
+                const double ia = 1.0 / (1.0 + n[2]), c = -n[0] * n[1] * ia;
+                const double t[3] = { 1.0 - n[0] * n[0] * ia, c, -n[0] }, b[3] = { c, 1.0 - n[1] * n[1] * ia, -n[1] };
+                std::vector<VoxelReaderCone> cones;
+                double nls[3], l = 0.0;
+                for (int k = 0; k < 3; ++k) { nls[k] = (k == 2 ? -n[k] : n[k]) / size[k]; l += nls[k] * nls[k]; }
+                for (double &q : nls) q /= std::sqrt(l);
+                for (int i = 0; i < 4; ++i) {
+                    double d[3], dl = 0.0;
+                    for (int k = 0; k < 3; ++k) {
+                        const double dc = four[i][0] * t[k] + four[i][1] * b[k] + four[i][2] * n[k];
+                        d[k] = (k == 2 ? -dc : dc) / size[k];
+                        dl += d[k] * d[k];
+                    }
+                    VoxelReaderCone cone;
+                    cone.posLS = Vec3(float((pw[0] - v.origin[0]) / size[0] + nls[0] / res[0]),
+                                      float((pw[1] - v.origin[1]) / size[1] + nls[1] / res[1]),
+                                      float((pw[2] - v.origin[2]) / size[2] + nls[2] / res[2]));
+                    cone.dirLS = Vec3(float(d[0] / std::sqrt(dl)), float(d[1] / std::sqrt(dl)), float(d[2] / std::sqrt(dl)));
+                    cone.biasDirLS = Vec3(float(nls[0]), float(nls[1]), float(nls[2]));
+                    cone.tanHalfAngle = 0.98269f;
+                    cones.push_back(cone);
+                }
+                std::vector<VoxelReaderAnswer> fr, co;
+                out[0] = out[1] = out[2] = 0.0;
+                if (!e->voxelReaderParity(s, cones, fr, co) || co.size() != 4) return false;
+                for (int i = 0; i < 4; ++i)
+                    for (int k = 0; k < 3; ++k) out[k] += 0.25 * co[size_t(i)].march[k];
+                return true;
+            };
+            double exact[3], worstTilt = 0.0;
+            if (readWith(0.0, 0.0, exact) && exact[0] > 0.0) {
+                for (double sx : { -1.0, 1.0 })
+                    for (double sy : { -1.0, 1.0 }) {
+                        double tilted[3];
+                        if (readWith(sx * 0.0039, sy * 0.0039, tilted))
+                            worstTilt = std::max(worstTilt, std::fabs(tilted[0] - exact[0]) / exact[0]);
+                    }
+                std::printf("    ATTRIBUTION: the four cones at (-1.5, 1.6) read %.5f with the exact normal; the "
+                            "stored normal's 0.32-degree tilt moves the read by up to %.2f %% (the residual above: "
+                            "up to %.2f %%)\n", exact[0], 100.0 * worstTilt, 100.0 * worst);
+            }
+        }
+    }
     std::printf("target: %.4f (bar 0.0000) the wall turned 30 degrees: the card's indirect beyond "
                 "1 %% + the stores' half-quanta of the pixel's, as a fraction of the value%s\n",
                 std::max(0.0, worstOffAxis), worstOffAxis <= 0.0 ? " -- MET" : "");

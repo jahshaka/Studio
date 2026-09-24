@@ -144,6 +144,25 @@ int main()
     // THE red wall: +Z, i.e. behind the camera. It is the only saturated thing
     // in the room, so any red in the mirror came from it.
     addSlab(s, red, Vec3(0.0f, 2.5f, 4.2f), Vec3(8.8f, 5.0f, 0.4f));
+    // THE ROOM'S OWN LIGHT (PHOTON-VOXEL-3 round 9): an EMISSIVE panel under the ceiling.
+    // The directional light below lights the red wall in the RENDER (shadows off) but its
+    // injection is shadowed by the shell (the note on the light), so this sealed room's
+    // walls used to be lit for GI only by the shell's lit outer faces BLEEDING through the
+    // slabs - which the directional store closed. An emissive surface lights the room
+    // through the voxels ONLY (the raster has no emissive light), so every surface the
+    // directional light cannot reach is still black until GI turns on, and what lights it
+    // then is physics the suite guards: a bounce off a source inside the room.
+    {
+        PbrParams panel;
+        panel.albedo = Colour(0.05f, 0.05f, 0.05f);
+        panel.emissive = Colour(12.0f, 12.0f, 12.0f);
+        panel.roughness = 1.0f;
+        const NodeId pn = s->createNode();
+        const MaterialId pm = s->createPbrMaterial(panel);
+        const MeshId pmesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(pn && pm && pmesh && s->attachMesh(pn, pmesh, pm), "the room's emissive panel attaches");
+        s->setNodeTransform(pn, Vec3(0.0f, 4.9f, 0.0f), Quat(), Vec3(3.0f, 0.1f, 3.0f));
+    }
 
     // ---- the mirror ------------------------------------------------------
     // Metalness 1 + roughness 0: a pure specular surface with no diffuse term
@@ -180,14 +199,15 @@ int main()
     // voxel's march crosses the shell, so its injected radiance is ~0; only the
     // shell's OUTER faces, which march straight out of the volume, get lit.
     // Consequence in this room: the red wall is bright red in the RENDER (and
-    // therefore in the probe capture, which is a render) while its voxels are
-    // dark — so cone-traced reflections of it are black and probe reflections
-    // of it are red. That is a genuinely maximal probe-vs-cone discriminator,
-    // and it is also why the diffuse assertion below is a BRIGHTNESS assertion
-    // and not a hue one: the achromatic light VCT does put into this room comes
-    // from the shell's lit outer faces bleeding through ~3-voxel-thick slabs,
-    // not from the red wall. The red-bounce HUE contract stays where it already
-    // lives and works — gi.modes, on an open scene, which is in this lane's gate.
+    // therefore in the probe capture, which is a render) while its voxels hold
+    // only the panel's dim bounce - so cone-traced reflections of it are dark
+    // and probe reflections of it are red. That is a genuinely maximal
+    // probe-vs-cone discriminator, and it is also why the diffuse assertion
+    // below is a BRIGHTNESS assertion and not a hue one: the light VCT puts
+    // into this room is the white emissive panel's (above; it used to be the
+    // shell's lit outer faces bleeding through the slabs, which the
+    // directional store closed). The red-bounce HUE contract stays where it
+    // already lives and works — gi.modes, on an open scene.
     const NodeId lightNode = enginetest::addDirectionalLight(s, Vec3(0.0f, -0.12f, 0.993f), 6.0f);
     CHECK(lightNode != 0, "directional light created");
 
@@ -269,7 +289,11 @@ int main()
     // light comment above for why a sealed room cannot carry it. If a later
     // phase of this program breaks diffuse GI while chasing reflections, these
     // two go red here as well as there.
-    CHECK(vctWall.r > offWall.r + 0.15f,
+    // THE MARGIN (PHOTON-VOXEL-3 round 9): 0.05, thirteen codes over a GI-off far wall that
+    // reads 0.000 - a gain nothing but the bounce can put there. (It was 0.15 of the
+    // shell's bleed; the room's light is now its own panel, 12x a white radiance over
+    // 9 m^2 under the ceiling: the far wall reads 0.078.)
+    CHECK(vctWall.r > offWall.r + 0.05f,
           "VCT lights the far wall the direct light never reaches (diffuse GI is live)");
     CHECK(vctFloor.r > offFloor.r + 0.05f,
           "VCT raises the lit floor as well (bounce on top of the direct term)");
@@ -328,7 +352,7 @@ int main()
           "the probe reflection is measurably brighter than the cone-traced one");
     // The diffuse half survives the hybrid unchanged: the probes are ADDED to
     // VCT, they do not replace its diffuse contribution.
-    CHECK(hyWall.r > offWall.r + 0.15f,
+    CHECK(hyWall.r > offWall.r + 0.05f,
           "the hybrid keeps VCT's diffuse light on the far wall");
 
     // ---- idempotence: re-pushing identical params leaves the image alone --

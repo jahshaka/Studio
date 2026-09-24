@@ -96,60 +96,18 @@ using enginetest::leakroom::meanRG;
 int main()
 {
     const float thicknesses[4] = { 0.5f, 0.2f, 0.1f, 0.05f };
-    // THE BARS, and where they come from. The spike measured 0.041 / 0.046 /
-    // 0.054 / 0.083 (FINDINGS §3a, "the wall itself") from SIX metres away. This
-    // suite stands at THREE, because under a chain the field rides cascade 0 — a
-    // 10 m box centred on the camera — and at six metres the wall being measured
-    // is outside it, so the suite would be grading the ring instead of the
-    // field. Closer means a brighter wall and a slightly larger absolute leak in
-    // BOTH arms: the shipped single-volume arm, whose code E1 does not touch,
-    // reads 0.0452 at 0.5 m here against the spike's 0.0410 there. The bars are
-    // therefore this pose's, measured, with ~12 % of headroom, and the
-    // comparative bar below is the one that carries the actual claim: moving the
-    // field onto a cascade must not leak MORE than the scene-fitted field does.
-    //
-    // RE-ANCHORED BY PHOTON-M2 (F-C), and this one admits a LARGER absolute
-    // leak, so here is the whole of it.
-    //
-    // The irradiance field's atlas holds the mean of RAW light-voxel samples,
-    // normalised by the brightest light's radiance over pi (the injection's
-    // bakingMultiplier). The cone-traced diffuse multiplies that normalisation
-    // back out; the field's composite did NOT, so the field's brightness went as
-    // 1/D_max -- correct only in a scene whose brightest light has radiance pi.
-    // THIS FIXTURE'S OUTSIDE LAMP IS INTENSITY 25, so its factor is 25 and the
-    // field was 25 times too DARK here: these bars were fitted to a field that
-    // was contributing almost nothing. With the units fixed (measured
-    // intensity-independent to within 2 %: field/cone 1.127 / 1.144 / 1.145 at
-    // lamp intensity 0.03 / 0.12 / 0.5, spikes/photon-m2) the same walls read
-    //
-    //    wall   chain (asserted)   single     old chain   old single
-    //    0.50       0.0608         0.1023       0.0431      0.0452
-    //    0.20       0.0633         0.1331       0.0438      0.0507
-    //    0.10       0.0829         0.1239       0.0539      0.0501
-    //    0.05       0.2898         0.4876       0.0723      0.1018
-    //
-    // and the bars below are this pose's again, measured, with ~12 % of
-    // headroom, exactly as the paragraph above describes.
-    //
-    // WHAT THAT MEANS, SAID PLAINLY: a 0.05 m wall is SUB-VOXEL at every cascade
-    // cell size (cascade 0 is 10 m over 128 = 0.078 m), so it occludes nothing
-    // in the voxel volume and the field's depth moments -- computed from the
-    // same voxel trace -- cannot find a surface the volume does not hold. The
-    // leak was always there; what changed is that it is no longer scaled down by
-    // a units error into invisibility. The claim this suite says it carries --
-    // the field on a CASCADE leaks no more than the field on the scene-fitted
-    // box -- is untouched and passes with margin (0.0608 against 0.1023 at
-    // 0.50 m). The absolute leak at the corrected brightness is a QUALITY
-    // question for the irradiance field's occlusion, reported to the lead by
-    // PHOTON-M2 rather than hidden by a bar.
-    //
-    // THE 0.10 m BAR IS 0.10 (PHOTON-READER-1, the lead's verdict): the field's
-    // probe rays now walk the whole chain, so past cascade 0's box they read
-    // cascade 1, whose 15.6 cm cells cannot hold a 10 cm wall (0.0963 measured;
-    // the cascade-0-only march stopped there and discarded the escape, which read
-    // as opacity - 0.0830). The 0.50 / 0.20 / 0.05 m walls leak LESS than before
-    // (0.0534 / 0.0553 / 0.2617), which is what says the walk is right.
-    const float bars[4] = { 0.068f, 0.071f, 0.100f, 0.325f };
+    // THE BARS, DERIVED FROM THE STORE (PHOTON-VOXEL-4, SUITES-REANCHOR-1): an opaque wall leaks
+    // nothing in the physics, so the bar is what the store may still let through - its quantum
+    // (the 10-bit coverage over ~3 crossings: 0.003 of the escape) plus the oblique spread (a
+    // ray crossing a wall's texel at a slant reads its coverage through the kernel's tent: at
+    // worst 0.17 of the wall's own share of the probe's sky, <= 0.1 here) = 0.02 at EVERY
+    // thickness. The split store counts a surface on the half it faces and by where it lies,
+    // so the 0.05 m wall - sub-voxel at every cascade - is held as a surface, not a 6 %
+    // opacity: measured 0.000 / 0.000 / 0.000 / 0.010 (chain) where the leaky store read
+    // 0.053 / 0.055 / 0.096 / 0.262 against bars of 0.068 / 0.071 / 0.100 / 0.325 fitted to
+    // it. The comparative bar below still carries the cascade claim: the field on a cascade
+    // leaks no more than the field on the scene-fitted box.
+    const float bars[4] = { 0.02f, 0.02f, 0.02f, 0.02f };
 
     std::string err;
     EngineConfig cfg;
@@ -329,7 +287,7 @@ int main()
         const float k = 0.70710678f;
         const Vec3 frontEye(k * 3.4f, 0.0f, -k * 3.4f);
         const Vec3 behind(-k * 3.0f, 0.0f, k * 3.0f), inFront(k * 3.0f, 0.0f, -k * 3.0f);
-        const auto measure = [&](bool seam, float &frontGi, float &frontLit) {
+        const auto measure = [&](bool seam, float &frontGi, float &frontLit, float &storeFront) {
             Scene *s = e->createScene(seam ? "seam-pair" : "twosided-pair");
             view->setScene(s);
             s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -379,6 +337,31 @@ int main()
             setGi(true);
             const float on = readFront();
             frontGi = on - off;
+            // THE STORE, READ FROM THE FRONT: the plate's voxel along a ray arriving from the
+            // camera's side (Engine::voxelReaderParity's point read, the ray hit's read) - the
+            // light the voxel sends TOWARDS the front, which is the flag's whole effect.
+            storeFront = 0.0f;
+            {
+                GiVoxelVolume v;
+                if (s->giVoxelVolume(0, v) && v.available) {
+                    const double size[3] = { double(v.cell[0]) * v.width, double(v.cell[1]) * v.height,
+                                             double(v.cell[2]) * v.depth };
+                    const double dw[3] = { -k, 0.0, k };   // from the front eye towards the plate
+                    double dl[3], l = 0.0;
+                    for (int a = 0; a < 3; ++a) { dl[a] = dw[a] / size[a]; l += dl[a] * dl[a]; }
+                    l = std::sqrt(l);
+                    VoxelReaderCone c;
+                    c.posLS = Vec3(float((0.0 - v.origin[0]) / size[0]), float((0.0 - v.origin[1]) / size[1]),
+                                   float((0.0 - v.origin[2]) / size[2]));
+                    c.dirLS = Vec3(float(dl[0] / l), float(dl[1] / l), float(dl[2] / l));
+                    c.biasDirLS = Vec3(0, 0, 0);
+                    c.tanHalfAngle = 0.0f;
+                    c.lod = 0.0f;
+                    std::vector<VoxelReaderAnswer> fr, co;
+                    if (e->voxelReaderParity(s, { c }, fr, co) && !co.empty() && co[0].hitRead[3] > 0.0f)
+                        storeFront = co[0].hitRead[1] / co[0].hitRead[3];
+                }
+            }
             // ...and the same camera with the lamp IN FRONT, so a subject that
             // simply is not there cannot pass by reading zero twice.
             placeLamp(inFront);
@@ -391,8 +374,11 @@ int main()
         };
 
         float seamFront = 0.0f, seamLit = 0.0f, twoFront = 0.0f, twoLit = 0.0f;
-        measure(true, seamFront, seamLit);
-        measure(false, twoFront, twoLit);
+        float seamStore = 0.0f, twoStore = 0.0f;
+        measure(true, seamFront, seamLit, seamStore);
+        measure(false, twoFront, twoLit, twoStore);
+        std::printf("   the store read from the front, lamp behind: seam %.4f, two-sided %.4f\n",
+                    double(seamStore), double(twoStore));
         CHECK(seamLit > 0.05f && twoLit > 0.05f,
               "both subjects are there and face the camera (the lamp in front lights them)");
         char msg[256];
@@ -401,11 +387,19 @@ int main()
                       "BEHIND: the seam pair's unlit side gains %.4f from the bounce against "
                       "the genuinely two-sided pair's %.4f", double(seamFront), double(twoFront));
         CHECK(seamFront < twoFront * 0.25f + 0.004f, msg);
+        // THE OTHER HALF, READ IN THE STORE (PHOTON-VOXEL-3 round 9): the flag's effect is
+        // light the plate's voxels send towards the FRONT. The camera on the front used to
+        // show it on the plate itself - its own cones read its own voxels, a leak the origin
+        // rule closed (a cone never reads the surface it leaves, so the front pixel now
+        // stays dark for both pairs, which is the opaque plate's physics). The instrument
+        // moves to the voxel itself, read from the front: the two-sided pair's voxel holds
+        // front-facing light (the pin's abs(NdotL) injection), the seam pair's none.
         std::snprintf(msg, sizeof(msg),
                       "...and a genuinely two-sided pair still IS, which is the pin's answer "
-                      "and the half that stops the fix being \"never flag anything\" (%.4f)",
-                      double(twoFront));
-        CHECK(twoFront > 0.02f, msg);
+                      "and the half that stops the fix being \"never flag anything\": its voxel, "
+                      "read from the front, holds light (%.4f) and the seam pair's does not (%.4f)",
+                      double(twoStore), double(seamStore));
+        CHECK(twoStore > 0.02f && seamStore < twoStore * 0.25f + 0.004f, msg);
     }
 
     view->setScene(nullptr);
