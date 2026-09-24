@@ -48,7 +48,7 @@
 //       the voxels of a sky-only scene held NOTHING at any bounce count (the
 //       sky was never in them), and the two readings were identical.
 //
-// Its own binary: the field and the voxel lighting bind process-wide.
+// Its own binary.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

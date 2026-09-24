@@ -80,8 +80,7 @@
 // grid placed in the lit volume instead of in the photographed space, 467 of
 // that case's 1344 metal pixels come back as hard black holes.
 //
-// ONE SCENE AT A TIME, always: the HlmsPbs VCT/PCC binding is process-wide
-// (the binding before PHOTON-SCENE-SWITCH-1), so a second live scene would fight for it.
+// ONE SCENE AT A TIME, always.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -150,9 +149,9 @@ static void addMirror(Scene *s, const Vec3 &pos, float size = 1.8f)
 /// HUE assertion and not a brightness one: the VISIBLE sky is a blue equirect
 /// (what a probe would photograph), the IBL reflection cubemap is GREEN (what a
 /// datablock samples when the engine binds the sky cubemap to it). While a
-/// probe grid exists the engine UNBINDS that cubemap from every datablock
-/// (`reflectionTexForDatablocks`, OgreSky.cpp — the env-probe slot has one
-/// occupant), so a mirror shows BLUE through a probe and GREEN through the sky.
+/// probe grid exists the engine UNBINDS that cubemap from every datablock of
+/// the scene (`OgreScene::reflectionTexFor`, OgreMaterials.cpp — the env-probe
+/// slot has one occupant), so a mirror shows BLUE through a probe and GREEN through the sky.
 static void bindTwoTonedSky(Scene *s)
 {
     SkyDesc sky;

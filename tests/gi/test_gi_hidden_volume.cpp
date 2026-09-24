@@ -22,7 +22,7 @@
 //    children leave GI with it, and showing it restores each child to its own
 //    flag — a child the user hid stays hidden.
 //
-// Its own binary like every GI suite: GI binds process-wide HlmsPbs state.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

@@ -685,8 +685,8 @@ int main()
     // textureCubeArray overload — and the third one is the verdict: the manual
     // cubemap is UNSAMPLEABLE in that permutation, so the two are mutually
     // exclusive by construction. The fix is ours and lives in
-    // OgreScene::reflectionTexForDatablocks (OgreSky.cpp): while auto PCC is
-    // bound we do not bind the IBL cubemap at all. Nothing is lost — the probe
+    // OgreScene::reflectionTexFor (OgreMaterials.cpp): while the scene's auto
+    // PCC is bound we do not bind the IBL cubemap at all. Nothing is lost — the probe
     // captures include the sky, so the probes ARE the environment.
     //
     // It was pre-existing (any user picking VCT+Probes on a scene with a sky got

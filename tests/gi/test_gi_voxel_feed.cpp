@@ -29,7 +29,7 @@
 //      unchanged) — the rows, partitions and material words are already there,
 //      and the feed is written on the device.
 //
-// Its own binary like every GI suite (the voxel lighting binds process-wide).
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

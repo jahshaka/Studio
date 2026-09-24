@@ -49,7 +49,7 @@
 //      volumes and return: it used to walk into fillInstanceBuffers with a null
 //      instance buffer and segfault, so "GI is empty" was a crash.
 //
-// Its own binary like every GI suite (the voxel lighting binds process-wide).
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

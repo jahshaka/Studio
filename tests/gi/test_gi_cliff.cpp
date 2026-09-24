@@ -40,7 +40,7 @@
 //      thousand-unit voxel volume — measured, and caught by
 //      scripting.e2e.gi_bounds.
 //
-// Its own binary, like its siblings: GI binds process-wide HlmsPbs state.
+// Its own binary, like its siblings.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

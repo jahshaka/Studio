@@ -35,7 +35,7 @@
 //      PROPERTY, so an ambient that happens to be flat for one frame recompiles
 //      the scene twice. Asserted by compile counters, not by pixels.
 //
-// Its own binary, like every GI suite: the arm binds process-wide HlmsPbs state.
+// Its own binary, like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

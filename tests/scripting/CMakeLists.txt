@@ -342,10 +342,9 @@ set_tests_properties(scripting.e2e.shadow_cache_probes PROPERTIES
 # reason as gi_status: the interesting numbers are the renderer's.
 add_script_e2e(gi_bounds e2e_gi_bounds.js)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
-# editor -> player -> editor, whose own GI build takes the process-wide HlmsPbs
-# binding) never re-pushes or rebuilds GI — giPushes, giStatus().rebuilds and
-# the whole giStatus reading are unchanged, and the editor owns the binding
-# again. Engine + real pages -> needs a display.
+# editor -> player -> editor) never re-pushes or rebuilds GI — giPushes,
+# giStatus().rebuilds and the whole giStatus reading are unchanged, and the
+# editor's passes still bind its own arms. Engine + real pages -> needs a display.
 add_script_e2e(page_gi e2e_page_gi.js)
 # GI_UNIFIED_SPEC.md §4 P1: the DDGI verb surface — world.gi's {ddgi,
 # ddgiIntensity} and the four ifd* readings on world.giStatus(). Engine UP for

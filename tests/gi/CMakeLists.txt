@@ -24,9 +24,7 @@ set_tests_properties(gi.modes PROPERTIES TIMEOUT 120 LABELS "engine")
 # behind the camera and a roughness-0 metal box whose reflection must contain
 # that wall — plus Scene::giStatus() assertions, so buildPcc's silent
 # "hybrid renders as plain VCT" bail fails the suite instead of passing it.
-# Its OWN binary rather than a case in test_gi: the hybrid binds
-# process-wide HlmsPbs state (before PHOTON-SCENE-SWITCH-1), so this scene must not share a
-# process with gi.modes' scene (spec §9).
+# Its OWN binary rather than a case in test_gi (spec §9).
 add_executable(test_gi_pcc_mirror test_gi_pcc_mirror.cpp)
 set_target_properties(test_gi_pcc_mirror PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -43,8 +41,7 @@ add_test(NAME gi.pcc_mirror COMMAND test_gi_pcc_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_mirror PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# GI BOUNDS + PROBE PLACEMENT (spec §4 / P1a). Its own binary for the same
-# process-wide-binding reason as gi.pcc_mirror.
+# GI BOUNDS + PROBE PLACEMENT (spec §4 / P1a). Its own binary.
 add_executable(test_gi_pcc_bounds test_gi_pcc_bounds.cpp)
 set_target_properties(test_gi_pcc_bounds PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -62,8 +59,7 @@ add_test(NAME gi.pcc_bounds COMMAND test_gi_pcc_bounds
 set_tests_properties(gi.pcc_bounds PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.cliff — THE GI-VOLUME CLIFF (LIGHTING_FIX fix 1) plus the engine half of
-# the re-fit-on-exit contract (fix 2). Its own binary for the same
-# process-wide-HlmsPbs-binding reason as its siblings.
+# the re-fit-on-exit contract (fix 2). Its own binary.
 add_executable(test_gi_cliff test_gi_cliff.cpp)
 set_target_properties(test_gi_cliff PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -80,8 +76,7 @@ add_test(NAME gi.cliff COMMAND test_gi_cliff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cliff PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# gi.ambient — THE VCT AMBIENT (LIGHTING_FIX fix 3). Own binary: process-wide
-# HlmsPbs binding, same rule as its siblings.
+# gi.ambient — THE VCT AMBIENT (LIGHTING_FIX fix 3). Own binary.
 add_executable(test_gi_ambient test_gi_ambient.cpp)
 set_target_properties(test_gi_ambient PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -180,8 +175,7 @@ set_tests_properties(gi.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscree
 # gi.budget — THE GI UPDATE BUDGET (FIX WAVE B1-B5). Mirror-linked for the same
 # reason gi.coalesce is: the debounce and the counters are mirror-side and the
 # budget, the sweep and the reuse arm are engine-side; the contract is the pair.
-# Its own binary as well, like every hybrid suite here (process-wide HlmsPbs
-# binding) and because it TIMES refreshes.
+# Its own binary as well, because it TIMES refreshes.
 add_executable(test_gi_budget test_gi_budget.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_gi_budget PROPERTIES
@@ -238,8 +232,7 @@ set_tests_properties(gi.probe_inputs PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
 # PROBE REBUILD PARITY + SHRINK-FIT LOCALITY (2026-09-07 fix wave, defect 2).
 # A CLUTTERED room — free-standing columns, which is what defeats the 1x1
 # averaged-depth shrink-fit that gi.pcc_mirror's empty room never exercises —
-# rebuilt six times at a fixed camera. Its own binary for the same
-# process-wide-binding reason as gi.pcc_mirror.
+# rebuilt six times at a fixed camera. Its own binary.
 add_executable(test_gi_pcc_stability test_gi_pcc_stability.cpp)
 set_target_properties(test_gi_pcc_stability PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -257,10 +250,8 @@ add_test(NAME gi.pcc_stability COMMAND test_gi_pcc_stability
 set_tests_properties(gi.pcc_stability PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # DDGI — the irradiance-field diffuse layer (GI_UNIFIED_SPEC.md §4 P1). Its own
-# binary for the same process-wide-binding reason as gi.pcc_mirror: the field
-# binds to HlmsPbs globally (setIrradianceField), so it must not share a
-# process with another suite's scene. It also RE-RUNS ITSELF (argv[1] == "hash")
-# to prove cross-process byte determinism, which no in-process re-render can.
+# binary and process because it RE-RUNS ITSELF (argv[1] == "hash") to prove
+# cross-process byte determinism, which no in-process re-render can.
 add_executable(test_gi_ddgi test_gi_ddgi.cpp)
 set_target_properties(test_gi_ddgi PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -319,8 +310,7 @@ jah_no_display(gi.tiers)
 # gi.ddgi_ambient — THE PHOTON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
 # CORRECTION; the upstream mechanism is in SPECS/OGRE_UPSTREAM_ISSUES.md's
 # "Vct_piece_ps.any: volume-local ambient blend commented out" entry). Its own
-# binary for the same process-wide-binding reason as gi.ddgi — and separate from
-# gi.ddgi deliberately: that suite pins the field's BOUNCE and must keep its
+# binary, separate from gi.ddgi deliberately: that suite pins the field's BOUNCE and must keep its
 # ambient at zero to do so, while this one is about the ambient and needs three
 # scenes with a non-degenerate hemisphere pair.
 add_executable(test_gi_ddgi_ambient test_gi_ddgi_ambient.cpp)
@@ -354,8 +344,7 @@ set_tests_properties(gi.cone_corner_target PROPERTIES TIMEOUT 180
 # gi.hidden_volume — WHAT THE AUTOMATIC LIT VOLUME MAY CONTAIN (SMOKE_FIX S12 +
 # S14): a hidden object stops bouncing light and stops defining the volume, and
 # the automatic fit is capped in metres per voxel so a new project's ground
-# plane cannot voxelise a square kilometre. Its own binary for the same
-# process-wide-HlmsPbs-binding reason as its siblings.
+# plane cannot voxelise a square kilometre. Its own binary.
 add_executable(test_gi_hidden_volume test_gi_hidden_volume.cpp)
 set_target_properties(test_gi_hidden_volume PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -376,7 +365,7 @@ set_tests_properties(gi.hidden_volume PROPERTIES TIMEOUT 180 LABELS "engine")
 # (ledger 177 defect A, the owner's "black rectangle"): a flat scene ambient
 # reaches HlmsPbs through setAmbient's 1/pi scale and reached VctLighting
 # unscaled, so the same setting was pi apart on the two sides of the volume
-# boundary. Its own binary (process-wide HlmsPbs binding) like every GI suite.
+# boundary. Its own binary like every GI suite.
 add_executable(test_gi_volume_edge test_gi_volume_edge.cpp)
 set_target_properties(test_gi_volume_edge PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -408,8 +397,7 @@ set_tests_properties(gi.volume_edge_spec_target PROPERTIES TIMEOUT 180
 # planar mirror, SSR) and casts shadows there in the frame it moves, and is
 # absent from the reflection-probe captures, the voxel bounce and every GI
 # signature — so a scene full of moving things costs the room's lighting
-# nothing. Its own binary for the same process-wide-HlmsPbs-binding reason as
-# its hybrid siblings.
+# nothing. Its own binary.
 add_executable(test_gi_mobility test_gi_mobility.cpp)
 set_target_properties(test_gi_mobility PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -429,8 +417,7 @@ set_tests_properties(gi.mobility PROPERTIES TIMEOUT 300 LABELS "engine")
 # gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
 # sealed box whose GI bounds top sits inside its ceiling slab, measured from
 # OUTSIDE. Gates the cage clamp, the outside-the-volume fade and the fallback to
-# the term the field's binding deletes (VctDisableDiffuse). Its own binary for
-# the same process-wide-HlmsPbs-binding reason as its gi.ddgi siblings.
+# the term the field's binding deletes (VctDisableDiffuse). Its own binary.
 add_executable(test_gi_ddgi_edge test_gi_ddgi_edge.cpp)
 set_target_properties(test_gi_ddgi_edge PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -449,8 +436,7 @@ set_tests_properties(gi.ddgi_edge PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # THE MATERIAL GATE (owner 2026-09-13 Q1, ogre-patch 0028): a material with
 # no specular response samples no reflection probe, and the ones beside it still
-# do. Its own binary for the same process-wide-HlmsPbs-binding reason as its
-# siblings.
+# do. Its own binary.
 add_executable(test_gi_probe_gate test_gi_probe_gate.cpp)
 set_target_properties(test_gi_probe_gate PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -549,7 +535,7 @@ set_tests_properties(gi.scene_switch PROPERTIES TIMEOUT 300 LABELS "engine")
 # cascade per frame, the ambient reaches every cascade (upstream's 2,2,2 room),
 # and a 1 km teleport is exactly N counted rebuilds with no black frame — the
 # case that lost the GPU three ways on upstream's incremental path.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_cascades test_gi_cascades.cpp)
 set_target_properties(test_gi_cascades PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -658,8 +644,8 @@ set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RUN
 # staleness is recorded and the whole grid is re-captured at the settle, one per
 # frame), a NON-motion input reaches the probes mid-drag anyway, and under a
 # cascade chain the moving light tick never writes a second, different answer
-# over the cascade the scheduler just rebuilt. RUN_SERIAL: the voxel lighting
-# binds process-wide and the suite counts captures per frame.
+# over the cascade the scheduler just rebuilt. RUN_SERIAL: the suite counts
+# captures per frame.
 add_executable(test_gi_drag_cadence test_gi_drag_cadence.cpp)
 set_target_properties(test_gi_drag_cadence PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -773,7 +759,7 @@ set_tests_properties(gi.cascade_determinism PROPERTIES
 # camera walks — in the same frame the cascade moved, bound throughout, and
 # converged by the end of that frame (the atlas describes another place until it
 # is). Before E1 the arm refused to build a field under a chain at all.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_field_follows test_gi_field_follows.cpp)
 set_target_properties(test_gi_field_follows PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -868,7 +854,7 @@ set_tests_properties(gi.leak_room PROPERTIES TIMEOUT 600 LABELS "engine" RUN_SER
 # probe shadow node, never the voxels — so the 3rd casting lamp in a scene, or a
 # Shadow Quality change, costs the voxel arm (and, under Photon, the whole
 # cascade chain) exactly nothing.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_atlas_voxels test_gi_atlas_voxels.cpp)
 set_target_properties(test_gi_atlas_voxels PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -989,7 +975,7 @@ endif()
 # exists — ogre-patch 0057's subject), and it drains `takeLastError()` after
 # every push, so an arm that throws its way out of a build fails the suite
 # instead of rendering a dark picture quietly.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_reenable test_gi_reenable.cpp)
 set_target_properties(test_gi_reenable PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1011,7 +997,7 @@ set_tests_properties(gi.reenable PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERI
 
 # gi.chain_face — PHOTON-E3 item 0 (ii): the chain-to-world face and the faces
 # inside the chain, under a REAL sky (audit B8). Its own binary like every GI
-# suite (the voxel lighting binds process-wide to HlmsPbs).
+# suite.
 add_executable(test_gi_chain_face test_gi_chain_face.cpp)
 set_target_properties(test_gi_chain_face PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1053,9 +1039,7 @@ set_tests_properties(gi.chain_face_target PROPERTIES
 # closed form cross-checked against a 512x512 quadrature of its own definition
 # inside the suite.
 #
-# ITS OWN BINARY AND PROCESS, like every GI suite: the voxel lighting and the
-# irradiance field bind process-wide to HlmsPbs, so this fixture cannot share a
-# process with gi.field_follows' room.
+# ITS OWN BINARY AND PROCESS, like every GI suite.
 #
 # LABEL `photon-target`. GREEN AFTER: VOXEL-CLIP-1 (phase A) for the source the
 # voxels hold and the field's integral in PHOTON P4 for the transport. The lane
@@ -1131,9 +1115,8 @@ set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_S
 
 # SURFACE-CACHE phase 2 (SURFACE-CACHE-1b) — the capture Component's gates.
 # SEVEN ctest names (gi.card_lighting + _indirect: PHOTON-CARDS-1's lit card; gi.cone_integrator_parity, gi.card_read_parity: PHOTON-CARDS-2) out of ONE binary, selected by argv: five different scenes
-# are needed and a GI arm binds process-wide state (before PHOTON-SCENE-SWITCH-1), so they
-# must not share a process — while the fixture scaffolding is the same in all
-# five. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
+# are needed, one process each — while the fixture scaffolding is the same in
+# all five. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1428,7 +1411,7 @@ set_tests_properties(gi.env_cone PROPERTIES TIMEOUT 120 LABELS "engine")
 # the voxel cones' escape, through the irradiance field and through the gather's
 # ray misses; no Sky Light is no environment for any of them; the SH lookup is
 # camera-independent; a sun disc in the probes reaches neither the SH nor the
-# cube. Its own binary: the field and the voxel lighting bind process-wide.
+# cube. Its own binary.
 add_executable(test_gi_env_one test_gi_env_one.cpp)
 set_target_properties(test_gi_env_one PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1584,6 +1567,19 @@ set_tests_properties(gi.sun_contact_norays PROPERTIES
 add_test(NAME gi.sun_contact_both COMMAND test_gi_sun_contact --both
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sun_contact_both PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and THE GAP THE MAP LEAVES BY CONSTRUCTION (PHOTON-SCENE-SWITCH-2): a 1 m
+# board 2 cm thick on 5 cm legs under a 10-degree sun with a 1024 px atlas — the
+# receiver's normal-offset lift (>= 0.136 m) exceeds the board's 0.07 m top, so the
+# map shadows none of the board's shadow; the contact ray closes all of it. The
+# no-rays row: row on == row off, byte for byte.
+add_test(NAME gi.sun_contact_legs COMMAND test_gi_sun_contact --legs
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_legs PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.sun_contact_legs_norays COMMAND test_gi_sun_contact --legs
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_legs_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # gi.skin_rays — THE GPU SKIN CACHE AND THE SKINNED BLAS (PHOTON P5, RY-R4;
 # PHOTON-SKIN-1)

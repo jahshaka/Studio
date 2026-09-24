@@ -41,8 +41,7 @@
 //   3. a HEMISPHERE ambient (upper != lower) is untouched by all of this —
 //      it never took the 1/pi branch and its edge was already flat.
 //
-// Its own binary like every GI suite: the field and the voxel lighting bind
-// process-wide to HlmsPbs.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

@@ -34,8 +34,7 @@
 //   6. THE GUARD DOES NOT FIRE ON AN ORDINARY SCROLL. The counter would be
 //      worthless if walking tripped it.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs, so this scene must not share a process with another arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

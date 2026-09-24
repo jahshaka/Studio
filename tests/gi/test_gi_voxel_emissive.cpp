@@ -50,8 +50,7 @@
 // them. A cascade coarse enough to decline a 2 m object holds nothing and is
 // reported as such rather than asserted on.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

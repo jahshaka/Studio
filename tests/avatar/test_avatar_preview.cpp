@@ -442,7 +442,7 @@ int main(int argc, char **argv)
             CHECK(doc && !doc->hdrEnabled && !doc->bloomEnabled,
                   "S12: the workspace grade has no tonemapper and no bloom");
             CHECK(doc && doc->giMode == iris::GiMode::OFF && doc->worldMode == -1,
-                  "S12: ... GI off, World Mode Custom (the binding is process-wide)");
+                  "S12: ... GI off, World Mode Custom");
             CHECK(doc && doc->exposureMode == iris::ExposureMode::Manual,
                   "S12: ... and a MANUAL exposure, so the page never breathes");
 

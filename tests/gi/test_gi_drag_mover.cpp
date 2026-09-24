@@ -41,8 +41,8 @@
 //      same pose reached without the rule, stably, because every probe had
 //      photographed the room WITHOUT it.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide.
-// RUN_SERIAL for the same reason, and because it counts per-frame work.
+// Its own binary like every GI suite. RUN_SERIAL because it counts per-frame
+// work.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

@@ -20,8 +20,7 @@
 //
 // Section B swaps GI off and the moving layer on (planar, then SSR, then the
 // view's shadow maps) in the same process, deliberately AFTER the hybrid
-// section: the probe/VCT binding is process-wide (before PHOTON-SCENE-SWITCH-1), so a
-// hybrid scene wants the process to itself while it is being measured.
+// section, so the hybrid is measured with the process to itself.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

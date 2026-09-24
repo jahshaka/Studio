@@ -39,8 +39,7 @@
 // the only fixture for "a texture that never arrives" takes this pin's process
 // down, with or without this rule.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs, so this scene must not share a process with another arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

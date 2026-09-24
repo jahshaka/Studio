@@ -53,9 +53,7 @@
 // 1 probe -> r = 1.000, 4 probes -> r = 0.251. That is why the thresholds below
 // are 0.15 and not 0.9.
 //
-// Its own binary, like gi.pcc_mirror: the hybrid binds process-wide HlmsPbs
-// state (before PHOTON-SCENE-SWITCH-1), so a GI scene must not share a process with
-// gi.modes' scene (spec §9).
+// Its own binary, like gi.pcc_mirror (spec §9).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -539,7 +537,7 @@ int main()
     groundPlaneCase(engine.get(), view);
     singleBigMeshCase(engine.get(), view);
     excludeFlagCase(engine.get(), view);
-    // The hybrid cases last: they take the process-wide HlmsPbs binding.
+    // The hybrid cases last.
     roomCase(engine.get(), view, "thin_snug",  0.4f, false, 0.2f);
     roomCase(engine.get(), view, "thick_auto", 1.4f, true,  0.0f);
     roomCase(engine.get(), view, "thick_snug", 1.4f, false, 0.2f);

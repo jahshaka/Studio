@@ -26,8 +26,7 @@
 // backend's swallowed exceptions land: a GI arm that throws its way out of a
 // build reports a wrong picture and nothing else without it.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs, so this scene must not share a process with another arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

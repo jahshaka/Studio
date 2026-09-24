@@ -26,8 +26,7 @@
 // Section A pins it for the SINGLE-VOLUME arm (the behaviour every shipped
 // scene has today), section B for the cascade chain.
 //
-// Its own binary like every GI suite: the voxel lighting and the probe grid bind
-// process-wide to HlmsPbs.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

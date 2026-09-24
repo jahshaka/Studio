@@ -60,9 +60,7 @@
 // compared with the cone reference, which over-reads a corner (+11.7 points): the
 // cone's corner is the target row gi.cone_corner_target (PHOTON-FIELD-ROTATE-1).
 //
-// Its own binary, like every GI suite here: the field and the voxel lighting
-// bind PROCESS-WIDE to HlmsPbs, so these scenes must not share a process with
-// another suite's. Determinism discipline is gi.ddgi's: fixed frame delta, no
+// Its own binary, like every GI suite here. Determinism discipline is gi.ddgi's: fixed frame delta, no
 // wall clock, and a rebuild-determinism control before any A/B is believed.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
