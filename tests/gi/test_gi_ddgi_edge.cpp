@@ -263,9 +263,18 @@ static GiParams vctBase()
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
-    gi.testBoundsMin = Vec3(-5.0f, -1.0f, -5.0f);
     // THE WORST CASE, and today's automatic answer: the top of the volume sits
     // INSIDE the ceiling slab (5.0 - 5.5).
+    // THE BOUNDS ARE A LATTICE'S (PHOTON-VOXEL-4): the fitted box is the bounds
+    // padded on the far side to a power-of-two count of cubic cells (OgreGi.cpp,
+    // buildVoxelArm), so bounds whose height is not the longest side / 2^k grow
+    // UPWARD - the old -1 .. 5.25 (6.25 m of a 10 m side) became -1 .. 9 at Medium
+    // and took in the roof AND the cube 2 m above it, whose cones then saw that
+    // cube: the roof varied by 6/255 with the field off, correct occlusion of a box
+    // the fixture means to leave outside. 10 m tall (-4.75, empty below the floor)
+    // is 64 cells of 0.156 m exactly, the box IS the bounds, and the top still sits
+    // inside the ceiling slab.
+    gi.testBoundsMin = Vec3(-5.0f, -4.75f, -5.0f);
     gi.testBoundsMax = Vec3(5.0f, 5.25f, 5.0f);
     return gi;
 }

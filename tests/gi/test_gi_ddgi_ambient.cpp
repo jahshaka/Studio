@@ -581,7 +581,11 @@ int main(int argc, char **argv)
         //      every face - the conservative raster's envelope) bracket what the field can
         //      show, widened by twice the field's own converged standard error (one
         //      sample's 2 % over sqrt(K) samples) and by the reader's half-code quantisation
-        //      of the two pixels (0.5/255 over each reading).
+        //      of the two pixels (0.5/255 over each reading). THE CELL IS LOW'S 64 (PHOTON-VOXEL-4,
+        //      the lead's decision): on this 18 m fixture 0.28125 m, bracket 76.1-84.0 %, the field
+        //      83.7 %; at the old 32 (0.5625 m) the field read 85.0 % against 73.2-83.9 - the dial's
+        //      measured cost (tests/gi/voxel_dial_measure): the rebuild +0.06 ms GPU, the store
+        //      0.45 -> 3.6 MB, the settle's GI work 20.9 -> 46.3 ms GPU once.
         const GiStatus fst = s->giStatus();
         const float cell = fst.voxelMetres;
         const double anaAuthored = analyticCorner(0.0f);

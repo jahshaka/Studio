@@ -209,12 +209,12 @@ static void testTierTable()
                                      .arg(worldmodes::photonTierName(tier))
                                      .arg(worldmodes::photonTierProbeFaceSize(tier))));
         }
-        // (iv) Low's chain is 64, NOT the quality dial's 32 — the exact claim
-        // the tooltip used to get backwards, and the one PHOTON_SPEC §7 E2 (4)
-        // decided (a 0.31 m cell smears a room's own walls).
+        // (iv) Low's chain is 64 (PHOTON_SPEC §7 E2 (4): a 0.31 m cell smears a
+        // room's own walls) and so is its scene-fitted volume since PHOTON-VOXEL-4
+        // (at 32 the field's corner fell outside its derived bracket).
         CHECK(giQualityFacts(GiQuality::Low).cascades[0].resolution == 64 &&
-                  giQualityFacts(GiQuality::Low).voxelResolution == 32u,
-              "Low: the CHAIN is 64 per axis while the single volume is 32");
+                  giQualityFacts(GiQuality::Low).voxelResolution == 64u,
+              "Low: the CHAIN and the single scene-fitted volume are both 64 per axis");
         CHECK(worldmodes::photonTierVoxelPhrase(PhotonTier::Low) == QStringLiteral("64") &&
                   worldmodes::photonTierVoxelPhrase(PhotonTier::Medium) == QStringLiteral("64"),
               "Low and Medium voxelise the chain at the SAME resolution — the "

@@ -1489,7 +1489,7 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     // (THE TECHNIQUE ORDINALS MOVED with Instant Radiosity's deletion — VCT is
     // 1 and the hybrid 2 — so VCT alone can no longer tell Low from Medium.
     // The QUALITY does, and it is the field those two tiers actually differ in:
-    // Low is 32^3 (the cascade chain's own Low row is 64), Medium 64^3.)
+    // the quality row - its cascade chain, probes and card budgets.)
     PhotonTier tier = PhotonTier::Medium;
     if (enabled) {
         tier = technique == 2 ? PhotonTier::High
