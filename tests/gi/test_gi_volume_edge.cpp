@@ -43,6 +43,11 @@
 //
 // Its own binary like every GI suite: the field and the voxel lighting bind
 // process-wide to HlmsPbs.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -179,6 +184,7 @@ static Slab buildSlab(Engine *e, const char *name, const Colour &upper, const Co
 static GiParams hybridDdgi()
 {
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::High;      // Epic in the UI: 128^3 voxels
     gi.numBounces = 1;

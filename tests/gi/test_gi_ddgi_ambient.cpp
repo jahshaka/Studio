@@ -64,6 +64,11 @@
 // bind PROCESS-WIDE to HlmsPbs, so these scenes must not share a process with
 // another suite's. Determinism discipline is gi.ddgi's: fixed frame delta, no
 // wall clock, and a rebuild-determinism control before any A/B is believed.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -134,6 +139,7 @@ static const Colour kAmbientLower(0.10f, 0.10f, 0.12f);
 static GiParams vctBase()
 {
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
@@ -261,6 +267,7 @@ int main(int argc, char **argv)
         //      lives in a VCT scene — the cone-traced diffuse's own
         //      `ambient * escapeFraction` add.
         GiParams ref;
+        ref.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
         ref.mode = GiMode::Vct;
         ref.quality = GiQuality::Low;        // isotropic: see the header above
         ref.numBounces = 2;

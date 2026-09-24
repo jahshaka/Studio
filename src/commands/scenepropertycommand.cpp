@@ -178,10 +178,8 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giPccGrid = vec(v); });
     add("giUpdateBudget", [](const ScenePtr &s) { return QVariant(s->giUpdateBudget); },
         [](const ScenePtr &s, const QVariant &v) { s->giUpdateBudget = v.toInt(); });
-    add("giDdgiIntensity", [](const ScenePtr &s) { return QVariant(s->giDdgiIntensity); },
-        [](const ScenePtr &s, const QVariant &v) { s->giDdgiIntensity = v.toFloat(); });
-    // THE SCREEN-PROBE GATHER's row (GATHER-1a). Verb-only like the two above
-    // it, and in this table for the same reason: a world field the verb writes
+    // THE SCREEN-PROBE GATHER's row (GATHER-1a). A verb's row like the ones
+    // above it, and in this table for the same reason: a world field the verb writes
     // outside WorldEdit is not undoable and is not rolled back when a later key
     // of the same call is refused.
     add("giGather", [](const ScenePtr &s) { return QVariant(s->giGather); },

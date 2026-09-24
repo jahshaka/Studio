@@ -302,12 +302,11 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
             set.append(QJsonArray{ double(c.x()), double(c.y()), double(c.z()) });
         sceneObj["giCascadeSet"] = set;
     }
-    // DDGI (GI_UNIFIED_SPEC.md §4 P1). Tri-state toggle + our intensity scalar,
+    // DDGI (GI_UNIFIED_SPEC.md §4 P1) and the gather: tri-state toggles,
     // written like the probe knobs above: always, and read back onto the same
     // defaults, so a document that never touched them reopens identical.
     sceneObj["giDdgi"] = scene->giDdgi;
     sceneObj["giGather"] = scene->giGather;
-    sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
     // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
     // and spelled out here for the same reason (this file must not pull the
     // services layer into a dozen headless test targets): an ordinal would

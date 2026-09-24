@@ -70,7 +70,29 @@ assert(byTier.high.probeFaceSize === 512 && byTier.high.probeHdr === true &&
        byTier.high.probeShadows === true,
        "High's probes are 512 px per face, HDR and shadowed");
 assert(byTier.epic.bounces === 3 && byTier.high.bounces === 1,
-       "Epic's one column over High is the bounce count");
+       "Epic's bounce count is 3 against High's 1");
+
+// ---- THE GATHER COLUMN (PHOTON-GATHER-1d, the rule T-A) ---------------------
+// A PROJECTION of the engine's tier table (Types.h GiGatherFacts through
+// giQualityFacts), never a copy: High and Epic on, Medium on at 36 rays, Low off;
+// Epic's density keyed on the tier (a probe per 8 px), not on the SSR row; the
+// VR column off (GA-VR).
+function g(t) { return byTier[t].gather; }
+assert(g("low").on === false, "Low: no gather — the cones and the field are its diffuse");
+assert(g("medium").on === true && g("medium").raysPerProbe === 36 && g("medium").stride === 16,
+       "Medium: the gather at 36 rays a probe, a probe per 16 px " + JSON.stringify(g("medium")));
+assert(g("high").on === true && g("high").raysPerProbe === 64 && g("high").stride === 16,
+       "High: the gather at 64 rays, a probe per 16 px " + JSON.stringify(g("high")));
+assert(g("epic").on === true && g("epic").raysPerProbe === 64 && g("epic").stride === 8,
+       "Epic: four times the probes (a probe per 8 px) " + JSON.stringify(g("epic")));
+for (var gt in byTier) {
+    assert(byTier[gt].gather.adaptiveCapDivisor === 4,
+           gt + ": the adaptive probes are capped at a quarter of the grid");
+    assert(byTier[gt].vrGather.on === false, gt + ": the VR column keeps the gather OFF (GA-VR)");
+}
+assert(byTier.high.description.indexOf("screen-probe gather") >= 0 &&
+       byTier.low.description.indexOf("screen-probe gather") < 0,
+       "the generated tier sentence names the gather where the table has it and nowhere else");
 
 // ---- THE ATOM COLUMN (ATOM P3's SUB-ERROR) ---------------------------------
 //

@@ -49,6 +49,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -276,10 +277,94 @@ static int glassMain(Engine *e)
         CHECK_MSG(patch.mean > 1.0,
                   "%s: the gather MOVES the opaque patch beside the glass (mean %.3f/255) — the "
                   "two arms are different estimators", arm.name, patch.mean);
-        CHECK_MSG(glass.mean <= 0.25 && glass.worst <= 3u,
-                  "GA-GLASS, %s: the glass reads NO probe irradiance — its pixels are the "
-                  "gather-off picture's (mean %.3f/255, worst %u; bar 0.25 mean, 3 worst)",
-                  arm.name, glass.mean, glass.worst);
+        if (arm.refractionPass) {
+            // The refraction pass lies OUTSIDE the gather's bracket (the pass
+            // property is registered for the PrePassUse pass alone), so the
+            // refractive slab shades as it does with the gather off: pixel for
+            // pixel.
+            CHECK_MSG(glass.mean <= 0.25 && glass.worst <= 3u,
+                      "GA-GLASS, %s: the glass reads NO probe irradiance — its pixels are the "
+                      "gather-off picture's (mean %.3f/255, worst %u; bar 0.25 mean, 3 worst)",
+                      arm.name, glass.mean, glass.worst);
+        } else {
+            // IN THE GATHERING PASS a blended fragment's diffuse GI is THE
+            // ENVIRONMENT TERM ALONE since PHOTON-GATHER-1d (the listener's
+            // `jah_env_diffuse_only`): no probe, no cones, no field cage. So the
+            // toggle MAY move the slab — it loses the cones' red bounce — but the
+            // probe's answer must not reach it: that answer is the red panel's
+            // bounce, and reading it made the slab REDDER (the 1b leak: +18.6/255
+            // on the Blend slab). The slab's red may fall; it may not rise.
+            const Colour gOff = meanIn(off, 0.66f, 0.43f, 0.86f, 0.57f);
+            const Colour gOn = meanIn(on, 0.66f, 0.43f, 0.86f, 0.57f);
+            const double redRise = 255.0 * (double(gOn.r) - double(gOff.r));
+            const double greenMove = 255.0 * (double(gOn.g) - double(gOff.g));
+            std::printf("   the slab's red %+.3f/255, green %+.3f/255 on the gather's toggle\n",
+                        redRise, greenMove);
+            CHECK_MSG(redRise <= 0.25,
+                      "GA-GLASS, %s: the slab reads NO probe irradiance — its red does not rise with "
+                      "the gather on (%+.3f/255; bar +0.25; the leak raised it 18.6/255)",
+                      arm.name, redRise);
+        }
+        e->destroyScene(s);
+    }
+
+    // ---- F2: A BLENDED FRAGMENT UNDER THE PREPASS (PHOTON-GATHER-1d) ---------
+    // `hlms_use_prepass` is a PASS property, and under it the PBS pixel shader
+    // takes the fragment's normal, roughness and directional SHADOW from the
+    // G-buffer at iFragCoord — the OPAQUE floor's under the slab, which lies in
+    // the slab's OWN cast shadow: the slab rendered in its own shadow, measured
+    // 25/255 dark (spikes/photon-gather-1b/AUDIT.md item 8). The listener now
+    // withdraws the property per blended renderable. The same Fade slab over a
+    // lit white floor, GI off (nothing but the direct term moves), with the
+    // prepass (the SSR row) and without it (no chain at all): the slab reads the
+    // same.
+    {
+        Scene *s = e->createScene("glass-f2");
+        view->setScene(s);
+        s->setAmbient(Colour(0.10f, 0.10f, 0.12f), Colour(0.03f, 0.03f, 0.03f));
+        addBox(s, matte(Colour(0.85f, 0.85f, 0.85f)), Vec3(0, -0.25f, 0), Vec3(24, 0.5f, 24));
+        {
+            PbrParams p = matte(Colour(0.9f, 0.9f, 0.9f));
+            p.alphaMode = PbrAlphaMode::Blend;
+            p.alpha = 0.6f;
+            addBox(s, p, Vec3(1.4f, 0.5f, 0.0f), Vec3(2.0f, 0.1f, 2.4f));
+        }
+        enginetest::addDirectionalLight(s, Vec3(0.3f, -1.0f, -0.4f), 1.0f);
+        enginetest::testCameraLookAt(view, Vec3(-0.6f, 6.5f, 7.5f), Vec3(-0.6f, 0.0f, -0.5f));
+        GiParams gi;
+        gi.mode = GiMode::Off;
+        CHECK(s->setGlobalIllumination(gi), "F2: GI off (only the direct term)");
+        view->setPostFx(PostFxDesc());     // no chain: no prepass
+        render(e, 12);
+        Image plain; view->readPixels(plain);
+        armChain(view);                      // the SSR row: the prepass
+        render(e, 12);
+        Image prepass; view->readPixels(prepass);
+        if (std::getenv("JAH_GATHER_DUMP")) {
+            const std::string dir = std::getenv("JAH_GATHER_DUMP");
+            for (const auto &pr : { std::make_pair(&plain, "plain"), std::make_pair(&prepass, "prepass") }) {
+                FILE *f = std::fopen((dir + "/f2-" + pr.second + ".ppm").c_str(), "wb");
+                if (!f) continue;
+                std::fprintf(f, "P6\n%u %u\n255\n", pr.first->width, pr.first->height);
+                for (size_t i = 0; i + 3 < pr.first->rgba.size(); i += 4) std::fwrite(&pr.first->rgba[i], 1, 3, f);
+                std::fclose(f);
+            }
+        }
+        // THE CONTROL: the opaque floor beside the slab, where the prepass changes
+        // nothing a blended fragment could be blamed for.
+        const Delta floorCtl = deltaIn(plain, prepass, 0.15f, 0.45f, 0.35f, 0.65f);
+        printDelta("F2: the opaque floor beside it (control)", floorCtl);
+        const Colour a = meanIn(plain, 0.66f, 0.43f, 0.86f, 0.57f);
+        const Colour b = meanIn(prepass, 0.66f, 0.43f, 0.86f, 0.57f);
+        const double dark = 255.0 * ((double(a.r) + a.g + a.b) - (double(b.r) + b.g + b.b)) / 3.0;
+        const Delta slab = deltaIn(plain, prepass, 0.66f, 0.43f, 0.86f, 0.57f);
+        printDelta("F2: the Fade slab, prepass vs none", slab);
+        std::printf("   F2: the slab is %.3f/255 darker under the prepass (1b measured 25)\n", dark);
+        CHECK_MSG(std::fabs(dark) <= 1.0 && slab.mean <= 1.0,
+                  "F2: A BLENDED FRAGMENT SHADES FROM ITSELF under the prepass — the Fade slab reads "
+                  "%.3f/255 against the chain-less picture (mean |d| %.3f; bar 1; it was 25 dark, in its "
+                  "own cast shadow)",
+                  dark, slab.mean);
         e->destroyScene(s);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
@@ -651,6 +736,89 @@ static int planeWeightMain(Engine *e)
     return failures ? 1 : 0;
 }
 
+// ===========================================================================
+// gi.gather_letterbox — THE GATHER'S EYE BASIS UNDER A CONSTRAINED ASPECT
+// (PHOTON-GATHER-1d; 1c's hand-off item 5). Under a letterboxing camera the
+// picture is the target's INNER rectangle while the gather addresses the whole
+// target, so its eye basis is EXPANDED to the target — the ray tier's shared
+// helper (RayQueryTier::expandEyeToTarget), the reflection's and the sun
+// contact's own. Without it every probe reconstructed its surface through the
+// shot's basis at the TARGET's uv: a wrong world point off the floor, which the
+// plane test then declines. THE FIXTURE: an open floor under the sky, shot
+// square and then letterboxed to 2:1 (bars top and bottom): the inner
+// rectangle's floor reads the square shot's E/pi, every band of it answered,
+// and the bars hold no probe.
+static int letterboxMain(Engine *e)
+{
+    View *view = e->createOffscreenView("letterbox", kSize, kSize, Colour(0, 0, 0));
+    Scene *s = e->createScene("letterbox");
+    if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(s);
+    view->setShadows(true);
+    armChain(view);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine — gi.gather_letterbox skips cleanly\n");
+        return 0;
+    }
+    // THE OPEN FLOOR UNDER THE SKY (gi.gather_sky's fixture): every floor point
+    // sees the same sky, so the floor's E/pi is ONE number wherever it is sampled
+    // and a probe answers every floor pixel — WHEN it sits on the surface its
+    // pixel shows. A probe reconstructed through the wrong basis sits off it,
+    // and the plane test then declines the pixels whose surface it is not on.
+    addBox(s, matte(Colour(0.8f, 0.8f, 0.8f)), Vec3(0, -0.25f, 0), Vec3(200, 0.5f, 200));
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.sun.enabled = true;
+    sky.sun.angularDiameterDeg = 2.0f;
+    sky.sun.colour = Colour(200.0f, 200.0f, 180.0f, 1.0f);
+    sky.sun.dir[0] = 0.0f; sky.sun.dir[1] = 1.0f; sky.sun.dir[2] = 0.0f;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[0] = 0.0f; sky.atmosphere.sunDir[1] = 1.0f; sky.atmosphere.sunDir[2] = 0.0f;
+    CHECK(s->setSky(sky), "the analytic sky binds");
+    enginetest::addDirectionalLight(s, Vec3(0.0f, -1.0f, 0.0001f), 3.0f);
+    float sh[27] = {};
+    bool shReady = false;
+    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->skyAmbientSh(sh); }
+    s->setAmbientSh(sh);
+    s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
+    // A STEEP view: the floor fills the frame to its top, so the inner
+    // rectangle's rows far from the centre — where a basis that ignores the bars
+    // is most wrong — are floor.
+    CameraDesc cam = enginetest::testCameraDescLookAt(Vec3(0.0f, 4.0f, 3.0f), Vec3(0.0f, 0.0f, -1.0f));
+    view->setCamera(cam);
+    GiParams gi = chainGi(true);
+    CHECK(s->setGlobalIllumination(gi), "the chain builds");
+    setGather(s, gi, true, true);
+    render(e, 60);
+    GatherStatus st = s->giStatus().gather;
+    CHECK_MSG(st.running && !st.irradiance.empty(), "the gather runs and reads back (%ux%u)",
+              st.irradianceW, st.irradianceH);
+    const IrrMean square = irrIn(st, 0.05f, 0.05f, 0.95f, 0.95f);
+    cam.constrainAspect = true;
+    cam.aspect = 2.0f;            // a 2:1 shot in a square target: bars of a quarter each
+    view->setCamera(cam);
+    render(e, 60);
+    st = s->giStatus().gather;
+    const IrrMean inner = irrIn(st, 0.05f, 0.26f, 0.95f, 0.74f);
+    const IrrMean edges[2] = { irrIn(st, 0.05f, 0.26f, 0.95f, 0.32f), irrIn(st, 0.05f, 0.68f, 0.95f, 0.74f) };
+    const IrrMean bar = irrIn(st, 0.05f, 0.80f, 0.95f, 0.98f, false);
+    std::printf("   the floor's E/pi: square shot %.4f %.4f %.4f (coverage %.4f); the 2:1 shot's inner "
+                "rectangle %.4f %.4f %.4f (coverage %.4f; its top and bottom bands %.4f / %.4f); the "
+                "bar's coverage %.4f\n", square.r, square.g, square.b, square.w, inner.r, inner.g,
+                inner.b, inner.w, edges[0].w, edges[1].w, bar.w);
+    const double worst = std::max(std::fabs(inner.r / std::max(square.r, 1e-6) - 1.0),
+                                  std::max(std::fabs(inner.g / std::max(square.g, 1e-6) - 1.0),
+                                           std::fabs(inner.b / std::max(square.b, 1e-6) - 1.0)));
+    CHECK_MSG(worst <= 0.02, "the letterboxed floor reads the square shot's E/pi within %.2f %% (bar 2 %%)",
+              100.0 * worst);
+    CHECK_MSG(std::min(edges[0].w, edges[1].w) >= 0.99,
+              "EVERY PROBE OF THE LETTERBOXED SHOT SITS ON ITS SURFACE: the inner rectangle's top and "
+              "bottom bands are answered %.4f / %.4f (bar 0.99)", edges[0].w, edges[1].w);
+    CHECK_MSG(bar.w <= 0.01, "the bars hold no probe (coverage %.3f)", bar.w);
+    std::printf("%s\n", failures ? "FAILED" : "PASSED");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "";
@@ -667,6 +835,7 @@ int main(int argc, char **argv)
     if (mode == "nest") return nestMain(e);
     if (mode == "sky") return skyMain(e);
     if (mode == "plane_weight") return planeWeightMain(e);
+    if (mode == "letterbox") return letterboxMain(e);
     std::printf("FAIL: unknown mode '%s' (glass | nest | sky | plane_weight)\n", mode.c_str());
     return 1;
 }

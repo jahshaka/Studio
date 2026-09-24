@@ -45,6 +45,11 @@
 // Determinism discipline, as gi.pcc_mirror: offscreen view (MSAA 1x), explicit
 // GI bounds, no SSAO/planar/sky, nothing moves between reads, and every read
 // waits a whole probe sweep after the same call.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -161,6 +166,7 @@ int main()
 
     // ---- arm the hybrid ----------------------------------------------------
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;

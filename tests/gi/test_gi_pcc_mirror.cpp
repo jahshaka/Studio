@@ -56,6 +56,11 @@
 // sampling defect in DOCS/MACOS_BUILD.md §6.1. It is GPU-FILLED (a copy, not a
 // CPU upload), so it may well be fine — running THIS suite on the Mac is the
 // measurement. A red-hue failure there is that defect, not this test.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -233,6 +238,7 @@ int main()
 
     // ---- plain VCT: cone-traced reflections only -------------------------
     GiParams vct;
+    vct.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     vct.mode = GiMode::Vct;
     vct.quality = GiQuality::Medium;      // 64^3 voxels
     vct.numBounces = 2;
@@ -745,6 +751,7 @@ int main()
 
     // ---- off restores -----------------------------------------------------
     GiParams off;
+    off.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     CHECK(s->setGlobalIllumination(off), "setGlobalIllumination(Off) succeeds");
     render(engine.get());
     view->readPixels(img);

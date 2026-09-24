@@ -71,24 +71,8 @@ static MeshData texturedCubeMesh()
     return d;
 }
 
-/// THE SIX-FACE BOX CARD LIST for a unit cube of half-extent `h`, in MESH
-/// space — the shape the bake's generator produces for a convex mesh, written
-/// by hand here so an engine suite needs no document and no .jmb.
-static std::vector<MeshCardDesc> boxCards(float h, float margin = 0.02f)
-{
-    std::vector<MeshCardDesc> cards;
-    for (unsigned a = 0; a < 6u; ++a) {
-        MeshCardDesc c;
-        c.axis = static_cast<unsigned char>(a);
-        c.lodLevel = 0;
-        c.origin = Vec3(0, 0, 0);
-        c.halfU = h;
-        c.halfV = h;
-        c.halfDepth = h + margin;
-        cards.push_back(c);
-    }
-    return cards;
-}
+/// The six-face card list for a unit cube: the shared helper.
+using enginetest::boxCards;
 
 static float dot3(const Vec3 &a, const Vec3 &b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 static Vec3 cross3(const Vec3 &a, const Vec3 &b) {

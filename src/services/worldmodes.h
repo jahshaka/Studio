@@ -46,6 +46,8 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 
+namespace jahshaka { namespace engine { struct GiGatherFacts; } }
+
 namespace worldmodes {
 
 /// Tier. Custom means "no tier applied": the backing fields are whatever the
@@ -241,6 +243,13 @@ int photonProbeSize(PhotonTier t);
 /// On in every tier since PHOTON_SPEC §7 E2 (6): the bounce follows the camera
 /// unless a scene pins `giCascades` off.
 int photonCascades(PhotonTier t);
+/// THE GATHER COLUMN (PHOTON-GATHER-1d): the screen-probe gather at this tier —
+/// on/off, the probe stride, the octahedral resolution, the adaptive cap — as a
+/// PROJECTION of the engine's tier table (`giQualityFacts(...).gather`, the
+/// quality column and the Epic tier), never a copy: High and Epic on (8 px a
+/// probe at Epic), Medium on at 36 rays, Low off. What it resolves to still
+/// needs a machine that traces; the document row `giGather` = auto follows it.
+jahshaka::engine::GiGatherFacts photonGather(PhotonTier t);
 
 /// WHAT A TIER IS, GENERATED FROM THE TABLES — the cure for the five tier
 /// tooltips that described a renderer which did not exist (render audit A5,

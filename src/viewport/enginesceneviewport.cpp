@@ -2779,6 +2779,11 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.traceMs      = st.gather.traceMs;
     out.gather.integrateMs  = st.gather.integrateMs;
     out.gather.cpuMs        = st.gather.cpuMs;
+    out.gather.temporal     = st.gather.temporal;
+    out.gather.historyAge   = int(std::min(st.gather.historyAge, 1u << 30));
+    out.gather.lightingAge  = int(std::min(st.gather.lightingAge, 1u << 30));
+    out.gather.settleFrames = int(st.gather.settleFrames);
+    out.gather.settled      = st.gather.settled;
     out.gather.error        = QString::fromStdString(st.gather.error);
     return out;
 }
@@ -3170,9 +3175,20 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     if (mShotSettleFrames > 0) {
         const int cap = mShotSettleFrames;
         mShotSettleFrames = 0;
-        if (view() && view()->scene() && !view()->scene()->giStatus().giAtRest) {
+        // ...AND THE SHOT'S OWN GATHER HISTORY (PHOTON-GATHER-1d). Where the
+        // screen-probe gather runs, the shot view has a pixel history of its own
+        // that starts young, and giAtRest cannot see it until the view has drawn
+        // once (its settled term reads the views that drew the latest frame). So
+        // a gathering scene draws the shot's first frame unconditionally and then
+        // waits for the ONE predicate as always; a scene that does not gather
+        // takes exactly the path it always took.
+        jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
+        const bool gathering = sc && sc->giStatus().gather.on;
+        if (sc && (gathering || !sc->giStatus().giAtRest)) {
             mEngine->setFixedFrameDelta(0.0f);
-            for (int i = 0; i < cap && !view()->scene()->giStatus().giAtRest; ++i)
+            int i = 0;
+            if (gathering) { mEngine->renderOneFrame(); ++i; }
+            for (; i < cap && !sc->giStatus().giAtRest; ++i)
                 mEngine->renderOneFrame();
             mEngine->setFixedFrameDelta(mLastFrameDelta);
         }

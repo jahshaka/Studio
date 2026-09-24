@@ -648,8 +648,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // (A "giDdgiSource" key written before 2026-09-17 is IGNORED: the
         // irradiance field's rasterised probe source was deleted with the lane
         // FIELD-RASTER-CRUD, and the voxel source is the only one there is.)
-        scene->giDdgiIntensity = float(
-            qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(scene->giDdgiIntensity), 64.0));
         // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
         // document written before the unification — those are DERIVED from the
         // fields above, below, once the World Mode is known.

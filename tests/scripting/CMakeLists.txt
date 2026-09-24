@@ -287,6 +287,20 @@ add_script_e2e(light_masks e2e_light_masks.js)
 # gi.pcc_mirror engine suite. Engine UP, not --headless: the verb's entire value
 # is that it measures the renderer rather than echoing the document.
 add_script_e2e(gi_status e2e_gi_status.js)
+# gi.gather_default (PHOTON-GATHER-1d): the screen-probe gather is the diffuse BY
+# TIER — Low off, Medium 36 rays, High 64, Epic a probe per 8 px — through the
+# app's own path, and at High the default ground's picture is the gather's (the
+# world.gi({gather:false}) A/B moves it). Its own ctest name in the gi family
+# (the brief's), the scripting harness's home and data root.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-gather_default)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME gi.gather_default
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_default.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(gi.gather_default PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
 # THE SURPRISE MOVER (REALTIME_REFLECTIONS_SPEC §3.3.3, owner decision O3): an
 # object nobody marked as moving starts moving during PLAY. It moves smoothly,
 # is treated as movable from that frame, leaves its old bounce light behind

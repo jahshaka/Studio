@@ -498,6 +498,20 @@ static int motionMain(Engine *e)
     const float yawAlone = runMove(e, view, yawPose, "yaw, each frame alone (lever)");
     const float truckAlone = runMove(e, view, truckPose, "truck, each frame alone (lever)");
     setNoTemporal(false);
+    // THE ACCEPT-ALL ARM (PHOTON-GATHER-1d, the 1c audit's m2 — landed as a test
+    // door, GatherTuning::historyValidationOff, where 1c measured it with a
+    // one-off shader edit): every reprojected texel accepted, the distance and
+    // normal tests off. It is what the truck's tile bar exists to catch, so the
+    // bar is proved against it in this process (below), not quoted from a log.
+    float truckAcceptAll = 0.0f, truckAcceptAllTile = 0.0f;
+    {
+        GatherTuning t;
+        t.historyValidationOff = true;
+        s->setGatherTuning(t);
+        truckAcceptAll = runMove(e, view, truckPose, "truck, every texel accepted (door)");
+        truckAcceptAllTile = gLastTile;
+        s->setGatherTuning(GatherTuning());
+    }
 
     // THE BARS, from this suite's own numbers (RTX 4080 SUPER; the run is
     // deterministic — the frame index counts from the view's birth):
@@ -546,6 +560,11 @@ static int motionMain(Engine *e)
     CHECK_MSG(yawTile < kYawTileBar,
               "...and the turning camera's worst tile %.3f (bar %.1f; each frame alone 3.41)", yawTile,
               kYawTileBar);
+    CHECK_MSG(truckAcceptAllTile >= kTruckTileBar,
+              "THE BAR DISCRIMINATES THE DEFECT: with the validation off (every reprojected texel "
+              "accepted) the sliding camera's worst tile reads %.3f codes, at or over the bar %.1f "
+              "(region mean %.3f)",
+              truckAcceptAllTile, kTruckTileBar, truckAcceptAll);
     (void)stillTile;
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

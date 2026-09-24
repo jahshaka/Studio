@@ -112,7 +112,6 @@ void WorldGiPropertyWidget::rebuild()
     quality = nullptr; bounces = nullptr;
     pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr; reflectionsText.clear();
     updateBudget = nullptr; ddgiToggle = nullptr;
-    ddgiIntensity = nullptr;
     advancedButton = nullptr; resetAdvancedButton = nullptr;
     editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
     if (!scene) return;
@@ -391,20 +390,11 @@ void WorldGiPropertyWidget::rebuild()
                "the leak fix: a cone cannot tell a wall from empty space, and this can.\n\n"
                "Turning it on turns the voxel-cone diffuse OFF — it replaces that term rather "
                "than adding to it. Reflections, probes and planar are untouched. EVERY Photon "
-               "tier turns it on, Low included — Low's two camera cascades exist to feed it."));
+               "tier turns it on, Low included — Low's two camera cascades exist to feed it. "
+               "Where rays run (Medium and above) the screen-probe gather is the diffuse and "
+               "the field is its fallback."));
         connect(ddgiToggle, &CheckBoxWidget::valueChanged,
                 this, &WorldGiPropertyWidget::onDdgiToggled);
-        if (scene->giDdgi > 0) {
-            ddgiIntensity = this->addFloatValueSlider(tr("Field Intensity"), 0.0f, 4.0f,
-                                                      qBound(0.0f, scene->giDdgiIntensity, 4.0f));
-            ddgiIntensity->setToolTip(
-                tr("How brightly the field's diffuse is applied. 1.0 is the field's own physical "
-                   "answer and the default: the bounced light and the sky its probes see, in the "
-                   "same units as the lights themselves. Raise it to trim a room brighter; 0 "
-                   "leaves the field bound and contributing nothing."));
-            wirePlainRow(ddgiIntensity, QStringLiteral("giDdgiIntensity"), tr("Field Intensity"),
-                         [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 64.0f)); });
-        }
 
         break;
     }

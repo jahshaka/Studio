@@ -88,6 +88,11 @@ int main(int argc, char **argv)
     // about one arm.
     doc->giCascades = 0;
     doc->giMode = iris::GiMode::VCT;
+    // PHOTON-GATHER-1d: the gather pinned off — this suite measures the mirror's
+    // GI re-solve coalescing and counts GI work rows; the gather is a per-frame,
+    // view-dependent estimate (its rows are filed every frame by design), and it
+    // has its own suites.
+    doc->giGather = 0;
     doc->giQuality = iris::GiQuality::MEDIUM;
     // Pinned to what "auto" RESOLVED to at this quality, so the hybrid section
     // below captures exactly what it used to.
@@ -695,6 +700,11 @@ int main(int argc, char **argv)
     // frames, ONE re-solve on release. Here: none, ever.
     {
         doc->giMode = iris::GiMode::VCT;
+    // PHOTON-GATHER-1d: the gather pinned off — this suite measures the mirror's
+    // GI re-solve coalescing and counts GI work rows; the gather is a per-frame,
+    // view-dependent estimate (its rows are filed every frame by design), and it
+    // has its own suites.
+    doc->giGather = 0;
         for (int f = 0; f < 30; ++f) frame();
         sun->setMobility(iris::Mobility::Movable);
         for (int f = 0; f < 20; ++f) frame();          // the classification lands

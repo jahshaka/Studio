@@ -41,6 +41,11 @@
 //
 // Its OWN binary, like every other gi.ddgi* suite: the field binds PROCESS-WIDE
 // to HlmsPbs (the setIrradianceField singleton hazard).
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -255,6 +260,7 @@ static Reading measure(Engine *e, Box &b)
 static GiParams vctBase()
 {
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
@@ -397,21 +403,9 @@ int main()
           "the cube above the ENLARGED volume still reads its field-off value");
     CHECK(encOn.cubeA.chroma <= 2.0f, "and is still neutral");
 
-    // =====================================================================
-    // CASE 4 — the intensity dial still governs the interior, which is the
-    // cheapest proof that the fade did not simply turn the field off.
-    // =====================================================================
-    std::printf("\n== case 4: intensity 0 removes the interior bounce ==\n");
-    GiParams zero = vctBase();
-    zero.ddgi = GiToggle::On;
-    zero.ddgiIntensity = 0.0f;
-    CHECK(b.scene->setGlobalIllumination(zero), "DDGI at intensity 0 arms");
-    const Reading zeroOn = measure(e, b);
-    show("interior floor near the red wall, intensity 0", zeroOn.floorNear);
-    CHECK(lum(zeroOn.floorNear) < lum(ddgiOn.floorNear),
-          "intensity 0 is darker inside than intensity 1 (the field was doing the work)");
-    showStats("roof, intensity 0", zeroOn.roof);
-    CHECK(zeroOn.roof.spread <= 2.0f, "and the roof is flat at intensity 0 too");
+    // (CASE 4, the intensity dial at 0 inside, went with the dial —
+    // PHOTON-GATHER-1d deleted it; "the field still DOES something inside",
+    // above, is the field-off-against-on proof it duplicated.)
 
     b.view->setScene(nullptr);
     b.inside->setScene(nullptr);

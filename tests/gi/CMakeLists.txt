@@ -1465,7 +1465,9 @@ target_compile_definitions(test_gi_gather_findings PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_gather_findings PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_findings JahshakaEngineMedia)
-foreach(_finding glass nest sky plane_weight)
+# ...and gi.gather_letterbox (PHOTON-GATHER-1d): the gather's eye basis
+# expanded to the target under a constrained-aspect camera (the shared helper).
+foreach(_finding glass nest sky plane_weight letterbox)
     add_test(NAME gi.gather_${_finding} COMMAND test_gi_gather_findings ${_finding}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_finding} PROPERTIES TIMEOUT 600 LABELS "engine")
@@ -1487,7 +1489,9 @@ target_compile_definitions(test_gi_gather_phase2 PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_gather_phase2 PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_phase2 JahshakaEngineMedia)
-foreach(_arm plane deterministic)
+# ...and gi.gather_cards (PHOTON-GATHER-1d, GA-1e): the hit lit from the card —
+# the plane fixture on carded meshes, the voxel / card / ungated arms paired.
+foreach(_arm plane deterministic cards)
     add_test(NAME gi.gather_${_arm} COMMAND test_gi_gather_phase2 ${_arm}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
