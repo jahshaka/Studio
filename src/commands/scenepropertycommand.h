@@ -83,15 +83,25 @@ QVariant get(const iris::ScenePtr &scene, const QString &id);
 bool set(const iris::ScenePtr &scene, const QString &id, const QVariant &value);
 
 /// WHO WROTE A WORLD PROPERTY, told after the fact: every write through set()
-/// — a panel row, a world verb, an undo or redo of either — calls each
-/// observer with the scene and the key, AFTER the value is in the document.
+/// that CHANGED the value — a panel row, a world verb, an undo or redo of
+/// either — calls each observer with the scene and the key, AFTER the value is
+/// in the document (a write of what the field already holds tells nobody).
+/// `external` is true when no panel row is behind the write: a verb (the
+/// script, MCP, the console) or the undo/redo of a verb's step — the writes a
+/// panel cannot know about, so the panel showing the key must re-read it. A
+/// row's own live write (a drag tick) is not external: re-reading the row
+/// under the user's cursor is exactly what must not happen.
 /// A panel whose rows DEPEND on another section's field (the Sun Contact rows
-/// grey on `rayTracing`) listens here, because a script's verb touches no
-/// widget. `context` scopes the observer: it is dropped when `context` is
-/// destroyed. Observers run on the writer's thread (the UI thread: every
-/// sceneprops write is a UI-thread write).
-using WriteObserver = std::function<void(const iris::ScenePtr &, const QString &)>;
+/// grey on `rayTracing`) listens here too. `context` scopes the observer: it
+/// is dropped when `context` is destroyed. Observers run on the writer's
+/// thread (the UI thread: every sceneprops write is a UI-thread write).
+using WriteObserver = std::function<void(const iris::ScenePtr &, const QString &, bool external)>;
 void observeWrites(QObject *context, WriteObserver observer);
+/// Tells the observers that `key` CHANGED by an external writer that did not
+/// go through set() — a world verb that assigns the document's fields itself
+/// and brackets them in its own before/after (WorldApi's WorldEdit). The key
+/// "worldModes" means the World Mode registry rows moved (a tier write).
+void notifyExternal(const iris::ScenePtr &scene, const QString &key);
 
 }   // namespace sceneprops
 

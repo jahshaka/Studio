@@ -83,6 +83,9 @@ public:
 
     /// BINDS TO THE OPEN SCENE (the World panel's Sky section).
     void setScene(QSharedPointer<iris::Scene> scene);
+    /// Whether the section is showing the SCENE's sky (not a library asset) —
+    /// the only binding a write to the scene's `sky` key can make stale.
+    bool showsSceneSky() const { return binding == Binding::Scene; }
     /// BINDS TO A LIBRARY SKY ASSET (the Assets page's sky item).
     void setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType);
 

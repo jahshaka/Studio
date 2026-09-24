@@ -435,6 +435,10 @@ add_script_e2e(clouds_2d e2e_clouds_2d.js)
 # default, validation, one undo step, the file round trip, and what the renderer
 # did (gi.sun_contact is the picture).
 add_script_e2e(sun_contact e2e_sun_contact.js)
+# A WORLD ROW SHOWS WHAT A VERB WROTE (SMALL-FIXES-3): every World section that
+# shows a sceneprops key (or a World Mode registry row) re-reads it on a
+# changed external write — one verb, then the row read with no gesture between.
+add_script_e2e(world_rows_follow e2e_world_rows_follow.js)
 # SUN_AND_LIGHT_DEFAULTS_SPEC Q1b/Q1c: THE SCENE-ERROR AREA. The general
 # facility (raise / never repeat / dismiss / clear / scan) and its two first
 # customers — two directional lights fighting to be the sun, and a light whose

@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "ui/panels/propertyrows.h"
+#include <QSet>
 
 namespace iris {
     class SceneNode;
@@ -277,6 +278,11 @@ private:
     /// the world blades something other than the scene (the viewport, the
     /// library, the project, the undo stack).
     void invalidateWorldBinding() { worldBoundScene.clear(); }
+    /// The World-tab section that shows sceneprops `key`, or null (see the
+    /// .cpp for the enumeration); and the re-read of every section an
+    /// external write made stale.
+    QWidget *worldSectionForKey(const QString &key) const;
+    void refreshStaleWorldSections();
     void mountWorldBlades();
     void mountSelectionBlades();
     /// Makes the layout hold exactly `wantedBlades`, in order, moving only
@@ -330,6 +336,10 @@ private:
     bool mountScheduled = false;
     /// The scene the world blades are currently pointed at (see bindScene).
     QSharedPointer<iris::Scene> worldBoundScene;
+    /// Sections an external sceneprops write made stale, re-read once per
+    /// event-loop turn (or on the next question — flushPendingMount).
+    QSet<QWidget *> staleWorldSections;
+    bool worldRefreshQueued = false;
 
     /// WHAT THE SELECTION TAB IS SHOWING when it is not a scene node: a
     /// library asset picked in a drawer (setAssetItem). It has to be STATE and
