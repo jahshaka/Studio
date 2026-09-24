@@ -310,16 +310,31 @@ int main()
     // bar is the field's own read plus these terms and survives it.
     const float kSensitivity = (0.0772f - 0.0764f) / 0.039f;       // per metre of start height
     const float kStartMove = 0.039f, kStartUncertainty = 0.002f;
+    // ...AND A.1 THROUGH THE HIT READ (PHOTON-VOXEL-4, the sealed room's form: the measured
+    // residual with its cause, never a widening). A wall thinner than a cascade-0 cell holds
+    // BOTH faces in one texel with ONE radiance (the injection writes one): the gather's ray
+    // stops on the wall's inner face and reads that texel, whose light is the mean of the dark
+    // inner face and the lit outer one. No read of the texel separates two
+    // faces (measured in VOXEL-4's fix round: the directional level of the facing half 0.0827,
+    // the hit's own texel 0.0218, withdrawn). Measured on the split store: the gather 0.0215
+    // against the field 0.0084 + the terms above 0.0029 at the 0.05 m wall - the residual
+    // 0.0102, applied only to a wall thinner than the cell. VOXEL-5 (ii) - the sun's
+    // irradiance per half sign at the injection - is the owed fix; the thicker walls read 0.
+    const GiQualityFacts high = giQualityFacts(GiQuality::High);
+    const float kCell0 = 2.0f * high.cascades[0].halfSize / float(high.cascades[0].resolution);
+    const float kA1Residual = 0.0102f;
     for (int a = 0; a < 4; ++a) {
+        const float a1 = thicknesses[a] < kCell0 ? kA1Residual : 0.0f;
         const float bar = rows[a].field + 0.002f + kSensitivity * (kStartMove + kStartUncertainty) +
-                          rows[a].gather / 1024.0f;
+                          rows[a].gather / 1024.0f + a1;
         CHECK_MSG(rows[a].gather <= bar,
                   "the ray gather leaks no more than the field through the %.2f m wall "
                   "(%.4f vs %.4f; bar %.4f = the field + 0.0020 phase 1's filter leak + %.4f the "
-                  "start's move and uncertainty x %.3f/m + %.5f quantum)",
+                  "start's move and uncertainty x %.3f/m + %.5f quantum + %.4f A.1 through the hit "
+                  "read, a wall thinner than the %.3f m cell)",
                   double(thicknesses[a]), double(rows[a].gather), double(rows[a].field), double(bar),
                   double(kSensitivity * (kStartMove + kStartUncertainty)), double(kSensitivity),
-                  double(rows[a].gather / 1024.0f));
+                  double(rows[a].gather / 1024.0f), double(a1), double(kCell0));
     }
     CHECK_MSG(rows[0].greenGather > 0.02f,
               "the room is lit by its own lamp under the gather (green %.4f) — a black room "
