@@ -39,10 +39,12 @@ assert(sc.enabled === true && sc.range === 3.5 && sc.resolution === "half", "set
 assert(world.sunContact().range === 3.5, "...and they read back");
 assert(world.sunContact({ resolution: " FULL " }).resolution === "full",
        "the resolution is trimmed and case-insensitive");
-assert(world.sunContact({ range: 1000 }).range === 50, "a range past the band is held at 50 m");
-assert(Math.abs(world.sunContact({ range: 0.001 }).range - 0.05) < 1e-6,
-       "...and one below it at 0.05 m");
+throws(function () { world.sunContact({ range: 1000 }); }, "a range past the band (50 m) is REFUSED");
+throws(function () { world.sunContact({ range: 0.001 }); }, "...and one below it (0.05 m)");
 throws(function () { world.sunContact({ range: -1 }); }, "a negative range is REFUSED");
+assert(world.sunContact({ range: 50 }).range === 50 && Math.abs(world.sunContact({ range: 0.05 }).range - 0.05) < 1e-6,
+       "the band's two ends are accepted");
+world.sunContact({ range: 3.5 });
 throws(function () { world.sunContact({ range: "far" }); }, "a range that is not a number is refused");
 throws(function () { world.sunContact({ resolution: "quarter" }); }, "an unknown resolution is refused");
 throws(function () { world.sunContact({ enabeld: false }); }, "an unknown key is refused");

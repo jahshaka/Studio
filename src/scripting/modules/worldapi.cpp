@@ -375,7 +375,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "band to one pixel of its own resolution; it can only ever DARKEN (the map keeps every shadow it has), and "
           "beyond `range` it answers nothing and the map is alone, unchanged. OFF by default, and a scene at the "
           "defaults writes nothing into its file. "
-          "`enabled` (default false) switches it. `range` (metres, default 2, held in 0.05..50) is how far a ray "
+          "`enabled` (default false) switches it. `range` (metres, default 2; 0.05..50, anything outside refused) is how far a ray "
           "looks for an occluder — a contact is a short question, and the map answers everything further away. "
           "`resolution` is \"auto\" (the default: one ray per 2x2 block at the Low and Medium GI quality, one per "
           "pixel at High), \"full\" or \"half\". Opaque casters only: an alpha-tested leaf is not in the ray "
@@ -1922,8 +1922,15 @@ QVariantMap WorldApi::sunContact(const QVariantMap &params)
         if (params.contains(QStringLiteral("range"))) {
             bool ok = false;
             const double v = params.value(QStringLiteral("range")).toDouble(&ok);
-            if (!ok || !std::isfinite(v) || v <= 0.0) {
-                fail(QStringLiteral("world.sunContact: 'range' must be a positive number of metres"));
+            // REFUSED OUTSIDE THE BAND, both ends (fix round F5): a value the
+            // renderer would hold elsewhere is refused by name, never moved
+            // silently, so what a call writes is what it reads back.
+            // (compared in the document's own float: 0.05 as a double is below
+            // 0.05f, and the band's ends must be accepted)
+            if (!ok || !std::isfinite(v) || float(v) < iris::kSunContactMinRange ||
+                float(v) > iris::kSunContactMaxRange) {
+                fail(QStringLiteral("world.sunContact: 'range' must be a number of metres in %1..%2")
+                         .arg(double(iris::kSunContactMinRange)).arg(double(iris::kSunContactMaxRange)));
                 return out;
             }
             c.range = float(v);

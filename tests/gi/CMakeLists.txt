@@ -1444,3 +1444,12 @@ add_test(NAME gi.sun_contact_norays COMMAND test_gi_sun_contact
 set_tests_properties(gi.sun_contact_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+# ...and the CURVED casters, in their own process (a second scene in the board's
+# process draws no directional map shadow — the finding is in the suite): a
+# sphere lattice with a three-level chain at 25.5 m under a 10-degree sun — the
+# map leaves every foot's contact lit (its normal-offset bias), the ray closes it
+# at full and half resolution, no sunlit pixel is darkened by the ray (the
+# lift's margin), and a glass pane over the contact keeps the map's answer.
+add_test(NAME gi.sun_contact_lattice COMMAND test_gi_sun_contact --lattice
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_lattice PROPERTIES TIMEOUT 300 LABELS "engine")
