@@ -521,6 +521,25 @@ set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 # through app.textureMemory(); the file header carries the mechanism.
 add_script_e2e(sky_name_recycle e2e_sky_name_recycle.js)
 set_tests_properties(scripting.e2e.sky_name_recycle PROPERTIES TIMEOUT 300)
+# THE ENVIRONMENT LANDS AS ONE SET (PHOTON-SKY-TRANSIENT-1): the first frame
+# after a sky power change, a sun move, a sky type change either way and the
+# cloud layer on/off equals the frame after it within 2/255 — the change frame
+# used to sample a reflection cube nothing had written, with the SH one host
+# push behind it. Engine UP (a picture); the home is WIPED first, so no cached
+# shader or face stands between a change and its first frame. ~10 s solo.
+set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
+add_test(NAME scripting.e2e.sky_swap_transient.fresh_home
+         COMMAND sh -c "rm -rf '${_sstHome}' && mkdir -p '${_sstHome}/run'")
+set_tests_properties(scripting.e2e.sky_swap_transient.fresh_home PROPERTIES
+    FIXTURES_SETUP skySwapTransientFreshHome LABELS "scripting")
+add_test(NAME scripting.e2e.sky_swap_transient
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
+         WORKING_DIRECTORY ${_sstHome}/run)
+set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
+    ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED skySwapTransientFreshHome
+    LABELS "scripting" TIMEOUT 240)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
