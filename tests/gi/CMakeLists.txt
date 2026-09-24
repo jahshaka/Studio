@@ -1414,3 +1414,33 @@ add_dependencies(test_gi_env_one JahshakaEngineMedia)
 add_test(NAME gi.env_one COMMAND test_gi_env_one
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# ---------------------------------------------------------------------------
+# gi.sun_contact — HARD SUN CONTACT SHADOWS (PHOTON P5, RY-R3; PHOTON-RAYS-1)
+#
+# A crate on a floor under a 15-degree sun: the shadow map's contact leak is
+# measured (and must exist), then closed to one texel of the ray job at full and
+# at half resolution; the shadow beyond the 2 m range is the map's, unchanged;
+# the sunlit floor is untouched (no acne). The no-rays row renders the row-on
+# picture byte for byte as the row-off one. `test_gi_sun_contact --cost` is the
+# paired-arm cost measurement (by hand, under scripts/gpu-exclusive.sh).
+add_executable(test_gi_sun_contact test_gi_sun_contact.cpp)
+set_target_properties(test_gi_sun_contact PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_sun_contact PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_sun_contact PRIVATE JahshakaEngine)
+add_dependencies(test_gi_sun_contact JahshakaEngineMedia)
+add_test(NAME gi.sun_contact COMMAND test_gi_sun_contact
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.sun_contact_norays COMMAND test_gi_sun_contact
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
