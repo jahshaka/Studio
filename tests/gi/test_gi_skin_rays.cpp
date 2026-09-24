@@ -247,7 +247,7 @@ static int costMain(Engine *e, int characters, unsigned rings)
     // and the same scene held still. The difference in the frame's GPU time is
     // the skin cache's whole cost; the tier's own timestamps split it.
     e->setFrameMonitor(MonitorLevel::Review);
-    double skinMs = 0.0, refitMs = 0.0, frameAnim = 0.0, frameStill = 0.0;
+    double skinMs = 0.0, refitMs = 0.0, frameAnim = 0.0, frameStill = 0.0, cpuMs = 0.0;
     int skinN = 0, animN = 0, stillN = 0;
     const unsigned long long p0 = s->rayQueryStatus().skinPasses;
     int frame = 0;
@@ -269,6 +269,7 @@ static int costMain(Engine *e, int characters, unsigned rings)
                 if (arm == 0 && rq.skinMs >= 0.0f) {
                     skinMs += rq.skinMs;
                     refitMs += rq.skinRefitMs;
+                    cpuMs += rq.skinCpuMs;
                     ++skinN;
                 }
             }
@@ -290,6 +291,8 @@ static int costMain(Engine *e, int characters, unsigned rings)
                     sm, sm / items, sm / items / verts * 1e4);
         std::printf("cost: skinned refits %.4f ms/frame = %.4f ms per item\n", rm, rm / items);
         std::printf("cost: passes GPU ms animated %.4f / still %.4f (delta %.4f)\n", fa, fs, fa - fs);
+        std::printf("cost: skin pass CPU %.4f ms/frame = %.4f ms per item (this build's config)\n",
+                    cpuMs / skinN, cpuMs / skinN / items);
         std::printf("cost: RATIOS  skin/frame %.4f  refit/frame %.4f  (skin+refit)/16.667ms %.4f\n",
                     sm / fa, rm / fa, (sm + rm) / 16.667);
     } else {
