@@ -71,7 +71,7 @@
 // suite that went red there would be asserting the driver, not the code.
 //
 // Its own binary like every GI suite: an engine per process (Ogre::Root is a
-// singleton) and process-wide HlmsPbs bindings.
+// singleton).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

@@ -157,8 +157,7 @@
 // DELETES the `photon-target` label from this suite's CMake row; that deletion
 // IS the part's acceptance.
 //
-// Its own binary and its own process like every GI suite: the voxel lighting
-// and the field bind process-wide to HlmsPbs.
+// Its own binary and its own process like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

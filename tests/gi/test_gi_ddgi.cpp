@@ -2,9 +2,8 @@
 // (GI_UNIFIED_SPEC.md §4 P1; the P0 spike it stands on:
 // spikes/ddgi-vulkan/FINDINGS.md).
 //
-// ITS OWN BINARY, like gi.pcc_mirror and for the same reason: the field binds
-// PROCESS-WIDE to HlmsPbs (setIrradianceField, the same singleton hazard as
-// setVctLighting), so this scene must not share a process with another suite's.
+// ITS OWN BINARY AND PROCESS: it re-runs itself (argv[1] == "hash") to prove
+// cross-process byte determinism.
 //
 // The scene is gi.modes' room, deliberately: a white floor, a strongly red wall
 // the light hits nearly edge-on, and a camera looking at the patch of floor the

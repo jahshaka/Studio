@@ -26,6 +26,12 @@
 // B (no post effects), all drawn every frame — A's passes before B's; (2) A and B
 // drawn ALTERNATELY, one scene per frame; (3) the views re-created B first — B's
 // passes before A's; (4) scene A DESTROYED — B alone, still its own.
+// PHOTON-SCENE-SWITCH-2 adds two more pairs of scenes: (5) PLANAR MIRRORS armed in
+// both, each view keeping its own reflection (the planar pointer is bound per pass
+// AND per renderable at hash time — it used to be the last armer's), P's view first
+// and then Q's; (6) SKY CUBES of 8 and 256 px, a mid-roughness sphere in each equal
+// to its single-scene picture within a code (passBuf.envMapNumMipmaps is the
+// scene's chain length, no longer the process-wide grow-only maximum).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -243,6 +249,129 @@ static void report(const char *phase, const char *who, const Tally &t, bool thum
     CHECK(t.frames == expectedFrames && t.mirrorBad == 0 && t.shadowBad == 0, msg);
 }
 
+
+// ---- PHASE 5: PLANAR MIRRORS IN BOTH SCENES (PHOTON-SCENE-SWITCH-2) ---------
+// A metal floor plate that is a planar reflector and an emissive cube above it,
+// the cube's colour the scene's own; the view looks down at the plate, so the
+// cube's MIRROR IMAGE is in the lower half of the picture.
+static const unsigned kPlanarSize = 160;
+static void planarRoom(Scene *s, const Colour &emit, bool &ok)
+{
+    s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.10f, 0.10f, 0.10f));
+    const NodeId plate = enginetest::addTestCube(s, Colour(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
+    enginetest::setNodeScale(s, plate, Vec3(12.0f, 0.2f, 12.0f));
+    enginetest::setNodePosition(s, plate, Vec3(0.0f, -0.1f, 0.0f));
+    PbrParams p;
+    p.albedo = Colour(0.05f, 0.05f, 0.05f);
+    p.emissive = Colour(3.0f * emit.r, 3.0f * emit.g, 3.0f * emit.b);
+    p.roughness = 0.5f;
+    const NodeId cube = s->createNode();
+    ok = ok && cube && s->attachMesh(cube, s->createMesh(enginetest::unitCubeMesh()), s->createPbrMaterial(p));
+    enginetest::setNodeScale(s, cube, Vec3(1.5f, 1.5f, 1.5f));
+    enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.2f, 0.0f));
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+    PlanarReflectionParams pr;
+    pr.budget = 1;
+    pr.resolution = 256;
+    pr.maxDistance = 4.0f;
+    ok = ok && s->setPlanarReflections(pr) && s->setNodePlanarReflector(plate, true);
+}
+/// The largest excess of channel `ch` (0 r, 1 g) over the other two in the lower
+/// half: the emitter's reflection when the mirror works, ~0 when it does not.
+static float lowerHalfExcess(View *v, int ch)
+{
+    Image img;
+    if (!v->readPixels(img)) return -1.0f;
+    float best = 0.0f;
+    for (unsigned y = img.height / 2u; y < img.height; ++y)
+        for (unsigned x = 0; x < img.width; ++x) {
+            const Colour c = img.at(x, y);
+            const float want = ch == 0 ? c.r : c.g, other = std::max(ch == 0 ? c.g : c.r, c.b);
+            best = std::max(best, want - other);
+        }
+    return best;
+}
+
+// ---- PHASE 6: SKY CUBES OF DIFFERENT SIZES (PHOTON-SCENE-SWITCH-2) ----------
+// A mid-roughness metal sphere reflecting a checkered reflection cube: 8 px faces
+// (a 4-level chain) in one scene, 256 px (9 levels) in the other. The roughness
+// maps to a mip through passBuf.envMapNumMipmaps, so a count that is not the
+// scene's own chain samples the wrong level — the sphere's picture moves.
+static const unsigned kSphereSize = 128;
+static MeshData uvSphere(int rings, int segments)
+{
+    MeshData d;
+    const float pi = 3.14159265358979f;
+    for (int r = 0; r <= rings; ++r) {
+        const float th = float(r) / float(rings) * pi;
+        for (int sg = 0; sg < segments; ++sg) {          // the seam re-uses segment 0
+            const float ph = float(sg) / float(segments) * 2.0f * pi;
+            const float x = std::sin(th) * std::cos(ph), y = std::cos(th), z = std::sin(th) * std::sin(ph);
+            d.positions.insert(d.positions.end(), { x, y, z });
+            d.normals.insert(d.normals.end(), { x, y, z });
+            d.uvs.insert(d.uvs.end(), { float(sg) / float(segments), float(r) / float(rings) });
+        }
+    }
+    for (int r = 0; r < rings; ++r)
+        for (int sg = 0; sg < segments; ++sg) {
+            const unsigned a = unsigned(r * segments + sg), b = unsigned(r * segments + (sg + 1) % segments);
+            const unsigned c = unsigned((r + 1) * segments + sg), e = unsigned((r + 1) * segments + (sg + 1) % segments);
+            d.indices.insert(d.indices.end(), { a, c, b, b, c, e });
+        }
+    return d;
+}
+static bool skySphereScene(Scene *s, unsigned faceSize)
+{
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    SkyDesc sky;
+    const unsigned char grey[4] = { 90, 90, 90, 255 };
+    sky.mode = SkyMode::Equirectangular;
+    sky.equirect = s->createTexture(1, 1, grey, true);
+    sky.reflections = true;
+    for (int f = 0; f < 6; ++f) {
+        // a checker of four cells per face edge, each face its own pair of colours
+        std::vector<unsigned char> px(size_t(faceSize) * faceSize * 4u);
+        const unsigned cell = std::max(1u, faceSize / 4u);
+        for (unsigned y = 0; y < faceSize; ++y)
+            for (unsigned x = 0; x < faceSize; ++x) {
+                const bool on = ((x / cell) + (y / cell)) % 2u == 0u;
+                unsigned char *o = &px[(size_t(y) * faceSize + x) * 4u];
+                o[0] = on ? (unsigned char)(40 + 35 * f) : 10;
+                o[1] = on ? 230 : (unsigned char)(20 + 30 * f);
+                o[2] = on ? 20 : 200;
+                o[3] = 255;
+            }
+        sky.reflectionFaces[f] = s->createTexture(faceSize, faceSize, px.data(), true);
+    }
+    if (!s->setSky(sky)) return false;
+    PbrParams p;
+    p.albedo = Colour(1, 1, 1);
+    p.metalness = 1.0f;
+    p.roughness = 0.5f;
+    const NodeId n = s->createNode();
+    return n && s->attachMesh(n, s->createMesh(uvSphere(48, 96)), s->createPbrMaterial(p));
+}
+/// The worst per-channel difference (codes) over the sphere's disc.
+static int sphereDiff(const Image &a, const Image &b, unsigned *over = nullptr)
+{
+    int worst = 0;
+    unsigned n = 0;
+    const float c = 0.5f * float(kSphereSize), r = 0.30f * float(kSphereSize);
+    for (unsigned y = 0; y < a.height; ++y)
+        for (unsigned x = 0; x < a.width; ++x) {
+            const float dx = float(x) + 0.5f - c, dy = float(y) + 0.5f - c;
+            if (dx * dx + dy * dy > r * r) continue;
+            for (int k = 0; k < 3; ++k) {
+                const int d = std::abs(int(a.rgba[(size_t(y) * a.width + x) * 4u + k]) -
+                                       int(b.rgba[(size_t(y) * b.width + x) * 4u + k]));
+                worst = std::max(worst, d);
+                if (d > 1) ++n;
+            }
+        }
+    if (over) *over = n;
+    return worst;
+}
+
 int main()
 {
     std::string err;
@@ -371,6 +500,99 @@ int main()
     }
     for (View *v : { vB, thumb }) { v->setScene(nullptr); e->destroyView(v); }
     e->destroyScene(b);
+
+    // ---- 5. PLANAR MIRRORS IN BOTH SCENES ------------------------------------
+    // P (red emitter) arms its mirror FIRST, Q (green) second — under the old
+    // last-armer-wins binding Q took the one HlmsPbs planar pointer at hash time
+    // and P's mirror went dark. Each view must keep its OWN reflection every
+    // judged frame, P's view drawn first and then Q's first.
+    {
+        Scene *p = e->createScene("switch_planar_p");
+        Scene *q = e->createScene("switch_planar_q");
+        const auto planarView = [&](const char *name, Scene *s) {
+            View *v = e->createOffscreenView(name, kPlanarSize, kPlanarSize, Colour(0, 0, 0));
+            v->setScene(s);
+            enginetest::testCameraLookAt(v, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
+            return v;
+        };
+        View *vp = planarView("switch_planar_p", p);
+        View *vq = planarView("switch_planar_q", q);
+        bool ok = p && q && vp && vq;
+        planarRoom(p, Colour(1.0f, 0.0f, 0.0f), ok);
+        for (int i = 0; i < 5; ++i) e->renderOneFrame();
+        planarRoom(q, Colour(0.0f, 1.0f, 0.0f), ok);
+        CHECK(ok, "5: two scenes, each with its own planar mirror (P armed first, Q second)");
+        const auto run = [&](const char *phase) {
+            int bad = 0, judged = 0;
+            float worstP = 1e9f, worstQ = 1e9f;
+            for (int f = 0; f < kPhaseFrames; ++f) {
+                e->renderOneFrame();
+                if (f < kSkipFrames) continue;
+                const float ep = lowerHalfExcess(vp, 0), eq = lowerHalfExcess(vq, 1);
+                worstP = std::min(worstP, ep);
+                worstQ = std::min(worstQ, eq);
+                ++judged;
+                if (!(ep > 0.10f && eq > 0.10f)) ++bad;
+            }
+            std::printf("    %-28s %d frames judged: P's red reflection worst %.3f, Q's green worst %.3f (%d bad)\n",
+                        phase, judged, double(worstP), double(worstQ), bad);
+            char msg[160];
+            std::snprintf(msg, sizeof msg, "%s: EACH mirror reflects its own scene's emitter every frame", phase);
+            CHECK(judged == kPhaseFrames - kSkipFrames && bad == 0, msg);
+        };
+        run("5a P's view then Q's");
+        for (View *v : { vp, vq }) { v->setScene(nullptr); e->destroyView(v); }
+        vq = planarView("switch_planar_q2", q);
+        vp = planarView("switch_planar_p2", p);
+        run("5b Q's view then P's");
+        for (View *v : { vp, vq }) { v->setScene(nullptr); e->destroyView(v); }
+        e->destroyScene(p);
+        e->destroyScene(q);
+    }
+
+    // ---- 6. SKY CUBES OF DIFFERENT SIZES -------------------------------------
+    // The small-cube scene's sphere is pictured ALONE, then again beside a scene
+    // whose cube is 32x larger (a longer chain), then the large one alone: each
+    // picture must equal its single-scene picture within one code (the 8-bit
+    // readback's quantum).
+    {
+        const auto sphereView = [&](const char *name, Scene *s) {
+            View *v = e->createOffscreenView(name, kSphereSize, kSphereSize, Colour(0, 0, 0));
+            v->setScene(s);
+            enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 3.2f), Vec3(0.0f, 0.0f, 0.0f));
+            return v;
+        };
+        Scene *small = e->createScene("switch_sky_small");
+        View *vs = sphereView("switch_sky_small", small);
+        CHECK(skySphereScene(small, 8), "6: a sphere under an 8 px reflection cube (4 levels)");
+        for (int i = 0; i < 60; ++i) e->renderOneFrame();
+        Image smallAlone, smallBeside, bigBeside, bigAlone;
+        vs->readPixels(smallAlone);
+        Scene *big = e->createScene("switch_sky_big");
+        View *vb = sphereView("switch_sky_big", big);
+        CHECK(skySphereScene(big, 256), "6: ...and a second scene under a 256 px cube (9 levels)");
+        for (int i = 0; i < 60; ++i) e->renderOneFrame();
+        vs->readPixels(smallBeside);
+        vb->readPixels(bigBeside);
+        vs->setScene(nullptr);
+        e->destroyView(vs);
+        e->destroyScene(small);
+        for (int i = 0; i < 60; ++i) e->renderOneFrame();
+        vb->readPixels(bigAlone);
+        unsigned overS = 0, overB = 0;
+        const int dS = sphereDiff(smallAlone, smallBeside, &overS);
+        const int dB = sphereDiff(bigAlone, bigBeside, &overB);
+        const int dSB = sphereDiff(smallAlone, bigAlone);
+        std::printf("    6 the sphere, beside the other scene vs alone: small cube worst %d codes (%u > 1), "
+                    "big cube worst %d codes (%u > 1); small vs big alone %d codes (the instrument)\n",
+                    dS, overS, dB, overB, dSB);
+        CHECK(dSB > 8, "6: the two chains picture the sphere differently (the fixture can see a mip count)");
+        CHECK(dS <= 1 && dB <= 1,
+              "6: EACH scene's sphere equals its single-scene picture — its own chain length, never the process max");
+        vb->setScene(nullptr);
+        e->destroyView(vb);
+        e->destroyScene(big);
+    }
 
     std::printf(failures ? "\ngi.scene_switch: FAILED (%d)\n" : "\ngi.scene_switch: all ok\n", failures);
     return failures ? 1 : 0;

@@ -2,9 +2,8 @@
 // (SURFACE-CACHE-1b, phase 2 of SPECS/SURFACE_CACHE_ASSESSMENT.md §7).
 //
 // THREE CTEST NAMES, ONE BINARY, selected by argv — because the three questions
-// need three different scenes and a GI arm binds process-wide state
-// (before PHOTON-SCENE-SWITCH-1), so they must not share a process, while the fixture
-// scaffolding is the same in all three.
+// need three different scenes, one process each, while the fixture scaffolding
+// is the same in all three.
 //
 //   gi.card_capture  the cache captures what it says it captures, and an edit
 //                    costs exactly the cards it should: a moved instance

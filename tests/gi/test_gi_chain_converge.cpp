@@ -26,8 +26,7 @@
 // THE FIELD IS DELIBERATELY OFF for the history cases (an integral of the chain,
 // with its own re-convergence rule — case 5 covers it).
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs, so this scene must not share a process with another arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

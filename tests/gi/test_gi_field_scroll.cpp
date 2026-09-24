@@ -43,7 +43,7 @@
 //
 // The field is PAUSED (update budget 0) for 1 and 2: no progressive walk runs
 // between the two readbacks, so the only work in the step frame is the scroll's.
-// Its own binary like every GI suite (the field binds process-wide to HlmsPbs).
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

@@ -54,7 +54,7 @@
 //   6. AND THE PICTURE STILL RENDERS: the chain is bound and the scene is lit,
 //      so a "cheaper" that voxelised nothing would not pass.
 //
-// Its own binary like every GI suite (the voxel lighting binds process-wide).
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

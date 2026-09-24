@@ -38,7 +38,7 @@
 //   5. And the drag's END is the same picture: the probes catch up and the
 //      grid's stale count returns to zero.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

@@ -28,8 +28,7 @@
 //      chain's total rebuild count must actually MOVE after a geometry edit —
 //      the cascades that can see it owe one each and the scheduler spends them.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs, so this scene must not share a process with another arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

@@ -29,9 +29,7 @@
 //      cascade 0, with the chain's own contract (at most one rebuild a frame)
 //      unbroken.
 //
-// Its own binary like every GI suite: the voxel lighting and the field bind
-// process-wide to HlmsPbs, so this scene must not share a process with another
-// arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

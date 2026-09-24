@@ -46,8 +46,7 @@
 //      instead: the per-voxel merge accumulates exact integer sums and resolves
 //      them once, so no partition and no order changes a voxel.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs, so this scene must not share a process with another arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

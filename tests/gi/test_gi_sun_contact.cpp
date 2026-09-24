@@ -653,6 +653,201 @@ static int costMain(Engine *e)
     return 0;
 }
 
+
+// ---------------------------------------------------------------------------
+// THE GAP THE MAP LEAVES BY CONSTRUCTION (PHOTON-SCENE-SWITCH-2) — `gi.sun_contact_legs`
+// and `gi.sun_contact_legs_norays` (`--legs`).
+//
+// After the shadow-VAO fix no other arm has a map gap for the ray to close (the
+// board's is 0.0 mm, the lattice's 0 of 433 px), so the ray's benefit was
+// unmeasured. This fixture is built so the MAP must miss by arithmetic:
+// a 1 x 1 m board 2 cm thick on four 5 cm legs (its top 7 cm above the floor)
+// under a GRAZING sun (10 degrees), seen from ~15 m, with a 1024 px shadow atlas.
+//
+// THE ARITHMETIC. Upstream's receiver-side normal offset
+// (ShadowMapping_piece_all.any getNormalOffsetBias) moves the floor's lookup point
+// ALONG ITS NORMAL by (1 - N.L) x normalOffsetBias x autoScale / splitTexels
+// WORLD UNITS: N.L = sin 10 deg = 0.174, normalOffsetBias = 168 (the pin's
+// default), autoScale = 1 + 4 x orthoSize / shadowFar >= 1, and a split has at most
+// 1024 texels (the atlas plan: split 0 R, splits 1-2 R/2). So the lift is AT LEAST
+// 0.826 x 168 / 1024 = 0.136 m — twice the board's 0.07 m top. A floor point in the
+// board's shadow is looked up 13.6+ cm above the floor, where the sun's ray passes
+// OVER the board: the map shadows NONE of the board's shadow (prediction: every
+// pixel of the analytic shadow class lit, less the class's edge quantum).
+//
+// THE RAY'S OWN RESIDUAL, by the same arithmetic: the contact ray starts TWO
+// full-resolution pixel footprints off the receiver (rq_sun_contact.comp's bias
+// rule; OgreRayQuery.cpp kSunContactLiftFootprints = 2, floor kSunContactMinBias
+// = 1 mm): 2 x 2 tan(10 deg) / 640 x view depth = 1.65 cm at 15 m. A floor point
+// whose LIFTED ray passes over the board's 7 cm top is not closed — the shadow's
+// last lift / tan(10 deg) ~= 9.4 cm. So the ray must close EVERY class pixel whose
+// lifted ray still meets the board (0 px left lit there), and leave lit exactly
+// the pixels the lift predicts (measured on the first run: 501 predicted, 501
+// lit, the same pixels).
+namespace legs {
+static const Vec3 kPos(6.3f, 7.0f, 12.0f), kTarget(0.3f, 0.0f, 0.0f);
+static const float kFovL = 20.0f, kElev = 10.0f;
+static const float kHalf = 0.5f, kLegH = 0.05f, kBoardT = 0.02f, kLeg = 0.02f;
+static bool hitBox(const Vec3 &o, const Vec3 &d, const Vec3 &mn, const Vec3 &mx, float tMax)
+{
+    float t0 = 0.0f, t1 = tMax;
+    const float oo[3] = { o.x, o.y, o.z }, dd[3] = { d.x, d.y, d.z };
+    const float lo[3] = { mn.x, mn.y, mn.z }, hi[3] = { mx.x, mx.y, mx.z };
+    for (int a = 0; a < 3; ++a) {
+        if (std::fabs(dd[a]) < 1e-9f) { if (oo[a] < lo[a] || oo[a] > hi[a]) return false; continue; }
+        float ta = (lo[a] - oo[a]) / dd[a], tb = (hi[a] - oo[a]) / dd[a];
+        if (ta > tb) std::swap(ta, tb);
+        t0 = std::max(t0, ta); t1 = std::min(t1, tb);
+        if (t0 > t1) return false;
+    }
+    return true;
+}
+}   // namespace legs
+
+static int legsArm(Engine *e, bool raysWanted, const char *dumpDir)
+{
+    using namespace legs;
+    e->setShadowResolution(1024);
+    View *view = e->createOffscreenView("sunlegs", kSize, kSize, Colour(0.45f, 0.55f, 0.70f));
+    Scene *s = e->createScene("sunlegs");
+    if (!view || !s || !view->setScene(s)) { std::printf("FAIL: legs view/scene\n"); return 1; }
+    const bool haveRays = e->rayQueryAvailable() && e->rayTracing();
+    if (raysWanted && !haveRays) {
+        std::printf("ok: no ray queries on this machine — gi.sun_contact_legs skips cleanly\n");
+        return 0;
+    }
+    view->setShadows(true);
+    s->setAmbient(Colour(0.30f, 0.34f, 0.40f), Colour(0.20f, 0.20f, 0.20f));
+    const NodeId floor = enginetest::addTestCube(s, Colour(0.7f, 0.7f, 0.7f), 0.0f, 1.0f);
+    enginetest::setNodeScale(s, floor, Vec3(60.0f, 0.2f, 60.0f));
+    enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.1f, 0.0f));
+    const NodeId board = enginetest::addTestCube(s, Colour(0.55f, 0.45f, 0.35f), 0.0f, 1.0f);
+    enginetest::setNodeScale(s, board, Vec3(2.0f * kHalf, kBoardT, 2.0f * kHalf));
+    enginetest::setNodePosition(s, board, Vec3(0.0f, kLegH + 0.5f * kBoardT, 0.0f));
+    const float lx[2] = { -kHalf + kLeg, kHalf - kLeg };
+    for (float x : lx)
+        for (float z : lx) {
+            const NodeId leg = enginetest::addTestCube(s, Colour(0.55f, 0.45f, 0.35f), 0.0f, 1.0f);
+            enginetest::setNodeScale(s, leg, Vec3(kLeg, kLegH, kLeg));
+            enginetest::setNodePosition(s, leg, Vec3(x, 0.5f * kLegH, z));
+        }
+    const float el = kElev * kPi / 180.0f;
+    enginetest::addDirectionalLight(s, Vec3(std::cos(el), -std::sin(el), 0.0f), kSunPower);
+    {
+        CameraDesc c = enginetest::testCameraDescLookAt(kPos, kTarget);
+        c.fovDegrees = kFovL;
+        view->setCamera(c);
+    }
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    view->setPostFx(fx);
+
+    // The analytic classes: floor the camera SEES (its view ray clears the board
+    // and the legs, grown 1 cm), SHADOWED when the sun ray from it passes through
+    // the board shrunk by 1 cm in x and z, SUNLIT when it clears the board grown
+    // by 10 cm.
+    const Vec3 toSun(-std::cos(el), std::sin(el), 0.0f);
+    const Vec3 bMin(-kHalf, kLegH, -kHalf), bMax(kHalf, kLegH + kBoardT, kHalf);
+    std::vector<unsigned> shadowPx, litPx;
+    std::vector<unsigned char> liftClears(size_t(kSize) * kSize, 0u);   // the ray's own residual
+    const float footprint = 2.0f * 2.0f * std::tan(0.5f * kFovL * kPi / 180.0f) / float(kSize);
+    Vec3 fwd(kTarget.x - kPos.x, kTarget.y - kPos.y, kTarget.z - kPos.z);
+    {
+        const float l = std::sqrt(fwd.x * fwd.x + fwd.y * fwd.y + fwd.z * fwd.z);
+        fwd = Vec3(fwd.x / l, fwd.y / l, fwd.z / l);
+    }
+    for (unsigned y = 0; y < kSize; ++y)
+        for (unsigned x = 0; x < kSize; ++x) {
+            const Vec3 g = enginetest::groundPointForPixel(kPos, kTarget, x, y, kSize, 0.0f, kFovL);
+            const Vec3 v(g.x - kPos.x, g.y - kPos.y, g.z - kPos.z);
+            if (hitBox(kPos, v, Vec3(bMin.x - 0.01f, 0.0f, bMin.z - 0.01f),
+                       Vec3(bMax.x + 0.01f, bMax.y + 0.01f, bMax.z + 0.01f), 1.0f))
+                continue;
+            const Vec3 o(g.x, 0.001f, g.z);
+            if (hitBox(o, toSun, Vec3(bMin.x + 0.01f, bMin.y, bMin.z + 0.01f),
+                       Vec3(bMax.x - 0.01f, bMax.y, bMax.z - 0.01f), 1e30f)) {
+                shadowPx.push_back(y * kSize + x);
+                const float depth = v.x * fwd.x + v.y * fwd.y + v.z * fwd.z;
+                const float lift = std::max(footprint * depth, 0.001f);
+                liftClears[size_t(y) * kSize + x] = !hitBox(Vec3(g.x, lift, g.z), toSun, bMin, bMax, 1e30f);
+            }
+            else if (!hitBox(o, toSun, Vec3(bMin.x - 0.1f, 0.0f, bMin.z - 0.1f),
+                             Vec3(bMax.x + 0.1f, bMax.y + 0.1f, bMax.z + 0.1f), 1e30f) &&
+                     std::fabs(g.x) < 4.0f && std::fabs(g.z) < 4.0f)
+                litPx.push_back(y * kSize + x);
+        }
+    std::printf("    LEGS (a 1 m board 2 cm thick on 5 cm legs, sun 10 deg, camera %.1f m): %zu shadowed px, "
+                "%zu sunlit px\n", double(std::sqrt((kPos.x - kTarget.x) * (kPos.x - kTarget.x) +
+                                                      kPos.y * kPos.y + kPos.z * kPos.z)),
+                shadowPx.size(), litPx.size());
+    CHECK_MSG(shadowPx.size() > 300 && litPx.size() > 10000, "the legs fixture's classes are populated");
+
+    const auto shot = [&](bool on, SunContactResolution res, Image &out) {
+        SunContactDesc sc;
+        sc.enabled = on;
+        sc.resolution = res;
+        s->setSunContact(sc);
+        render(e, kSettleFrames);
+        return view->readPixels(out);
+    };
+    render(e, 60);   // a new scene's first frames carry no sun shadow yet
+    {
+        const ShadowStatus st = e->shadowStatus();
+        std::printf("    atlas %u px base (%ux%u): the largest split has %u texels, so the floor's lookup is lifted "
+                    ">= 0.826 x 168 / %u = %.3f m against the board's %.2f m top\n",
+                    st.resolution, st.atlasWidth, st.atlasHeight, st.resolution, st.resolution,
+                    double(0.826f * 168.0f / float(std::max(1u, st.resolution))), double(kLegH + kBoardT));
+    }
+    Image off, onFull, onHalf;
+    CHECK(shot(false, SunContactResolution::Full, off), "legs: read back, row off");
+    CHECK(shot(true, SunContactResolution::Full, onFull), "legs: read back, row on (full)");
+    CHECK(shot(true, SunContactResolution::Half, onHalf), "legs: read back, row on (half)");
+    if (dumpDir) {
+        savePpm(off, std::string(dumpDir) + "/legs_off.ppm");
+        savePpm(onFull, std::string(dumpDir) + "/legs_on_full.ppm");
+    }
+    if (!raysWanted) {
+        CHECK_MSG(off.rgba == onFull.rgba && off.rgba == onHalf.rgba,
+                  "legs, no rays: the row on renders EXACTLY the row-off picture");
+        std::printf("%s\n", failures ? "gi.sun_contact_legs_norays: FAILED" : "gi.sun_contact_legs_norays: all ok");
+        return failures ? 1 : 0;
+    }
+    const auto mean = [&](const Image &img, const std::vector<unsigned> &px) {
+        double sum = 0.0;
+        for (unsigned i : px) sum += luma(img, i % kSize, i / kSize);
+        return px.empty() ? 0.0f : float(sum / double(px.size()));
+    };
+    const float lit = mean(off, litPx), deep = mean(onFull, shadowPx);
+    const float thr = 0.5f * (lit + deep);
+    unsigned nOff = 0, nFull = 0, nHalf = 0, predicted = 0, fullInReach = 0, fullPredicted = 0;
+    for (unsigned i : shadowPx) {
+        const bool clears = liftClears[i] != 0u;
+        const bool fullLit = luma(onFull, i % kSize, i / kSize) > thr;
+        nOff += luma(off, i % kSize, i / kSize) > thr;
+        nFull += fullLit;
+        nHalf += luma(onHalf, i % kSize, i / kSize) > thr;
+        predicted += clears;
+        fullInReach += fullLit && !clears;
+        fullPredicted += fullLit && clears;
+    }
+    std::printf("    the board's shadow (sunlit floor %.1f, ray-closed shadow %.1f): lit px — map %u of %zu, "
+                "row full %u (the lift predicts %u; %u of them lit, %u lit outside it), half %u\n",
+                double(lit), double(deep), nOff, shadowPx.size(), nFull, predicted, fullPredicted, fullInReach,
+                nHalf);
+    CHECK_MSG(lit - deep > 40.0f, "legs: the ray's shadow is a shadow (%.1f vs %.1f codes)", double(lit), double(deep));
+    CHECK_MSG(nOff + shadowPx.size() / 50u >= shadowPx.size(),
+              "THE MAP LEAVES THE GAP, as the arithmetic predicts: %u of %zu shadowed px lit (all, within the "
+              "class's 2 %% edge quantum)", nOff, shadowPx.size());
+    CHECK_MSG(fullInReach == 0u,
+              "THE RAY CLOSES IT at full resolution: 0 px lit wherever its lifted origin still meets the board "
+              "(%u of %zu)", fullInReach, shadowPx.size() - predicted);
+    CHECK_MSG(fullPredicted + predicted / 50u >= predicted && nFull <= predicted + predicted / 50u,
+              "...and what it leaves lit is exactly its own lift's tail: %u px lit, %u predicted (2 %% quantum)",
+              nFull, predicted);
+    std::printf("%s\n", failures ? "gi.sun_contact_legs: FAILED" : "gi.sun_contact_legs: all ok");
+    return failures ? 1 : 0;
+}
+
 // THE BOARD ARM (`gi.sun_contact`, `gi.sun_contact_norays`, and the first half of
 // `--both`). Its view and scene stay alive when it returns: under `--both` the
 // lattice is drawn beside them, two scenes through two views every frame.
@@ -869,6 +1064,7 @@ int main(int argc, char **argv)
 {
     const bool cost = argc > 1 && std::strcmp(argv[1], "--cost") == 0;
     const bool both = argc > 1 && std::strcmp(argv[1], "--both") == 0;
+    const bool legsOnly = argc > 1 && std::strcmp(argv[1], "--legs") == 0;
     const char *dumpDir = std::getenv("JAH_SUN_CONTACT_DUMP");   // evidence pictures, a tool
     std::string err;
     EngineConfig cfg;
@@ -895,6 +1091,7 @@ int main(int argc, char **argv)
         kCamPos = Vec3(kCamTarget.x + dir.x / l * d, kCamTarget.y + dir.y / l * d, kCamTarget.z + dir.z / l * d);
     }
     if (cost) return costMain(e);
+    if (legsOnly) return legsArm(e, raysWanted, dumpDir);
     if (both && !raysWanted) { std::printf("FAIL: the lattice arm needs rays\n"); return 1; }
 
     const BoardResult board = boardArm(e, raysWanted, dumpDir);

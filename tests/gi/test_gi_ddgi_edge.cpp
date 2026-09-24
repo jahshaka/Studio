@@ -39,8 +39,7 @@
 //      the leak returns when the volume swallows the shell. Only what is
 //      genuinely outside the enlarged volume is asserted there.
 //
-// Its OWN binary, like every other gi.ddgi* suite: the field binds PROCESS-WIDE
-// to HlmsPbs (the setIrradianceField singleton hazard).
+// Its OWN binary, like every other gi.ddgi* suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
