@@ -1955,9 +1955,9 @@ static int footprintSweepMain(Engine *e)
 /// the formats its own images use (RGBA16F, RG32F) instead of assuming it, and a
 /// device that lacks one is a no-rays device with ONE log line naming it. Both
 /// rows run on LAVAPIPE, the second device of the box: without the deny it must
-/// NOT refuse (llvmpipe stores to both — measured with vulkaninfo, 2026-09-24,
-/// which is what made the brief's "lavapipe lacks some" premise false), and
-/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT` the same device must
+/// NOT refuse (both formats are core-mandatory storage formats, so every
+/// conformant driver stores to them — the check is a driver-defect guard), and
+/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT` (fault injection) the same device must
 /// refuse through the one gate: no ray query, a view at the ray tier with no
 /// trace, frames that still draw, and the line in the log.
 static bool logContains(const std::string &path, const char *needle)

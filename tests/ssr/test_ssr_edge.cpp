@@ -313,28 +313,28 @@ int main()
         e->destroyScene(s);
     }
 
-    // THE BARS, from the A/B on this rig (RTX 4080 SUPER, 2026-09-24; the base
+    // THE BAR, from the A/B on this rig (RTX 4080 SUPER, 2026-09-24; the base
     // media against SSR-EDGE-1's, same binary, same frames, rays off):
     //
     //                 rim before -> after     of the envelope boundary
-    //   spheres       143 -> 127 px (-11 %)   4.0 % -> 3.7 %
-    //   floor         308 -> 136 px (-56 %)   49.3 % -> 14.8 %
+    //   spheres       143 -> 127 px (-11 %)   4.0 % -> 3.7 %     PRINTED
+    //   floor         308 -> 136 px (-56 %)   49.3 % -> 14.8 %   GATED
     //
-    // The FLOOR's reflected cube lost its hard top edge (the thickness margin,
-    // a fade now) and keeps its two vertical sides: rays passing beside the cube
-    // continue into the sky, which has no depth — a miss beside a hit whose gap
-    // is zero, the reflected OBJECT's silhouette, not the envelope's end. The
-    // SPHERES lost the toothed end of the floor's reflection (the range end: the
-    // teeth were the checkerboard's two phases either side of the screen exit)
-    // and keep two things no fade of the range or the thickness can see: the
-    // near sphere OCCLUDING the floor the far one reflects (the gap there is the
-    // occluder's, rejected outright — an occlusion edge in screen space), and
-    // the limbs, where neighbouring pixels' rays diverge by more than the fade
-    // is wide. Each bar is the measured value plus 10 %, and each refuses the
-    // base media outright (143 > 140, 308 > 150).
-    CHECK_MSG(results[0].rim <= 140u,
-              "spheres: THE RANGE END HANDS OVER — %u rim pixels (bar 140; the base media's 143)",
-              results[0].rim);
+    // The FLOOR gates: its reflected cube lost its hard top edge (the thickness
+    // margin, a fade now) and keeps its two vertical sides — rays passing beside
+    // the cube continue into the sky, which has no depth: a miss beside a hit
+    // whose gap is zero, the reflected OBJECT's silhouette, not the envelope's
+    // end. Bar 150 = the measured 136 + 10 %, and it refuses the base's 308.
+    // The SPHERES are printed, not gated: the fix's share there is 16 px, and a
+    // bar a few pixels under the base's number is no bar. What they keep no fade
+    // of the range or the thickness can see: the near sphere OCCLUDING the floor
+    // the far one reflects (the gap is the occluder's — an occlusion edge in
+    // screen space), and the limbs. The fade's width is the range's own
+    // screen-space gradient (floored at 2 steps); it measured the same 127 as a
+    // fixed 2-step fade on this fixture, so the limbs' residual is not the
+    // range end.
+    std::printf("   spheres (printed, not gated): %u rim pixels after SSR-EDGE-1 (the base media's 143)\n",
+                results[0].rim);
     CHECK_MSG(results[1].rim <= 150u,
               "floor: THE THICKNESS MARGIN HANDS OVER — %u rim pixels (bar 150; the base media's 308)",
               results[1].rim);

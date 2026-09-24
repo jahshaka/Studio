@@ -57,10 +57,10 @@ add_test(NAME gi.rt_reflect_hitres COMMAND test_rt_reflect --hitres
 set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # RAY-FMT-CHECK (PHOTON P3): the availability gate asks the device for STORAGE
-# support of the tier's history formats and refuses with a log line. On
-# LAVAPIPE, twice: the real check (llvmpipe stores to both formats, so it must
-# not refuse) and the refusal path through the gate's test door (no device on
-# this box lacks either format).
+# support of the tier's history formats and refuses with a log line — a
+# driver-defect guard, both formats being core-mandatory. On LAVAPIPE, twice:
+# the real check (must not refuse) and the refusal path through the gate's
+# fault-injection door (JAHSHAKA_RAY_DENY_STORAGE_FORMAT).
 set(_rt_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
 if(EXISTS "${_rt_lvp_icd}")
     add_test(NAME gi.rt_reflect_format_lavapipe COMMAND test_rt_reflect --format-check
@@ -108,16 +108,9 @@ add_test(NAME gi.reflect_motion COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 300 LABELS "engine")
 # THE LETTERBOX (SSR-LETTERBOX-1): both rows run a 2.4:1 "the rectangle IS the
-# shot" arm and a 2.39:1 moving-vs-settled arm. The no-rays row GATES them (the
-# march, the resolve and the reprojection take the shot's uv); the rays row
-# prints them as `target:` lines and this row asserts them: the ray tier
-# (rq_reflect.comp) reconstructs its rays from the full target's uv, so a
-# letterboxed shot with rays reads ~37 codes from the shot view. LABEL
-# `photon-target`; the lane that feeds the rectangle to the trace deletes it.
-add_test(NAME gi.reflect_motion_letterbox_target COMMAND test_reflect_motion --letterbox-target
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.reflect_motion_letterbox_target PROPERTIES
-                     TIMEOUT 300 LABELS "engine;photon-target")
+# shot" arm and a 2.39:1 moving-vs-settled arm, and both gate them — the march
+# takes the shot's uv in its pass buffer, the ray tier its image basis expanded
+# to the target on the CPU.
 add_test(NAME gi.reflect_motion_norays COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion_norays PROPERTIES

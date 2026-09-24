@@ -249,12 +249,19 @@ int main()
                     arms[a].name, fp[0], fp[1], fp[2], grip[a]);
     }
     // THE BARS AND THEIR HEADROOM (measured on this rig: 8.2 %, 0.2 %, 9.4 %;
-    // 2.6 %, 0.7 %, 4.1 % before SSR-EDGE-1 put the march's LAST sample on the
-    // end of the ray's range — the 0.065 m arm's 24 steps now reach the
-    // crossings its last jittered step used to overshoot, so its footprint grew
-    // 3119 -> 3296 under `checker` and `dither`, while `refined`, which asks
-    // the crossing itself, moved 3181 -> 3261 like the other two arms and
-    // its grip FELL).
+    // 2.6 %, 0.7 %, 4.1 % before SSR-EDGE-1). TWO SSR-EDGE-1 changes moved the
+    // footprints, and they are not the same effect:
+    //  * THE LAST SAMPLE ON THE RANGE'S END moved ONLY the 6.25 m arm under
+    //    `checker` and `dither` (3119 -> 3296; their 25 m and 50 m arms held):
+    //    its 24 steps now reach the crossings at the end of its short range
+    //    that its last jittered step overshot — a RANGE effect, which is why
+    //    this dose-response confounds range with step (the fixed-range arm
+    //    below does not).
+    //  * THE THICKNESS FADE MOVED TO THE ENVELOPE moved EVERY `refined` arm by
+    //    ~+90 px (3175/3181/3159 -> 3266/3261/3263): refined's hitDiff is the
+    //    bisected crossing's, non-zero on marginal crossings, and those used to
+    //    be COUNTED out by the resolve's trust threshold; checker's coarse
+    //    hitDiff is ~0 on a flat floor, so it did not move.
     // This is a FLAT floor, where the shipped march is already close to
     // trustworthy — its rays arrive face-on and well inside the tolerance, as
     // the shader's own note says — so the grip here is a few percent where on
@@ -271,6 +278,35 @@ int main()
               "...while `dither` keeps the shipped hit rule — its footprint still follows the "
               "step (%.1f%%), which is what makes it a PHASE change and not a coverage one",
               100.0 * grip[2]);
+
+    // ---- 2b. THE STEP AT A FIXED RANGE ------------------------------------
+    // The arms above change `ssrMaxDistance`, i.e. the RANGE with the step.
+    // Here the range is held at 25 m, the resolution at full, and only the
+    // step count moves (PostFxDesc::ssrSteps): 96 steps (0.26 m) against 24
+    // (1.04 m) and 128 (0.195 m).
+    std::printf("\n-- the step at a fixed 25 m range (ssrSteps 96 / 24 / 128) --\n");
+    double fixedGrip[3] = { 0.0, 0.0, 0.0 };
+    for (size_t a = 0; a < 3; ++a) {
+        PostFxDesc v = off;
+        v.ssr = 2;
+        v.ssrMarchPhase = arms[a].phase;
+        v.ssrMaxDistance = 25.0f;
+        unsigned fp[3] = { 0, 0, 0 };
+        const int stepsArm[3] = { 96, 24, 128 };
+        for (int k = 0; k < 3; ++k) {
+            v.ssrSteps = stepsArm[k];
+            Image img;
+            shoot(v, img, nullptr);
+            fp[k] = footprint(img, noSsr);
+        }
+        const double base = std::max(1.0, double(fp[0]));
+        fixedGrip[a] = (std::fabs(double(fp[1]) - base) + std::fabs(double(fp[2]) - base)) / base;
+        std::printf("   %-8s footprint  96 steps %6u | 24 steps %6u | 128 steps %6u  -> grip %.3f\n",
+                    arms[a].name, fp[0], fp[1], fp[2], fixedGrip[a]);
+    }
+    CHECK_MSG(fixedGrip[1] < fixedGrip[0] * 0.5,
+              "AT A FIXED RANGE `refined` TAKES THE STEP'S GRIP OFF: %.1f%% against checker's %.1f%%",
+              100.0 * fixedGrip[1], 100.0 * fixedGrip[0]);
 
     // ---- 3. THE COST, printed and never asserted --------------------------
     if (envOn("JAH_SSR_RINGS_BENCH")) {

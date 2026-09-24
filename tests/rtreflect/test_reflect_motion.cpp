@@ -169,15 +169,8 @@ static float runMove(Engine *e, View *view, Pose (*poseAt)(int), const char *wha
     return floorErr;
 }
 
-int main(int argc, char **argv)
+int main()
 {
-    // THE LETTERBOX TARGET ROW (gi.reflect_motion_letterbox_target): the rays
-    // arm's letterbox statements ASSERTED. In the ordinary rays row they print
-    // as `target:` lines — the ray tier does not take the letterbox's
-    // rectangle yet (see the letterbox block) — and the no-rays row gates them.
-    bool letterboxTarget = false;
-    for (int i = 1; i < argc; ++i)
-        if (std::string(argv[i]) == "--letterbox-target") letterboxTarget = true;
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -349,39 +342,17 @@ int main(int argc, char **argv)
 
     // ---- A LETTERBOXED SHOT (SSR-LETTERBOX-1) -----------------------------
     //
-    // WHO GATES WHAT. The MARCH is this lane's subject and the no-rays row
-    // gates every statement below (measured: the rectangle 1.869 codes from
-    // the shot view before the fix, 0.000 after). THE RAY TIER does not take
-    // the rectangle: rq_reflect.comp reconstructs each pixel's view ray from
-    // the FULL target's uv (its `uv` / eyeLocalUv / worldAt, the frustum's
-    // corner rays spread over the whole target), so a letterboxed shot with
-    // rays reads ~37 codes from the shot view — the rays' whole contribution
-    // (on vs off is 42.5) — and its moving-vs-settled number is the march's
-    // alone. That is the ray tier's file, not this lane's: in the rays row the
-    // statements print as `target:` lines, and gi.reflect_motion_letterbox_target
-    // (label photon-target) asserts them; the lane that feeds the rectangle to
-    // the trace deletes the label.
-    const bool letterboxGates = !raysWanted || letterboxTarget;
+    // BOTH HALVES OF A REFLECTION TAKE THE RECTANGLE: the march in its pass
+    // buffer (the shot's uv), the ray tier on the CPU (its image basis expanded
+    // to the target, OgreRayQuery.cpp). Measured before and after: the march
+    // alone 1.869 -> 0.000 codes from the shot view; with rays ~37 -> 0.323 (the
+    // two views' own ray noise — THE CONTROL's 0.35), in two steps: the
+    // letterbox prologue CLEARED the prepass' depth, so the trace declined every
+    // pixel (37 -> 4.33 once it keeps it), and the trace built its rays from the
+    // full target's uv (4.33 -> 0.32 with the basis expanded).
     const auto letterboxCheck = [&](bool ok, float value, float bar, const char *what) {
-        if (letterboxGates) {
-            CHECK_MSG(ok, "%s (%.3f, bar %.3f)", what, value, bar);
-        } else {
-            std::printf("target: %.4f (bar %.4f) %s%s\n", value, bar, what, ok ? " -- MET" : "");
-        }
+        CHECK_MSG(ok, "%s (%.3f, bar %.3f)", what, value, bar);
     };
-    //
-    // Under a constrained-aspect camera the prepass draws the shot into the
-    // target's INNER rectangle while the march, the resolve and the
-    // reprojection are full-target quads: they must work in the SHOT's uv (the
-    // camera's projection lands there) and read the textures through the
-    // rectangle. Two statements:
-    //
-    //  (1) A LETTERBOXED SHOT IS THE SHOT. At 2.4:1 the rectangle is exactly
-    //      384 x 160 on this 384 x 216 target, so a second view of exactly that
-    //      size with the same camera draws the SAME picture — reflections
-    //      included — and the rectangle must match it.
-    //  (2) THE BRIEF'S ARM: at 2.39:1 the moving-vs-settled error is the
-    //      full-frame arm's, within 0.5 code, both moves.
     {
         gLetterboxAspect = 2.4f;
         const Pose rest = yawPose(0);
@@ -398,6 +369,11 @@ int main(int argc, char **argv)
             Image boxed, plain;
             view->readPixels(boxed);
             shot->readPixels(plain);
+            {
+                const RayQueryStatus lrq = s->rayQueryStatus();
+                std::printf("    letterboxed: rayQuery reflect=%d rays=%d\n", int(lrq.reflect),
+                            lrq.reflectRays);
+            }
             unsigned y0 = 0u, h = kHeight;
             shotRows(y0, h);
             // The inner rectangle's floor against the shot view's floor, row for
