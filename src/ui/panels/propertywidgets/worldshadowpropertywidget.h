@@ -13,10 +13,15 @@ For more information see the LICENSE file
 #define WORLDSHADOWPROPERTYWIDGET_H
 
 #include <QWidget>
+#include <functional>
 #include "ui/controls/accordionbladewidget.h"
+#include "ui/panels/propertywidgets/panelundo.h"
 #include "irisgl/irisglfwd.h"
 
+namespace iris { struct SunContact; }
+class CheckBoxWidget;
 class ComboBoxWidget;
+class HFloatSliderWidget;
 class LabelWidget;
 class IEditorViewport;
 struct StudioServices;
@@ -38,6 +43,16 @@ struct StudioServices;
  *
  * The document field is the API: SceneMirror pushes it to the engine each
  * frame, exactly the path world.setShadowResolution() takes.
+ *
+ * SUN CONTACT (PHOTON-RAYS-1's Studio slice, SMALL-FIXES-3): three rows —
+ * the switch, the range in metres, the resolution — over the ONE document
+ * block `iris::Scene::sunContact`, written through the sceneprops key
+ * "sunContact" that world.sunContact writes, with the verb's clamp
+ * (iris::SunContact::clamped) and the verb's band on the range control, so
+ * the panel and the verb are one model and every gesture is one undo step.
+ * What the renderer did with it is world.sunContact().live, read here from the
+ * same engine calls: a scene that is not ray traced on this machine greys the
+ * rows that cannot act and says why.
  */
 class WorldShadowPropertyWidget : public AccordianBladeWidget
 {
@@ -65,6 +80,15 @@ private:
     /// Built ONCE; selection and undo refresh the same rows in place (debt L6).
     void build();
     void refreshRows();
+    /// The Sun Contact rows' half of refreshRows: the document block, then the
+    /// renderer's answer (world.sunContact().live's source).
+    void refreshSunContact();
+    /// Two frames, then refreshRows — after a Sun Contact gesture and after
+    /// every undo/redo of one.
+    void contactEdited();
+    /// The whole block with ONE field changed, as the "sunContact" key stores
+    /// it — the verb's clamp applied.
+    QVariant withContact(const std::function<void(iris::SunContact &)> &edit) const;
     /// What Auto would derive right now: the largest Shadow Size among the
     /// scene's shadow-casting lights (the mirror's own policy), or 0 if none.
     int derivedFromLights() const;
@@ -86,6 +110,16 @@ private:
     /// never as a warning: an interior lit by lamps is an ordinary scene.
     LabelWidget *sunRow = nullptr;
     LabelWidget *secondaryRow = nullptr;
+
+    /// SUN CONTACT: the switch, the range (metres, the verb's band) and the
+    /// resolution (auto / full / half — the verb's words), plus the renderer's
+    /// answer in words. Row keys `sunContact.enabled` / `.range` /
+    /// `.resolution` / `.status` (the property filter and editor.propertyRow).
+    panelundo::SceneRows contactRows;
+    CheckBoxWidget *contactEnabled = nullptr;
+    HFloatSliderWidget *contactRange = nullptr;
+    ComboBoxWidget *contactResolution = nullptr;
+    LabelWidget *contactStatus = nullptr;
 };
 
 #endif // WORLDSHADOWPROPERTYWIDGET_H

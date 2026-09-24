@@ -5736,6 +5736,48 @@ QVariantList MainWindow::propertyRows(const QString &tabName) const
     return out;
 }
 
+QVariantMap MainWindow::propertyRow(const QString &tabName, const QString &key, bool drive,
+                                    const QVariant &value, QString *error)
+{
+    auto refuse = [error](const QString &why) { if (error) *error = why; return QVariantMap(); };
+    if (!sceneNodePropertiesWidget) return refuse(QStringLiteral("there is no properties column"));
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.trimmed().isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab))
+        return refuse(QStringLiteral("unknown tab '%1' (world|selection)").arg(tabName));
+    // The same listing editor.properties reports, so "which row" is answered
+    // the way the column answers it — and a mount owed to this turn happens.
+    QVector<PropertyRows::Registry::Listing> hits;
+    for (const auto &row : sceneNodePropertiesWidget->propertyRows(tab))
+        if (row.key == key && row.widget) hits.append(row);
+    const QString name = SceneNodePropertiesWidget::tabName(tab);
+    if (hits.isEmpty())
+        return refuse(QStringLiteral("the %1 tab has no row with the key '%2' mounted")
+                          .arg(name, key));
+    if (hits.size() > 1)
+        return refuse(QStringLiteral("%1 rows on the %2 tab share the key '%3'")
+                          .arg(hits.size()).arg(name, key));
+    const PropertyRows::Registry::Listing &row = hits.first();
+    if (drive) {
+        // A ROW THE PANEL HIDES TAKES NO GESTURE (a filtered-out row is still
+        // the panel's and is driven: the filter is a view, not a lock).
+        if (!row.panelVisible)
+            return refuse(QStringLiteral("the row '%1' is hidden by its panel").arg(key));
+        QString why;
+        if (!PropertyRows::driveRow(row.widget, value, &why))
+            return refuse(QStringLiteral("the row '%1' refused: %2").arg(key, why));
+    }
+    // Read AFTER the gesture: what the row shows once its panel has answered.
+    QVariantMap out = PropertyRows::readRow(row.widget);
+    out[QStringLiteral("tab")] = name;
+    out[QStringLiteral("key")] = row.key;
+    out[QStringLiteral("label")] = row.label;
+    out[QStringLiteral("section")] = row.sections;
+    out[QStringLiteral("panelVisible")] = row.panelVisible;
+    out[QStringLiteral("filteredOut")] = row.filteredOut;
+    out[QStringLiteral("visible")] = row.visible;
+    return out;
+}
+
 bool MainWindow::isPropertiesTab(const QString &tabName) const
 {
     if (tabName.trimmed().isEmpty()) return true;

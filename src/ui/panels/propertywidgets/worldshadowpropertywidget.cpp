@@ -16,11 +16,14 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 
+#include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
+#include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
 #include "services/worldmodes.h"
 #include "ui/panels/propertywidgets/panelundo.h"
+#include "ui/panels/propertywidgets/rowundo.h"
 
 #include <QSignalBlocker>
 
@@ -39,7 +42,21 @@ int shadowRowFor(int resolution)
 }
 
 WorldShadowPropertyWidget::WorldShadowPropertyWidget()
+    : contactRows([this]() { return scene; }, [this]() { return services; },
+                  [this]() { contactEdited(); }, [this]() { return !loading; })
 {
+}
+
+// After a Sun Contact gesture, and after every undo/redo of one. Two frames
+// first, so the renderer's answer (running, its resolution) is the edit's and
+// not the frame before it — the Shadow Quality combo's refresh, for the same
+// reason. (A command's FIRST redo is the edit itself and runs no refresh, so
+// the rows' own signals call this too; see build().)
+void WorldShadowPropertyWidget::contactEdited()
+{
+    if (loading || !scene) return;
+    if (sceneView && sceneView->isInitialized()) sceneView->renderFrames(2);
+    refreshRows();
 }
 
 int WorldShadowPropertyWidget::atlasMegabytes(int resolution)
@@ -107,6 +124,118 @@ void WorldShadowPropertyWidget::build()
     mapsRow = this->addLabel("Shadow Maps", QString());
     for (LabelWidget *row : { sunRow, secondaryRow, autoRow, memoryRow, mapsRow })
         if (row) PropertyRows::setPanelVisible(row, false);
+
+    // ---- SUN CONTACT (PHOTON-RAYS-1's row; world.sunContact) ----------------
+    // Three rows over one document block, each gesture one undo step through
+    // the "sunContact" key the verb writes. The range control carries the
+    // verb's band, so it cannot offer a value the verb would refuse.
+    const QStringList contactWords = { QStringLiteral("contact"), QStringLiteral("sun"),
+                                       QStringLiteral("rays") };
+    contactEnabled = this->addCheckBox("Sun Contact", false);
+    contactEnabled->setToolTip(QStringLiteral(
+        "Hard contact shadows traced from the sun: one hardware ray per pixel closes the gap of "
+        "light a shadow map leaves where an object meets the ground. Off by default; it needs "
+        "ray tracing (World > Ray Tracing, and a GPU that has it) and is never drawn in VR."));
+    rowundo::bind(contactEnabled, contactRows(QStringLiteral("sunContact"), tr("Sun Contact"),
+        [this](const QVariant &v) {
+            return withContact([&v](iris::SunContact &c) { c.enabled = v.toBool(); });
+        }));
+    PropertyRows::identify(contactEnabled, QStringLiteral("sunContact.enabled"), contactWords);
+
+    contactRange = this->addFloatValueSlider("Contact Range (m)", iris::kSunContactMinRange,
+                                             iris::kSunContactMaxRange, 2.0f);
+    contactRange->setDecimals(2);
+    contactRange->setToolTip(QStringLiteral(
+        "How far, in metres, a contact ray looks for something between the surface and the sun. "
+        "Beyond it the shadow map answers alone."));
+    rowundo::bind(contactRange, contactRows(QStringLiteral("sunContact"), tr("Sun Contact Range"),
+        [this](const QVariant &v) {
+            return withContact([&v](iris::SunContact &c) { c.range = v.toFloat(); });
+        }));
+    PropertyRows::identify(contactRange, QStringLiteral("sunContact.range"), contactWords);
+
+    // Row index = iris::SunContactResolution (Auto 0, Full 1, Half 2).
+    contactResolution = this->addComboBox("Contact Resolution");
+    contactResolution->addItem("Auto (follows the tier)");
+    contactResolution->addItem("Full (one ray per pixel)");
+    contactResolution->addItem("Half (one ray per 2x2 block)");
+    contactResolution->setToolTip(QStringLiteral(
+        "Auto traces at half resolution at the Low and Medium GI quality and at full resolution "
+        "at High."));
+    rowundo::bind(contactResolution, contactRows(QStringLiteral("sunContact"),
+                                                 tr("Sun Contact Resolution"),
+        [this](const QVariant &v) {
+            return withContact([&v](iris::SunContact &c) {
+                c.resolution = iris::SunContactResolution(qBound(0, v.toInt(), 2));
+            });
+        }));
+    PropertyRows::identify(contactResolution, QStringLiteral("sunContact.resolution"),
+                           contactWords);
+
+    // THE EDIT'S OWN REFRESH: connected AFTER rowundo::bind, so the document
+    // already holds the gesture's value when these run.
+    connect(contactEnabled, &CheckBoxWidget::valueChanged, this, [this](bool) { contactEdited(); });
+    connect(contactRange, &HFloatSliderWidget::valueChangeEnd, this,
+            [this](float) { contactEdited(); });
+    connect(contactResolution, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this,
+            [this](int) { contactEdited(); });
+
+    contactStatus = this->addLabel("Contact Status", QString());
+    PropertyRows::identify(contactStatus, QStringLiteral("sunContact.status"), contactWords);
+    PropertyRows::setPanelVisible(contactStatus, false);
+}
+
+QVariant WorldShadowPropertyWidget::withContact(
+    const std::function<void(iris::SunContact &)> &edit) const
+{
+    if (!scene) return QVariant();
+    iris::SunContact c = scene->sunContact;
+    edit(c);
+    return iris::SunContact::clamped(c).toJson().toVariantMap();
+}
+
+// THE SUN CONTACT ROWS, re-read in place: the document block (what
+// world.sunContact() returns), then what the renderer did with it (its `live`
+// half, from the same two engine calls).
+void WorldShadowPropertyWidget::refreshSunContact()
+{
+    if (!scene || !contactEnabled) return;
+    const iris::SunContact &c = scene->sunContact;
+    contactEnabled->setValue(c.enabled);
+    contactRange->setValue(c.range);
+    {
+        const QSignalBlocker quiet(contactResolution);
+        contactResolution->setCurrentIndex(int(c.resolution));
+    }
+
+    // No renderer (headless, before the first frame): the rows are the
+    // document's, live, and there is nothing to report.
+    IEditorViewport::SunContactInfo st;
+    if (sceneView && sceneView->isInitialized()) st = sceneView->sunContactInfo();
+    const bool rays = st.available ? st.rays : true;
+    // THE ROWS THAT CANNOT ACT ARE GREYED. Without rays the range and the
+    // resolution mean nothing; the switch stays live while it is ON so a scene
+    // authored elsewhere can always be turned off here.
+    contactRange->setEnabled(rays);
+    contactResolution->setEnabled(rays);
+    contactEnabled->setEnabled(rays || c.enabled);
+
+    QString status;
+    if (st.available && !rays) {
+        status = QStringLiteral("Needs rays: this scene is not ray traced here (World > Ray "
+                                "Tracing is Off, or this machine has no ray-tracing GPU). The "
+                                "shadow map answers alone.");
+    } else if (st.available && c.enabled && st.on && !st.running) {
+        status = QStringLiteral("Not running: %1.").arg(st.reason);
+    } else if (st.available && c.enabled && st.running) {
+        status = QStringLiteral("Tracing %1 x %2 (%3), out to %4 m")
+                     .arg(st.width).arg(st.height)
+                     .arg(st.divisor > 1 ? QStringLiteral("one ray per 2x2 block")
+                                         : QStringLiteral("one ray per pixel"))
+                     .arg(double(st.range));
+    }
+    contactStatus->setText(status);
+    PropertyRows::setPanelVisible(contactStatus, !status.isEmpty());
 }
 
 // The READ-BACK rows, re-read in place. Nothing here is created or destroyed:
@@ -221,6 +350,7 @@ void WorldShadowPropertyWidget::refreshRows()
             PropertyRows::setPanelVisible(mapsRow, false);
         }
     }
+    refreshSunContact();
     loading = false;
 }
 

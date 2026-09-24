@@ -1902,8 +1902,9 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
 // ---------------------------------------------------------------------------
 // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact)
 // ---------------------------------------------------------------------------
-// The whole authoring surface of the row: a World panel row (a follow-up slice)
-// calls exactly this document field through the same sceneprops key.
+// The whole authoring surface of the row: the World panel's Sun Contact rows
+// (WorldShadowPropertyWidget, SMALL-FIXES-3) write exactly this document field
+// through the same sceneprops key, with the same clamp.
 QVariantMap WorldApi::sunContact(const QVariantMap &params)
 {
     QVariantMap out;

@@ -429,6 +429,12 @@ public:
     /// THE COLUMN'S OWN ACCOUNT OF ITSELF (`editor.properties`): one entry per
     /// row that tab has mounted, in column order.
     QVariantList propertyRows(const QString &tabName = QString()) const;
+    /// ONE ROW BY ITS STABLE KEY (`editor.propertyRow`): its listing plus its
+    /// control's reading (PropertyRows::readRow), after — when `drive` — the
+    /// gesture a user makes on it (PropertyRows::driveRow). An empty map with
+    /// `error` set when the tab, the key or the gesture is refused.
+    QVariantMap propertyRow(const QString &tabName, const QString &key, bool drive,
+                            const QVariant &value, QString *error);
     /// WHAT THE COLUMN HAS COST (`editor.propertiesStats`): mounts, material
     /// refills vs rebuilds, the mounted row count, and whether a mount is owed.
     /// Reads nothing into existence — it never settles a pending mount.

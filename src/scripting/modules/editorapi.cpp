@@ -483,6 +483,26 @@ QVector<VerbInfo> EditorApi::verbs() const
           "front; only the rows that tab has MOUNTED are listed, because those are the rows "
           "that exist for the current selection.",
           Needs::Window },
+        { "propertyRow", "editor.propertyRow({tab, key, value?}) -> {tab, key, label, section, "
+                         "control, value, enabled, panelVisible, filteredOut, visible, text?, "
+                         "items?, min?, max?, toolTip}",
+          "ONE PROPERTIES-COLUMN ROW BY ITS STABLE KEY, read — and, given `value`, DRIVEN the "
+          "way a person drives it — so a test proves a panel row is wired to the model it "
+          "claims (the row's gesture, its one undo step, its greying) instead of asserting on "
+          "the verb the row is supposed to call. `key` is the row's key as editor.properties "
+          "lists it (\"sunContact.enabled\", \"world.shadowResolution\"); `tab` is \"world\" or "
+          "\"selection\", defaulting to the tab in front, and only a MOUNTED row is found. "
+          "`control` says what the row offers: \"check\" (value true/false: the box is CLICKED "
+          "when it does not already hold it), \"combo\" (value = the item index, or an item's "
+          "exact text; `items` lists them), \"number\" (value = the number, typed in and "
+          "committed with Return — the gesture that makes one undo step; `min`/`max` are the "
+          "field's range and a value outside it is REFUSED, never clamped), \"label\" (a "
+          "read-back row: `value` is its text, never driven) or \"other\". `enabled` is the "
+          "control's effective state: a GREYED row refuses a gesture, as it refuses a click, "
+          "and so does a row its panel hides. The answer is read AFTER the gesture, so it is "
+          "what the row shows once its panel has answered. A key two mounted rows share is "
+          "refused by name rather than guessed at.",
+          Needs::Window },
         { "propertiesStats", "editor.propertiesStats() -> {mounts, refills, rebuilds, rows, "
                              "pending, deferredHidden, visible, attached}",
           "WHAT THE PROPERTIES COLUMN HAS COST — the numbers behind \"how expensive is a "
@@ -2274,6 +2294,32 @@ QVariantList EditorApi::properties(const QVariantMap &args)
         return QVariantList();
     }
     return host.mainWindow->propertyRows(tab);
+}
+
+QVariantMap EditorApi::propertyRow(const QVariantMap &args)
+{
+    if (!host.mainWindow) {
+        fail("editor.propertyRow: this verb needs the editor window (a --script/--headless "
+             "run has no panels)");
+        return QVariantMap();
+    }
+    static const QStringList known = { QStringLiteral("tab"), QStringLiteral("key"),
+                                       QStringLiteral("value") };
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("editor.propertyRow"),
+                                                         args, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+    const QString key = args.value(QStringLiteral("key")).toString().trimmed();
+    if (key.isEmpty()) { fail("editor.propertyRow: a 'key' is required"); return QVariantMap(); }
+    const bool drive = args.contains(QStringLiteral("value"));
+    QString error;
+    const QVariantMap out = host.mainWindow->propertyRow(
+        args.value(QStringLiteral("tab")).toString(), key, drive,
+        scriptmod::normalizeJs(args.value(QStringLiteral("value"))), &error);
+    if (out.isEmpty()) {
+        fail(QStringLiteral("editor.propertyRow: %1").arg(error));
+        return QVariantMap();
+    }
+    return out;
 }
 
 QVariantMap EditorApi::snapSize()
