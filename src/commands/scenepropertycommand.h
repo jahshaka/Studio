@@ -44,6 +44,8 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVariant>
 
+class QObject;
+
 #include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
 
@@ -79,6 +81,17 @@ QStringList ids();
 /// key (and writes nothing) rather than half-applying it.
 QVariant get(const iris::ScenePtr &scene, const QString &id);
 bool set(const iris::ScenePtr &scene, const QString &id, const QVariant &value);
+
+/// WHO WROTE A WORLD PROPERTY, told after the fact: every write through set()
+/// — a panel row, a world verb, an undo or redo of either — calls each
+/// observer with the scene and the key, AFTER the value is in the document.
+/// A panel whose rows DEPEND on another section's field (the Sun Contact rows
+/// grey on `rayTracing`) listens here, because a script's verb touches no
+/// widget. `context` scopes the observer: it is dropped when `context` is
+/// destroyed. Observers run on the writer's thread (the UI thread: every
+/// sceneprops write is a UI-thread write).
+using WriteObserver = std::function<void(const iris::ScenePtr &, const QString &)>;
+void observeWrites(QObject *context, WriteObserver observer);
 
 }   // namespace sceneprops
 

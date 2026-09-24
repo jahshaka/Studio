@@ -11,6 +11,10 @@ For more information see the LICENSE file
 
 #include "commands/scenepropertycommand.h"
 
+#include <QPointer>
+#include <QVector>
+#include <algorithm>
+
 #include <QColor>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -287,12 +291,40 @@ QVariant get(const iris::ScenePtr &scene, const QString &id)
     return (f && f->get) ? f->get(scene) : QVariant();
 }
 
+namespace {
+struct Observer
+{
+    QPointer<QObject> context;
+    WriteObserver fn;
+};
+QVector<Observer> &observers()
+{
+    static QVector<Observer> list;
+    return list;
+}
+}   // namespace
+
+void observeWrites(QObject *context, WriteObserver observer)
+{
+    if (!context || !observer) return;
+    observers().append({ QPointer<QObject>(context), std::move(observer) });
+}
+
 bool set(const iris::ScenePtr &scene, const QString &id, const QVariant &value)
 {
     if (!scene) return false;
     const Field *f = field(id);
     if (!f || !f->set) return false;
     f->set(scene, value);
+    // A COPY is walked: an observer may add another (a panel built in its
+    // callback), and a destroyed context is pruned here, not by the caller.
+    auto &list = observers();
+    list.erase(std::remove_if(list.begin(), list.end(),
+                              [](const Observer &o) { return o.context.isNull(); }),
+               list.end());
+    const QVector<Observer> now = list;
+    for (const Observer &o : now)
+        if (o.context) o.fn(scene, id);
     return true;
 }
 

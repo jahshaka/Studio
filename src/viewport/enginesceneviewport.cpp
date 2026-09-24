@@ -2853,13 +2853,16 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     refreshOverlay();
 }
 
-IEditorViewport::SunContactInfo EngineSceneViewport::sunContactInfo()
+IEditorViewport::SunContactInfo EngineSceneViewport::sunContactInfo() const
 {
     SunContactInfo out;
-    jahshaka::engine::Scene *es = engineScene();
-    if (!es) return out;                      // available stays false
+    const jahshaka::engine::Scene *es = mEngineScene;
+    if (!es || !mEngine) return out;          // available stays false
     out.available = true;
-    out.rays = es->rayTracingResolved();
+    // Scene::rayTracingResolved's own three terms, with the ROW read from the
+    // document rather than from the engine scene the mirror updates next frame.
+    out.rays = mEngine->rayTracing() && mEngine->rayQueryAvailable() && mScene &&
+               mScene->rayTracing != iris::RayTracingMode::Off;
     const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
     out.on = st.on;
     out.running = st.running;

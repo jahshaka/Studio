@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEventLoop>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QSpinBox>
@@ -569,6 +570,22 @@ bool driveRow(QWidget *row, const QVariant &value, QString *error)
     // and Return is what commits a typed edit (editingFinished — the one undo
     // step every number row's binding closes on). A value outside the field's
     // range is refused rather than clamped: the field would clamp it silently.
+    //
+    // FOCUS FIRST, as a person's click into the field gives it: a slider row
+    // opens its typed-edit session only while its spin box HAS focus
+    // (HFloatSliderWidget::onValueSpinboxChanged) and closes it — the
+    // valueChangeEnd its panel refreshes on — only inside one. Without focus
+    // the value lands as an atomic tick and the Return is a no-op, which is a
+    // path no person's typing takes. A window that cannot take focus is
+    // refused, not driven down the other path.
+    if (!c.number->window()->isActiveWindow()) {
+        c.number->window()->activateWindow();
+        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    }
+    c.number->setFocus(Qt::MouseFocusReason);
+    if (!c.number->hasFocus())
+        return refuse(QStringLiteral("the field cannot take keyboard focus (its window is not "
+                                     "the active window)"));
     if (auto *d = qobject_cast<QDoubleSpinBox *>(c.number)) {
         if (v < d->minimum() || v > d->maximum())
             return refuse(QStringLiteral("%1 is outside the field's range %2..%3")

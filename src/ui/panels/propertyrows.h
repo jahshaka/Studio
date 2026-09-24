@@ -217,9 +217,11 @@ inline void setPanelVisible(QWidget *row, bool visible)
 QVariantMap readRow(QWidget *row);
 /// Performs the gesture a user makes on the row's control: a check box is
 /// CLICKED when it does not already hold `value`; a combo takes an index or an
-/// item's text; a number field takes the value and a Return (which is what
-/// commits a typed edit — one undo step). Refuses a greyed row, a label, and a
-/// value the control cannot hold, with the reason in `error`.
+/// item's text; a number field is FOCUSED, takes the value and a Return (the
+/// typed session a person's click-type-Return makes — one undo step; a field
+/// whose window cannot take focus is refused). A field rounds the value to its
+/// own decimals before the document sees it. Refuses a greyed row, a label,
+/// and a value the control cannot hold, with the reason in `error`.
 bool driveRow(QWidget *row, const QVariant &value, QString *error);
 
 }   // namespace PropertyRows

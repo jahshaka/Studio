@@ -165,6 +165,12 @@ if (machineHasRays) {
     assert(Math.abs(world.sunContact().range - 3.25) < 1e-6 && Math.abs(rg.value - 3.25) < 1e-6,
            "a TYPED range (3.25 + Return) reads back through the verb");
     assert(pushes() === p0 + 1, "...as exactly ONE undo step");
+    // THE TYPED SESSION'S OWN END refreshes the section — no other gesture
+    // between the number and this read (the row is focused, typed, Returned).
+    var st = row("sunContact.status");
+    console.log("   status row after the typed range: " + st.value);
+    assert(st.panelVisible && st.value.indexOf("Tracing") === 0 && st.value.indexOf("out to 3.25 m") > 0,
+           "straight after the typed range the status row names it: " + st.value);
     throws(function () { row("sunContact.range", 60); }, "a range past the band is refused at the row");
     assert(Math.abs(world.sunContact().range - 3.25) < 1e-6, "...and writes nothing");
     p0 = pushes();
@@ -173,7 +179,7 @@ if (machineHasRays) {
     row("sunContact.resolution", "Full (one ray per pixel)");
     assert(world.sunContact().resolution === "full", "picking Full reads back 'full'");
     assert(pushes() === p0 + 2, "...one undo step per pick");
-    var st = row("sunContact.status");
+    st = row("sunContact.status");
     console.log("   status row: " + st.value);
     assert(st.panelVisible && st.value.indexOf("Tracing") === 0,
            "the status row says what the renderer is doing: " + st.value);
@@ -189,24 +195,37 @@ if (machineHasRays) {
     st = row("sunContact.status");
     assert(!st.panelVisible, "...and the status row, with nothing to report, is hidden");
 
-    // NO RAYS FOR THIS SCENE: what cannot act is greyed, and says why.
+    // NO RAYS FOR THIS SCENE: what cannot act is greyed, and says why — read
+    // STRAIGHT AFTER the Ray Tracing write, with no Sun Contact gesture between
+    // (the Shadows section re-reads on the document write, whoever made it).
     var mode = world.rayTracing();
+    row("sunContact.enabled", true);          // ON first: the switch must stay live
     world.rayTracing("off");
-    row("sunContact.enabled", true);          // the gesture refreshes the section
-    sw = row("sunContact.enabled");
-    rg = row("sunContact.range");
-    assert(sw.value === true && sw.enabled && !rg.enabled,
-           "rays off with the row ON: the switch stays live (it can always be turned off), the range greys");
-    row("sunContact.enabled", false);
     sw = row("sunContact.enabled");
     rg = row("sunContact.range");
     rs = row("sunContact.resolution");
     st = row("sunContact.status");
-    assert(!sw.enabled && !rg.enabled && !rs.enabled,
-           "rays off for the scene: the switch (off), range and resolution are GREYED");
+    assert(sw.value === true && sw.enabled && !rg.enabled && !rs.enabled,
+           "world.rayTracing('off'), no gesture: range and resolution GREY at once; the ON switch stays live");
     assert(st.panelVisible && st.value.indexOf("Needs rays") === 0, "...and the row says why: " + st.value);
+    row("sunContact.enabled", false);
+    sw = row("sunContact.enabled");
+    assert(!sw.enabled, "turned off with no rays: the switch greys too");
     throws(function () { row("sunContact.range", 1); }, "a greyed row takes no gesture");
     world.rayTracing(mode);
+    assert(world.rayTracing() === "auto" && row("sunContact.range").enabled &&
+           row("sunContact.resolution").enabled && row("sunContact.enabled").enabled,
+           "world.rayTracing back to auto, no gesture: the Sun Contact rows are live again at once");
+    // ...and the OTHER writer, the World section's own Ray Tracing row, again
+    // with no Sun Contact gesture between it and the read.
+    var rt = row("rayTracing", "Off");
+    assert(rt.control === "combo" && world.rayTracing() === "off", "the World > Ray Tracing row set Off");
+    assert(!row("sunContact.range").enabled && !row("sunContact.enabled").enabled,
+           "...and the Sun Contact rows grey at once");
+    row("rayTracing", "Auto");
+    assert(world.rayTracing() === "auto" && row("sunContact.range").enabled,
+           "the row back to Auto: live again at once");
+    assert(!row("sunContact.status").panelVisible, "...with no status to give (the row is off)");
     world.sunContact({ enabled: false, range: 2, resolution: "auto" });
 } else {
     assert(!rg.enabled && !rs.enabled, "no rays here: range and resolution are greyed");

@@ -948,7 +948,9 @@ public:
     /// read of what world.sunContact().live reports (the same two engine
     /// calls: Scene::rayTracingResolved and Scene::sunContactStatus), for a
     /// panel that includes no engine header. `available` false = no engine
-    /// scene to ask (headless, or before the first frame).
+    /// scene to ask (headless, or before the first frame). `rays` is the
+    /// DOCUMENT's Ray Tracing row against this machine — current the moment
+    /// the row is written, not a frame later when the mirror pushes it.
     struct SunContactInfo {
         bool available = false;
         bool rays = false;       ///< this scene traces on this machine
@@ -959,7 +961,7 @@ public:
         float range = 0.0f;
         QString reason;          ///< why it is not running while `on`
     };
-    virtual SunContactInfo sunContactInfo() { return {}; }
+    virtual SunContactInfo sunContactInfo() const { return {}; }
 
     /// Whether the renderer ACCEPTED this node as a planar-reflection plane.
     /// The plane, its size and its normal are derived from the mesh's own

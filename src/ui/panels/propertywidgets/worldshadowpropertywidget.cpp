@@ -126,6 +126,10 @@ void WorldShadowPropertyWidget::build()
         if (row) PropertyRows::setPanelVisible(row, false);
 
     // ---- SUN CONTACT (PHOTON-RAYS-1's row; world.sunContact) ----------------
+    // ORDER MATTERS below: rowundo::bind names every row by its binding key
+    // ("sunContact" for all three), and the PropertyRows::identify AFTER it is
+    // what gives each its own key — swap them and the three rows share one key,
+    // which the filter tolerates and editor.propertyRow refuses by name.
     // Three rows over one document block, each gesture one undo step through
     // the "sunContact" key the verb writes. The range control carries the
     // verb's band, so it cannot offer a value the verb would refuse.

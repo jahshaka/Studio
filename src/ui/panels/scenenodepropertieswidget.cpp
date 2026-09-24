@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/propertyrows.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "commands/scenepropertycommand.h"
 #include "ui/panels/transformeditor.h"
 #include "ui/style/themeroles.h"
 
@@ -156,6 +157,16 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 		if (!sc && !!sceneNode) sc = sceneNode->getScene();
 		if (!sc) return;
 		if (worldModesPropView) worldModesPropView->setScene(sc);
+	});
+
+	// THE SUN CONTACT ROWS GREY ON ANOTHER SECTION'S FIELD (SMALL-FIXES-3):
+	// World > Ray Tracing lives in the World blade, and `world.rayTracing` from
+	// a script touches no widget at all — so the Shadows blade re-reads on the
+	// document WRITE, whoever made it (a row, a verb, an undo of either).
+	sceneprops::observeWrites(this, [this](const iris::ScenePtr &written, const QString &key) {
+		if (key != QLatin1String("rayTracing") || !worldShadowPropView) return;
+		if (written != worldBoundScene) return;   // not the scene this column shows
+		worldShadowPropView->setScene(written);
 	});
 
 	// VR (owner request 2026-09-18): how a WEARER moves in this world — a
