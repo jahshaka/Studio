@@ -269,6 +269,15 @@ int main()
     // wall is sub-voxel at every cascade cell size. This is the assertion, and
     // it is stated as a comparison rather than a bar because a bar on a
     // measurement nobody has taken before is a number invented, not measured.
+    //
+    // AGAINST PHASE 1 (PHOTON-GATHER-1b, audit F8): 0.0367 / 0.0381 / 0.0457 /
+    // 0.0764 against phase 1's 0.0367 / 0.0382 / 0.0458 / 0.0762 — the 0.05 m
+    // wall reads +0.0002 (+0.3 %), deterministic (the frame index frozen). Its
+    // mechanism: the filter's same-plane neighbour across a thin wall, in the
+    // directions BOTH probes see far away — the plane test cannot separate two
+    // floor probes on either side of a wall, the hit-distance test does for
+    // every direction that hits the wall. Accepted: "at or below phase 1" is
+    // missed by the letter, by 0.3 %, with the mechanism named.
     for (int a = 0; a < 4; ++a)
         CHECK_MSG(rows[a].gather <= rows[a].field + 0.002f,
                   "the ray gather leaks no more than the field through the %.2f m wall "
@@ -822,23 +831,38 @@ static int costMain(Engine *e)
         return pm + tm + fm + im;
     };
     const float high = measure(view, 16u, 8u, "1080p, 16 px probes, 64 rays (High)");
-    measure(view, 16u, 6u, "1080p, 16 px probes, 36 rays (Medium)");
-    measure(view, 8u, 8u, "1080p, 8 px probes, 64 rays (Epic)");
     measure(view, 32u, 8u, "1080p, 32 px probes, 64 rays");
+    // THE FILTER'S PRICE, PAIRED IN ONE PROCESS (fix round, audit F3): each tier
+    // measured with the filter in probe space ON and OFF, interleaved over three
+    // rounds, and the ratio of the medians quoted. OFF still runs the SH reduce
+    // and the five-probe integrate, so the ratio is what the neighbourhood taps
+    // (now a per-workgroup table in shared memory) cost on top of the rest.
+    Knobs nof; nof.filterOff = true;
+    const auto paired = [&](View *v, unsigned stride, unsigned octRes, const char *tier) {
+        std::vector<float> on, off;
+        for (int round = 0; round < 3; ++round) {
+            on.push_back(measure(v, stride, octRes, (std::string(tier) + ", filter ON").c_str()));
+            off.push_back(measure(v, stride, octRes, (std::string(tier) + ", filter OFF").c_str(), nof));
+        }
+        std::sort(on.begin(), on.end());
+        std::sort(off.begin(), off.end());
+        std::printf("   PAIRED %-10s block %.4f ms with the filter, %.4f without: ratio %.3f\n", tier,
+                    double(on[1]), double(off[1]), double(on[1] / std::max(off[1], 1e-6f)));
+    };
+    paired(view, 16u, 8u, "High");
+    paired(view, 8u, 8u, "Epic");
+    paired(view, 16u, 6u, "Medium");
     // THE SH9 RECORD'S PRICE (PHOTON-GATHER-1b item 3's premise): the same Epic
     // arm with the integrate reading 3 of the record's 7 SH vec4s (L0-L1)
     // against all 7, paired and interleaved in this process — the INTEGRATE
-    // column is the memory traffic's cost. And the filter's own price.
+    // column is the memory traffic's cost.
     {
         Knobs sh4; sh4.shBands = 4u;
         Knobs sh9; sh9.shBands = 9u;
-        Knobs nof; nof.filterOff = true;
         for (int round = 0; round < 3; ++round) {
             measure(view, 8u, 8u, "Epic, SH9 integrate", sh9);
             measure(view, 8u, 8u, "Epic, SH4 integrate (L0-L1 only)", sh4);
         }
-        measure(view, 16u, 8u, "High, filter OFF", nof);
-        measure(view, 8u, 8u, "Epic, filter OFF", nof);
     }
 
     // ---- THE VR EYE SIZE, as ONE mono target of the same pixel count ------
@@ -861,6 +885,7 @@ static int costMain(Engine *e)
         render(e, 8);
         measure(vr, 16u, 8u, "10.3 Mpx (two Quest Pro eyes), 16 px, 64 rays");
         measure(vr, 16u, 6u, "10.3 Mpx (two Quest Pro eyes), 16 px, 36 rays");
+        paired(vr, 16u, 8u, "VR 10.3Mpx");
         // AND THE READING IS THE VR VIEW'S, asserted by its own size rather
         // than assumed — the whole point of GATHER-0's D3.
         armGather(s, gi, true, 16u, 8u);

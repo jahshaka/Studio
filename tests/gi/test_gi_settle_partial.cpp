@@ -71,7 +71,7 @@ int main()
     s->setAmbient(Colour(0.05f, 0.05f, 0.06f), Colour(0.02f, 0.02f, 0.03f));
     enginetest::leakroom::addSlab(s, Colour(0.8f, 0.8f, 0.8f), Vec3(0, -0.25f, 0), Vec3(80, 0.5f, 80));
     enginetest::leakroom::addSlab(s, Colour(0.8f, 0.2f, 0.2f), Vec3(0, 2.0f, -3.0f), Vec3(6, 4, 0.3f));
-    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 2.0f);
+    const NodeId sun = enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 2.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 5.0f), Vec3(0.0f, 1.0f, -2.0f));
     GiParams gi;
     gi.mode = GiMode::Vct;
@@ -193,6 +193,87 @@ int main()
         if (a.rgba[i] != b.rgba[i]) ++moved;
     CHECK_MSG(a.rgba.size() == b.rgba.size() && moved == 0u,
               "...and the picture is the whole sweep's picture (%u bytes differ; bar 0/255)", moved);
+
+    // ---- 4. A LIGHT WRITTEN WHILE A PARTIAL DEBT IDLES (fix round, audit F7) ----
+    // After an edit's last rebuild (cascade 3) the chain owes cascades 2, 1, 0,
+    // paid on the last three of four payable frames — so the first frame after
+    // that rebuild pays nothing. A light written in THAT frame must restart the
+    // settle over the WHOLE chain at once (an injection reads the lights' poses
+    // as it runs: a settle across a light write is the fixed point of neither),
+    // and the restart must pay on the frame it is seen, not after the idle count.
+    {
+        GiStatus gb = s->giStatus();
+        std::vector<unsigned long long> rb(n);
+        for (size_t i = 0; i < n; ++i) rb[i] = gb.cascades[i].rebuilds;
+        const NodeId box2 = enginetest::leakroom::addSlab(s, Colour(0.2f, 0.9f, 0.9f),
+                                                          Vec3(at.x, 0.3f, at.z + 2.0f),
+                                                          Vec3(0.6f, 0.6f, 0.6f));
+        CHECK(box2 != 0, "the second edit's box exists");
+        s->refreshGlobalIllumination();
+        e->setFrameMonitor(MonitorLevel::Review);
+        bool wrote = false;
+        int writeFrame = -1, firstSettleAfter = -1;
+        unsigned settleAfter = 0;
+        std::vector<FrameRecord> keep;
+        for (int f = 0; f < 160; ++f) {
+            if (!wrote && s->giStatus().cascades[3].rebuilds > rb[3]) {
+                LightDesc l;
+                l.type = LightType::Directional;
+                l.colour = Colour(1.f, 1.f, 1.f);
+                l.intensity = 2.6f / 3.14159265f;     // was 2.0 / pi
+                CHECK(s->setLight(sun, l), "the sun's intensity is written mid-debt");
+                wrote = true;
+                writeFrame = f;
+            }
+            e->renderOneFrame();
+            std::vector<FrameRecord> recs;
+            e->takeFrameRecords(recs);
+            keep.insert(keep.end(), recs.begin(), recs.end());
+            if (f > writeFrame + 20 && wrote && s->giStatus().giAtRest) break;
+        }
+        e->setFrameMonitor(MonitorLevel::Off);
+        {
+            std::vector<FrameRecord> recs;
+            e->takeFrameRecords(recs);
+            keep.insert(keep.end(), recs.begin(), recs.end());
+        }
+        // The records carry the engine's frame numbers; the write happened before
+        // the frame whose cascade-3 rebuild row came first, plus one.
+        unsigned long long c3Frame = 0;
+        for (const FrameRecord &r : keep)
+            for (const CacheWork &w : r.cacheWork)
+                if (w.cache == CacheKind::Gi && w.detail == "vct.cascade3" && !c3Frame) c3Frame = r.frame;
+        for (const FrameRecord &r : keep) {
+            if (r.frame <= c3Frame) continue;
+            for (const CacheWork &w : r.cacheWork)
+                if (w.cache == CacheKind::Gi && w.detail == "vct.light.settle" && w.units) {
+                    settleAfter += w.units;
+                    if (firstSettleAfter < 0) firstSettleAfter = int(r.frame - c3Frame);
+                }
+        }
+        std::printf("   light write in the idle frame after cascade 3's rebuild: settle injections "
+                    "after it %u (the whole chain is %zu), the first %d frame(s) after the rebuild\n",
+                    settleAfter, n, firstSettleAfter);
+        CHECK_MSG(wrote && settleAfter == unsigned(n),
+                  "A LIGHT WRITTEN MID-DEBT RESTARTS THE SETTLE OVER THE WHOLE CHAIN: %u injections",
+                  settleAfter);
+        CHECK_MSG(firstSettleAfter == 1,
+                  "...PAID FROM THE FRAME THE WRITE IS SEEN (the first settle step is %d frame(s) "
+                  "after the rebuild; 1 = no idle frame)", firstSettleAfter);
+        std::vector<std::string> mid(n);
+        for (size_t i = 0; i < n; ++i) mid[i] = s->giVoxelStats(int(i)).lightDigest;
+        s->refreshGiLighting(false);
+        for (int f = 0; f < 60; ++f) {
+            e->renderOneFrame();
+            if (f > 4 && s->giStatus().giAtRest) break;
+        }
+        unsigned same2 = 0;
+        for (size_t i = 0; i < n; ++i)
+            if (s->giVoxelStats(int(i)).lightDigest == mid[i]) ++same2;
+        CHECK_MSG(same2 == n, "...and it leaves the whole sweep's fixed point under the NEW light "
+                              "(%u of %zu cascades byte-identical after a whole at-rest sweep)", same2, n);
+    }
+
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }

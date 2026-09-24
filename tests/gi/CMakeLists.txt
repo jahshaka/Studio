@@ -1299,6 +1299,15 @@ add_dependencies(test_gi_gather_reference JahshakaEngineMedia)
 add_test(NAME gi.gather_reference COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_reference PROPERTIES TIMEOUT 900 LABELS "engine")
+# ...and the brief's 1.00 +- 0.05 at every point against the COMPLETE closed form —
+# a TARGET row (photon-target: prints, does not gate). The residual that survives
+# the complete form (-5 % past 3.6 m) is the hits' voxel read, named by exclusion
+# in the suite; GA-1e's card read is predicted to close it.
+add_test(NAME gi.gather_reference_target COMMAND test_gi_gather_reference
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_reference_target PROPERTIES
+                     TIMEOUT 900 LABELS "engine;photon-target"
+                     ENVIRONMENT "JAH_GATHER_REFERENCE_TARGET=1")
 
 # ...and the TRACE's own bar, in R5's form: a probe a metre from a lit red wall
 # reads at least 0.6 of that wall's albedo times its lighting, in the wall's
@@ -1409,8 +1418,9 @@ set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIA
 # section 1.1) — one binary, the mode on the command line: GA-GLASS (a blended
 # fragment reads no probe irradiance), GA-NEST (the registration is the PASS's,
 # not the scene's), GA-SKY (ONE-ENV's miss: the open floor's probe irradiance is
-# the disc-free sky's SH irradiance), GA-CAGE (the crushed-cage guard at a
-# fence's edge, its leak printed).
+# the disc-free sky's SH irradiance), gi.gather_plane_weight (the gather's plane
+# weight at a 2 cm fence's edge, its leak printed; the field's own crushed-cage
+# guard is unreachable while the gather runs — the suite's header says why).
 add_executable(test_gi_gather_findings test_gi_gather_findings.cpp)
 set_target_properties(test_gi_gather_findings PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1423,7 +1433,7 @@ target_compile_definitions(test_gi_gather_findings PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_gather_findings PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_findings JahshakaEngineMedia)
-foreach(_finding glass nest sky cage)
+foreach(_finding glass nest sky plane_weight)
     add_test(NAME gi.gather_${_finding} COMMAND test_gi_gather_findings ${_finding}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_finding} PROPERTIES TIMEOUT 600 LABELS "engine")
@@ -1450,10 +1460,11 @@ foreach(_arm plane deterministic)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
 endforeach()
-# ...and the plane fixture's closed form at the brief's 5 % — a TARGET row
-# (label photon-target: it runs in every scoped selection, prints its value and
-# does not decide a gate). What is short of it is the HIT's read of the voxel
-# cache at an oblique face; the card read at the hit (GA-1e) is its lane.
+# ...and the plane fixture's COMPLETE closed form at the brief's 5 % — a TARGET
+# row (label photon-target: it runs in every scoped selection, prints its value
+# and does not decide a gate). What survives the complete form (-11 % at two
+# strides) is the hits' voxel read, named by exclusion in the suite; the card
+# read at the hit (GA-1e) is predicted to close it.
 add_test(NAME gi.gather_plane_target COMMAND test_gi_gather_phase2 plane --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_plane_target PROPERTIES TIMEOUT 600

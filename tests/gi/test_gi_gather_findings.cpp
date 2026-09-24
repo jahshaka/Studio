@@ -18,12 +18,28 @@
 //   gi.gather_sky    GA-SKY    ONE-ENV's miss, asserted: a zenith sun with its
 //                              disc on, and the open floor's probe irradiance is
 //                              the disc-free sky's SH irradiance within 2 %.
-//   gi.gather_cage   GA-CAGE   The crushed cage: a wall pixel beside the edge of
-//                              a fence 2 cm in front of it — where every probe
-//                              around it passes one plane test — reads the
-//                              WALL's irradiance (the same wall with no fence)
-//                              and not the fence's; the share of the fence's
-//                              excess that crosses the edge is printed.
+//   gi.gather_plane_weight     THE GATHER'S PLANE WEIGHT at a crushed cage: a
+//                              wall pixel beside the edge of a fence 2 cm in
+//                              front of it — where every probe around it passes
+//                              one plane test — reads the WALL's irradiance (the
+//                              same wall with no fence), not the fence's; the
+//                              share of the fence's excess that crosses the edge
+//                              is printed.
+//
+// GA-CAGE AS THE DESIGN WROTE IT — the IRRADIANCE FIELD's crushed-cage guard
+// (JahIfd_piece_ps.any's ifdFrontWeight / sumIfdWeight and the weight fade) —
+// HAS NO ARM HERE, AND CANNOT WHILE THE GATHER RUNS (fix round, measured,
+// spikes/photon-gather-1b/fieldguard-slot.log): the field answers only where the
+// gather declines (w = 0), and the gather declines only where every bracketing
+// probe fails the plane test — a surface more than 1 % of its view distance off
+// every probe's plane. At a 2 cm fence the gather answers (w = 1 at every wall
+// pixel, whatever the stride); behind a 20 cm fence with a 15 cm slot, stride 64,
+// centred probes and no adaptive ones, the slot's wall pixels DO read w = 0 and
+// the bound field answers — and neutralising the guard in the staged media moves
+// no pixel there either: a cage is crushed only for a pixel no field probe can
+// see, and a pixel the camera sees through a gap wider than the plane tolerance
+// is one the probes in front of it see too. The guard is the no-gather tiers'
+// (and VR's) protection; its fixture belongs with the field's suites.
 //
 // Every A/B here FREEZES the gather's frame index in BOTH arms (GAFAR-1's
 // instrument rule): two live frames of a stochastic estimator differ on half
@@ -294,19 +310,26 @@ static int nestMain(Engine *e)
     {
         Scene *s = e->createScene("nest-planar");
         view->setScene(s);
-        s->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.01f, 0.01f, 0.01f));
+        s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
         addBox(s, matte(Colour(0.85f, 0.85f, 0.85f)), Vec3(0, -0.25f, 0), Vec3(20, 0.5f, 20));
         {
             PbrParams p = matte(Colour(0.05f, 0.05f, 0.05f));
-            p.emissive = Colour(0.9f, 0.0f, 0.0f);
-            addBox(s, p, Vec3(0.0f, 1.0f, 2.5f), Vec3(6.0f, 2.0f, 0.3f));
+            // LOW and BRIGHT, behind the camera, facing a WHITE WALL a few
+            // decimetres beyond it: the wall is lit by nothing but the
+            // emitter's bounce, and it is what the mirror shows above the
+            // emitter's own image.
+            p.emissive = Colour(4.0f, 0.0f, 0.0f);
+            addBox(s, p, Vec3(0.0f, 0.2f, 2.6f), Vec3(6.0f, 0.4f, 0.2f));
+            addBox(s, matte(Colour(0.85f, 0.85f, 0.85f)), Vec3(0.0f, 1.5f, 3.1f), Vec3(8.0f, 3.0f, 0.2f));
         }
         PbrParams mp;
         mp.albedo = Colour(0.95f, 0.95f, 0.95f);
         mp.metalness = 1.0f;
         mp.roughness = 0.02f;
         const NodeId mirror = addBox(s, mp, Vec3(0.0f, 1.5f, -3.0f), Vec3(5.0f, 3.0f, 0.1f));
-        enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, -0.3f), 0.5f);
+        // BOUNCE-ONLY (fix round, audit F5): no light and no ambient, so every
+        // photon on the reflected floor is the emitter's diffuse bounce — the
+        // term a leaked registration would remove (vct_disable_diffuse).
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 1.2f), Vec3(0.0f, 1.2f, -3.0f));
         PlanarReflectionParams pr;
         pr.budget = 1;
@@ -324,22 +347,43 @@ static int nestMain(Engine *e)
         setGather(s, gi, true);
         render(e, 48);
         Image on; view->readPixels(on);
+        if (const char *dump = std::getenv("JAH_GATHER_DUMP")) {
+            FILE *f = std::fopen((std::string(dump) + "/nest-planar-on.ppm").c_str(), "wb");
+            if (f) {
+                std::fprintf(f, "P6\n%u %u\n255\n", on.width, on.height);
+                for (size_t i = 0; i + 3 < on.rgba.size(); i += 4) std::fwrite(&on.rgba[i], 1, 3, f);
+                std::fclose(f);
+            }
+        }
         CHECK(s->activePlanarReflectors() == 1, "the mirror renders");
         CHECK_MSG(s->giStatus().gather.running, "the gather runs (%u probes)",
                   s->giStatus().gather.probes);
-        // The mirror fills the upper-middle of the shot; the reflected floor is
-        // its lower half.
-        const Colour a = meanIn(off, 0.25f, 0.30f, 0.75f, 0.55f);
-        const Colour b = meanIn(on, 0.25f, 0.30f, 0.75f, 0.55f);
-        const Delta d = deltaIn(off, on, 0.25f, 0.30f, 0.75f, 0.55f);
-        printDelta("the mirror's reflected floor, gather on vs off", d);
-        std::printf("   reflected floor red: off %.4f on %.4f\n", double(a.r), double(b.r));
+        // ...AND A THIRD ARM WITH NO DIFFUSE GI AT ALL (GiMode::Off), so the
+        // share of the mirror's picture that IS the bounce is measured rather
+        // than assumed (audit F5: a 2 % bar discriminates a lost bounce only
+        // where the bounce is well over 2 % of the reading).
+        GiParams noGi = gi;
+        noGi.mode = GiMode::Off;
+        s->setGlobalIllumination(noGi);
+        render(e, 48);
+        Image none; view->readPixels(none);
+        // The reflected WHITE WALL above the emitter's own image in the mirror.
+        const float rx0 = 0.20f, ry0 = 0.40f, rx1 = 0.80f, ry1 = 0.49f;
+        const Colour a = meanIn(off, rx0, ry0, rx1, ry1);
+        const Colour b = meanIn(on, rx0, ry0, rx1, ry1);
+        const Colour c = meanIn(none, rx0, ry0, rx1, ry1);
+        const Delta d = deltaIn(off, on, rx0, ry0, rx1, ry1);
+        printDelta("the mirror's reflected wall, gather on vs off", d);
+        const double share = a.r > 1e-4f ? (double(a.r) - double(c.r)) / double(a.r) : 0.0;
+        std::printf("   reflected wall red: gather off %.4f, on %.4f, NO diffuse GI %.4f -> the "
+                    "bounce is %.1f %% of the reading\n", double(a.r), double(b.r), double(c.r),
+                    100.0 * share);
         const double rel = a.r > 1e-4f ? std::fabs(double(b.r) - double(a.r)) / double(a.r) : 0.0;
-        CHECK_MSG(a.r > 0.02f, "the reflected floor is lit (red %.4f) — a black reflection proves "
-                               "nothing", double(a.r));
+        CHECK_MSG(share >= 0.5, "the reflected wall is lit BY THE BOUNCE (%.1f %% of it; bar 50 %%) "
+                                "— a lost diffuse term would move it by that much", 100.0 * share);
         CHECK_MSG(rel <= 0.02,
-                  "GA-NEST, planar: the mirror reflects the floor lit within 2 %% of the gather-off "
-                  "picture (%.2f %%) — its render is not the pass the gather registered for",
+                  "GA-NEST, planar: the mirror reflects the bounce-lit wall within 2 %% of the "
+                  "gather-off picture (%.2f %%) — its render is not the pass the gather registered for",
                   100.0 * rel);
         e->destroyScene(s);
     }
@@ -352,7 +396,7 @@ static int nestMain(Engine *e)
         const auto shot = [&](bool gather) {
             Scene *s = e->createScene(gather ? "nest-pcc-on" : "nest-pcc-off");
             view->setScene(s);
-            s->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.01f, 0.01f, 0.01f));
+            s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
             // A closed-ish room so the probes are kept (they photograph walls).
             const Colour white(0.85f, 0.85f, 0.85f);
             addBox(s, matte(white), Vec3(0, -0.25f, 0), Vec3(10, 0.5f, 10));
@@ -361,15 +405,22 @@ static int nestMain(Engine *e)
             addBox(s, matte(white), Vec3(5.0f, 2.0f, 0), Vec3(0.3f, 4.0f, 10));
             {
                 PbrParams p = matte(Colour(0.05f, 0.05f, 0.05f));
-                p.emissive = Colour(0.9f, 0.0f, 0.0f);
-                addBox(s, p, Vec3(-2.0f, 1.0f, -4.6f), Vec3(3.0f, 2.0f, 0.3f));
+                // LOW, at the foot of a FRONT wall behind the camera: the wall
+                // is lit by nothing but the emitter's bounce, and the metal
+                // box's front face reflects it.
+                p.emissive = Colour(4.0f, 0.0f, 0.0f);
+                addBox(s, p, Vec3(0.0f, 0.2f, 4.5f), Vec3(8.0f, 0.4f, 0.2f));
+                addBox(s, matte(white), Vec3(0, 2.0f, 5.0f), Vec3(10, 4.0f, 0.3f));
+                addBox(s, matte(white), Vec3(0, 4.15f, 0), Vec3(10, 0.3f, 10));
             }
             PbrParams mp;
             mp.albedo = Colour(0.95f, 0.95f, 0.95f);
             mp.metalness = 1.0f;
             mp.roughness = 0.05f;
             addBox(s, mp, Vec3(0.0f, 0.8f, -1.0f), Vec3(1.6f, 1.6f, 1.6f));
-            enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, -0.3f), 0.5f);
+            // BOUNCE-ONLY (fix round, audit F5): no light and no ambient, so every
+        // photon on the reflected floor is the emitter's diffuse bounce — the
+        // term a leaked registration would remove (vct_disable_diffuse).
             enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 3.5f), Vec3(0.0f, 0.8f, -1.0f));
             GiParams gi = chainGi(gather);
             gi.mode = GiMode::VctPccHybrid;
@@ -380,6 +431,14 @@ static int nestMain(Engine *e)
             render(e, 90);
             const GiStatus g = s->giStatus();
             Image img; view->readPixels(img);
+            if (const char *dump = std::getenv("JAH_GATHER_DUMP")) {
+                FILE *f = std::fopen((std::string(dump) + "/nest-pcc-" + (gather ? "on" : "off") + ".ppm").c_str(), "wb");
+                if (f) {
+                    std::fprintf(f, "P6\n%u %u\n255\n", img.width, img.height);
+                    for (size_t i = 0; i + 3 < img.rgba.size(); i += 4) std::fwrite(&img.rgba[i], 1, 3, f);
+                    std::fclose(f);
+                }
+            }
             std::printf("   probe arm (gather %s): %d probes, gather running %d\n",
                         gather ? "on" : "off", int(g.probeCount), int(g.gather.running));
             e->destroyScene(s);
@@ -398,6 +457,16 @@ static int nestMain(Engine *e)
         const double rel = la > 1e-4 ? std::fabs(lb - la) / la : 0.0;
         std::printf("   probe reflection luminance-ish: off %.4f on %.4f\n", la, lb);
         CHECK_MSG(la > 0.03, "the probe reflection is lit (%.4f)", la);
+        // WHAT THIS ARM CAN AND CANNOT SAY (fix round, audit F5, measured): the
+        // box reflects the front wall ABOVE the emitter's image as BLACK in both
+        // arms, where the world shows that wall bounce-lit — the capture does
+        // not carry this bounce, so a registration leaked into a capture (whose
+        // only effect would be `vct_disable_diffuse`) would have nothing to
+        // remove there. The arm stays as
+        // the capture's identity guard; the planar arm above is the decisive one.
+        const Colour wallOff = meanIn(off.first, 0.30f, 0.32f, 0.70f, 0.44f);
+        std::printf("   the captured wall above the emitter's image (bounce-lit in the world): %.4f "
+                    "red — the capture does not carry the bounce\n", double(wallOff.r));
         CHECK_MSG(rel <= 0.02,
                   "GA-NEST, probe capture: what the probes captured is within 2 %% of the "
                   "gather-off capture (%.2f %%)", 100.0 * rel);
@@ -442,7 +511,7 @@ static int skyMain(Engine *e)
     sky.mode = SkyMode::Atmosphere;
     sky.sun.enabled = true;
     sky.sun.angularDiameterDeg = 2.0f;
-    sky.sun.colour = Colour(20.0f, 20.0f, 18.0f, 1.0f);
+    sky.sun.colour = Colour(200.0f, 200.0f, 180.0f, 1.0f);
     // Both directions point FROM the scene TOWARDS the sun: the zenith.
     sky.sun.dir[0] = 0.0f; sky.sun.dir[1] = 1.0f; sky.sun.dir[2] = 0.0f;
     sky.atmosphere.hasSun = true;
@@ -459,23 +528,45 @@ static int skyMain(Engine *e)
     GiParams gi = chainGi(true);
     CHECK(s->setGlobalIllumination(gi), "the chain builds");
     setGather(s, gi, true, true);
-    render(e, 60);
-    const GatherStatus st = s->giStatus().gather;
-    CHECK_MSG(st.running && !st.irradiance.empty(), "the gather runs and reads back (%ux%u)",
-              st.irradianceW, st.irradianceH);
-    // The floor's lower half of the shot: every probe there sees nothing but sky.
-    const IrrMean m = irrIn(st, 0.2f, 0.6f, 0.8f, 0.95f);
-    double ref[3];
-    evalAmbientSh(sh, Vec3(0.0f, 1.0f, 0.0f), ref);
-    std::printf("   the open floor's probe E/pi: %.4f %.4f %.4f (coverage %.3f, %u px)\n", m.r, m.g,
-                m.b, m.w, m.n);
-    std::printf("   the disc-free sky's SH E/pi at +Y: %.4f %.4f %.4f\n", ref[0], ref[1], ref[2]);
-    const double got[3] = { m.r, m.g, m.b };
+    // TWO DISCS, ONE PROCESS (fix round, audit F6): the sun's disc at 200 and at
+    // 2,000 (x10). A miss that read the disc would carry ten times its share in
+    // the second arm — at 200 the disc is 24 / 14 / 8 % of the sky's E/pi per
+    // channel (the audit's 2.4 / 1.4 / 0.8 % at 20, the first cut's disc) —
+    // so the two arms' ratios must agree; the 2 % bar alone was the size of the
+    // disc's share and could not decide.
+    double ratios[2][3] = {};
+    IrrMean m;
+    for (int arm = 0; arm < 2; ++arm) {
+        sky.sun.colour = arm == 0 ? Colour(200.0f, 200.0f, 180.0f, 1.0f)
+                                  : Colour(2000.0f, 2000.0f, 1800.0f, 1.0f);
+        CHECK(s->setSky(sky), "the disc's radiance is set");
+        render(e, 60);
+        const GatherStatus st = s->giStatus().gather;
+        CHECK_MSG(st.running && !st.irradiance.empty(), "the gather runs and reads back (%ux%u)",
+                  st.irradianceW, st.irradianceH);
+        // The floor's lower half of the shot: every probe there sees nothing but sky.
+        m = irrIn(st, 0.2f, 0.6f, 0.8f, 0.95f);
+        double ref[3];
+        evalAmbientSh(sh, Vec3(0.0f, 1.0f, 0.0f), ref);
+        std::printf("   disc x%d: the open floor's probe E/pi %.4f %.4f %.4f (coverage %.3f); the "
+                    "disc-free sky's SH E/pi at +Y %.4f %.4f %.4f\n", arm ? 10 : 1, m.r, m.g, m.b,
+                    m.w, ref[0], ref[1], ref[2]);
+        const double got[3] = { m.r, m.g, m.b };
+        for (int c = 0; c < 3; ++c) ratios[arm][c] = ref[c] > 1e-6 ? got[c] / ref[c] : 0.0;
+    }
     for (int c = 0; c < 3; ++c) {
-        const double ratio = ref[c] > 1e-6 ? got[c] / ref[c] : 0.0;
-        CHECK_MSG(std::fabs(ratio - 1.0) <= 0.02,
+        CHECK_MSG(std::fabs(ratios[1][c] - ratios[0][c]) <= 0.002,
+                  "GA-SKY: THE MISS DOES NOT READ THE DISC — channel %d reads %.4f with the disc "
+                  "and %.4f with it ten times brighter (bar 0.002; a disc read would move it by ~%.0f %%)",
+                  c, ratios[0][c], ratios[1][c], 9.0 * (c == 0 ? 24.0 : (c == 1 ? 14.0 : 8.0)));
+        // THE RESIDUAL (1.016 / 1.007 / 1.004) is therefore the REFERENCE's: the
+        // SH9 the sky integrates to is a band-limited clamped cosine, which reads
+        // a sky with a bright zenith glow (the sun's aureole, whiter than the
+        // blue sky, so largest in red) a little LOW at the zenith normal; the
+        // gather's quadrature integrates the cube itself.
+        CHECK_MSG(std::fabs(ratios[1][c] - 1.0) <= 0.02,
                   "GA-SKY: channel %d of the open floor's probe irradiance is the disc-free sky's "
-                  "SH irradiance within 2 %% (ratio %.4f)", c, ratio);
+                  "SH irradiance within 2 %% (ratio %.4f)", c, ratios[1][c]);
     }
     CHECK_MSG(m.w > 0.99, "the open floor is covered by probes (%.3f)", m.w);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
@@ -483,16 +574,16 @@ static int skyMain(Engine *e)
 }
 
 // ===========================================================================
-// GA-CAGE
+// THE GATHER'S PLANE WEIGHT AT A CRUSHED CAGE (was GA-CAGE)
 // ===========================================================================
-static int cageMain(Engine *e)
+static int planeWeightMain(Engine *e)
 {
     View *view = e->createOffscreenView("cage", kSize, kSize, Colour(0, 0, 0));
     if (!view) { std::printf("FAIL: view\n"); return 1; }
     view->setShadows(true);
     armChain(view);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
-        std::printf("ok: no ray queries on this machine — gi.gather_cage skips cleanly\n");
+        std::printf("ok: no ray queries on this machine — gi.gather_plane_weight skips cleanly\n");
         return 0;
     }
     // A GREY WALL and, 2 cm in front of its face, a thin FENCE PANEL over its
@@ -548,12 +639,12 @@ static int cageMain(Engine *e)
                 "fence %.4f (coverage at the edge %.3f)\n", face.r, edge.r, bare.r, edge.w);
     const double excess = face.r - bare.r;
     const double weight = std::fabs(excess) > 1e-5 ? (edge.r - bare.r) / excess : 0.0;
-    std::printf("   GA-CAGE: THE GUARD'S WEIGHT — %.1f %% of the fence's excess over the bare wall "
+    std::printf("   PLANE WEIGHT: %.1f %% of the fence's excess over the bare wall "
                 "crosses the edge onto the wall\n", 100.0 * weight);
     CHECK_MSG(face.n > 0u && edge.n > 0u && bare.n > 0u, "the three regions are covered (%u %u %u)",
               face.n, edge.n, bare.n);
     CHECK_MSG(std::fabs(edge.r - bare.r) <= 0.05 * bare.r + 0.10 * std::fabs(excess),
-              "GA-CAGE: the wall beside the fence's edge reads the WALL's irradiance — %.4f "
+              "THE PLANE WEIGHT: the wall beside the fence's edge reads the WALL's irradiance — %.4f "
               "against the bare wall's %.4f (bar 5 %% of it + 10 %% of the fence's excess %.4f)",
               edge.r, bare.r, excess);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
@@ -575,7 +666,7 @@ int main(int argc, char **argv)
     if (mode == "glass") return glassMain(e);
     if (mode == "nest") return nestMain(e);
     if (mode == "sky") return skyMain(e);
-    if (mode == "cage") return cageMain(e);
-    std::printf("FAIL: unknown mode '%s' (glass | nest | sky | cage)\n", mode.c_str());
+    if (mode == "plane_weight") return planeWeightMain(e);
+    std::printf("FAIL: unknown mode '%s' (glass | nest | sky | plane_weight)\n", mode.c_str());
     return 1;
 }
