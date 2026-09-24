@@ -361,8 +361,8 @@ add_script_e2e(gi_bounds e2e_gi_bounds.js)
 # the whole giStatus reading are unchanged, and the editor owns the binding
 # again. Engine + real pages -> needs a display.
 add_script_e2e(page_gi e2e_page_gi.js)
-# GI_UNIFIED_SPEC.md §4 P1: the DDGI verb surface — world.gi's {ddgi,
-# ddgiIntensity} and the four ifd* readings on world.giStatus(). Engine UP for
+# GI_UNIFIED_SPEC.md §4 P1: the DDGI verb surface — world.gi's {ddgi} (the
+# intensity dial is gone and refused) and the four ifd* readings on world.giStatus(). Engine UP for
 # the same reason as the two above: "asked for a field" and "the shader is
 # sampling one" are different readings, and only the renderer knows the second.
 # The pixel half is the gi.ddgi engine suite.

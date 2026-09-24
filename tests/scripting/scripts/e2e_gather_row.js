@@ -4,10 +4,9 @@
 // The API-first law's half of this lane: a new editor capability lands as a
 // VERB with a test driving it, and only then as UI. The verb is
 // `world.gi({gather})` and it takes the same off|auto|on word every other
-// three-state GI row takes — with `auto` meaning OFF at every tier today, which
-// is a statement and not a placeholder: the phase-1 estimate is correct and
-// NOISY (no filter, no temporal accumulation until the spec's phases 2 and 3),
-// so a tier may not select it yet.
+// three-state GI row takes — with `auto` meaning THE TIER'S since
+// PHOTON-GATHER-1d (the engine's tier table: on at Medium and above, off at Low;
+// gi.gather_default drives the rule through every tier).
 //
 // WHAT THIS MEASURES, and why each one is here:
 //   1. the key is ACCEPTED — for one round it was not in `world.gi`'s known-key
@@ -80,6 +79,15 @@ if (rays.available && rays.enabled) {
            "THE MACHINE ANSWERS, NOT THE DOCUMENT: no ray query here, so the row resolves off " +
            "and the picture is the one this machine already drew");
 }
+
+// ---- 5. auto is the tier's (PHOTON-GATHER-1d) ------------------------------
+// A new project is born at Epic, whose gather row is on: "auto" resolves ON on
+// a machine that traces, exactly as "on" did.
+assert(world.gi({ gather: "auto" }), "world.gi accepts gather: auto");
+assert(world.get().gi.gather === "auto", "...and the row reads back auto");
+editor.frame(2);
+if (rays.available && rays.enabled)
+    assert(world.giStatus().gather.on, "AUTO IS THE TIER'S: Epic's gather row resolves on here");
 
 // ...and off again leaves the status off, whatever the machine is.
 assert(world.gi({ gather: "off" }), "the row goes back off");
