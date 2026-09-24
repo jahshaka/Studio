@@ -21,12 +21,12 @@
 // 2/255 on every probe and channel. The probes are the repro's ground points and
 // a glossy metal sphere (the reflection cube's own reader).
 //
-// WHY GI IS OFF. editor.screenshot settles GI before it photographs (a shot is
-// the picture at rest), so with the Photon chain on, a sky change's first frame
-// is never the one photographed. With GI off nothing owes a settle, and the
-// shot's own frames ARE the first frames after the change — which isolates the
-// sky/IBL swap, where the defect lived (it reproduced with the irradiance field
-// off as well; it is upstream of every GI reader).
+// WHY GI IS OFF FOR THE FIRST SIX. editor.screenshot settles GI before it
+// photographs (a shot is the picture at rest); with GI off nothing owes a
+// settle, so its frames ARE the first after the change — the sky/IBL swap in
+// isolation, where the defect lived. The last two arms turn the Photon chain on
+// (field off: the repro; field on: the shipped tier) and photograph through
+// camera.screenshot, which never settles — frame 0 by construction.
 //
 // Engine UP (the assertion is a picture). Fresh home: the run starts from an
 // empty data root, so nothing a previous run cached (a shader, a probe face)
@@ -103,21 +103,84 @@ moved = arm("to_gradient", function () {
 assert(moved >= 3, "realistic -> gradient moved the picture (" + moved + ")");
 moved = arm("to_realistic", function () { world.sky("realistic", { power: 1.5 }); });
 assert(moved >= 3, "gradient -> realistic moved the picture (" + moved + ")");
-// speed 0: no scroll, so the only capture is the change's own
-arm("clouds_on", function () { world.clouds({ enabled: true, coverage: 0.7, speed: 0 }); });
-arm("clouds_off", function () { world.clouds({ enabled: false }); });
+// speed 0: no scroll, so the only capture is the change's own. A layer that
+// failed to draw would pass the frame-0 check by measuring nothing: it must move
+// the picture.
+moved = arm("clouds_on", function () { world.clouds({ enabled: true, coverage: 0.7, speed: 0 }); });
+assert(moved >= 3, "the cloud layer going on moved the picture (" + moved + ")");
+moved = arm("clouds_off", function () { world.clouds({ enabled: false }); });
+assert(moved >= 3, "the cloud layer going off moved the picture (" + moved + ")");
 
+// ---- THE CHAIN ON: frame 0 BY CONSTRUCTION --------------------------------
+// editor.screenshot settles GI before it photographs, and whether the first
+// shot after a change is frame 0 then depends on whether the chain happened to
+// be at rest when the settle looked. camera.screenshot takes no settle at all
+// (cameraapi.cpp -> takeScreenshot): its frames ARE the first frames after the
+// change, whatever GI owes. A scene camera at the editor camera's pose.
+var cam = scene.addCamera({ position: { x: 0, y: 40, z: 40 } });
+node.transform(cam, { rotation: { x: -45, y: 0, z: 0 } });
+editor.selectNone();
+function camShot(tag) {
+    return camera.screenshot(cam, "sky_swap_cam_" + tag + ".png",
+                             { width: 480, height: 270, probes: probes, grade: "plain" }).probes;
+}
+function armCam(label, change) {
+    // THE CHAIN AT REST BEFORE THE CHANGE, through the camera's own view (the
+    // shot view drives GI while it renders): otherwise the frames after the
+    // change still carry the previous edit's settle and measure THAT.
+    var before = camShot(label + "_before");
+    for (var n = 0; n < 600 && !world.giStatus().giAtRest; n++) before = camShot(label + "_before");
+    var rest = world.giStatus();
+    console.log("SKYSWAP " + label + " at rest before the change: " + rest.giAtRest + " (" + n + " shots)");
+    // ...and a LONE change: more than kSkyCaptureDragFrames (2) drawn frames
+    // after the last capture, or the engine reads it as a drag (the drag arm).
+    editor.frame(4, 1 / 60);
+    change();
+    var f0 = camShot(label + "_f0");
+    editor.frame(1, 1 / 60);
+    var f1 = camShot(label + "_f1");
+    console.log("SKYSWAP " + label + " before " + rgb(before) + " | f0 " + rgb(f0) +
+                " | f1 " + rgb(f1));
+    var d = worst(f0, f1);
+    var line = label + ": the first frame after the change equals the next within 2/255 (worst " +
+               d + "; f0 " + rgb(f0) + " vs f1 " + rgb(f1) + ")";
+    if (d <= 2) console.log("ok: " + line);
+    else { console.log("FAIL: " + line); failures.push(label); }
+    return worst(before, f1);
+}
 // THE REPRO ITSELF (CLOUDS-2D-1's ifd_magenta_repro, FIELD-ROTATE-1's frames2):
 // the Photon chain ON with the irradiance field off, the power going 3.0 -> 1.5.
-// Here the chain's own readers (the bounce injection's escape) are what carried
-// the uncaptured cube into the photographed frame — 111/28/118 on the ground,
-// base d63d8445e. The shot after the change is not settled (the chain is at rest
-// when the shot checks, before the change reaches it); the next one is, so this
-// arm also says that a settled picture and the first one agree.
+// Here the chain's own readers (the bounce injection's escape) carried the
+// uncaptured cube into the frames after it — 111/28/118 on the ground at base.
 world.clouds({ enabled: false });
 world.gi({ mode: "vct", ddgi: false });
 world.sky("realistic", { power: 3.0 });
+moved = armCam("repro_power", function () { world.sky("realistic", { power: 1.5 }); });
+assert(moved >= 3, "the repro's power change moved the picture (" + moved + ")");
+// ...and the SHIPPED configuration: the chain and the irradiance field on.
+world.gi({ mode: "vct", ddgi: true });
+moved = armCam("field_power", function () { world.sky("realistic", { power: 3.0 }); });
+assert(moved >= 3, "the field arm's power change moved the picture (" + moved + ")");
+
+// ---- A DRAG: the second capture within two frames of the first -------------
+// Its SH read is deferred (integrateSkyShFromCube), so its set lands a frame or
+// more later — and until it does, the PREVIOUS set is drawn WHOLE. The first
+// frame after the second change must therefore be either the picture the first
+// change produced or the one the second produces, never a mixture of the two
+// and never an unwritten cube. GI off again, as for the first six arms: the
+// chain's own settle after a change is not what this arm measures.
+world.gi({ mode: "off" });
 editor.frame(8, 1 / 60);
-arm("repro_power", function () { world.sky("realistic", { power: 1.5 }); });
+world.sky("realistic", { power: 2.2 });
+var dragA = camShot("drag_a");                 // the first change, landed (lone)
+world.sky("realistic", { power: 1.5 });        // within two frames: a drag
+var dragF0 = camShot("drag_f0");
+editor.frame(4, 1 / 60);
+var dragB = camShot("drag_b");
+var dA = worst(dragF0, dragA), dB = worst(dragF0, dragB);
+console.log("SKYSWAP drag a " + rgb(dragA) + " | f0 " + rgb(dragF0) + " | b " + rgb(dragB));
+assert(worst(dragA, dragB) >= 3, "the drag's two skies differ (" + worst(dragA, dragB) + ")");
+assert(Math.min(dA, dB) <= 2, "a drag frame draws ONE whole set: f0 is the first sky's picture (" + dA +
+       ") or the second's (" + dB + "), within 2/255");
 assert(failures.length === 0, "no change flashes its first frame (failed: " + failures.join(", ") + ")");
 console.log("sky_swap_transient: PASS");
