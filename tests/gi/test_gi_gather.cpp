@@ -348,12 +348,12 @@ int main()
         render(e, 40);
         const GatherStatus stats = gatherStatus(s);
         std::printf("\n   gather: %u x %u probes (%u) + %u adaptive (cap %u) x %u rays = %llu "
-                    "rays/frame over %ux%u, place %.4f ms, trace %.4f ms, integrate %.4f ms, "
-                    "record %.4f ms CPU, VRAM %llu bytes\n",
+                    "rays/frame over %ux%u, place %.4f ms, trace %.4f ms, filter %.4f ms, "
+                    "integrate %.5f ms, record %.4f ms CPU, VRAM %llu bytes\n",
                     stats.probesX, stats.probesY, stats.probes, stats.adaptive, stats.adaptiveCap,
                     stats.raysPerProbe, (unsigned long long)stats.raysPerFrame, stats.targetW,
                     stats.targetH, double(stats.placeMs), double(stats.traceMs),
-                    double(stats.integrateMs), double(stats.cpuMs),
+                    double(stats.filterMs), double(stats.integrateMs), double(stats.cpuMs),
                     (unsigned long long)stats.atlasBytes);
         CHECK(stats.on && stats.running,
               "the scene reports the gather ON and a view RUNNING it (giStatus().gather)");
@@ -774,14 +774,29 @@ static int costMain(Engine *e)
     // of one scene both gathering, which view's milliseconds come back is
     // decided by the allocator's addresses. Every arm below therefore leaves
     // exactly one view enabled.
-    const auto measure = [&](View *, unsigned stride, unsigned octRes, const char *what) {
+    // THE ARMS' EXTRA KNOBS (PHOTON-GATHER-1b): the SH bands the integrate
+    // evaluates (9 shipped; 4 = the memory-traffic arm the SH9 record is priced
+    // against) and the filter in probe space off (the arm that prices it).
+    struct Knobs { unsigned shBands = 0u; bool filterOff = false; };
+    const auto measure = [&](View *, unsigned stride, unsigned octRes, const char *what,
+                             Knobs k = Knobs()) {
         armGather(s, gi, true, stride, octRes);
-        std::vector<float> place, trace, integrate;
+        {
+            GatherTuning t;
+            t.probeStride = stride;
+            t.octRes = octRes;
+            t.freezeFrameIndex = true;
+            t.shBands = k.shBands;
+            t.filterOff = k.filterOff;
+            s->setGatherTuning(t);
+        }
+        std::vector<float> place, trace, filter, integrate;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
             const GatherStatus q = gatherStatus(s);
             if (q.placeMs >= 0.0f) place.push_back(q.placeMs);
             if (q.traceMs >= 0.0f) trace.push_back(q.traceMs);
+            if (q.filterMs >= 0.0f) filter.push_back(q.filterMs);
             if (q.integrateMs >= 0.0f) integrate.push_back(q.integrateMs);
         }
         const GatherStatus fin = gatherStatus(s);
@@ -791,22 +806,40 @@ static int costMain(Engine *e)
             std::sort(tail.begin(), tail.end());
             return tail[tail.size() / 2];
         };
-        const float pm = median(place), tm = median(trace), im = median(integrate);
-        std::printf("   %-34s %u probes (+%u adaptive) x %u rays = %llu rays: PLACE %.4f, "
-                    "TRACE %.4f, INTEGRATE %.4f ms, sum %.4f, CPU %.4f ms, VRAM %.2f MB\n",
+        const float pm = median(place), tm = median(trace), fm = median(filter),
+                    im = median(integrate);
+        std::printf("   %-44s %u probes (+%u adaptive) x %u rays = %llu rays: PLACE %.4f, "
+                    "TRACE %.4f, FILTER %.4f, INTEGRATE %.4f ms, sum %.4f, CPU %.4f ms, VRAM "
+                    "%.2f MB\n",
                     what, fin.probes, fin.adaptive, fin.raysPerProbe,
-                    (unsigned long long)fin.raysPerFrame, double(pm), double(tm), double(im),
-                    double(pm + tm + im), double(fin.cpuMs),
+                    (unsigned long long)fin.raysPerFrame, double(pm), double(tm), double(fm),
+                    double(im), double(pm + tm + fm + im), double(fin.cpuMs),
                     double(fin.atlasBytes) / (1024.0 * 1024.0));
-        CHECK_MSG(pm > 0.0f && tm > 0.0f && im > 0.0f, "%s: all three stages were timed", what);
+        CHECK_MSG(pm > 0.0f && tm > 0.0f && fm > 0.0f && im > 0.0f,
+                  "%s: all four stages were timed", what);
         armGather(s, gi, false);
         render(e, 2);
-        return pm + tm + im;
+        return pm + tm + fm + im;
     };
     const float high = measure(view, 16u, 8u, "1080p, 16 px probes, 64 rays (High)");
     measure(view, 16u, 6u, "1080p, 16 px probes, 36 rays (Medium)");
     measure(view, 8u, 8u, "1080p, 8 px probes, 64 rays (Epic)");
     measure(view, 32u, 8u, "1080p, 32 px probes, 64 rays");
+    // THE SH9 RECORD'S PRICE (PHOTON-GATHER-1b item 3's premise): the same Epic
+    // arm with the integrate reading 3 of the record's 7 SH vec4s (L0-L1)
+    // against all 7, paired and interleaved in this process — the INTEGRATE
+    // column is the memory traffic's cost. And the filter's own price.
+    {
+        Knobs sh4; sh4.shBands = 4u;
+        Knobs sh9; sh9.shBands = 9u;
+        Knobs nof; nof.filterOff = true;
+        for (int round = 0; round < 3; ++round) {
+            measure(view, 8u, 8u, "Epic, SH9 integrate", sh9);
+            measure(view, 8u, 8u, "Epic, SH4 integrate (L0-L1 only)", sh4);
+        }
+        measure(view, 16u, 8u, "High, filter OFF", nof);
+        measure(view, 8u, 8u, "Epic, filter OFF", nof);
+    }
 
     // ---- THE VR EYE SIZE, as ONE mono target of the same pixel count ------
     // Two Quest Pro eyes are 10.26 Mpx (SCREEN_PROBE_GATHER_SPEC section 4's

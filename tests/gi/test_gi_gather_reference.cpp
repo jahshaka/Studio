@@ -393,6 +393,15 @@ int main()
     // measurement below actually uses; every reading below is divided by the
     // same albedo * energyFactor to come back to E / pi.
     //
+    // AND THE MEASURED FACTOR IS THE CURRENCY (PHOTON-GATHER-1b). The ratio
+    // columns below used to divide by `albedo * kEnergyFactor1` — the constant
+    // lobe factor the environment path carried before PHOTON-WRITER-1 replaced
+    // it with the lobe's own directional albedo (0.688 at normal view against
+    // 1/1.51 = 0.662) — so every ratio carried this calibration's residual
+    // (+7.6 % at this tree) as if it were the estimator's. The factor measured
+    // here on the SAME floor at the SAME view is what a pixel of envColourD is
+    // worth; the gate divides by it.
+    double envPathScale = 1.0;
     // The DIRECT path is printed beside it, not gated: a directional light of
     // power P on a horizontal matte floor renders MEASURE-1a's pbsDirect, the
     // normalised Disney lobe — energyFactor(1) = 0.662 of `albedo * P / pi` at
@@ -422,6 +431,7 @@ int main()
         std::printf("   THE ENVIRONMENT PATH: a %.2f-albedo floor under a flat ambient of %.2f "
                     "renders %.4f; the arithmetic says %.4f (%.1f %%)\n", double(kFloorAlbedo),
                     double(kAmbient), lit, expected, 100.0 * (lit / expected - 1.0));
+        envPathScale = lit / expected;
         CHECK_MSG(std::fabs(lit / expected - 1.0) < 0.08,
                   "THE ENVIRONMENT PATH IS CALIBRATED: %.4f against %.4f, within 8 %% — a pixel "
                   "of this floor IS albedo * energyFactor(1) * envColourD", lit, expected);
@@ -482,6 +492,7 @@ int main()
     // THE THREE ARMS, each ONE estimator: the gather (the cones compiled out by
     // the listener, the field's cage stood down by ogre-patch 0086), the cones
     // (no field, no gather), the field (no gather).
+    std::vector<double> sem;   // the gather arm's standard error per point, relative
     const auto measure = [&](const char *what, GiToggle ddgi, bool gather,
                              std::vector<double> &out) {
         GiParams g = gi;
@@ -498,8 +509,18 @@ int main()
         // of a random variable whose MEAN is the quantity. Forty-eight frames
         // of a still scene is the measurement; it also dithers the 8-bit
         // quantisation, which is worth more than it sounds at these values.
-        std::vector<double> acc(points.size(), 0.0);
-        const int kFrames = 48;
+        //
+        // ...AND THE GATHER'S ARM TAKES 192 (PHOTON-GATHER-1b). At the grazing
+        // points the emitter covers two or three of a probe's 64 texels and the
+        // 11 x 11 block sits inside one or two probe cells, so a frame's reading
+        // there is a coin toss per texel: its standard error over 48 frames is
+        // 3-4 % of the value — the size of the per-point bar — and it is
+        // PRINTED below so the bar is never read inside the instrument's noise.
+        // (The arms are deterministic: the sequence is the frame index's, so a
+        // run repeats its own reading exactly — which is not the same as the
+        // reading being the mean.)
+        std::vector<double> acc(points.size(), 0.0), acc2(points.size(), 0.0);
+        const int kFrames = gather ? 192 : 48;
         for (int f = 0; f < kFrames; ++f) {
             e->renderOneFrame();
             Image img;
@@ -508,12 +529,23 @@ int main()
                 double px, py, m[3];
                 worldToPixel(points[i].x, points[i].z, px, py);
                 blockMean(img, px, py, 5, m);
-                acc[i] += decode(m[0], transfer);
+                const double v = decode(m[0], transfer);
+                acc[i] += v;
+                acc2[i] += v * v;
             }
         }
         out.assign(points.size(), 0.0);
-        for (size_t i = 0; i < points.size(); ++i)
-            out[i] = acc[i] / kFrames / (double(kFloorAlbedo) * kEnergyFactor1);   // back to E/pi
+        if (gather) sem.assign(points.size(), 0.0);
+        for (size_t i = 0; i < points.size(); ++i) {
+            out[i] = acc[i] / kFrames /
+                     (double(kFloorAlbedo) * kEnergyFactor1 * envPathScale);   // back to E/pi
+            if (gather) {
+                const double mean = acc[i] / kFrames;
+                const double var = std::max(0.0, acc2[i] / kFrames - mean * mean);
+                // The standard error of the mean, as a fraction of it.
+                sem[i] = mean > 0.0 ? std::sqrt(var / kFrames) / mean : 0.0;
+            }
+        }
         (void)what;
     };
     std::vector<double> gatherE, conesE, fieldE;
@@ -567,6 +599,31 @@ int main()
     CHECK_MSG(gMean > 0.70 && gMean < 1.30,
               "THE MAGNITUDE IS RIGHT: the gather reads %.3f of the closed-form irradiance "
               "(bar: 0.70 to 1.30)", gMean);
+    // ...AND AT EVERY POINT (PHOTON-GATHER-1b: the SH record and the plane-
+    // weighted four-probe integrate must not lose the analytic gate). The bar is
+    // the brief's 1.00 +- 0.05 out to 4.6 m. The two GRAZING points (5.1 and
+    // 5.6 m, the emitter 18-37 degrees over the horizon) carry +- 0.10, and the
+    // reason is measured, not assumed (spikes/photon-gather-1b): the ratio RISES
+    // with distance in the base as in this lane (base 0.978 -> 1.050, this lane
+    // 0.997 -> 1.086, both at 192 frames, standard errors 1-2 %), and the
+    // lane's whole offset is the interpolation — the base's single-probe read
+    // sat 2 % LOW on this grid's alignment and the four-probe bilinear is
+    // centred (+0.4..1.3 % convexity blur of this falloff, computed from the
+    // closed form). What is left at the grazing points is the TRACE's: a hit
+    // at the emitter's edge reads the voxel cache's opacity-divided texel,
+    // which widens a light by a fraction of the hit's footprint — a larger
+    // share of what a grazing receiver sees. The card read at the hit
+    // (GA-1e) is the fix, and it is not this lane's to land (the lane report).
+    for (size_t i = 0; i < points.size(); ++i) {
+        const double a = points[i].analytic;
+        const double rg = a > 0 ? gatherE[i] / a : 0.0;
+        const double bar = points[i].x > 5.0f ? 0.10 : 0.05;
+        const double se = i < sem.size() ? sem[i] : 0.0;
+        CHECK_MSG(std::fabs(rg - 1.0) <= bar,
+                  "THE ANALYTIC GATE AT x = %.2f m: the gather reads %.3f of the closed form "
+                  "(bar 1.00 +- %.2f; the reading's standard error %.1f %%)",
+                  double(points[i].x), rg, bar, 100.0 * se);
+    }
 
     // ...and the other two estimators are PRINTED, never gated: this lane does
     // not own the cones or the field, and a bar on them here would be a bar

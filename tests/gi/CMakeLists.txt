@@ -1428,3 +1428,33 @@ foreach(_finding glass nest sky cage)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_finding} PROPERTIES TIMEOUT 600 LABELS "engine")
 endforeach()
+
+# THE GATHER'S PHASE-2 ACCEPTANCE (PHOTON-GATHER-1b item 5; C2 design section
+# 1.4): gi.gather_plane (no bounce crosses a plane edge; the floor two strides
+# out at the closed form) and gi.gather_deterministic (three cold 60-frame
+# stills, the probeIrradiance readback byte-identical).
+add_executable(test_gi_gather_phase2 test_gi_gather_phase2.cpp)
+set_target_properties(test_gi_gather_phase2 PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_phase2 PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_phase2 PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_phase2 JahshakaEngineMedia)
+foreach(_arm plane deterministic)
+    add_test(NAME gi.gather_${_arm} COMMAND test_gi_gather_phase2 ${_arm}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
+# ...and the plane fixture's closed form at the brief's 5 % — a TARGET row
+# (label photon-target: it runs in every scoped selection, prints its value and
+# does not decide a gate). What is short of it is the HIT's read of the voxel
+# cache at an oblique face; the card read at the hit (GA-1e) is its lane.
+add_test(NAME gi.gather_plane_target COMMAND test_gi_gather_phase2 plane --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_plane_target PROPERTIES TIMEOUT 600
+                     LABELS "engine;photon-target")
