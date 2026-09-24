@@ -95,6 +95,16 @@ WorldCloudsPropertyWidget::WorldCloudsPropertyWidget()
     bindDial(direction, tr("Wind Direction"), &iris::CloudLayer::direction);
     bindDial(altitude, tr("Cloud Altitude"), &iris::CloudLayer::altitude);
     bindDial(shadow, tr("Cloud Shadow"), &iris::CloudLayer::shadow);
+    // EACH ROW ITS OWN KEY (SMALL-FIXES-3): bind() names all seven by the one
+    // document key "clouds" they write, which the filter tolerates and
+    // editor.propertyRow refuses by name — so they are told apart AFTER it.
+    PropertyRows::identify(enabled, QStringLiteral("clouds.enabled"));
+    PropertyRows::identify(coverage, QStringLiteral("clouds.coverage"));
+    PropertyRows::identify(density, QStringLiteral("clouds.density"));
+    PropertyRows::identify(speed, QStringLiteral("clouds.speed"));
+    PropertyRows::identify(direction, QStringLiteral("clouds.direction"));
+    PropertyRows::identify(altitude, QStringLiteral("clouds.altitude"));
+    PropertyRows::identify(shadow, QStringLiteral("clouds.shadow"));
     connect(weather, &TexturePickerWidget::valuesChanged, this,
             [this](QString value, QString guid) { onWeatherPicked(value, guid); });
 }

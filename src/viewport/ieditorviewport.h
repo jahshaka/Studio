@@ -944,6 +944,25 @@ public:
     };
     virtual ShadowStatusInfo shadowStatus() const { return {}; }
 
+    /// THE SUN CONTACT ROW AS THE RENDERER RESOLVED IT — the World panel's
+    /// read of what world.sunContact().live reports (the same two engine
+    /// calls: Scene::rayTracingResolved and Scene::sunContactStatus), for a
+    /// panel that includes no engine header. `available` false = no engine
+    /// scene to ask (headless, or before the first frame). `rays` is the
+    /// DOCUMENT's Ray Tracing row against this machine — current the moment
+    /// the row is written, not a frame later when the mirror pushes it.
+    struct SunContactInfo {
+        bool available = false;
+        bool rays = false;       ///< this scene traces on this machine
+        bool on = false;         ///< enabled AND rays
+        bool running = false;    ///< a view dispatched it on its last frame
+        int  width = 0, height = 0;
+        int  divisor = 0;        ///< 1 = a ray per pixel, 2 = per 2x2 block
+        float range = 0.0f;
+        QString reason;          ///< why it is not running while `on`
+    };
+    virtual SunContactInfo sunContactInfo() const { return {}; }
+
     /// Whether the renderer ACCEPTED this node as a planar-reflection plane.
     /// The plane, its size and its normal are derived from the mesh's own
     /// bounds, so geometry that is not plate-like is refused — and only the

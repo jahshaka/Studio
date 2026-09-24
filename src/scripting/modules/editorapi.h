@@ -89,6 +89,7 @@ public:
     Q_INVOKABLE QVariantMap propertiesTab(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantMap propertiesFilter(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantList properties(const QVariantMap &args = QVariantMap());
+    Q_INVOKABLE QVariantMap propertyRow(const QVariantMap &args);
     Q_INVOKABLE QVariantMap propertiesStats();
     Q_INVOKABLE QVariantMap selectionCost(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap snapSize();

@@ -11,9 +11,19 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertyrows.h"
 
+#include <QAbstractSpinBox>
+#include <QApplication>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QEventLoop>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QSpinBox>
 #include <QTimer>
 #include <QWidget>
+
+#include <cmath>
 
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/controls/rowfit.h"
@@ -424,6 +434,7 @@ void Registry::collect(QWidget *container, const QStringList &sections,
         l.panelVisible = it->panelVisible;
         l.filteredOut = it->filteredOut;
         l.visible = it->panelVisible && !it->filteredOut;
+        l.widget = row;
         out.append(l);
     }
 }
@@ -436,6 +447,163 @@ void Registry::scheduleChanged()
         changePending = false;
         emit rowsChanged();
     });
+}
+
+// ---------------------------------------------------------------------------
+// THE ROW AS A USER MEETS IT (editor.propertyRow)
+// ---------------------------------------------------------------------------
+namespace {
+
+/// The one control a row offers, by what it is. A row holds one control (the
+/// generic .ui rows and the scrubbable rows alike); a slider row holds a
+/// slider AND its spin box, and the spin box is the field a typed value goes
+/// into, so it is the one found.
+struct RowControl {
+    QCheckBox *check = nullptr;
+    QComboBox *combo = nullptr;
+    QAbstractSpinBox *number = nullptr;
+};
+
+RowControl controlOf(QWidget *row)
+{
+    RowControl c;
+    if (!row) return c;
+    c.check = row->findChild<QCheckBox *>();
+    if (!c.check) c.combo = row->findChild<QComboBox *>();
+    if (!c.check && !c.combo) c.number = row->findChild<QAbstractSpinBox *>();
+    return c;
+}
+
+double numberValue(QAbstractSpinBox *box)
+{
+    if (auto *d = qobject_cast<QDoubleSpinBox *>(box)) return d->value();
+    if (auto *i = qobject_cast<QSpinBox *>(box)) return double(i->value());
+    return 0.0;
+}
+
+}   // namespace
+
+QVariantMap readRow(QWidget *row)
+{
+    QVariantMap out;
+    const RowControl c = controlOf(row);
+    QWidget *control = nullptr;
+    if (c.check) {
+        control = c.check;
+        out[QStringLiteral("control")] = QStringLiteral("check");
+        out[QStringLiteral("value")] = c.check->isChecked();
+    } else if (c.combo) {
+        control = c.combo;
+        out[QStringLiteral("control")] = QStringLiteral("combo");
+        out[QStringLiteral("value")] = c.combo->currentIndex();
+        out[QStringLiteral("text")] = c.combo->currentText();
+        QStringList items;
+        for (int i = 0; i < c.combo->count(); ++i) items << c.combo->itemText(i);
+        out[QStringLiteral("items")] = items;
+    } else if (c.number) {
+        control = c.number;
+        out[QStringLiteral("control")] = QStringLiteral("number");
+        out[QStringLiteral("value")] = numberValue(c.number);
+        if (auto *d = qobject_cast<QDoubleSpinBox *>(c.number)) {
+            out[QStringLiteral("min")] = d->minimum();
+            out[QStringLiteral("max")] = d->maximum();
+        } else if (auto *i = qobject_cast<QSpinBox *>(c.number)) {
+            out[QStringLiteral("min")] = i->minimum();
+            out[QStringLiteral("max")] = i->maximum();
+        }
+    } else if (auto *label = row ? row->findChild<QLabel *>() : nullptr) {
+        // A read-back row: its text is its value (the last QLabel is the one
+        // a LabelWidget writes; the first is its name).
+        const QList<QLabel *> labels = row->findChildren<QLabel *>();
+        control = labels.isEmpty() ? label : labels.last();
+        out[QStringLiteral("control")] = QStringLiteral("label");
+        out[QStringLiteral("value")] = RowFit::fullText(qobject_cast<QLabel *>(control));
+    } else {
+        out[QStringLiteral("control")] = QStringLiteral("other");
+    }
+    out[QStringLiteral("enabled")] = control ? control->isEnabled() : (row && row->isEnabled());
+    out[QStringLiteral("toolTip")] = row ? (control && !control->toolTip().isEmpty()
+                                                ? control->toolTip() : row->toolTip())
+                                         : QString();
+    return out;
+}
+
+bool driveRow(QWidget *row, const QVariant &value, QString *error)
+{
+    auto refuse = [error](const QString &why) { if (error) *error = why; return false; };
+    const RowControl c = controlOf(row);
+    QWidget *control = c.check ? static_cast<QWidget *>(c.check)
+                     : c.combo ? static_cast<QWidget *>(c.combo)
+                               : static_cast<QWidget *>(c.number);
+    if (!control) return refuse(QStringLiteral("the row has no control a user can change"));
+    // A GREYED ROW TAKES NO GESTURE — a person cannot click it either.
+    if (!control->isEnabled()) return refuse(QStringLiteral("the row is greyed out"));
+
+    if (c.check) {
+        if (value.typeId() != QMetaType::Bool)
+            return refuse(QStringLiteral("a check box takes true or false"));
+        if (c.check->isChecked() != value.toBool()) c.check->click();
+        return true;
+    }
+    if (c.combo) {
+        int index = -1;
+        if (value.typeId() == QMetaType::QString) {
+            const QString want = value.toString().trimmed();
+            for (int i = 0; i < c.combo->count() && index < 0; ++i)
+                if (c.combo->itemText(i).compare(want, Qt::CaseInsensitive) == 0) index = i;
+            if (index < 0) return refuse(QStringLiteral("the combo has no item '%1'").arg(want));
+        } else {
+            bool ok = false;
+            const double v = value.toDouble(&ok);
+            if (!ok || v != double(int(v)) || int(v) < 0 || int(v) >= c.combo->count())
+                return refuse(QStringLiteral("a combo takes an item index in 0..%1 or an item's "
+                                             "text").arg(c.combo->count() - 1));
+            index = int(v);
+        }
+        c.combo->setCurrentIndex(index);
+        return true;
+    }
+    bool ok = false;
+    const double v = value.toDouble(&ok);
+    if (!ok || !std::isfinite(v)) return refuse(QStringLiteral("a number field takes a number"));
+    // TYPED, THEN RETURN: the value goes in as a person's typing would put it,
+    // and Return is what commits a typed edit (editingFinished — the one undo
+    // step every number row's binding closes on). A value outside the field's
+    // range is refused rather than clamped: the field would clamp it silently.
+    //
+    // FOCUS FIRST, as a person's click into the field gives it: a slider row
+    // opens its typed-edit session only while its spin box HAS focus
+    // (HFloatSliderWidget::onValueSpinboxChanged) and closes it — the
+    // valueChangeEnd its panel refreshes on — only inside one. Without focus
+    // the value lands as an atomic tick and the Return is a no-op, which is a
+    // path no person's typing takes. A window that cannot take focus is
+    // refused, not driven down the other path.
+    if (!c.number->window()->isActiveWindow()) {
+        c.number->window()->activateWindow();
+        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    }
+    c.number->setFocus(Qt::MouseFocusReason);
+    if (!c.number->hasFocus())
+        return refuse(QStringLiteral("the field cannot take keyboard focus (its window is not "
+                                     "the active window)"));
+    if (auto *d = qobject_cast<QDoubleSpinBox *>(c.number)) {
+        if (v < d->minimum() || v > d->maximum())
+            return refuse(QStringLiteral("%1 is outside the field's range %2..%3")
+                              .arg(v).arg(d->minimum()).arg(d->maximum()));
+        d->setValue(v);
+    } else if (auto *i = qobject_cast<QSpinBox *>(c.number)) {
+        if (v < i->minimum() || v > i->maximum() || v != double(int(v)))
+            return refuse(QStringLiteral("%1 is not a whole number in %2..%3")
+                              .arg(v).arg(i->minimum()).arg(i->maximum()));
+        i->setValue(int(v));
+    } else {
+        return refuse(QStringLiteral("the row's number field is of a kind this cannot drive"));
+    }
+    QKeyEvent press(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QApplication::sendEvent(c.number, &press);
+    QKeyEvent release(QEvent::KeyRelease, Qt::Key_Return, Qt::NoModifier);
+    QApplication::sendEvent(c.number, &release);
+    return true;
 }
 
 }   // namespace PropertyRows

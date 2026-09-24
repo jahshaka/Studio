@@ -134,13 +134,19 @@ public:
     void commit(UndoService *undo, const QString &text)
     {
         mDone = true;
-        if (!undo) return;
         QStringList changed;
         for (const QString &k : mKeys)
             if (sceneprops::get(mScene, k) != mBefore.value(k)) changed.append(k);
         const bool registry = (mFlags & Registry) &&
                               !WorldModeCommand::same(mModeBefore, WorldModeCommand::capture(mScene));
         const bool texture = (mFlags & SkyTexture) && mScene->skyTexture != mTextureBefore;
+        // THE PANEL SHOWING WHAT CHANGED RE-READS IT (SMALL-FIXES-3): many
+        // verbs assign the fields themselves rather than through
+        // sceneprops::set, so the column learns of the change here, where the
+        // before/after already is.
+        for (const QString &k : changed) sceneprops::notifyExternal(mScene, k);
+        if (registry) sceneprops::notifyExternal(mScene, QStringLiteral("worldModes"));
+        if (!undo) return;
         const int parts = int(changed.size()) + (registry ? 1 : 0) + (texture ? 1 : 0);
         if (parts == 0) return;
         if (parts == 1 && !texture) {   // exactly the command the panel's row pushes
@@ -1902,8 +1908,9 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
 // ---------------------------------------------------------------------------
 // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact)
 // ---------------------------------------------------------------------------
-// The whole authoring surface of the row: a World panel row (a follow-up slice)
-// calls exactly this document field through the same sceneprops key.
+// The whole authoring surface of the row: the World panel's Sun Contact rows
+// (WorldShadowPropertyWidget, SMALL-FIXES-3) write exactly this document field
+// through the same sceneprops key, with the same clamp.
 QVariantMap WorldApi::sunContact(const QVariantMap &params)
 {
     QVariantMap out;
@@ -2153,6 +2160,7 @@ int WorldApi::setShadowResolution(int pixels)
 {
     auto scene = sceneOrFail(QStringLiteral("world.setShadowResolution"));
     if (!scene) return 0;
+    const auto registryBefore = WorldModeCommand::capture(scene);
     if (pixels < 0) {
         fail(QStringLiteral("world.setShadowResolution: pixels must be 0 (Auto) or 256..8192"));
         return 0;
@@ -2180,6 +2188,8 @@ int WorldApi::setShadowResolution(int pixels)
 #endif
     }
     worldmodes::pinRowValue(scene, QStringLiteral("shadowResolution"), scene->shadowResolution);
+    if (!WorldModeCommand::same(registryBefore, WorldModeCommand::capture(scene)))
+        sceneprops::notifyExternal(scene, QStringLiteral("worldModes"));
     // SceneMirror pushes the document value at the next sync; step a frame so
     // the atlas rebuild lands and the readback below is the applied truth.
     if (host.isEngineReady() && host.viewport) {
@@ -2645,6 +2655,9 @@ QVariantMap WorldApi::rowState(const iris::ScenePtr &scene, const worldmodes::Ro
 void WorldApi::pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
                                  const WorldModeCommand::Snapshot &before)
 {
+    // The sections showing registry rows re-read them (SMALL-FIXES-3).
+    if (!WorldModeCommand::same(before, WorldModeCommand::capture(scene)))
+        sceneprops::notifyExternal(scene, QStringLiteral("worldModes"));
     if (!host.services || !host.services->undo) return;
     host.services->undo->push(new WorldModeCommand(text, scene, before));
 }
@@ -2786,6 +2799,8 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
             return QVariantMap();
         }
     }
+    QVariantMap before;
+    for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) before[p.id] = p.get(scene);
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) {
         if (params.contains(p.id))
             p.set(scene, qBound(p.minValue, params.value(p.id).toDouble(), p.maxValue));
@@ -2799,6 +2814,10 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
     // would select nothing.
     if (scene->exposureMeterHighPercent < scene->exposureMeterLowPercent)
         std::swap(scene->exposureMeterLowPercent, scene->exposureMeterHighPercent);
+    // The Post Process section re-reads what moved (SMALL-FIXES-3).
+    for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
+        if (QVariant(p.get(scene)) != before.value(p.id))
+            sceneprops::notifyExternal(scene, QStringLiteral("postFx.") + p.id);
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
         out[p.id] = p.get(scene);
     // THE READING (RENDER AUDIT A11/A14: the monitor and this verb could see

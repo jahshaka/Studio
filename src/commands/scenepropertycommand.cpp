@@ -11,6 +11,11 @@ For more information see the LICENSE file
 
 #include "commands/scenepropertycommand.h"
 
+#include <QPointer>
+#include "services/editgate.h"
+#include <QVector>
+#include <algorithm>
+
 #include <QColor>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -287,12 +292,66 @@ QVariant get(const iris::ScenePtr &scene, const QString &id)
     return (f && f->get) ? f->get(scene) : QVariant();
 }
 
+namespace {
+struct Observer
+{
+    QPointer<QObject> context;
+    WriteObserver fn;
+};
+QVector<Observer> &observers()
+{
+    static QVector<Observer> list;
+    return list;
+}
+/// Set while a ScenePropertyCommand that NO panel owns (a verb's step: it has
+/// no refresh) is undone or redone — an external write like the verb itself.
+int &verbStepApplying()
+{
+    static int depth = 0;
+    return depth;
+}
+}   // namespace
+
+void observeWrites(QObject *context, WriteObserver observer)
+{
+    if (!context || !observer) return;
+    observers().append({ QPointer<QObject>(context), std::move(observer) });
+}
+
+static void tell(const iris::ScenePtr &scene, const QString &id, bool external)
+{
+    auto &list = observers();
+    list.erase(std::remove_if(list.begin(), list.end(),
+                              [](const Observer &o) { return o.context.isNull(); }),
+               list.end());
+    // A COPY is walked: an observer may add another (a panel built in its
+    // callback).
+    const QVector<Observer> now = list;
+    for (const Observer &o : now)
+        if (o.context) o.fn(scene, id, external);
+}
+
+void notifyExternal(const iris::ScenePtr &scene, const QString &key)
+{
+    if (scene) tell(scene, key, true);
+}
+
 bool set(const iris::ScenePtr &scene, const QString &id, const QVariant &value)
 {
     if (!scene) return false;
     const Field *f = field(id);
     if (!f || !f->set) return false;
+    auto &list = observers();
+    if (list.isEmpty()) {
+        f->set(scene, value);
+        return true;
+    }
+    const QVariant before = f->get ? f->get(scene) : QVariant();
     f->set(scene, value);
+    // NOTHING CHANGED, NOTHING TOLD: a row that already shows the value is
+    // right, and a script re-asserting a field must not refresh the column.
+    if (f->get && f->get(scene) == before) return true;
+    tell(scene, id, editgate::inVerb() || verbStepApplying() > 0);
     return true;
 }
 
@@ -310,7 +369,11 @@ void ScenePropertyCommand::apply(const QVariant &value)
 {
     auto scene = mScene.lock();
     if (!scene) return;
+    // A step no panel owns (a verb's) is an EXTERNAL write when undone or
+    // redone: the panel showing the key learns of it through observeWrites.
+    if (!mRefresh) ++sceneprops::verbStepApplying();
     sceneprops::set(scene, mKey, value);
+    if (!mRefresh) --sceneprops::verbStepApplying();
     if (mRefresh) mRefresh();
 }
 
