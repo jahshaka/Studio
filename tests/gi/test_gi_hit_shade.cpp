@@ -43,6 +43,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -298,12 +299,77 @@ static int mirrorArms(Engine *e)
         }
     }
     s->setGlobalIllumination(gi);
+
+    // THE CRATE IS WATERTIGHT TO A RAY (F-B): a 64 x 64 sheet of parallel rays at
+    // an oblique direction that sees three faces and their shared edges; every ray
+    // whose line passes through the box shrunk by 5 mm must hit the crate at the
+    // analytic entry distance. A seam between two faces that lets a ray through
+    // would be an interior miss. The unit cube's 24 unwelded vertices carry
+    // bit-identical corners, and the trace is watertight across them (measured:
+    // 0 of 1840) — the 2 "misses inside the silhouette" above are the mirror
+    // picture's masks, not rays through the crate.
+    {
+        s->setNodeVisible(wall, false);
+        const float c[3] = { 0.3f, 0.0f, -8.0f };
+        float d[3] = { 0.55f, -0.45f, -1.0f };
+        const float dl = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        for (float &x : d) x /= dl;
+        // A basis of the sheet's plane.
+        float u[3] = { d[2], 0.0f, -d[0] };
+        const float ul = std::sqrt(u[0] * u[0] + u[2] * u[2]);
+        u[0] /= ul; u[2] /= ul;
+        const float v[3] = { d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0] };
+        const auto slab = [&](const float o[3], float half, float &tEnter) {
+            float t0 = -1e30f, t1 = 1e30f;
+            for (int k = 0; k < 3; ++k) {
+                const float lo = (c[k] - half - o[k]) / d[k], hi = (c[k] + half - o[k]) / d[k];
+                t0 = std::max(t0, std::min(lo, hi));
+                t1 = std::min(t1, std::max(lo, hi));
+            }
+            tEnter = t0;
+            return t0 <= t1 && t1 > 0.0f;
+        };
+        for (int arm = 0; arm < 2; ++arm) {
+            show(arm == 0, arm == 1);
+            render(e, 6);
+            std::vector<float> in, out;
+            std::vector<std::array<float, 3>> origins;
+            const unsigned m = kRayMaskNearField;
+            float mbits;
+            std::memcpy(&mbits, &m, sizeof(mbits));
+            for (int j = 0; j < 64; ++j)
+                for (int i = 0; i < 64; ++i) {
+                    const float a = -0.95f + 1.9f * (float(i) + 0.5f) / 64.0f;
+                    const float b = -0.95f + 1.9f * (float(j) + 0.5f) / 64.0f;
+                    std::array<float, 3> o;
+                    for (int k = 0; k < 3; ++k) o[size_t(k)] = c[k] - 4.0f * d[k] + a * u[k] + b * v[k];
+                    origins.push_back(o);
+                    in.insert(in.end(), { o[0], o[1], o[2], 0.0f, d[0], d[1], d[2], 10.0f, mbits, 0, 0, 0 });
+                }
+            const bool traced = s->traceRays(in, out) && out.size() >= origins.size() * 4u;
+            int interior = 0, missed = 0, wrongT = 0;
+            for (size_t k = 0; traced && k < origins.size(); ++k) {
+                float tIn = 0.0f, tFull = 0.0f;
+                if (!slab(origins[k].data(), 0.5f - 0.005f, tIn)) continue;
+                slab(origins[k].data(), 0.5f, tFull);
+                ++interior;
+                const bool hit = out[k * 4u + 3u] > 0.5f;
+                if (!hit) ++missed;
+                else if (std::fabs(out[k * 4u] - tFull) > 2e-3f) ++wrongT;
+            }
+            CHECK_MSG(traced && interior > 1000 && missed == 0 && wrongT == 0,
+                      "(a) the %s crate is watertight: a 64x64 oblique ray sheet, %d rays through its interior, "
+                      "%d missed it, %d hit it off the analytic entry", arm == 0 ? "STATIC" : "MOVER", interior,
+                      missed, wrongT);
+        }
+        show(false, false);
+    }
     s->setNodeVisible(floorN, true);
     // THE BAR: the static control's fraction, less one point for the silhouette's
     // edge (a few pixels of a ~90 px perimeter land on either side of the trace's
     // own sample), and no more misses INSIDE it than the control has (measured: 2
-    // each — rays through the unit cube's unwelded face seams, the mirror showing
-    // the background there in both arms: the TRACE's, not the shading's).
+    // each, in both arms alike — NOT rays through the cube's seams: the sheet
+    // above finds the crate watertight; they are the mirror picture's own).
     CHECK_MSG(frac[1] >= frac[0] - 0.01f && interiorMiss[1] <= interiorMiss[0],
               "(a) the MOVER's reflection covers %.1f %% of its raster silhouette, the static control's %.1f %% "
               "(bar: less 1 point on the edge); misses inside it %u, the control's %u (before this lane: 0 %% — "
