@@ -164,6 +164,16 @@ int main()
 
     if (std::getenv("JAH_GATHER_COST")) return costMain(e);
     if (std::getenv("JAHSHAKA_NO_RAY_QUERY")) return noRaysMain(e);
+    // THE ESTIMATOR, NOT ITS MEAN (PHOTON-GATHER-1c): every arm of this suite is
+    // an A/B that changes the SCENE between two readings a few frames apart (a
+    // lamp on and off, a panel's arm, a ray length), and the pixel history would
+    // carry the first arm's light into the second for as long as it remembers
+    // (the leak room's "lamp off" read r 0.0040 of the "on" arm's 0.069 after 16
+    // frames). So the suite holds the history's measurement lever for its whole
+    // run — the frozen frame index's pair: the frozen index makes consecutive
+    // frames the same estimate, the lever makes each picture that estimate.
+    // gi.gather_stable and gi.gather_motion are what measure the history.
+    ::setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
 
     const unsigned kSize = 256u;
     View *view = e->createOffscreenView("gather", kSize, kSize, Colour(0, 0, 0));
