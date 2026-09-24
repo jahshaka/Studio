@@ -1471,6 +1471,29 @@ foreach(_arm plane deterministic)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
 endforeach()
+# THE GATHER'S HISTORIES (PHOTON-GATHER-1c; C2 design section 2): gi.gather_stable
+# (a still Showroom-2-shaped room moves < 2/255 frame to frame after the warm-up,
+# and the JAHSHAKA_GATHER_NO_TEMPORAL arm in the same process shows the history is
+# what stills it) and gi.gather_motion (a truck and a yaw against the frames they
+# settle to, gi.reflect_motion's method).
+add_executable(test_gi_gather_temporal test_gi_gather_temporal.cpp)
+set_target_properties(test_gi_gather_temporal PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_temporal PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_temporal PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_temporal JahshakaEngineMedia)
+foreach(_arm stable motion)
+    add_test(NAME gi.gather_${_arm} COMMAND test_gi_gather_temporal ${_arm}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
+
 # ...and the plane fixture's COMPLETE closed form at the brief's 5 % — a TARGET
 # row (label photon-target: it runs in every scoped selection, prints its value
 # and does not decide a gate). What survives the complete form (-11 % at two

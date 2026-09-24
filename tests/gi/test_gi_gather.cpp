@@ -164,6 +164,16 @@ int main()
 
     if (std::getenv("JAH_GATHER_COST")) return costMain(e);
     if (std::getenv("JAHSHAKA_NO_RAY_QUERY")) return noRaysMain(e);
+    // THE ESTIMATOR, NOT ITS MEAN (PHOTON-GATHER-1c): every arm of this suite is
+    // an A/B that changes the SCENE between two readings a few frames apart (a
+    // lamp on and off, a panel's arm, a ray length), and the pixel history would
+    // carry the first arm's light into the second for as long as it remembers
+    // (the leak room's "lamp off" read r 0.0040 of the "on" arm's 0.069 after 16
+    // frames). So the suite holds the history's measurement lever for its whole
+    // run — the frozen frame index's pair: the frozen index makes consecutive
+    // frames the same estimate, the lever makes each picture that estimate.
+    // gi.gather_stable and gi.gather_motion are what measure the history.
+    ::setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
 
     const unsigned kSize = 256u;
     View *view = e->createOffscreenView("gather", kSize, kSize, Colour(0, 0, 0));
@@ -786,7 +796,10 @@ static int costMain(Engine *e)
     // THE ARMS' EXTRA KNOBS (PHOTON-GATHER-1b): the SH bands the integrate
     // evaluates (9 shipped; 4 = the memory-traffic arm the SH9 record is priced
     // against) and the filter in probe space off (the arm that prices it).
-    struct Knobs { unsigned shBands = 0u; bool filterOff = false; };
+    // PHOTON-GATHER-1c: the pixel history off (the JAHSHAKA_GATHER_NO_TEMPORAL
+    // lever — the phase-2 block exactly).
+    struct Knobs { unsigned shBands = 0u; bool filterOff = false; bool noTemporal = false; };
+    float lastIntegrate = 0.0f;
     const auto measure = [&](View *, unsigned stride, unsigned octRes, const char *what,
                              Knobs k = Knobs()) {
         armGather(s, gi, true, stride, octRes);
@@ -799,6 +812,8 @@ static int costMain(Engine *e)
             t.filterOff = k.filterOff;
             s->setGatherTuning(t);
         }
+        if (k.noTemporal) ::setenv("JAHSHAKA_GATHER_NO_TEMPORAL", "1", 1);
+        else              ::unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
         std::vector<float> place, trace, filter, integrate;
         for (int i = 0; i < 90; ++i) {
             e->renderOneFrame();
@@ -826,6 +841,8 @@ static int costMain(Engine *e)
                     double(fin.atlasBytes) / (1024.0 * 1024.0));
         CHECK_MSG(pm > 0.0f && tm > 0.0f && fm > 0.0f && im > 0.0f,
                   "%s: all four stages were timed", what);
+        ::unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
+        lastIntegrate = im;
         armGather(s, gi, false);
         render(e, 2);
         return pm + tm + fm + im;
@@ -852,6 +869,29 @@ static int costMain(Engine *e)
     paired(view, 16u, 8u, "High");
     paired(view, 8u, 8u, "Epic");
     paired(view, 16u, 6u, "Medium");
+    // THE PIXEL HISTORY'S PRICE, PAIRED IN ONE PROCESS (PHOTON-GATHER-1c item 4):
+    // each tier with the history OFF (the lever: the phase-2 block exactly) and
+    // ON (the shipped block), interleaved over three rounds; the medians and the
+    // INTEGRATE delta (the history lives in the integrate) quoted.
+    const auto pairedHistory = [&](View *v, unsigned stride, unsigned octRes, const char *tier) {
+        std::vector<float> off, on, intOff, intOn;
+        Knobs kOff; kOff.noTemporal = true;
+        Knobs kOn;
+        for (int round = 0; round < 3; ++round) {
+            off.push_back(measure(v, stride, octRes, (std::string(tier) + ", history OFF").c_str(), kOff));
+            intOff.push_back(lastIntegrate);
+            on.push_back(measure(v, stride, octRes, (std::string(tier) + ", history ON").c_str(), kOn));
+            intOn.push_back(lastIntegrate);
+        }
+        for (auto *vec : { &off, &on, &intOff, &intOn }) std::sort(vec->begin(), vec->end());
+        std::printf("   PAIRED %-10s block %.4f ms history OFF, %.4f ON (ratio %.3f; INTEGRATE %.4f -> "
+                    "%.4f, +%.4f ms)\n",
+                    tier, double(off[1]), double(on[1]), double(on[1] / std::max(off[1], 1e-6f)),
+                    double(intOff[1]), double(intOn[1]), double(intOn[1] - intOff[1]));
+    };
+    pairedHistory(view, 16u, 8u, "High");
+    pairedHistory(view, 8u, 8u, "Epic");
+    pairedHistory(view, 16u, 6u, "Medium");
     // THE SH9 RECORD'S PRICE (PHOTON-GATHER-1b item 3's premise): the same Epic
     // arm with the integrate reading 3 of the record's 7 SH vec4s (L0-L1)
     // against all 7, paired and interleaved in this process — the INTEGRATE
@@ -886,6 +926,7 @@ static int costMain(Engine *e)
         measure(vr, 16u, 8u, "10.3 Mpx (two Quest Pro eyes), 16 px, 64 rays");
         measure(vr, 16u, 6u, "10.3 Mpx (two Quest Pro eyes), 16 px, 36 rays");
         paired(vr, 16u, 8u, "VR 10.3Mpx");
+        pairedHistory(vr, 16u, 8u, "VR 10.3Mpx");
         // AND THE READING IS THE VR VIEW'S, asserted by its own size rather
         // than assumed — the whole point of GATHER-0's D3.
         armGather(s, gi, true, 16u, 8u);
