@@ -34,16 +34,12 @@ set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 300 LABELS "engine")
 # 1.0 was clipped on its way into the cache (ogre-patch 0087).
 #
 #   gi.rt_reflect_lamp        L = 0.9, a PERFECT mirror: pixel = L.
-#   gi.rt_reflect_lamp_clip   L = 3.0, a GREY mirror, and the claim is the RATIO
-#                             against the same pixel at L = 0.8 (3.75, not 1.25).
-#                             THE LABEL `photon-target` CAME OFF HERE
-#                             (VOXEL-CLIP-1, 2026-09-22) — and the row's FORM had
-#                             to change with it, because an offscreen view's
-#                             readback is PFG_RGBA8_UNORM and a perfect mirror at
-#                             L = 3.0 reads exactly 1.0 whatever the voxels hold:
-#                             the old form could never have gone green. Measured
-#                             on the two engines: 1.255x unpatched, 3.745x
-#                             patched (see the suite's header).
+#   gi.rt_reflect_lamp_clip   L = 3.0, the same perfect mirror: pixel = L.
+#                             Both read the view's RADIANCE through
+#                             View::readPixelsHdr (HDR-READBACK-1); the round in
+#                             which the 8-bit readback forced this row into a grey
+#                             mirror's ratio against a reference below 1.0 is over
+#                             and that form is deleted.
 add_test(NAME gi.rt_reflect_lamp COMMAND test_rt_reflect --lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 300 LABELS "engine")
@@ -59,6 +55,33 @@ set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
 add_test(NAME gi.rt_reflect_hitres COMMAND test_rt_reflect --hitres
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# RAY-FMT-CHECK (PHOTON P3): the availability gate asks the device for STORAGE
+# support of the tier's history formats and refuses with a log line — a
+# driver-defect guard, both formats being core-mandatory. On LAVAPIPE, twice:
+# the real check (must not refuse) and the refusal path through the gate's
+# fault-injection door (JAHSHAKA_RAY_DENY_STORAGE_FORMAT).
+set(_rt_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
+if(EXISTS "${_rt_lvp_icd}")
+    add_test(NAME gi.rt_reflect_format_lavapipe COMMAND test_rt_reflect --format-check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_format_lavapipe PROPERTIES TIMEOUT 300 LABELS "engine"
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd}")
+    add_test(NAME gi.rt_reflect_format_refused_lavapipe COMMAND test_rt_reflect --format-check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 300
+                         LABELS "engine"
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
+endif()
+
+# ENV-RAY-MATCH (PHOTON P3): a silver floor under the realistic sky, the
+# environment lobe (rays off) against the ray tier's sky (rays on) for the same
+# pixels, read as radiance, at five roughnesses. Every environment reader looks
+# along jahEnvDominantDir; the bars are per roughness (0.5 code up to r = 0.05,
+# the measured split-sum residual + 25 % above) — see envRayMatchMain.
+add_test(NAME gi.env_ray_match COMMAND test_rt_reflect --env-ray-match
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 300 LABELS "engine")
 
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -84,6 +107,10 @@ target_link_libraries(test_reflect_motion PRIVATE JahshakaEngine)
 add_test(NAME gi.reflect_motion COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 300 LABELS "engine")
+# THE LETTERBOX (SSR-LETTERBOX-1): both rows run a 2.4:1 "the rectangle IS the
+# shot" arm and a 2.39:1 moving-vs-settled arm, and both gate them — the march
+# takes the shot's uv in its pass buffer, the ray tier its image basis expanded
+# to the target on the CPU.
 add_test(NAME gi.reflect_motion_norays COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion_norays PROPERTIES

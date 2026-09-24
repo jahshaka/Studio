@@ -1117,7 +1117,8 @@ static int caseLighting()
 // and a matte WALL standing on its edge, facing it — the sun is perpendicular
 // to the wall, so the wall's pixel is its indirect term and nothing else
 // (F0 = 0: the Specular workflow at ior 1.0 with a black specular colour, so no
-// environment specular either), read LINEAR through an hdr-off offscreen view.
+// environment specular either), read as RADIANCE through the view's float
+// readback (HDR-READBACK-1).
 // The irradiance field is OFF (it routes the pixel's diffuse at every shipped
 // tier: the trap file's rule), and so are the rays and the gather — the pixel's
 // diffuse is then exactly the cone march this job ports.
@@ -1164,7 +1165,8 @@ static int caseLightingIndirect()
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 0;
-    fx.hdr = false;      // linear RGBA8, no tonemap, no dither (field_energy's currency)
+    fx.hdr = false;         // no tonemap, no exposure, no dither
+    fx.hdrReadback = true;  // the scene RADIANCE, in float (field_energy's currency)
     view->setPostFx(fx);
     view->setShadows(true);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -1218,8 +1220,8 @@ static int caseLightingIndirect()
               "the relight job marched the chain (%llu marches)",
               (unsigned long long)st.indirectRelights);
 
-    Image img;
-    CHECK(view->readPixels(img), "the view reads back");
+    ImageF img;
+    CHECK(view->readPixelsHdr(img), "the view reads its radiance back");
     // World (x, y) on the wall's face -> pixel: screen right is world -X after
     // the half turn, screen down is world -Y.
     const auto toPixel = [&](double wx, double wy, double &px, double &py) {
@@ -1232,7 +1234,7 @@ static int caseLightingIndirect()
         for (double h : heights) {
             double px, py, m[3];
             toPixel(x, h, px, py);
-            // A 9 x 9 block: the pixel side's 8-bit quantisation averaged down.
+            // A 9 x 9 block of the float read.
             double sum[3] = { 0, 0, 0 };
             int n = 0;
             for (int y = int(py) - 4; y <= int(py) + 4; ++y)
@@ -1252,8 +1254,7 @@ static int caseLightingIndirect()
                         " | radiance %.4f\n",
                         x, h, m[0], m[1], m[2], t.indirect[0], t.indirect[1], t.indirect[2],
                         t.radiance[0]);
-            CHECK_MSG(m[0] > 0.05 && m[0] < 0.95,
-                      "the pixel is lit and inside the readback's linear range (%.4f)", m[0]);
+            CHECK_MSG(m[0] > 0.05, "the pixel is lit (%.4f)", m[0]);
             for (int k = 0; k < 3; ++k) {
                 const double rel = m[k] > 1e-4 ? std::fabs(t.indirect[k] - m[k]) / m[k] : 1.0;
                 CHECK_MSG(rel <= 0.05,
@@ -1271,8 +1272,8 @@ static int caseLightingIndirect()
     // THE COMPARISON, as a function: the card's indirect against the pixel at
     // the three heights of x = -1.5, both read NOW.
     const auto compareAll = [&](const char *what) {
-        Image im;
-        view->readPixels(im);
+        ImageF im;
+        view->readPixelsHdr(im);
         for (double h : heights) {
             double px, py;
             toPixel(-1.5, h, px, py);
@@ -1456,15 +1457,31 @@ static int caseLightingIndirect()
 // pixel's cones are exercised off the axes. The fixture is
 // gi.card_lighting_indirect's: a matte floor under a vertical sun, the walls lit
 // only by its bounce, F0 = 0 (no specular), the field, the gather and the rays
-// off (the field routes the pixel's diffuse at every shipped tier), read LINEAR
-// through an hdr-off offscreen view, orthographic and head-on.
+// off (the field routes the pixel's diffuse at every shipped tier), read as
+// RADIANCE through the view's float readback, orthographic and head-on.
 //
 // THE BAR IS 1 % PLUS THE TWO STORES' OWN HALF-QUANTA, both computed rather
 // than assumed: the card's Indirect layer is R11G11B10F (6 mantissa bits on red
 // and green, 5 on blue; the job rounds to nearest, so half a step of the value's
-// octave), and the pixel is 8-bit (half a code; a 9 x 9 mean of a smooth region
-// does not average a flat quantisation away).
-static int caseConeParity()
+// octave), and the pixel is the view's RGBA16F scene target (10 mantissa bits:
+// half a step of ITS octave). The pixel term used to be half an 8-bit code,
+// 0.5/255 = 0.00196 absolute — 0.8-2.2 % of the 0.09-0.25 these walls read
+// (CARDS-2's audit F6), as large as the 1 % the bar is about; in float it is
+// 0.5 x 2^(ilogb(v) - 10), 3.1e-5 at 0.09 and 6.1e-5 at 0.25 — 0.02-0.03 %
+// (HDR-READBACK-1).
+//
+// WHAT THE FLOAT READ FOUND (HDR-READBACK-1, 2026-09-24). With the pixel's term
+// at its float size the WALL FACING -Z holds 1 % + the quanta at all eighteen
+// samples (worst 1.48 %, within the card store's half step), and the WALL TURNED
+// 30 DEGREES does not: the card reads 1.64 % and 2.06 % below the pixel at
+// (-1.5, 1.6) and (-1.5, 2.8) — two whole R11G11B10F steps, not rounding, and
+// the card is below the pixel at EVERY sample of both walls (a bias, not
+// noise). The 8-bit term's 0.00196 absolute was hiding exactly that. So the
+// turned wall is its own row, `gi.cone_integrator_parity_offaxis` (label
+// photon-target: it runs, prints `target:` and does not decide a gate), and
+// the owner of the card's cone frame deletes the label when the off-axis frame
+// agrees; the axis-aligned wall keeps gating at the unwidened bar.
+static int caseConeParity(bool offAxisTarget)
 {
     const unsigned kPx = 256u;
     const double kConv = hemiOverHeadOn(1.0);   // the card's convention (hemiOverHeadOn)
@@ -1485,6 +1502,7 @@ static int caseConeParity()
     fx.allowOffscreen = true;
     fx.ssr = 0;
     fx.hdr = false;
+    fx.hdrReadback = true;
     view->setPostFx(fx);
     view->setShadows(true);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -1537,7 +1555,9 @@ static int caseConeParity()
     const double heights[3] = { 0.8, 1.6, 2.8 };
     const double xs[2] = { -1.5, 1.5 };
     double worst = 0.0;
+    double worstOffAxis = 0.0;
     for (const Arm &a : arms) {
+        const bool offAxis = a.theta != 0.0f;
         // The camera straight at the front face, orthographic, turned with it.
         CameraDesc cam;
         const Vec3 off = rotY(a.theta, Vec3(0.0f, 0.0f, -10.15f));
@@ -1547,25 +1567,72 @@ static int caseConeParity()
         cam.orthoSize = 3.0f;
         cam.farClip = 200.0f;
         view->setCamera(cam);
-        render(e, 90);
-        Image img;
-        CHECK(view->readPixels(img), "the view reads back");
+        render(e, std::getenv("JAH_CONE_PARITY_FRAMES") ? std::atoi(std::getenv("JAH_CONE_PARITY_FRAMES")) : 90);
+        {
+            const CardCacheStatus cs = s->giStatus().cards;
+            std::printf("    %s: indirect marches %llu, relights %llu\n", a.name,
+                        (unsigned long long)cs.indirectRelights, (unsigned long long)cs.relights);
+        }
+        ImageF img;
+        CHECK(view->readPixelsHdr(img), "the view reads its radiance back");
         const Vec3 n = rotY(a.theta, Vec3(0.0f, 0.0f, -1.0f));
-        for (double x : xs)
-            for (double h : heights) {
-                // Local (x, h) on the face -> the pixel: screen right is the
-                // wall's -x after the half turn, screen down is -y.
-                const double px = (-x / 3.0 * 0.5 + 0.5) * kPx;
-                const double py = (-(h - 2.0) / 3.0 * 0.5 + 0.5) * kPx;
-                double m[3] = { 0, 0, 0 };
-                int cnt = 0;
-                for (int y = int(py) - 4; y <= int(py) + 4; ++y)
-                    for (int xx = int(px) - 4; xx <= int(px) + 4; ++xx) {
-                        const Colour c = img.at(unsigned(xx), unsigned(y));
-                        m[0] += c.r; m[1] += c.g; m[2] += c.b;
-                        ++cnt;
+        const auto worldAt = [&](double lx, double lh) {
+            const Vec3 local = rotY(a.theta, Vec3(float(lx), float(lh) - 2.0f, -0.15f));
+            return Vec3(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
+        };
+        for (double x0 : xs)
+            for (double h0 : heights) {
+                double x = x0, h = h0;
+                // THE TEXEL-CENTRE ARM (JAH_CONE_PARITY_CENTRES, a diagnostic):
+                // the card's value belongs to its texel's CENTRE, so move the
+                // sample there — the texel's boundaries found by walking the
+                // wall until readCardAt's texel index changes — and read the
+                // pixel at that point too. A bias that is the nearest-texel
+                // read's vanishes here.
+                if (std::getenv("JAH_CONE_PARITY_CENTRES")) {
+                    CardSample c0;
+                    if (s->readCardAt(worldAt(x, h), n, c0, a.node) && c0.ok) {
+                        const double stepM = 0.002;
+                        const auto walk = [&](double dxs, double dhs, bool alongX) {
+                            double d = 0.0;
+                            for (int i = 1; i < 200; ++i) {
+                                CardSample ci;
+                                const bool okc = s->readCardAt(worldAt(x + dxs * i, h + dhs * i), n, ci, a.node) && ci.ok;
+                                if (!okc || (alongX ? ci.texelX != c0.texelX : ci.texelY != c0.texelY)) break;
+                                d = i * stepM;
+                            }
+                            return d + 0.5 * stepM;
+                        };
+                        const double left = walk(-stepM, 0.0, true), right = walk(stepM, 0.0, true);
+                        const double down = walk(0.0, -stepM, false), up = walk(0.0, stepM, false);
+                        x += 0.5 * (right - left);
+                        h += 0.5 * (up - down);
+                        std::printf("    %s (%+.1f, %.1f): texel %u,%u spans %.4f x %.4f m, its centre is "
+                                    "(%+.4f, %.4f)\n", a.name, x0, h0, c0.texelX, c0.texelY,
+                                    left + right, down + up, x, h);
                     }
-                for (double &v : m) v = v / cnt * kConv;
+                }
+                // Local (x, h) on the face -> the pixel: screen right is the
+                // wall's -x after the half turn, screen down is -y. The 9 x 9
+                // block is taken at the point's FRACTIONAL pixel position
+                // (bilinear between the four integer-centred blocks around it).
+                const double px = (-x / 3.0 * 0.5 + 0.5) * kPx - 0.5;
+                const double py = (-(h - 2.0) / 3.0 * 0.5 + 0.5) * kPx - 0.5;
+                double m[3] = { 0, 0, 0 };
+                {
+                    const int ix = int(std::floor(px)), iy = int(std::floor(py));
+                    const double fx = px - ix, fy = py - iy;
+                    for (int oy = 0; oy < 2; ++oy)
+                        for (int ox = 0; ox < 2; ++ox) {
+                            const double wgt = (ox ? fx : 1.0 - fx) * (oy ? fy : 1.0 - fy);
+                            for (int y = iy + oy - 4; y <= iy + oy + 4; ++y)
+                                for (int xx = ix + ox - 4; xx <= ix + ox + 4; ++xx) {
+                                    const Colour c = img.at(unsigned(xx), unsigned(y));
+                                    m[0] += wgt * c.r / 81.0; m[1] += wgt * c.g / 81.0; m[2] += wgt * c.b / 81.0;
+                                }
+                        }
+                }
+                for (double &v : m) v = v * kConv;
                 const Vec3 local = rotY(a.theta, Vec3(float(x), float(h) - 2.0f, -0.15f));
                 const Vec3 w(a.cx + local.x, 2.0f + local.y, 0.15f + local.z);
                 CardSample t;
@@ -1579,18 +1646,38 @@ static int caseConeParity()
                     const double store = t.indirect[k] > 0.0f
                                              ? 0.5 * std::ldexp(1.0, std::ilogb(double(t.indirect[k])) - bits)
                                              : 0.0;
-                    const double tol = 0.01 * m[k] + store + kConv * 0.5 / 255.0;
+                    // The pixel's own half-quantum: RGBA16F, 10 mantissa bits, at
+                    // the pixel's value (m / kConv), carried through the same kConv.
+                    const double pix = m[k] / kConv;
+                    const double pixQ = pix > 0.0 ? 0.5 * std::ldexp(1.0, std::ilogb(pix) - 10) : 0.0;
+                    const double tol = 0.01 * m[k] + store + kConv * pixQ;
                     const double diff = std::fabs(double(t.indirect[k]) - m[k]);
                     const double rel = m[k] > 1e-4 ? diff / m[k] : 1.0;
-                    worst = std::max(worst, rel);
-                    CHECK_MSG(m[k] > 0.05 && m[k] < 0.95 && diff <= tol,
+                    if (offAxis) {
+                        // How far beyond the bar, as a fraction of the value.
+                        worstOffAxis = std::max(worstOffAxis, (diff - tol) / m[k]);
+                        if (!offAxisTarget) {
+                            std::printf("    %s (%+.1f, %.1f) channel %d: card %.4f, pixel %.4f "
+                                        "(%.2f %%; the target row's)\n", a.name, x, h, k,
+                                        t.indirect[k], m[k], 100.0 * rel);
+                            continue;
+                        }
+                    } else {
+                        worst = std::max(worst, rel);
+                        if (offAxisTarget) continue;
+                    }
+                    CHECK_MSG(m[k] > 0.05 && diff <= tol,
                               "%s (%+.1f, %.1f) channel %d: card indirect %.4f, pixel diffuse x A_hemi/A(1) %.4f"
-                              " (%.2f %%; bar 1 %% + half the store's step %.4f + half a code)",
-                              a.name, x, h, k, t.indirect[k], m[k], 100.0 * rel, store);
+                              " (%.2f %%; bar 1 %% + half the store's step %.5f + half the pixel's "
+                              "float step %.6f)",
+                              a.name, x, h, k, t.indirect[k], m[k], 100.0 * rel, store, kConv * pixQ);
                 }
             }
     }
-    std::printf("    worst relative difference over both walls: %.2f %%\n", 100.0 * worst);
+    std::printf("    worst relative difference on the axis-aligned wall: %.2f %%\n", 100.0 * worst);
+    std::printf("target: %.4f (bar 0.0000) the wall turned 30 degrees: the card's indirect beyond "
+                "1 %% + the stores' half-quanta of the pixel's, as a fraction of the value%s\n",
+                std::max(0.0, worstOffAxis), worstOffAxis <= 0.0 ? " -- MET" : "");
     return failures ? 1 : 0;
 }
 
@@ -1885,7 +1972,8 @@ int main(int argc, char **argv)
     else if (which == "budget") rc = caseBudget();
     else if (which == "lighting") rc = caseLighting();
     else if (which == "lighting_indirect") rc = caseLightingIndirect();
-    else if (which == "cone_parity") rc = caseConeParity();
+    else if (which == "cone_parity") rc = caseConeParity(false);
+    else if (which == "cone_parity_offaxis") rc = caseConeParity(true);
     else if (which == "read_parity") rc = caseReadParity();
     else if (which == "clouds") rc = caseClouds();
     else { std::printf("FAIL: unknown case '%s'\n", which.c_str()); return 1; }

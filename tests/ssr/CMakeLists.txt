@@ -73,3 +73,25 @@ add_test(NAME ssr.rings COMMAND test_ssr_rings
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.rings PROPERTIES TIMEOUT 180 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
+# ssr.edge — SSR-EDGE-1: the rim of the accepted region, read on the reflection's
+# own weight (View::readReflectionHdr) as a RIM METRIC (pixels whose weight
+# differs from a 4-neighbour's by more than 0.5), on the pictures-1 subject
+# rebuilt in the engine (two glossy spheres) and on tests/ssr's mirror floor.
+# Rays off: the march and the resolve alone. JAH_SSR_EDGE_DUMP=1 writes PPMs.
+add_executable(test_ssr_edge test_ssr_edge.cpp)
+set_target_properties(test_ssr_edge PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_ssr_edge PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_ssr_edge JahshakaEngineMedia)
+target_link_libraries(test_ssr_edge PRIVATE JahshakaEngine)
+add_test(NAME ssr.edge COMMAND test_ssr_edge
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ssr.edge PROPERTIES TIMEOUT 180 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
