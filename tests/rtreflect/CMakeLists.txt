@@ -74,6 +74,15 @@ if(EXISTS "${_rt_lvp_icd}")
                          ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
 endif()
 
+# ENV-RAY-MATCH (PHOTON P3): a silver floor under the realistic sky, the
+# environment lobe (rays off) against the ray tier's sky (rays on) for the same
+# pixels, read as radiance. 3.25 codes at roughness 0.2 (exact at a mirror): the
+# split-sum lookup along R against the VNDF lobe's off-specular lean — the fork's
+# media (see envRayMatchMain). LABEL `photon-target` until that lookup moves.
+add_test(NAME gi.env_ray_match COMMAND test_rt_reflect --env-ray-match
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 300 LABELS "engine;photon-target")
+
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_norays PROPERTIES

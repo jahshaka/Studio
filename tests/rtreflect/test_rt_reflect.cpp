@@ -201,6 +201,7 @@ static int lampMain(Engine *e, bool target);
 static int hitresMain(Engine *e);
 static int footprintSweepMain(Engine *e);
 static int formatCheckMain(Engine *e, const std::string &logFile);
+static int envRayMatchMain(Engine *e);
 
 int main(int argc, char **argv)
 {
@@ -210,16 +211,18 @@ int main(int argc, char **argv)
         if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
         if (std::strcmp(argv[i], "--hitres") == 0) wantHitres = true;
     }
-    bool wantSweep = false, wantFormat = false;
+    bool wantSweep = false, wantFormat = false, wantEnvMatch = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--footprint-sweep") == 0) wantSweep = true;
         if (std::strcmp(argv[i], "--format-check") == 0) wantFormat = true;
+        if (std::strcmp(argv[i], "--env-ray-match") == 0) wantEnvMatch = true;
     }
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = wantFormat ? (getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT")
+    cfg.logFile = wantEnvMatch ? "test-rt-reflect-env-match-ogre.log"
+                  : wantFormat ? (getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT")
                                     ? "test-rt-reflect-format-refused-ogre.log"
                                     : "test-rt-reflect-format-ogre.log")
                   : wantHitres ? "test-rt-reflect-hitres-ogre.log"
@@ -238,6 +241,7 @@ int main(int argc, char **argv)
     if (wantHitres) return hitresMain(e);
     if (wantSweep) return footprintSweepMain(e);
     if (wantFormat) return formatCheckMain(e, cfg.logFile);
+    if (wantEnvMatch) return envRayMatchMain(e);
 
     View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtreflect");
@@ -2005,6 +2009,217 @@ static int formatCheckMain(Engine *e, const std::string &logFile)
                     available ? "available — the gate passed on the formats"
                               : "no ray query on this device at all");
     }
+    std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+/// ENV-RAY-MATCH (PHOTON P3; `--env-ray-match`, the row gi.env_ray_match).
+///
+/// A SILVER FLOOR UNDER THE REALISTIC SKY (PAN-SMEAR-1's fixture: metal 1,
+/// perceptual roughness 0.2, the camera at (0,5,14) looking at (0,1,0) — a
+/// glossy floor at a grazing angle) with NOTHING on it: every reflected ray
+/// escapes to the sky. The same pixels are answered twice, in one process:
+///   RAYS OFF  the environment lobe (HlmsPbs's specular env term, the sky's
+///             prefiltered cube at the surface's roughness);
+///   RAYS ON   the ray tier: one GGX VNDF sample a pixel a frame, each miss
+///             reading jahEnvCone at its footprint, the temporal mean.
+/// Both are ONE-ENV's environment; the claim is that they agree — mean
+/// |on - off| under 2/255 over the floor, read as RADIANCE (readPixelsHdr, the
+/// linear un-tonemapped chain, so 1/255 is 1/255 of radiance) and with the
+/// ray arm's weight (readReflectionHdr's alpha) printed so a pixel the rays did
+/// not answer is never counted as agreement.
+///
+/// MEASURED (2026-09-24, RTX 4080 SUPER): mean |on - off| 0.05 / 0.15 / 1.31 /
+/// 3.25 / 7.23 codes at roughness 0 / 0.05 / 0.1 / 0.2 / 0.3 — EXACT at a mirror
+/// (one cube, one gain, one mip: the two answers read the same texel), and
+/// growing with the lobe, the ray arm darker and BLUER (on/off 0.916 / 0.964 /
+/// 0.990 at 0.2). THE MECHANISM is none of the three the design listed (a mip
+/// mismatch, the Sky Light's gate, the energy factor): the environment answer is
+/// the SPLIT-SUM lookup, the prefiltered chain read along the MIRROR direction R
+/// (HlmsPbs's CubemapGlobal, 800.PixelShader_piece_ps.any:775 — N = V = R is the
+/// convolution's own assumption), while the ray tier's VNDF samples are the lobe
+/// itself, whose mean leans toward the NORMAL (the off-specular peak) and which
+/// the horizon clips. Over this sky — red falls five-fold from 5 to 60 degrees of
+/// elevation (the cone harness, printed with JAH_ENV_MATCH_CONES) — a lookup
+/// centred too low reads warmer. Measured: moving the lookup to the dominant
+/// direction (Frostbite's lerp(N, R, f(alpha)), an experiment on the fork's
+/// media, not landed) halves it (3.25 -> 1.71 at 0.2, 7.23 -> 3.80 at 0.3); the
+/// rest is the horizon clip and the dropped G2/G1. The fix is the fork's media
+/// (the lookup direction in CubemapGlobal, the jah_env fallback and
+/// Vct_piece_ps.any's jahEnvLobe call), so this row is a TARGET (photon-target).
+///
+/// THE FRAME INDEX. The rays arm's sequence is keyed on the frame; both arms
+/// are read after the same warm-up from a fresh view, and the rays arm is the
+/// MEAN of 32 consecutive read-backs of an already-converged history, which is
+/// what "the ray tier's answer" is (one frame of it is one sample of a random
+/// variable whose mean is the quantity).
+static int envRayMatchMain(Engine *e)
+{
+    std::printf("== gi.env_ray_match: the environment answer vs the ray tier's sky answer\n");
+    const unsigned kW = 384u, kH = 216u;
+    View *view = e->createOffscreenView("envraymatch", kW, kH, Colour(0, 0, 0));
+    Scene *s = e->createScene("envraymatch");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine — skips cleanly\n");
+        return 0;
+    }
+    // THE REALISTIC SKY: the analytic atmosphere at its clear-sky defaults, the
+    // sun 35 degrees up, its SH and the environment light at 1 — what the
+    // document pushes for a new world's sky.
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    const float rad = 35.0f * 3.14159265f / 180.0f;
+    sky.atmosphere.sunDir[0] = std::cos(rad) * 0.6f;
+    sky.atmosphere.sunDir[1] = std::sin(rad);
+    sky.atmosphere.sunDir[2] = std::cos(rad) * 0.8f;
+    CHECK(s->setSky(sky), "the analytic sky binds");
+    for (int f = 0; f < 8; ++f) e->renderOneFrame();
+    float sh[27] = { 0.0f };
+    CHECK(s->skyAmbientSh(sh), "the sky's SH is integrated");
+    s->setAmbientSh(sh);
+    s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
+
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams silver;
+    silver.albedo = Colour(0.9f, 0.9f, 0.9f);
+    silver.metalness = 1.0f;
+    silver.roughness = 0.2f;
+    if (const char *r = getenv("JAH_ENV_MATCH_ROUGHNESS")) silver.roughness = float(std::atof(r));
+    std::printf("   roughness %.3f\n", double(silver.roughness));
+    const NodeId floorN = s->createNode();
+    CHECK(floorN && s->attachMesh(floorN, cube, s->createPbrMaterial(silver)),
+          "the silver floor exists (metal 1, roughness 0.2)");
+    s->setNodeTransform(floorN, Vec3(0.0f, -0.1f, 0.0f), Quat(), Vec3(200.0f, 0.2f, 200.0f));
+
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdr = false;
+    fx.hdrReadback = true;
+    view->setPostFx(fx);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 5.0f, 14.0f), Vec3(0.0f, 1.0f, 0.0f));
+
+    // The floor region: the lower two thirds, the frame's side margins out.
+    const unsigned x0 = 16u, x1 = kW - 16u, y0 = kH / 3u, y1 = kH - 4u;
+    const auto meanOver = [&](const ImageF &img, int ch) {
+        double sum = 0.0;
+        size_t n = 0;
+        for (unsigned y = y0; y < y1; ++y)
+            for (unsigned x = x0; x < x1; ++x) {
+                const Colour c = img.at(x, y);
+                sum += ch == 0 ? c.r : ch == 1 ? c.g : ch == 2 ? c.b : c.a;
+                ++n;
+            }
+        return n ? sum / double(n) : 0.0;
+    };
+
+    // ---- RAYS ON: warm, then the mean of 32 read-backs -----------------
+    e->setRayTracing(true);
+    for (int f = 0; f < 120; ++f) e->renderOneFrame();
+    std::vector<double> onSum(size_t(kW) * kH * 3u, 0.0);
+    double weightMean = 0.0;
+    const int kMean = 32;
+    for (int f = 0; f < kMean; ++f) {
+        e->renderOneFrame();
+        ImageF img, refl;
+        view->readPixelsHdr(img);
+        view->readReflectionHdr(refl);
+        weightMean += meanOver(refl, 3) / kMean;
+        for (size_t i = 0; i < onSum.size() / 3u; ++i)
+            for (int k = 0; k < 3; ++k) onSum[i * 3u + k] += img.rgba[i * 4u + k] / kMean;
+    }
+    const RayQueryStatus rq = s->rayQueryStatus();
+    CHECK(rq.reflect, "the tier traced this view's reflections");
+
+    // ---- RAYS OFF --------------------------------------------------------
+    e->setRayTracing(false);
+    for (int f = 0; f < 120; ++f) e->renderOneFrame();
+    ImageF off;
+    view->readPixelsHdr(off);
+    e->setRayTracing(true);
+
+    double diff[3] = { 0, 0, 0 }, signedDiff[3] = { 0, 0, 0 }, onMean[3] = { 0, 0, 0 },
+           offMean[3] = { 0, 0, 0 };
+    size_t n = 0;
+    for (unsigned y = y0; y < y1; ++y)
+        for (unsigned x = x0; x < x1; ++x) {
+            const size_t i = size_t(y) * kW + x;
+            for (int k = 0; k < 3; ++k) {
+                const double a = onSum[i * 3u + k], b = off.rgba[i * 4u + k];
+                diff[k] += std::fabs(a - b);
+                signedDiff[k] += a - b;
+                onMean[k] += a;
+                offMean[k] += b;
+            }
+            ++n;
+        }
+    for (int k = 0; k < 3; ++k) {
+        diff[k] /= double(n); signedDiff[k] /= double(n); onMean[k] /= double(n); offMean[k] /= double(n);
+    }
+    const double meanCodes = 255.0 * (diff[0] + diff[1] + diff[2]) / 3.0;
+    std::printf("   the floor (%u px): rays ON %.4f %.4f %.4f | rays OFF %.4f %.4f %.4f | the rays' "
+                "mean weight %.3f\n", unsigned(n), onMean[0], onMean[1], onMean[2], offMean[0],
+                offMean[1], offMean[2], weightMean);
+    std::printf("   mean |on - off| %.4f %.4f %.4f (radiance) = %.2f / 255; signed on - off %.4f %.4f "
+                "%.4f; ratio on/off %.3f %.3f %.3f\n", diff[0], diff[1], diff[2], meanCodes,
+                signedDiff[0], signedDiff[1], signedDiff[2], onMean[0] / std::max(offMean[0], 1e-9),
+                onMean[1] / std::max(offMean[1], 1e-9), onMean[2] / std::max(offMean[2], 1e-9));
+    // THE CHAIN AGAINST ITS OWN FINEST MIP, per channel (a diagnostic, printed):
+    // jahEnvCone's lookup (a prefiltered mip) against the 64-direction integral of
+    // mip 0 over the same cone, at directions the floor reflects.
+    if (getenv("JAH_ENV_MATCH_CONES")) {
+        std::vector<EnvironmentConeQuery> q;
+        const float tans[3] = { 0.1f, 0.3f, 0.6f };
+        const float elev[4] = { 5.0f, 15.0f, 30.0f, 60.0f };
+        for (float t : tans)
+            for (float el : elev) {
+                const float er = el * 3.14159265f / 180.0f;
+                q.push_back(EnvironmentConeQuery{ Vec3(0.0f, std::sin(er), -std::cos(er)), t });
+            }
+        std::vector<EnvironmentConeAnswer> ans;
+        if (e->environmentCones(s, q, ans)) {
+            for (size_t i = 0; i < ans.size(); ++i)
+                std::printf("   cone tan %.2f elev %4.0f: lookup %.4f %.4f %.4f  ref %.4f %.4f %.4f  "
+                            "(lod %.2f) lookup/ref %.3f %.3f %.3f\n", double(q[i].tanHalfAngle),
+                            double(elev[i % 4]), ans[i].lookup[0], ans[i].lookup[1], ans[i].lookup[2],
+                            ans[i].reference[0], ans[i].reference[1], ans[i].reference[2],
+                            double(ans[i].lod), ans[i].lookup[0] / std::max(ans[i].reference[0], 1e-9f),
+                            ans[i].lookup[1] / std::max(ans[i].reference[1], 1e-9f),
+                            ans[i].lookup[2] / std::max(ans[i].reference[2], 1e-9f));
+        } else {
+            std::printf("   (the cone harness: %s)\n", e->takeLastError().c_str());
+        }
+    }
+    // BY ROW BAND: the far floor reflects the horizon, the near floor the sky
+    // high up — where the two answers part says which lookup parts them.
+    for (int band = 0; band < 4; ++band) {
+        const unsigned b0 = y0 + (y1 - y0) * unsigned(band) / 4u, b1 = y0 + (y1 - y0) * unsigned(band + 1) / 4u;
+        double on[3] = { 0, 0, 0 }, of[3] = { 0, 0, 0 };
+        size_t m = 0;
+        for (unsigned y = b0; y < b1; ++y)
+            for (unsigned x = x0; x < x1; ++x) {
+                const size_t i = size_t(y) * kW + x;
+                for (int k = 0; k < 3; ++k) { on[k] += onSum[i * 3u + k]; of[k] += off.rgba[i * 4u + k]; }
+                ++m;
+            }
+        std::printf("   rows %3u-%3u: on %.4f %.4f %.4f  off %.4f %.4f %.4f  on/off %.3f %.3f %.3f\n",
+                    b0, b1, on[0] / m, on[1] / m, on[2] / m, of[0] / m, of[1] / m, of[2] / m,
+                    on[0] / std::max(of[0], 1e-9), on[1] / std::max(of[1], 1e-9),
+                    on[2] / std::max(of[2], 1e-9));
+    }
+    CHECK_MSG(weightMean > 0.9,
+              "the rays ANSWER the floor (mean composite weight %.3f): the comparison is the ray "
+              "tier's sky, not the environment twice", weightMean);
+    std::printf("target: %.4f (bar 2.0000) ONE ENVIRONMENT: the ray tier's sky and the environment "
+                "lobe over the silver floor, mean |on - off| in codes%s\n", meanCodes,
+                meanCodes < 2.0 ? " -- MET" : "");
+    CHECK_MSG(meanCodes < 2.0,
+              "ONE ENVIRONMENT: the ray tier's sky and the environment lobe agree over the silver "
+              "floor, mean |on - off| %.2f / 255 (bar 2)", meanCodes);
     std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
 }
