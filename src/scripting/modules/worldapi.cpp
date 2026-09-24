@@ -365,6 +365,34 @@ QVector<VerbInfo> WorldApi::verbs() const
           "`enabled` (default false) switches it. `coverage` 0..1 (default 0.5) is how much of the sky is cloud — 0 clear, 1 an overcast deck. `density` 0..4 (default 1) is how opaque a covered patch is: its underside darkness and its shadow. `speed` 0..100 metres per second of SCENE time (default 10): the renderer's own clock, so a paused scene holds its clouds still and a scripted frame is reproducible. `direction` 0..360 degrees (default 0) is the heading the wind blows TOWARDS, from +X turning towards -Z. `altitude` 500..8000 metres (default 2000) is the ALTITUDE LOOK: the sheet lies over a curved earth, so a low layer fills the sky to the horizon and a high one stays overhead, and a low sun throws the ground shadow sideways by altitude / tan(elevation). `shadow` 0..1 (default 1) scales how much of the sheet's transmittance reaches the sun's light on the ground. `weatherMap` is an image asset guid (assets.list({type:\"texture\"})) whose red channel scales the coverage over one 16 km tile of the sheet — white lets clouds form, black keeps the sky clear — or \"\" to clear it. Values outside a dial's band are clamped, and the answer reports what the scene holds. An unknown key, a value that is not a number, or a weatherMap that is not a stored texture asset is refused and nothing is written. One undo step. "
           "`live` is what the renderer is doing with it (absent without an engine viewport): `drawn`, and `reason` when not (\"off\", \"imageSky\", \"noSky\", \"media\"); `fieldBakes`, how many times the layer's optical-depth field has been rebuilt (a coverage, density or weather-map change rebuilds it; wind and shadow never do); `changeCaptures` and `scrollCaptures`, the environment re-captures it has asked for — at once on a change that moves the sky's picture, and every `capturePeriodFrames` drawn frames while it scrolls (the ambient follows a moving sheet on that cadence, never per frame); `clockTicks`, the drawn frames the sheet's clock has advanced (one per frame, never more); `scroll`, the sheet's current offset in metres; and `skyMean`, the environment capture's mean radiance (its SH band 0, linear, before the Sky Light scales it) — the number that moves when the clouds change the sky's light.",
           Needs::Document },
+        { "sunContact", "world.sunContact({enabled?, range?, resolution?}) -> {enabled, range, resolution, live}",
+          "HARD SUN CONTACT SHADOWS — one hardware ray per pixel from the surface the camera sees towards the sun, "
+          "folded into the sun's shadow as min(shadow map, ray). A shadow map is rendered with a depth BIAS (or every "
+          "lit surface would shadow itself), and where a THIN caster meets the ground — a board, a panel, a table top, "
+          "a lid — the bias is thicker than the caster and the shadow detaches: measured 4 cm under a 2 cm board seen "
+          "from 5 m and 10-16 cm from 15-30 m (a solid block does not leak: the map holds its far face). The ray has "
+          "no bias to speak of and closes that "
+          "band to one pixel of its own resolution; it can only ever DARKEN (the map keeps every shadow it has), and "
+          "beyond `range` it answers nothing and the map is alone, unchanged. OFF by default, and a scene at the "
+          "defaults writes nothing into its file. "
+          "`enabled` (default false) switches it. `range` (metres, default 2, held in 0.05..50) is how far a ray "
+          "looks for an occluder — a contact is a short question, and the map answers everything further away. "
+          "`resolution` is \"auto\" (the default: one ray per 2x2 block at the Low and Medium GI quality, one per "
+          "pixel at High), \"full\" or \"half\". Opaque casters only: an alpha-tested leaf is not in the ray "
+          "structure (it would stop a ray as a solid quad) and keeps the map's shadow; an object whose Cast Shadows "
+          "is off casts no contact shadow either; a skinned character is not traced (its structure would be the bind "
+          "pose). Only the FIRST directional light that casts shadows — the sun — gets it, and only where the "
+          "material receives shadows. "
+          "It needs what every ray feature needs — a machine with ray queries and the project's world.rayTracing "
+          "not \"off\" (--no-ray-query renders the map alone) — and it is NEVER drawn in VR (a headset view "
+          "declines it and pays nothing). Turning it on gives a view the PREPASS (a second geometry traversal) if "
+          "its SSR row had not already; the rays themselves measured at a fraction of a millisecond at 1080p. "
+          "`live` is what the renderer did on its last frame (absent without an engine viewport): `on` (the row "
+          "resolved against the machine), `running` (a view dispatched it), `reason` when it did not, the texture "
+          "`width`/`height` and `divisor` (1 = a ray per pixel, 2 = per 2x2 block), `rays`, the `toSun` direction "
+          "the rays were cast along, and `gpuMs`/`cpuMs` (-1 until measured). Called with no argument it reads. One "
+          "undo step.",
+          Needs::Document },
         { "rayTracing", "world.rayTracing([\"off\"|\"auto\"|\"on\"]) -> \"off\"|\"auto\"|\"on\"",
           "HARDWARE RAY TRACING FOR THIS PROJECT, saved with the scene and travelling with it (owner, 2026-09-15). Three states, and the first thing to know is that NOTHING can force ray hardware onto a machine that has none: this row says what the project was authored for, and the renderer meets it with what the machine can do. \"off\" never traces, even where the GPU can — what a scene that must look and cost the SAME everywhere asks for. \"auto\" (the default) traces where the machine can and falls back silently everywhere else: the same file looks right on a ray-capable desktop and on a Mac, and nobody has to think about it. \"on\" means the scene was AUTHORED for rays: it renders exactly like auto — traces where it can, falls back where it cannot — and additionally raises a scene issue in the editor's error bar (\"this project expects hardware ray tracing; this machine has none\") so the author learns that this machine is not showing them what they built. On and auto therefore render the same picture; on is the one that TELLS YOU when the machine falls short. Called with no argument it reads the project's state. Any other word is refused, loudly, rather than guessed at. One undo step, and it dirties the project like any other document edit — it is NOT an application preference (it used to be one for two days: a machine-wide switch meant the same project rendered differently depending on a setting that was not in it). What the machine actually answered is world.giStatus().rayQuery — 'available' is the device's own answer, 'enabled' whether the renderer is using it — and --no-ray-query is the diagnostic switch that makes a ray-capable box render the no-rays picture for one run.",
           Needs::Document },
@@ -484,7 +512,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "not here either: it is a world row, world.sunDisc({size}). On any other sky "
           "it is inert. It is read and written with node.property / node.setProperty.",
           Needs::Document },
-        { "get", "world.get() -> {skyLight, sunDisc, clouds, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
+        { "get", "world.get() -> {skyLight, sunDisc, clouds, sunContact, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
@@ -1871,6 +1899,79 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
 }
 
 // ---------------------------------------------------------------------------
+// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact)
+// ---------------------------------------------------------------------------
+// The whole authoring surface of the row: a World panel row (a follow-up slice)
+// calls exactly this document field through the same sceneprops key.
+QVariantMap WorldApi::sunContact(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.sunContact"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        static const QStringList known = {
+            QStringLiteral("enabled"), QStringLiteral("range"), QStringLiteral("resolution")
+        };
+        const QString refusal = refuseUnknownKeys(QStringLiteral("world.sunContact"), params, known);
+        if (!refusal.isEmpty()) { fail(refusal); return out; }
+        // VALIDATED BEFORE ANYTHING IS WRITTEN (world.clouds' rule).
+        iris::SunContact c = scene->sunContact;
+        if (params.contains(QStringLiteral("enabled")))
+            c.enabled = params.value(QStringLiteral("enabled")).toBool();
+        if (params.contains(QStringLiteral("range"))) {
+            bool ok = false;
+            const double v = params.value(QStringLiteral("range")).toDouble(&ok);
+            if (!ok || !std::isfinite(v) || v <= 0.0) {
+                fail(QStringLiteral("world.sunContact: 'range' must be a positive number of metres"));
+                return out;
+            }
+            c.range = float(v);
+        }
+        if (params.contains(QStringLiteral("resolution"))) {
+            iris::SunContactResolution r = iris::SunContactResolution::Auto;
+            if (!iris::SunContact::resolutionFromName(
+                    params.value(QStringLiteral("resolution")).toString(), r)) {
+                fail(QStringLiteral("world.sunContact: 'resolution' must be \"auto\", \"full\" or \"half\""));
+                return out;
+            }
+            c.resolution = r;
+        }
+        c = iris::SunContact::clamped(c);
+        WorldEdit edit(scene, { QStringLiteral("sunContact") });
+        sceneprops::set(scene, QStringLiteral("sunContact"), c.toJson().toVariantMap());
+        edit.commit(host.services ? host.services->undo : nullptr,
+                    QStringLiteral("Sun Contact Shadows"));
+    }
+    const iris::SunContact &c = scene->sunContact;
+    out[QStringLiteral("enabled")] = c.enabled;
+    out[QStringLiteral("range")] = double(c.range);
+    out[QStringLiteral("resolution")] =
+        QString::fromLatin1(iris::SunContact::resolutionName(c.resolution));
+    if (host.isEngineReady() && host.viewport) {
+        if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
+            const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
+            QVariantMap live;
+            live[QStringLiteral("on")] = st.on;
+            live[QStringLiteral("running")] = st.running;
+            live[QStringLiteral("reason")] = QString::fromStdString(st.reason);
+            live[QStringLiteral("width")] = st.width;
+            live[QStringLiteral("height")] = st.height;
+            live[QStringLiteral("targetWidth")] = st.targetW;
+            live[QStringLiteral("targetHeight")] = st.targetH;
+            live[QStringLiteral("divisor")] = st.divisor;
+            live[QStringLiteral("rays")] = double(st.rays);
+            live[QStringLiteral("range")] = double(st.range);
+            live[QStringLiteral("toSun")] =
+                QVariantList{ double(st.toSun[0]), double(st.toSun[1]), double(st.toSun[2]) };
+            live[QStringLiteral("gpuMs")] = double(st.gpuMs);
+            live[QStringLiteral("cpuMs")] = double(st.cpuMs);
+            out[QStringLiteral("live")] = live;
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // HARDWARE RAY TRACING (owner, 2026-09-15; ledger §425)
 // ---------------------------------------------------------------------------
 // A PROJECT fact, not an application preference — see the verb's doc text and
@@ -2433,6 +2534,7 @@ QVariantMap WorldApi::get()
     out["skyLight"] = skyLight();
     out["sunDisc"] = sunDisc(QVariantMap());
     out["clouds"] = clouds(QVariantMap());
+    out["sunContact"] = sunContact(QVariantMap());
     out["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     out["gravity"] = scene->gravity;
     out["shadows"] = scene->shadowEnabled;

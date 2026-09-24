@@ -161,6 +161,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // layer existed (the reader reads an absent block as the default).
     if (scene->clouds != iris::CloudLayer())
         sceneObj["clouds"] = scene->clouds.toJson();
+    // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1) — the same rule: only when it is
+    // not the default, so every scene that never turned it on is unchanged.
+    if (scene->sunContact != iris::SunContact())
+        sceneObj["sunContact"] = scene->sunContact.toJson();
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;

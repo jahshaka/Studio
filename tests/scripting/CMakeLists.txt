@@ -431,6 +431,10 @@ add_script_e2e(sun_light e2e_sun_light.js GPU_EXCLUSIVE)   # DEVPROCESS-1: the G
 # measured direct term, the scroll and its capture cadence, an image sky
 # ignoring the block, and the export bake.
 add_script_e2e(clouds_2d e2e_clouds_2d.js)
+# HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): world.sunContact's contract — off by
+# default, validation, one undo step, the file round trip, and what the renderer
+# did (gi.sun_contact is the picture).
+add_script_e2e(sun_contact e2e_sun_contact.js)
 # SUN_AND_LIGHT_DEFAULTS_SPEC Q1b/Q1c: THE SCENE-ERROR AREA. The general
 # facility (raise / never repeat / dismiss / clear / scan) and its two first
 # customers — two directional lights fighting to be the sun, and a light whose
