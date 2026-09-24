@@ -81,7 +81,7 @@
 // that case's 1344 metal pixels come back as hard black holes.
 //
 // ONE SCENE AT A TIME, always: the HlmsPbs VCT/PCC binding is process-wide
-// (OgreGi.cpp sVctBindingOwner), so a second live scene would fight for it.
+// (the binding before PHOTON-SCENE-SWITCH-1), so a second live scene would fight for it.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 

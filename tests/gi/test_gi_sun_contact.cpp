@@ -24,12 +24,13 @@
 //
 // FIX ROUND (the lead's F3): that leak was upstream's constant bias (0.01 x 1 in
 // world units along the light, x the split's auto factor) — cut to 0.3 for the sun (the lowest without acne on a glossy plane)
-// (OgreShadow.cpp) it is 0.0 mm here, and the board now GUARDS the cut. The
-// contact the MAP still misses is the grazing sun's: its receiver-side
-// NORMAL-OFFSET bias moves the whole shadow downstream (about a metre at 25 m
-// under a 10-degree sun) — `gi.sun_contact_lattice` (`--lattice`, its own
-// process) measures it and the ray closing it, the ray's acne on curved,
-// LOD'd casters, and a glass pane over the contact.
+// (OgreShadow.cpp) it is 0.0 mm here, and the board now GUARDS the cut.
+// `gi.sun_contact_both` (`--both`) then draws a sphere LATTICE as the process's
+// SECOND scene beside the board: the map's acne and its contact on curved, LOD'd
+// casters, the ray's acne there, and a glass pane over the contact. (The "grazing
+// sun's contact the map misses, a metre downstream" this arm was written for was
+// the coarse LOD levels' garbage caster geometry — PHOTON-SCENE-SWITCH-1; the map
+// now shadows every contact pixel.)
 //
 // THE NUMBERS (every one in FRAMES and ground metres, never time):
 //   1. THE GAP: the widest band of LIT floor next to the board's shaded face,
@@ -546,9 +547,15 @@ static void latticeArm(Engine *e, const char *dumpDir)
         }
     std::printf("      contact under the spheres (lit %.1f, shadow %.1f): lit px — map %u, row full %u, half %u\n",
                 double(litRef), double(deep), leakOff, leakOn, leakHalf);
-    CHECK_MSG(leakOff >= nContact / 2u,
-              "THE MAP LEAVES THE CONTACT LIT at a grazing sun (%u of %u px: the normal-offset bias moves its "
-              "shadow downstream) — the fixture proves something", leakOff, nContact);
+    // THE MAP DRAWS THE CONTACT (PHOTON-SCENE-SWITCH-1). This row used to assert
+    // the opposite — "the map leaves the contact lit at a grazing sun, its
+    // normal-offset bias moves the shadow ~1 m downstream" (433 of 433 px) — and
+    // that picture was the coarse levels' garbage caster geometry (the mixed
+    // shadow-VAO list, buildShadowVaos' note): with every level cast through its
+    // own shrunk VAO the map shadows every contact pixel, in either scene order.
+    CHECK_MSG(leakOff == 0u,
+              "THE MAP DRAWS THE CONTACT SHADOW under every sphere (%u of %u contact px lit): the casters are "
+              "each LOD level's own triangles", leakOff, nContact);
     CHECK_MSG(leakOn == 0 && leakHalf == 0, "THE CONTACT UNDER EVERY SPHERE IS CLOSED (full %u, half %u lit px)",
               leakOn, leakHalf);
     // ---- THE GLASS (F1): the pane over the middle row's feet must show the
@@ -646,51 +653,17 @@ static int costMain(Engine *e)
     return 0;
 }
 
-int main(int argc, char **argv)
+// THE BOARD ARM (`gi.sun_contact`, `gi.sun_contact_norays`, and the first half of
+// `--both`). Its view and scene stay alive when it returns: under `--both` the
+// lattice is drawn beside them, two scenes through two views every frame.
+enum BoardResult { BoardRan, BoardDone, BoardFatal };
+static BoardResult boardArm(Engine *e, bool raysWanted, const char *dumpDir)
 {
-    const bool cost = argc > 1 && std::strcmp(argv[1], "--cost") == 0;
-    const char *dumpDir = std::getenv("JAH_SUN_CONTACT_DUMP");   // evidence pictures, a tool
-    std::string err;
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    const bool raysWanted = !getenv("JAHSHAKA_NO_RAY_QUERY");
-    cfg.logFile = raysWanted ? "test-sun-contact-ogre.log" : "test-sun-contact-norays-ogre.log";
-    auto engine = Engine::create(cfg, err);
-    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->setFixedFrameDelta(1.0f / 60.0f);
-    Engine *e = engine.get();
-    // THE SWEEP'S KNOBS (measurement switches, not modes — the table in
-    // spikes/photon-rays-1 was taken with them): the camera's distance from its
-    // target along the fixture's own direction, its vertical angle, the
-    // caster's thickness (1 = the solid crate), the sun's elevation and power.
-    if (const char *v = getenv("JAH_SC_WALL")) kBoard = float(atof(v));
-    if (const char *v = getenv("JAH_SC_ELEV")) kSunElevationDeg = float(atof(v));
-    if (const char *v = getenv("JAH_SC_POWER")) kSunPower = float(atof(v));
-    if (const char *v = getenv("JAH_SC_FOV")) kFov = float(atof(v));
-    if (const char *v = getenv("JAH_SC_DIST")) {
-        const float d = float(atof(v));
-        Vec3 dir(kCamPos.x - kCamTarget.x, kCamPos.y - kCamTarget.y, kCamPos.z - kCamTarget.z);
-        const float l = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-        kCamPos = Vec3(kCamTarget.x + dir.x / l * d, kCamTarget.y + dir.y / l * d, kCamTarget.z + dir.z / l * d);
-    }
-    if (cost) return costMain(e);
-    // THE CURVED CASTERS run in their OWN process (`gi.sun_contact_lattice`):
-    // a second scene drawn in the same process after the board's shows NO
-    // directional map shadow at all (measured, fix round — recorded as a
-    // finding, not this lane's), and the lattice's whole question is the map.
-    if (argc > 1 && std::strcmp(argv[1], "--lattice") == 0) {
-        if (getenv("JAHSHAKA_NO_RAY_QUERY")) { std::printf("FAIL: the lattice arm needs rays\n"); return 1; }
-        latticeArm(e, dumpDir);
-        std::printf("%s\n", failures ? "gi.sun_contact_lattice: FAILED" : "gi.sun_contact_lattice: all ok");
-        return failures ? 1 : 0;
-    }
-
     View *view = e->createOffscreenView("suncontact", kSize, kSize, Colour(0.45f, 0.55f, 0.70f));
     Scene *s = e->createScene("suncontact");
     if (!view || !s || !view->setScene(s)) {
         std::printf("FAIL: view/scene: %s\n", e->lastError().c_str());
-        return 1;
+        return BoardFatal;
     }
     // Asked AFTER the first view exists: the device is made with it.
     const bool haveRays = e->rayQueryAvailable() && e->rayTracing();
@@ -699,7 +672,7 @@ int main(int argc, char **argv)
                     "gi.sun_contact is about the ray job and skips cleanly; "
                     "gi.sun_contact_norays covers the fallback picture\n",
                     int(e->rayQueryAvailable()), int(e->rayTracing()));
-        return 0;
+        return BoardDone;
     }
     buildFixture(s, 1);
     view->setShadows(true);
@@ -753,7 +726,7 @@ int main(int argc, char **argv)
         CHECK_MSG(off.rgba == onFull.rgba && off.rgba == onHalf.rgba,
                   "without ray queries the row on renders EXACTLY the row-off picture");
         std::printf("%s\n", failures ? "gi.sun_contact_norays: FAILED" : "gi.sun_contact_norays: all ok");
-        return failures ? 1 : 0;
+        return BoardDone;
     }
 
     // ---- THE ROW'S CONTRACT ------------------------------------------------
@@ -889,6 +862,55 @@ int main(int argc, char **argv)
         CHECK_MSG(acne <= total / 1000u, "THE MAP HAS NO ACNE at its constant bias (%u of %u px)", acne, total);
     }
 
+    return BoardRan;
+}
+
+int main(int argc, char **argv)
+{
+    const bool cost = argc > 1 && std::strcmp(argv[1], "--cost") == 0;
+    const bool both = argc > 1 && std::strcmp(argv[1], "--both") == 0;
+    const char *dumpDir = std::getenv("JAH_SUN_CONTACT_DUMP");   // evidence pictures, a tool
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    const bool raysWanted = !getenv("JAHSHAKA_NO_RAY_QUERY");
+    cfg.logFile = raysWanted ? "test-sun-contact-ogre.log" : "test-sun-contact-norays-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    engine->setFixedFrameDelta(1.0f / 60.0f);
+    Engine *e = engine.get();
+    // THE SWEEP'S KNOBS (measurement switches, not modes — the table in
+    // spikes/photon-rays-1 was taken with them): the camera's distance from its
+    // target along the fixture's own direction, its vertical angle, the
+    // caster's thickness (1 = the solid crate), the sun's elevation and power.
+    if (const char *v = getenv("JAH_SC_WALL")) kBoard = float(atof(v));
+    if (const char *v = getenv("JAH_SC_ELEV")) kSunElevationDeg = float(atof(v));
+    if (const char *v = getenv("JAH_SC_POWER")) kSunPower = float(atof(v));
+    if (const char *v = getenv("JAH_SC_FOV")) kFov = float(atof(v));
+    if (const char *v = getenv("JAH_SC_DIST")) {
+        const float d = float(atof(v));
+        Vec3 dir(kCamPos.x - kCamTarget.x, kCamPos.y - kCamTarget.y, kCamPos.z - kCamTarget.z);
+        const float l = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+        kCamPos = Vec3(kCamTarget.x + dir.x / l * d, kCamTarget.y + dir.y / l * d, kCamTarget.z + dir.z / l * d);
+    }
+    if (cost) return costMain(e);
+    if (both && !raysWanted) { std::printf("FAIL: the lattice arm needs rays\n"); return 1; }
+
+    const BoardResult board = boardArm(e, raysWanted, dumpDir);
+    if (board == BoardFatal) return 1;
+    if (board == BoardDone) return failures ? 1 : 0;
     std::printf("%s\n", failures ? "gi.sun_contact: FAILED" : "gi.sun_contact: all ok");
+    if (both) {
+        // THE CURVED CASTERS, AS THE PROCESS'S SECOND SCENE (PHOTON-SCENE-SWITCH-1):
+        // the lattice is drawn while the board's view still draws the board, every
+        // frame. It used to need a process of its own — after another scene had
+        // drawn, its map cast NO shadow — and the cause was not the second scene:
+        // the spheres' coarse LOD levels reached the shadow map through the
+        // level-0 shrunk vertex layout (a mixed shadow-VAO list; OgreMesh.cpp's
+        // buildShadowVaos), garbage whose shape followed where the buffers landed.
+        latticeArm(e, dumpDir);
+        std::printf("%s\n", failures ? "gi.sun_contact_both: FAILED" : "gi.sun_contact_both: all ok");
+    }
     return failures ? 1 : 0;
 }

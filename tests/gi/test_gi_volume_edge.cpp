@@ -275,13 +275,11 @@ int main(int argc, char **argv)
         DIFFUSE_CHECK(std::fabs(inside - flatGiOff) < 0.08f * flatGiOff,
                       "inside the volume, turning GI on does not change the flat ambient");
 
-        // UNBIND before case 2 measures anything: VctLighting binds
-        // PROCESS-WIDE to HlmsPbs (sVctBindingOwner), and while it is bound
-        // every PBS ambient term in every scene is gated off by
-        // `vctSpecular.w == 0` — a second scene with GI off would render with
-        // no ambient at all and its reference reading would be zero. Setting
-        // this scene's GI off is what releases the binding (teardownVct).
-        CHECK(o.scene->setGlobalIllumination(off), "GI off again (releases the HlmsPbs binding)");
+        // GI OFF before case 2 measures anything. (It used to be REQUIRED: the
+        // VctLighting was bound process-wide, and a second scene with GI off
+        // rendered through it with its ambient gated off. The binding is per
+        // scene and per pass since PHOTON-SCENE-SWITCH-1; this is housekeeping.)
+        CHECK(o.scene->setGlobalIllumination(off), "GI off again");
         render(e, 2);
         e->destroyView(o.view);
         e->destroyScene(o.scene);

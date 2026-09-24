@@ -54,7 +54,7 @@
 // are 0.15 and not 0.9.
 //
 // Its own binary, like gi.pcc_mirror: the hybrid binds process-wide HlmsPbs
-// state (sVctBindingOwner), so a GI scene must not share a process with
+// state (before PHOTON-SCENE-SWITCH-1), so a GI scene must not share a process with
 // gi.modes' scene (spec §9).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"

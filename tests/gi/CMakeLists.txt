@@ -25,7 +25,7 @@ set_tests_properties(gi.modes PROPERTIES TIMEOUT 120 LABELS "engine")
 # that wall — plus Scene::giStatus() assertions, so buildPcc's silent
 # "hybrid renders as plain VCT" bail fails the suite instead of passing it.
 # Its OWN binary rather than a case in test_gi: the hybrid binds
-# process-wide HlmsPbs state (sVctBindingOwner), so this scene must not share a
+# process-wide HlmsPbs state (before PHOTON-SCENE-SWITCH-1), so this scene must not share a
 # process with gi.modes' scene (spec §9).
 add_executable(test_gi_pcc_mirror test_gi_pcc_mirror.cpp)
 set_target_properties(test_gi_pcc_mirror PROPERTIES
@@ -504,9 +504,9 @@ add_test(NAME gi.probe_open COMMAND test_gi_probe_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.probe_open PROPERTIES TIMEOUT 180 LABELS "engine")
 
-# gi.pcc_second_scene — the PROCESS-WIDE probe binding against a second scene's
-# own sky cubemap (lane SKY-FALLBACK-1). RUN_SERIAL is not needed: it owns both
-# of its scenes and touches the HlmsPbs binding only through them.
+# gi.pcc_second_scene — a second scene's mirror reads its OWN sky cubemap while
+# another scene holds a probe grid, is torn down, is destroyed (lane
+# SKY-FALLBACK-1; the per-pass GI binding, PHOTON-SCENE-SWITCH-1).
 add_executable(test_gi_pcc_second_scene test_gi_pcc_second_scene.cpp)
 set_target_properties(test_gi_pcc_second_scene PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -522,6 +522,27 @@ add_dependencies(test_gi_pcc_second_scene JahshakaEngineMedia)
 add_test(NAME gi.pcc_second_scene COMMAND test_gi_pcc_second_scene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_second_scene PROPERTIES TIMEOUT 180 LABELS "engine")
+
+# gi.scene_switch — WHAT THE SHADER READS IS THE SCENE BEING DRAWN
+# (PHOTON-SCENE-SWITCH-1): two rooms, each with its own voxels, probe grid, field,
+# sun and caster, drawn through two offscreen views and a thumbnail-shaped one —
+# A's passes first, alternating frames, B's passes first, and A destroyed — and
+# every judged frame each mirror reads its own room and each floor is shadowed.
+add_executable(test_gi_scene_switch test_gi_scene_switch.cpp)
+set_target_properties(test_gi_scene_switch PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_scene_switch PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_scene_switch PRIVATE JahshakaEngine)
+add_dependencies(test_gi_scene_switch JahshakaEngineMedia)
+add_test(NAME gi.scene_switch COMMAND test_gi_scene_switch
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.scene_switch PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # PHOTON'S CAMERA-CENTRED VOXEL CASCADES (SPECS/PHOTON_SPEC.md P0): the chain
 # builds and binds, a still camera re-voxelises nothing, a scroll re-centres one
@@ -1110,7 +1131,7 @@ set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_S
 
 # SURFACE-CACHE phase 2 (SURFACE-CACHE-1b) — the capture Component's gates.
 # SEVEN ctest names (gi.card_lighting + _indirect: PHOTON-CARDS-1's lit card; gi.cone_integrator_parity, gi.card_read_parity: PHOTON-CARDS-2) out of ONE binary, selected by argv: five different scenes
-# are needed and a GI arm binds process-wide state (sVctBindingOwner), so they
+# are needed and a GI arm binds process-wide state (before PHOTON-SCENE-SWITCH-1), so they
 # must not share a process — while the fixture scaffolding is the same in all
 # five. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
 add_executable(test_gi_cards test_gi_cards.cpp)
@@ -1554,12 +1575,12 @@ add_test(NAME gi.sun_contact_norays COMMAND test_gi_sun_contact
 set_tests_properties(gi.sun_contact_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
-# ...and the CURVED casters, in their own process (a second scene in the board's
-# process draws no directional map shadow — the finding is in the suite): a
-# sphere lattice with a three-level chain at 25.5 m under a 10-degree sun — the
-# map leaves every foot's contact lit (its normal-offset bias), the ray closes it
-# at full and half resolution, no sunlit pixel is darkened by the ray (the
-# lift's margin), and a glass pane over the contact keeps the map's answer.
-add_test(NAME gi.sun_contact_lattice COMMAND test_gi_sun_contact --lattice
+# ...and the CURVED casters as the process's SECOND scene, drawn beside the
+# board's (PHOTON-SCENE-SWITCH-1 — they used to need a process of their own, and
+# the cause was the mixed shadow-VAO list, not the second scene): a sphere
+# lattice with a three-level chain at 25.5 m under a 10-degree sun — the map
+# shadows every foot's contact and has no acne, the ray has none either at full
+# and half resolution, and a glass pane over the contact keeps the map's answer.
+add_test(NAME gi.sun_contact_both COMMAND test_gi_sun_contact --both
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sun_contact_lattice PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.sun_contact_both PROPERTIES TIMEOUT 300 LABELS "engine")
