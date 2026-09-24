@@ -3203,10 +3203,18 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         const bool gathering = sc && sc->giStatus().gather.on;
         if (sc && (gathering || !sc->giStatus().giAtRest)) {
             mEngine->setFixedFrameDelta(0.0f);
-            int i = 0;
-            if (gathering) { mEngine->renderOneFrame(); ++i; }
-            for (; i < cap && !sc->giStatus().giAtRest; ++i)
+            // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
+            // settle renders through the shot view, outside the driver's tick,
+            // and the frame monitor must not read them as driven frames.
+            const auto frame = [this] {
+                if (framemonitor::active())
+                    mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
                 mEngine->renderOneFrame();
+            };
+            int i = 0;
+            if (gathering) { frame(); ++i; }
+            for (; i < cap && !sc->giStatus().giAtRest; ++i)
+                frame();
             mEngine->setFixedFrameDelta(mLastFrameDelta);
         }
     }
