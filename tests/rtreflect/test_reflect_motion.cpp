@@ -98,6 +98,35 @@ static float meanDiff(const Image &a, const Image &b, unsigned x0, unsigned x1, 
 
 struct Pose { Vec3 pos; Vec3 target; };
 
+/// THE SHOT a pose is framed in: the full target, or a LETTERBOX (a camera that
+/// constrains its aspect, CAMERAS_SPEC §7.4) — then the picture is the inner
+/// rectangle and the rows above and below it are bars.
+static float gLetterboxAspect = 0.0f;   // 0 = the full frame
+
+static void setPose(View *view, const Pose &p)
+{
+    CameraDesc c = enginetest::testCameraDescLookAt(p.pos, p.target);
+    if (gLetterboxAspect > 0.0f) {
+        c.constrainAspect = true;
+        c.aspect = gLetterboxAspect;
+    }
+    view->setCamera(c);
+}
+
+/// The shot's rows: all of them, or the letterbox's inner rectangle's (the
+/// target is wider than tall only up to 16:9 here, so the bars are top and
+/// bottom).
+static void shotRows(unsigned &y0, unsigned &h)
+{
+    y0 = 0u; h = kHeight;
+    if (gLetterboxAspect > 0.0f) {
+        const float targetAspect = float(kWidth) / float(kHeight);
+        const float hf = targetAspect / gLetterboxAspect;
+        h = unsigned(std::lround(float(kHeight) * hf));
+        y0 = (kHeight - h) / 2u;
+    }
+}
+
 /// A steady turn to the LEFT about the camera's own position, 1.5 degrees a
 /// frame: what the owner's held-button pan is.
 static Pose yawPose(int frame)
@@ -121,26 +150,34 @@ static Pose truckPose(int frame)
 static float runMove(Engine *e, View *view, Pose (*poseAt)(int), const char *what, float &skyOut)
 {
     const Pose rest = poseAt(0);
-    enginetest::testCameraLookAt(view, rest.pos, rest.target);
+    setPose(view, rest);
     render(e, kWarmFrames);
     for (int i = 1; i <= kMoveFrames; ++i) {
-        const Pose p = poseAt(i);
-        enginetest::testCameraLookAt(view, p.pos, p.target);
+        setPose(view, poseAt(i));
         render(e, 1);
     }
     Image moving, settled;
     if (!view->readPixels(moving)) { std::printf("FAIL: readPixels moving (%s)\n", what); ++failures; }
     render(e, kSettleFrames);
     if (!view->readPixels(settled)) { std::printf("FAIL: readPixels settled (%s)\n", what); ++failures; }
-    // The floor is the lower two thirds of this framing; the top strip is sky.
-    const float floorErr = meanDiff(moving, settled, 0u, kWidth, kHeight / 3u, kHeight);
-    skyOut = meanDiff(moving, settled, 0u, kWidth, 0u, kHeight / 10u);
+    // The floor is the lower two thirds of the SHOT; its top strip is sky.
+    unsigned y0 = 0u, h = kHeight;
+    shotRows(y0, h);
+    const float floorErr = meanDiff(moving, settled, 0u, kWidth, y0 + h / 3u, y0 + h);
+    skyOut = meanDiff(moving, settled, 0u, kWidth, y0, y0 + h / 10u);
     std::printf("    %-28s floor %.3f codes   sky %.3f codes\n", what, floorErr, skyOut);
     return floorErr;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    // THE LETTERBOX TARGET ROW (gi.reflect_motion_letterbox_target): the rays
+    // arm's letterbox statements ASSERTED. In the ordinary rays row they print
+    // as `target:` lines — the ray tier does not take the letterbox's
+    // rectangle yet (see the letterbox block) — and the no-rays row gates them.
+    bool letterboxTarget = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::string(argv[i]) == "--letterbox-target") letterboxTarget = true;
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -309,6 +346,100 @@ int main()
               "the sky strip is the same picture moving and settled (%.3f / %.3f) — the floor's "
               "number is about reflections",
               skyYaw, skyTruck);
+
+    // ---- A LETTERBOXED SHOT (SSR-LETTERBOX-1) -----------------------------
+    //
+    // WHO GATES WHAT. The MARCH is this lane's subject and the no-rays row
+    // gates every statement below (measured: the rectangle 1.869 codes from
+    // the shot view before the fix, 0.000 after). THE RAY TIER does not take
+    // the rectangle: rq_reflect.comp reconstructs each pixel's view ray from
+    // the FULL target's uv (its `uv` / eyeLocalUv / worldAt, the frustum's
+    // corner rays spread over the whole target), so a letterboxed shot with
+    // rays reads ~37 codes from the shot view — the rays' whole contribution
+    // (on vs off is 42.5) — and its moving-vs-settled number is the march's
+    // alone. That is the ray tier's file, not this lane's: in the rays row the
+    // statements print as `target:` lines, and gi.reflect_motion_letterbox_target
+    // (label photon-target) asserts them; the lane that feeds the rectangle to
+    // the trace deletes the label.
+    const bool letterboxGates = !raysWanted || letterboxTarget;
+    const auto letterboxCheck = [&](bool ok, float value, float bar, const char *what) {
+        if (letterboxGates) {
+            CHECK_MSG(ok, "%s (%.3f, bar %.3f)", what, value, bar);
+        } else {
+            std::printf("target: %.4f (bar %.4f) %s%s\n", value, bar, what, ok ? " -- MET" : "");
+        }
+    };
+    //
+    // Under a constrained-aspect camera the prepass draws the shot into the
+    // target's INNER rectangle while the march, the resolve and the
+    // reprojection are full-target quads: they must work in the SHOT's uv (the
+    // camera's projection lands there) and read the textures through the
+    // rectangle. Two statements:
+    //
+    //  (1) A LETTERBOXED SHOT IS THE SHOT. At 2.4:1 the rectangle is exactly
+    //      384 x 160 on this 384 x 216 target, so a second view of exactly that
+    //      size with the same camera draws the SAME picture — reflections
+    //      included — and the rectangle must match it.
+    //  (2) THE BRIEF'S ARM: at 2.39:1 the moving-vs-settled error is the
+    //      full-frame arm's, within 0.5 code, both moves.
+    {
+        gLetterboxAspect = 2.4f;
+        const Pose rest = yawPose(0);
+        setPose(view, rest);
+        View *shot = e->createOffscreenView("reflectmotion-shot", kWidth, 160u,
+                                            Colour(0.45f, 0.55f, 0.70f));
+        CHECK(shot != nullptr, "the 384 x 160 shot view exists");
+        if (shot) {
+            shot->setScene(s);
+            shot->setPostFx(fx);
+            CameraDesc c = enginetest::testCameraDescLookAt(rest.pos, rest.target);
+            shot->setCamera(c);
+            render(e, kWarmFrames);
+            Image boxed, plain;
+            view->readPixels(boxed);
+            shot->readPixels(plain);
+            unsigned y0 = 0u, h = kHeight;
+            shotRows(y0, h);
+            // The inner rectangle's floor against the shot view's floor, row for
+            // row (the rectangle starts at row y0 of the letterboxed target).
+            double sum = 0.0;
+            size_t n = 0;
+            for (unsigned y = h / 3u; y < h && y < plain.height; ++y)
+                for (unsigned x = 0; x < kWidth; ++x) {
+                    const size_t a = (size_t(y + y0) * kWidth + x) * 4u;
+                    const size_t b = (size_t(y) * kWidth + x) * 4u;
+                    for (int k = 0; k < 3; ++k) {
+                        sum += std::fabs(double(boxed.rgba[a + k]) - double(plain.rgba[b + k]));
+                        ++n;
+                    }
+                }
+            const float same = n ? float(sum / double(n)) : 1e9f;
+            std::printf("    the letterboxed 2.4:1 rectangle (rows %u..%u) against a 384 x 160 view "
+                        "of the same camera: %.3f codes over the floor\n", y0, y0 + h, same);
+            // THE BAR: the march alone is deterministic and the two views run
+            // the same passes over the same pixels — measured 0.000 without rays;
+            // with the ray tier each view keeps its own running mean, whose
+            // blend floor keeps a glossy lobe moving by a fraction of a code
+            // (THE CONTROL above: 0.5).
+            const float sameBar = raysWanted ? 1.0f : 0.05f;
+            letterboxCheck(same < sameBar, same, sameBar,
+                           "A LETTERBOXED SHOT IS THE SHOT: its rectangle, in codes from a view of "
+                           "exactly its size");
+            e->destroyView(shot);
+        }
+
+        gLetterboxAspect = 2.39f;
+        float skyYawL = 0.0f, skyTruckL = 0.0f;
+        const float yawErrL = runMove(e, view, yawPose, "yaw, letterboxed 2.39:1", skyYawL);
+        const float truckErrL = runMove(e, view, truckPose, "truck, letterboxed 2.39:1", skyTruckL);
+        std::printf("    letterboxed against full frame: yaw %.3f vs %.3f, truck %.3f vs %.3f codes\n",
+                    yawErrL, yawErr, truckErrL, truckErr);
+        letterboxCheck(std::fabs(yawErrL - yawErr) <= 0.5f, std::fabs(yawErrL - yawErr), 0.5f,
+                       "A LETTERBOXED TURN reprojects like the full frame: |letterboxed - full| codes");
+        letterboxCheck(std::fabs(truckErrL - truckErr) <= 0.5f, std::fabs(truckErrL - truckErr), 0.5f,
+                       "A LETTERBOXED SLIDE reprojects like the full frame: |letterboxed - full| codes");
+        gLetterboxAspect = 0.0f;
+    }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

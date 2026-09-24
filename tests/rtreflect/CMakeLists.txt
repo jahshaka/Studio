@@ -98,6 +98,17 @@ target_link_libraries(test_reflect_motion PRIVATE JahshakaEngine)
 add_test(NAME gi.reflect_motion COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 300 LABELS "engine")
+# THE LETTERBOX (SSR-LETTERBOX-1): both rows run a 2.4:1 "the rectangle IS the
+# shot" arm and a 2.39:1 moving-vs-settled arm. The no-rays row GATES them (the
+# march, the resolve and the reprojection take the shot's uv); the rays row
+# prints them as `target:` lines and this row asserts them: the ray tier
+# (rq_reflect.comp) reconstructs its rays from the full target's uv, so a
+# letterboxed shot with rays reads ~37 codes from the shot view. LABEL
+# `photon-target`; the lane that feeds the rectangle to the trace deletes it.
+add_test(NAME gi.reflect_motion_letterbox_target COMMAND test_reflect_motion --letterbox-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_motion_letterbox_target PROPERTIES
+                     TIMEOUT 300 LABELS "engine;photon-target")
 add_test(NAME gi.reflect_motion_norays COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion_norays PROPERTIES
