@@ -146,6 +146,7 @@ using enginetest::leakroom::meanRG;
 
 // ---------------------------------------------------------------------------
 static int costMain(Engine *e);
+static int shippedCostMain(Engine *e);
 static int noRaysMain(Engine *e);
 
 int main()
@@ -162,6 +163,7 @@ int main()
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
 
+    if (std::getenv("JAH_GATHER_COST_SHIPPED")) return shippedCostMain(e);
     if (std::getenv("JAH_GATHER_COST")) return costMain(e);
     if (std::getenv("JAHSHAKA_NO_RAY_QUERY")) return noRaysMain(e);
     // THE ESTIMATOR, NOT ITS MEAN (PHOTON-GATHER-1c): every arm of this suite is
@@ -177,6 +179,7 @@ int main()
 
     const unsigned kSize = 256u;
     View *view = e->createOffscreenView("gather", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }
     // Offscreen views ship with shadows OFF; the leak measurement is nothing
     // without them (the outside lamp would light the room through the wall).
@@ -688,6 +691,7 @@ int main()
 static int noRaysMain(Engine *e)
 {
     View *view = e->createOffscreenView("gathernorays", 256u, 256u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *s = e->createScene("gathernorays");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -728,6 +732,7 @@ static int noRaysMain(Engine *e)
 static int costMain(Engine *e)
 {
     View *view = e->createOffscreenView("gathercost", 1920u, 1080u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *s = e->createScene("gathercost");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -914,6 +919,7 @@ static int costMain(Engine *e)
     // trace is per PROBE and the integrate per PIXEL, and neither knows about
     // the seam. Stated as an equivalence, not as a VR measurement.
     View *vr = e->createOffscreenView("gathervr", 4320u, 2384u, Colour(0, 0, 0));
+    if (vr) vr->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (vr) {
         // ...and the 1080p view stands DOWN first (see the note on `measure`):
         // with both enabled the "10.3 Mpx" rows could be the 1080p view's.
@@ -958,4 +964,99 @@ static int costMain(Engine *e)
               "(a print, not the spec's bar — see the note)", double(high));
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// THE SHIPPED GATHER'S ABSOLUTE COST (PHOTON-GATHER-1d fix round, item 8) — a
+// MEASUREMENT, run by hand under scripts/gpu-exclusive.sh with
+// JAH_GATHER_COST_SHIPPED=1 (no ctest registers it): 1080p, the tier's own
+// stride and rays (High 16 px, Epic 8 px, 64 rays), the frame index LIVE and the
+// rest door shut (a still view would hold and dispatch nothing), in a carded
+// room, the card read ON against OFF — the two arms paired in one process. The
+// four jobs' GPU timestamps, median of 60 frames after 60 of warm-up.
+static int shippedCostMain(Engine *e)
+{
+    View *view = e->createOffscreenView("gathershipped", 1920u, 1080u, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);
+    Scene *s = e->createScene("gathershipped");
+    if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(s);
+    view->setShadows(true);
+    armChain(view);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.02f, 0.02f, 0.03f), Colour(0.01f, 0.01f, 0.02f));
+    MeshData md = enginetest::unitCubeMesh();
+    md.cards = enginetest::boxCards(0.5f);
+    const MeshId cubeMesh = s->createMesh(md);
+    PbrParams wallP;
+    wallP.albedo = Colour(0.8f, 0.78f, 0.75f);
+    wallP.roughness = 0.9f;
+    const MaterialId wallMat = s->createPbrMaterial(wallP);
+    const Vec3 walls[6][2] = {
+        { Vec3(24, 12, 0.4f), Vec3(0, 4, 12) }, { Vec3(24, 12, 0.4f), Vec3(0, 4, -12) },
+        { Vec3(0.4f, 12, 24), Vec3(12, 4, 0) }, { Vec3(0.4f, 12, 24), Vec3(-12, 4, 0) },
+        { Vec3(24, 0.4f, 24), Vec3(0, -1, 0) }, { Vec3(24, 0.4f, 24), Vec3(0, 10, 0) } };
+    for (const auto &w : walls) {
+        const NodeId n = s->createNode();
+        if (!n || !s->attachMesh(n, cubeMesh, wallMat)) { std::printf("FAIL: wall\n"); return 1; }
+        enginetest::setNodeScale(s, n, w[0]);
+        enginetest::setNodePosition(s, n, w[1]);
+    }
+    for (int i = 0; i < 120; ++i) {
+        const NodeId n = s->createNode();
+        PbrParams p;
+        p.albedo = Colour(0.2f + 0.005f * float(i), 0.3f, 0.8f - 0.004f * float(i));
+        p.emissive = Colour(0.0f, 0.0f, float(i % 5) * 0.4f);
+        p.roughness = 0.6f;
+        const MaterialId m = s->createPbrMaterial(p);
+        if (!n || !m || !s->attachMesh(n, cubeMesh, m)) { std::printf("FAIL: prop\n"); return 1; }
+        enginetest::setNodeScale(s, n, Vec3(1.2f, 0.8f + 0.02f * float(i % 9), 1.2f));
+        enginetest::setNodePosition(s, n, Vec3(-10.0f + 1.7f * float(i % 13), 0.2f + 0.6f * float(i % 7),
+                                               -10.0f + 2.1f * float(i % 11)));
+    }
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 3.0f, -4.0f), Vec3(2.0f, 3.0f, 6.0f));
+    const auto median = [](std::vector<float> v) {
+        if (v.empty()) return -1.0f;
+        std::sort(v.begin(), v.end());
+        return v[v.size() / 2];
+    };
+    std::printf("   tier   cards  stride rays probes(+adaptive)  place  trace  filter integrate  TOTAL ms  "
+                "(cards resident)\n");
+    for (int epic = 0; epic < 2; ++epic)
+        for (int cards = 1; cards >= 0; --cards) {
+            GiParams gi;
+            gi.mode = GiMode::Vct;
+            gi.quality = GiQuality::High;
+            gi.epicTier = epic != 0;
+            gi.ddgi = GiToggle::Off;
+            gi.numBounces = epic ? 3 : 1;
+            gi.cascades = true;
+            gi.cards = cards ? GiToggle::On : GiToggle::Off;
+            gi.gather = GiToggle::On;
+            s->setGlobalIllumination(gi);
+            GatherTuning t;
+            t.restOff = true;
+            s->setGatherTuning(t);
+            render(e, 60);
+            std::vector<float> pl, tr, fi, in, tot;
+            for (int i = 0; i < 60; ++i) {
+                e->renderOneFrame();
+                const GatherStatus q = gatherStatus(s);
+                if (q.placeMs < 0.0f || q.traceMs < 0.0f || q.filterMs < 0.0f || q.integrateMs < 0.0f)
+                    continue;
+                pl.push_back(q.placeMs); tr.push_back(q.traceMs); fi.push_back(q.filterMs);
+                in.push_back(q.integrateMs);
+                tot.push_back(q.placeMs + q.traceMs + q.filterMs + q.integrateMs);
+            }
+            const GatherStatus q = gatherStatus(s);
+            std::printf("   %-6s %-5s  %4u  %4u  %6u(+%u)      %.3f  %.3f  %.3f   %.3f     %.3f   (%u)\n",
+                        epic ? "Epic" : "High", cards ? "ON" : "off", q.stride, q.raysPerProbe, q.probes,
+                        q.adaptive, double(median(pl)), double(median(tr)), double(median(fi)),
+                        double(median(in)), double(median(tot)), s->giStatus().cards.cardsResident);
+        }
+    return 0;
 }

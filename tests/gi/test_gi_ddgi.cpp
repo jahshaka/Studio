@@ -127,6 +127,7 @@ static Room buildRoom(Engine *engine)
 {
     Room r;
     r.view = engine->createOffscreenView("ddgi", 128, 128, Colour(0, 0, 0));
+    if (r.view) r.view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     r.scene = engine->createScene("ddgi");
     r.view->setScene(r.scene);
     r.scene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -570,6 +571,7 @@ int main(int argc, char **argv)
         // THE YOUNG VIEW: a second view of the scene, drawn alone for two frames,
         // is a history two frames old — not settled, and neither is GI.
         View *young = e->createOffscreenView("ddgi-young", 128, 128, Colour(0, 0, 0));
+        if (young) young->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
         young->setScene(r.scene);
         enginetest::testCameraLookAt(young, Vec3(0.0f, 4.0f, 6.0f), Vec3(0.0f, 0.0f, -0.5f));
         r.view->setEnabled(false);
@@ -588,6 +590,61 @@ int main(int argc, char **argv)
                   youngFrames, r.scene->giStatus().gather.settleFrames);
         e->destroyView(young);
         r.view->setEnabled(true);
+
+        // ---- 5d. A PER-FRAME MOVER NEVER RESTS, AND IT SETTLES (the fix round's
+        // split): a continuous transform write is not a RESTART — the history
+        // follows it per pixel — so a scene with something moving every frame is
+        // settled N frames after its last discontinuity, and GI comes to rest
+        // there, never at a cap. The rest (and its hold) stays off throughout.
+        {
+            std::printf("\n-- 5d. a per-frame mover: settled, never resting --\n");
+            const NodeId mover = r.scene->createNode();
+            r.scene->setNodeMovable(mover, true);
+            const MeshId cube = r.scene->createMesh(enginetest::unitCubeMesh());
+            PbrParams mp;
+            mp.albedo = Colour(0.2f, 0.8f, 0.2f);
+            const MaterialId mm = r.scene->createPbrMaterial(mp);
+            CHECK(mover && cube && mm && r.scene->attachMesh(mover, cube, mm), "a movable cube exists");
+            float x = -2.0f;
+            const auto step = [&]() {
+                x += 0.01f;
+                enginetest::setNodePosition(r.scene, mover, Vec3(x, 0.5f, 0.5f));
+                e->renderOneFrame();
+            };
+            int warm = 0;
+            for (; warm < 4000 && !r.scene->giStatus().giAtRest; ++warm) step();
+            CHECK_MSG(r.scene->giStatus().giAtRest,
+                      "GI comes to rest with the mover moving every frame (%d frames after it arrived)", warm);
+            int restless = 0, frames = 0;
+            for (int i = 0; i < 40; ++i) {
+                step();
+                if (!r.scene->giStatus().giAtRest) ++restless;
+            }
+            st = r.scene->giStatus();
+            CHECK_MSG(restless == 0 && st.gather.restFrames == 0u && st.gather.settled,
+                      "...and STAYS at rest while it moves: settled every frame (%d frames not), never resting "
+                      "(rest frames %u), since its restart %u", restless, st.gather.restFrames,
+                      st.gather.sinceRestart);
+            // THE RESTART: a light write while the mover moves.
+            CHECK(r.scene->refreshGiLighting(true), "a light write with the mover moving");
+            CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
+            unsigned lastSince = 0u;
+            while (frames < 4000 && !r.scene->giStatus().giAtRest) {
+                step();
+                ++frames;
+                lastSince = r.scene->giStatus().gather.sinceRestart;
+            }
+            st = r.scene->giStatus();
+            const int lightingFrames = frames - int(lastSince);
+            std::printf("   at rest %d frames after the write: %d of them the lighting still landing, then %u "
+                        "since the restart (N %u)\n", frames, lightingFrames, lastSince, st.gather.settleFrames);
+            CHECK_MSG(st.giAtRest && lastSince == st.gather.settleFrames && frames < 4000,
+                      "A MOVING SCENE SETTLES: GI at rest %d frames after the write — the lighting's own "
+                      "%d, then exactly N = %u since the last restart — never the cap",
+                      frames, lightingFrames, st.gather.settleFrames);
+            r.scene->removeNode(mover);
+            render(e, 2);
+        }
         CHECK(r.scene->setGlobalIllumination(ddgi), "back to the section's field");
         render(e, 2);
     }

@@ -927,9 +927,14 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);
     // The native window exists now: bind a View to it, then the engine scene.
-    if (!view() && mEngine)
+    if (!view() && mEngine) {
+        // THE EDITOR'S PICTURE: an offscreen fallback of the viewport still
+        // gathers (it drives the scene's GI, and its pictures are the
+        // screenshot verbs', taken at rest).
+        setFallbackContract(jahshaka::engine::OffscreenContract::StillPicture);
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
+    }
     // …and bind it, whether the scene is born here or was born earlier for the
     // Player (ensureEngineScene returns early then, so the bind is its own call).
     ensureEngineScene();
@@ -2782,6 +2787,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.temporal     = st.gather.temporal;
     out.gather.historyAge   = int(std::min(st.gather.historyAge, 1u << 30));
     out.gather.restFrames   = int(std::min(st.gather.restFrames, 1u << 30));
+    out.gather.sinceRestart = int(std::min(st.gather.sinceRestart, 1u << 30));
     out.gather.settleFrames = int(st.gather.settleFrames);
     out.gather.settled      = st.gather.settled;
     out.gather.error        = QString::fromStdString(st.gather.error);
@@ -3012,6 +3018,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                                              unsigned(width), unsigned(height),
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
+    // A STILL PICTURE (View::setOffscreenContract): it gathers, and the settle
+    // below waits for giAtRest before the readback.
+    shot->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // THE USER'S PICTURE OPENS NEITHER HELPER CHANNEL (VR-4-FIX finding 2).
     //
     // `pushEditorHelpers(false)` below takes away the furniture the MIRROR
@@ -3172,6 +3181,14 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // The engine's clock is FROZEN for these frames (particles, shader time and
     // texture animation stay at the instant the script asked for; the document's
     // clock is not stepped at all) and handed back before the shot's own frames.
+    // ...AND A GATHERING SCENE SETTLES WHOEVER ASKED (the fix round): the
+    // shot view is a StillPicture, so a shot the script did not ask to settle
+    // (the Screenshot button, a preview tile) still waits for its own history
+    // — at the verb's cap — rather than photographing the raw estimate.
+    {
+        jahshaka::engine::Scene *sc0 = view() ? view()->scene() : nullptr;
+        if (mShotSettleFrames <= 0 && sc0 && sc0->giStatus().gather.on) mShotSettleFrames = 2000;
+    }
     if (mShotSettleFrames > 0) {
         const int cap = mShotSettleFrames;
         mShotSettleFrames = 0;

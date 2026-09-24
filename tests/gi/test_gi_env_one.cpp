@@ -109,6 +109,8 @@ int main()
     Engine *e = engine.get();
 
     View *view = e->createOffscreenView("envone", kSize, kSize, Colour(0, 0, 0));
+
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     // Asked AFTER the first view: the device is created with it (Engine.h).
     const bool rays = e->rayQueryAvailable() && e->rayTracing();
     {

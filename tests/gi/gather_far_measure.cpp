@@ -288,20 +288,20 @@ static void armChain(View *view, int ssrRow)
 {
     PostFxDesc fx;
     fx.allowOffscreen = true;
-    fx.ssr = ssrRow;       // the tier's own row; >= 2 is what makes the stride 8
+    fx.ssr = ssrRow;       // the tier's own SSR row (the gather's stride is epicTier's)
     view->setPostFx(fx);
 }
 
 /// THE TIER AXIS IS STUDIO'S OWN TABLE, and `GiQuality` is only part of it
-/// (src/services/worldmodes.cpp:81-85 and :354 — Epic shares High's resolution
-/// dial and differs in the bounce count and the SSR row, and the SSR row is what
-/// `epicRow` reads for the probe stride: OgreRayQuery.cpp:3276, stride 8 vs 16
-/// at OgreScreenProbeGather.cpp:585).
-struct Tier { const char *name; GiQuality quality; GiMode mode; int bounces; int ssrRow; };
+/// (src/services/worldmodes.cpp — Epic shares High's resolution dial and
+/// differs in the bounce count, the SSR row and the gather's density). The
+/// gather's stride is the engine's tier table's (`giQualityFacts`, keyed on
+/// GiParams::epicTier: 8 at Epic, 16 below), never the SSR row.
+struct Tier { const char *name; GiQuality quality; GiMode mode; int bounces; int ssrRow; bool epic; };
 static const Tier kTiers[3] = {
-    { "Medium", GiQuality::Medium, GiMode::Vct,         1, 0 },
-    { "High",   GiQuality::High,   GiMode::VctPccHybrid, 1, 1 },
-    { "Epic",   GiQuality::High,   GiMode::VctPccHybrid, 3, 2 },
+    { "Medium", GiQuality::Medium, GiMode::Vct,         1, 0, false },
+    { "High",   GiQuality::High,   GiMode::VctPccHybrid, 1, 1, false },
+    { "Epic",   GiQuality::High,   GiMode::VctPccHybrid, 3, 2, true },
 };
 
 static GiParams giAt(const Tier &t)
@@ -312,6 +312,7 @@ static GiParams giAt(const Tier &t)
     gi.cascades = true;
     gi.ddgi = GiToggle::Off;          // STATED: the field is off; this is the gather's own ray
     gi.numBounces = t.bounces;
+    gi.epicTier = t.epic;
     gi.gather = GiToggle::On;
     return gi;
 }
@@ -443,6 +444,7 @@ static int farBlasMain(Engine *e, View *view);
 static int sweepMain(Engine *e, View *view)
 {
     View *big = e->createOffscreenView("gafar-cost", 1920u, 1080u, Colour(0, 0, 0));
+    if (big) big->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!big) { std::printf("FAIL: cost view: %s\n", e->lastError().c_str()); return 1; }
     big->setShadows(true);
     big->setEnabled(false);
@@ -480,8 +482,9 @@ static int sweepMain(Engine *e, View *view)
             const float reach = std::sqrt(3.0f) * 2.0f * outerHalf;
             const float len[3] = { outerHalf, 0.5f * reach, reach };
             const GatherStatus gst = gs.gather;
-            const float bias = gs.cascades.empty() ? 0.02f
-                                                   : std::max(0.01f, 0.5f * gs.cascades[0].cell);
+            // THE RAY START, as the gather now makes it (the fix round): an
+            // epsilon off the surface, never half a voxel.
+            const float bias = 0.001f;
             std::printf("\n-- %s %s: %zu cascades, outer half %.2f m; lengths %.2f / %.2f / %.2f m; "
                         "gather on=%d running=%d stride %u octRes %u\n", f.name, tier.name,
                         boxes.size(), double(outerHalf), double(len[0]), double(len[1]),
@@ -583,6 +586,7 @@ int main()
     engine->setFixedFrameDelta(1.0f / 60.0f);
     Engine *e = engine.get();
     View *view = e->createOffscreenView("gafar", kW, kH, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view: %s\n", e->lastError().c_str()); return 1; }
     view->setShadows(true);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
@@ -646,8 +650,9 @@ int main()
                               r.outerHalf > 0.0f ? r.outerHalf : 50.0f);
             const GatherStatus gst = gs.gather;
             r.stride = gst.stride; r.octRes = gst.octRes; r.gatherProbes = gst.probes;
-            const float bias = gs.cascades.empty() ? 0.02f
-                                                   : std::max(0.01f, 0.5f * gs.cascades[0].cell);
+            // THE RAY START, as the gather now makes it (the fix round): an
+            // epsilon off the surface, never half a voxel.
+            const float bias = 0.001f;
 
             unsigned tried = 0, dropped = 0;
             const std::vector<Probe> probes =
@@ -729,6 +734,7 @@ static void tuneFar(Scene *s, float rayLength, bool farOff)
 static int farBlasMain(Engine *e, View *view)
 {
     View *big = e->createOffscreenView("farblas-cost", 1920u, 1080u, Colour(0, 0, 0));
+    if (big) big->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!big) { std::printf("FAIL: cost view: %s\n", e->lastError().c_str()); return 1; }
     big->setShadows(true);
     big->setEnabled(false);

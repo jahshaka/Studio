@@ -375,6 +375,7 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
                                              unsigned(width), unsigned(height),
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
+    shot->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // A PICTURE OF THE PLAYER, so it hides what the player hides: the grid, the
     // wires and icons, the gizmo, the selection shell (ChainDesc::helpers).
     // Before setScene, so the workspace is built once in its final shape.
@@ -413,23 +414,11 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
     // Quiet the on-screen views for the two forced frames (fps audit F5) —
     // the same scope the editor's screenshot uses.
     OffscreenRenderScope quiet(engine.get());
-    // THE PICTURE AT REST, as the editor's shot takes it (PHOTON-GATHER-1d). Where
-    // the screen-probe gather runs, a hit is lit from the surface cache's cards,
-    // and a card relights over frames after the geometry it describes changes (a
-    // hidden floor shown again is recaptured); the shot view's own gather history
-    // also starts young. So a gathering scene draws the shot's first frame and
-    // then waits on the ONE predicate, giAtRest, with the engine's clock frozen
-    // (the player's time does not move for a photograph) — the same rule and the
-    // same cap as EngineSceneViewport's shot. A scene that does not gather takes
-    // exactly the path it always took.
-    if (mScene && mScene->giStatus().gather.on) {
-        const float delta = engine->fixedFrameDelta();
-        engine->setFixedFrameDelta(0.0f);
-        engine->renderOneFrame();
-        for (int i = 1; i < kShotSettleCap && !mScene->giStatus().giAtRest; ++i)
-            engine->renderOneFrame();
-        engine->setFixedFrameDelta(delta);
-    }
+    // THE PICTURE AT REST, as the editor's shot takes it (PHOTON-GATHER-1d): a
+    // hit is lit from the surface cache, which relights over frames after the
+    // geometry it describes changes (a hidden floor shown again is recaptured),
+    // and the shot view's own history starts young — bridge/stableoffscreenrender.h.
+    settleStillPicture(engine.get(), mScene, kShotSettleCap);
     // Plus whatever the texture load-request counter still owes
     // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
     renderStableFrames(engine.get());

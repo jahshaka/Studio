@@ -143,6 +143,7 @@ static const unsigned kW = 768u, kH = 432u;
 static View *makeView(Engine *e, Scene *&s, const char *name)
 {
     View *view = e->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) return nullptr;
     s = e->createScene(name);
     if (!s) return nullptr;

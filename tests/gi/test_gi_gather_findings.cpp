@@ -200,6 +200,7 @@ static IrrMean irrIn(const GatherStatus &st, float x0, float y0, float x1, float
 static int glassMain(Engine *e)
 {
     View *view = e->createOffscreenView("glass", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view\n"); return 1; }
     view->setShadows(true);
 
@@ -377,6 +378,7 @@ static int glassMain(Engine *e)
 static int nestMain(Engine *e)
 {
     View *view = e->createOffscreenView("nest", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view\n"); return 1; }
     view->setShadows(true);
     armChain(view);
@@ -579,6 +581,7 @@ static void evalAmbientSh(const float sh[27], const Vec3 &n, double out[3])
 static int skyMain(Engine *e)
 {
     View *view = e->createOffscreenView("sky", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *s = e->createScene("sky");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -664,6 +667,7 @@ static int skyMain(Engine *e)
 static int planeWeightMain(Engine *e)
 {
     View *view = e->createOffscreenView("cage", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     if (!view) { std::printf("FAIL: view\n"); return 1; }
     view->setShadows(true);
     armChain(view);
@@ -728,9 +732,18 @@ static int planeWeightMain(Engine *e)
                 "crosses the edge onto the wall\n", 100.0 * weight);
     CHECK_MSG(face.n > 0u && edge.n > 0u && bare.n > 0u, "the three regions are covered (%u %u %u)",
               face.n, edge.n, bare.n);
-    CHECK_MSG(std::fabs(edge.r - bare.r) <= 0.05 * bare.r + 0.10 * std::fabs(excess),
-              "THE PLANE WEIGHT: the wall beside the fence's edge reads the WALL's irradiance — %.4f "
-              "against the bare wall's %.4f (bar 5 %% of it + 10 %% of the fence's excess %.4f)",
+    // ONE-SIDED (the fix round): the guard is that the FENCE's excess does not
+    // cross the edge onto the wall. The wall there may read LESS than the bare
+    // wall, and physically does: the fence stands 1-3 cm proud of the wall and
+    // the emitter lies 61-81 degrees off the wall's normal, so the fence hides
+    // ALL of it from the wall within 7 cm of the edge and 26 % at 10 cm (a Monte
+    // Carlo of this geometry, spikes/photon-gather-1d). The two-sided bar held
+    // only while every probe's rays started half a voxel (4 cm) off its
+    // surface — IN FRONT of the fence — which hid the fence from the wall.
+    CHECK_MSG(edge.r - bare.r <= 0.05 * bare.r + 0.10 * std::fabs(excess),
+              "THE PLANE WEIGHT: the fence's excess does not cross its edge onto the wall — %.4f "
+              "against the bare wall's %.4f (bar: at most 5 %% of it + 10 %% of the fence's excess "
+              "%.4f above; below is the fence's own occlusion)",
               edge.r, bare.r, excess);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
@@ -751,6 +764,7 @@ static int planeWeightMain(Engine *e)
 static int letterboxMain(Engine *e)
 {
     View *view = e->createOffscreenView("letterbox", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     Scene *s = e->createScene("letterbox");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
@@ -819,6 +833,138 @@ static int letterboxMain(Engine *e)
     return failures ? 1 : 0;
 }
 
+// ===========================================================================
+// gi.gather_edge — GA-EDGE (PHOTON-GATHER-1d fix round)
+// ===========================================================================
+// A pixel on a SILHOUETTE belongs to the surface it is on. The selftest's B1
+// showed 1-px bright lines along the blocks' top silhouettes: the integrate's
+// four grid probes all sat on OTHER surfaces there (the sky has none, the
+// neighbour cells' probes are on the floor or the wall), every plane test
+// failed, the pixel's coverage fell to 0 and the field's cage — a different,
+// brighter estimate — owned it. THE FIXTURE: a grey block on a sky-lit floor,
+// seen from below its top so its top edge stands against the sky and its two
+// sides against the far floor and sky: the silhouette row (and column, both
+// sides) must read within the store's quantum of the row (column) inside it,
+// and the gather must answer it.
+static int edgeMain(Engine *e)
+{
+    View *view = e->createOffscreenView("edge", kSize, kSize, Colour(0, 0, 0));
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
+    Scene *s = e->createScene("edge");
+    if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(s);
+    view->setShadows(true);
+    armChain(view);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine — gi.gather_edge skips cleanly\n");
+        return 0;
+    }
+    addBox(s, matte(Colour(0.8f, 0.8f, 0.8f)), Vec3(0, -0.25f, 0), Vec3(200, 0.5f, 200));
+    addBox(s, matte(Colour(0.5f, 0.5f, 0.5f)), Vec3(0, 1.0f, 0), Vec3(2.0f, 2.0f, 2.0f));
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.sun.enabled = true;
+    sky.sun.angularDiameterDeg = 2.0f;
+    sky.sun.colour = Colour(200.0f, 200.0f, 180.0f, 1.0f);
+    sky.sun.dir[0] = 0.3f; sky.sun.dir[1] = 0.8f; sky.sun.dir[2] = 0.5f;
+    sky.atmosphere.hasSun = true;
+    sky.atmosphere.sunDir[0] = 0.3f; sky.atmosphere.sunDir[1] = 0.8f; sky.atmosphere.sunDir[2] = 0.5f;
+    CHECK(s->setSky(sky), "the analytic sky binds");
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 3.0f);
+    float sh[27] = {};
+    bool shReady = false;
+    for (int f = 0; f < 30 && !shReady; ++f) { render(e, 1); shReady = s->skyAmbientSh(sh); }
+    s->setAmbientSh(sh);
+    s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));
+    // Below the block's top (1.6 m < 2 m): the front face's top edge is the
+    // silhouette against the sky.
+    view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.3f, 1.6f, 5.0f), Vec3(0.0f, 1.2f, 0.0f)));
+    GiParams gi = chainGi(true);
+    gi.ddgi = GiToggle::On;              // the field's cage is what a declined pixel falls to
+    CHECK(s->setGlobalIllumination(gi), "the chain builds (with the field)");
+    setGather(s, gi, true, true);
+    render(e, 90);
+    GatherStatus st = s->giStatus().gather;
+    CHECK_MSG(st.running && !st.irradiance.empty(), "the gather runs and reads back (%ux%u)",
+              st.irradianceW, st.irradianceH);
+    Image img;
+    CHECK(view->readPixels(img), "the picture reads back");
+    // THE BLOCK'S PIXELS: the gather answers them and the sky has no surface, so
+    // the readback's DEPTH-VALID mask is the block + the floor; the block is the
+    // part above the floor's horizon row at the centre column.
+    const auto lum = [&](unsigned x, unsigned y) {
+        const unsigned char *p = &img.rgba[(size_t(y) * img.width + x) * 4u];
+        return double(p[0]) + double(p[1]) + double(p[2]);
+    };
+    const auto irr = [&](unsigned x, unsigned y) { return &st.irradiance[(size_t(y) * st.irradianceW + x) * 4u]; };
+    const auto isSurface = [&](unsigned x, unsigned y) {
+        const float *v = irr(x, y);
+        return v[0] + v[1] + v[2] > 0.0f || v[3] > 0.0f;   // the sky writes (0,0,0,0)
+    };
+    // The top silhouette: the first surface row from the top in the middle columns.
+    unsigned yTop = 0;
+    const unsigned cx = kSize / 2u;
+    for (unsigned y = 0; y < kSize; ++y) if (isSurface(cx, y)) { yTop = y; break; }
+    // The side silhouettes at the block's mid height.
+    const unsigned yMid = yTop + 12u;
+    unsigned xL = 0, xR = kSize - 1u;
+    for (unsigned x = 0; x < kSize; ++x) if (isSurface(x, yMid)) { xL = x; break; }
+    for (unsigned x = kSize; x-- > 0;) if (isSurface(x, yMid)) { xR = x; break; }
+    // The row / column means over the middle of the edge, and the gather's
+    // coverage there.
+    double top = 0, below = 0, covTop = 0; unsigned nTop = 0;
+    for (unsigned x = xL + 4u; x + 4u < xR; ++x) {
+        if (!isSurface(x, yTop) || !isSurface(x, yTop + 1u)) continue;
+        top += lum(x, yTop); below += lum(x, yTop + 1u); covTop += irr(x, yTop)[3]; ++nTop;
+    }
+    double left = 0, leftIn = 0, right = 0, rightIn = 0, covL = 0, covR = 0; unsigned nSide = 0;
+    for (unsigned y = yTop + 4u; y < yTop + 24u && y < kSize; ++y) {
+        left += lum(xL, y); leftIn += lum(xL + 1u, y); covL += irr(xL, y)[3];
+        right += lum(xR, y); rightIn += lum(xR - 1u, y); covR += irr(xR, y)[3];
+        ++nSide;
+    }
+    if (nTop) { top /= nTop; below /= nTop; covTop /= nTop; }
+    if (nSide) { left /= nSide; leftIn /= nSide; right /= nSide; rightIn /= nSide; covL /= nSide; covR /= nSide; }
+    // THE STORE'S QUANTUM: the picture is 8-bit, three channels summed — one
+    // code a channel is 3 in these sums.
+    const double kQuantum = 3.0;
+    std::printf("   the silhouette (row %u, columns %u..%u): top %.2f vs the row below %.2f (coverage %.3f); "
+                "left %.2f vs inside %.2f (coverage %.3f); right %.2f vs inside %.2f (coverage %.3f)\n",
+                yTop, xL, xR, top, below, covTop, left, leftIn, covL, right, rightIn, covR);
+    CHECK_MSG(nTop > 8u && nSide > 8u, "the block's silhouettes were found (%u / %u samples)", nTop, nSide);
+    CHECK_MSG(std::fabs(top - below) <= kQuantum,
+              "THE TOP SILHOUETTE BELONGS TO ITS SURFACE: its row reads %.2f against %.2f inside "
+              "(bar: the store's quantum, %.0f summed codes)", top, below, kQuantum);
+    CHECK_MSG(std::fabs(left - leftIn) <= kQuantum && std::fabs(right - rightIn) <= kQuantum,
+              "...AND BOTH SIDES: left %.2f / %.2f, right %.2f / %.2f", left, leftIn, right, rightIn);
+    CHECK_MSG(covTop >= 0.99 && covL >= 0.99 && covR >= 0.99,
+              "THE GATHER ANSWERS THE SILHOUETTE: coverage top %.3f, left %.3f, right %.3f (bar 0.99)",
+              covTop, covL, covR);
+    // THE EDGE-ON TOP: the camera just above the block's top, which is then a
+    // strip three pixels tall that few probes land on. Its pixels must stay on
+    // the gather (the silhouette rule's two steps): measured 0.32 of them
+    // answered before the rule, 0.80 with it — the rest are the strip's far
+    // edge, two metres behind every probe in reach, which only a probe ON the
+    // top can answer (placement's quarter samples miss a 3-px strip; recorded).
+    {
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.3f, 2.12f, 5.0f), Vec3(0.0f, 1.2f, 0.0f)));
+        render(e, 90);
+        st = s->giStatus().gather;
+        unsigned yt = 0;
+        for (unsigned y = 0; y < kSize; ++y) if (isSurface(cx, y)) { yt = y; break; }
+        double cov = 0.0;
+        unsigned n = 0;
+        for (unsigned y = yt; y < yt + 3u; ++y)
+            for (unsigned x = 80; x < 180; ++x) { cov += irr(x, y)[3]; ++n; }
+        cov = n ? cov / n : 0.0;
+        std::printf("   the edge-on top (rows %u..%u): gather coverage %.3f\n", yt, yt + 2u, cov);
+        CHECK_MSG(cov >= 0.75, "AN EDGE-ON TOP STAYS ON THE GATHER: %.3f of its strip answered (bar 0.75; "
+                  "0.32 before the silhouette rule)", cov);
+    }
+    std::printf("%s\n", failures ? "FAILED" : "PASSED");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "";
@@ -836,6 +982,7 @@ int main(int argc, char **argv)
     if (mode == "sky") return skyMain(e);
     if (mode == "plane_weight") return planeWeightMain(e);
     if (mode == "letterbox") return letterboxMain(e);
+    if (mode == "edge") return edgeMain(e);
     std::printf("FAIL: unknown mode '%s' (glass | nest | sky | plane_weight)\n", mode.c_str());
     return 1;
 }
