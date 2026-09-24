@@ -281,12 +281,22 @@ static int glassMain(Engine *e)
         if (arm.refractionPass) {
             // The refraction pass lies OUTSIDE the gather's bracket (the pass
             // property is registered for the PrePassUse pass alone), so the
-            // refractive slab shades as it does with the gather off: pixel for
-            // pixel.
-            CHECK_MSG(glass.mean <= 0.25 && glass.worst <= 3u,
+            // refractive slab shades as it does with the gather off - but it
+            // TRANSMITS the floor under it, which the opaque pass drew. Since
+            // PHOTON-VOXEL-3/4 that floor's rough specular (roughness 1: a lobe
+            // wider than a cone) takes its occluded share from the DIFFUSE
+            // estimator's voxel light (Vct_piece_ps.any, applyVctRoughSpecular) -
+            // the gather's where it runs - so the gather moves what the glass
+            // transmits by the gather's own change of irradiance times the black
+            // floor's specular albedo: the white patch's change over its albedo
+            // 0.85, times the dielectric F0 0.04 at roughness 1 (the split-sum's
+            // DFG there is below 1: an upper bound), plus the reader's quantum 0.25.
+            const double glassBar = 0.25 + patch.mean / 0.85 * 0.04;
+            CHECK_MSG(glass.mean <= glassBar && glass.worst <= 3u,
                       "GA-GLASS, %s: the glass reads NO probe irradiance — its pixels are the "
-                      "gather-off picture's (mean %.3f/255, worst %u; bar 0.25 mean, 3 worst)",
-                      arm.name, glass.mean, glass.worst);
+                      "gather-off picture's but for the floor's rough specular it transmits (mean "
+                      "%.3f/255, worst %u; bar %.3f mean = 0.25 + the patch's %.3f / 0.85 x 0.04, 3 worst)",
+                      arm.name, glass.mean, glass.worst, glassBar, patch.mean);
         } else {
             // IN THE GATHERING PASS a blended fragment's diffuse GI is THE
             // ENVIRONMENT TERM ALONE since PHOTON-GATHER-1d (the listener's

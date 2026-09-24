@@ -318,11 +318,13 @@ int main()
     // faces (measured in VOXEL-4's fix round: the directional level of the facing half 0.0827,
     // the hit's own texel 0.0218, withdrawn). Measured on the split store: the gather 0.0215
     // against the field 0.0084 + the terms above 0.0029 at the 0.05 m wall - the residual
-    // 0.0102, applied only to a wall thinner than the cell. VOXEL-5 (ii) - the sun's
-    // irradiance per half sign at the injection - is the owed fix; the thicker walls read 0.
+    // 0.0102 (+0.0001: the two readings are known to their printed 4th decimal - the bar
+    // must not be the reading itself), applied only to a wall thinner than the cell.
+    // VOXEL-5 (ii) - the sun's irradiance per half sign at the injection - is the owed fix;
+    // the thicker walls read 0.
     const GiQualityFacts high = giQualityFacts(GiQuality::High);
     const float kCell0 = 2.0f * high.cascades[0].halfSize / float(high.cascades[0].resolution);
-    const float kA1Residual = 0.0102f;
+    const float kA1Residual = 0.0102f + 0.0001f;
     for (int a = 0; a < 4; ++a) {
         const float a1 = thicknesses[a] < kCell0 ? kA1Residual : 0.0f;
         const float bar = rows[a].field + 0.002f + kSensitivity * (kStartMove + kStartUncertainty) +
