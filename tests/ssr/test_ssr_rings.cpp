@@ -202,7 +202,7 @@ int main()
     const unsigned fpChecker = footprint(byDefault, noSsr);
     // A FOOTPRINT BIG ENOUGH TO MEASURE: the reflected cube is a small, bright
     // object in a mirror floor, so the march's whole footprint is a few percent
-    // of the frame by construction (measured: 3045 px, 4.6 %). What the bar
+    // of the frame by construction (measured: 3048 px, 4.7 %). What the bar
     // guards is a fixture that stopped reflecting at all — a thousand pixels is
     // two orders of magnitude above the noise and a third of what it should be.
     CHECK_MSG(fpChecker > 1000u,
@@ -237,7 +237,7 @@ int main()
         // RANGE as well as its step, and an arm short enough to reach nothing
         // would report a grip of 1.0 — "the step decides everything" — from a
         // range effect. The guard is what keeps the dose-response about the
-        // step (measured at this pose: 3045 / 3119 / 3051 pixels).
+        // step (measured at this pose: 3048 / 3296 / 3051 pixels).
         CHECK_MSG(fp[0] && fp[1] && fp[2],
                   "%s: every step length still reaches the reflected cube (%u / %u / %u px)",
                   arms[a].name, fp[0], fp[1], fp[2]);
@@ -248,7 +248,13 @@ int main()
         std::printf("   %-8s footprint  0.26 m step %6u | 0.065 m %6u | 0.52 m %6u  -> grip %.3f\n",
                     arms[a].name, fp[0], fp[1], fp[2], grip[a]);
     }
-    // THE BARS AND THEIR HEADROOM (measured on this rig: 2.6 %, 0.7 %, 4.1 %).
+    // THE BARS AND THEIR HEADROOM (measured on this rig: 8.2 %, 0.2 %, 9.4 %;
+    // 2.6 %, 0.7 %, 4.1 % before SSR-EDGE-1 put the march's LAST sample on the
+    // end of the ray's range — the 0.065 m arm's 24 steps now reach the
+    // crossings its last jittered step used to overshoot, so its footprint grew
+    // 3119 -> 3296 under `checker` and `dither`, while `refined`, which asks
+    // the crossing itself, moved 3181 -> 3261 like the other two arms and
+    // its grip FELL).
     // This is a FLAT floor, where the shipped march is already close to
     // trustworthy — its rays arrive face-on and well inside the tolerance, as
     // the shader's own note says — so the grip here is a few percent where on
