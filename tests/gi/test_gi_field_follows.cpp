@@ -476,6 +476,10 @@ int main() {
                     endGround);
         CHECK(b.ifdFollows > a.ifdFollows + 4u, "the field was re-placed once per cascade-0 step");
         CHECK(b.ifdBound, "it is still the bound field at the end of the walk");
+        std::printf("   the field's refinement passes owed at the walk's end: %d of a %d-sample "
+                    "target (%u probes); chain settles %lld -> %lld\n", int(b.ifdRefinesOwed),
+                    int(b.ifdTargetSamples), unsigned(b.ifdProbes), (long long)a.chainSettles,
+                    (long long)b.chainSettles);
         CHECK(fieldWhole(b), "...and whole");
         CHECK(dist(centreOf(b), b.cascades[0].centre) < 0.5f * b.cascades[0].halfSize,
               "...and still centred on cascade 0, 100 m from where it started");
