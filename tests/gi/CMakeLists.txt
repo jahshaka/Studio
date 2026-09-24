@@ -1458,3 +1458,25 @@ add_test(NAME gi.gather_plane_target COMMAND test_gi_gather_phase2 plane --targe
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_plane_target PROPERTIES TIMEOUT 600
                      LABELS "engine;photon-target")
+
+# gi.settle_partial — THE OWED SETTLE INJECTS ONLY THE STALE CASCADES
+# (PHOTON-GATHER-1b item 6; WRITER-1's debt, audit F5): a cascade re-voxelised in
+# the frame of an at-rest tick owes the cascades INSIDE it (k, ..., 0), not the
+# chain's whole sweep — and the partial settle is the whole sweep's fixed point
+# (light voxels byte-identical, picture 0/255). Counted on the render monitor's
+# `vct.light.settle` rows.
+add_executable(test_gi_settle_partial test_gi_settle_partial.cpp)
+set_target_properties(test_gi_settle_partial PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_settle_partial PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_settle_partial PRIVATE JahshakaEngine)
+add_dependencies(test_gi_settle_partial JahshakaEngineMedia)
+add_test(NAME gi.settle_partial COMMAND test_gi_settle_partial
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.settle_partial PROPERTIES TIMEOUT 600 LABELS "engine")
