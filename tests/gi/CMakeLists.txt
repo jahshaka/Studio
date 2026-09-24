@@ -801,7 +801,8 @@ set_tests_properties(gi.field_scroll PROPERTIES TIMEOUT 300 LABELS "engine" RUN_
 # gi.field_thin_wall — THE FIELD'S ESTIMATOR ON A ONE-VOXEL EMISSIVE WALL
 # (PHOTON-FIELD-ROTATE-1 part 1): a probe's reading of a one-voxel-thick
 # emissive wall at four probe spacings, three lateral offsets, against the
-# analytic irradiance of the wall's voxelised extent. Its own binary like every
+# authored wall's analytic irradiance times what the directional coverage model
+# predicts the probe reads (PHOTON-VOXEL-3). Its own binary like every
 # GI suite; RUN_SERIAL like every cascade suite.
 add_executable(test_gi_field_thin_wall test_gi_field_thin_wall.cpp)
 set_target_properties(test_gi_field_thin_wall PROPERTIES
@@ -1337,6 +1338,59 @@ set_tests_properties(gi.gather_trace PROPERTIES
                      TIMEOUT 600 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_TRACE=1")
 
+# gi.voxel_coverage — THE STORE HOLDS A SURFACE'S PROJECTED AREA PER AXIS
+# (PHOTON-VOXEL-3): an open emissive quad and a closed box one and four cascade-0
+# cells thick, turned 0/15/45 degrees against the lattice, and a quad at opacity
+# 0.5, read out of the store whole (giVoxelVolume) — the store equal to the CPU
+# model of tests/support/voxelcoveragemodel.h along every axis, an open surface's
+# integral equal to the authored one, the reader's mip-0 march over the store
+# against the same march over the model (face-on flux, the opacity along the
+# normal and along the plane), a thin wall opaque along its normal, a
+# half-transparent surface half its opaque self.
+add_executable(test_gi_voxel_coverage test_gi_voxel_coverage.cpp)
+set_target_properties(test_gi_voxel_coverage PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_coverage PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_coverage PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_coverage JahshakaEngineMedia)
+add_test(NAME gi.voxel_coverage COMMAND test_gi_voxel_coverage
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
+# (tests/support/voxel_lab.h) over analytic stores - gi.ddgi_ambient's sealed shell per
+# surface class and its open scene per cone set, on the cone-trace reference and the
+# hemisphere's truth. No engine, no GPU: the record the reader's rules were chosen on,
+# every candidate the lab measured beside the shipped reader. `validate DIR` reads the
+# stores a suite dumped (JAH_VOXEL_DUMP, tests/support/voxeldump.h).
+add_executable(test_gi_voxel_lab test_gi_voxel_lab.cpp)
+set_target_properties(test_gi_voxel_lab PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+add_test(NAME gi.voxel_lab COMMAND test_gi_voxel_lab
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_lab PROPERTIES TIMEOUT 120 LABELS "engine")
+# VOXEL-DIAL (PHOTON-VOXEL-4) — a TOOL, not a suite: the scene-fitted volume's
+# resolution (GiParams::testVoxelResolution) against its rebuild, injection and
+# frame cost, paired 32 / 64 in one process. Run under scripts/gpu-exclusive.sh.
+add_executable(voxel_dial_measure EXCLUDE_FROM_ALL voxel_dial_measure.cpp)
+set_target_properties(voxel_dial_measure PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(voxel_dial_measure PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(voxel_dial_measure PRIVATE JahshakaEngine)
+add_dependencies(voxel_dial_measure JahshakaEngineMedia)
 # gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L (PHOTON
 # phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane VOXEL-CLIP-1,
 # ogre-patch 0087). The emissive VOXEL store was RGBA8_UNORM, so every emitter

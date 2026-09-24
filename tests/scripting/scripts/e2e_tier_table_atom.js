@@ -58,8 +58,8 @@ for (var tn in byTier) {
 // THE THREE CLAIMS THE OLD TOOLTIPS GOT WRONG, now assertable:
 assert(byTier.low.chain[0].resolution === byTier.medium.chain[0].resolution,
        "Low and Medium voxelise at the SAME resolution — \"Medium is twice Low\" was never true");
-assert(byTier.low.voxelResolution === 32 && byTier.low.chain[0].resolution === 64,
-       "Low's CHAIN is 64 per axis while its single scene-fitted volume is 32");
+assert(byTier.low.voxelResolution === 64 && byTier.low.chain[0].resolution === 64,
+       "Low's CHAIN and its single scene-fitted volume are both 64 per axis (PHOTON-VOXEL-4)");
 assert(byTier.high.chain[0].resolution === 128 &&
        byTier.high.chain[byTier.high.chain.length - 1].resolution === 64,
        "High's chain is 128 near the eye and 64 far away — not \"128^3\"");

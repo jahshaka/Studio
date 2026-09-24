@@ -272,6 +272,14 @@ int main()
     // the settled floor with the chain's reflections differs from the same floor
     // without them.
     {
+        // WITH THE VOXEL ARM OFF (PHOTON-VOXEL-3 round 9): what is switched here is the
+        // chain's reflection, and with the voxels on the floor ALSO reflects through the
+        // pixel's specular cone - which since the plane march reads the pillars nearly as
+        // the screen does (the on-vs-off difference fell 5.3 -> 1.3 codes with the arm
+        // on). The subject is "the resolve did not decline everywhere", so it is measured
+        // against no reflection at all.
+        GiParams giOff; giOff.mode = GiMode::Off;
+        s->setGlobalIllumination(giOff);
         const Pose rest = yawPose(0);
         enginetest::testCameraLookAt(view, rest.pos, rest.target);
         render(e, kWarmFrames);
@@ -283,9 +291,9 @@ int main()
         render(e, kWarmFrames);
         view->readPixels(without);
         view->setPostFx(fx);
+        s->setGlobalIllumination(gi);
+        render(e, kWarmFrames);
         const float present = meanDiff(with, without, 0u, kWidth, kHeight / 3u, kHeight);
-        // Measured 50.7 with the ray tier (the floor mirrors the sky) and 3.4 with
-        // the march alone (only the pillars are on screen to be reflected).
         CHECK_MSG(present > 1.5f,
                   "THE FLOOR REFLECTS: reflections on vs off differ by %.3f codes over the floor (> 1.5)",
                   present);

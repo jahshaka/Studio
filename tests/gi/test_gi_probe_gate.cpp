@@ -133,6 +133,19 @@ int main()
     addSlab(s, white, Vec3(-4.2f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 8.8f));    // -X wall
     addSlab(s, white, Vec3( 4.2f, 2.5f, 0.0f), Vec3(0.4f, 5.0f, 8.8f));    // +X wall
     addSlab(s, red,   Vec3(0.0f,  2.5f, 4.2f), Vec3(8.8f, 5.0f, 0.4f));    // +Z wall: THE red one
+    // THE ROOM'S OWN LIGHT (PHOTON-VOXEL-3 round 9; gi.pcc_mirror's panel): an emissive
+    // panel under the ceiling lights the room through the voxels only. The directional
+    // light's injection is shadowed by the sealed shell, so the ceiling-high wall below
+    // used to be lit for GI only by the shell's outer faces bleeding through the slabs,
+    // which the directional store closed.
+    {
+        PbrParams panel;
+        panel.albedo = Colour(0.05f, 0.05f, 0.05f);
+        panel.emissive = Colour(12.0f, 12.0f, 12.0f);
+        panel.roughness = 1.0f;
+        CHECK(addPlate(s, panel, Vec3(0.0f, 4.9f, 0.0f), Vec3(3.0f, 0.1f, 3.0f)) != 0,
+              "the room's emissive panel attaches");
+    }
 
     // The chrome witness (gi.pcc_mirror's mirror box, same numbers).
     PbrParams mirrorP; mirrorP.albedo = Colour(1, 1, 1); mirrorP.metalness = 1.0f; mirrorP.roughness = 0.0f;

@@ -892,7 +892,14 @@ int main()
         // printed as it always was.
         std::printf("   13: disc-exclusion metric retired — whitest %.4f is the room's wall, "
                     "not the disc (mirror b %.4f)\n", double(withoutDisc), double(mirrorPx().b));
-        CHECK(mirrorPx().b > mirrorPx().g && mirrorPx().b > mirrorPx().r,
+        // AS A SHARE, like the first reading above (PHOTON-VOXEL-3): the pixel is the
+        // hybrid's blend of the probe's blue photograph with the cone-traced half, whose
+        // escape reads the fixture's GREEN environment (PHOTON-ENV-1) - on the directional
+        // store that half keeps more of it here (g 0.659 over b 0.620; the lane's first
+        // commit already read g 0.729 over b 0.655), so "blue over green" measured the
+        // blend, not the probe. What only the probe's photograph holds is blue over red.
+        const Colour after = mirrorPx();
+        CHECK(after.b > 0.30f && after.b > after.r + 0.08f,
               "13: with inProbes FALSE the mirror is still the bare blue sky through a probe");
 
         // THE INCLUSION IS STILL A MEASURED DEFECT, NOT AN ASSERTION (ENGINE-6

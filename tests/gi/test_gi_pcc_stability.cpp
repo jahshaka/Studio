@@ -159,6 +159,21 @@ int main()
 
     const NodeId lightNode = enginetest::addDirectionalLight(s, Vec3(0.0f, -0.12f, 0.993f), 6.0f);
     CHECK(lightNode != 0, "directional light created");
+    // THE OTHER WALLS' OWN LIGHT (PHOTON-VOXEL-3 round 9). At the pan's far end the witness
+    // window also holds the far (-Z) wall beside the metal, which nothing lit in the render:
+    // the room's GI used to light it, through the shell's outer faces BLEEDING in, and the
+    // directional store closed that - the window then counted an unlit wall as "dark metal"
+    // (0.1154 at x -1.20, the same with every probe in place). Three more directional
+    // lights light the -Z, -X and +X walls' inner faces IN THE RENDER, which is what the
+    // probes photograph; like the first, their injection is shadowed by the sealed shell,
+    // so the voxels stay dark and the instrument keeps its meaning - a pixel whose probe
+    // was dropped falls to cone tracing, which in this room returns nothing.
+    CHECK(enginetest::addDirectionalLight(s, Vec3(0.0f, -0.12f, -0.993f), 3.0f) != 0,
+          "the -Z wall's light");
+    CHECK(enginetest::addDirectionalLight(s, Vec3(-0.993f, -0.12f, 0.0f), 3.0f) != 0,
+          "the -X wall's light");
+    CHECK(enginetest::addDirectionalLight(s, Vec3(0.993f, -0.12f, 0.0f), 3.0f) != 0,
+          "the +X wall's light");
 
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 3.6f), Vec3(0.0f, 2.0f, 0.0f));
     // The witness's +Z face fills the middle of the 192x192 frame.

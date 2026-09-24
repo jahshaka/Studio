@@ -236,12 +236,10 @@ int main()
     // escape is not 1 on this fixture. At Low the volume is isotropic and a
     // cone's escape is its own composite: nothing but the box is in the volume
     // and every cone leaves the top face upward, so the escape is 1 and the
-    // pixel is the environment's own number. Above Low the escape rides the
-    // anisotropic OCCUPANCY estimate (jah_voxel_sample.glsl, jahVoxelOccupancy:
-    // the min of three axis composites one mip finer), which a cone STARTING on
-    // a surface reads its own slab through as its footprint grows — deliberately
-    // an under-estimate (READER-1's measured trade against a sealed room's
-    // leak). Its reading is printed and fenced at its measured value, and the
+    // pixel is the environment's own number. Above Low the escape is the directional
+    // composite along each cone (PHOTON-VOXEL-3; the min-over-axes OCCUPANCY estimate
+    // that stood in for it is deleted), read by the plane march with the origin rule (a
+    // cone never reads the face it leaves). Its reading is printed and fenced, and the
     // number it is short by is the escape, not the environment.
     {
         GiParams low = base;
@@ -257,11 +255,11 @@ int main()
     CHECK(s->setGlobalIllumination(base), "VCT Medium (anisotropic, no field, no gather) builds");
     render(e, 20);
     const double rb = readTop(4);
-    std::printf("   (b) the cones' escape, Medium:   %.4f  (%.3f of (a): the occupancy "
-                "estimate's escape)\n", rb, rb / ra);
+    std::printf("   (b) the cones' escape, Medium:   %.4f  (%.3f of (a): the directional "
+                "composite's escape)\n", rb, rb / ra);
     CHECK_MSG(rb / ra > 0.92 && rb / ra < 1.02,
-              "(b) anisotropic: the same number times the occupancy estimate's escape, fenced at "
-              "its measured 0.94 (%.4f against %.4f)", rb, ra);
+              "(b) anisotropic: the same number times the directional composite's escape, fenced "
+              "at 0.92-1.02 (%.4f against %.4f)", rb, ra);
 
     // ---- (c) THE IRRADIANCE FIELD ----------------------------------------------
     {

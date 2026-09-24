@@ -287,6 +287,16 @@ int main(int argc, char **argv)
     // 1.057x instead of 1.029x: +1.4/255 on a 24/255 band, inside the volume
     // where the escape is unoccluded. The bracket's purpose is a REGRESSION
     // toward the 1.9x staircase, and 1.08 keeps it.
+    // PHOTON-VOXEL-4 (SUITES-REANCHOR-1): THE CHAIN'S OWN QUADRATURE of a flat slab under any
+    // sky is 1.000 at every face - the cones leave the one surface in every cascade and see
+    // nothing else - which IS the target row's claim (1 +- 0.05), not a fence: an ordinary row
+    // derived from it would be the target row. So the brackets below stay what they are, a
+    // regression fence toward the staircase, and the split store's numbers are recorded: the
+    // chain's faces now read 1.000-1.107x where the leaky store read 0.821-1.252x; the single
+    // volume's edge 1.000x; the flat ambient's faces within one code. What steps is cascade 0's
+    // face under a real sky (1.05x noon, 1.11x low sun): the field inside cascade 0 against the
+    // four-cone set outside it - two quadratures of one sky, the set's own error (BAR 2, -0.034
+    // on an open floor, gi.ddgi_ambient) weighted by where the sky is bright.
     const float kSingleFaceMax = 1.08f;      // measured 1.007-1.057 over four ambients
     const float kChainFaceMax  = 1.35f;      // measured 0.821-1.252 over four ambients
     const float kChainFaceMin  = 0.75f;
