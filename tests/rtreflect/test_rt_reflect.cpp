@@ -200,6 +200,7 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 static int lampMain(Engine *e, bool target);
 static int hitresMain(Engine *e);
 static int footprintSweepMain(Engine *e);
+static int formatCheckMain(Engine *e, const std::string &logFile);
 
 int main(int argc, char **argv)
 {
@@ -209,14 +210,19 @@ int main(int argc, char **argv)
         if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
         if (std::strcmp(argv[i], "--hitres") == 0) wantHitres = true;
     }
-    bool wantSweep = false;
-    for (int i = 1; i < argc; ++i)
+    bool wantSweep = false, wantFormat = false;
+    for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--footprint-sweep") == 0) wantSweep = true;
+        if (std::strcmp(argv[i], "--format-check") == 0) wantFormat = true;
+    }
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = wantHitres ? "test-rt-reflect-hitres-ogre.log"
+    cfg.logFile = wantFormat ? (getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT")
+                                    ? "test-rt-reflect-format-refused-ogre.log"
+                                    : "test-rt-reflect-format-ogre.log")
+                  : wantHitres ? "test-rt-reflect-hitres-ogre.log"
                   : wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
                                              : "test-rt-reflect-lamp-ogre.log")
                   : getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-rt-reflect-norays-ogre.log"
@@ -231,6 +237,7 @@ int main(int argc, char **argv)
     if (wantLamp) return lampMain(e, wantLampTarget);
     if (wantHitres) return hitresMain(e);
     if (wantSweep) return footprintSweepMain(e);
+    if (wantFormat) return formatCheckMain(e, cfg.logFile);
 
     View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtreflect");
@@ -1934,4 +1941,70 @@ static int footprintSweepMain(Engine *e)
     std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
                 crossing);
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+/// RAY-FMT-CHECK (PHOTON P3; `--format-check`, the rows
+/// gi.rt_reflect_format_lavapipe and gi.rt_reflect_format_refused_lavapipe).
+///
+/// The tier's availability gate asks the device for STORAGE_IMAGE support of
+/// the formats its own images use (RGBA16F, RG32F) instead of assuming it, and a
+/// device that lacks one is a no-rays device with ONE log line naming it. Both
+/// rows run on LAVAPIPE, the second device of the box: without the deny it must
+/// NOT refuse (llvmpipe stores to both — measured with vulkaninfo, 2026-09-24,
+/// which is what made the brief's "lavapipe lacks some" premise false), and
+/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT` the same device must
+/// refuse through the one gate: no ray query, a view at the ray tier with no
+/// trace, frames that still draw, and the line in the log.
+static bool logContains(const std::string &path, const char *needle)
+{
+    FILE *f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    std::string text;
+    char buf[4096];
+    size_t n = 0;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n);
+    std::fclose(f);
+    return text.find(needle) != std::string::npos;
+}
+
+static int formatCheckMain(Engine *e, const std::string &logFile)
+{
+    const char *deny = getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT");
+    std::printf("== gi.rt_reflect_format: the ray tier asks the device for its storage formats "
+                "(%s)\n", deny ? deny : "no format denied");
+    View *view = e->createOffscreenView("rtformat", 64u, 64u, Colour(0, 0, 0));
+    Scene *s = e->createScene("rtformat");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;                    // the ray tier's row: a device with rays would trace here
+    view->setPostFx(fx);
+    enginetest::addTestCube(s, Colour(0.5f, 0.5f, 0.5f), 1.0f, 0.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 4.0f), Vec3(0.0f, 0.0f, 0.0f));
+    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    const bool available = e->rayQueryAvailable();
+    const RayQueryStatus rq = s->rayQueryStatus();
+    const bool refusedLine = logContains(logFile, "ray-query tier refused");
+    std::printf("   rayQueryAvailable %d; status available %d reflect %d; refusal line in the log "
+                "%d\n", int(available), int(rq.available), int(rq.reflect), int(refusedLine));
+    Image img;
+    CHECK(view->readPixels(img) && img.width == 64u, "the frames draw either way");
+    if (deny) {
+        CHECK(!available, "A DEVICE THAT CANNOT STORE TO A HISTORY FORMAT IS A NO-RAYS DEVICE: "
+                          "rayQueryAvailable() is false");
+        CHECK(!rq.available && !rq.reflect,
+              "...every consumer reads the same gate: the scene's status is unavailable and "
+              "its view traces nothing");
+        CHECK(refusedLine, "...and the refusal is said once, in the log, naming the format");
+    } else {
+        CHECK(!refusedLine, "a device that stores to both formats is NOT refused (no refusal "
+                            "line)");
+        std::printf("   (the device's own ray-query answer: %s)\n",
+                    available ? "available — the gate passed on the formats"
+                              : "no ray query on this device at all");
+    }
+    std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
+    return failures ? 1 : 0;
 }

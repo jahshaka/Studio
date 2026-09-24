@@ -56,6 +56,24 @@ add_test(NAME gi.rt_reflect_hitres COMMAND test_rt_reflect --hitres
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 300 LABELS "engine")
 
+# RAY-FMT-CHECK (PHOTON P3): the availability gate asks the device for STORAGE
+# support of the tier's history formats and refuses with a log line. On
+# LAVAPIPE, twice: the real check (llvmpipe stores to both formats, so it must
+# not refuse) and the refusal path through the gate's test door (no device on
+# this box lacks either format).
+set(_rt_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
+if(EXISTS "${_rt_lvp_icd}")
+    add_test(NAME gi.rt_reflect_format_lavapipe COMMAND test_rt_reflect --format-check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_format_lavapipe PROPERTIES TIMEOUT 300 LABELS "engine"
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd}")
+    add_test(NAME gi.rt_reflect_format_refused_lavapipe COMMAND test_rt_reflect --format-check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 300
+                         LABELS "engine"
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
+endif()
+
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_norays PROPERTIES
