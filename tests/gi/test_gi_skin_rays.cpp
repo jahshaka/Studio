@@ -28,9 +28,18 @@
 //      near copies) and range, is occluded; under the bind pose's arm it is not.
 //   5. THE ROW OVERRIDE: the GPU scene's entry for the character names its skin
 //      row (GpuInstance::raster[2]); a static item's names none.
-//   6. THE MIRROR (`--mirror`, printed as a measurement AND asserted): the
-//      reflection of the posed character in a perfect mirror against the
-//      raster of the same character through the mirror's reflected camera.
+//   6. THE MIRROR (`--mirror`, its own row): the reflection of the posed
+//      character in a perfect mirror against the raster through the mirror's
+//      reflected camera. WHAT THIS LANE DELIVERS IS THE POSED SILHOUETTE AND
+//      SHADOW, NOT A SHADED CHARACTER REFLECTION: a hit is shaded from cards (a
+//      rigged mesh gets none) or the voxels (which hold the rig's BIND pose), so
+//      the bent arm beyond the bind pose's voxels shows the probe/sky. Asserted:
+//      no T-pose ghost, and the static baseline; the shading gap is printed.
+//      Owed elsewhere: the voxel feed reading the override (SKIN-2).
+//   7. A SHARED SKELETON (a multi-piece character's armour) re-skins with its
+//      MASTER's clip, in the same frame; a RE-ATTACH in place to a different mesh
+//      rebuilds the cache (identity = Item, Mesh, rig generation); a blend index
+//      past the rig is refused at attach.
 //
 // `--cost` (not a ctest row): N characters of V vertices each, every one
 // re-posed every frame — the skin dispatch's and the refits' GPU milliseconds
@@ -116,11 +125,11 @@ static void addBox(MeshData &d, float x0, float x1, float y0, float y1, float z0
     rings = keep;
 }
 
-static MeshData columnMesh(unsigned rings = 1)
+static MeshData columnMesh(unsigned rings = 1, float top = 2.0f, float z = 0.0f)
 {
     MeshData d;
-    addBox(d, -0.2f, 0.2f, 0.0f, 1.0f, -0.2f, 0.2f, 0, rings);
-    addBox(d, -0.2f, 0.2f, 1.0f, 2.0f, -0.2f, 0.2f, 1, rings);
+    addBox(d, -0.2f, 0.2f, 0.0f, 1.0f, z - 0.2f, z + 0.2f, 0, rings);
+    addBox(d, -0.2f, 0.2f, 1.0f, top, z - 0.2f, z + 0.2f, 1, rings);
     return d;
 }
 
@@ -354,6 +363,31 @@ int main(int argc, char **argv)
     const ClipDesc clip = bendClip(rig, -90.0f);
     CHECK_MSG(s->attachClips(ch, &clip, 1), "the Bend clip attaches (%s)", e->lastError().c_str());
     CHECK(pose(s, ch, 0.0f), "the clip poses the column STRAIGHT (t = 0)");
+    // THE FOLLOWER (a multi-piece character's armour): a second piece — the same
+    // column shifted to z = 0.5, beside the body — SHARING the first's skeleton,
+    // so it is posed by the MASTER's clip and never by one of its own. A shared
+    // instance's bones carry the MASTER's node (Bone: node x derived x reverse
+    // bind), so the piece draws where the master stands, as the raster does.
+    const float kFz = 0.5f;
+    const NodeId fo = s->createNode();
+    CHECK_MSG(s->attachSkinnedMesh(fo, s->createMesh(columnMesh(1, 2.0f, kFz)), mat, rig) &&
+                  s->shareSkeleton(fo, ch),
+              "a follower piece shares the master's skeleton (%s)", e->lastError().c_str());
+    // THE MALFORMED ASSET: a blend index past the rig (bone 5 of 2) is refused at
+    // attach with a reason, so the raster and the cache never draw two different
+    // wrong pictures (OgreSkeleton.cpp's check; the skin job's clamp is the
+    // second lock).
+    {
+        MeshData bad = columnMesh();
+        bad.blendIndices[0] = 5;
+        const MeshId badMesh = s->createMesh(bad);
+        const NodeId bn = s->createNode();
+        CHECK_MSG(badMesh && !s->attachSkinnedMesh(bn, badMesh, mat, rig) &&
+                      e->lastError().find("bone the rig does not have") != std::string::npos,
+                  "a mesh whose blend index names bone 5 of a 2-bone rig is REFUSED (%s)",
+                  e->lastError().c_str());
+        s->removeNode(bn);
+    }
     enginetest::testCameraLookAt(view, Vec3(3.0f, 2.5f, 5.0f), Vec3(0.3f, 1.0f, 0.0f));
     view->setShadows(true);
     SunContactDesc sc;
@@ -391,9 +425,10 @@ int main(int argc, char **argv)
                     "refits %llu reason '%s'\n",
                     rq.instances, rq.skinnedInstances, rq.skinCaches, rq.skinPasses, rq.skinDispatches,
                     rq.skinBlasBuilds, rq.skinRefits, rq.skinReason.c_str());
-        CHECK(rq.skinnedInstances == 1 && rq.skinCaches == 1,
-              "5a. the rigged column IS traced, through its own skin cache (it used to be excluded)");
-        CHECK(rq.skinBlasBuilds == 1, "its structure was built once");
+        CHECK(rq.skinnedInstances == 2 && rq.skinCaches == 2,
+              "5a. the rigged column and its follower ARE traced, each through its own skin cache "
+              "(they used to be excluded)");
+        CHECK(rq.skinBlasBuilds == 2, "each structure was built once");
         GpuSceneEntry en, fl;
         CHECK(s->gpuSceneEntry(unsigned(chSlot), en) && en.skinRow != 0xFFFFFFFFu,
               "5b. the character's GPU-scene entry names its SKIN ROW (the per-instance override)");
@@ -403,7 +438,9 @@ int main(int argc, char **argv)
 
     // ---- 1: straight ------------------------------------------------------
     {
-        const auto h = trace(s, { down(0.6f, 0.0f), down(0.0f, 0.0f) });
+        const auto h = trace(s, { down(0.6f, 0.0f), down(0.0f, 0.0f), down(0.6f, kFz) });
+        CHECK_MSG(h[2].slot == floorSlot && near(h[2].t, 3.0f, 2e-3f),
+                  "1a'. straight: at x = 0.6 the FOLLOWER's ray passes it too (t %.4f)", h[2].t);
         CHECK_MSG(h[0].slot == floorSlot && near(h[0].t, 3.0f, 2e-3f),
                   "1a. straight: a ray down at x = 0.6 passes the column and meets the floor (t %.4f, slot %d)",
                   h[0].t, h[0].slot);
@@ -417,7 +454,13 @@ int main(int argc, char **argv)
     CHECK(pose(s, ch, 1.0f), "the clip bends the column (t = 1)");
     render(e, 1);
     {
-        const auto h = trace(s, { down(0.6f, 0.0f), down(0.0f, 0.0f), down(0.95f, 0.0f) });
+        const auto h = trace(s, { down(0.6f, 0.0f), down(0.0f, 0.0f), down(0.95f, 0.0f),
+                                  down(0.6f, kFz) });
+        const int foSlot = slotOfNode(s, fo);
+        CHECK_MSG(h[3].slot == foSlot && near(h[3].t, 1.8f, 2e-3f),
+                  "1c'. the FOLLOWER, posed only by the MASTER's clip, is hit on its bent arm in the "
+                  "SAME frame (t %.4f, slot %d of %d) — its own pose serial never moved",
+                  h[3].t, h[3].slot, foSlot);
         CHECK_MSG(h[0].slot == chSlot && near(h[0].t, 1.8f, 2e-3f),
                   "1c+2. ONE frame after the pose push, a ray down at x = 0.6 meets the BENT arm's top "
                   "at y = 1.2 (t %.4f, slot %d; the bind pose would reach the floor at t 3)",
@@ -443,23 +486,27 @@ int main(int argc, char **argv)
                 const float x = sheet[k][0], y = sheet[k][1];
                 const bool inLower = x > -0.2f && x < 0.2f && y > 0.0f && y < 1.0f;
                 const bool inArm = x > 0.0f && x < 1.0f && y > 0.8f && y < 1.2f;
-                if (hs[k].slot != chSlot) {
+                // The follower piece stands in front (z to kFz + 0.2) and is posed
+                // by the same bones: a hit on either must land on the bent shape.
+                if (hs[k].slot != chSlot && hs[k].slot != foSlot) {
                     if (inArm && x > 0.25f && y > 0.85f && y < 1.15f) ++armMissed;
                     continue;
                 }
                 ++onChar;
                 const float z = 3.0f - hs[k].t;
-                const bool zOk = z > 0.2f - 2e-3f && z < 0.2f + 2e-3f;
+                const float front = hs[k].slot == foSlot ? kFz + 0.2f : 0.2f;
+                const bool zOk = z > front - 2e-3f && z < front + 2e-3f;
                 if (!zOk || (!inLower && !inArm)) ++outside;
             }
             CHECK_MSG(onChar > 100 && outside == 0 && armMissed == 0,
                       "1g. a 64x64 sheet of rays: %d hit the character, %d of them OFF the bent shape "
-                      "(its front face z = 0.2), %d rays through the bent arm missed it",
+                      "(front faces z = 0.2 / 0.7), %d rays through the bent arm missed it",
                       onChar, outside, armMissed);
         }
         const RayQueryStatus rq = s->rayQueryStatus();
-        CHECK_MSG(rq.skinPasses == passesBefore + 1 && rq.skinRefits == refitsBefore + 1,
-                  "2b. the pose change cost ONE skin pass and ONE refit (%llu, %llu)",
+        CHECK_MSG(rq.skinPasses == passesBefore + 2 && rq.skinRefits == refitsBefore + 2,
+                  "2b. the pose change cost ONE skin pass and ONE refit per piece, master and "
+                  "follower (%llu, %llu)",
                   rq.skinPasses - passesBefore, rq.skinRefits - refitsBefore);
     }
     // ---- 3: still frames and a walk ----------------------------------------
@@ -508,6 +555,25 @@ int main(int argc, char **argv)
         CHECK_MSG(h[0].slot == floorSlot && near(h[1].t, 1.0f, 2e-3f),
                   "1f. straight again one frame later: x = 0.6 reaches the floor, x = 0 the top at y = 2 "
                   "(t %.4f / %.4f)", h[0].t, h[1].t);
+    }
+    // ---- a RE-ATTACH in place: a new mesh, a new vertex count, the same node --
+    // attachSkinnedMesh detaches and re-creates the Item at the same node, and a new
+    // Item may land at the old one's address: the cache must follow the MESH and
+    // the rig generation, never the pointer (a stale cache would over-read the new
+    // source and refit over the old mesh's released indices).
+    {
+        s->removeNode(fo);       // the follower's share would die with the master's Item
+        render(e, 1);
+        const MeshId tall = s->createMesh(columnMesh(3, 2.5f));
+        const bool reattached = s->attachSkinnedMesh(ch, tall, mat, rig);
+        CHECK_MSG(reattached, "the character re-attaches in place to a TALLER column with a different "
+                              "vertex count (%s)", reattached ? "" : e->lastError().c_str());
+        render(e, 1);
+        const auto h = trace(s, { down(0.0f, 0.0f) });
+        const RayQueryStatus rq = s->rayQueryStatus();
+        CHECK_MSG(h[0].slot == slotOfNode(s, ch) && near(h[0].t, 0.5f, 2e-3f) && rq.skinCaches == 1,
+                  "the next frame's ray meets the NEW shape's top at y = 2.5 (t %.4f) and the "
+                  "character still holds ONE cache (%d)", h[0].t, rq.skinCaches);
     }
     // ---- a removed character gives its cache back --------------------------
     {
@@ -702,6 +768,11 @@ int mirrorMain(Engine *e)
             // NO T-POSE GHOST: the raster of the STRAIGHT (bind-like) pose from the
             // same reflected camera; a reflection pixel inside it and more than 2 px
             // from the bent raster would be the bind pose showing through.
+            // WHY 2 px: a MIRROR is not spatially filtered at all (radius 0 at the
+            // mirror alpha, rq_reflect_filter.comp), so the tolerance is the shaded
+            // edge the STATIC control measures on this fixture (worst raster-to-
+            // reflection 1.4-2.2 px: the voxel cell a hit is shaded from). A filter
+            // that ever reaches a mirror must be read against this bar.
             pose(s, ch, 0.0f);
             const Image rStraight = shot(false, true, false, "r-rig-straight");
             pose(s, ch, 1.0f);
