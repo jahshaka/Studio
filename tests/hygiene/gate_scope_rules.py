@@ -201,6 +201,15 @@ def main(source, build):
     check(any(l.startswith("ctest -j3 ") and "-LE" in l for l in out.splitlines()),
           "...and so does the printed MERGE tier line (-j3)")
 
+    # 8. THE DECODE'S OWN SUITE (PHOTON-HIT-SHADE-1 audit F2): the Atom media, HlmsAtom and
+    # the fork pin (Ogre's Pbs pieces are the decode's text too) select engine.atom_parity;
+    # a lane that changed all three gated without it once.
+    for path in ("irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any",
+                 "irisgl/engine/src/HlmsAtom.cpp", "irisgl/thirdparty/ogre-next"):
+        code, out, err = run([tool, "--files", path, "--build", build], source)
+        check(code == 0 and ("engine.atom_parity|" in plain(out) or "engine.atom_parity)" in plain(out)),
+              "%s selects engine.atom_parity" % path)
+
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
         return 1

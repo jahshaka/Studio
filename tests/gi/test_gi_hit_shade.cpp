@@ -32,6 +32,11 @@
 //       raster does.
 //   (f) `engine.atom_parity` byte-identical is that suite's own (the screen
 //       decode is untouched).
+//   (g) A SAME-SLOT TEXTURE SWAP on a mover's live material reaches its hits
+//       the next frame (the decode twin's witness carries the texture set).
+//   (h) A GLOSSY mover (metal, roughness 0.1) in a sky that turns around the
+//       horizon: its reflection's specular environment is its raster's from
+//       the reflected camera (the reflection vector at a hit is the ray's).
 //
 // `--cost` (not a ctest row): the hit decode's and the write-back's GPU
 // milliseconds against the frame's at 1920x1080, paired arms in ONE process —
@@ -241,6 +246,7 @@ static int mirrorArms(Engine *e)
     s->setNodeVisible(floorN, false);
     float frac[2] = { 0.0f, 0.0f };
     unsigned interiorMiss[2] = { 0u, 0u };
+    unsigned coreN[2] = { 0u, 0u };
     Colour moverRefl, moverRast;
     // PASS 1, GI ON — THE COVERAGE: the static control's hits are the CACHES'
     // (its voxels), the mover's the decode's.
@@ -267,9 +273,10 @@ static int mirrorArms(Engine *e)
                 // nothing shaded; a miss on the edge is the trace's own sampling.
                 const Mask rastCore = erode(rast, kSize, kSize, 2);
                 for (size_t i = 0; i < rastCore.m.size(); ++i) interiorMiss[arm] += (rastCore.m[i] && !refl.m[i]);
+                coreN[arm] = rastCore.n;
                 std::printf("   %-7s: reflection %u px, raster %u px, both %u (%.1f %% of the raster), %u misses "
-                            "inside the silhouette (2 px in)\n", arm == 0 ? "STATIC" : "MOVER", refl.n, rast.n, both,
-                            100.0f * frac[arm], interiorMiss[arm]);
+                            "inside the silhouette (2 px in, %u px)\n", arm == 0 ? "STATIC" : "MOVER", refl.n, rast.n,
+                            both, 100.0f * frac[arm], interiorMiss[arm], rastCore.n);
                 if (std::getenv("JAH_HIT_DUMP")) {
                     // Evidence: the reflection mask (red), the raster mask (green), both = yellow.
                     FILE *f = std::fopen(arm == 0 ? "hit-a-static.ppm" : "hit-a-mover.ppm", "wb");
@@ -367,14 +374,19 @@ static int mirrorArms(Engine *e)
     s->setNodeVisible(floorN, true);
     // THE BAR: the static control's fraction, less one point for the silhouette's
     // edge (a few pixels of a ~90 px perimeter land on either side of the trace's
-    // own sample), and no more misses INSIDE it than the control has (measured: 2
-    // each, in both arms alike — NOT rays through the cube's seams: the sheet
-    // above finds the crate watertight; they are the mirror picture's own).
-    CHECK_MSG(frac[1] >= frac[0] - 0.01f && interiorMiss[1] <= interiorMiss[0],
+    // own sample). THE MISSES INSIDE IT have an ABSOLUTE bar, never the control's
+    // count (a control that scores 0 would fail the mover on its own luck): the
+    // sheet above finds 0 rays through the crate (1840 of 1840 at the analytic
+    // entry), so a miss 2 px inside the silhouette is the mirror picture's own —
+    // measured 2 in each arm alike — and the bar is 1 % of the eroded silhouette
+    // (~370 px: 3). A leaking seam misses a LINE of pixels along an edge, a face's
+    // width (~20 px at this framing), which this bar refuses.
+    const unsigned missBar = std::max(1u, coreN[1] / 100u);
+    CHECK_MSG(frac[1] >= frac[0] - 0.01f && interiorMiss[1] <= missBar,
               "(a) the MOVER's reflection covers %.1f %% of its raster silhouette, the static control's %.1f %% "
-              "(bar: less 1 point on the edge); misses inside it %u, the control's %u (before this lane: 0 %% — "
-              "a mover's hit was handed back to the probe)",
-              100.0f * frac[1], 100.0f * frac[0], interiorMiss[1], interiorMiss[0]);
+              "(bar: less 1 point on the edge); misses inside it %u of %u px (bar %u, 1 %%; the control's %u) "
+              "(before this lane: 0 %% — a mover's hit was handed back to the probe)",
+              100.0f * frac[1], 100.0f * frac[0], interiorMiss[1], coreN[1], missBar, interiorMiss[0]);
     // THE BAR: the reflection is the decode of the SAME surface point the raster
     // shades, with the same lighting text; what may differ is the history's
     // RGBA16F quantum (2^-11), the sun's term (the shadow ray against the map —
@@ -598,6 +610,192 @@ static int mirrorArms(Engine *e)
                   "(e) ...in the raster's proportion (shadow / lit %.3f against %.3f, bar 0.05)",
                   lum(md) / std::max(lum(ml), 1e-6f), lum(rd) / std::max(lum(rl), 1e-6f));
     }
+
+    // ---- (g) a SAME-SLOT TEXTURE SWAP reaches the hits ----------------------
+    // A decode twin is a CLONE of its PBS datablock (HlmsJson, textures resolved
+    // by name). Swapping the albedo texture of a live material keeps the Hlms
+    // hash (the property vector does not change), so a witness of the hash alone
+    // kept the OLD texture in every hit until the twin died for another reason
+    // (audit F6). The witness carries the datablock's texture set too.
+    std::printf("\n== (g) a MOVER's albedo texture swapped on its live material: the reflection follows ==\n");
+    s->setNodeVisible(moverWall, false);
+    s->setNodeVisible(overhang, false);
+    s->setNodeVisible(floorN, false);
+    show(false, false);
+    {
+        GiParams off = gi;
+        off.mode = GiMode::Off;
+        s->setGlobalIllumination(off);
+    }
+    const auto solid = [&](unsigned char r, unsigned char g, unsigned char b) {
+        std::vector<unsigned char> px(4u * 4u * 4u);
+        for (size_t i = 0; i < px.size(); i += 4u) { px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255; }
+        return s->createTexture(4, 4, px.data(), true);
+    };
+    const TextureId texRed = solid(230, 40, 30), texGreen = solid(30, 220, 40);
+    const MaterialId texMat = matte(s, Colour(1, 1, 1));
+    s->setPbrTexture(texMat, PbrTextureSlot::Albedo, texRed);
+    const NodeId texCrate = s->createNode();
+    s->setNodeMovable(texCrate, true);
+    s->attachMesh(texCrate, cube, texMat);
+    enginetest::setNodePosition(s, texCrate, Vec3(0.3f, 0.0f, -8.0f));
+    s->setNodeVisible(texCrate, false);
+    {
+        // The raster first, the mirror last: the swap below happens in the
+        // mirror's pose with its history settled on the red crate.
+        const ImageF rNo = shot(false), mNo = shot(true);
+        s->setNodeVisible(texCrate, true);
+        const ImageF rRed = shot(false), mRed = shot(true);
+        const Mask refl = diffMask(mRed, mNo, false, 0.01f);
+        const Mask rast = diffMask(rRed, rNo, true, 0.01f);
+        Mask in;
+        in.m.assign(refl.m.size(), 0u);
+        for (size_t i = 0; i < refl.m.size(); ++i)
+            if (refl.m[i] && rast.m[i]) { in.m[i] = 1u; ++in.n; }
+        const Mask core = erode(in, kSize, kSize, 2);
+        const Colour redRefl = maskMean(mRed, core, false), redRast = maskMean(rRed, core, true);
+        std::printf("   RED: interior %u px: reflection (%.4f %.4f %.4f), raster (%.4f %.4f %.4f)\n", core.n,
+                    redRefl.r, redRefl.g, redRefl.b, redRast.r, redRast.g, redRast.b);
+        // THE SWAP, in the mirror's pose (the last shot's), then frame by frame.
+        s->setPbrTexture(texMat, PbrTextureSlot::Albedo, texGreen);
+        int firstGreen = -1;
+        Colour after[8];
+        for (int f = 0; f < 8; ++f) {
+            render(e, 1);
+            ImageF img;
+            view->readPixelsHdr(img);
+            after[f] = maskMean(img, core, false);
+            if (firstGreen < 0 && after[f].g > after[f].r) firstGreen = f + 1;
+            std::printf("   frame %d after the swap: reflection (%.4f %.4f %.4f)\n", f + 1, after[f].r, after[f].g,
+                        after[f].b);
+        }
+        const ImageF mGreen = shot(true), rGreen = shot(false);
+        const Colour greenRefl = maskMean(mGreen, core, false), greenRast = maskMean(rGreen, core, true);
+        std::printf("   GREEN (settled): reflection (%.4f %.4f %.4f), raster (%.4f %.4f %.4f)\n", greenRefl.r,
+                    greenRefl.g, greenRefl.b, greenRast.r, greenRast.g, greenRast.b);
+        CHECK_MSG(core.n > 50 && redRefl.r > 2.0f * redRefl.g && greenRast.g > 2.0f * greenRast.r,
+                  "(g) the fixture: the red crate reflects red (%u px) and the green one rasters green", core.n);
+        CHECK_MSG(firstGreen == 1,
+                  "(g) the FIRST frame after the swap reflects the new texture (green > red from frame %d; "
+                  "before the witness carried the texture set: never, the twin kept the red one)", firstGreen);
+        // Against the raster's BRIGHTEST channel: the green texture's red and blue
+        // are ~0.006, where a 2e-4 difference is 4 % of the channel and nothing of
+        // the colour.
+        const float gPeak = std::max(greenRast.r, std::max(greenRast.g, greenRast.b));
+        const float gDiff = std::max(std::fabs(greenRefl.r - greenRast.r),
+                                     std::max(std::fabs(greenRefl.g - greenRast.g), std::fabs(greenRefl.b - greenRast.b)));
+        CHECK_MSG(gDiff < 0.02f * gPeak,
+                  "(g) ...and settles on the green raster's colour: (%.4f %.4f %.4f) against (%.4f %.4f %.4f), "
+                  "worst channel %.2f %% of the brightest (bar 2 %%, arm (a)'s)", greenRefl.r, greenRefl.g,
+                  greenRefl.b, greenRast.r, greenRast.g, greenRast.b, 100.0f * gDiff / std::max(gPeak, 1e-6f));
+    }
+    s->removeNode(texCrate);
+
+    // ---- (h) a GLOSSY mover: the specular environment at a hit --------------
+    // The eye vector at a hit is the reversed ray (HlmsAtom's hit-mode
+    // custom_ps_preLights), and so must be EVERYTHING the lighting header derived
+    // from the camera's pinhole: the reflection vector every specular environment
+    // read takes (the probes' localCorrect, the PCC/VCT blend, the cubemap, the
+    // VCT specular cone). Arms (a)-(e) are MATTE (F0 = 0) and could not see a
+    // wrong one (audit F1). THE FIXTURE: a metal crate at roughness 0.1 BESIDE the
+    // camera and behind it, in a sky whose colour turns once around the horizon
+    // (R = 0.5 + 0.4 cos(az), G = 0.5 + 0.4 sin(az) over the equirect's u), GI off
+    // (the mirror-fixture rule) — its reflection is the sky's colour in the
+    // reflection vector's azimuth.
+    //   THE ARITHMETIC: the face the mirror sees (+Z) at (1.8, 0.8, -3.7). The
+    //   reversed ray points at the reflected camera (0, 1, 12.7): v = (-1.8, 0.2,
+    //   16.4)/16.5, reflected about +Z -> azimuth 6.3 deg off +Z. The camera's
+    //   pinhole is (0, 1, -3): v = (-1.8, 0.2, 0.7)/1.94 -> azimuth 68.7 deg. The
+    //   sky's (R, G) turns by 62 deg between them: |d(R,G)| = 2 x 0.4 x sin(31 deg)
+    //   = 0.41 of a ~0.9 channel, ~45 % — the pinhole's reflection vector fails
+    //   the bar by twenty times (measured before the fix: 71 % in the worst channel,
+    //   the crate's -X face turning further). The raster from the reflected camera (NO ray
+    //   reflections: the crate's own environment is then the cube in both) reads
+    //   the same cube texel at the same LOD (the prefiltered mip is picked by the
+    //   roughness, not by derivatives), so what may differ is the reflection
+    //   history's RGBA16F quantum (2^-11 relative for a mean) and the mirror's own
+    //   composite, which arm (a) measures at 0.15-0.21 % (this arm: 0.18 %). The
+    //   bar is arm (a)'s 2 %. (The reflection's difference mask also holds ~1300
+    //   scattered pixels of the mirror's own sky, the ray reflection's frame-to-frame
+    //   noise above the 0.01 threshold; the interior is the two masks' overlap.)
+    std::printf("\n== (h) a GLOSSY mover (metal, roughness 0.1): its specular environment at the hit ==\n");
+    {
+        const unsigned kSkyW = 64u, kSkyH = 32u;
+        std::vector<unsigned char> px(size_t(kSkyW) * kSkyH * 4u);
+        for (unsigned y = 0; y < kSkyH; ++y)
+            for (unsigned x = 0; x < kSkyW; ++x) {
+                const float a = 6.2831853f * (float(x) + 0.5f) / float(kSkyW);
+                unsigned char *p = &px[(size_t(y) * kSkyW + x) * 4u];
+                p[0] = (unsigned char)std::lround(255.0f * (0.5f + 0.4f * std::cos(a)));
+                p[1] = (unsigned char)std::lround(255.0f * (0.5f + 0.4f * std::sin(a)));
+                p[2] = (unsigned char)77;
+                p[3] = 255;
+            }
+        SkyDesc sky;
+        sky.mode = SkyMode::Equirectangular;
+        sky.equirect = s->createTexture(kSkyW, kSkyH, px.data(), false);
+        CHECK(sky.equirect && s->setSky(sky), "(h) the turning sky binds");
+    }
+    PbrParams gp;
+    gp.albedo = Colour(0.95f, 0.95f, 0.95f);
+    gp.metalness = 1.0f;
+    gp.roughness = 0.1f;
+    const NodeId glossy = s->createNode();
+    s->setNodeMovable(glossy, true);
+    s->attachMesh(glossy, cube, s->createPbrMaterial(gp));
+    enginetest::setNodePosition(s, glossy, Vec3(1.8f, 0.8f, -4.2f));
+    s->setNodeVisible(glossy, false);
+    {
+        PostFxDesc noRays = fx;
+        noRays.ssr = 0;
+        const auto rasterShot = [&]() {
+            view->setPostFx(noRays);
+            const ImageF img = shot(false);
+            view->setPostFx(fx);
+            return img;
+        };
+        const ImageF mNo = shot(true), rNo = rasterShot();
+        s->setNodeVisible(glossy, true);
+        const ImageF mOn = shot(true), rOn = rasterShot();
+        const Mask refl = diffMask(mOn, mNo, false, 0.01f);
+        const Mask rast = diffMask(rOn, rNo, true, 0.01f);
+        Mask in;
+        in.m.assign(refl.m.size(), 0u);
+        for (size_t i = 0; i < refl.m.size(); ++i)
+            if (refl.m[i] && rast.m[i]) { in.m[i] = 1u; ++in.n; }
+        const Mask core = erode(in, kSize, kSize, 2);
+        const Colour cm = maskMean(mOn, core, false), cr = maskMean(rOn, core, true);
+        if (std::getenv("JAH_HIT_DUMP")) {
+            // Evidence: the reflection mask (red), the raster mask (green), both = yellow;
+            // then the mirror shot and the flipped raster, side by side.
+            FILE *f = std::fopen("hit-h.ppm", "wb");
+            if (f) {
+                std::fprintf(f, "P6\n%u %u\n255\n", kSize * 3u, kSize);
+                for (unsigned y = 0; y < kSize; ++y)
+                    for (unsigned x = 0; x < kSize * 3u; ++x) {
+                        const unsigned xx = x % kSize;
+                        const size_t i = size_t(y) * kSize + xx;
+                        unsigned char px[3];
+                        if (x < kSize) {
+                            px[0] = refl.m[i] ? 255 : 0; px[1] = rast.m[i] ? 255 : 0; px[2] = core.m[i] ? 255 : 0;
+                        } else {
+                            const Colour c = x < 2u * kSize ? mOn.at(xx, y) : rOn.at(kSize - 1u - xx, y);
+                            px[0] = (unsigned char)std::min(255.0f, c.r * 255.0f);
+                            px[1] = (unsigned char)std::min(255.0f, c.g * 255.0f);
+                            px[2] = (unsigned char)std::min(255.0f, c.b * 255.0f);
+                        }
+                        std::fwrite(px, 1, 3, f);
+                    }
+                std::fclose(f);
+            }
+        }
+        std::printf("   reflection %u px, raster %u px, interior %u px: reflection (%.4f %.4f %.4f), raster (%.4f "
+                    "%.4f %.4f)\n", refl.n, rast.n, core.n, cm.r, cm.g, cm.b, cr.r, cr.g, cr.b);
+        CHECK_MSG(core.n > 50 && relDiff(cm, cr) < 0.02f,
+                  "(h) the GLOSSY mover's reflection is its raster from the reflected camera: worst channel %.2f %% "
+                  "(bar 2 %%; the camera's reflection vector would be ~45 %% off)", 100.0f * relDiff(cm, cr));
+    }
+    s->removeNode(glossy);
     e->destroyView(view);
     e->destroyScene(s);
     return 0;
