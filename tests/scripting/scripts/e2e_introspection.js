@@ -268,35 +268,24 @@ material.set(cubeId, { metallic: 0.25 });
 assert(rowsByName(material.properties(cubeId).rows).metallic.value > 0.24,
        "material.properties reports the value material.set just wrote");
 
-// ---- #10: the nine world set* aliases ---------------------------------------
-// Each alias must move the SAME field its noun-setter does — the assertion that
-// catches a delegation wired to the wrong twin.
+// ---- the noun-setters move their fields -------------------------------------
 // (world.setAmbient and world.setAmbientFromSky are GONE with the flat ambient,
 // SKY_LIGHT_SPEC.md §5: ambient is a Sky Light node now, and its two rows are
 // ordinary light properties — node.setProperty(skyLight, "intensity", ...).)
-world.setGravity(3.5);
-assert(Math.abs(world.get().gravity - 3.5) < 0.001, "world.setGravity moves gravity");
-world.setFog({ enabled: true, density: 0.25 });
-assert(world.get().fog.enabled === true, "world.setFog moves the fog block");
-world.setShadows({ enabled: false });
-assert(world.get().shadows === false, "world.setShadows moves the shadow flag");
-world.setGi({ mode: "vct" });
-assert(world.get().gi.mode === "vct", "world.setGi moves the GI mode");
-world.setSky("color", { color: "#112233" });
-assert(world.get().sky.color === "#112233", "world.setSky moves the sky");
-assert(world.setMode({ mode: "high" }) === "high", "world.setMode applies a tier");
-assert(world.mode() === "high", "…and the noun reads it back");
-var fx = world.setPostFx({ exposureEv: 1.25 });
-assert(Math.abs(fx.exposureEv - 1.25) < 0.001, "world.setPostFx moves the post chain");
-
-// Reading through the alias is the same read (setMode with no argument).
-assert(world.setMode() === "high", "world.setMode() with no argument still reads");
-
-// And the aliases are documented as aliases — the docs must not read as
-// eighteen unrelated verbs (owner decision D5).
-var worldHelp = api.help("world");
-assert(worldHelp.indexOf("Alias of world.fog") >= 0,
-       "each alias's doc string names its twin");
+world.gravity(3.5);
+assert(Math.abs(world.get().gravity - 3.5) < 0.001, "world.gravity moves gravity");
+world.fog({ enabled: true, density: 0.25 });
+assert(world.get().fog.enabled === true, "world.fog moves the fog block");
+world.shadows({ enabled: false });
+assert(world.get().shadows === false, "world.shadows moves the shadow flag");
+world.gi({ mode: "vct" });
+assert(world.get().gi.mode === "vct", "world.gi moves the GI mode");
+world.sky("color", { color: "#112233" });
+assert(world.get().sky.color === "#112233", "world.sky moves the sky");
+assert(world.mode({ mode: "high" }) === "high", "world.mode applies a tier");
+assert(world.mode() === "high", "…and reads it back with no argument");
+var fx = world.postFx({ exposureEv: 1.25 });
+assert(Math.abs(fx.exposureEv - 1.25) < 0.001, "world.postFx moves the post chain");
 
 // ---- the engine census's threading rows -------------------------------------
 // SPECS/THREADING_ADOPTION_SPEC.md P5 (stagingScenes), P4(b) D-E

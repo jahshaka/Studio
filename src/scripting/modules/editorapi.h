@@ -43,9 +43,6 @@ public:
     Q_INVOKABLE bool selectNone();
     Q_INVOKABLE QVariantMap deleteSelection();
     Q_INVOKABLE QVariantList duplicateSelection();
-    Q_INVOKABLE int copy();
-    Q_INVOKABLE QVariantList paste();
-    Q_INVOKABLE QVariantList clipboard();
     Q_INVOKABLE QString gizmoMode();
     Q_INVOKABLE bool setGizmoMode(const QString &mode);
     Q_INVOKABLE QVariantMap gizmoHitTest(double x, double y);

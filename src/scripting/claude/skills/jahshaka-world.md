@@ -43,7 +43,7 @@ text the World panel shows.
 ## Switching tiers
 
 ```js
-world.mode({ mode: "high" });    // world.setMode is the same verb
+world.mode({ mode: "high" });
 ```
 
 Rows the user pinned are NOT overwritten by a mode switch — that is the whole

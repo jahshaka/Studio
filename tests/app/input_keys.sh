@@ -558,7 +558,7 @@ note "delete + one undo: $BACK"
 js "editor.select(['$C','$D'])" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
 key ctrl+c
-CLIP=$(js 'editor.clipboard().length')
+CLIP=$(js 'clipboard.contents().items.length')
 [ "$CLIP" = "2" ] && ok "the Ctrl+C KEY filled the editor clipboard ($CLIP fragments)" \
                   || bad "Ctrl+C did not reach the editor (clipboard = $CLIP)"
 key ctrl+v

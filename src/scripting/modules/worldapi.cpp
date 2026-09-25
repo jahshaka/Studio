@@ -563,34 +563,6 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "tierTable", "world.tierTable() -> {photon: [...], world: [...]}",
           "WHAT EACH PHOTON QUALITY TIER PHYSICALLY IS, read from the renderer's own tables rather than described in prose. Per tier: the registry columns it writes ('technique' off|vct|vct_pcc_hybrid, 'quality' low|medium|high, 'ddgi' 0/1, 'bounces' 1-4, 'probeSize' 0 = follow the quality dial, 'cascades' 0/1); 'gather' is the SCREEN-PROBE GATHER's row of the renderer's tier table {on, stride, octRes, raysPerProbe, adaptiveCapDivisor} — on at High and Epic (Epic four times the probes), on at Medium at 36 rays, off at Low — and 'vrGather' its VR column (off: the headset keeps the irradiance field until the gather's history is sized for it); then the PHYSICAL facts the engine derives from the quality column — 'chain' is the camera-centred voxel cascade table it builds when the cascades are on, innermost first, each entry {halfSize, resolution, stepCells, cell, step, guaranteedRadius, nearFieldRadius} in metres and voxels (the cell is what that cascade can resolve; the step is RESOLVED here through the renderer's own derivation rather than reported as the tier row's 0, so this is the chain that would be built; guaranteedRadius is the radius around the camera that step guarantees the cascade covers at every moment of any walk, and nearFieldRadius the radius the rule requires of it \u2014 0.45 of the half-size); 'vrChain' is THE SAME TABLE'S VR COLUMN \u2014 the chain a HEADSET gets, which is not the same chain, because a headset renders it five times over for half the frame (2160x2376 per eye against a desktop 1080p is 10.26 against 2.07 megapixels, and 11.1 ms at 90 Hz against 16.7 at 60). It is the tier's own chain with the redundant middle cascade dropped and the outermost step doubled -- the two apply independently, so low, which has no middle to drop, still gets the doubled outer step and no tier's VR column equals its desktop one: measured at Quest Pro size on the rig, the opaque pass costs 0.31 ms PER EYE PER CASCADE, so one fewer cascade is 0.31 ms of every eye frame back, and halving the outermost cascade's rebuild rate is headroom on top. What is given up is one hand-over in the mid field and up to 30 m of off-centring on a 120 m box at 1.875 m per cell instead of 15; the reach and the inner cell are untouched. A live session reports which column it is on through world.giStatus()'s 'cascadeProfileVr'. 'voxelResolution' is the single scene-fitted volume's resolution per axis, which is the arm used when the cascades are pinned off; 'probeFaceSize' the reflection probe's cube face in pixels; 'probeHdr' and 'probeShadows' what \"auto\" resolves to for the two expensive probe options. 'pixelTolerance' is the tier's geometric tolerance in SAMPLES of whatever is sampling \u2014 pixels for a view, cells for a cascade \u2014 i.e. the 'tolerance' argument of the quality currency allowedWorldError (the world-space deviation a consumer may afford = tolerance x its sample footprint / the mesh's scale): Low 2.0, Medium 1.0, High and Epic 0.5. Today it feeds the GPU cull's level output only; the shipped draw path keeps one pixel at every tier and the cascades keep their measured 1/256 of a cell. 'description' is the one-sentence English form of all of it, and it is the SAME string the World panel's tier tooltips are built from — the point of this verb is that a tier's description cannot drift from what the tier does, which it did for months (the panel promised Medium twice Low's resolution when both are 64, and 32/64/128 voxels per axis when the chain uses 64/64/128). 'world' maps each WORLD mode onto the Photon tier it selects, or 'off'. Reads only: there is nothing here to set — world.photon picks a tier, world.gi pins a row.",
           Needs::Document },
-
-        // The nine set* aliases (owner decision D5). Canonical spelling stays
-        // the noun; these exist so the obvious guess works. Each doc string
-        // points at its twin and nowhere else — the arguments are documented
-        // once, on the verb that implements them.
-        { "setGravity", "world.setGravity(value) -> bool",
-          "Alias of world.gravity — same arguments, same result.", Needs::Document },
-        { "setFog", "world.setFog({enabled, color, density, ...}) -> bool",
-          "Alias of world.fog — same arguments, same result.", Needs::Document },
-        { "setShadows", "world.setShadows({enabled}) -> bool",
-          "Alias of world.shadows — same arguments, same result.", Needs::Document },
-        { "setGi", "world.setGi({mode, quality, bounces, ...}) -> bool",
-          "Alias of world.gi — same arguments, same result.", Needs::Document },
-        { "setPhoton", "world.setPhoton({enabled, tier}) -> object",
-          "Alias of world.photon — same arguments, same result.", Needs::Document },
-        { "setSky", "world.setSky(type, {...}) -> bool",
-          "Alias of world.sky — same arguments, same result.", Needs::Document },
-        { "setSunLight", "world.setSunLight(id|null) -> id",
-          "Alias of world.sunLight — same arguments, same result.", Needs::Document },
-        { "setMode", "world.setMode({mode}) -> string",
-          "Alias of world.mode — same arguments, same result (and, called with no argument, the "
-          "same read).", Needs::Document },
-        { "setPostFx", "world.setPostFx({exposureEv, exposureMin, exposureMax, bloomAmount, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius}) -> object",
-          "Alias of world.postFx — same arguments, same result.", Needs::Document },
-        { "setVr", "world.setVr({flySpeed, fly, turn, snapTurnDegrees, "
-          "smoothTurnDegreesPerSecond, dominant}) -> object",
-          "Alias of world.vr — same arguments, same result (and, called with no argument, the "
-          "same read).", Needs::Document },
     };
 }
 

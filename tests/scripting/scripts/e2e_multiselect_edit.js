@@ -114,23 +114,24 @@ assert(childrenOf(copyOfD1)[0] !== d1Kid, "and that child is a COPY, with its ow
 
 // ---- 3. copy + paste -------------------------------------------------------
 editor.select([d1, d2]);
-assert(editor.copy() === 2, "copy() stored two fragments");
-var clip = editor.clipboard();
-assert(clip.length === 2, "the clipboard reads back two entries");
-assert(clip[0].format === "jahshaka.scene", "a clipboard entry is a scene fragment: " + J(clip[0].format));
-assert(clip[0].version >= 2, "and it names the format version");
-assert(clip[0].node && clip[0].node.guid, "and carries the node object");
+assert(clipboard.copy().items === 2, "copy() stored two fragments");
+var clip = clipboard.contents();
+assert(clip.items.length === 2, "the clipboard reads back two entries");
+assert(clip.items[0].kind === "node", "a clipboard entry is a scene object: " + J(clip.items[0].kind));
+assert(clip.sceneFormat >= 2, "and it names the scene format version");
+var clipNode = JSON.parse(clipboard.text()).items[0].node;
+assert(clipNode && clipNode.guid, "and carries the node object");
 
 // D5 again: copying a parent AND its child stores ONE fragment.
 editor.select([d1, d1Kid]);
-assert(editor.copy() === 1, "copying a parent and its own child stores one fragment (D5)");
+assert(clipboard.copy().items === 1, "copying a parent and its own child stores one fragment (D5)");
 
 // Paste beside the PRIMARY: same parent, sibling index + 1.
 editor.select([d1, d2]);
-editor.copy();
+clipboard.copy();
 editor.select(d2);
 var pushesPaste = editor.undoState().pushes;
-var pasted = editor.paste();
+var pasted = clipboard.paste().pasted;
 console.log("paste -> " + J(pasted));
 assert(pasted.length === 2, "two nodes pasted");
 assert(pasted.indexOf(d1) === -1 && pasted.indexOf(d2) === -1, "fresh guids, not the originals");
@@ -147,8 +148,7 @@ assert(childrenOf(pastedWithKid)[0] !== d1Kid, "with a fresh guid of its own");
 // ---- 4. the clipboard is not the document ----------------------------------
 //
 // (It is the SYSTEM clipboard since CLIPBOARD_SPEC D3 b — one component for the
-// whole app, behind these same three verbs, which are aliases onto it now. What
-// this section still gates is unchanged: copying nothing must not lose what was
+// whole app, the clipboard module. What this section still gates is unchanged: copying nothing must not lose what was
 // copied a moment ago, and a paste with no selection lands at the root.)
 editor.selectNone();
 // Copying nothing is a REFUSAL, not a silent success — and since the refusal
@@ -156,13 +156,13 @@ editor.selectNone();
 // the verb documents `-> n`, so it returns 0 and records why, instead of
 // aborting the caller's whole script over an outcome its own doc allows.
 // Either way it must not clear what was copied a moment ago.
-var copied = editor.copy();
+var copied = clipboard.copy().items;
 assert(copied === 0, "copying with nothing selected returns 0, not a silent success");
 assert(String(app.lastError()).indexOf("nothing is selected") >= 0,
        "and says why: " + app.lastError());
-assert(editor.clipboard().length === 2,
+assert(clipboard.contents().items.length === 2,
        "and leaves the previous clipboard alone — Ctrl+C on empty space must not lose it");
-var atRoot = editor.paste();
+var atRoot = clipboard.paste().pasted;
 assert(atRoot.length === 2, "paste with no selection still pastes");
 assert(rootChildren().indexOf(atRoot[0]) >= 0, "at the scene root");
 
@@ -205,8 +205,8 @@ assert(nameOf(c1[0]).indexOf(" ") === -1, "no space anywhere in a copy's name");
 
 // PASTE takes the same rule — one rule for both.
 editor.select(box);
-assert(editor.copy() === 1, "one fragment copied");
-var p1 = editor.paste();
+assert(clipboard.copy().items === 1, "one fragment copied");
+var p1 = clipboard.paste().pasted;
 assert(p1.length === 1, "one node pasted");
 assert(node.info(p1[0]).parent === holder, "beside the primary, under the same parent");
 assert(nameOf(p1[0]) === "Cube5",
@@ -219,7 +219,7 @@ var other = scene.addEmpty();
 var slot = scene.addPrimitive("sphere");
 assert(node.reparent(slot, other), "a sphere under the other container");
 editor.select(slot);                     // paste lands beside slot, under `other`
-var p2 = editor.paste();
+var p2 = clipboard.paste().pasted;
 assert(p2.length === 1 && node.info(p2[0]).parent === other,
        "the second paste landed under the other container");
 assert(nameOf(p2[0]) === "Cube",

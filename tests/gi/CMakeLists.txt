@@ -973,7 +973,7 @@ endif()
 
 # GI OFF AND BACK ON AT RUNTIME (lane PATCHES-1 / GI-REENABLE-1): every other GI
 # suite pushes its mode once, so the TRANSITION had no coverage at all — and it
-# is what a user drives (the World panel's dropdown, `world.setGi`, a scene
+# is what a user drives (the World panel's dropdown, `world.gi`, a scene
 # open). Two things here that no other suite does: it runs the hybrid with
 # MULTIPLE BOUNCES (numBounces = 2, i.e. the bounce-inject compute job actually
 # exists — ogre-patch 0057's subject), and it drains `takeLastError()` after
