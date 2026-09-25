@@ -596,8 +596,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             0.0, sceneObj.value("giProbeSnapSidesMin").toDouble(scene->giProbeSnapSidesMin)));
         scene->giProbeSnapSidesMax = float(qMax(
             0.0, sceneObj.value("giProbeSnapSidesMax").toDouble(scene->giProbeSnapSidesMax)));
-        scene->giRayMarchStepScale = float(qBound(
-            1.0, sceneObj.value("giRayMarchStepScale").toDouble(scene->giRayMarchStepScale), 8.0));
         // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
         // written before the flag existed, and the default is the arm those
         // documents were authored against — there is nothing to migrate.

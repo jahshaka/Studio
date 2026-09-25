@@ -3,6 +3,7 @@
 
 #include "app/versionsplashscreen.h"
 #include "bridge/enginehost.h"
+#include "services/worldmodes.h"
 
 #include <QApplication>
 #include <QElapsedTimer>
@@ -33,6 +34,36 @@ constexpr unsigned kWarmUpSize = 32;
 /// compositor chain to execute; a few more cost microseconds and cover any pass
 /// that only runs on a later frame.
 constexpr int kWarmUpFrames = 4;
+
+/// THE GI COMPUTE SET'S FRAMES (PHOTON-VOXEL-5): the warm scene's GI must voxelise, inject,
+/// bounce, build the directional mips, integrate the field and light the cards before the
+/// window shows - each compute job compiles on its first DISPATCH and nowhere else. Bounded:
+/// the frames stop when the GI reports it is at rest, or at this many.
+constexpr int kWarmUpGiFrames = 240;
+
+/// One closed box (24 vertices, the four corners of each face with its own normal), for the
+/// warm scene's GI to have something to voxelise.
+MeshData warmUpBox()
+{
+    MeshData md;
+    static const float n[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+    for (int f = 0; f < 6; ++f) {
+        // two axes across the face, oriented so (u x v) = n: counter-clockwise from outside
+        const int a = f / 2, u = (a + 1) % 3, v = (a + 2) % 3;
+        const float sg = n[f][a];
+        const unsigned base = unsigned(md.positions.size() / 3);
+        const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        for (const auto &c : corners) {
+            float p[3];
+            p[a] = 0.5f * sg; p[u] = 0.5f * c[0]; p[v] = 0.5f * c[1] * sg;
+            md.positions.insert(md.positions.end(), { p[0], p[1], p[2] });
+            md.normals.insert(md.normals.end(), { n[f][0], n[f][1], n[f][2] });
+            md.uvs.insert(md.uvs.end(), { 0.5f + 0.5f * c[0], 0.5f + 0.5f * c[1] });
+        }
+        md.indices.insert(md.indices.end(), { base, base + 1u, base + 2u, base, base + 2u, base + 3u });
+    }
+    return md;
+}
 
 }  // namespace
 
@@ -101,7 +132,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
                                                  Colour(0.0f, 0.0f, 0.0f, 1.0f));
     // LIVE (View::setOffscreenContract): its frames are never read as a picture
-    // and its scene carries no GI, so it never gathers.
+    // (its scene's GI below is there to compile the compute set, not to be seen).
     if (warmView) warmView->setOffscreenContract(OffscreenContract::Live);
     // PRIMARY, NOT UTILITY, AND THIS IS THE WHOLE OF PHASE P4(a)
     // (SPECS/THREADING_ADOPTION_SPEC.md §3.4a, interaction I-2).
@@ -151,6 +182,45 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             l.castShadows = shape.shadows;
             warmScene->setLight(sun, l);
         }
+        // THE GI COMPUTE SET (PHOTON-VOXEL-5; owner smoke from a wiped data root = a cold cache):
+        // a box and the tier a new scene is born with (Epic, the Photon table), so the voxeliser,
+        // the light injection, the bounce, step 0/1, the field and the card light job DISPATCH
+        // here, behind the splash - a compute job compiles on its first dispatch and nowhere else
+        // (HlmsCompute::dispatch), outside the render-queue warm-up. The world's own permutations
+        // differ where its GI does (another tier, a sky cube); this is the default world's set.
+        const NodeId box = warmScene->createNode();
+        const MeshId boxMesh = box ? warmScene->createMesh(warmUpBox()) : MeshId(0);
+        PbrParams boxMat;
+        boxMat.albedo = Colour(0.8f, 0.8f, 0.8f);
+        const MaterialId boxMatId = boxMesh ? warmScene->createPbrMaterial(boxMat) : MaterialId(0);
+        // ...TEXTURED (the voxeliser's texture-pool permutation - every world's ground has a map)
+        // under the ANALYTIC SKY (the bounce, the field and the cards read its environment cube:
+        // their `jah_env` permutation) - the default world's shape.
+        if (boxMatId) {
+            const unsigned char grey[4 * 4 * 4] = {
+                200, 200, 200, 255, 180, 180, 180, 255, 200, 200, 200, 255, 180, 180, 180, 255,
+                180, 180, 180, 255, 200, 200, 200, 255, 180, 180, 180, 255, 200, 200, 200, 255,
+                200, 200, 200, 255, 180, 180, 180, 255, 200, 200, 200, 255, 180, 180, 180, 255,
+                180, 180, 180, 255, 200, 200, 200, 255, 180, 180, 180, 255, 200, 200, 200, 255 };
+            const TextureId tex = warmScene->createTexture(4u, 4u, grey, true, true);
+            if (tex) warmScene->setPbrTexture(boxMatId, PbrTextureSlot::Albedo, tex);
+        }
+        {
+            SkyDesc sky;
+            sky.mode = SkyMode::Atmosphere;
+            warmScene->setSky(sky);
+        }
+        if (box && boxMesh && boxMatId && warmScene->attachMesh(box, boxMesh, boxMatId)) {
+            const worldmodes::PhotonTier tier = worldmodes::PhotonTier::Epic;
+            GiParams gi;
+            gi.mode = GiMode(qBound(0, worldmodes::photonTechnique(tier), 2));
+            gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 2));
+            gi.epicTier = tier == worldmodes::PhotonTier::Epic;
+            gi.numBounces = worldmodes::photonBounces(tier);
+            gi.cascades = worldmodes::photonCascades(tier) > 0;
+            gi.ddgi = worldmodes::photonDdgi(tier) ? GiToggle::On : GiToggle::Off;
+            warmScene->setGlobalIllumination(gi);
+        }
     }
     // What this covers is everything PROCESS-WIDE: Hlms registration, all the
     // low-level material scripts (sky, DPSM, depth utils, copy/resolve, ESM,
@@ -162,6 +232,28 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         engine->renderOneFrame();
         poll();
     }
+    // ...and the GI's frames, ONLY ON A COLD CACHE (the frames above compiled something: a warm
+    // cache has every compute PSO already and would pay the GI's settle, ~1.1 s, on every
+    // launch for nothing), until no shader has compiled for kGiQuietFrames frames - the compute
+    // set dispatches in the GI's first frames; its settle after that compiles nothing - or the
+    // GI is at rest, or the bound.
+    constexpr int kGiQuietFrames = 30;
+    int giFrames = 0;
+    QElapsedTimer giTimer; giTimer.start();
+    engine->shaderBuildProgress(compiled, cached, expected);
+    const bool coldCache = compiled > 0;
+    unsigned lastCompiled = compiled;
+    int quiet = 0;
+    for (; coldCache && warmScene && giFrames < kWarmUpGiFrames && quiet < kGiQuietFrames &&
+           !warmScene->giStatus().giAtRest; ++giFrames) {
+        engine->renderOneFrame();
+        poll();
+        engine->shaderBuildProgress(compiled, cached, expected);
+        quiet = compiled == lastCompiled ? quiet + 1 : 0;
+        lastCompiled = compiled;
+    }
+    qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s", giFrames,
+          static_cast<long long>(giTimer.elapsed()), coldCache ? "" : " (a warm cache: skipped)");
 
     // THE RECORDED SET IS GONE (WARMUPSET-2, 2026-09-21). A replay used to run
     // here: the previous session's permutation list, applied to degenerate
