@@ -1550,7 +1550,6 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
         materialDef["values"] = materialValues;
 
         QJsonDocument saveDoc;
-        //saveDoc.setObject(materialDef);
         saveDoc.setObject(materialDefOriginal);
 
         QString fileName = IrisUtils::join(

@@ -28,7 +28,6 @@
 #include "../models/library.h"
 #include "../widgets/graphicsview.h"
 #include "../core/undoredo.h"
-//#include "nodes/test.h"
 
 #include <QDebug>
 

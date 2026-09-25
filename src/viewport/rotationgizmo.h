@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #ifndef ROTATIONGIZMO_H
 #define ROTATIONGIZMO_H
 
-//#include "gizmoinstance.h"
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"

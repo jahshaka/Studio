@@ -120,8 +120,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	shortcutsWidget	= new QWidget;
 	databaseWidget	= new QWidget;
 
-	//StyleSheet::setStyle(buttonGroup);
-
 	stack = new QStackedWidget;
 
 	auto mainLayout = new QVBoxLayout;
@@ -139,8 +137,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	buttonLayout->addWidget(desktopBtn);
 	buttonLayout->addWidget(editor);
 	buttonLayout->addWidget(content);
-	//buttonLayout->addWidget(mining);
-	//buttonLayout->addWidget(help);
 	buttonLayout->addWidget(about);
 	buttonLayout->addWidget(shortcuts);
 	buttonLayout->addWidget(database);
@@ -186,9 +182,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 void WorldSettingsWidget::changeDefaultDirectory()
 {
     QFileDialog projectDir;
-    //defaultProjectDirectory = projectDir.getExistingDirectory(nullptr, "Select project dir", defaultProjectDirectory);
-    //if (!defaultProjectDirectory.isNull())
-    //    ui->projectDefault->setText(defaultProjectDirectory);
 }
 
 void WorldSettingsWidget::outlineWidthChanged(double width)
@@ -283,8 +276,6 @@ void WorldSettingsWidget::changeEditorPath()
 {
     QFileDialog editorBrowser;
     defaultEditorPath = editorBrowser.getExistingDirectory(Q_NULLPTR, "Select Editor", defaultProjectDirectory);
-    //if (!defaultEditorPath.isNull())
-    //    ui->editorPath->setText(defaultEditorPath);
 }
 
 void WorldSettingsWidget::editorPathChanged(QString path)
@@ -295,24 +286,12 @@ void WorldSettingsWidget::editorPathChanged(QString path)
 
 void WorldSettingsWidget::saveSettings()
 {
-	//if (!ui->author->text().isEmpty()) {
-	//	db->updateAuthorInfo(ui->author->text());
-	//}
 }
 
 WorldSettingsWidget::~WorldSettingsWidget()
 {
   //  delete ui;
 }
-//
-//void WorldSettingsWidget::setupDirectoryDefaults()
-//{
-//    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-//                + Constants::PROJECT_FOLDER;
-//    defaultProjectDirectory = settings->getValue("default_directory", path).toString();
-//
-//   // ui->projectDefault->setText(defaultProjectDirectory);
-//}
 
 void WorldSettingsWidget::configureViewport()
 {

@@ -108,7 +108,6 @@ private:
     QPoint mousePos;
     QPoint clickPos;
 
-    //iris::FloatKey* selectedKey;
     DopeKey selectedKey;
     DopeKey contextKey;
 
@@ -140,7 +139,6 @@ public:
     void mouseReleaseEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
     void wheelEvent(QWheelEvent* evt);
-    //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
     void drawPoint(QPainter& paint, QPoint point, bool isHighlight = false);
 

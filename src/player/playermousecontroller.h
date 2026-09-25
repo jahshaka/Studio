@@ -34,7 +34,6 @@ struct PickingResult
 class PlayerMouseController : public CameraControllerBase
 {
 	iris::ScenePtr scene;
-    //iris::CameraNodePtr camera;
     iris::SceneNodePtr pickedNode;
 
     float movementSpeed = 25;

@@ -309,7 +309,6 @@ FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
 {
     FilePickerWidget *filePicker = new FilePickerWidget();
     filePicker->ui->label->setText(name);
-//    filePicker->suffix = suffix;
 
     minimum_height += filePicker->height() + stretch;
 
@@ -484,13 +483,6 @@ void AccordianBladeWidget::collapse()
 
 void AccordianBladeWidget::expand()
 {
-    // this is a tad bit hacky and there is definitely a better way to do this automatically
-    // for now, we calculate and set the accordion height including spacing and margins
-    // int widgetCount = ui->contentpane->layout()->count();
-    // int topMargin, bottomMargin;
-    // int spacing = ui->contentpane->layout()->spacing();
-    // ui->contentpane->layout()->getContentsMargins(nullptr, &topMargin, nullptr, &bottomMargin);
-    // int finalHeight = minimum_height + (widgetCount * spacing) + topMargin + bottomMargin;
 
     this->setMinimumHeight(0);
     // this->setMaximumHeight(finalHeight);

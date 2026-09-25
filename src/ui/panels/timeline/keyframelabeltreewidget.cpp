@@ -70,7 +70,6 @@ void KeyFrameLabelTreeWidget::setActiveAnimation(iris::AnimationPtr animation)
     if (!!animation) {
         for(auto prop : animation->properties) {
             // add prop to tree
-            //switch(prop->)
             addPropertyToTree(prop);
         }
     }
@@ -118,7 +117,6 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
     } else {
 
         KeyFrameData frameData;
-        //frameData.keyFrame = frames[0].keyFrame;
         frameData.keyFrame = nullptr;
         frameData.propertyName = prop->getName();
         frameData.subPropertyName = "";

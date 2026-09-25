@@ -112,7 +112,6 @@ protected slots:
     void renameFromWidgetStr(QString);
 
 protected:
-//    void keyPressEvent(QKeyEvent* event);
     void enterEvent(QEnterEvent*);
     void leaveEvent(QEvent*);
     void mousePressEvent(QMouseEvent*);
@@ -121,11 +120,8 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent*);
 
 signals:
-//    void arrowPressed(QWidget *current, QString keypress);
-//    void enterPressed(QWidget *current);
     void hovered();
     void left();
-    //void edit(ItemGridWidget*, bool playMode);
     void remove(ItemGridWidget*);
     void singleClicked(ItemGridWidget*);
     void doubleClicked(ItemGridWidget*);

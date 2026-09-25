@@ -359,12 +359,6 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     gameGridLayout->addWidget(options, 0, 0);
     gameGridLayout->addWidget(gridTextLabel, 1, 0);
 
-//    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect;
-//    shadow->setColor(Qt::black);
-//    shadow->setOffset(0);
-//    shadow->setBlurRadius(12.f);
-//    setGraphicsEffect(shadow);
-
     setLayout(gameGridLayout);
     setMinimumHeight(this->sizeHint().height());
 

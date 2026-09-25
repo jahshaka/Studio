@@ -28,7 +28,6 @@ AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	// top-left — the grid widget anchors to the viewport's top-left instead
 	// of floating centered.
 	setAlignment(Qt::AlignLeft | Qt::AlignTop);
-	//setWidgetResizable(true);
 	setWidget(gridWidget);
 	// Frameless in both themes — the border:0 sheet alone doesn't stop
 	// Qlementine drawing the default QFrame around the scroll area.
@@ -241,7 +240,6 @@ void AssetViewGrid::updateGridColumns(int width)
 		count++;
 	}
 
-	// gridWidget->setMinimumWidth(gridCount * (180 + 10));
 	gridWidget->adjustSize();
 }
 

@@ -26,7 +26,6 @@ struct Property
     QString             id;
     QString             displayName;
     QString             name;
-    //QString             uniform;
     PropertyType        type = PropertyType::None;
 
     Property();

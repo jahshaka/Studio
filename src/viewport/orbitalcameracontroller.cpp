@@ -196,7 +196,6 @@ void OrbitalCameraController::onMouseWheel(int delta)
 		return;
 	}
 
-    //qDebug()<<delta;
     auto zoomSpeed = 0.01f;
     distFromPivot += -delta * zoomSpeed;
     //distFromPivot += delta;

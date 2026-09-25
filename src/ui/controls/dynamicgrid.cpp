@@ -50,9 +50,6 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     tileSize = sizeFromString(settings->get(settingkeys::tileSize));
 
     gridLayout = new QGridLayout(gridWidget);
-//    gridLayout->setSpacing(20);
-//    gridLayout->setSizeConstraint(QLayout::SetMinimumSize);
-//    gridLayout->setRowMinimumHeight(0, offset);
 
     gridWidget->setLayout(gridLayout);
     gridLayout->setSpacing(12);
@@ -592,7 +589,6 @@ void deleteChildWidgets(QLayoutItem *item) {
         }
     }
 
-    // delete item->widget();
     item->widget()->deleteLater();
 }
 
@@ -687,9 +683,6 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
         applySliderLayout();    // re-clamp offsets; vertical scroll if rows overflow
         return;
     }
-
-//    gridWidget->setMinimumWidth(viewport()->width());
-//    gridWidget->setMaximumWidth(viewport()->width());
 
     int check = event->size().width() / (tileSize.width());
     bool autoAdjustColumns = true;

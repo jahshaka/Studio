@@ -97,7 +97,6 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
     this->project = project;
 
 #ifdef Q_OS_WIN32
-	// setAttribute(Qt::WA_PaintOnScreen, true);
     setAttribute(Qt::WA_NativeWindow, true);
 #endif
 

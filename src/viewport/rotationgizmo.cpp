@@ -391,7 +391,6 @@ RotationGizmo::RotationGizmo() :
 	handles[kScreenHandle] = new RotationHandle(this, GizmoAxis::Screen);
 
 	loadAssets();
-	//handle->setHandleColor(QColor(255, 255, 255));
 
 	dragging = false;
 	draggedHandle = nullptr;
@@ -430,7 +429,6 @@ void RotationGizmo::startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Ve
 {
 	dragging = false;                 // so the hit test below still refreshes
 	trans = Gizmo::getTransform();
-	//qDebug() << "drag starting";
 	draggedHandle = getHitHandle(rayPos, rayDir, startAngle);
 	if (draggedHandle == nullptr) {
 		dragging = false; // end dragging if no handle was actually hit
@@ -459,12 +457,9 @@ void RotationGizmo::endDragging()
 
 void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
-	//qDebug() << "dragging";
 	if (draggedHandle == nullptr) {
-		//dragging = false;
 		return;
 	}
-	//qDebug()<<"sliding";
 	float hitAngle = 0.0f;
 	// No answer this frame (the cursor dead on the centre pixel, a projection
 	// failure, the camera flown behind the gizmo mid-drag): hold still rather
@@ -515,8 +510,6 @@ void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDi
 			break;
 	}
 
-	//qDebug() << rot.toEulerAngles();
-	//selectedNode->setLocalRot(nodeStartRot * rot);
 	if (transformSpace == GizmoTransformSpace::Global)
 		selectedNode->setLocalRot(rot * nodeStartRot);
 	else

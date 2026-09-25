@@ -19,7 +19,6 @@
 #include <QUndoStack>
 
 #include "widgets/nodepropertiespanel.h"
-//#include "nodemodel.h"
 #include "widgets/graphicsview.h"
 #include "widgets/materialsettingswidget.h"
 #include "dialogs/createnewdialog.h"

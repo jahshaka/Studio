@@ -42,7 +42,6 @@ struct KeyFrameData
     QString subPropertyName;
     iris::FloatKeyFrame* keyFrame;
     QMap<float,SummaryKey> summaryKeys;
-    //iris::PropertyAnim *prop;
 
     KeyFrameData()
     {

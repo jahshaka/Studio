@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QPainter>
 #include <QMouseEvent>
-//#include "../scenegraph/scenenodes.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
 class AnimationWidgetData;
@@ -46,7 +45,6 @@ public:
     QPen cursorPen;
 
     bool dragging;
-    //int scaleRatio;
 
     //timeline widget doesnt manage lifetime of this pointer
     iris::SceneNodePtr node;

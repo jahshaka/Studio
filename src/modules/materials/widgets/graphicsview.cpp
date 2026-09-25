@@ -30,11 +30,9 @@ GraphicsView::GraphicsView( QWidget *parent) : QGraphicsView(parent)
 	setRenderHint(QPainter::Antialiasing);
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	//setCacheMode(QGraphicsView::CacheBackground);
 	setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
 	setCacheMode(QGraphicsView::CacheBackground);
-	//setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
 	setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
 	setDragMode(QGraphicsView::ScrollHandDrag);
 

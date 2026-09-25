@@ -225,13 +225,6 @@ int main(int argc, char *argv[])
     // widget alive. See THEME_AUDIT.md §4.
     ThemeManager::applyAtStartup(app);
 
-	
-	/*
-	QtConcurrent::run([&updateChecker]() {
-		updateChecker.checkForUpdate();
-	});
-	*/
-
 	Upgrader upgrader;
 	upgrader.checkIfSchemaNeedsUpdating();
 
@@ -346,20 +339,17 @@ int main(int argc, char *argv[])
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
-//#ifdef QT_DEBUG
 #ifdef GIT_COMMIT_HASH
     if (GIT_COMMIT_HASH != "0000")
         splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
                            Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
 #endif // GIT_COMMIT_HASH
-//#endif // QT_DEBUG
 
     splash.updateVersion(Constants::CONTENT_VERSION);
 
     splash.show();
 
     app.processEvents();
-    //app.setOverrideCursor( QCursor( Qt::BlankCursor ) );
 
     // Create our main app window but hide it at the same time while showing the EDITOR first
     // Set the attribute to render invisible while running as normal then hiding it after

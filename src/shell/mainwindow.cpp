@@ -2470,7 +2470,6 @@ void MainWindow::closeProject(CloseIntent intent)
 
         scene->getPhysicsEnvironment()->destroyPhysicsWorld();
 
-        //playbackService->stopSimulation();
         playSimBtn->setText("Simulate Physics");
         playSimBtn->setToolTip("Simulate physics only");
 
@@ -2905,19 +2904,6 @@ void MainWindow::updateCurrentSceneThumbnail()
     projectService->updateCurrentSceneThumbnail();
 }
 
-/*
-bool MainWindow::isModelExtension(QString extension)
-{
-    if(extension == "obj"   ||
-       extension == "3ds"   ||
-       extension == "fbx"   ||
-       extension == "dae"   ||
-       extension == "blend" ||
-       extension == "c4d"   )
-        return true;
-    return false;
-}
-*/
 void MainWindow::exportSceneAsZip()
 {
     if (!projectService->isSceneOpen() || project->getProjectGuid().isEmpty()) return;
@@ -3778,7 +3764,6 @@ void MainWindow::toggleScriptConsole()
 
 void MainWindow::setupViewPort()
 {
-	// ui->MenuBar->setVisible(false);
 
 	worlds_menu = new QPushButton("Desktop");
 	worlds_menu->setObjectName("worlds_menu");
@@ -3849,7 +3834,6 @@ void MainWindow::setupViewPort()
 	help->setObjectName("helpButton");
     // for adapting Qt6.9.0
     help->setText(QChar(static_cast<ushort>(fa::questioncircle)));
-    //help->setText(QChar(fa::questioncircle));
 	// Sheet + font together, through the one helper: the three header glyphs
 	// (Publish, Help, Preferences) are the same size and sit on the header's
 	// own colour instead of Qlementine's grey button plate.
@@ -3863,7 +3847,6 @@ void MainWindow::setupViewPort()
 	prefs = new QPushButton;
 	prefs->setObjectName("prefsButton");
 
-    //prefs->setText(QChar(fa::cog));
     // for adapting Qt6.9.0
     prefs->setText(QChar(static_cast<ushort>(fa::cog)));
 	// (Classic still gets PrefsButton() — the helper picks by object name.)
@@ -4375,7 +4358,6 @@ void MainWindow::setupDesktop()
 	
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
-	//ui->stackedWidget->addWidget(new QWidget(this));
 	// The modules (audit §6.2): the shell constructs them against the full
 	// host context and drives pages through the one interface. Stack order is
 	// load-bearing (WindowSpaces indexes): EFFECT = 3, PLAYER = 4, PUBLISH = 5.
@@ -5189,11 +5171,9 @@ void MainWindow::toggleDockWidgets()
 
 	QPushButton *closeAll = new QPushButton("Close All");
 	closeAll->setCheckable(true);
-	//closeAll->setChecked(true);
 
 	QPushButton *restoreAll = new QPushButton("Restore All");
 	restoreAll->setCheckable(true);
-	//restoreAll->setChecked(true);
 
 	QLabel *label = new QLabel("Toggle Widgets");
 	label->setAlignment(Qt::AlignCenter);
@@ -6503,12 +6483,10 @@ void MainWindow::onPlaySceneButton()
 
     if (playbackService->isPlaying()) {
         enterEditMode();
-		//playbackService->restartSimulation();
 		sceneView->stopPlayingScene();
     }
     else {
         enterPlayMode();
-		//playbackService->startSimulation();
 		sceneView->startPlayingScene();
     }
 

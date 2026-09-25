@@ -1372,7 +1372,6 @@ void SceneHierarchyWidget::repopulateTree()
 
     for (auto it = folderItemList.constBegin(); it != folderItemList.constEnd(); ++it)
         if (it.value()) it.value()->setExpanded(!collapsedFolders.contains(it.key()));
-    //ui->sceneTree->expandAll();
 
     if (!selectedIds.isEmpty()) {
         QList<iris::SceneNodePtr> restored;

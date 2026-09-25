@@ -297,7 +297,6 @@ class ColorKeyFrame:public KeyFrame<QColor>
 public:
     QColor interpolate(QColor a,QColor b,float t)
     {
-        //return a+(b-a)*t;
         return QColor(
                     a.red()+(int)((b.red()-a.red())*t),
                     a.green()+(int)((b.green()-a.green())*t),

@@ -72,8 +72,6 @@ GraphTexture * TextureManager::loadTextureFromGuid(QString guid)
 		return tex;
 	}
 
-	//auto p = loadTextureFromDisk(guid); // load if file paths are located on the disk
-	//if (!QFileInfo::exists(p)) // if they are not located on disk
 	auto p = loadTextureFromDatabase(guid); // load file paths from database
 
 	tex->setImage(p);

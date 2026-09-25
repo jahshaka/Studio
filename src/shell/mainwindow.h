@@ -561,8 +561,6 @@ public:
     /// Pushes the current project / MCP state into the chat window + host.
     void refreshClaudeChatContext();
 
-    //void setGizmoTransformMode(GizmoTransformMode mode);
-
     /**
      * Applies material preset to active scene node and refreshes material property widget
      * @param preset
@@ -618,9 +616,6 @@ private:
 
 
     void updateCurrentSceneThumbnail();
-
-    // determines if file extension is that of a model (obj, fbx, 3ds)
-    // bool isModelExtension(QString extension);
 
 public slots:
     /// File > Export: the OPEN project, through a save dialog.

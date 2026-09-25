@@ -67,12 +67,10 @@ void TexturePropertyWidget::setConnections()
 		TextureManager::getSingleton()->removeTexture(graphTexture);
 		graphTexture = TextureManager::getSingleton()->importTexture(filename);
 		prop->value = graphTexture->guid;
-		//graphTexture->uniformName = prop->getUniformName();
 		QIcon icon(graphTexture->path);
 		icon.addFile(graphTexture->path, { wid->texture->width(), wid->texture->height() });
 		
 		wid->texture->setIcon(icon);
-	//	wid->texture->setIconSize({ wid->texture->width(), wid->texture->height() });
 		emit valueChanged(filename, this);
 	});
 }

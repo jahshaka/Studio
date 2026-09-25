@@ -20,9 +20,6 @@ MaterialSettingsWidget::MaterialSettingsWidget(QWidget *parent):
 	QWidget(parent)
 {
 	
-//	font.setPointSizeF(font.pointSize() * devicePixelRatioF());
-//	font.setPixelSize(7 * devicePixelRatioF());
-//	setFont(font);
 	if (this->objectName().isEmpty())
 		this->setObjectName(QStringLiteral("MaterialSettingsWidget"));
 

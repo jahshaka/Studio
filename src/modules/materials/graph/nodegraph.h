@@ -104,8 +104,6 @@ public:
 	Property* getPropertyById(const QString& id);
 	QVector<NodeModel *> getNodesByTypeName(QString name);
 
-	//QMap<QString, std::function<NodeModel*()>> modelFactories;
-	//void registerModel(QString name, std::function<NodeModel*()> factoryFunction);
 	/// THE NODE LIBRARY IS NOT OWNED. It is a stateless factory registry
 	/// handed in from outside, and half the callers own a stack-allocated
 	/// one (tests/shadergraph, tests/materialpreview) — so the destructor

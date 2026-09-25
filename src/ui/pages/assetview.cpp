@@ -134,7 +134,6 @@ For more information see the LICENSE file
 void AssetView::focusInEvent(QFocusEvent *event)
 {
 	Q_UNUSED(event);
-	//emit fetch();
 }
 
 bool AssetView::eventFilter(QObject *watched, QEvent *event)
@@ -198,13 +197,7 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 
 void AssetView::checkForEmptyState()
 {
-    //if (fastGrid->containsTiles()) {
-    //    ui->stackedWidget->setCurrentIndex(0);
-    //    return false;
-    //}
 
-    //ui->stackedWidget->setCurrentIndex(1);
-    //return true;
 }
 
 void AssetView::toggleFilterPane(bool toggle) {
@@ -223,7 +216,6 @@ void AssetView::spaceSplits()
 
 void AssetView::closeViewer()
 {
-    // viewer->clearScene();
 
     int size = this->height() / 3;
     const QList<int> sizes = { 1, size * 2 };   // 1px keeps the viewer visible so it's never fully hidden so initializegl gets called
@@ -462,7 +454,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     }
 
     settings = SettingsManager::getDefaultManager();
-	//prefsDialog = new PreferencesDialog(this, db, settings);
 
 	// Header row (ASSET_DRAWERS_SPEC §1): the Local Assets label plus the [+]
 	// drawer button. The Online Assets stub (assetSource was never read, no
@@ -488,7 +479,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	headerRow->setLayout(headerLayout);
 
 	fastGrid = new AssetViewGrid(this);
-	//fastGrid->installEventFilter(this);
 
     // gui
     _splitter = new QSplitter(this);
@@ -659,7 +649,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	backdropColor->addItem("Plain Dark", 1);
 	backdropColor->addItem("Plain Light", 2);
 	backdropColor->addItem("Checkered Floor", 3);
-	//backdropColor->addItem("Custom Color", 4);
 
 	filterLayout->addWidget(backdropLabel);
 	filterLayout->addWidget(backdropColor);
@@ -676,9 +665,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
         else if (text == "Checkered Floor") {
             viewer->changeBackdrop(3);
         }
-		//else if ("Custom Color") {
-		//	viewer->changeBackdrop(3);
-		//}
 	});
 
 	// Tiles/List switch (owner request 2026-08-31): the same grey "▾"
@@ -745,7 +731,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		libraryButton->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
 	filterLayout->addWidget(libraryButton);
 
-	//filterLayout->addWidget(new QLabel("Filter: "));
 	filterLayout->addStretch();
 	filterLayout->addWidget(new QLabel("Search: "));
 	le = new QLineEdit();
@@ -856,7 +841,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 			fastGrid->setVisible(false);
 			assetListView->setVisible(false);
 
-            // closeViewer();
 		}
 	});
 
@@ -897,7 +881,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		i++;
 	}
 
-	//QApplication::processEvents();
 	fastGrid->updateGridColumns(fastGrid->lastWidth);
 
 	// Restore the persisted Tiles/List choice (owner request 2026-08-31).
@@ -1072,13 +1055,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 			tagModelField->setText(tags);
 
-			// get material 
-			//auto material_guid = db->getDependencyByType((int)AssetMetaType::Material, gridItem->metadata["guid"].toString());
-			//auto material = db->getAssetMaterialGlobal(gridItem->metadata["guid"].toString());
-			//auto materialObj = QJsonDocument::fromBinaryData(material);
-
-
-			// viewer->setMaterial(materialObj.object());
 
 			QVector3D pos;
 			QVector3D rot;
@@ -1351,7 +1327,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
             assetVideoViewer->stop();
     });
 
-	//split->addWidget(viewer);
 	split->addWidget(viewersWidget);
 	split->addWidget(_viewPane);
 
@@ -2119,17 +2094,12 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
     object["icon_url"] = "";
     object["name"] = QFileInfo(fileName).baseName(); // renameModelField->text();
 
-    //auto thumbnail = viewer->takeScreenshot(512, 512);
-
     auto bytes = db->fetchAsset(guid).thumbnail;
     QImage thumbnail;
     if (!thumbnail.loadFromData(bytes, "PNG")) {
-        //thumbnail = viewer->takeScreenshot(512, 512);
-        //db->updateAssetThumbnail(guid, bytes);
     }
 
 
-    //db->updateAssetThumbnail(guid, bytes);
 	db->updateAssetViewFilter(guid, 2);
 
     object["type"] = db->fetchAsset(guid).type;
@@ -2164,33 +2134,9 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
 
 void AssetView::addToLibrary(const QString& main_guid, bool jfx)
 {
-	//bool canAdd = db->isAuthorInfoPresent();
 	QJsonObject tags;
 	QJsonArray actualTags;
 
-	// parse tags
-	//QString stringIn = tagModelField->text();
-	//if (!stringIn.isEmpty()) {
-	//	std::vector<QString> commaSeparated(1);
-	//	int commaCounter = 0;
-	//	for (int i = 0; i<stringIn.size(); i++) {
-	//		if (stringIn[i] == ",") {
-	//			commaSeparated.push_back("");
-	//			commaCounter++;
-	//		}
-	//		else {
-	//			commaSeparated.at(commaCounter) += stringIn[i];
-	//		}
-	//	}
-
-	//	for (const QString &tag : commaSeparated) {
-	//		if (!tag.isEmpty()) actualTags.append(tag);
-	//	}
-
-	//	tags["tags"] = actualTags;
-	//}
-
-	//if (canAdd) {
 		QFileInfo fInfo(filename);
 		QJsonObject object;
 		object["icon_url"] = "";
@@ -2199,39 +2145,6 @@ void AssetView::addToLibrary(const QString& main_guid, bool jfx)
     auto assetSnapshot = viewer->takeScreenshot(512, 512);
 
     QJsonDocument tagsDoc(tags);
-
-    // // maybe actually check if Object?
-    // QString guid;
-    // if (jfx) {
-    //     guid = db->createAssetEntry(
-    //         main_guid,
-    //         QFileInfo(filename).fileName(),
-    //         static_cast<int>(ModelTypes::Object),
-    //         QString(),
-    //         QString(),
-    //         "JahFX",
-    //         AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
-    //         QJsonDocument(viewer->getSceneProperties()).toJson(),
-    //         tagsDoc.toJson(),
-    //         QJsonDocument(viewer->getMaterial()).toJson(),
-    //         AssetViewFilter::AssetsView
-    //         );
-    // }
-    // else {
-    //     guid = db->createAssetEntry(
-    //         main_guid,
-    //         QFileInfo(filename).fileName(),
-    //         static_cast<int>(ModelTypes::Object),
-    //         QString(),
-    //         QString(),
-    //         QString(),
-    //         AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
-    //         QJsonDocument(viewer->getSceneProperties()).toJson(),
-    //         tagsDoc.toJson(),
-    //         QJsonDocument(viewer->getMaterial()).toJson(),
-    //         AssetViewFilter::AssetsView
-    //         );
-    // }
 
     object["guid"] = main_guid;
     object["type"] = db->fetchAsset(main_guid).type; // model?
@@ -2246,19 +2159,6 @@ void AssetView::addToLibrary(const QString& main_guid, bool jfx)
 
 
 
-   //  if (!QDir(QDir(assetPath).filePath(main_guid)).exists()) {
-   //      QDir().mkdir(QDir(assetPath).filePath(main_guid));
-   //      bool copyFile = QFile::copy(filename,
-   //                                  QDir(QDir(assetPath).filePath(main_guid)).filePath(
-   //                                      IrisUtils::buildFileName(main_guid, fInfo.suffix().toLower()))
-   //                                  );
-   //  }
-
-   // copyTextures(main_guid);
-
-		//auto material_guid = db->insertMaterialGlobal(QFileInfo(filename).baseName() + "_material", guid, QJsonDocument(viewer->getMaterial()).toBinaryData());
-		//db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
-
 		auto gridItem = new AssetGridItem(object, assetSnapshot, viewer->getSceneProperties(), tags);
 		wireTile(gridItem);
 
@@ -2271,22 +2171,6 @@ void AssetView::addToLibrary(const QString& main_guid, bool jfx)
 		renameWidget->setVisible(true);
 		tagWidget->setVisible(true);
 		updateAsset->setVisible(true);
-		//addToLibrary->setVisible(false);
-	//}
-	//else {
-	//	auto option = QMessageBox::question(this,
-	//		"No Author!", "There is no author set, would you like to set a name now?\n"
-	//		"Without it you will not be able to import assets.\n\n"
-	//		"Enter a valid name in the Author field and save.",
-	//		QMessageBox::Yes | QMessageBox::No);
-
-	//	if (option == QMessageBox::Yes) {
-	//		prefsDialog->exec();
-	//	}
-	//	else {
-	//		QMessageBox::warning(this, "Failed to add asset!", "Nothing was done.", QMessageBox::Ok);
-	//	}
-	//}
 }
 
 // ---- rich metadata formatting (ASSET_DRAWERS_SPEC addendum) ----

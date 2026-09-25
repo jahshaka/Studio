@@ -41,7 +41,6 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "io/builtinmaterials.h"
 #include "irisgl/core/irisutils.h"
-//#include "irisgl/src/core/property.h"
 #include "modules/materials/core/materialhelper.h"
 
 /*

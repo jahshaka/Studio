@@ -1488,8 +1488,6 @@ void EffectsPage::configureAssetsDock()
 	scrollViewPreset->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 
-	//layout->addWidget(scrollView);
-	//layout->addWidget(buttonBar);
 	assetsDock->setWidget(tabWidget);
 	assetsDock->setStyleSheet(StyleSheet::EffectsDock());
 
@@ -1542,13 +1540,8 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	currentProjectShader = item;
 	oldName = newShader;
 
-	//QStringList assetsInProject = dataBase->fetchAssetNameByParent(assetItemShader.selectedGuid);
-
 	//// If we encounter the same file, make a duplicate...
 	int increment = 1;
-	//while (assetsInProject.contains(IrisUtils::buildFileName(shaderName, "shader"))) {
-	//	shaderName = QString(newShader + " %1").arg(QString::number(increment++));
-	//}
 
 	item->setText(newShader);
 	effects->addItem(item);
@@ -1719,7 +1712,6 @@ void EffectsPage::configureUI()
 	displayWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	propertyWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	materialSettingsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-	//projectDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	assetsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
 	setDockNestingEnabled(true);
@@ -1790,7 +1782,6 @@ void EffectsPage::configureUI()
 
 	assetWidget = new ShaderAssetWidget;
 	assetWidget->sceneOpenProbe = mSceneOpenProbe;
-	//addDockWidget(Qt::LeftDockWidgetArea, projectDock, Qt::Vertical);
 	addDockWidget(Qt::LeftDockWidgetArea, assetsDock, Qt::Vertical);
 	addDockWidget(Qt::RightDockWidgetArea, displayWidget, Qt::Vertical);
 	addDockWidget(Qt::LeftDockWidgetArea, materialSettingsDock, Qt::Vertical);
@@ -1875,7 +1866,6 @@ void EffectsPage::configureUI()
 		nodeContainer->setViewMode(QListWidget::ListMode);
 	});
 
-	//connect(materialSettingsWidget, SIGNAL(settingsChanged(MaterialSettings)), sceneWidget, SLOT(setMaterialSettings(MaterialSettings)));
 	connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged, [=](MaterialSettings value) {
 	});
 	materialSettingsDock->setWidget(materialSettingsWidget);
@@ -1954,7 +1944,6 @@ void EffectsPage::configureToolbar()
 	toolBar->addAction(actionSave);
 
 	QPushButton* downloadBtn = new QPushButton("Download Materials");
-	//downloadBtn->setStyleSheet(StyleSheet::QPushButtonGreyscale());
 	downloadBtn->setStyleSheet(StyleSheet::EffectsDownloadButton());
 	connect(downloadBtn, &QPushButton::pressed, []() {
 		QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/get/materials/"));

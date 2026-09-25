@@ -131,12 +131,6 @@ void LibraryV1::initMath()
 		return new DivideNode();
 	});
 
-	/*
-	addNode(iconPath, iconPath, iconPath, type, []() {
-		return new Node();
-	});
-	*/
-
 	// sine
 	addNode("sine", "Sine", iconPath, type, []()
 	{

@@ -196,7 +196,6 @@ TextureNode::TextureNode()
 
 	auto pushLayout = new QVBoxLayout;
 	texture->setLayout(pushLayout);
-	//pushLayout->addWidget(label);
 
 	layout->setContentsMargins(3, 0, 3, 2);
 	layout->addWidget(texture);

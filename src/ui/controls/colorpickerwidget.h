@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #define COLORPICKERWIDGET_H
 
 #include <QWidget>
-//#include <QColorDialog>
 
 namespace Ui {
 class ColorPickerWidget;

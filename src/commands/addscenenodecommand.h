@@ -26,7 +26,6 @@ For more information see the LICENSE file
 /// duplicate, whose whole point is landing beside its original.
 class AddSceneNodeCommand : public StudioCommand
 {
-    //iris::ScenePtr scene;
     iris::SceneNodePtr parentNode;
     iris::SceneNodePtr sceneNode;
     /// Where under `parentNode` the node goes. -1 = append, which is what every

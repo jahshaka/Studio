@@ -30,7 +30,6 @@ public:
     void setImage(const QImage &value);
 public slots:
     void saveImage();
-    //void closeWindow();
 
 private:
     Ui::ScreenshotWidget *ui;

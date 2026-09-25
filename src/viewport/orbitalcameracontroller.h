@@ -17,8 +17,6 @@ For more information see the LICENSE file
 #include <QPoint>
 #include <QSharedPointer>
 #include <QKeyEvent>
-//#include "../irisgl/src/core/scenenode.h"
-//#include "../irisgl/src/scenegraph/cameranode.h"
 #include "viewport/cameracontrollerbase.h"
 
 //class CameraPtr;

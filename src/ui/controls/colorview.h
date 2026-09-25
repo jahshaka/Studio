@@ -108,7 +108,6 @@ private:
     bool pressed = false;
     int squareSize;
     int radius;
-//    int padding;
     int alpha = 255;
     
     ColorCircle *parent;

@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include <QTime>
 #include <QSharedPointer>
 #include <QIcon>
-//#include "ui_animationwidget.h"
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
@@ -149,7 +148,6 @@ private:
     /// leaked, and the panel behaves as it always did.
     void pushEdit(QUndoCommand *command);
 
-    //float timeAtCursor;
     float timerSpeed;
     Ui::AnimationWidget *ui;
     StudioServices *services = nullptr;
