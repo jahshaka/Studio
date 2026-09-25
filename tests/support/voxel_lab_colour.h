@@ -589,8 +589,8 @@ enum InjModel { kInjOneLight = 0, kInjTwoSides = 1, kInjFused = 2, kInjIdeal = 3
 struct Lamp { bool directional = false; double pos[3] = { 0, 0, 0 }; double toLight[3] = { 0, 1, 0 }; Rgb col; };
 
 /// A fixed generic direction: a two-sided voxel's FRONT is the side whose normal has a positive
-/// dot with it - no architectural orientation (axes, 45-degree diagonals) lies on its seam.
-inline double canonDot(const double n[3]) { return 0.2673 * n[0] + 0.5345 * n[1] + 0.8018 * n[2]; }
+/// dot with it - VoxelMerge's direction; its comment states the seam check.
+inline double canonDot(const double n[3]) { return 0.8925 * n[0] + 0.4166 * n[1] + 0.1726 * n[2]; }
 
 inline bool segBlocked(const double p[3], const double q[3], const std::vector<Box> &boxes)
 {
@@ -611,19 +611,21 @@ inline bool segBlocked(const double p[3], const double q[3], const std::vector<B
     return false;
 }
 
-/// THE INJECTION'S SHADOW MARCH (LightInjection_piece_cs.any): from the voxel's centre one cell a
+/// THE RETIRED STEPPED SHADOW MARCH (LightInjection_piece_cs.any before the DDA): from the voxel's centre one cell a
 /// step toward the lamp, both halves' coverage capped, crossed per axis by the cells the step
 /// crosses, the origin plane (axis `oAxis`, coordinate `oCoord` normalised, sign `oSign`) never
 /// counted; to the box's edge or past a point lamp. Returns the transmittance.
-/// Lab switch: the fused form's per-half march starts on the half's face (its stored position).
-static bool gStartOnFace = false;
+/// Lab switch, THE SHIPPED START by default: the fused form's per-half march starts on the half's
+/// face (its stored position); false = the RETIRED start at the voxel's centre (the `...stepped` arms).
+static bool gStartOnFace = true;
 
 
 /// Lab switch: THE EXACT MARCH - a 3D-DDA over the level-0 voxels from the start toward the lamp; in
 /// each voxel every half's surface plane (its stored position along its axis) that the segment
 /// inside the voxel crosses stops the ray by that half's coverage (either side, like the shipped
-/// march's both halves); the origin plane never. Nearest texels, no filtering.
-static bool gMarchDDA = false;
+/// march's both halves); the origin plane never. Nearest texels, no filtering. THE SHIPPED MARCH by
+/// default; false = the RETIRED stepped march above (the `...stepped` arms).
+static bool gMarchDDA = true;
 
 inline double marchVisDDA(const Cascade &c, const double su[3], const Lamp &L, const double sw[3], int oAxis, double oCoord,
                           double oSign)

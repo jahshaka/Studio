@@ -191,11 +191,10 @@ int main()
     // THE ONE THING TO KNOW ABOUT THIS SCENE (measured here, 2026-09-07; it is
     // what makes assertion (b) as clean as it is): a DIRECTIONAL light inside a
     // SEALED room injects nothing into the VCT voxel volume. Ogre's light
-    // injection compute shader ray-marches from every voxel towards the light
-    // through the voxel albedo volume and multiplies an alpha down as it
-    // crosses geometry (Samples/Media/VCT/LightInjection_piece_cs.any — the
-    // `alpha *= max(0, 1 - albedoAtIt.w * p_thinWallCounter)` loop, which for a
-    // directional light only stops when it exits the volume). Every interior
+    // injection compute shader marches from every voxel's face towards the light
+    // over the level-0 voxels and stops at the first surface it crosses
+    // (Samples/Media/VCT/LightInjection_piece_cs.any — jahInjectVisibility, a DDA;
+    // for a directional light it only ends lit when it exits the volume). Every interior
     // voxel's march crosses the shell, so its injected radiance is ~0; only the
     // shell's OUTER faces, which march straight out of the volume, get lit.
     // Consequence in this room: the red wall is bright red in the RENDER (and

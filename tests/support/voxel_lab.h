@@ -6,7 +6,6 @@
 #pragma once
 #include <algorithm>
 #include <array>
-#include <functional>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -30,8 +29,6 @@ static bool gInteg = false;      ///< candidate: the minor axes' kernel integrat
 static bool gBox = false;        ///< candidate: ...each texel over its own box (not its hat)
 static bool gStartTexel = false; ///< candidate: ...the texel holding the start by position
 static bool gLatTile = false;    ///< candidate: the lateral level rises only on its own boundary
-static bool gLateral = false;    ///< PHOTON-VOXEL-5 (i): the plane axis read from THE LATERAL-ONLY MIP FAMILY
-static bool gLateralMinor = false; ///< ...and the minor axes too (depth = the plane's level, across = the footprint)
 
 
 struct Level {
@@ -45,23 +42,12 @@ struct Level {
 /// texel's depth - step 0 / step 1's composite (AnisotropicMipVctStep0/1_piece_cs.any).
 struct DirLevel { int r[3] = { 1, 1, 1 }; std::vector<float> a[6]; };
 
-/// One texture of THE LATERAL-ONLY MIP FAMILY (PHOTON-VOXEL-5 item (i)): one scalar per texel on
-/// its own grid - the depth axis at its level's resolution, the two lateral axes halved per step.
-struct Lat { int r[3] = { 1, 1, 1 }; std::vector<float> v; };
-
 struct Cascade {
     int R[3] = { 0, 0, 0 };
     double origin[3] = {}, cell[3] = {}, size[3] = {};
     std::vector<Level> L;
     std::vector<DirLevel> D;   // D[m] on the grid of L[m + 1]
     double maxLod = 256.0;
-    /// THE FAMILY (buildLateral): per directional level m and travel direction d, the lateral chain
-    /// of the directional opacity - [m][d][k], k = 0 the level itself, each k the lateral 2 x 2 box
-    /// mean of k - 1 within the same planes (exact along the axis, averaged across); and per
-    /// coverage level L, half h and axis a, the same chains of the coverage and the O-premultiplied
-    /// position along a (the gate's), [L][h][a][k].
-    std::vector<std::array<std::vector<Lat>, 6>> DLat;
-    std::vector<std::array<std::array<std::vector<Lat>, 3>, 2>> OLat, PLat;
 };
 
 /// THE DIRECTIONAL COMPOSITE, opacity only: each 2x2x2 block, per travel direction, the four
@@ -136,86 +122,6 @@ inline double fetchDir(const Cascade &c, int m, int d, const double u[3])
         const int iz = std::min(std::max(jz, 0), l.r[2] - 1);
         const double w = ((q & 1) ? f[0] : 1 - f[0]) * (((q >> 1) & 1) ? f[1] : 1 - f[1]) * (((q >> 2) & 1) ? f[2] : 1 - f[2]);
         out += w * l.a[d][(size_t(iz) * l.r[1] + iy) * l.r[0] + ix];
-    }
-    return out;
-}
-
-/// The lateral chain of one scalar field on grid r along axis ax: halve the other two axes per
-/// step (a 2 x 2 box within each plane) until both are one texel.
-inline std::vector<Lat> lateralChain(const int r0[3], int ax, const std::function<float(size_t)> &at)
-{
-    std::vector<Lat> ch(1);
-    for (int a = 0; a < 3; ++a) ch[0].r[a] = r0[a];
-    const size_t n0 = size_t(r0[0]) * r0[1] * r0[2];
-    ch[0].v.resize(n0);
-    for (size_t i = 0; i < n0; ++i) ch[0].v[i] = at(i);
-    const int u = (ax + 1) % 3, v = (ax + 2) % 3;
-    while (ch.back().r[u] > 1 || ch.back().r[v] > 1) {
-        const Lat &p = ch.back();
-        Lat q;
-        for (int a = 0; a < 3; ++a) q.r[a] = p.r[a];
-        q.r[u] = std::max(1, p.r[u] / 2); q.r[v] = std::max(1, p.r[v] / 2);
-        q.v.assign(size_t(q.r[0]) * q.r[1] * q.r[2], 0.f);
-        for (int z = 0; z < q.r[2]; ++z) for (int y = 0; y < q.r[1]; ++y) for (int x = 0; x < q.r[0]; ++x) {
-            double sum = 0;
-            for (int k = 0; k < 4; ++k) {
-                int qq[3] = { x, y, z };
-                if (q.r[u] < p.r[u]) qq[u] = 2 * qq[u] + (k & 1);
-                if (q.r[v] < p.r[v]) qq[v] = 2 * qq[v] + ((k >> 1) & 1);
-                for (int a = 0; a < 3; ++a) qq[a] = std::min(qq[a], p.r[a] - 1);
-                sum += p.v[(size_t(qq[2]) * p.r[1] + qq[1]) * p.r[0] + qq[0]];
-            }
-            q.v[(size_t(z) * q.r[1] + y) * q.r[0] + x] = float(sum / 4.0);
-        }
-        ch.push_back(q);
-    }
-    return ch;
-}
-
-/// Builds THE FAMILY over a cascade's directional levels and coverage chain (buildDir first).
-inline void buildLateral(Cascade &c)
-{
-    c.DLat.clear(); c.OLat.clear(); c.PLat.clear();
-    for (size_t m = 0; m < c.D.size(); ++m) {
-        std::array<std::vector<Lat>, 6> per;
-        for (int d = 0; d < 6; ++d) {
-            const std::vector<float> &src = c.D[m].a[d];
-            per[size_t(d)] = lateralChain(c.D[m].r, d / 2, [&](size_t i) { return src[i]; });
-        }
-        c.DLat.push_back(per);
-    }
-    for (size_t L = 0; L < c.L.size(); ++L) {
-        std::array<std::array<std::vector<Lat>, 3>, 2> o, p;
-        for (int h = 0; h < 2; ++h)
-            for (int a = 0; a < 3; ++a) {
-                const Level &l = c.L[L];
-                o[size_t(h)][size_t(a)] = lateralChain(l.r, a, [&](size_t i) { return l.O[h][i * 3 + size_t(a)]; });
-                p[size_t(h)][size_t(a)] = lateralChain(l.r, a, [&](size_t i) { return l.P[h][i * 3 + size_t(a)]; });
-            }
-        c.OLat.push_back(o); c.PLat.push_back(p);
-    }
-}
-
-/// A trilinear fetch of a family chain at the fractional lateral level kf.
-inline double fetchLat(const std::vector<Lat> &ch, double kf, const double u[3])
-{
-    kf = std::min(std::max(kf, 0.0), double(ch.size() - 1));
-    const int k0 = int(std::floor(kf));
-    const double fl = kf - k0;
-    double out = 0;
-    for (int s = 0; s < 2; ++s) {
-        const double ws = s == 0 ? 1 - fl : fl;
-        if (ws <= 0) continue;
-        const Lat &l = ch[size_t(std::min(k0 + s, int(ch.size()) - 1))];
-        double f[3]; int i0[3];
-        for (int a = 0; a < 3; ++a) { const double g = u[a] * l.r[a] - 0.5; i0[a] = int(std::floor(g)); f[a] = g - i0[a]; }
-        for (int q = 0; q < 8; ++q) {
-            const int ix = std::min(std::max(i0[0] + (q & 1), 0), l.r[0] - 1);
-            const int iy = std::min(std::max(i0[1] + ((q >> 1) & 1), 0), l.r[1] - 1);
-            const int iz = std::min(std::max(i0[2] + ((q >> 2) & 1), 0), l.r[2] - 1);
-            const double w = ws * ((q & 1) ? f[0] : 1 - f[0]) * (((q >> 1) & 1) ? f[1] : 1 - f[1]) * (((q >> 2) & 1) ? f[2] : 1 - f[2]);
-            out += w * l.v[(size_t(iz) * l.r[1] + iy) * l.r[0] + ix];
-        }
     }
     return out;
 }
@@ -470,18 +376,7 @@ inline Result marchCascade(const Cascade &c, bool aniso, const double pos[3], co
             fetch(c, selO, h, Lc, cp, O);
             fetch(c, selP, h, Lc, cp, P);
             if (dir) {
-                if (gLateral && !c.DLat.empty()) {
-                    // THE FAMILY: the plane's own depth (level m), the cone's footprint across it -
-                    // the kernel's level lk in cells, i.e. lk - (m + 1) lateral steps above m; the
-                    // gate reads the coverage and the position from the same lateral level
-                    const double lkp = std::max(std::max(r.lod - 1.0, 0.0), gSpan ? std::log2(tc) + mip : 0.0);
-                    const double kd = std::max(lkp - (mip + 1.0), 0.0);
-                    const int d = 2 * axis + (sgn > 0 ? 0 : 1);
-                    A[axis] = fetchLat(c.DLat[size_t(std::min(int(mip), int(c.DLat.size()) - 1))][size_t(d)], kd, cp);
-                    const size_t Li = size_t(std::min(int(Lc), int(c.OLat.size()) - 1));
-                    O[axis] = fetchLat(c.OLat[Li][size_t(h)][size_t(axis)], kd, cp);
-                    P[axis] = fetchLat(c.PLat[Li][size_t(h)][size_t(axis)], kd, cp);
-                } else if (!c.D.empty()) A[axis] = fetchDir(c, int(mip), 2 * axis + (sgn > 0 ? 0 : 1), cp);
+                if (!c.D.empty()) A[axis] = fetchDir(c, int(mip), 2 * axis + (sgn > 0 ? 0 : 1), cp);
                 else fetch(c, selA, h, Lc, cp, A);
             } else {
                 double o = O[axis];
@@ -518,18 +413,6 @@ inline Result marchCascade(const Cascade &c, bool aniso, const double pos[3], co
             double O[3], P[3];
             fetch(c, selO, h, lk, kp, O);
             fetch(c, selP, h, lk, kp, P);
-            if (gLateralMinor && dir && !c.OLat.empty()) {
-                // THE FAMILY FOR THE MINOR AXES: exact along b at the plane's own level (the stretch
-                // crosses at most one of its texels along b), averaged across over the footprint
-                const double Lcm = mip + 1.0;
-                const size_t Li = size_t(std::min(int(Lcm), int(c.OLat.size()) - 1));
-                const double kd = std::max(lk - Lcm, 0.0);
-                for (int b = 0; b < 3; ++b) {
-                    if (b == axis) continue;
-                    O[b] = fetchLat(c.OLat[Li][size_t(h)][size_t(b)], kd, kp);
-                    P[b] = fetchLat(c.PLat[Li][size_t(h)][size_t(b)], kd, kp);
-                }
-            }
             if (ray) for (int b = 0; b < 3; ++b) O[b] = OB[b];
             for (int b = 0; b < 3; ++b) {
                 if (b == axis || (!(O[b] > 0.0) && !(gInteg && !ray))) continue;

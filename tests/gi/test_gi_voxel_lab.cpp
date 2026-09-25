@@ -29,10 +29,11 @@
 //   THE STORE LIT BY LAMPS THROUGH THE INJECTION (synthLamps: its normal, its shadow march), per
 //   store - one light, two sides, the FUSED form (light per half-axis into the directional level
 //   0; axis / group / THE GPU PLAN's side cosine), per face: `fused DIR [dz] [T]` the leak room
-//   with its two lamps (cones, hit read, probe ray), `fusedroof DIR`, `fusedflat [R]`; the
-//   `...dda` twins march EXACTLY (a 3D-DDA over the voxels, each half's plane by its stored
-//   position, the per-half march starting on its face) - the march the fused form needs;
-//   `fusedwhy DIR T CASCADE [dda]` lists the halves holding red their faces do not.
+//   with its two lamps (cones, hit read, probe ray), `fusedroof DIR`, `fusedflat [R]`, all with
+//   THE SHIPPED MARCH (a 3D-DDA over the voxels, each half's plane by its stored position, the
+//   per-half march starting on its face); the `...stepped` twins run the RETIRED stepped march
+//   from the voxel's centre, the record of why it went; `fusedwhy DIR T CASCADE [stepped]` lists
+//   the halves holding red their faces do not.
 //   LAB_ROWS_FROM=N prints the stores from row N.
 #include "../support/voxel_lab.h"
 #include "../support/voxel_lab_colour.h"
@@ -56,7 +57,7 @@ static const std::vector<Box> kShell = {
     { { -4.4, 0.0, -4.4 }, { 4.4, 5.0, -4.0 } }, { { -4.4, 0.0, -4.4 }, { -4.0, 5.0, 4.4 } },
     { { 4.0, 0.0, -4.4 }, { 4.4, 5.0, 4.4 } },   { { -4.4, 0.0, 4.0 }, { 4.4, 5.0, 4.4 } } };
 
-struct Candidate { const char *name; bool integ, box, startTexel, latTile, lateral, lateralMinor; };
+struct Candidate { const char *name; bool integ, box, startTexel, latTile; };
 
 /// The sealed shell for one set under the switches set now: the per-class table.
 static void sealedRun(const std::vector<Cascade> &ch, const ConeSet &st, const char *label, double &worstPoint)
@@ -111,7 +112,6 @@ static std::vector<Cascade> sealedStore(int R)
     const int Rv[3] = { R, R, R };
     std::vector<Cascade> ch = { synthStore(kShell, false, 0.0, org, size, Rv) };
     buildDir(ch[0]);
-    buildLateral(ch[0]);
     return ch;
 }
 
@@ -120,25 +120,21 @@ static void armSealed(int R)
     std::printf("== THE SEALED ROOM, four-cone set, %d^3 cubic (SYNTH)\n", R);
     const std::vector<Cascade> ch = sealedStore(R);
     const ConeSet four = coneSets()[0];
-    const Candidate cands[] = { { "the shipped reader", false, false, false, false, false, false },
-                                { "+ minor axes integrated (not shipped)", true, true, true, false, false, false },
-                                { "+ lateral tiling (not shipped)", true, true, true, true, false, false },
-                                { "THE FAMILY, the plane axis", false, false, false, false, true, false },
-                                { "THE FAMILY, every axis", false, false, false, false, true, true } };
+    const Candidate cands[] = { { "the shipped reader", false, false, false, false },
+                                { "+ minor axes integrated (not shipped)", true, true, true, false },
+                                { "+ lateral tiling (not shipped)", true, true, true, true } };
     for (const Candidate &k : cands) {
-        gInteg = k.integ; gBox = k.box; gStartTexel = k.startTexel; gLatTile = k.latTile; gLateral = k.lateral;
-        gLateralMinor = k.lateralMinor;
+        gInteg = k.integ; gBox = k.box; gStartTexel = k.startTexel; gLatTile = k.latTile;
         double worst = 0;
         sealedRun(ch, four, k.name, worst);
         CHECK(worst == worst && worst <= 1.0, "the sealed room's leak is a share of the sky");
     }
-    gInteg = gBox = gStartTexel = gLatTile = gLateral = gLateralMinor = false;
+    gInteg = gBox = gStartTexel = gLatTile = false;
     std::printf("   (A/C: the crease within 0.4 m of the floor - the floor's texel spreads its surface over the\n"
                 "    part behind a start 0.1 m up; B/D: the coarse edge - the plane axis's lateral reach is its\n"
                 "    own texel, a surface below the axis's crossing of the ceiling never read. THE LATERAL-ONLY\n"
-                "    MIP FAMILY (PHOTON-VOXEL-5 item (i)) closes neither: an area mean over the footprint makes\n"
-                "    the plane term exact, and the minor-axis kernel's under-read - which the per-texel plane\n"
-                "    read over-counted away - is then the escape.)\n");
+                "    MIP FAMILY (PHOTON-VOXEL-5 item (i)) closed neither and is deleted - its table is in\n"
+                "    spikes/photon-voxel-5/EVIDENCE.txt.)\n");
     // THE ANALYTIC STORE IS CLOSED: a ray (aperture 0) from the room's middle, in every axis
     // direction, is stopped by the shell (both halves, the ray rule).
     const double mid[3] = { 0.0, 2.5, 0.0 };
@@ -806,15 +802,19 @@ int main(int argc, char **argv)
         else if (arm == "thin" && argc > 2) armThin(argv[2], argc > 3 ? std::atof(argv[3]) : 0.0);
         else if (arm == "roof" && argc > 2) armRoof(argv[2]);
         else if (arm == "flatwall") armFlatWall(argc > 2 ? std::atoi(argv[2]) : 32);
-        else if (arm == "fusedwhy" && argc > 4) { gMarchDDA = argc > 5; gStartOnFace = argc > 5; armFusedWhy(argv[2], std::atof(argv[3]), std::atoi(argv[4])); }
-        else if (arm == "fuseddda" && argc > 2) { gMarchDDA = true; gStartOnFace = true; armFused(argv[2], argc > 3 ? std::atof(argv[3]) : 0.0, argc > 4 ? std::atof(argv[4]) : 0.0); }
-        else if (arm == "fusedroofdda" && argc > 2) { gMarchDDA = true; gStartOnFace = true; armFusedRoof(argv[2]); }
-        else if (arm == "fusedflatdda") { gMarchDDA = true; gStartOnFace = true; armFusedFlat(argc > 2 ? std::atoi(argv[2]) : 32); }
-        else if (arm == "fusedlit" && argc > 2) { gMarchDDA = true; gStartOnFace = true; armFusedLit(argv[2], argc > 3 ? std::atof(argv[3]) : 0.5); }
-        else if (arm == "storeroom") { gMarchDDA = true; gStartOnFace = true; armStoreRoom(); }
+        else if (arm == "fusedwhy" && argc > 4) { gMarchDDA = gStartOnFace = argc <= 5; armFusedWhy(argv[2], std::atof(argv[3]), std::atoi(argv[4])); }
+        else if (arm == "fusedlit" && argc > 2) armFusedLit(argv[2], argc > 3 ? std::atof(argv[3]) : 0.5);
+        else if (arm == "storeroom") armStoreRoom();
         else if (arm == "fused" && argc > 2) armFused(argv[2], argc > 3 ? std::atof(argv[3]) : 0.0, argc > 4 ? std::atof(argv[4]) : 0.0);
         else if (arm == "fusedroof" && argc > 2) armFusedRoof(argv[2]);
         else if (arm == "fusedflat") armFusedFlat(argc > 2 ? std::atoi(argv[2]) : 32);
+        else if (arm.size() > 7 && arm.compare(arm.size() - 7, 7, "stepped") == 0) {
+            gMarchDDA = gStartOnFace = false;   // the RETIRED march, the record
+            if (arm == "fusedstepped" && argc > 2) armFused(argv[2], argc > 3 ? std::atof(argv[3]) : 0.0, argc > 4 ? std::atof(argv[4]) : 0.0);
+            else if (arm == "fusedroofstepped" && argc > 2) armFusedRoof(argv[2]);
+            else if (arm == "fusedflatstepped") armFusedFlat(argc > 2 ? std::atoi(argv[2]) : 32);
+            else { std::printf("usage: %s fusedstepped DIR [dz] [T] | fusedroofstepped DIR | fusedflatstepped [R]\n", argv[0]); return 2; }
+        }
         else { std::printf("usage: %s [sealed|sets|split|flatwall R | validate|thin|roof DIR | leak DIR [T]]\n", argv[0]); return 2; }
     }
     std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
