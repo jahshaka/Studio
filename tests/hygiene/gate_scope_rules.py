@@ -63,6 +63,11 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
      prints the MERGE tier from NIGHTLY_LABELS | TARGET_LABELS — and an edit to
      the doc selects this guard.
 
+  10. A SUITE REGISTERED THROUGH A HELPER FUNCTION (jah_gpu_exclusive_test)
+      belongs to the directory that CALLS the helper: a change to
+      tests/openasync/test_open_responsive.cpp selects open.responsive. FAILS
+      BEFORE the fix (the backtrace's add_test frame is tests/CMakeLists.txt).
+
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
@@ -240,6 +245,22 @@ def main(source, build):
     code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
     check(code == 0 and "source.gate_scope_rules" in plain(out),
           "an edit to docs/TESTING_GATE.md selects this guard")
+
+    # 10. A SUITE REGISTERED THROUGH A HELPER BELONGS TO ITS CALL SITE'S DIR
+    # (POST-C-FIXES-1). jah_gpu_exclusive_test's add_test lives in tests/CMakeLists.txt,
+    # so ctest's backtrace put every GPU-lock suite in dir "tests" and a change to the
+    # suite's OWN source selected everything in its directory except the suite itself
+    # (open.responsive for tests/openasync/test_open_responsive.cpp - measured).
+    for path, suite in (("tests/openasync/test_open_responsive.cpp", "open.responsive"),
+                        ("tests/gi/test_gi_budget.cpp", "gi.budget"),
+                        ("tests/gi/test_gi_field_scroll.cpp", "gi.field_scroll")):
+        code, out, err = run([tool, "--files", path, "--build", build, "--json"], source)
+        try:
+            doc = json.loads(out)
+        except ValueError:
+            doc = {}
+        check(code == 0 and suite in doc.get("suites", []),
+              "%s selects its own GPU-lock suite %s (%d suites selected)" % (path, suite, len(doc.get("suites", []))))
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))

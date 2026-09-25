@@ -295,10 +295,26 @@ def load_inventory(build):
     bt = j["backtraceGraph"]; files = bt["files"]; nodes = bt["nodes"]
     inv = {}
     for t in j["tests"]:
+        # THE SUITE'S OWN DIRECTORY IS WHERE IT WAS REGISTERED, NOT WHERE add_test RAN
+        # (POST-C-FIXES-1). A suite registered through a helper function has its
+        # add_test in the file that DEFINES the helper: every jah_gpu_exclusive_test
+        # suite (tests/CMakeLists.txt) came out as dir "tests", which no rule names —
+        # so open.responsive, gi.budget and the rest of the GPU-lock list were never
+        # selected by a change to their own sources. Walk the backtrace outward and
+        # take the first frame that lies in a tests/<dir>/ (the call site); the
+        # add_test frame is kept only when no such frame exists.
         n = nodes[t["backtrace"]]
-        while n.get("file") is None and "parent" in n:
+        frames = []
+        while True:
+            if n.get("file") is not None:
+                frames.append(files[n["file"]])
+            if "parent" not in n:
+                break
             n = nodes[n["parent"]]
-        cm = files[n["file"]]
+        def _in_test_dir(f):
+            r = os.path.relpath(os.path.dirname(f), ROOT).split(os.sep)
+            return len(r) >= 2 and r[0] == "tests"
+        cm = next((f for f in frames if _in_test_dir(f)), frames[0] if frames else ROOT)
         d = os.path.relpath(os.path.dirname(cm), ROOT)          # tests/<dir>
         cmd = t.get("command", [])   # absent for a not-yet-built executable (partial build dir)
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
