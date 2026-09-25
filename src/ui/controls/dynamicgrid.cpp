@@ -496,6 +496,14 @@ void DynamicGrid::scaleTile(QString scale)
     tileSize.setWidth(size.width());
     tileSize.setHeight(size.height());
 
+    // A NEW TILE SIZE is the one path that needs every full picture again
+    // (the cache holds tile-sized ones): decoded in parallel here, so the
+    // setTileSize calls below are all hits.
+    QVector<ProjectTileData> rows;
+    rows.reserve(originalItems.size());
+    for (ItemGridWidget *gridItem : std::as_const(originalItems)) rows.append(gridItem->tileData);
+    ItemGridWidget::prefetchThumbnails(rows, tileSize);
+
     if (mode == LayoutMode::Freeform) {
         foreach (ItemGridWidget *gridItem, originalItems) gridItem->setTileSize(tileSize, iconSize);
         applyFreeformLayout();

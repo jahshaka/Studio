@@ -295,6 +295,40 @@ int main(int argc, char **argv)
         delete second;
     }
 
+    // ---- A LARGE DESKTOP STAYS WARM (the fix round) -----------------------
+    // The cache charged each entry its FULL 920x430 decode (1.5 MB), so 128 MB
+    // held ~84 projects: above that a rebuild thrashed (every tile a decode,
+    // on the UI thread, plus a wasted parallel one). It now holds the
+    // tile-sized picture only. 200 projects with REAL-SIZE thumbnails at the
+    // Normal tile: the first build decodes 200 (all on the pool), the second
+    // decodes NOTHING.
+    {
+        const QSize normalTile(276, 129);
+        QVector<ProjectTileData> rows;
+        for (int i = 0; i < 200; ++i) {
+            ProjectTileData row;
+            row.name = QStringLiteral("Big %1").arg(i);
+            row.guid = QStringLiteral("guid-big-%1").arg(i);
+            row.thumbnail = makeThumbnail(QColor(i % 256, (7 * i) % 256, 90), QSize(920, 430));
+            rows.append(row);
+        }
+        const auto build = [&]() {
+            const int before = ItemGridWidget::thumbnailDecodeCount();
+            ItemGridWidget::prefetchThumbnails(rows, normalTile);
+            QVector<ItemGridWidget *> tiles;
+            for (const ProjectTileData &row : std::as_const(rows))
+                tiles.append(new ItemGridWidget(row, normalTile, QSize(28, 28), nullptr, false));
+            qDeleteAll(tiles);
+            return ItemGridWidget::thumbnailDecodeCount() - before;
+        };
+        const int firstBuild = build();
+        const int secondBuild = build();
+        std::printf("info: 200 real-size thumbnails: first build %d decode(s), second %d\n",
+                    firstBuild, secondBuild);
+        CHECK(firstBuild == 200, "a cold 200-project desktop decodes each thumbnail once");
+        CHECK(secondBuild == 0, "...and its rebuild decodes NONE (the cache holds all 200)");
+    }
+
     if (failures) std::printf("project tile: %d FAILURES\n", failures);
     else          std::printf("project tile: all checks passed\n");
     return failures ? 1 : 0;

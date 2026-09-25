@@ -86,25 +86,29 @@ static QByteArray encodeThumbnailPng(const QImage &img)
 void ProjectService::storeThumbnailLater(const QString &guid, const QImage &img)
 {
     if (guid.isEmpty() || img.isNull()) return;
-    if (auto *old = mThumbEncodes.take(guid)) {
-        old->disconnect();          // superseded: its bytes never land (the
-        old->deleteLater();         // worker finishes into its own future)
-    }
+    // Superseded: its bytes never land. DELETED, not deleteLater'd — nothing
+    // pumps after ~MainWindow on the --script exit, and a QFutureWatcher's
+    // destructor only disconnects (the worker finishes into its own future).
+    delete mThumbEncodes.take(guid);
     auto *watcher = new QFutureWatcher<QByteArray>();
     mThumbEncodes.insert(guid, watcher);
     QObject::connect(watcher, &QFutureWatcher<QByteArray>::finished, watcher,
-                     [this, guid, watcher]() { finishThumbnail(guid, watcher); });
+                     [this, guid, watcher]() { finishThumbnail(guid, watcher, true); });
     const QImage copy = img;        // implicitly shared, read-only on the worker
     watcher->setFuture(QtConcurrent::run([copy]() { return encodeThumbnailPng(copy); }));
 }
 
-void ProjectService::finishThumbnail(const QString &guid, QFutureWatcher<QByteArray> *watcher)
+void ProjectService::finishThumbnail(const QString &guid, QFutureWatcher<QByteArray> *watcher,
+                                     bool fromItsSignal)
 {
     if (mThumbEncodes.value(guid) != watcher) return;   // superseded meanwhile
     mThumbEncodes.remove(guid);
     watcher->disconnect();
     const QByteArray thumb = watcher->result();
-    watcher->deleteLater();
+    // Its own finished() is on the stack only when it called us; a drain (the
+    // shutdown paths, where nothing pumps afterwards) deletes it outright.
+    if (fromItsSignal) watcher->deleteLater();
+    else delete watcher;
     if (thumb.isEmpty()) return;    // never wipe the tile with an empty PNG
     db->updateSceneThumbnail(guid, thumb);
     if (projectManager) projectManager->updateTile(guid, thumb);
@@ -112,10 +116,7 @@ void ProjectService::finishThumbnail(const QString &guid, QFutureWatcher<QByteAr
 
 void ProjectService::supersedeThumbnail(const QString &guid)
 {
-    if (auto *old = mThumbEncodes.take(guid)) {
-        old->disconnect();
-        old->deleteLater();
-    }
+    delete mThumbEncodes.take(guid);    // see storeThumbnailLater
 }
 
 int ProjectService::drainThumbnailEncodes()
@@ -125,7 +126,7 @@ int ProjectService::drainThumbnailEncodes()
         const QString guid = mThumbEncodes.constBegin().key();
         QFutureWatcher<QByteArray> *watcher = mThumbEncodes.constBegin().value();
         watcher->waitForFinished();
-        finishThumbnail(guid, watcher);
+        finishThumbnail(guid, watcher, false);
         ++drained;
     }
     return drained;

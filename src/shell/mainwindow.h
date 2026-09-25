@@ -650,7 +650,22 @@ private:
     // bool isModelExtension(QString extension);
 
 public slots:
+    /// File > Export: the OPEN project, through a save dialog.
     void exportSceneAsZip();
+    /// A desktop tile's Export: project `guid`, through a save dialog. The
+    /// current project is never re-pointed (CREATE-GAP-1's fix round).
+    void exportProjectWithDialog(const QString &guid, const QString &name);
+
+public:
+    /// THE ONE EXPORT OF A PROJECT BY GUID (threaded, the window's archiver):
+    /// what the tile's Export and `desktop.exportTile` both run. Reads the
+    /// project's ROW; the current project, the open world and its autosave are
+    /// untouched — except that exporting the project that IS open first saves
+    /// it, so the archive carries what is on screen. False (and `why`) when an
+    /// archive operation is already running or the project is unknown.
+    bool startProjectExport(const QString &guid, const QString &zipPath, QString *why = nullptr);
+
+public slots:
 
     void setupDockWidgets();
     void setupViewPort();
@@ -996,6 +1011,9 @@ private:
     /// Created on first use, parented here; shutdownBackgroundWork cancels and
     /// joins it (ProjectArchiver::shutdownArchives).
     class ProjectArchiver *archiver = nullptr;
+    /// The archiver's export target: a Project naming the row being exported,
+    /// never the live one (an export used to re-point the live project).
+    std::unique_ptr<Project> exportTarget;
     QPointer<class ProgressDialog> archiveProgress;
 
     /// A NON-owning watch on the process's Engine, taken when the viewport is

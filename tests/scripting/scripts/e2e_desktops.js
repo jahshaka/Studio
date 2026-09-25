@@ -34,7 +34,7 @@ assert(gridBuilds() === 0, "a script boot (editor page) has built no Desktop gri
 var mods = api.verbs().filter(function (m) { return m.module === "desktop"; });
 assert(mods.length === 1, "desktop module registered");
 var names = mods[0].verbs.map(function (v) { return v.name; }).sort().join(",");
-assert(names === "gridStats,moveTile,setSliderRows,setViewMode,sliderRows,tiles,viewMode",
+assert(names === "exportTile,gridStats,moveTile,setSliderRows,setViewMode,sliderRows,tiles,viewMode",
        "desktop verbs: " + names);
 
 // ---- fixtures: three fresh (never-assigned) projects on desktop 1 ----
@@ -210,6 +210,33 @@ imports.concat([{ guid: src }]).forEach(function (r) {
 assert(desktop.tiles().length === onDesktop.length,
        "desktop_tiles: the grid after the close is every project on the desktop ("
        + desktop.tiles().length + " tiles, " + onDesktop.length + " projects)");
+
+// ---- A TILE'S EXPORT NEVER TOUCHES THE OPEN WORLD (CREATE-GAP-1's fix round) ----
+// The tile's Export used to re-point the LIVE project at the exported tile and
+// save "the scene" — the open world, written into the exported project's row —
+// and the pointer stayed there, so every later autosave of the open world
+// landed in that row too. A open with an edit, B exported from the Desktop,
+// then A saved: B's row is untouched and A's row has the edit.
+var expA = project.create("Export A " + t);
+var expB = project.create("Export B " + t);
+var bNodes = scene.nodes().length;
+assert(project.open(expA) === true, "export: A opened");
+scene.addPrimitive("cube", { count: 3 });
+var aNodes = scene.nodes().length;
+app.space("desktop");
+var expPath = project.current().folder + "-export-b.zip";
+assert(desktop.exportTile(expB, expPath) === true, "export: B exported from its tile (" + app.lastError() + ")");
+var turns = 0;
+while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
+assert(project.archiveResult().ok === true, "export: the archive finished ok (" + project.archiveResult().error + ")");
+assert(project.current().guid === expA, "export: the current project is still A");
+assert(project.save() === true, "export: A saved after the export");
+assert(project.open(expB) === true, "export: B reopened");
+assert(scene.nodes().length === bNodes,
+       "export: B's row is B's world (" + scene.nodes().length + " nodes, created with " + bNodes + ")");
+assert(project.open(expA) === true, "export: A reopened");
+assert(scene.nodes().length === aNodes, "export: A's row has A's edit (" + scene.nodes().length + "/" + aNodes + ")");
+project.close();
 
 assert(outOfStep() === 0, "no path left the grid out of step with the library");
 

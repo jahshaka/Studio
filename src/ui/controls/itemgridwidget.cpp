@@ -46,21 +46,8 @@ static QPainterPath topCornersClip(int w, int h, int radius)
     return path.simplified();
 }
 
-static QPixmap roundTopCorners(const QPixmap &src, int radius)
-{
-    if (src.isNull()) return src;
-    QPixmap out(src.size());
-    out.setDevicePixelRatio(src.devicePixelRatio());
-    out.fill(Qt::transparent);
-    QPainter p(&out);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setClipPath(topCornersClip(src.width(), src.height(), radius));
-    p.drawPixmap(0, 0, src);
-    return out;
-}
-
-// The same card corners on a QImage — callable on a worker (QPainter on a
-// QImage is; on a QPixmap it is not).
+// The card's two top corners, clipped on a QImage — callable on a worker
+// (QPainter on a QImage is; on a QPixmap it is not).
 static QImage roundTopCornersImage(const QImage &src, int radius)
 {
     if (src.isNull()) return src;
@@ -81,10 +68,17 @@ static QImage roundTopCornersImage(const QImage &src, int radius)
 // checked against a hash of the thumbnail BYTES, so a project whose thumbnail
 // was re-saved decodes once more and a project whose thumbnail did not change
 // never does. One entry per guid (a new thumbnail REPLACES its project's old
-// entry), bounded by cost: kThumbCacheKB of decoded pixels (128 MB, ~80 full
-// 920x430 thumbnails with their scaled tiles); the least-recently-used entry
-// goes first. The pixmaps are implicitly shared with the tiles that show them,
-// so a visible tile costs the cache nothing extra. GUI thread only (QPixmap).
+// entry).
+//
+// AN ENTRY IS THE TILE-SIZED PICTURE ONLY, and the bound charges exactly that
+// (fix round): the full 920x430 decode is scaled and dropped. Charging the full
+// decode (1.5 MB) held ~84 entries in 128 MB, and a desktop above that thrashed
+// — the build's row 0 was evicted by the prefetch's last rows, and every tile
+// then evicted the next one it needed. At the tile sizes (Normal 276x129,
+// ~139 KB; Huge 460x215, ~386 KB) the same 128 MB holds ~940 projects at
+// Normal and ~340 at Huge. A tile-size change is the one path that needs the
+// full picture again: it re-decodes, in parallel (DynamicGrid::scaleTile ->
+// prefetchThumbnails). GUI thread only (QPixmap).
 namespace {
 
 const int kThumbCacheKB = 128 * 1024;
@@ -92,7 +86,6 @@ const int kThumbCacheKB = 128 * 1024;
 struct CachedThumb
 {
     size_t  hash = 0;
-    QPixmap full;       // the decoded thumbnail (the tile's oimage)
     QSize   tileSize;   // what `tile` was scaled for
     QPixmap tile;       // scaled + rounded for tileSize
 };
@@ -125,46 +118,35 @@ size_t thumbHash(const QByteArray &png)
     return qHash(png) ^ size_t(png.size());
 }
 
-QPixmap placeholderThumbnail()
+QImage placeholderThumbnail()
 {
-    return QPixmap(QStringLiteral(":/images/preview.png"));
+    return QImage(QStringLiteral(":/images/preview.png"));
 }
 
-// The tile's pixmaps for (guid, png) at `size`: a hit when the bytes hash the
-// same, one decode (replacing the guid's old entry) otherwise; the scaled tile
-// is cached beside the decode for the size it was last asked at.
-void thumbnailFor(const QString &guid, const QByteArray &png, const QSize &size,
-                  QPixmap *full, QPixmap *tile)
+QImage scaledTile(const QImage &full, const QSize &size)
+{
+    return roundTopCornersImage(full.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation),
+                                kTileCornerRadius);
+}
+
+// The tile's picture for (guid, png) at `size`: a hit when the bytes hash the
+// same and the entry was scaled for this size; one decode (replacing the
+// guid's entry) otherwise.
+QPixmap thumbnailFor(const QString &guid, const QByteArray &png, const QSize &size)
 {
     ThumbCache &cache = thumbCache();
     const size_t hash = thumbHash(png);
-    CachedThumb *entry = guid.isEmpty() ? nullptr : cache.entries.object(guid);
-    if (!entry || entry->hash != hash) {
-        CachedThumb fresh;
-        fresh.hash = hash;
-        if (!png.isEmpty() && fresh.full.loadFromData(png, "PNG")) ++cache.decodes;
-        else fresh.full = placeholderThumbnail();
-        entry = nullptr;
-        if (!guid.isEmpty()) {
-            cache.entries.insert(guid, new CachedThumb(fresh), costKB(fresh.full));
-            entry = cache.entries.object(guid);   // null if the bound refused it
-        }
-        if (!entry) {   // uncacheable: serve the decode without keeping it
-            *full = fresh.full;
-            *tile = roundTopCorners(fresh.full.scaled(size, Qt::KeepAspectRatio,
-                                                      Qt::SmoothTransformation),
-                                    kTileCornerRadius);
-            return;
-        }
-    }
-    if (entry->tile.isNull() || entry->tileSize != size) {
-        entry->tile = roundTopCorners(entry->full.scaled(size, Qt::KeepAspectRatio,
-                                                         Qt::SmoothTransformation),
-                                      kTileCornerRadius);
-        entry->tileSize = size;
-    }
-    *full = entry->full;
-    *tile = entry->tile;
+    if (!guid.isEmpty())
+        if (CachedThumb *hit = cache.entries.object(guid))
+            if (hit->hash == hash && hit->tileSize == size) return hit->tile;
+
+    QImage full;
+    if (!png.isEmpty() && full.loadFromData(png, "PNG")) ++cache.decodes;
+    else full = placeholderThumbnail();
+    const QPixmap tile = QPixmap::fromImage(scaledTile(full, size));
+    if (!guid.isEmpty())
+        cache.entries.insert(guid, new CachedThumb{ hash, size, tile }, costKB(tile));
+    return tile;
 }
 
 }   // namespace
@@ -177,10 +159,12 @@ int ItemGridWidget::thumbnailDecodeCount()
 // A COLD DESKTOP IS DECODED IN PARALLEL (CREATE-GAP-1, built because it was
 // measured: a first build of 43 tiles blocked 446 ms, 43 decodes, where the
 // same build with the cache warm took 60). Every thumbnail the cache does not
-// hold is inflated AND scaled to the tile on the thread pool — QImage work,
+// hold at `tileSize` is inflated AND scaled on the thread pool — QImage work,
 // legal off the GUI thread — and only the QImage -> QPixmap conversion runs
 // here. The calling thread takes part in the map rather than idling, so it
 // cannot starve behind a busy pool. The tiles built next are all cache hits.
+// Inserted LAST ROW FIRST, so the rows a build reaches first are the most
+// recently used should a desktop ever outgrow the bound.
 int ItemGridWidget::prefetchThumbnails(const QVector<ProjectTileData> &rows, const QSize &tileSize)
 {
     struct Job
@@ -188,7 +172,7 @@ int ItemGridWidget::prefetchThumbnails(const QVector<ProjectTileData> &rows, con
         QString guid;
         QByteArray png;
         size_t hash = 0;
-        QImage full, tile;
+        QImage tile;
     };
     ThumbCache &cache = thumbCache();
     QVector<Job> jobs;
@@ -196,27 +180,21 @@ int ItemGridWidget::prefetchThumbnails(const QVector<ProjectTileData> &rows, con
         if (row.guid.isEmpty() || row.thumbnail.isEmpty()) continue;
         const size_t hash = thumbHash(row.thumbnail);
         if (CachedThumb *hit = cache.entries.object(row.guid))
-            if (hit->hash == hash) continue;
-        jobs.append({ row.guid, row.thumbnail, hash, QImage(), QImage() });
+            if (hit->hash == hash && hit->tileSize == tileSize) continue;
+        jobs.append({ row.guid, row.thumbnail, hash, QImage() });
     }
     if (jobs.isEmpty()) return 0;
 
     QtConcurrent::blockingMap(jobs, [tileSize](Job &job) {
-        if (!job.full.loadFromData(job.png, "PNG")) return;
-        job.tile = roundTopCornersImage(job.full.scaled(tileSize, Qt::KeepAspectRatio,
-                                                        Qt::SmoothTransformation),
-                                        kTileCornerRadius);
+        QImage full;
+        if (full.loadFromData(job.png, "PNG")) job.tile = scaledTile(full, tileSize);
     });
 
     int decoded = 0;
-    for (const Job &job : std::as_const(jobs)) {
-        if (job.full.isNull()) continue;    // undecodable: the tile's own path decides
-        auto *entry = new CachedThumb;
-        entry->hash = job.hash;
-        entry->full = QPixmap::fromImage(job.full);
-        entry->tile = QPixmap::fromImage(job.tile);
-        entry->tileSize = tileSize;
-        cache.entries.insert(job.guid, entry, costKB(entry->full));
+    for (auto it = jobs.crbegin(); it != jobs.crend(); ++it) {
+        if (it->tile.isNull()) continue;    // undecodable: the tile's own path decides
+        const QPixmap tile = QPixmap::fromImage(it->tile);
+        cache.entries.insert(it->guid, new CachedThumb{ it->hash, tileSize, tile }, costKB(tile));
         ++cache.decodes;
         ++decoded;
     }
@@ -226,7 +204,7 @@ int ItemGridWidget::prefetchThumbnails(const QVector<ProjectTileData> &rows, con
 void ItemGridWidget::setThumbnail(const QByteArray &png)
 {
     tileData.thumbnail = png;
-    thumbnailFor(tileData.guid, png, tileSize, &oimage, &image);
+    image = thumbnailFor(tileData.guid, png, tileSize);
     gridImageLabel->setPixmap(image);
     gridImageLabel->setAlignment(Qt::AlignCenter);
 }
@@ -419,9 +397,10 @@ void ItemGridWidget::setTileSize(QSize size, QSize iSize)
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
 
-    auto img = roundTopCorners(oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::FastTransformation), kTileCornerRadius);
-
-    gridImageLabel->setPixmap(img);
+    // The cached tile picture at this size (a relayout at an unchanged size
+    // costs nothing; a tile-size change was prefetched by DynamicGrid).
+    image = thumbnailFor(tileData.guid, tileData.thumbnail, tileSize);
+    gridImageLabel->setPixmap(image);
     gridImageLabel->setAlignment(Qt::AlignCenter);
 
     gridTextLabel->setWordWrap(true);

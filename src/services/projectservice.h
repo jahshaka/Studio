@@ -200,7 +200,8 @@ public:
     ~ProjectService();
 
 private:
-    void finishThumbnail(const QString &guid, QFutureWatcher<QByteArray> *watcher);
+    void finishThumbnail(const QString &guid, QFutureWatcher<QByteArray> *watcher,
+                         bool fromItsSignal);
     /// Drops `guid`'s encode in flight (a synchronous write or a delete
     /// replaces what it would have written).
     void supersedeThumbnail(const QString &guid);

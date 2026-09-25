@@ -237,7 +237,8 @@ signals:
     /// current project at it only after closing the world that is open.
     void fileToCreate(const QString &guid, const QString &name, const QString &path, bool empty);
     void importProject();
-    void exportProject();
+    /// A tile's Export: the project `guid` (the current project is untouched).
+    void exportProject(const QString &guid, const QString &name);
     void closeProject();
 
 private:

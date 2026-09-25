@@ -40,7 +40,9 @@ QVector<VerbInfo> ProjectApi::verbs() const
     return {
         { "create", "project.create(name, {empty, location}) -> guid",
           "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
-          "opens it in the editor. INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
+          "opens it in the editor. The scene is in the row when this returns; the row's THUMBNAIL is encoded "
+          "on a worker and lands ~100 ms later (the same holds for the world a create closes; project.save "
+          "writes its thumbnail synchronously). INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
           "did up to here becomes one undo step of the project being left, whose stack is then cleared with "
           "it, and the rest of the run records into a fresh entry in the new project.\n\n"
           "`empty: true` gives a BLANK WORLD instead of the default template. The template is a ground, the "

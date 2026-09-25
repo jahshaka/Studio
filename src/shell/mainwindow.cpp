@@ -2969,27 +2969,53 @@ bool MainWindow::isModelExtension(QString extension)
 */
 void MainWindow::exportSceneAsZip()
 {
+    if (!projectService->isSceneOpen() || project->getProjectGuid().isEmpty()) return;
+    exportProjectWithDialog(project->getProjectGuid(), project->getProjectName());
+}
+
+void MainWindow::exportProjectWithDialog(const QString &guid, const QString &name)
+{
     // get the export file path from a save dialog
     auto filePath = QFileDialog::getSaveFileName(
                         this,
                         "Choose export path",
-                        QString("%1_export").arg(project->getProjectName()),
+                        QString("%1_export").arg(name),
                         "Supported Export Formats (*.zip)"
                     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;
     if (!filePath.endsWith(".zip")) filePath += ".zip";
-    if (!!scene) saveScene();
+    QString why;
+    if (!startProjectExport(guid, filePath, &why))
+        QMessageBox::information(this, tr("Export"), why, QMessageBox::Ok);
+}
 
-    if (archiver && archiver->isRunning()) {
-        QMessageBox::information(this, tr("Export"),
-                                 tr("An archive operation is already running."), QMessageBox::Ok);
-        return;
-    }
+bool MainWindow::startProjectExport(const QString &guid, const QString &zipPath, QString *why)
+{
+    const auto refuse = [why](const QString &reason) {
+        if (why) *why = reason;
+        return false;
+    };
+    if (archiver && archiver->isRunning())
+        return refuse(tr("An archive operation is already running."));
+    if (guid.isEmpty() || !db->fetchProjectTile(guid, nullptr))
+        return refuse(tr("No project with guid '%1'.").arg(guid));
+
+    // THE OPEN WORLD IS SAVED ONLY WHEN IT IS THE ONE BEING EXPORTED (CREATE-
+    // GAP-1's fix round). The tile's Export used to re-point the LIVE project
+    // at the exported tile and then save "the scene" — the open world, written
+    // into the exported project's row and folder — and the pointer stayed
+    // there, so every later autosave of the open world landed in that row too.
+    const bool exportingOpenWorld = scene && projectService->isSceneOpen()
+                                    && guid == project->getProjectGuid();
+    if (exportingOpenWorld) saveScene();
+
     if (!archiver) {
         // Parented: it dies with this window (step 5 of the shutdown order),
-        // and shutdownBackgroundWork cancels + joins it before that.
-        archiver = new ProjectArchiver(db, project, this);
+        // and shutdownBackgroundWork cancels + joins it before that. It exports
+        // `exportTarget` — a Project naming the row — never the live project.
+        exportTarget = std::make_unique<Project>();
+        archiver = new ProjectArchiver(db, exportTarget.get(), this);
         archiveProgress = new ProgressDialog(this);
         // SIGNAL-driven, never pumping: a pump from inside a slice re-enters
         // the loop and can destroy objects the slice is still using
@@ -3003,11 +3029,13 @@ void MainWindow::exportSceneAsZip()
                 });
         connect(archiver, &ProjectArchiver::finished, this, [this](bool canceled) {
             if (archiveProgress) archiveProgress->close();
-            if (!canceled && !archiver->result().ok())
+            if (!canceled && !archiver->result().ok() && !FirstRun::isDrivenSession())
                 QMessageBox::warning(this, tr("Export failed"),
                                      archiver->result().error, QMessageBox::Ok);
         });
     }
+    exportTarget->setProjectPath(projectService->projectFolderFor(guid), QString());
+    exportTarget->setProjectGuid(guid);
 
     // Pin-world archives (phase 4): catalog snapshot + manifest v2 + the
     // pinned CAS objects, through the one archive implementation the
@@ -3021,11 +3049,16 @@ void MainWindow::exportSceneAsZip()
         archiveProgress->show();
     }
     // The manifest's scene-scale block, measured from the live document — the
-    // archiver only ever sees the database (services/sceneextents.h).
-    if (sceneView)
-        archiver->setSceneMetadata(sceneextents::describe(sceneView->getScene(),
-                                                          sceneView->editorCamera()));
-    archiver->startExport(filePath);
+    // archiver only ever sees the database (services/sceneextents.h). Only
+    // the OPEN world has a live document; another project's archive carries
+    // no scale block rather than the open world's.
+    archiver->setSceneMetadata(exportingOpenWorld && sceneView
+                                   ? sceneextents::describe(sceneView->getScene(),
+                                                            sceneView->editorCamera())
+                                   : exportformat::ManifestScene());
+    if (!archiver->startExport(zipPath))
+        return refuse(archiver->result().error);
+    return true;
 }
 
 namespace {
@@ -4456,7 +4489,7 @@ void MainWindow::setupDesktop()
 	        this, [this](const QString &guid, const QString &name, const QString &path, bool empty) {
 		newProject(guid, name, path, empty);
 	});
-	connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
+	connect(pmContainer, &ProjectManager::exportProject, this, &MainWindow::exportProjectWithDialog);
 }
 
 void MainWindow::setupToolBar()
@@ -6129,6 +6162,14 @@ void MainWindow::newProjectAsync(const QString &guid, const QString &filename,
 void MainWindow::startCreateRun(const QString &guid, const QString &filename,
                                 const QString &projectPath, bool empty)
 {
+    // AN OPEN IN FLIGHT FINISHES FIRST — before this create's ledger begins:
+    // its run is the one LoadTimeline holds until the open ends it, so a begin
+    // skipped because "a run is running" would leave the create's marks on no
+    // run at all once the drain's end() closed the open's (fix round).
+    if (isOpeningProject()) {
+        qWarning("project create: an open was still in flight — draining it first");
+        openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
+    }
     // THE LEDGER COVERS THE CLOSE (CREATE-GAP-1). It began after it, so the
     // create's own record was the smaller half of the verb: 800-1200 ms of a
     // create over an open world — the autosave, the teardown, the page switch
@@ -6140,10 +6181,6 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
     if (projectService->isSceneOpen()) {
         LoadTimeline::mark(QStringLiteral("closePrevious"));
         closeProject();
-    }
-    if (isOpeningProject()) {
-        qWarning("project create: an open was still in flight — draining it first");
-        openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
     }
     // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the close above
     // autosaved the old world into the old project's own row (createProject-

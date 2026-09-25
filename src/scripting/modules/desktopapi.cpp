@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "scripting/modules/desktopapi.h"
 
 #include "ui/pages/projectmanager.h"
+#include "shell/mainwindow.h"
 
 QVector<VerbInfo> DesktopApi::verbs() const
 {
@@ -30,6 +31,9 @@ QVector<VerbInfo> DesktopApi::verbs() const
           Needs::Window },
         { "gridStats", "desktop.gridStats() -> {builds, lastBuildMs, lastBuildTiles, lastBuildDecodes, decodes, outOfStep, tiles}",
           "How the Desktop grid has been kept this session. The grid is a MODEL: a create, import, move, rename or delete changes ONE tile, and the whole grid is BUILT only when the desktop itself changes — its first showing, another desktop selected. `builds` counts those builds; `lastBuildMs`, `lastBuildTiles` and `lastBuildDecodes` describe the latest (decodes = PNG thumbnails it had to inflate; 0 when the session has seen them all); `decodes` is the session's thumbnail decodes in total. `outOfStep` counts Desktop entries that found the tiles differing from the library and fixed them — a path that changed the library without its tile verb (0 is the only healthy value). `tiles` is the grid's tile count now.",
+          Needs::Window },
+        { "exportTile", "desktop.exportTile(guid, zipPath) -> bool",
+          "Exports the project `guid` to `zipPath` exactly as its desktop tile's Export does, minus the save dialog: threaded on the window's archiver (poll project.archiveState(), read project.archiveResult()). It reads the project's own row and never re-points the current project — the open world, its autosave and project.current() are untouched, except that exporting the project that IS open saves it first. False with an error when an archive operation is already running or no project has that guid.",
           Needs::Window },
         { "sliderRows", "desktop.sliderRows() -> rows",
           "How many filmstrip rows the Sliders view mode stacks (2..10). A per-user setting, not per desktop.",
@@ -62,6 +66,16 @@ bool DesktopApi::moveTile(const QString &guid, int row, int index)
         return fail("desktop.moveTile: the current desktop is not in 'sliders' view mode");
     if (!host.projectManager->moveTileToSliderPos(guid, row - 1, index))
         return fail(QStringLiteral("desktop.moveTile: no tile '%1' on the current desktop").arg(guid));
+    return true;
+}
+
+bool DesktopApi::exportTile(const QString &guid, const QString &zipPath)
+{
+    if (!host.mainWindow) return fail("desktop.exportTile: this verb needs the editor window");
+    if (zipPath.trimmed().isEmpty()) return fail("desktop.exportTile: a destination path is required");
+    QString why;
+    if (!host.mainWindow->startProjectExport(guid, zipPath, &why))
+        return fail(QStringLiteral("desktop.exportTile: %1").arg(why));
     return true;
 }
 

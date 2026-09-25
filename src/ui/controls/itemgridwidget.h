@@ -149,7 +149,6 @@ private:
     void applyCaptionBarStyle();
 
     QPixmap image;
-    QPixmap oimage;
     QWidget *parent;
 
     // freeform drag state

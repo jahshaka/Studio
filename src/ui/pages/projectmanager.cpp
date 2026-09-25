@@ -411,11 +411,10 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
                                 .arg(widget->tileData.name, whyMissing));
         return;
     }
-    project->setProjectPath(projectService->projectFolderFor(widget->tileData.guid),
-                            widget->tileData.name);
-    project->setProjectGuid(widget->tileData.guid);
-
-    emit exportProject();
+    // BY GUID, NEVER BY RE-POINTING (CREATE-GAP-1's fix round): this used to
+    // aim the LIVE project at the exported tile, so the export's save wrote the
+    // OPEN world into this tile's row — and so did every autosave after it.
+    emit exportProject(widget->tileData.guid, widget->tileData.name);
 }
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
