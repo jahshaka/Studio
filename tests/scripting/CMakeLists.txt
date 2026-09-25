@@ -665,6 +665,20 @@ set_tests_properties(scripting.e2e.world_reach PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# node.exportArchive (STUDIO-CRUD-1 item 9): the verb behind the outliner's
+# Export Object / Export Particle System. Document verbs only -> --headless.
+configure_file(scripts/e2e_node_export.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-node_export)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.node_export
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.node_export PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
+    LABELS "scripting"
+    TIMEOUT 120)
+jah_no_display(scripting.e2e.node_export)
+
 # AI_SURFACE_PROGRAM_SPEC lane D #14: node.physics / node.physicsInfo — the last
 # UI-with-no-verb domain. Every scalar and both enums round-trip, every refusal
 # is loud, the values survive a reopen, AND the settings reach Bullet (two

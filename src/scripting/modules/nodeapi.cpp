@@ -29,6 +29,9 @@ For more information see the LICENSE file
 #include "commands/setnodepropertycommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
+#include <QFile>
+#include <QFileInfo>
+#include "services/nodeexport.h"
 #include "services/sceneeditservice.h"
 #include "data/database/database.h"
 #include "services/services.h"
@@ -77,6 +80,17 @@ QVector<VerbInfo> NodeApi::verbs() const
           "restart. Assets travel as guids, not bytes, so a fragment pasted into a project that "
           "does not have the mesh or texture pinned rebuilds with that reference unresolved "
           "rather than failing. The result is plain JSON — store it, diff it, edit it.",
+          Needs::Document },
+        { "exportArchive", "node.exportArchive(id, path, {type}) -> {path, type, assets, bytes}",
+          "EXPORT: packages the node, its subtree and every asset they reference into a "
+          "self-contained .jaf archive at `path` — the scene outliner's Export Object / Export "
+          "Particle System, which call the same service. What a node exports as is one rule: "
+          "\"object\" for a mesh or empty that is not a built-in primitive, \"particleSystem\" "
+          "for a particle system; anything else is refused, and so is a `type` that names the "
+          "other kind. `type` is optional (the rule answers it). `assets` is how many asset "
+          "files travelled beside the scene blob and `bytes` the archive's size. Needs an open "
+          "project. An existing file at `path` is replaced: the menu's save dialog asks first, "
+          "a script is taken at its word.",
           Needs::Document },
         { "deserialize", "node.deserialize(fragment, parentId, index) -> newId",
           "PASTE: rebuilds a fragment from node.serialize under `parentId` (empty = the scene "
@@ -706,6 +720,43 @@ bool NodeApi::reparent(const QString &id, const QString &parentId)
         return fail("node.reparent: that would create a cycle");
     host.services->undo->push(new ReparentSceneNodeCommand(node, parent));
     return true;
+}
+
+QVariantMap NodeApi::exportArchive(const QString &id, const QString &path,
+                                   const QVariantMap &options)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.exportArchive"));
+    if (!node) return QVariantMap();
+    if (path.trimmed().isEmpty()) {
+        fail(QStringLiteral("node.exportArchive: no path — pass where the .jaf goes"));
+        return QVariantMap();
+    }
+    const ModelTypes type = nodeexport::typeFor(node);
+    const QString typeName = type == ModelTypes::Object          ? QStringLiteral("object")
+                           : type == ModelTypes::ParticleSystem  ? QStringLiteral("particleSystem")
+                                                                 : QString();
+    if (typeName.isEmpty()) {
+        fail(QStringLiteral("node.exportArchive: '%1' does not export — only a mesh or empty "
+                            "that is not a built-in primitive, or a particle system, does")
+                 .arg(node->getName()));
+        return QVariantMap();
+    }
+    const QString asked = options.value(QStringLiteral("type")).toString();
+    if (!asked.isEmpty() && asked != typeName) {
+        fail(QStringLiteral("node.exportArchive: '%1' exports as \"%2\", not \"%3\"")
+                 .arg(node->getName(), typeName, asked));
+        return QVariantMap();
+    }
+    if (QFileInfo::exists(path)) QFile::remove(path);
+    const auto result = host.services->sceneEdit->exportNodeTo(node, type, path);
+    if (!result.ok()) {
+        fail(QStringLiteral("node.exportArchive: %1").arg(result.error));
+        return QVariantMap();
+    }
+    return QVariantMap{ { QStringLiteral("path"), path },
+                        { QStringLiteral("type"), typeName },
+                        { QStringLiteral("assets"), result.assets },
+                        { QStringLiteral("bytes"), double(result.bytes) } };
 }
 
 QVariantMap NodeApi::serialize(const QString &id)

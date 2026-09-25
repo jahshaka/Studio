@@ -479,10 +479,18 @@ public:
     /// folderGuid (the shell passes its asset browser's current folder).
     void createMaterialFromNode(iris::SceneNodePtr node, const QString &folderGuid);
 
-    /// Packages a node with its dependencies into a .jaf at filePath (the
-    /// save dialog stays in the shell).
-    void exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,
-                      const QString &filePath);
+    /// What an export did. `error` empty = the archive was written.
+    struct NodeExportResult {
+        QString error;
+        int     assets = 0;     ///< asset files packaged beside the scene blob
+        qint64  bytes = 0;      ///< the .jaf's size on disk
+        bool ok() const { return error.isEmpty(); }
+    };
+    /// Packages a node with its dependencies into a .jaf at filePath. The save
+    /// dialog stays in the shell; node.exportArchive (API-first) and the menu
+    /// both land here. What a node exports as: services/nodeexport.h.
+    NodeExportResult exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,
+                                  const QString &filePath);
 
     // Refresh notifications the undo commands raise (Phase 4: the commands'
     // widget-refresh statics became these signals; the shell connects them to

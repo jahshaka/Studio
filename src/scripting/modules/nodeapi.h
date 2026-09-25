@@ -41,6 +41,8 @@ public:
     Q_INVOKABLE QString rename(const QString &id, const QString &name);
     Q_INVOKABLE bool reparent(const QString &id, const QString &parentId);
     Q_INVOKABLE QVariantMap serialize(const QString &id);
+    Q_INVOKABLE QVariantMap exportArchive(const QString &id, const QString &path,
+                                          const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString deserialize(const QVariantMap &fragment, const QString &parentId,
                                     int index = -1);
     Q_INVOKABLE QVariantMap transform(const QString &id, const QVariantMap &change = QVariantMap());

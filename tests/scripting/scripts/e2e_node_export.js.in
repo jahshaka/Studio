@@ -1,0 +1,59 @@
+// scripting.e2e.node_export — node.exportArchive, the verb behind the scene
+// outliner's Export Object / Export Particle System (STUDIO-CRUD-1 item 9:
+// API-first — the menu had no verb). Document verbs only -> --headless.
+//
+// What it gates: an imported model exports as a .jaf that exists and carries
+// its asset files; a particle system exports as
+// "particleSystem"; a built-in primitive, a light, a wrong `type`, a missing
+// path and an unknown id are refused loudly.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("FAIL: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function caught(fn) { try { fn(); } catch (e) { return "" + e; } return ""; }
+
+var proj = project.create("Node export " + Date.now());
+assert(proj.length > 10, "a project to export from");
+var outDir = app.dataRoot().root;
+assert(outDir.length > 0, "a scratch directory (the data root): " + outDir);
+
+// ---- an imported model: Export Object --------------------------------------
+var placed = assets.importAndPlace("@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb");
+assert(placed.nodeId && placed.nodeId.length > 10, "a model placed in the scene: " + J(placed));
+var jaf = outDir + "/node_export_model.jaf";
+var r = node.exportArchive(placed.nodeId, jaf);
+console.log("exportArchive -> " + J(r));
+assert(r.path === jaf, "the archive went where it was asked");
+assert(r.type === "object", "a model exports as an object");
+assert(r.bytes > 0, "the .jaf exists and is not empty (" + r.bytes + " bytes)");
+assert(r.assets >= 1, "and its asset files travelled (" + r.assets + ")");
+// An explicit type that agrees is accepted; one that does not is refused.
+assert(node.exportArchive(placed.nodeId, jaf, { type: "object" }).type === "object",
+       "an agreeing type is accepted (and the file is replaced)");
+var wrongType = caught(function () {
+    node.exportArchive(placed.nodeId, jaf, { type: "particleSystem" });
+});
+assert(wrongType.indexOf("exports as \"object\"") >= 0, "a disagreeing type is refused: " + wrongType);
+
+// ---- a particle system: Export Particle System ----------------------------
+var fire = scene.addParticles("fire");
+assert(fire.length > 10, "a particle system");
+var pr = node.exportArchive(fire, outDir + "/node_export_fire.jaf");
+console.log("particles -> " + J(pr));
+assert(pr.type === "particleSystem" && pr.bytes > 0, "a particle system exports as particleSystem");
+
+// ---- the refusals ---------------------------------------------------------
+var cube = scene.addPrimitive("cube");
+var builtin = caught(function () { node.exportArchive(cube, outDir + "/cube.jaf"); });
+assert(builtin.indexOf("does not export") >= 0, "a built-in primitive is refused: " + builtin);
+var lamp = scene.addLight("point");
+var light = caught(function () { node.exportArchive(lamp, outDir + "/lamp.jaf"); });
+assert(light.indexOf("does not export") >= 0, "a light is refused: " + light);
+var noPath = caught(function () { node.exportArchive(placed.nodeId, ""); });
+assert(noPath.indexOf("no path") >= 0, "an empty path is refused: " + noPath);
+var noNode = caught(function () { node.exportArchive("no-such-node", jaf); });
+assert(noNode.length > 0, "an unknown id is refused: " + noNode);
+
+console.log("scripting.e2e.node_export: ALL PASS");

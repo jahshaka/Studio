@@ -617,6 +617,7 @@ set(HEADERS
     src/services/projectservice.h
     src/services/imagematerial.h
     src/services/sceneeditservice.h
+    src/services/nodeexport.h
     src/services/clipboardservice.h
     src/services/clipboardbackend.h
     src/services/clipboardresolver.h

@@ -192,7 +192,6 @@ protected slots:
     void deleteNode();
 	void duplicateNode();
 	void focusOnNode();
-	void exportNode(const iris::SceneNodePtr &node, ModelTypes modelType);
 	void createMaterial();
 
 	void attachAllChildren();

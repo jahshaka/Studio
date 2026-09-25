@@ -2882,7 +2882,9 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
     if (filePath.isEmpty() || filePath.isNull()) return;
 
-    sceneEditService->exportNodeTo(node, modelType, filePath);
+    // THE VERB'S PATH (node.exportArchive calls the same service).
+    const auto result = sceneEditService->exportNodeTo(node, modelType, filePath);
+    if (!result.ok()) irisLog(QStringLiteral("Export failed: %1").arg(result.error));
 }
 
 void MainWindow::deleteNode()

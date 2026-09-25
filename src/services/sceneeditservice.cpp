@@ -1628,15 +1628,24 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
     }
 }
 
-void SceneEditService::exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,
-                                    const QString &filePath)
+SceneEditService::NodeExportResult SceneEditService::exportNodeTo(const iris::SceneNodePtr &node,
+                                                                  ModelTypes modelType,
+                                                                  const QString &filePath)
 {
-    if (!node) return;
-    if (filePath.isEmpty() || filePath.isNull()) return;
+    NodeExportResult result;
+    if (!node) { result.error = QStringLiteral("no node"); return result; }
+    if (filePath.isEmpty()) { result.error = QStringLiteral("no path"); return result; }
+    if (!db || !project || project->getProjectGuid().isEmpty()) {
+        result.error = QStringLiteral("no project is open");
+        return result;
+    }
 
     // Construct a temporary dir to place all the files that will be packaged
     QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) return;
+    if (!temporaryDir.isValid()) {
+        result.error = QStringLiteral("could not create a temporary directory");
+        return result;
+    }
 
     const QString writePath = temporaryDir.path();
 
@@ -1689,10 +1698,18 @@ void SceneEditService::exportNodeTo(const iris::SceneNodePtr &node, ModelTypes m
             if (assetPath.isEmpty()) continue;
             if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
             if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-            QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
+            if (QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name)))
+                ++result.assets;
         }
     }
 
     // ONE zip loop (amendment 7): shared helper.
-    ZipHelper::zipDirectory(writePath, filePath);
+    QString zipError;
+    if (!ZipHelper::zipDirectory(writePath, filePath, &zipError)) {
+        result.error = zipError.isEmpty() ? QStringLiteral("the archive could not be written")
+                                          : zipError;
+        return result;
+    }
+    result.bytes = QFileInfo(filePath).size();
+    return result;
 }
