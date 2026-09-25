@@ -75,7 +75,7 @@ editor.frame(8);
 // cannot have covered, and asks three ways (MSAA, fog, a particle system).
 world.setAntiAliasing(4);
 editor.frame(8);
-world.setFog({ enabled: true, density: 0.02 });
+world.fog({ enabled: true, density: 0.02 });
 scene.addPrimitive("sphere", { position: { x: 2, y: 1, z: 0 } });
 scene.addParticles("fire", { position: { x: 1, y: 1, z: 0 } });
 editor.frame(10);

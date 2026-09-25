@@ -35,7 +35,6 @@ var world_ = api.verbs().filter(function (m) { return m.module === "world"; })[0
 var names = world_.verbs.map(function (v) { return v.name; });
 assert(names.indexOf("sunLight") >= 0, "world.sunLight is registered");
 assert(names.indexOf("sun") >= 0, "world.sun is registered");
-assert(names.indexOf("setSunLight") >= 0, "world.setSunLight alias is registered");
 
 var guid = project.create("Sun " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);

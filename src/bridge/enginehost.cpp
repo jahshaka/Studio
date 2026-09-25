@@ -184,7 +184,7 @@ EngineConfig EngineHost::resolveConfig()
     // Preferences -> Viewport writes it; WorldSettingsWidget pushes runtime
     // changes straight to the live Engine.
     cfg.optimizeShadowMeshes =
-        SettingsManager::getDefaultManager()->getValue("shadow_mesh_optimization", true).toBool();
+        SettingsManager::getDefaultManager()->get(settingkeys::shadowMeshOptimization);
 
     // HARDWARE RAY TRACING (owner, 2026-09-15; ledger §425). There is NO
     // application preference any more — the state is a property of the PROJECT
@@ -275,7 +275,7 @@ QString EngineHost::shaderCacheDirectory()
 
 bool EngineHost::shaderCacheEnabled()
 {
-    return SettingsManager::getDefaultManager()->getValue("shader_cache_enabled", true).toBool();
+    return SettingsManager::getDefaultManager()->get(settingkeys::shaderCacheEnabled);
 }
 
 bool EngineHost::clearShaderCacheOnDisk()
@@ -443,8 +443,8 @@ EngineHost::WarmUpShape EngineHost::warmUpShape()
 {
     WarmUpShape s;
     SettingsManager *sm = SettingsManager::getDefaultManager();
-    s.samples = unsigned(qBound(1, sm->getValue("shader_warmup_samples", 1).toInt(), 16));
-    s.shadows = sm->getValue("shader_warmup_shadows", true).toBool();
+    s.samples = unsigned(qBound(1, sm->get(settingkeys::shaderWarmupSamples), 16));
+    s.shadows = sm->get(settingkeys::shaderWarmupShadows);
     return s;
 }
 
@@ -454,8 +454,8 @@ void EngineHost::rememberWarmUpShape(const WarmUpShape &shape)
     // Written only on change: this runs on the open path and setValue reaches
     // QSettings, which syncs to disk.
     const WarmUpShape had = warmUpShape();
-    if (had.samples != shape.samples) sm->setValue("shader_warmup_samples", int(shape.samples));
-    if (had.shadows != shape.shadows) sm->setValue("shader_warmup_shadows", shape.shadows);
+    if (had.samples != shape.samples) sm->set(settingkeys::shaderWarmupSamples, int(shape.samples));
+    if (had.shadows != shape.shadows) sm->set(settingkeys::shaderWarmupShadows, shape.shadows);
 }
 
 void EngineHost::startShaderCacheWatchdog()

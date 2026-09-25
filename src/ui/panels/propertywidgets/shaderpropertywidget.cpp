@@ -132,23 +132,6 @@ void ShaderPropertyWidget::setShaderGuid(const QString &guid)
             auto vShader = shaderObject["vertex_shader"].toString();
             auto fShader = shaderObject["fragment_shader"].toString();
 
-            //bool usesBuiltinAsset = false;
-            //for (const auto &asset : builtinShaders) {
-            //    if (vShader == asset || fShader == asset) {
-            //        usesBuiltinAsset = true;
-            //        break;
-            //    }
-            //}
-
-            //if (usesBuiltinAsset) {
-            //    allowBuiltinShaders->setValue(true);
-            //    for (const auto &shader : builtinShaders) {
-            //        auto shaderInfo = QFileInfo(shader);
-            //        if (shaderInfo.suffix() == "vert") vertexShaderCombo->addItem(shaderInfo.baseName(), shader);
-            //        if (shaderInfo.suffix() == "frag") fragmentShaderCombo->addItem(shaderInfo.baseName(), shader);
-            //    }
-            //}
-
             int vindex = vertexShaderCombo->findData(vShader);
             if (vindex) vertexShaderCombo->setCurrentIndex(vindex);
 

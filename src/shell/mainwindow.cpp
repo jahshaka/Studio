@@ -47,7 +47,6 @@ For more information see the LICENSE file
 
 #include "data/guidmanager.h"
 #include "services/thumbnailmanager.h"
-#include "ui/dialogs/ogrepreviewdialog.h"
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginematerialpreview.h"
@@ -408,7 +407,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// app.scriptPolicy). Live is the default: a person or an agent driving the
 	// editor should see it work.
 	scriptEngine->setInteractivePolicy(
-		SettingsManager::getDefaultManager()->getValue("script_feedback_live", true).toBool()
+		SettingsManager::getDefaultManager()->get(settingkeys::scriptFeedbackLive)
 			? ScriptRunPolicy::Live : ScriptRunPolicy::Off);
 	if (prefsDialog) prefsDialog->wireScripting(scriptEngine);
 	registerStudioModules(*scriptEngine);
@@ -431,9 +430,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// it from the CLI path instead.
 	mcpServer = new McpServer(scriptEngine, this);
 	prefsDialog->wireMcp(mcpServer, this);
-	if (settings->getValue("mcp_enabled", false).toBool()) {
+	if (settings->get(settingkeys::mcpEnabled)) {
 		QString mcpError;
-		if (!startMcpServer(quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt()), &mcpError))
+		if (!startMcpServer(quint16(settings->get(settingkeys::mcpPort)), &mcpError))
 			qWarning("MCP: %s", qPrintable(mcpError));
 	}
 
@@ -471,11 +470,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	MainThreadWatchdog::start();
 }
 
-void MainWindow::grabOpenGLContextHack()
-{
-    //switchSpace(WindowSpaces::PLAYER);
-}
-
 void MainWindow::goToDesktop()
 {
     show();
@@ -486,13 +480,11 @@ void MainWindow::setShowFrameStats(bool on)
 {
     // ONE code path for the F3 key, the View Options row, the Preferences
     // checkbox and editor.setOverlays({stats}) — and one stored value, so the
-    // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3).
+    // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3). The
+    // View Options checkmark follows the viewport's overlaysChanged
+    // (syncOverlayChecks), never this call.
     if (sceneView) sceneView->setShowFps(on);
-    SettingsManager::getDefaultManager()->setValue("show_fps", on);
-    if (statsCheckAction && statsCheckAction->isChecked() != on) {
-        QSignalBlocker block(statsCheckAction);   // no toggled() round trip
-        statsCheckAction->setChecked(on);
-    }
+    SettingsManager::getDefaultManager()->set(settingkeys::showFps, on);
 }
 
 bool MainWindow::bounceIfViewportIsDead()
@@ -878,30 +870,6 @@ SettingsManager* MainWindow::getSettingsManager()
     return settings;
 }
 
-bool MainWindow::handleMousePress(QMouseEvent *event)
-{
-    mousePressPos = event->pos();
-
-    return true;
-}
-
-bool MainWindow::handleMouseRelease(QMouseEvent *event)
-{
-    return true;
-}
-
-bool MainWindow::handleMouseMove(QMouseEvent *event)
-{
-    mousePos = event->pos();
-    return false;
-}
-
-// TODO - disable scrolling while doing gizmo transform ?
-bool MainWindow::handleMouseWheel(QWheelEvent *event)
-{
-    return false;
-}
-
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     // THE TITLE-BAR X IS A DOCK TOGGLE (lane SPACE-1 round 2). `widgetStates`
@@ -989,7 +957,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	}
 
     bool closing = false;
-	bool autoSave = settings->getValue("auto_save", true).toBool();
+	bool autoSave = settings->get(settingkeys::autoSave);
 
 	if (autoSave && projectService->isSceneOpen()) {
 		saveScene();
@@ -1169,6 +1137,16 @@ void MainWindow::shutdownBackgroundWork()
     if (claudeChatHost) claudeChatHost->shutdown();
 
     ThumbnailGenerator::getSingleton()->shutdown();
+
+    // THE LAST SAVE'S THUMBNAIL (CREATE-GAP-1): a save encodes its PNG on a
+    // worker and writes it when the worker is done — closeEvent's autosave
+    // above is exactly such a save. Waited for and WRITTEN here, while the
+    // database is still open, so a quit never drops the picture of the world
+    // it just saved. Bounded by one PNG encode (~100 ms).
+    if (projectService) {
+        const int drained = projectService->drainThumbnailEncodes();
+        if (drained) qInfo("shutdown: wrote %d pending project thumbnail(s)", drained);
+    }
 
     // Reap the remaining pool workers (metadata/peaks/bake futures) so
     // QThreadPool's exit-time wait finds an empty pool.
@@ -1631,14 +1609,20 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
     previousSpace = currentSpace;
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
-			if (projectService->isSceneOpen()) {
-				//if (settings->getValue("auto_save", true).toBool()) saveScene();
-				//saveScene();
-				if (sceneView->isInitialized())
-					updateCurrentSceneThumbnail();
-				pmContainer->populateDesktop(true);
-			}
-			
+			if (projectService->isSceneOpen() && sceneView->isInitialized())
+				updateCurrentSceneThumbnail();
+			// THE GRID IS NOT REBUILT HERE (CREATE-GAP-1). It was, on every entry
+			// (TRAY-REPOP-1: a close used to come back to a grid that had never
+			// seen the projects made since boot) — correct, and O(N) PNG decodes
+			// on the UI thread inside every close: 450 ms at 40 tiles, the create
+			// gap open.responsive reds on. The grid is a MODEL now: a project's
+			// tile is added when its row is made, removed with it, re-ordered and
+			// re-thumbnailed by its saves — so a close has nothing to rebuild.
+			// The entry builds the grid only the first time the desktop shows,
+			// and otherwise refreshes the open markers (ProjectManager::
+			// enterDesktop).
+			pmContainer->enterDesktop();
+
 			ui->stackedWidget->setCurrentIndex(0);
 
             hideEditorPanels();
@@ -1905,9 +1889,8 @@ void MainWindow::openStageBegin()
 void MainWindow::openStageRead(const iris::MeshPrewarmPtr &prewarm)
 {
 	LoadTimeline::mark(QStringLiteral("readProjectScene"));
-	iris::PostProcessManagerPtr postMan;
 	openPendingEditorData = Q_NULLPTR;
-	openPendingScene = projectService->readProjectScene(&openPendingEditorData, postMan, prewarm);
+	openPendingScene = projectService->readProjectScene(&openPendingEditorData, prewarm);
 }
 
 void MainWindow::openStageBind(bool playMode)
@@ -1933,8 +1916,8 @@ void MainWindow::openStageBind(bool playMode)
 		// needs to be done so controllers can have the correct
 		// camera
 		playerView->setScene(scene);
-		wireCheckAction->setChecked(editorData->showLightWires);
-		gridCheckAction->setChecked(editorData->showGrid);
+		// (The grid and light-wire checkmarks follow setEditorData's
+		// overlaysChanged — syncOverlayChecks.)
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
 	}
 
@@ -2383,7 +2366,7 @@ void MainWindow::startOpenRun(bool playMode)
 	// kills the app on the second world of a session, so it ships behind
 	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
 	// The switch stays in Preferences -> Cache for anyone who wants it off.
-	if (settings->getValue("shader_warmup_on_open", true).toBool()) {
+	if (settings->get(settingkeys::shaderWarmupOnOpen)) {
 		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
 			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
 			const unsigned built = sceneView->warmUpShaders();
@@ -2476,12 +2459,14 @@ void MainWindow::closeProject(CloseIntent intent)
             scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 
         if (projectService->isSceneOpen()) {
-            if (settings->getValue("auto_save", true).toBool()) saveScene();
+            // closePrevious:save — a create's ledger shows its close now
+            // (CREATE-GAP-1); a no-op outside a LoadTimeline run.
+            LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
+            if (settings->get(settingkeys::autoSave)) saveScene();
         }
 
         scene->getPhysicsEnvironment()->destroyPhysicsWorld();
 
-        //playbackService->stopSimulation();
         playSimBtn->setText("Simulate Physics");
         playSimBtn->setToolTip("Simulate physics only");
 
@@ -2498,11 +2483,9 @@ void MainWindow::closeProject(CloseIntent intent)
 
     // The desktop's tiles carry the open marker (dark blue caption bar,
     // "[ Open ]" caption, Close instead of Play/Edit). Refresh them the moment
-    // the flag goes false: NEITHER exit path below rebuilds the grid — closing
-    // while already on the desktop returns early, and switchSpace(DESKTOP)'s
-    // repopulate is gated on a scene being open, which it no longer is. Found
-    // by scripting.e2e.desktops' open-flag assertion (2026-09-08); the stale
-    // marker predates the blue bar, it was just less visible.
+    // the flag goes false: closing while already on the desktop returns early
+    // below and never reaches switchSpace(DESKTOP)'s rebuild. Found by
+    // scripting.e2e.desktops' open-flag assertion (2026-09-08).
     if (pmContainer) pmContainer->refreshOpenTiles();
 
     playbackService->setPlaying(false);
@@ -2533,11 +2516,13 @@ void MainWindow::closeProject(CloseIntent intent)
     // switchSpace below — so a close with the headset on reached the engine's
     // own safety net in OgreEngine::destroyScene instead of the Player's end.
     // The net stays; the ordinary flow does not need it.
+    LoadTimeline::Accumulate teardown(QStringLiteral("closePrevious:teardown"));
     playerView->endVrForSceneClose();
     removeScene();
 
     scene->cleanup();
     scene.clear();
+    teardown.stop();
 
     // R4: the document's nodes are gone from the staging manager now, and
     // the engine scene went with removeScene() — the one moment a SIMD-pool
@@ -2588,6 +2573,7 @@ void MainWindow::closeProject(CloseIntent intent)
 	// The reveal calls enterEditorSpace() itself when the page never left.
 	if (intent == CloseIntent::ReopenInPlace) return;
 
+    LoadTimeline::Accumulate toDesktop(QStringLiteral("closePrevious:switch"));
     switchSpace(WindowSpaces::DESKTOP);
 
 	if (sceneView->isInitialized())
@@ -2652,11 +2638,6 @@ void MainWindow::removeScene()
     sceneView->clearScene();
     sceneNodePropertiesWidget->setScene(iris::ScenePtr());
     sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
-}
-
-void MainWindow::setupPropertyUi()
-{
-    animWidget = new AnimationWidget();
 }
 
 void MainWindow::assetItemSelected(QListWidgetItem *item)
@@ -2834,17 +2815,6 @@ void MainWindow::addAssetParticleSystem(bool ignore, iris::Vec3 position, QStrin
     sceneEditService->addAssetParticleSystem(ignore, position, guid, assetName);
 }
 
-void MainWindow::addDragPlaceholder()
-{
-    /*
-    auto node = iris::MeshNode::create();
-    node->scale = iris::Vec3(.5f, .5f, .5f);
-    node->setMesh(":app/content/primitives/arrow.obj");
-    node->setName("Arrow");
-    addNodeToScene(node, true);
-    */
-}
-
 /**
  * Adds sceneNode to selected scene node. If there is no selected scene node,
  * sceneNode is added to the root node
@@ -2863,11 +2833,6 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
 {
     sceneEditService->addNodeToScene(sceneNode, ignore);
-}
-
-void MainWindow::repopulateSceneTree()
-{
-    this->sceneHierarchyWidget->repopulateTree();
 }
 
 // THE SELECTION, not the primary (EDITOR_MULTISELECT_SPEC §2.5). Both of these
@@ -2913,7 +2878,16 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
     if (filePath.isEmpty() || filePath.isNull()) return;
 
-    sceneEditService->exportNodeTo(node, modelType, filePath);
+    // THE VERB'S PATH (node.exportArchive calls the same service).
+    const auto result = sceneEditService->exportNodeTo(node, modelType, filePath);
+    if (!result.ok()) {
+        // TOLD, not only logged — this was a silent void (the project export's
+        // shape, exportSceneAsZip).
+        irisLog(QStringLiteral("Export failed: %1").arg(result.error));
+        if (!FirstRun::isDrivenSession())
+            QMessageBox::warning(this, tr("Export failed"),
+                                 tr("%1 could not be exported: %2").arg(node->getName(), result.error));
+    }
 }
 
 void MainWindow::deleteNode()
@@ -2934,42 +2908,55 @@ void MainWindow::updateCurrentSceneThumbnail()
     projectService->updateCurrentSceneThumbnail();
 }
 
-/*
-bool MainWindow::isModelExtension(QString extension)
-{
-    if(extension == "obj"   ||
-       extension == "3ds"   ||
-       extension == "fbx"   ||
-       extension == "dae"   ||
-       extension == "blend" ||
-       extension == "c4d"   )
-        return true;
-    return false;
-}
-*/
 void MainWindow::exportSceneAsZip()
+{
+    if (!projectService->isSceneOpen() || project->getProjectGuid().isEmpty()) return;
+    exportProjectWithDialog(project->getProjectGuid(), project->getProjectName());
+}
+
+void MainWindow::exportProjectWithDialog(const QString &guid, const QString &name)
 {
     // get the export file path from a save dialog
     auto filePath = QFileDialog::getSaveFileName(
                         this,
                         "Choose export path",
-                        QString("%1_export").arg(project->getProjectName()),
+                        QString("%1_export").arg(name),
                         "Supported Export Formats (*.zip)"
                     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;
     if (!filePath.endsWith(".zip")) filePath += ".zip";
-    if (!!scene) saveScene();
+    QString why;
+    if (!startProjectExport(guid, filePath, &why))
+        QMessageBox::information(this, tr("Export"), why, QMessageBox::Ok);
+}
 
-    if (archiver && archiver->isRunning()) {
-        QMessageBox::information(this, tr("Export"),
-                                 tr("An archive operation is already running."), QMessageBox::Ok);
-        return;
-    }
+bool MainWindow::startProjectExport(const QString &guid, const QString &zipPath, QString *why)
+{
+    const auto refuse = [why](const QString &reason) {
+        if (why) *why = reason;
+        return false;
+    };
+    if (archiver && archiver->isRunning())
+        return refuse(tr("An archive operation is already running."));
+    if (guid.isEmpty() || !db->fetchProjectTile(guid, nullptr))
+        return refuse(tr("No project with guid '%1'.").arg(guid));
+
+    // THE OPEN WORLD IS SAVED ONLY WHEN IT IS THE ONE BEING EXPORTED (CREATE-
+    // GAP-1's fix round). The tile's Export used to re-point the LIVE project
+    // at the exported tile and then save "the scene" — the open world, written
+    // into the exported project's row and folder — and the pointer stayed
+    // there, so every later autosave of the open world landed in that row too.
+    const bool exportingOpenWorld = scene && projectService->isSceneOpen()
+                                    && guid == project->getProjectGuid();
+    if (exportingOpenWorld) saveScene();
+
     if (!archiver) {
         // Parented: it dies with this window (step 5 of the shutdown order),
-        // and shutdownBackgroundWork cancels + joins it before that.
-        archiver = new ProjectArchiver(db, project, this);
+        // and shutdownBackgroundWork cancels + joins it before that. It exports
+        // `exportTarget` — a Project naming the row — never the live project.
+        exportTarget = std::make_unique<Project>();
+        archiver = new ProjectArchiver(db, exportTarget.get(), this);
         archiveProgress = new ProgressDialog(this);
         // SIGNAL-driven, never pumping: a pump from inside a slice re-enters
         // the loop and can destroy objects the slice is still using
@@ -2983,11 +2970,13 @@ void MainWindow::exportSceneAsZip()
                 });
         connect(archiver, &ProjectArchiver::finished, this, [this](bool canceled) {
             if (archiveProgress) archiveProgress->close();
-            if (!canceled && !archiver->result().ok())
+            if (!canceled && !archiver->result().ok() && !FirstRun::isDrivenSession())
                 QMessageBox::warning(this, tr("Export failed"),
                                      archiver->result().error, QMessageBox::Ok);
         });
     }
+    exportTarget->setProjectPath(projectService->projectFolderFor(guid), QString());
+    exportTarget->setProjectGuid(guid);
 
     // Pin-world archives (phase 4): catalog snapshot + manifest v2 + the
     // pinned CAS objects, through the one archive implementation the
@@ -3001,11 +2990,16 @@ void MainWindow::exportSceneAsZip()
         archiveProgress->show();
     }
     // The manifest's scene-scale block, measured from the live document — the
-    // archiver only ever sees the database (services/sceneextents.h).
-    if (sceneView)
-        archiver->setSceneMetadata(sceneextents::describe(sceneView->getScene(),
-                                                          sceneView->editorCamera()));
-    archiver->startExport(filePath);
+    // archiver only ever sees the database (services/sceneextents.h). Only
+    // the OPEN world has a live document; another project's archive carries
+    // no scale block rather than the open world's.
+    archiver->setSceneMetadata(exportingOpenWorld && sceneView
+                                   ? sceneextents::describe(sceneView->getScene(),
+                                                            sceneView->editorCamera())
+                                   : exportformat::ManifestScene());
+    if (!archiver->startExport(zipPath))
+        return refuse(archiver->result().error);
+    return true;
 }
 
 namespace {
@@ -3774,7 +3768,6 @@ void MainWindow::toggleScriptConsole()
 
 void MainWindow::setupViewPort()
 {
-	// ui->MenuBar->setVisible(false);
 
 	worlds_menu = new QPushButton("Desktop");
 	worlds_menu->setObjectName("worlds_menu");
@@ -3845,7 +3838,6 @@ void MainWindow::setupViewPort()
 	help->setObjectName("helpButton");
     // for adapting Qt6.9.0
     help->setText(QChar(static_cast<ushort>(fa::questioncircle)));
-    //help->setText(QChar(fa::questioncircle));
 	// Sheet + font together, through the one helper: the three header glyphs
 	// (Publish, Help, Preferences) are the same size and sit on the header's
 	// own colour instead of Qlementine's grey button plate.
@@ -3859,7 +3851,6 @@ void MainWindow::setupViewPort()
 	prefs = new QPushButton;
 	prefs->setObjectName("prefsButton");
 
-    //prefs->setText(QChar(fa::cog));
     // for adapting Qt6.9.0
     prefs->setText(QChar(static_cast<ushort>(fa::cog)));
 	// (Classic still gets PrefsButton() — the helper picks by object name.)
@@ -3967,38 +3958,10 @@ void MainWindow::setupViewPort()
     statsCheckAction = new QAction(QIcon(), "Frame Stats (F3)");
     statsCheckAction->setCheckable(true);
     statsCheckAction->setChecked(
-        SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
+        SettingsManager::getDefaultManager()->get(settingkeys::showFps));
     connect(statsCheckAction, &QAction::toggled, this,
             [this](bool on) { setShowFrameStats(on); });
     wireFramesMenu->addAction(statsCheckAction);
-
-    // --- Engine preview (Ogre-Next) -------------------------------------
-    // Scaffolding for the engine migration: opens a window driven entirely
-    // through the engine abstraction. Removed once the editor viewport moves over.
-    {
-        QAction *enginePreviewAction = new QAction(QIcon(), "Engine Preview (Ogre-Next)", this);
-        enginePreviewAction->setShortcut(QKeySequence("Ctrl+Shift+O"));
-        // Register on the window itself, application-wide: an action living only in a
-        // toolbar-button menu does not reliably deliver its shortcut.
-        enginePreviewAction->setShortcutContext(Qt::ApplicationShortcut);
-        this->addAction(enginePreviewAction);
-        wireFramesMenu->addSeparator();
-        wireFramesMenu->addAction(enginePreviewAction);
-        connect(enginePreviewAction, &QAction::triggered, this, [this]() {
-            // ONE dialog for the life of the process: it owns the Engine, which is
-            // one-per-process and (with the current Ogre build) cannot be re-created
-            // after destruction. Closing merely hides it; a second trigger raises it.
-            static OgrePreviewDialog *dlg = nullptr;
-            if (!dlg) {
-                dlg = new OgrePreviewDialog(this);
-                connect(dlg, &QObject::destroyed, this, [] { dlg = nullptr; });
-            }
-            dlg->show();
-            dlg->raise();
-            dlg->activateWindow();
-        });
-    }
-    // --------------------------------------------------------------------
 
     // Qlementine: the checkable actions become Switch rows (and stay in sync
     // with their QActions); a bonus is the menu no longer closes per toggle.
@@ -4280,13 +4243,18 @@ void MainWindow::setupViewPort()
 	}
 	playerView = new PlayerWidget(viewPort, playerBackend);
 
-    wireCheckAction->setChecked(sceneView->getShowLightWires());
-    gridCheckAction->setChecked(sceneView->getShowGrid());
+    // ONE DOOR (STUDIO-CRUD-1 item 8): the menu's grid / light-wire / stats
+    // checkmarks follow the viewport's state through overlaysChanged — so
+    // editor.setOverlays, the shortcuts and a scene open move them exactly as
+    // a click does — and the actions' toggled() call the path the verb calls.
+    connect(sceneView->events(), &EditorViewportEvents::overlaysChanged,
+            this, &MainWindow::syncOverlayChecks);
+    syncOverlayChecks();
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
     // The persisted readout state reaches the viewport HERE, not when the menu
     // action was built: the View Options menu is constructed before sceneView
     // exists, so its initial setChecked found nothing to switch on.
-    setShowFrameStats(SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
+    setShowFrameStats(SettingsManager::getDefaultManager()->get(settingkeys::showFps));
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView->asWidget(), 0, 0);
@@ -4394,7 +4362,6 @@ void MainWindow::setupDesktop()
 	
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
-	//ui->stackedWidget->addWidget(new QWidget(this));
 	// The modules (audit §6.2): the shell constructs them against the full
 	// host context and drives pages through the one interface. Stack order is
 	// load-bearing (WindowSpaces indexes): EFFECT = 3, PLAYER = 4, PUBLISH = 5.
@@ -4433,10 +4400,10 @@ void MainWindow::setupDesktop()
 
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
 	connect(pmContainer, &ProjectManager::fileToCreate,
-	        this, [this](const QString &name, const QString &path, bool empty) {
-		newProject(name, path, empty);
+	        this, [this](const QString &guid, const QString &name, const QString &path, bool empty) {
+		newProject(guid, name, path, empty);
 	});
-	connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
+	connect(pmContainer, &ProjectManager::exportProject, this, &MainWindow::exportProjectWithDialog);
 }
 
 void MainWindow::setupToolBar()
@@ -4447,6 +4414,8 @@ void MainWindow::setupToolBar()
 	options.insert("color-active", QColor(255, 255, 255));
   
     toolBar = new QToolBar("Tool Bar");
+	// Named: DockState's snapshot of `viewPort` matches toolbars by objectName.
+	toolBar->setObjectName(QString::fromLatin1(DockState::kEditorToolBarName));
 	toolBar->setIconSize(QSize(16, 16));
 
 	QAction *actionUndo = new QAction;
@@ -4751,8 +4720,15 @@ void MainWindow::setupShortcuts()
             [this]() { spaceKeyActiveSpace(); });
 
     // ---- camera ----
-    reg.add("camera.focus", "Focus Selection", "Camera", QKeySequence(Qt::Key_F), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection(); });
+    // F is page-scoped like Space: ONE registry claimant (the graph view's own
+    // QShortcut made it ambiguous on the Materials page — STUDIO-CRUD-1 item 7),
+    // routed by the active space (see focusActiveSpace).
+    reg.add("camera.focus", "Focus Selection / Frame Graph Nodes", "Camera",
+            QKeySequence(Qt::Key_F), this, [this]() { focusActiveSpace(); });
+    reg.add("graph.resetZoom", "Reset Graph Zoom", "Materials", QKeySequence(Qt::Key_H), this,
+            [this]() {
+                if (currentSpace == WindowSpaces::EFFECT && shaderGraph) shaderGraph->graphResetZoom();
+            });
     reg.add("view.orthographic", "Orthographic Projection", "Camera", QKeySequence(Qt::Key_O), this,
             [this]() { emit projectionChangeRequested(false); });
     reg.add("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), this,
@@ -4793,7 +4769,7 @@ void MainWindow::setupShortcuts()
                     sceneView->setGameView(!sceneView->isGameView());
             });
     reg.add("view.grid", "Toggle Ground Grid", "View", QKeySequence(), this,
-            [this]() { if (gridCheckAction) gridCheckAction->toggle(); });
+            [this]() { if (sceneView) sceneView->setShowGrid(!sceneView->getShowGrid()); });
     // F3 — the games convention (Minecraft, idTech-adjacent), and the only free
     // F-key in this registry besides F11 (STATS_OVERLAY_SPEC D3). Category
     // "View" so it lands beside gameView/grid/fullscreen in the generated
@@ -5199,11 +5175,9 @@ void MainWindow::toggleDockWidgets()
 
 	QPushButton *closeAll = new QPushButton("Close All");
 	closeAll->setCheckable(true);
-	//closeAll->setChecked(true);
 
 	QPushButton *restoreAll = new QPushButton("Restore All");
 	restoreAll->setCheckable(true);
-	//restoreAll->setChecked(true);
 
 	QLabel *label = new QLabel("Toggle Widgets");
 	label->setAlignment(Qt::AlignCenter);
@@ -5464,6 +5438,15 @@ void MainWindow::pasteActiveSpace()
 // means. On the Materials space Space opens the node-SEARCH palette — the graph
 // is the thing being edited there and there is no gizmo to cycle; everywhere
 // else it is the tool cycle it has always been.
+void MainWindow::focusActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->graphFitSelection();
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection();
+}
+
 void MainWindow::spaceKeyActiveSpace()
 {
     if (currentSpace == WindowSpaces::EFFECT) {
@@ -5499,6 +5482,32 @@ void MainWindow::toggleLightWires(bool state)
 void MainWindow::toggleGrid(bool state)
 {
     if (sceneView) sceneView->setShowGrid(state);
+}
+
+void MainWindow::syncOverlayChecks()
+{
+    if (!sceneView) return;
+    // Not signal-blocked: the World panel's Show Grid row follows the grid
+    // action's toggled(), and the round trip ends at the viewport's setter,
+    // which ignores a value it already holds.
+    if (gridCheckAction) gridCheckAction->setChecked(sceneView->getShowGrid());
+    if (wireCheckAction) wireCheckAction->setChecked(sceneView->getShowLightWires());
+    // The stats action's toggled() persists show_fps (setShowFrameStats), so it
+    // is blocked: the state it follows was written by whoever moved it.
+    if (statsCheckAction && statsCheckAction->isChecked() != sceneView->getShowFps()) {
+        QSignalBlocker block(statsCheckAction);
+        statsCheckAction->setChecked(sceneView->getShowFps());
+    }
+}
+
+QVariantMap MainWindow::viewOptionChecks() const
+{
+    QVariantMap out;
+    if (gridCheckAction) out[QStringLiteral("grid")] = gridCheckAction->isChecked();
+    if (wireCheckAction) out[QStringLiteral("lightWires")] = wireCheckAction->isChecked();
+    if (statsCheckAction) out[QStringLiteral("stats")] = statsCheckAction->isChecked();
+    if (physicsCheckAction) out[QStringLiteral("physicsDebug")] = physicsCheckAction->isChecked();
+    return out;
 }
 
 // F11: immersive fullscreen — the window goes fullscreen and (in the editor
@@ -5735,6 +5744,48 @@ QVariantList MainWindow::propertyRows(const QString &tabName) const
     return out;
 }
 
+QVariantMap MainWindow::propertyRow(const QString &tabName, const QString &key, bool drive,
+                                    const QVariant &value, QString *error)
+{
+    auto refuse = [error](const QString &why) { if (error) *error = why; return QVariantMap(); };
+    if (!sceneNodePropertiesWidget) return refuse(QStringLiteral("there is no properties column"));
+    SceneNodePropertiesWidget::Tab tab = sceneNodePropertiesWidget->propertiesTab();
+    if (!tabName.trimmed().isEmpty() && !SceneNodePropertiesWidget::tabFromName(tabName, tab))
+        return refuse(QStringLiteral("unknown tab '%1' (world|selection)").arg(tabName));
+    // The same listing editor.properties reports, so "which row" is answered
+    // the way the column answers it — and a mount owed to this turn happens.
+    QVector<PropertyRows::Registry::Listing> hits;
+    for (const auto &row : sceneNodePropertiesWidget->propertyRows(tab))
+        if (row.key == key && row.widget) hits.append(row);
+    const QString name = SceneNodePropertiesWidget::tabName(tab);
+    if (hits.isEmpty())
+        return refuse(QStringLiteral("the %1 tab has no row with the key '%2' mounted")
+                          .arg(name, key));
+    if (hits.size() > 1)
+        return refuse(QStringLiteral("%1 rows on the %2 tab share the key '%3'")
+                          .arg(hits.size()).arg(name, key));
+    const PropertyRows::Registry::Listing &row = hits.first();
+    if (drive) {
+        // A ROW THE PANEL HIDES TAKES NO GESTURE (a filtered-out row is still
+        // the panel's and is driven: the filter is a view, not a lock).
+        if (!row.panelVisible)
+            return refuse(QStringLiteral("the row '%1' is hidden by its panel").arg(key));
+        QString why;
+        if (!PropertyRows::driveRow(row.widget, value, &why))
+            return refuse(QStringLiteral("the row '%1' refused: %2").arg(key, why));
+    }
+    // Read AFTER the gesture: what the row shows once its panel has answered.
+    QVariantMap out = PropertyRows::readRow(row.widget);
+    out[QStringLiteral("tab")] = name;
+    out[QStringLiteral("key")] = row.key;
+    out[QStringLiteral("label")] = row.label;
+    out[QStringLiteral("section")] = row.sections;
+    out[QStringLiteral("panelVisible")] = row.panelVisible;
+    out[QStringLiteral("filteredOut")] = row.filteredOut;
+    out[QStringLiteral("visible")] = row.visible;
+    return out;
+}
+
 bool MainWindow::isPropertiesTab(const QString &tabName) const
 {
     if (tabName.trimmed().isEmpty()) return true;
@@ -5880,28 +5931,6 @@ void MainWindow::captureEditorDockState()
     editorDockState = DockState::snapshot(viewPort);
 }
 
-void MainWindow::showProjectManagerInternal()
-{
-    if (undoService->isDirty()) {
-        QMessageBox::StandardButton option;
-        option = QMessageBox::question(this,
-                                       "Unsaved Changes",
-                                       "There are unsaved changes, save before closing?",
-                                       QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-
-        if (option == QMessageBox::Yes) {
-            saveScene();
-        } else if (option == QMessageBox::Cancel) {
-            return;
-        }
-    }
-
-    if (playbackService->isPlaying()) enterEditMode();
-    hide();
-    pmContainer->populateDesktop(true);
-    pmContainer->cleanupOnClose();
-}
-
 // A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07). Opening a
 // scene pushes its saved EditorData into the viewport and the View menu
 // (openStage's `editorData` branch); creating one pushed NOTHING, so a new
@@ -5915,13 +5944,19 @@ void MainWindow::newScene(bool empty)
     auto scene = this->createDefaultScene(empty);
     this->setScene(scene);
     this->sceneView->resetEditorCam();
+    resetOverlaysToDefaults();
+}
 
+// A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07) — the
+// three overlays the open path pushes out of the saved EditorData. ONE body for
+// newScene and the create run (it was two copies). The grid and light-wire
+// checkmarks follow through overlaysChanged (syncOverlayChecks).
+void MainWindow::resetOverlaysToDefaults()
+{
     const EditorData defaults;
     sceneView->setShowGrid(defaults.showGrid);
     sceneView->setShowLightWires(defaults.showLightWires);
     sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
-    if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
-    if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
     if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
 }
 
@@ -5986,16 +6021,15 @@ void MainWindow::toggleClaudeChat()
     // model instead of silently inheriting the user's terminal default. The
     // setting is what a header picker will write; absent, the shipped default
     // applies, and an explicit empty string restores "inherit".
-    claudeChatHost->setModel(settings->getValue("claude_model",
-                                                ClaudeLaunchConfig::defaultModel()).toString());
+    claudeChatHost->setModel(settings->get(settingkeys::claudeModel));
     if (!claudeChatWindow) {
         claudeChatWindow = new ClaudeChatWindow(settings->settings, claudeChatHost, this);
         connect(claudeChatWindow, &ClaudeChatWindow::enableMcpRequested, this, [this]() {
             const quint16 port =
-                quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt());
+                quint16(settings->get(settingkeys::mcpPort));
             QString error;
             if (startMcpServer(port, &error)) {
-                settings->setValue("mcp_enabled", true);
+                settings->set(settingkeys::mcpEnabled, true);
             } else if (scriptConsole) {
                 scriptConsole->announce(QStringLiteral("MCP enable failed: %1").arg(error));
             }
@@ -6065,9 +6099,10 @@ void MainWindow::refreshClaudeChatContext()
 // so `project.create` keeps its synchronous promise to scripts and the desktop's
 // Create button keeps a window that answers. `project.createAsync` — a create
 // that returns before the world is installed — is phase 2b.
-void MainWindow::newProject(const QString &filename, const QString &projectPath, bool empty)
+void MainWindow::newProject(const QString &guid, const QString &filename,
+                            const QString &projectPath, bool empty)
 {
-    startCreateRun(filename, projectPath, empty);
+    startCreateRun(guid, filename, projectPath, empty);
     waitForOpen();
 }
 
@@ -6077,20 +6112,40 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath,
 // reads — covers a create exactly as it covers an open. It exists because a
 // caller that wants to WATCH a world arrive has to own the frames between the
 // slices, and `newProject` spends them itself inside `waitForOpen`.
-void MainWindow::newProjectAsync(const QString &filename, const QString &projectPath, bool empty)
+void MainWindow::newProjectAsync(const QString &guid, const QString &filename,
+                                 const QString &projectPath, bool empty)
 {
-    startCreateRun(filename, projectPath, empty);
+    startCreateRun(guid, filename, projectPath, empty);
 }
 
-void MainWindow::startCreateRun(const QString &filename, const QString &projectPath, bool empty)
+void MainWindow::startCreateRun(const QString &guid, const QString &filename,
+                                const QString &projectPath, bool empty)
 {
-    if (projectService->isSceneOpen()) closeProject();
+    // AN OPEN IN FLIGHT FINISHES FIRST — before this create's ledger begins:
+    // its run is the one LoadTimeline holds until the open ends it, so a begin
+    // skipped because "a run is running" would leave the create's marks on no
+    // run at all once the drain's end() closed the open's (fix round).
     if (isOpeningProject()) {
         qWarning("project create: an open was still in flight — draining it first");
         openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
     }
+    // THE LEDGER COVERS THE CLOSE (CREATE-GAP-1). It began after it, so the
+    // create's own record was the smaller half of the verb: 800-1200 ms of a
+    // create over an open world — the autosave, the teardown, the page switch
+    // — sat in front of the run and in no stage. `closePrevious` is that
+    // span, and its counters (closePrevious:save / :teardown / :switch, and
+    // the save's own saveOpen:*) say where it went.
     if (!LoadTimeline::isRunning())
         LoadTimeline::begin(QStringLiteral("create %1").arg(filename));
+    if (projectService->isSceneOpen()) {
+        LoadTimeline::mark(QStringLiteral("closePrevious"));
+        closeProject();
+    }
+    // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the close above
+    // autosaved the old world into the old project's own row (createProject-
+    // Shell used to re-point first, and the old project's edits went into the
+    // new one's row — CREATE-GAP-1).
+    projectService->pointAtProject(guid, filename);
 
     // The runner and its slice boundary are set up once, by whichever route
     // reaches them first, so there is ONE definition of what a boundary does.
@@ -6114,15 +6169,7 @@ void MainWindow::startCreateRun(const QString &filename, const QString &projectP
         ui->actionClose->setDisabled(false);
         setScene(created);
         sceneView->resetEditorCam();
-        // A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07) —
-        // the three settings the open path pushes out of the saved EditorData.
-        const EditorData defaults;
-        sceneView->setShowGrid(defaults.showGrid);
-        sceneView->setShowLightWires(defaults.showLightWires);
-        sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
-        if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
-        if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
-        if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
+        resetOverlaysToDefaults();   // a brand-new scene starts at the defaults
         refreshClaudeChatContext();   // D1: rebind an open chat to the new project
         if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project
         if (services) services->announceSceneOpened();
@@ -6141,7 +6188,7 @@ void MainWindow::startCreateRun(const QString &filename, const QString &projectP
         LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
         sceneView->primeSceneEnvironment();
     } });
-    if (settings->getValue("shader_warmup_on_open", true).toBool()) {
+    if (settings->get(settingkeys::shaderWarmupOnOpen)) {
         slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
             LoadTimeline::mark(QStringLiteral("warmUpShaders"));
             const unsigned built = sceneView->warmUpShaders();
@@ -6320,6 +6367,11 @@ MainWindow::~MainWindow()
     // say what it means.
     if (undoStack) undoStack->clear();
     if (db) db->flushPendingAssetDeletes();
+    // ...and the last save's thumbnail, for the same reason and the same exits:
+    // the --script / --dump-api-docs paths never reach shutdownBackgroundWork,
+    // where a window close drains it (CREATE-GAP-1). Idempotent; nothing left
+    // is nothing done.
+    if (projectService) projectService->drainThumbnailEncodes();
 
     // The modules. They are plain heap objects the shell news up in
     // setupViewPort() and nothing ever deleted them (deep audit 2026-09,
@@ -6435,12 +6487,10 @@ void MainWindow::onPlaySceneButton()
 
     if (playbackService->isPlaying()) {
         enterEditMode();
-		//playbackService->restartSimulation();
 		sceneView->stopPlayingScene();
     }
     else {
         enterPlayMode();
-		//playbackService->startSimulation();
 		sceneView->startPlayingScene();
     }
 

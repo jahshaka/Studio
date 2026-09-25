@@ -33,20 +33,31 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # dirs are tests/<dir>; modules are the `<module>.` prefixes an e2e script calls. The
 # special dir "*vulkan-scripts" means every app-spawning suite that is NOT --headless
 # (anything that renders), "*headless-scripts" the --headless ones, "*all-scripts" both.
+# THE ENGINE FAMILY: the test dirs any change to the engine's pixels or boundary selects.
+# `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING from this list,
+# so no engine change ever selected the ray-traced reflection suites — DRAG-1 changed what
+# the ray arm reads from the voxels and two scoped gates came back green while
+# gi.rt_reflect was red. The entries are test DIRECTORY names, not ctest labels, so a
+# suite whose dir is not named is invisible however it is labelled.
+ENGINE_FAMILY = ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow",
+                 "shadercache", "compute", "hdr", "sky", "pieces", "vr",
+                 "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
+                 "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
+                 "shutdown", "openasync", "*vulkan-scripts"]
+
 AREA_RULES = [
     # --- engine: anything that changes pixels or the boundary ---------------------------
-    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/build-ogre)",
-     # `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING
-     # from this list, so no engine change ever selected the ray-traced
-     # reflection suites — DRAG-1 changed what the ray arm reads from the voxels
-     # and two scoped gates came back green while gi.rt_reflect was red. The
-     # entries here are test DIRECTORY names, not ctest labels, so a suite whose
-     # dir is not named is invisible however it is labelled.
-     ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
-      "compute", "hdr", "sky", "pieces", "vr",
-      "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
-      "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
-      "shutdown", "openasync", "*vulkan-scripts"], []),
+    # THE VISIBILITY-BUFFER DECODE (tests/atom: engine.atom_parity and its twins, the
+    # cluster suites): HlmsAtom is a derived HlmsPbs, so its pixels move with ITS OWN
+    # media and C++, the GPU scene tables it reads, the atom pass, EVERY Hlms piece the
+    # engine stages (PBS's pieces are its text too) and the fork pin (Ogre's Pbs pieces,
+    # the Forward+ hook). PHOTON-HIT-SHADE-1 changed all of these and the generic rule
+    # below did not select engine.atom_parity (audit F2): its byte-identity rested on a
+    # hand run.
+    (r"^irisgl/(engine/media/Hlms/|engine/src/(HlmsAtom|OgreAtomPass|AtomPass|OgreGpuScene|GpuScene)\.|"
+     r"thirdparty/ogre-next)",
+     ENGINE_FAMILY + ["atom"], []),
+    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/build-ogre)", ENGINE_FAMILY, []),
     (r"^irisgl/mirror/",
      ["mirror", "skeletal", "sockets", "cameras", "gizmo", "player", "thumbnails",
       "materialpreview", "samples", "picking", "particles",
@@ -80,6 +91,11 @@ AREA_RULES = [
     (r"^irisgl/core/",
      ["document", "math", "input", "gizmo", "cameras", "hygiene", "*headless-scripts"], []),
     (r"^irisgl/docs/", [], []),                                   # documentation: no suite at all
+    # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what
+    # the engine's shaders SEE — the engine family, not the whole tier (DEVPROCESS-2, 2026-09-24:
+    # eight lane gates fell back to the MERGE tier this phase on paths like this one).
+    # The wrapped pieces are Hlms text HlmsAtom's decode compiles too: the atom dir with it.
+    (r"^irisgl/cmake/WrapHlmsPiece", ENGINE_FAMILY + ["atom"], []),
     (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name
@@ -154,6 +170,11 @@ AREA_RULES = [
     (r"^src/", ["*merge-tier"], []),
     # --- data, docs, build ---------------------------------------------------------------
     (r"^docs/SCRIPTING\.md$", ["api"], []),
+    # THE TIER DOC'S OWN GUARD (POST-C-FIXES-1): docs/TESTING_GATE.md must quote the
+    # MERGE tier through `gate-scope.py --merge-tier`, never a copy of its -LE set
+    # (a copy went stale once: it lacked photon-target). source.gate_scope_rules case 9
+    # greps it, so an edit to the doc selects the hygiene rows.
+    (r"^docs/TESTING_GATE\.md$", ["hygiene"], []),
     (r"^(docs/|README|LICENSE|\.claude/|\.github/|[A-Za-z_\-]+\.md$|\.gitignore$|\.gitmodules$)", [], []),   # no suite at all
     (r"^(scenes/|app/content/|app/samples/)", ["samples", "reopen", "assets"], ["project"]),
     (r"^app/", ["ui", "theme", "app"], []),
@@ -274,10 +295,26 @@ def load_inventory(build):
     bt = j["backtraceGraph"]; files = bt["files"]; nodes = bt["nodes"]
     inv = {}
     for t in j["tests"]:
+        # THE SUITE'S OWN DIRECTORY IS WHERE IT WAS REGISTERED, NOT WHERE add_test RAN
+        # (POST-C-FIXES-1). A suite registered through a helper function has its
+        # add_test in the file that DEFINES the helper: every jah_gpu_exclusive_test
+        # suite (tests/CMakeLists.txt) came out as dir "tests", which no rule names —
+        # so open.responsive, gi.budget and the rest of the GPU-lock list were never
+        # selected by a change to their own sources. Walk the backtrace outward and
+        # take the first frame that lies in a tests/<dir>/ (the call site); the
+        # add_test frame is kept only when no such frame exists.
         n = nodes[t["backtrace"]]
-        while n.get("file") is None and "parent" in n:
+        frames = []
+        while True:
+            if n.get("file") is not None:
+                frames.append(files[n["file"]])
+            if "parent" not in n:
+                break
             n = nodes[n["parent"]]
-        cm = files[n["file"]]
+        def _in_test_dir(f):
+            r = os.path.relpath(os.path.dirname(f), ROOT).split(os.sep)
+            return len(r) >= 2 and r[0] == "tests"
+        cm = next((f for f in frames if _in_test_dir(f)), frames[0] if frames else ROOT)
         d = os.path.relpath(os.path.dirname(cm), ROOT)          # tests/<dir>
         cmd = t.get("command", [])   # absent for a not-yet-built executable (partial build dir)
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
@@ -389,6 +426,25 @@ def cmake_list_only(rng, relpath):
                or (subdir_ok and _SUBDIR_ENTRY.match(l)) for l in lines)
 
 
+def header_included_by_dir(name, d):
+    """True when a source under tests/<d>/ includes the header `name` (by basename)."""
+    pat = re.compile(r'^\s*#\s*include\s*[<"](?:[^">]*/)?' + re.escape(name) + r'[">]', re.M)
+    # `d` is the inventory's dir key as ctest's backtrace spells it, relative to the BUILD
+    # dir ("../../../tests/gi"); a bare "gi" or "tests/gi" is accepted too. Walk the source dir.
+    rel = d.split("tests/", 1)[1] if "tests/" in d else d
+    if not rel or rel.startswith(".."): return False
+    root = os.path.join(ROOT, "tests", rel)
+    for dirpath, _, files in os.walk(root):
+        for f in files:
+            if f.endswith((".cpp", ".h", ".hpp")):
+                try:
+                    with open(os.path.join(dirpath, f), errors="replace") as fh:
+                        if pat.search(fh.read()): return True
+                except OSError:
+                    pass
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
@@ -399,9 +455,14 @@ def main():
                     help="ctest parallelism (default 4 — the tier's contract; a lane beside other live lanes runs 2)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--record-times", metavar="CTEST_LOG", help="snapshot suite seconds from a ctest output log")
+    ap.add_argument("--merge-tier", action="store_true",
+                    help="print the MERGE tier's ctest command (at -j) and exit — the one source "
+                         "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
     a = ap.parse_args()
     if a.record_times:
         record_times(a.record_times); return
+    if a.merge_tier:
+        print(merge_tier(a.jobs)); return
     build = resolve_build(a.build)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
@@ -468,6 +529,18 @@ def main():
             if p in script_suites: add(script_suites[p], f"{p}: script"); hit.append("script")
             elif base in script_base: add(script_base[base], f"{p}: script"); hit.append("script")
             elif d in by_dir: add(by_dir[d], f"{p}: tests/{d}"); hit.append(f"tests/{d}")
+            elif p.endswith((".h", ".hpp")) and (len(parts) == 2 or d == "support"):
+                # A SHARED TEST HEADER (tests/enginetesthelpers.h, tests/support/*.h): its owners
+                # are exactly the dirs whose sources include it — scanned, never guessed
+                # (DEVPROCESS-2, 2026-09-24: this path used to fall back to the whole MERGE tier).
+                name = os.path.basename(p)
+                owners = sorted(dd for dd in by_dir if header_included_by_dir(name, dd))
+                if owners:
+                    for dd in owners: add(by_dir[dd], f"{p}: included by tests/{dd}")
+                    hit.append("included by " + ", ".join(f"tests/{dd}" for dd in owners))
+                    code_moved = True
+                else:
+                    fallback.append(f"{p}: a tests/ header no suite source includes")
             else:
                 # tests/CMakeLists.txt, tests/support/*.h (included by ~40 test sources), a
                 # dir with no registered suite: nothing precise owns it → merge tier, loudly

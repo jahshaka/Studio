@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "ui/panels/propertyrows.h"
+#include <QSet>
 
 namespace iris {
     class SceneNode;
@@ -52,6 +53,7 @@ class Project;
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class ShaderPropertyWidget;
 class SkyPropertyWidget;
+class WorldCloudsPropertyWidget;
 class WorldGiPropertyWidget;
 class WorldAaPropertyWidget;
 class WorldModesPropertyWidget;
@@ -276,6 +278,11 @@ private:
     /// the world blades something other than the scene (the viewport, the
     /// library, the project, the undo stack).
     void invalidateWorldBinding() { worldBoundScene.clear(); }
+    /// The World-tab section that shows sceneprops `key`, or null (see the
+    /// .cpp for the enumeration); and the re-read of every section an
+    /// external write made stale.
+    QWidget *worldSectionForKey(const QString &key) const;
+    void refreshStaleWorldSections();
     void mountWorldBlades();
     void mountSelectionBlades();
     /// Makes the layout hold exactly `wantedBlades`, in order, moving only
@@ -329,6 +336,10 @@ private:
     bool mountScheduled = false;
     /// The scene the world blades are currently pointed at (see bindScene).
     QSharedPointer<iris::Scene> worldBoundScene;
+    /// Sections an external sceneprops write made stale, re-read once per
+    /// event-loop turn (or on the next question — flushPendingMount).
+    QSet<QWidget *> staleWorldSections;
+    bool worldRefreshQueued = false;
 
     /// WHAT THE SELECTION TAB IS SHOWING when it is not a scene node: a
     /// library asset picked in a drawer (setAssetItem). It has to be STATE and
@@ -369,6 +380,8 @@ private:
 	/// serves both bindings — the world's sky while the world is selected, a
 	/// library sky asset while one is — because a selection is exclusive.
 	SkyPropertyWidget *skyPropView;
+	/// The Clouds blade, under the Sky blade (CLOUDS-2D-1).
+	WorldCloudsPropertyWidget *cloudsPropView = nullptr;
 	MeshPropertyWidget* meshPropView;
     /// MOVEMENT (REALTIME_REFLECTIONS_SPEC §3.3): the per-object mobility row,
     /// mounted for EVERY node kind — a lamp on a swinging arm needs it as much

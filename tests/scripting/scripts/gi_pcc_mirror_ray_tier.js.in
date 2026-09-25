@@ -1,0 +1,104 @@
+// gi.pcc_mirror.ray_tier — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on the
+// scene the grid cost the most: Grand Showroom 2 at Epic (32 probes kept at 512 px HDR on the
+// base — 838,987,760 bytes of texture and 713-799 ms of the open's placement, measured).
+//
+// Three arms, one process:
+//   1. RAYS ON (the sample's own row, auto): NO grid — probeGridByRays true, probeCount 0,
+//      probesDropped 0, pccBound false, and nothing placed or captured over the scene's life.
+//   2. RAYS OFF: High is then not a ray tier and the grid builds, like a technique change.
+//   3. RAYS BACK ON: the grid goes again, and the mirror's picture is the first arm's, byte
+//      for byte at the sampled points.
+//
+// THE PICTURE A/B: the roughness-0 Sphere_r0, filled to the frame from 4 m, at the VIEWPORT
+// grade (the ray tier rides the chain's prepass), 81 points over the sphere. The no-grid answer
+// (screen march + rays + cone/sky) against the grid's (screen march + probes): MEASURED mean
+// 45.8/255, worst 127/255 on the RTX 4080 SUPER (spikes/photon-f12-pcc/mirror). The difference
+// is the PROBE's, not the rays': the grid's photograph misprojects the near column onto the
+// blue wall (a ghost the parallax box cannot place), shows its blend seams as circles on the
+// ceiling and paints the floor near-black under the sphere, where the traced hit shows the lit
+// floor. So N is a BOUND ON THE DIFFERENCE between two different estimators, 64/255 mean (the
+// measurement + 40 % for the gather's and the cone's noise), and the teeth are the other two
+// checks: the no-grid mirror is NOT darker than the grid's (a reflection that degraded to the
+// sky or to black reads far darker in this closed room), and it is deterministic.
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+var SHOWROOM = "@JAH_PCC_RAY_SHOWROOM@";
+var OUT = "@JAH_PCC_RAY_OUT@";
+app.engineErrors(true);
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+editor.setCamera({ position: { x: -6.3, y: 1.7, z: -4.0 }, lookAt: { x: -6.3, y: 1.7, z: 0.0 } });
+editor.frame(240);
+
+var probes = [];
+for (var j = 0; j < 9; ++j) for (var i = 0; i < 9; ++i) probes.push({ x: 0.34 + i * 0.04, y: 0.34 + j * 0.04 });
+function shot(tag) {
+    return editor.screenshot(OUT + tag + ".png", 256, 256, probes, "viewport").probes;
+}
+function luma(p) {
+    var s = 0;
+    for (var k = 0; k < p.length; ++k) s += 0.2126 * p[k].r + 0.7152 * p[k].g + 0.0722 * p[k].b;
+    return s / p.length;
+}
+function diff(p, q) {
+    var worst = 0, sum = 0;
+    for (var k = 0; k < p.length; ++k) {
+        var d = Math.max(Math.abs(p[k].r - q[k].r), Math.abs(p[k].g - q[k].g), Math.abs(p[k].b - q[k].b));
+        worst = Math.max(worst, d); sum += d;
+    }
+    return { worst: worst, mean: sum / p.length };
+}
+
+// ---- 1. RAYS ON: no grid ---------------------------------------------------
+var g1 = world.giStatus();
+console.log("RAYTIER on: mode " + g1.mode + " byRays " + g1.probeGridByRays + " probes " + g1.probeCount +
+            " dropped " + g1.probesDropped + " pccBound " + g1.pccBound + " placements " +
+            g1.probePlacements + " captures " + g1.probeCapturesTotal + " slots " + g1.cubemapProbeSlotsPerCell);
+if (!g1.rayQuery || !g1.rayQuery.available) {
+    // A machine without ray queries: High is not a ray tier, the grid is the answer.
+    assert(g1.probeGridByRays === false && g1.probeCount > 0,
+           "no ray queries on this machine: Showroom 2 keeps its probe grid");
+} else {
+    assert(g1.mode === "vct_pcc_hybrid", "Showroom 2 runs the hybrid");
+    assert(g1.probeGridByRays === true, "Showroom 2 at Epic with rays: the rays are the reflection");
+    assert(g1.probeCount === 0 && g1.probesDropped === 0 && g1.pccBound === false,
+           "NO GRID: probeCount 0, probesDropped 0, pccBound false");
+    assert(g1.probePlacements === 0 && g1.probeCapturesTotal === 0,
+           "nothing was scouted, fitted or captured over the scene's life [placements " +
+           g1.probePlacements + ", captures " + g1.probeCapturesTotal + "]");
+    var a = shot("rays_on");
+
+    // ---- 2. RAYS OFF: the grid builds ------------------------------------------
+    world.rayTracing("off");
+    editor.frame(240);
+    var g2 = world.giStatus();
+    console.log("RAYTIER off: byRays " + g2.probeGridByRays + " probes " + g2.probeCount +
+                " pccBound " + g2.pccBound + " placements " + g2.probePlacements);
+    assert(g2.probeGridByRays === false && g2.probeCount > 0 && g2.pccBound === true,
+           "rays OFF: High is not a ray tier and the grid builds [" + g2.probeCount + " probes]");
+    var b = shot("rays_off_grid");
+
+    // ---- 3. RAYS BACK ON: the grid goes -----------------------------------------
+    world.rayTracing("auto");
+    editor.frame(240);
+    var g3 = world.giStatus();
+    assert(g3.probeGridByRays === true && g3.probeCount === 0 && g3.pccBound === false,
+           "rays back ON: the grid is taken down again");
+    var c = shot("rays_on_again");
+
+    var ab = diff(a, b), ac = diff(a, c);
+    var la = luma(a), lb = luma(b);
+    console.log("RAYTIER mirror: no-grid vs grid mean " + ab.mean.toFixed(2) + " worst " + ab.worst +
+                " | luma no-grid " + la.toFixed(1) + " grid " + lb.toFixed(1) +
+                " | repeat worst " + ac.worst);
+    assert(ab.mean <= 64,
+           "the three sources' mirror is within 64/255 (mean over 81 sphere points) of the grid's " +
+           "answer [" + ab.mean.toFixed(2) + ", worst " + ab.worst + " — the probe's ghosts and seams]");
+    assert(la >= 0.9 * lb,
+           "the no-grid mirror reflects the room — it is not darker than the grid's photograph " +
+           "[luma " + la.toFixed(1) + " vs " + lb.toFixed(1) + "]");
+    assert(ac.worst === 0, "the ray tier's mirror is deterministic across a grid round trip");
+}

@@ -304,10 +304,12 @@ public:
     void writeFrame(const FrameRecord &r);
     void writeEvent(const MonitorEvent &e);
     void writeSnapshot(const EngineSnapshot &s, const QString &file);
-    /// The worst per-frame GPU-sample overflow this capture saw (see
+    /// GPU timing marks the engine's query pool could not hold over this
+    /// capture (MonitorStatus::gpuMarksDropped, cumulative — see
     /// FrameMonitor::drainOnce) — reported in machine.json's truncation block,
-    /// because incomplete GPU times are a truncation like any other.
-    void noteGpuSamplesTruncated(unsigned n) { mGpuSamplesTruncated = qMax(mGpuSamplesTruncated, n); }
+    /// because incomplete GPU times are a truncation like any other. Each
+    /// frame's own count is in frames.jsonl (`gpuMarksDropped`).
+    void noteGpuMarksDropped(unsigned long long n) { mGpuMarksDropped = qMax(mGpuMarksDropped, n); }
     /// What the ENGINE dropped: ring records nobody drained in time, and events
     /// past the event queue's cap. Both are counted on the engine's side of the
     /// boundary and neither is visible in the files — so a bundle that did not
@@ -347,7 +349,7 @@ private:
     unsigned long long mFrameCount = 0, mEventCount = 0;
     unsigned long long mFramesCut = 0, mEventsCut = 0, mTraceCut = 0;
     bool    mOgreCut = false;
-    unsigned mGpuSamplesTruncated = 0;
+    unsigned long long mGpuMarksDropped = 0;
     unsigned long long mEngineFramesDropped = 0, mEngineEventsDropped = 0;
     QElapsedTimer mWall;
     QDateTime mStartedAt;
@@ -481,6 +483,7 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
         { "textureWaitMs", double(r.textureWaitMs) },
         { "gpuMs", double(r.gpuMs) },
         { "overheadMs", double(r.overheadMs) },
+        { "gpuMarksDropped", int(r.gpuMarksDropped) },
         { "stages", stages },
         { "passes", passes },
         { "cacheWork", work },
@@ -677,9 +680,7 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "probeShadows", QLatin1String(toggleName(s.giParams.probeShadows)) },
             { "probeOverlap", double(s.giParams.probeOverlap) },
             { "updateBudget", s.giParams.updateBudget },
-            { "rayMarchStepScale", double(s.giParams.rayMarchStepScale) },
-            { "ddgi", QLatin1String(toggleName(s.giParams.ddgi)) },
-            { "ddgiIntensity", double(s.giParams.ddgiIntensity) } } },
+            { "ddgi", QLatin1String(toggleName(s.giParams.ddgi)) } } },
         { "gi", QJsonObject{
             { "mode", QLatin1String(giModeName(s.gi.mode)) },
             { "probeCount", s.gi.probeCount },
@@ -699,7 +700,8 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
             { "reusedLastRefresh", s.gi.reusedLastRefresh },
             { "ifdBound", s.gi.ifdBound },
             { "ifdProbes", s.gi.ifdProbes },
-            { "ifdConverged", s.gi.ifdConverged },
+            { "ifdRefinesOwed", int(s.gi.ifdRefinesOwed) },
+            { "giAtRest", s.gi.giAtRest },
             // THE CACHE'S OWN HISTORY (audit D6). The snapshot described what
             // the GI arm IS and never what it has been DOING, so a bundle could
             // not answer the one question the cache policy exists for: how much
@@ -746,7 +748,21 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
                 { "radius", double(s.gi.cards.residencyRadius) },
                 { "bytesPerTexel", int(s.gi.cards.bytesPerTexel) },
                 { "megabytes", double(s.gi.cards.bytes) / (1024.0 * 1024.0) },
-                { "emissiveFormat", qs(s.gi.cards.emissiveFormat) } } } } },
+                { "emissiveFormat", qs(s.gi.cards.emissiveFormat) } } },
+            // ...and THE MOVERS' SHADOW ON THEM (PHOTON-CARDS-4): the traced
+            // term's cards, texels and GPU milliseconds (with the relight's), the
+            // cards past the budget, and the still casters' recaptures.
+            { "cardsMovers", QJsonObject{
+                { "movers", int(s.gi.cards.moverCasters) },
+                { "tracedLastFrame", int(s.gi.cards.moverTracedLastFrame) },
+                { "texelsLastFrame", int(s.gi.cards.moverTexelsLastFrame) },
+                { "pending", int(s.gi.cards.moverPending) },
+                { "pendingAgeFrames", int(s.gi.cards.moverPendingAge) },
+                { "traces", double(s.gi.cards.moverTraces) },
+                { "retired", double(s.gi.cards.moverRetired) },
+                { "casterRecaptures", double(s.gi.cards.casterRecaptures) },
+                { "traceGpuMs", double(s.gi.cards.moverGpuMs) },
+                { "relightGpuMs", double(s.gi.cards.relightGpuMs) } } } } },
         { "shaderCache", QJsonObject{
             { "enabled", s.shaderCache.enabled },
             { "dir", qs(s.shaderCache.dir) },
@@ -1066,7 +1082,7 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         { "eventRecordsDropped", double(mEventsCut) },
         { "traceRecordsDropped", double(mTraceCut) },
         { "ogreLogTruncated", mOgreCut },
-        { "gpuSamplesTruncated", int(mGpuSamplesTruncated) },
+        { "gpuMarksDropped", double(mGpuMarksDropped) },
         // THE ENGINE'S OWN LOSSES, which no file in the bundle could reveal:
         // frame records the ring overwrote before the host drained them, and
         // events past the engine's event-queue cap.
@@ -1077,7 +1093,7 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         // query pool and the log window — is ANDed in here. A bundle must never
         // claim a completeness it cannot prove (review item, lane MON-P1b).
         { "complete", mFramesCut == 0 && mEventsCut == 0 && mTraceCut == 0 && !mOgreCut
-                          && mGpuSamplesTruncated == 0
+                          && mGpuMarksDropped == 0
                           && mEngineFramesDropped == 0 && mEngineEventsDropped == 0 },
         { "note", QStringLiteral(
               "Per-file caps: frames.jsonl 50%, trace.json 35%, events.jsonl 10%, "
@@ -1147,7 +1163,7 @@ QString FrameMonitor::captureRoot()
     if (!env.isEmpty()) return QString::fromLocal8Bit(env);
     if (auto *settings = SettingsManager::getDefaultManager()) {
         const QString stored =
-            settings->getValue(QStringLiteral("perf/captureRoot"), QString()).toString().trimmed();
+            settings->get(settingkeys::perfCaptureRoot).trimmed();
         if (!stored.isEmpty()) return stored;
     }
     // THE DEFAULT IS THIS RUN'S DATA DIRECTORY (CLEANUP-1 item 11). It used to
@@ -1161,8 +1177,8 @@ QString FrameMonitor::captureRoot()
     return QDir(AppPaths::dataRoot()).filePath(QStringLiteral("perf"));
 }
 
-double FrameMonitor::defaultKeepDays() { return 14.0; }
-qint64 FrameMonitor::defaultKeepBytes() { return qint64(2) * 1024 * 1024 * 1024; }
+double FrameMonitor::defaultKeepDays() { return settingkeys::perfKeepDays.fallback; }
+qint64 FrameMonitor::defaultKeepBytes() { return settingkeys::perfKeepBytes.fallback; }
 
 // THE SWEEP (item 11). Captures used to accumulate forever in a directory
 // nothing ever looked at — a 20 s bundle of a busy scene is tens of megabytes,
@@ -1250,10 +1266,8 @@ bool FrameMonitor::start(const Request &request, QString *error)
         double keepDays = defaultKeepDays();
         qint64 keepBytes = defaultKeepBytes();
         if (auto *settings = SettingsManager::getDefaultManager()) {
-            keepDays = qBound(0.0, settings->getValue(QStringLiteral("perf/keepDays"),
-                                                      keepDays).toDouble(), 3650.0);
-            keepBytes = qMax(qint64(0), settings->getValue(QStringLiteral("perf/keepBytes"),
-                                                           QVariant::fromValue(keepBytes)).toLongLong());
+            keepDays = qBound(0.0, settings->get(settingkeys::perfKeepDays), 3650.0);
+            keepBytes = qMax(qint64(0), settings->get(settingkeys::perfKeepBytes));
         }
         sweepOldBundles(root.absolutePath(), keepDays, keepBytes);
     }
@@ -1306,7 +1320,7 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mPlannedSeconds = seconds;
     mPlannedFrames = frames;
     mFramesDrawn = 0;
-    mGpuSamplesTruncated = 0;
+    mGpuMarksDropped = 0;
     mEngineFramesDropped = mEngineEventsDropped = 0;
     // A breakdown from the PREVIOUS capture must not be readable as this
     // frame's (app.renderStats().perPass).
@@ -1441,15 +1455,16 @@ unsigned FrameMonitor::drainOnce()
 {
     auto eng = engine();
     if (!eng || !mBundle) return 0;
-    // GPU SAMPLES THE QUERY POOL COULD NOT HOLD (MonitorStatus, P1a's review
-    // round). It is a per-frame number, so the capture keeps the worst it ever
-    // saw and machine.json states it: a bundle whose GPU times are incomplete
-    // has to say so rather than let analysis discover that some passes have no
-    // time.
+    // GPU TIMING MARKS THE QUERY POOL COULD NOT HOLD (MonitorStatus). The
+    // engine counts them per frame and CUMULATIVELY since the capture began, so
+    // this 250 ms drain misses none (it used to read the LAST frame's count and
+    // missed every dropping frame between two drains); machine.json states the
+    // total: a bundle whose GPU times are incomplete has to say so rather than
+    // let analysis discover that some passes have no time.
     const MonitorStatus st = eng->monitorStatus();
-    if (st.gpuSamplesTruncated > mGpuSamplesTruncated) {
-        mGpuSamplesTruncated = st.gpuSamplesTruncated;
-        mBundle->noteGpuSamplesTruncated(st.gpuSamplesTruncated);
+    if (st.gpuMarksDropped > mGpuMarksDropped) {
+        mGpuMarksDropped = st.gpuMarksDropped;
+        mBundle->noteGpuMarksDropped(st.gpuMarksDropped);
     }
     // The engine's own losses, sampled on every drain — they are monotonic, and
     // the LAST read while the monitor is still on is the capture's total (the
@@ -1730,10 +1745,10 @@ QVariantMap FrameMonitor::status() const
         gpu["active"] = s.gpuActive;
         gpu["queryPools"] = s.gpuQueryPools;
         gpu["reason"] = qs(s.gpuReason);
-        gpu["samplesTruncated"] = s.gpuSamplesTruncated;
+        gpu["marksDropped"] = double(s.gpuMarksDropped);
         eng["gpu"] = gpu;
     }
-    out["gpuSamplesTruncated"] = mGpuSamplesTruncated;
+    out["gpuMarksDropped"] = double(mGpuMarksDropped);
     out["engineFramesDropped"] = double(mEngineFramesDropped);
     out["engineEventsDropped"] = double(mEngineEventsDropped);
     out["engine"] = eng;

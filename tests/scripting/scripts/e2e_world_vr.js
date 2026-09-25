@@ -39,7 +39,6 @@ function pushes() { return editor.undoState().pushes; }
 var worldModule = api.verbs().filter(function (m) { return m.module === "world"; })[0];
 var worldNames = worldModule.verbs.map(function (v) { return v.name; });
 assert(worldNames.indexOf("vr") >= 0, "world.vr is registered");
-assert(worldNames.indexOf("setVr") >= 0, "...beside the set* alias every noun-write verb has");
 
 var guid = project.create("VR world " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
@@ -68,7 +67,7 @@ assert(near(w.flySpeed, 3) && w.fly === "level" && w.turn === "smooth" &&
 assert(JSON.stringify(world.vr()) === JSON.stringify(w), "...and the read agrees");
 // The enums are trimmed and case-insensitive, like every other named state.
 assert(world.vr({ fly: "  GAZE " }).fly === "gaze", "a mode name is trimmed and folded");
-assert(world.setVr({ fly: "aim" }).fly === "aim", "the setVr alias is the same verb");
+assert(world.vr({ fly: "aim" }).fly === "aim", "a second write moves the mode again");
 // THE FLAG ROW takes a true/false and reports one — not "on"/"off" and not a
 // number (lane HANDS-SWITCH-1). It is written on its own because it is the one
 // row in this table that is not a quantity or a mode.

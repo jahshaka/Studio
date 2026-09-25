@@ -240,9 +240,154 @@ int main()
                           "reads what PBS reads outside it within 1 %% (roughness %.2f: %.4f / %.4f)",
                           rough, inside, outside);
             CHECK(std::fabs(inside / outside - 1.0) < 0.01, msg);
+            // THE SAME PLATE WITH THE FIELD ON (PHOTON-VOXEL-5; the VOXEL-4 audit's F4): a rough
+            // lobe's occluded share then reads the FIELD's diffuse estimate, whose atlas holds
+            // the voxels' light and the sky's as one sum - applyVctRoughSpecular subtracts the
+            // analytic sky times the SPECULAR query's transmittance from it. Open sky above the
+            // plate: whatever that subtraction leaves is a second copy of the sky or a lost one.
+            GiParams field = vct;
+            field.ddgi = GiToggle::On;
+            scene->setGlobalIllumination(field);
+            for (int f = 0; f < 20; ++f) e->renderOneFrame();
+            for (int f = 0; f < 4000 && !scene->giStatus().giAtRest; ++f) e->renderOneFrame();
+            const double withField = centre();
+            std::printf("   SPECULAR ENVIRONMENT at roughness %.2f, THE FIELD ON: inside %.4f (%.3fx of outside)\n",
+                        rough, withField, withField / outside);
+            std::snprintf(msg, sizeof msg, "the field on: the volume's specular escape reads what PBS reads outside "
+                          "it within 1 %% (roughness %.2f: %.4f / %.4f)", rough, withField, outside);
+            CHECK(std::fabs(withField / outside - 1.0) < 0.01, msg);
         }
         GiParams off; off.mode = GiMode::Off;
         scene->setGlobalIllumination(off);
+    }
+
+    // THE ROUGH LOBE IN A SEALED ROOM (PHOTON-VOXEL-5, F4b). A lobe wider than tan 1 reads its
+    // occluded share from the diffuse estimator's VOXEL light (applyVctRoughSpecular) - never an
+    // environment cube. THE FURNACE is its closed form: a sealed box whose every inner face
+    // emits radiance L (black albedo: no bounce), no sky, no environment light, no ambient. The
+    // rough metal plate inside sees radiance L in every direction, so it must read exactly what
+    // the same plate reads under a UNIFORM SKY of radiance L outside any volume (the split-sum's
+    // specular albedo times L, both ways). GI off it must read nothing (no cube stands in for
+    // the room). The cones and the field are both asserted. Scene radiance, float readback.
+    // THE BAR: 3 % - the four cones' coverage of the box's corners and edges at Low's cells (a
+    // cone whose composite stops short of 0.95 lets the (empty) environment in) and the
+    // half-float store; measured 0.987x (the cones), 0.999x (the field), 0.0000 GI off.
+    // (VOXEL-5's first form of this arm read 0.3400 in every arm: its view was never switched -
+    // View::setScene refuses a second scene until the first is detached - and it measured the
+    // open plate. Every setScene here is checked.)
+    {
+        View *rv = e->createOffscreenView("envcone-room", 64, 64, Colour(0, 0, 0));
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.ssr = 0;
+        fx.hdr = false;
+        fx.hdrReadback = true;
+        rv->setPostFx(fx);
+        const auto readHdr = [&](View *v) {
+            double acc = 0.0;
+            for (int f = 0; f < 4; ++f) {
+                e->renderOneFrame();
+                ImageF img;
+                if (!v->readPixelsHdr(img)) return -1.0;
+                double s2 = 0.0; int n = 0;
+                for (unsigned y = 28; y < 36; ++y)
+                    for (unsigned x = 28; x < 36; ++x) {
+                        const Colour c = img.at(x, y);
+                        s2 += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; ++n;
+                    }
+                acc += s2 / n;
+            }
+            return acc / 4.0;
+        };
+        const unsigned char kSkyByte = 128;
+        const double L = std::pow((kSkyByte / 255.0 + 0.055) / 1.055, 2.4);   // the byte's linear radiance
+        PbrParams metal; metal.albedo = Colour(1, 1, 1); metal.metalness = 1.0f; metal.roughness = 0.8f;
+        // THE REFERENCE: the plate under a uniform sky of radiance L, no volume.
+        double reference = -1.0;
+        {
+            Scene *open = e->createScene("envcone-uniform");
+            CHECK(rv->setScene(open), "the reference view shows the uniform-sky scene");
+            const unsigned char skyPx[4] = { kSkyByte, kSkyByte, kSkyByte, 255 };
+            SkyDesc sky;
+            sky.mode = SkyMode::Equirectangular;
+            sky.equirect = open->createTexture(1, 1, skyPx, true);
+            CHECK(sky.equirect && open->setSky(sky), "the uniform sky binds");
+            float sh[27] = { 0 };
+            for (int f = 0; f < 20 && !open->skyAmbientSh(sh); ++f) e->renderOneFrame();
+            open->setAmbientSh(sh);
+            open->setEnvironmentLight(Colour(1, 1, 1, 1));
+            const NodeId nd = open->createNode();
+            open->attachMesh(nd, open->createMesh(enginetest::unitCubeMesh()), open->createPbrMaterial(metal));
+            open->setNodeTransform(nd, Vec3(0.0f, 0.05f, 0.0f), Quat(), Vec3(4.0f, 0.1f, 4.0f));
+            enginetest::testCameraLookAt(rv, Vec3(0.02f, 3.0f, 0.02f), Vec3(0.0f, 0.0f, 0.0f));
+            for (int f = 0; f < 10; ++f) e->renderOneFrame();
+            reference = readHdr(rv);
+            rv->setScene(nullptr);
+            e->destroyScene(open);
+        }
+        Scene *room = e->createScene("envcone-furnace");
+        CHECK(rv->setScene(room), "the view shows the sealed furnace");
+        {
+            SkyDesc none;
+            none.mode = SkyMode::NoSky;
+            room->setSky(none);
+            room->setEnvironmentLight(Colour(0, 0, 0, 1));
+        }
+        room->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        const MeshId cubeR = room->createMesh(enginetest::unitCubeMesh());
+        const auto slab = [&](const Vec3 &pos, const Vec3 &scale, const PbrParams &p) {
+            const NodeId nd = room->createNode();
+            room->attachMesh(nd, cubeR, room->createPbrMaterial(p));
+            room->setNodeTransform(nd, pos, Quat(), scale);
+        };
+        PbrParams wall; wall.albedo = Colour(0, 0, 0); wall.roughness = 1.0f;
+        wall.emissive = Colour(float(L), float(L), float(L));
+        slab(Vec3(0, 5.25f, 0), Vec3(9.0f, 0.5f, 9.0f), wall);
+        slab(Vec3(0, -0.25f, 0), Vec3(9.0f, 0.5f, 9.0f), wall);
+        slab(Vec3(-4.25f, 2.5f, 0), Vec3(0.5f, 5.0f, 9.0f), wall);
+        slab(Vec3(4.25f, 2.5f, 0), Vec3(0.5f, 5.0f, 9.0f), wall);
+        slab(Vec3(0, 2.5f, -4.25f), Vec3(9.0f, 5.0f, 0.5f), wall);
+        slab(Vec3(0, 2.5f, 4.25f), Vec3(9.0f, 5.0f, 0.5f), wall);
+        slab(Vec3(0.0f, 0.05f, 0.0f), Vec3(4.0f, 0.1f, 4.0f), metal);
+        enginetest::testCameraLookAt(rv, Vec3(0.02f, 3.0f, 0.02f), Vec3(0.0f, 0.0f, 0.0f));
+        GiParams none; none.mode = GiMode::Off;
+        room->setGlobalIllumination(none);
+        for (int f = 0; f < 6; ++f) e->renderOneFrame();
+        const double viaNone = readHdr(rv);
+        GiParams cones;
+        cones.mode = GiMode::Vct;
+        cones.quality = GiQuality::Low;
+        cones.numBounces = 1;
+        cones.ddgi = GiToggle::Off;
+        cones.gather = GiToggle::Off;
+        cones.testBoundsMin = Vec3(-4.5f, -0.5f, -4.5f);
+        cones.testBoundsMax = Vec3(4.5f, 5.5f, 4.5f);
+        room->setGlobalIllumination(cones);
+        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) e->renderOneFrame();
+        const double viaCones = readHdr(rv);
+        GiParams field = cones;
+        field.ddgi = GiToggle::On;
+        room->setGlobalIllumination(field);
+        for (int f = 0; f < 20; ++f) e->renderOneFrame();
+        for (int f = 0; f < 4000 && !room->giStatus().giAtRest; ++f) e->renderOneFrame();
+        const double viaField = readHdr(rv);
+        std::printf("   ROUGH METAL (0.80) IN A SEALED FURNACE of radiance L = %.4f: the plate under a uniform sky "
+                    "of L %.4f; in the furnace GI off %.4f, the cones %.4f (%.3fx), the field %.4f (%.3fx)\n", L,
+                    reference, viaNone, viaCones, viaCones / reference, viaField, viaField / reference);
+        CHECK(reference > 0.01, "the reference plate reads the uniform sky");
+        CHECK(viaNone >= 0.0 && viaNone < 0.002 * reference,
+              "GI off, the sealed room's plate reads NO environment cube (nothing stands in for the room)");
+        char rmsg[240];
+        std::snprintf(rmsg, sizeof rmsg, "THE FURNACE, the cones: the rough lobe reads the room's voxel light as the "
+                      "plate reads a uniform sky of the same radiance (%.4f / %.4f; bar 3 %%)", viaCones, reference);
+        CHECK(std::fabs(viaCones / reference - 1.0) <= 0.03, rmsg);
+        std::snprintf(rmsg, sizeof rmsg, "THE FURNACE, the field: the same (%.4f / %.4f; bar 3 %%)", viaField, reference);
+        CHECK(std::fabs(viaField / reference - 1.0) <= 0.03, rmsg);
+        GiParams off; off.mode = GiMode::Off;
+        room->setGlobalIllumination(off);
+        rv->setScene(nullptr);
+        e->destroyScene(room);
+        e->destroyView(rv);
     }
 
     view->setScene(nullptr);

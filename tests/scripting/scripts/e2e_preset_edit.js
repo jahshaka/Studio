@@ -43,11 +43,16 @@ function assert(cond, msg) {
     if (!cond) throw new Error("FAILED: " + msg);
     console.log("ok: " + msg);
 }
+// EVERY library material row, a project's copy included: the store listing
+// folds copies under their master (PRESET-FOLD-1, section 5b), and these two
+// count and name the rows the copy-on-write MINTS — `includeCopies` is the
+// tooling flag for exactly that.
 function materialRows() {
-    return assets.list({ scope: "store", type: "material" });
+    return assets.list({ scope: "store", type: "material", includeCopies: true });
 }
 function nameOf(guid) {
-    var hit = assets.list({ scope: "store" }).filter(function (a) { return a.guid === guid; });
+    var hit = assets.list({ scope: "store", includeCopies: true })
+                  .filter(function (a) { return a.guid === guid; });
     return hit.length ? hit[0].name : "";
 }
 function projectMaterials() {
@@ -182,6 +187,37 @@ assert(materials.masterOf(editB.guid) === WOOD, "…with the same master behind 
 // A's copy is where it was.
 assert(nameOf(copy) === "Wood PBR" && materials.masterOf(copy) === WOOD,
        "A's copy is untouched by B's");
+
+// ---- 5b. PRESET-FOLD-1: a project's copy is that project's ---------------
+//
+// Two projects now hold a copy of Wood PBR. The LIBRARY listing — the Assets
+// page's grid, assets.list({scope:'store'}) — shows the preset ONCE: a copy
+// folds under its master's tile the way a member folds under its bundle, and
+// is shown only in its own project's views. And B cannot pin A's copy: that
+// would make it B's copy too (projectCopyOf answers the first copy pinned).
+function woodIn(rows) { return rows.filter(function (a) { return a.name === "Wood PBR"; }); }
+var libWood = woodIn(assets.list({ scope: "store" }));
+assert(libWood.length === 1 && libWood[0].guid === WOOD,
+       "the library list shows ONE 'Wood PBR' — the master (" + JSON.stringify(libWood) + ")");
+var everyWood = woodIn(assets.list({ scope: "store", includeCopies: true }))
+                    .map(function (a) { return a.guid; });
+assert(everyWood.indexOf(WOOD) >= 0 && everyWood.indexOf(copy) >= 0
+       && everyWood.indexOf(editB.guid) >= 0,
+       "…and includeCopies lists the master and both projects' copies (tooling)");
+var refusedPin = "";
+try { assets.addToProject(copy); } catch (e) { refusedPin = e.message; }
+console.log("   refusal: " + refusedPin);
+assert(/own copy of the shipped preset/.test(refusedPin),
+       "B's add of A's copy is REFUSED, with the reason");
+assert(assets.pins(copy).length === 1 && projectMaterials().indexOf(copy) < 0,
+       "…A's copy is still pinned by A alone, and not by B");
+assert(materials.edit(WOOD).guid === editB.guid,
+       "…and 'Wood PBR' in B still means B's own copy");
+var projC = project.create("Preset Edit C " + Date.now());
+assert(assets.addToProject(WOOD) === WOOD, "a third project's add from the library gets the MASTER");
+assert(projectMaterials().length === 1 && projectMaterials()[0] === WOOD,
+       "…and pins the master, not anybody's copy");
+assert(project.open(projB) === true, "back to B for the sections below");
 
 // ---- 6. a graph save on a PRESET copies too (the implicit door) ---------
 //

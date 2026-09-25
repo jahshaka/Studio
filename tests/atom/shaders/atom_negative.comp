@@ -1,0 +1,22 @@
+#version 450
+// engine.atom_negative_control's compute half: OUR pipeline, OUR descriptor set, OUR
+// push constant, dispatched inside Ogre's frame from the engine's PASS_CUSTOM.
+layout( local_size_x = 64 ) in;
+layout( std430, set = 0, binding = 0 ) buffer Data
+{
+	uint frame;
+	uint pad0, pad1, pad2;
+	vec4 tri[3];
+} data;
+layout( push_constant ) uniform Pc { uint frame; } pc;
+void main()
+{
+	if( gl_LocalInvocationIndex == 0u )
+	{
+		data.frame = pc.frame;
+		float a = float( pc.frame % 360u ) * 0.0174533;
+		data.tri[0] = vec4( cos( a ) * 0.8, sin( a ) * 0.8, 0.0, 1.0 );
+		data.tri[1] = vec4( cos( a + 2.0944 ) * 0.8, sin( a + 2.0944 ) * 0.8, 0.0, 1.0 );
+		data.tri[2] = vec4( cos( a + 4.1888 ) * 0.8, sin( a + 4.1888 ) * 0.8, 0.0, 1.0 );
+	}
+}

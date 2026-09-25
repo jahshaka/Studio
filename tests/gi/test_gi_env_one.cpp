@@ -48,7 +48,7 @@
 //       the voxels of a sky-only scene held NOTHING at any bounce count (the
 //       sky was never in them), and the two readings were identical.
 //
-// Its own binary: the field and the voxel lighting bind process-wide.
+// Its own binary.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -83,7 +83,7 @@ static const double kRho = 0.8;           // the box's albedo (linear)
 static const unsigned char kSkyByte = 190; // the sky's sRGB byte -> L
 
 /// The mean of a block of pixels (green channel: the fixture is grey).
-static double blockMean(const Image &img, unsigned cx, unsigned cy, int half)
+static double blockMean(const ImageF &img, unsigned cx, unsigned cy, int half)
 {
     double s = 0.0;
     int n = 0;
@@ -109,6 +109,8 @@ int main()
     Engine *e = engine.get();
 
     View *view = e->createOffscreenView("envone", kSize, kSize, Colour(0, 0, 0));
+
+    if (view) view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     // Asked AFTER the first view: the device is created with it (Engine.h).
     const bool rays = e->rayQueryAvailable() && e->rayTracing();
     {
@@ -117,6 +119,7 @@ int main()
         PostFxDesc fx;
         fx.allowOffscreen = true;
         fx.ssr = 0;
+        fx.hdrReadback = true;   // every number below is RADIANCE (HDR-READBACK-1)
         view->setPostFx(fx);
     }
     Scene *s = e->createScene("envone");
@@ -177,29 +180,26 @@ int main()
     };
     const double kEnergyFactor1 = lobeAt(kTopCam);
 
-    // THE PICTURE'S TRANSFER, read off the sky itself: the corner pixel is the
-    // sky, radiance L exactly.
+    // THE READBACK, checked off the sky itself: the corner pixel is the sky,
+    // radiance L exactly, read back as radiance (HDR-READBACK-1).
     lookAtTop(kTopCam);
     render(e, 6);
-    bool linear = true;
     {
-        Image img;
-        view->readPixels(img);
+        ImageF img;
+        CHECK(view->readPixelsHdr(img), "the view reads its radiance back");
         const double c = blockMean(img, 3, 3, 2);
-        linear = std::fabs(c - L) < std::fabs(srgbToLinear(c) - L);
-        std::printf("   the sky pixel reads %.4f: the picture is %s\n", c, linear ? "linear" : "sRGB");
-        CHECK_MSG(std::fabs((linear ? c : srgbToLinear(c)) - L) < 0.01 * L + 0.004,
-                  "the sky draws its own radiance (%.4f against L = %.4f) — the currency of every "
-                  "number below", linear ? c : srgbToLinear(c), L);
+        std::printf("   the sky pixel reads %.5f against L = %.5f\n", c, L);
+        CHECK_MSG(std::fabs(c - L) < 0.005 * L,
+                  "the sky draws its own radiance (%.5f against L = %.5f, bar 0.5 %%) — the "
+                  "currency of every number below", c, L);
     }
-    const auto decode = [&](double v) { return linear ? v : srgbToLinear(v); };
     const auto readTop = [&](int frames) {
         double acc = 0.0;
         for (int f = 0; f < frames; ++f) {
             e->renderOneFrame();
-            Image img;
-            view->readPixels(img);
-            acc += decode(blockMean(img, kSize / 2u, kSize / 2u, 3));
+            ImageF img;
+            view->readPixelsHdr(img);
+            acc += blockMean(img, kSize / 2u, kSize / 2u, 3);
         }
         return acc / frames;
     };
@@ -236,12 +236,10 @@ int main()
     // escape is not 1 on this fixture. At Low the volume is isotropic and a
     // cone's escape is its own composite: nothing but the box is in the volume
     // and every cone leaves the top face upward, so the escape is 1 and the
-    // pixel is the environment's own number. Above Low the escape rides the
-    // anisotropic OCCUPANCY estimate (jah_voxel_sample.glsl, jahVoxelOccupancy:
-    // the min of three axis composites one mip finer), which a cone STARTING on
-    // a surface reads its own slab through as its footprint grows — deliberately
-    // an under-estimate (READER-1's measured trade against a sealed room's
-    // leak). Its reading is printed and fenced at its measured value, and the
+    // pixel is the environment's own number. Above Low the escape is the directional
+    // composite along each cone (PHOTON-VOXEL-3; the min-over-axes OCCUPANCY estimate
+    // that stood in for it is deleted), read by the plane march with the origin rule (a
+    // cone never reads the face it leaves). Its reading is printed and fenced, and the
     // number it is short by is the escape, not the environment.
     {
         GiParams low = base;
@@ -257,11 +255,11 @@ int main()
     CHECK(s->setGlobalIllumination(base), "VCT Medium (anisotropic, no field, no gather) builds");
     render(e, 20);
     const double rb = readTop(4);
-    std::printf("   (b) the cones' escape, Medium:   %.4f  (%.3f of (a): the occupancy "
-                "estimate's escape)\n", rb, rb / ra);
+    std::printf("   (b) the cones' escape, Medium:   %.4f  (%.3f of (a): the directional "
+                "composite's escape)\n", rb, rb / ra);
     CHECK_MSG(rb / ra > 0.92 && rb / ra < 1.02,
-              "(b) anisotropic: the same number times the occupancy estimate's escape, fenced at "
-              "its measured 0.94 (%.4f against %.4f)", rb, ra);
+              "(b) anisotropic: the same number times the directional composite's escape, fenced "
+              "at 0.92-1.02 (%.4f against %.4f)", rb, ra);
 
     // ---- (c) THE IRRADIANCE FIELD ----------------------------------------------
     {
@@ -270,7 +268,7 @@ int main()
         CHECK(s->setGlobalIllumination(g), "the field binds");
         render(e, 40);
         const GiStatus st = s->giStatus();
-        CHECK(st.ifdBound && st.ifdConverged, "the field is bound and converged");
+        CHECK(st.ifdBound && st.ifdRefinesOwed < st.ifdTargetSamples, "the field is bound and whole (every probe sampled)");
         const double rc = readTop(4);
         std::printf("   (c) the field's sky term:        %.4f  (%.3f of (a))\n", rc, rc / ra);
         CHECK_MSG(std::fabs(rc / ra - 1.0) < 0.02,
@@ -304,17 +302,11 @@ int main()
     // (D_max / pi, D_max the brightest LIGHT; 1 in a scene with no light), and it
     // was R10G10B10A2_UNORM: a sky above radiance 1.0 clipped there the moment the
     // sky entered the atlas. It is RGBA16_FLOAT now. A Sky Light at 4 makes the
-    // environment 4 L = 2.06; a dark box (rho 0.2) keeps the pixel readable (the
-    // readback is 8-bit UNORM). The field must read the SH's number, not the
-    // clipped one (rho x 1.0 x energyFactor = 0.132).
+    // environment 4 L = 2.06, and the SAME box (rho 0.8) then reads about 1.1 —
+    // above the display's 1.0, which is why this arm reads RADIANCE: the dark
+    // box it needed while the readback was 8-bit is gone (HDR-READBACK-1). The
+    // field must read the SH's number, not the clipped one (rho x 1.0 x A).
     {
-        PbrParams dark;
-        dark.albedo = Colour(0.2f, 0.2f, 0.2f);
-        dark.roughness = 1.0f;
-        dark.workflow = PbrParams::Workflow::Specular;
-        dark.ior = 1.0f;
-        dark.specularColour = Colour(0.0f, 0.0f, 0.0f);
-        CHECK(s->setNodeMaterial(boxNode, s->createPbrMaterial(dark)), "the box goes dark (rho 0.2)");
         skyLightOn(4.0f);
         GiParams offG; offG.mode = GiMode::Off;
         s->setGlobalIllumination(offG);
@@ -325,20 +317,16 @@ int main()
         s->setGlobalIllumination(g);
         render(e, 40);
         const double fieldBright = readTop(4);
-        const double clipped = 0.2 * 1.0 * kEnergyFactor1;
+        const double clipped = kRho * 1.0 * kEnergyFactor1;
         std::printf("   (c2) Sky Light 4 (environment %.3f): SH %.4f, field %.4f (%.3f of it); an "
                     "atlas clipped at 1.0 would read %.4f\n", 4.0 * L, shBright, fieldBright,
                     fieldBright / shBright, clipped);
+        CHECK_MSG(shBright > 1.0,
+                  "(c2) the pixel is read ABOVE the display's ceiling (%.4f) — the radiance "
+                  "readback, not a darker fixture", shBright);
         CHECK_MSG(std::fabs(fieldBright / shBright - 1.0) < 0.03 && fieldBright > 1.5 * clipped,
                   "(c2) the field holds a sky twice its old ceiling (%.4f against the SH's %.4f)",
                   fieldBright, shBright);
-        PbrParams back;
-        back.albedo = Colour(float(kRho), float(kRho), float(kRho));
-        back.roughness = 1.0f;
-        back.workflow = PbrParams::Workflow::Specular;
-        back.ior = 1.0f;
-        back.specularColour = Colour(0.0f, 0.0f, 0.0f);
-        s->setNodeMaterial(boxNode, s->createPbrMaterial(back));
         skyLightOn(1.0f);
     }
 
@@ -349,12 +337,14 @@ int main()
         render(e, 20);
         const double re = readTop(2);
         std::printf("   (e) no Sky Light, the cones:     %.4f\n", re);
-        CHECK_MSG(re < 1.5 / 255.0,
-                  "(e) no Sky Light is no environment for the cones' escape either (%.4f)", re);
+        // ZERO, not "under a code": the read is float (HDR-READBACK-1), so the
+        // bar is the RGBA16F store's own floor and not 1.5/255.
+        CHECK_MSG(re < 1.0e-4,
+                  "(e) no Sky Light is no environment for the cones' escape either (%.6f)", re);
         CHECK(s->setGlobalIllumination(off), "GI off");
         render(e, 4);
         const double re2 = readTop(2);
-        CHECK_MSG(re2 < 1.5 / 255.0, "(e) ...nor for the SH outside a volume (%.4f)", re2);
+        CHECK_MSG(re2 < 1.0e-4, "(e) ...nor for the SH outside a volume (%.6f)", re2);
         skyLightOn(1.0f);
     }
 
@@ -382,9 +372,15 @@ int main()
                     "(closed form %.4f)\n", reads[0], reads[1], reads[2], expected);
         const double spread = std::max({ reads[0], reads[1], reads[2] }) -
                               std::min({ reads[0], reads[1], reads[2] });
-        CHECK_MSG(spread < 1.5 / 255.0,
+        // 1 % OF THE VALUE, where the 8-bit read allowed 1.5 codes (0.0059, 1.5 %):
+        // measured 0.0011 = 0.28 % in float, which is the lobe's shader fit
+        // against the suite's integral over the 7 x 7 block's view angles, not
+        // the lookup (the transposed lookup this guards moved the y band by tens
+        // of per cent).
+        CHECK_MSG(spread < 0.01 * expected,
                   "(f) the SH lookup is camera-independent: one surface, three camera poses "
-                  "with yaw AND pitch, within 1.5 codes (spread %.4f)", spread);
+                  "with yaw AND pitch, within 1 %% (spread %.4f, bar %.4f)", spread,
+                  0.01 * expected);
         CHECK_MSG(std::fabs(reads[1] / expected - 1.0) < 0.02,
                   "(f) ...and it is the world's +Y band that lights an upward face (%.4f against "
                   "%.4f)", reads[1], expected);
@@ -475,9 +471,11 @@ int main()
         const double two = armAt(2);
         std::printf("   (h) the floor at the wall's foot, sky only: one bounce %.4f, two %.4f "
                     "(+%.4f)\n", one, two, two - one);
-        CHECK_MSG(two - one > 2.0 / 255.0,
+        // A RELATIVE bar in float (it was 2/255, the 8-bit read's noise guard):
+        // measured +26 %; 2 % is twenty times the lobe fit's own spread above.
+        CHECK_MSG(two - one > 0.02 * one,
                   "(h) the sky enters the bounce at injection: two bounces light the floor at a "
-                  "sky-lit wall's foot more than one (+%.4f)", two - one);
+                  "sky-lit wall's foot more than one (+%.4f, bar +2 %%)", two - one);
         b->setGlobalIllumination(offAll);
         view->setScene(nullptr);
         e->destroyScene(b);

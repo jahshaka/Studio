@@ -927,9 +927,14 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);
     // The native window exists now: bind a View to it, then the engine scene.
-    if (!view() && mEngine)
+    if (!view() && mEngine) {
+        // THE EDITOR'S PICTURE: an offscreen fallback of the viewport still
+        // gathers (it drives the scene's GI, and its pictures are the
+        // screenshot verbs', taken at rest).
+        setFallbackContract(jahshaka::engine::OffscreenContract::StillPicture);
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
+    }
     // …and bind it, whether the scene is born here or was born earlier for the
     // Player (ensureEngineScene returns early then, so the bind is its own call).
     ensureEngineScene();
@@ -2208,14 +2213,16 @@ void EngineSceneViewport::setEditorData(EditorData *data)
             if (data->editorCamera != mEditorCam) clearViewStates();
             adoptEditorCamera(data->editorCamera);
         }
+        const bool moved = mShowLightWires != data->showLightWires
+                           || mShowGrid != data->showGrid;
         mShowLightWires = data->showLightWires;
         mShowGrid = data->showGrid;
         mShowDebugDraw = data->showDebugDrawFlags;
+        if (moved) emit mEvents.overlaysChanged();
     }
     // The controller must steer the SAME camera the view renders; without this a
     // project load leaves the mouse driving the old, no-longer-rendered camera.
     if (mCamController) mCamController->setCamera(mEditorCam);
-    if (mPlayback && mScene && mEditorCam) mScene->setCamera(mEditorCam);
 }
 
 // ---------------------------------------------------------------------------
@@ -2309,6 +2316,15 @@ void EngineSceneViewport::adoptEditorCamera(iris::CameraNodePtr camera)
     if (!camera) return;
     mEditorCam = camera;
     mEditorCam->setFramingAspect(freecam::kFreeCameraFramingAspect);
+    // …AND THE DOCUMENT'S EXPLORER IS THIS CAMERA (PLAY-FLY-1). Play flies
+    // `Scene::renderCamera(Scene::camera)` (PlayBack::playCamera) while this
+    // view renders mEditorCam; they must be one node. A NEW scene broke that:
+    // setScene() bound Scene::camera to the old explorer and resetEditorCam()
+    // then minted a fresh one here without telling the scene — so play-in-
+    // place flew a camera nobody rendered and the fly keys looked dead in every
+    // scene made with New/project.create. One place, since every assignment to
+    // mEditorCam comes through here.
+    if (mScene) mScene->setCamera(mEditorCam);
 }
 
 void EngineSceneViewport::setPipEnabled(bool on)
@@ -2458,29 +2474,18 @@ void EngineSceneViewport::syncFrame(float dtOverride)
             simulated = mScene->advance(dt);
     }
     }
-    // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5). The arm is COMPUTED in
-    // the document (Scene::advance, right after the movement step, so it never
-    // lags the character by a frame); what the document cannot know is which
-    // camera this viewport DRAWS with — `Scene::camera` and `viewCamera()` are
-    // not always the same node in this tree (measured; reported upward). So the
-    // host hands its own camera in, once per frame, after the playback update
-    // and before applyCamera reads it.
-    //
-    // Called whether or not anything is possessed: with nothing possessed it
-    // restores the camera once and then does nothing, which is what returns the
-    // explorer to its exact pre-play pose on stop.
-    //
-    // PILOTING WINS — a user flying a scene camera asked for that shot — and
-    // while piloting the arm is not applied at all, so the eventual restore
-    // still puts the explorer back where play found it.
-    //
-    // ...AND AN EJECTED RUN DOES NOT HOLD THE CAMERA EITHER (PLAY-SELECT-1).
-    // Ejecting means the editor has the input, and an editor whose fly is
-    // overwritten by the arm every frame has a dead fly. The arm keeps its
-    // saved pose latched while it stands down, so un-ejecting takes the shot
-    // back and Stop still returns the explorer to where play found it.
-    if (mScene && mScene->getPossession() && !mPilot && !mPlayEjected)
-        mScene->getPossession()->applyToViewCamera(viewCamera());
+    // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5) NEEDS NO HAND-OFF HERE.
+    // The arm is computed AND APPLIED in the document (Scene::advance ->
+    // AvatarPossession::updateFollowCamera writes Scene::camera, saves its
+    // pre-arm pose once and restores it at Stop), and Scene::camera IS this
+    // view's explorer on every path (setScene, adoptEditorCamera — PLAY-FLY-1).
+    // The host used to hand viewCamera() in as well (applyToViewCamera); with
+    // the two nodes one that second save captured the ARM's pose and restored
+    // it over the document's at Stop, and while PILOTING it was skipped anyway —
+    // the arm writes the explorer, never the piloted camera, so the shot the
+    // user is flying stays theirs (scripting.e2e.possession's pilot arm). The
+    // Player keeps its own call (engineplayerscene.cpp), where the render
+    // camera is a different node.
     // Emitters used to be ticked here, one document node at a time, because the
     // document owned a CPU particle simulator. It does not any more
     // (PARTICLES_FX2_SPEC): the engine simulates every particle inside
@@ -2557,8 +2562,9 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // scene's particle time scale. A frame that bought no step (a 144 Hz
     // panel's odd frames, a paused scene) freezes the flame for that frame,
     // exactly as it freezes the falling crate.
+    mLastFrameDelta = simulated * (mScene ? mScene->particleTimeScale : 1.0f);
     if (mEngine)
-        mEngine->setFixedFrameDelta(simulated * (mScene ? mScene->particleTimeScale : 1.0f));
+        mEngine->setFixedFrameDelta(mLastFrameDelta);
 }
 
 QImage EngineSceneViewport::takeScreenshot(QSize dimension)
@@ -2627,6 +2633,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeHdr       = st.probeHdr;
     out.probeCaptureSize   = st.probeCaptureSize;
     out.probesDropped      = st.probesDropped;
+    out.probeGridByRays    = st.probeGridByRays;
+    out.probePlacements    = st.probePlacements;
+    out.probeCapturesTotal = st.probeCapturesTotal;
     out.probeGateCrossings = st.probeGateCrossings;
     out.probeShadows   = st.probeShadows;
     out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;
@@ -2639,7 +2648,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.reusedLastRefresh    = st.reusedLastRefresh;
     out.ifdBound             = st.ifdBound;
     out.ifdProbes            = st.ifdProbes;
-    out.ifdConverged         = st.ifdConverged;
+    out.ifdTargetSamples     = st.ifdTargetSamples;
+    out.ifdRefinesOwed       = st.ifdRefinesOwed;
+    out.giAtRest             = st.giAtRest;
     out.ifdProbesPerFrame    = st.ifdProbesPerFrame;
     out.ifdMin               = q(st.ifdMin);
     out.ifdMax               = q(st.ifdMax);
@@ -2779,6 +2790,12 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.traceMs      = st.gather.traceMs;
     out.gather.integrateMs  = st.gather.integrateMs;
     out.gather.cpuMs        = st.gather.cpuMs;
+    out.gather.temporal     = st.gather.temporal;
+    out.gather.historyAge   = int(std::min(st.gather.historyAge, 1u << 30));
+    out.gather.restFrames   = int(std::min(st.gather.restFrames, 1u << 30));
+    out.gather.sinceRestart = int(std::min(st.gather.sinceRestart, 1u << 30));
+    out.gather.settleFrames = int(st.gather.settleFrames);
+    out.gather.settled      = st.gather.settled;
     out.gather.error        = QString::fromStdString(st.gather.error);
     return out;
 }
@@ -2851,6 +2868,32 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     // Scripted stepping is the deterministic path: editor.frame(2) must be
     // enough to take the cover down, exactly as two driver frames would.
     refreshOverlay();
+}
+
+bool EngineSceneViewport::sceneTracesRays() const
+{
+    // Scene::rayTracingResolved's own three terms, with the ROW read from the
+    // document rather than from the engine scene the mirror updates next frame.
+    return mEngine && mEngine->rayTracing() && mEngine->rayQueryAvailable() && mScene &&
+           mScene->rayTracing != iris::RayTracingMode::Off;
+}
+
+IEditorViewport::SunContactInfo EngineSceneViewport::sunContactInfo() const
+{
+    SunContactInfo out;
+    const jahshaka::engine::Scene *es = mEngineScene;
+    if (!es || !mEngine) return out;          // available stays false
+    out.available = true;
+    out.rays = sceneTracesRays();
+    const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
+    out.on = st.on;
+    out.running = st.running;
+    out.width = int(st.width);
+    out.height = int(st.height);
+    out.divisor = int(st.divisor);
+    out.range = st.range;
+    out.reason = QString::fromStdString(st.reason);
+    return out;
 }
 
 IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
@@ -3007,6 +3050,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
                                              unsigned(width), unsigned(height),
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
+    // A STILL PICTURE (View::setOffscreenContract): it gathers, and the settle
+    // below waits for giAtRest before the readback.
+    shot->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // THE USER'S PICTURE OPENS NEITHER HELPER CHANNEL (VR-4-FIX finding 2).
     //
     // `pushEditorHelpers(false)` below takes away the furniture the MIRROR
@@ -3157,6 +3203,53 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // (fps audit F5, bridge/offscreenrenderscope.h). The shot view is
     // offscreen, so it is untouched.
     OffscreenRenderScope quiet(mEngine.get());
+    // THE PICTURE AT REST, WITHOUT PRESENTING (PHOTON-FIELD-ROTATE-1). With the
+    // on-screen views quiet, the shot view is the only enabled view of this scene,
+    // so it is the one that drives the scene's GI this frame (the engine's driver
+    // pass falls from "on-screen" to "any enabled view", OgreEngine.cpp's
+    // per-frame loop): the chain's tick, the settle and the field's refinements all
+    // advance through it, and it sits at the editor camera's pose, so the chain is
+    // placed exactly where the on-screen view placed it. Nothing is presented.
+    // The engine's clock is FROZEN for these frames (particles, shader time and
+    // texture animation stay at the instant the script asked for; the document's
+    // clock is not stepped at all) and handed back before the shot's own frames.
+    // ...AND A GATHERING SCENE SETTLES WHOEVER ASKED (the fix round): the
+    // shot view is a StillPicture, so a shot the script did not ask to settle
+    // (the Screenshot button, a preview tile) still waits for its own history
+    // — at the verb's cap — rather than photographing the raw estimate.
+    {
+        jahshaka::engine::Scene *sc0 = view() ? view()->scene() : nullptr;
+        if (mShotSettleFrames <= 0 && sc0 && sc0->giStatus().gather.on) mShotSettleFrames = 2000;
+    }
+    if (mShotSettleFrames > 0) {
+        const int cap = mShotSettleFrames;
+        mShotSettleFrames = 0;
+        // ...AND THE SHOT'S OWN GATHER HISTORY (PHOTON-GATHER-1d). Where the
+        // screen-probe gather runs, the shot view has a pixel history of its own
+        // that starts young, and giAtRest cannot see it until the view has drawn
+        // once (its settled term reads the views that drew the latest frame). So
+        // a gathering scene draws the shot's first frame unconditionally and then
+        // waits for the ONE predicate as always; a scene that does not gather
+        // takes exactly the path it always took.
+        jahshaka::engine::Scene *sc = view() ? view()->scene() : nullptr;
+        const bool gathering = sc && sc->giStatus().gather.on;
+        if (sc && (gathering || !sc->giStatus().giAtRest)) {
+            mEngine->setFixedFrameDelta(0.0f);
+            // FRAMES NOBODY SAW (bridge/stableoffscreenrender.h's rule): the
+            // settle renders through the shot view, outside the driver's tick,
+            // and the frame monitor must not read them as driven frames.
+            const auto frame = [this] {
+                if (framemonitor::active())
+                    mEngine->setNextFrameCause(jahshaka::engine::FrameCause::Offscreen);
+                mEngine->renderOneFrame();
+            };
+            int i = 0;
+            if (gathering) { frame(); ++i; }
+            for (; i < cap && !sc->giStatus().giAtRest; ++i)
+                frame();
+            mEngine->setFixedFrameDelta(mLastFrameDelta);
+        }
+    }
     // Plus whatever the texture load-request counter still owes
     // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
     renderStableFrames(mEngine.get());
@@ -3302,6 +3395,7 @@ void EngineSceneViewport::setShowFps(bool value)
     mStatsLines.clear();
     mStatsClock.invalidate();   // rebuild the text on the very next refresh
     refreshOverlay();
+    emit mEvents.overlaysChanged();
 }
 
 jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const

@@ -43,9 +43,6 @@ public:
     Q_INVOKABLE bool selectNone();
     Q_INVOKABLE QVariantMap deleteSelection();
     Q_INVOKABLE QVariantList duplicateSelection();
-    Q_INVOKABLE int copy();
-    Q_INVOKABLE QVariantList paste();
-    Q_INVOKABLE QVariantList clipboard();
     Q_INVOKABLE QString gizmoMode();
     Q_INVOKABLE bool setGizmoMode(const QString &mode);
     Q_INVOKABLE QVariantMap gizmoHitTest(double x, double y);
@@ -89,6 +86,7 @@ public:
     Q_INVOKABLE QVariantMap propertiesTab(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantMap propertiesFilter(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantList properties(const QVariantMap &args = QVariantMap());
+    Q_INVOKABLE QVariantMap propertyRow(const QVariantMap &args);
     Q_INVOKABLE QVariantMap propertiesStats();
     Q_INVOKABLE QVariantMap selectionCost(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap snapSize();
@@ -109,6 +107,11 @@ public:
     Q_INVOKABLE QString playInputOwner();
     Q_INVOKABLE bool simulate(bool enabled = true);
     Q_INVOKABLE bool frame(int n = 1, double dt = -1.0);
+    /// A KEY ON THE EDITOR VIEWPORT, as delivered (PLAY-FLY-1): the
+    /// ShortcutOverride, then KeyPress and/or KeyRelease, sent to the viewport
+    /// widget. `action` is 'press', 'release' or 'tap'. An unclaimed key that is an
+    /// editor shortcut is refused (it would never reach the viewport).
+    Q_INVOKABLE bool key(const QString &name, const QString &action = QStringLiteral("tap"));
     Q_INVOKABLE QVariantMap warmUpShaders();
     Q_INVOKABLE QVariant dropPointAt(double x, double y);
     Q_INVOKABLE QVariant dropTargetAt(double x, double y);

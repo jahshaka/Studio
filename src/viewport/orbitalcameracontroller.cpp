@@ -169,7 +169,7 @@ bool OrbitalCameraController::canLeftMouseDrag()
 
 	return (leftMouseDown && // left mouse must be down
 		!altOrbit && // Alt+LMB orbits; it must not also pan in jahshaka mouse mode
-		settings->getValue("mouse_controls", "default").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
+		settings->get(settingkeys::mouseControls) == "jahshaka" && // left mouse to drag in jahshaka mouse mode
 		!gizmoDragging); // cant pan while dragging gizmo
 }
 
@@ -196,7 +196,6 @@ void OrbitalCameraController::onMouseWheel(int delta)
 		return;
 	}
 
-    //qDebug()<<delta;
     auto zoomSpeed = 0.01f;
     distFromPivot += -delta * zoomSpeed;
     //distFromPivot += delta;

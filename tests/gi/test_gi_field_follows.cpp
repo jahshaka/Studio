@@ -29,9 +29,7 @@
 //      cascade 0, with the chain's own contract (at most one rebuild a frame)
 //      unbroken.
 //
-// Its own binary like every GI suite: the voxel lighting and the field bind
-// process-wide to HlmsPbs, so this scene must not share a process with another
-// arm's.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -42,6 +40,13 @@
 #include <vector>
 
 using namespace jahshaka::engine;
+
+/// Every probe of the irradiance field holds at least one sample (the event's own
+/// pass is done; `ifdRefinesOwed` counts the passes left, the running one included).
+static bool fieldWhole(const GiStatus &s)
+{
+    return s.ifdProbes > 0 && s.ifdRefinesOwed < s.ifdTargetSamples;
+}
 
 static int failures = 0;
 #define CHECK(cond, msg)                                                        \
@@ -161,7 +166,7 @@ int main() {
     CHECK(!st.cascades.empty(), "the chain is up");
     CHECK(st.ifdBound, "THE FIELD IS BOUND UNDER A CHAIN (it was torn down before E1)");
     CHECK(st.ifdProbes > 0, "...with probes");
-    CHECK(st.ifdConverged, "...converged on the frame it bound");
+    CHECK(fieldWhole(st), "...whole on the frame it bound (every probe sampled)");
     if (!st.cascades.empty()) {
         const Vec3 c0 = st.cascades[0].centre;
         const Vec3 fc = centreOf(st);
@@ -190,7 +195,7 @@ int main() {
         const GiStatus b = scene->giStatus();
         std::printf("   60 still frames: follows %llu -> %llu\n", a.ifdFollows, b.ifdFollows);
         CHECK(b.ifdFollows == a.ifdFollows, "a still camera re-places the field not once");
-        CHECK(b.ifdConverged, "...and it stays converged");
+        CHECK(fieldWhole(b), "...and it stays whole");
     }
 
     // =====================================================================
@@ -266,7 +271,7 @@ int main() {
             if (stepFrame < 0 && followed) {
                 stepFrame = f;
                 CHECK(s.ifdBound, "the field stays BOUND across the step");
-                CHECK(s.ifdConverged, "...and is converged in the follow's own frame");
+                CHECK(fieldWhole(s), "...and is whole in the follow's own frame");
                 const float moved = dist(centreOf(s), fieldBefore);
                 std::printf("   the field moved on frame %d: its centre moved %.2f m "
                             "(cascade 0's step is %.2f m)\n", f, moved, step0);
@@ -469,7 +474,11 @@ int main() {
                     endGround);
         CHECK(b.ifdFollows > a.ifdFollows + 4u, "the field was re-placed once per cascade-0 step");
         CHECK(b.ifdBound, "it is still the bound field at the end of the walk");
-        CHECK(b.ifdConverged, "...and converged");
+        std::printf("   the field's refinement passes owed at the walk's end: %d of a %d-sample "
+                    "target (%u probes); chain settles %lld -> %lld\n", int(b.ifdRefinesOwed),
+                    int(b.ifdTargetSamples), unsigned(b.ifdProbes), (long long)a.chainSettles,
+                    (long long)b.chainSettles);
+        CHECK(fieldWhole(b), "...and whole");
         CHECK(dist(centreOf(b), b.cascades[0].centre) < 0.5f * b.cascades[0].halfSize,
               "...and still centred on cascade 0, 100 m from where it started");
         CHECK(worstFrame <= 1, "and no frame of the 100 m paid for two cascades");

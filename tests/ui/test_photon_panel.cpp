@@ -51,6 +51,7 @@ For more information see the LICENSE file
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "ui/panels/propertywidgets/worldmodespropertywidget.h"
 #include "viewport/headlesseditorviewport.h"
 #include "ui_hfloatsliderwidget.h"
 
@@ -110,7 +111,9 @@ class StubViewport : public HeadlessEditorViewport
 {
 public:
     GiStatusInfo status;
+    bool rays = false;
     GiStatusInfo giStatus() const override { return status; }
+    bool sceneTracesRays() const override { return rays; }
 };
 
 int main(int argc, char **argv)
@@ -211,7 +214,7 @@ int main(int argc, char **argv)
         CHECK(technique && technique->count() == 3,
               "the technique picker offers the three modes there are (Instant Radiosity "
               "was deleted with PHOTON_SPEC E2 (4))");
-        if (technique) technique->setCurrentIndex(2);   // VCT + Probes
+        if (technique) technique->setCurrentIndex(2);   // the hybrid (VCT + probes / VCT + rays)
         pump();
         CHECK(scene->giMode == iris::GiMode::VCT_PCC_HYBRID, "picking one writes it through");
         CHECK(panel.findChildren<DragVector3Widget *>().size() == 1,
@@ -482,6 +485,124 @@ int main(int argc, char **argv)
             CHECK(box->count() == 4 && box->currentText().contains(QStringLiteral("512")),
                   "an on-dial value keeps the four-row dial and picks its own row");
         }
+    }
+
+    // ---- 8. AT A RAY TIER THE PROBE ROWS ARE GREYED (PHOTON-F12-PCC) --------
+    // High and Epic build no grid wherever the scene traces, so the two rows
+    // that shape only the grid are GREYED with the reason — the same rule and
+    // the same sentence world.gi refuses their keys with (e2e_gi_status) — and
+    // the Reflections row reads "Rays". Without rays the rows are live again.
+    {
+        const auto probeCombo = [&panel]() -> ComboBoxWidget * {
+            for (ComboBoxWidget *c : panel.findChildren<ComboBoxWidget *>())
+                for (QLabel *l : c->findChildren<QLabel *>())
+                    if (l->text().startsWith(QStringLiteral("Probe Capture"))) return c;
+            return nullptr;
+        };
+        const auto gridRow = [&panel]() -> DragVector3Widget * {
+            const auto rows = panel.findChildren<DragVector3Widget *>();
+            return rows.isEmpty() ? nullptr : rows.first();
+        };
+        const auto reflections = [&panel]() -> QString {
+            for (LabelWidget *l : panel.findChildren<LabelWidget *>())
+                for (QLabel *q : l->findChildren<QLabel *>())
+                    if (q->text().startsWith(QStringLiteral("Reflections"))) {
+                        QStringList texts;
+                        for (QLabel *t : l->findChildren<QLabel *>()) texts << t->text();
+                        return l->isHidden() ? QString() : texts.join(QStringLiteral("|"));
+                    }
+            return QString();
+        };
+        worldmodes::setMode(scene, worldmodes::Mode::Epic);
+        scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        StubViewport viewport;
+        viewport.rays = true;
+        viewport.status.available = true;
+        viewport.status.mode = QStringLiteral("vct_pcc_hybrid");
+        viewport.status.probeGridByRays = true;
+        panel.setSceneView(&viewport);
+        panel.setScene(scene);
+        pump();
+        if (auto *adv = buttonWith(&panel, QStringLiteral("Advanced"))) adv->setChecked(true);
+        pump();
+        ComboBoxWidget *combo = probeCombo();
+        DragVector3Widget *grid = gridRow();
+        CHECK(combo && grid, "ray tier: the Advanced block still shows the two probe rows");
+        CHECK(combo && !combo->isEnabled() && grid && !grid->isEnabled(),
+              "ray tier: the probe grid and capture-size rows are GREYED");
+        CHECK(combo && combo->toolTip().contains(QStringLiteral("the rays are the reflection")) &&
+                  grid && grid->toolTip().contains(QStringLiteral("the rays are the reflection")),
+              "ray tier: ...and each says why, in world.gi's words");
+        CHECK(reflections().contains(QStringLiteral("Rays")),
+              "ray tier: the Reflections row reads 'Rays'");
+
+        viewport.rays = false;                          // the scene's rays off
+        viewport.status.probeGridByRays = false;
+        viewport.status.probeCount = 32;
+        panel.setScene(scene);
+        pump();
+        if (auto *adv = buttonWith(&panel, QStringLiteral("Advanced"))) adv->setChecked(true);
+        pump();
+        combo = probeCombo();
+        grid = gridRow();
+        CHECK(combo && combo->isEnabled() && grid && grid->isEnabled(),
+              "no rays: High is a grid tier and the probe rows are live");
+        CHECK(reflections().contains(QStringLiteral("32 probes")),
+              "no rays: the Reflections row reads the grid's count");
+        panel.setSceneView(nullptr);
+    }
+
+    // ---- ONE NAME FOR THE TECHNIQUE ON BOTH SURFACES (STUDIO-CRUD-1 fix) ----
+    // The World Modes section's "Photon Technique" combo and this section's
+    // Advanced "Technique" combo name ordinal 2 through ONE call
+    // (worldmodes::optionLabel with the scene), so on a tracing machine a
+    // scene at Medium reads "VCT + probes" on both and at High "VCT + rays" on
+    // both — and flipping the Ray Tracing row (the refresh both sections take,
+    // SceneNodePropertiesWidget's observer: setScene) moves both.
+    {
+        const auto comboLabelled = [](QWidget *root, const QString &label) -> QComboBox * {
+            for (ComboBoxWidget *c : root->findChildren<ComboBoxWidget *>())
+                for (QLabel *l : c->findChildren<QLabel *>())
+                    if (l->text().startsWith(label) && !c->isHidden()) return c->getWidget();
+            return nullptr;
+        };
+        WorldGiPropertyWidget gi;
+        WorldModesPropertyWidget modes;
+        StubViewport viewport;
+        worldmodes::setMode(scene, worldmodes::Mode::Epic);
+        scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        gi.setSceneView(&viewport);
+        modes.setSceneView(&viewport);
+        const auto both = [&](bool rays, int quality) {
+            viewport.rays = rays;
+            scene->giQuality = iris::GiQuality(quality);
+            gi.setScene(scene);
+            modes.setScene(scene);
+            pump();
+            if (auto *adv = buttonWith(&gi, QStringLiteral("Advanced"))) adv->setChecked(true);
+            pump();
+            QComboBox *a = comboLabelled(&gi, QStringLiteral("Technique"));
+            QComboBox *b = comboLabelled(&modes, QStringLiteral("Photon Technique"));
+            const QString ta = a && a->count() > 2 ? a->itemText(2) : QStringLiteral("<none>");
+            const int bi = b ? b->findData(2) : -1;
+            const QString tb = bi >= 0 ? b->itemText(bi) : QStringLiteral("<none>");
+            return qMakePair(ta, tb);
+        };
+        auto t = both(true, 1);
+        CHECK(t.first == QStringLiteral("VCT + probes") && t.second == t.first,
+              qPrintable(QStringLiteral("tracing machine, scene at Medium: both say 'VCT + probes' "
+                                        "(Photon '%1', World Modes '%2')").arg(t.first, t.second)));
+        t = both(true, 2);
+        CHECK(t.first == QStringLiteral("VCT + rays") && t.second == t.first,
+              qPrintable(QStringLiteral("tracing machine, scene at High: both say 'VCT + rays' "
+                                        "(Photon '%1', World Modes '%2')").arg(t.first, t.second)));
+        t = both(false, 2);
+        CHECK(t.first == QStringLiteral("VCT + probes") && t.second == t.first,
+              qPrintable(QStringLiteral("the Ray Tracing row flipped off, scene at High: both "
+                                        "follow to 'VCT + probes' (Photon '%1', World Modes '%2')")
+                             .arg(t.first, t.second)));
+        gi.setSceneView(nullptr);
+        modes.setSceneView(nullptr);
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

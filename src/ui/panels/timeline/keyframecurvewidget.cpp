@@ -18,7 +18,6 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <vector>
 #include <QPainterPath>
-//#include "../scenegraph/scenenodes.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -115,10 +114,6 @@ void KeyFrameCurveWidget::paintEvent(QPaintEvent *painter)
     //draw grid
     drawGrid(paint);
 
-    // dont draw any lines if no scenenode is selected
-    // if(!animWidgetData->sceneNode)
-    //     return;
-
     drawKeyFrames(paint);
     drawKeys(paint);
 }
@@ -182,7 +177,6 @@ void KeyFrameCurveWidget::mouseReleaseEvent(QMouseEvent *evt)
             menu.addSeparator();
 
             auto handleMenu = new QMenu("Handles");
-            //handleMenu.setTitle("Handles");
             handleMenu->addAction("Auto");
             handleMenu->addAction("Broken");
             handleMenu->addAction("Flat");
@@ -242,7 +236,6 @@ void KeyFrameCurveWidget::mouseMoveEvent(QMouseEvent *evt)
             point += diff;
 
             // now normalize and recalc tangent
-            //auto relPos = point - getKeyFramePoint(selectedKey);
             auto relPos = mousePos - getKeyFramePoint(selectedKey);
             auto relVec = QVector2D(relPos.x(),relPos.y()).normalized();
 
@@ -391,13 +384,6 @@ void KeyFrameCurveWidget::drawKeyFrames(QPainter &paint)
             iris::FloatKey* a = keyFrame->keys[i];
             iris::FloatKey* b = keyFrame->keys[i+1];
 
-            /*
-            paint.drawLine(animWidgetData->timeToPos(a->time, widgetWidth),
-                           animWidgetData->valueToPos(a->value, widgetHeight),
-                           animWidgetData->timeToPos(b->time, widgetWidth),
-                           animWidgetData->valueToPos(b->value, widgetHeight));
-            */
-
             QPoint ap = QPoint(animWidgetData->timeToPos(a->time, widgetWidth),
                               animWidgetData->valueToPos(a->value, widgetHeight));
 
@@ -500,7 +486,6 @@ iris::FloatKey* KeyFrameCurveWidget::getKeyAt(int x, int y)
                               animWidgetData->valueToPos(a->value, widgetHeight));
 
 
-            //qDebug() << ap.distanceToPoint(mousePos);
             if(ap.distanceToPoint(mousePos) <= keyPointRadius)
                 return a;
         }

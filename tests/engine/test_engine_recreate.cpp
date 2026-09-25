@@ -25,16 +25,16 @@ static int failures = 0;
 /// that destroys three engines as well as in a suite of its own.
 static bool gShadowVaoOnly = false;
 
-/// THE MIXED SHADOW-VAO LIST (ATOM P1's AT-A11, ogre-patch 0088) — the body of
-/// `meshbake.shadow_vao_alias`, and a case of this suite as well.
+/// THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11; PHOTON-SCENE-SWITCH-1) —
+/// the body of `meshbake.shadow_vao_alias`, and a case of this suite as well.
 ///
-/// THIS SUITE IS WHERE IT BELONGS because this suite is what the double free
-/// killed: a MIXED list — an optimized shadow VAO at level 0 with the coarse levels
-/// aliasing the normal ones — used to read as fully INDEPENDENT in
-/// `SubMesh::destroyShadowMappingVaos`, so the aliased entries were destroyed there
-/// and again by `~SubMesh`, throwing on the FIRST MESH DESTROY AFTER AN IMPORT. The
-/// patch makes the alias test per entry; the checks are that the shape really is
-/// mixed AND that the destroy still comes back clean.
+/// EVERY LEVEL IS SHRUNK, over ONE position-only vertex buffer: Ogre builds a
+/// pass's pipeline from the FIRST VAO's vertex layout (OgreHlms.cpp:2939-2942), so
+/// the MIXED list this arm used to assert (the shrunk VAO at level 0, the normal
+/// VAOs aliased above it) drew every coarse level into the shadow map as garbage —
+/// `gi.sun_contact_both` is the picture. The checks: one independent shadow VAO per
+/// level, and the destroy of a list whose VAOs SHARE a vertex buffer comes back
+/// clean (the double free the pin used to throw lived in exactly this destroy).
 static void shadowVaoArm(Engine *engine, Scene *s, int iteration) {
     char msg[192];
     MeshData chained = enginetest::unitCubeMesh();
@@ -56,12 +56,12 @@ static void shadowVaoArm(Engine *engine, Scene *s, int iteration) {
     std::snprintf(msg, sizeof msg, "iteration %d: the chain really is 6 levels deep", iteration);
     CHECK(got && levels == 6, msg);
     std::snprintf(msg, sizeof msg,
-                  "iteration %d: and it holds ONE shadow VAO set, not one per level"
-                  " (ogre-patch 0088)", iteration);
-    CHECK(got && independent == 1, msg);
-    // And it destroys cleanly — the exact operation that used to throw.
+                  "iteration %d: every level has its own SHRUNK shadow VAO (one layout for"
+                  " the caster pipeline), none an alias of a normal one", iteration);
+    CHECK(got && independent == levels, msg);
+    // And it destroys cleanly — the shared vertex buffer once, never twice.
     std::snprintf(msg, sizeof msg,
-                  "iteration %d: destroying the mixed-list mesh does not double free",
+                  "iteration %d: destroying the shrunk-list mesh does not double free",
                   iteration);
     CHECK(s->destroyMesh(cm), msg);
 

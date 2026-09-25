@@ -39,8 +39,12 @@
 //      the leak returns when the volume swallows the shell. Only what is
 //      genuinely outside the enlarged volume is asserted there.
 //
-// Its OWN binary, like every other gi.ddgi* suite: the field binds PROCESS-WIDE
-// to HlmsPbs (the setIrradianceField singleton hazard).
+// Its OWN binary, like every other gi.ddgi* suite.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -255,12 +259,22 @@ static Reading measure(Engine *e, Box &b)
 static GiParams vctBase()
 {
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 2;
-    gi.testBoundsMin = Vec3(-5.0f, -1.0f, -5.0f);
     // THE WORST CASE, and today's automatic answer: the top of the volume sits
     // INSIDE the ceiling slab (5.0 - 5.5).
+    // THE BOUNDS ARE A LATTICE'S (PHOTON-VOXEL-4): the fitted box is the bounds
+    // padded on the far side to a power-of-two count of cubic cells (OgreGi.cpp,
+    // buildVoxelArm), so bounds whose height is not the longest side / 2^k grow
+    // UPWARD - the old -1 .. 5.25 (6.25 m of a 10 m side) became -1 .. 9 at Medium
+    // and took in the roof AND the cube 2 m above it, whose cones then saw that
+    // cube: the roof varied by 6/255 with the field off, correct occlusion of a box
+    // the fixture means to leave outside. 10 m tall (-4.75, empty below the floor)
+    // is 64 cells of 0.156 m exactly, the box IS the bounds, and the top still sits
+    // inside the ceiling slab.
+    gi.testBoundsMin = Vec3(-5.0f, -4.75f, -5.0f);
     gi.testBoundsMax = Vec3(5.0f, 5.25f, 5.0f);
     return gi;
 }
@@ -308,7 +322,7 @@ int main()
     CHECK(b.scene->setGlobalIllumination(on), "DDGI arms");
     const GiStatus st = b.scene->giStatus();
     CHECK(st.ifdBound, "the field is bound (the leak has a source)");
-    std::printf("   field: %d probes, converged %d\n", st.ifdProbes, int(st.ifdConverged));
+    std::printf("   field: %d probes, GI at rest %d\n", st.ifdProbes, int(st.giAtRest));
     const Reading ddgiOn = measure(e, b);
     showStats("roof, field ON", ddgiOn.roof);
     showStats("cube 2 m above, field ON", ddgiOn.cubeA);
@@ -397,21 +411,9 @@ int main()
           "the cube above the ENLARGED volume still reads its field-off value");
     CHECK(encOn.cubeA.chroma <= 2.0f, "and is still neutral");
 
-    // =====================================================================
-    // CASE 4 — the intensity dial still governs the interior, which is the
-    // cheapest proof that the fade did not simply turn the field off.
-    // =====================================================================
-    std::printf("\n== case 4: intensity 0 removes the interior bounce ==\n");
-    GiParams zero = vctBase();
-    zero.ddgi = GiToggle::On;
-    zero.ddgiIntensity = 0.0f;
-    CHECK(b.scene->setGlobalIllumination(zero), "DDGI at intensity 0 arms");
-    const Reading zeroOn = measure(e, b);
-    show("interior floor near the red wall, intensity 0", zeroOn.floorNear);
-    CHECK(lum(zeroOn.floorNear) < lum(ddgiOn.floorNear),
-          "intensity 0 is darker inside than intensity 1 (the field was doing the work)");
-    showStats("roof, intensity 0", zeroOn.roof);
-    CHECK(zeroOn.roof.spread <= 2.0f, "and the roof is flat at intensity 0 too");
+    // (CASE 4, the intensity dial at 0 inside, went with the dial —
+    // PHOTON-GATHER-1d deleted it; "the field still DOES something inside",
+    // above, is the field-off-against-on proof it duplicated.)
 
     b.view->setScene(nullptr);
     b.inside->setScene(nullptr);

@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include <QTime>
 #include <QSharedPointer>
 #include <QIcon>
-//#include "ui_animationwidget.h"
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
@@ -93,11 +92,6 @@ public:
     void refreshAnimationList();
     void clearAnimationList();
 
-    //startRange and endRange are in seconds
-    void setTimeViewRange(float startRange,float endRange);
-
-    //sets cursor position at time
-    void setCursorPositionAtTime(float timeInSeconds);
 
     void removeProperty(QString propertyName);
     void clearPropertyKeys(QString propertyName);
@@ -154,7 +148,6 @@ private:
     /// leaked, and the panel behaves as it always did.
     void pushEdit(QUndoCommand *command);
 
-    //float timeAtCursor;
     float timerSpeed;
     Ui::AnimationWidget *ui;
     StudioServices *services = nullptr;

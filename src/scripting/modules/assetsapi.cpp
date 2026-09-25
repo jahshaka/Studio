@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
 #include "services/materialpresetassets.h"
+#include "services/materialpresetseeder.h"
 #include "services/presetrestamp.h"
 #include "services/animationfile.h"
 #include "services/assetcas.h"
@@ -153,10 +154,10 @@ bool importSettingsFromOptions(const QString &verb, const QVariantMap &options,
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, members, limit}) -> [{guid, name, type, drawer}]",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, rigged, tray, members, includeCopies, limit}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
           "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); rigged: true keeps only MODEL rows whose metadata says the file carries a skeleton (the candidates avatar.createAsset accepts — refused for scope 'session', which has no metadata); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag, then rigged — and limit last, so a limited listing is the first N of the filtered set, not a sample of it. rigged is the expensive one on a library that predates the rig metadata (it backfills the block once per row it reaches), which is why it is applied last. "
-          "tray: true is THE EDITOR TRAY's listing, from the same function the tray panel calls (services/assettray.h) — EVERY ASSET THE PROJECT'S SCENE USES, ONCE (owner rules, 2026-09-11 and 2026-09-12): the root folder's rows plus the project's pinned members, where a row is dropped only when it is an import's MEMBER (its parent is another asset), a MESH row, a model or clip an AVATAR in this project is built from (the avatar is that character's tile), a scene node's OWN row (the built-in primitives, the Ground, image planes, decals, particle emitters — a node is not a library asset; what it uses is), or an image added directly whose companion material is the only thing in the project using it (the material is that image's tile). A dependency never hides anything: a texture on a material slot, the ground, a decal or a particle, a material applied to a node, all stay. One more row is folded: a picture that arrived THROUGH a material's picker, while only materials use it — the bundle is its tile (the owner's rule V-2). `members: true` turns off that one rule and lists them, which is the 'Show member textures' switch in the panels. With type, the same listing keeps one type. Nothing is deleted and every guid still resolves. Refused for scopes 'store' and 'session': the tray is a project's listing. SCOPE 'store' IS THE ASSETS PAGE's grid, from the one function the page reads (assettray::libraryList): import members (a Mesh, an import's own textures — rows whose parent is another asset) are never listed, a legacy Shader row is not, and the bundle rule above applies there too — a picture that arrived inside a material and that only materials use is folded into the bundle, `members: true` lists it (the page's own 'Show member textures' switch).",
+          "tray: true is THE EDITOR TRAY's listing, from the same function the tray panel calls (services/assettray.h) — EVERY ASSET THE PROJECT'S SCENE USES, ONCE (owner rules, 2026-09-11 and 2026-09-12): the root folder's rows plus the project's pinned members, where a row is dropped only when it is an import's MEMBER (its parent is another asset), a MESH row, a model or clip an AVATAR in this project is built from (the avatar is that character's tile), a scene node's OWN row (the built-in primitives, the Ground, image planes, decals, particle emitters — a node is not a library asset; what it uses is), or an image added directly whose companion material is the only thing in the project using it (the material is that image's tile). A dependency never hides anything: a texture on a material slot, the ground, a decal or a particle, a material applied to a node, all stay. One more row is folded: a picture that arrived THROUGH a material's picker, while only materials use it — the bundle is its tile (the owner's rule V-2). `members: true` turns off that one rule and lists them, which is the 'Show member textures' switch in the panels. With type, the same listing keeps one type. Nothing is deleted and every guid still resolves. Refused for scopes 'store' and 'session': the tray is a project's listing. SCOPE 'store' IS THE ASSETS PAGE's grid, from the one function the page reads (assettray::libraryList): import members (a Mesh, an import's own textures — rows whose parent is another asset) are never listed, a legacy Shader row is not, and the bundle rule above applies there too — a picture that arrived inside a material and that only materials use is folded into the bundle, `members: true` lists it (the page's own 'Show member textures' switch). A PROJECT'S COPY of a shipped preset (the row a project's first edit of 'Wood PBR' mints, `materials.masterOf` names its preset) is folded under the preset's own tile there too — it is shown only in its project's own views (the tray, the Project drawer); `includeCopies: true` lists every copy, for tooling.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures, plus the RIG block — hasSkeleton, bones, boneNames, nodeNames, rigId (a stable hash of the sorted bone names: two exports of one skeleton share it) and animations [{name, length in seconds, channels, boneChannels}]; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
@@ -613,7 +614,8 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         // THE LIBRARY LISTING through the one function the Assets page reads
         // (ASSETS-PAGE-MEMBERS-1): a legacy Shader row and, unless `members`,
         // a picture that arrived inside a material bundle are not tiles.
-        records = assettray::libraryList(host.db, showMembers);
+        records = assettray::libraryList(host.db, showMembers,
+                                         options.value("includeCopies", false).toBool());
     } else if (scope == "project") {
         if (!requireProject()) return out;
         if (trayOnly) {
@@ -2019,11 +2021,11 @@ QVariantMap AssetsApi::restampSeed()
 {
     QVariantMap out;
     if (!host.db) { fail("assets: not available in this session"); return out; }
-    // THE SAME CALL THE LAUNCH MAKES (services/materialpresetseeder.h runs it
-    // beside its own pass), so the verb the test drives and the route a user
-    // takes are one function over one shipped set.
-    const presetrestamp::Report report =
-        presetrestamp::restamp(host.db, MaterialPresetAssets::allGuids());
+    // THE SAME PASS THE LAUNCH MAKES (services/materialpresetseeder.h runs it
+    // beside its own seed), so the verb the test drives and the route a user
+    // takes are one function over one shipped set — and it ends in the
+    // seeder's `finished`, which is what repopulates the tray.
+    const presetrestamp::Report report = MaterialPresetSeeder::instance().restamp(host.db);
     if (!report.error.isEmpty()) {
         fail(QStringLiteral("assets.restampSeed: %1").arg(report.error));
         return out;

@@ -533,6 +533,28 @@ editor.frame(2);   // a frame renders with the debug drawer armed
 assert(editor.setOverlays({ physicsDebug: false }), "setOverlays({physicsDebug:false})");
 assert(editor.overlays().physicsDebug === false, "physicsDebug reads back off");
 
+// ---- ONE DOOR FOR THE OVERLAYS (STUDIO-CRUD-1 item 8) ----
+// editor.setOverlays and the View Options menu used to be two doors on one
+// state: a scripted change moved the viewport and left the menu's checkmarks
+// stale. The viewport owns the state now and the menu follows it.
+var ovBefore = editor.overlays();
+assert(typeof ovBefore.menu.grid === "boolean" && typeof ovBefore.menu.lightWires === "boolean",
+       "overlays().menu reports the View Options checkmarks: " + JSON.stringify(ovBefore.menu));
+assert(editor.setOverlays({ grid: false }), "setOverlays({grid:false})");
+assert(editor.overlays().menu.grid === false, "the Ground Grid checkmark follows the verb (off)");
+assert(editor.setOverlays({ grid: true }), "setOverlays({grid:true})");
+assert(editor.overlays().menu.grid === true, "the Ground Grid checkmark follows the verb (on)");
+assert(editor.setOverlays({ lightWires: !ovBefore.lightWires }), "setOverlays flips lightWires");
+assert(editor.overlays().menu.lightWires === !ovBefore.lightWires,
+       "the Light Bounds checkmark follows the verb");
+assert(editor.setOverlays({ stats: !ovBefore.stats }), "setOverlays flips stats");
+assert(editor.overlays().menu.stats === !ovBefore.stats, "the Frame Stats checkmark follows the verb");
+assert(editor.setOverlays({ grid: ovBefore.grid, lightWires: ovBefore.lightWires,
+                            stats: ovBefore.stats }), "the overlays put back");
+var ovAfter = editor.overlays();
+assert(ovAfter.menu.grid === ovAfter.grid && ovAfter.menu.lightWires === ovAfter.lightWires &&
+       ovAfter.menu.stats === ovAfter.stats, "and the menu agrees with the state again");
+
 // The empty-map refusal lists EVERY key, including the two that were missing
 // from it (stats and physicsDebug) — a caller who reads that message must not
 // have to guess.

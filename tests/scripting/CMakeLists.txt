@@ -182,6 +182,10 @@ add_script_e2e(material_preview e2e_material_preview.js)
 # The document half of the floor is scripting.e2e.default_floor, which is
 # headless; this one needs a camera.
 add_script_e2e(default_ground e2e_default_ground.js)
+# ATOM S3-DRAW: world.atomStatus() on the default scene (the floor through the id
+# pass and the decode, its horizon plane on PBS as a backdrop) and world.setAtomDraw,
+# the split's measuring door — the editor's shot agrees with the split on and off.
+add_script_e2e(atom_draw e2e_atom_draw.js)
 # CUBE-SHADE-1: the two things the owner saw on a cube (review R8) — a flat
 # face shaded as two triangles (ogre-patch 0083, the diffuse cone basis) and the
 # dark climb up its sides (the AO radius, now a contact scale). Needs a camera
@@ -260,6 +264,10 @@ add_script_e2e(editor_controls e2e_editor_controls.js)
 add_script_e2e(gizmo_rings e2e_gizmo_rings.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).
 add_script_e2e(desktops e2e_desktops.js)
+# PLAY-FLY-1: the play-in-place FLY, driven by a held key through the viewport's
+# own key path (editor.key) — the camera must move monotonically along the key's
+# axis over 30 frames. Engine up: play runs in the editor viewport.
+add_script_e2e(play_fly e2e_play_fly.js)
 # STATS_OVERLAY_SPEC phase 1 — the DATA half of the engine-drawn stats overlay,
 # landed and tested before a pixel of it exists (the API-first rule). Pins the
 # shape of app.renderStats(), the LAZY geometry counters, the invariants between
@@ -283,6 +291,20 @@ add_script_e2e(light_masks e2e_light_masks.js)
 # gi.pcc_mirror engine suite. Engine UP, not --headless: the verb's entire value
 # is that it measures the renderer rather than echoing the document.
 add_script_e2e(gi_status e2e_gi_status.js)
+# gi.gather_default (PHOTON-GATHER-1d): the screen-probe gather is the diffuse BY
+# TIER — Low off, Medium 36 rays, High 64, Epic a probe per 8 px — through the
+# app's own path, and at High the default ground's picture is the gather's (the
+# world.gi({gather:false}) A/B moves it). Its own ctest name in the gi family
+# (the brief's), the scripting harness's home and data root.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-gather_default)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME gi.gather_default
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_default.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(gi.gather_default PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 300)
 # THE SURPRISE MOVER (REALTIME_REFLECTIONS_SPEC §3.3.3, owner decision O3): an
 # object nobody marked as moving starts moving during PLAY. It moves smoothly,
 # is treated as movable from that frame, leaves its old bounce light behind
@@ -338,13 +360,12 @@ set_tests_properties(scripting.e2e.shadow_cache_probes PROPERTIES
 # reason as gi_status: the interesting numbers are the renderer's.
 add_script_e2e(gi_bounds e2e_gi_bounds.js)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
-# editor -> player -> editor, whose own GI build takes the process-wide HlmsPbs
-# binding) never re-pushes or rebuilds GI — giPushes, giStatus().rebuilds and
-# the whole giStatus reading are unchanged, and the editor owns the binding
-# again. Engine + real pages -> needs a display.
+# editor -> player -> editor) never re-pushes or rebuilds GI — giPushes,
+# giStatus().rebuilds and the whole giStatus reading are unchanged, and the
+# editor's passes still bind its own arms. Engine + real pages -> needs a display.
 add_script_e2e(page_gi e2e_page_gi.js)
-# GI_UNIFIED_SPEC.md §4 P1: the DDGI verb surface — world.gi's {ddgi,
-# ddgiIntensity} and the four ifd* readings on world.giStatus(). Engine UP for
+# GI_UNIFIED_SPEC.md §4 P1: the DDGI verb surface — world.gi's {ddgi} (the
+# intensity dial is gone and refused) and the four ifd* readings on world.giStatus(). Engine UP for
 # the same reason as the two above: "asked for a field" and "the shader is
 # sampling one" are different readings, and only the renderer knows the second.
 # The pixel half is the gi.ddgi engine suite.
@@ -421,12 +442,49 @@ add_script_e2e(presentation_state e2e_presentation_state.js)
 # directional light to the realistic sky's sun, the light follows the dials,
 # unlinking gives manual control back, and the link is a document field.
 add_script_e2e(sun_light e2e_sun_light.js GPU_EXCLUSIVE)   # DEVPROCESS-1: the GPU-timing lock
+# THE 2D CLOUD LAYER (CLOUDS-2D-1): the world.clouds block (defaults, clamps,
+# refusals, undo, save/reopen), coverage 0 byte-identical to no layer, the
+# environment SH moving with the coverage, the ground shadow against the sun's
+# measured direct term, the scroll and its capture cadence, an image sky
+# ignoring the block, and the export bake.
+add_script_e2e(clouds_2d e2e_clouds_2d.js)
+# HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): world.sunContact's contract — off by
+# default, validation, one undo step, the file round trip, and what the renderer
+# did (gi.sun_contact is the picture).
+add_script_e2e(sun_contact e2e_sun_contact.js)
+# A WORLD ROW SHOWS WHAT A VERB WROTE (SMALL-FIXES-3): every World section that
+# shows a sceneprops key (or a World Mode registry row) re-reads it on a
+# changed external write — one verb, then the row read with no gesture between.
+add_script_e2e(world_rows_follow e2e_world_rows_follow.js)
 # SUN_AND_LIGHT_DEFAULTS_SPEC Q1b/Q1c: THE SCENE-ERROR AREA. The general
 # facility (raise / never repeat / dismiss / clear / scan) and its two first
 # customers — two directional lights fighting to be the sun, and a light whose
 # shadows are off standing over something it lights straight through. Plus the
 # case that is deliberately NOT an issue: a scene with no directional light.
 add_script_e2e(scene_issues e2e_scene_issues.js)
+# TEXTURE-FAIL-ISSUE-1 (SMALL-FIXES-3): a material's texture file deleted on
+# disk under a running editor is a `texture.missing` scene issue — raised
+# within two scans, one per object, cleared when the file returns. A harness,
+# not a --script run: the file has to vanish from OUTSIDE the app (no verb
+# deletes files), so the app runs under MCP and this process removes and
+# restores it (tests/support/mcpharness.h, the ui.shot_aspect shape).
+add_executable(test_texture_missing test_texture_missing.cpp)
+set_target_properties(test_texture_missing PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_texture_missing PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
+target_include_directories(test_texture_missing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_texture_missing PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+set(_texmiss_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-texture_missing)
+file(MAKE_DIRECTORY ${_texmiss_home}/run)
+add_test(NAME scripting.e2e.texture_missing COMMAND test_texture_missing
+         WORKING_DIRECTORY ${_texmiss_home}/run)
+set_tests_properties(scripting.e2e.texture_missing PROPERTIES
+    ENVIRONMENT "HOME=${_texmiss_home};JAHSHAKA_DATA_ROOT=${_texmiss_home}/.local/share/Jahshaka"
+    TIMEOUT 300 LABELS "scripting")
+jah_tsan_blocked(scripting.e2e.texture_missing)   # spawns the app
+jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 # THE PROJECT'S VR SETTINGS (lane VR-WORLD-1, owner request 2026-09-18) — the
 # World panel's VR section as a verb: `world.vr` reads and writes six document
 # fields (the fly speed in m/s, the fly direction, the turn and its step or
@@ -511,6 +569,25 @@ set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 # through app.textureMemory(); the file header carries the mechanism.
 add_script_e2e(sky_name_recycle e2e_sky_name_recycle.js)
 set_tests_properties(scripting.e2e.sky_name_recycle PROPERTIES TIMEOUT 300)
+# THE ENVIRONMENT LANDS AS ONE SET (PHOTON-SKY-TRANSIENT-1): the first frame
+# after a sky power change, a sun move, a sky type change either way and the
+# cloud layer on/off equals the frame after it within 2/255 — the change frame
+# used to sample a reflection cube nothing had written, with the SH one host
+# push behind it. Engine UP (a picture); the home is WIPED first, so no cached
+# shader or face stands between a change and its first frame. ~10 s solo.
+set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
+add_test(NAME scripting.e2e.sky_swap_transient.fresh_home
+         COMMAND sh -c "rm -rf '${_sstHome}' && mkdir -p '${_sstHome}/run'")
+set_tests_properties(scripting.e2e.sky_swap_transient.fresh_home PROPERTIES
+    FIXTURES_SETUP skySwapTransientFreshHome LABELS "scripting")
+add_test(NAME scripting.e2e.sky_swap_transient
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
+         WORKING_DIRECTORY ${_sstHome}/run)
+set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
+    ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED skySwapTransientFreshHome
+    LABELS "scripting" TIMEOUT 240)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
@@ -591,6 +668,20 @@ set_tests_properties(scripting.e2e.world_reach PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 120)
+
+# node.exportArchive (STUDIO-CRUD-1 item 9): the verb behind the outliner's
+# Export Object / Export Particle System. Document verbs only -> --headless.
+configure_file(scripts/e2e_node_export.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-node_export)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.node_export
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.node_export PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
+    LABELS "scripting"
+    TIMEOUT 120)
+jah_no_display(scripting.e2e.node_export)
 
 # AI_SURFACE_PROGRAM_SPEC lane D #14: node.physics / node.physicsInfo — the last
 # UI-with-no-verb domain. Every scalar and both enums round-trip, every refusal
@@ -724,13 +815,18 @@ set(STORE_MOVE_TARGET ${_home}/store-moved)
 set(STORE_EMPTY_TARGET ${_home}/store-empty)
 set(STAMP e2e)
 configure_file(scripts/e2e_store_root.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js @ONLY)
-file(MAKE_DIRECTORY ${_home}/run)
-file(MAKE_DIRECTORY ${STORE_EMPTY_TARGET})
+# The home is WIPED before every run: a crashed run cannot reach the script's
+# own exit reset, and would leave a moved store + a stale assets/storeRoot here.
+add_test(NAME scripting.e2e.store_root.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run' '${STORE_EMPTY_TARGET}'")
+set_tests_properties(scripting.e2e.store_root.fresh_home PROPERTIES
+    FIXTURES_SETUP storeRootFreshHome LABELS "scripting")
 add_test(NAME scripting.e2e.store_root
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.store_root PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED storeRootFreshHome
     LABELS "scripting"
     TIMEOUT 120)
 
@@ -1347,6 +1443,28 @@ add_test(NAME gi.one_writer
 set_tests_properties(gi.one_writer PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_writer_home
+    LABELS "scripting"
+    TIMEOUT 600)
+
+# gi.pcc_mirror.ray_tier — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on
+# Showroom 2 at Epic: no grid with rays on, the grid with rays off, gone again with rays back
+# on, and the roughness-0 sphere's reflection A/B against the grid's answer. The engine's books
+# for the same rule are gi.pcc_mirror's arm (i). A FRESH home per run (the sample is imported).
+set(JAH_PCC_RAY_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pcc_ray_tier)
+set(JAH_PCC_RAY_OUT "${_home}/run/")
+configure_file(scripts/gi_pcc_mirror_ray_tier.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js @ONLY)
+add_test(NAME gi.pcc_mirror.ray_tier.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(gi.pcc_mirror.ray_tier.fresh_home PROPERTIES
+    FIXTURES_SETUP pcc_ray_tier_home LABELS "scripting" TIMEOUT 60)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME gi.pcc_mirror.ray_tier
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED pcc_ray_tier_home
     LABELS "scripting"
     TIMEOUT 600)
 

@@ -128,3 +128,128 @@ add_test(NAME atom.cluster_crack COMMAND test_atom_cluster_crack
 set_tests_properties(atom.cluster_crack PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 600 LABELS "engine")
+
+# ---------------------------------------------------------------------------
+# ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
+# SPECS/atom/D1_HLMS_ATOM_AND_VISBUF_DESIGN.md §1). Both reach past the public
+# Engine API (EnginePrivate.h, HlmsAtom.h, AtomPass.h — as atom.cluster_crack
+# does) and link Ogre: the grid builds its own workspaces on the scene's manager,
+# the control records raw Vulkan through the engine's pass provider.
+function(jah_atom_engine_target _t)
+    set_target_properties(${_t} PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_include_directories(${_t} PRIVATE
+        "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+    target_compile_definitions(${_t} PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_link_libraries(${_t} PRIVATE JahshakaEngine OgreNext)
+    add_dependencies(${_t} JahshakaEngineMedia)
+endfunction()
+
+# engine.atom_parity — the grid: materials x lights x Photon terms, stock HlmsPbs
+# against HlmsAtom's decode over a hand-made id buffer, per cell mean <= 1.0 code
+# and <= 0.5 % of interior pixels beyond 8 codes, a grazing cell included. It reads
+# until every arm is stable (frames, never time) and prints the whole grid.
+
+# engine.atom_negative_control — stage 0's P-B, permanent: our own compute + graphics
+# pipeline recorded into Ogre's frame from the engine's PASS_CUSTOM provider, and
+# Ogre's next pass byte-identical to the same pass without ours over 120 frames. Its
+# three shaders compile to SPIR-V at BUILD time (never committed bytes), and the
+# suite links the Vulkan render system to reach the device, like tests/vr's spike.
+find_package(Vulkan QUIET)
+find_program(JAH_ATOM_GLSLANG NAMES glslangValidator glslang)
+if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
+    set(_atom_neg_gen "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    file(MAKE_DIRECTORY "${_atom_neg_gen}")
+    set(_atom_neg_headers)
+    foreach(_stage comp vert frag)
+        add_custom_command(
+            OUTPUT "${_atom_neg_gen}/atom_negative_${_stage}_spv.h"
+            COMMAND "${JAH_ATOM_GLSLANG}" -V -S ${_stage} --vn test_${_stage}
+                    -o "${_atom_neg_gen}/atom_negative_${_stage}_spv.h"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/atom_negative.${_stage}"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/atom_negative.${_stage}"
+            COMMENT "Compiling engine.atom_negative_control's ${_stage} shader"
+            VERBATIM)
+        list(APPEND _atom_neg_headers "${_atom_neg_gen}/atom_negative_${_stage}_spv.h")
+    endforeach()
+    add_executable(test_atom_parity test_atom_parity.cpp)
+    jah_atom_engine_target(test_atom_parity)
+    target_include_directories(test_atom_parity PRIVATE
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
+        ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(test_atom_parity PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
+    add_test(NAME engine.atom_parity COMMAND test_atom_parity
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    # 220 cells in 20 arms, each read until stable, plus a material destroyed mid-grid.
+    set_tests_properties(engine.atom_parity PROPERTIES TIMEOUT 300 LABELS "engine")
+    # ...its quick arm (one row, the destroyed material included) UNDER THE LAYER.
+    if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+        add_test(NAME engine.atom_parity_validation COMMAND test_atom_parity
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(engine.atom_parity_validation PROPERTIES
+            TIMEOUT 600 LABELS "engine"
+            ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
+            FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
+    endif()
+    # engine.atom_draw — THE VISIBILITY BUFFER AS THE PRODUCT'S OPAQUE PATH (ATOM
+    # S3-DRAW): an ordinary view of the parity grid whose chain carries the id pass
+    # and the screen decode, against the same view through stock PBS (the split's
+    # measurement door shut); the ids against the CPU raster; the split's stat; the
+    # buckets. ATOM_DRAW_QUICK=1 runs the direct arm alone (a diagnosis switch).
+    add_executable(test_atom_draw test_atom_draw.cpp)
+    jah_atom_engine_target(test_atom_draw)
+    target_compile_definitions(test_atom_draw PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    add_test(NAME engine.atom_draw COMMAND test_atom_draw
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 600 LABELS "engine")
+    add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
+    jah_atom_engine_target(test_atom_negative_control)
+    target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan"
+        "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
+        ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(test_atom_negative_control PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
+    add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 300 LABELS "engine")
+    # ...on lavapipe, the second device of the spike's recipe (the software rasteriser
+    # exposes neither ray queries nor the RTX's timing, so it is the other half of
+    # "validation clean on both devices").
+    set(_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
+    if(EXISTS "${_lvp_icd}")
+        add_test(NAME engine.atom_negative_control_lavapipe COMMAND test_atom_negative_control
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(engine.atom_negative_control_lavapipe PROPERTIES
+            TIMEOUT 600 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
+    endif()
+    # ...and both UNDER THE VALIDATION LAYER, failing on any report: our recorder's
+    # barriers and the provider's restoration are what the layer reads. Each asserts
+    # the layer is ACTIVE (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into
+    # the layer's library), so a machine without the layer cannot read as green.
+    if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+        add_test(NAME engine.atom_negative_control_validation COMMAND test_atom_negative_control
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(engine.atom_negative_control_validation PROPERTIES
+            TIMEOUT 600 LABELS "engine"
+            ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
+            FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
+        if(EXISTS "${_lvp_icd}")
+            add_test(NAME engine.atom_negative_control_validation_lavapipe COMMAND test_atom_negative_control
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+            set_tests_properties(engine.atom_negative_control_validation_lavapipe PROPERTIES
+                TIMEOUT 900 LABELS "engine"
+                ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd};JAH_ATOM_EXPECT_VALIDATION=1"
+                FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
+        endif()
+    endif()
+else()
+    message(STATUS "Jahshaka: engine.atom_negative_control NOT built — vulkan=${Vulkan_FOUND} "
+                   "glslang='${JAH_ATOM_GLSLANG}' vulkanRs='${OGRE_NEXT_VULKAN_RS_LIB}'")
+endif()

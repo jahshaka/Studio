@@ -71,11 +71,9 @@ PerfSampler::PerfSampler(QObject *parent) : QObject(parent)
 
 int PerfSampler::defaultSeconds()
 {
-#ifdef QT_DEBUG
-    return 60;      // the daily driver: a sample a minute
-#else
-    return 300;     // a shipped tool: a sample every five
-#endif
+    // A minute in the daily Debug driver, five in a shipped build — the ONE
+    // default lives with the key (data/settingkeys.h).
+    return settingkeys::perfSampleSeconds.fallback;
 }
 
 void PerfSampler::start(int seconds)
@@ -92,7 +90,7 @@ void PerfSampler::startFromSettings()
 {
     SettingsManager *sm = SettingsManager::getDefaultManager();
     const int seconds =
-        sm ? sm->getValue(QStringLiteral("log/perfSampleSeconds"), defaultSeconds()).toInt()
+        sm ? sm->get(settingkeys::perfSampleSeconds)
            : defaultSeconds();
     start(seconds);
 }

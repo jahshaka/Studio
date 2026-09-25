@@ -112,7 +112,6 @@ void WorldGiPropertyWidget::rebuild()
     quality = nullptr; bounces = nullptr;
     pccGrid = nullptr; probeSize = nullptr; reflectionsRow = nullptr; reflectionsText.clear();
     updateBudget = nullptr; ddgiToggle = nullptr;
-    ddgiIntensity = nullptr;
     advancedButton = nullptr; resetAdvancedButton = nullptr;
     editing = false;   // a build mid-gesture ends the gesture (the slider is gone)
     if (!scene) return;
@@ -198,7 +197,10 @@ void WorldGiPropertyWidget::rebuild()
                "and the sky itself is both cheaper and sharper than a grid of photographs of it: "
                "that is \"Sky\", and it is the right answer rather than a failure. Build "
                "something for the reflections to stand in — walls, a vehicle, a room — and the "
-               "probes that can see it appear."));
+               "probes that can see it appear.\n\n"
+               "\"Rays\" is High and Epic wherever this scene traces rays: no probe grid is "
+               "built there, because the screen march, the traced rays and the voxel cone with "
+               "the sky as its escape are the reflection."));
         PropertyRows::setPanelVisible(reflectionsRow, false);
     }
 
@@ -267,14 +269,20 @@ void WorldGiPropertyWidget::rebuild()
     modeSelector = this->addComboBox(tr("Technique") + pinMark(scene, "giMode"));
     // THE ROWS ARE kGiRows, in order — "Bounced Light" (Instant Radiosity) went
     // with the technique (PHOTON_SPEC §7 E2 (4)).
-    modeSelector->addItem(tr("Off"));
-    modeSelector->addItem(tr("Voxel Lighting"));
-    modeSelector->addItem(tr("Voxel + Reflections"));
+    // ONE TEXT SOURCE (STUDIO-CRUD-1 item 6): the names are the giMode row's
+    // own (worldmodes::optionLabel — the same call the World Modes section and
+    // world.modeTable make: "VCT + rays" wherever probeGridByRays holds for
+    // THIS scene on THIS machine), the tooltips the registry rows' own texts.
+    const bool tracesRays = sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays();
+    if (const worldmodes::Row *modeRow = worldmodes::row(QStringLiteral("giMode")))
+        for (const worldmodes::EnumOption &o : modeRow->options)
+            modeSelector->addItem(worldmodes::optionLabel(*modeRow, o, scene, tracesRays));
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
-    modeSelector->setToolTip(tr("Which technique Photon uses, if you want to choose it yourself. "
-                                "Voxel Lighting cone-traces the bounce out of a voxelization of "
-                                "the lit volume; Voxel + Reflections adds the parallax-corrected "
-                                "probe grid."));
+    auto rowTip = [tracesRays](const char *id) {
+        const worldmodes::Row *r = worldmodes::row(QString::fromLatin1(id));
+        return r ? worldmodes::rowCost(*r, tracesRays) : QString();
+    };
+    modeSelector->setToolTip(rowTip("giMode"));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldGiPropertyWidget::modeChanged);
 
@@ -298,6 +306,7 @@ void WorldGiPropertyWidget::rebuild()
         quality->addItem(tr("Medium"));
         quality->addItem(tr("High"));
         quality->setCurrentIndex(qBound(0, static_cast<int>(scene->giQuality), 2));
+        quality->setToolTip(rowTip("giQuality"));
         connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldGiPropertyWidget::onQualityChanged);
 
@@ -305,10 +314,7 @@ void WorldGiPropertyWidget::rebuild()
         // technique and quality above, and the mark says so.
         bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
                                             1.0f, 4.0f, float(scene->giNumBounces));
-        bounces->setToolTip(tr("Total light bounces, 1-4. Each bounce past the first is another "
-                               "light-propagation pass over the whole voxel volume on every "
-                               "re-solve, and the irradiance field is fed from that volume so it "
-                               "sees them too. Epic sets 3; the other tiers 1."));
+        bounces->setToolTip(rowTip("giBounces"));
         wirePhotonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Photon Light Bounces"));
 
         // NO BOUNDS ROWS (owner decision D8, 2026-09-13): the lit volume is the
@@ -317,8 +323,17 @@ void WorldGiPropertyWidget::rebuild()
         // and it is reported by world.giStatus().
 
         if (scene->giMode == iris::GiMode::VCT_PCC_HYBRID) {
+            // AT A RAY TIER THE GRID IS NOT BUILT (PHOTON-F12-PCC), so its two
+            // rows are GREYED with the reason — the same rule and the same
+            // sentence world.gi refuses the keys with (API-first: the verb's
+            // refusal came first, these rows follow it).
+            const bool byRays = worldmodes::probeGridByRays(
+                scene, sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays());
+            const QString byRaysTip =
+                tr("Greyed: %1").arg(worldmodes::probeGridByRaysReason());
             this->addLabel(tr("Reflection Probes"),
-                           tr("Probe counts along each axis of the lit volume"));
+                           byRays ? tr("None — the rays are the reflection here")
+                                  : tr("Probe counts along each axis of the lit volume"));
             // Counts, not lengths: whole numbers, a coarse scrub, and a range
             // that cannot ask for a probe grid nobody could afford.
             //
@@ -338,6 +353,10 @@ void WorldGiPropertyWidget::rebuild()
                                                                   qBound(1, qRound(g.y()), 8),
                                                                   qBound(1, qRound(g.z()), 8)));
                          });
+            if (pccGrid && byRays) {
+                pccGrid->setEnabled(false);
+                pccGrid->setToolTip(byRaysTip);
+            }
 
             // PROBE CAPTURE SIZE (owner, 2026-09-13: "yes halve it but add it
             // to the world settings"). A Photon tier row like Quality above —
@@ -360,20 +379,13 @@ void WorldGiPropertyWidget::rebuild()
                     probeSize->setCurrentIndex(kProbeSizeRowCount);
                 }
             }
-            probeSize->setToolTip(
-                tr("The pixel size of ONE reflection-probe cube face. A probe is six of them "
-                   "plus a mip chain, so the probe array's video memory goes with the SQUARE "
-                   "of this: at 256 a probe costs 4.0 MB in HDR and a 32-probe room 128 MB; "
-                   "at 512 it is 16.0 MB and 512 MB.\n\n"
-                   "Automatic follows the quality dial (%1 px at Low, %2 at Medium, %3 at "
-                   "High and Epic) and is the shipped answer, because the roughness blur the "
-                   "renderer convolves into these captures hides the difference on everything "
-                   "but a mirror. Only High and Epic build a probe grid at all.")
-                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Low))
-                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Medium))
-                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::High)));
+            probeSize->setToolTip(rowTip("giProbeSize"));
             connect(probeSize, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                     this, &WorldGiPropertyWidget::onProbeSizeChanged);
+            if (byRays) {
+                probeSize->setEnabled(false);
+                probeSize->setToolTip(byRaysTip);
+            }
         }
 
         // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). On at every voxel tier
@@ -382,26 +394,9 @@ void WorldGiPropertyWidget::rebuild()
         ddgiToggle = this->addCheckBox(tr("Irradiance Field (DDGI)") + pinMark(scene, "giDdgi"),
                                        scene->giDdgi > 0);
         ddgiToggle->setValue(scene->giDdgi > 0);
-        ddgiToggle->setToolTip(
-            tr("A grid of probes over the lit volume storing the bounced light arriving from "
-               "every direction, plus a depth map that decides what each probe can see. It is "
-               "the leak fix: a cone cannot tell a wall from empty space, and this can.\n\n"
-               "Turning it on turns the voxel-cone diffuse OFF — it replaces that term rather "
-               "than adding to it. Reflections, probes and planar are untouched. EVERY Photon "
-               "tier turns it on, Low included — Low's two camera cascades exist to feed it."));
+        ddgiToggle->setToolTip(rowTip("giDdgi"));
         connect(ddgiToggle, &CheckBoxWidget::valueChanged,
                 this, &WorldGiPropertyWidget::onDdgiToggled);
-        if (scene->giDdgi > 0) {
-            ddgiIntensity = this->addFloatValueSlider(tr("Field Intensity"), 0.0f, 4.0f,
-                                                      qBound(0.0f, scene->giDdgiIntensity, 4.0f));
-            ddgiIntensity->setToolTip(
-                tr("How brightly the field's diffuse is applied. 1.0 is the renderer's raw value "
-                   "and the calibrated default (measured at 86% of the cone-traced diffuse it "
-                   "replaces). Raise it to trim a room brighter; 0 leaves the field bound and "
-                   "contributing nothing."));
-            wirePlainRow(ddgiIntensity, QStringLiteral("giDdgiIntensity"), tr("Field Intensity"),
-                         [](const QVariant &v) { return QVariant(qBound(0.0f, v.toFloat(), 64.0f)); });
-        }
 
         break;
     }
@@ -433,9 +428,11 @@ void WorldGiPropertyWidget::refreshReflectionsRow()
         return;
     }
     // "Sky" is the DECIDED answer — every candidate probe was photographed and
-    // dropped — while probeCount 0 with nothing dropped is a build that failed
-    // and must not read as a decision (gi.pcc_mirror's subject).
-    const QString text = st.probeCount == 0
+    // dropped — and "Rays" the ray tier's (PHOTON-F12-PCC: no grid is built,
+    // the rays are the reflection), while probeCount 0 with neither is a build
+    // that failed and must not read as a decision (gi.pcc_mirror's subject).
+    const QString text = st.probeGridByRays ? tr("Rays")
+                         : st.probeCount == 0
                              ? (st.probesDropped > 0 ? tr("Sky") : QString())
                              : (st.probeCount == 1 ? tr("1 probe")
                                                    : tr("%1 probes").arg(st.probeCount));

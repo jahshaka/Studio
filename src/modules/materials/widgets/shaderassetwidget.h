@@ -14,8 +14,6 @@
 #include "data/project.h"
 
 
-//#include "../widgets/assetwidget.h"
-
 struct AssetItemShader {
 	QString selectedPath; 
 	QListWidgetItem *wItem = nullptr;

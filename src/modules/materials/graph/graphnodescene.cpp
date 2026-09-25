@@ -49,9 +49,6 @@ void GraphNodeScene::setNodeGraph(NodeGraph *graph)
 	// recreate nodes
 	nodeGraph = graph;
 
-	//auto masterNode = nodeGraph->getMasterNode();
-	//addNodeModel(masterNode, 0, 0, false);
-
 	// add nodes
 	for (auto node : graph->nodes.values()) {
 		this->addNodeModel(node, false);
@@ -123,7 +120,6 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 	nodeView->setPos(model->getX(), model->getY());
 	nodeView->nodeId = model->id;
 	nodeView->layout();
-//	if (model->title == "Color Node") nodeView->resetPositionForColorWidget();
 
 	if (model->isPreviewEnabled()) {
 		nodeView->enablePreviewWidget();
@@ -146,11 +142,9 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 
 	return nodeView;
 
-	//connect(nodeView, &GraphNode::positionUpdated, [=](QPointF one, QPointF two) {
 	////	auto moveCommand = new MoveNodeCommand(nodeView,this,one,two);
 	////	stack->push(moveCommand);
 
-	//});
 }
 
 QMenu *GraphNodeScene::createContextMenu(float x, float y)
@@ -158,17 +152,6 @@ QMenu *GraphNodeScene::createContextMenu(float x, float y)
 	auto menu = new QMenu();
 	menu->setStyleSheet(StyleSheet::MaterialsContextMenu());
 
-	/*
-	for(auto key : nodeGraph->modelFactories.keys()) {
-	auto factory = nodeGraph->modelFactories[key];
-	connect(menu->addAction(key), &QAction::triggered, [this,x, y,factory](){
-
-	auto node = factory();
-	this->addNodeModel(node, x, y);
-
-	});
-	}
-	*/
 	for (auto item : nodeGraph->library->getItems()) {
 		auto factory = item->factoryFunction;
 		connect(menu->addAction(item->displayName), &QAction::triggered, [this, x, y, factory]() {
@@ -247,7 +230,6 @@ void GraphNodeScene::addNodeFromSearchDialog(QTreeWidgetItem * item, const QPoin
 	if (item->data(0, MODEL_TYPE_ROLE).toString() == "node") {
 		auto node = nodeGraph->library->createNode(item->data(0, Qt::UserRole).toString());
 
-		//	auto factory = nodeGraph->modelFactories[event->mimeData()->text()];
 		if (node) {
 			node->setX(p.x());
 			node->setY(p.y());
@@ -744,7 +726,6 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 
 					con->pos2 = me->scenePos();
 					con->updatePath();
-					//socketConnections.removeOne(con);
 
 					views().at(0)->setDragMode(QGraphicsView::NoDrag);
 
@@ -758,7 +739,6 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 					con->pos2 = me->scenePos();
 					con->status = SocketConnectionStatus::Started;
 					con->updatePath();
-					//conGroup->addToGroup(con);
 					this->addItem(con);
 					views().at(0)->setDragMode(QGraphicsView::NoDrag);
 				}
@@ -782,8 +762,6 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 			auto view = this->views().first();
 			auto scenePoint = view->mapFromScene(me->scenePos());
 			auto p = view->viewport()->mapToGlobal(scenePoint);
-
-//			menu->exec(p);
 
             auto dialog = new SearchDialog(this->nodeGraph, this, p);
             dialog->exec();
@@ -913,12 +891,6 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 	}
 	break;
 
-    // case QEvent::GraphicsSceneDrop: {
-    // 	auto event = (QDropEvent*)e;
-    // 	event->acceptProposedAction();
-    // }
-    // break;
-
 	}
 
 	return QObject::eventFilter(o, e);
@@ -956,16 +928,6 @@ bool GraphNodeScene::willConnectionBeALoop(Socket* sock1, Socket* sock2)
 {
 	Socket* leftSock;
 	Socket* rightSock;
-	/*
-	if (sock1->socketType == SocketType::Out) {
-		leftSock = sock1;
-		rightSock = sock2;
-	}
-	else {
-		leftSock = sock2;
-		rightSock = sock1;
-	}
-	*/
 	determineOutAndInSockets(sock1, sock2, &leftSock, &rightSock);
 
 	// recursively gather nodes from left side of tree
@@ -1008,7 +970,6 @@ void GraphNodeScene::determineOutAndInSockets(Socket* sock1, Socket* sock2, Sock
 Socket* GraphNodeScene::getSocketAt(float x, float y)
 {
 	auto items = this->items(QPointF(x, y));
-	//auto items = this->items();
 	for (auto item : items) {
 		if (item && item->type() == (int)GraphicsItemType::Socket)
 			return (Socket*)item;
@@ -1020,7 +981,6 @@ Socket* GraphNodeScene::getSocketAt(float x, float y)
 SocketConnection* GraphNodeScene::getConnectionAt(float x, float y)
 {
 	auto items = this->items(QPointF(x, y));
-	//auto items = this->items();
 	for (auto item : items) {
 		if (item && item->type() == (int)GraphicsItemType::Connection)
 			return (SocketConnection*)item;
@@ -1068,7 +1028,6 @@ QVector<GraphNode*> GraphNodeScene::getNodes()
 GraphNode *GraphNodeScene::getNodeByPos(QPointF point)
 {
 	auto items = this->items();
-	//auto items = this->items();
 	for (auto item : items) {
 		if (item && item->boundingRect().contains(point)) {
 			return (GraphNode*)item;

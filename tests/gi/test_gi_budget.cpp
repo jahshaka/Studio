@@ -131,6 +131,9 @@ int main(int argc, char **argv)
     // they meant. The probe toggles are pinned to what "auto" RESOLVED to at
     // medium (both off), so the quality step moves nothing else.
     doc->giQuality = iris::GiQuality::HIGH;
+    // PHOTON-F12-PCC: at a ray tier no probe grid is built; this suite measures the
+    // grid's own budget (the 2x1x2 grid's captures), so the rays are OFF here.
+    doc->rayTracing = iris::RayTracingMode::Off;
     doc->giProbeHdr = 0;
     doc->giProbeShadows = 0;
     doc->giNumBounces = 2;
@@ -156,6 +159,18 @@ int main(int argc, char **argv)
     slab(doc, "red wall", red,  iris::Vec3(0.0f, 2.5f, 4.2f),   iris::Vec3(8.8f, 5.0f, 0.4f));
     slab(doc, "mirror", QColor(255, 255, 255), iris::Vec3(0.0f, 2.0f, 0.0f),
          iris::Vec3(1.6f, 1.6f, 1.6f), 0.0f, 1.0f);
+    // THE ROOM'S OWN LIGHT (PHOTON-VOXEL-3 round 9; gi.pcc_mirror's panel): an emissive
+    // panel under the ceiling lights the sealed room through the voxels. The sun's
+    // injection is shadowed by the shell, so the room's GI used to come only from the
+    // shell's outer faces bleeding through the slabs - which the directional store closed,
+    // leaving the voxels dark: the hybrid's mirror then blended the probe's green slab
+    // with a black cone-traced answer (the refreshed mirror read g 0.141 against 0.431).
+    {
+        auto panel = slab(doc, "panel", QColor(13, 13, 13), iris::Vec3(0.0f, 4.9f, 0.0f),
+                          iris::Vec3(3.0f, 0.1f, 3.0f), 1.0f, 0.0f);
+        auto pm = qSharedPointerDynamicCast<iris::PbrMaterial>(panel->getMaterial());
+        if (pm) { pm->setEmissiveColor(QColor(255, 255, 255)); pm->setEmissiveIntensity(12.0f); }
+    }
 
     static const float kMoverParked = -3.2f, kMoverOnRay = 0.0f, kMoverZ = 3.7f;
     auto mover = slab(doc, "mover", green, iris::Vec3(kMoverParked, 2.0f, kMoverZ),
@@ -221,13 +236,25 @@ int main(int argc, char **argv)
     show("budget 0, mover parked", pausedParked);
     const quint64 refresh0 = mirror.giRefreshCount(), light0 = mirror.giLightRefreshCount();
     moveMover(kMoverOnRay);
-    frames(40);
+    unsigned pausedCaptures = 0;
+    for (int i = 0; i < 40; ++i) {
+        frame();
+        pausedCaptures += unsigned(escene->giStatus().probeCapturesLastFrame);
+    }
     const Colour pausedMoved = mirrorPixel();
     show("budget 0, mover ON the reflection ray", pausedMoved);
     CHECK(mirror.giRefreshCount() == refresh0 && mirror.giLightRefreshCount() == light0,
           "budget 0: moving geometry costs no re-solve and no re-inject");
-    CHECK(std::fabs(pausedMoved.g - pausedParked.g) < 0.05f,
-          "budget 0: the reflection is frozen at what it last captured");
+    // FROZEN = NOTHING WAS CAPTURED, counted (PHOTON-VOXEL-3 round 9). The mirror pixel is
+    // the hybrid's blend of the probe with the cone-traced reflection, and the cone half
+    // reads the chain's voxels, which follow a moved object without any re-solve (the
+    // counters above): now that the room has light of its own the cone half shows the
+    // green slab where it moved (g +0.21 measured). What budget 0 freezes is the PROBES.
+    std::printf("   budget 0: %u probe captures over the 40 frames the mover moved "
+                "(the pixel moved g %+.3f through the cone-traced half)\n",
+                pausedCaptures, pausedMoved.g - pausedParked.g);
+    CHECK(pausedCaptures == 0u,
+          "budget 0: the probes are frozen at what they last captured (no capture in 40 frames of motion)");
     // ...until world.refreshGi() asks — the paused contract's other half. A
     // paused scene has no budget to spread a re-capture over, so an explicit
     // refresh captures the whole grid at once, as it always did (P6 spreads

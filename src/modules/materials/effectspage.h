@@ -19,7 +19,6 @@
 #include <QUndoStack>
 
 #include "widgets/nodepropertiespanel.h"
-//#include "nodemodel.h"
 #include "widgets/graphicsview.h"
 #include "widgets/materialsettingswidget.h"
 #include "dialogs/createnewdialog.h"
@@ -28,9 +27,7 @@
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
 #include "ui/controls/fonticons.h"
 
-#if(EFFECT_BUILD_AS_LIB)
 #include "widgets/shaderassetwidget.h"
-#endif
 
 class Toast;
 class QLabel;
@@ -199,6 +196,12 @@ public:
 	/// single-claimant routing pattern graphUndo established for Ctrl+Z. Tab
 	/// over the view still opens it too. False = no graph to search.
 	bool openNodeSearch();
+	/// F and H on this page (STUDIO-CRUD-1 item 7): frame the selected nodes
+	/// (all of them when nothing is selected) and reset the zoom. Registry
+	/// entries routed here by the shell when the Materials space is active —
+	/// the openNodeSearch pattern. False = no graph view.
+	bool graphFitSelection();
+	bool graphResetZoom();
 
 	// The graph's EDIT chords, page-scoped (EDITOR_MULTISELECT_SPEC §2.6).
 	//
@@ -257,6 +260,9 @@ public:
 	/// `materials.projectDrawer()` verb, through the page delegate — the one
 	/// route the module's verbs take. Empty with no drawer.
 	QVariantList projectDrawerTiles() const;
+	/// WHAT THE CUSTOM DRAWER IS SHOWING, in order (PRESET-FOLD-1): the
+	/// `materials.customDrawer()` verb, through the page delegate.
+	QVariantList customDrawerTiles() const;
 
     ~EffectsPage();
 
@@ -544,10 +550,8 @@ private:
 	QString newName;
 
 	QLineEdit *projectName = nullptr;
-#if(EFFECT_BUILD_AS_LIB)
-	ShaderAssetWidget *assetWidget;
+	ShaderAssetWidget *assetWidget = nullptr;
 	Database *dataBase = nullptr;
-#endif
 };
 
 }

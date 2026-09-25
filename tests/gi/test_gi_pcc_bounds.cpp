@@ -53,9 +53,7 @@
 // 1 probe -> r = 1.000, 4 probes -> r = 0.251. That is why the thresholds below
 // are 0.15 and not 0.9.
 //
-// Its own binary, like gi.pcc_mirror: the hybrid binds process-wide HlmsPbs
-// state (sVctBindingOwner), so a GI scene must not share a process with
-// gi.modes' scene (spec §9).
+// Its own binary, like gi.pcc_mirror (spec §9).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -518,6 +516,18 @@ static void occluderShapeCase(Engine *engine, View *view)
     CHECK(dark == 0,
           "no pixel on the metal is a hard black hole (the A2 artifact)");
 
+    // THE RAY TIER (PHOTON-F12-PCC): the same hybrid at High builds NO grid
+    // wherever the scene traces — this suite's Medium grid is the non-ray tier.
+    if (engine->rayQueryAvailable()) {
+        GiParams high = gi;
+        high.quality = GiQuality::High;
+        CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
+        render(engine, 4);
+        const GiStatus rt = s->giStatus();
+        CHECK(rt.probeGridByRays && rt.probeCount == 0 && rt.probesDropped == 0 && !rt.pccBound,
+              "ray tier: High with rays builds no probe grid");
+    }
+
     GiParams off;
     s->setGlobalIllumination(off);
     view->setScene(nullptr);
@@ -539,7 +549,7 @@ int main()
     groundPlaneCase(engine.get(), view);
     singleBigMeshCase(engine.get(), view);
     excludeFlagCase(engine.get(), view);
-    // The hybrid cases last: they take the process-wide HlmsPbs binding.
+    // The hybrid cases last.
     roomCase(engine.get(), view, "thin_snug",  0.4f, false, 0.2f);
     roomCase(engine.get(), view, "thick_auto", 1.4f, true,  0.0f);
     roomCase(engine.get(), view, "thick_snug", 1.4f, false, 0.2f);

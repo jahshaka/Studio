@@ -157,8 +157,12 @@
 // DELETES the `photon-target` label from this suite's CMake row; that deletion
 // IS the part's acceptance.
 //
-// Its own binary and its own process like every GI suite: the voxel lighting
-// and the field bind process-wide to HlmsPbs.
+// Its own binary and its own process like every GI suite.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -328,15 +332,6 @@ static double transferIntegral(const double p[3], const double n[3], int n1d, bo
     return sum;
 }
 
-/// The 8-bit picture's transfer, decided by MEASUREMENT (an emissive ramp), not
-/// assumed — the same calibration `gi.gather_reference` performs.
-enum class Transfer { Linear, Srgb };
-static double decode(double v, Transfer t)
-{
-    if (t == Transfer::Linear) return v;
-    return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
-}
-
 /// The camera: horizontal, orthographic, looking along +z at the wall. Built by
 /// hand rather than through the lookAt helper so the pixel mapping below is an
 /// identity in x and a flip in y, with nothing to invert.
@@ -386,7 +381,7 @@ static void floorToPixel(double wx, double wz, double &px, double &py)
     py = ((wz + kFloorDepth * 0.5) / kFloorOrthoHalf * 0.5 + 0.5) * kSize;
 }
 
-static void blockMean(const Image &img, double cx, double cy, int half, double out[3])
+static void blockMean(const ImageF &img, double cx, double cy, int half, double out[3])
 {
     double s[3] = { 0, 0, 0 };
     int n = 0;
@@ -461,12 +456,11 @@ int main()
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 0;                        // no screen-space reflection anywhere in this measurement
-    // hdr FALSE is the currency (MEASURE-1a's reading): the scene then renders
-    // straight into the offscreen RTT at PFG_RGBA8_UNORM — LINEAR, no sRGB
-    // encode, and NOT dithered (the dither rides the tonemap quad only,
-    // OgreView.cpp:645 `if (chainDesc().hdr)`), so the quantisation is a hard
-    // +-0.5/255 with nothing stochastic in it.
+    // THE CURRENCY IS RADIANCE (HDR-READBACK-1): no tonemap, no exposure, and
+    // the scene result read back in float — no 8-bit quantisation (it was a
+    // hard +-0.5/255 on a wall reading 0.03-0.10) and no ceiling.
     fx.hdr = false;
+    fx.hdrReadback = true;
     view->setPostFx(fx);
     view->setShadows(true);
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));   // no sky, no ambient: the floor is the source
@@ -533,6 +527,7 @@ int main()
     }
 
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.ddgi = GiToggle::On;            // the irradiance field: the term this suite is about
@@ -546,32 +541,26 @@ int main()
     s->setRayTracing(RayTracingMode::Off);
     render(e, 40);
 
-    // ---- CALIBRATION: the transfer ----------------------------------------
-    Transfer transfer = Transfer::Linear;
+    // ---- CALIBRATION: the readback ----------------------------------------
+    // Each patch is an emitter that reflects nothing (F0 = 0, black albedo), so
+    // its pixel is its authored radiance — the check that every number below is
+    // read in the units the closed form is written in.
     {
-        Image img;
-        view->readPixels(img);
-        double linErr = 0.0, srgbErr = 0.0;
-        std::printf("\n   THE TRANSFER, from a ramp of emissive patches:\n");
+        ImageF img;
+        CHECK(view->readPixelsHdr(img), "the view reads its radiance back");
+        double worst = 0.0;
+        std::printf("\n   THE READBACK, from a ramp of emissive patches:\n");
         for (int i = 0; i < 4; ++i) {
             double px, py, m[3];
             wallToPixel(kRampX[i], kRampY, px, py);
             blockMean(img, px, py, 5, m);
-            linErr += std::fabs(decode(m[0], Transfer::Linear) - kRamp[i]) / kRamp[i];
-            srgbErr += std::fabs(decode(m[0], Transfer::Srgb) - kRamp[i]) / kRamp[i];
-            std::printf("     radiance %.2f -> pixel %.4f (as linear %.4f, as sRGB %.4f)\n",
-                        kRamp[i], m[0], decode(m[0], Transfer::Linear),
-                        decode(m[0], Transfer::Srgb));
+            const double rel = std::fabs(m[0] - kRamp[i]) / kRamp[i];
+            worst = std::max(worst, rel);
+            std::printf("     radiance %.2f -> %.5f (%.2f %% off)\n", kRamp[i], m[0], 100.0 * rel);
         }
-        linErr /= 4.0; srgbErr /= 4.0;
-        transfer = linErr < srgbErr ? Transfer::Linear : Transfer::Srgb;
-        std::printf("     mean relative error: linear %.1f %%, sRGB %.1f %%\n",
-                    100.0 * linErr, 100.0 * srgbErr);
-        CHECK_MSG(std::min(linErr, srgbErr) < 0.08,
-                  "THE PICTURE'S TRANSFER IS IDENTIFIED (%s, mean error %.1f %%) — the currency "
-                  "every number below is stated in",
-                  transfer == Transfer::Linear ? "linear" : "sRGB",
-                  100.0 * std::min(linErr, srgbErr));
+        CHECK_MSG(worst < 0.01,
+                  "THE READBACK IS THE RADIANCE (worst %.2f %%, bar 1 %%) — the currency every "
+                  "number below is stated in", 100.0 * worst);
     }
 
     // ---- THE RAMP GOES, before anything is measured ------------------------
@@ -594,13 +583,13 @@ int main()
         off.mode = GiMode::Off;
         CHECK(s->setGlobalIllumination(off), "...and the same picture with no GI at all");
         render(e, 20);
-        Image img;
-        view->readPixels(img);
+        ImageF img;
+        view->readPixelsHdr(img);
         for (int i = 0; i < 3; ++i) {
             double px, py, m[3];
             wallToPixel(0.0, kHeights[i], px, py);
             blockMean(img, px, py, 8, m);
-            wallNoGi[i] = decode(m[0], transfer);
+            wallNoGi[i] = m[0];
         }
         std::printf("\n   THE CONTROL (GI off): the wall reads %.4f / %.4f / %.4f at the three "
                     "heights — the sun is vertical, so this is the floor of the measurement\n",
@@ -613,11 +602,11 @@ int main()
         // wall and 2 m off the axis.
         view->setCamera(floorCamera());
         render(e, 12);
-        view->readPixels(img);
+        view->readPixelsHdr(img);
         double px, py, m[3];
         floorToPixel(2.0, -4.0, px, py);
         blockMean(img, px, py, 10, m);
-        floorMeasured = decode(m[0], transfer);
+        floorMeasured = m[0];
         view->setCamera(wallCamera());
         std::printf("   THE FLOOR (GI off, direct only): measured radiance %.4f; pbsDirect at "
                     "normal incidence %.4f (%.0f %%); rho_f * P / pi %.4f (%.0f %%)\n",
@@ -640,8 +629,8 @@ int main()
 
     // ---- THE MEASUREMENT -------------------------------------------------
     {
-        Image img;
-        view->readPixels(img);
+        ImageF img;
+        view->readPixelsHdr(img);
         const double n[3] = { 0.0, 0.0, -1.0 };
         const double verts[4][3] = { { -kFloorHalfX, 0.0, 0.0 },
                                      {  kFloorHalfX, 0.0, 0.0 },
@@ -671,7 +660,7 @@ int main()
             double px, py, m[3];
             wallToPixel(0.0, kHeights[i], px, py);
             blockMean(img, px, py, 8, m);
-            const double measured = decode(m[0], transfer) - wallNoGi[i];
+            const double measured = m[0] - wallNoGi[i];
             const double ratio = expected > 0.0 ? measured / expected : 0.0;
             const double ratioFromFloor = expectedFromFloor > 0.0 ? measured / expectedFromFloor
                                                                   : 0.0;
@@ -705,8 +694,8 @@ int main()
         double mLow[3], mHigh[3], px, py;
         wallToPixel(0.0, kHeights[0], px, py); blockMean(img, px, py, 8, mLow);
         wallToPixel(0.0, kHeights[2], px, py); blockMean(img, px, py, 8, mHigh);
-        const double lowLin = decode(mLow[0], transfer) - wallNoGi[0];
-        const double highLin = decode(mHigh[0], transfer) - wallNoGi[2];
+        const double lowLin = mLow[0] - wallNoGi[0];
+        const double highLin = mHigh[0] - wallNoGi[2];
         const double shapeMeasured = highLin > 0.0 ? lowLin / highLin : 0.0;
         const double shapeExpected = fLow / fHigh;
         const double shapeErr = shapeExpected > 0.0

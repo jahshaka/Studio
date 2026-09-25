@@ -22,7 +22,12 @@
 //    children leave GI with it, and showing it restores each child to its own
 //    flag — a child the user hid stays hidden.
 //
-// Its own binary like every GI suite: GI binds process-wide HlmsPbs state.
+// Its own binary like every GI suite.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -97,6 +102,7 @@ static void hiddenGeometry(Engine *engine, View *view)
     s->setNodeVisible(panel, true);
 
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;
     gi.numBounces = 1;
@@ -157,6 +163,7 @@ static void hiddenGeometry(Engine *engine, View *view)
           "showing the panel again restores its bounce");
 
     GiParams off;
+    off.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     s->setGlobalIllumination(off);
     render(engine, 2);
     view->setScene(nullptr);
@@ -286,6 +293,7 @@ static void hiddenParentBounce(Engine *engine, View *view)
           "showing the root does NOT re-draw the pillar the user hid itself");
 
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::High;
     gi.numBounces = 3;
@@ -298,9 +306,9 @@ static void hiddenParentBounce(Engine *engine, View *view)
     const Colour withModel = img.at(kFloorX, kFloorY);
     const GiStatus shownSt = s->giStatus();
     std::printf("   floor no-model r=%.3f g=%.3f | root shown r=%.3f g=%.3f "
-                "(probes %d, ifd converged %d)\n",
+                "(probes %d, GI at rest %d)\n",
                 noModel.r, noModel.g, withModel.r, withModel.g,
-                shownSt.probeCount, int(shownSt.ifdConverged));
+                shownSt.probeCount, int(shownSt.giAtRest));
     // NO ASSERTION ABOUT THE PROBE COUNT HERE ANY MORE (R5-ROOM, 2026-09-15),
     // and the verdict is that the line was about the retired rule rather than
     // about this case: it read "pinned bounds stand the enclosure rule down, so
@@ -347,6 +355,7 @@ static void hiddenParentBounce(Engine *engine, View *view)
           "...and the pillar the user hid is STILL not drawn");
 
     GiParams off;
+    off.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     s->setGlobalIllumination(off);
     render(engine, 2);
     view->setScene(nullptr);
@@ -369,6 +378,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
     render(engine);
 
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::High;
     gi.numBounces = 3;
@@ -411,6 +421,7 @@ static void hiddenParentVolume(Engine *engine, View *view)
           "showing the pillar itself draws it and puts it in the volume");
 
     GiParams off;
+    off.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     s->setGlobalIllumination(off);
     render(engine, 2);
     view->setScene(nullptr);
@@ -454,6 +465,7 @@ static void volumeCeiling(Engine *engine, View *view)
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 12.0f), Vec3(0.0f, 0.0f, -20.0f));
 
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;      // 128^3, the Epic tier's resolution
     gi.numBounces = 3;
@@ -526,6 +538,7 @@ static void volumeCeiling(Engine *engine, View *view)
           "a pinned volume is not clamped by the ceiling");
 
     GiParams off;
+    off.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     s->setGlobalIllumination(off);
     render(engine, 2);
     view->setScene(nullptr);

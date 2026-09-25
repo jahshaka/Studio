@@ -104,20 +104,26 @@ int main(int argc, char **argv)
 
     // ---- the frame-stats readout is OFF by default ---------------------------
     // Four doors read `show_fps` (F3, the View Options row, Preferences,
-    // editor.setOverlays({stats})) and all four pass this constant. A user who
-    // switched it on keeps it — the DEFAULT, for a settings file that has
-    // never seen the key, is off (owner report 2026-09-07).
-    CHECK(Constants::SHOW_FPS_DEFAULT == false,
-          "show_fps defaults to OFF");
+    // editor.setOverlays({stats})) and all four read the ONE declared key
+    // (data/settingkeys.h). A user who switched it on keeps it — the DEFAULT,
+    // for a settings file that has never seen the key, is off (owner report
+    // 2026-09-07).
+    CHECK(settingkeys::showFps.fallback == false, "show_fps defaults to OFF");
     {
         auto *s = SettingsManager::getDefaultManager();
-        s->settings->remove(QStringLiteral("show_fps"));
-        CHECK(s->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool() == false,
+        s->settings->remove(QLatin1String(settingkeys::showFps.name));
+        CHECK(s->get(settingkeys::showFps) == false,
               "a settings file with no show_fps key reads back OFF");
-        s->setValue("show_fps", true);
-        CHECK(s->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool() == true,
-              "an explicit choice survives the default");
-        s->settings->remove(QStringLiteral("show_fps"));
+        s->set(settingkeys::showFps, true);
+        CHECK(s->get(settingkeys::showFps) == true, "an explicit choice survives the default");
+        s->settings->remove(QLatin1String(settingkeys::showFps.name));
+        // A string key reads its declared default too, and writes through.
+        s->settings->remove(QLatin1String(settingkeys::tileSize.name));
+        CHECK(s->get(settingkeys::tileSize) == QStringLiteral("Normal"),
+              "an unset string key reads its declared default");
+        s->set(settingkeys::tileSize, QStringLiteral("Large"));
+        CHECK(s->get(settingkeys::tileSize) == QStringLiteral("Large"), "and a write reads back");
+        s->settings->remove(QLatin1String(settingkeys::tileSize.name));
     }
 
     // ---- QMenu polish contract (menu-click regression, JOURNAL 2026-08-31) ----

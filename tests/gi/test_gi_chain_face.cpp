@@ -86,6 +86,11 @@
 // is what the hard case is held to. Below that lies the measurement's own
 // floor: the profile bands are 16 columns of a 512-wide picture and the slab is
 // dithered, so a face reads +-0.005 run to run.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -282,9 +287,18 @@ int main(int argc, char **argv)
     // 1.057x instead of 1.029x: +1.4/255 on a 24/255 band, inside the volume
     // where the escape is unoccluded. The bracket's purpose is a REGRESSION
     // toward the 1.9x staircase, and 1.08 keeps it.
+    // THE CHAIN'S FENCE IS THE SPLIT STORE'S ENVELOPE (PHOTON-VOXEL-5; the VOXEL-4 audit's F5).
+    // The chain's own quadrature of a flat slab is 1.000 at every face - the target row's claim
+    // (1 +- 0.05). What steps is cascade 0's face under a real sky (measured 1.000-1.107x over
+    // the four ambients: 1.05x noon, 1.11x low sun, the flat ambient within one code): the field
+    // inside cascade 0 against the four-cone set outside it, two quadratures of one sky, whose
+    // difference is the set's own error against the hemisphere - 0.034 of the escape on an open
+    // floor (BAR 2, gi.ddgi_ambient). The fence is that envelope widened by that error on both
+    // sides: 0.966-1.141. (It was 0.75-1.35, the leaky store's 0.821-1.252 envelope.)
     const float kSingleFaceMax = 1.08f;      // measured 1.007-1.057 over four ambients
-    const float kChainFaceMax  = 1.35f;      // measured 0.821-1.252 over four ambients
-    const float kChainFaceMin  = 0.75f;
+    const float kSetError      = 0.034f;     // the four-cone set's quadrature error, open floor
+    const float kChainFaceMax  = 1.107f + kSetError;
+    const float kChainFaceMin  = 1.000f - kSetError;
     // THE TARGET. A face is a boundary in a data structure, not in the world:
     // the ambient on a flat slab under an unchanging sky is one number, so every
     // ratio is 1.000 and the bar is the deviation from it. 0.05 is the figure
@@ -302,6 +316,7 @@ int main(int argc, char **argv)
     const auto measure = [&](const char *what, bool chain, const Amb &a, float camX, float orthoHalf) {
         r.camX = camX; r.orthoHalf = orthoHalf; placeCamera(r);
         GiParams gi;
+        gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
         gi.mode = GiMode::Vct;
         gi.quality = GiQuality::High;
         gi.numBounces = 1;

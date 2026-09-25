@@ -161,3 +161,13 @@ add_test(NAME source.one_fonticons
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.one_fonticons PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_fonticons)
+
+# source.settings_keys — STUDIO-CRUD-1 item 10: a settings key has ONE owner
+# (src/data/settingkeys.h, or a subsystem's own key function). Fails on a key
+# literal read with a default at a second site, and on a literal read or write
+# of a key the table declares.
+add_test(NAME source.settings_keys
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/settings_keys.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.settings_keys PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.settings_keys)

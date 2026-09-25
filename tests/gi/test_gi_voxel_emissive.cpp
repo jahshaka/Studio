@@ -38,13 +38,19 @@
 // changing the store's meaning rather than its range); L = 3.0 and 12.0 read
 // 1.0 on the unpatched engine and are the acceptance.
 //
+// AND THE PICTURE HALF (HDR-READBACK-1): the same emitter seen head-on must
+// draw ITS OWN radiance, L, read as radiance through the view's float readback.
+// It is the one statement about the picture this fixture can make exactly — an
+// emissive face with F0 = 0 and a black albedo shows its emission and nothing
+// else — and at L = 3.0 and 12.0 it is a statement the 8-bit readback could
+// never make (it reads 1.0 for both).
+//
 // EVERY CASCADE THAT HOLDS THE EMITTER IS CHECKED, because the store is
 // per-cascade: a chain has one voxeliser per level and the clip was in all of
 // them. A cascade coarse enough to decline a 2 m object holds nothing and is
 // reported as such rather than asserted on.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs.
+// Its own binary like every GI suite.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -113,6 +119,13 @@ int main()
     Scene *scene = e->createScene("voxemissive");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
+    {
+        // A PASSTHROUGH view that keeps its scene radiance: no post chain, no
+        // grade — the float scene target and the one composite, nothing else.
+        PostFxDesc fx;
+        fx.hdrReadback = true;
+        view->setPostFx(fx);
+    }
     // A BLACK BOX: no ambient at all, so nothing but the emitter puts radiance
     // in the volume.
     scene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -136,6 +149,11 @@ int main()
     lampP.albedo = Colour(0.0f, 0.0f, 0.0f);
     lampP.metalness = 0.0f;
     lampP.roughness = 1.0f;
+    // ...AND IT REFLECTS NOTHING (Specular workflow, ior 1, black specular ->
+    // F0 = 0), so its picture is its emission alone (the picture half).
+    lampP.workflow = PbrParams::Workflow::Specular;
+    lampP.ior = 1.0f;
+    lampP.specularColour = Colour(0.0f, 0.0f, 0.0f);
     lampP.emissive = Colour(0.5f, 0.5f, 0.5f);
     const MaterialId lampMat = scene->createPbrMaterial(lampP);
     CHECK(lamp && cube && lampMat && scene->attachMesh(lamp, cube, lampMat),
@@ -196,6 +214,27 @@ int main()
         }
         CHECK_MSG(heldBy > 0, "at least one cascade holds the emitter at L = %.2f (%d do)", L,
                   heldBy);
+
+        // THE PICTURE HALF: the emitter's front face fills the centre of the
+        // frame (the camera looks at its centre from 4 m in front of it).
+        ImageF img;
+        if (!view->readPixelsHdr(img)) {
+            CHECK_MSG(false, "the view reads its radiance back (%s)", e->lastError().c_str());
+        } else {
+            double sum = 0.0;
+            int n = 0;
+            for (unsigned y = kSize / 2u - 4u; y <= kSize / 2u + 4u; ++y)
+                for (unsigned x = kSize / 2u - 4u; x <= kSize / 2u + 4u; ++x) {
+                    sum += img.at(x, y).g;
+                    ++n;
+                }
+            const double pix = sum / n;
+            const double rel = std::fabs(pix - L) / L;
+            CHECK_MSG(rel <= 0.01,
+                      "THE PICTURE: the emitter's face draws %.4f against its authored L = %.2f "
+                      "(%.3f %% off, bar 1 %%) — read as radiance, above 1.0 included", pix, L,
+                      100.0 * rel);
+        }
     }
 
     CHECK_MSG(cascadesMeasured >= 4,

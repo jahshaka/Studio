@@ -11,6 +11,11 @@ For more information see the LICENSE file
 
 #include "commands/scenepropertycommand.h"
 
+#include <QPointer>
+#include "services/editgate.h"
+#include <QVector>
+#include <algorithm>
+
 #include <QColor>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -97,6 +102,25 @@ QVector<sceneprops::Field> buildFields()
             s->sunDiscSize = float(qBound(double(iris::kMinSunDiscSize), v.toDouble(),
                                           double(iris::kMaxSunDiscSize)));
         });
+    // THE CLOUD LAYER (CLOUDS-2D-1), whole — one value, like the sky block, so
+    // one gesture or one world.clouds call is one step. The weather map rides
+    // beside the block as the PATH of the pixels that were loaded for its guid:
+    // this table has no asset resolver, and restoring a guid without its
+    // pixels would leave the renderer showing the other map.
+    add("clouds", [](const ScenePtr &s) {
+            QVariantMap m = s->clouds.toJson().toVariantMap();
+            if (s->cloudWeatherMap) m.insert("weatherPath", s->cloudWeatherMap->source);
+            return QVariant(m);
+        },
+        [](const ScenePtr &s, const QVariant &v) {
+            const QVariantMap m = v.toMap();
+            s->clouds = iris::CloudLayer::fromJson(QJsonObject::fromVariantMap(m));
+            const QString path = m.value("weatherPath").toString();
+            if (s->clouds.weatherMapGuid.isEmpty() || path.isEmpty())
+                s->cloudWeatherMap.reset();
+            else if (!s->cloudWeatherMap || s->cloudWeatherMap->source != path)
+                s->cloudWeatherMap = iris::Texture2D::load(path, false);
+        });
     // HARDWARE RAY TRACING (ledger §425) — the project's own state, as the
     // enum's int. Auto is 0, so a blob that lost the value restores the
     // documented default rather than the most restrictive state; anything
@@ -107,6 +131,12 @@ QVector<sceneprops::Field> buildFields()
             s->rayTracing = (i == int(iris::RayTracingMode::Off))  ? iris::RayTracingMode::Off
                           : (i == int(iris::RayTracingMode::On))   ? iris::RayTracingMode::On
                                                                    : iris::RayTracingMode::Auto;
+        });
+    // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1), whole — one value, so one
+    // world.sunContact call is one undo step.
+    add("sunContact", [](const ScenePtr &s) { return QVariant(s->sunContact.toJson().toVariantMap()); },
+        [](const ScenePtr &s, const QVariant &v) {
+            s->sunContact = iris::SunContact::fromJson(QJsonObject::fromVariantMap(v.toMap()));
         });
     // THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1), 0..2.
     add("ssrMarch", [](const ScenePtr &s) { return QVariant(s->ssrMarch); },
@@ -153,10 +183,8 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giPccGrid = vec(v); });
     add("giUpdateBudget", [](const ScenePtr &s) { return QVariant(s->giUpdateBudget); },
         [](const ScenePtr &s, const QVariant &v) { s->giUpdateBudget = v.toInt(); });
-    add("giDdgiIntensity", [](const ScenePtr &s) { return QVariant(s->giDdgiIntensity); },
-        [](const ScenePtr &s, const QVariant &v) { s->giDdgiIntensity = v.toFloat(); });
-    // THE SCREEN-PROBE GATHER's row (GATHER-1a). Verb-only like the two above
-    // it, and in this table for the same reason: a world field the verb writes
+    // THE SCREEN-PROBE GATHER's row (GATHER-1a). A verb's row like the ones
+    // above it, and in this table for the same reason: a world field the verb writes
     // outside WorldEdit is not undoable and is not rolled back when a later key
     // of the same call is refused.
     add("giGather", [](const ScenePtr &s) { return QVariant(s->giGather); },
@@ -169,8 +197,6 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->giCardRadius = v.toFloat(); });
     // Verb-only integrator knobs (world.gi): no panel row, but the verb's one
     // undo step records them through this table like every other world field.
-    add("giRayMarchStepScale", [](const ScenePtr &s) { return QVariant(s->giRayMarchStepScale); },
-        [](const ScenePtr &s, const QVariant &v) { s->giRayMarchStepScale = v.toFloat(); });
     add("giProbeCaptureSize", [](const ScenePtr &s) { return QVariant(s->giProbeCaptureSize); },
         [](const ScenePtr &s, const QVariant &v) { s->giProbeCaptureSize = v.toInt(); });
     add("giProbeHdr", [](const ScenePtr &s) { return QVariant(s->giProbeHdr); },
@@ -262,12 +288,66 @@ QVariant get(const iris::ScenePtr &scene, const QString &id)
     return (f && f->get) ? f->get(scene) : QVariant();
 }
 
+namespace {
+struct Observer
+{
+    QPointer<QObject> context;
+    WriteObserver fn;
+};
+QVector<Observer> &observers()
+{
+    static QVector<Observer> list;
+    return list;
+}
+/// Set while a ScenePropertyCommand that NO panel owns (a verb's step: it has
+/// no refresh) is undone or redone — an external write like the verb itself.
+int &verbStepApplying()
+{
+    static int depth = 0;
+    return depth;
+}
+}   // namespace
+
+void observeWrites(QObject *context, WriteObserver observer)
+{
+    if (!context || !observer) return;
+    observers().append({ QPointer<QObject>(context), std::move(observer) });
+}
+
+static void tell(const iris::ScenePtr &scene, const QString &id, bool external)
+{
+    auto &list = observers();
+    list.erase(std::remove_if(list.begin(), list.end(),
+                              [](const Observer &o) { return o.context.isNull(); }),
+               list.end());
+    // A COPY is walked: an observer may add another (a panel built in its
+    // callback).
+    const QVector<Observer> now = list;
+    for (const Observer &o : now)
+        if (o.context) o.fn(scene, id, external);
+}
+
+void notifyExternal(const iris::ScenePtr &scene, const QString &key)
+{
+    if (scene) tell(scene, key, true);
+}
+
 bool set(const iris::ScenePtr &scene, const QString &id, const QVariant &value)
 {
     if (!scene) return false;
     const Field *f = field(id);
     if (!f || !f->set) return false;
+    auto &list = observers();
+    if (list.isEmpty()) {
+        f->set(scene, value);
+        return true;
+    }
+    const QVariant before = f->get ? f->get(scene) : QVariant();
     f->set(scene, value);
+    // NOTHING CHANGED, NOTHING TOLD: a row that already shows the value is
+    // right, and a script re-asserting a field must not refresh the column.
+    if (f->get && f->get(scene) == before) return true;
+    tell(scene, id, editgate::inVerb() || verbStepApplying() > 0);
     return true;
 }
 
@@ -285,7 +365,11 @@ void ScenePropertyCommand::apply(const QVariant &value)
 {
     auto scene = mScene.lock();
     if (!scene) return;
+    // A step no panel owns (a verb's) is an EXTERNAL write when undone or
+    // redone: the panel showing the key learns of it through observeWrites.
+    if (!mRefresh) ++sceneprops::verbStepApplying();
     sceneprops::set(scene, mKey, value);
+    if (!mRefresh) --sceneprops::verbStepApplying();
     if (mRefresh) mRefresh();
 }
 

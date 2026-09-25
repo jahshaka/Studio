@@ -80,8 +80,7 @@
 // grid placed in the lit volume instead of in the photographed space, 467 of
 // that case's 1344 metal pixels come back as hard black holes.
 //
-// ONE SCENE AT A TIME, always: the HlmsPbs VCT/PCC binding is process-wide
-// (OgreGi.cpp sVctBindingOwner), so a second live scene would fight for it.
+// ONE SCENE AT A TIME, always.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -150,9 +149,9 @@ static void addMirror(Scene *s, const Vec3 &pos, float size = 1.8f)
 /// HUE assertion and not a brightness one: the VISIBLE sky is a blue equirect
 /// (what a probe would photograph), the IBL reflection cubemap is GREEN (what a
 /// datablock samples when the engine binds the sky cubemap to it). While a
-/// probe grid exists the engine UNBINDS that cubemap from every datablock
-/// (`reflectionTexForDatablocks`, OgreSky.cpp — the env-probe slot has one
-/// occupant), so a mirror shows BLUE through a probe and GREEN through the sky.
+/// probe grid exists the engine UNBINDS that cubemap from every datablock of
+/// the scene (`OgreScene::reflectionTexFor`, OgreMaterials.cpp — the env-probe
+/// slot has one occupant), so a mirror shows BLUE through a probe and GREEN through the sky.
 static void bindTwoTonedSky(Scene *s)
 {
     SkyDesc sky;
@@ -893,7 +892,14 @@ int main()
         // printed as it always was.
         std::printf("   13: disc-exclusion metric retired — whitest %.4f is the room's wall, "
                     "not the disc (mirror b %.4f)\n", double(withoutDisc), double(mirrorPx().b));
-        CHECK(mirrorPx().b > mirrorPx().g && mirrorPx().b > mirrorPx().r,
+        // AS A SHARE, like the first reading above (PHOTON-VOXEL-3): the pixel is the
+        // hybrid's blend of the probe's blue photograph with the cone-traced half, whose
+        // escape reads the fixture's GREEN environment (PHOTON-ENV-1) - on the directional
+        // store that half keeps more of it here (g 0.659 over b 0.620; the lane's first
+        // commit already read g 0.729 over b 0.655), so "blue over green" measured the
+        // blend, not the probe. What only the probe's photograph holds is blue over red.
+        const Colour after = mirrorPx();
+        CHECK(after.b > 0.30f && after.b > after.r + 0.08f,
               "13: with inProbes FALSE the mirror is still the bare blue sky through a probe");
 
         // THE INCLUSION IS STILL A MEASURED DEFECT, NOT AN ASSERTION (ENGINE-6
@@ -1009,11 +1015,20 @@ int main()
         // are two numbers now, so both are asserted, on one scene, from the
         // dial the engine resolves them with (OgreGi.cpp buildPcc). Epic shares
         // GiQuality::High and is therefore this same row.
+        // HIGH BUILDS A GRID ONLY WHERE THE SCENE DOES NOT TRACE (PHOTON-F12-PCC):
+        // its capture size is read with the scene's rays off.
+        s->setRayTracing(RayTracingMode::Off);
         gi.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(gi), "capture size: the hybrid rebuilds at High");
         render(engine.get(), 10);
         CHECK(s->giStatus().probeCaptureSize == 512,
               "capture size: High (and Epic, which shares the quality) captures at 512 px");
+        // ...and with them back on, High is a ray tier and the grid goes.
+        s->setRayTracing(RayTracingMode::Auto);
+        render(engine.get(), 2);
+        if (engine->rayQueryAvailable())
+            CHECK(s->giStatus().probeGridByRays && s->giStatus().probeCount == 0,
+                  "ray tier: High with the scene's rays on builds no grid");
         engine->destroyScene(s);
     }
 

@@ -118,4 +118,39 @@ assert(assets.fly({ x: 0, y: 3, z: 0 }) === true, "assets.fly({y: 3}) (world off
 var sideAfter = assets.preview().camera.position;
 assert(Math.abs(sideAfter.y - sideBefore.y - 3) < 0.001, "world-space fly moved +3 in y");
 
+// ---- PRESET-FOLD-1: a project's copy of a preset, in the library views -----
+// The first edit of a shipped preset in a project mints that project's copy,
+// under the preset's name. In the LIBRARY views — this page's grid and the
+// Materials module's Custom drawer — it used to stand as a second "Wood PBR"
+// with the master's picture, in every project; it folds under the master now
+// and is shown only in its own project's views (the Project drawer).
+var WOOD = "00000000-0000-0000-0000-000000002022";
+function woodIn(rows) { return rows.filter(function (r) { return r.name === "Wood PBR"; }); }
+function guidsIn(rows) { return rows.map(function (r) { return r.guid; }); }
+project.create("Fold A " + Date.now());
+var foldCube = scene.addPrimitive("Cube");
+assert(material.apply(foldCube, "Wood PBR") === true, "fold: project A applies Wood PBR");
+var editA = materials.edit("Wood PBR");
+assert(editA.copied === true && editA.guid !== WOOD, "fold: A's first edit makes A's own copy");
+var libWood = woodIn(assets.list({ scope: "store" }));
+assert(libWood.length === 1 && libWood[0].guid === WOOD,
+       "fold: the Assets page's library list shows ONE 'Wood PBR', the master ("
+       + JSON.stringify(libWood) + ")");
+app.space("materials");
+assert(guidsIn(materials.projectDrawer()).indexOf(editA.guid) >= 0,
+       "fold: A's own Project drawer shows A's copy");
+assert(woodIn(materials.customDrawer()).length === 0,
+       "fold: …and no Custom drawer row is a copy of Wood PBR ("
+       + JSON.stringify(woodIn(materials.customDrawer())) + ")");
+project.create("Fold B " + Date.now());
+app.space("materials");
+assert(guidsIn(materials.customDrawer()).indexOf(editA.guid) < 0
+       && woodIn(materials.customDrawer()).length === 0,
+       "fold: project B's Custom drawer does not list A's copy");
+assert(assets.addToProject(WOOD) === WOOD, "fold: B's add from the library gets the MASTER");
+var foreign = "";
+try { assets.addToProject(editA.guid); } catch (e) { foreign = e.message; }
+assert(/own copy of the shipped preset/.test(foreign), "fold: B cannot pin A's copy: " + foreign);
+app.space("assets");
+
 console.log("scripting.e2e.assets_page PASSED");

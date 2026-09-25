@@ -24,9 +24,7 @@ set_tests_properties(gi.modes PROPERTIES TIMEOUT 120 LABELS "engine")
 # behind the camera and a roughness-0 metal box whose reflection must contain
 # that wall — plus Scene::giStatus() assertions, so buildPcc's silent
 # "hybrid renders as plain VCT" bail fails the suite instead of passing it.
-# Its OWN binary rather than a case in test_gi: the hybrid binds
-# process-wide HlmsPbs state (sVctBindingOwner), so this scene must not share a
-# process with gi.modes' scene (spec §9).
+# Its OWN binary rather than a case in test_gi (spec §9).
 add_executable(test_gi_pcc_mirror test_gi_pcc_mirror.cpp)
 set_target_properties(test_gi_pcc_mirror PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -43,8 +41,7 @@ add_test(NAME gi.pcc_mirror COMMAND test_gi_pcc_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_mirror PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# GI BOUNDS + PROBE PLACEMENT (spec §4 / P1a). Its own binary for the same
-# process-wide-binding reason as gi.pcc_mirror.
+# GI BOUNDS + PROBE PLACEMENT (spec §4 / P1a). Its own binary.
 add_executable(test_gi_pcc_bounds test_gi_pcc_bounds.cpp)
 set_target_properties(test_gi_pcc_bounds PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -62,8 +59,7 @@ add_test(NAME gi.pcc_bounds COMMAND test_gi_pcc_bounds
 set_tests_properties(gi.pcc_bounds PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.cliff — THE GI-VOLUME CLIFF (LIGHTING_FIX fix 1) plus the engine half of
-# the re-fit-on-exit contract (fix 2). Its own binary for the same
-# process-wide-HlmsPbs-binding reason as its siblings.
+# the re-fit-on-exit contract (fix 2). Its own binary.
 add_executable(test_gi_cliff test_gi_cliff.cpp)
 set_target_properties(test_gi_cliff PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -80,8 +76,7 @@ add_test(NAME gi.cliff COMMAND test_gi_cliff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cliff PROPERTIES TIMEOUT 120 LABELS "engine")
 
-# gi.ambient — THE VCT AMBIENT (LIGHTING_FIX fix 3). Own binary: process-wide
-# HlmsPbs binding, same rule as its siblings.
+# gi.ambient — THE VCT AMBIENT (LIGHTING_FIX fix 3). Own binary.
 add_executable(test_gi_ambient test_gi_ambient.cpp)
 set_target_properties(test_gi_ambient PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -180,8 +175,7 @@ set_tests_properties(gi.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscree
 # gi.budget — THE GI UPDATE BUDGET (FIX WAVE B1-B5). Mirror-linked for the same
 # reason gi.coalesce is: the debounce and the counters are mirror-side and the
 # budget, the sweep and the reuse arm are engine-side; the contract is the pair.
-# Its own binary as well, like every hybrid suite here (process-wide HlmsPbs
-# binding) and because it TIMES refreshes.
+# Its own binary as well, because it TIMES refreshes.
 add_executable(test_gi_budget test_gi_budget.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_gi_budget PROPERTIES
@@ -238,8 +232,7 @@ set_tests_properties(gi.probe_inputs PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
 # PROBE REBUILD PARITY + SHRINK-FIT LOCALITY (2026-09-07 fix wave, defect 2).
 # A CLUTTERED room — free-standing columns, which is what defeats the 1x1
 # averaged-depth shrink-fit that gi.pcc_mirror's empty room never exercises —
-# rebuilt six times at a fixed camera. Its own binary for the same
-# process-wide-binding reason as gi.pcc_mirror.
+# rebuilt six times at a fixed camera. Its own binary.
 add_executable(test_gi_pcc_stability test_gi_pcc_stability.cpp)
 set_target_properties(test_gi_pcc_stability PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -257,10 +250,8 @@ add_test(NAME gi.pcc_stability COMMAND test_gi_pcc_stability
 set_tests_properties(gi.pcc_stability PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # DDGI — the irradiance-field diffuse layer (GI_UNIFIED_SPEC.md §4 P1). Its own
-# binary for the same process-wide-binding reason as gi.pcc_mirror: the field
-# binds to HlmsPbs globally (setIrradianceField), so it must not share a
-# process with another suite's scene. It also RE-RUNS ITSELF (argv[1] == "hash")
-# to prove cross-process byte determinism, which no in-process re-render can.
+# binary and process because it RE-RUNS ITSELF (argv[1] == "hash") to prove
+# cross-process byte determinism, which no in-process re-render can.
 add_executable(test_gi_ddgi test_gi_ddgi.cpp)
 set_target_properties(test_gi_ddgi PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -319,8 +310,7 @@ jah_no_display(gi.tiers)
 # gi.ddgi_ambient — THE PHOTON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
 # CORRECTION; the upstream mechanism is in SPECS/OGRE_UPSTREAM_ISSUES.md's
 # "Vct_piece_ps.any: volume-local ambient blend commented out" entry). Its own
-# binary for the same process-wide-binding reason as gi.ddgi — and separate from
-# gi.ddgi deliberately: that suite pins the field's BOUNCE and must keep its
+# binary, separate from gi.ddgi deliberately: that suite pins the field's BOUNCE and must keep its
 # ambient at zero to do so, while this one is about the ambient and needs three
 # scenes with a non-degenerate hemisphere pair.
 add_executable(test_gi_ddgi_ambient test_gi_ddgi_ambient.cpp)
@@ -338,12 +328,23 @@ add_dependencies(test_gi_ddgi_ambient JahshakaEngineMedia)
 add_test(NAME gi.ddgi_ambient COMMAND test_gi_ddgi_ambient
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.cone_corner_target — THE CONE'S CORNER OVER-READ (PHOTON-FIELD-ROTATE-1, F2):
+# gi.ddgi_ambient's corner used to compare the field with the cone reference; it is
+# anchored on the fixture's ANALYTIC now, and the cone reference - which reads a
+# 2.2 m wall's foot at 93.9 % of open floor against the analytic 82 % (+11.7
+# points: the cone's footprint against a wall edge) - is this row, against the same
+# analytic and the same bar. LABEL `photon-target`: it runs in every scoped
+# selection and PRINTS its value, and it does NOT decide a gate. The lane that
+# makes the cone read a corner right deletes the label.
+add_test(NAME gi.cone_corner_target COMMAND test_gi_ddgi_ambient --cone-target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_corner_target PROPERTIES TIMEOUT 180
+                     LABELS "engine;photon-target")
 
 # gi.hidden_volume — WHAT THE AUTOMATIC LIT VOLUME MAY CONTAIN (SMOKE_FIX S12 +
 # S14): a hidden object stops bouncing light and stops defining the volume, and
 # the automatic fit is capped in metres per voxel so a new project's ground
-# plane cannot voxelise a square kilometre. Its own binary for the same
-# process-wide-HlmsPbs-binding reason as its siblings.
+# plane cannot voxelise a square kilometre. Its own binary.
 add_executable(test_gi_hidden_volume test_gi_hidden_volume.cpp)
 set_target_properties(test_gi_hidden_volume PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -364,7 +365,7 @@ set_tests_properties(gi.hidden_volume PROPERTIES TIMEOUT 180 LABELS "engine")
 # (ledger 177 defect A, the owner's "black rectangle"): a flat scene ambient
 # reaches HlmsPbs through setAmbient's 1/pi scale and reached VctLighting
 # unscaled, so the same setting was pi apart on the two sides of the volume
-# boundary. Its own binary (process-wide HlmsPbs binding) like every GI suite.
+# boundary. Its own binary like every GI suite.
 add_executable(test_gi_volume_edge test_gi_volume_edge.cpp)
 set_target_properties(test_gi_volume_edge PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -396,8 +397,7 @@ set_tests_properties(gi.volume_edge_spec_target PROPERTIES TIMEOUT 180
 # planar mirror, SSR) and casts shadows there in the frame it moves, and is
 # absent from the reflection-probe captures, the voxel bounce and every GI
 # signature — so a scene full of moving things costs the room's lighting
-# nothing. Its own binary for the same process-wide-HlmsPbs-binding reason as
-# its hybrid siblings.
+# nothing. Its own binary.
 add_executable(test_gi_mobility test_gi_mobility.cpp)
 set_target_properties(test_gi_mobility PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -417,8 +417,7 @@ set_tests_properties(gi.mobility PROPERTIES TIMEOUT 300 LABELS "engine")
 # gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
 # sealed box whose GI bounds top sits inside its ceiling slab, measured from
 # OUTSIDE. Gates the cage clamp, the outside-the-volume fade and the fallback to
-# the term the field's binding deletes (VctDisableDiffuse). Its own binary for
-# the same process-wide-HlmsPbs-binding reason as its gi.ddgi siblings.
+# the term the field's binding deletes (VctDisableDiffuse). Its own binary.
 add_executable(test_gi_ddgi_edge test_gi_ddgi_edge.cpp)
 set_target_properties(test_gi_ddgi_edge PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -437,8 +436,7 @@ set_tests_properties(gi.ddgi_edge PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # THE MATERIAL GATE (owner 2026-09-13 Q1, ogre-patch 0028): a material with
 # no specular response samples no reflection probe, and the ones beside it still
-# do. Its own binary for the same process-wide-HlmsPbs-binding reason as its
-# siblings.
+# do. Its own binary.
 add_executable(test_gi_probe_gate test_gi_probe_gate.cpp)
 set_target_properties(test_gi_probe_gate PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -492,9 +490,9 @@ add_test(NAME gi.probe_open COMMAND test_gi_probe_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.probe_open PROPERTIES TIMEOUT 180 LABELS "engine")
 
-# gi.pcc_second_scene — the PROCESS-WIDE probe binding against a second scene's
-# own sky cubemap (lane SKY-FALLBACK-1). RUN_SERIAL is not needed: it owns both
-# of its scenes and touches the HlmsPbs binding only through them.
+# gi.pcc_second_scene — a second scene's mirror reads its OWN sky cubemap while
+# another scene holds a probe grid, is torn down, is destroyed (lane
+# SKY-FALLBACK-1; the per-pass GI binding, PHOTON-SCENE-SWITCH-1).
 add_executable(test_gi_pcc_second_scene test_gi_pcc_second_scene.cpp)
 set_target_properties(test_gi_pcc_second_scene PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -511,12 +509,33 @@ add_test(NAME gi.pcc_second_scene COMMAND test_gi_pcc_second_scene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_second_scene PROPERTIES TIMEOUT 180 LABELS "engine")
 
+# gi.scene_switch — WHAT THE SHADER READS IS THE SCENE BEING DRAWN
+# (PHOTON-SCENE-SWITCH-1): two rooms, each with its own voxels, probe grid, field,
+# sun and caster, drawn through two offscreen views and a thumbnail-shaped one —
+# A's passes first, alternating frames, B's passes first, and A destroyed — and
+# every judged frame each mirror reads its own room and each floor is shadowed.
+add_executable(test_gi_scene_switch test_gi_scene_switch.cpp)
+set_target_properties(test_gi_scene_switch PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_scene_switch PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_scene_switch PRIVATE JahshakaEngine)
+add_dependencies(test_gi_scene_switch JahshakaEngineMedia)
+add_test(NAME gi.scene_switch COMMAND test_gi_scene_switch
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.scene_switch PROPERTIES TIMEOUT 300 LABELS "engine")
+
 # PHOTON'S CAMERA-CENTRED VOXEL CASCADES (SPECS/PHOTON_SPEC.md P0): the chain
 # builds and binds, a still camera re-voxelises nothing, a scroll re-centres one
 # cascade per frame, the ambient reaches every cascade (upstream's 2,2,2 room),
 # and a 1 km teleport is exactly N counted rebuilds with no black frame — the
 # case that lost the GPU three ways on upstream's incremental path.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_cascades test_gi_cascades.cpp)
 set_target_properties(test_gi_cascades PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -625,8 +644,8 @@ set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RUN
 # staleness is recorded and the whole grid is re-captured at the settle, one per
 # frame), a NON-motion input reaches the probes mid-drag anyway, and under a
 # cascade chain the moving light tick never writes a second, different answer
-# over the cascade the scheduler just rebuilt. RUN_SERIAL: the voxel lighting
-# binds process-wide and the suite counts captures per frame.
+# over the cascade the scheduler just rebuilt. RUN_SERIAL: the suite counts
+# captures per frame.
 add_executable(test_gi_drag_cadence test_gi_drag_cadence.cpp)
 set_target_properties(test_gi_drag_cadence PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -740,7 +759,7 @@ set_tests_properties(gi.cascade_determinism PROPERTIES
 # camera walks — in the same frame the cascade moved, bound throughout, and
 # converged by the end of that frame (the atlas describes another place until it
 # is). Before E1 the arm refused to build a field under a chain at all.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_field_follows test_gi_field_follows.cpp)
 set_target_properties(test_gi_field_follows PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -776,9 +795,41 @@ target_compile_definitions(test_gi_field_scroll PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_field_scroll PRIVATE JahshakaEngine)
 add_dependencies(test_gi_field_scroll JahshakaEngineMedia)
-add_test(NAME gi.field_scroll COMMAND test_gi_field_scroll
+# UNDER THE GPU-TIMING LOCK (POST-C-FIXES-1): its jump bar is the jump frame's GPU
+# work against the tier's 16.7 ms frame and its step-frame bars are GPU ratios -
+# numbers a sibling sharing the GPU moves (docs/TESTING_GATE.md section 4).
+jah_gpu_exclusive_test(NAME gi.field_scroll RUN_TIMEOUT 300 COMMAND test_gi_field_scroll
+                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_scroll PROPERTIES LABELS "engine" RUN_SERIAL ON)
+# gi.field_thin_wall — THE FIELD'S ESTIMATOR ON A ONE-VOXEL EMISSIVE WALL
+# (PHOTON-FIELD-ROTATE-1 part 1): a probe's reading of a one-voxel-thick
+# emissive wall at four probe spacings, three lateral offsets, against the
+# authored wall's analytic irradiance times what the directional coverage model
+# predicts the probe reads (PHOTON-VOXEL-3). Its own binary like every
+# GI suite; RUN_SERIAL like every cascade suite.
+add_executable(test_gi_field_thin_wall test_gi_field_thin_wall.cpp)
+set_target_properties(test_gi_field_thin_wall PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_field_thin_wall PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_field_thin_wall PRIVATE JahshakaEngine)
+add_dependencies(test_gi_field_thin_wall JahshakaEngineMedia)
+add_test(NAME gi.field_thin_wall COMMAND test_gi_field_thin_wall wall
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_scroll PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# gi.field_alias — ONE RAY THAT DOES NOT ALIAS (PHOTON-FIELD-ROTATE-1 part 2): the
+# same fixture and binary; the noise of one integration at 1 and 2 rays (rotated)
+# and at 1 ray static, the target sample count derived from it, convergence at
+# budget 1 and a field that stops at rest, 1 ray against 2 converged, and the cost
+# of one whole-field integration at 1 and 2 rays in one process.
+add_test(NAME gi.field_alias COMMAND test_gi_field_thin_wall alias
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and
@@ -807,7 +858,7 @@ set_tests_properties(gi.leak_room PROPERTIES TIMEOUT 600 LABELS "engine" RUN_SER
 # probe shadow node, never the voxels — so the 3rd casting lamp in a scene, or a
 # Shadow Quality change, costs the voxel arm (and, under Photon, the whole
 # cascade chain) exactly nothing.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_atlas_voxels test_gi_atlas_voxels.cpp)
 set_target_properties(test_gi_atlas_voxels PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -922,13 +973,13 @@ endif()
 
 # GI OFF AND BACK ON AT RUNTIME (lane PATCHES-1 / GI-REENABLE-1): every other GI
 # suite pushes its mode once, so the TRANSITION had no coverage at all — and it
-# is what a user drives (the World panel's dropdown, `world.setGi`, a scene
+# is what a user drives (the World panel's dropdown, `world.gi`, a scene
 # open). Two things here that no other suite does: it runs the hybrid with
 # MULTIPLE BOUNCES (numBounces = 2, i.e. the bounce-inject compute job actually
 # exists — ogre-patch 0057's subject), and it drains `takeLastError()` after
 # every push, so an arm that throws its way out of a build fails the suite
 # instead of rendering a dark picture quietly.
-# Its own binary for the same process-wide-binding reason as every GI suite.
+# Its own binary.
 add_executable(test_gi_reenable test_gi_reenable.cpp)
 set_target_properties(test_gi_reenable PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -950,7 +1001,7 @@ set_tests_properties(gi.reenable PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERI
 
 # gi.chain_face — PHOTON-E3 item 0 (ii): the chain-to-world face and the faces
 # inside the chain, under a REAL sky (audit B8). Its own binary like every GI
-# suite (the voxel lighting binds process-wide to HlmsPbs).
+# suite.
 add_executable(test_gi_chain_face test_gi_chain_face.cpp)
 set_target_properties(test_gi_chain_face PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -992,9 +1043,7 @@ set_tests_properties(gi.chain_face_target PROPERTIES
 # closed form cross-checked against a 512x512 quadrature of its own definition
 # inside the suite.
 #
-# ITS OWN BINARY AND PROCESS, like every GI suite: the voxel lighting and the
-# irradiance field bind process-wide to HlmsPbs, so this fixture cannot share a
-# process with gi.field_follows' room.
+# ITS OWN BINARY AND PROCESS, like every GI suite.
 #
 # LABEL `photon-target`. GREEN AFTER: VOXEL-CLIP-1 (phase A) for the source the
 # voxels hold and the field's integral in PHOTON P4 for the transport. The lane
@@ -1069,10 +1118,28 @@ add_test(NAME gi.stream_edit COMMAND test_gi_stream_edit
 set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
 
 # SURFACE-CACHE phase 2 (SURFACE-CACHE-1b) — the capture Component's gates.
-# THREE ctest names out of ONE binary, selected by argv: three different scenes
-# are needed and a GI arm binds process-wide state (sVctBindingOwner), so they
-# must not share a process — while the fixture scaffolding is the same in all
-# three. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
+# SEVEN ctest names (gi.card_lighting + _indirect: PHOTON-CARDS-1's lit card; gi.cone_integrator_parity, gi.card_read_parity: PHOTON-CARDS-2) out of ONE binary, selected by argv: five different scenes
+# are needed, one process each — while the fixture scaffolding is the same in
+# all five. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
+# PHOTON-CARDS-4: a mover's shadow on the cached surfaces (the mirror umbra vs the
+# raster, the slide at 0 frames' latency, rest costs nothing, a missed footprint
+# relights nothing, a still crate's move recaptured). `--cost` is not a row.
+add_executable(test_gi_cards_mover test_gi_cards_mover.cpp)
+set_target_properties(test_gi_cards_mover PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cards_mover PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cards_mover PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cards_mover JahshakaEngineMedia)
+add_test(NAME gi.cards_mover_shadow COMMAND test_gi_cards_mover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cards_mover_shadow PROPERTIES TIMEOUT 300 LABELS "engine")
+
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1094,6 +1161,53 @@ set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 300 LABELS "engine" RUN_S
 add_test(NAME gi.card_budget COMMAND test_gi_cards budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.card_lighting COMMAND test_gi_cards lighting
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_lighting PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.card_lighting_indirect COMMAND test_gi_cards lighting_indirect
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 300 LABELS "engine")
+# CLOUDS-2D-2: the card relight's direct sun crosses the 2D cloud sheet by the
+# pixel's own factor (half at shadow 0.5 under an opaque deck, none at 1).
+add_test(NAME gi.card_clouds COMMAND test_gi_cards clouds
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_clouds PROPERTIES TIMEOUT 300 LABELS "engine")
+# gi.card_blend (PHOTON-GATHER-1d fix round): a Blend material on a card subject renders, holds no card.
+add_test(NAME gi.card_blend COMMAND test_gi_cards blend
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_blend PROPERTIES TIMEOUT 300 LABELS "engine")
+# PHOTON-CARDS-5: a card read from a direction is the pixel seen from it — the
+# ray job's card read vs the float raster, head-on and grazing, per term (sun,
+# lamp x3, spot x2, ambient), GI off and on (Medium, High at the Epic trace).
+add_test(NAME gi.card_view COMMAND test_gi_cards view
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_view PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and the audit's F3: a capture batch past the relight budget is relit in its
+# own frame (the read never meets the capture's alpha = the world -Z direction).
+add_test(NAME gi.card_view_batch COMMAND test_gi_cards view_batch
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_view_batch PROPERTIES TIMEOUT 300 LABELS "engine")
+# PHOTON-CARDS-2 part A: the pixel's diffuse cones and the card job's are ONE
+# text (JahVoxelCones) — their answers at a point, 1 % apart at most.
+add_test(NAME gi.cone_integrator_parity COMMAND test_gi_cards cone_parity
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_integrator_parity PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...THE OFF-AXIS WALL, A TARGET (HDR-READBACK-1, 2026-09-24): read in float the
+# wall turned 30 degrees shows the card 1.64 % / 2.06 % below the pixel at two of
+# its six points (two R11G11B10F steps, and the card below the pixel at every
+# sample of both walls) — the 8-bit readback's half-code term (0.00196, ~2 % of
+# these values) hid it. LABEL `photon-target`: it runs, prints `target:` and
+# does not decide a gate; the lane that makes the card's off-axis cone frame
+# agree with the pixel's deletes the label.
+add_test(NAME gi.cone_integrator_parity_offaxis COMMAND test_gi_cards cone_parity_offaxis
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cone_integrator_parity_offaxis PROPERTIES TIMEOUT 300
+                     LABELS "engine;photon-target")
+# PHOTON-CARDS-2 part B: a reflection ray's hit reads the surface cache first
+# (jah_rq_card.glsl); the GLSL pick = SurfaceCache::readAt's for 1,000 hits.
+add_test(NAME gi.card_read_parity COMMAND test_gi_cards read_parity
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_read_parity PROPERTIES TIMEOUT 300 LABELS "engine")
 
 # SURFACE-CACHE-1b's MEASUREMENT ARM — a TOOL, not a suite (no add_test): the
 # numbers in the lane's report are taken by code that is read, and re-taking
@@ -1238,6 +1352,15 @@ add_dependencies(test_gi_gather_reference JahshakaEngineMedia)
 add_test(NAME gi.gather_reference COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_reference PROPERTIES TIMEOUT 900 LABELS "engine")
+# ...and the brief's 1.00 +- 0.05 at every point against the COMPLETE closed form —
+# a TARGET row (photon-target: prints, does not gate). The residual that survives
+# the complete form (-5 % past 3.6 m) is the hits' voxel read, named by exclusion
+# in the suite; GA-1e's card read is predicted to close it.
+add_test(NAME gi.gather_reference_target COMMAND test_gi_gather_reference
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_reference_target PROPERTIES
+                     TIMEOUT 900 LABELS "engine;photon-target"
+                     ENVIRONMENT "JAH_GATHER_REFERENCE_TARGET=1")
 
 # ...and the TRACE's own bar, in R5's form: a probe a metre from a lit red wall
 # reads at least 0.6 of that wall's albedo times its lighting, in the wall's
@@ -1248,6 +1371,59 @@ set_tests_properties(gi.gather_trace PROPERTIES
                      TIMEOUT 600 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_TRACE=1")
 
+# gi.voxel_coverage — THE STORE HOLDS A SURFACE'S PROJECTED AREA PER AXIS
+# (PHOTON-VOXEL-3): an open emissive quad and a closed box one and four cascade-0
+# cells thick, turned 0/15/45 degrees against the lattice, and a quad at opacity
+# 0.5, read out of the store whole (giVoxelVolume) — the store equal to the CPU
+# model of tests/support/voxelcoveragemodel.h along every axis, an open surface's
+# integral equal to the authored one, the reader's mip-0 march over the store
+# against the same march over the model (face-on flux, the opacity along the
+# normal and along the plane), a thin wall opaque along its normal, a
+# half-transparent surface half its opaque self.
+add_executable(test_gi_voxel_coverage test_gi_voxel_coverage.cpp)
+set_target_properties(test_gi_voxel_coverage PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_voxel_coverage PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_voxel_coverage PRIVATE JahshakaEngine)
+add_dependencies(test_gi_voxel_coverage JahshakaEngineMedia)
+add_test(NAME gi.voxel_coverage COMMAND test_gi_voxel_coverage
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
+# (tests/support/voxel_lab.h) over analytic stores - gi.ddgi_ambient's sealed shell per
+# surface class and its open scene per cone set, on the cone-trace reference and the
+# hemisphere's truth. No engine, no GPU: the record the reader's rules were chosen on,
+# every candidate the lab measured beside the shipped reader. `validate DIR` reads the
+# stores a suite dumped (JAH_VOXEL_DUMP, tests/support/voxeldump.h).
+add_executable(test_gi_voxel_lab test_gi_voxel_lab.cpp)
+set_target_properties(test_gi_voxel_lab PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+add_test(NAME gi.voxel_lab COMMAND test_gi_voxel_lab
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.voxel_lab PROPERTIES TIMEOUT 120 LABELS "engine")
+# VOXEL-DIAL (PHOTON-VOXEL-4) — a TOOL, not a suite: the scene-fitted volume's
+# resolution (GiParams::testVoxelResolution) against its rebuild, injection and
+# frame cost, paired 32 / 64 in one process. Run under scripts/gpu-exclusive.sh.
+add_executable(voxel_dial_measure EXCLUDE_FROM_ALL voxel_dial_measure.cpp)
+set_target_properties(voxel_dial_measure PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(voxel_dial_measure PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(voxel_dial_measure PRIVATE JahshakaEngine)
+add_dependencies(voxel_dial_measure JahshakaEngineMedia)
 # gi.voxel_emissive — AN EMITTER AUTHORED AT RADIANCE L IS STORED AS L (PHOTON
 # phase A, SPECS/photon/A2_VOXEL_CLIP_DESIGN.md section 2; lane VOXEL-CLIP-1,
 # ogre-patch 0087). The emissive VOXEL store was RGBA8_UNORM, so every emitter
@@ -1320,13 +1496,61 @@ add_dependencies(test_gi_env_cone JahshakaEngineMedia)
 add_test(NAME gi.env_cone COMMAND test_gi_env_cone
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_cone PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
+# THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
+# perfect mirror against its raster from the reflected camera.
+add_executable(test_gi_hit_voxel test_gi_hit_voxel.cpp)
+set_target_properties(test_gi_hit_voxel PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_hit_voxel PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_hit_voxel PRIVATE JahshakaEngine)
+add_dependencies(test_gi_hit_voxel JahshakaEngineMedia)
+add_test(NAME gi.hit_voxel COMMAND test_gi_hit_voxel
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_voxel PROPERTIES TIMEOUT 300 LABELS "engine")
+# VOXEL-LEAK-TRACE (PHOTON-VOXEL-5 item (iii)) — a TOOL, not a suite: gi.gather's leak room,
+# the pixel's four cones from the -Z wall's inner face by the engine's own reader, per cone
+# colour / alpha / cascade, lamp on and off, and the store dumped (JAH_VOXEL_DUMP).
+add_executable(voxel_leak_trace EXCLUDE_FROM_ALL voxel_leak_trace.cpp)
+set_target_properties(voxel_leak_trace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(voxel_leak_trace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(voxel_leak_trace PRIVATE JahshakaEngine)
+add_dependencies(voxel_leak_trace JahshakaEngineMedia)
+
+# voxel_store_room_trace — a TOOL (PHOTON-VOXEL-5 item (ii)): scripting.e2e.gi_voxel_store's room -
+# the cascade-0 voxels holding a face that looks into the room whose direct light is zero.
+add_executable(voxel_store_room_trace EXCLUDE_FROM_ALL voxel_store_room_trace.cpp)
+set_target_properties(voxel_store_room_trace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(voxel_store_room_trace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(voxel_store_room_trace PRIVATE JahshakaEngine)
+add_dependencies(voxel_store_room_trace JahshakaEngineMedia)
 
 # gi.env_one — ONE ENVIRONMENT, FOUR READERS, ONE NUMBER (PHOTON-ENV-1): a matte
 # box under a uniform sky reads rho L energyFactor(1) outside any volume, through
 # the voxel cones' escape, through the irradiance field and through the gather's
 # ray misses; no Sky Light is no environment for any of them; the SH lookup is
 # camera-independent; a sun disc in the probes reaches neither the SH nor the
-# cube. Its own binary: the field and the voxel lighting bind process-wide.
+# cube. Its own binary.
 add_executable(test_gi_env_one test_gi_env_one.cpp)
 set_target_properties(test_gi_env_one PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1342,3 +1566,230 @@ add_dependencies(test_gi_env_one JahshakaEngineMedia)
 add_test(NAME gi.env_one COMMAND test_gi_env_one
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+
+# ---------------------------------------------------------------------------
+# THE GATHER'S FOUR CORRECTNESS FINDINGS (PHOTON-GATHER-1b item 1; C2 design
+# section 1.1) — one binary, the mode on the command line: GA-GLASS (a blended
+# fragment reads no probe irradiance), GA-NEST (the registration is the PASS's,
+# not the scene's), GA-SKY (ONE-ENV's miss: the open floor's probe irradiance is
+# the disc-free sky's SH irradiance), gi.gather_plane_weight (the gather's plane
+# weight at a 2 cm fence's edge, its leak printed; the field's own crushed-cage
+# guard is unreachable while the gather runs — the suite's header says why).
+add_executable(test_gi_gather_findings test_gi_gather_findings.cpp)
+set_target_properties(test_gi_gather_findings PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_findings PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_findings PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_findings JahshakaEngineMedia)
+# ...and gi.gather_letterbox (PHOTON-GATHER-1d): the gather's eye basis
+# expanded to the target under a constrained-aspect camera (the shared helper);
+# gi.gather_edge (the fix round, GA-EDGE): a silhouette pixel belongs to its surface.
+foreach(_finding glass nest sky plane_weight letterbox edge)
+    add_test(NAME gi.gather_${_finding} COMMAND test_gi_gather_findings ${_finding}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_finding} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
+
+# THE GATHER'S PHASE-2 ACCEPTANCE (PHOTON-GATHER-1b item 5; C2 design section
+# 1.4): gi.gather_plane (no bounce crosses a plane edge; the floor two strides
+# out at the closed form) and gi.gather_deterministic (three cold 60-frame
+# stills, the probeIrradiance readback byte-identical).
+add_executable(test_gi_gather_phase2 test_gi_gather_phase2.cpp)
+set_target_properties(test_gi_gather_phase2 PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_phase2 PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_phase2 PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_phase2 JahshakaEngineMedia)
+# ...and gi.gather_cards (PHOTON-GATHER-1d, GA-1e): the hit lit from the card —
+# the plane fixture on carded meshes, the voxel / card / ungated arms paired.
+foreach(_arm plane deterministic cards)
+    add_test(NAME gi.gather_${_arm} COMMAND test_gi_gather_phase2 ${_arm}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
+# THE GATHER'S HISTORIES (PHOTON-GATHER-1c; C2 design section 2): gi.gather_stable
+# (a still Showroom-2-shaped room moves < 2/255 frame to frame after the warm-up,
+# and the JAHSHAKA_GATHER_NO_TEMPORAL arm in the same process shows the history is
+# what stills it) and gi.gather_motion (a truck and a yaw against the frames they
+# settle to, gi.reflect_motion's method).
+add_executable(test_gi_gather_temporal test_gi_gather_temporal.cpp)
+set_target_properties(test_gi_gather_temporal PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_gather_temporal PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_gather_temporal PRIVATE JahshakaEngine)
+add_dependencies(test_gi_gather_temporal JahshakaEngineMedia)
+foreach(_arm stable motion)
+    add_test(NAME gi.gather_${_arm} COMMAND test_gi_gather_temporal ${_arm}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
+endforeach()
+
+# ...and the plane fixture's COMPLETE closed form at the brief's 5 % — a TARGET
+# row (label photon-target: it runs in every scoped selection, prints its value
+# and does not decide a gate). What survives the complete form (-11 % at two
+# strides) is the hits' voxel read, named by exclusion in the suite; the card
+# read at the hit (GA-1e) is predicted to close it.
+add_test(NAME gi.gather_plane_target COMMAND test_gi_gather_phase2 plane --target
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.gather_plane_target PROPERTIES TIMEOUT 600
+                     LABELS "engine;photon-target")
+
+# gi.settle_partial — THE OWED SETTLE INJECTS ONLY THE STALE CASCADES
+# (PHOTON-GATHER-1b item 6; WRITER-1's debt, audit F5): a cascade re-voxelised in
+# the frame of an at-rest tick owes the cascades INSIDE it (k, ..., 0), not the
+# chain's whole sweep — and the partial settle is the whole sweep's fixed point
+# (light voxels byte-identical, picture 0/255). Counted on the render monitor's
+# `vct.light.settle` rows.
+add_executable(test_gi_settle_partial test_gi_settle_partial.cpp)
+set_target_properties(test_gi_settle_partial PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_settle_partial PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_settle_partial PRIVATE JahshakaEngine)
+add_dependencies(test_gi_settle_partial JahshakaEngineMedia)
+add_test(NAME gi.settle_partial COMMAND test_gi_settle_partial
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.settle_partial PROPERTIES TIMEOUT 600 LABELS "engine")
+
+# gi.sun_contact — HARD SUN CONTACT SHADOWS (PHOTON P5, RY-R3; PHOTON-RAYS-1)
+#
+# A crate on a floor under a 15-degree sun: the shadow map's contact leak is
+# measured (and must exist), then closed to one texel of the ray job at full and
+# at half resolution; the shadow beyond the 2 m range is the map's, unchanged;
+# the sunlit floor is untouched (no acne). The no-rays row renders the row-on
+# picture byte for byte as the row-off one. `test_gi_sun_contact --cost` is the
+# paired-arm cost measurement (by hand, under scripts/gpu-exclusive.sh).
+add_executable(test_gi_sun_contact test_gi_sun_contact.cpp)
+set_target_properties(test_gi_sun_contact PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_sun_contact PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_sun_contact PRIVATE JahshakaEngine)
+add_dependencies(test_gi_sun_contact JahshakaEngineMedia)
+add_test(NAME gi.sun_contact COMMAND test_gi_sun_contact
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.sun_contact_norays COMMAND test_gi_sun_contact
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+# ...and the CURVED casters as the process's SECOND scene, drawn beside the
+# board's (PHOTON-SCENE-SWITCH-1 — they used to need a process of their own, and
+# the cause was the mixed shadow-VAO list, not the second scene): a sphere
+# lattice with a three-level chain at 25.5 m under a 10-degree sun — the map
+# shadows every foot's contact and has no acne, the ray has none either at full
+# and half resolution, and a glass pane over the contact keeps the map's answer.
+add_test(NAME gi.sun_contact_both COMMAND test_gi_sun_contact --both
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_both PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and THE GAP THE MAP LEAVES BY CONSTRUCTION (PHOTON-SCENE-SWITCH-2): a 1 m
+# board 2 cm thick on 5 cm legs under a 10-degree sun with a 1024 px atlas — the
+# receiver's normal-offset lift (>= 0.136 m) exceeds the board's 0.07 m top, so the
+# map shadows none of the board's shadow; the contact ray closes all of it. The
+# no-rays row: row on == row off, byte for byte.
+add_test(NAME gi.sun_contact_legs COMMAND test_gi_sun_contact --legs
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_legs PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.sun_contact_legs_norays COMMAND test_gi_sun_contact --legs
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sun_contact_legs_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
+# gi.hit_shade — A RAY HIT IS A PIXEL OF A SECOND VISIBILITY BUFFER
+# (PHOTON-HIT-SHADE-1; SPECS/atom/D2_HIT_SHADING_DESIGN.md)
+#
+# A hit no cache can shade (a mover, a rigged item, a static hit neither card
+# nor cascade answers, the gather's far copies) is appended to the hit list and
+# shaded by HlmsAtom's decode: (a) a MOVER crate's reflection in a perfect
+# mirror covers the static control's fraction of its silhouette in its raster
+# colour; (b) the gather's bounce off a MOVER emitter meets the closed form;
+# (d) a hit outside the frustum takes no clustered light; (e) the sun at a hit is
+# the shadow ray. The rigged arm (c) is gi.skin_rays_mirror's.
+# `test_gi_hit_shade --cost` is the paired-arm cost measurement (by hand, under
+# scripts/gpu-exclusive.sh).
+add_executable(test_gi_hit_shade test_gi_hit_shade.cpp)
+set_target_properties(test_gi_hit_shade PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_hit_shade PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_hit_shade PRIVATE JahshakaEngine)
+add_dependencies(test_gi_hit_shade JahshakaEngineMedia)
+add_test(NAME gi.hit_shade COMMAND test_gi_hit_shade
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 600 LABELS "engine")
+
+# gi.skin_rays — THE GPU SKIN CACHE AND THE SKINNED BLAS (PHOTON P5, RY-R4;
+# PHOTON-SKIN-1)
+#
+# A two-bone column bent by a clip: rays down meet the POSED arm (analytic to a
+# millimetre) one frame after the pose push, never the bind pose; still frames
+# and a walk re-skin nothing; a contact ray (the sun-contact job's mask and
+# range) is occluded by the posed arm; the GPU scene names the row override; a
+# removed character gives its cache back. `--mirror` is the reflection against
+# the raster; the no-rays row asserts nothing of the tier exists.
+# `test_gi_skin_rays --cost [--chars N --rings R]` is the paired-arm cost
+# measurement (by hand, under scripts/gpu-exclusive.sh).
+add_executable(test_gi_skin_rays test_gi_skin_rays.cpp)
+set_target_properties(test_gi_skin_rays PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_skin_rays PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_skin_rays PRIVATE JahshakaEngine)
+add_dependencies(test_gi_skin_rays JahshakaEngineMedia)
+add_test(NAME gi.skin_rays COMMAND test_gi_skin_rays
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.skin_rays PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and THE MIRROR, its own process: the rigged column bent by its clip, a
+# static control and a static MOVER, each reflected in a perfect mirror against
+# its raster through the reflected camera. Asserted: no T-pose ghost, the static
+# baseline within 3 px, and the rigged and the MOVER arms SHADED over at least the
+# control's fraction of their silhouettes (the hit decode, PHOTON-HIT-SHADE-1 —
+# gi.hit_shade's arm (c)).
+add_test(NAME gi.skin_rays_mirror COMMAND test_gi_skin_rays --mirror
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.skin_rays_mirror PROPERTIES TIMEOUT 300 LABELS "engine")
+add_test(NAME gi.skin_rays_norays COMMAND test_gi_skin_rays
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.skin_rays_norays PROPERTIES
+                     TIMEOUT 300 LABELS "engine"
+                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")

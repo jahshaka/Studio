@@ -255,7 +255,9 @@ int main(int argc, char **argv)
                                   QStringLiteral("cascadesAwaitingCamera"),
                                   QStringLiteral("cascadeFullRebuilds"),
                                   QStringLiteral("cascadeDeferrals"),
-                                  QStringLiteral("cascadeDirtyMajority") };
+                                  QStringLiteral("cascadeDirtyMajority"),
+                                  QStringLiteral("cardsCapture"), QStringLiteral("cardsResident"),
+                                  QStringLiteral("cardsMovers") };
         QStringList missing;
         for (const QString &k : giKeys)
             if (!gi.contains(k)) missing << k;

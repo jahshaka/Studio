@@ -18,9 +18,9 @@
 // horizon band and a dim floor half — carrying three soft-edged rectangular
 // SOFTBOXES placed high-left, high-right and overhead-behind, written into the
 // preview document as an equirect sky. The sky IS the lighting: its
-// cosine-convolved integral is the diffuse term (pushed through
-// Scene::setAmbientSh, the same nine bands a real sky pushes) and the engine's
-// own capture of it is the specular one, so a chrome sphere reflects softboxes
+// cosine-convolved integral is the diffuse term (formed by the engine from its
+// own capture, exactly as for a real sky) and the prefiltered capture is the
+// specular one, so a chrome sphere reflects softboxes
 // with shape and a matte one reads with real direction. There are NO light
 // nodes left in either preview document.
 //
@@ -87,9 +87,10 @@ void viewDirection(float out[3]);
 /// Integrated once from the image's own texels.
 const float *ambientSh();
 
-/// Pushes both halves of the environment light into an engine Scene: the
-/// diffuse nine bands and the specular gain. The sky itself travels the
-/// ordinary way (SceneMirror::applySky).
+/// Pushes the environment light's gain (1) into an engine Scene; the engine
+/// forms the diffuse nine bands from the sky it captured (Engine.h,
+/// setEnvironmentLight). The sky itself travels the ordinary way
+/// (SceneMirror::applySky).
 void pushAmbient(jahshaka::engine::Scene *scene);
 
 /// THE PREVIEW'S EXPOSURE, in STOPS (iris::Scene::exposure's unit), DERIVED:

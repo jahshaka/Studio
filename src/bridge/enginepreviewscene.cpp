@@ -133,6 +133,9 @@ QImage EnginePreviewScene::renderOffscreen(const char *tag, int width, int heigh
     View *shot = engine->createOffscreenView(uniqueName(tag, this) + "-" + std::to_string(++mShotSerial),
                                              unsigned(width), unsigned(height), background);
     if (!shot) return QImage();
+    // A STORED SNAPSHOT: a still picture (View::setOffscreenContract) — it
+    // gathers where the preview's scene does and settles below.
+    shot->setOffscreenContract(OffscreenContract::StillPicture);
     // Nothing attached yet (the widget was never shown): the shot View is the
     // FIRST View, which is what lets the Scene be created (ORDER MATTERS).
     const bool temporary = !mScene;
@@ -149,6 +152,7 @@ QImage EnginePreviewScene::renderOffscreen(const char *tag, int width, int heigh
     // The editor does not pay for a preview snapshot (fps audit F5) — see
     // bridge/offscreenrenderscope.h.
     OffscreenRenderScope quiet(engine.get());
+    settleStillPicture(engine.get(), mScene);
     // Two frames, plus whatever the texture load-request counter still owes
     // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
     renderStableFrames(engine.get());

@@ -129,7 +129,6 @@ ALLOWED = [
      'a statement about the file, answered by markRolesFromFile'),
 
     # --- empty strings: absence, not a value ---------------------------------
-    ('processObj["name"].toString("")', 'an absent name is the empty string'),
     ('sceneNode->name = nodeObj["name"].toString("")',
      'an absent name is the empty string'),
     ('QString source = nodeObj["mesh"].toString("")',

@@ -37,7 +37,7 @@ set_target_properties(test_engine_material_preview PROPERTIES AUTOMOC ON AUTOUIC
 target_include_directories(test_engine_material_preview PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
    ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_engine_material_preview PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_engine_material_preview PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_material_preview PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
     Qt6::Widgets Qt6::Sql Qt6::Concurrent)

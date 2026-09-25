@@ -88,6 +88,24 @@ QString taggedPath(const QString &outPng, const QString &tag)
            + (suffix.isEmpty() ? QStringLiteral("png") : suffix);
 }
 
+/// THE SHOT WAITS FOR THE GATHER'S SETTLED HISTORY (PHOTON-GATHER-1d). A shot is
+/// its own offscreen view, and where the screen-probe gather runs that view has a
+/// pixel history of its own that starts young — a two-frame shot would photograph
+/// the raw estimate. So, exactly where the gather runs, the shot settles through
+/// its own view until GiStatus::giAtRest (whose fourth term is that history) holds,
+/// as editor.screenshot does. Where it does not run nothing is rendered and the
+/// shot is the one it always was — which is what keeps the gather-off arm's four
+/// lines byte-identical to the pre-gather picture.
+void settleShotIfGathering(MainWindow &window)
+{
+    ScriptEngine *host = window.scripting();
+    if (!host) return;
+    const ScriptResult r =
+        host->evaluate(QStringLiteral("world.giStatus().gather.running === true"),
+                       QStringLiteral("selftest-gather-running"), true, 0, ScriptRunPolicy::Off);
+    if (r.ok && r.value.toBool()) window.viewport()->settleGiBeforeNextScreenshot(2000);
+}
+
 // ---------------------------------------------------------------------------
 // POSE PAIR B — A FENCE THAT CAN SEE LIGHTING (PHOTON phase A, A1 section 1.1;
 // lane FENCE-1)
@@ -252,6 +270,46 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     std::fprintf(stderr, "engine-selftest: default scene: %d nodes, ground %d vertices\n",
                  countNodes(scene->getRootNode()) - 1, groundMesh->numVerts);
 
+    // THE SUN CONTACT ARM (PHOTON-RAYS-1): `JAHSHAKA_SELFTEST_SUN_CONTACT` turns
+    // world.sunContact on for the default scene and for fixture B, so the four
+    // hash lines of the row ON can be quoted beside the shipped (off) four. A
+    // MEASUREMENT switch, not a mode: read here and nowhere else, and without
+    // it this function runs exactly the verbs it always ran.
+    const bool sunContactArm = qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_SUN_CONTACT");
+    if (sunContactArm) {
+        ScriptEngine *armHost = window.scripting();
+        const ScriptResult r = armHost
+            ? armHost->evaluate(QStringLiteral("world.sunContact({enabled:true}).enabled ? 'ok' : "
+                                               "(function(){ throw new Error('refused'); })()"),
+                                QStringLiteral("selftest-sun-contact"), true, 0, ScriptRunPolicy::Off)
+            : ScriptResult();
+        if (!armHost || !r.ok) {
+            std::fprintf(stderr, "engine-selftest: the sun contact arm could not turn the row on\n");
+            return 1;
+        }
+        std::fprintf(stderr, "engine-selftest: SUN CONTACT ARM - world.sunContact is ON\n");
+    }
+
+    // THE GATHER-OFF ARM (PHOTON-GATHER-1d): `JAHSHAKA_SELFTEST_GATHER_OFF` pins
+    // world.gi({gather:false}) on the default scene and on fixture B — the A/B the
+    // gather's default-on is quoted against: with it, the four hash lines are the
+    // pre-gather picture byte for byte. A MEASUREMENT switch, the sun contact
+    // arm's shape: read here and nowhere else.
+    const bool gatherOffArm = qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_GATHER_OFF");
+    if (gatherOffArm) {
+        ScriptEngine *armHost = window.scripting();
+        const ScriptResult r = armHost
+            ? armHost->evaluate(QStringLiteral("world.gi({ gather: false }) ? 'ok' : "
+                                               "(function(){ throw new Error('refused'); })()"),
+                                QStringLiteral("selftest-gather-off"), true, 0, ScriptRunPolicy::Off)
+            : ScriptResult();
+        if (!armHost || !r.ok) {
+            std::fprintf(stderr, "engine-selftest: the gather-off arm could not pin the row off\n");
+            return 1;
+        }
+        std::fprintf(stderr, "engine-selftest: GATHER-OFF ARM - world.gi({gather:false})\n");
+    }
+
     // Pump the render loop for ~30 frames (the driver ticks every 16 ms).
     QElapsedTimer clock;
     clock.start();
@@ -320,6 +378,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                  widgetAfterSecond.width(), widgetAfterSecond.height());
 #endif
 
+    settleShotIfGathering(window);
     QImage img = window.viewport()->takeScreenshot(256, 256);
     if (img.isNull()) {
         std::fprintf(stderr, "engine-selftest: takeScreenshot returned a null image after %lld ms\n",
@@ -388,7 +447,23 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         return 1;
     }
     window.viewport()->renderFrames(240, 1.0f / 60.0f);
+    // ...AND UNTIL GI IS AT REST (PHOTON-FIELD-ROTATE-1): the 240 frames move the
+    // document; the ONE settle predicate then decides when the picture has stopped
+    // moving - the cascade steps, the chain's settle and the irradiance field's
+    // refinement passes all paid. At dt 0, so the document's clock stays where
+    // the 240 frames left it. (Pose 2 used to be captured at a fixed frame count
+    // with a 23-40 frame margin over the field's convergence - determinism by
+    // luck, not by construction.)
+    int restFrames = 0;
+    for (; restFrames < 4000 && !window.viewport()->giStatus().giAtRest; ++restFrames)
+        window.viewport()->renderFrames(1, 0.0f);
+    if (!window.viewport()->giStatus().giAtRest) {
+        std::fprintf(stderr, "engine-selftest: pose 2's GI never came to rest (%d frames)\n",
+                     restFrames);
+        return 1;
+    }
     app.processEvents();
+    settleShotIfGathering(window);
     QImage img2 = window.viewport()->takeScreenshot(256, 256);
     if (img2.isNull() || !img2.save(pose2Png, "PNG")) {
         std::fprintf(stderr, "engine-selftest: could not take or save the second pose (%s)\n",
@@ -400,7 +475,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     const QString hash2 = fileSha256(pose2Png);
     std::fprintf(stderr, "engine-selftest: pose 2 sha256 %s (%s)\n",
                  qPrintable(hash2), qPrintable(pose2Png));
-    std::fprintf(stderr, "engine-selftest: pose 2 (camera +5 m in x, turned, 240 frames settled): "
+    std::fprintf(stderr, "engine-selftest: pose 2 (camera +5 m in x, turned, 240 frames + GI at rest): "
                          "%dx%d image, centre pixel (%d,%d,%d) -> %s\n",
                  img2.width(), img2.height(), centre2.red(), centre2.green(), centre2.blue(),
                  differs2 ? "PASS" : "FAIL");
@@ -453,7 +528,14 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                  window.viewport()->renderTargetSize().width(),
                  window.viewport()->renderTargetSize().height());
 
-    if (!runFixtureStep(kFixtureBScript, "build + settle")) return 1;
+    // The arm's row, set before the fixture's 300 settling frames so B1/B2 are
+    // taken after the same frame count as the shipped pair.
+    QByteArray fixtureB(kFixtureBScript);
+    if (sunContactArm)
+        fixtureB.replace("editor.frame(300);", "world.sunContact({ enabled: true });\neditor.frame(300);");
+    if (gatherOffArm)
+        fixtureB.replace("editor.frame(300);", "world.gi({ gather: false });\neditor.frame(300);");
+    if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
     app.processEvents();
 
     // THE GRADE IS PART OF THE FENCE, and this is the one thing about fixture B
@@ -477,6 +559,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // which is a temporal filter's state, and a fence may not depend on one.
     // Viewport is deterministic by construction (`resetExposureHistory`).
     const QString b1Png = taggedPath(outPng, QStringLiteral("B1"));
+    settleShotIfGathering(window);
     QImage imgB1 = window.viewport()->takeScreenshot(256, 256,
                                                      IEditorViewport::ScreenshotGrade::Viewport);
     if (imgB1.isNull() || !imgB1.save(b1Png, "PNG")) {
@@ -492,6 +575,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     app.processEvents();
 
     const QString b2Png = taggedPath(outPng, QStringLiteral("B2"));
+    settleShotIfGathering(window);
     QImage imgB2 = window.viewport()->takeScreenshot(256, 256,
                                                      IEditorViewport::ScreenshotGrade::Viewport);
     if (imgB2.isNull() || !imgB2.save(b2Png, "PNG")) {

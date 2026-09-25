@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/services.h"
 #include "ui/pages/projectmanager.h"
+#include <QPointer>
 #include "services/projectarchiver.h"
 #include "services/sceneextents.h"
 #include "viewport/ieditorviewport.h"
@@ -39,7 +40,9 @@ QVector<VerbInfo> ProjectApi::verbs() const
     return {
         { "create", "project.create(name, {empty, location}) -> guid",
           "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
-          "opens it in the editor. INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
+          "opens it in the editor. The scene is in the row when this returns; the row's THUMBNAIL is encoded "
+          "on a worker and lands ~100 ms later (the same holds for the world a create closes; project.save "
+          "writes its thumbnail synchronously). INSIDE A SCRIPT this ends the run's undo entry first: everything the run "
           "did up to here becomes one undo step of the project being left, whose stack is then cleared with "
           "it, and the rest of the run records into a fresh entry in the new project.\n\n"
           "`empty: true` gives a BLANK WORLD instead of the default template. The template is a ground, the "
@@ -178,7 +181,7 @@ QVector<VerbInfo> ProjectApi::verbs() const
           Needs::Document },
         { "importArchive", "project.importArchive(path) -> {guid, name, assets, objects}",
           "Imports a project archive as a NEW project: rows, objects ingested CAS-first, fresh pins. "
-          "Does not open it.",
+          "Does not open it; its tile is on the Desktop when this returns (the grid is rebuilt).",
           Needs::Document },
         { "exportArchiveAsync", "project.exportArchiveAsync(path) -> bool",
           "Exports the open project as an archive WITHOUT blocking the UI thread: the catalog reads happen "
@@ -249,8 +252,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // ProjectService's; MainWindow::newProject then builds the default scene
     // and saves it, so the row never carries the empty scene blob (the crash
     // window the census flagged).
-    QString why;
-    const QString guid = host.services->project->createProjectShell(name, location, &why);
+    QString why, folder;
+    const QString guid = host.services->project->createProjectShell(name, location, &why, &folder);
     if (guid.isEmpty()) {
         // THE SERVICE'S OWN REASON, by name: "the location '/nope' does not
         // exist" is the answer a caller can act on, and it is the same
@@ -265,8 +268,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
     // stack, and that clear is a no-op while the run's macro is open.
     host.endRunUndoMacro();
-    if (async) host.mainWindow->newProjectAsync(name.trimmed(), host.project->getProjectFolder(), empty);
-    else       host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder(), empty);
+    if (async) host.mainWindow->newProjectAsync(guid, name.trimmed(), folder, empty);
+    else       host.mainWindow->newProject(guid, name.trimmed(), folder, empty);
     host.beginRunUndoMacro();
     return guid;
 }
@@ -506,6 +509,8 @@ bool ProjectApi::rename(const QString &guid, const QString &newName)
         return fail(QStringLiteral("project.rename: no project with guid '%1'").arg(guid));
     if (host.project->getProjectGuid() == guid)
         host.project->setProjectPath(host.project->getProjectFolder(), newName.trimmed());
+    // The caption follows (the Desktop used to learn it at its next rebuild).
+    if (host.projectManager) host.projectManager->renameTile(guid, newName.trimmed());
     return true;
 }
 
@@ -558,7 +563,8 @@ bool ProjectApi::moveToDesktop(const QString &guid, int desktop)
     if (desktop < 1 || desktop > 4) return fail("project.moveToDesktop: desktop must be 1-4");
     if (!host.db->updateProjectDesktop(guid, desktop))
         return fail(QStringLiteral("project.moveToDesktop: no project with guid '%1'").arg(guid));
-    if (host.projectManager) host.projectManager->populateDesktop(true);
+    // ONE TILE MOVES (CREATE-GAP-1): off this desktop's grid, or onto it.
+    if (host.projectManager) host.projectManager->moveTile(guid, desktop);
     return true;
 }
 
@@ -582,7 +588,11 @@ QVariantMap ProjectApi::exportWeb(const QString &dir)
     if (outDir.isEmpty())
         outDir = QDir(host.project->getProjectFolder()).filePath(QStringLiteral("exports/web"));
 
-    const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir);
+    // The live renderer, when there is one, bakes the sky's cloud layer into
+    // the exported sky image (CLOUDS-2D-1); headless exports go without it.
+    jahshaka::engine::Scene *renderer =
+        (host.isEngineReady() && host.viewport) ? host.viewport->engineScene() : nullptr;
+    const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir, renderer);
     if (!r.ok) { fail(QStringLiteral("project.exportWeb: %1").arg(r.error)); return out; }
 
     out["dir"] = r.dir;
@@ -768,6 +778,18 @@ bool ProjectApi::importArchiveAsync(const QString &path)
     ProjectArchiver *&a = sessionArchiver();
     if (a && a->isRunning()) return fail("project.importArchiveAsync: an archive operation is already running");
     if (!a) a = new ProjectArchiver(host.db, host.project);
+    // THE IMPORTED PROJECT IS A TILE when it lands (CREATE-GAP-1) — the
+    // Desktop no longer rebuilds on entry to find it. One connection per
+    // session archiver, made with the import that needs it.
+    if (host.projectManager && !a->property("jahTileHook").toBool()) {
+        a->setProperty("jahTileHook", true);
+        QPointer<ProjectManager> page = host.projectManager;
+        QObject::connect(a, &ProjectArchiver::finished, a, [a, page](bool canceled) {
+            if (canceled || !page) return;
+            const ProjectArchiver::Result &r = a->result();
+            if (r.ok() && !r.projectGuid.isEmpty()) page->addTile(r.projectGuid);
+        });
+    }
     return a->startImport(path);
 }
 
@@ -823,6 +845,9 @@ QVariantMap ProjectApi::importArchive(const QString &path)
     ProjectArchiver archiver(host.db, nullptr);
     const auto r = archiver.importArchive(path);
     if (!r.ok()) { fail(QStringLiteral("project.importArchive: %1").arg(r.error)); return out; }
+    // THE NEW PROJECT IS A TILE NOW — its one tile, as the Desktop page's own
+    // import adds it (CREATE-GAP-1: this rebuilt the whole grid for it).
+    if (host.projectManager) host.projectManager->addTile(r.projectGuid);
     out["guid"] = r.projectGuid;
     out["name"] = r.worldName;
     out["assets"] = r.assets;

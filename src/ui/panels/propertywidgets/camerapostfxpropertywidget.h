@@ -84,6 +84,9 @@ private:
 
     QSharedPointer<iris::CameraNode> camera;
     IEditorViewport *sceneView = nullptr;
+    /// Whether the scene traces rays on this machine — the fact a row's text
+    /// and the technique's name are computed from (worldmodes::rowCost).
+    bool sceneTracesRays() const;
     StudioServices *services = nullptr;
     /// Populating the rows (the panel rebuilds itself, and the controls emit
     /// from their setters) — see rowundo::Binding::guard.

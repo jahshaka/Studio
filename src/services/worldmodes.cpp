@@ -65,7 +65,8 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// and exists for an AUTHOR to pin a size per scene.
 /// THE ORDINALS MOVED WITH INSTANT RADIOSITY (PHOTON_SPEC §7 E2 (4)): the
 /// technique column is `iris::GiMode` and that enum is now Off 0 / VCT 1 /
-/// VCT + Probes 2. Low is a VOXEL tier now — two camera-centred cascades at
+/// the hybrid 2 (techniqueLabel names it: VCT + rays where the scene traces,
+/// VCT + probes where it does not). Low is a VOXEL tier now — two camera-centred cascades at
 /// 64^3 with the irradiance field on and no probes — which is cheaper on the
 /// frame than the CPU ray trace it replaces, sees every light instead of one,
 /// and is the same arm as the tiers above it.
@@ -80,7 +81,7 @@ struct PhotonRow { int technique = 0, quality = 0, ddgi = 0, bounces = 0, probeS
 const PhotonRow kPhotonTable[4] = {
     /* Low    */ { 1, 0, 1, 1, 0, 1 },   // VCT, 2 cascades @ 64^3, the field on, no probes
     /* Medium */ { 1, 1, 1, 1, 0, 1 },   // VCT, the chain at 64^3, DDGI-fed (voxel source)
-    /* High   */ { 2, 2, 1, 1, 0, 1 },   // + probes, the chain's High table, HDR + shadowed
+    /* High   */ { 2, 2, 1, 1, 0, 1 },   // the hybrid (rays where the scene traces, else probes), the chain's High table
     /* Epic   */ { 2, 2, 1, 3, 0, 1 },   // ... plus 3 bounces
 };
 /// The Photon-tiered row ids, in kPhotonTable column order.
@@ -117,6 +118,34 @@ void photonColumns(Row &r, int column)
 /// UNTOUCHED: Epic is still the tier that turns everything on. Each row carries
 /// its own note; the before/after screenshots that justified it are in the
 /// wave's report.
+// ---- the machine-dependent reflection phrases (STUDIO-CRUD-1 item 6) -------
+// After PHOTON-F12-PCC a ray tier builds NO probe grid wherever the scene
+// traces, so every row that names a reflection source at High and Epic reads
+// its words from these, keyed on the engine's own rayReflections fact.
+
+/// The tiers whose technique column is `technique`, as a phrase
+/// ("High and Epic"), read from kPhotonTable.
+QString tiersWithTechnique(int technique)
+{
+    static const char *names[4] = { "Low", "Medium", "High", "Epic" };
+    QStringList out;
+    for (int t = 0; t < 4; ++t)
+        if (kPhotonTable[t].technique == technique) out << QString::fromLatin1(names[t]);
+    if (out.size() <= 1) return out.join(QString());
+    const QString last = out.takeLast();
+    return out.join(QStringLiteral(", ")) + QStringLiteral(" and ") + last;
+}
+
+/// What answers a reflection the screen march cannot, at the tiers the march
+/// runs (High and Epic).
+QString reflectionFallback(bool raysResolve)
+{
+    return raysResolve
+        ? QStringLiteral("the traced rays, then the voxel cone with the sky as its escape")
+        : QStringLiteral("the reflection probes and the voxel cone, with the sky as the last "
+                         "resort");
+}
+
 QVector<Row> buildRows()
 {
     QVector<Row> out;
@@ -352,16 +381,45 @@ QVector<Row> buildRows()
                       { QStringLiteral("half"), QStringLiteral("Half-Res Rays"), 1 },
                       { QStringLiteral("hq"),   QStringLiteral("Full-Res Rays"), 2 } };
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
-        r.cost = QStringLiteral("Reflections of things that MOVE — the one gap a baked probe "
-                                "structurally cannot fill, and the only reflection source that "
-                                "needs no capture at all. Costs a second traversal of the scene "
-                                "(a depth/normal/roughness prepass) on top of the ray march, so "
-                                "it never appears below High. Only reflects what is ON SCREEN: "
-                                "reflections fade out at the frame's edges and on rough surfaces, "
-                                "and fall back to the sky and probes wherever they do.");
+        r.costAt = [](bool sceneTracesRays) {
+            return QStringLiteral("Reflections of things that MOVE — the one gap a baked capture "
+                                  "structurally cannot fill, and the only reflection source that "
+                                  "needs no capture at all. Costs a second traversal of the scene "
+                                  "(a depth/normal/roughness prepass) on top of the ray march, so "
+                                  "it never appears below High. Only reflects what is ON SCREEN: "
+                                  "reflections fade out at the frame's edges and on rough "
+                                  "surfaces, and fall back to %1 wherever they do.")
+                .arg(reflectionFallback(tierRaysResolve(PhotonTier::High, sceneTracesRays)));
+        };
         r.available = true;
         r.get = [](const iris::ScenePtr &s) { return s->ssrMode; };
         r.set = [](const iris::ScenePtr &s, int v) { s->ssrMode = v; };
+        out.append(r);
+    }
+    {
+        // THE SURFACE CACHE (PHOTON-CARDS-2): a reflection ray's hit reads the
+        // hit surface's card first, so the cache is worth its capture exactly
+        // where the ray tier runs — and the ray tier rides the SSR row above
+        // (off at Low and Medium). So the column is OFF there and AUTO at High
+        // and Epic (the engine resolves Auto against the machine's rays: a GPU
+        // without them captures nothing even at Epic).
+        Row r;
+        r.id = QStringLiteral("giCards");
+        r.label = QStringLiteral("Surface Cache (Hit Lighting)");
+        r.group = QStringLiteral("Reflections");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),  0 },
+                      { QStringLiteral("auto"), QStringLiteral("Auto"), -1 },
+                      { QStringLiteral("on"),   QStringLiteral("On"),   1 } };
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = -1; r.tier[3] = -1;
+        r.cost = QStringLiteral("Photographs of the surfaces around the camera, lit, that a "
+                                "traced reflection reads at the point it hits — a mirror shows a "
+                                "surface's own lighting instead of the voxels' 15 cm cells. Costs "
+                                "a 100 MB atlas and a few card captures a frame; Auto turns it on "
+                                "only where reflection rays run, and a wide glossy lobe keeps "
+                                "reading the voxels (a card texel would speckle there).");
+        r.get = [](const iris::ScenePtr &s) { return s->giCards; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->giCards = v; };
         out.append(r);
     }
     {
@@ -398,18 +456,25 @@ QVector<Row> buildRows()
         // was perceptual 0.581, a number nobody chose and nobody could read.
         // That second cutoff is DELETED and the march takes this dial, so the
         // tooltip may say the whole sentence again.
-        r.cost = QStringLiteral("How rough a surface may be and still have its reflections "
-                                "computed per pixel — MARCHED in screen space and, on a machine "
-                                "with ray-tracing hardware, TRACED — in per cent. Below it the "
-                                "screen answers what it can see and a ray answers the rest; above "
-                                "it the reflection probes' own blurred photograph answers, which "
-                                "for a rough surface is both cheaper and closer to the truth. The "
-                                "change is feathered: both the screen's march and the ray fade "
-                                "out over the same 10 points of this scale below the value, so a surface "
-                                "whose roughness varies across it has no seam in it. Raising it "
-                                "spends "
-                                "rays and marches on surfaces that will look much the same either "
-                                "way; lowering it hands more of the picture to the probes.");
+        r.costAt = [](bool sceneTracesRays) {
+            const bool rays = tierRaysResolve(PhotonTier::High, sceneTracesRays);
+            return QStringLiteral("How rough a surface may be and still have its reflections "
+                                  "computed per pixel — MARCHED in screen space and, on a machine "
+                                  "with ray-tracing hardware, TRACED — in per cent. Below it the "
+                                  "screen answers what it can see%1; above it %2 answers, which "
+                                  "for a rough surface is both cheaper and closer to the truth. "
+                                  "The change is feathered: both the screen's march and the ray "
+                                  "fade out over the same 10 points of this scale below the "
+                                  "value, so a surface whose roughness varies across it has no "
+                                  "seam in it. Raising it spends rays and marches on surfaces "
+                                  "that will look much the same either way; lowering it hands "
+                                  "more of the picture to %3.")
+                .arg(rays ? QStringLiteral(" and a traced ray answers the rest") : QString(),
+                     rays ? QStringLiteral("the voxel cone's blurred reflection (the sky where "
+                                           "it escapes)")
+                          : QStringLiteral("the reflection probes' own blurred photograph"),
+                     rays ? QStringLiteral("the voxel cone") : QStringLiteral("the probes"));
+        };
         r.available = true;
         r.get = [](const iris::ScenePtr &s) { return s->reflectionRoughnessCutoff; };
         r.set = [](const iris::ScenePtr &s, int v) { s->reflectionRoughnessCutoff = v; };
@@ -650,20 +715,39 @@ QVector<Row> buildRows()
         r.group = QStringLiteral("Global Illumination");
         r.type = RowType::Enum;
         r.tierSpace = TierSpace::Photon;
-        r.options = { { QStringLiteral("off"),            QStringLiteral("Off"),          0 },
-                      { QStringLiteral("vct"),            QStringLiteral("VCT"),          1 },
-                      { QStringLiteral("vct_pcc_hybrid"), QStringLiteral("VCT + Probes"), 2 } };
+        // The NAMES are techniqueLabel's (the hybrid is "VCT + rays" where the
+        // scene traces, "VCT + probes" where it does not); the stored label is
+        // the no-engine answer, and every surface reads optionLabel().
+        r.options = { { QStringLiteral("off"),            techniqueLabel(0, false), 0 },
+                      { QStringLiteral("vct"),            techniqueLabel(1, false), 1 },
+                      { QStringLiteral("vct_pcc_hybrid"), techniqueLabel(2, false), 2 } };
+        r.optionLabelAt = [](int value, const iris::ScenePtr &scene, bool sceneTracesRays) {
+            return techniqueLabel(value, probeGridByRays(scene, sceneTracesRays));
+        };
         // PHOTON columns (Low, Medium, High, Epic) — not world-mode ones —
         // read from kPhotonTable. Low and Medium are VCT and differ in the
         // voxel resolution; the top two are the hybrid and differ in the
         // giBounces row below, not here.
         photonColumns(r, 0);
-        r.cost = QStringLiteral("Which technique Photon uses. VCT re-voxelizes on "
-                                "geometry edits (editing latency, not frame time) and lights from "
-                                "everything; VCT + Probes adds sharp reflections near geometry — "
-                                "six renders per reflection probe on every re-solve (18 probes by "
-                                "default), HDR and shadowed at High quality. Normally the Photon "
-                                "quality tier picks this; setting it here PINS it.");
+        r.costAt = [](bool sceneTracesRays) {
+            const bool rays = tierRaysResolve(PhotonTier::High, sceneTracesRays);
+            return QStringLiteral("Which technique Photon uses. VCT re-voxelizes on geometry "
+                                  "edits (editing latency, not frame time) and lights from "
+                                  "everything. %1 Normally the Photon quality tier picks this "
+                                  "(%2 %3, %4 %5); setting it here PINS it.")
+                .arg(rays
+                         ? QStringLiteral("%1 is where the scene traces its reflections: the "
+                                          "screen march and the traced rays are the sharp "
+                                          "reflections, the voxel cone and the sky behind them, "
+                                          "and no reflection-probe grid is built.")
+                               .arg(techniqueLabel(2, true))
+                         : QStringLiteral("%1 adds sharp reflections near geometry — six renders "
+                                          "per reflection probe on every re-solve (18 probes by "
+                                          "default), HDR and shadowed at High quality.")
+                               .arg(techniqueLabel(2, false)),
+                     tiersWithTechnique(1), techniqueLabel(1, false),
+                     tiersWithTechnique(2), techniqueLabel(2, rays));
+        };
         r.get = [](const iris::ScenePtr &s) { return int(s->giMode); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giMode = iris::GiMode(v); };
         out.append(r);
@@ -703,11 +787,24 @@ QVector<Row> buildRows()
                      .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
                               .probeFaceSize)
                      .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
-                              .probeFaceSize) +
-                 QStringLiteral(". In VCT + Probes High ALSO turns on HDR and shadowed probe "
-                                "captures (world.gi's probeHdr/probeShadows pin either one "
-                                "independently). High is a re-solve-latency trap in an editor: "
-                                "every geometry or light edit pays for it again.");
+                              .probeFaceSize);
+        r.costAt = [text = r.cost](bool sceneTracesRays) {
+            const bool rays = tierRaysResolve(PhotonTier::High, sceneTracesRays);
+            return text +
+                   (rays ? QStringLiteral(". High traces its reflections here, so no probe grid "
+                                          "is built for that face size to size unless the "
+                                          "technique is pinned to %1 or the scene's Ray Tracing "
+                                          "row is off; where one is built, High ALSO turns on "
+                                          "HDR and shadowed probe captures")
+                                .arg(techniqueLabel(2, false))
+                         : QStringLiteral(". Under %1 High ALSO turns on HDR and shadowed probe "
+                                          "captures")
+                                .arg(techniqueLabel(2, false))) +
+                   QStringLiteral(" (world.gi's probeHdr/probeShadows pin either one "
+                                  "independently). High is a re-solve-latency trap in an editor: "
+                                  "every geometry or light edit pays for it again.");
+        };
+        r.cost.clear();
         r.get = [](const iris::ScenePtr &s) { return int(s->giQuality); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giQuality = iris::GiQuality(v); };
         out.append(r);
@@ -736,6 +833,27 @@ QVector<Row> buildRows()
                                 "including Low, whose two camera cascades exist for exactly this "
                                 "— so every tier turns it on. (It said \"Low cannot\" here for "
                                 "months; Low's column has always been 1.)");
+        // Where the screen-probe gather runs it is the diffuse and the field its
+        // fallback — generated from the engine's gather row, the sentence the
+        // World GI panel used to hand-write a second copy of.
+        {
+            QStringList gatherTiers;
+            for (PhotonTier t : { PhotonTier::Low, PhotonTier::Medium, PhotonTier::High,
+                                  PhotonTier::Epic }) {
+                if (!photonGather(t).on) continue;
+                QString n = photonTierName(t);
+                n[0] = n[0].toUpper();
+                gatherTiers << n;
+            }
+            if (!gatherTiers.isEmpty()) {
+                const QString last = gatherTiers.takeLast();
+                const QString tiers = gatherTiers.isEmpty()
+                    ? last
+                    : gatherTiers.join(QStringLiteral(", ")) + QStringLiteral(" and ") + last;
+                r.cost += QStringLiteral(" At %1, wherever rays run, the screen-probe gather is "
+                                         "the diffuse and the field is its fallback.").arg(tiers);
+            }
+        }
         // -1 (auto) is what a scene no tier has ever been applied to holds, and
         // the engine renders it as OFF — so that is what it RESOLVES to. Any
         // tier application writes a concrete 0/1 through.
@@ -768,22 +886,37 @@ QVector<Row> buildRows()
         // tiers build probes at all. The hand-written version claimed 256 "at
         // every tier from Medium up" while High and Epic resolve 512, and
         // Medium builds no probe grid to size (render audit A5).
-        r.cost = QStringLiteral("The pixel size of ONE reflection-probe cube face. A probe is six "
-                                "of them plus a mip chain, so the grid's video memory goes with "
-                                "the SQUARE of this: at 256 a probe is 4.0 MB in HDR and a "
-                                "32-probe room 128 MB; at 512 it is 16.0 MB and 512 MB. "
-                                "Automatic follows the quality dial (%1 px at Low, %2 at Medium, "
-                                "%3 at High and Epic), and only High and Epic build a probe grid "
-                                "at all, so %3 is the shipped answer wherever this row has "
-                                "anything to size. The roughness blur the renderer convolves "
-                                "into these captures hides the difference on everything but a "
-                                "mirror.")
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Low)
-                              .probeFaceSize)
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
-                              .probeFaceSize)
-                     .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
-                              .probeFaceSize);
+        r.costAt = [](bool sceneTracesRays) {
+            const int high = int(jahshaka::engine::giQualityFacts(
+                                     jahshaka::engine::GiQuality::High).probeFaceSize);
+            const QString where =
+                tierRaysResolve(PhotonTier::High, sceneTracesRays)
+                    ? QStringLiteral(", but here NO shipped tier builds a probe grid: %1 "
+                                     "build%2 none, and at %3 the rays are the reflection. This "
+                                     "row sizes a grid only where the technique is pinned to %4 "
+                                     "or the scene's Ray Tracing row is off.")
+                          .arg(tiersWithTechnique(1))
+                          .arg(tiersWithTechnique(1).contains(QLatin1Char(' '))
+                                   ? QString() : QStringLiteral("s"))
+                          .arg(tiersWithTechnique(2), techniqueLabel(2, false))
+                    : QStringLiteral(", and only %1 build a probe grid at all, so %2 is the "
+                                     "shipped answer wherever this row has anything to size.")
+                          .arg(tiersWithTechnique(2)).arg(high);
+            return QStringLiteral("The pixel size of ONE reflection-probe cube face. A probe is "
+                                  "six of them plus a mip chain, so the grid's video memory goes "
+                                  "with the SQUARE of this: at 256 a probe is 4.0 MB in HDR and a "
+                                  "32-probe room 128 MB; at 512 it is 16.0 MB and 512 MB. "
+                                  "Automatic follows the quality dial (%1 px at Low, %2 at "
+                                  "Medium, %3 at High and Epic)")
+                       .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Low)
+                                .probeFaceSize)
+                       .arg(jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::Medium)
+                                .probeFaceSize)
+                       .arg(high) +
+                   where +
+                   QStringLiteral(" The roughness blur the renderer convolves into these "
+                                  "captures hides the difference on everything but a mirror.");
+        };
         r.get = [](const iris::ScenePtr &s) { return qBound(0, s->giProbeCaptureSize, 1024); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giProbeCaptureSize = qBound(0, v, 1024); };
         out.append(r);
@@ -907,6 +1040,17 @@ const Row *row(const QString &id)
     for (const Row &r : rows())
         if (r.id == id) return &r;
     return nullptr;
+}
+
+QString rowCost(const Row &r, bool sceneTracesRays)
+{
+    return r.costAt ? r.costAt(sceneTracesRays) : r.cost;
+}
+
+QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &scene,
+                    bool sceneTracesRays)
+{
+    return r.optionLabelAt ? r.optionLabelAt(o.value, scene, sceneTracesRays) : o.label;
 }
 
 // ---------------------------------------------------------------------------
@@ -1233,6 +1377,18 @@ int photonBounces(PhotonTier t)   { return kPhotonTable[tierIndex(t)].bounces; }
 int photonProbeSize(PhotonTier t) { return kPhotonTable[tierIndex(t)].probeSize; }
 int photonCascades(PhotonTier t)  { return kPhotonTable[tierIndex(t)].cascades; }
 
+// THE GATHER COLUMN IS A PROJECTION, NOT A COPY (PHOTON-GATHER-1d): the engine's
+// tier table holds the gather row (Types.h GiGatherFacts — on/off, stride,
+// octahedral resolution, adaptive cap) and this reads it for the tier's quality
+// and Epic fact, so the column cannot drift from what the renderer does.
+jahshaka::engine::GiGatherFacts photonGather(PhotonTier t)
+{
+    return jahshaka::engine::giQualityFacts(
+               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
+               jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic)
+        .gather;
+}
+
 // ---------------------------------------------------------------------------
 // WHAT A TIER IS, IN WORDS, GENERATED (render audit A5).
 //
@@ -1258,8 +1414,11 @@ QString metres(float v)
 /// The engine's physical facts for a tier's quality column.
 jahshaka::engine::GiQualityFacts factsFor(PhotonTier t)
 {
+    // The tier's Epic fact rides along (the gather's density is the one row the
+    // quality column cannot carry — GiParams::epicTier).
     return jahshaka::engine::giQualityFacts(
-        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)));
+        jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
+        jahshaka::engine::GiViewProfile::Desktop, t == PhotonTier::Epic);
 }
 
 }   // namespace
@@ -1284,6 +1443,48 @@ int photonTierProbeFaceSize(PhotonTier t)
 {
     const int pinned = photonProbeSize(t);
     return pinned > 0 ? pinned : int(factsFor(t).probeFaceSize);
+}
+
+namespace {
+/// THE ONE PREDICATE (STUDIO-CRUD-1 fix round): a quality column whose
+/// reflections the engine traces, met with a scene that traces on this
+/// machine. probeGridByRays asks it of a scene, tierRaysResolve of a tier.
+bool raysAreTheReflection(int giQuality, bool sceneTracesRays)
+{
+    return sceneTracesRays
+           && jahshaka::engine::giQualityFacts(
+                  jahshaka::engine::GiQuality(qBound(0, giQuality, 2)))
+                  .rayReflections;
+}
+}   // namespace
+
+bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays)
+{
+    return scene && raysAreTheReflection(int(scene->giQuality), sceneTracesRays);
+}
+
+bool tierRaysResolve(PhotonTier t, bool sceneTracesRays)
+{
+    return raysAreTheReflection(photonQuality(t), sceneTracesRays);
+}
+
+QString techniqueLabel(int technique, bool raysResolve)
+{
+    switch (technique) {
+    case 0:  return QStringLiteral("Off");
+    case 1:  return QStringLiteral("VCT");
+    default: return raysResolve ? QStringLiteral("VCT + rays") : QStringLiteral("VCT + probes");
+    }
+}
+
+QString probeGridByRaysReason()
+{
+    return QStringLiteral(
+        "the rays are the reflection here — at High and Epic, wherever this scene traces on this "
+        "machine, no reflection-probe grid is built: the screen march, the traced rays (a hit lit "
+        "from its surface card, the decode or the voxels) and the voxel cone with the sky as its "
+        "escape are the reflection, and a planar mirror stays a planar mirror. Turn the scene's "
+        "Ray Tracing row off (world.rayTracing(\"off\")) or pick Low or Medium for a probe grid.");
 }
 
 QString photonTierSentence(PhotonTier t)
@@ -1311,16 +1512,34 @@ QString photonTierSentence(PhotonTier t)
                    .arg(facts.voxelResolution);
     }
 
-    out += photonDdgi(t) ? QStringLiteral("; the irradiance field ON")
-                         : QStringLiteral("; no irradiance field");
+    // THE DIFFUSE, from the gather row (PHOTON-GATHER-1d): where rays run, the
+    // screen-probe gather IS the diffuse and the field its fallback; below it the
+    // field (and the cones) are the diffuse.
+    const jahshaka::engine::GiGatherFacts gather = photonGather(t);
+    if (gather.on) {
+        out += QStringLiteral("; the diffuse from the screen-probe gather where rays run "
+                              "(%1 rays a probe, a probe per %2x%2 px)")
+                   .arg(gather.octRes * gather.octRes)
+                   .arg(gather.stride);
+        out += photonDdgi(t) ? QStringLiteral(", the irradiance field its fallback")
+                             : QStringLiteral(", no irradiance field");
+    } else {
+        out += photonDdgi(t) ? QStringLiteral("; the irradiance field ON")
+                             : QStringLiteral("; no irradiance field");
+    }
     out += QStringLiteral("; %1 light bounce%2")
                .arg(photonBounces(t))
                .arg(photonBounces(t) == 1 ? QString() : QStringLiteral("s"));
 
     // The probe grid is the TECHNIQUE column, not the quality one: only the
-    // hybrid (ordinal 2) builds one.
+    // hybrid (ordinal 2) builds one — and at a RAY tier only where the scene
+    // does not trace (PHOTON-F12-PCC: the rays are the reflection there).
     if (photonTechnique(t) == 2) {
-        out += QStringLiteral("; a reflection-probe grid at %1 px per cube face")
+        out += (facts.rayReflections
+                    ? QStringLiteral("; where rays run the reflections are traced and no "
+                                     "reflection-probe grid is built, elsewhere a grid at %1 px "
+                                     "per cube face")
+                    : QStringLiteral("; a reflection-probe grid at %1 px per cube face"))
                    .arg(photonTierProbeFaceSize(t));
         if (facts.probeHdrDefault) out += QStringLiteral(", HDR");
         if (facts.probeShadowsDefault) out += QStringLiteral(", shadowed");
@@ -1435,7 +1654,7 @@ void derivePhotonFromDocument(const iris::ScenePtr &scene)
     // (THE TECHNIQUE ORDINALS MOVED with Instant Radiosity's deletion — VCT is
     // 1 and the hybrid 2 — so VCT alone can no longer tell Low from Medium.
     // The QUALITY does, and it is the field those two tiers actually differ in:
-    // Low is 32^3 (the cascade chain's own Low row is 64), Medium 64^3.)
+    // the quality row - its cascade chain, probes and card budgets.)
     PhotonTier tier = PhotonTier::Medium;
     if (enabled) {
         tier = technique == 2 ? PhotonTier::High
@@ -1618,15 +1837,6 @@ bool setRowValue(const iris::ScenePtr &scene, const QString &id, int value, bool
     // unlike setMode's sweep, which never touches those rows).
     if (recordOverride || !r->set) scene->worldOverrides.insert(id, value);
     return true;
-}
-
-bool setRowValueByOptionId(const iris::ScenePtr &scene, const QString &id, const QString &optionId)
-{
-    const Row *r = row(id);
-    if (!r) return false;
-    int value = 0;
-    if (!valueFromId(*r, optionId, value)) return false;
-    return setRowValue(scene, id, value);
 }
 
 void pinRowValue(const iris::ScenePtr &scene, const QString &id, int value)

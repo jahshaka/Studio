@@ -886,12 +886,23 @@ int main(int argc, char **argv)
                     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, dists[d]), Vec3(0, 0, 0));
                     for (int pass = 0; pass < 2; ++pass) {
                         es->setLodBias(pass == 0 ? 0.0f : 1.0f);
-                        // Ogre's LOD update runs inside the scene pass, so the
-                        // first frame after a dial change still draws the old
-                        // level; three frames is settled and cheap.
+                        // Ogre's LOD update runs inside the scene pass, so the first
+                        // frame after a dial change still draws the old level; three
+                        // frames is settled and cheap...
                         for (int f = 0; f < 3; ++f) engine->renderOneFrame();
                         RenderStats rs;
                         if (!engine->renderStats(rs)) continue;
+                        // ...and THE COUNTS' OWN LAG on top (RenderStats::gpuCountLagFrames).
+                        // Where the visibility buffer draws the grid (ATOM S3-DRAW) its
+                        // triangles are chosen by the GPU cull and counted from a readback
+                        // of the cull's counters once the frame has retired: the count trails
+                        // the picture by that many frames (the three above read the PREVIOUS
+                        // pose's count: "1365 %" was the level-0 count of the pass before).
+                        // 0 on the CPU path, where Ogre counts what it submits.
+                        if (rs.gpuCountLagFrames) {
+                            for (unsigned f = 0; f < rs.gpuCountLagFrames; ++f) engine->renderOneFrame();
+                            if (!engine->renderStats(rs)) continue;
+                        }
                         Reading &r = (pass == 0 ? off[d] : on[d]);
                         r.triangles = rs.triangles;
                         r.draws = rs.draws;

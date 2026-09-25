@@ -313,11 +313,12 @@ void apply(const iris::ScenePtr &scene)
 void pushAmbient(jahshaka::engine::Scene *scene)
 {
     if (!scene) return;
-    // BOTH HALVES (Engine.h, setEnvironmentLight): the nine bands are the
-    // environment's diffuse contribution, the gain is its specular one. A host
-    // that pushes only the first leaves a mirror reflecting an environment that
-    // lights nothing.
-    scene->setAmbientSh(ambientSh());
+    // THE GAIN ONLY (Engine.h, setEnvironmentLight; PHOTON-SKY-TRANSIENT-1):
+    // the engine forms the ambient itself from the studio sky it captured, times
+    // this gain, in the frame the capture lands — the same image this file's
+    // CPU integral reads (which stays: the exposure and the fallback colour are
+    // derived from it before any frame exists). Pushing that CPU SH here as
+    // well was a second writer the engine's landing overwrote.
     scene->setEnvironmentLight(jahshaka::engine::Colour(1.0f, 1.0f, 1.0f, 1.0f));
 }
 

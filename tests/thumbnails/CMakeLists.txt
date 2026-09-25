@@ -112,7 +112,7 @@ target_include_directories(test_shader_thumbnail PRIVATE ${CMAKE_SOURCE_DIR} ${C
     ${CMAKE_SOURCE_DIR}/src/modules/materials
    ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_shader_thumbnail PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_shader_thumbnail PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_shader_thumbnail PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
@@ -203,7 +203,7 @@ target_include_directories(test_thumbnail_sweep PRIVATE ${CMAKE_SOURCE_DIR} ${CM
     ${CMAKE_SOURCE_DIR}/src/modules/materials
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_thumbnail_sweep PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_thumbnail_sweep PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_thumbnail_sweep PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::Sql
     Qt6::Widgets Qt6::Multimedia Qt6::Concurrent)

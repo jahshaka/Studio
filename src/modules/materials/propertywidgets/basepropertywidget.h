@@ -72,6 +72,5 @@ signals:
 	void currentWidget(BasePropertyWidget *widget);
 	void shouldSetVisible(bool val);
 	void TitleChanged(QString title);
-	//void requestMimeData(Property *prop);
 };
 

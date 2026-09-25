@@ -109,7 +109,6 @@ For more information see the LICENSE file
 // otherwise be a second copy of it.
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
-                                      iris::PostProcessManagerPtr postMan,
                                       EditorData **editorData)
 {
     dir = projectPath;
@@ -142,8 +141,6 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     // come back with its folders, because the next save would otherwise write
     // an empty list over them.
     scenefolders::readEditorBlock(projectObj["editor"].toObject(), scene);
-	if (!!postMan)
-		readPostProcessData(projectObj, postMan);
 
     for (auto node : scene->rootNode->children()) {
         node->applyDefaultPose();
@@ -210,52 +207,6 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->showGrid = editorObj.value("showGrid").toBool(editorData->showGrid);
 
     return editorData;
-}
-
-void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
-{
-	/*
-    if (projectObj.contains("postprocesses")) {
-        auto processListObj = projectObj["postprocesses"].toArray();
-
-        for (auto processVal : processListObj) {
-            auto processObj = processVal.toObject();
-            auto name = processObj["name"].toString("");
-
-            iris::PostProcessPtr process;
-
-            if(name == "bloom")
-               process = iris::BloomPostProcess::create();
-            if(name == "color_overlay")
-               process = iris::ColorOverlayPostProcess::create();
-            //if(name == "greyscale")
-            //   process = iris::GreyscalePostProcess::create();
-            if(name == "radial_blur")
-               process = iris::RadialBlurPostProcess::create();
-            if(name == "ssao")
-               process = iris::SSAOPostProcess::create();
-            if(name == "fxaa")
-               process = iris::FxaaPostProcess::create();
-            //if(name == "material")
-            //   process = iris::MaterialPostProcess::create();
-
-            if (!!process) {
-                auto propertyObj = processObj["properties"].toObject();
-                auto props = process->getProperties();
-                for ( auto prop : props) {
-
-                    if (propertyObj.contains(prop->name)) {
-
-                        prop->setValue(propertyObj[prop->name].toVariant());
-                        process->setProperty(prop);
-                    }
-                }
-            }
-
-            postMan->addPostProcess(process);
-        }
-    }
-	*/
 }
 
 /// THE GLB TEXTURE-LOSS REPAIR (2026-09-09), reader half.
@@ -386,6 +337,20 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// key, a number that is not one, or a mode name this build does not know
 	// leaves the CONSTRUCTOR's value standing.
 	vrworld::read(scene, sceneObj);
+	// THE CLOUD LAYER (CLOUDS-2D-1). An absent block — every scene written
+	// before the layer existed, and every scene that never turned it on — is
+	// the constructor's layer, OFF; CloudLayer::fromJson gives each absent key
+	// inside a present block the constructor's value too (the reader-defaults
+	// law). The weather map is resolved here, like the sky's own image.
+	scene->clouds = iris::CloudLayer::fromJson(sceneObj.value("clouds").toObject());
+	// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): an absent block is the
+	// constructor's row, OFF (the reader-defaults law, fromJson's own).
+	scene->sunContact = iris::SunContact::fromJson(sceneObj.value("sunContact").toObject());
+	if (!scene->clouds.weatherMapGuid.isEmpty()) {
+		const QString weather = resolveAssetPath(scene->clouds.weatherMapGuid);
+		if (QFileInfo(weather).isFile())
+			scene->cloudWeatherMap = iris::Texture2D::load(weather, false);
+	}
 	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
 	auto volume = sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume);
 	scene->setAmbientMusicVolume(volume);
@@ -582,8 +547,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             0.0, sceneObj.value("giProbeSnapSidesMin").toDouble(scene->giProbeSnapSidesMin)));
         scene->giProbeSnapSidesMax = float(qMax(
             0.0, sceneObj.value("giProbeSnapSidesMax").toDouble(scene->giProbeSnapSidesMax)));
-        scene->giRayMarchStepScale = float(qBound(
-            1.0, sceneObj.value("giRayMarchStepScale").toDouble(scene->giRayMarchStepScale), 8.0));
         // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
         // written before the flag existed, and the default is the arm those
         // documents were authored against — there is nothing to migrate.
@@ -634,8 +597,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // (A "giDdgiSource" key written before 2026-09-17 is IGNORED: the
         // irradiance field's rasterised probe source was deleted with the lane
         // FIELD-RASTER-CRUD, and the voxel source is the only one there is.)
-        scene->giDdgiIntensity = float(
-            qBound(0.0, sceneObj.value("giDdgiIntensity").toDouble(scene->giDdgiIntensity), 64.0));
         // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
         // document written before the unification — those are DERIVED from the
         // fields above, below, once the World Mode is known.
@@ -1345,8 +1306,6 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
         }
 
         sceneNode->addAnimation(animation);
-        //if (animation->getName() == activeAnim)
-        //    sceneNode->setAnimation(animation);
     }
     // BOUNDS-CHECKED. This was a bare operator[] on the index the file happens
     // to carry: a blob whose activeAnimation points past its (possibly empty)

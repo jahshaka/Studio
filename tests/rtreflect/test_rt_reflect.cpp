@@ -20,13 +20,15 @@
 //   1. THE OFF ARM SEES NOTHING. With rays off the wall carries no more red
 //      than a wall with no reflection at all. This is both the control and the
 //      fallback contract.
-//   2. THE ON ARM SEES THE CUBE. With rays on the wall carries red, and the
-//      amount is at least 0.6 of what the cube's own lit albedo would give —
-//      the voxel bias, stated: a voxel stores radiance PRE-MULTIPLIED by the
-//      surface's coverage of the cell and the shader divides that back out, but
-//      a surface thinner than a cell or at a grazing angle to the grid keeps a
-//      residual of its empty neighbours, so the bar is a fraction and not
-//      equality.
+//   2. THE ON ARM SEES THE CUBE. With rays on the wall carries red, clearly
+//      above the no-ray control. The cube is CARDED (PHOTON-CARDS-2), so the
+//      hit reads the cube's own surface-cache card — its lit radiance at the
+//      card's texel, not a voxel's coverage-divided average — and the
+//      radiometric statement of that read lives in the F1-HITRES row
+//      (`--hitres`, an un-tonemapped perfect mirror held to the card's closed
+//      form pixel by pixel). The lamp rows below keep an UNCARDED emitter on
+//      purpose: they measure the voxel store's units, which is still the answer
+//      for every hit no card describes.
 //   3. IT IS REALLY THE CUBE. Move the cube far away and the red goes; bring it
 //      back and the red returns. A reflection, not a tint.
 //   4. A GLOSSY SURFACE CONVERGES AND HOLDS STILL. At roughness 0.3 one ray per
@@ -165,32 +167,23 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// factor, no cosine, no distance falloff and no albedo in that sentence — which
 /// is what makes it the cleanest possible probe of the voxel radiance's UNITS.
 ///
-///     mirror pixel = L,  within +-10 %.
+///     mirror pixel = L,  within +-3 %.
 ///
 /// TWO ROWS, because the answer is different on the two sides of 1.0:
 ///
-///   gi.rt_reflect_lamp        ORDINARY, and it gates: L = 0.9, inside the
-///                             voxel material store's old UNORM range, read
-///                             through a PERFECT mirror: pixel = L.
+///   gi.rt_reflect_lamp        L = 0.9, inside the emissive voxel store's old
+///                             UNORM range.
 ///   gi.rt_reflect_lamp_clip   L = 3.0, which used to be clipped to 1.0 by the
 ///                             EMISSIVE VOXEL STORE (PFG_RGBA8_UNORM) on its way
-///                             into the cache — ogre-patch 0087 makes that store
-///                             RGBA16F and the label came off with it
-///                             (VOXEL-CLIP-1, 2026-09-22).
-///                             ITS FORM HAD TO CHANGE TO BE ANSWERABLE, and the
-///                             reason is the INSTRUMENT: an offscreen view's
-///                             render target is PFG_RGBA8_UNORM
-///                             (OgreView::createRtt), so `readPixels` cannot
-///                             return anything above 1.0 and a PERFECT mirror
-///                             showing L = 3.0 reads exactly 1.0000 however much
-///                             radiance the chain carries — measured identical
-///                             before and after 0087, with the store proved by
-///                             the same process's readback to hold 3.0000. So
-///                             this row reads the same pixel through a GREY
-///                             mirror at L = 3.0 and at a reference L = 0.8 and
-///                             asserts the RATIO: 3.75 when the store carries
-///                             radiance, 1.25 when it clips at 1.0. The mirror's
-///                             reflectance and the grade cancel.
+///                             into the cache — ogre-patch 0087 made that store
+///                             RGBA16F (VOXEL-CLIP-1, 2026-09-22).
+///
+/// BOTH ROWS ARE THE SAME SENTENCE — a PERFECT mirror reads L — AND READ THE
+/// VIEW'S RADIANCE, NOT ITS DISPLAY (HDR-READBACK-1). The 8-bit readback clips
+/// at 1.0, so for one round the clip row had to be a grey mirror's RATIO between
+/// L = 3.0 and a reference below 1.0; `View::readPixelsHdr` returns the scene
+/// target in float, so the row is the physics again and the ratio workaround,
+/// its reference arm and its grey mirror are deleted.
 ///
 /// A CUBE, NOT A SPHERE, and the reason is the measurement rather than the
 /// drawing. The design named a spherical emitter; a sphere's surface is at every
@@ -201,24 +194,39 @@ static int costMain(Engine *e, const char *plugin, const char *media);
 /// UNITS, which is what this arm is for. The residual is not being avoided: it
 /// is `gi.rt_reflect`'s own subject and F1-HITRES's.
 ///
-/// THE CURRENCY IS MEASURED, not assumed: an emissive ramp of four known
-/// radiances is read where the pixel mapping says it is, and linear-vs-sRGB is
-/// decided from it. (`PostFxDesc::hdr` is false here, so the scene renders
-/// straight into the offscreen RTT at PFG_RGBA8_UNORM — linear and un-dithered.)
+/// THE INSTRUMENT IS CHECKED, not assumed: one full-frame emissive card at four
+/// known radiances, two of them ABOVE 1.0, must read back as those radiances
+/// through the same radiance readback the mirror is measured with.
 static int lampMain(Engine *e, bool target);
+static int hitresMain(Engine *e);
+static int footprintSweepMain(Engine *e);
+static int formatCheckMain(Engine *e, const std::string &logFile);
+static int envRayMatchMain(Engine *e);
 
 int main(int argc, char **argv)
 {
-    bool wantLamp = false, wantLampTarget = false;
+    bool wantLamp = false, wantLampTarget = false, wantHitres = false;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--lamp") == 0) wantLamp = true;
         if (std::strcmp(argv[i], "--target") == 0) wantLampTarget = true;
+        if (std::strcmp(argv[i], "--hitres") == 0) wantHitres = true;
+    }
+    bool wantSweep = false, wantFormat = false, wantEnvMatch = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--footprint-sweep") == 0) wantSweep = true;
+        if (std::strcmp(argv[i], "--format-check") == 0) wantFormat = true;
+        if (std::strcmp(argv[i], "--env-ray-match") == 0) wantEnvMatch = true;
     }
     std::string err;
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
+    cfg.logFile = wantEnvMatch ? "test-rt-reflect-env-match-ogre.log"
+                  : wantFormat ? (getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT")
+                                    ? "test-rt-reflect-format-refused-ogre.log"
+                                    : "test-rt-reflect-format-ogre.log")
+                  : wantHitres ? "test-rt-reflect-hitres-ogre.log"
+                  : wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
                                              : "test-rt-reflect-lamp-ogre.log")
                   : getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-rt-reflect-norays-ogre.log"
                                                     : "test-rt-reflect-ogre.log";
@@ -230,6 +238,10 @@ int main(int argc, char **argv)
     if (getenv("JAH_RT_REFLECT_COST"))
         return costMain(e, JAHSHAKA_TEST_PLUGIN_DIR, JAHSHAKA_TEST_MEDIA_DIR);
     if (wantLamp) return lampMain(e, wantLampTarget);
+    if (wantHitres) return hitresMain(e);
+    if (wantSweep) return footprintSweepMain(e);
+    if (wantFormat) return formatCheckMain(e, cfg.logFile);
+    if (wantEnvMatch) return envRayMatchMain(e);
 
     View *view = e->createOffscreenView("rtreflect", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtreflect");
@@ -294,9 +306,21 @@ int main(int argc, char **argv)
         p.emissive = Colour(0.9f, 0.0f, 0.0f);
         p.roughness = 0.6f;
         const MaterialId mat = s->createPbrMaterial(p);
-        const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+        // CARDED (PHOTON-CARDS-2): the six box cards the bake gives a cube, so
+        // the mirror's hit reads the cube's surface-cache card first.
+        MeshData md = enginetest::unitCubeMesh();
+        for (unsigned a = 0; a < 6u; ++a) {
+            MeshCardDesc c;
+            c.axis = static_cast<unsigned char>(a);
+            c.origin = Vec3(0, 0, 0);
+            c.halfU = 0.5f;
+            c.halfV = 0.5f;
+            c.halfDepth = 0.52f;
+            md.cards.push_back(c);
+        }
+        const MeshId mesh = s->createMesh(md);
         CHECK(cube && mat && mesh && s->attachMesh(cube, mesh, mat),
-              "the emissive cube exists (behind the camera)");
+              "the emissive cube exists (behind the camera), carded");
     }
     enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
     enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.0f, -11.0f));
@@ -1223,15 +1247,7 @@ static int costMain(Engine *e, const char *, const char *)
 // ---------------------------------------------------------------------------
 namespace {
 
-/// The 8-bit picture's transfer, decided by MEASUREMENT.
-enum class LampTransfer { Linear, Srgb };
-double lampDecode(double v, LampTransfer t)
-{
-    if (t == LampTransfer::Linear) return v;
-    return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
-}
-
-void lampBlockMean(const Image &img, int cx, int cy, int half, double out[3])
+void lampBlockMean(const ImageF &img, int cx, int cy, int half, double out[3])
 {
     double s[3] = { 0, 0, 0 };
     int n = 0;
@@ -1252,11 +1268,9 @@ static int lampMain(Engine *e, bool target)
     /// L = 0.9 was inside the emissive voxel store's old UNORM range; L = 3.0 was
     /// not, and that is the clip row's whole content (ogre-patch 0087).
     const double kL = target ? 3.0 : 0.9;
-    std::printf("== gi.rt_reflect_lamp%s: %s (L = %.2f)\n", target ? "_clip" : "",
-                target ? "THE CLIP ROW -- an emitter authored ABOVE the emissive voxel store's "
-                         "old 1.0 ceiling, measured as a RATIO against a reference below it"
-                       : "the ORDINARY row -- a perfect mirror reads the emitter's own radiance",
-                kL);
+    std::printf("== gi.rt_reflect_lamp%s: a perfect mirror reads the emitter's own radiance "
+                "(L = %.2f%s)\n", target ? "_clip" : "", kL,
+                target ? ", ABOVE the emissive voxel store's old 1.0 ceiling" : "");
 
     View *view = e->createOffscreenView("rtlamp", kSize, kSize, Colour(0, 0, 0));
     Scene *s = e->createScene("rtlamp");
@@ -1277,33 +1291,14 @@ static int lampMain(Engine *e, bool target)
 
     // THE MIRROR. metalness 1 with a white albedo is F0 = 1 at roughness 0: a
     // ray is redirected and not attenuated, which is the entire measurement.
-    //
-    // ...EXCEPT IN THE TARGET ROW, AND THE REASON IS THE INSTRUMENT, NOT THE
-    // PHYSICS (VOXEL-CLIP-1, 2026-09-22, measured). An offscreen view's render
-    // target is `PFG_RGBA8_UNORM` (OgreView::createRtt), so `readPixels` cannot
-    // return a value above 1.0 AT ALL: with a perfect mirror and L = 3.0 the
-    // centre pixel reads exactly 1.0000 whatever the voxels hold — before patch
-    // 0087 and after it, with the emissive store proved to hold 3.0000 in the
-    // same process (the VOXEL CACHE line below). The old form of this row could
-    // therefore never go green, and its 0.333x was reading the readback's
-    // ceiling, not the voxel store's.
-    // SO THE TARGET ROW USES A GREY MIRROR of reflectance kTargetMirrorF0 and
-    // asserts LINEARITY across the old ceiling instead: the same pixel at a
-    // reference radiance below 1.0 and at L = 3.0 must be in the ratio of the
-    // two radiances. The mirror's exact reflectance and the whole grade CANCEL in
-    // that ratio, which is what makes it a statement about the store's range and
-    // nothing else — a clip at 1.0 reads 1.25 where the physics says 3.75.
-    static const float kTargetMirrorF0 = 0.25f;
     PbrParams mirrorParams;
-    mirrorParams.albedo = target ? Colour(kTargetMirrorF0, kTargetMirrorF0, kTargetMirrorF0)
-                                 : Colour(1.0f, 1.0f, 1.0f);
+    mirrorParams.albedo = Colour(1.0f, 1.0f, 1.0f);
     mirrorParams.metalness = 1.0f;
     mirrorParams.roughness = 0.0f;
     const MaterialId mirrorMat = s->createPbrMaterial(mirrorParams);
     const NodeId mirror = s->createNode();
     CHECK(mirror && mirrorMat && s->attachMesh(mirror, cube, mirrorMat),
-          target ? "the grey mirror exists (metalness 1, albedo 0.25, roughness 0)"
-                 : "the perfect mirror exists (metalness 1, albedo 1 -> F0 = 1, roughness 0)");
+          "the perfect mirror exists (metalness 1, albedo 1 -> F0 = 1, roughness 0)");
     enginetest::setNodeScale(s, mirror, Vec3(14.0f, 9.0f, 0.3f));
     enginetest::setNodePosition(s, mirror, Vec3(0.0f, 2.0f, 5.0f));
 
@@ -1323,24 +1318,28 @@ static int lampMain(Engine *e, bool target)
     enginetest::setNodeScale(s, lamp, Vec3(8.0f, 8.0f, 4.0f));
     enginetest::setNodePosition(s, lamp, Vec3(0.0f, 2.0f, -12.0f));
 
-    // THE CALIBRATION CARD. ONE emissive slab a metre in front of the camera,
+    // THE INSTRUMENT CHECK. ONE emissive slab a metre in front of the camera,
     // large enough to fill the frame, read at the CENTRE pixel at four known
-    // radiances in turn. A ramp of four patches side by side was tried first and
-    // is the wrong instrument here: this fixture uses the perspective helper
-    // camera, so a patch's pixel has to be either projected by hand (one more
-    // thing that can be wrong) or SEARCHED for — and a search for "the brightest
-    // pixel in this column band" finds the mirror's own reflection of the
-    // emitter, which is exactly what it did (it read 0.4314 for a patch of
-    // radiance 0.05 and chose sRGB, decoding a correct 0.8980 down to 0.7835).
-    // A full-frame card cannot be mislocated: the centre pixel is the card.
-    const double kRamp[4] = { 0.05, 0.12, 0.30, 0.60 };
+    // radiances in turn (a full-frame card cannot be mislocated: the centre
+    // pixel is the card). Two of the four are above 1.0 — the readback this
+    // row is measured through must return them, not a ceiling.
+    const double kRamp[4] = { 0.05, 0.30, 1.50, 3.00 };
+    // THE CARD REFLECTS NOTHING, the emitter's own recipe (Specular workflow,
+    // ior 1, black specular -> F0 = 0; black albedo): with the default F0 of
+    // 0.04 its rough lobe picked up the lamp behind the camera and read
+    // 0.0017 x L above its emission — invisible to the 8-bit readback this
+    // replaced, and exactly the kind of term a float read exists to see.
+    PbrParams cardP;
+    cardP.albedo = Colour(0.0f, 0.0f, 0.0f);
+    cardP.roughness = 1.0f;
+    cardP.workflow = PbrParams::Workflow::Specular;
+    cardP.ior = 1.0f;
+    cardP.specularColour = Colour(0.0f, 0.0f, 0.0f);
     NodeId card = 0;
     MaterialId cardMat = 0;
     {
-        PbrParams p;
-        p.albedo = Colour(0.0f, 0.0f, 0.0f);
+        PbrParams p = cardP;
         p.emissive = Colour(float(kRamp[0]), float(kRamp[0]), float(kRamp[0]));
-        p.roughness = 1.0f;
         cardMat = s->createPbrMaterial(p);
         card = s->createNode();
         if (!card || !cardMat || !s->attachMesh(card, cube, cardMat)) {
@@ -1362,42 +1361,39 @@ static int lampMain(Engine *e, bool target)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;                  // Epic: full-resolution rays, the tier under test
-    fx.hdr = false;              // the currency: linear RGBA8, no dither
+    fx.hdr = false;              // no tonemap, no exposure, no dither
+    fx.hdrReadback = true;       // the scene radiance, in float (HDR-READBACK-1)
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
     render(e, 48);
 
-    // ---- the transfer, measured -------------------------------------------
-    LampTransfer transfer = LampTransfer::Linear;
+    // ---- the instrument, checked -------------------------------------------
     {
-        double linErr = 0.0, srgbErr = 0.0;
-        std::printf("   THE TRANSFER, from one full-frame emissive card at four radiances:\n");
+        double worst = 0.0;
+        std::printf("   THE RADIANCE READBACK, from one full-frame emissive card at four "
+                    "radiances:\n");
         for (int i = 0; i < 4; ++i) {
-            PbrParams p;
-            p.albedo = Colour(0.0f, 0.0f, 0.0f);
+            PbrParams p = cardP;
             p.emissive = Colour(float(kRamp[i]), float(kRamp[i]), float(kRamp[i]));
-            p.roughness = 1.0f;
             if (!s->setPbrMaterial(cardMat, p)) { std::printf("FAIL: card radiance\n"); ++failures; }
             render(e, 8);
-            Image img;
-            view->readPixels(img);
+            ImageF img;
+            if (!view->readPixelsHdr(img)) {
+                std::printf("FAIL: readPixelsHdr: %s\n", e->lastError().c_str());
+                ++failures;
+                continue;
+            }
             double m[3];
             lampBlockMean(img, int(kSize) / 2, int(kSize) / 2, 10, m);
-            linErr += std::fabs(lampDecode(m[0], LampTransfer::Linear) - kRamp[i]) / kRamp[i];
-            srgbErr += std::fabs(lampDecode(m[0], LampTransfer::Srgb) - kRamp[i]) / kRamp[i];
-            std::printf("     radiance %.2f -> pixel %.4f (as linear %.4f, as sRGB %.4f)\n",
-                        kRamp[i], m[0], lampDecode(m[0], LampTransfer::Linear),
-                        lampDecode(m[0], LampTransfer::Srgb));
+            const double rel = std::fabs(m[0] - kRamp[i]) / kRamp[i];
+            worst = std::max(worst, rel);
+            std::printf("     radiance %.2f -> %.5f (%.3f %% off)\n", kRamp[i], m[0], 100.0 * rel);
         }
-        linErr /= 4.0; srgbErr /= 4.0;
-        transfer = linErr < srgbErr ? LampTransfer::Linear : LampTransfer::Srgb;
-        std::printf("     mean relative error: linear %.1f %%, sRGB %.1f %%\n",
-                    100.0 * linErr, 100.0 * srgbErr);
-        CHECK_MSG(std::min(linErr, srgbErr) < 0.10,
-                  "THE PICTURE'S TRANSFER IS IDENTIFIED (%s, mean error %.1f %%) — the currency "
-                  "the number below is stated in",
-                  transfer == LampTransfer::Linear ? "linear" : "sRGB",
-                  100.0 * std::min(linErr, srgbErr));
+        // Half precision carries 11 significant bits: 0.05 % is its whole
+        // rounding at these values, and 0.5 % leaves room for nothing else.
+        CHECK_MSG(worst < 0.005,
+                  "THE READBACK IS THE SCENE'S RADIANCE, above 1.0 included (worst %.3f %%, bar "
+                  "0.5 %%) — the currency the number below is stated in", 100.0 * worst);
     }
 
     // ---- the card goes, and the mirror is measured -------------------------
@@ -1412,97 +1408,791 @@ static int lampMain(Engine *e, bool target)
                 int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays, rq.instances);
     CHECK(rq.reflect, "the tier reports that this scene's views are tracing reflections");
 
-    // WHAT THE VOXELS HOLD, which is where the clip happens. Printed for both
-    // rows, because it is the mechanism the target row is a witness to.
+    // WHAT THE VOXELS HOLD, which is where the clip used to happen. Printed for
+    // both rows: it is the mechanism the clip row witnesses.
     {
         const GiVoxelStats vs = s->giVoxelStats(0);
-        std::printf("   THE VOXEL CACHE (%s %dx%dx%d, multiplier %.4f): peak %.4f, peak direct "
-                    "%.4f over %lld lit voxels — the emitter's authored radiance is %.2f\n",
+        std::printf("   THE VOXEL CACHE (%s %dx%dx%d, multiplier %.4f): emissive store %s peak "
+                    "%.4f, lit peak %.4f, peak direct %.4f over %lld lit voxels — the emitter's "
+                    "authored radiance is %.2f\n",
                     vs.format.c_str(), vs.width, vs.height, vs.depth, double(vs.multiplier),
-                    double(vs.peak), double(vs.peakDirect), (long long)vs.voxelsLit, kL);
+                    vs.emissiveFormat.c_str(), double(vs.peakEmissive), double(vs.peak),
+                    double(vs.peakDirect), (long long)vs.voxelsLit, kL);
     }
 
     // The mirror's CENTRE: the camera is on the axis and so is the emitter, so
     // the centre pixel's ray leaves the mirror straight back past the camera and
     // into the emitter's front face.
-    Image img;
-    if (!view->readPixels(img)) { std::printf("FAIL: readPixels\n"); return 1; }
+    ImageF img;
+    if (!view->readPixelsHdr(img)) { std::printf("FAIL: readPixelsHdr\n"); return 1; }
     double m[3];
     lampBlockMean(img, int(kSize) / 2, int(kSize) / 2, 10, m);
-    const double measured = lampDecode(m[0], transfer);
+    const double measured = m[0];
     const double ratio = measured / kL;
-    if (!target)
-        std::printf("   THE MIRROR: centre pixel %.4f -> radiance %.4f against the emitter's L = "
-                    "%.2f -> %.3fx\n", m[0], measured, kL, ratio);
-    else
-        std::printf("   THE MIRROR: centre pixel %.4f at L = %.2f through a mirror of reflectance "
-                    "%.2f (the readback is RGBA8: a perfect mirror would saturate here)\n",
-                    m[0], kL, double(kTargetMirrorF0));
+    std::printf("   THE MIRROR: centre radiance %.4f against the emitter's L = %.2f -> %.3fx\n",
+                measured, kL, ratio);
 
     // ...and the same pixel with the rays OFF, printed as the control: without
     // it "the mirror reads L" could be satisfied by anything else in the shot.
     e->setRayTracing(false);
     render(e, 64);
-    Image off;
-    view->readPixels(off);
+    ImageF off;
+    view->readPixelsHdr(off);
     double mo[3];
     lampBlockMean(off, int(kSize) / 2, int(kSize) / 2, 10, mo);
     e->setRayTracing(true);
     render(e, 16);
-    std::printf("   (rays off, same pixel: %.4f -> radiance %.4f — the march has nothing behind "
-                "the camera to show)\n", mo[0], lampDecode(mo[0], transfer));
+    std::printf("   (rays off, same pixel: radiance %.4f — the march has nothing behind the "
+                "camera to show)\n", mo[0]);
 
-    if (!target) {
-        const double err = std::fabs(ratio - 1.0);
-        std::printf("target: %.4f (bar 0.1000) RADIANCE IS INVARIANT ALONG A RAY: a perfect "
-                    "mirror showing an emitter of radiance %.2f reads %.2f%s\n", err, kL, kL,
-                    err <= 0.10 ? " -- MET" : "");
-        CHECK_MSG(err <= 0.10,
-                  "RADIANCE IS INVARIANT ALONG A RAY: the mirror reads %.4f against the "
-                  "emitter's L = %.2f (%.3fx, bar 0.9-1.1x)", measured, kL, ratio);
-    } else {
-        // ---- THE TARGET ROW: LINEARITY ACROSS THE OLD 1.0 CEILING ----------
-        // The same pixel, the same pose, the same grey mirror, at a REFERENCE
-        // radiance below the old ceiling. The mirror's reflectance, the DFG term
-        // and the whole grade are identical in both readings and cancel exactly
-        // in the ratio, so what is left is the only question worth asking: does
-        // the chain carry radiance ABOVE 1.0 proportionally, or does it saturate?
-        //   correct: pixel(3.0) / pixel(0.8) = 3.75
-        //   a store clipped at 1.0: 1.0 / 0.8 = 1.25
-        // (Measured before ogre-patch 0087: 1.25. After: 3.75.)
-        const double kRef = 0.8;
-        PbrParams refLamp = lampParams;
-        refLamp.emissive = Colour(float(kRef), float(kRef), float(kRef));
-        CHECK(s->setPbrMaterial(lampMat, refLamp), "the emitter is re-authored at the reference "
-                                                  "radiance");
-        s->refreshGlobalIllumination();
-        render(e, 64);
-        Image refImg;
-        if (!view->readPixels(refImg)) { std::printf("FAIL: readPixels (reference)\n"); return 1; }
-        double mr[3];
-        lampBlockMean(refImg, int(kSize) / 2, int(kSize) / 2, 10, mr);
-        const double refPix = lampDecode(mr[0], transfer);
-        std::printf("   THE REFERENCE: the same pixel at L = %.2f reads %.4f (implied mirror "
-                    "reflectance %.3f)\n", kRef, refPix, refPix / kRef);
-        {
-            const GiVoxelStats vs = s->giVoxelStats(0);
-            std::printf("   the voxel cache at the reference: emissive store %s peak %.4f, lit "
-                        "peak %.4f\n", vs.emissiveFormat.c_str(), double(vs.peakEmissive),
-                        double(vs.peak));
-        }
-        const double want = kL / kRef;
-        const double got = refPix > 1e-6 ? measured / refPix : 0.0;
-        const double err = std::fabs(got / want - 1.0);
-        std::printf("target: %.4f (bar 0.1000) RADIANCE IS INVARIANT ALONG A RAY AND THE STORE "
-                    "HAS NO CEILING AT 1.0: the mirror's pixel at L = %.2f over the same pixel at "
-                    "L = %.2f reads %.3f, and must read %.3f%s\n", err, kL, kRef, got, want,
-                    err <= 0.10 ? " -- MET" : "");
-        CHECK_MSG(err <= 0.10,
-                  "THE EMISSIVE STORE CARRIES RADIANCE ABOVE 1.0: %.4f / %.4f = %.3fx against "
-                  "the authored %.2f / %.2f = %.3fx (bar 10 %%; a store clipped at 1.0 reads "
-                  "%.3fx)", measured, refPix, got, kL, kRef, want, 1.0 / kRef);
+    // THE BAR IS 3 %, down from the 10 % the 8-bit transfer's calibration
+    // needed: through the float read both rows measure 0.12-0.13 % off
+    // (0.8989 / 0.90, 2.9961 / 3.00 — HDR-READBACK-1, 2026-09-24), which is the
+    // half-float store's own rounding and the mirror's G-buffer normal. 3 % is
+    // twenty times that, and still refuses every units error this row exists
+    // for (a coverage division, an energy factor, a 1/pi — all 30 % or more).
+    const double err = std::fabs(ratio - 1.0);
+    std::printf("target: %.4f (bar 0.0300) RADIANCE IS INVARIANT ALONG A RAY: a perfect mirror "
+                "showing an emitter of radiance %.2f reads %.4f%s\n", err, kL, measured,
+                err <= 0.03 ? " -- MET" : "");
+    CHECK_MSG(err <= 0.03,
+              "RADIANCE IS INVARIANT ALONG A RAY: the mirror reads %.4f against the emitter's "
+              "L = %.2f (%.3fx, bar 0.97-1.03x)", measured, kL, ratio);
+    if (target)
+        CHECK_MSG(measured > 1.25,
+                  "...AND THE CHAIN HAS NO CEILING AT 1.0: %.4f (a store or a readback clipped at "
+                  "1.0 reads 1.0)", measured);
+
+    std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+/// F1-HITRES — A MIRROR'S HIT IS SHADED FROM THE HIT SURFACE'S CARD
+/// (PHOTON-CARDS-2 part B, SC-1d; `--hitres`, the row gi.rt_reflect_hitres).
+///
+/// THE DEFECT IT CLOSES. A reflection ray's hit used to be shaded from the
+/// Photon voxels alone, and a MIRROR reads their finest mip — still two cells
+/// (15.6 cm at High's 7.8 cm cascade 0). So a mirror showed every reflected
+/// surface as a mosaic of voxel cells: the reflected panel's edge smeared over
+/// two cells and its face banded along the cell boundaries. A hit now asks the
+/// surface cache FIRST (jah_rq_card.glsl): the card of the hit instance holds
+/// the surface's lit radiance at the card's own texel pitch.
+///
+/// THE CLOSED FORM, AND WHERE IT COMES FROM. A perfect mirror (metalness 1,
+/// albedo 1 -> F0 = 1, roughness 0) redirects a ray without attenuating it, so
+/// the mirror pixel whose ray lands on the panel at P reads the panel's
+/// outgoing radiance at P — which is what the panel's CARD stores at P (the
+/// panel's albedo x its lighting, the CardLight job's arithmetic; gi.card_lighting
+/// holds that to pbsDirect). The pixel's P is geometry: the mirror is the plane
+/// z = kMirrorZ, so the ray through a pixel, unfolded, meets the panel's plane
+/// mirrored to z = 2 kMirrorZ - kPanelZ. So the suite computes, per pixel of a
+/// row through the panel, where the ray lands and reads the card there — the
+/// closed form — and holds the picture to it:
+///
+///     |pixel - card(P)| <= 2 % of the card + half a card-store quantum + half the
+///                          pixel's own float quantum (the view's radiance, HDR-READBACK-1)
+///
+/// on every face pixel of the row more than 2.5 pixels inside the panel's edge,
+/// the background black more than 2.5 pixels outside it, and IN that band every
+/// pixel is one or the other — the panel's value or black, nothing between: the
+/// step is sharp. WHY THE BAND IS 2.5 PIXELS AND NOT ONE, measured: the mirror's
+/// reflected direction is built from the G-buffer normal, which is
+/// R10G10B10A2 — a half step of 1/1023 per component, doubled by the
+/// reflection, over the 5.8 m from the mirror to the panel is up to ~1.1 cm a
+/// component, and the edge's position in this 512-pixel row jitters by one or
+/// two pixels from row to row (dark and bright pixels interleave there in BOTH
+/// arms). That is where the edge lands, not how sharp it is. With the voxels
+/// (the cache turned off through the tuning door, same process) the same row
+/// is printed: the worst error on the face and the smeared pixels — the banding
+/// this replaces, as numbers.
+///
+/// NO SHADOW, NO SKY, NO FLOOR: the panel is lit by one non-casting sun, the
+/// environment is black, so the card's radiance is its direct term and the
+/// background is exactly 0.
+static int hitresMain(Engine *e)
+{
+    std::printf("== gi.rt_reflect_hitres: F1-HITRES -- a mirror's hit reads the card\n");
+    const unsigned kPx = 512u;
+    View *view = e->createOffscreenView("rthitres", kPx, kPx, Colour(0, 0, 0));
+    Scene *s = e->createScene("rthitres");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: this build/machine has no ray queries — F1-HITRES is about the ray "
+                    "tier's hit and skips cleanly\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    MeshData md = enginetest::unitCubeMesh();
+    for (unsigned a = 0; a < 6u; ++a) {
+        MeshCardDesc c;
+        c.axis = static_cast<unsigned char>(a);
+        c.origin = Vec3(0, 0, 0);
+        c.halfU = 0.5f;
+        c.halfV = 0.5f;
+        c.halfDepth = 0.52f;
+        md.cards.push_back(c);
+    }
+    const MeshId carded = s->createMesh(md);
+
+    // THE MIRROR, in front of the camera: its front face is the plane z = 2.85.
+    const float kMirrorZ = 2.85f;
+    PbrParams mp;
+    mp.albedo = Colour(1.0f, 1.0f, 1.0f);
+    mp.metalness = 1.0f;
+    mp.roughness = 0.0f;
+    const NodeId mirror = s->createNode();
+    CHECK(mirror && s->attachMesh(mirror, cube, s->createPbrMaterial(mp)),
+          "the perfect mirror exists (metalness 1, albedo 1, roughness 0)");
+    s->setNodeTransform(mirror, Vec3(0.0f, 1.5f, 3.0f), Quat(), Vec3(8.0f, 6.0f, 0.3f));
+
+    // THE PANEL, behind the camera, facing the mirror: 2 x 2 m, carded, matte;
+    // its front face is the plane z = -2.95.
+    const float kPanelZ = -2.95f;
+    PbrParams pp;
+    pp.albedo = Colour(0.5f, 0.45f, 0.4f);
+    pp.roughness = 1.0f;
+    pp.workflow = PbrParams::Workflow::Specular;
+    pp.ior = 1.0f;
+    pp.specularColour = Colour(0.0f, 0.0f, 0.0f);
+    const NodeId panel = s->createNode();
+    CHECK(panel && s->attachMesh(panel, carded, s->createPbrMaterial(pp)), "the carded panel exists");
+    s->setNodeTransform(panel, Vec3(0.0f, 1.5f, -3.0f), Quat(), Vec3(2.0f, 2.0f, 0.1f));
+
+    // ONE SUN, NOT CASTING, from above the mirror's side: the panel's face is
+    // lit uniformly (cos 30 degrees) and nothing shadows it.
+    {
+        const NodeId sun = s->createNode();
+        LightDesc l;
+        l.type = LightType::Directional;
+        l.colour = Colour(1.0f, 1.0f, 1.0f);
+        l.intensity = 1.0f;
+        l.castShadows = false;
+        // The light travels along the node's -Y; turn -Y to (0, -0.5, -0.866).
+        const float a = 60.0f * 3.14159265f / 180.0f;    // about X
+        s->setNodeTransform(sun, Vec3(0, 0, 0), Quat(std::sin(0.5f * a), 0.0f, 0.0f, std::cos(0.5f * a)),
+                            Vec3(1, 1, 1));
+        CHECK(sun && s->setLight(sun, l), "a non-casting sun lights the panel's face");
     }
 
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.testBoundsMin = Vec3(-8.0f, -3.0f, -8.0f);
+    gi.testBoundsMax = Vec3(8.0f, 6.0f, 8.0f);
+    gi.cards = GiToggle::On;
+    gi.cardResidencyRadius = 40.0f;
+    CHECK(s->setGlobalIllumination(gi), "the voxel arm and the surface cache build");
+
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdr = false;
+    fx.hdrReadback = true;   // the row is compared as RADIANCE (HDR-READBACK-1)
+    view->setPostFx(fx);
+    const float kFov = 45.0f;
+    CameraDesc cam;
+    cam.position = Vec3(0.0f, 1.5f, 0.0f);
+    cam.orientation = Quat(0.0f, 1.0f, 0.0f, 0.0f);     // -Z forward turned to +Z
+    cam.fovDegrees = kFov;
+    view->setCamera(cam);
+    render(e, 120);
+
+    const double tanH = std::tan(0.5 * double(kFov) * 3.14159265358979 / 180.0);
+    const double zImage = 2.0 * double(kMirrorZ) - double(kPanelZ);   // the panel, unfolded
+    const unsigned row = kPx / 2u;
+    // WHERE A PIXEL'S RAY LANDS on the panel's plane (world x; y is the row's).
+    const auto landX = [&](unsigned px) {
+        const double ndc = (double(px) + 0.5) / double(kPx) * 2.0 - 1.0;
+        return -ndc * tanH * zImage;   // screen right is world -X after the half turn
+    };
+    const double yRow = 1.5 - (((double(row) + 0.5) / double(kPx) * 2.0 - 1.0) * tanH * zImage);
+
+    // THE CLOSED FORM, per pixel of the row: where its ray lands on the panel,
+    // and the card's radiance there (0 off the panel). Read once, with the
+    // cache on; the voxel arm below is held to the same numbers.
+    const CardCacheStatus st = s->giStatus().cards;
+    CHECK_MSG(st.built && st.indirectRelights > 0ull, "the panel's cards are captured, lit and marched"
+              " (%u resident, %llu marches)", st.cardsResident, (unsigned long long)st.indirectRelights);
+    const double pixW = 2.0 * tanH * zImage / double(kPx);          // one pixel on the panel, metres
+    struct Want { bool face = false; bool edge = false; double v[3] = { 0, 0, 0 }; double q[3] = { 0, 0, 0 }; };
+    std::vector<Want> want(kPx);
+    double plateau = 0.0;
+    for (unsigned px = 0; px < kPx; ++px) {
+        const double x = landX(px);
+        const double inside = 1.0 - std::fabs(x);                    // metres inside the panel's edge
+        Want &w = want[px];
+        if (std::fabs(inside) <= 2.5 * pixW) { w.edge = true; continue; }   // the edge band
+        if (inside < 0.0) continue;                                   // the black background
+        CardSample t;
+        if (!s->readCardAt(Vec3(float(x), float(yRow), kPanelZ), Vec3(0, 0, 1), t, panel) || !t.ok ||
+            !t.lit)
+            continue;
+        w.face = true;
+        for (int k = 0; k < 3; ++k) {
+            w.v[k] = t.radiance[k];
+            const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
+            w.q[k] = t.radiance[k] > 0.0f ? 0.5 * std::ldexp(1.0, std::ilogb(double(t.radiance[k])) - bits)
+                                          : 0.0;
+            plateau = std::max(plateau, w.v[k]);
+        }
+    }
+    // THE PIXEL'S OWN QUANTUM, in float (HDR-READBACK-1). The row is read from
+    // the view's RGBA16F scene target, 10 mantissa bits: half a step of the
+    // value's octave, 0.5 x 2^(ilogb(v) - 10) — 1.2e-4 at the plateau's ~0.13,
+    // where the 8-bit read carried 1.5 codes = 0.0059 absolute, 4.5 % of the
+    // same value and more than the 2 % the bar is about (CARDS-2's audit F6).
+    // "BLACK" is likewise a float statement: the background reflects a black
+    // environment and a black sky, so it reads 0 up to the same store's floor.
+    const auto pixQ = [](double v) {
+        return v > 0.0 ? 0.5 * std::ldexp(1.0, std::ilogb(v) - 10) : 0.0;
+    };
+    const double kBlack = 1.0e-3;
+    struct Profile { int face = 0; double worstFace = 0.0; double worstBack = 0.0; int strays = 0;
+                     int smeared = 0; };
+    const auto measureRow = [&](const char *what) {
+        Profile pr;
+        ImageF img;
+        if (!view->readPixelsHdr(img)) { CHECK(false, "readPixelsHdr"); return pr; }
+        // The panel's value beside each edge band: the nearest face pixel's.
+        const auto nearestFace = [&](unsigned px) -> const Want * {
+            for (unsigned d = 1; d < 8u; ++d) {
+                if (px >= d && want[px - d].face) return &want[px - d];
+                if (px + d < kPx && want[px + d].face) return &want[px + d];
+            }
+            return nullptr;
+        };
+        for (unsigned px = 0; px < kPx; ++px) {
+            const Want &w = want[px];
+            const Colour c = img.at(px, row);
+            const double v[3] = { c.r, c.g, c.b };
+            if (w.edge) {
+                // THE BAND: the panel's value or black, nothing between.
+                const Want *f = nearestFace(px);
+                if (!f) continue;
+                bool black = true, panelValue = true;
+                for (int k = 0; k < 3; ++k) {
+                    black = black && v[k] <= kBlack;
+                    panelValue = panelValue && std::fabs(v[k] - f->v[k]) <= 0.02 * f->v[k] + f->q[k] + pixQ(v[k]);
+                }
+                if (!black && !panelValue) ++pr.smeared;
+                continue;
+            }
+            if (!w.face) {
+                // THE BACKGROUND: black, and no bright pixel may live out here.
+                const double lum = (v[0] + v[1] + v[2]) / 3.0;
+                pr.worstBack = std::max(pr.worstBack, std::max(v[0], std::max(v[1], v[2])));
+                if (lum > 0.1 * plateau) ++pr.strays;
+                continue;
+            }
+            ++pr.face;
+            for (int k = 0; k < 3; ++k) {
+                const double excess = std::fabs(v[k] - w.v[k]) - w.q[k] - pixQ(v[k]);
+                pr.worstFace = std::max(pr.worstFace, std::max(0.0, excess) / std::max(w.v[k], 1e-4));
+            }
+        }
+        // THE EDGE PROFILES, printed: four pixels either side of each band's
+        // outer pixel, the picture's red over the closed form's (0 off the panel).
+        for (unsigned px = 1; px + 1 < kPx; ++px) {
+            if (!(want[px].edge && !want[px - 1].edge)) continue;
+            std::printf("      edge band from px %u:", px);
+            for (int d = -2; d <= 7; ++d) {
+                const int q = int(px) + d;
+                if (q < 0 || q >= int(kPx)) continue;
+                std::printf(" %.3f/%.3f", img.at(unsigned(q), row).r, want[size_t(q)].v[0]);
+            }
+            std::printf("\n");
+        }
+        std::printf("    %-22s %d face pixels: worst error beyond the stores' half-quanta %.2f %% of"
+                    " the card; %d smeared pixels in the edge bands; background max %.4f, %d bright\n",
+                    what, pr.face, 100.0 * pr.worstFace, pr.smeared, pr.worstBack, pr.strays);
+        return pr;
+    };
+    const Profile cards = measureRow("hits read the card");
+    CHECK_MSG(cards.face > 100 && cards.worstFace <= 0.02,
+              "F1-HITRES: every face pixel of the row equals the card's radiance where its ray lands"
+              " (%d pixels, worst %.2f %% beyond the quanta; bar 2 %%)", cards.face,
+              100.0 * cards.worstFace);
+    CHECK_MSG(cards.smeared == 0 && cards.strays == 0 && cards.worstBack <= kBlack,
+              "F1-HITRES: the panel's edge is a STEP — every pixel of the edge bands is the panel's"
+              " value or black (%d smeared), the background beyond them black (max %.4f, %d bright)",
+              cards.smeared, cards.worstBack, cards.strays);
+
+    // THE SAME ROW FROM THE VOXELS — the cache off through the tuning door —
+    // printed, for the record: this is the banding the card read replaces.
+    GiParams off = gi;
+    off.cards = GiToggle::Off;
+    s->setGiTuning(off);
+    render(e, 30);
+    const Profile voxels = measureRow("hits read the voxels");
+    std::printf("    (the voxel read of the same row: worst %.2f %% on the face, %d smeared pixels in"
+                " the edge bands — the mirror band's banding, F1-HITRES's subject)\n",
+                100.0 * voxels.worstFace, voxels.smeared);
+
+    // ---- THE OBLIQUE HIT AT A BOX'S EDGE (PHOTON-CARDS-2 fix round, audit F3) ----
+    //
+    // The card pick FACES the hit's GEOMETRIC normal, which the reflection
+    // rebuilds from the hit triangle (jah_rq_geom.glsl: the GPU scene's geometry
+    // rows by the hit's instance, geometry and primitive). While it faced the
+    // REVERSED RAY, a hit on a crate's TOP within two card texels (+1 mm) of the
+    // top/front edge at more than 45 degrees of incidence went to the FRONT card
+    // (it faces the ray more squarely and its depth test passes there) — a stripe
+    // of the front's lighting along the top's edge — and past 87 degrees the top
+    // card failed the facing test outright.
+    //
+    // MEASURED ON THE HIT PATH ITSELF, not through a picture: Engine::
+    // cardReadParity's TRACED questions run the reflection's own sequence — trace
+    // the TLAS (near copies), take the instance from the hit, rebuild the normal,
+    // pick — at rays aimed at the top 0.3-1.5 card texels behind its front edge at
+    // 60 degrees of incidence, and anywhere on the top at 88. Every one must hit
+    // the top, rebuild +Y, and pick the TOP card (the CPU reference's pick at the
+    // hit with the surface normal); the reversed ray's pick at the same points is
+    // printed (the stripe it drew). A picture was the first instrument and the
+    // wrong one: the mirror's R10G10B10A2 G-buffer normal shifts the whole
+    // reflected image by ~20 rows, non-uniformly, which swamps a 5-row stripe.
+    {
+        s->removeNode(panel);
+        PbrParams cp;
+        cp.albedo = Colour(0.6f, 0.55f, 0.5f);
+        cp.roughness = 1.0f;
+        const NodeId crate = s->createNode();
+        CHECK(crate && s->attachMesh(crate, carded, s->createPbrMaterial(cp)), "the carded crate exists");
+        // 2 m cube, its top at y = 2, its front (+Z) face at z = 0.
+        s->setNodeTransform(crate, Vec3(0.0f, 1.0f, -1.0f), Quat(), Vec3(2.0f, 2.0f, 2.0f));
+        s->setGiTuning(gi);                          // the cache on again
+        s->refreshGlobalIllumination();
+        render(e, 150);
+        const float kTexel = 2.0f / 128.0f;          // a 2 m card at 64 texels a metre
+        std::vector<CardReadQuery> q;
+        std::vector<Vec3> at;
+        for (const float incidenceDeg : { 60.0f, 88.0f }) {
+            const float a = incidenceDeg * 3.14159265f / 180.0f;
+            const Vec3 dir(0.0f, -std::cos(a), -std::sin(a));   // travelling -Z, down
+            for (int ix = 0; ix < 5; ++ix)
+                for (int id = 0; id < 4; ++id) {
+                    const float behind = incidenceDeg < 70.0f ? kTexel * (0.3f + 0.4f * float(id))
+                                                              : 0.05f + 0.4f * float(id);
+                    const Vec3 p(-0.8f + 0.4f * float(ix), 2.0f, -behind);
+                    CardReadQuery cq;
+                    cq.trace = true;
+                    cq.position = Vec3(p.x - 2.0f * dir.x, p.y - 2.0f * dir.y, p.z - 2.0f * dir.z);
+                    cq.facing = dir;
+                    q.push_back(cq);
+                    at.push_back(p);
+                }
+        }
+        std::vector<CardReadPick> picks;
+        const bool ran = e->cardReadParity(s, q, picks);
+        CHECK_MSG(ran && picks.size() == q.size(), "the traced hit path ran (%s)",
+                  ran ? "ok" : e->lastError().c_str());
+        if (ran && picks.size() == q.size()) {
+            for (int arm = 0; arm < 2; ++arm) {
+                int hits = 0, topPicks = 0, normalsUp = 0, rayWouldPickFront = 0;
+                for (size_t i = size_t(arm) * 20u; i < size_t(arm + 1) * 20u; ++i) {
+                    const CardReadPick &g = picks[i];
+                    CardSample top, byRay;
+                    s->readCardAt(at[i], Vec3(0, 1, 0), top, crate);
+                    const Vec3 back(-q[i].facing.x, -q[i].facing.y, -q[i].facing.z);
+                    s->readCardAt(at[i], back, byRay, crate);
+                    hits += g.hit ? 1 : 0;
+                    normalsUp += (g.hit && g.hitNormal[1] > 0.999f) ? 1 : 0;
+                    topPicks += (g.ok && top.ok && g.card == top.card) ? 1 : 0;
+                    rayWouldPickFront += (!byRay.ok || byRay.card != top.card) ? 1 : 0;
+                }
+                const float inc = arm == 0 ? 60.0f : 88.0f;
+                std::printf("    %.0f degrees of incidence, %s: %d/20 hit the top, %d rebuilt +Y, %d picked the"
+                            " TOP card; the reversed ray would have picked another card (or none) at %d\n",
+                            inc, arm == 0 ? "0.3-1.5 texels behind the front edge" : "5-125 cm onto the top",
+                            hits, normalsUp, topPicks, rayWouldPickFront);
+                CHECK_MSG(hits == 20 && normalsUp == 20 && topPicks == 20,
+                          "at %.0f degrees of incidence every hit on the top reads the TOP card (%d/20)", inc,
+                          topPicks);
+            }
+        }
+    }
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+/// THE FOOTPRINT SWEEP — the measurement kCardFootprintTexels stands on
+/// (PHOTON-CARDS-2 fix round, audit F2). A TOOL, not a ctest row: `test_rt_reflect
+/// --footprint-sweep`, gi.rt_reflect's own fixture (the mirror wall, the carded
+/// emissive cube behind the camera), the wall's roughness swept.
+///
+/// THE TWO ERRORS, per roughness, over the wall pixels that show the cube,
+/// each arm in its own view warmed 60 frames (the temporal mean at its floor):
+///   card  the card read ALONE (the gate open, JAHSHAKA_CARD_FOOTPRINT_K huge):
+///         the per-pixel standard deviation of two CONSECUTIVE frames — the
+///         noise one texel-exact sample per frame leaves after the mean, which
+///         grows with the footprint (the speckle);
+///   voxel the voxel read ALONE (the gate shut, K = 0): its distance from the
+///         card arm's 60-frame mean (the converged answer the card read is
+///         unbiased towards) — the prefiltered read's bias, cells and coverage.
+/// Where the card's noise crosses the voxel's bias is where a texel-exact read
+/// stops paying; the footprint there, in card texels, is k. (A YOUNG view was
+/// the first instrument and says nothing: its two frames are the warm-up's fade
+/// from the probe, identical in both arms to four decimals.)
+static int footprintSweepMain(Engine *e)
+{
+    const unsigned kPx = 192u;
+    // The device exists once a view does (the startup-order law).
+    View *anchor = e->createOffscreenView("fpsweep-anchor", 16u, 16u, Colour(0, 0, 0));
+    Scene *s = e->createScene("fpsweep");
+    if (anchor && s) anchor->setScene(s);
+    if (!s || !e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("no ray queries — nothing to sweep\n");
+        return 0;
+    }
+    s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
+    PbrParams wallParams;
+    wallParams.albedo = Colour(1.0f, 1.0f, 1.0f);
+    wallParams.metalness = 1.0f;
+    wallParams.roughness = 0.3f;
+    const MaterialId wallMat = s->createPbrMaterial(wallParams);
+    const NodeId wall = s->createNode();
+    s->attachMesh(wall, s->createMesh(enginetest::unitCubeMesh()), wallMat);
+    enginetest::setNodeScale(s, wall, Vec3(14.0f, 9.0f, 0.3f));
+    enginetest::setNodePosition(s, wall, Vec3(0.0f, 2.0f, 5.0f));
+    MeshData md = enginetest::unitCubeMesh();
+    for (unsigned a = 0; a < 6u; ++a) {
+        MeshCardDesc c;
+        c.axis = static_cast<unsigned char>(a);
+        c.origin = Vec3(0, 0, 0);
+        c.halfU = 0.5f;
+        c.halfV = 0.5f;
+        c.halfDepth = 0.52f;
+        md.cards.push_back(c);
+    }
+    PbrParams cp;
+    cp.albedo = Colour(0.05f, 0.05f, 0.05f);
+    cp.emissive = Colour(0.9f, 0.0f, 0.0f);
+    cp.roughness = 0.6f;
+    const NodeId cube = s->createNode();
+    s->attachMesh(cube, s->createMesh(md), s->createPbrMaterial(cp));
+    enginetest::setNodeScale(s, cube, Vec3(3.0f, 3.0f, 3.0f));
+    enginetest::setNodePosition(s, cube, Vec3(0.0f, 2.0f, -11.0f));
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    gi.numBounces = 1;
+    gi.testBoundsMin = Vec3(-14.0f, -2.0f, -14.0f);
+    gi.testBoundsMax = Vec3(14.0f, 10.0f, 7.0f);
+    gi.cards = GiToggle::On;
+    gi.cardResidencyRadius = 40.0f;
+    s->setGlobalIllumination(gi);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdr = false;
+    int serial = 0;
+    const auto shots = [&](int frames, Image &a, Image &b) {
+        View *v = e->createOffscreenView(("fpsweep" + std::to_string(serial++)).c_str(), kPx, kPx,
+                                         Colour(0, 0, 0));
+        v->setScene(s);
+        v->setPostFx(fx);
+        enginetest::testCameraLookAt(v, Vec3(0.0f, 2.0f, -6.0f), Vec3(0.0f, 2.0f, 5.0f));
+        render(e, frames);
+        v->readPixels(a);
+        render(e, 1);
+        v->readPixels(b);
+        e->destroyView(v);
+    };
+    {   // settle the scene once (GI, the cube's cards)
+        Image w0, w1;
+        shots(120, w0, w1);
+    }
+    const double kCubeT = 16.0;                     // the wall to the cube, metres
+    const double kTexel = 1.5 / 128.0;              // the 3 m cube's cards split to 1.5 m pages
+    const double kN = 32.0;                         // the temporal mean's memory (1 / kReflectHistoryFloor)
+    std::printf("perceptual  alpha   footprint(texels)  card 2-frame std   voxel |. - card mean|   (mean"
+                " over the cube's reflection, red, 0..1)\n");
+    double prevDiff = 0.0, prevF = 0.0, crossing = -1.0;
+    bool havePrev = false;
+    for (const float rough : { 0.03f, 0.05f, 0.07f, 0.09f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f }) {
+        wallParams.roughness = rough;
+        s->setPbrMaterial(wallMat, wallParams);
+        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "1e9", 1);
+        Image c0, c1, v0, v1;
+        shots(60, c0, c1);
+        setenv("JAHSHAKA_CARD_FOOTPRINT_K", "0", 1);
+        shots(60, v0, v1);
+        double ec = 0.0, ev = 0.0;
+        int n = 0;
+        for (unsigned y = 0; y < kPx; ++y)
+            for (unsigned x = 0; x < kPx; ++x) {
+                const Colour a = c0.at(x, y), b = c1.at(x, y);
+                const double mean = 0.5 * (double(a.r) + double(b.r));
+                if (mean - std::max(double(a.g), double(a.b)) < 0.08) continue;   // the cube's reflection
+                ec += std::fabs(double(a.r) - double(b.r)) / std::sqrt(2.0);
+                ev += std::fabs(double(v1.at(x, y).r) - mean);
+                ++n;
+            }
+        if (n) { ec /= n; ev /= n; }
+        const double alpha = double(rough) * double(rough);
+        const double f = 2.0 * kCubeT * alpha / std::sqrt(kN) / kTexel;
+        std::printf("  %.2f     %.4f   %8.1f           %.4f             %.4f        (%d px)\n", rough, alpha,
+                    f, ec, ev, n);
+        const double diff = ec - ev;
+        if (havePrev && prevDiff < 0.0 && diff >= 0.0 && crossing < 0.0)
+            crossing = prevF + (f - prevF) * (-prevDiff) / (diff - prevDiff);
+        prevDiff = diff; prevF = f; havePrev = true;
+    }
+    unsetenv("JAHSHAKA_CARD_FOOTPRINT_K");
+    std::printf("crossing: the card's noise meets the voxel's bias at a footprint of %.2f card texels\n",
+                crossing);
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+/// RAY-FMT-CHECK (PHOTON P3; `--format-check`, the rows
+/// gi.rt_reflect_format_lavapipe and gi.rt_reflect_format_refused_lavapipe).
+///
+/// The tier's availability gate asks the device for STORAGE_IMAGE support of
+/// the formats its own images use (RGBA16F, RG32F) instead of assuming it, and a
+/// device that lacks one is a no-rays device with ONE log line naming it. Both
+/// rows run on LAVAPIPE, the second device of the box: without the deny it must
+/// NOT refuse (both formats are core-mandatory storage formats, so every
+/// conformant driver stores to them — the check is a driver-defect guard), and
+/// with `JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT` (fault injection) the same device must
+/// refuse through the one gate: no ray query, a view at the ray tier with no
+/// trace, frames that still draw, and the line in the log.
+static bool logContains(const std::string &path, const char *needle)
+{
+    FILE *f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    std::string text;
+    char buf[4096];
+    size_t n = 0;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n);
+    std::fclose(f);
+    return text.find(needle) != std::string::npos;
+}
+
+static int formatCheckMain(Engine *e, const std::string &logFile)
+{
+    const char *deny = getenv("JAHSHAKA_RAY_DENY_STORAGE_FORMAT");
+    std::printf("== gi.rt_reflect_format: the ray tier asks the device for its storage formats "
+                "(%s)\n", deny ? deny : "no format denied");
+    View *view = e->createOffscreenView("rtformat", 64u, 64u, Colour(0, 0, 0));
+    Scene *s = e->createScene("rtformat");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;                    // the ray tier's row: a device with rays would trace here
+    view->setPostFx(fx);
+    enginetest::addTestCube(s, Colour(0.5f, 0.5f, 0.5f), 1.0f, 0.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 4.0f), Vec3(0.0f, 0.0f, 0.0f));
+    for (int i = 0; i < 8; ++i) e->renderOneFrame();
+    const bool available = e->rayQueryAvailable();
+    const RayQueryStatus rq = s->rayQueryStatus();
+    const bool refusedLine = logContains(logFile, "ray-query tier refused");
+    std::printf("   rayQueryAvailable %d; status available %d reflect %d; refusal line in the log "
+                "%d\n", int(available), int(rq.available), int(rq.reflect), int(refusedLine));
+    Image img;
+    CHECK(view->readPixels(img) && img.width == 64u, "the frames draw either way");
+    if (deny) {
+        CHECK(!available, "A DEVICE THAT CANNOT STORE TO A HISTORY FORMAT IS A NO-RAYS DEVICE: "
+                          "rayQueryAvailable() is false");
+        CHECK(!rq.available && !rq.reflect,
+              "...every consumer reads the same gate: the scene's status is unavailable and "
+              "its view traces nothing");
+        CHECK(refusedLine, "...and the refusal is said once, in the log, naming the format");
+    } else {
+        CHECK(!refusedLine, "a device that stores to both formats is NOT refused (no refusal "
+                            "line)");
+        std::printf("   (the device's own ray-query answer: %s)\n",
+                    available ? "available — the gate passed on the formats"
+                              : "no ray query on this device at all");
+    }
+    std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
+    return failures ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+/// ENV-RAY-MATCH (PHOTON P3; `--env-ray-match`, the row gi.env_ray_match).
+///
+/// A SILVER FLOOR UNDER THE REALISTIC SKY (PAN-SMEAR-1's fixture: metal 1, the
+/// camera at (0,5,14) looking at (0,1,0) — a glossy floor at a grazing angle)
+/// with NOTHING on it: every reflected ray escapes to the sky. The same pixels
+/// are answered twice, in one process, at five roughnesses:
+///   RAYS OFF  the environment lobe (HlmsPbs's specular env term: the sky's
+///             prefiltered chain at the surface's roughness);
+///   RAYS ON   the ray tier: one GGX VNDF sample a pixel a frame, each miss
+///             reading jahEnvCone at its footprint, the temporal mean.
+/// Read as RADIANCE (readPixelsHdr, the linear un-tonemapped chain, so 1/255 is
+/// 1/255 of radiance), with the rays' composite weight (readReflectionHdr's
+/// alpha) checked so a pixel the rays did not answer never counts as agreement.
+///
+/// THE MECHANISM (measured 2026-09-24). Exact at a mirror: the two answers read
+/// one cube texel. Above it, the split-sum lookup is a prefiltered chain read
+/// along ONE direction while the rays sample the lobe itself, which leans toward
+/// the normal (the off-specular peak) and is clipped by the horizon. Over this
+/// sky — red falls five-fold from 5 to 60 degrees of elevation (the cone
+/// harness, JAH_ENV_MATCH_CONES) — a lookup centred on the mirror direction
+/// read warmer: 0.05 / 0.15 / 1.31 / 3.25 / 7.23 codes at r = 0 / 0.05 / 0.1 /
+/// 0.2 / 0.3. Every environment reader now looks along jahEnvDominantDir
+/// (jah_environment.glsl: Frostbite's fit to the lobe's CENTROID, not the
+/// physics), which measured 0.05 / 0.13 / 0.94 / 1.71 / 3.80. What remains is
+/// the horizon clip and the dropped G2/G1: no single prefiltered lookup meets
+/// the lobe exactly.
+///
+/// THE BARS, PER ROUGHNESS, from those numbers: 0.5 code where the lookup is
+/// the lobe (r <= 0.05: measured 0.05 / 0.13); above it the measured split-sum
+/// residual + 25 % (r = 0.1: 1.2, r = 0.2: 2.2, r = 0.3: 4.8). NOT MET: the
+/// lead's 0.5-code bar at r = 0.1 — the residual there is 0.94 after the fit
+/// (1.31 before), one-signed (the rays darker in all three channels).
+///
+/// THE FRAME INDEX. The rays arm's sequence is keyed on the frame; every arm is
+/// read after the same warm-up and the rays arm is the MEAN of 32 consecutive
+/// read-backs of a converged history (one frame of it is one sample of a random
+/// variable whose mean is the quantity).
+static int envRayMatchMain(Engine *e)
+{
+    std::printf("== gi.env_ray_match: the environment answer vs the ray tier's sky answer\n");
+    const unsigned kW = 384u, kH = 216u;
+    View *view = e->createOffscreenView("envraymatch", kW, kH, Colour(0, 0, 0));
+    Scene *s = e->createScene("envraymatch");
+    if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
+    view->setScene(s);
+    if (!e->rayQueryAvailable() || !e->rayTracing()) {
+        std::printf("ok: no ray queries on this machine — skips cleanly\n");
+        return 0;
+    }
+    // THE REALISTIC SKY: the analytic atmosphere at its clear-sky defaults, the
+    // sun 35 degrees up (behind the camera), its SH and the environment light at
+    // 1 — what the document pushes for a new world's sky.
+    SkyDesc sky;
+    sky.mode = SkyMode::Atmosphere;
+    sky.atmosphere.hasSun = true;
+    const float rad = 35.0f * 3.14159265f / 180.0f;
+    sky.atmosphere.sunDir[0] = std::cos(rad) * 0.6f;
+    sky.atmosphere.sunDir[1] = std::sin(rad);
+    sky.atmosphere.sunDir[2] = std::cos(rad) * 0.8f;
+    CHECK(s->setSky(sky), "the analytic sky binds");
+    for (int f = 0; f < 8; ++f) e->renderOneFrame();
+    float sh[27] = { 0.0f };
+    CHECK(s->skyAmbientSh(sh), "the sky's SH is integrated");
+    s->setAmbientSh(sh);
+    s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f, 1.0f));
+
+    const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams silver;
+    silver.albedo = Colour(0.9f, 0.9f, 0.9f);
+    silver.metalness = 1.0f;
+    silver.roughness = 0.0f;
+    const MaterialId silverMat = s->createPbrMaterial(silver);
+    const NodeId floorN = s->createNode();
+    CHECK(floorN && s->attachMesh(floorN, cube, silverMat), "the silver floor exists (metal 1)");
+    s->setNodeTransform(floorN, Vec3(0.0f, -0.1f, 0.0f), Quat(), Vec3(200.0f, 0.2f, 200.0f));
+
+    PostFxDesc fx;
+    fx.allowOffscreen = true;
+    fx.ssr = 2;
+    fx.hdr = false;
+    fx.hdrReadback = true;
+    view->setPostFx(fx);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 5.0f, 14.0f), Vec3(0.0f, 1.0f, 0.0f));
+
+    // The floor region: the lower two thirds, the frame's side margins out.
+    const unsigned x0 = 16u, x1 = kW - 16u, y0 = kH / 3u, y1 = kH - 4u;
+    const auto meanAlpha = [&](const ImageF &img) {
+        double sum = 0.0;
+        size_t n = 0;
+        for (unsigned y = y0; y < y1; ++y)
+            for (unsigned x = x0; x < x1; ++x) { sum += img.at(x, y).a; ++n; }
+        return n ? sum / double(n) : 0.0;
+    };
+
+    struct Arm { float roughness; double bar; };
+    Arm arms[5] = { { 0.0f, 0.5 }, { 0.05f, 0.5 }, { 0.1f, 1.2 }, { 0.2f, 2.2 }, { 0.3f, 4.8 } };
+    if (const char *r = getenv("JAH_ENV_MATCH_ROUGHNESS")) {   // a single arm, measured
+        arms[0] = { float(std::atof(r)), 1e9 };
+        for (int i = 1; i < 5; ++i) arms[i] = arms[0];
+    }
+    for (const Arm &arm : arms) {
+        silver.roughness = arm.roughness;
+        s->setPbrMaterial(silverMat, silver);
+
+        // ---- RAYS ON: warm, then the mean of 32 read-backs ---------------
+        e->setRayTracing(true);
+        for (int f = 0; f < 120; ++f) e->renderOneFrame();
+        std::vector<double> onSum(size_t(kW) * kH * 3u, 0.0);
+        double weightMean = 0.0;
+        const int kMean = 32;
+        for (int f = 0; f < kMean; ++f) {
+            e->renderOneFrame();
+            ImageF img, refl;
+            view->readPixelsHdr(img);
+            view->readReflectionHdr(refl);
+            weightMean += meanAlpha(refl) / kMean;
+            for (size_t i = 0; i < onSum.size() / 3u; ++i)
+                for (int k = 0; k < 3; ++k) onSum[i * 3u + k] += img.rgba[i * 4u + k] / kMean;
+        }
+        const RayQueryStatus rq = s->rayQueryStatus();
+
+        // ---- RAYS OFF ----------------------------------------------------
+        e->setRayTracing(false);
+        for (int f = 0; f < 120; ++f) e->renderOneFrame();
+        ImageF off;
+        view->readPixelsHdr(off);
+        e->setRayTracing(true);
+
+        double diff[3] = { 0, 0, 0 }, onMean[3] = { 0, 0, 0 }, offMean[3] = { 0, 0, 0 };
+        size_t n = 0;
+        for (unsigned y = y0; y < y1; ++y)
+            for (unsigned x = x0; x < x1; ++x) {
+                const size_t i = size_t(y) * kW + x;
+                for (int k = 0; k < 3; ++k) {
+                    const double a = onSum[i * 3u + k], b = off.rgba[i * 4u + k];
+                    diff[k] += std::fabs(a - b);
+                    onMean[k] += a;
+                    offMean[k] += b;
+                }
+                ++n;
+            }
+        for (int k = 0; k < 3; ++k) { diff[k] /= double(n); onMean[k] /= double(n); offMean[k] /= double(n); }
+        const double meanCodes = 255.0 * (diff[0] + diff[1] + diff[2]) / 3.0;
+        std::printf("   roughness %.2f: rays ON %.4f %.4f %.4f | OFF %.4f %.4f %.4f | on/off %.3f %.3f "
+                    "%.3f | weight %.3f | mean |on - off| %.2f / 255\n", double(arm.roughness),
+                    onMean[0], onMean[1], onMean[2], offMean[0], offMean[1], offMean[2],
+                    onMean[0] / std::max(offMean[0], 1e-9), onMean[1] / std::max(offMean[1], 1e-9),
+                    onMean[2] / std::max(offMean[2], 1e-9), weightMean, meanCodes);
+        CHECK_MSG(rq.reflect && weightMean > 0.9,
+                  "roughness %.2f: the rays ANSWER the floor (mean composite weight %.3f)",
+                  double(arm.roughness), weightMean);
+        CHECK_MSG(meanCodes < arm.bar,
+                  "roughness %.2f: ONE ENVIRONMENT — the ray tier's sky and the environment lobe "
+                  "agree over the silver floor, mean |on - off| %.2f / 255 (bar %.1f)",
+                  double(arm.roughness), meanCodes, arm.bar);
+        if (getenv("JAH_ENV_MATCH_ROUGHNESS")) break;
+    }
+
+    // THE CHAIN AGAINST ITS OWN FINEST MIP, per channel (a diagnostic, printed):
+    // jahEnvCone's lookup (a prefiltered mip) against the 64-direction integral of
+    // mip 0 over the same cone, at directions the floor reflects.
+    if (getenv("JAH_ENV_MATCH_CONES")) {
+        std::vector<EnvironmentConeQuery> q;
+        const float tans[3] = { 0.1f, 0.3f, 0.6f };
+        const float elev[4] = { 5.0f, 15.0f, 30.0f, 60.0f };
+        for (float t : tans)
+            for (float el : elev) {
+                const float er = el * 3.14159265f / 180.0f;
+                q.push_back(EnvironmentConeQuery{ Vec3(0.0f, std::sin(er), -std::cos(er)), t });
+            }
+        std::vector<EnvironmentConeAnswer> ans;
+        if (e->environmentCones(s, q, ans)) {
+            for (size_t i = 0; i < ans.size(); ++i)
+                std::printf("   cone tan %.2f elev %4.0f: lookup %.4f %.4f %.4f  ref %.4f %.4f %.4f\n",
+                            double(q[i].tanHalfAngle), double(elev[i % 4]), ans[i].lookup[0],
+                            ans[i].lookup[1], ans[i].lookup[2], ans[i].reference[0],
+                            ans[i].reference[1], ans[i].reference[2]);
+        }
+    }
     std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
 }

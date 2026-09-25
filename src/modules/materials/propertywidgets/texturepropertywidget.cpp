@@ -42,17 +42,9 @@ void TexturePropertyWidget::setProp(TextureProperty * prop)
 	value = prop->value;
 	modelProperty = prop;
 	
-#if(EFFECT_BUILD_AS_LIB)
 	graphTexture = TextureManager::getSingleton()->loadTextureFromGuid(prop->value);
 	QIcon icon(graphTexture->path);
 	wid->texture->setIcon(icon);
-#else
-	graphTexture = TextureManager::getSingleton()->createTexture();
-	if (QFile::exists(prop->value))
-		graphTexture->setImage(prop->value);
-	QIcon icon(prop->value);
-	texture->setIcon(icon);
-#endif
 	
 	graphTexture->uniformName = prop->getUniformName();
 }
@@ -72,21 +64,13 @@ void TexturePropertyWidget::setConnections()
 	connect(wid->texture, &QPushButton::clicked, [=]() {
 		auto filename = QFileDialog::getOpenFileName();
 
-#if(EFFECT_BUILD_AS_LIB)
 		TextureManager::getSingleton()->removeTexture(graphTexture);
 		graphTexture = TextureManager::getSingleton()->importTexture(filename);
 		prop->value = graphTexture->guid;
-		//graphTexture->uniformName = prop->getUniformName();
 		QIcon icon(graphTexture->path);
 		icon.addFile(graphTexture->path, { wid->texture->width(), wid->texture->height() });
-#else
-		graphTexture->setImage(filename);
-		prop->value = filename;
-		QIcon icon(filename);
-#endif
 		
 		wid->texture->setIcon(icon);
-	//	wid->texture->setIconSize({ wid->texture->width(), wid->texture->height() });
 		emit valueChanged(filename, this);
 	});
 }

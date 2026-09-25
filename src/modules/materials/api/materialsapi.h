@@ -59,6 +59,8 @@ public:
         /// THE PROJECT DRAWER's tiles, in order (DRAWERS-1) — the page hands
         /// over what its ShaderAssetWidget is showing.
         std::function<QVariantList()> projectDrawer;
+        /// THE CUSTOM DRAWER's tiles, in order (PRESET-FOLD-1).
+        std::function<QVariantList()> customDrawer;
     };
     void setPageDelegate(const PageDelegate &delegate) { mPage = delegate; }
 
@@ -79,6 +81,10 @@ public:
     /// (DRAWERS-1). A read verb, so a suite can prove the module's drawer and
     /// the editor's tray are ONE list.
     Q_INVOKABLE QVariantList projectDrawer();
+    /// THE MODULE'S CUSTOM DRAWER, as the widget shows it: [{guid, name}]
+    /// (PRESET-FOLD-1) — the user's own library materials, not the open
+    /// project's, never a preset and never a project's copy of one.
+    Q_INVOKABLE QVariantList customDrawer();
     /// THE VERB THE TEXTURE PICKER CALLS. A path from anywhere on disk is
     /// imported by CONTENT at that moment; a guid already in the library is
     /// reused. Either way the image becomes a MEMBER of the material (the

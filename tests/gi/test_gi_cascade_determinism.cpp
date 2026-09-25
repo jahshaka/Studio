@@ -46,8 +46,12 @@
 //      instead: the per-voxel merge accumulates exact integer sums and resolves
 //      them once, so no partition and no order changes a voxel.
 //
-// Its own binary like every GI suite: the voxel lighting binds process-wide to
-// HlmsPbs, so this scene must not share a process with another arm's.
+// Its own binary like every GI suite.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -76,6 +80,7 @@ static void render(Engine *e, int frames = 1)
 static GiParams chainGi()
 {
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
     gi.numBounces = 1;

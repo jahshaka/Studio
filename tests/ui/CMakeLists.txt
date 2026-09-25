@@ -320,6 +320,9 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_executable(test_photon_panel
     test_photon_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    # the World Modes section: its technique combo must name ordinal 2 exactly
+    # as this section does (STUDIO-CRUD-1 fix round)
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     # ieditorviewport.h is listed as a SOURCE so AUTOMOC generates the moc for
     # EditorViewportEvents: the Reflections-row case drives the panel from a
     # HeadlessEditorViewport, which constructs one.
@@ -442,6 +445,7 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
@@ -620,6 +624,7 @@ add_executable(test_panel_undo
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
@@ -751,6 +756,7 @@ add_executable(test_panel_lifetime
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
@@ -892,6 +898,7 @@ set(JAH_PROPERTIES_PANEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldcloudspropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lookstackeditor.cpp
@@ -1117,7 +1124,7 @@ set_property(TARGET test_project_tile PROPERTY AUTOUIC_SEARCH_PATHS
 target_include_directories(test_project_tile PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_project_tile PRIVATE Qt6::Widgets Qt6::Test qlementine)
+target_link_libraries(test_project_tile PRIVATE Qt6::Widgets Qt6::Concurrent Qt6::Test qlementine)
 add_test(NAME ui.project_tile COMMAND test_project_tile
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.project_tile PROPERTIES

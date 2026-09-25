@@ -12,8 +12,8 @@
 // holds the Engine through a weak_ptr so it can never touch a dead Engine: if the
 // Engine is still alive when the widget goes, the widget destroys its View; if the
 // Engine went first, the View is already gone and nothing is touched. Owners
-// should still destroy their EngineViewWidgets BEFORE the Engine (see
-// OgrePreviewDialog) so teardown is deterministic rather than merely safe.
+// should still destroy their EngineViewWidgets BEFORE the Engine so teardown
+// is deterministic rather than merely safe.
 #include <QWidget>
 #include <memory>
 #include "jahshaka/engine/Engine.h"
@@ -34,6 +34,14 @@ public:
                         jahshaka::engine::Colour(0.10f, 0.11f, 0.14f));
     /// Releases the View now (idempotent). The destructor does this too.
     void destroyView();
+
+    /// THE CONTRACT THE OFFSCREEN FALLBACK DECLARES (View::setOffscreenContract,
+    /// PHOTON-GATHER-1d fix round). A widget's view is drawn every frame for a
+    /// person, so the fallback is LIVE by default (the gather pinned off); the
+    /// editor viewport, whose pictures are taken at rest and which drives the
+    /// scene's GI, declares StillPicture. Call before createView(); an on-screen
+    /// view ignores it.
+    void setFallbackContract(jahshaka::engine::OffscreenContract c) { mFallbackContract = c; }
 
     jahshaka::engine::View *view() const { return mView; }
 
@@ -122,6 +130,7 @@ private:
     QString                                 mViewName;
     jahshaka::engine::Colour                mBackground{0.10f, 0.11f, 0.14f};
     QString                                 mCreateError;
+    jahshaka::engine::OffscreenContract     mFallbackContract = jahshaka::engine::OffscreenContract::Live;
     /// VIEW-REBUILD-1's two counters — see nativeHides()/rectChanges().
     qulonglong                              mNativeHides = 0;
     qulonglong                              mRectChanges = 0;

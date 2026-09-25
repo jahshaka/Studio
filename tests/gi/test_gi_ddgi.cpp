@@ -2,9 +2,8 @@
 // (GI_UNIFIED_SPEC.md §4 P1; the P0 spike it stands on:
 // spikes/ddgi-vulkan/FINDINGS.md).
 //
-// ITS OWN BINARY, like gi.pcc_mirror and for the same reason: the field binds
-// PROCESS-WIDE to HlmsPbs (setIrradianceField, the same singleton hazard as
-// setVctLighting), so this scene must not share a process with another suite's.
+// ITS OWN BINARY AND PROCESS: it re-runs itself (argv[1] == "hash") to prove
+// cross-process byte determinism.
 //
 // The scene is gi.modes' room, deliberately: a white floor, a strongly red wall
 // the light hits nearly edge-on, and a camera looking at the patch of floor the
@@ -36,10 +35,16 @@
 // Determinism discipline: setFixedFrameDelta, no wall-clock anywhere, and no
 // assertion reads a mid-convergence frame except the paused pair, which is
 // asserting exactly that nothing moved.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include <chrono>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -56,6 +61,13 @@ static int failures = 0;
         else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
     } while (0)
 
+#define CHECK_MSG(cond, fmt, ...)                                               \
+    do {                                                                        \
+        char buf_[512];                                                         \
+        std::snprintf(buf_, sizeof(buf_), fmt, __VA_ARGS__);                    \
+        CHECK(cond, buf_);                                                      \
+    } while (0)
+
 static void render(Engine *e, int frames = 3)
 {
     for (int i = 0; i < frames; ++i) e->renderOneFrame();
@@ -69,6 +81,22 @@ static void show(const char *what, const Colour &c)
 /// FNV-1a over the whole frame, quantized to 8 bits per channel — the same
 /// "byte-identical" question the spike asked across its 8 processes, in the
 /// form a subprocess can print and its parent can compare.
+/// Every probe of the field holds at least one sample: the event's own pass is done
+/// (the refinements it owes are what `ifdRefinesOwed` has left, below the target).
+static bool fieldWhole(const GiStatus &s)
+{
+    return s.ifdProbes > 0 && s.ifdRefinesOwed < s.ifdTargetSamples;
+}
+
+/// THE ONE SETTLE PREDICATE, waited on in frames (GiStatus::giAtRest). Returns the
+/// frames it took, -1 if it never came.
+static int settleGi(Engine *e, Scene *s, int cap = 4000)
+{
+    int n = 0;
+    for (; n < cap && !s->giStatus().giAtRest; ++n) e->renderOneFrame();
+    return s->giStatus().giAtRest ? n : -1;
+}
+
 static unsigned long long frameHash(const Image &img)
 {
     unsigned long long h = 1469598103934665603ull;
@@ -99,6 +127,7 @@ static Room buildRoom(Engine *engine)
 {
     Room r;
     r.view = engine->createOffscreenView("ddgi", 128, 128, Colour(0, 0, 0));
+    if (r.view) r.view->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
     r.scene = engine->createScene("ddgi");
     r.view->setScene(r.scene);
     r.scene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
@@ -131,6 +160,7 @@ static Room buildRoom(Engine *engine)
 static GiParams vctBase()
 {
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::Medium;      // 64^3 voxels
     gi.numBounces = 2;
@@ -169,6 +199,7 @@ static int runHashChild()
     gi.ddgi = GiToggle::On;
     if (!r.scene->setGlobalIllumination(gi)) { std::printf("HASH ERROR gi\n"); return 1; }
     render(engine.get(), 4);
+    if (settleGi(engine.get(), r.scene) < 0) { std::printf("HASH ERROR rest\n"); return 1; }
     Image img;
     r.view->readPixels(img);
     std::printf("HASH %llu\n", frameHash(img));
@@ -236,28 +267,30 @@ int main(int argc, char **argv)
     {
         GiStatus st = r.scene->giStatus();
         CHECK(st.vctBound && !st.ifdBound, "plain VCT binds no irradiance field");
-        CHECK(st.ifdProbes == 0 && st.ifdProbesPerFrame == 0 && !st.ifdConverged,
+        CHECK(st.ifdProbes == 0 && st.ifdProbesPerFrame == 0 && st.ifdTargetSamples == 0 &&
+                  st.ifdRefinesOwed == 0,
               "giStatus reports no field at all with ddgi off");
     }
 
     // ---- 1. the field arms ------------------------------------------------
     GiParams ddgi = vctBase();
     ddgi.ddgi = GiToggle::On;
-    ddgi.ddgiIntensity = 1.0f;            // the renderer's RAW brightness, for the A/B
     CHECK(r.scene->setGlobalIllumination(ddgi), "setGlobalIllumination(Vct + DDGI) succeeds");
     render(e);
     r.view->readPixels(img);
     const Colour rawFloor  = img.at(kFloorX, kFloorY);
     const Colour rawFar    = img.at(kFarX, kFarY);
-    show("floor  DDGI intensity 1.0", rawFloor);
-    show("far    DDGI intensity 1.0", rawFar);
+    show("floor  DDGI", rawFloor);
+    show("far    DDGI", rawFar);
+    const Colour rawWall   = img.at(kWallX, kWallY);
     GiStatus st = r.scene->giStatus();
-    std::printf("   giStatus: ifdBound=%d ifdProbes=%d ifdConverged=%d ifdProbesPerFrame=%d\n",
-                int(st.ifdBound), st.ifdProbes, int(st.ifdConverged), st.ifdProbesPerFrame);
+    std::printf("   giStatus: ifdBound=%d ifdProbes=%d ifdRefinesOwed=%u/%u ifdProbesPerFrame=%d\n",
+                int(st.ifdBound), st.ifdProbes, st.ifdRefinesOwed, st.ifdTargetSamples,
+                st.ifdProbesPerFrame);
     CHECK(st.ifdBound, "the irradiance field is BOUND to the PBR shader");
     CHECK(st.vctBound, "VCT stays bound (the field replaces its diffuse, not the whole arm)");
     CHECK(st.ifdProbes == 8192, "the field holds 8192 probes");
-    CHECK(st.ifdConverged, "a field is CONVERGED on the frame it binds (built in one dispatch)");
+    CHECK(fieldWhole(st), "a field is WHOLE on the frame it binds (every probe sampled by the build)");
     CHECK(st.ifdProbesPerFrame > 0 && (st.ifdProbesPerFrame & (st.ifdProbesPerFrame - 1)) == 0,
           "the re-converge batch is a power of two (so it divides the field exactly)");
     CHECK(st.ifdProbes % st.ifdProbesPerFrame == 0,
@@ -268,85 +301,50 @@ int main(int argc, char **argv)
     // fewer probes than X and Z, and X and Z must agree.
     CHECK(!(st.ifdProbes == 0), "probe fit ran");
 
-    // Binding a field changes the picture: it takes the diffuse term over.
-    CHECK(std::fabs(rawFloor.r - vctFloor.r) > 0.02f ||
-          std::fabs(rawFloor.g - vctFloor.g) > 0.02f,
-          "binding the field changes the floor (it REPLACES the cone-traced diffuse)");
-    // Away from the wall the two techniques agree closely — which is the honest
-    // reading of "the field replaces the cone-traced diffuse": where cone
-    // tracing was not leaking, the answers match. (The leak-vs-field comparison
-    // the P0 spike ran needs an ENCLOSED corner; this scene has an open floor
-    // and a wall, deliberately, because that is what gi.modes measures.)
-    //
-    // RE-ANCHORED 0.06 -> 0.20 BY PHOTON-M2 (F-C), measured 0.1883 (VCT 0.6235,
-    // DDGI 0.8118), and the reason is a UNITS FIX in the field's favour.
-    //
-    // The field's atlas holds the mean of RAW light-voxel samples, which are
-    // normalised by the brightest light's radiance over pi (the injection's
-    // bakingMultiplier). The cone-traced diffuse multiplies that normalisation
-    // back out; the field's composite did not (JahIfd_piece_ps.any's
-    // ifdIrradianceScale), so the field's brightness went as 1/D_max: right in a
-    // scene whose brightest light has radiance pi and wrong everywhere else --
-    // and this fixture's lamp is not that, which is why the two used to "agree
-    // closely" here by 0.04 and the field was pinned at the UNORM ceiling in
-    // brighter scenes (the 5x response asymmetry of ledger §659 F-C). With the
-    // multiplier applied, the field/cone ratio is INTENSITY-INDEPENDENT:
-    // measured 1.127 / 1.144 / 1.145 on a closed room at lamp intensity
-    // 0.03 / 0.12 / 0.5 (spikes/photon-m2, m2-field.js) where before the fix it
-    // was 13.4 / 4.1 / 1.6.
-    //
-    // What is left is the two ESTIMATORS differing, which is what this
-    // assertion is for: 144 rays per texel with a full cosine convolution
-    // against six 60-degree cones whose escape estimate is a deliberate
-    // under-estimate (patch 0021's min3: 65 % of an open floor's ambient against
-    // 93 % isotropic). The field reads HIGHER, by 1.14x on the bounce in a
-    // closed room and by 1.85x on this open scene's floor. NOT the sky (this
-    // fixture's ambient is BLACK, so no probe ray and no cone reads any
-    // environment); the plausible mechanism is the cone
-    // estimator's coarse-mip dilution of the 0.9 m wall seen from the far patch
-    // at grazing — a 60-degree cone's 7 m footprint averages the wall with the
-    // empty voxels around it while the field's narrow rays do not; a closed room
-    // has thick walls at every mip, hence 1.14. The one-voxel-reader item (V2
-    // stage C / FIELD-2) owns that gap; measure the attribution there.
-    // 0.20 admits that and nothing structural: a collapsed lookup is still
-    // caught by the three assertions below, which compare the two arms as a
-    // RATIO rather than a difference.
-    //
-    // RE-ANCHORED TO A RATIO BY PHOTON-M3 (patch 0080, the float voxel store):
-    // the red wall's bounce is no longer clipped in the volume, so BOTH
-    // estimators read more — VCT 0.6235 -> 0.6510, DDGI 0.8118 -> 0.8863 — and
-    // the DIFFERENCE grew past 0.20 (0.2353) while the RATIO barely moved
-    // (1.302 -> 1.361; the closed room's 1.14). The gap is the estimators', it
-    // scales with the light, so the honest bound is on the ratio; 1.6 admits
-    // the open-floor grazing case and nothing structural (a collapsed lookup
-    // reads under 1.0 or over 3).
-    CHECK(vctFar.r > 0.05f && rawFar.r / vctFar.r > 1.0f && rawFar.r / vctFar.r < 1.6f,
-          "far from the wall, DDGI and the cone-traced diffuse agree closely (as a ratio)");
+    // THAT THE FIELD REPLACES THE CONE-TRACED DIFFUSE is proved by its intensity-0 arm below
+    // (the field bound, no indirect term at all). It used to be asserted as "binding the
+    // field changes the floor" - a difference between the two estimators, which existed
+    // because the field's rays marched a world direction as the volume's (PHOTON-VOXEL-4,
+    // FIELD-DIR-1: this fixture's box is not a cube); with that fixed the two agree to
+    // 0.016 on the floor, and a difference is no longer the witness.
+    std::printf("   the floor, field vs cones: %.4f vs %.4f (r)\n", rawFloor.r, vctFloor.r);
+    // AWAY FROM THE WALL THE TWO ESTIMATORS AGREE (PHOTON-VOXEL-4): the field's rays (144 a
+    // texel, cosine-convolved) and the four-cone set read ONE store through ONE reader, and on
+    // the open floor they integrate the same hemisphere - so the far patch must read the same
+    // bounce either way. The field used to read 1.14x (a closed room) to 1.85x (this floor) the
+    // cones: the leaky coarse mips diluted the wall in a wide cone, and the field's rays marched
+    // a world direction as the volume's (FIELD-DIR-1). With the split store, the reader's
+    // rules and the bounce on the pixel's four-cone set (CONE-SET-1: it walked six) the
+    // ratio is 1.009 (0.4314 against 0.4275). THE BAR, derived: the four-cone set's own
+    // error against the hemisphere at an open floor (BAR 2, -0.034 of the share,
+    // gi.ddgi_ambient / gi.voxel_lab) plus the two readings' half-codes (0.5/255 each, as a
+    // fraction of the value). A collapsed lookup reads far outside it either way.
+    {
+        const double ratio = vctFar.r > 0.0f ? double(rawFar.r) / double(vctFar.r) : 0.0;
+        const double tol = 0.034 + 2.0 * (0.5 / 255.0) / std::max(double(vctFar.r), 1e-3);
+        std::printf("   AGREE: far floor, field / cones %.4f / %.4f = %.4f (bar 1 +- %.4f)\n", rawFar.r, vctFar.r,
+                    ratio, tol);
+        CHECK(vctFar.r > 0.05f && std::fabs(ratio - 1.0) <= tol,
+              "AGREE: far from the wall, the field and the four-cone set read one bounce (the ratio within the "
+              "set's open-floor error plus the pixels' half-codes)");
+    }
 
     // ---- 2. brightness calibration ---------------------------------------
     // THE CALIBRATION GATE. Turning DDGI on turns the cone-traced diffuse off,
     // so the question a user actually asks — "does my room stay lit?" — is
     // whether the field's indirect term lands in the same visual class as the
-    // term it replaced. It does, at the renderer's raw brightness, which is why
-    // the default intensity is 1.0. (The P0 spike reported ~13x dimmer; that
+    // term it replaced. It does, at the field's own physical answer — there is no
+    // intensity dial (PHOTON-GATHER-1d deleted it: the field is not the diffuse
+    // at a ray tier, and a physical answer needs no trim). (The P0 spike reported ~13x dimmer; that
     // reading came from the pass-buffer misalignment this lane found and fixed
     // — the pass-buffer under-report, fixed by ogre-patch 0050 — which was collapsing every irradiance
     // lookup onto a single texel. The number does not survive the fix.)
-    ddgi.ddgiIntensity = GiParams().ddgiIntensity;      // the calibrated default
-    CHECK(r.scene->setGlobalIllumination(ddgi), "setGlobalIllumination(DDGI, default intensity)");
-    render(e);
-    r.view->readPixels(img);
-    const Colour calFloor  = img.at(kFloorX, kFloorY);
-    const Colour calFar    = img.at(kFarX, kFarY);
-    const Colour calWall   = img.at(kWallX, kWallY);
-    show("floor  DDGI default intensity", calFloor);
-    show("far    DDGI default intensity", calFar);
-    const float rawBounce = (rawFloor.r - rawFloor.g) - (baseFloor.r - baseFloor.g);
+    const Colour calFloor = rawFloor, calFar = rawFar, calWall = rawWall;
     const float calBounce = (calFloor.r - calFloor.g) - (baseFloor.r - baseFloor.g);
-    std::printf("   red bounce: VCT %.4f | DDGI raw %.4f | DDGI default %.4f (ratio %.2f)\n",
-                vctBounce, rawBounce, calBounce, vctBounce > 0.0f ? calBounce / vctBounce : 0.0f);
+    std::printf("   red bounce: VCT %.4f | DDGI %.4f (ratio %.2f)\n",
+                vctBounce, calBounce, vctBounce > 0.0f ? calBounce / vctBounce : 0.0f);
     CHECK(calBounce > vctBounce * 0.5f && calBounce < vctBounce * 2.0f,
-          "the calibrated DDGI bounce is in the same class as the VCT diffuse it replaced");
+          "the DDGI bounce is in the same class as the VCT diffuse it replaced");
     CHECK(std::fabs(calWall.r - baseWall.r) < 0.2f,
           "the directly-lit wall is not blown out by the indirect term");
     // THE GUARD ON THE FIX. If the pass-buffer alignment regresses (the field's
@@ -362,25 +360,21 @@ int main(int argc, char **argv)
     CHECK(calFarBounce > 0.02f && calFarBounce < calBounce - 0.01f,
           "the bounce FALLS OFF with distance from the wall (a collapsed lookup is constant)");
 
-    // intensity 0: the field stays BOUND and contributes nothing — which is
-    // also the proof that everything above came from the field and not from
-    // some other term switching on with it.
-    GiParams zero = ddgi;
-    zero.ddgiIntensity = 0.0f;
-    CHECK(r.scene->setGlobalIllumination(zero), "setGlobalIllumination(DDGI, intensity 0)");
-    render(e);
-    r.view->readPixels(img);
-    const Colour zeroFloor = img.at(kFloorX, kFloorY);
-    show("floor  DDGI intensity 0", zeroFloor);
-    st = r.scene->giStatus();
-    CHECK(st.ifdBound, "intensity 0 leaves the field BOUND (it is a shader scalar, not a switch)");
-    CHECK(std::fabs((zeroFloor.r - zeroFloor.g) - (baseFloor.r - baseFloor.g)) < 0.02f,
-          "at intensity 0 the floor has no indirect bounce at all");
-    CHECK(zeroFloor.r < calFloor.r - 0.02f, "intensity 0 is darker than the calibrated default");
+    // (The intensity-0 arm is gone with the dial it measured, PHOTON-GATHER-1d:
+    // "binding the field changes the floor" above is what says the bounce is the
+    // field's.)
 
     // ---- 3. determinism ---------------------------------------------------
-    CHECK(r.scene->setGlobalIllumination(ddgi), "re-push the calibrated params");
+    // "Converged" is the ONE settle predicate (giAtRest): the field is a mean over
+    // rotated samples and refines for K passes after a build, so two frames are
+    // byte-identical once it owes nothing - not three frames after the build.
+    CHECK(r.scene->setGlobalIllumination(ddgi), "re-push the field's params");
     render(e);
+    {
+        const int n = settleGi(e, r.scene);
+        std::printf("   GI came to rest %d frames after the re-push\n", n);
+        CHECK(n >= 0, "GI comes to rest after a build (the field's refinements paid)");
+    }
     r.view->readPixels(img);
     const unsigned long long h1 = frameHash(img);
     render(e);
@@ -389,6 +383,7 @@ int main(int argc, char **argv)
     CHECK(h1 == h2, "a converged bound field renders byte-identical frames");
     CHECK(r.scene->setGlobalIllumination(ddgi), "re-push identical DDGI params again");
     render(e);
+    CHECK(settleGi(e, r.scene) >= 0, "...and GI comes to rest again");
     r.view->readPixels(img);
     CHECK(frameHash(img) == h1,
           "rebuilding the field from identical params reproduces the frame byte for byte");
@@ -415,8 +410,8 @@ int main(int argc, char **argv)
         const bool ok = r.scene->setGlobalIllumination(gb);
         render(e, 2);
         st = r.scene->giStatus();
-        std::printf("   budget %3d -> ifdProbesPerFrame %d (converged %d)\n",
-                    b, st.ifdProbesPerFrame, int(st.ifdConverged));
+        std::printf("   budget %3d -> ifdProbesPerFrame %d (refines owed %u of target %u)\n",
+                    b, st.ifdProbesPerFrame, st.ifdRefinesOwed, st.ifdTargetSamples);
         CHECK(ok && st.ifdBound, ("the field survives update budget " + std::to_string(b)).c_str());
         if (b == 0) {
             CHECK(st.ifdProbesPerFrame == 0,
@@ -448,7 +443,8 @@ int main(int argc, char **argv)
         r.view->readPixels(img);
         CHECK(frameHash(img) == p1, "a PAUSED field renders frame N+1 byte-identical to frame N");
         st = r.scene->giStatus();
-        CHECK(st.ifdConverged, "a paused field is still converged (the build converged it)");
+        CHECK(fieldWhole(st) && st.giAtRest && st.ifdRefinesOwed == 0,
+              "a paused field is whole and AT REST (it targets one sample and owes nothing)");
     }
 
     // ---- 5. the exact convergence frame count ----------------------------
@@ -463,20 +459,167 @@ int main(int argc, char **argv)
         const int batch = st.ifdProbesPerFrame;
         const int probes = st.ifdProbes;
         const int expected = (probes + batch - 1) / batch;
-        CHECK(st.ifdConverged, "converged before the light moves");
+        CHECK(fieldWhole(st), "whole before the light moves");
+        CHECK(settleGi(e, r.scene) >= 0, "...and at rest");
         CHECK(r.scene->refreshGiLighting(true), "refreshGiLighting (the light-only cheap path)");
         st = r.scene->giStatus();
-        CHECK(!st.ifdConverged, "the cheap path re-arms convergence (reset, not rebuild)");
+        CHECK(!fieldWhole(st), "the cheap path re-arms the field's pass (reset, not rebuild)");
+        CHECK(!st.giAtRest, "A LIGHT WRITE TAKES GI OUT OF REST");
         int frames = 0;
         while (frames < expected + 8) {
             e->renderOneFrame();
             ++frames;
-            if (r.scene->giStatus().ifdConverged) break;
+            if (fieldWhole(r.scene->giStatus())) break;
         }
         std::printf("   re-converge took %d frames at %d probes/frame (expected %d)\n",
                     frames, batch, expected);
         CHECK(frames == expected,
               "the re-converge takes EXACTLY ceil(probes / batch) frames");
+        // ...and GI is AT REST again only after the K - 1 refinement passes the
+        // change owes, counted in frames: each pass is ceil(probes / batch) frames.
+        const int k = int(r.scene->giStatus().ifdTargetSamples);
+        int more = 0;
+        while (more < (k + 2) * expected && !r.scene->giStatus().giAtRest) {
+            e->renderOneFrame();
+            ++more;
+        }
+        std::printf("   at rest %d frames after the pass (K = %d: %d refinement passes of %d frames)\n",
+                    more, k, k - 1, expected);
+        CHECK(r.scene->giStatus().giAtRest && more >= (k - 1) * expected - 1 &&
+                  more <= (k - 1) * expected + 2,
+              "GI COMES BACK TO REST AFTER THE K - 1 REFINEMENTS, counted in frames");
+    }
+
+    // ---- 5c. THE SETTLED HISTORY (PHOTON-GATHER-1d; the 1c audit's M1) -------
+    // Where the screen-probe gather runs, "at rest" has a FOURTH term: the pixel
+    // history must be at least N frames old over lighting that has held for N
+    // (GatherStatus::settled; N = ceil(ln(1/D)/ln(1 - 1/10)) = 16 for the stated
+    // 5-code step), because the history is an EMA and a lighting step arrives
+    // over N frames. The same light write as section 5, with the gather ON and
+    // the FIELD OFF (its K - 1 refinement passes would otherwise outlast the
+    // history and the term would never be the binding one): GI must come to rest
+    // on EXACTLY the frame the lighting has held for N — the term doing the work
+    // — and a YOUNG view (a fresh view of the same scene, two frames old) is not
+    // settled.
+    if (e->rayQueryAvailable() && e->rayTracing()) {
+        std::printf("\n-- 5c. the gather's settled history in giAtRest --\n");
+        GiParams gg = vctBase();
+        gg.gather = GiToggle::On;
+        gg.updateBudget = 1;
+        CHECK(r.scene->setGlobalIllumination(gg) && r.scene->setGiTuning(gg),
+              "the gather is on (the field off)");
+        render(e, 4);   // the view gains its prepass (a shape change) and the gather starts
+        CHECK(r.scene->giStatus().gather.running, "...the gather runs in the room's view");
+        CHECK(settleGi(e, r.scene) >= 0, "...and GI comes to rest with it");
+        st = r.scene->giStatus();
+        CHECK_MSG(st.gather.running && st.gather.settled && st.gather.settleFrames == 16u,
+                  "the gather runs and its history is SETTLED at rest (N = %u frames for a 5-code step)",
+                  st.gather.settleFrames);
+        CHECK(r.scene->refreshGiLighting(true), "a light write (the cheap path)");
+        CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
+        int frames = 0;
+        while (frames < 4000 && !r.scene->giStatus().giAtRest) {
+            e->renderOneFrame();
+            ++frames;
+        }
+        st = r.scene->giStatus();
+        std::printf("   at rest %d frames after the write: rest frames %u, history age %u (N %u)\n",
+                    frames, st.gather.restFrames, st.gather.historyAge, st.gather.settleFrames);
+        CHECK(st.giAtRest && st.gather.settled && st.gather.restFrames >= st.gather.settleFrames,
+              "GI comes back to rest with the history settled (N rest frames)");
+        CHECK_MSG(st.gather.restFrames == st.gather.settleFrames,
+                  "THE HISTORY'S TERM IS THE ONE THAT HELD IT: GI came to rest on exactly the N-th frame "
+                  "at rest (rest frames %u, N %u) — the lighting stopped moving %d frames after the write",
+                  st.gather.restFrames, st.gather.settleFrames, frames - int(st.gather.restFrames));
+        // AND AT REST THE PICTURE HOLDS: the answer IS the rest mean, nothing is
+        // dispatched, and the next frames are byte-identical.
+        {
+            Image a, b;
+            r.view->readPixels(a);
+            render(e, 3);
+            r.view->readPixels(b);
+            CHECK(frameHash(a) == frameHash(b),
+                  "A SETTLED GATHER HOLDS: three more still frames are byte-identical");
+        }
+        // THE YOUNG VIEW: a second view of the scene, drawn alone for two frames,
+        // is a history two frames old — not settled, and neither is GI.
+        View *young = e->createOffscreenView("ddgi-young", 128, 128, Colour(0, 0, 0));
+        if (young) young->setOffscreenContract(OffscreenContract::StillPicture);   // a measured picture
+        young->setScene(r.scene);
+        enginetest::testCameraLookAt(young, Vec3(0.0f, 4.0f, 6.0f), Vec3(0.0f, 0.0f, -0.5f));
+        r.view->setEnabled(false);
+        render(e, 2);
+        st = r.scene->giStatus();
+        std::printf("   a young view (2 frames): history age %u, settled %d, giAtRest %d\n",
+                    st.gather.historyAge, int(st.gather.settled), int(st.giAtRest));
+        CHECK(!st.gather.settled && !st.giAtRest,
+              "A YOUNG VIEW IS NOT AT REST: a two-frame history shows the raw estimate, so a shot "
+              "that does not wait photographs it");
+        const int youngFrames = settleGi(e, r.scene);
+        // Its first frame is its birth (no previous camera to be still against),
+        // then N frames at rest.
+        CHECK_MSG(youngFrames >= 0 && youngFrames + 2 == int(r.scene->giStatus().gather.settleFrames) + 1,
+                  "...and it settles through its own frames: its birth, then N at rest (%d more, N %u)",
+                  youngFrames, r.scene->giStatus().gather.settleFrames);
+        e->destroyView(young);
+        r.view->setEnabled(true);
+
+        // ---- 5d. A PER-FRAME MOVER NEVER RESTS, AND IT SETTLES (the fix round's
+        // split): a continuous transform write is not a RESTART — the history
+        // follows it per pixel — so a scene with something moving every frame is
+        // settled N frames after its last discontinuity, and GI comes to rest
+        // there, never at a cap. The rest (and its hold) stays off throughout.
+        {
+            std::printf("\n-- 5d. a per-frame mover: settled, never resting --\n");
+            const NodeId mover = r.scene->createNode();
+            r.scene->setNodeMovable(mover, true);
+            const MeshId cube = r.scene->createMesh(enginetest::unitCubeMesh());
+            PbrParams mp;
+            mp.albedo = Colour(0.2f, 0.8f, 0.2f);
+            const MaterialId mm = r.scene->createPbrMaterial(mp);
+            CHECK(mover && cube && mm && r.scene->attachMesh(mover, cube, mm), "a movable cube exists");
+            float x = -2.0f;
+            const auto step = [&]() {
+                x += 0.01f;
+                enginetest::setNodePosition(r.scene, mover, Vec3(x, 0.5f, 0.5f));
+                e->renderOneFrame();
+            };
+            int warm = 0;
+            for (; warm < 4000 && !r.scene->giStatus().giAtRest; ++warm) step();
+            CHECK_MSG(r.scene->giStatus().giAtRest,
+                      "GI comes to rest with the mover moving every frame (%d frames after it arrived)", warm);
+            int restless = 0, frames = 0;
+            for (int i = 0; i < 40; ++i) {
+                step();
+                if (!r.scene->giStatus().giAtRest) ++restless;
+            }
+            st = r.scene->giStatus();
+            CHECK_MSG(restless == 0 && st.gather.restFrames == 0u && st.gather.settled,
+                      "...and STAYS at rest while it moves: settled every frame (%d frames not), never resting "
+                      "(rest frames %u), since its restart %u", restless, st.gather.restFrames,
+                      st.gather.sinceRestart);
+            // THE RESTART: a light write while the mover moves.
+            CHECK(r.scene->refreshGiLighting(true), "a light write with the mover moving");
+            CHECK(!r.scene->giStatus().giAtRest, "the write takes GI out of rest");
+            unsigned lastSince = 0u;
+            while (frames < 4000 && !r.scene->giStatus().giAtRest) {
+                step();
+                ++frames;
+                lastSince = r.scene->giStatus().gather.sinceRestart;
+            }
+            st = r.scene->giStatus();
+            const int lightingFrames = frames - int(lastSince);
+            std::printf("   at rest %d frames after the write: %d of them the lighting still landing, then %u "
+                        "since the restart (N %u)\n", frames, lightingFrames, lastSince, st.gather.settleFrames);
+            CHECK_MSG(st.giAtRest && lastSince == st.gather.settleFrames && frames < 4000,
+                      "A MOVING SCENE SETTLES: GI at rest %d frames after the write — the lighting's own "
+                      "%d, then exactly N = %u since the last restart — never the cap",
+                      frames, lightingFrames, st.gather.settleFrames);
+            r.scene->removeNode(mover);
+            render(e, 2);
+        }
+        CHECK(r.scene->setGlobalIllumination(ddgi), "back to the section's field");
+        render(e, 2);
     }
 
     // ---- 5b. EPIC'S BOUNCES COLUMN (the Photon tier table, option (b)) ------
@@ -545,8 +688,8 @@ int main(int argc, char **argv)
     r.scene->refreshGlobalIllumination();
     render(e, 3);
     st = r.scene->giStatus();
-    CHECK(st.ifdBound && st.ifdConverged,
-          "a full refresh under a live field rebuilds it, bound and converged");
+    CHECK(st.ifdBound && fieldWhole(st),
+          "a full refresh under a live field rebuilds it, bound and whole");
     // (b) a rebuild over the refreshed arm.
     CHECK(r.scene->setGlobalIllumination(ddgi), "a rebuild over the refreshed arm succeeds");
     render(e, 2);
@@ -554,6 +697,7 @@ int main(int argc, char **argv)
     // (c) GI off with a bound field: the field must be unbound and destroyed
     //     BEFORE the VctLighting it points into, and the pixels must return.
     GiParams off;
+    off.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     CHECK(r.scene->setGlobalIllumination(off), "setGlobalIllumination(Off) with a bound field");
     render(e, 3);
     r.view->readPixels(img);

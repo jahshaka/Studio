@@ -47,6 +47,7 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 #include <QVector>
 
 class QLabel;
@@ -150,6 +151,8 @@ public:
         bool panelVisible = true;
         bool visible = true;
         bool filteredOut = false;
+        /// The row itself — what readRow/driveRow below act on.
+        QPointer<QWidget> widget;
     };
     QVector<Listing> list(QWidget *root) const;
 
@@ -203,6 +206,23 @@ inline void identifyControl(QWidget *control, const QString &key,
 { Registry::instance().identify(Registry::instance().rowFor(control), key, keywords); }
 inline void setPanelVisible(QWidget *row, bool visible)
 { Registry::instance().setPanelVisible(row, visible); }
+
+// --- THE ROW AS A USER MEETS IT (editor.propertyRow) ------------------------
+// A row's control, found inside the row by what it IS — a check box, a combo,
+// a number field, or only a label — so a script can read and drive a panel
+// row by its stable key without knowing which widget class the panel used.
+
+/// {control: "check"|"combo"|"number"|"label"|"other", value, enabled, items?}
+/// `enabled` is the control's EFFECTIVE state (a greyed row is false).
+QVariantMap readRow(QWidget *row);
+/// Performs the gesture a user makes on the row's control: a check box is
+/// CLICKED when it does not already hold `value`; a combo takes an index or an
+/// item's text; a number field is FOCUSED, takes the value and a Return (the
+/// typed session a person's click-type-Return makes — one undo step; a field
+/// whose window cannot take focus is refused). A field rounds the value to its
+/// own decimals before the document sees it. Refuses a greyed row, a label,
+/// and a value the control cannot hold, with the reason in `error`.
+bool driveRow(QWidget *row, const QVariant &value, QString *error);
 
 }   // namespace PropertyRows
 

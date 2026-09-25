@@ -84,7 +84,6 @@ void ListWidget::updateThumbnailImage(QByteArray arr, QListWidgetItem *item)
 	if(true) painter.drawPixmap(QRect(pixmap.width() - size, 0, size, size), pixmap_overlay);*/
 
 	item->setIcon(QIcon(pixmap));
-	//item->icon().addPixmap(QPixmap(":/icons/shader_overlay.png"));
 
 }
 
@@ -146,15 +145,7 @@ void ListWidget::clear()
 
 void ListWidget::displayAllContents()
 {
-	//setGridSize(QSize(95, 95));
 
-	//int num_of_items_per_row = width() / (gridSize().width()+6);
-	//int num_of_models = model()->rowCount();
-	//int number_of_rows = num_of_models / num_of_items_per_row;
-	//if (num_of_models % num_of_items_per_row != 0) number_of_rows++;
-	//int calculated_height = number_of_rows * (gridSize().height() + num_of_items_per_row*2);
-
-	//setFixedHeight(calculated_height);
 }
 
 

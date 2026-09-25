@@ -78,24 +78,6 @@ private:
 /// Old name, kept so an out-of-tree include still compiles; the class merged.
 using UVTransformNode = UVNode;
 
-/*
-// Samples texture
-class SampleTextureNode : public NodeModel
-{
-public:
-	SampleTextureNode();
-
-};
-*/
-/*
-// Samples texture as latlong, requires vec3 UVs
-class SampleEquirectangularTextureNode : public NodeModel
-{
-public:
-	SampleEquirectangularTextureNode();
-
-};
-*/
 /* Generates UV based on flipbook animation
 	Inputs: UV, rows, columns, startframe
 	Output: UV

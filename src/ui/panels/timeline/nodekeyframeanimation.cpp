@@ -180,8 +180,6 @@ void NodeKeyFrameAnimation::getKeyFramesAtTime(NodeKeyFrame** firstFrame,NodeKey
     }
 
     //anim is between two keys from here on out
-    //NodeKeyFrame* first = Q_NULLPTR;
-    //NodeKeyFrame* last = Q_NULLPTR;
 
     //find first key and last key
     for(unsigned int k = 0;k<frames.size();k++)

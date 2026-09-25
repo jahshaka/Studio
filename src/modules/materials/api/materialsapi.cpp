@@ -232,6 +232,13 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "in a folder the user made in the editor's tray is listed here all the same. Refuses (without "
           "throwing) in a session with no Materials module.",
           Needs::Window },
+        { "customDrawer", "materials.customDrawer() -> [{guid, name}]",
+          "What the Materials module's CUSTOM drawer is showing, in order — read off the widget. The drawer "
+          "is the user's own LIBRARY materials: not one the open project holds (that is the Project drawer), "
+          "not a shipped preset (Presets) and not a PROJECT'S COPY of one — the copy a project's first edit "
+          "of 'Wood PBR' mints is that project's, and it is shown only in its own project's views. Refuses "
+          "(without throwing) in a session with no Materials module.",
+          Needs::Window },
         { "addTexture", "materials.addTexture(materialGuid, pathOrGuid, {slot}) -> textureGuid",
           "Puts an image on a material as a MEMBER. A path from anywhere on disk is imported through the one "
           "import pipeline at that moment, keyed on its CONTENT (so picking the same image twice answers the same "
@@ -425,7 +432,8 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
         for (const auto &asset : host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView)) {
             if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
             if (asset.name.compare(wanted, Qt::CaseInsensitive) != 0) continue;
-            if (presetedit::masterOf(host.db, asset.guid).isEmpty()) continue;
+            // The row already carries its properties: no query per row.
+            if (MaterialBundle::presetMasterOf(asset.properties).isEmpty()) continue;
             if (host.db->isAssetPinnedBy(projectGuid, asset.guid)) return asset.guid;
         }
     }
@@ -878,6 +886,16 @@ QVariantList MaterialsApi::projectDrawer()
         return QVariantList();
     }
     return mPage.projectDrawer();
+}
+
+QVariantList MaterialsApi::customDrawer()
+{
+    if (!mPage.customDrawer) {
+        refuse("materials.customDrawer: the Materials module's custom drawer is not built in this "
+               "session");
+        return QVariantList();
+    }
+    return mPage.customDrawer();
 }
 
 QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pathOrGuid,

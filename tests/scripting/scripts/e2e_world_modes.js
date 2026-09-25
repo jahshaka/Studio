@@ -92,12 +92,22 @@ assert(fresh.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra: " + f
 assert(fresh.giMode.valueId === "vct_pcc_hybrid",
        "Epic turns the VCT+PCC hybrid on: " + fresh.giMode.valueId);
 assert(fresh.refractions.valueId === "auto", "Epic sets refractions to Auto");
+// THE SURFACE CACHE (PHOTON-CARDS-2): a traced reflection's hit reads the card
+// first, so the column follows the ray tier (which rides SSR, off below High):
+// Off at Low and Medium, Auto at High and Epic — and the engine resolves Auto
+// against the machine's rays.
+assert(!!byId["giCards"], "row giCards is declared");
+assert(byId["giCards"].tiers.low.valueId === "off" && byId["giCards"].tiers.medium.valueId === "off" &&
+       byId["giCards"].tiers.high.valueId === "auto" && byId["giCards"].tiers.epic.valueId === "auto",
+       "the cards column: off / off / auto / auto");
+assert(fresh.giCards.valueId === "auto", "Epic leaves the surface cache on Auto: " + fresh.giCards.valueId);
 
 // ---- applying a tier writes THROUGH to the backing fields -------------------
 assert(world.mode({ mode: "low" }) === "low", "world.mode({mode:'low'})");
 var s = world.settings();
 assert(s.msaa.value === 2, "Low sets MSAA to 2x (the chain is off there — real anti-aliasing): " + s.msaa.valueId);
 assert(s.hdr.value === 0, "Low turns HDR off");
+assert(s.giCards.valueId === "off", "Low turns the surface cache off (no ray tier there): " + s.giCards.valueId);
 assert(s.ssao.valueId === "off", "Low turns ambient occlusion off");
 assert(s.refractions.valueId === "off", "Low turns refractions off");
 assert(s.shadowResolution.value === 512, "Low sets a 512 shadow atlas: " + s.shadowResolution.value);

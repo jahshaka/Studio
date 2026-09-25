@@ -32,6 +32,9 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 
 #include <QElapsedTimer>
+#include <QFutureWatcher>
+#include <QImage>
+#include <QtConcurrent/QtConcurrentRun>
 
 
 ProjectService::ProjectService(Database *db,
@@ -45,12 +48,96 @@ ProjectService::ProjectService(Database *db,
 {
 }
 
+ProjectService::~ProjectService()
+{
+    // The shell drains at shutdown (shutdownBackgroundWork), while the
+    // database is still open; anything still here is only waited for, never
+    // written — the rows it would write may already be gone.
+    for (auto it = mThumbEncodes.begin(); it != mThumbEncodes.end(); ++it) {
+        it.value()->disconnect();
+        it.value()->waitForFinished();
+        delete it.value();
+    }
+    mThumbEncodes.clear();
+}
+
+// ---- THE THUMBNAIL ENCODE, OFF THE UI THREAD (CREATE-GAP-1) ----------------
+//
+// A save used to deflate its thumbnail PNG on the UI thread: ~100 ms of every
+// close, every Ctrl+S and every create (measured: the create's
+// `saveInitialScene` 131 ms, of which the screenshot 25-36 and the rest the
+// encode). The screenshot stays where it is — it reads the GPU — and the
+// QImage it hands back is ENCODED on a worker; the database write and the
+// tile follow on this thread when the worker is done (the DB is SQLite on the
+// UI thread; the worker never touches it).
+//
+// ONE ENCODE PER PROJECT: a second save of the same project while its first
+// encode is in flight supersedes it — the older result is dropped on arrival,
+// so the later picture always wins whichever worker finishes first.
+static QByteArray encodeThumbnailPng(const QImage &img)
+{
+    QByteArray thumb;
+    QBuffer buffer(&thumb);
+    buffer.open(QIODevice::WriteOnly);
+    img.save(&buffer, "PNG");
+    return thumb;
+}
+
+void ProjectService::storeThumbnailLater(const QString &guid, const QImage &img)
+{
+    if (guid.isEmpty() || img.isNull()) return;
+    // Superseded: its bytes never land. DELETED, not deleteLater'd — nothing
+    // pumps after ~MainWindow on the --script exit, and a QFutureWatcher's
+    // destructor only disconnects (the worker finishes into its own future).
+    delete mThumbEncodes.take(guid);
+    auto *watcher = new QFutureWatcher<QByteArray>();
+    mThumbEncodes.insert(guid, watcher);
+    QObject::connect(watcher, &QFutureWatcher<QByteArray>::finished, watcher,
+                     [this, guid, watcher]() { finishThumbnail(guid, watcher, true); });
+    const QImage copy = img;        // implicitly shared, read-only on the worker
+    watcher->setFuture(QtConcurrent::run([copy]() { return encodeThumbnailPng(copy); }));
+}
+
+void ProjectService::finishThumbnail(const QString &guid, QFutureWatcher<QByteArray> *watcher,
+                                     bool fromItsSignal)
+{
+    if (mThumbEncodes.value(guid) != watcher) return;   // superseded meanwhile
+    mThumbEncodes.remove(guid);
+    watcher->disconnect();
+    const QByteArray thumb = watcher->result();
+    // Its own finished() is on the stack only when it called us; a drain (the
+    // shutdown paths, where nothing pumps afterwards) deletes it outright.
+    if (fromItsSignal) watcher->deleteLater();
+    else delete watcher;
+    if (thumb.isEmpty()) return;    // never wipe the tile with an empty PNG
+    db->updateSceneThumbnail(guid, thumb);
+    if (projectManager) projectManager->updateTile(guid, thumb);
+}
+
+void ProjectService::supersedeThumbnail(const QString &guid)
+{
+    delete mThumbEncodes.take(guid);    // see storeThumbnailLater
+}
+
+int ProjectService::drainThumbnailEncodes()
+{
+    int drained = 0;
+    while (!mThumbEncodes.isEmpty()) {
+        const QString guid = mThumbEncodes.constBegin().key();
+        QFutureWatcher<QByteArray> *watcher = mThumbEncodes.constBegin().value();
+        watcher->waitForFinished();
+        finishThumbnail(guid, watcher, false);
+        ++drained;
+    }
+    return drained;
+}
+
 QString ProjectService::projectsRoot() const
 {
     // One rule, in services/apppaths.h: the data root when a run forces one
     // (so a scripted run stops writing project folders into the developer's
     // Documents), the `default_directory` preference otherwise.
-    return AppPaths::projectsRoot(settings->getValue("default_directory", QString()).toString(),
+    return AppPaths::projectsRoot(settings->get(settingkeys::defaultDirectory),
                                   Constants::PROJECT_FOLDER);
 }
 
@@ -111,7 +198,7 @@ QString ProjectService::resolveProjectGuid(const QString &guidOrName, QString *n
 }
 
 QString ProjectService::createProjectShell(const QString &name, const QString &location,
-                                           QString *whyOut)
+                                           QString *whyOut, QString *folderOut)
 {
     // The ProjectManager::newProject flow minus the dialog (SCRIPTING_SPEC
     // §1.1): guid, current project, folder, DB row, desktop — the caller then
@@ -147,9 +234,12 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     const QString guid = GUIDManager::generateGUID();
     const QString fullProjectPath = folderUnder(root, guid);
 
-    project->setProjectPath(fullProjectPath, name.trimmed());
-    project->setProjectGuid(guid);
-
+    // THE CURRENT PROJECT IS NOT RE-POINTED HERE (CREATE-GAP-1). It was, and
+    // the create closes the world that is open AFTER this returns — so the
+    // close's autosave wrote the OLD world into the NEW project's row (and its
+    // folder), and the old project lost every edit since its last save
+    // (measured: 3 cubes added, create, reopen — gone). The shell re-points
+    // after the close (MainWindow::startCreateRun, pointAtProject).
     QDir projectDir(fullProjectPath);
     if (!projectDir.exists() && !projectDir.mkpath("."))
         return fail(QStringLiteral("the project folder '%1' could not be created")
@@ -164,6 +254,10 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     // --data-root run) exactly as it always did — which is the behaviour every
     // project in the owner's library has.
     if (!location.trimmed().isEmpty()) db->setProjectLocation(guid, root);
+    // THE TILE IS MADE WITH THE PROJECT (CREATE-GAP-1): one row, one tile —
+    // the Desktop never has to rebuild to learn a project exists.
+    projectManager->addTile(guid);
+    if (folderOut) *folderOut = fullProjectPath;
     return guid;
 }
 
@@ -185,12 +279,12 @@ bool ProjectService::removeProject(const QString &guid)
     db->deleteFolderAndDependencies(guid);
     db->deleteAssetAndDependencies(guid);
 
-    if (projectManager) projectManager->populateDesktop(true);
+    supersedeThumbnail(guid);
+    if (projectManager) projectManager->removeTile(guid);
     return true;
 }
 
 iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
-                                                iris::PostProcessManagerPtr &postMan,
                                                 const iris::MeshPrewarmPtr &prewarm)
 {
     std::unique_ptr<SceneReader> reader(new SceneReader);
@@ -198,14 +292,12 @@ iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
     reader->setProject(project);
     reader->setPrewarm(prewarm);
 
-    postMan = iris::PostProcessManagerPtr();
     QByteArray blob;
     {
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
         blob = db->getSceneBlobGlobal(project->getProjectGuid());
     }
-    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob,
-                                             postMan, editorData);
+    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob, editorData);
 
     // A REPAIRED LOAD IS A DIRTY DOCUMENT (the GLB texture-loss defect,
     // io/scenereader.cpp): the reader healed texture slots that the stored
@@ -292,16 +384,21 @@ bool ProjectService::saveProjectBlob()
     QImage img;
     if (viewport && viewport->isInitialized())
         img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+    // THE VERB'S ENCODE STAYS SYNCHRONOUS (CREATE-GAP-1, stated): this is
+    // project.save — a script's call, never a person's key, whose contract is
+    // that the row (thumbnail included) is written when it returns. It
+    // supersedes an encode still in flight from an earlier save, which would
+    // otherwise land an OLDER picture over this one.
+    const QString guid = project->getProjectGuid();
+    supersedeThumbnail(guid);
     if (!img.isNull()) {
-        QByteArray thumb;
-        QBuffer buffer(&thumb);
-        buffer.open(QIODevice::WriteOnly);
-        img.save(&buffer, "PNG");
-        ok = db->updateProject(blob, thumb, project->getProjectGuid());
-        projectManager->updateTile(project->getProjectGuid(), thumb);
+        const QByteArray thumb = encodeThumbnailPng(img);
+        ok = db->updateProject(blob, thumb, guid);
+        projectManager->updateTile(guid, thumb);
     } else {
-        ok = db->updateProjectBlob(blob, project->getProjectGuid());
+        ok = db->updateProjectBlob(blob, guid);
     }
+    projectManager->touchTile(guid);
 
     undo->markSaved();
     JahLog::write(JahLog::scene, ok ? JahLog::Level::Display : JahLog::Level::Error,
@@ -320,27 +417,34 @@ void ProjectService::saveOpenScene()
     // need to save (nick)
     if (!viewport->isInitialized()) return;
 
-    SceneWriter writer;
-    auto blob = writer.getSceneObject(project->getProjectFolder(),
-                                      sceneProvider(),
-                                      iris::PostProcessManagerPtr(),
-                                      viewport->getEditorData());
-
-    auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
-    if (img.isNull()) {                 // never store an empty tile
-        db->updateProjectBlob(blob, project->getProjectGuid());
-        undo->markSaved();
-        return;
+    // The ledger's view of a save (CREATE-GAP-1): a create's closing save is
+    // inside the create's run now, and these say where its time goes. They
+    // are no-ops outside a run.
+    const QString guid = project->getProjectGuid();
+    QByteArray blob;
+    {
+        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:serialize"));
+        SceneWriter writer;
+        blob = writer.getSceneObject(project->getProjectFolder(),
+                                     sceneProvider(),
+                                     iris::PostProcessManagerPtr(),
+                                     viewport->getEditorData());
     }
-    QByteArray thumb;
-    QBuffer buffer(&thumb);
-    buffer.open(QIODevice::WriteOnly);
-    img.save(&buffer, "PNG");
-
-    db->updateProject(blob, thumb, project->getProjectGuid());
-    projectManager->updateTile(project->getProjectGuid(), thumb);
-
+    QImage img;
+    {
+        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:thumbnail"));
+        img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+    }
+    {
+        // THE ESSENTIAL WRITE IS SYNCHRONOUS: the scene is in the row before
+        // this returns. Only the thumbnail's PNG encode leaves the thread.
+        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:write"));
+        db->updateProjectBlob(blob, guid);
+    }
     undo->markSaved();
+    projectManager->touchTile(guid);
+    // A null screenshot never replaces the stored tile with an empty PNG.
+    if (!img.isNull()) storeThumbnailLater(guid, img);
 }
 
 void ProjectService::saveInitialScene(const QString &projectPath)
@@ -362,7 +466,7 @@ void ProjectService::saveInitialScene(const QString &projectPath)
 
     // Headless (scripted project.create): the viewport never initialized — the
     // legacy widget's takeScreenshot would touch a GL context that isn't there.
-    QByteArray thumb;
+    QImage img;
     if (viewport->isInitialized()) {
         // A 256-PIXEL TILE DOES NOT NEED GLOBAL ILLUMINATION (defect
         // 2026-09-08). takeScreenshot pushes the document's environment into
@@ -385,33 +489,28 @@ void ProjectService::saveInitialScene(const QString &projectPath)
         const iris::GiMode parkedGi = scene ? scene->giMode : iris::GiMode::OFF;
         if (scene) scene->giMode = iris::GiMode::OFF;
         LoadTimeline::Accumulate shot(QStringLiteral("save:thumbnail"));
-        auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+        img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
         shot.stop();
         if (scene) scene->giMode = parkedGi;
-        if (!img.isNull()) {
-            QBuffer buffer(&thumb);
-            buffer.open(QIODevice::WriteOnly);
-            img.save(&buffer, "PNG");
-        }
     }
 
+    const QString guid = project->getProjectGuid();
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:updateProject"));
-        db->updateProject(sceneObject, thumb, project->getProjectGuid());
+        db->updateProjectBlob(sceneObject, guid);
     }
 
     undo->markSaved();
+    projectManager->touchTile(guid);
+    // The thumbnail's encode is a worker's (see storeThumbnailLater); a
+    // headless create has no viewport and so no picture, and keeps the row's
+    // empty thumbnail exactly as before.
+    storeThumbnailLater(guid, img);
 }
 
 void ProjectService::updateCurrentSceneThumbnail()
 {
-    auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
-    if (img.isNull()) return;           // never wipe the tile with an empty PNG
-    QByteArray thumb;
-    QBuffer buffer(&thumb);
-    buffer.open(QIODevice::WriteOnly);
-    img.save(&buffer, "PNG");
-
-    db->updateSceneThumbnail(project->getProjectGuid(), thumb);
-    projectManager->updateTile(project->getProjectGuid(), thumb);
+    // Never wipes the tile with an empty PNG: a null shot stores nothing.
+    storeThumbnailLater(project->getProjectGuid(),
+                        viewport->takeScreenshot(Constants::TILE_SIZE * 2));
 }

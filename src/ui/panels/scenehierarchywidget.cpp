@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/undoservice.h"
+#include "services/nodeexport.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/clipboardservice.h"
@@ -1219,7 +1220,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		if (node->getSceneNodeType() == iris::SceneNodeType::Mesh ||
             node->getSceneNodeType() == iris::SceneNodeType::Empty)
         {
-            if (!node->isBuiltIn) {
+            // The one export rule node.exportArchive reads too.
+            if (nodeexport::typeFor(node) == ModelTypes::Object) {
                 QAction *exportAsset = subMenu->addAction("Export Object");
                 connect(exportAsset, &QAction::triggered, this, [this, node]() {
                     mainWindow->exportNode(node, ModelTypes::Object);
@@ -1297,19 +1299,9 @@ void SceneHierarchyWidget::focusOnNode()
 	}
 }
 
-void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
-{
-	mainWindow->exportNode(node, modelType);
-}
-
 void SceneHierarchyWidget::createMaterial()
 {
 	mainWindow->createMaterial();
-}
-
-void SceneHierarchyWidget::exportParticleSystem(const iris::SceneNodePtr &node)
-{
-	mainWindow->exportNode(node, ModelTypes::ParticleSystem);
 }
 
 void SceneHierarchyWidget::attachAllChildren()
@@ -1380,7 +1372,6 @@ void SceneHierarchyWidget::repopulateTree()
 
     for (auto it = folderItemList.constBegin(); it != folderItemList.constEnd(); ++it)
         if (it.value()) it.value()->setExpanded(!collapsedFolders.contains(it.key()));
-    //ui->sceneTree->expandAll();
 
     if (!selectedIds.isEmpty()) {
         QList<iris::SceneNodePtr> restored;

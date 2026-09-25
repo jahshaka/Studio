@@ -1,7 +1,7 @@
 // scripting.e2e.gi_ddgi — the DDGI verb surface (GI_UNIFIED_SPEC.md §4 P1),
 // end to end in the real app with the engine viewport up.
 //
-// The API-FIRST half of the feature: `world.gi({ddgi, ddgiIntensity})` and the
+// The API-FIRST half of the feature: `world.gi({ddgi})` and the
 // four `world.giStatus()` readings that say what the renderer did with them.
 // The pixel half is the gi.ddgi engine suite; what this one owns is everything
 // a script or a panel can see — defaults, the tri-state, refusals, the
@@ -13,9 +13,10 @@
 //          nothing bound. This is the compatibility statement: DDGI is opt-in
 //          until the Photon tier lands (P2).
 // Phase B: on, under plain VCT — bound, converged, probes fitted, batch sane.
-// Phase C: the intensity scalar, including the A/B value 0.
+// Phase C: there is no intensity dial (PHOTON-GATHER-1d deleted it) and no
+//          ambient dial (PHOTON-ENV-1): both keys are refused.
 // Phase D: refusals and the tri-state.
-// Phase E: save / close / reopen keeps both fields.
+// Phase E: save / close / reopen keeps the field.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -47,9 +48,8 @@ var gi = world.get().gi;
 console.log("gi defaults = " + JSON.stringify(gi));
 assert(gi.tier === "epic", "a new scene is born at the Epic tier: " + gi.tier);
 assert(gi.ddgi === true, "and Epic, like every voxel tier, turns the irradiance field on");
-assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
-       "ddgiIntensity defaults to 1.0 (the renderer's raw brightness, measured to be the "
-       + "right one: the field lands at ~86% of the cone-traced diffuse it replaces)");
+assert(gi.ddgiIntensity === undefined,
+       "and no intensity dial: the field is applied at its own physical answer");
 
 // The rest of this suite is about the VERB, so the scene is put on plain VCT
 // with the field explicitly OFF. It used to reach that state through the Low
@@ -69,8 +69,9 @@ assert(st.live === true, "giStatus is LIVE (the engine viewport answered)");
 assert(st.vctBound === true, "VCT is bound");
 assert(st.ifdBound === false,
        "and no field is bound — the pin, written through");
-assert(st.ifdProbes === 0 && st.ifdProbesPerFrame === 0 && st.ifdConverged === false,
-       "no field means no probes, no batch, and nothing converged");
+assert(st.ifdProbes === 0 && st.ifdProbesPerFrame === 0 && st.ifdTargetSamples === 0
+       && st.ifdRefinesOwed === 0,
+       "no field means no probes, no batch, and no convergence schedule");
 
 // ---- phase B: on --------------------------------------------------------
 assert(world.gi({ ddgi: true }), "world.gi({ddgi:true})");
@@ -81,8 +82,8 @@ assert(st.ifdBound === true, "the irradiance field is BOUND to the PBR shader");
 assert(st.vctBound === true,
        "VCT stays bound — the field replaces its DIFFUSE, not the whole arm");
 assert(st.ifdProbes === 8192, "the field holds 8192 probes");
-assert(st.ifdConverged === true,
-       "a field is converged on the frame it binds (the build converges it in one dispatch)");
+assert(st.ifdRefinesOwed < st.ifdTargetSamples,
+       "a field is WHOLE on the frame it binds (the build samples every probe in one dispatch)");
 assert(st.ifdProbesPerFrame > 0 && st.ifdProbes % st.ifdProbesPerFrame === 0,
        "the re-converge batch divides the field exactly — every dispatch is the same size, "
        + "which is what keeps the renderer clear of a zero-work-group dispatch");
@@ -99,17 +100,12 @@ assert(world.gi({ updateBudget: 1 }), "world.gi({updateBudget:1})");
 editor.frame(3);
 assert(world.giStatus().ifdProbesPerFrame > 0, "un-pausing re-arms the batch");
 
-// ---- phase C: the intensity ---------------------------------------------
-assert(world.gi({ ddgiIntensity: 0 }), "world.gi({ddgiIntensity:0})");
-editor.frame(3);
-st = world.giStatus();
-assert(st.ifdBound === true,
-       "intensity 0 leaves the field BOUND — it is a shader scalar, not a second switch "
-       + "(this is the A/B measurement, not an off state)");
-assert(Math.abs(world.get().gi.ddgiIntensity) < 1e-6, "the document echoes intensity 0");
-assert(world.gi({ ddgiIntensity: 2.5 }), "world.gi({ddgiIntensity:2.5})");
-editor.frame(3);
-assert(Math.abs(world.get().gi.ddgiIntensity - 2.5) < 1e-4, "the document echoes intensity 2.5");
+// ---- phase C: there is no intensity dial (PHOTON-GATHER-1d) -----------------
+// The field is applied at its own physical answer; the trim is gone and its key
+// is REFUSED, like every key world.gi does not know.
+var threwI = "";
+try { world.gi({ ddgiIntensity: 1 }); } catch (e) { threwI = String(e); }
+assert(threwI.indexOf("ddgiIntensity") >= 0, "world.gi refuses the retired ddgiIntensity key: " + threwI);
 
 // ---- phase C2: there is no ambient dial -----------------------------------
 // PHOTON-ENV-1: the field carries the SKY itself (every probe ray that escapes
@@ -122,13 +118,6 @@ try { world.gi({ ddgiAmbient: 1 }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("ddgiAmbient") >= 0, "world.gi refuses the retired ddgiAmbient key: " + threw);
 
 // ---- phase D: refusals and the tri-state --------------------------------
-try { world.gi({ ddgiIntensity: 100 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("ddgiIntensity") >= 0,
-       "world.gi refuses an out-of-range ddgiIntensity: " + threw);
-threw = "";
-try { world.gi({ ddgiIntensity: -1 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("ddgiIntensity") >= 0,
-       "world.gi refuses a negative ddgiIntensity: " + threw);
 threw = "";
 try { world.gi({ ddgi: "sometimes" }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("ddgi") >= 0,
@@ -177,7 +166,7 @@ assert(irRefused || world.get().gi.mode !== "instant_radiosity",
        "world.gi({mode:'instant_radiosity'}) is refused by name");
 
 // ---- phase E: the round trip --------------------------------------------
-assert(world.gi({ mode: "vct", ddgi: true, ddgiIntensity: 1.75 }), "set up for the round trip");
+assert(world.gi({ mode: "vct", ddgi: true }), "set up for the round trip");
 editor.frame(3);
 assert(project.save() === true, "project.save");
 assert(project.close() === true, "project.close");
@@ -186,7 +175,6 @@ editor.frame(4);
 gi = world.get().gi;
 console.log("gi after reopen = " + JSON.stringify(gi));
 assert(gi.ddgi === true, "ddgi survives save/close/reopen");
-assert(Math.abs(gi.ddgiIntensity - 1.75) < 1e-4, "ddgiIntensity survives save/close/reopen");
 st = world.giStatus();
 assert(st.ifdBound === true, "the reopened scene binds its field again");
 console.log("gi.ddgi e2e complete");

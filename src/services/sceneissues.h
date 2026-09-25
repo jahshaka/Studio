@@ -62,6 +62,7 @@ For more information see the LICENSE file
 // else. Process-wide, like the other message sinks (EngineErrorPump), because
 // there is one editor window and one open scene.
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -69,6 +70,8 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "irisgl/irisglfwd.h"
+
+class QFileSystemWatcher;
 
 /// One thing wrong with the open scene that the user can fix.
 struct SceneIssue
@@ -99,6 +102,11 @@ public:
     /// The condition is gone. Forgets it, so the NEXT occurrence is shown
     /// again. False when there is no such issue.
     bool clear(const QString &id);
+    /// The SAME condition, described afresh: replaces a live issue's message
+    /// IN PLACE — no move, no second row, and a `changed()` only when the text
+    /// really differs. For an issue whose wording tracks its subject (the
+    /// missing texture files of one object). False when there is no such issue.
+    bool update(const QString &id, const QString &message);
 
     /// Forgets every live issue of a kind. Returns how many went.
     int clearKind(const QString &kind);
@@ -134,6 +142,10 @@ public:
     ///     is about the PROJECT rather than an object, so it names no node —
     ///     and the entire reason the On state exists, since On and Auto render
     ///     the same picture and differ only in whether the author is told.
+    ///   * `texture.missing` — a material's texture file is gone from disk
+    ///     (the document keeps the path; the mirror binds nothing). One issue
+    ///     per mesh node, naming each missing slot and file; it clears when
+    ///     the file returns or the slot is re-linked.
     int scan(const iris::ScenePtr &scene);
 
 signals:
@@ -143,6 +155,14 @@ signals:
 private:
     SceneIssues() = default;
     int indexOf(const QString &id) const;
+    /// texture.missing's view of the disk (see the scanner): whether each
+    /// texture path exists, as last asked; forgotten per directory when the
+    /// watcher reports it changed, and wholesale every kTextureRecheckScans.
+    bool textureExists(const QString &path);
+    void forgetTextureDir(const QString &dir);
+    QHash<QString, bool> mTextureExists;
+    QFileSystemWatcher *mTextureDirs = nullptr;
+    int mScansSinceRecheck = 0;
 
     QVector<SceneIssue> mIssues;
 };

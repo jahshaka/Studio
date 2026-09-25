@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/memberstamp.h"
+#include "services/projectmembership.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -80,7 +81,13 @@ bool unstamp(Database *db, const QString &guid)
     if (!props.contains(kMemberKey) && !props.contains(kOriginKey)) return true;
     props.remove(kMemberKey);
     props.remove(kOriginKey);
-    return db->updateAssetProperties(guid, QJsonDocument(props).toJson());
+    if (!db->updateAssetProperties(guid, QJsonDocument(props).toJson())) return false;
+    // THE PICTURE IS A TILE AGAIN (TRAY-REPOP-1's residual): a folded map the
+    // user imported is theirs now, and the tray must show it without a click.
+    // Not a pin change, so announced as "some project" — the tray repopulates
+    // on it, coalesced, exactly as on a pin.
+    ProjectMembership::instance()->announceAny(QString());
+    return true;
 }
 
 QString stampedTextureFor(Database *db, const QString &oid)

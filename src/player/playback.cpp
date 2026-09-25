@@ -159,7 +159,6 @@ float PlayBack::update(iris::Viewport& viewport, float dt)
 void PlayBack::saveNodeTransforms()
 {
 	for (auto node : scene->nodes) {
-		//nodeTransforms.insert(node->guid, node->getLocalTransform());
 		nodeTransforms.insert(node->guid, PlayBackNodeTransform(node->getLocalPos(), node->getLocalRot(), node->getLocalScale()));
 	}
 }
@@ -336,7 +335,6 @@ void PlayBack::keyReleaseEvent(QKeyEvent *event)
 	if (!event->isAutoRepeat())
 		iris::InputSystem::instance().keyReleased(event->key());
 	camController->onKeyReleased((Qt::Key)event->key());
-	//camController->keyReleaseEvent(event);
 }
 
 void PlayBack::clearInputState()

@@ -158,9 +158,35 @@ static double budgetFor(double fixedMs, double controlMs, const char *label)
     return budget;
 }
 
+/// EVERY RUN STARTS FROM THE SAME LIBRARY (CREATE-GAP-1). The suite's home
+/// persists between runs, and each run leaves ~14 projects in it — so the
+/// library, and with it every Desktop the create arms close back to, grew by a
+/// run's worth each time (measured: 10 -> 25 -> 40 -> 55 tiles, and the
+/// create's worst gap with them, 418 -> 1 309 ms). The run's own counts are
+/// the only counts: the library database, its WAL, its lock, the asset store
+/// and the project folders go; the SHADER CACHE STAYS — a cold cache is a
+/// different measurement, and this suite's cold arms say which one they take.
+static void resetSuiteLibrary()
+{
+    const QString root = qEnvironmentVariable("JAHSHAKA_DATA_ROOT");
+    if (root.isEmpty()) {
+        std::printf("info: JAHSHAKA_DATA_ROOT unset — the library is NOT reset\n");
+        return;
+    }
+    QDir dir(root);
+    for (const char *file : { "JahLibrary.db", "JahLibrary.db-wal", "JahLibrary.db-shm",
+                              "JahLibrary.db-journal", "JahLibrary.db.lock" })
+        dir.remove(QString::fromLatin1(file));
+    for (const char *sub : { "AssetStore", "Projects" })
+        QDir(dir.filePath(QString::fromLatin1(sub))).removeRecursively();
+    std::printf("info: the suite library was reset under %s (shader cache kept)\n",
+                qUtf8Printable(root));
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    resetSuiteLibrary();
     seedSettings(QStringLiteral(JAHSHAKA_BINARY));
 
     const QString sample =
@@ -628,6 +654,87 @@ int main(int argc, char **argv)
               "and no single FRAME of a create is over 300 ms — the world streams in "
               "instead of arriving in one");
 
+        // ---- THE FULL LIBRARY (CREATE-GAP-1) ---------------------------------
+        //
+        // The create arms above close back to a desktop of the run's own ~10
+        // projects. The owner's is larger, and the close used to REBUILD it:
+        // every tile re-created and its PNG thumbnail inflated on the UI thread,
+        // ~11 ms a tile, inside the create (measured on the base, 40 tiles:
+        // the grid build 400-440 ms, the create's worst gap 890-903 ms). The
+        // grid is a model now — the create's close rebuilds nothing, its tile
+        // was added when its row was made — and this arm holds that at the size
+        // that exposed it: 40 projects on the desktop, then one more create.
+        {
+            const auto gridBuilds = [&]() {
+                return mcp.runScript(QStringLiteral("desktop.gridStats().builds"))
+                    .value("result").toInt();
+            };
+            const auto onDesktop = [&]() {
+                return mcp.runScript(QStringLiteral("project.list({desktop:1}).length"))
+                    .value("result").toInt();
+            };
+            const int before = onDesktop();
+            int made = 0;
+            while (onDesktop() < 40 && made < 60) {
+                mcp.runScript(QStringLiteral("project.create('Library %1 %2')")
+                                  .arg(made).arg(QDateTime::currentMSecsSinceEpoch()));
+                ++made;
+            }
+            const int library = onDesktop();
+            const int tilesBefore = mcp.runScript(QStringLiteral("desktop.tiles().length"))
+                                        .value("result").toInt();
+            std::printf("info: [full library] %d project(s) on the desktop before the fill, "
+                        "%d created, %d now; the grid shows %d tile(s)\n",
+                        before, made, library, tilesBefore);
+            CHECK(library == 40 && tilesBefore == 40,
+                  "the full-library arm starts from 40 projects, every one a tile (no rebuild "
+                  "was needed to learn them)");
+
+            const int buildsBefore = gridBuilds();
+            auto full = createAndMeasure("full library");
+            bool fullWithin = full.ok && full.gap > 0.0 && full.gap < full.budget;
+            if (!fullWithin) {
+                // ONE REPEAT before the red, as the arms above.
+                std::printf("info: the full-library create's worst gap (%.1f ms) exceeded its "
+                            "budget (%.1f ms) — repeating once\n", full.gap, full.budget);
+                full = createAndMeasure("full library-2");
+                fullWithin = full.ok && full.gap > 0.0 && full.gap < full.budget;
+            }
+            const int buildsAfter = gridBuilds();
+            const int tilesAfter = mcp.runScript(QStringLiteral("desktop.tiles().length"))
+                                       .value("result").toInt();
+            std::printf("info: [full library] grid builds during the create(s): %d (session "
+                        "total %d); tiles now %d (projects %d)\n", buildsAfter - buildsBefore,
+                        buildsAfter, tilesAfter, onDesktop());
+            CHECK(full.ok, "project.create made a world over a 40-project desktop");
+            CHECK(fullWithin,
+                  "no UI-thread gap beyond the budget during a create over a 40-project desktop");
+            CHECK(buildsBefore >= 1 && buildsAfter == buildsBefore,
+                  "the create's close rebuilt NO grid (desktop.gridStats().builds unchanged)");
+            CHECK(tilesAfter == onDesktop() && tilesAfter >= 41,
+                  "...and the grid holds one tile per project — the new one included (41+)");
+
+            // THE LEDGER TELLS THE WHOLE VERB: the close of the world that was
+            // open is a stage of the create, with its three parts counted.
+            const QJsonObject ledger = mcp.runScript(QStringLiteral(
+                "(function(){var t=app.openTimings();var m={};for(var i=0;i<t.length;i++)"
+                "m[t[i].stage]=t[i].ms;return JSON.parse(JSON.stringify(m))})()"))
+                                           .value("result").toObject();
+            std::printf("info: [full library] ledger closePrevious %.1f ms (save %.1f, teardown "
+                        "%.1f, switch %.1f; the save's screenshot %.1f) of total %.1f ms\n",
+                        ledger.value("closePrevious").toDouble(),
+                        ledger.value("counter:closePrevious:save").toDouble(),
+                        ledger.value("counter:closePrevious:teardown").toDouble(),
+                        ledger.value("counter:closePrevious:switch").toDouble(),
+                        ledger.value("counter:saveOpen:thumbnail").toDouble(),
+                        ledger.value("total").toDouble());
+            CHECK(ledger.contains("closePrevious") &&
+                      ledger.contains("counter:closePrevious:save") &&
+                      ledger.contains("counter:closePrevious:teardown") &&
+                      ledger.contains("counter:closePrevious:switch"),
+                  "app.openTimings() of a create carries its closePrevious stage and marks");
+        }
+
         // THE CREATE IS IN THE LEDGER, with the open's own stage names
         // (§4: `app.openTimings()` reports a create run).
         const QJsonObject createLedger = mcp.runScript(QStringLiteral(
@@ -686,6 +793,15 @@ int main(int argc, char **argv)
         // the 300 ms number is PRINTED here, every run, and the assertion is at
         // 600 until that lane lands. Never widen this silently: when
         // PCC-BUDGET-1 is in, this number comes down to kStreamFrameMs.
+        //
+        // ...EXCEPT AT A RAY TIER (PHOTON-F12-PCC), where the grid is not built
+        // at all: Showroom 2 is authored at Epic, so on a machine that traces
+        // the open places no probe and the 713-799 ms placement is gone. The
+        // bar there IS kStreamFrameMs — re-derived from the open without the
+        // grid, measured at a worst frame of 97.4 ms on the RTX 4080 SUPER
+        // (Debug, three lanes sharing the box). Which arm applies is the
+        // engine's own answer (world.giStatus().probeGridByRays), read after
+        // the open; a machine without rays keeps the 600 until PCC-BUDGET-1.
         const double kOpenFrameMsUntilPccBudget = 600.0;
         if (!showroomGuid.isEmpty()) {
             const double control = measureControlGap(mcp, "showroom");
@@ -711,21 +827,30 @@ int main(int argc, char **argv)
                 QStringLiteral("JSON.parse(JSON.stringify(editor.viewportState()))"))
                                          .value("result").toObject();
             mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+            const bool rayTier = mcp.runScript(QStringLiteral("world.giStatus().probeGridByRays"))
+                                     .value("result").toBool();
+            const double bar = rayTier ? kStreamFrameMs : kOpenFrameMsUntilPccBudget;
             const double worst = frames.value("worstMs").toDouble();
-            std::printf("info: [open Showroom 2, cover off] open verb %.0f ms | worst UI gap "
+            std::printf("info: [open Showroom 2, cover off, %s] open verb %.0f ms | worst UI gap "
                         "%.1f ms (budget %.1f) | worst FRAME %.1f ms — PRINTED against %.0f, "
-                        "ASSERTED at %.0f until PCC-BUDGET-1 | slow frames %d | cover '%s'\n",
+                        "ASSERTED at %.0f%s | slow frames %d | cover '%s'\n",
+                        rayTier ? "ray tier: no probe grid" : "probe grid",
                         elapsedMs, beat.value("maxGapMs").toDouble(), budget, worst,
-                        kStreamFrameMs, kOpenFrameMsUntilPccBudget,
+                        kStreamFrameMs, bar, rayTier ? "" : " until PCC-BUDGET-1",
                         frames.value("slowFrames").toInt(),
                         qUtf8Printable(view.value("cover").toString()));
             std::fflush(stdout);
             CHECK(opened, "Grand Showroom 2 opened with the cover off");
             CHECK(view.value("cover").toString() == QLatin1String("none"),
                   "no cover was drawn for the open");
-            CHECK(worst > 0.0 && worst < kOpenFrameMsUntilPccBudget,
-                  "no single frame of the Showroom 2 open is over 600 ms (the residual is the "
-                  "probe fit + the closing capture — PCC-BUDGET-1 owes the 300)");
+            if (rayTier)
+                CHECK(worst > 0.0 && worst < bar,
+                      "AT A RAY TIER no single frame of the Showroom 2 open is over 300 ms — no "
+                      "probe grid is placed, fitted or captured (PHOTON-F12-PCC)");
+            else
+                CHECK(worst > 0.0 && worst < bar,
+                      "no single frame of the Showroom 2 open is over 600 ms (the residual is the "
+                      "probe fit + the closing capture — PCC-BUDGET-1 owes the 300)");
             // THE WATCHDOG SAW NOTHING. Its default threshold is 2,000 ms, and
             // a stall report across a load with the cover off would mean a
             // frame the user watched the window die in.

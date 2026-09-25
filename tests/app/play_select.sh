@@ -249,22 +249,45 @@ js 'editor.selectNone()' > /dev/null
 # SECTION 1 — A CLICK DURING PLAY SELECTS (the owner's request)
 # ##########################################################################
 js 'editor.play()' > /dev/null || bad "editor.play()"
-sleep 0.6
 [ "$(js 'editor.playing()')" = "true" ] && ok "the scene is playing" || bad "the scene is not playing"
 [ "$(js 'editor.playInputOwner()')" = "editor" ] \
     && ok "with nobody possessed the EDITOR owns the click" \
     || bad "the run claims the click with nobody possessed"
 
-Y0=$(js "JSON.stringify(node.info('$BALL').position)" | jq -r .y)
+# THE FALL IS COUNTED IN FRAMES, NOT IN TIME (the frames-not-time law). This
+# used to be `sleep 0.6`, a click, and "the ball is lower" across two reads —
+# a wall-clock window: under load the driver's frames spent the ball's whole
+# 8 m drop before the first read (the clock catches up to the wall), the two
+# reads agreed and the section redded (3 of ~10 at load 18) while the app was
+# fine. Now: the ball is lifted to 1 000 m (a paused run is still a run — the
+# 3c arm below relies on the same), resumed, and after the click the SCRIPT
+# steps a known number of grid steps. Bullet's step from any downward speed
+# covers at least g*h^2*N(N+1)/2 in N steps of h (semi-implicit Euler from
+# rest), and whatever the driver's own frames add only lengthens the fall — so
+# the lower bound holds on a quiet box and a loaded one alike, and 1 000 m is
+# further than any run of this section can fall.
+js "editor.pause(); node.transform('$BALL', {position:{x:4, y:1000, z:0}}); editor.play()" > /dev/null \
+    || bad "could not lift the ball for the fall"
+FALL_STEPS=30
+BEFORE=$(js "JSON.stringify({y: node.info('$BALL').position.y, steps: scene.clock().steps,
+                             h: scene.clock().stepSeconds, g: world.get().gravity})")
 click "$CX" "$CY"
 SEL=$(js 'editor.selection() || ""')
-Y1=$(js "JSON.stringify(node.info('$BALL').position)" | jq -r .y)
+AFTER=$(js "editor.frame($FALL_STEPS, scene.clock().stepSeconds);
+            JSON.stringify({y: node.info('$BALL').position.y, steps: scene.clock().steps})")
+Y0=$(num "$BEFORE" y); Y1=$(num "$AFTER" y)
+STEPS=$(jq -rn --argjson a "$BEFORE" --argjson b "$AFTER" '$b.steps - $a.steps')
+MINFALL=$(jq -rn --argjson a "$BEFORE" --argjson n "$FALL_STEPS" \
+            '$a.g * $a.h * $a.h * $n * ($n + 1) / 2 * 0.99')
 [ "$SEL" = "$CUBE" ] \
     && ok "A PLAIN LEFT CLICK DURING PLAY SELECTED THE CUBE (owner R13)" \
     || bad "the click during play selected '$SEL', not the cube"
-[ "$(gt "$Y0" "$Y1")" = "yes" ] \
-    && ok "and the simulation kept advancing across the click (the ball fell $Y0 -> $Y1)" \
-    || bad "the ball did not fall across the click ($Y0 -> $Y1): the run is not running"
+[ "$(jq -rn --argjson s "$STEPS" --argjson n "$FALL_STEPS" 'if $s >= $n then "yes" else "no" end')" = "yes" ] \
+    && ok "the run's clock took $STEPS grid steps across the click (>= the $FALL_STEPS the script stepped)" \
+    || bad "the document clock took $STEPS grid steps for $FALL_STEPS scripted frames of one step each"
+[ "$(jq -rn --argjson a "$Y0" --argjson b "$Y1" --argjson m "$MINFALL" 'if ($a - $b) >= $m then "yes" else "no" end')" = "yes" ] \
+    && ok "and the simulation kept advancing across the click (the ball fell $Y0 -> $Y1 over $STEPS steps, >= $MINFALL m)" \
+    || bad "the ball fell $Y0 -> $Y1 over $STEPS steps, less than the $MINFALL m of $FALL_STEPS free-fall steps: the run is not running"
 [ "$(js 'editor.playing()')" = "true" ] \
     && ok "the click did not stop the run" || bad "the run stopped on a click"
 
@@ -354,12 +377,12 @@ MODE=$(js 'editor.gizmoMode()')
 # avatar consumes) and KeyboardState (what the camera controllers poll) — and
 # only the first was being cleared when a run lost the keyboard. What this
 # suite can SEE is the InputSystem half: hold a Move key, eject, and the run's
-# input must read empty. The KeyboardState half has no reading from here (its
-# only consumer is the play-mode fly, and that fly does not move the camera in
-# this build at all — measured below and reported upward: `input.state().move`
-# reads 1 with the key held and editor.camera() does not move a millimetre, for
-# an arrow and for W alike, which is a Player-side defect this lane does not
-# own).
+# input must read empty. The KeyboardState half is read through its consumer,
+# the play-mode fly: a REAL held key must move the camera the view renders.
+# (It did not move a millimetre until PLAY-FLY-1: in a new scene the run flew a
+# camera nobody rendered — scripting.e2e.play_fly is the frame-counted guard;
+# this is the real-X half.) The camera is put back afterwards: the sections
+# below frame the ball and the cube from where the run started.
 A=$(js 'JSON.stringify(editor.camera().position)')
 xdotool keydown Up; sleep 0.5
 MOVE=$(js 'JSON.stringify(input.state().move)')
@@ -367,7 +390,11 @@ MOVE=$(js 'JSON.stringify(input.state().move)')
     && ok "the held key reached the RUN (input.state().move $MOVE)" \
     || bad "the held key never reached the run ($MOVE) — the hand-over means nothing"
 B=$(js 'JSON.stringify(editor.camera().position)')
-note "the run's camera under a held fly key: $A -> $B (see the note above)"
+FLOWN=$(jq -rn --argjson a "$A" --argjson b "$B" \
+          'if ((($a.x-$b.x)*($a.x-$b.x) + ($a.y-$b.y)*($a.y-$b.y) + ($a.z-$b.z)*($a.z-$b.z)) > 0.0001) then "yes" else "no" end')
+[ "$FLOWN" = "yes" ] \
+    && ok "A REAL HELD FLY KEY MOVES THE CAMERA THE RUN RENDERS ($A -> $B)" \
+    || bad "the play-mode fly is dead: the camera did not move under a held key ($A -> $B)"
 
 key j                                    # EJECT with the key still down
 xdotool keyup Up; sleep 0.3              # the release the RUN will never see
@@ -381,6 +408,8 @@ MOVE=$(js 'JSON.stringify(input.state().move)')
 [ "$(printf '%s' "$MOVE" | jq -r '(.x|fabs) + (.y|fabs)')" = "0" ] \
     && ok "...and the run did not inherit it when it took the keyboard back ($MOVE)" \
     || bad "the run took the keyboard back still believing the key was down ($MOVE)"
+js "editor.setCamera({position: $A})" > /dev/null \
+    || bad "could not put the camera back where the run started"
 
 # ##########################################################################
 # SECTION 3c — A GESTURE CANNOT SURVIVE THE HAND-OVER (fix round F2)

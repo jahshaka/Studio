@@ -240,7 +240,6 @@ iris::Vec3 PlayerMouseController::screenSpaceToWoldSpace(const QPointF& pos, flo
     // HCC -> View Space
     iris::Mat4 projection_matrix_inverse = this->camera->projMatrix.inverted();
     iris::Vec4 eye_coords = projection_matrix_inverse * HCC;
-    //iris::Vec4 ray_eye = iris::Vec4(eye_coords.x(), eye_coords.y(), eye_coords.z(), 0.0f);
 
     // View Space -> World Space
     iris::Mat4 view_matrix_inverse = this->camera->viewMatrix.inverted();

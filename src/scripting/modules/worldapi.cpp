@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include <functional>
 #include "services/vrworld.h"
 #include "services/worldmodes.h"
+#include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/Types.h"
 #include "services/looks.h"
 #include "commands/scenelookscommand.h"
@@ -133,13 +134,19 @@ public:
     void commit(UndoService *undo, const QString &text)
     {
         mDone = true;
-        if (!undo) return;
         QStringList changed;
         for (const QString &k : mKeys)
             if (sceneprops::get(mScene, k) != mBefore.value(k)) changed.append(k);
         const bool registry = (mFlags & Registry) &&
                               !WorldModeCommand::same(mModeBefore, WorldModeCommand::capture(mScene));
         const bool texture = (mFlags & SkyTexture) && mScene->skyTexture != mTextureBefore;
+        // THE PANEL SHOWING WHAT CHANGED RE-READS IT (SMALL-FIXES-3): many
+        // verbs assign the fields themselves rather than through
+        // sceneprops::set, so the column learns of the change here, where the
+        // before/after already is.
+        for (const QString &k : changed) sceneprops::notifyExternal(mScene, k);
+        if (registry) sceneprops::notifyExternal(mScene, QStringLiteral("worldModes"));
+        if (!undo) return;
         const int parts = int(changed.size()) + (registry ? 1 : 0) + (texture ? 1 : 0);
         if (parts == 0) return;
         if (parts == 1 && !texture) {   // exactly the command the panel's row pushes
@@ -211,10 +218,9 @@ const QStringList &giPlainKeys()
     static const QStringList keys = {
         QStringLiteral("giCascadeInstanceCap"), QStringLiteral("giDragMoverChannel"),
         QStringLiteral("giPccGrid"), QStringLiteral("giUpdateBudget"),
-        QStringLiteral("giDdgiIntensity"),
         QStringLiteral("giGather"),
         QStringLiteral("giCards"), QStringLiteral("giCardBudgetTexels"), QStringLiteral("giCardRadius"),
-        QStringLiteral("giRayMarchStepScale"), QStringLiteral("giProbeHdr"),
+        QStringLiteral("giProbeHdr"),
         QStringLiteral("giProbeShadows"), QStringLiteral("giProbeOverlap"),
         QStringLiteral("giProbeSnapDeviation"), QStringLiteral("giProbeSnapSidesMin"),
         QStringLiteral("giProbeSnapSidesMax")
@@ -264,16 +270,15 @@ QVector<VerbInfo> WorldApi::verbs() const
           "lights. The resolution is world.setShadowResolution and the per-light filter/bias rows "
           "are node.setProperty on the light; any other key here is REFUSED.",
           Needs::Document },
-        { "gi", "world.gi({tier, mode, quality, bounces, cascades, cascadeSet, cascadeInstanceCap, dragOnMoverChannel, cards, cardBudget, cardRadius, pccGrid, updateBudget, probeSize, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, gather, ddgi, ddgiIntensity}) -> bool",
+        { "gi", "world.gi({tier, mode, quality, bounces, cascades, cascadeSet, cascadeInstanceCap, dragOnMoverChannel, cards, cardBudget, cardRadius, pccGrid, updateBudget, probeSize, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, gather, ddgi}) -> bool",
           "Global illumination — the full surface, of which world.photon is the product-named shorthand. "
-          "'tier' is PHOTON'S QUALITY TIER (low|medium|high|epic) and it is the setting to reach for first: it picks the technique, the voxel/probe quality, the irradiance field, the bounce count and the dynamic probes, all at once — THE TIER TABLE: every tier is a VOXEL tier with the irradiance field on and the camera cascades on — low = two cascades at 64^3, 1 bounce, no probes; medium = the chain at 64^3 feeding the field (voxel source); high = 128^3 + reflection probes with HDR shadowed captures; epic = high plus 3 light bounces (no tier reserves dynamic probes since 2026-09-12: moving things are reflected every frame by screen-space reflections and planar mirrors, not by re-capturing probes). world.settings() lists every row with its four columns (tierSpace 'photon'). Setting it does NOT turn GI on or off (world.photon({enabled}) or 'mode' do that) and it never overwrites a setting you pinned yourself: any of the keys below, set explicitly, stays pinned through tier switches until world.clearOverride drops it. "
+          "'tier' is PHOTON'S QUALITY TIER (low|medium|high|epic) and it is the setting to reach for first: it picks the technique, the voxel/probe quality, the irradiance field, the bounce count and the dynamic probes, all at once — THE TIER TABLE: every tier is a VOXEL tier with the irradiance field on and the camera cascades on — low = two cascades at 64^3, 1 bounce, no probes; medium = the chain at 64^3 feeding the field (voxel source); high = 128^3, its reflections TRACED wherever the scene traces rays on this machine (no reflection-probe grid is built there) and otherwise a probe grid with HDR shadowed captures; epic = high plus 3 light bounces; and wherever the machine traces rays the SCREEN-PROBE GATHER is the diffuse at medium (36 rays a probe), high (64) and epic (64, four times the probes), the irradiance field its fallback, while low keeps the field and the cones as its diffuse (world.tierTable()'s 'gather' column) (no tier reserves dynamic probes since 2026-09-12: moving things are reflected every frame by screen-space reflections and planar mirrors, not by re-capturing probes). world.settings() lists every row with its four columns (tierSpace 'photon'). Setting it does NOT turn GI on or off (world.photon({enabled}) or 'mode' do that) and it never overwrites a setting you pinned yourself: any of the keys below, set explicitly, stays pinned through tier switches until world.clearOverride drops it. "
           "The individual knobs: mode off|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4 (a tier row: epic 3, the rest 1 — each bounce past the first is another light-propagation pass over the whole voxel volume on every re-solve, and the irradiance field is fed from that volume so it sees them too). THE LIT VOLUME IS AUTOMATIC AND THERE IS NO KNOB FOR IT: the renderer fits it to the scene's content on every solve, under its own ceiling, and 'boundsMin', 'boundsMax' and 'autoBoundsMax' are gone and refused by name. Read what the fit decided with world.giStatus().boundsMin / .boundsMax, and .voxelMetres for the metres per voxel it resolved to — the number that says whether the GI in a scene means anything. One object can be kept out of the fit with node.setProperty(id, \"giBoundsExcluded\", true). pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). cascades = PHOTON's camera-centred voxel cascades, and it is a PHOTON TIER ROW: every tier turns it ON, so setting it here PINS it. On, the renderer builds a chain of voxel boxes centred on the camera — fine cells near the eye, coarse ones far away — and re-centres them as you travel, at most one box per frame, so the bounce follows the camera and what escapes the outermost cascade reads the Sky Light rather than going dark; the irradiance field rides cascade 0 and is re-placed with it, and reflection probes are unaffected. Off fits ONE box around the scene's content under a 64 m ceiling instead: inside it the bounce is identical and slightly cheaper per pixel (one volume to cone-trace instead of four — measured at 1.6 vs 2.7 ms of a 1080p frame on the Showroom), outside it there is no bounce at all, and a scene larger than the ceiling is voxelised at metres per cell. cascadeInstanceCap = how many objects ONE cascade may voxelise, 0 (the default) meaning no budget: the renderer keeps the ones that fill most of that cascade's own voxels, largest first and nearest first among equals, which is the lever for a scene dense enough that a whole re-voxelisation does not fit in a frame (world.giStatus().cascades[].attached against [].items says whether it is biting). cascadeSet = [{halfSize, resolution, stepCells?}, ...], at most 8, pins the table: halfSize is the HALF-extent in metres of that cascade's cube, resolution its voxel count per axis (16..256), stepCells how many cells the camera may travel before it re-centres (0 or absent DERIVES it, which is what every shipped tier does: every cascade steps the same distance as the outermost one, met with THE NEAR-FIELD GUARANTEE \u2014 the step is held small enough that the cascade covers a radius of 0.45 of its own half-size around the camera at every moment of any WALK (a cell of slack over that pays for the frame the per-frame re-centre test costs and for a rebuild that had to wait its turn; at the editor's 15 m/s fly a single frame is 0.25 m and spends it, which is deliberate \u2014 the guarantee is for walking pace), so the near field you are standing in is voxelised by that cascade and not by the coarser one behind (world.giStatus().cascades[].guaranteedRadius is what it resolved to; it was NEGATIVE at every tier but Low before 2026-09-18, which is what made a walk shimmer). A pinned one is the author's own number and is held only between one cell and half the resolution, since below that the volume re-centres for nothing and above it the camera leaves the box before it re-centres \u2014 pin one below the derived value and the guarantee shrinks with it.) The table must GROW OUTWARD — every row a bigger halfSize AND a bigger cell than the one before it, because each cascade hands the ray march over to the coarser one behind it — and one that does not is refused whole, never honoured halfway. Omit it and the quality tier decides. world.giStatus().cascades reports what was actually built. "
-          "The rest are vct_pcc_hybrid probe-capture knobs. 'probeSize' is the pixel size of ONE probe cube face and the grid's biggest memory lever: a probe is six faces plus a mip chain, so memory goes with the SQUARE of it (256 = 4.0 MB per probe in HDR, 512 = 16.0 MB). 0 (the default) follows the quality dial — 128 at low, 256 at medium, 512 at high and epic — and any other value must be a power of two in 64..1024; it is a Photon tier row, so setting it PINS it against the tier. 'probeHdr' captures probes in floating point instead of 8-bit, so a light or emissive surface brighter than white keeps its brightness in the reflection instead of clipping to flat white; it doubles probe VRAM. 'probeShadows' renders the scene's shadows into every probe face, so reflections show the room's shadows; it multiplies the capture cost by the shadow passes. Both are true|false|\"auto\", and \"auto\" (the default) means FOLLOW THE QUALITY DIAL — on at high, off below — so most scenes never set them. 'overlap' (0..8, default 1.25) is how far each probe's influence stretches past its share of the region: 1.0 leaves visible seams between probes, higher blends more smoothly and puts more probes over each pixel. 'snapDeviation', 'snapSidesMin' and 'snapSidesMax' (defaults 0.05/0.25/0.25) are relative tolerances for snapping a probe's depth-fitted shape back out to the region — raise them when the walls of a room have no reflections, 0 disables snapping. "
+          "The rest are vct_pcc_hybrid probe-capture knobs, and AT A RAY TIER THEY ARE REFUSED: at high and epic (the quality this call leaves), wherever the scene traces rays on this machine, no probe grid is built — the screen march, the traced rays (a hit lit from its surface card, the decode or the voxels) and the voxel cone with the sky as its escape are the reflection, planar mirrors stay planar — so 'pccGrid', 'probeSize', 'probeHdr' and 'probeShadows' would set nothing and the call is refused whole with that reason (world.rayTracing(\"off\") or a low/medium quality gives a grid back, and world.giStatus().probeGridByRays says which regime is in force). 'probeSize' is the pixel size of ONE probe cube face and the grid's biggest memory lever: a probe is six faces plus a mip chain, so memory goes with the SQUARE of it (256 = 4.0 MB per probe in HDR, 512 = 16.0 MB). 0 (the default) follows the quality dial — 128 at low, 256 at medium, 512 at high and epic — and any other value must be a power of two in 64..1024; it is a Photon tier row, so setting it PINS it against the tier. 'probeHdr' captures probes in floating point instead of 8-bit, so a light or emissive surface brighter than white keeps its brightness in the reflection instead of clipping to flat white; it doubles probe VRAM. 'probeShadows' renders the scene's shadows into every probe face, so reflections show the room's shadows; it multiplies the capture cost by the shadow passes. Both are true|false|\"auto\", and \"auto\" (the default) means FOLLOW THE QUALITY DIAL — on at high, off below — so most scenes never set them. 'overlap' (0..8, default 1.25) is how far each probe's influence stretches past its share of the region: 1.0 leaves visible seams between probes, higher blends more smoothly and puts more probes over each pixel. 'snapDeviation', 'snapSidesMin' and 'snapSidesMax' (defaults 0.05/0.25/0.25) are relative tolerances for snapping a probe's depth-fitted shape back out to the region — raise them when the walls of a room have no reflections, 0 disables snapping. "
           "'updateBudget' (0..512, default 1) is the GI UPDATE BUDGET: how many reflection probes the renderer may re-capture per FRAME. It replaced the old 'autoRefresh' switch, and the two generations of 'dynamicProbes' that came before it (the nearest-N one of 2026-09-07 and Epic's moved-covering reservation, deleted 2026-09-12 — moving objects are not captured by the probes at all any more, and are reflected every frame by screen-space and planar reflections instead). 0 PAUSES global illumination — no probe re-captures and nothing re-solves automatically, so the picture is whatever was last built until world.refreshGi() asks for more. Reflection probes are a CACHE: they re-capture only when something they can see changes (a GI rebuild or re-solve, STILL geometry moving, arriving, leaving or being shown or hidden, an object's Movement setting changing, a light, material, sky, ambient or fog edit), so a still scene spends nothing at all — and a scene full of MOVING things spends nothing either, because moving objects are not in a probe capture — and time-varying content (a particle system, a clock-driven material, a live or video texture, a posing character) is FROZEN in the probes at their last capture, while screen-space and planar reflections show it live; world.giStatus()'s staleProbes and lastStaleReason say what is owed and why. 1 (the default) is a realtime editor: at most one probe's six faces per frame while probes are stale, about 2 ms in a debug build, with the whole grid caught up within (probes / budget) frames of a change and the probes nearest you — and the ones covering whatever just moved — updated first. Higher trades frame time for catch-up latency, linearly. world.giStatus().probeUpdatesPerFrame reports the resolved figure. NOTE, because it changes the picture: above 0 the renderer trusts the probes over cone-traced reflections inside the probe region, so ROUGH metal takes its reflections from the probes; mirror-sharp surfaces are unaffected. "
-          "'rayMarchStepScale' (>= 1.0, default 1.0) is how coarsely voxel light injection ray-marches towards each light when working out what is shadowed: bigger is faster and starts losing shadow contact in the bounce. It is the AT-REST value; while you drag something the renderer raises it on its own for the cheap re-injections it throws away a moment later. "
-          "'gather' turns on the SCREEN-PROBE GATHER — the diffuse GI estimated once per 16x16 pixels by 64 hardware rays instead of once per pixel by six voxel cones. A ray is stopped by a TRIANGLE where a cone is stopped by a VOXEL, which is the whole argument: a rectangular Lambertian emitter over a plane has a closed-form irradiance, and measured against it the gather reads 1.03 of the right answer where the cones read 0.75, and it leaks 18 to 59 % less light through a thin wall. true|false|\"auto\", where auto is OFF at every tier — deliberately, until the estimate is filtered and temporally accumulated (the spec's phases 2 and 3): at this phase it is correct and NOISY, and a tier may not select a noisy estimate. On traces wherever the machine can and falls back silently where it cannot, exactly as world.rayTracing does: a machine with no ray query, or a project whose ray row is off, keeps today's picture and this row does nothing at all. What the machine actually did is world.giStatus().gather — 'on' is the row resolved against the machine, 'running' whether a view dispatched it, and the rest is the grid it placed, the rays it traced and the GPU milliseconds the three jobs cost. Only meaningful in the vct modes: a gather ray's HIT is lit from the voxel cascades. Two costs it is honest about: a view whose row is on carries the PREPASS — a second geometry traversal — whether or not its SSR row asked for one, because that is where a probe reads the surface it sits on; and a view with any chain at all renders at 1x, so turning it on turns hardware MSAA off exactly as every other effect in the chain does (SMAA is the AA). A VR eye is declined at this phase and pays neither. "
+          "'gather' is the SCREEN-PROBE GATHER — the diffuse GI estimated once per probe cell by hardware rays instead of once per pixel by six voxel cones. A ray is stopped by a TRIANGLE where a cone is stopped by a VOXEL, which is the whole argument: a rectangular Lambertian emitter over a plane has a closed-form irradiance, and measured against it the gather reads 0.98-1.01 of the right answer where the cones read 0.65-0.72, and it leaks 18 to 59 % less light through a thin wall. true|false|\"auto\", where AUTO IS THE TIER'S (world.tierTable()'s 'gather' column, the renderer's own table): ON at High (64 rays a probe, a probe per 16x16 pixels), Epic (four times the probes: one per 8x8) and Medium (36 rays a probe), OFF at Low, and off in a VR headset. Where it runs it IS the diffuse: the cone diffuse is compiled out and the irradiance field stays only as the fallback for a pixel no probe answered; a translucent (blended) surface takes the environment's diffuse alone. true forces it on and false keeps the field and the cones. It traces wherever the machine can and falls back silently where it cannot, exactly as world.rayTracing does: a machine with no ray query, or a project whose ray row is off, keeps the no-rays picture and this row does nothing at all. What the machine actually did is world.giStatus().gather — 'on' is the row resolved against the tier and the machine, 'running' whether a view dispatched it, and the rest is the grid it placed, the rays it traced and the GPU milliseconds the jobs cost. Only meaningful in the vct modes: a gather ray's HIT is lit from the hit surface's card where the ray's footprint allows, else from the voxel cascades. Its per-pixel history is part of 'at rest': once the camera, the lighting and the scene hold still, the answer becomes a true mean of the still frames and after 16 of them it is HELD (the gather then costs nothing and the picture no longer moves by a byte); world.giStatus().giAtRest waits for that, so a two-frame screenshot taken without waiting shows the raw estimate. Two costs it is honest about: a view whose row is on carries the PREPASS — a second geometry traversal — whether or not its SSR row asked for one, because that is where a probe reads the surface it sits on; and a view with any chain at all renders at 1x, so turning it on turns hardware MSAA off exactly as every other effect in the chain does (SMAA is the AA). "
           "'ddgi' turns on the IRRADIANCE FIELD — a grid of probes, built over the same voxel volume, that stores the bounced light arriving from every direction plus a depth map used to decide what each probe can actually see. It is the leak fix: cone-traced bounce blows out corners because a cone cannot tell a wall from empty space, and the field's depth test can. true|false|\"auto\", where \"auto\" hands the decision back to the Photon tier (which turns it on at medium, high and epic — every voxel tier — and off at low, which has no voxel volume to feed it from) and setting it explicitly PINS it through tier switches. Only meaningful in vct and vct_pcc_hybrid — the field is fed by the voxels, and DDGI is deliberately NOT offered without them, because with no voxel lighting bound the shader's ambient term comes back and would be counted twice on top of the field. TURNING IT ON TURNS THE VOXEL-CONE DIFFUSE OFF: the field REPLACES that term rather than adding to it. Reflections, probes, planar and specular are untouched. "
-          "'ddgiIntensity' (0..64, default 1) scales that replacement, because the technique itself has no brightness setting and the two diffuse terms are different integrals of the same bounce. Measured on a closed room, the field lands at about 86% of the cone-traced diffuse it takes over from, so the raw value 1.0 is also the calibrated default: raise it to trim the room brighter, lower it to trim it down, and 0 leaves the field bound while contributing nothing (the A/B measurement). world.giStatus()'s ifdBound / ifdProbes / ifdConverged / ifdProbesPerFrame report what the renderer did with all of this. "
+          "The field is applied at its own physical answer - the cosine integral of the same voxel chain and the same environment the pixel's cones read, in the same units - with no intensity dial; where the screen-probe gather runs (see 'gather') the field is not the diffuse but the fallback for a pixel no probe answered. world.giStatus()'s ifdBound / ifdProbes / ifdProbesPerFrame / ifdRefinesOwed / giAtRest report what the renderer did with all of this. "
           "The field carries the SKY as well as the bounce: every probe ray that escapes the voxels reads the scene's environment in its own direction (PHOTON-ENV-1), so there is no separate ambient term and no ambient dial. "
           
           "'dragOnMoverChannel' (MOVER-1, default TRUE since 2026-09-20: a dragged object is a mover "
@@ -292,7 +297,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "(gi.drag_mover renders it under both rules and compares the bytes); what changes is the "
           "picture DURING the drag, which is why this is a choice and not a fix. Cascades only: the "
           "single-volume arm re-voxelises nothing during a drag anyway. What it is DOING is "
-          "THE SURFACE CACHE (SURFACE-CACHE phase 2). 'cards' is off|auto|on and AUTO IS OFF TODAY, which is a statement and not a placeholder: the renderer can CAPTURE surface cards — the axis-aligned orthographic photographs of an object's own surface that the mesh bake authors — but nothing READS one yet (a reflection ray's hit will, at phase 4), so capturing on a user's machine would be pure cost. With it on, every still, GI-lit object inside 'cardRadius' metres of the camera holds pages in a 2048-square five-layer atlas (albedo, normal, depth, emissive, shadow+roughness — 16 bytes a texel), captured through a prepass in THIS scene with THIS scene's shadow node, so a card's shadow term is occlusion by OTHER objects and not a constant. 'cardBudget' is how many TEXELS one frame may capture (0 = the quality tier's own): the queue drains oldest-first in Lumen's own priority (last used minus last updated) and a frame never spends more than it was given, so a scene that arrives all at once fills in over frames instead of hitching. An object that MOVES re-allocates its own cards and nobody else's; a material edit or a light change re-captures without freeing a page; a MOVING object holds no cards at all, for the same reason it holds no voxels and no probe capture. world.giStatus().cards reports every one of those as a counter. "
+          "THE SURFACE CACHE (SURFACE-CACHE phase 2). 'cards' is off|auto|on and AUTO (the default; the World Mode table's High and Epic columns, Off at Low and Medium) means ON EXACTLY WHERE THE REFLECTION TRACE RUNS: a reflection ray's hit reads the hit surface's CARD first — its lit radiance at the card's texel, while the ray's footprint there is at most four card texels — and the voxels where no card answers, so a machine without rays captures nothing. Cards are the axis-aligned orthographic photographs of an object's own surface that the mesh bake authors. With it on, every still, GI-lit object inside 'cardRadius' metres of the camera holds pages in a 2048-square five-layer atlas (albedo, normal, depth, emissive, shadow+roughness — 16 bytes a texel), captured through a prepass in THIS scene with THIS scene's shadow node, so a card's shadow term is occlusion by OTHER objects and not a constant. 'cardBudget' is how many TEXELS one frame may capture (0 = the quality tier's own): the queue drains oldest-first in Lumen's own priority (last used minus last updated) and a frame never spends more than it was given, so a scene that arrives all at once fills in over frames instead of hitching. An object that MOVES re-allocates its own cards and nobody else's; a material edit or a light change re-captures without freeing a page; a MOVING object holds no cards at all, for the same reason it holds no voxels and no probe capture. world.giStatus().cards reports every one of those as a counter. "
           "world.giStatus()'s 'dragMovers' (how many objects ride the channel right now, normally 1 "
           "during a drag and 0 at rest) and 'dragMoverGestures' (how many such gestures have ended — "
           "one per drag, never one per frame). "
@@ -300,8 +305,14 @@ QVector<VerbInfo> WorldApi::verbs() const
           "changes nothing. One call is one undo step, whatever it touches — the quality rows "
           "it pins (undo restores the pin too), the tier, and the plain GI fields.",
           Needs::Document },
-        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, voxelMetres, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeCaptureSize, probesDropped, probeHdr, probeShadows, probeUpdatesPerFrame, cubemapProbeSlotsPerCell, probesClampedToRegion, probesExceedingCell, probeGateCrossings, worstProbeShapeCellRatio, reusedLastRefresh, ifdBound, ifdProbes, ifdConverged, ifdProbesPerFrame, ifdMin, ifdMax, ifdFollows, probeCapturesLastFrame, probeCapturesDeferred, staleProbes, lastStaleReason, staleSerial, rebuilds, movableItems, movableLights, mobilityMisses, lastMobilityMiss, mobilityRebuilds, cards, rayQuery, gather, live}",
-          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used. It is always the automatic fit — the document carries no bounds at all since 2026-09-13 — so this reading is the ONLY way to see where the lighting is happening, and it is worth checking whenever a scene lights oddly. 'voxelMetres' is that volume's metres per voxel — the number that says whether the GI in this scene means anything at all, since a kilometre-wide volume at 128^3 is eight metres per voxel and is computing a constant. In the single-volume arm it is the largest axis divided by the tier's resolution; UNDER A CASCADE CHAIN there is no single voxel size and this is the OUTERMOST, COARSEST cascade's cell, because that is the volume 'boundsMin'/'boundsMax' describe — 'cascades[i].cell' is every one of them and the innermost is what the eye is usually looking at. The renderer holds the volume under its own ceiling, which nothing in the document can move. 'probeCaptureSize' is the RESOLVED pixel size of one probe cube face (world.gi's probeSize, 0 there meaning follow the quality dial). 'probesDropped' says WHY there is or is not a grid, and it is a measurement rather than a rule about scenes. Candidate probes are spread through the probe region and each one PHOTOGRAPHS ITS SURROUNDINGS as it is placed: the renderer reads the averaged depth of each of the six cube faces, which comes back as the distance that face could see expressed as a multiple of the distance to the region's own face in the same direction (1 = on the region's face, 2 = nothing within twice it). A probe whose fitted box therefore spans LESS than the region on some axis has photographed something and is kept; one that spans the region or more saw nothing and is dropped, and this counts the drops. A scene whose candidates ALL saw nothing gets no grid at all and keeps the sky cubemap bound as its reflection source instead — which is both cheaper (no 128-512 MB probe array, no per-pixel probe loop) and sharper than a grid of photographs of the sky, and is what a new project with a ground and a few objects looks like. So 'probeCount' 0 in the hybrid with 'probesDropped' non-zero is the open-scene answer, not a failure; with it 0 it is the silent degradation to plain VCT that gi.pcc_mirror exists to catch. The rule is per probe, reads no position, counts no walls and knows nothing about rooms — a mirror standing beside one building in an open world keeps the probes that can see the building and drops the rest. 'probeRegionMin'/'probeRegionMax' are the region those probes were spread through: the scene's own fitted box, the same one 'boundsMin'/'boundsMax' report in the single-volume arm. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region, which the renderer enforces. Being a UNION it is a weak reading: it equals the clamp box whenever any probe was clamped, so use 'probesClampedToRegion' for how degenerate the fit actually was, and 'probesExceedingCell' for how many probes reach further past their own share of the region than the fit is allowed to — non-zero there is a defect and not a tuning matter. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer MAY re-capture per frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked) — a ceiling spent only on stale probes, so a change is caught up within probeCount / probeUpdatesPerFrame frames and a still scene spends nothing (probeCapturesLastFrame, below, is what was actually spent). 'cubemapProbeSlotsPerCell' is the Forward+ per-cell reflection-probe budget: the renderer culls probes through a screen-space cluster grid and a cell that sees MORE probes than this drops the rest silently, which paints hard-edged black rectangles on reflective surfaces wherever it happens (they move with the camera, because the grid does). The renderer grows the budget to hold the probe grid it built, so a value below probeCount is a defect and not a setting. 'probesClampedToRegion' is how many of those probes had their depth-fitted parallax box corrected back into the probe region at the last build — the honest measure of how degenerate the shrink-fit was in this scene (it fits from ONE averaged depth sample per cube face, which means nothing once anything stands between a probe and a wall); it is not itself an artifact, the clamp handles it, but a high count says the fit is not doing the work here. 'probeGateCrossings' counts the material edits on this scene that have CROSSED the reflection-probe gate — the point where a material stops (or starts) being able to reflect anything at all (specular colour black and no authored F0), which is the one material edit that has to REBUILD the shader, with or without the per-pixel probe loop. An ordinary parameter push is free; dragging Specular Color down through black and back crosses exactly twice. It is cumulative and never reset, so a count that climbs on a still scene is a defect. 'worstProbeShapeCellRatio' is how far the worst probe's parallax box reaches past its own share of the region, as a multiple of that share — a diagnostic, because a probe standing in a room is RIGHT to have a room-sized box. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. The four ifd* fields are the IRRADIANCE FIELD (world.gi's 'ddgi'), reported the same way: 'ifdBound' is whether the PBR shader is sampling THIS scene's field — asking for DDGI and getting it are two different things, since the field needs a voxel volume to be built from and its compute jobs to be staged; 'ifdProbes' is how many probes it holds; 'ifdConverged' says every probe has been integrated since the last build, light change or re-placement, and it is true on the frame the field binds and on the frame a cascade chain re-places it (both converge the whole field in one go) — it reads false only while a progressive re-integration is still running, after a light move or after cascade 0 re-voxelised in place; 'ifdProbesPerFrame' is how fast that re-integration runs, derived from updateBudget, and 0 when GI is paused or there is no field. 'ifdMin'/'ifdMax' are WHERE the field is — the corners of the volume its probes span. In the single-volume arm that is the lit volume and it never moves without a rebuild; under a Photon cascade chain the field rides CASCADE 0, so this box walks with the camera and 'ifdFollows' counts how many times it has followed since the last build (0 standing still, one per cascade-0 step while walking), split into 'ifdScrolls' — the field is a window over a probe lattice fixed in the world, and an ordinary step SCROLLS it: the probes that stay inside keep their values and only the planes that entered are integrated — and 'ifdReplacements', the follows that kept nothing (a jump of the whole field or more, a teleport, or a resize) and re-placed the whole field. A field that is bound with 'ifdFollows' stuck at 0 while the chain's cascade centres move is the defect that reading exists to catch. THE PROBE CACHE: reflection probes are captured once and re-captured only when something they can see changes, so a still scene costs no probe work at all. 'probeCapturesLastFrame' is how many probes the last rendered frame actually re-captured (0 every frame in a still scene; a from-scratch build reports its placement's captures of the whole grid); 'probeCapturesDeferred' is how many frames the budget has held its spend because something was still MOVING, over the scene's life — a photograph of a box that is still moving is out of date before it is displayed and the next frame stales it again, so a drag defers instead, the staleness is recorded either way, and the sweep guarantee is measured from the frame the content came to REST; it is 0 for ever in a scene nothing moves in, rises by one per frame through a gesture, and the deferral has a ceiling so a motion that never stops still re-captures at a bounded rate; 'staleProbes' how many still owe a capture — they drain at probeUpdatesPerFrame per frame, and 0 means the reflections have caught up; 'lastStaleReason' names the input that last marked the grid stale: \"rebuild\" (a from-scratch build), \"refresh\" (a GI re-solve — the settle after a drag, or world.refreshGi()), \"moved\" (STILL geometry the probes capture moved, arrived, left, or was shown, hidden or made a helper — unlit geometry included, which re-captures the probes without touching the voxels; a MOVING object never raises this), \"mobility\" (an object's Movement setting changed, so the probes that hold its picture owe one re-capture), \"light\" (a light was added, switched on or off, or changed a parameter), \"material\" (a material or texture on visible geometry changed), \"camera\" (the camera moved far enough that a camera-following cache — Photon's cascade chain — re-did work; the one reason in this list that is not an edit), \"sky\", \"ambient\" or \"fog\"; \"none\" before anything has (time-varying content never stales the probes: they freeze it); 'staleSerial' moves on every such event, so two events with the same reason can be told apart; 'rebuilds' counts the scene's FROM-SCRATCH GI builds (mode, quality, probe grid or bounds changes, and anything destroyed) — a page switch, a refresh or an idle frame never moves it. MOBILITY (SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3): what the renderer has been told MOVES, which is what decides who can be baked into the room's lighting at all. 'movableItems' and 'movableLights' are how many objects and lights the renderer holds as moving — physics bodies, characters, socket riders, animated objects, particle emitters, and everything travelling with one of them (node.mobility(id) explains any single object, and editor.mirrorStats().movableNodes is the DOCUMENT's side of the same count: a disagreement between the two is a classification that never reached the renderer). 'mobilityMisses' counts objects that started moving DURING PLAY with nothing predicting they would — a script pushing a prop nobody marked Movable: each moves smoothly and is treated as moving from that frame, but keeps its old bounce light where it started until play stops, so each one is worth marking by hand; 'lastMobilityMiss' names the last one. 'mobilityRebuilds' counts the from-scratch GI builds a mobility CHANGE caused. Moving objects do not bounce light, so RE-classifying an object the room has already been lit with costs exactly one rebuild — that is authoring, and it is the only thing that moves this counter: opening a scene, adding a moving object and the play-time promotions above are all free. PHOTON CASCADES (world.gi's 'cascades'): 'cascades' is the live chain, innermost first and empty in the single-volume arm — per entry the 'halfSize' and 'resolution' it was built at, the 'cell' size in metres that resolves to (the number that says what that cascade can resolve), the 'step' in metres of camera travel between re-centres, the world 'centre' it currently sits on, its 'rebuilds' count (it does not move while the camera stands still — a still scene re-voxelises nothing), how many rebuilds it still 'pending's, 'items' is how many objects it actually voxelises — the ones inside its box that are big enough to fill half a voxel of it, since a coarse cascade cannot represent anything smaller and re-voxelising them is most of what a rebuild costs — and 'lastCpuMs' is what its last rebuild cost. 'cascadeFullRebuilds' counts the whole-chain rebuilds the teleport guard forced (a jump longer than a cascade re-centres every one of them, innermost first, one per frame), and 'cascadeDeferrals' the rebuilds a frame refused because it had already spent its one — the queue-pressure reading, so a number that climbs while flying means the camera is outrunning the scheduler. Both, and 'cascadeDirtyMajority', are CUMULATIVE over the scene's life: a re-solve of the arm does not reset them, only switching GI off does. Under a chain 'boundsMin'/'boundsMax' follow the OUTERMOST cascade as it re-centres (they are where the lighting is happening right now, not where it started), and 'voxelMetres' is that cascade's own cell rather than the tier's resolution. The chain is built around the tracked camera and not before one exists, so a scene that has not rendered a frame yet reports no cascades at all rather than a chain around the origin — 'cascadesAwaitingCamera' is true exactly then, which is what tells \"no view yet\" apart from \"the build failed\" (both leave 'cascades' empty). 'items' per cascade is re-counted by every rebuild, so it follows the cascade as it scrolls and reads 0 for one standing in empty space; it, 'attached', 'voxelLevels' and 'voxelTriangles' are counted ON THE DEVICE by the gather that writes the voxeliser's records, not by a walk of the scene. 'voxelLevels' and 'voxelTriangles' are THE FAR-FIELD PROXY, measured: a cascade voxelises the coarsest BAKED LOD level of each mesh whose error is below a MEASURED fraction of its own cell — 1/256, so at most ~0.4 % of a surface's voxels can change occupancy (SPECS/NANITE_SPEC.md §7 stage 1 — imported static meshes are baked with a chain at import, document primitives carry none). It is not half a cell, and the reason is measurable: a voxel's occupancy is a BINARY triangle-box test, so a level that deviates by e moves the surface across a cell boundary wherever it sat within e of one and the bounce through those voxels changes by a whole factor (at half a cell that is half the shell; the picture moved by up to 70/255 on a dense lattice at 1/151). What remains true is that a voxel grid cannot hold detail finer than its own sample. 'voxelLevels' is the histogram over the cascade's attach set — entry L is how many PARTITIONS (2,001-index runs of a mesh level; one per object for a mesh under 667 triangles) it took at level L, index 0 the authored geometry — so the innermost cascade reads {N} and an outer one spreads towards the coarse end; 'voxelTriangles' is what those levels add up to, which is the currency of a re-voxelisation (the raster dispatch is sized by the index count). The level belongs to the OBJECT: two instances of one mesh that ask for different levels — which is what a SCALED instance does, since the baked error is in the mesh's own units — each take their own, because the voxeliser reads every instance's geometry in place through its level's geometry row, and the histogram reports both levels. 'cascadeVoxelLod' says whether the proxy is running at all. 'cascadeProfileVr' says which COLUMN of the tier table this chain came from: true when the view driving GI is the headset's, which is a different chain (world.tierTable()'s 'vrChain' \u2014 the middle cascade dropped and the outermost step doubled, because a headset renders the march five times over for half the frame and it costs 0.31 ms per eye per cascade at Quest Pro size). Entering or leaving a session rebuilds the chain once, from the other column. The LOD BIAS (editor.setLodBias) moves what is DRAWN and deliberately does not move any of this. THE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1): 'rayQuery' is what the renderer's ray-traceable copy of the scene HOLDS — {available, enabled, blasCount, instances, triangles, blasBytes, tlasBytes, tlasMs, blasMs, gatherMs, lastWasRefit, tlasBuilds, tlasRefits, blasBuilds, reflect, reflectRays, reflectMs}. 'available' is the DEVICE's answer (the driver advertises Vulkan ray queries) and 'enabled' is ours, so available true with enabled false is the no-rays switch in force — the --no-ray-query diagnostic latch for this run (the project's own row, world.rayTracing, decides the PICTURE per scene and is read through world.rayTracing(), not through this engine-wide flag). 'enabled' is engine-wide and does not read the open project's row by itself; what THIS scene resolves to is its row met with 'available'. 'blasCount' is one bottom-level structure per unique traced mesh and 'instances' the traced set in the top-level one — which is NOT the scene's object count: editor gizmos, light icons, the backdrop, the sun disc, overlay objects, SKINNED objects (their geometry is stored at bind pose, so tracing them would reflect a T-pose) and alpha-tested ones (a cut-out leaf would intersect as a solid quad, because there is no any-hit shader without ray-tracing pipelines) are all out by design. 'tlasMs' and 'blasMs' are GPU milliseconds of the last top-level and bottom-level update, read back from a timestamp pair several frames later and -1 until one has been measured; 'gatherMs' is the CPU cost of writing the instance transforms, the one figure that scales with instance count. 'lastWasRefit' says whether the last top-level update refitted the existing tree rather than rebuilding it: a rebuild is the default because it makes the better tree and costs half a millisecond even at eight thousand instances. A still scene updates nothing at all — the tier gates on the same movement epoch the shadow caster walk does — so all three millisecond figures hold their last value rather than reading zero. 'reflect' says whether the REFLECT TRACE (R5) ran on the last frame — it needs the SSR row on, since the ray listener rides the SSR chain: SSR off means no traced reflections whatever this row says — 'reflectRays' how many rays that dispatch traced (one per pixel of the trace's own resolution: full at Epic, one in four below, before the shader's gates decline most of them), and 'reflectMs' its GPU cost, -1 until measured. 'voxelDispatches' is the OTHER half of that bill: the voxeliser issues one dispatch per material POOL of the chain's shared material store per octant (the pool decides the textures a dispatch binds; the geometry's format and index width are fields of each instance's geometry row, not dispatch keys), each sized by the whole volume however few objects the pool holds. So a scene that shares materials reads a handful of dispatches whatever its size, and one whose every object owns its own material reads one per pool of them; a cascade whose rebuild is slow with a small 'voxelTriangles' is paying for its material count, not for its geometry. A light tick re-injects the chain ONCE, outermost cascade first: each cascade reads only the cascades outside it and rebuilds its own light from its direct term, so one sweep in that order already IS the chain's fixed point, byte for byte (a second sweep changes nothing — world.giVoxelStats's 'lightDigest' is how that is checked). 'chainSettles' counts the times the renderer has run that at-rest injection because a CASCADE REBUILD owed it: a rebuild injects the one cascade it rebuilt, once, over the radiance that cascade held where it used to stand, so a camera walk left the chain one pass from its fixed point and nothing ticked afterwards (a walk moves no light and no geometry, which is all the mirror's cadence watches) — measured at 5/255 in the picture and up to 55/255 in the light voxels, permanently, on a walk that returned to its own starting pose. It is paid ONE INJECTION PER FRAME out of the same one-slot budget the rebuilds come from — the whole at-rest tick is one injection per cascade, spread over frames in the tick's own order, and the bytes it leaves are the tick's bytes — and this counter moves once the LAST of them has run (the rebuild queue keeps priority, so a camera that keeps outrunning the scheduler pays nothing until it lets the queue empty, and a camera that never stands still — a headset's head pose — is paid exactly like any other, which a settle gated on a still camera would never have been). One gesture costs ONE full at-rest injection and NO settle of its own: whoever pays the injection pays the debt, so the settle the drag's re-voxelisations owed is cleared by the tick the mirror's stability window runs when the gesture ends (measured on a twenty-frame drag: twenty cascade rebuilds, one mirror tick, zero settles). Cumulative, and 0 in the single-volume arm, whose rebuild already injects the whole volume at the document's bounce count. THE ONE WRITER: every write to a voxel volume's light goes through one renderer function and a volume is injected AT MOST ONCE per frame — 'chainInjectionRefusals' counts the second injections that rule refused over the scene's life (the work is left owed and paid on a later frame, never dropped; 0 is the invariant and a non-zero reading names a path that asked twice), and 'chainInjectionsPeakFrame' is the most injections any one frame has spent (at most the chain's cascade count). MOVER-1: 'dragMovers' is how many objects are riding the MOVER CHANNEL because they are being DRAGGED right now (world.gi's 'dragOnMoverChannel'; 0 in a still scene, 0 for ever with the rule off, normally 1 during a drag — it is what the user has hold of, and it is NOT part of 'movableItems', which is what the document resolved), and 'dragMoverGestures' how many such gestures have ENDED over the scene's life: one per drag, never one per frame, so a number that climbs while nothing is being dragged is a defect. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, probeGridByRays, probePlacements, probeCapturesTotal, vctBound, boundsMin, boundsMax, voxelMetres, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeCaptureSize, probesDropped, probeHdr, probeShadows, probeUpdatesPerFrame, cubemapProbeSlotsPerCell, probesClampedToRegion, probesExceedingCell, probeGateCrossings, worstProbeShapeCellRatio, reusedLastRefresh, ifdBound, ifdProbes, ifdProbesPerFrame, ifdTargetSamples, ifdRefinesOwed, giAtRest, ifdMin, ifdMax, ifdFollows, probeCapturesLastFrame, probeCapturesDeferred, staleProbes, lastStaleReason, staleSerial, rebuilds, movableItems, movableLights, mobilityMisses, lastMobilityMiss, mobilityRebuilds, cards, rayQuery, gather, live}",
+          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the probes the hybrid kept, 0 in every other mode); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. THE HYBRID HAS TWO REGIMES. At a RAY TIER — high and epic, wherever this scene traces rays on this machine — 'probeGridByRays' is true and NO GRID IS BUILT, by design: the screen march, the traced rays and the voxel cone with the sky as its escape are the reflection, so probeCount and probesDropped are 0, pccBound is false, and 'probePlacements' (probe-grid placements started over the scene's life) and 'probeCapturesTotal' (probe captures rendered over its life) do not move. Everywhere else (low, medium, or rays off) the hybrid builds its grid, and there it can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid and probeGridByRays is false is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used. It is always the automatic fit — the document carries no bounds at all since 2026-09-13 — so this reading is the ONLY way to see where the lighting is happening, and it is worth checking whenever a scene lights oddly. 'voxelMetres' is that volume's metres per voxel — the number that says whether the GI in this scene means anything at all, since a kilometre-wide volume at 128^3 is eight metres per voxel and is computing a constant. In the single-volume arm it is the largest axis divided by the tier's resolution; UNDER A CASCADE CHAIN there is no single voxel size and this is the OUTERMOST, COARSEST cascade's cell, because that is the volume 'boundsMin'/'boundsMax' describe — 'cascades[i].cell' is every one of them and the innermost is what the eye is usually looking at. The renderer holds the volume under its own ceiling, which nothing in the document can move. 'probeCaptureSize' is the RESOLVED pixel size of one probe cube face (world.gi's probeSize, 0 there meaning follow the quality dial). 'probesDropped' says WHY there is or is not a grid, and it is a measurement rather than a rule about scenes. Candidate probes are spread through the probe region and each one PHOTOGRAPHS ITS SURROUNDINGS as it is placed: the renderer reads the averaged depth of each of the six cube faces, which comes back as the distance that face could see expressed as a multiple of the distance to the region's own face in the same direction (1 = on the region's face, 2 = nothing within twice it). A probe whose fitted box therefore spans LESS than the region on some axis has photographed something and is kept; one that spans the region or more saw nothing and is dropped, and this counts the drops. A scene whose candidates ALL saw nothing gets no grid at all and keeps the sky cubemap bound as its reflection source instead — which is both cheaper (no probe array — 839 MB of texture with its capture targets at 32 HDR probes of 512 px, measured on Grand Showroom 2 — and no per-pixel probe loop) and sharper than a grid of photographs of the sky, and is what a new project with a ground and a few objects looks like. So 'probeCount' 0 in the hybrid with 'probesDropped' non-zero is the open-scene answer, not a failure; with both 0 it is either the ray tier (probeGridByRays true) or the silent degradation to plain VCT that gi.pcc_mirror exists to catch. The rule is per probe, reads no position, counts no walls and knows nothing about rooms — a mirror standing beside one building in an open world keeps the probes that can see the building and drops the rest. 'probeRegionMin'/'probeRegionMax' are the region those probes were spread through: the scene's own fitted box, the same one 'boundsMin'/'boundsMax' report in the single-volume arm. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region, which the renderer enforces. Being a UNION it is a weak reading: it equals the clamp box whenever any probe was clamped, so use 'probesClampedToRegion' for how degenerate the fit actually was, and 'probesExceedingCell' for how many probes reach further past their own share of the region than the fit is allowed to — non-zero there is a defect and not a tuning matter. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer MAY re-capture per frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked) — a ceiling spent only on stale probes, so a change is caught up within probeCount / probeUpdatesPerFrame frames and a still scene spends nothing (probeCapturesLastFrame, below, is what was actually spent). 'cubemapProbeSlotsPerCell' is the Forward+ per-cell reflection-probe budget: the renderer culls probes through a screen-space cluster grid and a cell that sees MORE probes than this drops the rest silently, which paints hard-edged black rectangles on reflective surfaces wherever it happens (they move with the camera, because the grid does). The renderer grows the budget to hold the probe grid it built, so a value below probeCount is a defect and not a setting. 'probesClampedToRegion' is how many of those probes had their depth-fitted parallax box corrected back into the probe region at the last build — the honest measure of how degenerate the shrink-fit was in this scene (it fits from ONE averaged depth sample per cube face, which means nothing once anything stands between a probe and a wall); it is not itself an artifact, the clamp handles it, but a high count says the fit is not doing the work here. 'probeGateCrossings' counts the material edits on this scene that have CROSSED the reflection-probe gate — the point where a material stops (or starts) being able to reflect anything at all (specular colour black and no authored F0), which is the one material edit that has to REBUILD the shader, with or without the per-pixel probe loop. An ordinary parameter push is free; dragging Specular Color down through black and back crosses exactly twice. It is cumulative and never reset, so a count that climbs on a still scene is a defect. 'worstProbeShapeCellRatio' is how far the worst probe's parallax box reaches past its own share of the region, as a multiple of that share — a diagnostic, because a probe standing in a room is RIGHT to have a room-sized box. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. The four ifd* fields are the IRRADIANCE FIELD (world.gi's 'ddgi'), reported the same way: 'ifdBound' is whether the PBR shader is sampling THIS scene's field — asking for DDGI and getting it are two different things, since the field needs a voxel volume to be built from and its compute jobs to be staged; 'ifdProbes' is how many probes it holds; 'ifdProbesPerFrame' is how many probes a pass integrates per frame, derived from updateBudget, and 0 when GI is paused or there is no field. A probe's value is the MEAN of its samples, each shot under a new random rotation of its rays: every event (a build, a light change, a follow) gives every affected probe one sample in its own pass and then owes 'ifdTargetSamples' - 1 whole-field refinement passes at the update budget; 'ifdRefinesOwed' counts the passes not yet finished, the running one included (below 'ifdTargetSamples' = every probe holds a sample; 0 = converged, and the field then costs nothing). A paused budget targets one sample and owes nothing. 'giAtRest' is THE settle predicate: true when nothing the scene's GI owes will change the picture — no rebuild or cascade step pending, no light tick or settle owed, no field follow owed, every field pass done, and — where the screen-probe gather runs — its pixel history SETTLED (gather.settled: gather.sinceRestart, the frames the history has drawn since its last RESTART — the view's birth or resize, a light, sky or material write, an injection landing — at least gather.settleFrames, 16; a moving object, an animation or a socket rider is NOT a restart, the history follows it per pixel. Separately gather.restFrames counts the frames the camera, the lighting AND the scene's geometry have held still: at 16 of those the answer is a true mean of the rest frames and is HELD, so two pictures of a still scene agree byte for byte, while a scene with something moving every frame never rests and its picture at giAtRest is the history's settled EMA, which is not byte-stable by nature) — so a script that wants the picture at rest renders frames until it is true (editor.screenshot does exactly that); true with GI off. Reflection-probe captures are 'staleProbes', separately. 'ifdMin'/'ifdMax' are WHERE the field is — the corners of the volume its probes span. In the single-volume arm that is the lit volume and it never moves without a rebuild; under a Photon cascade chain the field rides CASCADE 0, so this box walks with the camera and 'ifdFollows' counts how many times it has followed since the last build (0 standing still, one per cascade-0 step while walking), split into 'ifdScrolls' — the field is a window over a probe lattice fixed in the world, and an ordinary step SCROLLS it: the probes that stay inside keep their values and only the planes that entered are integrated — and 'ifdReplacements', the follows that kept nothing (a jump of the whole field or more, a teleport, or a resize) and re-placed the whole field — counted once per re-placement, however many frames its slabs take (the field is integrated a budget's worth of probes a frame, never whole in one). A field that is bound with 'ifdFollows' stuck at 0 while the chain's cascade centres move is the defect that reading exists to catch. THE PROBE CACHE: reflection probes are captured once and re-captured only when something they can see changes, so a still scene costs no probe work at all. 'probeCapturesLastFrame' is how many probes the last rendered frame actually re-captured (0 every frame in a still scene; a from-scratch build reports its placement's captures of the whole grid); 'probeCapturesDeferred' is how many frames the budget has held its spend because something was still MOVING, over the scene's life — a photograph of a box that is still moving is out of date before it is displayed and the next frame stales it again, so a drag defers instead, the staleness is recorded either way, and the sweep guarantee is measured from the frame the content came to REST; it is 0 for ever in a scene nothing moves in, rises by one per frame through a gesture, and the deferral has a ceiling so a motion that never stops still re-captures at a bounded rate; 'staleProbes' how many still owe a capture — they drain at probeUpdatesPerFrame per frame, and 0 means the reflections have caught up; 'lastStaleReason' names the input that last marked the grid stale: \"rebuild\" (a from-scratch build), \"refresh\" (a GI re-solve — the settle after a drag, or world.refreshGi()), \"moved\" (STILL geometry the probes capture moved, arrived, left, or was shown, hidden or made a helper — unlit geometry included, which re-captures the probes without touching the voxels; a MOVING object never raises this), \"mobility\" (an object's Movement setting changed, so the probes that hold its picture owe one re-capture), \"light\" (a light was added, switched on or off, or changed a parameter), \"material\" (a material or texture on visible geometry changed), \"camera\" (the camera moved far enough that a camera-following cache — Photon's cascade chain — re-did work; the one reason in this list that is not an edit), \"sky\", \"ambient\" or \"fog\"; \"none\" before anything has (time-varying content never stales the probes: they freeze it); 'staleSerial' moves on every such event, so two events with the same reason can be told apart; 'rebuilds' counts the scene's FROM-SCRATCH GI builds (mode, quality, probe grid or bounds changes, and anything destroyed) — a page switch, a refresh or an idle frame never moves it. MOBILITY (SPECS/REALTIME_REFLECTIONS_SPEC.md §3.3): what the renderer has been told MOVES, which is what decides who can be baked into the room's lighting at all. 'movableItems' and 'movableLights' are how many objects and lights the renderer holds as moving — physics bodies, characters, socket riders, animated objects, particle emitters, and everything travelling with one of them (node.mobility(id) explains any single object, and editor.mirrorStats().movableNodes is the DOCUMENT's side of the same count: a disagreement between the two is a classification that never reached the renderer). 'mobilityMisses' counts objects that started moving DURING PLAY with nothing predicting they would — a script pushing a prop nobody marked Movable: each moves smoothly and is treated as moving from that frame, but keeps its old bounce light where it started until play stops, so each one is worth marking by hand; 'lastMobilityMiss' names the last one. 'mobilityRebuilds' counts the from-scratch GI builds a mobility CHANGE caused. Moving objects do not bounce light, so RE-classifying an object the room has already been lit with costs exactly one rebuild — that is authoring, and it is the only thing that moves this counter: opening a scene, adding a moving object and the play-time promotions above are all free. PHOTON CASCADES (world.gi's 'cascades'): 'cascades' is the live chain, innermost first and empty in the single-volume arm — per entry the 'halfSize' and 'resolution' it was built at, the 'cell' size in metres that resolves to (the number that says what that cascade can resolve), the 'step' in metres of camera travel between re-centres, the world 'centre' it currently sits on, its 'rebuilds' count (it does not move while the camera stands still — a still scene re-voxelises nothing), how many rebuilds it still 'pending's, 'items' is how many objects it actually voxelises — the ones inside its box that are big enough to fill half a voxel of it, since a coarse cascade cannot represent anything smaller and re-voxelising them is most of what a rebuild costs — and 'lastCpuMs' is what its last rebuild cost. 'cascadeFullRebuilds' counts the whole-chain rebuilds the teleport guard forced (a jump longer than a cascade re-centres every one of them, innermost first, one per frame), and 'cascadeDeferrals' the rebuilds a frame refused because it had already spent its one — the queue-pressure reading, so a number that climbs while flying means the camera is outrunning the scheduler. Both, and 'cascadeDirtyMajority', are CUMULATIVE over the scene's life: a re-solve of the arm does not reset them, only switching GI off does. Under a chain 'boundsMin'/'boundsMax' follow the OUTERMOST cascade as it re-centres (they are where the lighting is happening right now, not where it started), and 'voxelMetres' is that cascade's own cell rather than the tier's resolution. The chain is built around the tracked camera and not before one exists, so a scene that has not rendered a frame yet reports no cascades at all rather than a chain around the origin — 'cascadesAwaitingCamera' is true exactly then, which is what tells \"no view yet\" apart from \"the build failed\" (both leave 'cascades' empty). 'items' per cascade is re-counted by every rebuild, so it follows the cascade as it scrolls and reads 0 for one standing in empty space; it, 'attached', 'voxelLevels' and 'voxelTriangles' are counted ON THE DEVICE by the gather that writes the voxeliser's records, not by a walk of the scene. 'voxelLevels' and 'voxelTriangles' are THE FAR-FIELD PROXY, measured: a cascade voxelises the coarsest BAKED LOD level of each mesh whose error is below a MEASURED fraction of its own cell — 1/256, so at most ~0.4 % of a surface's voxels can change occupancy (SPECS/NANITE_SPEC.md §7 stage 1 — imported static meshes are baked with a chain at import, document primitives carry none). It is not half a cell, and the reason is measurable: a voxel's occupancy is a BINARY triangle-box test, so a level that deviates by e moves the surface across a cell boundary wherever it sat within e of one and the bounce through those voxels changes by a whole factor (at half a cell that is half the shell; the picture moved by up to 70/255 on a dense lattice at 1/151). What remains true is that a voxel grid cannot hold detail finer than its own sample. 'voxelLevels' is the histogram over the cascade's attach set — entry L is how many PARTITIONS (2,001-index runs of a mesh level; one per object for a mesh under 667 triangles) it took at level L, index 0 the authored geometry — so the innermost cascade reads {N} and an outer one spreads towards the coarse end; 'voxelTriangles' is what those levels add up to, which is the currency of a re-voxelisation (the raster dispatch is sized by the index count). The level belongs to the OBJECT: two instances of one mesh that ask for different levels — which is what a SCALED instance does, since the baked error is in the mesh's own units — each take their own, because the voxeliser reads every instance's geometry in place through its level's geometry row, and the histogram reports both levels. 'cascadeVoxelLod' says whether the proxy is running at all. 'cascadeProfileVr' says which COLUMN of the tier table this chain came from: true when the view driving GI is the headset's, which is a different chain (world.tierTable()'s 'vrChain' \u2014 the middle cascade dropped and the outermost step doubled, because a headset renders the march five times over for half the frame and it costs 0.31 ms per eye per cascade at Quest Pro size). Entering or leaving a session rebuilds the chain once, from the other column. The LOD BIAS (editor.setLodBias) moves what is DRAWN and deliberately does not move any of this. THE RAY-QUERY TIER (SPECS/PHOTON_SPEC.md §7 R1): 'rayQuery' is what the renderer's ray-traceable copy of the scene HOLDS — {available, enabled, blasCount, instances, triangles, blasBytes, tlasBytes, tlasMs, blasMs, gatherMs, lastWasRefit, tlasBuilds, tlasRefits, blasBuilds, reflect, reflectRays, reflectMs}. 'available' is the DEVICE's answer (the driver advertises Vulkan ray queries) and 'enabled' is ours, so available true with enabled false is the no-rays switch in force — the --no-ray-query diagnostic latch for this run (the project's own row, world.rayTracing, decides the PICTURE per scene and is read through world.rayTracing(), not through this engine-wide flag). 'enabled' is engine-wide and does not read the open project's row by itself; what THIS scene resolves to is its row met with 'available'. 'blasCount' is one bottom-level structure per unique traced mesh and 'instances' the traced set in the top-level one — which is NOT the scene's object count: editor gizmos, light icons, the backdrop, the sun disc, overlay objects, SKINNED objects (their geometry is stored at bind pose, so tracing them would reflect a T-pose) and alpha-tested ones (a cut-out leaf would intersect as a solid quad, because there is no any-hit shader without ray-tracing pipelines) are all out by design. 'tlasMs' and 'blasMs' are GPU milliseconds of the last top-level and bottom-level update, read back from a timestamp pair several frames later and -1 until one has been measured; 'gatherMs' is the CPU cost of writing the instance transforms, the one figure that scales with instance count. 'lastWasRefit' says whether the last top-level update refitted the existing tree rather than rebuilding it: a rebuild is the default because it makes the better tree and costs half a millisecond even at eight thousand instances. A still scene updates nothing at all — the tier gates on the same movement epoch the shadow caster walk does — so all three millisecond figures hold their last value rather than reading zero. 'reflect' says whether the REFLECT TRACE (R5) ran on the last frame — it needs the SSR row on, since the ray listener rides the SSR chain: SSR off means no traced reflections whatever this row says — 'reflectRays' how many rays that dispatch traced (one per pixel of the trace's own resolution: full at Epic, one in four below, before the shader's gates decline most of them), and 'reflectMs' its GPU cost, -1 until measured. 'voxelDispatches' is the OTHER half of that bill: the voxeliser issues one dispatch per material POOL of the chain's shared material store per octant (the pool decides the textures a dispatch binds; the geometry's format and index width are fields of each instance's geometry row, not dispatch keys), each sized by the whole volume however few objects the pool holds. So a scene that shares materials reads a handful of dispatches whatever its size, and one whose every object owns its own material reads one per pool of them; a cascade whose rebuild is slow with a small 'voxelTriangles' is paying for its material count, not for its geometry. A light tick re-injects the chain ONCE, outermost cascade first: each cascade reads only the cascades outside it and rebuilds its own light from its direct term, so one sweep in that order already IS the chain's fixed point, byte for byte (a second sweep changes nothing — world.giVoxelStats's 'lightDigest' is how that is checked). 'chainSettles' counts the times the renderer has run that at-rest injection because a CASCADE REBUILD owed it: a rebuild injects the one cascade it rebuilt, once, over the radiance that cascade held where it used to stand, so a camera walk left the chain one pass from its fixed point and nothing ticked afterwards (a walk moves no light and no geometry, which is all the mirror's cadence watches) — measured at 5/255 in the picture and up to 55/255 in the light voxels, permanently, on a walk that returned to its own starting pose. It is paid ONE INJECTION PER FRAME out of the same one-slot budget the rebuilds come from — the whole at-rest tick is one injection per cascade, spread over frames in the tick's own order, and the bytes it leaves are the tick's bytes — and this counter moves once the LAST of them has run (the rebuild queue keeps priority, so a camera that keeps outrunning the scheduler pays nothing until it lets the queue empty, and a camera that never stands still — a headset's head pose — is paid exactly like any other, which a settle gated on a still camera would never have been). One gesture costs ONE full at-rest injection and NO settle of its own: whoever pays the injection pays the debt, so the settle the drag's re-voxelisations owed is cleared by the tick the mirror's stability window runs when the gesture ends (measured on a twenty-frame drag: twenty cascade rebuilds, one mirror tick, zero settles). Cumulative, and 0 in the single-volume arm, whose rebuild already injects the whole volume at the document's bounce count. THE ONE WRITER: every write to a voxel volume's light goes through one renderer function and a volume is injected AT MOST ONCE per frame — 'chainInjectionRefusals' counts the second injections that rule refused over the scene's life (the work is left owed and paid on a later frame, never dropped; 0 is the invariant and a non-zero reading names a path that asked twice), and 'chainInjectionsPeakFrame' is the most injections any one frame has spent (at most the chain's cascade count). MOVER-1: 'dragMovers' is how many objects are riding the MOVER CHANNEL because they are being DRAGGED right now (world.gi's 'dragOnMoverChannel'; 0 in a still scene, 0 for ever with the rule off, normally 1 during a drag — it is what the user has hold of, and it is NOT part of 'movableItems', which is what the document resolved), and 'dragMoverGestures' how many such gestures have ENDED over the scene's life: one per drag, never one per frame, so a number that climbs while nothing is being dragged is a defect. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+          Needs::Document },
+        { "atomStatus", "world.atomStatus() -> {live, on, atomItems, pbsItems, notWorld, notPbs, customPiece, blended, twoSided, planar, pending, alphaTested, skinned, noRow, stockItems, materials, buckets, twins, decodeDraws, screenDraws, stereoViews, passthroughViews}",
+          "THE VISIBILITY BUFFER'S SPLIT, as the renderer decides it for the open scene (ATOM S3-DRAW). 'on' says the split is live: the renderer's GPU scene exists and this machine can run the ID PASS (it needs Vulkan buffer device addresses and indirect draws with a GPU-written count); off, every object draws through the stock PBR shader and every count below is what the split WOULD decide. 'atomItems' is how many shown objects the id pass draws and the material DECODE shades: an object with a row in the GPU scene, an opaque PBR material the decode can serve and one submesh. Every view of the scene carries the id pass and shades those objects through the decode — viewport, screenshots, thumbnails and previews alike — except a VR headset's, which draws them through the stock shader ('stereoViews' counts those views) and a view with no post-processing at all that draws straight into its window — the Low tier's viewport, whose anti-aliasing is the window's own ('passthroughViews'). 'pbsItems' is how many stay on the stock PBR shader, and the next ten fields split them by the FIRST reason that holds, in this order: 'notWorld' (a backdrop or helper, such as the ground's horizon plane: the id pass draws world objects only), 'notPbs' (an unlit or other non-PBR material), 'customPiece' (a material carrying its own shader piece), 'blended' (a transparent, faded or refractive material), 'twoSided' (a material drawn from both sides: the id pass culls back faces), 'planar' (a planar mirror: its reflection is bound per object, a decode draw serves many), 'pending' (its textures are still loading, so the decode draw that will shade it is not known yet — the stock shader draws it for those frames), 'alphaTested' (a cut-out), 'skinned' (a posed character: the id pass reads the mesh's stored bind pose) and 'noRow' (no readable triangle geometry for its finest level — a line mesh, for one). 'stockItems' counts objects in a queue the split never touches (gizmos, wires, the sun disc, distortion). 'materials' is how many distinct PBR materials the atom objects wear and 'buckets' how many DECODE DRAWS they need: materials that share a shader permutation, a texture set and a material pool are shaded by ONE full-screen draw, so buckets is the decode's cost and materials is not. 'twins' is how many decode twins the renderer holds, 'decodeDraws' this scene's decode draws for ray hits and 'screenDraws' its decode draws for the screen (drawn in the prepass and again in the colour pass when the view has a prepass). Hidden objects are in no count. 'live' is false without an engine viewport or GPU scene, and every other field is then 0.",
+          Needs::Document },
+        { "setAtomDraw", "world.setAtomDraw(on) -> bool",
+          "THE VISIBILITY BUFFER'S MEASURING DOOR, never a mode: false routes every object of the open scene through the stock PBR shader and rebuilds every view without the id pass; true (the default) restores the split. It exists so the split's cost and its picture can be compared in ONE process (paired arms), the way the renderer's A/B measurements must be taken. Not saved and not undoable: it belongs to the renderer's scene, so opening or creating a scene starts with the split on again. Answers what world.atomStatus().on then reports — false on a machine that cannot run the id pass, whatever was asked.",
           Needs::Document },
         { "giVoxelStats", "world.giVoxelStats({cascade}) -> {available, cascade, width, height, depth, format, formatMax, multiplier, peak, peakDirect, meanLit, voxels, voxelsLit, voxelsAtMax, voxelsAboveOne, directAtMax, emissiveFormat, peakEmissive, emissiveAtMax, emissiveAboveOne, lightDigest}",
           "WHAT THE VOXEL LIGHTING VOLUME HOLDS — the bytes, not the picture. A TEST AND TOOL verb: the renderer flushes its command stream and downloads the whole 3D volume (8 MB at 128^3), which takes milliseconds and must never be called on a frame path. "
@@ -312,7 +323,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "AND THE SOURCE, one stage upstream: 'emissiveFormat', 'peakEmissive', 'emissiveAtMax' and 'emissiveAboveOne' are the same reading over the VOXELISER'S EMISSIVE STORE — what the light injection SEEDS the volumes above from. They are in SCENE RADIANCE, not store units ('multiplier' does not apply to them): 'peakEmissive' over a scene with one emitter is that emitter's authored radiance, so an emitter authored at 3.0 that reads 1.0 here has been clipped on its way IN, which is a defect nothing downstream can tell from a dimmer emitter. 'emissiveAtMax' counts texels on a fixed-range store's top bin (the clip itself) and 'emissiveAboveOne' the texels an 8-bit store could not have held. 'emissiveFormat' is empty when the cascade has no voxeliser to read. "
           "'available' false — and nothing else — when there is no engine viewport, no voxel arm on this scene, or no such cascade; there is no document-side answer to fall back on, so a zero here is never a measurement. 'lightDigest' is a 64-bit hash of the raw bytes of every light volume a reader of that cascade samples (the total, then the three anisotropic axis volumes on an anisotropic tier), as 16 hex digits: two readings are equal exactly when the volumes are byte-identical, which is how the renderer proves that one at-rest injection sweep already IS the chain's fixed point (a second sweep changes no byte).",
           Needs::Document },
-        { "photon", "world.photon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, bounces, row, ddgiIntensity, updateBudget}",
+        { "photon", "world.photon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, bounces, row, updateBudget}",
           "PHOTON — realtime global illumination, as one switch and one quality dial. This is the surface the World panel shows and the shortest way to say what a scene should look like; world.gi is the same model with every individual knob exposed, and world.settings()/world.override are the same model again as registry rows. "
           "'enabled' true|false turns it on and off. Off is the renderer's GI mode set to off and nothing else — no second flag to disagree with it — and the tier is remembered, so turning it back on restores the quality you had. 'tier' is low|medium|high|epic: low voxelizes what is around the camera in two coarse steps and feeds the irradiance field from it, which REPLACES the cone-traced diffuse with probe-stored bounce that cannot leak through walls; medium does the same at twice the resolution; high adds a grid of parallax-corrected reflection probes captured in HDR with shadows; epic adds three light bounces. Every tier builds the camera-centred CASCADE CHAIN, so the bounce follows you through a world of any size. (No tier reserves dynamic probes: that column was deleted on 2026-09-12 — moving things are reflected every frame by screen-space reflections and planar mirrors, never by re-capturing probes.) New scenes are born epic. "
           "Called with no argument it reads. 'custom' is true when a setting you pinned deviates from what the tier would give it, and 'deviations' names those settings — the tier is still the tier, your pin still wins, and world.clearOverride({id}) hands one back (ids: giMode, giQuality, giDdgi, giBounces, photon). 'technique', 'quality', 'ddgi' and 'bounces' are what the tier and your pins RESOLVED to, in world.gi's spelling, and 'row' is the tier's own column set {technique, quality, ddgi, bounces} before any pin — the effective table row, so a script can see tier against resolution. "
@@ -358,6 +369,40 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "sunDisc", "world.sunDisc({visible, inProbes, size}) -> {visible, inProbes, size}",
           "THE SUN DISC — the bright disc drawn in the sky where the scene's sun light points. It is the SUN's, not the sky's: one mechanism, drawn over EVERY sky type (colour, gradient, realistic, equirect, cubemap), and it moves when the light is rotated. `visible` (default true) is the scene-level switch. `size` is its ANGULAR DIAMETER IN DEGREES, 0.1 to 10, default 2.12: the real sun is 0.53 degrees across, but a photograph's sun looks several times larger because glare in the lens and in the eye spreads the saturated core, so the default is four times the physical angle. THE SIZE COSTS NO LIGHT: the disc's radiance is normalised per solid angle, so a wider disc spreads the SAME energy over more of the sky — bloom and an `inProbes` capture read the same total at every size, and only the sun light's own colour and intensity say how bright it is. NOTE for image skies: an equirect or cubemap sky usually has a sun PAINTED into it, and the disc will only line up with it if you aim the sun light at it — otherwise the scene shows two suns, so either align the light or turn the disc off here. `inProbes` (default FALSE) says whether reflection-probe captures contain it: off, because the sun's energy already reaches glossy surfaces through the directional light's own specular highlight, and capturing the disc as well paints a SECOND sun on everything the probes light. Turn it on if you want probe-lit mirrors to show the disc. A sun that has set draws no disc at all. Called with no argument it reads. One undo step.",
+          Needs::Document },
+        { "clouds", "world.clouds({enabled?, coverage?, density?, speed?, direction?, altitude?, shadow?, weatherMap?}) -> {enabled, coverage, density, speed, direction, altitude, shadow, weatherMap, drawsOver, live}",
+          "THE 2D CLOUD LAYER — one sheet of cloud at a fixed altitude, drawn over the sky (HDRP's Cloud Layer is the model). OFF by default, and a scene whose layer is at the defaults writes nothing into its file. It is drawn over the COLOUR, GRADIENT and REALISTIC skies only: an equirectangular or cubemap sky is a photograph with its own clouds in it, and the layer is not drawn over one (`drawsOver` says whether the current sky takes it). It is part of the SKY: the Sky Light's ambient and every reflection see it, because the renderer's environment capture photographs it — so an overcast sky changes the scene's ambient light, and a full overcast changes the exposure too (correct: the key moves). It also SHADOWS THE GROUND: the sun's light on a surface is multiplied by the fraction of the beam that crosses the sheet, where the sun ray from that surface meets it (a material that receives no shadows, and a sun that casts none, are not shaded — as for every shadow). It runs at every quality tier and in VR — it is the VR cloud. There is no parallax inside it and the camera never enters it; volumetric clouds are a separate, parked program. "
+          "`enabled` (default false) switches it. `coverage` 0..1 (default 0.5) is how much of the sky is cloud — 0 clear, 1 an overcast deck. `density` 0..4 (default 1) is how opaque a covered patch is: its underside darkness and its shadow. `speed` 0..100 metres per second of SCENE time (default 10): the renderer's own clock, so a paused scene holds its clouds still and a scripted frame is reproducible. `direction` 0..360 degrees (default 0) is the heading the wind blows TOWARDS, from +X turning towards -Z. `altitude` 500..8000 metres (default 2000) is the ALTITUDE LOOK: the sheet lies over a curved earth, so a low layer fills the sky to the horizon and a high one stays overhead, and a low sun throws the ground shadow sideways by altitude / tan(elevation). `shadow` 0..1 (default 1) scales how much of the sheet's transmittance reaches the sun's light on the ground. `weatherMap` is an image asset guid (assets.list({type:\"texture\"})) whose red channel scales the coverage over one 16 km tile of the sheet — white lets clouds form, black keeps the sky clear — or \"\" to clear it. Values outside a dial's band are clamped, and the answer reports what the scene holds. An unknown key, a value that is not a number, or a weatherMap that is not a stored texture asset is refused and nothing is written. One undo step. "
+          "`live` is what the renderer is doing with it (absent without an engine viewport): `drawn`, and `reason` when not (\"off\", \"imageSky\", \"noSky\", \"media\"); `fieldBakes`, how many times the layer's optical-depth field has been rebuilt (a coverage, density or weather-map change rebuilds it; wind and shadow never do); `changeCaptures` and `scrollCaptures`, the environment re-captures it has asked for — at once on a change that moves the sky's picture, and every `capturePeriodFrames` drawn frames while it scrolls (the ambient follows a moving sheet on that cadence, never per frame); `clockTicks`, the drawn frames the sheet's clock has advanced (one per frame, never more); `scroll`, the sheet's current offset in metres; and `skyMean`, the environment capture's mean radiance (its SH band 0, linear, before the Sky Light scales it) — the number that moves when the clouds change the sky's light.",
+          Needs::Document },
+        { "sunContact", "world.sunContact({enabled?, range?, resolution?}) -> {enabled, range, resolution, live}",
+          "HARD SUN CONTACT SHADOWS — one hardware ray per pixel from the surface the camera sees towards the sun, "
+          "folded into the sun's shadow as min(shadow map, ray). A shadow map is rendered with a depth BIAS (or every "
+          "lit surface would shadow itself), and where a THIN caster meets the ground — a board, a panel, a table top, "
+          "a lid — the bias is thicker than the caster and the shadow detaches: measured 4 cm under a 2 cm board seen "
+          "from 5 m and 10-16 cm from 15-30 m (a solid block does not leak: the map holds its far face). The ray has "
+          "no bias to speak of and closes that "
+          "band to one pixel of its own resolution; it can only ever DARKEN (the map keeps every shadow it has), and "
+          "beyond `range` it answers nothing and the map is alone, unchanged. OFF by default, and a scene at the "
+          "defaults writes nothing into its file. "
+          "`enabled` (default false) switches it. `range` (metres, default 2; 0.05..50, anything outside refused) is how far a ray "
+          "looks for an occluder — a contact is a short question, and the map answers everything further away. "
+          "`resolution` is \"auto\" (the default: one ray per 2x2 block at the Low and Medium GI quality, one per "
+          "pixel at High), \"full\" or \"half\". Opaque casters only: an alpha-tested leaf is not in the ray "
+          "structure (it would stop a ray as a solid quad) and keeps the map's shadow; an object whose Cast Shadows "
+          "is off casts no contact shadow either; a skinned character is not traced (its structure would be the bind "
+          "pose). Only the FIRST directional light that casts shadows — the sun — gets it, and only where the "
+          "material receives shadows. "
+          "It needs what every ray feature needs — a machine with ray queries and the project's world.rayTracing "
+          "not \"off\" (--no-ray-query renders the map alone) — and it is NEVER drawn in VR (a headset view "
+          "declines it and pays nothing). Turning it on gives a view the PREPASS (a second geometry traversal) if "
+          "its SSR row had not already; the rays themselves measured at 1.5-1.9 % of the frame's GPU pass time at "
+          "full resolution and under 0.8 % at half (0.08-0.11 ms and 0.04-0.05 ms at a 924x565 editor view). "
+          "`live` is what the renderer did on its last frame (absent without an engine viewport): `on` (the row "
+          "resolved against the machine), `running` (a view dispatched it), `reason` when it did not, the texture "
+          "`width`/`height` and `divisor` (1 = a ray per pixel, 2 = per 2x2 block), `rays`, the `toSun` direction "
+          "the rays were cast along, and `gpuMs`/`cpuMs` (-1 until measured). Called with no argument it reads. One "
+          "undo step.",
           Needs::Document },
         { "rayTracing", "world.rayTracing([\"off\"|\"auto\"|\"on\"]) -> \"off\"|\"auto\"|\"on\"",
           "HARDWARE RAY TRACING FOR THIS PROJECT, saved with the scene and travelling with it (owner, 2026-09-15). Three states, and the first thing to know is that NOTHING can force ray hardware onto a machine that has none: this row says what the project was authored for, and the renderer meets it with what the machine can do. \"off\" never traces, even where the GPU can — what a scene that must look and cost the SAME everywhere asks for. \"auto\" (the default) traces where the machine can and falls back silently everywhere else: the same file looks right on a ray-capable desktop and on a Mac, and nobody has to think about it. \"on\" means the scene was AUTHORED for rays: it renders exactly like auto — traces where it can, falls back where it cannot — and additionally raises a scene issue in the editor's error bar (\"this project expects hardware ray tracing; this machine has none\") so the author learns that this machine is not showing them what they built. On and auto therefore render the same picture; on is the one that TELLS YOU when the machine falls short. Called with no argument it reads the project's state. Any other word is refused, loudly, rather than guessed at. One undo step, and it dirties the project like any other document edit — it is NOT an application preference (it used to be one for two days: a machine-wide switch meant the same project rendered differently depending on a setting that was not in it). What the machine actually answered is world.giStatus().rayQuery — 'available' is the device's own answer, 'enabled' whether the renderer is using it — and --no-ray-query is the diagnostic switch that makes a ray-capable box render the no-rays picture for one run.",
@@ -478,7 +523,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "not here either: it is a world row, world.sunDisc({size}). On any other sky "
           "it is inert. It is read and written with node.property / node.setProperty.",
           Needs::Document },
-        { "get", "world.get() -> {skyLight, sunDisc, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
+        { "get", "world.get() -> {skyLight, sunDisc, clouds, sunContact, gravity, fog, shadows, gi, sky, mode, settings, postFx, looks}",
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
@@ -519,39 +564,11 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Changes a look already in the stack: 'enabled' switches it on and off without losing its settings, and any of the look's own parameter names sets that parameter (clamped to the catalogue's range). Returns the look's new state. Scrubbing a parameter is free — it never rebuilds the renderer's graph, unlike adding, removing or reordering. One undo step.",
           Needs::Document },
         { "modeTable", "world.modeTable() -> object",
-          "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from.",
+          "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from. The cost notes are THIS MACHINE'S — a row that explains reflections at High and Epic reads differently where the scene traces rays, because no probe grid is built there — and the technique's name is the OPEN SCENE'S: 'VCT + rays' where its quality traces its reflections on this machine (world.giStatus().probeGridByRays), 'VCT + probes' where it does not.",
           Needs::Document },
         { "tierTable", "world.tierTable() -> {photon: [...], world: [...]}",
-          "WHAT EACH PHOTON QUALITY TIER PHYSICALLY IS, read from the renderer's own tables rather than described in prose. Per tier: the registry columns it writes ('technique' off|vct|vct_pcc_hybrid, 'quality' low|medium|high, 'ddgi' 0/1, 'bounces' 1-4, 'probeSize' 0 = follow the quality dial, 'cascades' 0/1); then the PHYSICAL facts the engine derives from the quality column — 'chain' is the camera-centred voxel cascade table it builds when the cascades are on, innermost first, each entry {halfSize, resolution, stepCells, cell, step, guaranteedRadius, nearFieldRadius} in metres and voxels (the cell is what that cascade can resolve; the step is RESOLVED here through the renderer's own derivation rather than reported as the tier row's 0, so this is the chain that would be built; guaranteedRadius is the radius around the camera that step guarantees the cascade covers at every moment of any walk, and nearFieldRadius the radius the rule requires of it \u2014 0.45 of the half-size); 'vrChain' is THE SAME TABLE'S VR COLUMN \u2014 the chain a HEADSET gets, which is not the same chain, because a headset renders it five times over for half the frame (2160x2376 per eye against a desktop 1080p is 10.26 against 2.07 megapixels, and 11.1 ms at 90 Hz against 16.7 at 60). It is the tier's own chain with the redundant middle cascade dropped and the outermost step doubled -- the two apply independently, so low, which has no middle to drop, still gets the doubled outer step and no tier's VR column equals its desktop one: measured at Quest Pro size on the rig, the opaque pass costs 0.31 ms PER EYE PER CASCADE, so one fewer cascade is 0.31 ms of every eye frame back, and halving the outermost cascade's rebuild rate is headroom on top. What is given up is one hand-over in the mid field and up to 30 m of off-centring on a 120 m box at 1.875 m per cell instead of 15; the reach and the inner cell are untouched. A live session reports which column it is on through world.giStatus()'s 'cascadeProfileVr'. 'voxelResolution' is the single scene-fitted volume's resolution per axis, which is the arm used when the cascades are pinned off; 'probeFaceSize' the reflection probe's cube face in pixels; 'probeHdr' and 'probeShadows' what \"auto\" resolves to for the two expensive probe options. 'pixelTolerance' is the tier's geometric tolerance in SAMPLES of whatever is sampling \u2014 pixels for a view, cells for a cascade \u2014 i.e. the 'tolerance' argument of the quality currency allowedWorldError (the world-space deviation a consumer may afford = tolerance x its sample footprint / the mesh's scale): Low 2.0, Medium 1.0, High and Epic 0.5. Today it feeds the GPU cull's level output only; the shipped draw path keeps one pixel at every tier and the cascades keep their measured 1/256 of a cell. 'description' is the one-sentence English form of all of it, and it is the SAME string the World panel's tier tooltips are built from — the point of this verb is that a tier's description cannot drift from what the tier does, which it did for months (the panel promised Medium twice Low's resolution when both are 64, and 32/64/128 voxels per axis when the chain uses 64/64/128). 'world' maps each WORLD mode onto the Photon tier it selects, or 'off'. Reads only: there is nothing here to set — world.photon picks a tier, world.gi pins a row.",
+          "WHAT EACH PHOTON QUALITY TIER PHYSICALLY IS, read from the renderer's own tables rather than described in prose. Per tier: the registry columns it writes ('technique' off|vct|vct_pcc_hybrid, 'quality' low|medium|high, 'ddgi' 0/1, 'bounces' 1-4, 'probeSize' 0 = follow the quality dial, 'cascades' 0/1); 'gather' is the SCREEN-PROBE GATHER's row of the renderer's tier table {on, stride, octRes, raysPerProbe, adaptiveCapDivisor} — on at High and Epic (Epic four times the probes), on at Medium at 36 rays, off at Low — and 'vrGather' its VR column (off: the headset keeps the irradiance field until the gather's history is sized for it); then the PHYSICAL facts the engine derives from the quality column — 'chain' is the camera-centred voxel cascade table it builds when the cascades are on, innermost first, each entry {halfSize, resolution, stepCells, cell, step, guaranteedRadius, nearFieldRadius} in metres and voxels (the cell is what that cascade can resolve; the step is RESOLVED here through the renderer's own derivation rather than reported as the tier row's 0, so this is the chain that would be built; guaranteedRadius is the radius around the camera that step guarantees the cascade covers at every moment of any walk, and nearFieldRadius the radius the rule requires of it \u2014 0.45 of the half-size); 'vrChain' is THE SAME TABLE'S VR COLUMN \u2014 the chain a HEADSET gets, which is not the same chain, because a headset renders it five times over for half the frame (2160x2376 per eye against a desktop 1080p is 10.26 against 2.07 megapixels, and 11.1 ms at 90 Hz against 16.7 at 60). It is the tier's own chain with the redundant middle cascade dropped and the outermost step doubled -- the two apply independently, so low, which has no middle to drop, still gets the doubled outer step and no tier's VR column equals its desktop one: measured at Quest Pro size on the rig, the opaque pass costs 0.31 ms PER EYE PER CASCADE, so one fewer cascade is 0.31 ms of every eye frame back, and halving the outermost cascade's rebuild rate is headroom on top. What is given up is one hand-over in the mid field and up to 30 m of off-centring on a 120 m box at 1.875 m per cell instead of 15; the reach and the inner cell are untouched. A live session reports which column it is on through world.giStatus()'s 'cascadeProfileVr'. 'voxelResolution' is the single scene-fitted volume's resolution per axis, which is the arm used when the cascades are pinned off; 'probeFaceSize' the reflection probe's cube face in pixels; 'probeHdr' and 'probeShadows' what \"auto\" resolves to for the two expensive probe options. 'pixelTolerance' is the tier's geometric tolerance in SAMPLES of whatever is sampling \u2014 pixels for a view, cells for a cascade \u2014 i.e. the 'tolerance' argument of the quality currency allowedWorldError (the world-space deviation a consumer may afford = tolerance x its sample footprint / the mesh's scale): Low 2.0, Medium 1.0, High and Epic 0.5. Today it feeds the GPU cull's level output only; the shipped draw path keeps one pixel at every tier and the cascades keep their measured 1/256 of a cell. 'description' is the one-sentence English form of all of it, and it is the SAME string the World panel's tier tooltips are built from — the point of this verb is that a tier's description cannot drift from what the tier does, which it did for months (the panel promised Medium twice Low's resolution when both are 64, and 32/64/128 voxels per axis when the chain uses 64/64/128). 'world' maps each WORLD mode onto the Photon tier it selects, or 'off'. Reads only: there is nothing here to set — world.photon picks a tier, world.gi pins a row.",
           Needs::Document },
-
-        // The nine set* aliases (owner decision D5). Canonical spelling stays
-        // the noun; these exist so the obvious guess works. Each doc string
-        // points at its twin and nowhere else — the arguments are documented
-        // once, on the verb that implements them.
-        { "setGravity", "world.setGravity(value) -> bool",
-          "Alias of world.gravity — same arguments, same result.", Needs::Document },
-        { "setFog", "world.setFog({enabled, color, density, ...}) -> bool",
-          "Alias of world.fog — same arguments, same result.", Needs::Document },
-        { "setShadows", "world.setShadows({enabled}) -> bool",
-          "Alias of world.shadows — same arguments, same result.", Needs::Document },
-        { "setGi", "world.setGi({mode, quality, bounces, ...}) -> bool",
-          "Alias of world.gi — same arguments, same result.", Needs::Document },
-        { "setPhoton", "world.setPhoton({enabled, tier}) -> object",
-          "Alias of world.photon — same arguments, same result.", Needs::Document },
-        { "setSky", "world.setSky(type, {...}) -> bool",
-          "Alias of world.sky — same arguments, same result.", Needs::Document },
-        { "setSunLight", "world.setSunLight(id|null) -> id",
-          "Alias of world.sunLight — same arguments, same result.", Needs::Document },
-        { "setMode", "world.setMode({mode}) -> string",
-          "Alias of world.mode — same arguments, same result (and, called with no argument, the "
-          "same read).", Needs::Document },
-        { "setPostFx", "world.setPostFx({exposureEv, exposureMin, exposureMax, bloomAmount, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius}) -> object",
-          "Alias of world.postFx — same arguments, same result.", Needs::Document },
-        { "setVr", "world.setVr({flySpeed, fly, turn, snapTurnDegrees, "
-          "smoothTurnDegreesPerSecond, dominant}) -> object",
-          "Alias of world.vr — same arguments, same result (and, called with no argument, the "
-          "same read).", Needs::Document },
     };
 }
 
@@ -677,11 +694,10 @@ bool WorldApi::gi(const QVariantMap &params)
         QStringLiteral("probeSize"),
         QStringLiteral("overlap"),   QStringLiteral("snapDeviation"),
         QStringLiteral("snapSidesMin"), QStringLiteral("snapSidesMax"),
-        QStringLiteral("rayMarchStepScale"),
         // DDGI (GI_UNIFIED_SPEC.md §4 P1), verb-only for the same reason: the
         // panel is P2's, and until the Photon tier exists this is an opt-in a
         // script or a suite asks for explicitly.
-        QStringLiteral("ddgi"),      QStringLiteral("ddgiIntensity"),
+        QStringLiteral("ddgi"),
         QStringLiteral("cascades"), QStringLiteral("cascadeSet"),
         QStringLiteral("cascadeInstanceCap"),
         // MOVER-1, verb-only and OFF by default: it changes the picture WHILE
@@ -767,6 +783,21 @@ bool WorldApi::gi(const QVariantMap &params)
         else return fail(QStringLiteral("world.gi: unknown quality '%1' (low, medium, high)").arg(q));
         worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
     }
+    // THE PROBE GRID'S OWN KEYS AT A RAY TIER (PHOTON-F12-PCC). At High and
+    // Epic, wherever the scene traces on this machine, no probe grid is built,
+    // so a key that shapes only the grid would be a silently ignored setting —
+    // refused, by name and with the reason, and a refused call changes nothing
+    // (WorldEdit rolls the tier/quality writes above back). Read AFTER the
+    // tier and quality keys, so the question is asked of the state this call
+    // would leave: `world.gi({quality: "medium", pccGrid: ...})` is accepted.
+    if (worldmodes::probeGridByRays(scene, host.isEngineReady() && host.viewport &&
+                                               host.viewport->sceneTracesRays())) {
+        for (const char *key : { "pccGrid", "probeSize", "probeHdr", "probeShadows" }) {
+            if (!params.contains(QLatin1String(key))) continue;
+            return fail(QStringLiteral("world.gi: '%1' is refused — %2")
+                            .arg(QLatin1String(key), worldmodes::probeGridByRaysReason()));
+        }
+    }
     // PHOTON CASCADES (SPECS/PHOTON_SPEC.md P0). A scene-level switch, not a
     // tier row yet: P0 is the lane that measures what it costs under motion,
     // and a tier cannot adopt a number nobody has measured.
@@ -795,9 +826,8 @@ bool WorldApi::gi(const QVariantMap &params)
         else
             return fail(QStringLiteral(
                 "world.gi: cards is 'off', 'auto' or 'on' — whether the renderer captures "
-                "SURFACE CARDS for the objects around the camera. Auto is OFF today and says "
-                "so: nothing reads a card until a reflection ray's hit does (phase 4), so a "
-                "capture on a user's machine would be pure cost."));
+                "SURFACE CARDS for the objects around the camera. Auto is on exactly where the "
+                "reflection trace runs (a ray's hit reads the card first) and off elsewhere."));
     }
     if (params.contains(QStringLiteral("cardBudget"))) {
         const int v = params.value(QStringLiteral("cardBudget")).toInt();
@@ -947,17 +977,6 @@ bool WorldApi::gi(const QVariantMap &params)
                 "world.giStatus().probeUpdatesPerFrame reports what the renderer resolved."));
         scene->giUpdateBudget = v;
     }
-    if (params.contains("rayMarchStepScale")) {
-        const double v = params.value("rayMarchStepScale").toDouble();
-        if (!(v >= 1.0) || v > 8.0)
-            return fail(QStringLiteral(
-                "world.gi: rayMarchStepScale must be in [1, 8] — how coarsely voxel light "
-                "injection ray-marches towards each light. Below 1 the renderer asserts; "
-                "bigger is faster and starts losing shadow contact in the bounce. 1.0 is the "
-                "default and the at-rest value; the renderer raises it by itself for the "
-                "throwaway re-injections it does while you are dragging something."));
-        scene->giRayMarchStepScale = float(v);
-    }
     // ---- probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3) -----------------
     // The two toggles are TRI-STATE, and the string "auto" is the point: a
     // plain boolean could not express "follow the quality dial", which is the
@@ -1023,29 +1042,15 @@ bool WorldApi::gi(const QVariantMap &params)
         }
     }
     // ---- THE SCREEN-PROBE GATHER (SPECS/SCREEN_PROBE_GATHER_SPEC.md) --------
-    // The same tri-state shape, and NOT a pinned tier row: no tier selects the
-    // gather yet, so "auto" is plainly off and a person who wants it says so.
-    // (Phase 4 gives the tier table its own column, and this key becomes a pin
-    // like `ddgi` beside it.)
+    // The same tri-state shape. "auto" is the TIER's (PHOTON-GATHER-1d): the
+    // engine's tier table resolves it (worldmodes::photonGather is the same row,
+    // projected), so the document stores no tier value of its own and a true or
+    // false here is the scene's pin.
     if (params.contains(QStringLiteral("gather"))) {
         int wanted = scene->giGather;
         e = readToggle("gather", wanted);
         if (!e.isEmpty()) return fail(e);
         scene->giGather = wanted;
-    }
-    if (params.contains("ddgiIntensity")) {
-        const double v = params.value("ddgiIntensity").toDouble();
-        if (v < 0.0 || v > 64.0)
-            return fail(QStringLiteral(
-                "world.gi: ddgiIntensity must be in [0, 64] — how brightly the irradiance "
-                "field's diffuse is applied. It exists because turning DDGI on turns the "
-                "voxel-cone diffuse OFF (the field REPLACES it, it does not add to it), and "
-                "the two are different integrals of the same bounce: measured, the field lands "
-                "at about 86% of what it takes over, so 1.0 — the renderer's raw value — is "
-                "also the default. Raise it to trim the room brighter, lower it to trim it "
-                "down; 0 leaves the field bound and contributing nothing, which is the A/B "
-                "measurement."));
-        scene->giDdgiIntensity = float(v);
     }
     edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("World GI"));
     return true;
@@ -1088,12 +1093,15 @@ QVariantMap WorldApi::photonState(const iris::ScenePtr &scene)
         { QStringLiteral("quality"),
           QString::fromLatin1(qualityNames[qBound(0, int(scene->giQuality), 2)]) },
         { QStringLiteral("ddgi"), scene->giDdgi > 0 },
-        { QStringLiteral("gather"), scene->giGather > 0 },
+        // RESOLVED against the tier (the engine's table): a pin wins, auto is
+        // the tier's gather row.
+        { QStringLiteral("gather"),
+          scene->giGather >= 0 ? scene->giGather > 0
+                               : worldmodes::photonGather(worldmodes::photonTier(scene)).on },
         { QStringLiteral("bounces"), qBound(1, scene->giNumBounces, 4) },
         // THE EFFECTIVE TABLE ROW — the tier's own columns before any pin, so
         // a caller can hold the resolution above against the table.
         { QStringLiteral("row"), photonRow(worldmodes::photonTier(scene)) },
-        { QStringLiteral("ddgiIntensity"), double(scene->giDdgiIntensity) },
         { QStringLiteral("updateBudget"), scene->giUpdateBudget },
     };
 }
@@ -1246,6 +1254,9 @@ QVariantMap WorldApi::giStatus()
                             { QStringLiteral("probeShadows"), false },
                             { QStringLiteral("probeCaptureSize"), 0 },
                             { QStringLiteral("probesDropped"), 0 },
+                            { QStringLiteral("probeGridByRays"), false },
+                            { QStringLiteral("probePlacements"), 0.0 },
+                            { QStringLiteral("probeCapturesTotal"), 0.0 },
                             { QStringLiteral("probeGateCrossings"), 0 },
                             { QStringLiteral("probeShapeMin"), vecToJs(iris::Vec3()) },
                             { QStringLiteral("probeShapeMax"), vecToJs(iris::Vec3()) },
@@ -1257,7 +1268,9 @@ QVariantMap WorldApi::giStatus()
                             { QStringLiteral("reusedLastRefresh"), false },
                             { QStringLiteral("ifdBound"), false },
                             { QStringLiteral("ifdProbes"), 0 },
-                            { QStringLiteral("ifdConverged"), false },
+                            { QStringLiteral("ifdTargetSamples"), 0 },
+                            { QStringLiteral("ifdRefinesOwed"), 0 },
+                            { QStringLiteral("giAtRest"), true },
                             { QStringLiteral("ifdProbesPerFrame"), 0 },
                             { QStringLiteral("ifdMin"), vecToJs(iris::Vec3()) },
                             { QStringLiteral("ifdMax"), vecToJs(iris::Vec3()) },
@@ -1327,6 +1340,9 @@ QVariantMap WorldApi::giStatus()
                         { QStringLiteral("voxelMetres"), double(st.voxelMetres) },
                         { QStringLiteral("probeCaptureSize"), st.probeCaptureSize },
                         { QStringLiteral("probesDropped"), st.probesDropped },
+                        { QStringLiteral("probeGridByRays"), st.probeGridByRays },
+                        { QStringLiteral("probePlacements"), double(st.probePlacements) },
+                        { QStringLiteral("probeCapturesTotal"), double(st.probeCapturesTotal) },
                         { QStringLiteral("probeGateCrossings"), int(st.probeGateCrossings) },
                         { QStringLiteral("probeRegionMin"), vecToJs(iris::fromQt(st.probeRegionMin)) },
                         { QStringLiteral("probeRegionMax"), vecToJs(iris::fromQt(st.probeRegionMax)) },
@@ -1352,7 +1368,11 @@ QVariantMap WorldApi::giStatus()
                         // fast a re-integration is running.
                         { QStringLiteral("ifdBound"), st.ifdBound },
                         { QStringLiteral("ifdProbes"), st.ifdProbes },
-                        { QStringLiteral("ifdConverged"), st.ifdConverged },
+                        { QStringLiteral("ifdTargetSamples"), int(st.ifdTargetSamples) },
+                        { QStringLiteral("ifdRefinesOwed"), int(st.ifdRefinesOwed) },
+                        // THE ONE SETTLE PREDICATE (PHOTON-FIELD-ROTATE-1): GI owes
+                        // nothing that would change the picture.
+                        { QStringLiteral("giAtRest"), st.giAtRest },
                         { QStringLiteral("ifdProbesPerFrame"), st.ifdProbesPerFrame },
                         // ...and WHERE the field is, which is a reading only a
                         // cascade chain makes interesting: under one the field
@@ -1422,8 +1442,58 @@ QVariantMap WorldApi::giStatus()
                               { QStringLiteral("traceMs"), double(st.gather.traceMs) },
                               { QStringLiteral("integrateMs"), double(st.gather.integrateMs) },
                               { QStringLiteral("cpuMs"), double(st.gather.cpuMs) },
+                              // THE SETTLED HISTORY (PHOTON-GATHER-1d): the
+                              // term giAtRest carries.
+                              { QStringLiteral("temporal"), st.gather.temporal },
+                              { QStringLiteral("historyAge"), st.gather.historyAge },
+                              { QStringLiteral("restFrames"), st.gather.restFrames },
+                              { QStringLiteral("sinceRestart"), st.gather.sinceRestart },
+                              { QStringLiteral("settleFrames"), st.gather.settleFrames },
+                              { QStringLiteral("settled"), st.gather.settled },
                               { QStringLiteral("error"), st.gather.error } } },
                         { QStringLiteral("live"), true } };
+}
+
+QVariantMap WorldApi::atomStatus()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.atomStatus"));
+    if (!scene) return QVariantMap();
+    jahshaka::engine::AtomDrawStatus st;
+    if (host.isEngineReady() && host.viewport)
+        if (jahshaka::engine::Scene *es = host.viewport->engineScene()) st = es->atomDrawStatus();
+    return QVariantMap{ { QStringLiteral("live"), st.live },
+                        { QStringLiteral("on"), st.on },
+                        { QStringLiteral("atomItems"), st.atomItems },
+                        { QStringLiteral("pbsItems"), st.pbsItems },
+                        { QStringLiteral("notWorld"), st.notWorld },
+                        { QStringLiteral("notPbs"), st.notPbs },
+                        { QStringLiteral("customPiece"), st.customPiece },
+                        { QStringLiteral("blended"), st.blended },
+                        { QStringLiteral("twoSided"), st.twoSided },
+                        { QStringLiteral("planar"), st.planar },
+                        { QStringLiteral("pending"), st.pending },
+                        { QStringLiteral("alphaTested"), st.alphaTested },
+                        { QStringLiteral("skinned"), st.skinned },
+                        { QStringLiteral("noRow"), st.noRow },
+                        { QStringLiteral("stockItems"), st.stockItems },
+                        { QStringLiteral("materials"), st.materials },
+                        { QStringLiteral("buckets"), st.buckets },
+                        { QStringLiteral("twins"), st.twins },
+                        { QStringLiteral("decodeDraws"), st.decodeDraws },
+                        { QStringLiteral("screenDraws"), st.screenDraws },
+                        { QStringLiteral("stereoViews"), st.stereoViews },
+                        { QStringLiteral("passthroughViews"), st.passthroughViews } };
+}
+
+bool WorldApi::setAtomDraw(bool on)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.setAtomDraw"));
+    if (!scene) return false;
+    if (!host.isEngineReady() || !host.viewport) return false;
+    jahshaka::engine::Scene *es = host.viewport->engineScene();
+    if (!es) return false;
+    es->setAtomDrawEnabled(on);
+    return es->atomDrawStatus().on;
 }
 
 QVariantMap WorldApi::giVoxelStats(const QVariantMap &params)
@@ -1760,6 +1830,188 @@ QVariantMap WorldApi::sunDisc(const QVariantMap &params)
 }
 
 // ---------------------------------------------------------------------------
+// THE 2D CLOUD LAYER (CLOUDS-2D-1; SPECS/CLOUDS_ASSESSMENT.md option C0)
+// ---------------------------------------------------------------------------
+// The whole authoring surface of the layer: the World panel's Clouds rows call
+// exactly this document field through the same sceneprops key ("clouds").
+QVariantMap WorldApi::clouds(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.clouds"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        static const QStringList known = {
+            QStringLiteral("enabled"),   QStringLiteral("coverage"), QStringLiteral("density"),
+            QStringLiteral("speed"),     QStringLiteral("direction"), QStringLiteral("altitude"),
+            QStringLiteral("shadow"),    QStringLiteral("weatherMap")
+        };
+        const QString refusal = refuseUnknownKeys(QStringLiteral("world.clouds"), params, known);
+        if (!refusal.isEmpty()) { fail(refusal); return out; }
+        // VALIDATED BEFORE ANYTHING IS WRITTEN (world.vr's rule): a call with
+        // one bad value writes none of the good ones.
+        iris::CloudLayer c = scene->clouds;
+        QString weatherPath = scene->cloudWeatherMap ? scene->cloudWeatherMap->source : QString();
+        if (params.contains(QStringLiteral("enabled")))
+            c.enabled = params.value(QStringLiteral("enabled")).toBool();
+        const struct { const char *key; float *field; } numbers[] = {
+            { "coverage", &c.coverage }, { "density", &c.density }, { "speed", &c.speed },
+            { "direction", &c.direction }, { "altitude", &c.altitude }, { "shadow", &c.shadow },
+        };
+        for (const auto &n : numbers) {
+            const QString key = QString::fromLatin1(n.key);
+            if (!params.contains(key)) continue;
+            bool ok = false;
+            const double v = params.value(key).toDouble(&ok);
+            if (!ok || !std::isfinite(v)) {
+                fail(QStringLiteral("world.clouds: '%1' must be a number").arg(key));
+                return out;
+            }
+            *n.field = float(v);
+        }
+        if (params.contains(QStringLiteral("weatherMap"))) {
+            const QVariant ref = params.value(QStringLiteral("weatherMap"));
+            if (ref.isNull() || ref.toString().isEmpty()) {
+                c.weatherMapGuid.clear();
+                weatherPath.clear();
+            } else {
+                if (!requireProject()) return out;
+                QString guid, path;
+                if (!resolveTexture(ref, guid, path)) {
+                    fail(QStringLiteral("world.clouds: 'weatherMap' must be a texture asset guid with "
+                                        "stored bytes (assets.list({type:\"texture\"}) lists them), "
+                                        "or \"\" to clear it"));
+                    return out;
+                }
+                c.weatherMapGuid = guid;
+                weatherPath = path;
+            }
+        }
+        c = iris::CloudLayer::clamped(c);
+        QVariantMap value = c.toJson().toVariantMap();
+        if (!c.weatherMapGuid.isEmpty() && !weatherPath.isEmpty())
+            value.insert(QStringLiteral("weatherPath"), weatherPath);
+        WorldEdit edit(scene, { QStringLiteral("clouds") });
+        sceneprops::set(scene, QStringLiteral("clouds"), value);
+        edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("Clouds"));
+    }
+    const iris::CloudLayer &c = scene->clouds;
+    out[QStringLiteral("enabled")] = c.enabled;
+    out[QStringLiteral("coverage")] = double(c.coverage);
+    out[QStringLiteral("density")] = double(c.density);
+    out[QStringLiteral("speed")] = double(c.speed);
+    out[QStringLiteral("direction")] = double(c.direction);
+    out[QStringLiteral("altitude")] = double(c.altitude);
+    out[QStringLiteral("shadow")] = double(c.shadow);
+    out[QStringLiteral("weatherMap")] = c.weatherMapGuid;
+    out[QStringLiteral("drawsOver")] = scene->skyType != iris::SkyType::EQUIRECTANGULAR &&
+                                       scene->skyType != iris::SkyType::CUBEMAP;
+    if (host.isEngineReady() && host.viewport) {
+        if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
+            const jahshaka::engine::CloudStatus st = es->cloudStatus();
+            QVariantMap live;
+            live[QStringLiteral("drawn")] = st.drawn;
+            // The document's own reason first: the renderer never hears of a
+            // layer the mirror keeps off a photograph.
+            live[QStringLiteral("reason")] =
+                (c.enabled && !out.value(QStringLiteral("drawsOver")).toBool())
+                    ? QStringLiteral("imageSky") : QString::fromStdString(st.reason);
+            live[QStringLiteral("fieldBakes")] = st.fieldBakes;
+            live[QStringLiteral("changeCaptures")] = st.changeCaptures;
+            live[QStringLiteral("scrollCaptures")] = st.scrollCaptures;
+            live[QStringLiteral("capturePeriodFrames")] = st.capturePeriodFrames;
+            live[QStringLiteral("clockTicks")] = st.clockTicks;
+            live[QStringLiteral("scroll")] = QVariantList{ double(st.scroll[0]), double(st.scroll[1]) };
+            float sh[27];
+            if (es->skyAmbientSh(sh))
+                live[QStringLiteral("skyMean")] = QVariantList{ double(sh[0]), double(sh[1]), double(sh[2]) };
+            out[QStringLiteral("live")] = live;
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact)
+// ---------------------------------------------------------------------------
+// The whole authoring surface of the row: the World panel's Sun Contact rows
+// (WorldShadowPropertyWidget, SMALL-FIXES-3) write exactly this document field
+// through the same sceneprops key, with the same clamp.
+QVariantMap WorldApi::sunContact(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.sunContact"));
+    if (!scene) return out;
+    if (!params.isEmpty()) {
+        static const QStringList known = {
+            QStringLiteral("enabled"), QStringLiteral("range"), QStringLiteral("resolution")
+        };
+        const QString refusal = refuseUnknownKeys(QStringLiteral("world.sunContact"), params, known);
+        if (!refusal.isEmpty()) { fail(refusal); return out; }
+        // VALIDATED BEFORE ANYTHING IS WRITTEN (world.clouds' rule).
+        iris::SunContact c = scene->sunContact;
+        if (params.contains(QStringLiteral("enabled")))
+            c.enabled = params.value(QStringLiteral("enabled")).toBool();
+        if (params.contains(QStringLiteral("range"))) {
+            bool ok = false;
+            const double v = params.value(QStringLiteral("range")).toDouble(&ok);
+            // REFUSED OUTSIDE THE BAND, both ends (fix round F5): a value the
+            // renderer would hold elsewhere is refused by name, never moved
+            // silently, so what a call writes is what it reads back.
+            // (compared in the document's own float: 0.05 as a double is below
+            // 0.05f, and the band's ends must be accepted)
+            if (!ok || !std::isfinite(v) || float(v) < iris::kSunContactMinRange ||
+                float(v) > iris::kSunContactMaxRange) {
+                fail(QStringLiteral("world.sunContact: 'range' must be a number of metres in %1..%2")
+                         .arg(double(iris::kSunContactMinRange)).arg(double(iris::kSunContactMaxRange)));
+                return out;
+            }
+            c.range = float(v);
+        }
+        if (params.contains(QStringLiteral("resolution"))) {
+            iris::SunContactResolution r = iris::SunContactResolution::Auto;
+            if (!iris::SunContact::resolutionFromName(
+                    params.value(QStringLiteral("resolution")).toString(), r)) {
+                fail(QStringLiteral("world.sunContact: 'resolution' must be \"auto\", \"full\" or \"half\""));
+                return out;
+            }
+            c.resolution = r;
+        }
+        c = iris::SunContact::clamped(c);
+        WorldEdit edit(scene, { QStringLiteral("sunContact") });
+        sceneprops::set(scene, QStringLiteral("sunContact"), c.toJson().toVariantMap());
+        edit.commit(host.services ? host.services->undo : nullptr,
+                    QStringLiteral("Sun Contact Shadows"));
+    }
+    const iris::SunContact &c = scene->sunContact;
+    out[QStringLiteral("enabled")] = c.enabled;
+    out[QStringLiteral("range")] = double(c.range);
+    out[QStringLiteral("resolution")] =
+        QString::fromLatin1(iris::SunContact::resolutionName(c.resolution));
+    if (host.isEngineReady() && host.viewport) {
+        if (jahshaka::engine::Scene *es = host.viewport->engineScene()) {
+            const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
+            QVariantMap live;
+            live[QStringLiteral("on")] = st.on;
+            live[QStringLiteral("running")] = st.running;
+            live[QStringLiteral("reason")] = QString::fromStdString(st.reason);
+            live[QStringLiteral("width")] = st.width;
+            live[QStringLiteral("height")] = st.height;
+            live[QStringLiteral("targetWidth")] = st.targetW;
+            live[QStringLiteral("targetHeight")] = st.targetH;
+            live[QStringLiteral("divisor")] = st.divisor;
+            live[QStringLiteral("rays")] = double(st.rays);
+            live[QStringLiteral("range")] = double(st.range);
+            live[QStringLiteral("toSun")] =
+                QVariantList{ double(st.toSun[0]), double(st.toSun[1]), double(st.toSun[2]) };
+            live[QStringLiteral("gpuMs")] = double(st.gpuMs);
+            live[QStringLiteral("cpuMs")] = double(st.cpuMs);
+            out[QStringLiteral("live")] = live;
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // HARDWARE RAY TRACING (owner, 2026-09-15; ledger §425)
 // ---------------------------------------------------------------------------
 // A PROJECT fact, not an application preference — see the verb's doc text and
@@ -1933,6 +2185,7 @@ int WorldApi::setShadowResolution(int pixels)
 {
     auto scene = sceneOrFail(QStringLiteral("world.setShadowResolution"));
     if (!scene) return 0;
+    const auto registryBefore = WorldModeCommand::capture(scene);
     if (pixels < 0) {
         fail(QStringLiteral("world.setShadowResolution: pixels must be 0 (Auto) or 256..8192"));
         return 0;
@@ -1960,6 +2213,8 @@ int WorldApi::setShadowResolution(int pixels)
 #endif
     }
     worldmodes::pinRowValue(scene, QStringLiteral("shadowResolution"), scene->shadowResolution);
+    if (!WorldModeCommand::same(registryBefore, WorldModeCommand::capture(scene)))
+        sceneprops::notifyExternal(scene, QStringLiteral("worldModes"));
     // SceneMirror pushes the document value at the next sync; step a frame so
     // the atlas rebuild lands and the readback below is the applied truth.
     if (host.isEngineReady() && host.viewport) {
@@ -2321,6 +2576,8 @@ QVariantMap WorldApi::get()
 
     out["skyLight"] = skyLight();
     out["sunDisc"] = sunDisc(QVariantMap());
+    out["clouds"] = clouds(QVariantMap());
+    out["sunContact"] = sunContact(QVariantMap());
     out["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     out["gravity"] = scene->gravity;
     out["shadows"] = scene->shadowEnabled;
@@ -2366,10 +2623,8 @@ QVariantMap WorldApi::get()
                              { "snapDeviation", scene->giProbeSnapDeviation },
                              { "snapSidesMin", scene->giProbeSnapSidesMin },
                              { "snapSidesMax", scene->giProbeSnapSidesMax },
-                             { "rayMarchStepScale", scene->giRayMarchStepScale },
                              { "ddgi", giToggleToJs(scene->giDdgi) },
                              { "gather", giToggleToJs(scene->giGather) },
-                             { "ddgiIntensity", scene->giDdgiIntensity },
                              // PHOTON'S CAMERA CASCADES, RESOLVED (E2 (6)): a
                              // tier row like the four above it, so -1 ("the tier
                              // decides", what a pre-column document carries)
@@ -2423,6 +2678,9 @@ QVariantMap WorldApi::rowState(const iris::ScenePtr &scene, const worldmodes::Ro
 void WorldApi::pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
                                  const WorldModeCommand::Snapshot &before)
 {
+    // The sections showing registry rows re-read them (SMALL-FIXES-3).
+    if (!WorldModeCommand::same(before, WorldModeCommand::capture(scene)))
+        sceneprops::notifyExternal(scene, QStringLiteral("worldModes"));
     if (!host.services || !host.services->undo) return;
     host.services->undo->push(new WorldModeCommand(text, scene, before));
 }
@@ -2564,6 +2822,8 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
             return QVariantMap();
         }
     }
+    QVariantMap before;
+    for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) before[p.id] = p.get(scene);
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) {
         if (params.contains(p.id))
             p.set(scene, qBound(p.minValue, params.value(p.id).toDouble(), p.maxValue));
@@ -2577,6 +2837,10 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
     // would select nothing.
     if (scene->exposureMeterHighPercent < scene->exposureMeterLowPercent)
         std::swap(scene->exposureMeterLowPercent, scene->exposureMeterHighPercent);
+    // The Post Process section re-reads what moved (SMALL-FIXES-3).
+    for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
+        if (QVariant(p.get(scene)) != before.value(p.id))
+            sceneprops::notifyExternal(scene, QStringLiteral("postFx.") + p.id);
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
         out[p.id] = p.get(scene);
     // THE READING (RENDER AUDIT A11/A14: the monitor and this verb could see
@@ -2824,6 +3088,13 @@ QVariantMap WorldApi::modeTable()
 {
     QVariantMap out;
     QVariantList rowList;
+    // The texts are the machine's (worldmodes::rowCost) and the option names
+    // the open scene's (worldmodes::optionLabel): with no engine the answer is
+    // the no-rays one, exactly what the World panel shows then.
+    const bool rays = host.isEngineReady() && host.viewport && host.viewport->sceneTracesRays();
+    const iris::ScenePtr openScene =
+        (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                    : iris::ScenePtr();
     for (const worldmodes::Row &r : worldmodes::rows()) {
         QVariantMap row;
         row["id"] = r.id;
@@ -2832,7 +3103,7 @@ QVariantMap WorldApi::modeTable()
         row["type"] = r.type == worldmodes::RowType::Bool ? QStringLiteral("bool")
                     : r.type == worldmodes::RowType::Enum ? QStringLiteral("enum")
                                                           : QStringLiteral("int");
-        row["cost"] = r.cost;
+        row["cost"] = worldmodes::rowCost(r, rays);
         row["available"] = r.available;
         // WHICH DIAL OWNS THIS ROW (GI_UNIFIED_SPEC §2). "world" rows resolve
         // through world.mode's tier; "photon" rows resolve through the Photon
@@ -2851,7 +3122,9 @@ QVariantMap WorldApi::modeTable()
         }
         QVariantList options;
         for (const worldmodes::EnumOption &o : r.options)
-            options.append(QVariantMap{ { "id", o.id }, { "label", o.label }, { "value", o.value } });
+            options.append(QVariantMap{ { "id", o.id },
+                                        { "label", worldmodes::optionLabel(r, o, openScene, rays) },
+                                        { "value", o.value } });
         if (!options.isEmpty()) row["options"] = options;
         // A "none" row has NO tier columns to report (EXPOSURE-1): nothing
         // resolves it, so an empty map is the honest answer and a table of four
@@ -2933,6 +3206,14 @@ QVariantMap WorldApi::tierTable()
         };
         const QVariantList chain   = chainOf(facts);
         const QVariantList vrChain = chainOf(vrFacts);
+        const auto gatherOf = [](const jahshaka::engine::GiGatherFacts &g) {
+            return QVariantMap{ { QStringLiteral("on"), g.on },
+                                { QStringLiteral("stride"), int(g.stride) },
+                                { QStringLiteral("octRes"), int(g.octRes) },
+                                { QStringLiteral("raysPerProbe"), int(g.octRes * g.octRes) },
+                                { QStringLiteral("adaptiveCapDivisor"),
+                                  int(g.adaptiveCapDivisor) } };
+        };
 
         photonList.append(QVariantMap{
             { QStringLiteral("tier"), name },
@@ -2955,6 +3236,11 @@ QVariantMap WorldApi::tierTable()
             { QStringLiteral("pixelTolerance"), double(facts.pixelTolerance) },
             { QStringLiteral("probeHdr"), facts.probeHdrDefault },
             { QStringLiteral("probeShadows"), facts.probeShadowsDefault },
+            // THE GATHER COLUMN (PHOTON-GATHER-1d): the engine's gather row,
+            // projected (worldmodes::photonGather — the quality column and the
+            // Epic tier); the VR column's gather is off (GA-VR).
+            { QStringLiteral("gather"), gatherOf(worldmodes::photonGather(t)) },
+            { QStringLiteral("vrGather"), gatherOf(vrFacts.gather) },
             { QStringLiteral("description"), worldmodes::photonTierSentence(t) } });
     }
 

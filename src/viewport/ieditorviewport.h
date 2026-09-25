@@ -64,6 +64,12 @@ signals:
     /// speed button; CameraSpeed already holds the new integer.
     void cameraSpeedChanged();
     void changeSkyFromAssetWidget(int index);
+    /// An editor overlay the View Options menu shows a checkmark for (the
+    /// ground grid, the light wires, the frame-stats readout) CHANGED — from
+    /// the menu, a shortcut, editor.setOverlays or a scene open alike. The
+    /// viewport is the one owner of that state; the menu's checkmarks follow
+    /// this signal, never the click (STUDIO-CRUD-1 item 8).
+    void overlaysChanged();
 };
 
 /// What `editor.setCamera` asks the viewport for (AI_SURFACE_PROGRAM_SPEC lane
@@ -482,6 +488,11 @@ public:
     virtual QImage takeScreenshot(int width, int height, ScreenshotGrade grade) {
         (void)grade; return takeScreenshot(width, height);
     }
+    /// THE NEXT SCREENSHOT IS TAKEN AT REST (PHOTON-FIELD-ROTATE-1): before its
+    /// readback it renders frames - OFFSCREEN, through the shot's own view, with
+    /// the on-screen views quiet, so nothing is presented - until the scene's
+    /// GiStatus::giAtRest, at most `maxFrames`. Consumed by that one screenshot.
+    virtual void settleGiBeforeNextScreenshot(int maxFrames) { (void)maxFrames; }
 
     /// THE SCRIPT SPELLINGS, in ONE place — "plain" (and "raw", the spelling
     /// the pixel suites were written with), "tonemap", "scene", "viewport".
@@ -601,6 +612,12 @@ public:
         /// is the open-scene answer (the sky reflects); with it zero, in the
         /// hybrid, it is a build failure.
         int  probesDropped = 0;
+        /// The hybrid at a RAY tier (PHOTON-F12-PCC): no grid by design — the
+        /// rays are the reflection (GiStatus::probeGridByRays), and the two
+        /// cumulative counters that prove nothing was placed or captured.
+        bool probeGridByRays = false;
+        unsigned probePlacements = 0;
+        unsigned long long probeCapturesTotal = 0;
         /// Material edits that CROSSED the reflection-probe gate on this scene
         /// (ogre-patch 0028): the one material edit that rebuilds a shader.
         /// Cumulative, never reset.
@@ -648,13 +665,15 @@ public:
         /// refused for reasons no caller can see (no voxel volume to feed the
         /// field, DDGI media not staged, a construction that threw), so a
         /// scene asking for it and a scene getting it are two different
-        /// readings. `ifdConverged` is false only while a progressive
-        /// re-converge after a light move is still in flight — a field is
-        /// converged on the frame it binds.
+        /// readings. `ifdTargetSamples` / `ifdRefinesOwed` are the field's
+        /// convergence schedule (engine Types.h), and `giAtRest` is THE settle
+        /// predicate: nothing the scene's GI owes will change the picture.
         bool ifdBound = false;
         int  ifdProbes = 0;
-        bool ifdConverged = false;
         int  ifdProbesPerFrame = 0;
+        unsigned ifdTargetSamples = 0;
+        unsigned ifdRefinesOwed = 0;
+        bool giAtRest = true;
         /// WHERE THE FIELD IS — the corners of the volume its probes span. The
         /// scene's fitted box in the single-volume arm; cascade 0's box, which
         /// follows the camera, under a Photon cascade chain (PHOTON_SPEC E1).
@@ -836,6 +855,13 @@ public:
             double atlasBytes = 0.0; ///< the atlas + records + irradiance, resident
             float placeMs = -1.0f, traceMs = -1.0f, integrateMs = -1.0f;
             float cpuMs = -1.0f;     ///< the CPU cost of RECORDING the three jobs
+            /// THE SETTLED HISTORY (PHOTON-GATHER-1d; engine GatherStatus): the
+            /// pixel history ran, its age, the consecutive frames at rest (the
+            /// camera, the lighting and the scene still), the N the rest mean
+            /// takes, and whether the rest reached it (giAtRest's term).
+            bool  temporal = false;
+            int   historyAge = 0, restFrames = 0, sinceRestart = 0, settleFrames = 0;
+            bool  settled = true;
             QString error;           ///< why it is not running, when it is not
         };
         GatherInfo gather;
@@ -936,6 +962,33 @@ public:
         unsigned long long casterWalkItems = 0;
     };
     virtual ShadowStatusInfo shadowStatus() const { return {}; }
+
+    /// THE SUN CONTACT ROW AS THE RENDERER RESOLVED IT — the World panel's
+    /// read of what world.sunContact().live reports (the same two engine
+    /// calls: Scene::rayTracingResolved and Scene::sunContactStatus), for a
+    /// panel that includes no engine header. `available` false = no engine
+    /// scene to ask (headless, or before the first frame). `rays` is the
+    /// DOCUMENT's Ray Tracing row against this machine — current the moment
+    /// the row is written, not a frame later when the mirror pushes it.
+    struct SunContactInfo {
+        bool available = false;
+        bool rays = false;       ///< this scene traces on this machine
+        bool on = false;         ///< enabled AND rays
+        bool running = false;    ///< a view dispatched it on its last frame
+        int  width = 0, height = 0;
+        int  divisor = 0;        ///< 1 = a ray per pixel, 2 = per 2x2 block
+        float range = 0.0f;
+        QString reason;          ///< why it is not running while `on`
+    };
+    virtual SunContactInfo sunContactInfo() const { return {}; }
+
+    /// THIS SCENE TRACES ON THIS MACHINE: the DOCUMENT's Ray Tracing row met
+    /// with the process latch and the device — Scene::rayTracingResolved's
+    /// three terms, current the moment the row is written rather than a frame
+    /// later when the mirror pushes it. False with no engine. Read by the probe
+    /// grid's ray-tier rule (worldmodes::probeGridByRays: world.gi's refusal and
+    /// the World panel's greyed probe rows) and by sunContactInfo.
+    virtual bool sceneTracesRays() const { return false; }
 
     /// Whether the renderer ACCEPTED this node as a planar-reflection plane.
     /// The plane, its size and its normal are derived from the mesh's own

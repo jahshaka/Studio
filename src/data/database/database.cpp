@@ -513,20 +513,6 @@ void Database::closeDatabase()
     if (!name.isEmpty()) QSqlDatabase::removeDatabase(name);
 }
 
-int Database::getTableCount()
-{
-	QSqlQuery query;
-	query.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'");
-	if (query.exec()) {
-		if (query.first()) return query.value(0).toInt();
-	}
-	else {
-		irisLog(QString("There was an error getting the table count! ").arg(query.lastError().text()));
-	}
-
-	return 0;
-}
-
 bool Database::checkIfTableExists(const QString &tableName)
 {
     QSqlQuery query;
@@ -658,39 +644,6 @@ void Database::migrateAssetsTable()
         addListed.prepare("ALTER TABLE assets ADD COLUMN listed INTEGER NOT NULL DEFAULT 1");
         executeAndCheckQuery(addListed, "MigrateAssetsAddListed");
     }
-}
-
-QString Database::getVersion()
-{
-    //QSqlQuery pquery;
-    //pquery.prepare("SELECT COUNT(*) FROM projects");
-    //executeAndCheckQuery(pquery, "projectsCount");
-
-    //bool getVersion = false;
-    //if (pquery.exec()) {
-    //    if (pquery.first()) {
-    //        getVersion = pquery.value(0).toBool();
-    //    }
-    //}
-    //else {
-    //    irisLog("There was an error getting the projects count! " + pquery.lastError().text());
-    //}
-
-    //if (getVersion) {
-    //    QSqlQuery query1;
-    //    query1.prepare("SELECT version FROM projects LIMIT 1");
-
-    //    if (query1.exec()) {
-    //        if (query1.first()) {
-    //            return query1.value(0).toString();
-    //        }
-    //    }
-    //    else {
-    //        irisLog("There was an error getting the db version! " + query1.lastError().text());
-    //    }
-    //}
-
-    return QString();
 }
 
 // Both of these bound by NAME (":depender", ...) against POSITIONAL '?'
@@ -2600,7 +2553,7 @@ QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& fi
 {
 	QSqlQuery query;
 	// LIBRARY LISTING (the Effects page's shader library): unlisted rows out.
-	query.prepare("SELECT guid, type, name, thumbnail, asset FROM assets "
+	query.prepare("SELECT guid, type, name, thumbnail, asset, properties FROM assets "
 	              "WHERE view_filter = ? AND listed = 1");
 	query.addBindValue(filter);
 	executeAndCheckQuery(query, "fetchAssetsByViewFilter");
@@ -2615,6 +2568,9 @@ QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& fi
 			data.name = record.value(2).toString();
 			data.thumbnail = query.value(3).toByteArray();
 			data.asset = record.value(4).toByteArray();
+			// The row's own facts (a project's copy of a preset is one —
+			// the Custom drawer folds it, PRESET-FOLD-1).
+			data.properties = record.value(5).toByteArray();
 		}
 
 		tileData.push_back(data);
@@ -2720,16 +2676,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         insertExportAssetQuery.bindValue(":parent", asset.parent);
         insertExportAssetQuery.bindValue(":tags", asset.tags);
         insertExportAssetQuery.bindValue(":properties", asset.properties);
-
-        //if (asset.type == static_cast<int>(ModelTypes::Object)) {
-        //    QJsonObject assetJson;
-        //    SceneWriter::writeSceneNode(assetJson, node);
-        //    qDebug() << assetJson;
-        //    insertExportAssetQuery.bindValue(":asset", QJsonDocument(assetJson).toBinaryData());
-        //}
-        //else {
-            insertExportAssetQuery.bindValue(":asset", asset.asset);
-        //}
+        insertExportAssetQuery.bindValue(":asset", asset.asset);
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
@@ -3015,50 +2962,72 @@ int Database::countAssetsInCollections(const QVector<int> &collectionIds)
     return 0;
 }
 
+// ONE ROW OF THE DESKTOP'S SHAPE, read the same way by the whole-desktop query
+// and the one-guid query (CREATE-GAP-1): the grid's incremental add must build
+// exactly the tile a rebuild would have built.
+static const char *kProjectTileColumns =
+    "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
+    "slider_row, slider_index FROM projects ";
+
+static ProjectTileData readProjectTile(const QSqlRecord &record)
+{
+    ProjectTileData data;
+    data.name       = record.value(0).toString();
+    data.thumbnail  = record.value(1).toByteArray();
+    data.guid       = record.value(2).toString();
+    data.desktop    = record.value(3).toInt();
+    data.hasPosition = !record.value(4).isNull() && !record.value(5).isNull();
+    if (data.hasPosition) {
+        data.posX = record.value(4).toFloat();
+        data.posY = record.value(5).toFloat();
+    }
+    data.hasSliderPos = !record.value(6).isNull() && !record.value(7).isNull();
+    if (data.hasSliderPos) {
+        data.sliderRow   = record.value(6).toInt();
+        data.sliderIndex = record.value(7).toInt();
+    }
+    return data;
+}
+
 QVector<ProjectTileData> Database::fetchProjects(int desktop)
 {
     QSqlQuery query;
     if (desktop > 0) {
         // COALESCE: rows from before the desktop migration (NULL) belong to Desktop 1
-        query.prepare(
-            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
-            "slider_row, slider_index "
-            "FROM projects WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC"
-        );
+        query.prepare(QString::fromLatin1(kProjectTileColumns) +
+                      "WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC");
         query.addBindValue(desktop);
     }
     else {
-        query.prepare(
-            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
-            "slider_row, slider_index "
-            "FROM projects ORDER BY last_written DESC"
-        );
+        query.prepare(QString::fromLatin1(kProjectTileColumns) + "ORDER BY last_written DESC");
     }
     executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
-    while (query.next())  {
-        ProjectTileData data;
-        QSqlRecord record = query.record();
-        data.name       = record.value(0).toString();
-        data.thumbnail  = record.value(1).toByteArray();
-        data.guid       = record.value(2).toString();
-        data.desktop    = record.value(3).toInt();
-        data.hasPosition = !record.value(4).isNull() && !record.value(5).isNull();
-        if (data.hasPosition) {
-            data.posX = record.value(4).toFloat();
-            data.posY = record.value(5).toFloat();
-        }
-        data.hasSliderPos = !record.value(6).isNull() && !record.value(7).isNull();
-        if (data.hasSliderPos) {
-            data.sliderRow   = record.value(6).toInt();
-            data.sliderIndex = record.value(7).toInt();
-        }
-
-        tileData.push_back(data);
-    }
-
+    while (query.next()) tileData.push_back(readProjectTile(query.record()));
     return tileData;
+}
+
+bool Database::fetchProjectTile(const QString &guid, ProjectTileData *out)
+{
+    QSqlQuery query;
+    query.prepare(QString::fromLatin1(kProjectTileColumns) + "WHERE guid = ?");
+    query.addBindValue(guid);
+    executeAndCheckQuery(query, "fetchProjectTile");
+    if (!query.next()) return false;
+    if (out) *out = readProjectTile(query.record());
+    return true;
+}
+
+QStringList Database::fetchProjectGuids(int desktop)
+{
+    QSqlQuery query;
+    query.prepare("SELECT guid FROM projects WHERE COALESCE(desktop, 1) = ?");
+    query.addBindValue(desktop);
+    executeAndCheckQuery(query, "fetchProjectGuids");
+    QStringList guids;
+    while (query.next()) guids.append(query.value(0).toString());
+    return guids;
 }
 
 QByteArray Database::getSceneBlobGlobal(const QString &projectGuid) const
@@ -4119,28 +4088,6 @@ QString Database::fetchObjectMesh(const QString &guid, const int ertype, const i
 	return QString();
 }
 
-QString Database::fetchMeshObject(const QString &guid, const int ertype, const int eetype)
-{
-	QSqlQuery query;
-	query.prepare("SELECT depender FROM dependencies WHERE dependee = ? AND depender_type = ? AND dependee_type == ?");
-	query.addBindValue(guid);
-	query.addBindValue(ertype);
-	query.addBindValue(eetype);
-
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toString();
-		}
-	}
-	else {
-		irisLog(
-			"There was an error fetching a guid" + query.lastError().text()
-		);
-	}
-
-	return QString();
-}
-
 QStringList Database::hasMultipleDependers(const QString &guid)
 {
     QSqlQuery query;
@@ -4783,15 +4730,9 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         QSqlRecord record = selectAssetQuery.record();
 
         for (int i = 0; i < record.count(); i++) {
-            //if (selectAssetQuery.value(1).toInt() == static_cast<int>(jafType)) {
-            //    data.guid = guidToReturn;
-            //    assetGuids.insert(record.value(0).toString(), guidToReturn);
-            //}
-            //else {
-                QString guid = GUIDManager::generateGUID();
-                assetGuids.insert(record.value(0).toString(), guid);
-                data.guid = guid;
-            //}
+            QString guid = GUIDManager::generateGUID();
+            assetGuids.insert(record.value(0).toString(), guid);
+            data.guid = guid;
 
             outGuids.insert(record.value(0).toString(), data.guid);
 
@@ -4889,10 +4830,6 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
             " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
-
-        //if (jafType == ModelTypes::Texture) {
-        //    guidToReturn = asset.guid;
-        //}
 
         insertAssetQuery.bindValue(":guid", asset.guid);
         insertAssetQuery.bindValue(":type", asset.type);

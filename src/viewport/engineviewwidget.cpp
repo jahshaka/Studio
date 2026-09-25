@@ -64,6 +64,7 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
         mView = engine->createOffscreenView(name.toStdString(),
                                             static_cast<unsigned>(width()),
                                             static_cast<unsigned>(height()), background);
+    if (mView && mView->isOffscreen()) mView->setOffscreenContract(mFallbackContract);
     if (mView) {
 #ifdef Q_OS_LINUX
         // From here the engine owns this region entirely; Qt updates would fight it.

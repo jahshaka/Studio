@@ -29,12 +29,14 @@ For more information see the LICENSE file
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/propertyrows.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "commands/scenepropertycommand.h"
 #include "ui/panels/transformeditor.h"
 #include "ui/style/themeroles.h"
 
 #include "data/database/database.h"
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
+#include "ui/panels/propertywidgets/worldcloudspropertywidget.h"
 #include "ui/panels/propertywidgets/lightpropertywidget.h"
 #include "ui/panels/propertywidgets/decalpropertywidget.h"
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
@@ -81,6 +83,12 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	skyPropView->setPanelTitle("Sky");
 	skyPropView->setDatabase(db);
 	skyPropView->expand();
+
+	// THE CLOUD LAYER (CLOUDS-2D-1), directly under the Sky it is drawn over.
+	cloudsPropView = new WorldCloudsPropertyWidget();
+	cloudsPropView->setPanelTitle("Clouds");
+	connect(skyPropView, &SkyPropertyWidget::skyTypeApplied,
+	        cloudsPropView, &WorldCloudsPropertyWidget::refreshRows);
 
 	// World Modes (POST_CHAIN_SPEC §9.6) sits FIRST among the quality sections:
 	// it is the tier every one of them resolves through.
@@ -149,6 +157,50 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 		if (!sc && !!sceneNode) sc = sceneNode->getScene();
 		if (!sc) return;
 		if (worldModesPropView) worldModesPropView->setScene(sc);
+	});
+
+	// A ROW RE-READS ON A WRITE IT DID NOT MAKE (SMALL-FIXES-3). A world verb
+	// (a script, MCP, the console) and the undo of a verb's step write the
+	// document without touching a widget, and every World section used to
+	// keep showing the value from before until it was rebound. Every CHANGED
+	// write through sceneprops is told here (observeWrites); an EXTERNAL one
+	// re-reads the section that shows the key — once per event-loop turn, or
+	// at once when the column is asked (flushPendingMount). A row's own live
+	// write is never external, so nothing re-reads under the user's cursor.
+	// And one DEPENDENCY across sections, for every writer: the Shadows
+	// section's Sun Contact rows grey on World > Ray Tracing.
+	sceneprops::observeWrites(this, [this](const iris::ScenePtr &written, const QString &key,
+	                                       bool external) {
+		if (written != worldBoundScene) return;   // not the scene this column shows
+		// ...and every section whose TEXTS or technique NAME follow whether the
+		// scene traces rays (worldmodes::rowCost / optionLabel, STUDIO-CRUD-1):
+		// the World Modes rows, the Photon section and the Post Process rows
+		// re-read on the same write, so the two technique combos never disagree.
+		if (key == QLatin1String("rayTracing")) {
+			if (worldShadowPropView) worldShadowPropView->setScene(written);
+			if (worldModesPropView)  worldModesPropView->setScene(written);
+			if (worldGiPropView)     worldGiPropView->setScene(written);
+			if (worldPostFxPropView) worldPostFxPropView->setScene(written);
+		}
+		if (!external) return;
+		// A TIER WRITE moves the registry rows several sections show — the
+		// same set the World Mode section's worldSettingsChanged re-reads.
+		QList<QWidget *> sections;
+		if (key == QLatin1String("worldModes"))
+			sections = { worldModesPropView, worldGiPropView, worldPostFxPropView,
+			             worldAaPropView, worldShadowPropView, skyPropView };
+		else if (QWidget *one = worldSectionForKey(key))
+			sections = { one };
+		for (QWidget *section : std::as_const(sections)) {
+			if (!section) continue;
+			if (section == skyPropView && !skyPropView->showsSceneSky()) continue;
+			staleWorldSections.insert(section);
+		}
+		if (!staleWorldSections.isEmpty() && !worldRefreshQueued) {
+			worldRefreshQueued = true;
+			QMetaObject::invokeMethod(this, [this]() { refreshStaleWorldSections(); },
+			                          Qt::QueuedConnection);
+		}
 	});
 
 	// VR (owner request 2026-09-18): how a WEARER moves in this world — a
@@ -273,7 +325,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
 {
     return {
-        fogPropView, worldPropView, skyPropView,
+        fogPropView, worldPropView, skyPropView, cloudsPropView,
         worldModesPropView, worldGiPropView, worldPostFxPropView,
         worldAaPropView, worldShadowPropView, worldVrPropView, transformPropView,
         mobilityPropView, componentsPropView,
@@ -556,8 +608,62 @@ bool SceneNodePropertiesWidget::eventFilter(QObject *watched, QEvent *event)
     return QWidget::eventFilter(watched, event);
 }
 
+// THE SECTION THAT SHOWS A sceneprops KEY. Enumerated from the rows each
+// section binds: World (ambience volume, gravity, play mode, ray tracing, the
+// three sun-disc rows), Fog (the fog* rows and Receive Shadows' shadowEnabled),
+// Clouds (clouds), Sky (sky — only while the section shows the SCENE's sky, not
+// a library asset), Photon (the gi* rows), Post Process (postFx.* and looks),
+// Shadows (sunContact), VR (vr.*). The keys no section shows (sunLight,
+// ssrMarch) map to none.
+QWidget *SceneNodePropertiesWidget::worldSectionForKey(const QString &key) const
+{
+    static const QStringList kWorld = {
+        QStringLiteral("ambientMusicVolume"), QStringLiteral("gravity"),
+        QStringLiteral("playMode"), QStringLiteral("rayTracing"),
+        QStringLiteral("sunDiscVisible"), QStringLiteral("sunDiscInProbes"),
+        QStringLiteral("sunDiscSize") };
+    if (kWorld.contains(key)) return worldPropView;
+    if (key.startsWith(QLatin1String("fog")) || key == QLatin1String("shadowEnabled"))
+        return fogPropView;
+    if (key == QLatin1String("clouds")) return cloudsPropView;
+    if (key == QLatin1String("sky"))
+        return (skyPropView && skyPropView->showsSceneSky()) ? skyPropView : nullptr;
+    if (key.startsWith(QLatin1String("gi"))) return worldGiPropView;
+    if (key.startsWith(QLatin1String("postFx.")) || key == QLatin1String("looks"))
+        return worldPostFxPropView;
+    if (key == QLatin1String("sunContact")) return worldShadowPropView;
+    if (key.startsWith(QLatin1String("vr."))) return worldVrPropView;
+    return nullptr;
+}
+
+void SceneNodePropertiesWidget::refreshStaleWorldSections()
+{
+    worldRefreshQueued = false;
+    const auto sections = staleWorldSections;
+    staleWorldSections.clear();
+    const auto sc = worldBoundScene;
+    if (!sc) return;
+    // Each section's own rebind — the call bindScene makes — which re-reads
+    // every row it shows in place (or rebuilds, for the sections that do).
+    for (QWidget *section : sections) {
+        if (section == worldPropView)             worldPropView->setScene(sc);
+        else if (section == fogPropView)          fogPropView->setScene(sc);
+        else if (section == cloudsPropView)       cloudsPropView->setScene(sc);
+        else if (section == skyPropView)          skyPropView->setScene(sc);
+        else if (section == worldGiPropView)      worldGiPropView->setScene(sc);
+        else if (section == worldPostFxPropView)  worldPostFxPropView->setScene(sc);
+        else if (section == worldShadowPropView)  worldShadowPropView->setScene(sc);
+        else if (section == worldVrPropView)      worldVrPropView->setScene(sc);
+        else if (section == worldModesPropView)   worldModesPropView->setScene(sc);
+        else if (section == worldAaPropView)      worldAaPropView->setScene(sc);
+    }
+}
+
 void SceneNodePropertiesWidget::flushPendingMount()
 {
+    // A QUESTION PAYS EVERY DEBT: a section a verb made stale re-reads before
+    // anybody lists or drives its rows.
+    if (!staleWorldSections.isEmpty()) refreshStaleWorldSections();
     if (!mountOwed) return;
     mountOwed = false;
     mountNow();
@@ -828,6 +934,7 @@ void SceneNodePropertiesWidget::bindScene(const QSharedPointer<iris::Scene> &sce
     // showing a LIBRARY sky asset since the last time the world was shown (one
     // implementation, two bindings).
     skyPropView->setScene(scene);
+    cloudsPropView->setScene(scene);
 }
 
 // THE CHEAP HALF: the blades are permanent children and already bound, so a
@@ -837,6 +944,7 @@ void SceneNodePropertiesWidget::mountWorldBlades()
 {
     mount(worldPropView);
     mount(skyPropView);
+    mount(cloudsPropView);
     mount(worldModesPropView);
     mount(worldGiPropView);
     mount(worldPostFxPropView);
@@ -1130,6 +1238,7 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     // rows needs the stack — not just the two that had it.
     if (worldGiPropView) worldGiPropView->setServices(services);
     if (worldPropView) worldPropView->setServices(services);
+    if (cloudsPropView) cloudsPropView->setServices(services);
     if (fogPropView) fogPropView->setServices(services);
     if (worldAaPropView) worldAaPropView->setServices(services);
     if (worldShadowPropView) worldShadowPropView->setServices(services);
@@ -1188,6 +1297,7 @@ void SceneNodePropertiesWidget::setProject(Project *project)
     // helpers forward to the controls they build).
     this->project = project;
     if (worldPropView)    worldPropView->setProject(project);
+    if (cloudsPropView)   cloudsPropView->setProject(project);
     if (skyPropView)      skyPropView->setProject(project);
     if (emitterPropView)  emitterPropView->setProject(project);
     if (shaderPropView)   shaderPropView->setProject(project);

@@ -48,6 +48,10 @@ public:
     /// WHAT THE VOXEL LIGHTING VOLUME HOLDS (PHOTON-M3) — a test-and-tool
     /// readback: the engine flushes and downloads a whole cascade volume.
     Q_INVOKABLE QVariantMap giVoxelStats(const QVariantMap &params = QVariantMap());
+    /// THE VISIBILITY BUFFER'S SPLIT AND DECODE BUCKETS (ATOM S3-DRAW).
+    Q_INVOKABLE QVariantMap atomStatus();
+    /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
+    Q_INVOKABLE bool setAtomDraw(bool on);
     Q_INVOKABLE bool refreshGi();
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
     Q_INVOKABLE bool refreshShadows();
@@ -61,6 +65,12 @@ public:
     Q_INVOKABLE QVariantMap skyLight();
     /// THE SUN DISC, a scene-level switch pair (§3, owner picks 2 and 4).
     Q_INVOKABLE QVariantMap sunDisc(const QVariantMap &params = QVariantMap());
+    /// THE 2D CLOUD LAYER (CLOUDS-2D-1; iris::CloudLayer). Reads with no
+    /// argument; every key is validated before anything is written.
+    Q_INVOKABLE QVariantMap clouds(const QVariantMap &params = QVariantMap());
+    /// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1; iris::SunContact). Reads with no
+    /// argument; every key is validated before anything is written.
+    Q_INVOKABLE QVariantMap sunContact(const QVariantMap &params = QVariantMap());
     /// HARDWARE RAY TRACING, a property of the PROJECT (ledger §425). Reads
     /// with no argument; refuses anything but "off", "auto" and "on".
     Q_INVOKABLE QString rayTracing(const QString &mode = QString());
@@ -110,27 +120,6 @@ public:
     Q_INVOKABLE QVariantMap setLook(const QString &id,
                                     const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantList lookCatalogue();
-
-    // ---- set* aliases (AI_SURFACE_PROGRAM_SPEC §3.A item #10, owner D5) ----
-    // Nine of this module's verbs are NOUNS that write (world.fog({...}) sets
-    // the fog) while the rest of the surface spells a write set* — so an agent
-    // reaches for world.setFog, gets a TypeError, and burns a turn. These are
-    // one-line delegations, never a second implementation; each doc string
-    // names its twin so api_docs does not read as eighteen unrelated verbs.
-    // Both spellings are supported forever: the nouns are what every existing
-    // script and skill already calls.
-    Q_INVOKABLE bool setGravity(double value) { return gravity(value); }
-    Q_INVOKABLE bool setFog(const QVariantMap &params) { return fog(params); }
-    Q_INVOKABLE bool setShadows(const QVariantMap &params) { return shadows(params); }
-    Q_INVOKABLE bool setGi(const QVariantMap &params) { return gi(params); }
-    Q_INVOKABLE QVariantMap setPhoton(const QVariantMap &params = QVariantMap())
-    { return photon(params); }
-    Q_INVOKABLE QString setSunLight(const QVariant &light) { return sunLight(light); }
-    Q_INVOKABLE bool setSky(const QString &type, const QVariantMap &params = QVariantMap())
-    { return sky(type, params); }
-    Q_INVOKABLE QString setMode(const QVariantMap &params = QVariantMap()) { return mode(params); }
-    Q_INVOKABLE QVariantMap setPostFx(const QVariantMap &params = QVariantMap()) { return postFx(params); }
-    Q_INVOKABLE QVariantMap setVr(const QVariantMap &params = QVariantMap()) { return vr(params); }
 
 private:
     iris::ScenePtr sceneOrFail(const QString &verb);

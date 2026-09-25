@@ -44,13 +44,13 @@ assert(guid.length > 10, "project.create");
 // ---- a deterministic world ---------------------------------------------
 // No sky (nothing to reflect but the one light), no GI, ambient near black so
 // the only thing shading a sphere is its own BRDF.
-assert(world.setSky("color", { color: "#000000" }) === true, "a flat black sky");
+assert(world.sky("color", { color: "#000000" }) === true, "a flat black sky");
 assert(world.gi({ mode: "off" }) === true, "GI OFF (no bounce, nothing to converge)");
 // Ambient is the Sky Light (SKY_LIGHT_SPEC.md §2): dim it there instead of
 // setting a flat colour that no longer exists.
 var sl = world.skyLight();
 if (sl.light !== "") node.setProperty(sl.light, "intensity", 0.02);
-assert(world.setShadows({ enabled: false }) === true, "no shadows (nothing casts onto anything)");
+assert(world.shadows({ enabled: false }) === true, "no shadows (nothing casts onto anything)");
 
 var sun = scene.addLight("directional", { position: { x: 0, y: 8, z: 8 } });
 assert(sun.length > 10, "one directional light");

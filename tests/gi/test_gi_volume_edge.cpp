@@ -41,8 +41,12 @@
 //   3. a HEMISPHERE ambient (upper != lower) is untouched by all of this —
 //      it never took the 1/pi branch and its edge was already flat.
 //
-// Its own binary like every GI suite: the field and the voxel lighting bind
-// process-wide to HlmsPbs.
+// Its own binary like every GI suite.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -179,6 +183,7 @@ static Slab buildSlab(Engine *e, const char *name, const Colour &upper, const Co
 static GiParams hybridDdgi()
 {
     GiParams gi;
+    gi.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     gi.mode = GiMode::VctPccHybrid;
     gi.quality = GiQuality::High;      // Epic in the UI: 128^3 voxels
     gi.numBounces = 1;
@@ -202,9 +207,9 @@ static void measure(Engine *e, Slab &o, const char *what, float &inside, float &
     outside = bandLum(img, edgeCol - 18u, edgeCol - 3u);
     inside  = bandLum(img, edgeCol + 3u, edgeCol + 18u);
     std::printf("   %-28s volume x %.2f .. %.2f (edge col %u)  outside %.4f  inside %.4f  "
-                "step %.2fx  [ifd %d probes %d conv %d]\n", what, st.boundsMin.x, st.boundsMax.x,
+                "step %.2fx  [ifd %d probes %d atRest %d]\n", what, st.boundsMin.x, st.boundsMax.x,
                 edgeCol, outside, inside, outside > 1e-5f ? inside / outside : 0.0f,
-                st.ifdBound ? 1 : 0, st.ifdProbes, st.ifdConverged ? 1 : 0);
+                st.ifdBound ? 1 : 0, st.ifdProbes, st.giAtRest ? 1 : 0);
 }
 
 int main(int argc, char **argv)
@@ -275,13 +280,11 @@ int main(int argc, char **argv)
         DIFFUSE_CHECK(std::fabs(inside - flatGiOff) < 0.08f * flatGiOff,
                       "inside the volume, turning GI on does not change the flat ambient");
 
-        // UNBIND before case 2 measures anything: VctLighting binds
-        // PROCESS-WIDE to HlmsPbs (sVctBindingOwner), and while it is bound
-        // every PBS ambient term in every scene is gated off by
-        // `vctSpecular.w == 0` — a second scene with GI off would render with
-        // no ambient at all and its reference reading would be zero. Setting
-        // this scene's GI off is what releases the binding (teardownVct).
-        CHECK(o.scene->setGlobalIllumination(off), "GI off again (releases the HlmsPbs binding)");
+        // GI OFF before case 2 measures anything. (It used to be REQUIRED: the
+        // VctLighting was bound process-wide, and a second scene with GI off
+        // rendered through it with its ambient gated off. The binding is per
+        // scene and per pass since PHOTON-SCENE-SWITCH-1; this is housekeeping.)
+        CHECK(o.scene->setGlobalIllumination(off), "GI off again");
         render(e, 2);
         e->destroyView(o.view);
         e->destroyScene(o.scene);

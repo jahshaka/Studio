@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <vector>
-//#include "../scenegraph/scenenodes.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -127,10 +126,6 @@ void KeyFrameWidget::paintEvent(QPaintEvent *painter)
 
     //black bg
     paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
-
-    // dont draw any lines if no scenenode is selected
-    //if(!obj)
-    //    return;
 
     //cosmetic
     drawBackgroundLines(paint);
@@ -290,13 +285,6 @@ void KeyFrameWidget::mousePressEvent(QMouseEvent* evt)
     {
         this->selectedKey = this->getSelectedKey(mousePos.x(),mousePos.y());
     }
-    /*
-    else if(leftButtonDown)
-    {
-        cursorPos = posToTime(evt->x());
-        emit cursorTimeChanged(cursorPos);
-    }
-    */
 }
 
 void KeyFrameWidget::mouseReleaseEvent(QMouseEvent* evt)
@@ -354,15 +342,12 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
     else if(leftButtonDown)
     {
         animWidgetData->cursorPosInSeconds = posToTime(evt->x());
-        //emit cursorTimeChanged(animWidgetData->cursorPosInSeconds);
     }
     if(middleButtonDown)
     {
         auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
         animWidgetData->rangeStart-=timeDiff;
         animWidgetData->rangeEnd-=timeDiff;
-
-        //emit timeRangeChanged(rangeStart, rangeEnd);
 
         animWidgetData->refreshWidgets();
     }
@@ -411,7 +396,6 @@ DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
     int widgetHeight = this->geometry().height();
 
     auto mousePos = QVector2D(x, y);
-    //qDebug() << mousePos;
 
     auto top = 0;
     auto tree = labelWidget->getTree();
@@ -427,7 +411,6 @@ DopeKey KeyFrameWidget::getSelectedKey(int x,int y)
 
 DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, int &yTop)
 {
-    //auto keyPointRadius = 7;//*7;
 
     auto data = item->data(0,Qt::UserRole).value<KeyFrameData>();
     auto height = tree->visualItemRect(item).height();
@@ -442,7 +425,6 @@ DopeKey KeyFrameWidget::getSelectedKey(QTreeWidget* tree,QTreeWidgetItem *item, 
                 return DopeKey(key, data.propertyName, data.subPropertyName);
         }
     } else if(data.isProperty()){ // draw summary keys
-        //paint.fillRect(0, yTop, this->width(), height, propColor);
         for(auto keyTime:data.summaryKeys.keys())
         {
             int xpos = this->timeToPos(keyTime);

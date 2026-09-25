@@ -73,6 +73,10 @@ function settle(what) {
 
 var guid = project.create("Page GI " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
+// THE GRID IS THE COSTLIEST ARM A RETURN COULD REBUILD, so this scene keeps one:
+// a new project is Epic, which builds no probe grid where the scene traces
+// (PHOTON-F12-PCC) — with the scene's rays off it is a grid tier again.
+assert(world.rayTracing("off") === "off", "the scene's rays off (a probe grid to watch)");
 var box = scene.addPrimitive("cube", { position: { x: 0, y: 0.5, z: 0 } });
 assert(box.length > 10, "a cube in the default scene");
 
@@ -93,7 +97,7 @@ assert(st0.mode === "vct_pcc_hybrid", "the default project runs the VCT + probes
 // it (gi.probe_open case 4b asserts it in pixels); adding objects is exactly
 // when probes appear. `probesDropped` is asserted so that a grid quietly
 // failing to build can never read as this.
-assert(st0.vctBound, "the editor scene owns the GI binding");
+assert(st0.vctBound, "the editor scene binds its own GI arms");
 assert(st0.probeCount > 0 && st0.probesDropped > 0 && st0.pccBound,
        "the probes that can see the scene's content are built and the rest dropped: " +
        JSON.stringify({ probes: st0.probeCount, dropped: st0.probesDropped }));
@@ -126,7 +130,7 @@ var st2 = settle("player round trip");
 var m2 = editor.mirrorStats();
 console.log("after player: " + JSON.stringify(st2) + " mirror " + JSON.stringify(m2));
 assert(st2.vctBound && st2.pccBound === st0.pccBound,
-       "player round trip: the editor scene owns the GI binding again");
+       "player round trip: the editor scene still binds its own GI arms");
 assert(m2.giPushes === m0.giPushes,
        "player round trip: NO GI re-push from the mirror (" + m0.giPushes + " -> " + m2.giPushes + ")");
 // ONE SCENE, SO NOTHING IS REBUILT (lane PLAYER-1). The header says what this

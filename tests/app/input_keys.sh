@@ -472,7 +472,14 @@ fi
 # QShortcut — the same defect, second instance, found while building this gate
 # and reported to the lead), and a blanket grep would tie this suite to that
 # separate decision.
-for chord in 'Ctrl+Z' 'Ctrl+Shift+Z'; do
+#
+# F (frame the graph's selection) and H (reset its zoom) are registry entries
+# too (STUDIO-CRUD-1 item 7): the graph view's own F QShortcut was a second
+# claimant beside "camera.focus", the Ctrl+Z defect again. Pressed here, on the
+# Materials page, so the same per-chord assertion convicts a re-claim.
+key f
+key h
+for chord in 'Ctrl+Z' 'Ctrl+Shift+Z' 'F' 'H'; do
     if logtail | grep -qF "QShortcutEvent(\"\"$chord\"\""; then
         ok "the shortcut map dispatched $chord"
     else
@@ -558,7 +565,7 @@ note "delete + one undo: $BACK"
 js "editor.select(['$C','$D'])" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
 key ctrl+c
-CLIP=$(js 'editor.clipboard().length')
+CLIP=$(js 'clipboard.contents().items.length')
 [ "$CLIP" = "2" ] && ok "the Ctrl+C KEY filled the editor clipboard ($CLIP fragments)" \
                   || bad "Ctrl+C did not reach the editor (clipboard = $CLIP)"
 key ctrl+v

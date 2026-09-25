@@ -8,7 +8,7 @@
 // gi.modes' hybrid case only ever asserted the VCT floor bounce, which
 // survives that bail untouched. Two things close the hole:
 //   1. Scene::giStatus() reports what GI ACHIEVED (probe count, whether this
-//      scene's probe/VCT bindings are live on the process-wide HlmsPbs), so
+//      scene's probe/VCT bindings are live in its passes), so
 //      the silent bail is an assertion failure here;
 //   2. a mirror pixel that must actually contain the red wall's hue.
 //
@@ -56,6 +56,11 @@
 // sampling defect in DOCS/MACOS_BUILD.md §6.1. It is GPU-FILLED (a copy, not a
 // CPU upload), so it may well be fine — running THIS suite on the Mac is the
 // measurement. A red-hue failure there is that defect, not this test.
+// PHOTON-GATHER-1d: THE GATHER PINNED OFF. Since 1d the screen-probe gather is
+// the diffuse at every ray tier (GiToggle::Auto resolves on at Medium and above);
+// this suite measures the voxel chain / the field / the cones / the probes, which
+// it pins, so its numbers stay about them. The gather has its own suites
+// (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -139,6 +144,25 @@ int main()
     // THE red wall: +Z, i.e. behind the camera. It is the only saturated thing
     // in the room, so any red in the mirror came from it.
     addSlab(s, red, Vec3(0.0f, 2.5f, 4.2f), Vec3(8.8f, 5.0f, 0.4f));
+    // THE ROOM'S OWN LIGHT (PHOTON-VOXEL-3 round 9): an EMISSIVE panel under the ceiling.
+    // The directional light below lights the red wall in the RENDER (shadows off) but its
+    // injection is shadowed by the shell (the note on the light), so this sealed room's
+    // walls used to be lit for GI only by the shell's lit outer faces BLEEDING through the
+    // slabs - which the directional store closed. An emissive surface lights the room
+    // through the voxels ONLY (the raster has no emissive light), so every surface the
+    // directional light cannot reach is still black until GI turns on, and what lights it
+    // then is physics the suite guards: a bounce off a source inside the room.
+    {
+        PbrParams panel;
+        panel.albedo = Colour(0.05f, 0.05f, 0.05f);
+        panel.emissive = Colour(12.0f, 12.0f, 12.0f);
+        panel.roughness = 1.0f;
+        const NodeId pn = s->createNode();
+        const MaterialId pm = s->createPbrMaterial(panel);
+        const MeshId pmesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(pn && pm && pmesh && s->attachMesh(pn, pmesh, pm), "the room's emissive panel attaches");
+        s->setNodeTransform(pn, Vec3(0.0f, 4.9f, 0.0f), Quat(), Vec3(3.0f, 0.1f, 3.0f));
+    }
 
     // ---- the mirror ------------------------------------------------------
     // Metalness 1 + roughness 0: a pure specular surface with no diffuse term
@@ -167,22 +191,22 @@ int main()
     // THE ONE THING TO KNOW ABOUT THIS SCENE (measured here, 2026-09-07; it is
     // what makes assertion (b) as clean as it is): a DIRECTIONAL light inside a
     // SEALED room injects nothing into the VCT voxel volume. Ogre's light
-    // injection compute shader ray-marches from every voxel towards the light
-    // through the voxel albedo volume and multiplies an alpha down as it
-    // crosses geometry (Samples/Media/VCT/LightInjection_piece_cs.any — the
-    // `alpha *= max(0, 1 - albedoAtIt.w * p_thinWallCounter)` loop, which for a
-    // directional light only stops when it exits the volume). Every interior
+    // injection compute shader marches from every voxel's face towards the light
+    // over the level-0 voxels and stops at the first surface it crosses
+    // (Samples/Media/VCT/LightInjection_piece_cs.any — jahInjectVisibility, a DDA;
+    // for a directional light it only ends lit when it exits the volume). Every interior
     // voxel's march crosses the shell, so its injected radiance is ~0; only the
     // shell's OUTER faces, which march straight out of the volume, get lit.
     // Consequence in this room: the red wall is bright red in the RENDER (and
-    // therefore in the probe capture, which is a render) while its voxels are
-    // dark — so cone-traced reflections of it are black and probe reflections
-    // of it are red. That is a genuinely maximal probe-vs-cone discriminator,
-    // and it is also why the diffuse assertion below is a BRIGHTNESS assertion
-    // and not a hue one: the achromatic light VCT does put into this room comes
-    // from the shell's lit outer faces bleeding through ~3-voxel-thick slabs,
-    // not from the red wall. The red-bounce HUE contract stays where it already
-    // lives and works — gi.modes, on an open scene, which is in this lane's gate.
+    // therefore in the probe capture, which is a render) while its voxels hold
+    // only the panel's dim bounce - so cone-traced reflections of it are dark
+    // and probe reflections of it are red. That is a genuinely maximal
+    // probe-vs-cone discriminator, and it is also why the diffuse assertion
+    // below is a BRIGHTNESS assertion and not a hue one: the light VCT puts
+    // into this room is the white emissive panel's (above; it used to be the
+    // shell's lit outer faces bleeding through the slabs, which the
+    // directional store closed). The red-bounce HUE contract stays where it
+    // already lives and works — gi.modes, on an open scene.
     const NodeId lightNode = enginetest::addDirectionalLight(s, Vec3(0.0f, -0.12f, 0.993f), 6.0f);
     CHECK(lightNode != 0, "directional light created");
 
@@ -233,6 +257,7 @@ int main()
 
     // ---- plain VCT: cone-traced reflections only -------------------------
     GiParams vct;
+    vct.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     vct.mode = GiMode::Vct;
     vct.quality = GiQuality::Medium;      // 64^3 voxels
     vct.numBounces = 2;
@@ -263,7 +288,11 @@ int main()
     // light comment above for why a sealed room cannot carry it. If a later
     // phase of this program breaks diffuse GI while chasing reflections, these
     // two go red here as well as there.
-    CHECK(vctWall.r > offWall.r + 0.15f,
+    // THE MARGIN (PHOTON-VOXEL-3 round 9): 0.05, thirteen codes over a GI-off far wall that
+    // reads 0.000 - a gain nothing but the bounce can put there. (It was 0.15 of the
+    // shell's bleed; the room's light is now its own panel, 12x a white radiance over
+    // 9 m^2 under the ceiling: the far wall reads 0.078.)
+    CHECK(vctWall.r > offWall.r + 0.05f,
           "VCT lights the far wall the direct light never reaches (diffuse GI is live)");
     CHECK(vctFloor.r > offFloor.r + 0.05f,
           "VCT raises the lit floor as well (bounce on top of the direct term)");
@@ -310,19 +339,28 @@ int main()
           "hybrid: the mirror pixel is RED-dominant (it is showing the red wall)");
     CHECK(hyMirror.r > 0.15f,
           "hybrid: the mirror's red is a real reflection, not a rounding crumb");
-    // ---- (b) plain VCT does not ------------------------------------------
-    // In THIS scene the cone-traced answer is not merely softer, it is empty:
-    // the red wall's voxels were never lit (the directional-injection note on
-    // the light above). So the margin is the whole signal, and the assertion
-    // that matters is a comparative one — a hybrid that quietly fell back to
-    // plain VCT would produce vctMirror's pixel exactly.
-    CHECK((hyMirror.r - hyMirror.g) > (vctMirror.r - vctMirror.g) + 0.08f,
+    // ---- (b) the probe ADDS over the cones ---------------------------------
+    // The defect this arm catches: a hybrid that quietly fell back to plain VCT, which reads
+    // vctMirror's pixel EXACTLY. So the discriminator is a DIFFERENCE from the cones, and it
+    // shrinks as the cones get right: the cone-traced mirror read 0 when the arm was written
+    // (the red wall's voxels unlit), 0.820 red on the split store, 0.918 once the store lights
+    // each face side and half-axis (PHOTON-VOXEL-5). THE BAR IS THE TWO ESTIMATORS' QUANTA at
+    // this tier, not a picture: each reading is two 8-bit codes (readPixels, rounding +-0.5 code
+    // each), so a difference of two readings resolves 2/255 - anything above that is the probe's
+    // own light, a fallback is exactly 0. (The hybrid's red clips at 1.0, so its margin is a
+    // lower bound.) THE TIER: Medium, the probe grid's home. At the RAY
+    // tiers (High and Epic) there is no grid to compare (PHOTON-F12-PCC): arm (i) below asserts it.
+    const float kQuanta = 2.0f / 255.0f;
+    std::printf("   (b) margins over the cones: (r-g) %+.3f, r %+.3f (bar %.4f, the quanta)\n",
+                double((hyMirror.r - hyMirror.g) - (vctMirror.r - vctMirror.g)), double(hyMirror.r - vctMirror.r),
+                double(kQuanta));
+    CHECK((hyMirror.r - hyMirror.g) > (vctMirror.r - vctMirror.g) + kQuanta,
           "the probe reflection is measurably redder than the cone-traced one");
-    CHECK(hyMirror.r > vctMirror.r + 0.08f,
+    CHECK(hyMirror.r > vctMirror.r + kQuanta,
           "the probe reflection is measurably brighter than the cone-traced one");
     // The diffuse half survives the hybrid unchanged: the probes are ADDED to
     // VCT, they do not replace its diffuse contribution.
-    CHECK(hyWall.r > offWall.r + 0.15f,
+    CHECK(hyWall.r > offWall.r + 0.05f,
           "the hybrid keeps VCT's diffuse light on the far wall");
 
     // ---- idempotence: re-pushing identical params leaves the image alone --
@@ -662,14 +700,74 @@ int main()
         render(engine.get(), 1);
         CHECK(!s->giStatus().probeShadows && !s->giStatus().probeHdr,
               "shadows: Auto at Medium quality means unshadowed, LDR captures");
+        // HIGH IS A RAY TIER (PHOTON-F12-PCC): wherever the scene traces it
+        // builds no grid at all, so the grid's High defaults are read with the
+        // scene's rays OFF — the one way a High scene keeps a grid.
+        s->setRayTracing(RayTracingMode::Off);
         GiParams autoHigh = hybrid;
         autoHigh.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(autoHigh), "shadows: auto at High builds");
         render(engine.get(), 1);
         CHECK(s->giStatus().probeShadows && s->giStatus().probeHdr,
               "shadows: Auto at High quality means shadowed, HDR captures");
+        s->setRayTracing(RayTracingMode::Auto);
 
         CHECK(s->removeNode(blocker), "shadows: occluder removed");
+    }
+
+    // ---- (i) THE RAY TIER BUILDS NO GRID (PHOTON-F12-PCC) ------------------
+    // At High (and Epic, which reads High's rows) wherever the scene traces on
+    // this machine the hybrid places, photographs and captures NOTHING: the
+    // screen march, the rays and the cone with the sky as its escape are the
+    // reflection (the picture's A/B is gi.pcc_mirror.ray_tier, on Grand
+    // Showroom 2 through the app — this arm is the engine's books). The rays
+    // coming off build the grid like a technique change does, and coming back
+    // on take it down again. On a machine without ray queries High is not a ray
+    // tier and the arm says so instead.
+    {
+        GiParams high = hybrid;
+        high.quality = GiQuality::High;
+        const bool rays = engine->rayQueryAvailable() && s->rayTracingResolved();
+        const GiStatus before = s->giStatus();
+        CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
+        render(engine.get(), 4);
+        const GiStatus st = s->giStatus();
+        std::printf("   ray tier: rays %s, probes %d, dropped %d, pccBound %s, byRays %s, "
+                    "placements %u -> %u, captures %llu -> %llu\n",
+                    rays ? "yes" : "no", st.probeCount, st.probesDropped,
+                    st.pccBound ? "true" : "false", st.probeGridByRays ? "true" : "false",
+                    before.probePlacements, st.probePlacements,
+                    before.probeCapturesTotal, st.probeCapturesTotal);
+        if (rays) {
+            CHECK(st.probeGridByRays, "ray tier: giStatus says the rays are the reflection");
+            CHECK(st.probeCount == 0 && st.probesDropped == 0 && !st.pccBound,
+                  "ray tier: NO grid — probeCount 0, probesDropped 0, pccBound false");
+            CHECK(st.probePlacements == before.probePlacements &&
+                      st.probeCapturesTotal == before.probeCapturesTotal,
+                  "ray tier: nothing was scouted, fitted or captured (the cumulative counters "
+                  "did not move)");
+            CHECK(st.vctBound, "ray tier: the voxel lighting is still bound");
+
+            s->setRayTracing(RayTracingMode::Off);
+            render(engine.get(), 4);
+            const GiStatus off = s->giStatus();
+            CHECK(!off.probeGridByRays && off.probeCount == expectedProbes && off.pccBound,
+                  "ray tier: the scene's rays OFF make High a grid tier — the grid builds");
+            CHECK(off.probePlacements == st.probePlacements + 1,
+                  "ray tier: ...through exactly one placement");
+
+            s->setRayTracing(RayTracingMode::Auto);
+            render(engine.get(), 2);
+            const GiStatus back = s->giStatus();
+            CHECK(back.probeGridByRays && back.probeCount == 0 && back.probesDropped == 0 &&
+                      !back.pccBound,
+                  "ray tier: the rays back ON take the grid down again");
+            CHECK(back.probePlacements == off.probePlacements,
+                  "ray tier: ...without placing anything");
+        } else {
+            CHECK(!st.probeGridByRays && st.probeCount == expectedProbes && st.pccBound,
+                  "no rays on this machine: High keeps its grid (not a ray tier)");
+        }
     }
 
     // ---- (h) A SKY IBL *AND* THE HYBRID -----------------------------------
@@ -685,8 +783,8 @@ int main()
     // textureCubeArray overload — and the third one is the verdict: the manual
     // cubemap is UNSAMPLEABLE in that permutation, so the two are mutually
     // exclusive by construction. The fix is ours and lives in
-    // OgreScene::reflectionTexForDatablocks (OgreSky.cpp): while auto PCC is
-    // bound we do not bind the IBL cubemap at all. Nothing is lost — the probe
+    // OgreScene::reflectionTexFor (OgreMaterials.cpp): while the scene's auto
+    // PCC is bound we do not bind the IBL cubemap at all. Nothing is lost — the probe
     // captures include the sky, so the probes ARE the environment.
     //
     // It was pre-existing (any user picking VCT+Probes on a scene with a sky got
@@ -745,6 +843,7 @@ int main()
 
     // ---- off restores -----------------------------------------------------
     GiParams off;
+    off.gather = GiToggle::Off;   // PHOTON-GATHER-1d (the header)
     CHECK(s->setGlobalIllumination(off), "setGlobalIllumination(Off) succeeds");
     render(engine.get());
     view->readPixels(img);

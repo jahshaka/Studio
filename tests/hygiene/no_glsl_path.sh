@@ -75,6 +75,22 @@ else
     echo "ok:   CMakeLists.txt does not list shaders.qrc"
 fi
 
+# NO GLSL SOURCE SHIPS (STUDIO-CRUD-1 item 4): the checks above are names, and
+# thirteen orphan shader/mesh files (src/modules/materials/assets/,
+# app/shadergraph/{preview,shader}.{frag,vert}) survived them for months,
+# referenced by nothing. Engine shaders live in the Hlms media; a GLSL file in
+# the app's own tree is a leftover of the deleted GL path. (tests/ keeps its
+# fixtures: the atom suites feed their own .vert/.frag to the fork's compiler.)
+glsl=$(find src app -type f \( -name '*.frag' -o -name '*.vert' -o -name '*.glsl' \
+            -o -name '*.geom' -o -name '*.tesc' -o -name '*.tese' \) 2>/dev/null || true)
+if [ -n "$glsl" ]; then
+    echo "FAIL: GLSL source files are back under src/ or app/:"
+    echo "$glsl"
+    failures=$((failures + 1))
+else
+    echo "ok:   no GLSL source files under src/ or app/"
+fi
+
 if [ $failures -ne 0 ]; then
     echo "source.no_glsl_path: $failures check(s) failed"
     exit 1

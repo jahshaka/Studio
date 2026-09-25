@@ -47,23 +47,6 @@ TexelSizeNode::TexelSizeNode()
 }
 
 
-/*
-SampleEquirectangularTextureNode::SampleEquirectangularTextureNode()
-{
-	setNodeType(NodeType::Math);
-	title = "Sample Texture Equirectangular";
-	typeName = "texelsize";
-	enablePreview = true;
-
-	addInputSocket(new TextureSocketModel("Texture"));
-	addOutputSocket(new Vector2SocketModel("Size"));
-	addOutputSocket(new FloatSocketModel("Width"));
-	addOutputSocket(new FloatSocketModel("Height"));
-	addOutputSocket(new FloatSocketModel("1/Width"));
-	addOutputSocket(new FloatSocketModel("1/Height"));
-}
-*/
-
 
 /*    THE UV NODE (MATERIAL_UV_NODES_SPEC D-3)    */
 UVNode::UVNode()

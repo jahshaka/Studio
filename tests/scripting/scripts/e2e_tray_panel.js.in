@@ -213,17 +213,18 @@ mapGuids.forEach(function (g) {
 
 // THE SYMPTOM: the maps are tiles in the tray, beside the bundle's own tile.
 //
-// READ FROM THE VERB, not the widget, and that is a FINDING of this lane worth
-// stating: the tray PANEL repopulates on pin changes, and taking a row's member
-// stamp off is not one — after the three imports above the widget still shows
-// the folded listing it built at the apply. (The verb is the model; the panel
-// agrees again the moment anything repopulates it, which `agree` below checks
-// once the repair has folded them for good.)
+// THE PANEL SHOWS IT TOO, WITH NO CLICK: taking a stamp off announces through
+// ProjectMembership like a pin does (TRAY-REPOP-1's last half) — nothing else
+// happened between the imports above and this read.
 var loose = guidsOf(verbRows());
 mapGuids.forEach(function (g) {
     assert(loose.indexOf(g) >= 0, "restamp: the map stands in the tray as a LOOSE TILE");
 });
 assert(loose.indexOf(BRICK) >= 0, "restamp: …beside the preset's own tile, which is the complaint");
+agree("before the re-stamp (the panel shows the loose maps too)");
+mapGuids.forEach(function (g) {
+    assert(guidsOf(panelRows()).indexOf(g) >= 0, "restamp: the PANEL shows the map as a loose tile");
+});
 
 // THE REPAIR.
 var report = assets.restampSeed();
@@ -245,6 +246,14 @@ mapGuids.forEach(function (g) {
 assert(folded.indexOf(BRICK) >= 0, "restamp: …and the PRESET is still the tile that is there");
 mapGuids.forEach(function (g) {
     assert(assets.pins(g).length > 0, "restamp: …with its pin untouched (a fold is not an unpin)");
+});
+// THE PANEL FOLDS TOO, WITH NO CLICK (TRAY-REPOP-1): the re-stamp is a pass of
+// the preset seeder, and its `finished` is what the tray panel repopulates on. Before
+// that it only heard pin changes, and a stamp is not one — the panel kept the
+// loose map tiles until something else repopulated it.
+mapGuids.forEach(function (g) {
+    assert(guidsOf(panelRows()).indexOf(g) < 0,
+           "restamp: the PANEL folds the map into the bundle's tile, with no click");
 });
 assert(guidsOf(assets.list({ scope: "project", tray: true, type: "texture", members: true }))
            .indexOf(mapGuids[0]) >= 0,

@@ -65,6 +65,10 @@ void EnginePlayerScene::setEditorScene(Scene *scene, SceneMirror *mirror)
 /// not a lifecycle), and unset — every ordinary run, every gate that does not
 /// ask for it — it is one getenv and a compare on a path that runs at a page
 /// switch, not per frame.
+/// THE SHOT'S SETTLE CAP, in frames: editor.screenshot's (editorapi.cpp
+/// kScreenshotSettleFrames), so the two spaces' pictures at rest are the same rule.
+static constexpr int kShotSettleCap = 2000;
+
 static bool playerTestNoAttach()
 {
     static const bool no = qEnvironmentVariableIntValue("JAHSHAKA_PLAYER_TEST_NO_ATTACH") > 0;
@@ -371,6 +375,7 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
                                              unsigned(width), unsigned(height),
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
+    shot->setOffscreenContract(jahshaka::engine::OffscreenContract::StillPicture);
     // A PICTURE OF THE PLAYER, so it hides what the player hides: the grid, the
     // wires and icons, the gizmo, the selection shell (ChainDesc::helpers).
     // Before setScene, so the workspace is built once in its final shape.
@@ -409,6 +414,11 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
     // Quiet the on-screen views for the two forced frames (fps audit F5) —
     // the same scope the editor's screenshot uses.
     OffscreenRenderScope quiet(engine.get());
+    // THE PICTURE AT REST, as the editor's shot takes it (PHOTON-GATHER-1d): a
+    // hit is lit from the surface cache, which relights over frames after the
+    // geometry it describes changes (a hidden floor shown again is recaptured),
+    // and the shot view's own history starts young — bridge/stableoffscreenrender.h.
+    settleStillPicture(engine.get(), mScene, kShotSettleCap);
     // Plus whatever the texture load-request counter still owes
     // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
     renderStableFrames(engine.get());

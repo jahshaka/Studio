@@ -814,7 +814,15 @@ var FIDELITY = {
         // Red reads red even in shade: strong hue ratio (grey fallback has r==g==b).
         assert(p[0].r > 45 && p[0].r > p[0].g * 2 && p[0].r > p[0].b * 2,
                "Physics: red pipe cap is red " + fmt(p[0]));
-        assert(p[1].b > 90 && p[1].b > p[1].g + 25, "Physics: purple pipe is purple " + fmt(p[1]));
+        // RE-ANCHORED by PHOTON-RAYS-1's fix round (the sun's constant shadow
+        // bias x 0.3, OgreShadow.cpp): the band sits at the edge of a shadow
+        // the smaller bias no longer pushes off it, so it reads DARKER, not
+        // less purple — measured 94 -> 91 -> 87 blue at scale 1.0 / 0.5 / 0.3
+        // (green 39 -> 38 -> 36), no acne in the crop
+        // (spikes/photon-rays-1/physics-pipe-bias-1.0-0.5-0.3.png). The HUE is
+        // the assertion (blue over green by 25); the brightness bar is the
+        // measurement less 15 %.
+        assert(p[1].b > 74 && p[1].b > p[1].g + 25, "Physics: purple pipe is purple " + fmt(p[1]));
         // RE-BASELINED for the Epic World Mode default (POST_CHAIN_SPEC §12
         // decision 8): a document with no worldMode — which is every shipped
         // sample — now reads as Epic, which turns VCT global illumination on and

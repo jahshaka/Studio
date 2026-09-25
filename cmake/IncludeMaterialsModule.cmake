@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Core )
-add_definitions(-DEFFECT_BUILD_AS_LIB )
 
 #add_subdirectory(irisgl)
 # set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -137,32 +136,3 @@ set(HEADERS
 #		src/modules/materials/images.qrc
 #		src/modules/materials/icons.qrc
 #		)
-
-# set(shaderSource ${CMAKE_CURRENT_SOURCE_DIR})
-# message("${CMAKE_CURRENT_SOURCE_DIR}  shader graph source")
-
-# macro(copy_dirs dirs)
-# foreach(dir ${dirs})
-#     # Replace / at the end of the path (copy dir content VS copy dir)
-#     string(REGEX REPLACE "/+$" "" dirclean "${dir}")
-#     message(STATUS "Copying resource ${dirclean}")
-#     file(COPY ${dirclean} DESTINATION ${DestDir})
-# endforeach()
-# endmacro()
-
-# set(dir assets)
-
-# if (APPLE)
-# 	add_custom_command(
-# 		TARGET ${PROJECT_NAME} POST_BUILD
-# 		COMMAND ${CMAKE_COMMAND} -E copy_directory
-# 				${shaderSource}/${dir}
-# 				${DestDir}/${APP_OUTPUT_NAME}.app/Contents/MacOS/${dir})
-# else()
-# 	add_custom_command(
-# 		TARGET ${PROJECT_NAME} POST_BUILD
-# 		COMMAND ${CMAKE_COMMAND} -E copy_directory
-# 				${shaderSource}/${dir}
-# 				${DestDir}/${dir})
-# endif()
-		

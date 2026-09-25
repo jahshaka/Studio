@@ -66,7 +66,6 @@ void EditorCameraController::setCamera(CameraNodePtr cam)
 
 iris::Vec3 EditorCameraController::getPos()
 {
-    //return this->camera->position();
     return iris::Vec3();
 }
 
@@ -91,34 +90,12 @@ float EditorCameraController::getLookSpeed()
 }
 
 /**
- * @brief rotates camera around the local x-axis
- * the angle is in degrees
- * pitch is restricted to the range of -90 and 90
- * todo: use global rotation in calculation
- */
-void EditorCameraController::tilt(float angle)
-{
-    /*
-    auto forward = camera->rot.rotatedVector(iris::Vec3(0,0,-1));
-    auto up = iris::Vec3(0,1,0);
-
-    auto side = iris::Vec3::crossProduct(forward,up);
-    */
-
-    pitch += angle;
-    pitch = (pitch<-90?-90:(pitch>90?90:pitch));//clamp( pitch,-90,90)
-
-}
-
-/**
  * @brief rotates the camera around the up vector
  * @param angle
  */
 void EditorCameraController::pan(float angle)
 {
-    //camera->rot = iris::Quat::fromAxisAndAngle(iris::Vec3(0,1,0),angle)*camera->rot;
     yaw += angle;
-    //yaw = fmod(yaw,360);
 }
 
 /**
@@ -167,18 +144,6 @@ void EditorCameraController::onMouseMove(int x,int y)
         camera->update(0);//force calculation of global transform. find a better way to do this
     }
 
-    /*
-    //todo: world-space translation using keyboard
-    iris::Vec3 upVector(0,1,0);
-    iris::Vec3 viewVector = camera->viewCenter() - camera->position();
-    auto x = iris::Vec3::crossProduct(viewVector, upVector).normalized();
-    //auto z = viewVector.normalized();
-    auto z = iris::Vec3::crossProduct(upVector,x).normalized();
-
-    camera->translateWorld(txAxis->value()*x*linearSpeed);
-    camera->translateWorld(tyAxis->value()*z*linearSpeed);
-    */
-
     // ONLY the look drag writes the rotation. This used to run on every mouse
     // move — the viewport has mouse tracking on for gizmo hover, so simply
     // moving the cursor over the viewport rewrote the camera's rotation from
@@ -199,7 +164,7 @@ bool EditorCameraController::canLeftMouseDrag()
 	bool gizmoDragging = gizmo && gizmo->isDragging();
 
 	return (leftMouseDown && // left mouse must be down
-		settings->getValue("mouse_controls", "default").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
+		settings->get(settingkeys::mouseControls) == "jahshaka" && // left mouse to drag in jahshaka mouse mode
 		!gizmoDragging); // cant pan while dragging gizmo
 }
 
@@ -328,10 +293,7 @@ void EditorCameraController::setAxisView(float yawDeg, float pitchDeg)
 
 void EditorCameraController::updateCameraRot()
 {
-    //iris::Quat yawQuat = iris::Quat::fromEulerAngles(0,yaw,0);
-    //iris::Quat pitchQuat = iris::Quat::fromEulerAngles(pitch,0,0);
 
-    //camera->rot = yawQuat*pitchQuat;
     camera->setLocalRot(iris::Quat::fromEulerAngles(pitch,yaw,0));
     camera->update(0);
 }

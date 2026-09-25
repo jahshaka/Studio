@@ -1,27 +1,23 @@
 // gi.pcc_second_scene — A SECOND SCENE WHILE THE FIRST ONE HOLDS A PROBE GRID.
 //
-// THE DEFECT THIS EXISTS FOR (lane SKY-FALLBACK-1, second read; it was live on
-// main). `HlmsPbs` is a singleton: `setParallaxCorrectedCubemap` is a
-// PROCESS-WIDE binding, and while any grid is bound HlmsPbs sets
-// `parallax_correct_cubemaps` for EVERY scene's pass (OgreHlmsPbs.cpp:1820-1828)
-// — which makes `texEnvProbeMap` a cube ARRAY in every scene's pixel shader.
+// THE RULE (PHOTON-SCENE-SWITCH-1): what the shader reads is the scene being
+// drawn. HlmsPbs holds ONE VctLighting / IrradianceField / PCC pointer, and
+// every PBS pass binds its OWN scene's (SceneGiBinding, the engine's per-pass
+// bind) — so scene A's probe grid, voxels and field reach A's passes and never
+// B's, and B's datablocks never have to give up their sky cube for A's grid.
 //
-// A datablock that also carries its own manual cubemap then takes the
-// `canUseManualProbe` branch and generates `SampleEnvProbe( texEnvProbeMap, … )`
-// against that array. There is no OGRE_SampleLevelF16 overload for a
-// textureCubeArray, so the shader DOES NOT COMPILE and every object using that
-// material draws nothing at all. The engine used to decide "may this material
-// carry a manual cubemap" from the scene's OWN `mPcc`, which is the wrong
-// question: a preview, a thumbnail or the avatar module's scene has no grid of
-// its own, kept its sky cube, and went black the moment the editor scene built
-// one. Measured at r3 g3 b4 with two RenderingAPIException lines in the log, and
-// previously misread as "the sky cubemap is unbound while a grid exists".
+// THE TWO DEFECTS THIS SUITE HAS SEEN, both of the old process-wide binding:
+//   * SKY-FALLBACK-1: while A's grid was bound HlmsPbs set
+//     `parallax_correct_cubemaps` for EVERY scene's pass, so B's datablock with
+//     a manual cubemap generated `SampleEnvProbe` against a cube ARRAY — a
+//     shader that does not compile, B's mirror black (r3 g3 b4);
+//   * and after that was patched over, B's mirror at the origin read A's PROBES
+//     and A's cones (0.106 / 0.149 / 0.106 at the lane's base, grey 0.34 under
+//     PHOTON-VOXEL-3's round 8) — the "margin" this suite used to carry.
 //
-// WHAT IS ASSERTED: with scene A holding a grid, scene B's mirror is not black,
-// and it shows scene B's OWN sky — which reaches it through the pass-level sky
-// slot (ogre-patch 0048), because the same pass property that made the env slot
-// a probe array is what arms that slot. Then scene A's grid is torn down and
-// scene B's sky comes back the ordinary way, through its datablocks.
+// WHAT IS ASSERTED: with scene A holding a grid, scene B's mirror shows B's OWN
+// sky exactly as it did before A had one; after A's grid is torn down and after
+// A is destroyed, likewise.
 //
 // The two-toned sky is the instrument, as everywhere in this family: the visible
 // sky is BLUE and the reflection cubemap is GREEN, so a green mirror is "the sky
@@ -29,6 +25,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -145,7 +142,7 @@ int main()
     const GiStatus stA = a->giStatus();
     std::printf("   scene A: probes=%d pccBound=%d\n", stA.probeCount, stA.pccBound ? 1 : 0);
     CHECK(stA.probeCount > 0 && stA.pccBound,
-          "...and it is BOUND, which makes texEnvProbeMap a cube array in EVERY pass");
+          "...and A's passes bind it (texEnvProbeMap is a cube array in A's passes)");
 
     viewB->readPixels(img);
     const Colour withGrid = img.at(64, 64);
@@ -153,21 +150,11 @@ int main()
     CHECK(withGrid.r + withGrid.g + withGrid.b > 0.10f,
           "B's mirror is NOT BLACK while another scene holds a probe grid — the\n"
           "          manual-cubemap branch would generate a shader that cannot compile");
-    // THE MARGIN (PHOTON-M3, patch 0080): B's mirror reads 0.12/0.33/0.12 on the
-    // 8-bit voxel store and 0.15/0.22/0.15 on the float one — what A's probes
-    // leak into B through the PROCESS-WIDE PCC binding (the accepted v1: the
-    // last scene to enable owns it) got brighter with A's un-clipped bounce.
-    // The subject here is "B's own sky reaches B's mirror", i.e. green dominates,
-    // not the size of the leak. 0.03 since PHOTON-ENV-1 (measured 0.047): B's
-    // mirror runs A's specular cone (the process-wide VCT binding), and its
-    // escape now sees B's environment weighted by the share of the cone A's
-    // voxels did NOT stop. Patch 0048's hand-out used to hand B the sky at a
-    // weight that carried the volume's decode multiplier and was then
-    // SATURATED — the full sky whatever the cone escaped (0.33 green) — a units
-    // defect, deleted with the hand-out.
-    CHECK(withGrid.g > withGrid.r + 0.03f && withGrid.g > withGrid.b + 0.03f,
-          "...and it still shows B's OWN sky, which reaches it through the pass-level\n"
-          "          sky slot (ogre-patch 0048) instead of through its datablock");
+    CHECK(withGrid.g > withGrid.r + 0.15f && withGrid.g > withGrid.b + 0.15f,
+          "...and it shows B's OWN sky cubemap, not A's probes or A's cones");
+    CHECK(std::fabs(withGrid.r - beforeGrid.r) < 0.01f && std::fabs(withGrid.g - beforeGrid.g) < 0.01f &&
+              std::fabs(withGrid.b - beforeGrid.b) < 0.01f,
+          "...exactly as it read before A had a grid: A's arms never reach B's passes");
 
     // ---- scene A gives the grid back ----------------------------------------
     {
@@ -180,16 +167,11 @@ int main()
     const Colour afterGrid = img.at(64, 64);
     show("scene B's mirror, grid gone", afterGrid);
     CHECK(afterGrid.g > afterGrid.r + 0.15f && afterGrid.g > afterGrid.b + 0.15f,
-          "B's sky comes back the ordinary way when the grid is released — the binding\n"
-          "          follows the singleton for every scene, not only the one that changed");
+          "B's sky is still its own when A's grid is released");
 
     // ---- and the other way out: A is DESTROYED while its grid is bound -------
-    // A different branch of the same fix, and it needs its own case because it
-    // is the only one that cannot walk the scenes where it stands: teardownVct
-    // runs inside OgreScene::destroy(), where the vector the walk iterates is
-    // the one this scene is about to be erased from. So destroy() flags
-    // `mReleasedPccOnDestroy` and OgreEngine::destroyScene does the walk AFTER
-    // the erase. Without that hand-off B's mirror stays bound to nothing.
+    // A's arms die with A (off every PBS-family host the last pass left them on
+    // — forgetGiArms), and B's passes never bound them.
     {
         GiParams gi;
         gi.mode = GiMode::VctPccHybrid;
@@ -208,8 +190,7 @@ int main()
     const Colour afterDestroy = img.at(64, 64);
     show("scene B's mirror, A destroyed", afterDestroy);
     CHECK(afterDestroy.g > afterDestroy.r + 0.15f && afterDestroy.g > afterDestroy.b + 0.15f,
-          "B's sky comes back when the scene holding the grid is DESTROYED — the walk\n"
-          "          happens after the erase, never from inside the dying scene");
+          "B's sky is still its own when the scene holding the grid is DESTROYED");
 
     engine->destroyScene(b);
 

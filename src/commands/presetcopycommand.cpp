@@ -109,7 +109,7 @@ void PresetCopyCommand::redo()
     // it is a fact about this row in this library, it must survive every
     // later definition write, and it is what `presetedit::masterOf` reads.
     QJsonObject props = propertiesOf(mDb, mCopyGuid);
-    props.insert(QStringLiteral("presetMaster"), mMaster);
+    props.insert(MaterialBundle::kPresetMasterKey, mMaster);
     mDb->updateAssetProperties(mCopyGuid, QJsonDocument(props).toJson());
 
     // 2. THE PIN MOVES. Direct, because the user asked for this material to be

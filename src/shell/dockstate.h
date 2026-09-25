@@ -69,6 +69,13 @@ namespace DockState {
 /// the whole area; the bump hands every existing layout the new default once.
 constexpr int kVersion = 4;
 
+/// The editor toolbar's objectName. It lives in the same nested window as the
+/// docks, and saveState()/restoreState() match TOOLBARS by objectName exactly
+/// as they match docks: an unnamed toolbar makes Qt warn on every snapshot and
+/// its position and visibility never come back (it was "Tool Bar", unnamed,
+/// until SMALL-FIXES-1). One constant so the shell and ui.dock_state agree.
+inline constexpr char kEditorToolBarName[] = "MainToolBar";
+
 /// `window`'s dock layout, at this layout version. The one place saveState's
 /// version argument is supplied, so a snapshot taken to be kept in memory (the
 /// editor's last layout, held across a space switch) cannot drift from the one

@@ -6292,6 +6292,19 @@ void monitor_gpu_timestamps() {
                 frames, sampled, anyGpu);
     CHECK_MSG(sampled > 0u, "with the patch on, passes must carry GPU times");
     CHECK_MSG(anyGpu >= 0.0f, "a frame's gpuMs is the sum of its sampled passes");
+    // THE MARKS THE POOL COULD NOT HOLD (POST-C-FIXES-1): counted per frame on
+    // the record and cumulatively on the status, and the two agree. A small
+    // scene fills a fraction of the 4,096-query pool, so both read 0 here; the
+    // count is what a heavy frame reports instead of passes that silently
+    // carry no time.
+    unsigned long long droppedInRecords = 0;
+    for (const FrameRecord &r : recs) droppedInRecords += r.gpuMarksDropped;
+    st = fx.e->monitorStatus();
+    std::printf("    gpu marks dropped: %llu in the records, %llu on the status\n",
+                droppedInRecords, st.gpuMarksDropped);
+    CHECK_MSG(st.gpuMarksDropped == droppedInRecords && st.gpuMarksDropped == 0ull,
+              "a small scene drops no GPU mark, and the status total equals the records' sum "
+              "(%llu / %llu)", st.gpuMarksDropped, droppedInRecords);
 
     // ...and the pools go with the capture.
     fx.e->setFrameMonitor(MonitorLevel::Off);

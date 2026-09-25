@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "data/settingsmanager.h"
 #include "claudechatwindow.h"
 
 #include <QCloseEvent>
@@ -41,9 +42,6 @@ For more information see the LICENSE file
 namespace {
 
 const char *kGeometryKey = "claude_chat/geometry";
-// The same key MainWindow::toggleClaudeChat reads when it builds the host, so
-// a choice made here survives a close/reopen and an app restart.
-const char *kModelKey = "claude_model";
 
 // Inline images are bounded by the popup, not by the PNG: a browse_assets
 // answer can carry two dozen of them.
@@ -125,7 +123,10 @@ ClaudeChatWindow::ClaudeChatWindow(QSettings *settings, ClaudeChatHost *host, QW
     // The persisted choice wins over the shipped default; selecting it here
     // must not write an info row (nothing changed for the user).
     if (mSettings && mModelCombo) {
-        const QString saved = mSettings->value(QString::fromLatin1(kModelKey)).toString();
+        // The same key MainWindow::toggleClaudeChat reads when it builds the
+        // host (settingkeys::claudeModel), so a choice made here survives a
+        // close/reopen and an app restart.
+        const QString saved = SettingsManager::read(mSettings, settingkeys::claudeModel);
         const int index = saved.isEmpty() ? -1 : mModelCombo->findData(saved);
         if (index >= 0) {
             QSignalBlocker block(mModelCombo);
@@ -505,7 +506,7 @@ void ClaudeChatWindow::applyModelChoice(const QString &modelId, bool announce)
     if (!announce) return;
     // Only a real choice is persisted: writing the shipped default here would
     // pin today's default into the user's settings for ever.
-    if (mSettings) mSettings->setValue(QString::fromLatin1(kModelKey), modelId);
+    SettingsManager::write(mSettings, settingkeys::claudeModel, modelId);
     const bool live = mHost && (mHost->isProcessRunning() || !mHost->sessionId().isEmpty());
     addInfoLine(live ? tr("model: %1 — applies to the next conversation (Clear starts one)")
                            .arg(modelId)

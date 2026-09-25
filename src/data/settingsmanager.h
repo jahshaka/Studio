@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QApplication>
 
+#include "data/settingkeys.h"
 #include "services/apppaths.h"
 
 class SettingsManager
@@ -35,8 +36,6 @@ public:
     }
 
     QSettings* settings = nullptr;
-
-    int recentlyOpenedFilesSize;
 
     // WHERE THE SETTINGS FILE IS, in one place: AppPaths::settingsFilePath.
     //
@@ -55,7 +54,6 @@ public:
     // library and the store, which is the whole point: one flag, one hermetic
     // run (services/apppaths.h).
     SettingsManager(QString fileName = "jahsettings.ini") {
-        recentlyOpenedFilesSize = 9;
         loadSettings(AppPaths::settingsFilePath(fileName));
     }
 
@@ -71,41 +69,28 @@ public:
         return settings->value(name,def);
     }
 
-    QStringList getRecentlyOpenedScenes() {
-        return settings->value("recent_files", QStringList()).toStringList();
+    /// A declared key (data/settingkeys.h): its value, or its ONE default.
+    template <typename T>
+    T get(const SettingKey<T> &key) const { return read(settings, key); }
+    QString get(const SettingKey<const char *> &key) const { return read(settings, key); }
+    template <typename T, typename V>
+    void set(const SettingKey<T> &key, const V &value) { write(settings, key, value); }
+
+    /// The same, on a QSettings a widget was handed directly (the Claude chat
+    /// window takes one so its suite can point it at a scratch file).
+    template <typename T>
+    static T read(const QSettings *s, const SettingKey<T> &key) {
+        return s ? s->value(QLatin1String(key.name), QVariant::fromValue(key.fallback))
+                       .template value<T>()
+                 : key.fallback;
     }
-
-    void removeRecentlyOpenedEntry(const QString &entry) {
-        auto list = settings->value("recent_files", QStringList()).toStringList();
-
-        if (list.contains(entry)) {
-            list.removeAt(list.indexOf(entry));
-        }
-
-        if (list.count()) {
-            settings->setValue("recent_files", list);
-        } else {
-            settings->remove("recent_files");
-        }
+    static QString read(const QSettings *s, const SettingKey<const char *> &key) {
+        return s ? s->value(QLatin1String(key.name), QString::fromUtf8(key.fallback)).toString()
+                 : QString::fromUtf8(key.fallback);
     }
-
-    void addRecentlyOpenedScene(QString path) {
-        auto list = settings->value("recent_files", QStringList()).toStringList();
-
-        // if it already exists, remove it from the list
-        // it will be added back to the top
-        if (list.contains(path)) {
-            list.removeAt(list.indexOf(path));
-        }
-
-        // prevents list from adding too much
-        while (list.size() > recentlyOpenedFilesSize - 1) {
-            list.removeLast();
-        }
-
-        list.push_front(path);
-
-        settings->setValue("recent_files", list);
+    template <typename T, typename V>
+    static void write(QSettings *s, const SettingKey<T> &key, const V &value) {
+        if (s) s->setValue(QLatin1String(key.name), QVariant::fromValue(value));
     }
 };
 

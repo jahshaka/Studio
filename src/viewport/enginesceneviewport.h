@@ -167,9 +167,19 @@ public:
     void stopPhysicsSimulation() override;
 
     bool getShowLightWires() const override { return mShowLightWires; }
-    void setShowLightWires(bool value) override { mShowLightWires = value; }
+    void setShowLightWires(bool value) override
+    {
+        if (mShowLightWires == value) return;
+        mShowLightWires = value;
+        emit mEvents.overlaysChanged();
+    }
     bool getShowGrid() const override { return mShowGrid; }
-    void setShowGrid(bool value) override { mShowGrid = value; }
+    void setShowGrid(bool value) override
+    {
+        if (mShowGrid == value) return;
+        mShowGrid = value;
+        emit mEvents.overlaysChanged();
+    }
     bool getShowGiVolume() const override { return mShowGiVolume; }
     void setShowGiVolume(bool value) override { mShowGiVolume = value; }
     /// The shadow-atlas inspector (SHADOW_TOOLING_SPEC.md §4.4). Not persisted,
@@ -199,6 +209,7 @@ public:
     QImage takeScreenshot(int width = 1920, int height = 1080) override;
     QImage takeScreenshot(QSize dimension) override;
     QImage takeScreenshot(int width, int height, ScreenshotGrade grade) override;
+    void settleGiBeforeNextScreenshot(int maxFrames) override { mShotSettleFrames = maxFrames; }
     int sampleCount() const override
     { return view() ? int(view()->sampleCount()) : 1; }
     bool isOffscreen() const override
@@ -218,6 +229,8 @@ public:
     GiStatusInfo giStatus() const override;
     GiVoxelStatsInfo giVoxelStats(int cascade) override;
     ShadowStatusInfo shadowStatus() const override;
+    SunContactInfo sunContactInfo() const override;
+    bool sceneTracesRays() const override;
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
@@ -626,6 +639,11 @@ private:
     /// driver's ticks, editor.frame(), and presentCovered itself. Deliberately
     /// not View::framesPresented, which resets on every scene bind.
     qulonglong mFrameEpoch = 0;
+    /// settleGiBeforeNextScreenshot's cap, consumed by the next takeScreenshot.
+    int mShotSettleFrames = 0;
+    /// The frame delta syncFrame last pushed (the settle freezes the engine's
+    /// clock for its frames and hands this back).
+    float mLastFrameDelta = 1.0f / 60.0f;
     /// A world is on its way but nothing of it has presented yet. Set by
     /// beginSceneLoad and cleared when the view starts presenting: the state
     /// machine alone cannot tell "no world open" from "a world is loading",

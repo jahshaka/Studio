@@ -34,16 +34,12 @@ set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 300 LABELS "engine")
 # 1.0 was clipped on its way into the cache (ogre-patch 0087).
 #
 #   gi.rt_reflect_lamp        L = 0.9, a PERFECT mirror: pixel = L.
-#   gi.rt_reflect_lamp_clip   L = 3.0, a GREY mirror, and the claim is the RATIO
-#                             against the same pixel at L = 0.8 (3.75, not 1.25).
-#                             THE LABEL `photon-target` CAME OFF HERE
-#                             (VOXEL-CLIP-1, 2026-09-22) — and the row's FORM had
-#                             to change with it, because an offscreen view's
-#                             readback is PFG_RGBA8_UNORM and a perfect mirror at
-#                             L = 3.0 reads exactly 1.0 whatever the voxels hold:
-#                             the old form could never have gone green. Measured
-#                             on the two engines: 1.255x unpatched, 3.745x
-#                             patched (see the suite's header).
+#   gi.rt_reflect_lamp_clip   L = 3.0, the same perfect mirror: pixel = L.
+#                             Both read the view's RADIANCE through
+#                             View::readPixelsHdr (HDR-READBACK-1); the round in
+#                             which the 8-bit readback forced this row into a grey
+#                             mirror's ratio against a reference below 1.0 is over
+#                             and that form is deleted.
 add_test(NAME gi.rt_reflect_lamp COMMAND test_rt_reflect --lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 300 LABELS "engine")
@@ -52,6 +48,40 @@ add_test(NAME gi.rt_reflect_lamp_clip COMMAND test_rt_reflect --lamp --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
                      TIMEOUT 300 LABELS "engine")
+
+# F1-HITRES (PHOTON-CARDS-2 part B): a perfect mirror's hit reads the hit
+# surface's CARD — the reflected panel's row held to the card's closed form pixel
+# by pixel, its edge a two-pixel step (the voxel read's numbers printed beside).
+add_test(NAME gi.rt_reflect_hitres COMMAND test_rt_reflect --hitres
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 300 LABELS "engine")
+
+# RAY-FMT-CHECK (PHOTON P3): the availability gate asks the device for STORAGE
+# support of the tier's history formats and refuses with a log line — a
+# driver-defect guard, both formats being core-mandatory. On LAVAPIPE, twice:
+# the real check (must not refuse) and the refusal path through the gate's
+# fault-injection door (JAHSHAKA_RAY_DENY_STORAGE_FORMAT).
+set(_rt_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
+if(EXISTS "${_rt_lvp_icd}")
+    add_test(NAME gi.rt_reflect_format_lavapipe COMMAND test_rt_reflect --format-check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_format_lavapipe PROPERTIES TIMEOUT 300 LABELS "engine"
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd}")
+    add_test(NAME gi.rt_reflect_format_refused_lavapipe COMMAND test_rt_reflect --format-check
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.rt_reflect_format_refused_lavapipe PROPERTIES TIMEOUT 300
+                         LABELS "engine"
+                         ENVIRONMENT "VK_ICD_FILENAMES=${_rt_lvp_icd};JAHSHAKA_RAY_DENY_STORAGE_FORMAT=R32G32_SFLOAT")
+endif()
+
+# ENV-RAY-MATCH (PHOTON P3): a silver floor under the realistic sky, the
+# environment lobe (rays off) against the ray tier's sky (rays on) for the same
+# pixels, read as radiance, at five roughnesses. Every environment reader looks
+# along jahEnvDominantDir; the bars are per roughness (0.5 code up to r = 0.05,
+# the measured split-sum residual + 25 % above) — see envRayMatchMain.
+add_test(NAME gi.env_ray_match COMMAND test_rt_reflect --env-ray-match
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 300 LABELS "engine")
 
 add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -77,6 +107,10 @@ target_link_libraries(test_reflect_motion PRIVATE JahshakaEngine)
 add_test(NAME gi.reflect_motion COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 300 LABELS "engine")
+# THE LETTERBOX (SSR-LETTERBOX-1): both rows run a 2.4:1 "the rectangle IS the
+# shot" arm and a 2.39:1 moving-vs-settled arm, and both gate them — the march
+# takes the shot's uv in its pass buffer, the ray tier its image basis expanded
+# to the target on the CPU.
 add_test(NAME gi.reflect_motion_norays COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion_norays PROPERTIES
@@ -86,36 +120,16 @@ set_tests_properties(gi.reflect_motion_norays PROPERTIES
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture
 # builder, a different question (see costMain).
 #
-# NO RUN_SERIAL, AND THE MEASUREMENT IS THE REASON (ATOM-RESUMES-1 item 4,
-# 2026-09-22). The ledger flagged the FULL-res glossy arm's 2 % margin as a
-# contention red risk. Measured on this box, solo and again while a 426-suite
-# gate-scope ran at -j2: 0.780 ms solo against 0.778-0.784 ms under load, with the
-# other three arms identical to three decimals (0.137 / 0.072 / 0.133) — a 0.8 %
-# spread on the tightest arm. Sibling Vulkan suites do not move this pass's own
-# timestamp pair, so serialising the row would cost gate wall-clock and buy
-# nothing.
-#
-# WHAT DOES MOVE IT IS THE DEVICE STATE, measured in the fix round: with the SM
-# clock LOCKED at 2550 MHz (the rig's own recipe for a GPU number) the card is
-# capped at 82 % of its 3105 MHz ceiling and every arm is ~7 % slower —
-# 0.833-0.834 ms full-res glossy in three runs, which RED the old 0.80 ms bar
-# while the ratios moved by at most 0.49 -> 0.53. So the full-res bar is now
-# 0.90 ms (the worst of the two states x 1.08) and the four ratio bars are the
-# worst of the two states x ~1.3; three of them are TIGHTER than the first
-# version's. The arithmetic and both states' numbers are in costMain.
-#
-# THE FOUR MILLISECOND BARS ARE `target:` PRINTS SINCE ATOM-FARBLAS-1 (2026-09-23):
-# inside a -j2 scoped gate beside two sibling lanes' gates the full-res glossy
-# arm read 1.213 ms (0.90 bar) AND the filter/trace ratio 8.76x (7.5x bar); solo
-# 3/3 green. The measurement above ("siblings do not move it") was one load; this
-# one moved it. A ratio of two passes cancels the CLOCK, not a sibling's
-# contention inside one of the two windows — so the ratio bars keep gating, and
-# a red of theirs gets the SOLO-RETRY verdict (docs/TESTING_GATE.md §4) before
-# anything else.
-add_test(NAME gi.rt_reflect_cost COMMAND test_rt_reflect
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# UNDER THE GPU-TIMING LOCK (docs/TESTING_GATE.md section 4): it measures GPU
+# milliseconds and GPU ratios, and a suite that measures time or GPU budget holds
+# the lock - a sibling sharing the GPU moves both (a ratio of two passes cancels
+# the clock, not a sibling's work inside one of the two windows). The four
+# millisecond bars print as `target:` (ATOM-FARBLAS-1); the ratio bars gate. The
+# bars' arithmetic over both clock states (free and locked) is in costMain.
+jah_gpu_exclusive_test(NAME gi.rt_reflect_cost RUN_TIMEOUT 300 COMMAND test_rt_reflect
+                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_cost PROPERTIES
-                     TIMEOUT 300 LABELS "engine"
+                     LABELS "engine"
                      ENVIRONMENT "JAH_RT_REFLECT_COST=1")
 
 if(JAHSHAKA_ASAN)

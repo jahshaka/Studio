@@ -83,7 +83,7 @@ NewProjectDialog::NewProjectDialog(QWidget *parent) : QDialog(parent)
     // chosen root is recorded with the project row instead
     // (Database::setProjectLocation; ProjectService::projectFolderFor reads it).
     projectPath = AppPaths::projectsRoot(
-        settingsManager->getValue("default_directory", QString()).toString(),
+        settingsManager->get(settingkeys::defaultDirectory),
         Constants::PROJECT_FOLDER);
 
 	setProjectLocation(projectPath);

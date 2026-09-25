@@ -48,9 +48,6 @@ void Upgrader::checkIfSchemaNeedsUpdating()
 		if (numbers[2].length() > 1) numbers[2].chop(1);
 		int dbPatch = numbers[2].toInt();
 
-		//qDebug() << "INCOMING  " << dbMajor << dbMinor << dbPatch;
-		//qDebug() << "CURRENT " << projectDb.major << projectDb.minor << projectDb.patch;
-
 		bool updateSchema = false;
 		bool majorGreater = false;
 		bool minorGreater = false;

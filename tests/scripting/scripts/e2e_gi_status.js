@@ -161,13 +161,43 @@ editor.frame(6);
 st = world.giStatus();
 assert(st.probeHdr === false && st.probeShadows === false,
        "auto at LOW quality resolves to LDR, unshadowed captures");
+// AT A RAY TIER THE GRID IS NOT BUILT (PHOTON-F12-PCC): High with the scene's
+// rays on, on a machine that traces, places no probe — so the grid's own keys
+// are REFUSED there with the reason, and the refused call changes nothing (the
+// quality it carried is rolled back too). High's grid defaults are then read
+// with the scene's rays OFF, the one way a High scene keeps a grid.
+var raysHere = st.rayQuery && st.rayQuery.available === true && world.rayTracing() !== "off";
+console.log("rays on this machine for this scene: " + raysHere);
+if (raysHere) {
+    ["pccGrid", "probeSize", "probeHdr", "probeShadows"].forEach(function (key) {
+        var call = { quality: "high" };
+        call[key] = key === "pccGrid" ? { x: 1, y: 1, z: 2 } : (key === "probeSize" ? 256 : true);
+        threw = "";
+        try { world.gi(call); } catch (e) { threw = String(e); }
+        assert(threw.indexOf(key) >= 0 && threw.indexOf("the rays are the reflection") >= 0,
+               "world.gi REFUSES '" + key + "' at a ray tier, with the reason: " + threw);
+        assert(world.get().gi.quality === "low",
+               "...and the refused call changed nothing (the quality is still low)");
+    });
+    assert(world.gi({ quality: "high" }), "world.gi(quality high) with the rays on");
+    editor.frame(8);
+    st = world.giStatus();
+    console.log("giStatus(ray tier) = " + JSON.stringify(st));
+    assert(st.probeGridByRays === true && st.probeCount === 0 && st.probesDropped === 0 &&
+           st.pccBound === false,
+           "the ray tier builds NO grid: probeGridByRays, probeCount 0, probesDropped 0, unbound");
+    assert(world.rayTracing("off") === "off", "the scene's rays off");
+    assert(world.gi({ quality: "low" }), "back to low before the grid keys");
+}
 assert(world.gi({ quality: "high", pccGrid: { x: 1, y: 1, z: 2 } }),
        "world.gi(quality high) — a small grid, High probes are 512px");
 editor.frame(8);
 st = world.giStatus();
 console.log("giStatus(auto at high) = " + JSON.stringify(st));
+assert(st.probeGridByRays === false, "with the scene's rays off High is not a ray tier");
 assert(st.probeHdr === true && st.probeShadows === true,
        "the SAME auto at HIGH quality resolves to HDR, shadowed captures");
+if (raysHere) assert(world.rayTracing("auto") === "auto", "the scene's rays back to auto");
 
 // The knobs are document state, so they survive a save and a reopen.
 assert(world.gi({ quality: "low", probeHdr: false, overlap: 1.4 }), "world.gi pins for the round trip");
@@ -257,13 +287,6 @@ assert(world.get().gi.autoRefresh === false,
        "the old autoRefresh reading follows the budget down to false");
 assert(world.refreshGi() === true, "world.refreshGi still works while paused");
 
-// The ray-march scale (B5) is a verb-only integrator knob with a floor of 1.
-threw = "";
-try { world.gi({ rayMarchStepScale: 0.5 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("rayMarchStepScale") >= 0,
-       "world.gi refuses a rayMarchStepScale below 1 (upstream asserts): " + threw);
-assert(world.gi({ rayMarchStepScale: 1.5 }), "world.gi accepts rayMarchStepScale 1.5");
-
 // Document state: they survive a save and a reopen like their siblings.
 assert(world.gi({ updateBudget: 2 }), "world.gi pins updateBudget for the round trip");
 assert(project.save() === true, "project.save (update budget)");
@@ -271,9 +294,7 @@ assert(project.close() === true, "project.close (update budget)");
 assert(project.open(guid) === true, "project.open (update budget)");
 editor.frame(4);
 assert(world.get().gi.updateBudget === 2, "updateBudget survived the round trip");
-assert(Math.abs(world.get().gi.rayMarchStepScale - 1.5) < 1e-4,
-       "rayMarchStepScale survived the round trip");
-assert(world.gi({ updateBudget: 1, rayMarchStepScale: 1.0 }),
+assert(world.gi({ updateBudget: 1 }),
        "back to the defaults before the next phase");
 editor.frame(4);
 

@@ -11,8 +11,6 @@ For more information see the LICENSE file
 
 #include "services/presetedit.h"
 
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QObject>
 
 #include "commands/presetcopycommand.h"
@@ -25,18 +23,6 @@ For more information see the LICENSE file
 #include "services/materialpresetseeder.h"
 #include "services/undoservice.h"
 
-namespace {
-
-const QLatin1String kMasterKey("presetMaster");
-
-QJsonObject propertiesOf(Database *db, const QString &guid)
-{
-    if (!db || guid.isEmpty()) return QJsonObject();
-    return QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
-}
-
-} // namespace
-
 namespace presetedit
 {
 
@@ -48,12 +34,12 @@ QString masterOf(Database *db, const QString &guid)
     // is what the module's banner quotes and what `materials.open` reports
     // before any copy exists.
     if (!MaterialBundle::shippedPresetName(guid).isEmpty()) return guid;
-    const QString recorded = propertiesOf(db, guid).value(kMasterKey).toString();
-    // A STALE LINK IS NO LINK. The key is written by the copy and nothing ever
-    // rewrites it, so a value that is not a reserved preset guid (a library
-    // carried over from a build with a different table) answers nothing rather
-    // than a guid no drawer can resolve.
-    return MaterialBundle::shippedPresetName(recorded).isEmpty() ? QString() : recorded;
+    // THE ROW'S OWN LINK, through the one reader (MaterialBundle::
+    // presetMasterOf) — which also answers nothing for a STALE link (a value
+    // that is not a reserved preset guid) rather than a guid no drawer can
+    // resolve.
+    if (!db) return QString();
+    return MaterialBundle::presetMasterOf(db->fetchAsset(guid).properties);
 }
 
 QStringList copiesOf(Database *db, const QString &masterGuid)
@@ -62,9 +48,7 @@ QStringList copiesOf(Database *db, const QString &masterGuid)
     if (!db || masterGuid.isEmpty()) return out;
     for (const auto &row : db->fetchAssetsForAssetView()) {
         if (row.type != static_cast<int>(ModelTypes::Material)) continue;
-        if (QJsonDocument::fromJson(row.properties).object().value(kMasterKey).toString()
-            == masterGuid)
-            out << row.guid;
+        if (MaterialBundle::presetMasterOf(row.properties) == masterGuid) out << row.guid;
     }
     return out;
 }

@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/editorapi.h"
 
+#include <QKeySequence>
+#include <QKeyEvent>
 #include <QDockWidget>
 #include <QDir>
 #include <QFileInfo>
@@ -25,6 +27,7 @@ For more information see the LICENSE file
 #include <cmath>
 
 #include "scripting/modules/moduleshared.h"
+#include "services/shortcutregistry.h"
 #include "services/selectioncost.h"
 #include "viewport/gizmomode.h"
 #include "viewport/ieditorviewport.h"
@@ -38,7 +41,6 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "ui/panels/assetwidget.h"
 #include "ui/panels/scenehierarchywidget.h"
-#include "io/sceneformat.h"
 #include "services/editgate.h"
 #include "services/services.h"
 #include "services/playerservice.h"
@@ -46,7 +48,6 @@ For more information see the LICENSE file
 #include "services/sceneissues.h"
 #include "services/sceneeditservice.h"
 #include "services/vrworld.h"
-#include "services/clipboardservice.h"
 #include "services/selectionservice.h"
 #include "services/outlinesettings.h"
 #include "services/undoservice.h"
@@ -127,24 +128,6 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Duplicates the selection as ONE undo step — each copy lands right after its own "
           "original — and selects the copies. Returns the new ids, the primary's copy first.",
           Needs::Document },
-        { "copy", "editor.copy() -> n",
-          "DEPRECATED — call clipboard.copy(). An alias kept for scripts written before the "
-          "clipboard became one component: it copies the selection onto the SAME system clipboard "
-          "clipboard.copy writes to (with the asset closure) and returns how many objects went. Not "
-          "an undo entry; copying nothing leaves the previous clipboard alone and returns 0.",
-          Needs::Document },
-        { "paste", "editor.paste() -> [id]",
-          "DEPRECATED — call clipboard.paste(). An alias: pastes the clipboard's scene objects "
-          "beside the primary — same parent, sibling index + 1, local transform kept — or at the "
-          "scene root when nothing is selected. Fresh guids, one undo step, and the pasted nodes "
-          "become the selection. It returns the new ids only; the missing-asset and skipped-item "
-          "reports are clipboard.paste's.",
-          Needs::Document },
-        { "clipboard", "editor.clipboard() -> [{format, version, node, parent, index}]",
-          "DEPRECATED — call clipboard.contents() (a description) or clipboard.text() (the "
-          "payload). An alias: the clipboard's SCENE-OBJECT items in the shape node.serialize "
-          "returns. Empty when the clipboard holds something that is not a Jahshaka payload.",
-          Needs::Document },
         { "gizmoMode", "editor.gizmoMode() -> \"translate\" | \"rotate\" | \"scale\"",
           "The active transform gizmo mode (W/E/R in the viewport; Space cycles).",
           Needs::Engine },
@@ -184,7 +167,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor, menu}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
@@ -213,6 +196,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
           "render through an offscreen view and the overlay is excluded from those by construction. "
+          "`menu` is what the View Options menu's checkmarks SHOW ({grid, lightWires, stats, "
+          "physicsDebug}; empty with no editor window): they follow the viewport's state, so after "
+          "any editor.setOverlays they equal the keys above — a difference is a defect. "
           "`outlineWidth`, `outlineColor` and `outlinePrimaryColor` are the selection highlight's "
           "LOOK, READ-ONLY here (they are persisted preferences, written by editor.setOutline): "
           "`outlinePrimaryColor` is the brighter colour the PRIMARY member of a multi-selection is "
@@ -226,9 +212,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`stats` persists as the `show_fps` preference and survives Game View and fullscreen; the "
           "others are viewport state for this session. `physicsDebug` draws the physics world's "
           "collision shapes, and shows nothing at all until a simulation is running "
-          "(editor.simulate / editor.play). NOTE the View Options menu's checkmarks do "
-          "not yet follow a script-driven change (same as editor.setCameraMode) — the viewport "
-          "does; `physicsDebug` is the exception, its menu checkmark follows.",
+          "(editor.simulate / editor.play). The View Options menu's checkmarks FOLLOW a "
+          "script-driven change of `grid`, `lightWires`, `stats` and `physicsDebug` "
+          "(editor.overlays().menu reads them): the viewport owns the state and the menu is a "
+          "view of it.",
           Needs::Engine },
         { "outline", "editor.outline() -> {width, color, primaryColor, primaryColorStored}",
           "The SELECTION OUTLINE's three persisted values (Preferences \u2192 Viewport): `width` in "
@@ -479,6 +466,29 @@ QVector<VerbInfo> EditorApi::verbs() const
           "row on screen. `tab` is \"world\" or \"selection\", defaulting to the tab in "
           "front; only the rows that tab has MOUNTED are listed, because those are the rows "
           "that exist for the current selection.",
+          Needs::Window },
+        { "propertyRow", "editor.propertyRow({tab, key, value?}) -> {tab, key, label, section, "
+                         "control, value, enabled, panelVisible, filteredOut, visible, text?, "
+                         "items?, min?, max?, toolTip}",
+          "ONE PROPERTIES-COLUMN ROW BY ITS STABLE KEY, read — and, given `value`, DRIVEN the "
+          "way a person drives it — so a test proves a panel row is wired to the model it "
+          "claims (the row's gesture, its one undo step, its greying) instead of asserting on "
+          "the verb the row is supposed to call. `key` is the row's key as editor.properties "
+          "lists it (\"sunContact.enabled\", \"world.shadowResolution\"); `tab` is \"world\" or "
+          "\"selection\", defaulting to the tab in front, and only a MOUNTED row is found. "
+          "`control` says what the row offers: \"check\" (value true/false: the box is CLICKED "
+          "when it does not already hold it), \"combo\" (value = the item index, or an item's "
+          "exact text; `items` lists them), \"number\" (value = the number: the field is "
+          "FOCUSED as a click gives it, the value typed in and committed with Return — the "
+          "typed session that makes one undo step; a field whose window cannot take keyboard "
+          "focus is refused; `min`/`max` are the field's range and a value outside it is "
+          "REFUSED, never clamped; the field ROUNDS the value to its own decimals — a "
+          "2-decimal field turns 3.257 into 3.26 — before the document sees it), \"label\" (a "
+          "read-back row: `value` is its text, never driven) or \"other\". `enabled` is the "
+          "control's effective state: a GREYED row refuses a gesture, as it refuses a click, "
+          "and so does a row its panel hides. The answer is read AFTER the gesture, so it is "
+          "what the row shows once its panel has answered. A key two mounted rows share is "
+          "refused by name rather than guessed at.",
           Needs::Window },
         { "propertiesStats", "editor.propertiesStats() -> {mounts, refills, rebuilds, rows, "
                              "pending, deferredHidden, visible, attached}",
@@ -793,11 +803,17 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...]}",
           "Runs the scene checker once against the open scene and returns what is live afterwards "
           "— the same thing the editor does on a timer, exposed so a script or a test can drive "
-          "it. It knows two conditions today, both of which used to reach nobody: \"sun.tie\", "
-          "two directional lights set to the same Forward Shading Priority, so which one is the "
-          "sun comes out of a tie-break the author never chose; and \"shadow.leak\", a light "
-          "whose shadows are switched off standing close enough to solid geometry to light "
-          "straight through it. Conditions that have been fixed are cleared, so this is safe to "
+          "it. The conditions it knows (SceneIssues::scan): \"sun.tie\", two directional "
+          "lights set to the same Forward Shading Priority, so which one is the sun comes out of "
+          "a tie-break the author never chose; \"shadow.leak\", a light whose shadows are "
+          "switched off standing close enough to solid geometry to light straight through it; "
+          "\"sky.duplicate\", a second Sky Light, which lights nothing; \"rays.absent\", a "
+          "project whose Ray Tracing row says On on a machine with none; \"vr.colour\", a VR "
+          "runtime encoding the picture twice; \"exposure.legacy\", a retired exposure key "
+          "ignored at load; and \"texture.missing\", a material's texture file gone from disk "
+          "(one issue per mesh node, naming each missing slot and its file; it clears when the "
+          "file returns or the slot is re-linked). Conditions that have been fixed are cleared, "
+          "so this is safe to "
           "call as often as you like. `raised` names the issues this call raised for the first "
           "time (empty on a second identical call — the never-repeat rule), and `list` is every "
           "live issue in the order the error area lists them.",
@@ -839,6 +855,19 @@ QVector<VerbInfo> EditorApi::verbs() const
           "gesture the owner performs with a mouse; everything it reaches is the viewport's own "
           "handler, so it cannot drift from what a person gets.",
           Needs::Engine },
+        { "key", "editor.key(name, action='tap') -> bool",
+          "A KEY ON THE EDITOR VIEWPORT, the way the viewport receives one once the window system "
+          "has delivered it: its ShortcutOverride, then the KeyPress and/or KeyRelease, sent to "
+          "the viewport widget itself — the route a held fly key takes to the camera controller, "
+          "and while playing to the run (PLAY-FLY-1's repro). `name` is a Qt key name ('W', 'Up', "
+          "'Shift+W'); `action` is 'press' (held until a 'release'), 'release', or 'tap' (both, the "
+          "default). A key the viewport does not claim that is an editor SHORTCUT is REFUSED with "
+          "the shortcut's id (a real press would fire the shortcut and never reach the viewport: W "
+          "is tool.translate while editing, the run's Move while playing). A held key moves the camera on every frame after it (editor.frame). It does "
+          "NOT pass through the window system or Qt's shortcut map — whether a REAL key arrives is "
+          "app.input_keys' question (xdotool on a private display). Refused with no viewport or "
+          "an unknown key name.",
+          Needs::Window },
         { "dragAssetToTray", "editor.dragAssetToTray(guidOrGuids, folderGuid, {action}) -> bool",
           "DROPS TILES ON A FOLDER TILE IN THE EDITOR'S ASSET TRAY, for real (DRAWERS-1): it "
           "posts the same QDragEnter/QDragMove/QDrop events the tray's own drag posts, aimed at "
@@ -868,6 +897,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           Needs::Engine },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"plain\") -> {path, width, height, grade, encoding, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
+          "A SCREENSHOT IS THE PICTURE AT REST: before the editor camera's shot the verb renders frames OFFSCREEN - nothing is presented, the document's clock does not move - until world.giStatus().giAtRest is true - no GI rebuild, settle or irradiance-field refinement still owed - at most 2000 frames, so two shots of a still scene are the same picture. A scene with something moving every frame (an animation, a socket rider, a physics body) never comes to rest: where the screen-probe gather runs, its shot is taken once the gather's history has settled (16 frames after its last restart) and shows that settled history, which is NOT byte-stable from one shot to the next by nature. "
           "`grade` says HOW THE SHOT IS DEVELOPED, and the default is deliberately the dullest answer, because this verb is a measuring instrument: "
           "\"plain\" (also spelled \"raw\", or false) is NO POST-PROCESSING AT ALL — 1x MSAA, linear radiance clipped to 8 bits, the same pixels on every machine and in every frame. This is the picture the pixel suites assert and what this verb has always returned. IT CARRIES NO SCREEN-SPACE REFLECTIONS, NO AMBIENT OCCLUSION, NO BLOOM, NO SMAA AND NO TONEMAP, BY DESIGN, and that is worth knowing before using this verb to diagnose a picture: two plain shots taken with reflections on and off are bit-identical, which says nothing about the renderer (a 2026-09-15 diagnosis read exactly that as \"screenshots have lost SSR\"). Ask for \"scene\" when the question is about what the user sees. "
           "\"tonemap\" is the THUMBNAIL picture: the deterministic filmic grade only (the scene's exposure as a constant; no bloom, no ambient occlusion, no SMAA, no reflections), so a bright scene does not clip to white and a sweep of hundreds stays cheap. "
@@ -1191,65 +1221,6 @@ QVariantList EditorApi::duplicateSelection()
     return out;
 }
 
-// ---- the clipboard aliases (CLIPBOARD_SPEC §8) ------------------------------
-//
-// One clipboard, three older names. These three verbs shipped against the
-// in-app QList<SceneFragment> that ClipboardService replaced; they are kept as
-// thin delegates so scripts and the MCP tools written against them keep
-// working, and they now read and write exactly what clipboard.* does. New code
-// calls the clipboard module — the doc strings say so.
-
-int EditorApi::copy()
-{
-    if (!host.services || !host.services->selection || !host.services->clipboard) {
-        fail("editor: not available in this session");
-        return 0;
-    }
-    const auto set = host.services->selection->selectedSet();
-    // "How many did I copy?" is the verb's whole contract, and zero is a
-    // perfectly good answer — the doc already promised the previous clipboard
-    // survives it. Throwing aborted the caller's script over a documented
-    // outcome (hygiene lane, 2026-09-09).
-    if (set.isEmpty()) { refuse("editor.copy: nothing is selected"); return 0; }
-    const auto result = host.services->clipboard->copyNodes(set);
-    if (!result.ok()) { refuse(QStringLiteral("editor.copy: %1").arg(result.error)); return 0; }
-    return result.items;
-}
-
-QVariantList EditorApi::paste()
-{
-    QVariantList out;
-    if (!host.services || !host.services->clipboard) {
-        fail("editor: not available in this session");
-        return out;
-    }
-    if (host.services->clipboard->contents().isNull()) {
-        fail("editor.paste: the clipboard is empty");
-        return out;
-    }
-    for (const QString &id : host.services->clipboard->paste().pasted) out.append(id);
-    return out;
-}
-
-QVariantList EditorApi::clipboard()
-{
-    QVariantList out;
-    if (!host.services || !host.services->clipboard) return out;
-    const auto envelope = host.services->clipboard->contents();
-    for (const auto &item : envelope.items) {
-        if (item.kind != QLatin1String(clipboardformat::kind::node())) continue;
-        // The same shape node.serialize returns — session node ids deliberately
-        // left out for the same reason it leaves them out.
-        out.append(QVariantMap{
-            { "format", QString::fromLatin1(sceneformat::kFormatId()) },
-            { "version", envelope.sceneFormat > 0 ? envelope.sceneFormat : sceneformat::kVersion },
-            { "node", item.nodeObject().toVariantMap() },
-            { "parent", item.parentGuid() },
-            { "index", item.siblingIndex() } });
-    }
-    return out;
-}
-
 QString EditorApi::gizmoMode()
 {
     if (!requireEngine()) return QString();
@@ -1351,6 +1322,9 @@ QVariantMap EditorApi::overlays()
     out["outlineWidth"] = outlinesettings::width();
     out["outlineColor"] = outlinesettings::color().name();
     out["outlinePrimaryColor"] = outlinesettings::primaryColor().name();
+    // The View Options menu's checkmarks, read back (STUDIO-CRUD-1 item 8):
+    // one owner (the viewport), and the menu follows it.
+    out["menu"] = host.mainWindow ? host.mainWindow->viewOptionChecks() : QVariantMap();
     return out;
 }
 
@@ -1394,7 +1368,7 @@ bool EditorApi::setOverlays(const QVariantMap &change)
         // Persisted, unlike the other rows: `stats` is the Preferences
         // `show_fps` setting, and the checkbox, the F3 key and this verb are one
         // code path with one stored value (STATS_OVERLAY_SPEC §5.3 step 3).
-        SettingsManager::getDefaultManager()->setValue("show_fps", on);
+        SettingsManager::getDefaultManager()->set(settingkeys::showFps, on);
     }
     if (change.contains("physicsDebug")) {
         const bool on = change.value("physicsDebug").toBool();
@@ -2259,6 +2233,32 @@ QVariantList EditorApi::properties(const QVariantMap &args)
     return host.mainWindow->propertyRows(tab);
 }
 
+QVariantMap EditorApi::propertyRow(const QVariantMap &args)
+{
+    if (!host.mainWindow) {
+        fail("editor.propertyRow: this verb needs the editor window (a --script/--headless "
+             "run has no panels)");
+        return QVariantMap();
+    }
+    static const QStringList known = { QStringLiteral("tab"), QStringLiteral("key"),
+                                       QStringLiteral("value") };
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("editor.propertyRow"),
+                                                         args, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+    const QString key = args.value(QStringLiteral("key")).toString().trimmed();
+    if (key.isEmpty()) { fail("editor.propertyRow: a 'key' is required"); return QVariantMap(); }
+    const bool drive = args.contains(QStringLiteral("value"));
+    QString error;
+    const QVariantMap out = host.mainWindow->propertyRow(
+        args.value(QStringLiteral("tab")).toString(), key, drive,
+        scriptmod::normalizeJs(args.value(QStringLiteral("value"))), &error);
+    if (out.isEmpty()) {
+        fail(QStringLiteral("editor.propertyRow: %1").arg(error));
+        return QVariantMap();
+    }
+    return out;
+}
+
 QVariantMap EditorApi::snapSize()
 {
     return QVariantMap{ { QStringLiteral("translate"), double(SnapSettings::translateSize()) },
@@ -2508,6 +2508,50 @@ bool EditorApi::frame(int n, double dt)
                fail(QStringLiteral("editor.frame: the player space is active but its view is not "
                                    "ready to render; show the page or use player.frame"));
     host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
+    return true;
+}
+
+bool EditorApi::key(const QString &name, const QString &action)
+{
+    QWidget *target = host.viewport ? host.viewport->asWidget() : nullptr;
+    if (!target) return fail("editor.key: no editor viewport in this session");
+    const QKeySequence seq = QKeySequence::fromString(name, QKeySequence::PortableText);
+    if (seq.isEmpty() || seq[0].key() == Qt::Key_unknown)
+        return fail(QStringLiteral("editor.key: unknown key '%1'").arg(name));
+    const QString act = action.isEmpty() ? QStringLiteral("tap") : action.toLower();
+    if (act != QLatin1String("press") && act != QLatin1String("release")
+        && act != QLatin1String("tap"))
+        return fail(QStringLiteral("editor.key: action must be 'press', 'release' or 'tap' "
+                                   "(got '%1')").arg(action));
+    const Qt::Key k = seq[0].key();
+    const Qt::KeyboardModifiers mods = seq[0].keyboardModifiers();
+    if (act != QLatin1String("release")) {
+        // THE OVERRIDE FIRST, as Qt's shortcut map asks it of the focus widget:
+        // it is where the viewport claims a key for the run while playing.
+        QKeyEvent over(QEvent::ShortcutOverride, k, mods);
+        over.ignore();
+        QApplication::sendEvent(target, &over);
+        // A KEY THE VIEWPORT DID NOT CLAIM, THAT IS AN EDITOR SHORTCUT, NEVER
+        // REACHES IT: Qt's shortcut map fires the shortcut instead (W is
+        // tool.translate while editing). Sending the KeyPress anyway would
+        // drive a path no user can take — refuse, and name the shortcut.
+        if (!over.isAccepted() && host.mainWindow) {
+            const QKeySequence chord(seq[0]);
+            if (const auto *reg = host.mainWindow->findChild<ShortcutRegistry *>()) {
+                for (const ShortcutRegistry::Entry &e : reg->entries()) {
+                    if (!e.shortcut || e.sequence.isEmpty() || e.sequence != chord) continue;
+                    return fail(QStringLiteral("editor.key: '%1' is the shortcut %2 here, not a "
+                                               "viewport key").arg(name, e.id));
+                }
+            }
+        }
+        QKeyEvent press(QEvent::KeyPress, k, mods);
+        QApplication::sendEvent(target, &press);
+    }
+    if (act != QLatin1String("press")) {
+        QKeyEvent release(QEvent::KeyRelease, k, mods);
+        QApplication::sendEvent(target, &release);
+    }
     return true;
 }
 
@@ -2987,6 +3031,25 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
                      .arg(g.toString(), IEditorViewport::gradeWords()));
             return out;
         }
+    }
+
+    // A SCREENSHOT IS THE EDITOR'S PICTURE AT REST (PHOTON-FIELD-ROTATE-1; the
+    // product rule): GI that still owes work - a rebuild, a settle injection, the
+    // irradiance field's refinement passes - would photograph a picture that is
+    // still moving, and two shots of one still scene would differ. Frames are
+    // stepped at dt 0 (the document's clock does not move: animation, physics and
+    // particles stay at the instant the script asked for) until the ONE settle
+    // predicate, world.giStatus().giAtRest, holds - bounded, because a scene whose
+    // lights move every frame never comes to rest.
+    //
+    // THE SETTLE PRESENTS NOTHING (round 4; perf.offscreen_isolation's rule - a
+    // readback presents no editor frame): the viewport renders the settle frames
+    // OFFSCREEN, through the shot's own view with the on-screen views quiet, and
+    // the scene's GI advances through that view (IEditorViewport::
+    // settleGiBeforeNextScreenshot). No frame moves the document's clock.
+    if (!playerHasTheScreen()) {
+        static const int kScreenshotSettleFrames = 2000;
+        host.viewport->settleGiBeforeNextScreenshot(kScreenshotSettleFrames);
     }
 
     // The player page owns the screen: photograph IT, through the player's own

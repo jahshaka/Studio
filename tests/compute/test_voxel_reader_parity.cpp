@@ -57,7 +57,7 @@ static std::vector<VoxelReaderCone> makeCones(unsigned cascades, bool withSdf)
     const Vec3 starts[4] = { Vec3(0.5f, 0.52f, 0.5f), Vec3(0.31f, 0.47f, 0.66f),
                              Vec3(0.5f, 0.505f, 0.9f), Vec3(-0.08f, 0.5f, 0.5f) };
     // flags: pixel diffuse, pixel diffuse (four cones), specular, field ray
-    const unsigned flags[4] = { 0u, 4u, 1u | 8u, 8u };
+    const unsigned flags[4] = { 0u, 0u, 1u, 0u };
     const float tans[4] = { 0.577f, 0.98269f, 0.12f, 0.0437f };
     std::vector<VoxelReaderCone> cones;
     for (unsigned i = 0; i < 64u; ++i) {
@@ -70,7 +70,8 @@ static std::vector<VoxelReaderCone> makeCones(unsigned cascades, bool withSdf)
         // pixel shader): there the specular variant takes it.
         if (withSdf && v == 2u) k.flags |= 2u;
         k.tanHalfAngle = tans[v];
-        k.biasDirLS = (flags[v] & 8u) ? Vec3(0, 0, 0) : unit(0, 1, 0);
+        // The field's probe ray starts in free space: no origin surface (no normal).
+        k.biasDirLS = (v == 3u) ? Vec3(0, 0, 0) : unit(0, 1, 0);
         k.cascade = i % (cascades ? cascades : 1u);
         k.lod = float((i / 3u) % 4u) * 0.75f;
         cones.push_back(k);

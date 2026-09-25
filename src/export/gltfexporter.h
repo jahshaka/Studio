@@ -32,8 +32,11 @@ For more information see the LICENSE file
 //   ambient audio, viewpoints, GI mode (informational).
 
 #include <QByteArray>
+#include <QImage>
 #include <QJsonObject>
 #include <QStringList>
+
+#include <functional>
 
 #include "irisgl/irisglfwd.h"
 
@@ -56,11 +59,20 @@ public:
         int animationCount = 0;
         int skinCount = 0;
         QString audioSourcePath; // ambient audio file to copy beside the export, if any
+        bool cloudsBaked = false; // the sky's cloud layer is baked into its sky image (CLOUDS-2D-1)
     };
+
+    /// THE SKY AS A PICTURE, for what only a renderer can draw (CLOUDS-2D-1's
+    /// cloud layer): a width x height lat-long image in the viewer's equirect
+    /// convention (stitchCubemapToEquirect's), or a null image. The exporter
+    /// stays a pure document consumer — the caller hands this in when it has a
+    /// renderer, and a headless export simply has none.
+    using SkyBaker = std::function<QImage(int width, int height)>;
 
     /// Converts the live document scene to a binary glTF. `sceneName` becomes
     /// the glTF scene name. Never throws; failures land in Result::error.
-    static Result exportScene(const iris::ScenePtr &scene, const QString &sceneName);
+    static Result exportScene(const iris::ScenePtr &scene, const QString &sceneName,
+                              const SkyBaker &bakeSky = SkyBaker());
 };
 
 #endif // GLTFEXPORTER_H

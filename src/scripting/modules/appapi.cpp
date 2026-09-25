@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "services/framepacing.h"
 #include "services/framemonitor.h"
@@ -267,7 +268,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
+        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, gpuCountLagFrames, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
@@ -281,14 +282,21 @@ QVector<VerbInfo> AppApi::verbs() const
           "LOD actually drawn. `submittedTriangles` is the other question — what the renderer handed "
           "the GPU last frame, EVERY pass included (the same geometry drawn again for the SSR depth "
           "pre-pass, each shadow cascade, probe captures, one full-screen quad per post step) — and it "
-          "is the number the readout used to show unlabelled as \"triangles\". `perPass` breaks that "
+          "is the number the readout used to show unlabelled as \"triangles\". Where the visibility buffer "
+          "draws (world.atomStatus), its objects and their levels are chosen by the GPU and their share of "
+          "these counts is read back once the frame has retired, so after a change they settle "
+          "`gpuCountLagFrames` frames later (0 while every draw is counted on the CPU). `perPass` breaks that "
           "total down per compositor pass, and it is filled only while the render monitor is capturing "
           "(Ctrl+F4 / perf.start): the per-pass counters cost clock reads and listeners on every "
           "workspace, so nothing pays for them when nobody is looking, and the list is empty "
           "otherwise. "
           "`perObject` is ATOM's readout: one row per drawn object with the LOD LEVEL it is "
           "actually on (`level`), how many its mesh has (`levels`, 1 = no baked chain) and what "
-          "that level's buffers really hold (`triangles`). It is read off the Items — the byte "
+          "that level's buffers really hold (`triangles`); `id` is the engine node and `name` "
+          "the DOCUMENT node's name it mirrors (resolved through the scene mirror; an editor "
+          "helper the renderer also draws — a light icon, the sun disc — mirrors no node and "
+          "reads ''). It is read "
+          "off the Items — the byte "
           "the render queue indexes their VAO list with — and never re-derived from the camera, "
           "so it is the decision and not a second opinion about it. ONE CAVEAT, stated because "
           "it is real: that byte is one slot per object and every pass which updates LOD lists "
@@ -1006,7 +1014,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     const QString projectsRoot =
         projects ? projects->projectsRoot()
                  : AppPaths::projectsRoot(SettingsManager::getDefaultManager()
-                                              ->getValue("default_directory", QString()).toString(),
+                                              ->get(settingkeys::defaultDirectory),
                                           Constants::PROJECT_FOLDER);
     const auto folderFor = [projects](const QString &guid) -> QString {
         return projects ? projects->projectFolderFor(guid) : QString();
@@ -1226,8 +1234,7 @@ QVariantMap AppApi::scriptPolicy(const QString &mode)
         // Persisted like every other preference, so the next session opens the
         // way the user left it.
         if (SettingsManager *settings = SettingsManager::getDefaultManager())
-            settings->setValue(QStringLiteral("script_feedback_live"),
-                               wanted == ScriptRunPolicy::Live);
+            settings->set(settingkeys::scriptFeedbackLive, wanted == ScriptRunPolicy::Live);
     }
     QVariantMap out;
     out["mode"] = ScriptEngine::policyName(engine->interactivePolicy());
@@ -1362,10 +1369,24 @@ QVariantMap AppApi::renderStats()
             std::vector<jahshaka::engine::ObjectLodDesc> lods;
             es->objectLods(lods);
             rows.reserve(int(lods.size()));
+            // THE NAME IS THE DOCUMENT'S. The engine's Items are created
+            // unnamed, so `ObjectLodDesc::name` is empty for every row; the
+            // mirror knows which engine node mirrors which document node, and
+            // ONE reverse map per call turns a row's engine id into the name
+            // the user gave it (never a walk per row).
+            QHash<jahshaka::engine::NodeId, QString> docNames;
+            if (SceneMirror *mirror = host.viewport->sceneMirror(); mirror && doc) {
+                docNames.reserve(doc->nodes.size());
+                for (const iris::SceneNodePtr &n : std::as_const(doc->nodes)) {
+                    if (!n) continue;
+                    const jahshaka::engine::NodeId id = mirror->engineNode(n.data());
+                    if (id) docNames.insert(id, n->getName());
+                }
+            }
             for (const jahshaka::engine::ObjectLodDesc &d : lods) {
                 QVariantMap row;
                 row.insert("id", QVariant::fromValue(qulonglong(d.node)));
-                row.insert("name", QString::fromStdString(d.name));
+                row.insert("name", docNames.value(d.node, QString::fromStdString(d.name)));
                 row.insert("level", int(d.level));
                 row.insert("levels", int(d.levels));
                 row.insert("triangles", QVariant::fromValue(qulonglong(d.triangles)));
@@ -1376,6 +1397,10 @@ QVariantMap AppApi::renderStats()
     }
     out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
     out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
+    // THE COUNTS' LAG (ATOM S3-DRAW): where the visibility buffer draws, its share of
+    // the geometry counts is read back from the GPU cull once the frame has retired,
+    // so after a change the counts settle this many frames later (0: CPU-counted).
+    out.insert("gpuCountLagFrames", int(s.gpuCountLagFrames));
     out.insert("incompletePsoRequests", s.incompletePsoRequests);
     // The Forward+ census. `forwardPlusOverBudget` == 0 PROVES no light was
     // dropped from any cell; non-zero says a full cell would have dropped that

@@ -30,11 +30,9 @@ GraphicsView::GraphicsView( QWidget *parent) : QGraphicsView(parent)
 	setRenderHint(QPainter::Antialiasing);
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	//setCacheMode(QGraphicsView::CacheBackground);
 	setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
 	setCacheMode(QGraphicsView::CacheBackground);
-	//setViewportUpdateMode(QGraphicsView::MinimalViewportUpdate);
 	setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
 	setDragMode(QGraphicsView::ScrollHandDrag);
 
@@ -194,24 +192,9 @@ void GraphicsView::addShortcuts()
 	// That is exactly what happened to Ctrl+Z (deep audit 2026-09, area 1:
 	// "The following shortcuts are about to be activated ambiguously", then
 	// QShortcutEvent("Ctrl+Z", ..., TRUE)), and re-adding any of these would
-	// reproduce it. If the graph view ever needs its own binding, register it
-	// in ShortcutRegistry with a distinct sequence.
-
-	// F frames the selection (all nodes when nothing is selected)
-	auto fitShortcut = new QShortcut(this);
-	fitShortcut->setKey(Qt::Key_F);
-	connect(fitShortcut, &QShortcut::activated, [this]()
-	{
-		fitSelection();
-	});
-
-	// H resets the zoom
-	auto resetZoomShortcut = new QShortcut(this);
-	resetZoomShortcut->setKey(Qt::Key_H);
-	connect(resetZoomShortcut, &QShortcut::activated, [this]()
-	{
-		resetZoom();
-	});
+	// reproduce it. F (frame the selection) and H (reset the zoom) went the
+	// same way (STUDIO-CRUD-1 item 7): F is the registry's "camera.focus",
+	// routed to fitSelection() on this page, and H is "graph.resetZoom".
 }
 
 void GraphicsView::fitSelection()

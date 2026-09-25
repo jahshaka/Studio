@@ -122,8 +122,6 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         writePostProcessData(projectObj, postMan);
     }
 
-    //qDebug() << projectObj;
-
     return QJsonDocument(projectObj).toJson();
 }
 
@@ -156,6 +154,15 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // does. `vr.locomotion` overrides are a SESSION's and are never written.
     vrworld::write(scene, sceneObj);
     sceneObj["skyData"] = skyDefs;
+    // THE CLOUD LAYER (CLOUDS-2D-1) — written ONLY when it is not the default,
+    // so a scene nobody gave clouds is byte-for-byte the file it was before the
+    // layer existed (the reader reads an absent block as the default).
+    if (scene->clouds != iris::CloudLayer())
+        sceneObj["clouds"] = scene->clouds.toJson();
+    // HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1) — the same rule: only when it is
+    // not the default, so every scene that never turned it on is unchanged.
+    if (scene->sunContact != iris::SunContact())
+        sceneObj["sunContact"] = scene->sunContact.toJson();
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;
@@ -278,7 +285,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giProbeSnapDeviation"] = scene->giProbeSnapDeviation;
     sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
     sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;
-    sceneObj["giRayMarchStepScale"] = scene->giRayMarchStepScale;   // FIX WAVE B5
     // PHOTON cascades. The flag always; the table only when a scene PINNED one,
     // so a document that leaves the tier in charge carries no empty array.
     sceneObj["giCascades"] = scene->giCascades;
@@ -293,12 +299,11 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
             set.append(QJsonArray{ double(c.x()), double(c.y()), double(c.z()) });
         sceneObj["giCascadeSet"] = set;
     }
-    // DDGI (GI_UNIFIED_SPEC.md §4 P1). Tri-state toggle + our intensity scalar,
+    // DDGI (GI_UNIFIED_SPEC.md §4 P1) and the gather: tri-state toggles,
     // written like the probe knobs above: always, and read back onto the same
     // defaults, so a document that never touched them reopens identical.
     sceneObj["giDdgi"] = scene->giDdgi;
     sceneObj["giGather"] = scene->giGather;
-    sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
     // PHOTON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
     // and spelled out here for the same reason (this file must not pull the
     // services layer into a dozen headless test targets): an ordinal would
@@ -647,7 +652,6 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
         sceneNodeObj["activeAnimation"] = animations.indexOf(activeAnim);
     else
         sceneNodeObj["activeAnimation"] = -1;
-        //sceneNodeObj["activeAnimation"] = activeAnim->getName();
 
 
     // todo: add all animations
@@ -802,9 +806,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     QJsonObject matObj;
     writeSceneNodeMaterial(matObj, meshNode->getMaterial(), relative);
 	sceneNodeObject["material"] = matObj;
-	//auto matDef = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
-	//qDebug() << QJsonDocument(matDef).toJson(QJsonDocument::Indented);
-	//sceneNodeObject["material"] = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
 }
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
@@ -973,7 +974,6 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 				valuesObj[prop->name] = QString();
 				continue;
 			}
-			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
 			auto id = relative
 				? assetGuidForTexturePath(prop->getValue().toString())
 				: relativeToStaticBase(prop->getValue().toString());

@@ -174,7 +174,23 @@ world.gi({ cascades: false });
 // stop when two consecutive pictures are identical. Every phase below compares
 // pictures taken several renders apart, so this is what makes those comparisons
 // about the GRADES.
+// GI FIRST, ON ITS OWN PREDICATE (PHOTON-FIELD-ROTATE-1): world.giStatus().giAtRest
+// says nothing the scene's GI owes will change the picture - the irradiance field
+// refines for ~200 frames after any event, a little at a time, and two identical
+// shots taken inside that window are not a settled picture. Then the picture loop
+// below reads until the exposure and the probe catch-up stop moving too.
+function restGi(tag) {
+    for (var f = 0; f < 4000; f++) {
+        if (world.giStatus().giAtRest) {
+            console.log("GI at rest (" + tag + ") after " + f + " frames");
+            return;
+        }
+        editor.frame(1, 1 / 60);
+    }
+    assert(false, "GI came to rest (" + tag + ")");
+}
 function settleGi(tag) {
+    restGi(tag);
     var prev = null;
     for (var r = 0; r < 40; r++) {
         editor.frame(10, 1 / 60);
@@ -451,6 +467,17 @@ settleGi("camera doors");
 // own HDR adaptation state, and that state advances only when IT renders — once
 // per camShot — so its first few pictures are its exposure converging and
 // nothing else. Shoot until two consecutive pictures are identical.
+// ...AND GI AT REST FROM THE CAMERA'S OWN POSE (PHOTON-FIELD-ROTATE-1): the
+// scene camera's view is the one rendering during these shots, so the cascade
+// chain and the irradiance field follow IT (the entered probes then refine over
+// the following frames); a shot is the picture at rest only once
+// world.giStatus().giAtRest says GI owes nothing more at this pose.
+var camRest = 0;
+for (; camRest < 4000; camRest++) {
+    camShot({ grade: "plain" });
+    if (world.giStatus().giAtRest) break;
+}
+assert(world.giStatus().giAtRest, "GI came to rest at the scene camera's pose (" + camRest + " shots)");
 var camPlain = camShot({ grade: "plain" });
 for (var camRound = 0; camRound < 40; camRound++) {
     var next = camShot({ grade: "plain" });
