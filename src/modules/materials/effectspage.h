@@ -551,7 +551,7 @@ private:
 	QString newName;
 
 	QLineEdit *projectName = nullptr;
-	ShaderAssetWidget *assetWidget;
+	ShaderAssetWidget *assetWidget = nullptr;
 	Database *dataBase = nullptr;
 };
 
