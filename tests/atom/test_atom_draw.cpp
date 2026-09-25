@@ -22,7 +22,10 @@
 //       the per-scene binding: HlmsAtom binds SceneGiBinding.pcc like PBS);
 //   (f) 640 buckets — past one 512-slot pool of twins — each shading only its own
 //       pixels (the bucket id, never the twin's slot);
-//   (g) an ORTHOGRAPHIC view picks the level the CPU strategy picks.
+//   (g) an ORTHOGRAPHIC view picks the level the CPU strategy picks;
+//   (h) so does a LETTERBOXED one (the inset's rows are the currency);
+//   (i) the LOD band's state follows the object: one renumbered into a removed object's
+//       slot takes the rule's level on the next frame.
 // FRAMES, NEVER TIME: every picture is read until two consecutive reads agree to a code.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -34,6 +37,7 @@
 #include <Compositor/OgreCompositorWorkspace.h>
 #include <OgreImage2.h>
 #include <OgreItem.h>
+#include <OgreSceneNode.h>
 #include <OgreSceneManager.h>
 #include <OgreRoot.h>
 #include <OgreTextureBox.h>
@@ -940,6 +944,105 @@ int main()
                       2.0f * A.half, gpu, cpu, A.want);
         }
         scene->setNodeVisible(ln, false);
+        scene->setLodBias(0.0f);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f));
+    }
+
+    // The GPU level a node's pixels carry in the id image this frame (its slot's level
+    // bits over every pixel of it; 98 = more than one level seen, 99 = no pixel).
+    auto gpuLevelOf = [&](NodeId node) -> unsigned {
+        ogreScene->ensureGpuScene(false);
+        uint32_t slot = 0xFFFFFFFFu;
+        for (unsigned sl = 0; sl < gs.slotCount(); ++sl)
+            if (gs.entry(sl).ids[0] == unsigned(node)) { slot = sl; break; }
+        std::vector<uint32_t> gx, gy;
+        if (slot == 0xFFFFFFFFu || !readIds(ogreView, gx, gy)) return 99u;
+        std::map<unsigned, size_t> seen;
+        for (size_t px = 0; px < gx.size(); ++px)
+            if (gx[px] != AtomId::kEmpty && (gx[px] & AtomId::kSlotMask) == slot) ++seen[(gx[px] >> 24u) & 0x7u];
+        return seen.empty() ? 99u : (seen.size() == 1u ? seen.begin()->first : 98u);
+    };
+    auto lodSphere = [&](const Vec3 &at, Ogre::Item **itemOut) -> NodeId {
+        Geometry lg;
+        MeshData lm = sphereMesh(48, 24, 0.5f, lg);
+        lm.lodIndices = { lm.indices, lm.indices };
+        lm.lodErrors = { 0.002f, 0.02f };
+        lm.lodBounds = { 0.002f, 0.02f };
+        PbrParams lp;
+        lp.roughness = 0.6f;
+        const NodeId n = scene->createNode();
+        scene->setNodeTransform(n, at, Quat(), Vec3(1, 1, 1));
+        const MeshId mesh = scene->createMesh(lm);
+        scene->attachMesh(n, mesh, scene->createPbrMaterial(lp));
+        if (itemOut) {
+            *itemOut = nullptr;
+            auto it = ogreScene->sceneManager()->getMovableObjectIterator("Item");
+            while (it.hasMoreElements()) {
+                auto *cand = static_cast<Ogre::Item *>(it.getNext());
+                if (cand->getParentSceneNode() && cand->getMesh() && cand->getMesh()->getNumLodLevels() == 3u &&
+                    cand->getParentSceneNode()->_getDerivedPosition().distance(Ogre::Vector3(at.x, at.y, at.z)) < 1e-3f)
+                    *itemOut = cand;
+            }
+        }
+        return n;
+    };
+
+    // ---- (h) A LETTERBOXED VIEW PICKS THE CPU STRATEGY'S LEVEL -----------------------
+    // The level rule's currency is the pass's own rows (Viewport::getActualHeight, the
+    // inset in a letterboxed chain), never the whole target's: the id pass fed it the
+    // full 540 rows while the casters' strategy read the 320-row inset. At 10 m from the
+    // surface the inset affords 0.0259 (level 2) and the full target 0.0153 (level 1).
+    {
+        scene->setLodBias(1.0f);
+        Ogre::Item *hitem = nullptr;
+        const NodeId hn = lodSphere(Vec3(0.0f, 1.0f, -2.0f), &hitem);
+        CameraDesc lc = enginetest::testCameraDescLookAt(Vec3(0.0f, 1.0f, 8.5f), Vec3(0.0f, 1.0f, -2.0f));
+        lc.constrainAspect = true;
+        lc.aspect = 3.0f;
+        view->setCamera(lc);
+        scene->setAtomDrawEnabled(true);
+        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        const unsigned gpu = gpuLevelOf(hn);
+        scene->setAtomDrawEnabled(false);
+        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        const unsigned cpu = hitem ? unsigned(hitem->getCurrentMeshLod()) : 97u;
+        scene->setAtomDrawEnabled(true);
+        std::printf("  (h) letterboxed 3:1: GPU level %u, CPU level %u\n", gpu, cpu);
+        CHECK_MSG(gpu == cpu && cpu == 2u,
+                  "(h) a letterboxed view: the id pass draws level %u, the CPU strategy's (%u; wanted 2 - the "
+                  "inset's rows)", gpu, cpu);
+        scene->setNodeVisible(hn, false);
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f)));
+    }
+
+    // ---- (i) THE BAND'S STATE BELONGS TO THE OBJECT, NOT THE SLOT ----------------------
+    // The table is swap-on-remove: deleting A moves the LAST slot's object B into A's
+    // slot. With the band on (a watched view's), A held level 0; B sits 0.0021 of
+    // allowed error out - inside level 0's band above its 0.002 threshold - so a band
+    // keyed by the slot would HOLD B at A's level 0 on the frame after the delete. The
+    // rule's level for B is 1.
+    {
+        scene->setLodBias(1.0f);
+        view->setLodHysteresisOffscreen(true);
+        // allowed = d * 2 / (proj11 * 540), proj11 = 2.4142 at 45 degrees, d = the
+        // centre's distance less the bounds' half-diagonal (0.866 for this sphere):
+        // A at 1.253 m -> d 0.387, 0.00059 (level 0); B at 2.235 m -> d 1.369, 0.0021.
+        const NodeId na = lodSphere(Vec3(-0.6f, 1.0f, 6.0f - 1.1f), nullptr);
+        const NodeId nb = lodSphere(Vec3(0.6f, 1.0f, 6.0f - 2.153f), nullptr);
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f)));
+        scene->setAtomDrawEnabled(true);
+        for (int i = 0; i < 8; ++i) e->renderOneFrame();
+        const unsigned before = gpuLevelOf(nb), aBefore = gpuLevelOf(na);
+        scene->removeNode(na);
+        e->renderOneFrame();
+        const unsigned after = gpuLevelOf(nb);
+        std::printf("  (i) banded: A level %u, B level %u before A's removal, B level %u the frame after\n", aBefore,
+                    before, after);
+        CHECK_MSG(aBefore == 0u && before == 1u && after == 1u,
+                  "(i) the object renumbered into a removed object's slot keeps the rule's level (A %u, B %u -> %u; "
+                  "wanted 0, 1 -> 1)", aBefore, before, after);
+        scene->setNodeVisible(nb, false);
+        view->setLodHysteresisOffscreen(false);
         scene->setLodBias(0.0f);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f));
     }
