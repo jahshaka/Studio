@@ -695,6 +695,9 @@ public slots:
     /// New Scene dialog's "Empty scene" checkbox and `project.create`'s
     /// `{empty: true}`. See createDefaultScene for what each of the two holds.
     void newScene(bool empty = false);
+    /// The grid, light-wire and physics-debug overlays back to EditorData's
+    /// defaults — newScene and the create run, one body.
+    void resetOverlaysToDefaults();
 
     /// Creates the world of the project `guid` (a row createProjectShell has
     /// just made) named `filename` in `projectPath`: closes the world that is

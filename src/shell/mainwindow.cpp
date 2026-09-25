@@ -5960,7 +5960,15 @@ void MainWindow::newScene(bool empty)
     auto scene = this->createDefaultScene(empty);
     this->setScene(scene);
     this->sceneView->resetEditorCam();
+    resetOverlaysToDefaults();
+}
 
+// A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07) — the
+// three overlays the open path pushes out of the saved EditorData. ONE body for
+// newScene and the create run (it was two copies). The grid and light-wire
+// checkmarks follow through overlaysChanged (syncOverlayChecks).
+void MainWindow::resetOverlaysToDefaults()
+{
     const EditorData defaults;
     sceneView->setShowGrid(defaults.showGrid);
     sceneView->setShowLightWires(defaults.showLightWires);
@@ -6177,13 +6185,7 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         ui->actionClose->setDisabled(false);
         setScene(created);
         sceneView->resetEditorCam();
-        // A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07) —
-        // the three settings the open path pushes out of the saved EditorData.
-        const EditorData defaults;
-        sceneView->setShowGrid(defaults.showGrid);
-        sceneView->setShowLightWires(defaults.showLightWires);
-        sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
-        if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
+        resetOverlaysToDefaults();   // a brand-new scene starts at the defaults
         refreshClaudeChatContext();   // D1: rebind an open chat to the new project
         if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project
         if (services) services->announceSceneOpened();
