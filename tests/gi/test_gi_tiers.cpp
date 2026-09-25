@@ -203,6 +203,12 @@ static void testTierTable()
             CHECK(text.contains(QStringLiteral("no reflection probes")) != probes,
                   qPrintable(QStringLiteral("tier %1's description tells the truth about probes")
                                  .arg(worldmodes::photonTierName(tier))));
+            // ...and at a RAY tier it says the grid is not built where rays run
+            // (PHOTON-F12-PCC; the engine's own rayReflections row).
+            if (probes && facts.rayReflections)
+                CHECK(text.contains(QStringLiteral("no reflection-probe grid is built")),
+                      qPrintable(QStringLiteral("tier %1 says it builds no grid where rays run: %2")
+                                     .arg(worldmodes::photonTierName(tier), text)));
             if (probes)
                 CHECK(text.contains(QString::number(worldmodes::photonTierProbeFaceSize(tier))),
                       qPrintable(QStringLiteral("tier %1 names its probe face size (%2 px)")

@@ -1015,11 +1015,20 @@ int main()
         // are two numbers now, so both are asserted, on one scene, from the
         // dial the engine resolves them with (OgreGi.cpp buildPcc). Epic shares
         // GiQuality::High and is therefore this same row.
+        // HIGH BUILDS A GRID ONLY WHERE THE SCENE DOES NOT TRACE (PHOTON-F12-PCC):
+        // its capture size is read with the scene's rays off.
+        s->setRayTracing(RayTracingMode::Off);
         gi.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(gi), "capture size: the hybrid rebuilds at High");
         render(engine.get(), 10);
         CHECK(s->giStatus().probeCaptureSize == 512,
               "capture size: High (and Epic, which shares the quality) captures at 512 px");
+        // ...and with them back on, High is a ray tier and the grid goes.
+        s->setRayTracing(RayTracingMode::Auto);
+        render(engine.get(), 2);
+        if (engine->rayQueryAvailable())
+            CHECK(s->giStatus().probeGridByRays && s->giStatus().probeCount == 0,
+                  "ray tier: High with the scene's rays on builds no grid");
         engine->destroyScene(s);
     }
 

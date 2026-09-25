@@ -572,6 +572,18 @@ int main()
               "(the fresnel_workflow + hlms_decals_diffuse permutation renders)");
     }
 
+    // THE RAY TIER (PHOTON-F12-PCC): the same hybrid at High builds NO grid
+    // wherever the scene traces — this suite's Medium grid is the non-ray tier.
+    if (engine->rayQueryAvailable()) {
+        GiParams high = gi;
+        high.quality = GiQuality::High;
+        CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
+        render(engine.get(), 4);
+        const GiStatus rt = s->giStatus();
+        CHECK(rt.probeGridByRays && rt.probeCount == 0 && rt.probesDropped == 0 && !rt.pccBound,
+              "ray tier: High with rays builds no probe grid");
+    }
+
     engine->destroyScene(s);
 
     // ---- (i) NOT ONE SHADER FAILED TO COMPILE ----------------------------

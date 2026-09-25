@@ -686,6 +686,15 @@ int main(int argc, char **argv)
         // the 300 ms number is PRINTED here, every run, and the assertion is at
         // 600 until that lane lands. Never widen this silently: when
         // PCC-BUDGET-1 is in, this number comes down to kStreamFrameMs.
+        //
+        // ...EXCEPT AT A RAY TIER (PHOTON-F12-PCC), where the grid is not built
+        // at all: Showroom 2 is authored at Epic, so on a machine that traces
+        // the open places no probe and the 713-799 ms placement is gone. The
+        // bar there IS kStreamFrameMs — re-derived from the open without the
+        // grid, measured at a worst frame of 97.4 ms on the RTX 4080 SUPER
+        // (Debug, three lanes sharing the box). Which arm applies is the
+        // engine's own answer (world.giStatus().probeGridByRays), read after
+        // the open; a machine without rays keeps the 600 until PCC-BUDGET-1.
         const double kOpenFrameMsUntilPccBudget = 600.0;
         if (!showroomGuid.isEmpty()) {
             const double control = measureControlGap(mcp, "showroom");
@@ -711,21 +720,30 @@ int main(int argc, char **argv)
                 QStringLiteral("JSON.parse(JSON.stringify(editor.viewportState()))"))
                                          .value("result").toObject();
             mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+            const bool rayTier = mcp.runScript(QStringLiteral("world.giStatus().probeGridByRays"))
+                                     .value("result").toBool();
+            const double bar = rayTier ? kStreamFrameMs : kOpenFrameMsUntilPccBudget;
             const double worst = frames.value("worstMs").toDouble();
-            std::printf("info: [open Showroom 2, cover off] open verb %.0f ms | worst UI gap "
+            std::printf("info: [open Showroom 2, cover off, %s] open verb %.0f ms | worst UI gap "
                         "%.1f ms (budget %.1f) | worst FRAME %.1f ms — PRINTED against %.0f, "
-                        "ASSERTED at %.0f until PCC-BUDGET-1 | slow frames %d | cover '%s'\n",
+                        "ASSERTED at %.0f%s | slow frames %d | cover '%s'\n",
+                        rayTier ? "ray tier: no probe grid" : "probe grid",
                         elapsedMs, beat.value("maxGapMs").toDouble(), budget, worst,
-                        kStreamFrameMs, kOpenFrameMsUntilPccBudget,
+                        kStreamFrameMs, bar, rayTier ? "" : " until PCC-BUDGET-1",
                         frames.value("slowFrames").toInt(),
                         qUtf8Printable(view.value("cover").toString()));
             std::fflush(stdout);
             CHECK(opened, "Grand Showroom 2 opened with the cover off");
             CHECK(view.value("cover").toString() == QLatin1String("none"),
                   "no cover was drawn for the open");
-            CHECK(worst > 0.0 && worst < kOpenFrameMsUntilPccBudget,
-                  "no single frame of the Showroom 2 open is over 600 ms (the residual is the "
-                  "probe fit + the closing capture — PCC-BUDGET-1 owes the 300)");
+            if (rayTier)
+                CHECK(worst > 0.0 && worst < bar,
+                      "AT A RAY TIER no single frame of the Showroom 2 open is over 300 ms — no "
+                      "probe grid is placed, fitted or captured (PHOTON-F12-PCC)");
+            else
+                CHECK(worst > 0.0 && worst < bar,
+                      "no single frame of the Showroom 2 open is over 600 ms (the residual is the "
+                      "probe fit + the closing capture — PCC-BUDGET-1 owes the 300)");
             // THE WATCHDOG SAW NOTHING. Its default threshold is 2,000 ms, and
             // a stall report across a load with the cover off would mean a
             // frame the user watched the window die in.
