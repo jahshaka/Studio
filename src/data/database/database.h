@@ -624,6 +624,12 @@ public:
     // desktop <= 0 fetches every project (legacy behaviour); desktop 1..N filters
     // to that desktop, treating an absent/NULL desktop column value as Desktop 1.
     QVector<ProjectTileData> fetchProjects(int desktop = 0);
+    /// ONE project's desktop row (the grid's incremental add, CREATE-GAP-1);
+    /// false when no row has `guid`.
+    bool fetchProjectTile(const QString &guid, ProjectTileData *out);
+    /// The guids on one desktop, no blobs — what the Desktop entry checks its
+    /// tiles against without reading a thumbnail.
+    QStringList fetchProjectGuids(int desktop);
     QVector<FolderRecord> fetchChildFolders(const QString &parent, const QString &projectGuid);
     /// ONE folder row by guid; an empty `guid` field when nothing has it.
     FolderRecord fetchFolder(const QString &guid);

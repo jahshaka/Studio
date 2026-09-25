@@ -26,6 +26,7 @@ For more information see the LICENSE file
 
 #include <functional>
 
+#include <QHash>
 #include <QString>
 #include <QStringList>
 
@@ -39,6 +40,8 @@ class SettingsManager;
 class IEditorViewport;
 class UndoService;
 class EditorData;
+class QImage;
+template <typename T> class QFutureWatcher;
 
 class ProjectService
 {
@@ -112,8 +115,13 @@ public:
     /// an existing, writable directory; `whyOut` says which of those it failed
     /// when the call returns empty, so a verb can refuse BY NAME instead of
     /// returning a bare false.
+    ///
+    /// The CURRENT project is NOT re-pointed (CREATE-GAP-1): the world that is
+    /// open is closed — and autosaved into its OWN row — by the caller, which
+    /// then points at the new guid (`pointAtProject`). `folderOut` receives the
+    /// new project's folder. The desktop gets the new project's tile here.
     QString createProjectShell(const QString &name, const QString &location = QString(),
-                               QString *whyOut = nullptr);
+                               QString *whyOut = nullptr, QString *folderOut = nullptr);
 
     /// Points the current project at an existing project. NO preload: the
     /// open registers the session assets in its own slices, with a worker's
@@ -123,7 +131,7 @@ public:
 
     /// Deletes a project: folder tree first (like the widget), then the DB
     /// rows through the guid-parameterised deletes — the current project is
-    /// NOT mutated (SCRIPTING_SPEC §1.6.1). Refreshes the desktop.
+    /// NOT mutated (SCRIPTING_SPEC §1.6.1). Removes the project's tile.
     bool removeProject(const QString &guid);
 
     /// The reader half of openProject: reads the scene blob into a document
@@ -153,16 +161,30 @@ public:
 
     bool saveProjectBlob();
 
-    /// The regular editor save: scene blob + viewport thumbnail + desktop
-    /// tile. No-ops when the viewport never initialized (nothing to save).
+    /// The regular editor save: scene blob (written before it returns) +
+    /// viewport thumbnail (encoded on a worker, written when it is done — see
+    /// storeThumbnailLater) + desktop tile. No-ops when the viewport never
+    /// initialized (nothing to save).
     void saveOpenScene();
 
     /// First save of a fresh project into projectPath (was
     /// MainWindow::saveScene(filename, projectPath)).
     void saveInitialScene(const QString &projectPath);
 
-    /// Screenshot -> scene thumbnail + desktop tile.
+    /// Screenshot -> scene thumbnail + desktop tile (the encode on a worker).
     void updateCurrentSceneThumbnail();
+
+    /// Encodes `img` as `guid`'s thumbnail PNG on a worker; on completion,
+    /// on this thread, writes the row's thumbnail and the tile. A later call
+    /// for the same guid supersedes an encode still in flight (the later
+    /// picture wins). A null image stores nothing.
+    void storeThumbnailLater(const QString &guid, const QImage &img);
+    /// Waits for every thumbnail encode in flight and writes each — the
+    /// shutdown path runs it while the database is still open. Returns how
+    /// many it finished.
+    int drainThumbnailEncodes();
+    /// Encodes still in flight (the suites read it).
+    int pendingThumbnailEncodes() const { return int(mThumbEncodes.size()); }
 
     /// Whether a project's scene is currently open in the editor (was
     /// UiManager::isSceneOpen — Phase 4 moved the state into the service
@@ -175,7 +197,15 @@ public:
     /// of the aggregate reads the same object.
     Project *current() const { return project; }
 
+    ~ProjectService();
+
 private:
+    void finishThumbnail(const QString &guid, QFutureWatcher<QByteArray> *watcher);
+    /// Drops `guid`'s encode in flight (a synchronous write or a delete
+    /// replaces what it would have written).
+    void supersedeThumbnail(const QString &guid);
+    QHash<QString, QFutureWatcher<QByteArray> *> mThumbEncodes;
+
     bool sceneOpen = false;
     Database *db = nullptr;
     Project *project;

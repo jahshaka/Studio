@@ -229,6 +229,72 @@ int main(int argc, char **argv)
               "...and the preference cannot take that away");
     }
 
+    // ---- THE THUMBNAIL CACHE AND A SAVE'S NEW PICTURE (CREATE-GAP-1) --------
+    // A tile decoded its PNG in its constructor on every grid build; the grid
+    // is a model now and a rebuild decodes nothing it has seen. And a save's
+    // thumbnail reached the tile through updateTile(), which decoded the tile's
+    // OLD bytes and stored the new ones after — the tile always showed the
+    // picture one save behind. setThumbnail() shows the bytes it is given.
+    {
+        const auto imageCentre = [](ItemGridWidget *tile) {
+            QLabel *image = tile->findChild<QLabel *>(QStringLiteral("image"));
+            const QImage px = image ? image->pixmap().toImage() : QImage();
+            return px.isNull() ? QColor() : px.pixelColor(px.width() / 2, px.height() / 2);
+        };
+        const QSize tileSize(200, 120);
+        ProjectTileData data;
+        data.name = QStringLiteral("Cache World");
+        data.guid = QStringLiteral("guid-cache-world");
+        data.thumbnail = makeThumbnail(QColor(200, 30, 30), tileSize);
+
+        const int d0 = ItemGridWidget::thumbnailDecodeCount();
+        auto *first = new ItemGridWidget(data, tileSize, QSize(24, 24), nullptr, false);
+        CHECK(ItemGridWidget::thumbnailDecodeCount() - d0 == 1,
+              "the first tile of a project decodes its thumbnail once");
+        auto *second = new ItemGridWidget(data, tileSize, QSize(24, 24), nullptr, false);
+        CHECK(ItemGridWidget::thumbnailDecodeCount() - d0 == 1,
+              "a rebuilt tile with the same thumbnail decodes nothing (cache hit)");
+        CHECK(imageCentre(second).red() > 150 && imageCentre(second).blue() < 80,
+              "...and shows the cached picture");
+
+        const QByteArray saved = makeThumbnail(QColor(30, 30, 200), tileSize);
+        second->setThumbnail(saved);
+        const QColor now = imageCentre(second);
+        CHECK(now.blue() > 150 && now.red() < 80,
+              "a save's NEW thumbnail is what the tile shows (not the one before it)");
+        CHECK(ItemGridWidget::thumbnailDecodeCount() - d0 == 2,
+              "new bytes for the project decode exactly once more");
+        CHECK(second->tileData.thumbnail == saved, "...and the tile keeps the new bytes");
+
+        // A COLD DESKTOP: the prefetch decodes every uncached thumbnail on the
+        // pool; the tiles built after it are all hits.
+        QVector<ProjectTileData> rows;
+        for (int i = 0; i < 6; ++i) {
+            ProjectTileData row;
+            row.name = QStringLiteral("Cold %1").arg(i);
+            row.guid = QStringLiteral("guid-cold-%1").arg(i);
+            row.thumbnail = makeThumbnail(QColor(20 * i, 100, 40), tileSize);
+            rows.append(row);
+        }
+        ProjectTileData seen = data;
+        seen.thumbnail = saved;
+        rows.append(seen);      // the cache holds exactly these bytes: skipped
+        const int d1 = ItemGridWidget::thumbnailDecodeCount();
+        const int prefetched = ItemGridWidget::prefetchThumbnails(rows, tileSize);
+        CHECK(prefetched == 6, "the prefetch decodes exactly the six thumbnails it has not seen");
+        QVector<ItemGridWidget *> cold;
+        for (const ProjectTileData &row : std::as_const(rows))
+            cold.append(new ItemGridWidget(row, tileSize, QSize(24, 24), nullptr, false));
+        CHECK(ItemGridWidget::thumbnailDecodeCount() - d1 == 6,
+              "the tiles built after a prefetch decode nothing more");
+        const QColor coldCentre = imageCentre(cold[5]);
+        CHECK(coldCentre.green() > 80 && coldCentre.red() > 80,
+              "a prefetched tile shows its own picture");
+        qDeleteAll(cold);
+        delete first;
+        delete second;
+    }
+
     if (failures) std::printf("project tile: %d FAILURES\n", failures);
     else          std::printf("project tile: all checks passed\n");
     return failures ? 1 : 0;

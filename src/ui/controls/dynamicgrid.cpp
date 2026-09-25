@@ -620,12 +620,32 @@ void DynamicGrid::deleteTile(ItemGridWidget *widget)
 
 void DynamicGrid::updateTile(const QString &id, const QByteArray &arr)
 {
-	foreach(ItemGridWidget *gridItem, originalItems) {
-		if (gridItem->tileData.guid == id) {
-			gridItem->updateTile(arr);
-			break;
-		}
-	}
+    if (ItemGridWidget *gridItem = tileByGuid(id)) gridItem->setThumbnail(arr);
+}
+
+ItemGridWidget *DynamicGrid::tile(const QString &guid) const
+{
+    return tileByGuid(guid);
+}
+
+// ONE TILE, AT THE HEAD (CREATE-GAP-1): the grid shows the desktop newest-first
+// (Database::fetchProjects orders by last_written), so a project that was just
+// made or just written belongs where a rebuild would have put it — first — and
+// nothing else is rebuilt: the flow layout re-places the existing widgets, the
+// freeform canvas places the one newcomer, the filmstrips reseed once.
+void DynamicGrid::insertTileAtHead(const ProjectTileData &tileData, bool highlight)
+{
+    addToGridView(tileData, originalItems.size(), highlight);
+    originalItems.move(originalItems.size() - 1, 0);
+    if (mode == LayoutMode::Rows) updateGridColumns(qMax(lastWidth, tileSize.width()));
+}
+
+void DynamicGrid::moveTileToHead(ItemGridWidget *widget)
+{
+    const int at = originalItems.indexOf(widget);
+    if (at <= 0) return;
+    originalItems.move(at, 0);
+    if (mode == LayoutMode::Rows) updateGridColumns(qMax(lastWidth, tileSize.width()));
 }
 
 void DynamicGrid::resetView()

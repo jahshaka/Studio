@@ -66,6 +66,13 @@ public:
     void deleteTile(ItemGridWidget*);
 
 	void updateTile(const QString &id, const QByteArray &arr);
+    /// The tile showing `guid`, or null.
+    ItemGridWidget *tile(const QString &guid) const;
+    /// Adds ONE tile first in the order (a new or newly-written project) —
+    /// the incremental half of the grid (CREATE-GAP-1); nothing is rebuilt.
+    void insertTileAtHead(const ProjectTileData &tileData, bool highlight);
+    /// A written project goes first, where a rebuild would put it.
+    void moveTileToHead(ItemGridWidget *widget);
 
     void resetView();
 

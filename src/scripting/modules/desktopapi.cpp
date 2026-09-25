@@ -28,6 +28,9 @@ QVector<VerbInfo> DesktopApi::verbs() const
         { "tiles", "desktop.tiles() -> [{guid, name, row, index, open}]",
           "Lists the current desktop's tiles with their slider assignment (row 1..N, index 0-based; -1/-1 when never assigned) and whether each tile is the project currently open in the editor (open: the tile the desktop paints with a dark blue caption bar).",
           Needs::Window },
+        { "gridStats", "desktop.gridStats() -> {builds, lastBuildMs, lastBuildTiles, lastBuildDecodes, decodes, outOfStep, tiles}",
+          "How the Desktop grid has been kept this session. The grid is a MODEL: a create, import, move, rename or delete changes ONE tile, and the whole grid is BUILT only when the desktop itself changes — its first showing, another desktop selected. `builds` counts those builds; `lastBuildMs`, `lastBuildTiles` and `lastBuildDecodes` describe the latest (decodes = PNG thumbnails it had to inflate; 0 when the session has seen them all); `decodes` is the session's thumbnail decodes in total. `outOfStep` counts Desktop entries that found the tiles differing from the library and fixed them — a path that changed the library without its tile verb (0 is the only healthy value). `tiles` is the grid's tile count now.",
+          Needs::Window },
         { "sliderRows", "desktop.sliderRows() -> rows",
           "How many filmstrip rows the Sliders view mode stacks (2..10). A per-user setting, not per desktop.",
           Needs::Window },
@@ -60,6 +63,12 @@ bool DesktopApi::moveTile(const QString &guid, int row, int index)
     if (!host.projectManager->moveTileToSliderPos(guid, row - 1, index))
         return fail(QStringLiteral("desktop.moveTile: no tile '%1' on the current desktop").arg(guid));
     return true;
+}
+
+QVariantMap DesktopApi::gridStats()
+{
+    if (!host.projectManager) { fail("desktop: not available in this session"); return {}; }
+    return host.projectManager->gridStats();
 }
 
 int DesktopApi::sliderRows()

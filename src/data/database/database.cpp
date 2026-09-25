@@ -3018,50 +3018,72 @@ int Database::countAssetsInCollections(const QVector<int> &collectionIds)
     return 0;
 }
 
+// ONE ROW OF THE DESKTOP'S SHAPE, read the same way by the whole-desktop query
+// and the one-guid query (CREATE-GAP-1): the grid's incremental add must build
+// exactly the tile a rebuild would have built.
+static const char *kProjectTileColumns =
+    "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
+    "slider_row, slider_index FROM projects ";
+
+static ProjectTileData readProjectTile(const QSqlRecord &record)
+{
+    ProjectTileData data;
+    data.name       = record.value(0).toString();
+    data.thumbnail  = record.value(1).toByteArray();
+    data.guid       = record.value(2).toString();
+    data.desktop    = record.value(3).toInt();
+    data.hasPosition = !record.value(4).isNull() && !record.value(5).isNull();
+    if (data.hasPosition) {
+        data.posX = record.value(4).toFloat();
+        data.posY = record.value(5).toFloat();
+    }
+    data.hasSliderPos = !record.value(6).isNull() && !record.value(7).isNull();
+    if (data.hasSliderPos) {
+        data.sliderRow   = record.value(6).toInt();
+        data.sliderIndex = record.value(7).toInt();
+    }
+    return data;
+}
+
 QVector<ProjectTileData> Database::fetchProjects(int desktop)
 {
     QSqlQuery query;
     if (desktop > 0) {
         // COALESCE: rows from before the desktop migration (NULL) belong to Desktop 1
-        query.prepare(
-            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
-            "slider_row, slider_index "
-            "FROM projects WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC"
-        );
+        query.prepare(QString::fromLatin1(kProjectTileColumns) +
+                      "WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC");
         query.addBindValue(desktop);
     }
     else {
-        query.prepare(
-            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
-            "slider_row, slider_index "
-            "FROM projects ORDER BY last_written DESC"
-        );
+        query.prepare(QString::fromLatin1(kProjectTileColumns) + "ORDER BY last_written DESC");
     }
     executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
-    while (query.next())  {
-        ProjectTileData data;
-        QSqlRecord record = query.record();
-        data.name       = record.value(0).toString();
-        data.thumbnail  = record.value(1).toByteArray();
-        data.guid       = record.value(2).toString();
-        data.desktop    = record.value(3).toInt();
-        data.hasPosition = !record.value(4).isNull() && !record.value(5).isNull();
-        if (data.hasPosition) {
-            data.posX = record.value(4).toFloat();
-            data.posY = record.value(5).toFloat();
-        }
-        data.hasSliderPos = !record.value(6).isNull() && !record.value(7).isNull();
-        if (data.hasSliderPos) {
-            data.sliderRow   = record.value(6).toInt();
-            data.sliderIndex = record.value(7).toInt();
-        }
-
-        tileData.push_back(data);
-    }
-
+    while (query.next()) tileData.push_back(readProjectTile(query.record()));
     return tileData;
+}
+
+bool Database::fetchProjectTile(const QString &guid, ProjectTileData *out)
+{
+    QSqlQuery query;
+    query.prepare(QString::fromLatin1(kProjectTileColumns) + "WHERE guid = ?");
+    query.addBindValue(guid);
+    executeAndCheckQuery(query, "fetchProjectTile");
+    if (!query.next()) return false;
+    if (out) *out = readProjectTile(query.record());
+    return true;
+}
+
+QStringList Database::fetchProjectGuids(int desktop)
+{
+    QSqlQuery query;
+    query.prepare("SELECT guid FROM projects WHERE COALESCE(desktop, 1) = ?");
+    query.addBindValue(desktop);
+    executeAndCheckQuery(query, "fetchProjectGuids");
+    QStringList guids;
+    while (query.next()) guids.append(query.value(0).toString());
+    return guids;
 }
 
 QByteArray Database::getSceneBlobGlobal(const QString &projectGuid) const

@@ -1121,7 +1121,7 @@ set_property(TARGET test_project_tile PROPERTY AUTOUIC_SEARCH_PATHS
 target_include_directories(test_project_tile PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_project_tile PRIVATE Qt6::Widgets Qt6::Test qlementine)
+target_link_libraries(test_project_tile PRIVATE Qt6::Widgets Qt6::Concurrent Qt6::Test qlementine)
 add_test(NAME ui.project_tile COMMAND test_project_tile
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.project_tile PROPERTIES

@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/services.h"
 #include "ui/pages/projectmanager.h"
+#include <QPointer>
 #include "services/projectarchiver.h"
 #include "services/sceneextents.h"
 #include "viewport/ieditorviewport.h"
@@ -249,8 +250,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // ProjectService's; MainWindow::newProject then builds the default scene
     // and saves it, so the row never carries the empty scene blob (the crash
     // window the census flagged).
-    QString why;
-    const QString guid = host.services->project->createProjectShell(name, location, &why);
+    QString why, folder;
+    const QString guid = host.services->project->createProjectShell(name, location, &why, &folder);
     if (guid.isEmpty()) {
         // THE SERVICE'S OWN REASON, by name: "the location '/nope' does not
         // exist" is the answer a caller can act on, and it is the same
@@ -265,8 +266,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // reasoning is on ScriptHost::endRunUndoMacro). newProject() clears the
     // stack, and that clear is a no-op while the run's macro is open.
     host.endRunUndoMacro();
-    if (async) host.mainWindow->newProjectAsync(name.trimmed(), host.project->getProjectFolder(), empty);
-    else       host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder(), empty);
+    if (async) host.mainWindow->newProjectAsync(guid, name.trimmed(), folder, empty);
+    else       host.mainWindow->newProject(guid, name.trimmed(), folder, empty);
     host.beginRunUndoMacro();
     return guid;
 }
@@ -506,6 +507,8 @@ bool ProjectApi::rename(const QString &guid, const QString &newName)
         return fail(QStringLiteral("project.rename: no project with guid '%1'").arg(guid));
     if (host.project->getProjectGuid() == guid)
         host.project->setProjectPath(host.project->getProjectFolder(), newName.trimmed());
+    // The caption follows (the Desktop used to learn it at its next rebuild).
+    if (host.projectManager) host.projectManager->renameTile(guid, newName.trimmed());
     return true;
 }
 
@@ -558,7 +561,8 @@ bool ProjectApi::moveToDesktop(const QString &guid, int desktop)
     if (desktop < 1 || desktop > 4) return fail("project.moveToDesktop: desktop must be 1-4");
     if (!host.db->updateProjectDesktop(guid, desktop))
         return fail(QStringLiteral("project.moveToDesktop: no project with guid '%1'").arg(guid));
-    if (host.projectManager) host.projectManager->populateDesktop(true);
+    // ONE TILE MOVES (CREATE-GAP-1): off this desktop's grid, or onto it.
+    if (host.projectManager) host.projectManager->moveTile(guid, desktop);
     return true;
 }
 
@@ -772,6 +776,18 @@ bool ProjectApi::importArchiveAsync(const QString &path)
     ProjectArchiver *&a = sessionArchiver();
     if (a && a->isRunning()) return fail("project.importArchiveAsync: an archive operation is already running");
     if (!a) a = new ProjectArchiver(host.db, host.project);
+    // THE IMPORTED PROJECT IS A TILE when it lands (CREATE-GAP-1) — the
+    // Desktop no longer rebuilds on entry to find it. One connection per
+    // session archiver, made with the import that needs it.
+    if (host.projectManager && !a->property("jahTileHook").toBool()) {
+        a->setProperty("jahTileHook", true);
+        QPointer<ProjectManager> page = host.projectManager;
+        QObject::connect(a, &ProjectArchiver::finished, a, [a, page](bool canceled) {
+            if (canceled || !page) return;
+            const ProjectArchiver::Result &r = a->result();
+            if (r.ok() && !r.projectGuid.isEmpty()) page->addTile(r.projectGuid);
+        });
+    }
     return a->startImport(path);
 }
 
@@ -827,9 +843,9 @@ QVariantMap ProjectApi::importArchive(const QString &path)
     ProjectArchiver archiver(host.db, nullptr);
     const auto r = archiver.importArchive(path);
     if (!r.ok()) { fail(QStringLiteral("project.importArchive: %1").arg(r.error)); return out; }
-    // THE NEW PROJECT IS A TILE NOW, as project.moveToDesktop's move is — the
-    // Desktop page's own import adds its tile itself; this verb added none.
-    if (host.projectManager) host.projectManager->populateDesktop(true);
+    // THE NEW PROJECT IS A TILE NOW — its one tile, as the Desktop page's own
+    // import adds it (CREATE-GAP-1: this rebuilt the whole grid for it).
+    if (host.projectManager) host.projectManager->addTile(r.projectGuid);
     out["guid"] = r.projectGuid;
     out["name"] = r.worldName;
     out["assets"] = r.assets;
