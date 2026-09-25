@@ -795,9 +795,12 @@ target_compile_definitions(test_gi_field_scroll PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_field_scroll PRIVATE JahshakaEngine)
 add_dependencies(test_gi_field_scroll JahshakaEngineMedia)
-add_test(NAME gi.field_scroll COMMAND test_gi_field_scroll
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_scroll PROPERTIES TIMEOUT 300 LABELS "engine" RUN_SERIAL ON)
+# UNDER THE GPU-TIMING LOCK (POST-C-FIXES-1): its jump bar is the jump frame's GPU
+# work against the tier's 16.7 ms frame and its step-frame bars are GPU ratios -
+# numbers a sibling sharing the GPU moves (docs/TESTING_GATE.md section 4).
+jah_gpu_exclusive_test(NAME gi.field_scroll RUN_TIMEOUT 300 COMMAND test_gi_field_scroll
+                       WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_scroll PROPERTIES LABELS "engine" RUN_SERIAL ON)
 # gi.field_thin_wall — THE FIELD'S ESTIMATOR ON A ONE-VOXEL EMISSIVE WALL
 # (PHOTON-FIELD-ROTATE-1 part 1): a probe's reading of a one-voxel-thick
 # emissive wall at four probe spacings, three lateral offsets, against the
