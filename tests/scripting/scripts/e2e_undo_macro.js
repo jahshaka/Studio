@@ -76,7 +76,7 @@ oneStep("world.fog (four keys)", function () {
 });
 // Registry rows (bounces PINS) and plain fields (updateBudget) in one call.
 oneStep("world.gi (a pinned row + plain fields)", function () {
-    return world.gi({ bounces: 2, updateBudget: 3, rayMarchStepScale: 1.5 });
+    return world.gi({ bounces: 2, updateBudget: 3 });
 });
 oneStep("world.gi (tier + an explicit knob)", function () {
     return world.gi({ tier: "medium", quality: "high" });

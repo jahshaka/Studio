@@ -572,28 +572,45 @@ static int motionMain(Engine *e)
     // test validation at all — under a pure turn every depth on a pixel's ray
     // reprojects to one place, nothing is disoccluded (0.203 not validated) — so
     // its tile bar, 2.4, is the midpoint to the reject-everything arm (3.41).
-    const float kStillBar = 0.21f;
-    const float kYawBar = 0.26f;
-    const float kTruckBar = 0.26f;
-    CHECK_MSG(still < kStillBar, "THE CONTROL: a still camera's room is settled (%.3f codes < %.2f)",
+    // SCALED BY THE PICTURE'S INDIRECT AMPLITUDE (PHOTON-VOXEL-5 item (iv)): every arm above is
+    // a difference of the gather's own light, so it scales with how much of it the picture
+    // carries. The hit read now takes the texel holding a hit's surface (jah_rq_hit.glsl): hits
+    // that were handed back are shaded, and THE GATHER IS IN THE PICTURE rose 24.455 -> 25.488
+    // codes, x 1.042 - the table and every bar below scale by it (the good arms measured with
+    // it: still 0.194, yaw 0.245, truck 0.265; worst tiles 1.315 / 2.395 / 2.798).
+    // ...AND AGAIN (PHOTON-VOXEL-5 item (ii), light per face side and per half-axis): the picture
+    // carries 26.443 codes of indirect light (was 25.488) - x 1.0813 of the table's 24.455.
+    // THE TRUCK'S RE-CENTRE SHARE (measured, PHOTON-VOXEL-5): a sliding camera re-centres the
+    // cascade chain, and every snap RE-VOXELISES the store exactly (the leaky store smeared it)
+    // - the sliding room read 0.286 against the yaw's 0.249; with the chain pinned
+    // (JAHSHAKA_GI_NO_RECENTRE, the measurement switch) 0.248, the yaw's class. So the truck's
+    // bar is the amplitude rule x (1 + the re-centre share): 0.26 x 1.0813 x (1 + (0.286 -
+    // 0.248) / 0.248) = 0.26 x 1.0813 x 1.153 = 0.324 - still under the un-reprojected slide
+    // (0.354 x 1.0813 = 0.383) and each frame alone (0.85).
+    const float kAmplitude = 26.443f / 24.455f;
+    const float kRecentreShare = (0.286f - 0.248f) / 0.248f;
+    const float kStillBar = 0.21f * kAmplitude;
+    const float kYawBar = 0.26f * kAmplitude;
+    const float kTruckBar = 0.26f * kAmplitude * (1.0f + kRecentreShare);
+    CHECK_MSG(still < kStillBar, "THE CONTROL: a still camera's room is settled (%.3f codes < %.3f)",
               still, kStillBar);
     CHECK_MSG(yaw < kYawBar,
-              "A TURNING CAMERA: the moving room is within %.2f codes of the settled one (%.3f; each "
+              "A TURNING CAMERA: the moving room is within %.3f codes of the settled one (%.3f; each "
               "frame alone %.3f)", kYawBar, yaw, yawAlone);
     CHECK_MSG(truck < kTruckBar,
-              "A SLIDING CAMERA: the moving room is within %.2f codes of the settled one (%.3f; each "
+              "A SLIDING CAMERA: the moving room is within %.3f codes of the settled one (%.3f; each "
               "frame alone %.3f)", kTruckBar, truck, truckAlone);
-    const float kTruckTileBar = 4.0f, kYawTileBar = 2.4f;
+    const float kTruckTileBar = 4.0f * kAmplitude, kYawTileBar = 2.4f * kAmplitude;
     CHECK_MSG(truckTile < kTruckTileBar,
               "NO SMEAR AT A DISOCCLUSION EDGE: the sliding camera's worst 16 x 16 tile is %.3f codes "
-              "from the settled one (bar %.1f; a history that accepts every texel reads 8.50)",
+              "from the settled one (bar %.2f; a history that accepts every texel reads 8.50)",
               truckTile, kTruckTileBar);
     CHECK_MSG(yawTile < kYawTileBar,
-              "...and the turning camera's worst tile %.3f (bar %.1f; each frame alone 3.41)", yawTile,
+              "...and the turning camera's worst tile %.3f (bar %.2f; each frame alone 3.41)", yawTile,
               kYawTileBar);
     CHECK_MSG(truckAcceptAllTile >= kTruckTileBar,
               "THE BAR DISCRIMINATES THE DEFECT: with the validation off (every reprojected texel "
-              "accepted) the sliding camera's worst tile reads %.3f codes, at or over the bar %.1f "
+              "accepted) the sliding camera's worst tile reads %.3f codes, at or over the bar %.2f "
               "(region mean %.3f)",
               truckAcceptAllTile, kTruckTileBar, truckAcceptAll);
     (void)stillTile;

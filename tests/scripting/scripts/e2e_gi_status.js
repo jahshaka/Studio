@@ -287,13 +287,6 @@ assert(world.get().gi.autoRefresh === false,
        "the old autoRefresh reading follows the budget down to false");
 assert(world.refreshGi() === true, "world.refreshGi still works while paused");
 
-// The ray-march scale (B5) is a verb-only integrator knob with a floor of 1.
-threw = "";
-try { world.gi({ rayMarchStepScale: 0.5 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("rayMarchStepScale") >= 0,
-       "world.gi refuses a rayMarchStepScale below 1 (upstream asserts): " + threw);
-assert(world.gi({ rayMarchStepScale: 1.5 }), "world.gi accepts rayMarchStepScale 1.5");
-
 // Document state: they survive a save and a reopen like their siblings.
 assert(world.gi({ updateBudget: 2 }), "world.gi pins updateBudget for the round trip");
 assert(project.save() === true, "project.save (update budget)");
@@ -301,9 +294,7 @@ assert(project.close() === true, "project.close (update budget)");
 assert(project.open(guid) === true, "project.open (update budget)");
 editor.frame(4);
 assert(world.get().gi.updateBudget === 2, "updateBudget survived the round trip");
-assert(Math.abs(world.get().gi.rayMarchStepScale - 1.5) < 1e-4,
-       "rayMarchStepScale survived the round trip");
-assert(world.gi({ updateBudget: 1, rayMarchStepScale: 1.0 }),
+assert(world.gi({ updateBudget: 1 }),
        "back to the defaults before the next phase");
 editor.frame(4);
 

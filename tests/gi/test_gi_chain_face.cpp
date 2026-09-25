@@ -287,19 +287,18 @@ int main(int argc, char **argv)
     // 1.057x instead of 1.029x: +1.4/255 on a 24/255 band, inside the volume
     // where the escape is unoccluded. The bracket's purpose is a REGRESSION
     // toward the 1.9x staircase, and 1.08 keeps it.
-    // PHOTON-VOXEL-4 (SUITES-REANCHOR-1): THE CHAIN'S OWN QUADRATURE of a flat slab under any
-    // sky is 1.000 at every face - the cones leave the one surface in every cascade and see
-    // nothing else - which IS the target row's claim (1 +- 0.05), not a fence: an ordinary row
-    // derived from it would be the target row. So the brackets below stay what they are, a
-    // regression fence toward the staircase, and the split store's numbers are recorded: the
-    // chain's faces now read 1.000-1.107x where the leaky store read 0.821-1.252x; the single
-    // volume's edge 1.000x; the flat ambient's faces within one code. What steps is cascade 0's
-    // face under a real sky (1.05x noon, 1.11x low sun): the field inside cascade 0 against the
-    // four-cone set outside it - two quadratures of one sky, the set's own error (BAR 2, -0.034
-    // on an open floor, gi.ddgi_ambient) weighted by where the sky is bright.
+    // THE CHAIN'S FENCE IS THE SPLIT STORE'S ENVELOPE (PHOTON-VOXEL-5; the VOXEL-4 audit's F5).
+    // The chain's own quadrature of a flat slab is 1.000 at every face - the target row's claim
+    // (1 +- 0.05). What steps is cascade 0's face under a real sky (measured 1.000-1.107x over
+    // the four ambients: 1.05x noon, 1.11x low sun, the flat ambient within one code): the field
+    // inside cascade 0 against the four-cone set outside it, two quadratures of one sky, whose
+    // difference is the set's own error against the hemisphere - 0.034 of the escape on an open
+    // floor (BAR 2, gi.ddgi_ambient). The fence is that envelope widened by that error on both
+    // sides: 0.966-1.141. (It was 0.75-1.35, the leaky store's 0.821-1.252 envelope.)
     const float kSingleFaceMax = 1.08f;      // measured 1.007-1.057 over four ambients
-    const float kChainFaceMax  = 1.35f;      // measured 0.821-1.252 over four ambients
-    const float kChainFaceMin  = 0.75f;
+    const float kSetError      = 0.034f;     // the four-cone set's quadrature error, open floor
+    const float kChainFaceMax  = 1.107f + kSetError;
+    const float kChainFaceMin  = 1.000f - kSetError;
     // THE TARGET. A face is a boundary in a data structure, not in the world:
     // the ambient on a flat slab under an unchanging sky is one number, so every
     // ratio is 1.000 and the bar is the deviation from it. 0.05 is the figure

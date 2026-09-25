@@ -240,24 +240,28 @@ struct Room {
 /// The room at wall thickness `T`, its two lamps, and the camera at the pose
 /// both suites measure from. The interior (x,z in [-5,5], y in [0,4]) is
 /// identical at every thickness — only the barrier's depth in voxels changes.
-inline Room build(Scene *s, View *view, float T)
+/// `shiftZ` moves the room and its lamps (not the camera, so not the lattice)
+/// along z: at 0 the -Z wall's inner face lies ON a cascade-0 texel plane, so a
+/// wall thinner than the cell is split between two texels, not held by one
+/// (gi.gather's two-sided arm moves it -0.02 m; PHOTON-VOXEL-5).
+inline Room build(Scene *s, View *view, float T, float shiftZ = 0.0f)
 {
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
     const Colour white(0.8f, 0.8f, 0.8f);
     const float ho = 5.0f + T * 0.5f;
     const float span = 10.0f + 2.0f * T;
-    addSlab(s, white, Vec3(0, -T * 0.5f, 0), Vec3(span, T, span));            // floor
-    addSlab(s, white, Vec3(0, 4.0f + T * 0.5f, 0), Vec3(span, T, span));      // ceiling
-    addSlab(s, white, Vec3(0, 2, -ho), Vec3(span, 4.0f, T));                  // -Z: THE wall
-    addSlab(s, white, Vec3(0, 2,  ho), Vec3(span, 4.0f, T));                  // +Z
-    addSlab(s, white, Vec3(-ho, 2, 0), Vec3(T, 4.0f, span));                  // -X
-    addSlab(s, white, Vec3( ho, 2, 0), Vec3(T, 4.0f, span));                  // +X
+    addSlab(s, white, Vec3(0, -T * 0.5f, shiftZ), Vec3(span, T, span));            // floor
+    addSlab(s, white, Vec3(0, 4.0f + T * 0.5f, shiftZ), Vec3(span, T, span));      // ceiling
+    addSlab(s, white, Vec3(0, 2, -ho + shiftZ), Vec3(span, 4.0f, T));                  // -Z: THE wall
+    addSlab(s, white, Vec3(0, 2,  ho + shiftZ), Vec3(span, 4.0f, T));                  // +Z
+    addSlab(s, white, Vec3(-ho, 2, shiftZ), Vec3(T, 4.0f, span));                  // -X
+    addSlab(s, white, Vec3( ho, 2, shiftZ), Vec3(T, 4.0f, span));                  // +X
 
     Room r;
     // The inside lamp: PURE GREEN, so the red channel is entirely the outside
     // lamp's and no threshold has to separate them.
     r.inside = s->createNode();
-    s->setNodeTransform(r.inside, Vec3(0.0f, 3.0f, 2.5f), Quat(), Vec3(1, 1, 1));
+    s->setNodeTransform(r.inside, Vec3(0.0f, 3.0f, 2.5f + shiftZ), Quat(), Vec3(1, 1, 1));
     LightDesc li;
     li.type = LightType::Point;
     li.colour = Colour(0.0f, 1.0f, 0.0f);
@@ -268,7 +272,7 @@ inline Room build(Scene *s, View *view, float T)
 
     // The outside lamp: RED, a metre beyond the outer face of the -Z wall.
     r.outside = s->createNode();
-    s->setNodeTransform(r.outside, Vec3(0.0f, 2.0f, -(ho + T * 0.5f + 1.0f)), Quat(), Vec3(1, 1, 1));
+    s->setNodeTransform(r.outside, Vec3(0.0f, 2.0f, -(ho + T * 0.5f + 1.0f) + shiftZ), Quat(), Vec3(1, 1, 1));
     r.outsideLight.type = LightType::Point;
     r.outsideLight.colour = Colour(1.0f, 0.0f, 0.0f);
     r.outsideLight.intensity = 25.0f;

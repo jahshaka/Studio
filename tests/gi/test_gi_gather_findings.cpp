@@ -293,8 +293,8 @@ static int glassMain(Engine *e)
             // DFG there is below 1: an upper bound), plus the reader's quantum 0.25.
             const double glassBar = 0.25 + patch.mean / 0.85 * 0.04;
             CHECK_MSG(glass.mean <= glassBar && glass.worst <= 3u,
-                      "GA-GLASS, %s: the glass reads NO probe irradiance — its pixels are the "
-                      "gather-off picture's but for the floor's rough specular it transmits (mean "
+                      "GA-GLASS, %s: the glass reads no probe irradiance of its own — it moves only by "
+                      "the transmitted floor's rough specular, which carries the gather's (mean "
                       "%.3f/255, worst %u; bar %.3f mean = 0.25 + the patch's %.3f / 0.85 x 0.04, 3 worst)",
                       arm.name, glass.mean, glass.worst, glassBar, patch.mean);
         } else {

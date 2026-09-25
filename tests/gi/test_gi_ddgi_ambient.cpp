@@ -865,9 +865,13 @@ int main(int argc, char **argv)
         //   D  elsewhere                            368 of 9848 cones, worst cone 0.257, point 0.064
         //      - THE COARSE EDGE: the plane axis's lateral reach is its own texel, so a cone
         //      whose plane axis crosses the ceiling beyond a coarse texel's reach never reads it.
-        // The owed refinement for all four classes is VOXEL-5: a lateral-only mip family per
-        // axis. (The integrated minor-axis kernel closes A and C in the lab but breaks the flat
-        // wall; it is kept as a lab candidate with its table, not shipped.)
+        // THE LATERAL-ONLY MIP FAMILY WAS TRIED AND REFUTED (PHOTON-VOXEL-5 item (i), gi.voxel_lab
+        // `sealed`): it makes the plane term an exact mean over the cone's footprint, and near a
+        // wall that footprint runs past the shell into minor-axis surfaces the kernel under-reads
+        // - escaping cones 534 -> 652 on the plane axis (A/B/C/D 54/94/50/454), 1,910 on every
+        // axis; at 128^3 382 -> 518. Nothing of it ships; the residual stays named here. (The
+        // integrated minor-axis kernel closes A and C in the lab but breaks the flat wall; it is
+        // kept as a lab candidate with its table, not shipped.)
         CHECK(delta * 255.0f <= 2.0f + 1e-3f,
               "SEALED-ROOM INVARIANCE: no pixel moves more than 2/255 with the sky on (the reader's residual)");
 

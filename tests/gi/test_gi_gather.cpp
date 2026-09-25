@@ -195,7 +195,8 @@ int main()
     const char *dumpDir = std::getenv("JAH_GATHER_DUMP");
 
     // =====================================================================
-    // 1. THE LEAK ROOM, four wall thicknesses, three arms each.
+    // 1. THE LEAK ROOM, four wall thicknesses (and the thinnest again, moved into ONE cascade-0
+    //    texel), three arms each.
     //
     // A sealed 10 m room with a GREEN lamp inside and a RED one outside; with
     // shadows on the direct term through the wall is zero, so every red pixel
@@ -206,21 +207,27 @@ int main()
     //   field   — the irradiance field on cascade 0 (what ships today)
     //   cones   — the cascade cone diffuse with no field (ddgi off)
     //   gather  — GATHER-0's probe rays, with the cones compiled out
-    const float thicknesses[4] = { 0.5f, 0.2f, 0.1f, 0.05f };
+    // THE FIFTH ROW IS THE 0.05 m WALL MOVED -0.02 m (PHOTON-VOXEL-5): at the fixture's own place
+    // the wall's inner face lies ON a cascade-0 texel plane (z = -5.0 on this pose's lattice), so
+    // the two faces fall in two texels and the thin wall is two-sided only from cascade 2 on;
+    // moved, both faces share one cascade-0 texel - the class the row is about (asserted below).
+    constexpr int kRows = 5;
+    const float thicknesses[kRows] = { 0.5f, 0.2f, 0.1f, 0.05f, 0.05f };
+    const float shifts[kRows] = { 0.0f, 0.0f, 0.0f, 0.0f, -0.02f };
     // PHOTON-S2's numbers, quoted for provenance and NOT asserted against: they
     // were taken at six metres with no post chain, before PHOTON-M2 corrected
     // the field's units. gi.leak_room's own asserted bars (this pose, chain
     // arm) are 0.068 / 0.071 / 0.093 / 0.325 and are the honest comparison.
-    const float s2[4] = { 0.041f, 0.046f, 0.054f, 0.083f };
-    const float leakRoomBars[4] = { 0.068f, 0.071f, 0.093f, 0.325f };
+    const float s2[kRows] = { 0.041f, 0.046f, 0.054f, 0.083f, 0.083f };
+    const float leakRoomBars[kRows] = { 0.068f, 0.071f, 0.093f, 0.325f, 0.325f };
 
-    struct Row { float field = 0, cones = 0, gather = 0, greenGather = 0; };
-    Row rows[4];
-    for (int a = 0; a < 4; ++a) {
+    struct Row { float field = 0, cones = 0, gather = 0, greenGather = 0; bool twoSided = false; };
+    Row rows[kRows];
+    for (int a = 0; a < kRows; ++a) {
         const float T = thicknesses[a];
         Scene *s = e->createScene("leak" + std::to_string(a));
         view->setScene(s);
-        enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T);
+        enginetest::leakroom::Room room = enginetest::leakroom::build(s, view, T, shifts[a]);
 
         // THE ACCOUNTING RULE. A pixel gets exactly ONE diffuse-GI term, and
         // since ogre-patch 0086 that is true of the FIELD too: the listener
@@ -264,18 +271,34 @@ int main()
         rows[a].cones = std::get<0>(c);
         rows[a].gather = std::get<0>(g);
         rows[a].greenGather = std::get<1>(g);
+        {   // is the -Z wall, where the camera looks, held by ONE cascade-0 texel (two-sided)?
+            GiVoxelVolume v;
+            if (s->giVoxelVolume(0, v) && v.available && !v.normal.empty()) {
+                const double wz = -5.0 - 0.5 * double(T) + double(shifts[a]);
+                const int ix = int(std::floor((3.6 - v.origin[0]) / v.cell[0]));
+                const int iy = int(std::floor((2.0 - v.origin[1]) / v.cell[1]));
+                const int iz = int(std::floor((wz - v.origin[2]) / v.cell[2]));
+                if (ix >= 0 && iy >= 0 && iz >= 0 && ix < v.width && iy < v.height && iz < v.depth)
+                    rows[a].twoSided = v.normal[((size_t(iz) * v.height + iy) * v.width + ix) * 4 + 3] > 0.5f;
+            }
+            std::printf("   wall %.2f m moved %.2f m: the -Z wall at cascade 0 is %s\n", double(T),
+                        double(shifts[a]), rows[a].twoSided ? "ONE two-sided texel" : "not one two-sided texel");
+        }
         e->destroyScene(s);
     }
+    CHECK(rows[kRows - 1].twoSided,
+          "the moved 0.05 m row measures what it claims: its wall is ONE two-sided cascade-0 texel");
 
     std::printf("\n THE LEAK, by wall thickness (red inside a sealed room, all three arms in one "
                 "process at one pose)\n");
     std::printf(" wall(m)     field      cones     GATHER   leak_room bar   PHOTON-S2 (6 m, "
                 "pre-M2)\n");
-    for (int a = 0; a < 4; ++a)
-        std::printf("  %5.2f   %9.4f  %9.4f  %9.4f   %12.4f   %12.4f\n", double(thicknesses[a]),
+    for (int a = 0; a < kRows; ++a)
+        std::printf("  %5.2f%s   %9.4f  %9.4f  %9.4f   %12.4f   %12.4f\n", double(thicknesses[a]),
+                    shifts[a] != 0.0f ? "*" : " ",
                     double(rows[a].field), double(rows[a].cones), double(rows[a].gather),
                     double(leakRoomBars[a]), double(s2[a]));
-    std::printf("\n");
+    std::printf(" (* the wall moved %.2f m: both its faces in one cascade-0 texel)\n\n", double(shifts[kRows - 1]));
     // THE CLAIM PHASE 0 IS ASKED TO TEST: does a RAY gather leak less through a
     // thin wall than the cone/field estimate does? The physics says yes — a ray
     // is stopped by a triangle, a cone is stopped by a voxel, and at 0.05 m the
@@ -310,33 +333,30 @@ int main()
     // bar is the field's own read plus these terms and survives it.
     const float kSensitivity = (0.0772f - 0.0764f) / 0.039f;       // per metre of start height
     const float kStartMove = 0.039f, kStartUncertainty = 0.002f;
-    // ...AND A.1 THROUGH THE HIT READ (PHOTON-VOXEL-4, the sealed room's form: the measured
-    // residual with its cause, never a widening). A wall thinner than a cascade-0 cell holds
-    // BOTH faces in one texel with ONE radiance (the injection writes one): the gather's ray
-    // stops on the wall's inner face and reads that texel, whose light is the mean of the dark
-    // inner face and the lit outer one. No read of the texel separates two
-    // faces (measured in VOXEL-4's fix round: the directional level of the facing half 0.0827,
-    // the hit's own texel 0.0218, withdrawn). Measured on the split store: the gather 0.0215
-    // against the field 0.0084 + the terms above 0.0029 at the 0.05 m wall - the residual
-    // 0.0102 (+0.0001: the two readings are known to their printed 4th decimal - the bar
-    // must not be the reading itself), applied only to a wall thinner than the cell.
-    // VOXEL-5 (ii) - the sun's irradiance per half sign at the injection - is the owed fix;
-    // the thicker walls read 0.
-    const GiQualityFacts high = giQualityFacts(GiQuality::High);
-    const float kCell0 = 2.0f * high.cascades[0].halfSize / float(high.cascades[0].resolution);
-    const float kA1Residual = 0.0102f + 0.0001f;
-    for (int a = 0; a < 4; ++a) {
-        const float a1 = thicknesses[a] < kCell0 ? kA1Residual : 0.0f;
+    // A.1 IS CLOSED (PHOTON-VOXEL-5 (ii), LIGHT PER FACE SIDE): a wall thinner than a cascade-0 cell
+    // used to hold both faces in one texel with ONE radiance, and the gather's ray stopped on the
+    // inner face read the lit outer one (VOXEL-4's named residual, 0.0102 at 0.05 m). The store
+    // keeps each side's light now and the hit reads the side its ray meets - no residual, at the
+    // fixture's place or moved into one texel (the fifth row).
+    for (int a = 0; a < kRows; ++a) {
         const float bar = rows[a].field + 0.002f + kSensitivity * (kStartMove + kStartUncertainty) +
-                          rows[a].gather / 1024.0f + a1;
+                          rows[a].gather / 1024.0f;
         CHECK_MSG(rows[a].gather <= bar,
-                  "the ray gather leaks no more than the field through the %.2f m wall "
+                  "the ray gather leaks no more than the field through the %.2f m wall%s "
                   "(%.4f vs %.4f; bar %.4f = the field + 0.0020 phase 1's filter leak + %.4f the "
-                  "start's move and uncertainty x %.3f/m + %.5f quantum + %.4f A.1 through the hit "
-                  "read, a wall thinner than the %.3f m cell)",
-                  double(thicknesses[a]), double(rows[a].gather), double(rows[a].field), double(bar),
-                  double(kSensitivity * (kStartMove + kStartUncertainty)), double(kSensitivity),
-                  double(rows[a].gather / 1024.0f), double(a1), double(kCell0));
+                  "start's move and uncertainty x %.3f/m + %.5f quantum)",
+                  double(thicknesses[a]), shifts[a] != 0.0f ? " (one texel)" : "", double(rows[a].gather),
+                  double(rows[a].field), double(bar), double(kSensitivity * (kStartMove + kStartUncertainty)),
+                  double(kSensitivity), double(rows[a].gather / 1024.0f));
+        // THE CONES THROUGH A LIT WALL (PHOTON-VOXEL-5 items (iii) / (ii)): the pixel's four cones
+        // from inside the room read the wall's lit outer face in a coarse texel holding both faces
+        // - 0.2190 / 0.2081 / 0.2213 / 0.2071 at the four thicknesses before light per face side and
+        // per half-axis (spikes/photon-voxel-5/lab3; the lab's ideal 0 of 36 cones). BAR: the
+        // field's own read + one display code (the block's mean of 8-bit codes).
+        CHECK_MSG(rows[a].cones <= rows[a].field + 1.0f / 255.0f,
+                  "the cones leak no more than the field through the %.2f m wall%s (%.4f vs %.4f + one code)",
+                  double(thicknesses[a]), shifts[a] != 0.0f ? " (one texel)" : "", double(rows[a].cones),
+                  double(rows[a].field));
     }
     CHECK_MSG(rows[0].greenGather > 0.02f,
               "the room is lit by its own lamp under the gather (green %.4f) — a black room "
