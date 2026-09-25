@@ -148,6 +148,10 @@ int main()
     View *view = e->createOffscreenView("atlas", kSize, kSize, Colour(0, 0, 0));
     Scene *scene = e->createScene("atlas");
     view->setScene(scene);
+    // THE SCENE'S RAYS OFF: this suite watches the probe grid's workspaces
+    // survive an atlas rebuild, and High with rays builds no grid at all
+    // (PHOTON-F12-PCC) — without rays High is a grid tier.
+    scene->setRayTracing(RayTracingMode::Off);
     scene->setAmbient(Colour(0.15f, 0.15f, 0.18f), Colour(0.08f, 0.08f, 0.10f));
     buildRoom(scene);
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 4.0f), Vec3(0.0f, 1.5f, 0.0f)));

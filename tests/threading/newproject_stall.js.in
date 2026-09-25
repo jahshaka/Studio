@@ -60,14 +60,16 @@ var createMs = Date.now() - t0;
 // has been per PROBE since R5-ROOM, 2026-09-15). So the arming this suite
 // watches for is the VOXEL half (vctBound), and `probesDropped` is asserted
 // with it so that a silent hybrid failure can never masquerade as the
-// decision.
+// decision. ...AND WHERE THE SCENE TRACES, Epic places no probe at all
+// (PHOTON-F12-PCC): `probeGridByRays` is that decision, named by the engine.
 var giAtReturn = world.giStatus();
 editor.frame(4);
 var gi = world.giStatus();
-if (!gi.live || !gi.vctBound || !(gi.probesDropped > 0) || gi.pccBound)
+if (!gi.live || !gi.vctBound || !(gi.probesDropped > 0 || gi.probeGridByRays) || gi.pccBound)
     fail("global illumination never armed after project creation (live=" + gi.live +
          " pccBound=" + gi.pccBound + " vctBound=" + gi.vctBound +
          " probeCount=" + gi.probeCount + " probesDropped=" + gi.probesDropped +
+         " probeGridByRays=" + gi.probeGridByRays +
          ") — the initial thumbnail's GI park did not restore");
 
 var after = world.photon();
