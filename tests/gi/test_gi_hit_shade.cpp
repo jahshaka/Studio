@@ -190,7 +190,11 @@ static int mirrorArms(Engine *e)
     // A matte floor under everything (the crates stand on it; its own reflection
     // is the same in every arm, so the difference masks never see it).
     const NodeId floorN = s->createNode();
-    s->attachMesh(floorN, cube, matte(s, Colour(0.3f, 0.3f, 0.3f)));
+    {
+        MeshData md = enginetest::unitCubeMesh();
+        md.cards = enginetest::boxCards(0.5f);
+        s->attachMesh(floorN, s->createMesh(md), matte(s, Colour(0.3f, 0.3f, 0.3f)));
+    }
     s->setNodeTransform(floorN, Vec3(0.0f, -0.55f, -4.0f), Quat(), Vec3(30.0f, 0.1f, 30.0f));
     // THE SUN FROM THE MIRROR'S SIDE (it travels towards -Z), so the faces the
     // mirror sees are lit, at a slope that lets arm (e)'s overhang shade half a wall.
@@ -214,6 +218,9 @@ static int mirrorArms(Engine *e)
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
     gi.gather = GiToggle::Off;   // the raster's diffuse and the decode's are then the same text
+    // No cards outside arm (a): the floor is carded for (a)'s shadow, and every
+    // other arm compares against the field as it did when nothing was carded.
+    gi.cards = GiToggle::Off;
     gi.testBoundsMin = Vec3(-8.0f, -2.0f, -12.0f);
     gi.testBoundsMax = Vec3(8.0f, 8.0f, 6.0f);
     s->setGlobalIllumination(gi);
@@ -239,11 +246,13 @@ static int mirrorArms(Engine *e)
 
     // ---- (a) coverage and colour -------------------------------------------
     std::printf("\n== (a) a MOVER crate beside a STATIC control in a perfect mirror ==\n");
-    // THE CRATE'S OWN SILHOUETTE: the floor is hidden for this arm, so the
-    // difference masks hold the crate and not its shadow on the floor — a static
-    // floor's hit is the CACHES' to shade, and they do not carry a mover's shadow
-    // (the voxel light holds the still world; out of this arm's scope).
-    s->setNodeVisible(floorN, false);
+    // THE CRATE AND ITS SHADOW: the floor is SHOWN and carded for this arm, so the
+    // difference masks hold the crate AND its sun shadow on the floor — the
+    // floor's hit is the CARDS' to shade, and they carry a mover's shadow as the
+    // traced movers' term (PHOTON-CARDS-4) and the static control's as the
+    // captured term. (Before PHOTON-CARDS-4 the floor was hidden here: the caches
+    // held the still world only.)
+    s->setNodeVisible(floorN, true);
     float frac[2] = { 0.0f, 0.0f };
     unsigned interiorMiss[2] = { 0u, 0u };
     unsigned coreN[2] = { 0u, 0u };
@@ -256,6 +265,8 @@ static int mirrorArms(Engine *e)
     // the shadow ray (+ the ambient), the same on both sides.
     for (int pass = 0; pass < 2; ++pass) {
         GiParams g = gi;
+        g.cards = GiToggle::On;
+        g.cardResidencyRadius = 40.0f;
         if (pass == 1) g.mode = GiMode::Off;
         s->setGlobalIllumination(g);
         show(false, false);
