@@ -517,6 +517,7 @@ set(HEADERS
     src/ui/panels/timeline/nodekeyframeanimation.h 
     src/data/project.h 
     src/data/settingsmanager.h 
+    src/data/settingkeys.h
     src/viewport/editorcameracontroller.h 
     src/viewport/engineviewwidget.h
     irisgl/mirror/scenemirror.h

@@ -407,7 +407,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// app.scriptPolicy). Live is the default: a person or an agent driving the
 	// editor should see it work.
 	scriptEngine->setInteractivePolicy(
-		SettingsManager::getDefaultManager()->getValue("script_feedback_live", true).toBool()
+		SettingsManager::getDefaultManager()->get(settingkeys::scriptFeedbackLive)
 			? ScriptRunPolicy::Live : ScriptRunPolicy::Off);
 	if (prefsDialog) prefsDialog->wireScripting(scriptEngine);
 	registerStudioModules(*scriptEngine);
@@ -430,9 +430,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// it from the CLI path instead.
 	mcpServer = new McpServer(scriptEngine, this);
 	prefsDialog->wireMcp(mcpServer, this);
-	if (settings->getValue("mcp_enabled", false).toBool()) {
+	if (settings->get(settingkeys::mcpEnabled)) {
 		QString mcpError;
-		if (!startMcpServer(quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt()), &mcpError))
+		if (!startMcpServer(quint16(settings->get(settingkeys::mcpPort)), &mcpError))
 			qWarning("MCP: %s", qPrintable(mcpError));
 	}
 
@@ -482,7 +482,7 @@ void MainWindow::setShowFrameStats(bool on)
     // checkbox and editor.setOverlays({stats}) — and one stored value, so the
     // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3).
     if (sceneView) sceneView->setShowFps(on);
-    SettingsManager::getDefaultManager()->setValue("show_fps", on);
+    SettingsManager::getDefaultManager()->set(settingkeys::showFps, on);
     if (statsCheckAction && statsCheckAction->isChecked() != on) {
         QSignalBlocker block(statsCheckAction);   // no toggled() round trip
         statsCheckAction->setChecked(on);
@@ -959,7 +959,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	}
 
     bool closing = false;
-	bool autoSave = settings->getValue("auto_save", true).toBool();
+	bool autoSave = settings->get(settingkeys::autoSave);
 
 	if (autoSave && projectService->isSceneOpen()) {
 		saveScene();
@@ -2369,7 +2369,7 @@ void MainWindow::startOpenRun(bool playMode)
 	// kills the app on the second world of a session, so it ships behind
 	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
 	// The switch stays in Preferences -> Cache for anyone who wants it off.
-	if (settings->getValue("shader_warmup_on_open", true).toBool()) {
+	if (settings->get(settingkeys::shaderWarmupOnOpen)) {
 		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
 			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
 			const unsigned built = sceneView->warmUpShaders();
@@ -2465,7 +2465,7 @@ void MainWindow::closeProject(CloseIntent intent)
             // closePrevious:save — a create's ledger shows its close now
             // (CREATE-GAP-1); a no-op outside a LoadTimeline run.
             LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
-            if (settings->getValue("auto_save", true).toBool()) saveScene();
+            if (settings->get(settingkeys::autoSave)) saveScene();
         }
 
         scene->getPhysicsEnvironment()->destroyPhysicsWorld();
@@ -3971,7 +3971,7 @@ void MainWindow::setupViewPort()
     statsCheckAction = new QAction(QIcon(), "Frame Stats (F3)");
     statsCheckAction->setCheckable(true);
     statsCheckAction->setChecked(
-        SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
+        SettingsManager::getDefaultManager()->get(settingkeys::showFps));
     connect(statsCheckAction, &QAction::toggled, this,
             [this](bool on) { setShowFrameStats(on); });
     wireFramesMenu->addAction(statsCheckAction);
@@ -4267,7 +4267,7 @@ void MainWindow::setupViewPort()
     // The persisted readout state reaches the viewport HERE, not when the menu
     // action was built: the View Options menu is constructed before sceneView
     // exists, so its initial setChecked found nothing to switch on.
-    setShowFrameStats(SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
+    setShowFrameStats(SettingsManager::getDefaultManager()->get(settingkeys::showFps));
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView->asWidget(), 0, 0);
@@ -6029,16 +6029,15 @@ void MainWindow::toggleClaudeChat()
     // model instead of silently inheriting the user's terminal default. The
     // setting is what a header picker will write; absent, the shipped default
     // applies, and an explicit empty string restores "inherit".
-    claudeChatHost->setModel(settings->getValue("claude_model",
-                                                ClaudeLaunchConfig::defaultModel()).toString());
+    claudeChatHost->setModel(settings->get(settingkeys::claudeModel));
     if (!claudeChatWindow) {
         claudeChatWindow = new ClaudeChatWindow(settings->settings, claudeChatHost, this);
         connect(claudeChatWindow, &ClaudeChatWindow::enableMcpRequested, this, [this]() {
             const quint16 port =
-                quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt());
+                quint16(settings->get(settingkeys::mcpPort));
             QString error;
             if (startMcpServer(port, &error)) {
-                settings->setValue("mcp_enabled", true);
+                settings->set(settingkeys::mcpEnabled, true);
             } else if (scriptConsole) {
                 scriptConsole->announce(QStringLiteral("MCP enable failed: %1").arg(error));
             }
@@ -6203,7 +6202,7 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
         sceneView->primeSceneEnvironment();
     } });
-    if (settings->getValue("shader_warmup_on_open", true).toBool()) {
+    if (settings->get(settingkeys::shaderWarmupOnOpen)) {
         slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
             LoadTimeline::mark(QStringLiteral("warmUpShaders"));
             const unsigned built = sceneView->warmUpShaders();

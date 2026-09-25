@@ -84,7 +84,6 @@ namespace Constants
     /// reads the setting with THIS default. It lived as four separate `false`
     /// literals; one constant means a future flip cannot happen in three
     /// places out of four (asserted by theme.manager).
-    extern bool SHOW_FPS_DEFAULT;
 
     namespace Reserved
     {

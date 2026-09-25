@@ -137,7 +137,7 @@ QString ProjectService::projectsRoot() const
     // One rule, in services/apppaths.h: the data root when a run forces one
     // (so a scripted run stops writing project folders into the developer's
     // Documents), the `default_directory` preference otherwise.
-    return AppPaths::projectsRoot(settings->getValue("default_directory", QString()).toString(),
+    return AppPaths::projectsRoot(settings->get(settingkeys::defaultDirectory),
                                   Constants::PROJECT_FOLDER);
 }
 

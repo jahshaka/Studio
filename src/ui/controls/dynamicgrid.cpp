@@ -47,7 +47,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     offset = 10;
     lastWidth = 0;
     settings = SettingsManager::getDefaultManager();
-    tileSize = sizeFromString(settings->getValue("tileSize", "Normal").toString());
+    tileSize = sizeFromString(settings->get(settingkeys::tileSize));
 
     gridLayout = new QGridLayout(gridWidget);
 //    gridLayout->setSpacing(20);
@@ -204,7 +204,7 @@ void DynamicGrid::scheduleSliderRelayout()
 int DynamicGrid::setSliderRowCount(int rows)
 {
     const int clamped = qBound(2, rows, 10);
-    settings->setValue("slider_rows", clamped);
+    settings->set(settingkeys::sliderRows, clamped);
     if (clamped == sliderRows) return clamped;
     if (mode != LayoutMode::Sliders) {
         // Not showing filmstrips: rebuildSliderModel reads the setting when the
@@ -223,7 +223,7 @@ int DynamicGrid::setSliderRowCount(int rows)
 void DynamicGrid::rebuildSliderModel(LayoutMode seedFrom)
 {
     // "Slider rows" is a user setting (Settings -> Desktop), not per desktop
-    sliderRows = qBound(2, settings->getValue("slider_rows", 6).toInt(), 10);
+    sliderRows = qBound(2, settings->get(settingkeys::sliderRows), 10);
 
     QVector<SliderTileInfo> infos;
     foreach (ItemGridWidget *gridItem, originalItems) {

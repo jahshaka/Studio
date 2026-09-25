@@ -120,7 +120,7 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
     tileSizeMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
     auto tileSizeGroup = new QActionGroup(tileSizeMenu);
     tileSizeGroup->setExclusive(true);
-    const QString currentTileSize = settings->getValue("tileSize", "Normal").toString();
+    const QString currentTileSize = settings->get(settingkeys::tileSize);
     for (const QString &sizeName :
          { QStringLiteral("Small"), QStringLiteral("Normal"),
            QStringLiteral("Large"), QStringLiteral("Huge") }) {
@@ -129,7 +129,7 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
         action->setChecked(sizeName == currentTileSize);
         tileSizeGroup->addAction(action);
         connect(action, &QAction::triggered, this, [this, sizeName]() {
-            settings->setValue("tileSize", sizeName);
+            settings->set(settingkeys::tileSize, sizeName);
             changePreviewSize(sizeName);
         });
     }
@@ -236,7 +236,7 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	// by it: this is the one route where "open" is a bare gesture.
 	loadProjectAssets(projectopen::tileOpenMode(
 	    playMode,
-	    SettingsManager::getDefaultManager()->getValue("open_in_player", false).toBool()));
+	    SettingsManager::getDefaultManager()->get(settingkeys::openInPlayer)));
 }
 
 QString projectBlobGuid;

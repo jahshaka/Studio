@@ -55,8 +55,7 @@ PerfSettingsWidget::PerfSettingsWidget(SettingsManager *settings, QWidget *paren
     // from having to know the path in order to get it back.
     mRoot = new QLineEdit(this);
     mRoot->setPlaceholderText(tr("Default — this installation's data folder"));
-    mRoot->setText(mSettings ? mSettings->getValue(QStringLiteral("perf/captureRoot"), QString())
-                                   .toString()
+    mRoot->setText(mSettings ? mSettings->get(settingkeys::perfCaptureRoot)
                              : QString());
     auto *browse = new QPushButton(tr("Browse…"), this);
     auto *openFolder = new QPushButton(tr("Open folder"), this);
@@ -77,10 +76,8 @@ PerfSettingsWidget::PerfSettingsWidget(SettingsManager *settings, QWidget *paren
     mKeepDays->setRange(0, 3650);
     mKeepDays->setSuffix(tr(" days"));
     mKeepDays->setSpecialValueText(tr("keep forever"));
-    mKeepDays->setValue(mSettings
-                            ? mSettings->getValue(QStringLiteral("perf/keepDays"),
-                                                  FrameMonitor::defaultKeepDays()).toInt()
-                            : int(FrameMonitor::defaultKeepDays()));
+    mKeepDays->setValue(mSettings ? int(mSettings->get(settingkeys::perfKeepDays))
+                                  : int(settingkeys::perfKeepDays.fallback));
     form->addRow(tr("Delete recordings after"), mKeepDays);
 
     mKeepGb = new QSpinBox(this);
@@ -88,9 +85,7 @@ PerfSettingsWidget::PerfSettingsWidget(SettingsManager *settings, QWidget *paren
     mKeepGb->setSuffix(tr(" GB"));
     mKeepGb->setSpecialValueText(tr("no limit"));
     const qint64 keepBytes =
-        mSettings ? mSettings->getValue(QStringLiteral("perf/keepBytes"),
-                                        QVariant::fromValue(FrameMonitor::defaultKeepBytes()))
-                        .toLongLong()
+        mSettings ? mSettings->get(settingkeys::perfKeepBytes)
                   : FrameMonitor::defaultKeepBytes();
     mKeepGb->setValue(int(keepBytes / (1024LL * 1024LL * 1024LL)));
     mKeepGb->setToolTip(tr("The oldest recordings are removed when the folder grows past this. "
@@ -138,8 +133,7 @@ void PerfSettingsWidget::saveSettings()
 {
     if (!mSettings) return;
     FrameMonitor::setPreferredSeconds(mSeconds->value());
-    mSettings->setValue(QStringLiteral("perf/captureRoot"), mRoot->text().trimmed());
-    mSettings->setValue(QStringLiteral("perf/keepDays"), double(mKeepDays->value()));
-    mSettings->setValue(QStringLiteral("perf/keepBytes"),
-                        QVariant::fromValue(qint64(mKeepGb->value()) * 1024LL * 1024LL * 1024LL));
+    mSettings->set(settingkeys::perfCaptureRoot, mRoot->text().trimmed());
+    mSettings->set(settingkeys::perfKeepDays, double(mKeepDays->value()));
+    mSettings->set(settingkeys::perfKeepBytes, qint64(mKeepGb->value()) * 1024LL * 1024LL * 1024LL);
 }

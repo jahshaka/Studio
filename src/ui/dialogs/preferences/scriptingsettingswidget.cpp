@@ -42,7 +42,7 @@ ScriptingSettingsWidget::ScriptingSettingsWidget(SettingsManager *settings, QWid
         mLive = sw;
     }
     mLive->setObjectName(QStringLiteral("scriptFeedbackLive"));
-    mLive->setChecked(mSettings->getValue("script_feedback_live", true).toBool());
+    mLive->setChecked(mSettings->get(settingkeys::scriptFeedbackLive));
     layout->addWidget(mLive);
 
     auto *note = new QLabel(
@@ -75,13 +75,13 @@ void ScriptingSettingsWidget::showEvent(QShowEvent *event)
     QWidget::showEvent(event);
     const QSignalBlocker block(mLive);
     if (mEngine) mLive->setChecked(mEngine->interactivePolicy() == ScriptRunPolicy::Live);
-    else mLive->setChecked(mSettings->getValue("script_feedback_live", true).toBool());
+    else mLive->setChecked(mSettings->get(settingkeys::scriptFeedbackLive));
 }
 
 void ScriptingSettingsWidget::saveSettings()
 {
     const bool live = mLive->isChecked();
-    mSettings->setValue("script_feedback_live", live);
+    mSettings->set(settingkeys::scriptFeedbackLive, live);
     if (mEngine)
         mEngine->setInteractivePolicy(live ? ScriptRunPolicy::Live : ScriptRunPolicy::Off);
 }

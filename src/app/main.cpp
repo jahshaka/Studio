@@ -54,6 +54,7 @@ For more information see the LICENSE file
 #include "app/versionsplashscreen.h"
 #include "app/shaderbuildgate.h"
 #include "ui/style/thememanager.h"
+#include "services/framepacing.h"
 #include "services/jahlog.h"
 #include "services/sessionheader.h"
 
@@ -274,18 +275,24 @@ int main(int argc, char *argv[])
         SessionHeader::Rows r;
         SettingsManager *sm = SettingsManager::getDefaultManager();
         r << SessionHeader::Row { QStringLiteral("file"), sm->settings->fileName() };
+        // Every key through its ONE owner (STUDIO-CRUD-1 item 10): this block
+        // used to re-type six keys and their defaults.
+        auto yesNo = [](bool on) { return on ? QStringLiteral("true") : QStringLiteral("false"); };
         r << SessionHeader::Row { QStringLiteral("theme"),
-                                  sm->getValue("appearance/theme", "qlementine-dark").toString() };
+                                  sm->getValue(ThemeManager::settingsKey(),
+                                               ThemeManager::defaultThemeId()).toString() };
         r << SessionHeader::Row { QStringLiteral("pacing"),
-                                  sm->getValue("viewport/pacing", "display").toString() };
+                                  sm->getValue(QString::fromLatin1(framepacing::settingsKey()),
+                                               framepacing::modeName(framepacing::Mode::Display))
+                                      .toString() };
         r << SessionHeader::Row { QStringLiteral("watchdog"),
-                                  sm->getValue("watchdog_enabled", true).toString() };
+                                  yesNo(sm->get(settingkeys::watchdogEnabled)) };
         r << SessionHeader::Row { QStringLiteral("shadowMeshOptimization"),
-                                  sm->getValue("shadow_mesh_optimization", true).toString() };
+                                  yesNo(sm->get(settingkeys::shadowMeshOptimization)) };
         r << SessionHeader::Row { QStringLiteral("shaderWarmupSamples"),
-                                  sm->getValue("shader_warmup_samples", 1).toString() };
+                                  QString::number(sm->get(settingkeys::shaderWarmupSamples)) };
         r << SessionHeader::Row { QStringLiteral("shaderWarmupShadows"),
-                                  sm->getValue("shader_warmup_shadows", true).toString() };
+                                  yesNo(sm->get(settingkeys::shaderWarmupShadows)) };
         return r;
     });
     SessionHeader::addProvider(QStringLiteral("assets"), [] {

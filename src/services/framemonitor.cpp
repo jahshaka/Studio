@@ -1163,7 +1163,7 @@ QString FrameMonitor::captureRoot()
     if (!env.isEmpty()) return QString::fromLocal8Bit(env);
     if (auto *settings = SettingsManager::getDefaultManager()) {
         const QString stored =
-            settings->getValue(QStringLiteral("perf/captureRoot"), QString()).toString().trimmed();
+            settings->get(settingkeys::perfCaptureRoot).trimmed();
         if (!stored.isEmpty()) return stored;
     }
     // THE DEFAULT IS THIS RUN'S DATA DIRECTORY (CLEANUP-1 item 11). It used to
@@ -1177,8 +1177,8 @@ QString FrameMonitor::captureRoot()
     return QDir(AppPaths::dataRoot()).filePath(QStringLiteral("perf"));
 }
 
-double FrameMonitor::defaultKeepDays() { return 14.0; }
-qint64 FrameMonitor::defaultKeepBytes() { return qint64(2) * 1024 * 1024 * 1024; }
+double FrameMonitor::defaultKeepDays() { return settingkeys::perfKeepDays.fallback; }
+qint64 FrameMonitor::defaultKeepBytes() { return settingkeys::perfKeepBytes.fallback; }
 
 // THE SWEEP (item 11). Captures used to accumulate forever in a directory
 // nothing ever looked at — a 20 s bundle of a busy scene is tens of megabytes,
@@ -1266,10 +1266,8 @@ bool FrameMonitor::start(const Request &request, QString *error)
         double keepDays = defaultKeepDays();
         qint64 keepBytes = defaultKeepBytes();
         if (auto *settings = SettingsManager::getDefaultManager()) {
-            keepDays = qBound(0.0, settings->getValue(QStringLiteral("perf/keepDays"),
-                                                      keepDays).toDouble(), 3650.0);
-            keepBytes = qMax(qint64(0), settings->getValue(QStringLiteral("perf/keepBytes"),
-                                                           QVariant::fromValue(keepBytes)).toLongLong());
+            keepDays = qBound(0.0, settings->get(settingkeys::perfKeepDays), 3650.0);
+            keepBytes = qMax(qint64(0), settings->get(settingkeys::perfKeepBytes));
         }
         sweepOldBundles(root.absolutePath(), keepDays, keepBytes);
     }

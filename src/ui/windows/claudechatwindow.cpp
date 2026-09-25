@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "data/settingkeys.h"
 #include "claudechatwindow.h"
 
 #include <QCloseEvent>
@@ -43,7 +44,7 @@ namespace {
 const char *kGeometryKey = "claude_chat/geometry";
 // The same key MainWindow::toggleClaudeChat reads when it builds the host, so
 // a choice made here survives a close/reopen and an app restart.
-const char *kModelKey = "claude_model";
+const char *kModelKey = settingkeys::claudeModel.name;
 
 // Inline images are bounded by the popup, not by the PNG: a browse_assets
 // answer can carry two dozen of them.

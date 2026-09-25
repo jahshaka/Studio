@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QApplication>
 
+#include "data/settingkeys.h"
 #include "services/apppaths.h"
 
 class SettingsManager
@@ -66,6 +67,21 @@ public:
 
     QVariant getValue(QString name, QVariant def) {
         return settings->value(name,def);
+    }
+
+    /// A declared key (data/settingkeys.h): its value, or its ONE default.
+    template <typename T>
+    T get(const SettingKey<T> &key) const {
+        return settings->value(QLatin1String(key.name), QVariant::fromValue(key.fallback))
+            .template value<T>();
+    }
+    QString get(const SettingKey<const char *> &key) const {
+        return settings->value(QLatin1String(key.name), QString::fromUtf8(key.fallback))
+            .toString();
+    }
+    template <typename T, typename V>
+    void set(const SettingKey<T> &key, const V &value) {
+        settings->setValue(QLatin1String(key.name), QVariant::fromValue(value));
     }
 };
 

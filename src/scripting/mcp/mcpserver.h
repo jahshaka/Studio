@@ -29,6 +29,7 @@ For more information see the LICENSE file
 //     event loop, e.g. project.open) wait in the queue.
 
 #include <QJsonObject>
+#include "data/settingkeys.h"
 #include <QObject>
 #include <QString>
 #include <deque>
@@ -45,7 +46,7 @@ class McpServer : public QObject
 {
     Q_OBJECT
 public:
-    static constexpr quint16 kDefaultPort = 8639;
+    static constexpr quint16 kDefaultPort = quint16(settingkeys::mcpPort.fallback);   // the key's ONE default
 
     explicit McpServer(ScriptEngine *engine, QObject *parent = nullptr);
     ~McpServer() override;

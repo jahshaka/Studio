@@ -1368,7 +1368,7 @@ bool EditorApi::setOverlays(const QVariantMap &change)
         // Persisted, unlike the other rows: `stats` is the Preferences
         // `show_fps` setting, and the checkbox, the F3 key and this verb are one
         // code path with one stored value (STATS_OVERLAY_SPEC §5.3 step 3).
-        SettingsManager::getDefaultManager()->setValue("show_fps", on);
+        SettingsManager::getDefaultManager()->set(settingkeys::showFps, on);
     }
     if (change.contains("physicsDebug")) {
         const bool on = change.value("physicsDebug").toBool();
