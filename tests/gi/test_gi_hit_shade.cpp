@@ -81,12 +81,18 @@ static void render(Engine *e, int n) { for (int i = 0; i < n; ++i) e->renderOneF
 /// surface's radiance is its diffuse (the sun and the GI) and nothing it
 /// reflects, which is what makes a reflection of it and a raster of it the same
 /// number.
+/// The matte recipe's roughness — (d)'s closed form reads it (never a literal 1).
+static const float kMatteRough = 1.0f;
+/// THE FLOOR'S ALBEDO IS AN EXACT kD CODE (PHOTON-CARDS-5 audit F1): the card's
+/// Albedo layer stores kD = albedo / pi in 8 bits, and 0.3 landed on 24.35 -> 24
+/// (-1.44 %) — a bias every card reading carried. 24 pi / 255 stores exactly.
+static const float kFloorAlbedo = float(24.0 * 3.14159265358979323846 / 255.0);
 static MaterialId matte(Scene *s, const Colour &albedo, const Colour &emissive = Colour(0, 0, 0))
 {
     PbrParams p;
     p.albedo = albedo;
     p.emissive = emissive;
-    p.roughness = 1.0f;
+    p.roughness = kMatteRough;
     p.workflow = PbrParams::Workflow::Specular;
     p.ior = 1.0f;
     p.specularColour = Colour(0.0f, 0.0f, 0.0f);
@@ -195,7 +201,7 @@ static int mirrorArms(Engine *e)
     {
         MeshData md = enginetest::unitCubeMesh();
         md.cards = enginetest::boxCards(0.5f);
-        s->attachMesh(floorN, s->createMesh(md), matte(s, Colour(0.3f, 0.3f, 0.3f)));
+        s->attachMesh(floorN, s->createMesh(md), matte(s, Colour(kFloorAlbedo, kFloorAlbedo, kFloorAlbedo)));
     }
     s->setNodeTransform(floorN, Vec3(0.0f, -0.55f, -4.0f), Quat(), Vec3(30.0f, 0.1f, 30.0f));
     // THE SUN FROM THE MIRROR'S SIDE (it travels towards -Z), so the faces the
@@ -394,10 +400,20 @@ static int mirrorArms(Engine *e)
     // measured 2 in each arm alike — and the bar is 1 % of the eroded silhouette
     // (~370 px: 3). A leaking seam misses a LINE of pixels along an edge, a face's
     // width (~20 px at this framing), which this bar refuses.
+    // ...AND HALF A POINT MORE FOR THE CONTROL'S SOFT FOOT (PHOTON-CARDS-5,
+    // measured): since the card read restores the lobe's view term the floor
+    // around the crates reflects at the grazing raster's brightness (1.6-2x its
+    // head-on value), and the STATIC control's captured PSSM shadow, SOFT at the
+    // crate's foot, crosses the masks' 0.01 threshold on 48 more pixels — a 1-3
+    // px line along the bottom edge of the silhouette (rows 225-227 of 203-227;
+    // spikes/photon-cards-5/hit-a-*.ppm). The MOVER's shadow on the cards is the
+    // traced movers' term (PHOTON-CARDS-4), HARD, so it has no such penumbra: the
+    // control rose 92.5 -> 93.8 %, the mover 92.6 -> 92.8 % with its interior
+    // misses 2 -> 1. The mover's coverage did not fall; the control's edge grew.
     const unsigned missBar = std::max(1u, coreN[1] / 100u);
-    CHECK_MSG(frac[1] >= frac[0] - 0.01f && interiorMiss[1] <= missBar,
+    CHECK_MSG(frac[1] >= frac[0] - 0.015f && interiorMiss[1] <= missBar,
               "(a) the MOVER's reflection covers %.1f %% of its raster silhouette, the static control's %.1f %% "
-              "(bar: less 1 point on the edge); misses inside it %u of %u px (bar %u, 1 %%; the control's %u) "
+              "(bar: less 1.5 points on the edge and the control's soft foot); misses inside it %u of %u px (bar %u, 1 %%; the control's %u) "
               "(before this lane: 0 %% — a mover's hit was handed back to the probe)",
               100.0f * frac[1], 100.0f * frac[0], interiorMiss[1], coreN[1], missBar, interiorMiss[0]);
     // THE BAR: the reflection is the decode of the SAME surface point the raster
@@ -479,16 +495,20 @@ static int mirrorArms(Engine *e)
         // seen). The earlier single mask mixed the two at the crate's foot — the
         // blue channel 3.88 % off the lamp-OFF raster was the carded floor there.
         //
-        // MEASURED (PHOTON-CARDS-4, 2026-09-25): the decode's half 0.22 % from the
-        // lamp-OFF raster; the floor-only mirror shot 0 records. The cards' half
-        // CARRIES the lamp (the mirror's floor moves with it by the ratio below)
-        // but does NOT equal the lamp-ON raster: 41.6 % off — with the lamp OFF the
-        // card floor reads 0.128 against the raster's 0.247 (0.52x: the card's
-        // relight with GI off holds the sun alone, the raster adds the sky's and
-        // the ambient's diffuse), and the lamp's own share is 0.76x the raster's.
-        // That card-versus-raster gap is the CARDS' defect, reported for its own
-        // lane; this arm asserts the physics that holds (the lamp reaches a card
-        // hit, never a decode hit off-screen) and prints the gap.
+        // THE CARDS' HALF IS THE GRAZING RASTER (PHOTON-CARDS-5). The mirror sees
+        // this floor at N.V ~ 0.08, where HlmsPbs's Disney diffuse is up to
+        // 1.6-2x its head-on value (the view term: the retro-reflection of a
+        // light behind the eye). A card stores the head-on value and the read
+        // restores the view term for its ray (jah_card_view.glsl) from ONE mean
+        // light direction per texel: EXACT for one light — the lamp-OFF floor
+        // (the sun + the ambient) — and, for the sun + the lamp together, off by
+        // the spread of their view terms per channel (the mean direction is
+        // luminance-weighted, and the lamp is blue while the sun is white). That
+        // error is PREDICTED here per pixel from the closed form (the lobe, the
+        // lights, the crate's shadow, the camera's rays) and the measurement is
+        // held to the prediction. Before PHOTON-CARDS-5: 41.6 % off, the card
+        // stored the head-on value and was read as it (and held no ambient at GI
+        // off).
         s->setNodeVisible(floorN, false);
         show(false, false);
         const ImageF rBare = shot(false);
@@ -523,9 +543,200 @@ static int mirrorArms(Engine *e)
         const Colour cardLamp(fm.r - fmOff.r, fm.g - fmOff.g, fm.b - fmOff.b),
                      rastLamp(fOn.r - fOff.r, fOn.g - fOff.g, fOn.b - fOff.b);
         std::printf("   the cards' half: mirror lamp OFF (%.4f %.4f %.4f); the lamp's share, mirror (%.4f %.4f %.4f) "
-                    "against the raster's (%.4f %.4f %.4f); the mirror %.1f %% off the lamp-ON raster (NOT "
-                    "asserted: the cards' gap, see above)\n", fmOff.r, fmOff.g, fmOff.b, cardLamp.r, cardLamp.g,
-                    cardLamp.b, rastLamp.r, rastLamp.g, rastLamp.b, 100.0f * relDiff(fm, fOn));
+                    "against the raster's (%.4f %.4f %.4f); the mirror %.1f %% off the lamp-ON raster\n",
+                    fmOff.r, fmOff.g, fmOff.b, cardLamp.r, cardLamp.g, cardLamp.b, rastLamp.r, rastLamp.g,
+                    rastLamp.b, 100.0f * relDiff(fm, fOn));
+        // THE PREDICTION, per floor pixel of the mask: the raster camera's ray
+        // through the pixel (the mask is the mirror's frame, the raster its
+        // mirror image) to the floor's top, the view V back up it, and the two
+        // lights' closed forms — the sun (power 3: albedo x 3 / pi x N.L x the
+        // lobe, 0 where the crate shadows it) and the lamp (albedo x colour x 6 x
+        // 1 / (0.5 + (0.5 / R^2) d^2) x (R - d) / R x N.L x the lobe) — plus the
+        // ambient pair's upper colour x albedo x A(N.V, r) (the read restores it
+        // exactly). EXACT = each light's lobe at V, at the pixel's point; READ =
+        // each light's lobe at V = N summed AT THE CARD TEXEL'S CENTRE (what the
+        // relight lit), times the lobe ratio at the luminance-weighted mean
+        // direction (jah_card_view.glsl's arithmetic). THE NAMED RESIDUAL (the
+        // lead's decision): a grazing mirror of a floor under differently
+        // coloured lights is off per channel by up to ~10 %; head-on and moderate
+        // angles within 3 %; per-channel directions would need a new layer.
+        double predicted[2][3] = { { 0, 0, 0 }, { 0, 0, 0 } };   // [lamp off, on][channel]: read / exact
+        // ...the same read half a row lower (the mirror picture's registration).
+        double predictedHalf[2][3] = { { 0, 0, 0 }, { 0, 0, 0 } };
+        double minNdotV = 1.0;
+        {
+            const double kPiD = 3.14159265358979323846;
+            const double albedo = kFloorAlbedo, kLampR = 6.0, rough = kMatteRough;
+            const double lampPos[3] = { 1.2, 1.3, -6.8 }, lampCol[3] = { 0.2, 0.4, 1.0 };
+            const double amb[3] = { 0.05, 0.05, 0.06 };
+            double sunL[3] = { 0.25, 1.0, 1.05 };
+            {
+                const double l = std::sqrt(sunL[0] * sunL[0] + sunL[1] * sunL[1] + sunL[2] * sunL[2]);
+                for (double &c : sunL) c /= l;
+            }
+            const auto lobe = [rough](const double L[3], const double V[3]) {
+                // jahDisneyDiffuse x N.L with N = +Y: the fork's Frostbite form,
+                // fd90 = 0.5 r + 2 r (V.H)^2, energy lerp(1, 1 / 1.51, r) (JahBrdf).
+                double H[3] = { L[0] + V[0], L[1] + V[1], L[2] + V[2] };
+                const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+                const double VdotH = (V[0] * H[0] + V[1] * H[1] + V[2] * H[2]) / hl;
+                const double NdotL = std::max(0.0, L[1]), NdotV = std::max(1e-4, V[1]);
+                const double fd90 = 0.5 * rough + 2.0 * rough * VdotH * VdotH;
+                return NdotL * (1.0 + (fd90 - 1.0) * std::pow(1.0 - NdotL, 5.0)) *
+                       (1.0 + (fd90 - 1.0) * std::pow(1.0 - NdotV, 5.0)) * (1.0 + (1.0 / 1.51 - 1.0) * rough);
+            };
+            const double N[3] = { 0.0, 1.0, 0.0 };
+            // The raster camera (testCameraDescLookAt's frame), 45 degrees vertical.
+            const double eye[3] = { kCamR.x, kCamR.y, kCamR.z };
+            double f[3] = { 0.0 - eye[0], 1.0 - eye[1], -20.0 - eye[2] };
+            {
+                const double l = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+                for (double &c : f) c /= l;
+            }
+            double r[3] = { -f[2], 0.0, f[0] };   // f x +Y
+            {
+                const double l = std::sqrt(r[0] * r[0] + r[2] * r[2]);
+                r[0] /= l; r[2] /= l;
+            }
+            const double u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
+            const double th = std::tan(0.5 * 45.0 * kPiD / 180.0);
+            // The crate (a unit cube at (0.3, 0, -8)) shadows the sun: a slab test.
+            const auto sunVisible = [&](const double P[3]) {
+                const double c[3] = { 0.3, 0.0, -8.0 };
+                double t0 = 1e-4, t1 = 1e30;
+                for (int k = 0; k < 3; ++k) {
+                    const double lo = (c[k] - 0.5 - P[k]) / sunL[k], hi = (c[k] + 0.5 - P[k]) / sunL[k];
+                    t0 = std::max(t0, std::min(lo, hi));
+                    t1 = std::min(t1, std::max(lo, hi));
+                }
+                return !(t0 <= t1);
+            };
+            double sumRead[2][3] = {}, sumReadHalf[2][3] = {}, sumExact[2][3] = {};
+            for (unsigned y = 0; y < kSize; ++y)
+                for (unsigned x = 0; x < kSize; ++x) {
+                    if (!crd.m[size_t(y) * kSize + x]) continue;
+                    const unsigned rx = kSize - 1u - x;   // the raster's own pixel
+                    // The floor point and the view up the raster camera's ray through
+                    // (column, row) of the raster — `oy` = 0.5 the pixel's centre.
+                    struct Hit { double P[3], V[3]; bool ok; };
+                    const auto hitAt = [&](double oy) {
+                        Hit h{};
+                        const double ndx = (2.0 * (double(rx) + 0.5) / kSize - 1.0) * th;
+                        const double ndy = (1.0 - 2.0 * (double(y) + oy) / kSize) * th;
+                        double d[3];
+                        for (int k = 0; k < 3; ++k) d[k] = f[k] + ndx * r[k] + ndy * u[k];
+                        h.ok = d[1] < 0.0;
+                        if (!h.ok) return h;
+                        const double t = (-0.5 - eye[1]) / d[1];
+                        const double P[3] = { eye[0] + t * d[0], -0.5, eye[2] + t * d[2] };
+                        double V[3] = { eye[0] - P[0], eye[1] - P[1], eye[2] - P[2] };
+                        const double l = std::sqrt(V[0] * V[0] + V[1] * V[1] + V[2] * V[2]);
+                        for (int k = 0; k < 3; ++k) { h.P[k] = P[k]; h.V[k] = V[k] / l; }
+                        return h;
+                    };
+                    const Hit centre = hitAt(0.5), halfRow = hitAt(1.0);
+                    if (!centre.ok || !halfRow.ok) continue;
+                    const double *P = centre.P, *V = centre.V;
+                    minNdotV = std::min(minNdotV, V[1]);
+                    // THE CARD'S TEXEL: the floor's top (x in [-15, 15], z in [-19, 11])
+                    // wants 64 texels a metre and is split into 4 x 4 pages of 128
+                    // (kCardMaxSplit): a 5.86 cm texel on one grid. Its relight lit the
+                    // texel's CENTRE — the read answers every point of the texel with it.
+                    const double tw = 30.0 / 512.0;
+                    const auto texelOf = [tw](const double Q[3], double out[3]) {
+                        out[0] = -15.0 + (std::floor((Q[0] + 15.0) / tw) + 0.5) * tw;
+                        out[1] = -0.5;
+                        out[2] = -19.0 + (std::floor((Q[2] + 19.0) / tw) + 0.5) * tw;
+                    };
+                    // Each light's share at V = N (what a card stores) at a point Q.
+                    struct Shares { double s[3], l[3], lampL[3]; };
+                    const auto shares = [&](const double Q[3], bool on) {
+                        Shares o{};
+                        double lampL[3] = { lampPos[0] - Q[0], lampPos[1] - Q[1], lampPos[2] - Q[2] };
+                        const double dist = std::sqrt(lampL[0] * lampL[0] + lampL[1] * lampL[1] + lampL[2] * lampL[2]);
+                        for (int k = 0; k < 3; ++k) o.lampL[k] = lampL[k] / dist;
+                        const double att = dist < kLampR ? 1.0 / (0.5 + (0.5 / (kLampR * kLampR)) * dist * dist) *
+                                                               (kLampR - dist) / kLampR
+                                                         : 0.0;
+                        const double sunE = sunVisible(Q) ? albedo * 3.0 / kPiD : 0.0;
+                        for (int k = 0; k < 3; ++k) {
+                            o.s[k] = sunE * lobe(sunL, N);
+                            o.l[k] = on ? albedo * lampCol[k] * 6.0 * att * lobe(o.lampL, N) : 0.0;
+                        }
+                        return o;
+                    };
+                    const double Aview = enginetest::disneyDiffuseAlbedo(V[1], rough);
+                    for (int on = 0; on < 2; ++on) {
+                        const Shares ex = shares(P, on != 0);
+                        const double viewS = lobe(sunL, N) > 0.0 ? lobe(sunL, V) / lobe(sunL, N) : 0.0;
+                        const double viewL = lobe(ex.lampL, N) > 0.0 ? lobe(ex.lampL, V) / lobe(ex.lampL, N) : 0.0;
+                        // THE READ, at the texel's centre, along the pixel's centre ray
+                        // (reg = 0) and — the instrument's registration — half a row
+                        // lower (reg = 1; see the bar).
+                        for (int reg = 0; reg < 2; ++reg) {
+                            const Hit &h = reg ? halfRow : centre;
+                            double Pt[3];
+                            texelOf(h.P, Pt);
+                            const Shares rd = shares(Pt, on != 0);
+                            const double wS = 0.2126 * rd.s[0] + 0.7152 * rd.s[1] + 0.0722 * rd.s[2];
+                            const double wL = 0.2126 * rd.l[0] + 0.7152 * rd.l[1] + 0.0722 * rd.l[2];
+                            double Lm[3];
+                            for (int k = 0; k < 3; ++k) Lm[k] = sunL[k] * wS + rd.lampL[k] * wL;
+                            const double lm = std::sqrt(Lm[0] * Lm[0] + Lm[1] * Lm[1] + Lm[2] * Lm[2]);
+                            double factor = 1.0;
+                            if (lm > 1e-12) {
+                                for (double &c : Lm) c /= lm;
+                                factor = lobe(Lm, h.V) / lobe(Lm, N);
+                            }
+                            const double Ah = enginetest::disneyDiffuseAlbedo(h.V[1], rough);
+                            for (int k = 0; k < 3; ++k) {
+                                (reg ? sumReadHalf : sumRead)[on][k] += (rd.s[k] + rd.l[k]) * factor + amb[k] * albedo * Ah;
+                                if (!reg) sumExact[on][k] += ex.s[k] * viewS + ex.l[k] * viewL + amb[k] * albedo * Aview;
+                            }
+                        }
+                    }
+                }
+            for (int on = 0; on < 2; ++on)
+                for (int k = 0; k < 3; ++k) {
+                    predicted[on][k] = sumExact[on][k] > 0.0 ? sumRead[on][k] / sumExact[on][k] : 1.0;
+                    predictedHalf[on][k] = sumExact[on][k] > 0.0 ? sumReadHalf[on][k] / sumExact[on][k] : 1.0;
+                }
+        }
+        // THE BAR, per channel: half an R11G11B10F step of the radiance read (2^-7
+        // red and green, 2^-6 blue, relative); the OCTAHEDRAL direction's half-cell
+        // (0.4 degree: fd90 moves by at most 0.007 r, times (1 - N.V)^5 at the
+        // mask's most grazing pixel — 0.46 % at N.V 0.065); and THE MIRROR
+        // PICTURE'S REGISTRATION: the traced reflection's rows sit half a pixel off
+        // the raster's (PHOTON-CARDS-5 measured it: the lamp-ON read fits the
+        // prediction taken half a row lower to 0.2 % in blue, the unshifted one to
+        // 2 %; at N.V 0.07 half a row is 20-40 cm of floor, across the lamp's
+        // falloff) — the prediction's own change over that half row. The kD store
+        // is exact (kFloorAlbedo) and the card's 5.9 cm texel is IN the prediction.
+        const double octHalf = 0.007 * double(kMatteRough) * std::pow(1.0 - minNdotV, 5.0);
+        double bar[2][3];
+        for (int on = 0; on < 2; ++on)
+            for (int k = 0; k < 3; ++k)
+                bar[on][k] = (k == 2 ? 1.0 / 64.0 : 1.0 / 128.0) + octHalf +
+                             std::fabs(predictedHalf[on][k] / predicted[on][k] - 1.0);
+        std::printf("   the prediction, lamp ON: %+.2f / %+.2f / %+.2f %% (the multi-light error, the card's texel"
+                    " in it); half a row lower %+.2f / %+.2f / %+.2f %% (most grazing N.V %.3f)\n",
+                    100.0 * (predicted[1][0] - 1.0), 100.0 * (predicted[1][1] - 1.0),
+                    100.0 * (predicted[1][2] - 1.0), 100.0 * (predictedHalf[1][0] - 1.0),
+                    100.0 * (predictedHalf[1][1] - 1.0), 100.0 * (predictedHalf[1][2] - 1.0), minNdotV);
+        const float mOffv[3] = { fmOff.r, fmOff.g, fmOff.b }, rOffv[3] = { fOff.r, fOff.g, fOff.b };
+        const float mOnv[3] = { fm.r, fm.g, fm.b }, rOnv[3] = { fOn.r, fOn.g, fOn.b };
+        for (int on = 0; on < 2; ++on)
+            for (int k = 0; k < 3; ++k) {
+                const double measured = double(on ? mOnv[k] : mOffv[k]) / double(on ? rOnv[k] : rOffv[k]);
+                const double off = std::fabs(measured / predicted[on][k] - 1.0);
+                CHECK_MSG(crd.n > 50 && off <= bar[on][k],
+                          "(d) the cards' half, lamp %s, channel %d: the mirror / the grazing raster %.4f against"
+                          " the view term's prediction %.4f (%s) — %.2f %% apart (bar %.2f %%: the store's step"
+                          " + the octahedral half-cell + half a row of the mirror's registration)", on ? "ON" : "OFF", k, measured, predicted[on][k],
+                          on ? "the sun + the lamp through ONE mean direction: the multi-light error"
+                             : "one light: exact",
+                          100.0 * off, 100.0 * bar[on][k]);
+            }
         CHECK_MSG(crd.n > 50 && relDiff(fOn, fOff) > 0.1f && relDiff(fm, fmOff) > 0.1f,
                   "(d) the floor's REFLECTION (a card hit outside the frustum) CARRIES the lamp: it moves %.0f %% "
                   "with it (the raster %.0f %%) — the card holds the light it captured",
