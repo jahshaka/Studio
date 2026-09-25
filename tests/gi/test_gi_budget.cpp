@@ -131,6 +131,9 @@ int main(int argc, char **argv)
     // they meant. The probe toggles are pinned to what "auto" RESOLVED to at
     // medium (both off), so the quality step moves nothing else.
     doc->giQuality = iris::GiQuality::HIGH;
+    // PHOTON-F12-PCC: at a ray tier no probe grid is built; this suite measures the
+    // grid's own budget (the 2x1x2 grid's captures), so the rays are OFF here.
+    doc->rayTracing = iris::RayTracingMode::Off;
     doc->giProbeHdr = 0;
     doc->giProbeShadows = 0;
     doc->giNumBounces = 2;
