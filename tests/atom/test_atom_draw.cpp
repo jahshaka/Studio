@@ -19,7 +19,10 @@
 //   (d) buckets against materials over the grid;
 //   (e) at Medium, the closed room's probe grid reaches the glossy metal cell through
 //       the decode exactly as through PBS (the parity audit's PCC blocker, closed by
-//       the per-scene binding: HlmsAtom binds SceneGiBinding.pcc like PBS).
+//       the per-scene binding: HlmsAtom binds SceneGiBinding.pcc like PBS);
+//   (f) 640 buckets — past one 512-slot pool of twins — each shading only its own
+//       pixels (the bucket id, never the twin's slot);
+//   (g) an ORTHOGRAPHIC view picks the level the CPU strategy picks.
 // FRAMES, NEVER TIME: every picture is read until two consecutive reads agree to a code.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -30,6 +33,8 @@
 #include <Compositor/OgreCompositorNode.h>
 #include <Compositor/OgreCompositorWorkspace.h>
 #include <OgreImage2.h>
+#include <OgreItem.h>
+#include <OgreSceneManager.h>
 #include <OgreRoot.h>
 #include <OgreTextureBox.h>
 #include <OgreMesh2.h>
@@ -799,6 +804,144 @@ int main()
                       "over %zu px)", c.name.c_str(), moveAtom, movePbs, n);
         }
         for (NodeId n : room) scene->setNodeVisible(n, false);
+    }
+
+    // ---- (f) PAST ONE POOL OF TWINS: 640 buckets ----------------------------------
+    // A twin is a datablock in HlmsAtom's const-buffer pools, 512 slots each, so a
+    // twin's SLOT repeats from the 513th bucket on. The decode must tell the buckets
+    // apart by a whole id (the table's entry against the draw's own), or two draws
+    // claim one pixel and the later one paints it. 640 tiles, each its own 1x1
+    // texture — a texture set each, so a bucket each — against the same tiles through
+    // stock PBS.
+    {
+        for (const Cell &c : cells) scene->setNodeVisible(c.node, false);
+        GiParams off;
+        off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        {
+            PostFxDesc fx;
+            fx.allowOffscreen = true;
+            fx.ssr = 0;
+            view->setPostFx(fx);
+        }
+        const MeshId tileMesh = scene->createMesh(enginetest::unitCubeMesh());
+        std::vector<NodeId> tiles;
+        const int kCols = 32, kRows = 20;
+        for (int r = 0; r < kRows; ++r)
+            for (int q = 0; q < kCols; ++q) {
+                const int i = r * kCols + q;
+                const unsigned char rgba[4] = { (unsigned char)(40 + (i * 37) % 200),
+                                                (unsigned char)(40 + (i * 91) % 200),
+                                                (unsigned char)(40 + (i * 53) % 200), 255 };
+                PbrParams tp;
+                tp.roughness = 0.8f;
+                const MaterialId m = scene->createPbrMaterial(tp);
+                scene->setPbrTexture(m, PbrTextureSlot::Albedo, scene->createTexture(1, 1, rgba, true, false));
+                const NodeId n = scene->createNode();
+                scene->setNodeTransform(n, Vec3(-3.1f + 0.2f * float(q), 2.9f - 0.2f * float(r), -2.0f), Quat(),
+                                        Vec3(0.18f, 0.18f, 0.18f));
+                scene->attachMesh(n, tileMesh, m);
+                tiles.push_back(n);
+            }
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 5.2f), Vec3(0.0f, 1.0f, -2.0f));
+        Image atomPic, pbsPic;
+        int fa = 0, fb = 0;
+        scene->setAtomDrawEnabled(true);
+        const bool sa = settle(e, view, atomPic, fa);
+        const AtomDrawStatus st = scene->atomDrawStatus();
+        scene->setAtomDrawEnabled(false);
+        const bool sb = settle(e, view, pbsPic, fb);
+        double whole = 0.0;
+        size_t n = 0, beyond = 0;
+        for (size_t p = 0; p + 3 < atomPic.rgba.size() && atomPic.rgba.size() == pbsPic.rgba.size(); p += 4) {
+            const int d = maxDiff(&atomPic.rgba[p], &pbsPic.rgba[p]);
+            whole += d;
+            beyond += d > kTailCodes;
+            ++n;
+        }
+        if (outDir) {
+            for (int w = 0; w < 2; ++w) {
+                const Image &im = w ? pbsPic : atomPic;
+                const std::string path = std::string(outDir) + (w ? "/tiles_pbs.ppm" : "/tiles_atom.ppm");
+                if (FILE *f = std::fopen(path.c_str(), "wb")) {
+                    std::fprintf(f, "P6\n%u %u\n255\n", im.width, im.height);
+                    for (size_t i = 0; i + 3 < im.rgba.size(); i += 4) std::fwrite(&im.rgba[i], 1, 3, f);
+                    std::fclose(f);
+                }
+            }
+        }
+        CHECK_MSG(st.buckets > 512 && st.twins > 512 && st.screenDraws == st.buckets,
+                  "(f) %u buckets, %u twins, %u screen draws: past one pool of twins", st.buckets, st.twins,
+                  st.screenDraws);
+        CHECK_MSG(sa && sb && n && whole / double(n) <= kMeanBar && double(beyond) / double(n) <= kTailBar,
+                  "(f) %zu tiles, a bucket each, through the decode against PBS: mean %.3f codes, %.3f %% beyond %d",
+                  tiles.size(), n ? whole / double(n) : -1.0, n ? 100.0 * double(beyond) / double(n) : 100.0,
+                  kTailCodes);
+        for (NodeId t : tiles) scene->setNodeVisible(t, false);
+    }
+
+    // ---- (g) AN ORTHOGRAPHIC VIEW PICKS THE CPU STRATEGY'S LEVEL -------------------
+    // One sample of an orthographic view is the same world length at every depth, so
+    // the level rule has no distance term there (OgreMesh.cpp's strategy): the id
+    // pass's GPU rule must take the same level Ogre's CPU strategy takes for the same
+    // view — read from the ids image's level bits with the split on, and from the
+    // Item's own mCurrentMeshLod with it shut. Two window sizes, two levels.
+    {
+        Geometry lg;
+        MeshData lm = sphereMesh(48, 24, 0.5f, lg);
+        lm.lodIndices = { lm.indices, lm.indices };      // same triangles: the LEVEL is the subject
+        lm.lodErrors = { 0.002f, 0.02f };
+        lm.lodBounds = { 0.002f, 0.02f };
+        PbrParams lp;
+        lp.roughness = 0.6f;
+        const NodeId ln = scene->createNode();
+        scene->setNodeTransform(ln, Vec3(0.0f, 1.0f, -2.0f), Quat(), Vec3(1, 1, 1));
+        scene->attachMesh(ln, scene->createMesh(lm), scene->createPbrMaterial(lp));
+        Ogre::Item *litem = nullptr;
+        {
+            auto it = ogreScene->sceneManager()->getMovableObjectIterator("Item");
+            while (it.hasMoreElements()) {
+                auto *cand = static_cast<Ogre::Item *>(it.getNext());
+                if (cand->getMesh() && cand->getMesh()->getNumLodLevels() == 3u) litem = cand;
+            }
+        }
+        CHECK(litem != nullptr, "(g) the three-level sphere's Item is found");
+        // The suite pins level 0 for the parity grid (lodBias 0, above); this arm is
+        // about the rule, so the dial comes back to 1 for it and goes back to 0 after.
+        scene->setLodBias(1.0f);
+        // orthoSize is HALF the window: footprint = 2 * orthoSize / 540, so 2 m affords
+        // 0.0074 (level 1: 0.002 <= e < 0.02) and 8 m affords 0.0296 (level 2).
+        const struct { float half; unsigned want; } arms[2] = { { 2.0f, 1u }, { 8.0f, 2u } };
+        for (const auto &A : arms) {
+            CameraDesc oc = enginetest::testCameraDescLookAt(Vec3(0.0f, 1.0f, 6.0f), Vec3(0.0f, 1.0f, -2.0f));
+            oc.orthographic = true;
+            oc.orthoSize = A.half;
+            view->setCamera(oc);
+            scene->setAtomDrawEnabled(true);
+            for (int i = 0; i < 8; ++i) e->renderOneFrame();
+            ogreScene->ensureGpuScene(false);
+            uint32_t slot = 0xFFFFFFFFu;
+            for (unsigned sl = 0; sl < gs.slotCount(); ++sl)
+                if (gs.entry(sl).ids[0] == unsigned(ln)) { slot = sl; break; }
+            std::vector<uint32_t> gx, gy;
+            const bool read = readIds(ogreView, gx, gy);
+            std::map<unsigned, size_t> gpuLevels;
+            for (size_t px = 0; read && px < gx.size(); ++px)
+                if (gx[px] != AtomId::kEmpty && (gx[px] & AtomId::kSlotMask) == slot)
+                    ++gpuLevels[(gx[px] >> 24u) & 0x7u];
+            scene->setAtomDrawEnabled(false);
+            for (int i = 0; i < 8; ++i) e->renderOneFrame();
+            const unsigned cpu = litem ? unsigned(litem->getCurrentMeshLod()) : 99u;
+            const unsigned gpu = gpuLevels.size() == 1u ? gpuLevels.begin()->first : 98u;
+            std::printf("  (g) ortho half-height %.1f m: GPU level %u (%zu level(s) seen), CPU level %u\n", A.half,
+                        gpu, gpuLevels.size(), cpu);
+            CHECK_MSG(read && gpu == cpu && cpu == A.want,
+                      "(g) orthographic, window %.0f m: the id pass draws level %u, the CPU strategy's (%u; wanted %u)",
+                      2.0f * A.half, gpu, cpu, A.want);
+        }
+        scene->setNodeVisible(ln, false);
+        scene->setLodBias(0.0f);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f));
     }
 
     // ---- (b) THE GROUND FROM A STANDING EYE: the grid hidden, the tiled, streamed

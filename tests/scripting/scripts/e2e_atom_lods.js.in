@@ -43,6 +43,15 @@ var SPHERE = "@SOURCE_DIR@/app/models/axis_sphere.obj";
 var proj = project.create("Atom LODs " + Date.now());
 assert(proj.length > 10, "project.create -> " + proj);
 
+// THIS SUITE READS OGRE'S LEVEL CHOICE THROUGH OGRE'S OWN COUNTERS
+// (app.renderStats().submittedTriangles), so it runs with the visibility buffer's
+// split shut (world.setAtomDraw, ATOM S3-DRAW). With the split live an opaque PBS
+// object is drawn by the id pass, whose level the GPU cull picks by the SAME rule
+// (engine.lod_rule_parity holds the two to one answer) and whose indirect draws
+// never reach the render queue's counters — the triangles below would be the
+// shadow passes' alone. The subject here is the rule and its dial, not the path.
+assert(world.setAtomDraw(false) === false, "the split is shut for this suite");
+
 // ---------------------------------------------------------------------------
 // 1. THE CHAIN IS IN THE BAKE, and assets.meshLods reports it.
 var guid = assets.importFile(SPHERE);
