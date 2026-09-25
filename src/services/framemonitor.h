@@ -311,11 +311,11 @@ private:
     /// The frame-counted window's budget, 0 when the capture is timed, and how
     /// many frames have been DRAWN inside it so far (one per rendered tick end).
     unsigned long long mPlannedFrames = 0, mFramesDrawn = 0;
-    /// The worst GPU-sample overflow the engine reported during this capture,
+    /// The GPU timing marks the engine dropped during this capture (cumulative),
     /// and what the ENGINE dropped on its own side (ring records nobody drained
     /// in time, events past its queue's cap) — all three go into the bundle's
     /// truncation block and into its `complete` flag.
-    unsigned mGpuSamplesTruncated = 0;
+    unsigned long long mGpuMarksDropped = 0;
     unsigned long long mEngineFramesDropped = 0, mEngineEventsDropped = 0;
 
     // ---- what the shell last showed, for the verbs (and their suites) -----
