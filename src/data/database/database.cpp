@@ -646,12 +646,6 @@ void Database::migrateAssetsTable()
     }
 }
 
-QString Database::getVersion()
-{
-
-    return QString();
-}
-
 // Both of these bound by NAME (":depender", ...) against POSITIONAL '?'
 // placeholders until 2026-09-03 — Qt's SQLite driver rejects that combination
 // wholesale ("Parameter count mismatch"), so neither statement had ever

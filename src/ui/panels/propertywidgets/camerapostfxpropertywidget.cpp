@@ -114,7 +114,7 @@ QString CameraPostFxPropertyWidget::inheritedText(const QString &key) const
         const int v = worldmodes::resolved(scene, *r);
         if (r->type == worldmodes::RowType::Bool) return v ? QStringLiteral("on") : QStringLiteral("off");
         for (const worldmodes::EnumOption &o : r->options)
-            if (o.value == v) return worldmodes::optionLabel(*r, o, sceneTracesRays());
+            if (o.value == v) return worldmodes::optionLabel(*r, o, scene, sceneTracesRays());
         return QString::number(v);
     }
     return QStringLiteral("world");
@@ -374,7 +374,8 @@ void CameraPostFxPropertyWidget::rebuild()
             int current = 0;
             if (r) {
                 for (int o = 0; o < r->options.size(); ++o) {
-                    combo->addItem(worldmodes::optionLabel(*r, r->options[o], sceneTracesRays()),
+                    combo->addItem(worldmodes::optionLabel(*r, r->options[o], sceneOf(camera),
+                                                           sceneTracesRays()),
                                    r->options[o].value);
                     if (own.isValid() && r->options[o].value == own.toInt()) current = o + 1;
                 }

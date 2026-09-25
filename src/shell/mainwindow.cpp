@@ -480,13 +480,11 @@ void MainWindow::setShowFrameStats(bool on)
 {
     // ONE code path for the F3 key, the View Options row, the Preferences
     // checkbox and editor.setOverlays({stats}) — and one stored value, so the
-    // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3).
+    // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3). The
+    // View Options checkmark follows the viewport's overlaysChanged
+    // (syncOverlayChecks), never this call.
     if (sceneView) sceneView->setShowFps(on);
     SettingsManager::getDefaultManager()->set(settingkeys::showFps, on);
-    if (statsCheckAction && statsCheckAction->isChecked() != on) {
-        QSignalBlocker block(statsCheckAction);   // no toggled() round trip
-        statsCheckAction->setChecked(on);
-    }
 }
 
 bool MainWindow::bounceIfViewportIsDead()
@@ -1891,9 +1889,8 @@ void MainWindow::openStageBegin()
 void MainWindow::openStageRead(const iris::MeshPrewarmPtr &prewarm)
 {
 	LoadTimeline::mark(QStringLiteral("readProjectScene"));
-	iris::PostProcessManagerPtr postMan;
 	openPendingEditorData = Q_NULLPTR;
-	openPendingScene = projectService->readProjectScene(&openPendingEditorData, postMan, prewarm);
+	openPendingScene = projectService->readProjectScene(&openPendingEditorData, prewarm);
 }
 
 void MainWindow::openStageBind(bool playMode)
@@ -2883,7 +2880,14 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
     // THE VERB'S PATH (node.exportArchive calls the same service).
     const auto result = sceneEditService->exportNodeTo(node, modelType, filePath);
-    if (!result.ok()) irisLog(QStringLiteral("Export failed: %1").arg(result.error));
+    if (!result.ok()) {
+        // TOLD, not only logged — this was a silent void (the project export's
+        // shape, exportSceneAsZip).
+        irisLog(QStringLiteral("Export failed: %1").arg(result.error));
+        if (!FirstRun::isDrivenSession())
+            QMessageBox::warning(this, tr("Export failed"),
+                                 tr("%1 could not be exported: %2").arg(node->getName(), result.error));
+    }
 }
 
 void MainWindow::deleteNode()

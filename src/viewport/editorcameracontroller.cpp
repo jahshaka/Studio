@@ -90,20 +90,6 @@ float EditorCameraController::getLookSpeed()
 }
 
 /**
- * @brief rotates camera around the local x-axis
- * the angle is in degrees
- * pitch is restricted to the range of -90 and 90
- * todo: use global rotation in calculation
- */
-void EditorCameraController::tilt(float angle)
-{
-
-    pitch += angle;
-    pitch = (pitch<-90?-90:(pitch>90?90:pitch));//clamp( pitch,-90,90)
-
-}
-
-/**
  * @brief rotates the camera around the up vector
  * @param angle
  */

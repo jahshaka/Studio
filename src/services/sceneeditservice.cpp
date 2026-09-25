@@ -1702,11 +1702,27 @@ SceneEditService::NodeExportResult SceneEditService::exportNodeTo(const iris::Sc
         }
     }
 
-    // ONE zip loop (amendment 7): shared helper.
+    // ONE zip loop (amendment 7): shared helper. WRITTEN BESIDE, RENAMED OVER
+    // (the QSaveFile shape): an archive already at `filePath` is replaced only
+    // by a complete one, so a failed export never leaves the user with less
+    // than they had.
+    const QString partial = filePath + QStringLiteral(".partial");
+    QFile::remove(partial);
     QString zipError;
-    if (!ZipHelper::zipDirectory(writePath, filePath, &zipError)) {
+    if (!ZipHelper::zipDirectory(writePath, partial, &zipError)) {
+        QFile::remove(partial);
         result.error = zipError.isEmpty() ? QStringLiteral("the archive could not be written")
                                           : zipError;
+        return result;
+    }
+    if (QFile::exists(filePath) && !QFile::remove(filePath)) {
+        QFile::remove(partial);
+        result.error = QStringLiteral("the existing file at %1 could not be replaced").arg(filePath);
+        return result;
+    }
+    if (!QFile::rename(partial, filePath)) {
+        QFile::remove(partial);
+        result.error = QStringLiteral("the archive could not be moved to %1").arg(filePath);
         return result;
     }
     result.bytes = QFileInfo(filePath).size();

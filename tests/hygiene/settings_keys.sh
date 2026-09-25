@@ -34,13 +34,16 @@ else
     echo "ok:   no settings key literal is read with a default at two sites"
 fi
 
-# A key the table declares must not also be read or written as a literal.
+# A key the table declares must not also be read or written as a literal —
+# through SettingsManager (getValue/setValue) OR straight on a QSettings
+# (->value / ->setValue / .value / .setValue), which is how a widget handed a
+# raw QSettings* used to slip past this check (the Claude chat's model key).
 declared=$(grep -oE 'SettingKey<[^>]+>\s+\w+\{\s*"[^"]+"' src/data/settingkeys.h \
            | sed -E 's/.*"([^"]+)"/\1/' | sort -u)
 second=""
 for k in $declared; do
     hits=$(grep -rnE --include='*.cpp' --include='*.h' \
-               "(getValue|setValue)\(\s*(QStringLiteral\()?\"$k\"" src 2>/dev/null \
+               "(getValue|setValue|->value|\.value|->setValue|\.setValue)\(\s*(QString(Literal|::fromLatin1)\()?\"$k\"" src 2>/dev/null \
            | grep -vE '^[^:]+:[0-9]+:\s*//')
     [ -n "$hits" ] && second="$second$hits"$'\n'
 done

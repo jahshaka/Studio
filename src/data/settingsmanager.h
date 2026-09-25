@@ -71,17 +71,26 @@ public:
 
     /// A declared key (data/settingkeys.h): its value, or its ONE default.
     template <typename T>
-    T get(const SettingKey<T> &key) const {
-        return settings->value(QLatin1String(key.name), QVariant::fromValue(key.fallback))
-            .template value<T>();
+    T get(const SettingKey<T> &key) const { return read(settings, key); }
+    QString get(const SettingKey<const char *> &key) const { return read(settings, key); }
+    template <typename T, typename V>
+    void set(const SettingKey<T> &key, const V &value) { write(settings, key, value); }
+
+    /// The same, on a QSettings a widget was handed directly (the Claude chat
+    /// window takes one so its suite can point it at a scratch file).
+    template <typename T>
+    static T read(const QSettings *s, const SettingKey<T> &key) {
+        return s ? s->value(QLatin1String(key.name), QVariant::fromValue(key.fallback))
+                       .template value<T>()
+                 : key.fallback;
     }
-    QString get(const SettingKey<const char *> &key) const {
-        return settings->value(QLatin1String(key.name), QString::fromUtf8(key.fallback))
-            .toString();
+    static QString read(const QSettings *s, const SettingKey<const char *> &key) {
+        return s ? s->value(QLatin1String(key.name), QString::fromUtf8(key.fallback)).toString()
+                 : QString::fromUtf8(key.fallback);
     }
     template <typename T, typename V>
-    void set(const SettingKey<T> &key, const V &value) {
-        settings->setValue(QLatin1String(key.name), QVariant::fromValue(value));
+    static void write(QSettings *s, const SettingKey<T> &key, const V &value) {
+        if (s) s->setValue(QLatin1String(key.name), QVariant::fromValue(value));
     }
 };
 

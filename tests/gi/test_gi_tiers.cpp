@@ -670,15 +670,33 @@ static void testTierTexts()
                   == (resolves ? QStringLiteral("VCT + rays") : QStringLiteral("VCT + probes")),
               qPrintable(QStringLiteral("%1: the hybrid is named %2").arg(machine,
                   worldmodes::techniqueLabel(2, resolves))));
+        // THE NAME IS THE SCENE'S (fix round): the World Modes combo, the
+        // Photon section's Technique combo and world.modeTable all call
+        // optionLabel(row, option, scene, traces), which reads the SAME
+        // predicate world.gi and the probe rows read — probeGridByRays.
         const worldmodes::Row *mode = worldmodes::row(QStringLiteral("giMode"));
-        bool named = mode != nullptr;
-        if (mode)
-            for (const worldmodes::EnumOption &o : mode->options)
-                if (worldmodes::optionLabel(*mode, o, traces)
-                    != worldmodes::techniqueLabel(o.value, resolves))
-                    named = false;
-        CHECK(named, qPrintable(QStringLiteral("%1: the giMode row's option names ARE "
-                                               "techniqueLabel's").arg(machine)));
+        for (int quality : { 0, 1, 2 }) {
+            auto scene = iris::Scene::create();
+            scene->giQuality = iris::GiQuality(quality);
+            const bool here = worldmodes::probeGridByRays(scene, traces);
+            const bool expect = traces && jahshaka::engine::giQualityFacts(
+                                              jahshaka::engine::GiQuality(quality)).rayReflections;
+            bool named = mode != nullptr && here == expect;
+            if (mode)
+                for (const worldmodes::EnumOption &o : mode->options)
+                    if (worldmodes::optionLabel(*mode, o, scene, traces)
+                        != worldmodes::techniqueLabel(o.value, here))
+                        named = false;
+            const QString hybrid = mode ? worldmodes::optionLabel(*mode, mode->options[2], scene,
+                                                                  traces)
+                                        : QString();
+            CHECK(named && hybrid == (expect ? QStringLiteral("VCT + rays")
+                                             : QStringLiteral("VCT + probes")),
+                  qPrintable(QStringLiteral("%1, scene quality %2: the hybrid is named '%3' "
+                                            "(probeGridByRays %4)")
+                                 .arg(machine).arg(quality).arg(hybrid)
+                                 .arg(here ? "true" : "false")));
+        }
         for (const Promise &p : promises) {
             const worldmodes::Row *r = worldmodes::row(QString::fromLatin1(p.row));
             const QString text = r ? worldmodes::rowCost(*r, traces) : QString();

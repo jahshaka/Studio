@@ -87,10 +87,13 @@ struct Row {
     /// The ONE text is computed from `sceneTracesRays` (through
     /// tierRaysResolve), never two hand-kept literals.
     std::function<QString(bool sceneTracesRays)> costAt;
-    /// An Enum row whose option NAMES depend on the same fact (the technique:
-    /// ordinal 2 is "VCT + rays" where rays resolve, "VCT + probes" where they
-    /// do not). Null = the options' own labels. Read through optionLabel().
-    std::function<QString(int value, bool sceneTracesRays)> optionLabelAt;
+    /// An Enum row whose option NAMES depend on the SCENE on this machine (the
+    /// technique: ordinal 2 is "VCT + rays" where probeGridByRays(scene,
+    /// sceneTracesRays) holds, "VCT + probes" where it does not — the ONE rule
+    /// the GI section and world.gi read too). Null = the options' own labels.
+    /// Read through optionLabel().
+    std::function<QString(int value, const iris::ScenePtr &scene, bool sceneTracesRays)>
+        optionLabelAt;
     bool     available = true;         ///< false = declared but not yet implemented
     /// TIER SPACE — WHICH DIAL, IF ANY, RESOLVES THIS ROW.
     ///
@@ -185,8 +188,10 @@ const Row *row(const QString &id);
 /// panels, world.modeTable), so a text cannot be right on one and stale on
 /// another.
 QString rowCost(const Row &r, bool sceneTracesRays);
-/// An Enum row option's display name on that machine (see Row::optionLabelAt).
-QString optionLabel(const Row &r, const EnumOption &o, bool sceneTracesRays);
+/// An Enum row option's display name for `scene` on this machine (see
+/// Row::optionLabelAt). Every surface that names an option reads it here.
+QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &scene,
+                    bool sceneTracesRays);
 
 // ---------------------------------------------------------------------------
 // PHOTON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
@@ -313,9 +318,10 @@ int photonTierProbeFaceSize(PhotonTier t);
 /// purpose: it answers "would a grid be built here", which is what world.gi's
 /// probe keys and the World panel's probe rows ask. False with no scene.
 bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays);
-/// The same rule for a TIER rather than a scene: the tier's quality column
-/// traces its reflections (`giQualityFacts(...).rayReflections`) and the scene
-/// traces rays on this machine. What every machine-dependent row text reads.
+/// The same rule — the same function underneath — for a TIER rather than a
+/// scene: the tier's quality column traces its reflections and the scene
+/// traces rays on this machine. What the rows' tier-describing TEXTS read; a
+/// NAME for the scene in front of the user reads probeGridByRays.
 bool tierRaysResolve(PhotonTier t, bool sceneTracesRays);
 /// THE TECHNIQUE'S NAME — one source for the World rows, the GI panel and the
 /// docs: 0 "Off", 1 "VCT", 2 "VCT + rays" where `raysResolve`, else

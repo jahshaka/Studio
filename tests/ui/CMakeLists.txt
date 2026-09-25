@@ -320,6 +320,9 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_executable(test_photon_panel
     test_photon_panel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    # the World Modes section: its technique combo must name ordinal 2 exactly
+    # as this section does (STUDIO-CRUD-1 fix round)
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     # ieditorviewport.h is listed as a SOURCE so AUTOMOC generates the moc for
     # EditorViewportEvents: the Reflections-row case drives the panel from a
     # HeadlessEditorViewport, which constructs one.

@@ -132,7 +132,7 @@ void WorldModesPropertyWidget::build()
         auto *combo = this->addComboBox(r.label);
         if (r.type == worldmodes::RowType::Enum) {
             for (const worldmodes::EnumOption &o : r.options)
-                combo->addItem(worldmodes::optionLabel(r, o, rays), o.value);
+                combo->addItem(worldmodes::optionLabel(r, o, scene, rays), o.value);
         } else {
             for (int v = r.minValue; v <= r.maxValue; ++v)
                 combo->addItem(QString::number(v), v);
@@ -231,7 +231,7 @@ void WorldModesPropertyWidget::refreshRows()
             const QSignalBlocker quiet(combo->getWidget());
             if (r.type == worldmodes::RowType::Enum)
                 for (int o = 0; o < r.options.size() && o < combo->getWidget()->count(); ++o)
-                    combo->getWidget()->setItemText(o, worldmodes::optionLabel(r, r.options[o], rays));
+                    combo->getWidget()->setItemText(o, worldmodes::optionLabel(r, r.options[o], scene, rays));
             const int index = combo->findData(value);
             combo->setCurrentIndex(index >= 0 ? index : 0);
         }

@@ -172,8 +172,16 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	sceneprops::observeWrites(this, [this](const iris::ScenePtr &written, const QString &key,
 	                                       bool external) {
 		if (written != worldBoundScene) return;   // not the scene this column shows
-		if (key == QLatin1String("rayTracing") && worldShadowPropView)
-			worldShadowPropView->setScene(written);
+		// ...and every section whose TEXTS or technique NAME follow whether the
+		// scene traces rays (worldmodes::rowCost / optionLabel, STUDIO-CRUD-1):
+		// the World Modes rows, the Photon section and the Post Process rows
+		// re-read on the same write, so the two technique combos never disagree.
+		if (key == QLatin1String("rayTracing")) {
+			if (worldShadowPropView) worldShadowPropView->setScene(written);
+			if (worldModesPropView)  worldModesPropView->setScene(written);
+			if (worldGiPropView)     worldGiPropView->setScene(written);
+			if (worldPostFxPropView) worldPostFxPropView->setScene(written);
+		}
 		if (!external) return;
 		// A TIER WRITE moves the registry rows several sections show — the
 		// same set the World Mode section's worldSettingsChanged re-reads.

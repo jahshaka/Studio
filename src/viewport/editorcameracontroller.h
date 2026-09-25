@@ -61,7 +61,6 @@ public:
     float getLookSpeed();
 
     //incomplete
-    void tilt(float angle);
 
     //incomplete
     void pan(float angle);

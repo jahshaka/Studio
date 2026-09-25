@@ -124,7 +124,7 @@ void WorldPostFxPropertyWidget::build()
         } else {
             row.combo = this->addComboBox(r->label);
             for (const worldmodes::EnumOption &o : r->options)
-                row.combo->addItem(worldmodes::optionLabel(*r, o, rays), o.value);
+                row.combo->addItem(worldmodes::optionLabel(*r, o, scene, rays), o.value);
             row.combo->setToolTip(worldmodes::rowCost(*r, rays));
             identifyRow(row.combo, *r);
             const QString id = r->id;

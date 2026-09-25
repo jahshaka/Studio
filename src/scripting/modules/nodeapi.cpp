@@ -29,8 +29,6 @@ For more information see the LICENSE file
 #include "commands/setnodepropertycommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
-#include <QFile>
-#include <QFileInfo>
 #include "services/nodeexport.h"
 #include "services/sceneeditservice.h"
 #include "data/database/database.h"
@@ -89,8 +87,10 @@ QVector<VerbInfo> NodeApi::verbs() const
           "for a particle system; anything else is refused, and so is a `type` that names the "
           "other kind. `type` is optional (the rule answers it). `assets` is how many asset "
           "files travelled beside the scene blob and `bytes` the archive's size. Needs an open "
-          "project. An existing file at `path` is replaced: the menu's save dialog asks first, "
-          "a script is taken at its word.",
+          "project. An existing file at `path` is replaced only by a COMPLETE archive: the export "
+          "is written beside it and renamed over it on success, so a failed export leaves the "
+          "old file untouched. The menu's save dialog asks before replacing; a script is taken "
+          "at its word.",
           Needs::Document },
         { "deserialize", "node.deserialize(fragment, parentId, index) -> newId",
           "PASTE: rebuilds a fragment from node.serialize under `parentId` (empty = the scene "
@@ -747,7 +747,6 @@ QVariantMap NodeApi::exportArchive(const QString &id, const QString &path,
                  .arg(node->getName(), typeName, asked));
         return QVariantMap();
     }
-    if (QFileInfo::exists(path)) QFile::remove(path);
     const auto result = host.services->sceneEdit->exportNodeTo(node, type, path);
     if (!result.ok()) {
         fail(QStringLiteral("node.exportArchive: %1").arg(result.error));

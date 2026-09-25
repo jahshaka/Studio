@@ -721,8 +721,8 @@ QVector<Row> buildRows()
         r.options = { { QStringLiteral("off"),            techniqueLabel(0, false), 0 },
                       { QStringLiteral("vct"),            techniqueLabel(1, false), 1 },
                       { QStringLiteral("vct_pcc_hybrid"), techniqueLabel(2, false), 2 } };
-        r.optionLabelAt = [](int value, bool sceneTracesRays) {
-            return techniqueLabel(value, tierRaysResolve(PhotonTier::High, sceneTracesRays));
+        r.optionLabelAt = [](int value, const iris::ScenePtr &scene, bool sceneTracesRays) {
+            return techniqueLabel(value, probeGridByRays(scene, sceneTracesRays));
         };
         // PHOTON columns (Low, Medium, High, Epic) — not world-mode ones —
         // read from kPhotonTable. Low and Medium are VCT and differ in the
@@ -1047,9 +1047,10 @@ QString rowCost(const Row &r, bool sceneTracesRays)
     return r.costAt ? r.costAt(sceneTracesRays) : r.cost;
 }
 
-QString optionLabel(const Row &r, const EnumOption &o, bool sceneTracesRays)
+QString optionLabel(const Row &r, const EnumOption &o, const iris::ScenePtr &scene,
+                    bool sceneTracesRays)
 {
-    return r.optionLabelAt ? r.optionLabelAt(o.value, sceneTracesRays) : o.label;
+    return r.optionLabelAt ? r.optionLabelAt(o.value, scene, sceneTracesRays) : o.label;
 }
 
 // ---------------------------------------------------------------------------
@@ -1444,17 +1445,27 @@ int photonTierProbeFaceSize(PhotonTier t)
     return pinned > 0 ? pinned : int(factsFor(t).probeFaceSize);
 }
 
+namespace {
+/// THE ONE PREDICATE (STUDIO-CRUD-1 fix round): a quality column whose
+/// reflections the engine traces, met with a scene that traces on this
+/// machine. probeGridByRays asks it of a scene, tierRaysResolve of a tier.
+bool raysAreTheReflection(int giQuality, bool sceneTracesRays)
+{
+    return sceneTracesRays
+           && jahshaka::engine::giQualityFacts(
+                  jahshaka::engine::GiQuality(qBound(0, giQuality, 2)))
+                  .rayReflections;
+}
+}   // namespace
+
 bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays)
 {
-    if (!scene || !sceneTracesRays) return false;
-    return jahshaka::engine::giQualityFacts(
-               jahshaka::engine::GiQuality(qBound(0, int(scene->giQuality), 2)))
-        .rayReflections;
+    return scene && raysAreTheReflection(int(scene->giQuality), sceneTracesRays);
 }
 
 bool tierRaysResolve(PhotonTier t, bool sceneTracesRays)
 {
-    return sceneTracesRays && factsFor(t).rayReflections;
+    return raysAreTheReflection(photonQuality(t), sceneTracesRays);
 }
 
 QString techniqueLabel(int technique, bool raysResolve)

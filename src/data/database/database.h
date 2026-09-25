@@ -700,7 +700,6 @@ public:
     void migrateCollectionsTable();
     void migrateAssetsTable();
 
-    QString getVersion();
 
     QByteArray getSceneBlobGlobal(const QString &projectGuid) const;
 	/// Both return false when the UPDATE did not run (they used to be void and

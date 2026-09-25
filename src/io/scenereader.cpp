@@ -109,7 +109,6 @@ For more information see the LICENSE file
 // otherwise be a second copy of it.
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
-                                      iris::PostProcessManagerPtr postMan,
                                       EditorData **editorData)
 {
     dir = projectPath;
@@ -142,8 +141,6 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     // come back with its folders, because the next save would otherwise write
     // an empty list over them.
     scenefolders::readEditorBlock(projectObj["editor"].toObject(), scene);
-	if (!!postMan)
-		readPostProcessData(projectObj, postMan);
 
     for (auto node : scene->rootNode->children()) {
         node->applyDefaultPose();
@@ -210,10 +207,6 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->showGrid = editorObj.value("showGrid").toBool(editorData->showGrid);
 
     return editorData;
-}
-
-void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
-{
 }
 
 /// THE GLB TEXTURE-LOSS REPAIR (2026-09-09), reader half.

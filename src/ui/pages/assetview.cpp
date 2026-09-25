@@ -195,11 +195,6 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 	return QObject::eventFilter(watched, event);
 }
 
-void AssetView::checkForEmptyState()
-{
-
-}
-
 void AssetView::toggleFilterPane(bool toggle) {
     filterPane->setVisible(toggle);
 }
@@ -1877,7 +1872,6 @@ void AssetView::applyShowMembers(bool on)
 			if (auto *tile = fastGrid->tileByGuid(guid)) fastGrid->deleteTile(tile);
 		fastGrid->updateGridColumns(fastGrid->lastWidth);
 	}
-	checkForEmptyState();
 }
 
 // ONE toast for the page, reused. Every message used to `new Toast(this)` and

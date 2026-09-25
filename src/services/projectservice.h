@@ -135,13 +135,12 @@ public:
     bool removeProject(const QString &guid);
 
     /// The reader half of openProject: reads the scene blob into a document
-    /// scene. editorData/postMan are output parameters exactly as SceneReader
-    /// hands them over.
+    /// scene. editorData is an output parameter exactly as SceneReader hands
+    /// it over.
     /// `prewarm` (optional) carries the model files a worker thread already
     /// parsed (irisgl/import/meshprewarm.h) — the reader then builds meshes
     /// out of ready iris::SceneSource parses instead of running the importer on this thread.
     iris::ScenePtr readProjectScene(EditorData **editorData,
-                                    iris::PostProcessManagerPtr &postMan,
                                     const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
 
     /// The open PLAN for the threaded path: every model file the project's

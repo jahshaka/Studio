@@ -269,14 +269,14 @@ void WorldGiPropertyWidget::rebuild()
     modeSelector = this->addComboBox(tr("Technique") + pinMark(scene, "giMode"));
     // THE ROWS ARE kGiRows, in order — "Bounced Light" (Instant Radiosity) went
     // with the technique (PHOTON_SPEC §7 E2 (4)).
-    // ONE TEXT SOURCE (STUDIO-CRUD-1 item 6): the names are techniqueLabel's
-    // for THIS scene on THIS machine (the hybrid is "VCT + rays" wherever no
-    // probe grid would be built), the tooltips the registry rows' own texts.
+    // ONE TEXT SOURCE (STUDIO-CRUD-1 item 6): the names are the giMode row's
+    // own (worldmodes::optionLabel — the same call the World Modes section and
+    // world.modeTable make: "VCT + rays" wherever probeGridByRays holds for
+    // THIS scene on THIS machine), the tooltips the registry rows' own texts.
     const bool tracesRays = sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays();
-    const bool raysHere = worldmodes::probeGridByRays(scene, tracesRays);
-    modeSelector->addItem(worldmodes::techniqueLabel(0, raysHere));
-    modeSelector->addItem(worldmodes::techniqueLabel(1, raysHere));
-    modeSelector->addItem(worldmodes::techniqueLabel(2, raysHere));
+    if (const worldmodes::Row *modeRow = worldmodes::row(QStringLiteral("giMode")))
+        for (const worldmodes::EnumOption &o : modeRow->options)
+            modeSelector->addItem(worldmodes::optionLabel(*modeRow, o, scene, tracesRays));
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
     auto rowTip = [tracesRays](const char *id) {
         const worldmodes::Row *r = worldmodes::row(QString::fromLatin1(id));
