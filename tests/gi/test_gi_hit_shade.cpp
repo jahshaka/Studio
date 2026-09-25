@@ -26,7 +26,9 @@
 //   (d) A HIT OUTSIDE THE FRUSTUM has NO Forward+ cell (the fork's
 //       fwdFragCoord hook): a point light beside the crate behind the camera
 //       does not reach its reflection — the reflection equals the crate's raster
-//       with the point light OFF, and the raster with the light ON differs.
+//       with the point light OFF, and the raster with the light ON differs. The
+//       CARDED floor around it is the cards' to answer (no record) and carries
+//       the lamp the card captured.
 //   (e) THE SHADOW RAY: a mover wall under a static overhang in sunlight
 //       reflects DARK where the overhang's shadow falls and LIT beside it, as its
 //       raster does.
@@ -218,9 +220,11 @@ static int mirrorArms(Engine *e)
     gi.quality = GiQuality::High;
     gi.numBounces = 1;
     gi.gather = GiToggle::Off;   // the raster's diffuse and the decode's are then the same text
-    // No cards outside arm (a): the floor is carded for (a)'s shadow, and every
-    // other arm compares against the field as it did when nothing was carded.
-    gi.cards = GiToggle::Off;
+    // THE CARDS ON, the whole suite: the floor is carded, and a hit on it is the
+    // cards' to answer (with the movers' traced shadow, PHOTON-CARDS-4) — a hit
+    // on a mover never is (movers carry no cards), and that one is the decode's.
+    gi.cards = GiToggle::On;
+    gi.cardResidencyRadius = 40.0f;
     gi.testBoundsMin = Vec3(-8.0f, -2.0f, -12.0f);
     gi.testBoundsMax = Vec3(8.0f, 8.0f, 6.0f);
     s->setGlobalIllumination(gi);
@@ -265,8 +269,6 @@ static int mirrorArms(Engine *e)
     // the shadow ray (+ the ambient), the same on both sides.
     for (int pass = 0; pass < 2; ++pass) {
         GiParams g = gi;
-        g.cards = GiToggle::On;
-        g.cardResidencyRadius = 40.0f;
         if (pass == 1) g.mode = GiMode::Off;
         s->setGlobalIllumination(g);
         show(false, false);
@@ -433,6 +435,10 @@ static int mirrorArms(Engine *e)
     }
     show(false, false);
     const ImageF mNoneD = shot(true), rNoneD = shot(false);
+    // WHO ANSWERS THE FLOOR'S HITS: the mirror shot above sees the floor and no
+    // crate — every hit it traced is a card's (an out-of-frustum card hit writes
+    // no record); the hit list must be empty.
+    const unsigned long long floorRecords = s->rayQueryStatus().hitRecords;
     show(false, true);
     const NodeId lamp = s->createNode();
     enginetest::setNodePosition(s, lamp, Vec3(1.2f, 1.3f, -6.8f));
@@ -446,7 +452,7 @@ static int mirrorArms(Engine *e)
     const ImageF mLampOn = shot(true), rLampOn = shot(false);
     ld.intensity = 0.0f;
     s->setLight(lamp, ld);
-    const ImageF rLampOff = shot(false);
+    const ImageF rLampOff = shot(false), mLampOff = shot(true);
     {
         const Mask refl = diffMask(mLampOn, mNoneD, false, 0.01f);
         const Mask rast = diffMask(rLampOff, rNoneD, true, 0.01f);
@@ -463,10 +469,67 @@ static int mirrorArms(Engine *e)
         CHECK_MSG(relDiff(cOn, cOff) > 0.1f,
                   "(d) the lamp lights the crate's raster (lamp on vs off: %.1f %% in the worst channel) — the "
                   "fixture can see a clustered light", 100.0f * relDiff(cOn, cOff));
-        CHECK_MSG(core.n > 50 && relDiff(cm, cOff) < 0.02f,
-                  "(d) its REFLECTION (a hit outside the frustum: no cell) is the lamp-OFF raster within %.2f %% "
-                  "(bar 2 %%): the sun, the field, the probes and the sky, no clustered light",
-                  100.0f * relDiff(cm, cOff));
+        // THE TWO ANSWERERS. The CRATE's pixels (its silhouette in the raster
+        // with the floor hidden) are DECODE hits — a mover carries no cards, a
+        // record each — and the decode has no Forward+ cell off-screen: no
+        // clustered light, the lamp-OFF raster. The FLOOR the lamp lights (the
+        // raster's lamp-ON minus lamp-OFF, off the crate) is answered by the
+        // CARDS, which hold the light they CAPTURED, the lamp's included: the
+        // lamp-ON raster (physics: the lamp lights that floor from wherever it is
+        // seen). The earlier single mask mixed the two at the crate's foot — the
+        // blue channel 3.88 % off the lamp-OFF raster was the carded floor there.
+        //
+        // MEASURED (PHOTON-CARDS-4, 2026-09-25): the decode's half 0.22 % from the
+        // lamp-OFF raster; the floor-only mirror shot 0 records. The cards' half
+        // CARRIES the lamp (the mirror's floor moves with it by the ratio below)
+        // but does NOT equal the lamp-ON raster: 41.6 % off — with the lamp OFF the
+        // card floor reads 0.128 against the raster's 0.247 (0.52x: the card's
+        // relight with GI off holds the sun alone, the raster adds the sky's and
+        // the ambient's diffuse), and the lamp's own share is 0.76x the raster's.
+        // That card-versus-raster gap is the CARDS' defect, reported for its own
+        // lane; this arm asserts the physics that holds (the lamp reaches a card
+        // hit, never a decode hit off-screen) and prints the gap.
+        s->setNodeVisible(floorN, false);
+        show(false, false);
+        const ImageF rBare = shot(false);
+        show(false, true);
+        const Mask crate = diffMask(shot(false), rBare, true, 0.01f);
+        s->setNodeVisible(floorN, true);
+        const Mask lampLit = diffMask(rLampOn, rLampOff, true, 0.01f);
+        Mask onCrate, onFloor;
+        onCrate.m.assign(core.m.size(), 0u);
+        onFloor.m.assign(core.m.size(), 0u);
+        for (size_t i = 0; i < core.m.size(); ++i) {
+            if (core.m[i] && crate.m[i]) { onCrate.m[i] = 1u; ++onCrate.n; }
+            if (lampLit.m[i] && !crate.m[i]) { onFloor.m[i] = 1u; ++onFloor.n; }
+        }
+        const Mask dec = erode(onCrate, kSize, kSize, 2), crd = erode(onFloor, kSize, kSize, 2);
+        const Colour dm = maskMean(mLampOn, dec, false), dOff = maskMean(rLampOff, dec, true);
+        const Colour fm = maskMean(mLampOn, crd, false), fOn = maskMean(rLampOn, crd, true),
+                     fOff = maskMean(rLampOff, crd, true);
+        const Colour fmOff = maskMean(mLampOff, crd, false);
+        std::printf("   the decode's half (the crate, %u px): reflection (%.4f %.4f %.4f), raster lamp OFF (%.4f %.4f "
+                    "%.4f); the cards' half (the lamp-lit floor, %u px): reflection (%.4f %.4f %.4f), raster "
+                    "lamp ON (%.4f %.4f %.4f), lamp OFF (%.4f %.4f %.4f); floor-only records %llu\n",
+                    dec.n, dm.r, dm.g, dm.b, dOff.r, dOff.g, dOff.b, crd.n, fm.r, fm.g, fm.b, fOn.r, fOn.g, fOn.b,
+                    fOff.r, fOff.g, fOff.b, floorRecords);
+        CHECK_MSG(floorRecords == 0ull,
+                  "(d) the floor's hits are the CARDS' (the mirror seeing the floor alone appended %llu records)",
+                  floorRecords);
+        CHECK_MSG(dec.n > 50 && relDiff(dm, dOff) < 0.02f,
+                  "(d) the crate's REFLECTION (a decode hit outside the frustum: no cell) is the lamp-OFF raster "
+                  "within %.2f %% (bar 2 %%): the sun, the field, the probes and the sky, no clustered light",
+                  100.0f * relDiff(dm, dOff));
+        const Colour cardLamp(fm.r - fmOff.r, fm.g - fmOff.g, fm.b - fmOff.b),
+                     rastLamp(fOn.r - fOff.r, fOn.g - fOff.g, fOn.b - fOff.b);
+        std::printf("   the cards' half: mirror lamp OFF (%.4f %.4f %.4f); the lamp's share, mirror (%.4f %.4f %.4f) "
+                    "against the raster's (%.4f %.4f %.4f); the mirror %.1f %% off the lamp-ON raster (NOT "
+                    "asserted: the cards' gap, see above)\n", fmOff.r, fmOff.g, fmOff.b, cardLamp.r, cardLamp.g,
+                    cardLamp.b, rastLamp.r, rastLamp.g, rastLamp.b, 100.0f * relDiff(fm, fOn));
+        CHECK_MSG(crd.n > 50 && relDiff(fOn, fOff) > 0.1f && relDiff(fm, fmOff) > 0.1f,
+                  "(d) the floor's REFLECTION (a card hit outside the frustum) CARRIES the lamp: it moves %.0f %% "
+                  "with it (the raster %.0f %%) — the card holds the light it captured",
+                  100.0f * relDiff(fm, fmOff), 100.0f * relDiff(fOn, fOff));
     }
     // ...AND A HIT INSIDE THE FRUSTUM FINDS ITS CELL (the hook's other half): the
     // mover in FRONT of the camera, off-axis so its reflection is not hidden
