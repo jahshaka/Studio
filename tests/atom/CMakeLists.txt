@@ -198,6 +198,17 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
             ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
     endif()
+    # engine.atom_draw — THE VISIBILITY BUFFER AS THE PRODUCT'S OPAQUE PATH (ATOM
+    # S3-DRAW): an ordinary view of the parity grid whose chain carries the id pass
+    # and the screen decode, against the same view through stock PBS (the split's
+    # measurement door shut); the ids against the CPU raster; the split's stat; the
+    # buckets. ATOM_DRAW_QUICK=1 runs the direct arm alone (a diagnosis switch).
+    add_executable(test_atom_draw test_atom_draw.cpp)
+    jah_atom_engine_target(test_atom_draw)
+    target_compile_definitions(test_atom_draw PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    add_test(NAME engine.atom_draw COMMAND test_atom_draw
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 600 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
