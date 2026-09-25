@@ -6,6 +6,7 @@
 #pragma once
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -29,17 +30,8 @@ static bool gInteg = false;      ///< candidate: the minor axes' kernel integrat
 static bool gBox = false;        ///< candidate: ...each texel over its own box (not its hat)
 static bool gStartTexel = false; ///< candidate: ...the texel holding the start by position
 static bool gLatTile = false;    ///< candidate: the lateral level rises only on its own boundary
-static bool gTile = false;       ///< candidate: the kernel at the plane's own level
-static bool gCross = false;      ///< candidate G9: the cone's crossing TIME at the surface's position
-static bool gSnap = true;        ///< ...with G9: the surface's own texel along b
-static bool gK4 = false;         ///< candidate: the plane axis at the kernel's directional level
-static bool gK4pos = false;      ///< candidate: ...depth-gated by the position
-static bool gLat2 = false;       ///< candidate: the plane axis at n x n lateral offsets
-static bool kAll = false;        ///< candidate K3: every axis through the kernel
-static bool gExtend = false;     ///< candidate: border-zero reads, the march past the box
-static bool allBoth = false;     ///< the unsplit rule (both halves for cones) - the record
-static double gKoff = 1.0;       ///< the kernel's level = lod - gKoff
-static bool gTrace = false;      ///< print every plane
+static bool gLateral = false;    ///< PHOTON-VOXEL-5 (i): the plane axis read from THE LATERAL-ONLY MIP FAMILY
+static bool gLateralMinor = false; ///< ...and the minor axes too (depth = the plane's level, across = the footprint)
 
 
 struct Level {
@@ -53,12 +45,23 @@ struct Level {
 /// texel's depth - step 0 / step 1's composite (AnisotropicMipVctStep0/1_piece_cs.any).
 struct DirLevel { int r[3] = { 1, 1, 1 }; std::vector<float> a[6]; };
 
+/// One texture of THE LATERAL-ONLY MIP FAMILY (PHOTON-VOXEL-5 item (i)): one scalar per texel on
+/// its own grid - the depth axis at its level's resolution, the two lateral axes halved per step.
+struct Lat { int r[3] = { 1, 1, 1 }; std::vector<float> v; };
+
 struct Cascade {
     int R[3] = { 0, 0, 0 };
     double origin[3] = {}, cell[3] = {}, size[3] = {};
     std::vector<Level> L;
     std::vector<DirLevel> D;   // D[m] on the grid of L[m + 1]
     double maxLod = 256.0;
+    /// THE FAMILY (buildLateral): per directional level m and travel direction d, the lateral chain
+    /// of the directional opacity - [m][d][k], k = 0 the level itself, each k the lateral 2 x 2 box
+    /// mean of k - 1 within the same planes (exact along the axis, averaged across); and per
+    /// coverage level L, half h and axis a, the same chains of the coverage and the O-premultiplied
+    /// position along a (the gate's), [L][h][a][k].
+    std::vector<std::array<std::vector<Lat>, 6>> DLat;
+    std::vector<std::array<std::array<std::vector<Lat>, 3>, 2>> OLat, PLat;
 };
 
 /// THE DIRECTIONAL COMPOSITE, opacity only: each 2x2x2 block, per travel direction, the four
@@ -118,13 +121,6 @@ inline void buildDir(Cascade &c, int rule = 0)
 }
 
 inline double fetchDir(const Cascade &c, int m, int d, const double u[3]);
-inline double fetchDirF(const Cascade &c, double mf, int d, const double u[3])
-{
-    mf = std::min(std::max(mf, 0.0), double(c.D.size()) - 1.0);
-    const int m0 = int(std::floor(mf)); const double f = mf - m0;
-    const double a0 = fetchDir(c, m0, d, u);
-    return f > 0 ? a0 + f * (fetchDir(c, std::min(m0 + 1, int(c.D.size()) - 1), d, u) - a0) : a0;
-}
 inline double fetchDir(const Cascade &c, int m, int d, const double u[3])
 {
     m = std::min(m, int(c.D.size()) - 1);
@@ -135,12 +131,91 @@ inline double fetchDir(const Cascade &c, int m, int d, const double u[3])
     double out = 0;
     for (int q = 0; q < 8; ++q) {
         int jx = i0[0] + (q & 1), jy = i0[1] + ((q >> 1) & 1), jz = i0[2] + ((q >> 2) & 1);
-        if (gExtend && (jx < 0 || jy < 0 || jz < 0 || jx >= l.r[0] || jy >= l.r[1] || jz >= l.r[2])) continue;
         const int ix = std::min(std::max(jx, 0), l.r[0] - 1);
         const int iy = std::min(std::max(jy, 0), l.r[1] - 1);
         const int iz = std::min(std::max(jz, 0), l.r[2] - 1);
         const double w = ((q & 1) ? f[0] : 1 - f[0]) * (((q >> 1) & 1) ? f[1] : 1 - f[1]) * (((q >> 2) & 1) ? f[2] : 1 - f[2]);
         out += w * l.a[d][(size_t(iz) * l.r[1] + iy) * l.r[0] + ix];
+    }
+    return out;
+}
+
+/// The lateral chain of one scalar field on grid r along axis ax: halve the other two axes per
+/// step (a 2 x 2 box within each plane) until both are one texel.
+inline std::vector<Lat> lateralChain(const int r0[3], int ax, const std::function<float(size_t)> &at)
+{
+    std::vector<Lat> ch(1);
+    for (int a = 0; a < 3; ++a) ch[0].r[a] = r0[a];
+    const size_t n0 = size_t(r0[0]) * r0[1] * r0[2];
+    ch[0].v.resize(n0);
+    for (size_t i = 0; i < n0; ++i) ch[0].v[i] = at(i);
+    const int u = (ax + 1) % 3, v = (ax + 2) % 3;
+    while (ch.back().r[u] > 1 || ch.back().r[v] > 1) {
+        const Lat &p = ch.back();
+        Lat q;
+        for (int a = 0; a < 3; ++a) q.r[a] = p.r[a];
+        q.r[u] = std::max(1, p.r[u] / 2); q.r[v] = std::max(1, p.r[v] / 2);
+        q.v.assign(size_t(q.r[0]) * q.r[1] * q.r[2], 0.f);
+        for (int z = 0; z < q.r[2]; ++z) for (int y = 0; y < q.r[1]; ++y) for (int x = 0; x < q.r[0]; ++x) {
+            double sum = 0;
+            for (int k = 0; k < 4; ++k) {
+                int qq[3] = { x, y, z };
+                if (q.r[u] < p.r[u]) qq[u] = 2 * qq[u] + (k & 1);
+                if (q.r[v] < p.r[v]) qq[v] = 2 * qq[v] + ((k >> 1) & 1);
+                for (int a = 0; a < 3; ++a) qq[a] = std::min(qq[a], p.r[a] - 1);
+                sum += p.v[(size_t(qq[2]) * p.r[1] + qq[1]) * p.r[0] + qq[0]];
+            }
+            q.v[(size_t(z) * q.r[1] + y) * q.r[0] + x] = float(sum / 4.0);
+        }
+        ch.push_back(q);
+    }
+    return ch;
+}
+
+/// Builds THE FAMILY over a cascade's directional levels and coverage chain (buildDir first).
+inline void buildLateral(Cascade &c)
+{
+    c.DLat.clear(); c.OLat.clear(); c.PLat.clear();
+    for (size_t m = 0; m < c.D.size(); ++m) {
+        std::array<std::vector<Lat>, 6> per;
+        for (int d = 0; d < 6; ++d) {
+            const std::vector<float> &src = c.D[m].a[d];
+            per[size_t(d)] = lateralChain(c.D[m].r, d / 2, [&](size_t i) { return src[i]; });
+        }
+        c.DLat.push_back(per);
+    }
+    for (size_t L = 0; L < c.L.size(); ++L) {
+        std::array<std::array<std::vector<Lat>, 3>, 2> o, p;
+        for (int h = 0; h < 2; ++h)
+            for (int a = 0; a < 3; ++a) {
+                const Level &l = c.L[L];
+                o[size_t(h)][size_t(a)] = lateralChain(l.r, a, [&](size_t i) { return l.O[h][i * 3 + size_t(a)]; });
+                p[size_t(h)][size_t(a)] = lateralChain(l.r, a, [&](size_t i) { return l.P[h][i * 3 + size_t(a)]; });
+            }
+        c.OLat.push_back(o); c.PLat.push_back(p);
+    }
+}
+
+/// A trilinear fetch of a family chain at the fractional lateral level kf.
+inline double fetchLat(const std::vector<Lat> &ch, double kf, const double u[3])
+{
+    kf = std::min(std::max(kf, 0.0), double(ch.size() - 1));
+    const int k0 = int(std::floor(kf));
+    const double fl = kf - k0;
+    double out = 0;
+    for (int s = 0; s < 2; ++s) {
+        const double ws = s == 0 ? 1 - fl : fl;
+        if (ws <= 0) continue;
+        const Lat &l = ch[size_t(std::min(k0 + s, int(ch.size()) - 1))];
+        double f[3]; int i0[3];
+        for (int a = 0; a < 3; ++a) { const double g = u[a] * l.r[a] - 0.5; i0[a] = int(std::floor(g)); f[a] = g - i0[a]; }
+        for (int q = 0; q < 8; ++q) {
+            const int ix = std::min(std::max(i0[0] + (q & 1), 0), l.r[0] - 1);
+            const int iy = std::min(std::max(i0[1] + ((q >> 1) & 1), 0), l.r[1] - 1);
+            const int iz = std::min(std::max(i0[2] + ((q >> 2) & 1), 0), l.r[2] - 1);
+            const double w = ws * ((q & 1) ? f[0] : 1 - f[0]) * (((q >> 1) & 1) ? f[1] : 1 - f[1]) * (((q >> 2) & 1) ? f[2] : 1 - f[2]);
+            out += w * l.v[(size_t(iz) * l.r[1] + iy) * l.r[0] + ix];
+        }
     }
     return out;
 }
@@ -302,7 +377,6 @@ inline void fetch(const Cascade &c, const std::vector<float> &(*sel)(const Level
         for (int a = 0; a < 3; ++a) { const double g = u[a] * l.r[a] - 0.5; i0[a] = int(std::floor(g)); f[a] = g - i0[a]; }
         for (int q = 0; q < 8; ++q) {
             int jx = i0[0] + (q & 1), jy = i0[1] + ((q >> 1) & 1), jz = i0[2] + ((q >> 2) & 1);
-            if (gExtend && (jx < 0 || jy < 0 || jz < 0 || jx >= l.r[0] || jy >= l.r[1] || jz >= l.r[2])) continue;
             const int ix = std::min(std::max(jx, 0), l.r[0] - 1);
             const int iy = std::min(std::max(jy, 0), l.r[1] - 1);
             const int iz = std::min(std::max(jz, 0), l.r[2] - 1);
@@ -321,19 +395,6 @@ inline double tentCdf(double u)
     return t < 0.0 ? 0.5 * (t + 1.0) * (t + 1.0) : 1.0 - 0.5 * (1.0 - t) * (1.0 - t);
 }
 
-/// THE CONE'S CROSSING RATE toward the faces met by rays heading +b (c = d_b) or -b (c = -d_b):
-/// the mean over the cone's cross-section - a uniform disc of radius tan at unit axial distance,
-/// whose points project on b as q_b = k X, k = tan sqrt(1 - d_b^2), X of density
-/// (2/pi) sqrt(1 - X^2) on [-1, 1] - of max(0, c + k X): the b-distance a ray advances per unit
-/// of axial length, toward that side. Closed form with A(x) = (x sqrt(1-x^2) + asin x) / 2,
-/// B(x) = -(1-x^2)^(3/2) / 3, t = clamp(-c/k): (2/pi) (c (A(1) - A(t)) + k (B(1) - B(t))).
-/// k = 0 (a ray): max(0, c).
-/// The CDF of X, a uniform unit disc's projection on a line (density (2/pi) sqrt(1 - x^2)).
-inline double discCdf(double x)
-{
-    const double t = std::min(1.0, std::max(-1.0, x));
-    return 0.5 + (t * std::sqrt(std::max(0.0, 1.0 - t * t)) + std::asin(t)) / M_PI;
-}
 inline double coneRate(double c, double k)
 {
     if (k <= 1e-12) return std::max(0.0, c);
@@ -376,7 +437,7 @@ inline Result marchCascade(const Cascade &c, bool aniso, const double pos[3], co
         if (b != org.n || !(o > 0.0)) return 1.0;
         return tentCdf(((pO / o - oLS) * org.sgn - invRes[b]) / (0.5 * invRes[b]));
     };
-    const bool ray = allBoth || !(tanA > 0.0);
+    const bool ray = !(tanA > 0.0);
     Result r; r.alpha = startAlpha; r.lod = startLod;
     double readTo = startA, prevMip = -1; bool prevDir = false;
     double kb[3] = { -1, -1, -1 };   // the lateral kernel's level per axis (gLatTile)
@@ -397,34 +458,30 @@ inline Result marchCascade(const Cascade &c, bool aniso, const double pos[3], co
         prevDir = dir; prevMip = mip;
         double cp[3];
         at(0.5 * (nr + fr), cp);
-        if (gExtend) {
-            // past the box while the kernel still reaches into it (border-zero reads)
-            const double reach = std::exp2(std::max(r.lod - 1.0, 0.0)) + tc * std::exp2(mip);
-            bool far = false;
-            for (int a = 0; a < 3; ++a) if (cp[a] < -reach * invRes[a] || cp[a] > 1.0 + reach * invRes[a]) far = true;
-            done = far;
-            if (far) break;
-        } else {
-            done = !inside(cp);
-            for (int a = 0; a < 3; ++a) cp[a] = std::min(std::max(cp[a], 0.0), 1.0);
-        }
+        done = !inside(cp);
+        for (int a = 0; a < 3; ++a) cp[a] = std::min(std::max(cp[a], 0.0), 1.0);
         const double w = std::fabs(fr - readTo) / T;
         const double lenLS = w * T * invAbsDa;
         double x = 0.0;
-        if (!kAll) {   // the plane's own axis: the half looking back at the travel
+        {   // the plane's own axis: the half looking back at the travel
             const int h = sgn > 0 ? kN : kP;
             const double Lc = dir ? mip + 1.0 : mip;
             double O[3], P[3], A[3];
             fetch(c, selO, h, Lc, cp, O);
             fetch(c, selP, h, Lc, cp, P);
-            if (dir && gK4 && !c.D.empty()) {
-                // the directional level of the footprint kernel (lk - 1: a level-m texel spans
-                // 2^(m+1) cells), its full-crossing opacity per its own depth T_k
-                const double lkk = std::max(r.lod - 1.0, 1.0);
-                const double Tk = std::exp2(lkk) * invRes[axis];
-                A[axis] = fetchDirF(c, lkk - 1.0, 2 * axis + (sgn > 0 ? 0 : 1), cp) * (T / Tk);
-            } else if (dir) {
-                if (!c.D.empty()) A[axis] = fetchDir(c, int(mip), 2 * axis + (sgn > 0 ? 0 : 1), cp);
+            if (dir) {
+                if (gLateral && !c.DLat.empty()) {
+                    // THE FAMILY: the plane's own depth (level m), the cone's footprint across it -
+                    // the kernel's level lk in cells, i.e. lk - (m + 1) lateral steps above m; the
+                    // gate reads the coverage and the position from the same lateral level
+                    const double lkp = std::max(std::max(r.lod - 1.0, 0.0), gSpan ? std::log2(tc) + mip : 0.0);
+                    const double kd = std::max(lkp - (mip + 1.0), 0.0);
+                    const int d = 2 * axis + (sgn > 0 ? 0 : 1);
+                    A[axis] = fetchLat(c.DLat[size_t(std::min(int(mip), int(c.DLat.size()) - 1))][size_t(d)], kd, cp);
+                    const size_t Li = size_t(std::min(int(Lc), int(c.OLat.size()) - 1));
+                    O[axis] = fetchLat(c.OLat[Li][size_t(h)][size_t(axis)], kd, cp);
+                    P[axis] = fetchLat(c.PLat[Li][size_t(h)][size_t(axis)], kd, cp);
+                } else if (!c.D.empty()) A[axis] = fetchDir(c, int(mip), 2 * axis + (sgn > 0 ? 0 : 1), cp);
                 else fetch(c, selA, h, Lc, cp, A);
             } else {
                 double o = O[axis];
@@ -442,56 +499,10 @@ inline Result marchCascade(const Cascade &c, bool aniso, const double pos[3], co
                 const double pa = P[axis] / O[axis], hh = 0.5 * invRes[axis];
                 g = tentCdf((pa - readTo) * sgn / hh);
             }
-            if (gK4pos && !ray) {
-                // (a) THE PLANE AXIS AT THE KERNEL'S LEVEL, DEPTH-GATED BY POSITION: the block at
-                // the kernel's integer level holding the plane; its surface (the half looking back)
-                // counts, whole, in the plane whose stretch holds its position
-                const int LK = int(std::floor(std::max(r.lod - 1.0, std::log2(tc) + mip)));
-                double Ok[3], Pk[3], kq[3];
-                at(0.5 * (readTo + fr), kq);
-                for (int t = 0; t < 3; ++t) kq[t] = std::min(std::max(kq[t], 0.0), 1.0);
-                fetch(c, selO, h, double(LK), kq, Ok);
-                fetch(c, selP, h, double(LK), kq, Pk);
-                double gk = 0;
-                if (Ok[axis] > 0) {
-                    const double pa = Pk[axis] / Ok[axis];
-                    const double lo = std::min(readTo, fr), hi = std::max(readTo, fr);
-                    gk = (pa >= lo && pa < hi) ? 1.0 : 0.0;
-                }
-                const double og = originGate(axis, h, Ok[axis], Pk[axis]);
-                x += og * gk * std::min(1.0, Ok[axis] * std::exp2(double(LK)));
-            } else if (gLat2 && !ray) {
-                // (b) THE PLANE AXIS AT ITS OWN LEVEL, READ AT n x n LATERAL OFFSETS over the
-                // kernel's width (+- its half-width): a box over the footprint, exact in depth
-                const double LKf = std::max(r.lod - 1.0, std::log2(tc) + mip);
-                const int nL = int(std::min(4.0, std::max(1.0, std::exp2(std::floor(LKf) - (std::log2(tc) + mip)) * 2.0)));
-                const int u = (axis + 1) % 3, v = (axis + 2) % 3;
-                const double hw[3] = { 0.5 * std::exp2(LKf) * invRes[0], 0.5 * std::exp2(LKf) * invRes[1], 0.5 * std::exp2(LKf) * invRes[2] };
-                double acc = 0;
-                for (int iu = 0; iu < nL; ++iu) for (int iv = 0; iv < nL; ++iv) {
-                    double q[3] = { cp[0], cp[1], cp[2] };
-                    q[u] += ((iu + 0.5) / nL * 2.0 - 1.0) * hw[u];
-                    q[v] += ((iv + 0.5) / nL * 2.0 - 1.0) * hw[v];
-                    for (int t = 0; t < 3; ++t) q[t] = std::min(std::max(q[t], 0.0), 1.0);
-                    double Aq;
-                    if (dir && !c.D.empty()) Aq = fetchDir(c, int(mip), 2 * axis + (sgn > 0 ? 0 : 1), q);
-                    else { double Oq[3]; fetch(c, selO, h, Lc, q, Oq); Aq = Oq[axis] * std::exp2(mip); }
-                    acc += Aq;
-                }
-                x += originGate(axis, h, O[axis], P[axis]) * (acc / (nL * nL)) * g;
-            } else
-                x += originGate(axis, h, O[axis], P[axis]) * A[axis] * g;
+            x += originGate(axis, h, O[axis], P[axis]) * A[axis] * g;
         }
-        // the plane's axial stretch from the apex, in world units, and the direction in world
-        double dWorld[3], dl = 0;
-        for (int a2 = 0; a2 < 3; ++a2) { dWorld[a2] = d[a2] * c.size[a2]; dl += dWorld[a2] * dWorld[a2]; }
-        dl = std::sqrt(dl);
-        for (int a2 = 0; a2 < 3; ++a2) dWorld[a2] /= dl;
-        const double startTravLS = startTrav;
-        const double t0W = (startTrav + (readTo - startA) * sgn * invAbsDa) * dl;
-        const double t1W = (startTrav + (fr - startA) * sgn * invAbsDa) * dl;
         // the kernel no finer than the plane's texel - the hats must span the plane spacing
-        const double lk = gTile ? std::log2(tc) + mip : std::max(std::max(r.lod - gKoff, 0.0), gSpan ? std::log2(tc) + mip : 0.0);
+        const double lk = std::max(std::max(r.lod - 1.0, 0.0), gSpan ? std::log2(tc) + mip : 0.0);
         // THE KERNEL SAMPLES THE STRETCH IT STANDS FOR: at the midpoint of what this plane
         // reads (the plane's centre but on a cascade's first plane) - the hats then tile.
         double kp[3];
@@ -507,60 +518,21 @@ inline Result marchCascade(const Cascade &c, bool aniso, const double pos[3], co
             double O[3], P[3];
             fetch(c, selO, h, lk, kp, O);
             fetch(c, selP, h, lk, kp, P);
-            if (ray) for (int b = 0; b < 3; ++b) O[b] = OB[b];
-            if (gCross && !ray) {
-                // THE CONE'S CROSSING TIME (world units; cells are cubes): the surface this
-                // half holds along b lies at p_b; the cone's rays leave the apex a_b with
-                // b-velocity v = d_b + k X per unit axial length (k = tan sqrt(1 - d_b^2), X the
-                // disc's projection) and cross p_b at t = (p_b - a_b) / v. The share of rays
-                // (heading toward it) crossing within this plane's axial stretch [t0, t1] -
-                // the stretches tile t, so every ray crossing the surface is counted once.
+            if (gLateralMinor && dir && !c.OLat.empty()) {
+                // THE FAMILY FOR THE MINOR AXES: exact along b at the plane's own level (the stretch
+                // crosses at most one of its texels along b), averaged across over the footprint
+                const double Lcm = mip + 1.0;
+                const size_t Li = size_t(std::min(int(Lcm), int(c.OLat.size()) - 1));
+                const double kd = std::max(lk - Lcm, 0.0);
                 for (int b = 0; b < 3; ++b) {
-                    if (b == axis || !(O[b] > 0.0)) continue;
-                    if (b == org.n && originGate(b, h, O[b], P[b]) < 0.5) continue;
-                    const bool toward = h == kN;   // half N: faces looking -b, met heading +b
-                    const double sz = c.size[b];
-                    const double pb = P[b] / O[b] * sz, ab = (pos[b] - d[b] * startTravLS) * sz;
-                    const double dw = dWorld[b], kk = tanA * std::sqrt(std::max(0.0, 1.0 - dw * dw));
-                    const double dist = pb - ab;   // world
-                    if (toward ? dist <= 0 : dist >= 0) continue;
-                    const double ad = std::fabs(dist);
-                    // speeds toward the surface that cross within [t0, t1]: |v| in [ad/t1, ad/t0]
-                    const double vlo = ad / std::max(t1W, 1e-9), vhi = t0W > 1e-9 ? ad / t0W : 1e30;
-                    const double sgnb = toward ? 1.0 : -1.0;   // v * sgnb > 0
-                    const double c0 = sgnb * dw;               // the axis's speed toward it
-                    double F = 0;
-                    if (kk > 1e-9) F = discCdf((vhi - c0) / kk) - discCdf((vlo - c0) / kk);
-                    else F = (c0 >= vlo && c0 < vhi) ? 1.0 : 0.0;
-                    // the surface's own texel along b (no depth blend): the coverage there
-                    double Os = O[b];
-                    if (gTrace) std::printf("      G9 b %d h %d O %.4f p %.3f a %.3f dist %.3f t %.2f..%.2f v %.3f..%.3f c0 %.3f k %.3f F %.4f\n", b, h, O[b], pb, ab, dist, t0W, t1W, vlo, vhi, c0, kk, F);
-                    if (F > 0 && gSnap) {
-                        const int L0 = int(std::floor(lk));
-                        const double rr = c.L[size_t(std::min(L0, int(c.L.size()) - 1))].r[b];
-                        // the texel holding p, and its neighbour when p lies within a fine
-                        // cell of their shared face (p is the O-weighted mean of what the
-                        // kernel holds - a far surface of the same half drags it)
-                        const double pl = P[b] / O[b];
-                        const double ti = std::floor(pl * rr), fr2 = pl * rr - ti;
-                        double q[3] = { kp[0], kp[1], kp[2] };
-                        q[b] = (ti + 0.5) / rr;
-                        double Oq[3]; fetch(c, selO, h, double(L0), q, Oq);
-                        Os = Oq[b];
-                        const double near1 = invRes[b] * rr;   // one fine cell in this level's texels
-                        if (fr2 < near1 || fr2 > 1.0 - near1) {
-                            q[b] = (ti + (fr2 < 0.5 ? -0.5 : 1.5)) / rr;
-                            if (q[b] > 0 && q[b] < 1) { fetch(c, selO, h, double(L0), q, Oq); Os = std::max(Os, Oq[b]); }
-                        }
-                        x += Os * std::exp2(double(L0)) * F;
-                        continue;
-                    }
-                    x += Os * std::exp2(lk) * F;
+                    if (b == axis) continue;
+                    O[b] = fetchLat(c.OLat[Li][size_t(h)][size_t(b)], kd, kp);
+                    P[b] = fetchLat(c.PLat[Li][size_t(h)][size_t(b)], kd, kp);
                 }
-                continue;
             }
+            if (ray) for (int b = 0; b < 3; ++b) O[b] = OB[b];
             for (int b = 0; b < 3; ++b) {
-                if ((b == axis && !kAll) || (!(O[b] > 0.0) && !(gInteg && !ray))) continue;
+                if (b == axis || (!(O[b] > 0.0) && !(gInteg && !ray))) continue;
                 // rays heading +b meet the faces looking -b (half N), rays heading -b the +b ones;
                 // a ray takes both halves at |d_b|
                 const double cdir = ray ? std::fabs(d[b]) : (h == kN ? d[b] : -d[b]);
@@ -626,13 +598,9 @@ inline Result marchCascade(const Cascade &c, bool aniso, const double pos[3], co
                 x += originGate(b, h, O[b], P[b]) * Ob * rate * lenLS / invRes[b];
             }
         }
-        if (gTrace) {
-            double pw[3]; for (int q = 0; q < 3; ++q) pw[q] = c.origin[q] + cp[q] * c.size[q];
-            std::printf("   plane ax %d dir %d mip %.0f lod %.2f lk %.2f w %.2f at (%.2f %.2f %.2f) x %.4f alpha %.4f\n", axis, dir ? 1 : 0, mip, r.lod, std::max(r.lod - 1.0, 0.0), w, pw[0], pw[1], pw[2], x, r.alpha);
-        }
         r.alpha += std::min(x, 1.0 - r.alpha);
         readTo = fr;
-        if (!gExtend && (sgn > 0 ? readTo >= 1.0 : readTo <= 0.0)) done = true;
+        if (sgn > 0 ? readTo >= 1.0 : readTo <= 0.0) done = true;
     }
     const double tEnd = (readTo - startA) * sgn * invAbsDa;
     for (int a = 0; a < 3; ++a) r.posLS[a] = pos[a] + tEnd * d[a];
