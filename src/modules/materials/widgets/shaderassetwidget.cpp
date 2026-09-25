@@ -33,12 +33,10 @@ For more information see the LICENSE file
 #include <QDirIterator>
 
 #include "../effectspage.h"
-#if(EFFECT_BUILD_AS_LIB)
 #include "io/assetmanager.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "ui/style/stylesheet.h"
-#endif
 
 ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()
 {

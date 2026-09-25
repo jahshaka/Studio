@@ -33,7 +33,7 @@ add_executable(test_pbr_evaluator
 set_target_properties(test_pbr_evaluator PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_pbr_evaluator PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_pbr_evaluator PRIVATE
     JAHSHAKA_TEST_PRESET_DIR="${CMAKE_SOURCE_DIR}/app/content/materials/")
 target_include_directories(test_pbr_evaluator PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -74,7 +74,7 @@ add_executable(test_node_regressions
 set_target_properties(test_node_regressions PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_node_regressions PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_node_regressions PRIVATE
     JAHSHAKA_TEST_PRESET_DIR="${CMAKE_SOURCE_DIR}/app/content/materials/")
 target_include_directories(test_node_regressions PRIVATE
     ${CMAKE_SOURCE_DIR}
@@ -116,7 +116,6 @@ add_executable(test_ao_removed
 set_target_properties(test_ao_removed PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_ao_removed PRIVATE EFFECT_BUILD_AS_LIB)
 target_include_directories(test_ao_removed PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
@@ -155,7 +154,6 @@ add_executable(test_baker_parity
 set_target_properties(test_baker_parity PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_baker_parity PRIVATE EFFECT_BUILD_AS_LIB)
 target_include_directories(test_baker_parity PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
@@ -194,7 +192,6 @@ add_executable(test_bake_output
 set_target_properties(test_bake_output PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_bake_output PRIVATE EFFECT_BUILD_AS_LIB)
 target_include_directories(test_bake_output PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
@@ -244,7 +241,7 @@ add_executable(test_panel_migration
 set_target_properties(test_panel_migration PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_panel_migration PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_panel_migration PRIVATE
     JAHSHAKA_TEST_PRESET_DIR="${CMAKE_SOURCE_DIR}/app/content/materials/"
     JAHSHAKA_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/")
 target_include_directories(test_panel_migration PRIVATE
@@ -296,7 +293,6 @@ add_executable(test_selection
 set_target_properties(test_selection PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_selection PRIVATE EFFECT_BUILD_AS_LIB)
 target_include_directories(test_selection PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
@@ -394,7 +390,6 @@ set_target_properties(test_asset_widget_db PROPERTIES
     AUTOMOC ON
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_asset_widget_db PRIVATE EFFECT_BUILD_AS_LIB)
 target_include_directories(test_asset_widget_db PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src

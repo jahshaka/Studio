@@ -88,7 +88,6 @@ For more information see the LICENSE file
 #include <QMessageBox>
 #include <QTemporaryDir>
 
-#if(EFFECT_BUILD_AS_LIB)
 #include "data/database/database.h"
 #include "services/assethelper.h"
 #include "services/thumbnailgenerator.h"
@@ -97,9 +96,6 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "ui/dialogs/progressdialog.h"
 #include "ui/dialogs/toast.h"
-#else
-#include <QUuid>
-#endif
 
 #include "io/materialreader.h"
 #include "io/scenewriter.h"
@@ -583,10 +579,8 @@ void EffectsPage::refreshShaderGraph()
 	// `updateAssetDock` is one library query plus a small parse per row, and
 	// it is what makes the drawer agree with the catalog after anything —
 	// including an import made on the Assets page while this page was hidden.
-#if(EFFECT_BUILD_AS_LIB)
 	updateAssetDock();
 	assetWidget->refresh();
-#endif
 	refreshCurrentTile();
 }
 
@@ -670,7 +664,6 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 	// what is stored is the bundle definition — guids only — as the Material
 	// row's own file. `MaterialBundle::write` derives the membership edges
 	// from it and refuses any path that slipped through.
-#if(EFFECT_BUILD_AS_LIB)
 	{
 		const auto build = materials::buildDefinition(doc->graph, doc->info.GUID,
 		                                              dataBase, mProject);
@@ -739,22 +732,6 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 	// textures, and a picture picked in a texture node becomes one. Only the
 	// panel's own document, though — it shows the ACTIVE material.
 	if (membersPanel && doc == activeDoc()) membersPanel->refresh();
-#else
-	// The STANDALONE build (no library): the graph goes to a file, unchanged.
-	{
-		auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-		if (!QDir(filePath).exists()) QDir().mkpath(filePath);
-		const QJsonObject matObj = MaterialHelper::serialize(doc->graph);
-		auto shaderFile = new QFile(filePath + matObj["name"].toString());
-		if (shaderFile->open(QIODevice::ReadWrite)) {
-			shaderFile->write(QJsonDocument(matObj).toJson());
-			shaderFile->close();
-		}
-		else {
-			qDebug() << "device not open";
-		}
-	}
-#endif
 
 	// THE DRAWER FOLLOWS THE MATERIAL THE USER IS LOOKING AT, and only that
 	// one (fix round F8): a BACKGROUND tab's 1.5 s autosave used to switch
@@ -1038,7 +1015,6 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	QJsonObject obj;
 	QString refused;
 
-#if(EFFECT_BUILD_AS_LIB)
 	obj = QJsonDocument::fromJson(fetchAsset(guid, origin)).object();
 	// A PRESET NOBODY HAS USED YET HAS NO ROW (seeding is on first USE, not on
 	// listing — services/materialpresetassets.h). Looking at one must not be
@@ -1054,21 +1030,6 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	progressDialog->setValueAndText(2, "Fetch graph");
 
 	graph = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj, &refused);
-#else
-	{
-		auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-		QDirIterator it(filePath);
-		while (it.hasNext()) {
-			QFile file(it.next());
-			file.open(QIODevice::ReadOnly);
-			auto doc1 = QJsonDocument::fromJson(file.readAll());
-			file.close();
-			auto obj1 = doc1.object();
-			if (obj1["guid"].toString() == guid) { obj = obj1; break; }
-		}
-		graph = NodeGraph::deserialize(obj["graph"].toObject(), mNodeLibrary, &refused);
-	}
-#endif
 
 	// THE FILE CAN BE REFUSED (LEGACY-MASTER-CRUD): a material written on the
 	// deleted "Surface Material" master has no graph this build can draw. The
@@ -1103,11 +1064,7 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 
 	progressDialog->setValueAndText(8, "Tidying up");
 
-#if(EFFECT_BUILD_AS_LIB)
 	restoreGraphPositions(doc, obj["shadergraph"].toObject());
-#else
-	restoreGraphPositions(doc, obj["graph"].toObject());
-#endif
 	restoringGraph = false;
 	// The Members panel follows the open bundle.
 	if (membersPanel && doc == activeDoc()) membersPanel->setMaterial(doc->info.GUID);
@@ -1346,7 +1303,6 @@ bool EffectsPage::deleteShader(QString guid)
     auto item = selectCorrectItemFromDrop(guid);
     auto holder = item->listWidget();
 
-#if(EFFECT_BUILD_AS_LIB)
 
     // THE LIBRARY-DELETE LAW, not a bare row delete (services/assetdelete.h;
     // owner, 2026-09-09: "deleting an asset from the LIBRARY should not delete
@@ -1390,31 +1346,6 @@ bool EffectsPage::deleteShader(QString guid)
                                                 : Gone::Both);
         return true;
     }
-#else
-
-    auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-    QDirIterator it(filePath);
-
-    while (it.hasNext()) {
-
-        QFile file(it.next());
-        file.open(QIODevice::ReadOnly);
-        auto doc = QJsonDocument::fromJson(file.readAll());
-        file.close();
-
-        auto obj = doc.object();
-        if (obj["guid"].toString() == "") continue;
-        if(obj["guid"].toString() == guid){
-            if(file.remove()){
-                holder->takeItem(holder->row(item));
-                forgetMaterial(guid, Gone::Both);
-                return true;
-            }
-        }
-
-    }
-
-#endif
     return false;
 
 }
@@ -1659,7 +1590,6 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	}
 
 
-#if(EFFECT_BUILD_AS_LIB)
 	// A LIBRARY BUNDLE. It is created in the library, not in a project — the
 	// user adds it to a project when they want it there (the four-drawer rule,
 	// OWNER_REVIEW 9) — and the row is an ordinary AssetsView Material, so the
@@ -1672,7 +1602,6 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	assetShader->fileName = newShader;
 	assetShader->assetGuid = assetGuid;
 	AssetManager::addAsset(assetShader);
-#endif
 	saveShader();
 }
 
@@ -1742,7 +1671,6 @@ void EffectsPage::refreshCurrentTile()
 
 QByteArray EffectsPage::fetchAsset(const QString &guid, shaderInfo::Origin origin)
 {
-#if(EFFECT_BUILD_AS_LIB)
 	// THE DEFINITION AT THE SCOPE THIS MATERIAL WAS OPENED AT (D-2 + the
 	// four-drawer rule): a Projects tile reads the project's pinned version,
 	// a Custom tile reads the library original. Passing the project
@@ -1753,10 +1681,6 @@ QByteArray EffectsPage::fetchAsset(const QString &guid, shaderInfo::Origin origi
 	    MaterialBundle::read(dataBase, guid, projectScope ? mProject : nullptr);
 	if (!definition.isEmpty()) return QJsonDocument(definition).toJson();
 	return dataBase->fetchAssetData(guid);
-#else
-	Q_UNUSED(guid); Q_UNUSED(origin);
-	return QByteArray();
-#endif
 }
 
 void EffectsPage::configureUI()
@@ -1864,11 +1788,9 @@ void EffectsPage::configureUI()
 	splitView->addWidget(tabbedWidget);
 	splitView->setStretchFactor(0, 90);
 
-#if(EFFECT_BUILD_AS_LIB)
 	assetWidget = new ShaderAssetWidget;
 	assetWidget->sceneOpenProbe = mSceneOpenProbe;
 	//addDockWidget(Qt::LeftDockWidgetArea, projectDock, Qt::Vertical);
-#endif
 	addDockWidget(Qt::LeftDockWidgetArea, assetsDock, Qt::Vertical);
 	addDockWidget(Qt::RightDockWidgetArea, displayWidget, Qt::Vertical);
 	addDockWidget(Qt::LeftDockWidgetArea, materialSettingsDock, Qt::Vertical);
@@ -2116,7 +2038,6 @@ void EffectsPage::updateAssetDock()
 	if (currentProjectShader && currentProjectShader->listWidget() == effects)
 		currentProjectShader = nullptr;
 	effects->clear();
-#if(EFFECT_BUILD_AS_LIB)
 	// THE TWO LIBRARY WORLDS MERGED (spec 2.4): the module lists the same
 	// library MATERIAL bundles the Assets page does — there is no private
 	// "Effects" world any more, and no ModelTypes::Shader tile.
@@ -2177,7 +2098,6 @@ void EffectsPage::updateAssetDock()
 		}
 	if (!openGuid.isEmpty() && !currentProjectShader)
 		currentProjectShader = selectCorrectItemFromDrop(openGuid);
-#endif
 }
 
 
@@ -2556,14 +2476,12 @@ void EffectsPage::setSceneOpenProbe(std::function<bool()> probe)
 
 void EffectsPage::setAssetWidgetDatabase(Database * db)
 {
-#if(EFFECT_BUILD_AS_LIB)
 	TextureManager::getSingleton()->setDatabase(db);
     assetWidget->setUpDatabase(db);
 	// The page's own handle is assigned in the constructor AFTER configureUI
 	// built the panels, so the Members panel is given the library here — the
 	// one place every caller passes through.
 	if (membersPanel) membersPanel->setDatabase(db);
-#endif
 }
 
 void EffectsPage::renameShader()
@@ -2572,21 +2490,12 @@ void EffectsPage::renameShader()
 	// the page's item pointer is null whenever no material is open, and a
 	// drawer refill can clear it).
 	if (!currentProjectShader) return;
-#if(EFFECT_BUILD_AS_LIB)
 	// THROUGH THE ONE NAME WRITER (PRESET-UNIFY-1 fix round 2), which is where
 	// both name laws live: a shipped preset cannot be renamed, and nothing
 	// else may take a shipped preset's name. `Database::renameAsset` knows
 	// neither, and this door went straight to it.
 	assettags::rename(dataBase, currentProjectShader->data(MODEL_GUID_ROLE).toString(),
 	                  currentProjectShader->data(Qt::DisplayRole).toString());
-#else
-	auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-	if (!QDir(filePath).exists()) return;
-	auto shaderFileOld = new QFile(filePath + oldName);
-	auto shaderFileNew = new QFile(filePath + newName);
-	QDir().rename(shaderFileOld->fileName() , shaderFileNew->fileName());
-	
-#endif
 	oldName = currentProjectShader->data(Qt::DisplayRole).toString();
 }
 
@@ -2724,14 +2633,12 @@ QListWidgetItem * EffectsPage::selectCorrectItemFromDrop(QString guid)
 		}
 	}
 
-#if(EFFECT_BUILD_AS_LIB)
 	for (int i = 0; i < assetWidget->assetViewWidget->count(); i++)
 	{
 		if (guid == assetWidget->assetViewWidget->item(i)->data(MODEL_GUID_ROLE)) {
 			return assetWidget->assetViewWidget->item(i);
 		}
 	}
-#endif
 
 
     return nullptr;
@@ -2760,12 +2667,10 @@ int EffectsPage::selectCorrectTabForItem(QString guid)
 		if (guid == effects->item(i)->data(MODEL_GUID_ROLE))	return (int) ShaderWorkspace::MyEffects;
 	}
 
-#if(EFFECT_BUILD_AS_LIB)
 	for (int i = 0; i < assetWidget->assetViewWidget->count(); i++)
 	{
 		if (guid == assetWidget->assetViewWidget->item(i)->data(MODEL_GUID_ROLE))	return (int)ShaderWorkspace::Projects;
 	}
-#endif
 	return 0;
 }
 
@@ -2776,7 +2681,6 @@ int EffectsPage::selectCorrectTabForItem(QString guid)
 
 void EffectsPage::configureConnections()
 {
-#if(EFFECT_BUILD_AS_LIB)
 	// THE DRAWER IS THE SCOPE (the four-drawer rule). A PROJECTS tile opens
 	// and saves the project's own copy; a CUSTOM tile opens and saves the
 	// library original — even while a project holds it, which the old
@@ -2837,7 +2741,6 @@ void EffectsPage::configureConnections()
 		// The handler names the material; loadGraph adopts it (fix round).
 		loadGraph(item->data(MODEL_GUID_ROLE).toString(), shaderInfo::Origin::Project);
 	});
-#endif
 
     connect(effects, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
         // The handler names the material; loadGraph adopts it (fix round).
@@ -3026,7 +2929,6 @@ void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
 
 	if (oldName == newName) return;
 
-#if(EFFECT_BUILD_AS_LIB)
     // THE ROW FIRST, BECAUSE THE ROW CAN SAY NO (fix round F10). The one
     // name writer is where the name laws live — a shipped preset cannot be
     // renamed, and nothing may take a preset's name — and the definition
@@ -3071,15 +2973,6 @@ void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
             if (!written.ok) irisLog("rename: " + written.error);
         }
     }
-#else
-    // get json obj from file and edit graph like above
-
-    auto filePath = QDir().filePath(AppPaths::dataRoot() + "/Materials/MyFx/");
-    if (!QDir(filePath).exists()) return;
-    auto shaderFileOld = new QFile(filePath + oldName);
-    auto shaderFileNew = new QFile(filePath + newName);
-    QDir().rename(shaderFileOld->fileName() , shaderFileNew->fileName());
-#endif
 
 	item->setData(Qt::DisplayRole, newName);
 

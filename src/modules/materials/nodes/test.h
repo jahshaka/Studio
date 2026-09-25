@@ -17,9 +17,7 @@
 
 class QDoubleSpinBox;
 
-#if(EFFECT_BUILD_AS_LIB)
 #include "ui/controls/colorpickerwidget.h"
-#endif
 
 // (SurfaceMasterNode — the Blinn-Phong "Surface Material" master, with
 // Diffuse/Specular/Shininess/Ambient/Emission sockets — was DELETED by
@@ -183,7 +181,6 @@ public:
 	void deserializeWidgetValue(QJsonValue val, int widgetIndex);
 };
 
-#if(EFFECT_BUILD_AS_LIB)
 class ColorPickerNode : public NodeModel
 {
 public:
@@ -195,4 +192,3 @@ private:
 	QJsonValue serializeWidgetValue(int widgetIndex);
 	void deserializeWidgetValue(QJsonValue val, int widgetIndex);
 };
-#endif

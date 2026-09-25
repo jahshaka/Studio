@@ -611,7 +611,6 @@ void Vector4Node::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 }
 
 
-#if(EFFECT_BUILD_AS_LIB)
 ColorPickerNode::ColorPickerNode()
 {
 	setNodeType(NodeCategory::Constants);
@@ -661,4 +660,3 @@ void ColorPickerNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 
 	colorWidget->setColor(col);
 }
-#endif

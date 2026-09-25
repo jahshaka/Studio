@@ -292,12 +292,10 @@ void LibraryV1::initConstants()
 		return floatNode;
 	});
 
-#if(EFFECT_BUILD_AS_LIB)
 	addNode("color", "Color", iconPath, type, []() {
 		return new ColorPickerNode();
 
 	});
-#endif
 }
 
 void LibraryV1::initUtility()

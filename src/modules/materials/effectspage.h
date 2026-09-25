@@ -28,9 +28,7 @@
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
 #include "ui/controls/fonticons.h"
 
-#if(EFFECT_BUILD_AS_LIB)
 #include "widgets/shaderassetwidget.h"
-#endif
 
 class Toast;
 class QLabel;
@@ -547,10 +545,8 @@ private:
 	QString newName;
 
 	QLineEdit *projectName = nullptr;
-#if(EFFECT_BUILD_AS_LIB)
 	ShaderAssetWidget *assetWidget;
 	Database *dataBase = nullptr;
-#endif
 };
 
 }
