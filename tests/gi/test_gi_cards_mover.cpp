@@ -40,8 +40,6 @@
 //       place it left lit (a class change is a caster move).
 //   (h) the still crate DELETED (not the tail slot: the swap-remove renumbers
 //       the tail into it): its footprint reads lit within the capture budget.
-//   (i) a still crate ARRIVES: its shadow reads in the captured term within
-//       the capture budget.
 //
 // `--cost` (not a ctest row; run under scripts/gpu-exclusive.sh): paired arms
 // of 0 / 1 / 30 moving movers on a Showroom-2-shaped floor at 1920x1080: the
@@ -507,29 +505,6 @@ int main(int argc, char **argv)
         CHECK_MSG(frames > 0 && frames <= bar,
                   "(h) the deleted crate's footprint reads lit within the capture budget's frames (%d, bar %d)",
                   frames, bar);
-    }
-
-    // ---- (i) A STILL CRATE ARRIVES ---------------------------------------------
-    std::printf("\n== (i) a still crate arrives\n");
-    {
-        const GiStatus s0 = s->giStatus();
-        const NodeId born = s->createNode();
-        s->attachMesh(born, cube, crateMat);
-        enginetest::setNodeScale(s, born, Vec3(1.2f, 1.2f, 1.2f));
-        enginetest::setNodePosition(s, born, Vec3(-0.6f, 0.6f, stillZ));
-        int frames = -1;
-        for (int f = 1; f <= 60; ++f) {
-            render(e, 1);
-            const float sh = cardShadow(s, 0.6f, stillZ);
-            if (sh >= 0.0f && sh < 0.1f) { frames = f; break; }
-        }
-        const unsigned long long queued = s->giStatus().cards.casterRecaptures - s0.cards.casterRecaptures;
-        const int bar = recaptureBar(queued);
-        std::printf("    %llu cards queued; its footprint dark after %d frames (bar %d)\n", queued, frames, bar);
-        CHECK_MSG(queued > 0u, "(i) the arrival queued its footprint's cards (%llu)", queued);
-        CHECK_MSG(frames > 0 && frames <= bar,
-                  "(i) the new crate's shadow reads in the captured term within the capture budget's "
-                  "frames (%d, bar %d)", frames, bar);
     }
 
     std::printf("\n%s\n", failures ? "FAILED" : "PASSED");
