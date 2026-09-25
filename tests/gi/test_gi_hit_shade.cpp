@@ -394,10 +394,20 @@ static int mirrorArms(Engine *e)
     // measured 2 in each arm alike — and the bar is 1 % of the eroded silhouette
     // (~370 px: 3). A leaking seam misses a LINE of pixels along an edge, a face's
     // width (~20 px at this framing), which this bar refuses.
+    // ...AND HALF A POINT MORE FOR THE CONTROL'S SOFT FOOT (PHOTON-CARDS-5,
+    // measured): since the card read restores the lobe's view term the floor
+    // around the crates reflects at the grazing raster's brightness (1.6-2x its
+    // head-on value), and the STATIC control's captured PSSM shadow, SOFT at the
+    // crate's foot, crosses the masks' 0.01 threshold on 48 more pixels — a 1-3
+    // px line along the bottom edge of the silhouette (rows 225-227 of 203-227;
+    // spikes/photon-cards-5/hit-a-*.ppm). The MOVER's shadow on the cards is the
+    // traced movers' term (PHOTON-CARDS-4), HARD, so it has no such penumbra: the
+    // control rose 92.5 -> 93.8 %, the mover 92.6 -> 92.8 % with its interior
+    // misses 2 -> 1. The mover's coverage did not fall; the control's edge grew.
     const unsigned missBar = std::max(1u, coreN[1] / 100u);
-    CHECK_MSG(frac[1] >= frac[0] - 0.01f && interiorMiss[1] <= missBar,
+    CHECK_MSG(frac[1] >= frac[0] - 0.015f && interiorMiss[1] <= missBar,
               "(a) the MOVER's reflection covers %.1f %% of its raster silhouette, the static control's %.1f %% "
-              "(bar: less 1 point on the edge); misses inside it %u of %u px (bar %u, 1 %%; the control's %u) "
+              "(bar: less 1.5 points on the edge and the control's soft foot); misses inside it %u of %u px (bar %u, 1 %%; the control's %u) "
               "(before this lane: 0 %% — a mover's hit was handed back to the probe)",
               100.0f * frac[1], 100.0f * frac[0], interiorMiss[1], coreN[1], missBar, interiorMiss[0]);
     // THE BAR: the reflection is the decode of the SAME surface point the raster
@@ -479,16 +489,20 @@ static int mirrorArms(Engine *e)
         // seen). The earlier single mask mixed the two at the crate's foot — the
         // blue channel 3.88 % off the lamp-OFF raster was the carded floor there.
         //
-        // MEASURED (PHOTON-CARDS-4, 2026-09-25): the decode's half 0.22 % from the
-        // lamp-OFF raster; the floor-only mirror shot 0 records. The cards' half
-        // CARRIES the lamp (the mirror's floor moves with it by the ratio below)
-        // but does NOT equal the lamp-ON raster: 41.6 % off — with the lamp OFF the
-        // card floor reads 0.128 against the raster's 0.247 (0.52x: the card's
-        // relight with GI off holds the sun alone, the raster adds the sky's and
-        // the ambient's diffuse), and the lamp's own share is 0.76x the raster's.
-        // That card-versus-raster gap is the CARDS' defect, reported for its own
-        // lane; this arm asserts the physics that holds (the lamp reaches a card
-        // hit, never a decode hit off-screen) and prints the gap.
+        // THE CARDS' HALF IS THE GRAZING RASTER (PHOTON-CARDS-5). The mirror sees
+        // this floor at N.V ~ 0.08, where HlmsPbs's Disney diffuse is up to
+        // 1.6-2x its head-on value (the view term: the retro-reflection of a
+        // light behind the eye). A card stores the head-on value and the read
+        // restores the view term for its ray (jah_card_view.glsl) from ONE mean
+        // light direction per texel: EXACT for one light — the lamp-OFF floor
+        // (the sun + the ambient) — and, for the sun + the lamp together, off by
+        // the spread of their view terms per channel (the mean direction is
+        // luminance-weighted, and the lamp is blue while the sun is white). That
+        // error is PREDICTED here per pixel from the closed form (the lobe, the
+        // lights, the crate's shadow, the camera's rays) and the measurement is
+        // held to the prediction. Before PHOTON-CARDS-5: 41.6 % off, the card
+        // stored the head-on value and was read as it (and held no ambient at GI
+        // off).
         s->setNodeVisible(floorN, false);
         show(false, false);
         const ImageF rBare = shot(false);
@@ -523,9 +537,142 @@ static int mirrorArms(Engine *e)
         const Colour cardLamp(fm.r - fmOff.r, fm.g - fmOff.g, fm.b - fmOff.b),
                      rastLamp(fOn.r - fOff.r, fOn.g - fOff.g, fOn.b - fOff.b);
         std::printf("   the cards' half: mirror lamp OFF (%.4f %.4f %.4f); the lamp's share, mirror (%.4f %.4f %.4f) "
-                    "against the raster's (%.4f %.4f %.4f); the mirror %.1f %% off the lamp-ON raster (NOT "
-                    "asserted: the cards' gap, see above)\n", fmOff.r, fmOff.g, fmOff.b, cardLamp.r, cardLamp.g,
-                    cardLamp.b, rastLamp.r, rastLamp.g, rastLamp.b, 100.0f * relDiff(fm, fOn));
+                    "against the raster's (%.4f %.4f %.4f); the mirror %.1f %% off the lamp-ON raster\n",
+                    fmOff.r, fmOff.g, fmOff.b, cardLamp.r, cardLamp.g, cardLamp.b, rastLamp.r, rastLamp.g,
+                    rastLamp.b, 100.0f * relDiff(fm, fOn));
+        // THE PREDICTION, per floor pixel of the mask: the raster camera's ray
+        // through the pixel (the mask is the mirror's frame, the raster its
+        // mirror image) to the floor's top, the view V back up it, and the two
+        // lights' closed forms — the sun (power 3: albedo x 3 / pi x N.L x the
+        // lobe, 0 where the crate shadows it) and the lamp (albedo x colour x 6 x
+        // 1 / (0.5 + (0.5 / R^2) d^2) x (R - d) / R x N.L x the lobe) — plus the
+        // ambient pair's upper colour x albedo x A(N.V, 1) (the read restores it
+        // exactly). EXACT = each light's lobe at V; READ = each light's lobe at
+        // V = N summed, times the lobe ratio at the luminance-weighted mean
+        // direction (jah_card_view.glsl's arithmetic).
+        double predicted[2][3] = { { 0, 0, 0 }, { 0, 0, 0 } };   // [lamp off, on][channel]: read / exact
+        {
+            const double kPiD = 3.14159265358979323846;
+            const double albedo = 0.3, kLampR = 6.0;
+            const double lampPos[3] = { 1.2, 1.3, -6.8 }, lampCol[3] = { 0.2, 0.4, 1.0 };
+            const double amb[3] = { 0.05, 0.05, 0.06 };
+            double sunL[3] = { 0.25, 1.0, 1.05 };
+            {
+                const double l = std::sqrt(sunL[0] * sunL[0] + sunL[1] * sunL[1] + sunL[2] * sunL[2]);
+                for (double &c : sunL) c /= l;
+            }
+            const auto lobe = [](const double L[3], const double V[3]) {
+                // jahDisneyDiffuse x N.L with N = +Y (the energy factor at r = 1).
+                double H[3] = { L[0] + V[0], L[1] + V[1], L[2] + V[2] };
+                const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+                const double VdotH = (V[0] * H[0] + V[1] * H[1] + V[2] * H[2]) / hl;
+                const double NdotL = std::max(0.0, L[1]), NdotV = std::max(1e-4, V[1]);
+                const double fd90 = 0.5 + 2.0 * VdotH * VdotH;
+                return NdotL * (1.0 + (fd90 - 1.0) * std::pow(1.0 - NdotL, 5.0)) *
+                       (1.0 + (fd90 - 1.0) * std::pow(1.0 - NdotV, 5.0)) / 1.51;
+            };
+            const double N[3] = { 0.0, 1.0, 0.0 };
+            // The raster camera (testCameraDescLookAt's frame), 45 degrees vertical.
+            const double eye[3] = { kCamR.x, kCamR.y, kCamR.z };
+            double f[3] = { 0.0 - eye[0], 1.0 - eye[1], -20.0 - eye[2] };
+            {
+                const double l = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+                for (double &c : f) c /= l;
+            }
+            double r[3] = { -f[2], 0.0, f[0] };   // f x +Y
+            {
+                const double l = std::sqrt(r[0] * r[0] + r[2] * r[2]);
+                r[0] /= l; r[2] /= l;
+            }
+            const double u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
+            const double th = std::tan(0.5 * 45.0 * kPiD / 180.0);
+            // The crate (a unit cube at (0.3, 0, -8)) shadows the sun: a slab test.
+            const auto sunVisible = [&](const double P[3]) {
+                const double c[3] = { 0.3, 0.0, -8.0 };
+                double t0 = 1e-4, t1 = 1e30;
+                for (int k = 0; k < 3; ++k) {
+                    const double lo = (c[k] - 0.5 - P[k]) / sunL[k], hi = (c[k] + 0.5 - P[k]) / sunL[k];
+                    t0 = std::max(t0, std::min(lo, hi));
+                    t1 = std::min(t1, std::max(lo, hi));
+                }
+                return !(t0 <= t1);
+            };
+            double sumRead[2][3] = {}, sumExact[2][3] = {};
+            for (unsigned y = 0; y < kSize; ++y)
+                for (unsigned x = 0; x < kSize; ++x) {
+                    if (!crd.m[size_t(y) * kSize + x]) continue;
+                    const unsigned rx = kSize - 1u - x;   // the raster's own pixel
+                    const double ndx = (2.0 * (double(rx) + 0.5) / kSize - 1.0) * th;
+                    const double ndy = (1.0 - 2.0 * (double(y) + 0.5) / kSize) * th;
+                    double d[3];
+                    for (int k = 0; k < 3; ++k) d[k] = f[k] + ndx * r[k] + ndy * u[k];
+                    if (d[1] >= 0.0) continue;
+                    const double t = (-0.5 - eye[1]) / d[1];
+                    const double P[3] = { eye[0] + t * d[0], -0.5, eye[2] + t * d[2] };
+                    double V[3] = { eye[0] - P[0], eye[1] - P[1], eye[2] - P[2] };
+                    {
+                        const double l = std::sqrt(V[0] * V[0] + V[1] * V[1] + V[2] * V[2]);
+                        for (double &c : V) c /= l;
+                    }
+                    double lampL[3] = { lampPos[0] - P[0], lampPos[1] - P[1], lampPos[2] - P[2] };
+                    const double dist = std::sqrt(lampL[0] * lampL[0] + lampL[1] * lampL[1] + lampL[2] * lampL[2]);
+                    for (double &c : lampL) c /= dist;
+                    const double att = dist < kLampR ? 1.0 / (0.5 + (0.5 / (kLampR * kLampR)) * dist * dist) *
+                                                           (kLampR - dist) / kLampR
+                                                     : 0.0;
+                    const double sunE = sunVisible(P) ? albedo * 3.0 / kPiD : 0.0;
+                    const double Aview = enginetest::disneyDiffuseAlbedo(V[1], 1.0);
+                    for (int on = 0; on < 2; ++on) {
+                        // Each light's share at V = N (what the card stores), per channel.
+                        double dS[3], dL[3];
+                        for (int k = 0; k < 3; ++k) {
+                            dS[k] = sunE * lobe(sunL, N);
+                            dL[k] = on ? albedo * lampCol[k] * 6.0 * att * lobe(lampL, N) : 0.0;
+                        }
+                        const double wS = 0.2126 * dS[0] + 0.7152 * dS[1] + 0.0722 * dS[2];
+                        const double wL = 0.2126 * dL[0] + 0.7152 * dL[1] + 0.0722 * dL[2];
+                        double Lm[3];
+                        for (int k = 0; k < 3; ++k) Lm[k] = sunL[k] * wS + lampL[k] * wL;
+                        const double lm = std::sqrt(Lm[0] * Lm[0] + Lm[1] * Lm[1] + Lm[2] * Lm[2]);
+                        double factor = 1.0;
+                        if (lm > 1e-12) {
+                            for (double &c : Lm) c /= lm;
+                            factor = lobe(Lm, V) / lobe(Lm, N);
+                        }
+                        const double viewS = lobe(sunL, N) > 0.0 ? lobe(sunL, V) / lobe(sunL, N) : 0.0;
+                        const double viewL = lobe(lampL, N) > 0.0 ? lobe(lampL, V) / lobe(lampL, N) : 0.0;
+                        for (int k = 0; k < 3; ++k) {
+                            const double ambient = amb[k] * albedo * Aview;
+                            sumRead[on][k] += (dS[k] + dL[k]) * factor + ambient;
+                            sumExact[on][k] += dS[k] * viewS + dL[k] * viewL + ambient;
+                        }
+                    }
+                }
+            for (int on = 0; on < 2; ++on)
+                for (int k = 0; k < 3; ++k)
+                    predicted[on][k] = sumExact[on][k] > 0.0 ? sumRead[on][k] / sumExact[on][k] : 1.0;
+        }
+        // THE BAR, per channel: the store's quanta — half an R11G11B10F step of the
+        // radiance read (2^-7 red and green, 2^-6 blue, relative) and half an 8-bit
+        // step of the card's kD (0.5 / (255 x 0.3 / pi) = 2.05 %) — plus the card's
+        // resolution edge, 1 % (one 23 cm texel of the 30 m floor against the
+        // raster's pixel; the lamp-lit floor's gradient across it).
+        const double kdHalf = 0.5 / (255.0 * 0.3 / 3.14159265358979323846);
+        const double bar[3] = { 1.0 / 128.0 + kdHalf + 0.01, 1.0 / 128.0 + kdHalf + 0.01, 1.0 / 64.0 + kdHalf + 0.01 };
+        const float mOffv[3] = { fmOff.r, fmOff.g, fmOff.b }, rOffv[3] = { fOff.r, fOff.g, fOff.b };
+        const float mOnv[3] = { fm.r, fm.g, fm.b }, rOnv[3] = { fOn.r, fOn.g, fOn.b };
+        for (int on = 0; on < 2; ++on)
+            for (int k = 0; k < 3; ++k) {
+                const double measured = double(on ? mOnv[k] : mOffv[k]) / double(on ? rOnv[k] : rOffv[k]);
+                const double off = std::fabs(measured / predicted[on][k] - 1.0);
+                CHECK_MSG(crd.n > 50 && off <= bar[k],
+                          "(d) the cards' half, lamp %s, channel %d: the mirror / the grazing raster %.4f against"
+                          " the view term's prediction %.4f (%s) — %.2f %% apart (bar %.2f %%: the store's quanta"
+                          " + the texel)", on ? "ON" : "OFF", k, measured, predicted[on][k],
+                          on ? "the sun + the lamp through ONE mean direction: the multi-light error"
+                             : "one light: exact",
+                          100.0 * off, 100.0 * bar[k]);
+            }
         CHECK_MSG(crd.n > 50 && relDiff(fOn, fOff) > 0.1f && relDiff(fm, fmOff) > 0.1f,
                   "(d) the floor's REFLECTION (a card hit outside the frustum) CARRIES the lamp: it moves %.0f %% "
                   "with it (the raster %.0f %%) — the card holds the light it captured",
