@@ -304,11 +304,71 @@ static void measureSheet(Engine *e, Scene *scene, const Result &r)
 
 /// MEASURE-2 (b) (the audit's A.1): A LIT ROOF THINNER THAN THE CELL over a closed dark room, at
 /// cascade 2 (0.47 m cells) and cascade 3 (1.875 m cells). One voxel holds both faces of the
-/// 0.1 m roof with ONE radiance (upstream's model), so the underside - lit by nothing but the
-/// dark room - is stored with the sunlit top's light. PRINTED, no bar: over the roof's voxels
-/// above the room's interior, the radiance a ray travelling -y reads off the top (the faces
-/// looking +y) and a ray travelling +y reads off the underside (the faces looking -y); the
-/// physics is the top's and 0.
+/// 0.1 m roof: over the roof's voxels above the room's interior, the light the faces looking +y
+/// (the top) and those looking -y (the underside, lit by nothing but the dark room) carry at level
+/// 0. PHOTON-VOXEL-5 (ii), LIGHT PER FACE SIDE: the injection lights each side of a two-sided voxel
+/// from its own side (the front along the canonical normal, the back against it) and the bounce
+/// gathers each side's own hemisphere, so the underside holds the room's light - none. BAR: the
+/// underside at most the top's x 2^-10 (the half-float store's quantum at the top's level); before
+/// (ii) it read 1.00 of the top's at cascade 2 and 0.95 at cascade 3.
+/// THREE LAYERS IN ONE CELL (PHOTON-VOXEL-5; the VOXEL-4 audit's F2): one mesh of three full
+/// quads facing -z at 0.1 / 0.5 / 0.9 of one cascade cell along z - three times the z field's
+/// saturation (2.0 of full coverage). The coverage caps; the store's surface position must stay
+/// the mean of the surfaces it counted, 0.5 (it read 0.75 when the position sum kept adding past
+/// the cap). Bar: 0.01 of a cell - the 1/512 grid per contribution over three layers and the
+/// position's 16-bit store, with room.
+static void measureLayers(Engine *e, View *view)
+{
+    std::printf("\n== three full layers in one cell: the mean position past the coverage cap ==\n");
+    Scene *s = e->createScene("layers");
+    view->setScene(s);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    const double cell = 8.0 / 64.0;      // the fitted volume below: Medium, 64 cells over 8 m
+    const double z0 = 4.0;               // a cell boundary (the box is anchored at 0)
+    MeshData md;
+    for (double f : { 0.1, 0.5, 0.9 }) {
+        const float z = float(z0 + f * cell);
+        const unsigned base = unsigned(md.positions.size() / 3);
+        const float q[4][2] = { { 2.0f, 2.0f }, { 2.5f, 2.0f }, { 2.5f, 2.5f }, { 2.0f, 2.5f } };
+        for (auto &v : q) {
+            md.positions.insert(md.positions.end(), { v[0], v[1], z });
+            md.normals.insert(md.normals.end(), { 0.f, 0.f, -1.f });
+        }
+        md.indices.insert(md.indices.end(), { base, base + 2u, base + 1u, base, base + 3u, base + 2u });
+    }
+    PbrParams mp;
+    mp.albedo = Colour(0, 0, 0);
+    mp.emissive = Colour(1, 1, 1);
+    mp.roughness = 1.0f;
+    const NodeId n = s->createNode();
+    CHECK_MSG(n && s->attachMesh(n, s->createMesh(md), s->createPbrMaterial(mp)), "%s", "the three layers attach");
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::Medium;
+    gi.numBounces = 0;
+    gi.cascades = false;
+    gi.ddgi = GiToggle::Off;
+    gi.testBoundsMin = Vec3(0.0f, 0.0f, 0.0f);
+    gi.testBoundsMax = Vec3(8.0f, 8.0f, 8.0f);
+    CHECK_MSG(s->setGlobalIllumination(gi), "%s", "the layers' volume builds");
+    render(e, 8);
+    GiVoxelVolume v;
+    if (!s->giVoxelVolume(0, v) || !v.available) { CHECK_MSG(false, "%s", "the layers' store reads back"); e->destroyScene(s); return; }
+    const int zi = int(std::floor((z0 + 0.5 * cell - v.origin[2]) / v.cell[2]));
+    const int xi = int(std::floor((2.25 - v.origin[0]) / v.cell[0])), yi = int(std::floor((2.25 - v.origin[1]) / v.cell[1]));
+    const size_t i = ((size_t(zi) * v.height + yi) * v.width + xi) * 4;
+    const double o = v.coverageN[i + 2], po = v.positionN[i + 2];
+    const double p = o > 0 ? po / o * v.depth - zi : -1.0;   // the mean in the cell, [0, 1]
+    std::printf("   cell (%d, %d, %d) of %.4f m: coverage along z %.4f (the cap 1), the mean position %.4f of the cell\n",
+                xi, yi, zi, double(v.cell[2]), o, p);
+    CHECK_MSG(o > 0.99 && std::fabs(p - 0.5) <= 0.01,
+              "THE MEAN POSITION PAST THE CAP: three layers at 0.1 / 0.5 / 0.9 of a cell read %.4f (0.5 +- 0.01)", p);
+    GiParams off; off.mode = GiMode::Off;
+    s->setGlobalIllumination(off);
+    view->setScene(nullptr);
+    e->destroyScene(s);
+}
+
 static void measureRoof(Engine *e, View *view)
 {
     std::printf("\n== MEASURE-2 (b): a 0.1 m lit roof over a closed dark room, cascades 2 and 3 ==\n");
@@ -334,9 +394,16 @@ static void measureRoof(Engine *e, View *view)
         slab(cx, 1.5, 3.35, 7.0, 3.0, 0.3);
     }
     enginetest::addDirectionalLight(s, Vec3(0.1f, -1.0f, 0.2f), 3.0f);
-    CHECK_MSG(s->setGlobalIllumination(storeGi()), "%s", "the roof fixture's chain builds");
+    // at one bounce (the shipped default: the direct term and the cones reading it) and at two
+    // (a bounce pass: each side of a two-sided voxel gathers its own hemisphere, and step 0 adds
+    // the bounce's part to the directional level 0 per half-axis)
+    for (const int bounces : { 1, 2 }) {
+    GiParams roofGi = storeGi();
+    roofGi.numBounces = bounces;
+    CHECK_MSG(s->setGlobalIllumination(roofGi), "the roof fixture's chain builds (%d bounce(s))", bounces);
     render(e, 12);
     for (int i = 0; i < 400 && !s->giStatus().giAtRest; ++i) render(e, 1);
+    std::printf("   %d bounce(s):\n", bounces);
     const int cascades[2] = { 2, 3 };
     for (int k = 0; k < 2; ++k) {
         GiVoxelVolume v;
@@ -354,14 +421,28 @@ static void measureRoof(Engine *e, View *view)
                     const size_t i = st.at(x, y, z);
                     const double c = st.cov[0][i + 3];
                     if (c <= 0.0) continue;
-                    const double rad = (st.light[i] + st.light[i + 1] + st.light[i + 2]) / 3.0 / st.k / c;
-                    top += rad * st.cov[0][i + 1];
-                    under += rad * st.cov[1][i + 1];
+                    double radTop = 0.0, radUnder = 0.0;
+                    for (int ch = 0; ch < 3; ++ch) {
+                        radTop += st.sideLight(i, 1, 0, ch) / 3.0 / st.k / c;
+                        radUnder += st.sideLight(i, 1, 1, ch) / 3.0 / st.k / c;
+                    }
+                    top += radTop * st.cov[0][i + 1];
+                    under += std::max(radUnder, 0.0) * st.cov[1][i + 1];
                     ++n;
                 }
         std::printf("   cascade %d (cell %.3f m, room at x = %.0f): %ld roof voxels; the top's radiance x coverage "
-                    "%.4f, the UNDERSIDE's %.4f (%.2f of the top's; the physics 0)\n", cascades[k], st.cell, rooms[k],
+                    "%.4f, the UNDERSIDE's %.6f (%.5f of the top's; the physics 0)\n", cascades[k], st.cell, rooms[k],
                     n, n ? top / n : 0.0, n ? under / n : 0.0, top > 0.0 ? under / top : 0.0);
+        // THE SHIPPED DEFAULT (one bounce: the direct term the injection writes per side and per
+        // half) is asserted; a BOUNCE PASS prints its residual - measured 0.022 of the top's at
+        // cascade 2 and 0.005 at cascade 3 (PHOTON-VOXEL-5, reported to the lead; the mechanism UNVERIFIED - the likely one: the back side's
+        // own gather meets two-sided CORNER voxels at level 0 - where a wall's top meets the roof -
+        // whose two sides mix orientations; level 0 keeps two sides, the directional levels six).
+        if (bounces == 1)
+            CHECK_MSG(n > 0 && top > 0.0 && under <= top * (1.0 / 1024.0),
+                      "A LIT ROOF'S UNDERSIDE HOLDS NONE OF THE TOP'S LIGHT at cascade %d: %.5f of the top's "
+                      "(<= 2^-10)", cascades[k], top > 0.0 ? under / top : -1.0);
+    }
     }
     GiParams off; off.mode = GiMode::Off;
     s->setGlobalIllumination(off);
@@ -495,6 +576,7 @@ int main(int argc, char **argv)
         if (r.ok) measureSheet(e, scene, r);
     }
     if (!measureOnly) areaLampShadow(e, view);
+    if (!measureOnly) measureLayers(e, view);
     measureRoof(e, view);
     std::printf("\n%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;

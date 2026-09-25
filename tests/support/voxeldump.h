@@ -1,6 +1,6 @@
 // THE STORE DUMP (PHOTON-VOXEL-4): `JAH_VOXEL_DUMP=<dir>` makes a suite that calls it write each
 // cascade's read-back split store (GiVoxelVolume) to <dir>/<tag>_<cascade>.bin - dims, origin,
-// cell, multiplier, then per texel RGBA float coverage+, coverage-, position+, position-. The
+// cell, multiplier, then per texel RGBA float coverage+, coverage-, position+, position-, light. The
 // voxel lab reads them (tests/support/voxel_lab.h loadDump; gi.voxel_lab's `validate DIR` arm):
 // the reader's rules are measured over the stores the suites' scenes really build. Unset, it
 // does nothing.
@@ -32,6 +32,9 @@ inline void dumpVoxelStore(jahshaka::engine::Scene *s, const char *tag)
         std::fwrite(v.coverageN.data(), sizeof(float), v.coverageN.size(), f);
         std::fwrite(v.positionP.data(), sizeof(float), v.positionP.size(), f);
         std::fwrite(v.positionN.data(), sizeof(float), v.positionN.size(), f);
+        // then the total light (rgba, premultiplied by c, the volume's k units) - after the four
+        // the lab's loadDump reads, so older readers stop before it
+        std::fwrite(v.light.data(), sizeof(float), v.light.size(), f);
         std::fclose(f);
         std::printf("   voxel store dumped: %s (%dx%dx%d)\n", path.c_str(), v.width, v.height, v.depth);
     }

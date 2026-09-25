@@ -191,11 +191,10 @@ int main()
     // THE ONE THING TO KNOW ABOUT THIS SCENE (measured here, 2026-09-07; it is
     // what makes assertion (b) as clean as it is): a DIRECTIONAL light inside a
     // SEALED room injects nothing into the VCT voxel volume. Ogre's light
-    // injection compute shader ray-marches from every voxel towards the light
-    // through the voxel albedo volume and multiplies an alpha down as it
-    // crosses geometry (Samples/Media/VCT/LightInjection_piece_cs.any — the
-    // `alpha *= max(0, 1 - albedoAtIt.w * p_thinWallCounter)` loop, which for a
-    // directional light only stops when it exits the volume). Every interior
+    // injection compute shader marches from every voxel's face towards the light
+    // over the level-0 voxels and stops at the first surface it crosses
+    // (Samples/Media/VCT/LightInjection_piece_cs.any — jahInjectVisibility, a DDA;
+    // for a directional light it only ends lit when it exits the volume). Every interior
     // voxel's march crosses the shell, so its injected radiance is ~0; only the
     // shell's OUTER faces, which march straight out of the volume, get lit.
     // Consequence in this room: the red wall is bright red in the RENDER (and
@@ -340,15 +339,24 @@ int main()
           "hybrid: the mirror pixel is RED-dominant (it is showing the red wall)");
     CHECK(hyMirror.r > 0.15f,
           "hybrid: the mirror's red is a real reflection, not a rounding crumb");
-    // ---- (b) plain VCT does not ------------------------------------------
-    // In THIS scene the cone-traced answer is not merely softer, it is empty:
-    // the red wall's voxels were never lit (the directional-injection note on
-    // the light above). So the margin is the whole signal, and the assertion
-    // that matters is a comparative one — a hybrid that quietly fell back to
-    // plain VCT would produce vctMirror's pixel exactly.
-    CHECK((hyMirror.r - hyMirror.g) > (vctMirror.r - vctMirror.g) + 0.08f,
+    // ---- (b) the probe ADDS over the cones ---------------------------------
+    // The defect this arm catches: a hybrid that quietly fell back to plain VCT, which reads
+    // vctMirror's pixel EXACTLY. So the discriminator is a DIFFERENCE from the cones, and it
+    // shrinks as the cones get right: the cone-traced mirror read 0 when the arm was written
+    // (the red wall's voxels unlit), 0.820 red on the split store, 0.918 once the store lights
+    // each face side and half-axis (PHOTON-VOXEL-5). THE BAR IS THE TWO ESTIMATORS' QUANTA at
+    // this tier, not a picture: each reading is two 8-bit codes (readPixels, rounding +-0.5 code
+    // each), so a difference of two readings resolves 2/255 - anything above that is the probe's
+    // own light, a fallback is exactly 0. (The hybrid's red clips at 1.0, so its margin is a
+    // lower bound.) THE TIER: Medium, the probe grid's home. At the RAY
+    // tiers (High and Epic) there is no grid to compare (PHOTON-F12-PCC): arm (i) below asserts it.
+    const float kQuanta = 2.0f / 255.0f;
+    std::printf("   (b) margins over the cones: (r-g) %+.3f, r %+.3f (bar %.4f, the quanta)\n",
+                double((hyMirror.r - hyMirror.g) - (vctMirror.r - vctMirror.g)), double(hyMirror.r - vctMirror.r),
+                double(kQuanta));
+    CHECK((hyMirror.r - hyMirror.g) > (vctMirror.r - vctMirror.g) + kQuanta,
           "the probe reflection is measurably redder than the cone-traced one");
-    CHECK(hyMirror.r > vctMirror.r + 0.08f,
+    CHECK(hyMirror.r > vctMirror.r + kQuanta,
           "the probe reflection is measurably brighter than the cone-traced one");
     // The diffuse half survives the hybrid unchanged: the probes are ADDED to
     // VCT, they do not replace its diffuse contribution.

@@ -1482,6 +1482,54 @@ add_dependencies(test_gi_env_cone JahshakaEngineMedia)
 add_test(NAME gi.env_cone COMMAND test_gi_env_cone
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_cone PROPERTIES TIMEOUT 120 LABELS "engine")
+# gi.hit_voxel — A RAY'S HIT ON A STATIC SURFACE, SHADED FROM THE VOXELS (jahVoxelRadiance), IS
+# THAT SURFACE'S RADIANCE (PHOTON-VOXEL-5 item (iv); HIT-SHADE-1's F-A): a static matte crate in a
+# perfect mirror against its raster from the reflected camera.
+add_executable(test_gi_hit_voxel test_gi_hit_voxel.cpp)
+set_target_properties(test_gi_hit_voxel PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_hit_voxel PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_hit_voxel PRIVATE JahshakaEngine)
+add_dependencies(test_gi_hit_voxel JahshakaEngineMedia)
+add_test(NAME gi.hit_voxel COMMAND test_gi_hit_voxel
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_voxel PROPERTIES TIMEOUT 300 LABELS "engine")
+# VOXEL-LEAK-TRACE (PHOTON-VOXEL-5 item (iii)) — a TOOL, not a suite: gi.gather's leak room,
+# the pixel's four cones from the -Z wall's inner face by the engine's own reader, per cone
+# colour / alpha / cascade, lamp on and off, and the store dumped (JAH_VOXEL_DUMP).
+add_executable(voxel_leak_trace EXCLUDE_FROM_ALL voxel_leak_trace.cpp)
+set_target_properties(voxel_leak_trace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(voxel_leak_trace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(voxel_leak_trace PRIVATE JahshakaEngine)
+add_dependencies(voxel_leak_trace JahshakaEngineMedia)
+
+# voxel_store_room_trace — a TOOL (PHOTON-VOXEL-5 item (ii)): scripting.e2e.gi_voxel_store's room -
+# the cascade-0 voxels holding a face that looks into the room whose direct light is zero.
+add_executable(voxel_store_room_trace EXCLUDE_FROM_ALL voxel_store_room_trace.cpp)
+set_target_properties(voxel_store_room_trace PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(voxel_store_room_trace PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(voxel_store_room_trace PRIVATE JahshakaEngine)
+add_dependencies(voxel_store_room_trace JahshakaEngineMedia)
 
 # gi.env_one — ONE ENVIRONMENT, FOUR READERS, ONE NUMBER (PHOTON-ENV-1): a matte
 # box under a uniform sky reads rho L energyFactor(1) outside any volume, through

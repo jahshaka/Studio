@@ -39,8 +39,9 @@ var ns = scene.nodes({ depth: 1 });
 for (var i = 0; i < ns.length; ++i)
     if (ns[i].parent !== null && ns[i].id !== scene.root()) node.remove(ns[i].id);
 
-// A closed 5 m cube of albedo 0.791 (#e6e6e6) with one point lamp inside: the
-// rig PHOTON-M1/M2/M3 measured, so the numbers here are the measured ones.
+// A closed room of albedo 0.791 (#e6e6e6) with one point lamp inside: the rig PHOTON-M1/M2/M3
+// measured. (The document's cube primitive is 2 x 2 x 2, so the scales below make 10 x 0.4 x 10
+// slabs overlapping into a room x, z in [-2.3, 2.3], y in [0.2, 4.8] - node.size, measured.)
 // ROUGHNESS 0 (PHOTON-WRITER-1): a voxel holds what its surface renders now - the
 // normalised Disney diffuse lobe's albedo, 0.69 of a Lambertian surface under the
 // lamp and 0.70 of the bounce at roughness 1 - and at roughness 1 this room's fixed
@@ -71,7 +72,13 @@ settle();
 var d = world.giVoxelStats({ cascade: 0 });
 assert(d.available === true, "giVoxelStats available on cascade 0 (" + JSON.stringify(d) + ")");
 assert(d.format === "PFG_RGBA16_FLOAT", "the total volume is RGBA16F (got " + d.format + ")");
-assert(d.voxelsLit > 1000, "the direct pass lit the room: " + d.voxelsLit + " voxels");
+// THE LIT GEOMETRY PREDICTS THE LIT VOXELS (PHOTON-VOXEL-5): every cascade-0 voxel holding a face
+// the lamp sees, and none other - 20,184 on this room's lattice (the camera's, cell 10/128 m;
+// gi.voxel_lab storeroom, the ideal: each face piece lit at its centroid, exact visibility). No
+// voxel's coverage lies within the store's quantum of zero, so the count is exact. The leaky
+// store read 22,476: 2,292 voxels holding only faces hidden inside the slabs, lit through them.
+assert(d.voxelsLit === 20184,
+       "the direct pass lit exactly the voxels the lit geometry predicts: " + d.voxelsLit + " (20184)");
 assert(d.peak > 0.5 && d.peak <= 1.0 + 1e-3,
        "the direct term is normalised to at most the ceiling: peak " + d.peak);
 assert(d.voxelsAboveOne === 0, "nothing of the direct term is above 1 (" + d.voxelsAboveOne + ")");
@@ -88,9 +95,11 @@ assert(b.peakDirect > 0.5 && b.peakDirect <= 1.0 + 1e-3,
 assert(b.peak > 1.2 * b.peakDirect,
        "the fixed point stands above the ceiling: peak " + b.peak + " vs direct " + b.peakDirect +
        " (measured 2.05x; an 8-bit store reads 1.0 here)");
-assert(b.voxelsAboveOne > 1000,
-       "the energy an 8-bit store clips is held: " + b.voxelsAboveOne + " voxels above 1 " +
-       "(measured ~9,700 on the top bin at the first bounce pass in this room)");
+// ...and HELD: voxels stand above the ceiling (an 8-bit store has none). The count itself is no
+// geometric prediction - it is the tail of the fixed point over the ceiling (781 here, 5,115 on
+// the leaky store whose hidden faces glowed) - so the claim is that the tail exists.
+assert(b.voxelsAboveOne > 0,
+       "the energy an 8-bit store clips is held: " + b.voxelsAboveOne + " voxels above 1");
 assert(b.voxelsAtMax === 0, "still no top bin: voxelsAtMax " + b.voxelsAtMax);
 assert(b.meanLit > d.meanLit * 0.9 || b.voxelsLit > d.voxelsLit,
        "the bounce added energy: lit " + d.voxelsLit + " -> " + b.voxelsLit + ", meanLit " + d.meanLit + " -> " + b.meanLit);

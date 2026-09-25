@@ -35,7 +35,21 @@ struct Store {
     double origin[3] = { 0, 0, 0 }, cell = 0, k = 1;
     std::vector<float> light;     ///< rgba per voxel (rgb only read)
     std::vector<float> cov[2];    ///< [0] the faces looking +a, [1] -a: O_x O_y O_z c per voxel
+    /// LEVEL 0 PER SIDE (PHOTON-VOXEL-5; empty on a Low volume): the back side's light and the
+    /// voxeliser's normal (GiVoxelVolume::lightBack / normal).
+    std::vector<float> lightBack, normal;
     size_t at(int x, int y, int z) const { return ((size_t(z) * H + y) * W + x) * 4u; }
+    /// The light (premultiplied like `light`, channel ch) of the faces of half h (0 looking +a,
+    /// 1 -a) along axis a in the voxel at index i: the side those faces are - where the normal's
+    /// component along a looks the half's way the front (2 light - back), against it the back,
+    /// across it the two sides' mean; a Low volume's one light either way.
+    double sideLight(size_t i, int a, int h, int ch) const
+    {
+        if (lightBack.empty() || normal.empty()) return light[i + size_t(ch)];
+        const double along = (h == 0 ? 1.0 : -1.0) * (normal[i + size_t(a)] * 2.0 - 1.0);
+        const double mean = light[i + size_t(ch)], back = lightBack[i + size_t(ch)];
+        return along > 0.0 ? 2.0 * mean - back : (along < 0.0 ? back : mean);
+    }
     bool in(int x, int y, int z) const { return x >= 0 && y >= 0 && z >= 0 && x < W && y < H && z < D; }
 };
 
@@ -47,6 +61,8 @@ inline Store fromGpu(const GiVoxelVolume &v)
     s.cell = v.cell[0];
     s.k = v.multiplier;
     s.light = v.light;
+    s.lightBack = v.lightBack;
+    s.normal = v.normal;
     const std::vector<float> *src[2] = { &v.coverageP, &v.coverageN };
     for (int h = 0; h < 2; ++h) {
         s.cov[h].assign(src[h]->size(), 0.f);
