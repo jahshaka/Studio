@@ -3,7 +3,12 @@
 
 #include "app/versionsplashscreen.h"
 #include "bridge/enginehost.h"
+#include "services/defaultfloor.h"
 #include "services/worldmodes.h"
+#include "bridge/secondarysurfacetonemap.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/mirror/scenemirror.h"
 
 #include <QApplication>
 #include <QElapsedTimer>
@@ -64,6 +69,9 @@ MeshData warmUpBox()
     }
     return md;
 }
+
+/// One more of the warm box, in `scene` (a mesh per call: the floor stands in twice).
+MeshId boxMeshFor(Scene *scene) { return scene ? scene->createMesh(warmUpBox()) : MeshId(0); }
 
 }  // namespace
 
@@ -254,6 +262,99 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     }
     qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s", giFrames,
           static_cast<long long>(giTimer.elapsed()), coldCache ? "" : " (a warm cache: skipped)");
+
+    // THE DEFAULT WORLD'S OWN MATERIAL, IN THE PASSES A NEW PROJECT DRAWS IT IN (ATOM
+    // S3-DRAW). The visibility buffer shades the ground through a DECODE TWIN of its
+    // material — a permutation of its own per pass shape — and the first place those
+    // passes run is `project.create`: the initial thumbnail (the Tonemap grade, GI
+    // parked off) and the viewport's first frames (the world's whole chain, GI not yet
+    // armed). Left to them, the twins compile inside the create (measured +500 ms,
+    // threading.newproject_stall). So the floor's REAL material (defaultfloor's factory,
+    // through the mirror's own conversion) stands in the warm scene, with its backdrop
+    // twin (the horizon plane: the same datablock through stock PBS), under the Epic
+    // world's chain with GI off, then under the thumbnail's grade. What it cannot reach
+    // is anything the document adds later (a user's material, another tier).
+    if (coldCache && warmScene && warmView) {
+        engine->shaderBuildProgress(compiled, cached, expected);
+        const unsigned before = compiled;
+        QElapsedTimer worldTimer; worldTimer.start();
+        // A SCENE OF ITS OWN, NEVER GI-ARMED: a new project's scene has had no GI when
+        // its thumbnail and first frames draw, and a scene whose GI was switched off
+        // still binds the torn-down arm's pass state for a while (measured: the box
+        // scene's floor compiled irradiance-field variants nothing in a create draws).
+        warmView->setScene(nullptr);
+        engine->destroyScene(warmScene);
+        warmScene = engine->createScene("startup-warmup-world",
+                                        sceneworkers::count(sceneworkers::Tier::Primary));
+        iris::ScenePtr world = iris::Scene::create();
+        worldmodes::setMode(world, worldmodes::Mode::Epic);
+        PbrParams floorParams;
+        const iris::PbrMaterialPtr floorMat = defaultfloor::createMaterial(nullptr, nullptr);
+        if (warmScene && warmView->setScene(warmScene) && floorMat &&
+            SceneMirror::toPbrParams(floorMat.data(), floorParams)) {
+            warmView->setShadows(shape.shadows);
+            warmScene->setAmbient(Colour(0.3f, 0.3f, 0.35f), Colour(0.1f, 0.1f, 0.12f));
+            if (const NodeId sun = warmScene->createNode()) {
+                LightDesc l;
+                l.type = LightType::Directional;
+                l.castShadows = shape.shadows;
+                warmScene->setLight(sun, l);
+            }
+            {
+                SkyDesc sky;
+                sky.mode = SkyMode::Atmosphere;
+                warmScene->setSky(sky);
+            }
+            const MaterialId fm = warmScene->createPbrMaterial(floorParams);
+            const TextureId tile =
+                fm ? warmScene->loadTexture(defaultfloor::shippedTilePath().toStdString(), true) : TextureId(0);
+            if (tile) warmScene->setPbrTexture(fm, PbrTextureSlot::Albedo, tile);
+            const NodeId ground = fm ? warmScene->createNode() : NodeId(0);
+            const NodeId horizon = fm ? warmScene->createNode() : NodeId(0);
+            if (ground && horizon && warmScene->attachMesh(ground, boxMeshFor(warmScene), fm) &&
+                warmScene->attachMesh(horizon, boxMeshFor(warmScene), fm)) {
+                warmScene->setNodeBackdrop(horizon, true);
+                // The tier's planar budget and rays (both are pass properties).
+                PlanarReflectionParams pr;
+                pr.budget = qBound(0, world->planarReflectionBudget, 8);
+                pr.resolution = 256u;
+                warmScene->setPlanarReflections(pr);
+                warmScene->setRayTracing(RayTracingMode::Auto);
+                // NO VOXELS, NO FIELD, AND THE GATHER ON — how a new project's viewport
+                // draws before its deferred GI arms (the tier's gather row is live, the
+                // voxel volume and the field are not built yet: the permutation compiled
+                // inside the create carried jah_probe_gather and no irradiance field). The
+                // gather is graph shape (a gathering view carries the prepass), so it is
+                // asked for by name here: with the mode off, Auto would decline it.
+                {
+                    GiParams parked;
+                    parked.mode = GiMode::Off;
+                    parked.gather = GiToggle::On;
+                    parked.epicTier = world->giTier == 3;
+                    warmScene->setGlobalIllumination(parked);
+                }
+                // (1) the viewport: the Epic world's chain (the mirror's applyEnvironment).
+                PostFxDesc fx;
+                fx.allowOffscreen = true;
+                fx.hdr = world->hdrEnabled;
+                fx.bloom = world->bloomEnabled;
+                fx.ssao = world->ssaoEnabled;
+                fx.ssaoScale = world->ssaoScale;
+                fx.smaaPreset = world->smaaPreset;
+                fx.ssr = world->ssrMode;
+                fx.ssrMarchPhase = qBound(0, world->ssrMarch, 2);
+                fx.reflectionRoughnessCutoff = float(world->reflectionRoughnessCutoff) * 0.01f;
+                warmView->setPostFx(fx);
+                for (int i = 0; i < kWarmUpFrames; ++i) { engine->renderOneFrame(); poll(); }
+                // (2) the thumbnail: the Tonemap grade.
+                secondaryfx::apply(warmView, true, 0.0f);
+                for (int i = 0; i < kWarmUpFrames; ++i) { engine->renderOneFrame(); poll(); }
+            }
+        }
+        engine->shaderBuildProgress(compiled, cached, expected);
+        qInfo("startup shader build: the default world's material took %lld ms and compiled %u shader(s)",
+              static_cast<long long>(worldTimer.elapsed()), compiled - before);
+    }
 
     // THE RECORDED SET IS GONE (WARMUPSET-2, 2026-09-21). A replay used to run
     // here: the previous session's permutation list, applied to degenerate

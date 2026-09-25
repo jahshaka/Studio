@@ -740,7 +740,7 @@ int main()
         auto it = pbsByWord.find(word);
         if (it == pbsByWord.end()) { twinsOk = false; continue; }
         std::string terr;
-        Ogre::HlmsPbsDatablock *twin = atom->decodeTwinFor(it->second, terr);
+        Ogre::HlmsPbsDatablock *twin = atom->decodeTwinForBucket(it->second, terr);
         if (!twin) { std::printf("  twin for %s: %s\n", c.name.c_str(), terr.c_str()); twinsOk = false; continue; }
         bool have = false;
         for (AtomDecodeRenderable *d : decodes) have = have || d->getDatablock() == twin;
@@ -787,9 +787,12 @@ int main()
                                                             Ogre::CustomPieceStage::PixelShader);
         std::printf("  DEBUG HOOK: both hosts write '%s'\n", what);
     }
-    CHECK_MSG(twinsOk && decodes.size() == cells.size(),
-              "one decode twin (HlmsAtom datablock, JSON round trip) per cell material: %zu twins",
-              decodes.size());
+    // ONE TWIN PER BUCKET (S3-DRAW): the cells' materials that share a permutation, a
+    // texture set and a pool are served by one twin and one draw.
+    CHECK_MSG(twinsOk && decodes.size() == atom->decodeTwinCount() && decodes.size() < cells.size() &&
+                  atom->decodeMemberCount() == cells.size(),
+              "one decode twin (HlmsAtom datablock, JSON round trip) per BUCKET: %zu materials -> %zu twins",
+              cells.size(), decodes.size());
 
     // ---- the targets and the two workspaces ----------------------------------
     auto makeTarget = [&](const char *name) {
@@ -1021,7 +1024,7 @@ int main()
         const uint32_t word = gs.entry(victim.slot).raster[0];
         Ogre::HlmsPbsDatablock *pbsDb = pbsByWord.count(word) ? pbsByWord[word] : nullptr;
         std::string terr;
-        Ogre::HlmsPbsDatablock *twin = pbsDb ? atom->decodeTwinFor(pbsDb, terr) : nullptr;
+        Ogre::HlmsPbsDatablock *twin = pbsDb ? atom->decodeTwinForBucket(pbsDb, terr) : nullptr;
         const size_t twinsBefore = atom->decodeTwinCount();
         for (auto it = decodes.begin(); it != decodes.end(); ++it)
             if ((*it)->getDatablock() == twin) {

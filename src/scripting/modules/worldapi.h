@@ -48,6 +48,10 @@ public:
     /// WHAT THE VOXEL LIGHTING VOLUME HOLDS (PHOTON-M3) — a test-and-tool
     /// readback: the engine flushes and downloads a whole cascade volume.
     Q_INVOKABLE QVariantMap giVoxelStats(const QVariantMap &params = QVariantMap());
+    /// THE VISIBILITY BUFFER'S SPLIT AND DECODE BUCKETS (ATOM S3-DRAW).
+    Q_INVOKABLE QVariantMap atomStatus();
+    /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
+    Q_INVOKABLE bool setAtomDraw(bool on);
     Q_INVOKABLE bool refreshGi();
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
     Q_INVOKABLE bool refreshShadows();

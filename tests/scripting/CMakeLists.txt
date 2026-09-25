@@ -182,6 +182,10 @@ add_script_e2e(material_preview e2e_material_preview.js)
 # The document half of the floor is scripting.e2e.default_floor, which is
 # headless; this one needs a camera.
 add_script_e2e(default_ground e2e_default_ground.js)
+# ATOM S3-DRAW: world.atomStatus() on the default scene (the floor through the id
+# pass and the decode, its horizon plane on PBS as a backdrop) and world.setAtomDraw,
+# the split's measuring door — the editor's shot agrees with the split on and off.
+add_script_e2e(atom_draw e2e_atom_draw.js)
 # CUBE-SHADE-1: the two things the owner saw on a cube (review R8) — a flat
 # face shaded as two triangles (ogre-patch 0083, the diffuse cone basis) and the
 # dark climb up its sides (the AO radius, now a contact scale). Needs a camera
