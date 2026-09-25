@@ -31,7 +31,10 @@
 //                       the owner's re-pin of the vct+medium samples to the
 //                       DDGI-fed Medium row (the pixel evidence is in the
 //                       lane report; the numbers moved WITH the decision, not
-//                       with a tolerance).
+//                       with a tolerance);
+//   7. THE TEXTS      — the rows that name a reflection source at High/Epic and
+//                       the technique's name follow the engine's rayReflections
+//                       in both machine states (STUDIO-CRUD-1 item 6).
 #include <QGuiApplication>
 #include <cstdio>
 
@@ -77,7 +80,7 @@ static void testTierTable()
     // The SIXTH is PHOTON'S CAMERA CASCADES (PHOTON_SPEC §7 E2 (6)): ON in
     // every tier, which is what "the boundary is gone for users" means.
     // The TECHNIQUE ordinals moved with Instant Radiosity's deletion (E2 (4)):
-    // GiMode is Off 0 / VCT 1 / VCT + Probes 2, and Low is a voxel tier now.
+    // GiMode is Off 0 / VCT 1 / the hybrid 2, and Low is a voxel tier now.
     struct Want { PhotonTier tier; int mode, quality, ddgi, bounces, probeSize, cascades; const char *name; };
     const Want wants[] = {
         { PhotonTier::Low,    1, 0, 1, 1, 0, 1, "Low = VCT, two cascades at 64^3, FIELD ON, 1 bounce, no probes" },
@@ -618,6 +621,85 @@ static void testMigration()
     }
 }
 
+// ---------------------------------------------------------------------------
+// 7. THE TIER TEXTS FOLLOW THE ENGINE'S RAY FACT (STUDIO-CRUD-1 item 6)
+// ---------------------------------------------------------------------------
+// After PHOTON-F12-PCC no shipped tier builds a reflection-probe grid wherever
+// the scene traces rays: High and Epic's reflections are the screen march, the
+// traced rays and the voxel cone. The texts that name a reflection source at
+// High and Epic are therefore machine-dependent, and they are computed from ONE
+// fact — the engine's giQualityFacts(High).rayReflections met with the
+// machine's sceneTracesRays. This asserts them against that fact in BOTH
+// machine states, so a text can neither promise probes where rays resolve nor
+// rays where they do not.
+static void testTierTexts()
+{
+    std::printf("\n-- 7. the tier texts follow rayReflections --\n");
+    const bool rayTier = jahshaka::engine::giQualityFacts(jahshaka::engine::GiQuality::High)
+                             .rayReflections;
+    CHECK(rayTier, "the engine's High quality traces its reflections (the premise of the texts)");
+
+    // Every tier whose technique is the hybrid resolves rays exactly when the
+    // engine says its quality does.
+    for (PhotonTier t : { PhotonTier::Low, PhotonTier::Medium, PhotonTier::High, PhotonTier::Epic }) {
+        const bool facts = jahshaka::engine::giQualityFacts(
+            jahshaka::engine::GiQuality(worldmodes::photonQuality(t))).rayReflections;
+        CHECK(worldmodes::tierRaysResolve(t, true) == facts
+                  && !worldmodes::tierRaysResolve(t, false),
+              qPrintable(QStringLiteral("%1: rays resolve iff the machine traces AND the "
+                                        "quality's rayReflections").arg(worldmodes::photonTierName(t))));
+    }
+
+    struct Promise { const char *row; const char *probes; const char *rays; };
+    const Promise promises[] = {
+        { "ssr",                       "fall back to the reflection probes",
+                                       "fall back to the traced rays" },
+        { "reflectionRoughnessCutoff", "the reflection probes' own blurred photograph",
+                                       "a traced ray answers the rest" },
+        { "giMode",                    "VCT + probes adds sharp reflections",
+                                       "VCT + rays is where the scene traces" },
+        { "giQuality",                 "Under VCT + probes High ALSO",
+                                       "High traces its reflections here" },
+        { "giProbeSize",               "build a probe grid at all",
+                                       "NO shipped tier builds a probe grid" },
+    };
+    for (bool traces : { false, true }) {
+        const bool resolves = traces && rayTier;
+        const char *machine = traces ? "tracing machine" : "non-tracing machine";
+        CHECK(worldmodes::techniqueLabel(2, resolves)
+                  == (resolves ? QStringLiteral("VCT + rays") : QStringLiteral("VCT + probes")),
+              qPrintable(QStringLiteral("%1: the hybrid is named %2").arg(machine,
+                  worldmodes::techniqueLabel(2, resolves))));
+        const worldmodes::Row *mode = worldmodes::row(QStringLiteral("giMode"));
+        bool named = mode != nullptr;
+        if (mode)
+            for (const worldmodes::EnumOption &o : mode->options)
+                if (worldmodes::optionLabel(*mode, o, traces)
+                    != worldmodes::techniqueLabel(o.value, resolves))
+                    named = false;
+        CHECK(named, qPrintable(QStringLiteral("%1: the giMode row's option names ARE "
+                                               "techniqueLabel's").arg(machine)));
+        for (const Promise &p : promises) {
+            const worldmodes::Row *r = worldmodes::row(QString::fromLatin1(p.row));
+            const QString text = r ? worldmodes::rowCost(*r, traces) : QString();
+            CHECK(r && text.contains(QLatin1String(p.probes)) == !resolves,
+                  qPrintable(QStringLiteral("%1: %2 %3 the probes").arg(machine,
+                      QLatin1String(p.row), resolves ? "does not promise" : "names")));
+            CHECK(r && text.contains(QLatin1String(p.rays)) == resolves,
+                  qPrintable(QStringLiteral("%1: %2 %3 the rays").arg(machine,
+                      QLatin1String(p.row), resolves ? "names" : "does not promise")));
+        }
+        // No row's text is forgotten by the machine-dependent split.
+        bool allSay = true;
+        for (const worldmodes::Row &r : worldmodes::rows())
+            if (worldmodes::rowCost(r, traces).isEmpty()) {
+                std::printf("      (%s has no text)\n", qPrintable(r.id));
+                allSay = false;
+            }
+        CHECK(allSay, qPrintable(QStringLiteral("%1: every row has a text").arg(machine)));
+    }
+}
+
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
@@ -632,6 +714,7 @@ int main(int argc, char **argv)
     testWorldModeOwnership();
     testNewSceneDefault();
     testMigration();
+    testTierTexts();
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;

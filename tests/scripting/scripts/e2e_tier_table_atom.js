@@ -65,7 +65,7 @@ assert(byTier.high.chain[0].resolution === 128 &&
        "High's chain is 128 near the eye and 64 far away — not \"128^3\"");
 assert(byTier.low.technique === "vct" && byTier.high.technique === "vct_pcc_hybrid" &&
        byTier.medium.technique === "vct",
-       "only High and Epic build a reflection-probe grid");
+       "only High and Epic run the hybrid (a probe grid only where the scene does not trace)");
 assert(byTier.high.probeFaceSize === 512 && byTier.high.probeHdr === true &&
        byTier.high.probeShadows === true,
        "High's probes are 512 px per face, HDR and shadowed");

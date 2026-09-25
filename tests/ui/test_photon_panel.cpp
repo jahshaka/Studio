@@ -213,7 +213,7 @@ int main(int argc, char **argv)
         CHECK(technique && technique->count() == 3,
               "the technique picker offers the three modes there are (Instant Radiosity "
               "was deleted with PHOTON_SPEC E2 (4))");
-        if (technique) technique->setCurrentIndex(2);   // VCT + Probes
+        if (technique) technique->setCurrentIndex(2);   // the hybrid (VCT + probes / VCT + rays)
         pump();
         CHECK(scene->giMode == iris::GiMode::VCT_PCC_HYBRID, "picking one writes it through");
         CHECK(panel.findChildren<DragVector3Widget *>().size() == 1,

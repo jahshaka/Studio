@@ -269,17 +269,20 @@ void WorldGiPropertyWidget::rebuild()
     modeSelector = this->addComboBox(tr("Technique") + pinMark(scene, "giMode"));
     // THE ROWS ARE kGiRows, in order — "Bounced Light" (Instant Radiosity) went
     // with the technique (PHOTON_SPEC §7 E2 (4)).
-    modeSelector->addItem(tr("Off"));
-    modeSelector->addItem(tr("Voxel Lighting"));
-    modeSelector->addItem(tr("Voxel + Reflections"));
+    // ONE TEXT SOURCE (STUDIO-CRUD-1 item 6): the names are techniqueLabel's
+    // for THIS scene on THIS machine (the hybrid is "VCT + rays" wherever no
+    // probe grid would be built), the tooltips the registry rows' own texts.
+    const bool tracesRays = sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays();
+    const bool raysHere = worldmodes::probeGridByRays(scene, tracesRays);
+    modeSelector->addItem(worldmodes::techniqueLabel(0, raysHere));
+    modeSelector->addItem(worldmodes::techniqueLabel(1, raysHere));
+    modeSelector->addItem(worldmodes::techniqueLabel(2, raysHere));
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
-    modeSelector->setToolTip(tr("Which technique Photon uses, if you want to choose it yourself. "
-                                "Voxel Lighting voxelizes the lit world around the camera: the "
-                                "irradiance field's probes gather the bounced light and the sky "
-                                "from those voxels and light every diffuse surface, and cones "
-                                "traced through the voxels give the glossy reflections (with the "
-                                "Irradiance Field turned off, the cones carry the bounce too). "
-                                "Voxel + Reflections adds the parallax-corrected probe grid."));
+    auto rowTip = [tracesRays](const char *id) {
+        const worldmodes::Row *r = worldmodes::row(QString::fromLatin1(id));
+        return r ? worldmodes::rowCost(*r, tracesRays) : QString();
+    };
+    modeSelector->setToolTip(rowTip("giMode"));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldGiPropertyWidget::modeChanged);
 
@@ -303,6 +306,7 @@ void WorldGiPropertyWidget::rebuild()
         quality->addItem(tr("Medium"));
         quality->addItem(tr("High"));
         quality->setCurrentIndex(qBound(0, static_cast<int>(scene->giQuality), 2));
+        quality->setToolTip(rowTip("giQuality"));
         connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldGiPropertyWidget::onQualityChanged);
 
@@ -310,10 +314,7 @@ void WorldGiPropertyWidget::rebuild()
         // technique and quality above, and the mark says so.
         bounces = this->addFloatValueSlider(tr("Light Bounces") + pinMark(scene, "giBounces"),
                                             1.0f, 4.0f, float(scene->giNumBounces));
-        bounces->setToolTip(tr("Total light bounces, 1-4. Each bounce past the first is another "
-                               "light-propagation pass over the whole voxel volume on every "
-                               "re-solve, and the irradiance field is fed from that volume so it "
-                               "sees them too. Epic sets 3; the other tiers 1."));
+        bounces->setToolTip(rowTip("giBounces"));
         wirePhotonSlider(bounces, &WorldGiPropertyWidget::onBouncesChanged, tr("Photon Light Bounces"));
 
         // NO BOUNDS ROWS (owner decision D8, 2026-09-13): the lit volume is the
@@ -378,19 +379,7 @@ void WorldGiPropertyWidget::rebuild()
                     probeSize->setCurrentIndex(kProbeSizeRowCount);
                 }
             }
-            probeSize->setToolTip(
-                tr("The pixel size of ONE reflection-probe cube face. A probe is six of them "
-                   "plus a mip chain, so the probe array's video memory goes with the SQUARE "
-                   "of this: at 256 a probe costs 4.0 MB in HDR and a 32-probe room 128 MB; "
-                   "at 512 it is 16.0 MB and 512 MB.\n\n"
-                   "Automatic follows the quality dial (%1 px at Low, %2 at Medium, %3 at "
-                   "High and Epic) and is the shipped answer, because the roughness blur the "
-                   "renderer convolves into these captures hides the difference on everything "
-                   "but a mirror. At High and Epic a grid is built only where the scene does not "
-                   "trace rays — where it does, the rays are the reflection.")
-                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Low))
-                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Medium))
-                    .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::High)));
+            probeSize->setToolTip(rowTip("giProbeSize"));
             connect(probeSize, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                     this, &WorldGiPropertyWidget::onProbeSizeChanged);
             if (byRays) {
@@ -405,15 +394,7 @@ void WorldGiPropertyWidget::rebuild()
         ddgiToggle = this->addCheckBox(tr("Irradiance Field (DDGI)") + pinMark(scene, "giDdgi"),
                                        scene->giDdgi > 0);
         ddgiToggle->setValue(scene->giDdgi > 0);
-        ddgiToggle->setToolTip(
-            tr("A grid of probes over the lit volume storing the bounced light arriving from "
-               "every direction, plus a depth map that decides what each probe can see. It is "
-               "the leak fix: a cone cannot tell a wall from empty space, and this can.\n\n"
-               "Turning it on turns the voxel-cone diffuse OFF — it replaces that term rather "
-               "than adding to it. Reflections, probes and planar are untouched. EVERY Photon "
-               "tier turns it on, Low included — Low's two camera cascades exist to feed it. "
-               "Where rays run (Medium and above) the screen-probe gather is the diffuse and "
-               "the field is its fallback."));
+        ddgiToggle->setToolTip(rowTip("giDdgi"));
         connect(ddgiToggle, &CheckBoxWidget::valueChanged,
                 this, &WorldGiPropertyWidget::onDdgiToggled);
 

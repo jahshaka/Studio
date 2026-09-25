@@ -78,6 +78,9 @@ private:
 
     QSharedPointer<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
+    /// Whether the scene traces rays on this machine — the fact a row's text
+    /// and the technique's name are computed from (worldmodes::rowCost).
+    bool sceneTracesRays() const;
     StudioServices *services = nullptr;
     ComboBoxWidget *modeSelector = nullptr;
     /// Offered only while something is pinned; present from the start, hidden

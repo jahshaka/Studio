@@ -76,7 +76,21 @@ struct Row {
     QVector<EnumOption> options;       ///< Enum rows only
     int      minValue = 0, maxValue = 0;   ///< Int rows only
     int      tier[4] = { 0, 0, 0, 0 };  ///< Low, Medium, High, Epic
-    QString  cost;                     ///< one line, shown as the row tooltip
+    /// The row's tooltip text when it is the same on every machine. READ IT
+    /// THROUGH rowCost(), never directly: a row whose text depends on whether
+    /// this machine's rays resolve carries `costAt` instead and leaves this empty.
+    QString  cost;
+    /// THE TEXT OF A ROW WHOSE TRUTH DEPENDS ON THE MACHINE (STUDIO-CRUD-1
+    /// item 6). After PHOTON-F12-PCC no shipped tier builds a reflection-probe
+    /// grid wherever the scene traces rays, so a row that explains reflections
+    /// at High and Epic says one thing on a tracing machine and another off it.
+    /// The ONE text is computed from `sceneTracesRays` (through
+    /// tierRaysResolve), never two hand-kept literals.
+    std::function<QString(bool sceneTracesRays)> costAt;
+    /// An Enum row whose option NAMES depend on the same fact (the technique:
+    /// ordinal 2 is "VCT + rays" where rays resolve, "VCT + probes" where they
+    /// do not). Null = the options' own labels. Read through optionLabel().
+    std::function<QString(int value, bool sceneTracesRays)> optionLabelAt;
     bool     available = true;         ///< false = declared but not yet implemented
     /// TIER SPACE — WHICH DIAL, IF ANY, RESOLVES THIS ROW.
     ///
@@ -165,6 +179,15 @@ const QVector<Row> &rows();
 /// The row with this id, or null.
 const Row *row(const QString &id);
 
+/// A row's tooltip text on a machine where the scene does (`sceneTracesRays`)
+/// or does not trace rays — IEditorViewport::sceneTracesRays, false with no
+/// engine. EVERY surface that shows a row's text reads it here (the World
+/// panels, world.modeTable), so a text cannot be right on one and stale on
+/// another.
+QString rowCost(const Row &r, bool sceneTracesRays);
+/// An Enum row option's display name on that machine (see Row::optionLabelAt).
+QString optionLabel(const Row &r, const EnumOption &o, bool sceneTracesRays);
+
 // ---------------------------------------------------------------------------
 // PHOTON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
 //
@@ -190,8 +213,13 @@ const Row *row(const QString &id);
 //   tier    technique             voxels             ddgi  DDGI grid  bounces  probe faces/HDR/shadows  budget
 //   Low     VCT, 2 cascades       64^3               ON    8192 fit   1        — (no probes)            (dial)
 //   Medium  VCT, 4 cascades       64^3               ON    8192 fit   1        — (no probes)            (dial)
-//   High    VCT + probes (hybrid) 128^3 near, 64^3   ON    8192 fit   1        512 / HDR / shadowed     (dial)
-//   Epic    VCT + probes (hybrid) 128^3 near, 64^3   ON    8192 fit   3        512 / HDR / shadowed     (dial)
+//   High    the hybrid            128^3 near, 64^3   ON    8192 fit   1        512 / HDR / shadowed *   (dial)
+//   Epic    the hybrid            128^3 near, 64^3   ON    8192 fit   3        512 / HDR / shadowed *   (dial)
+//
+// * The hybrid is "VCT + rays" wherever the scene traces rays on this machine
+//   (High's rayReflections: the rays are the reflection and NO probe grid is
+//   built, PHOTON-F12-PCC) and "VCT + probes" where it does not
+//   (techniqueLabel); the probe columns apply only in the second case.
 //
 // Derived columns (not rows): voxels and probe faces/HDR/shadows follow
 // `giQuality` (OgreGi.cpp giVoxelResolution / buildPcc); the DDGI grid is the
@@ -285,6 +313,14 @@ int photonTierProbeFaceSize(PhotonTier t);
 /// purpose: it answers "would a grid be built here", which is what world.gi's
 /// probe keys and the World panel's probe rows ask. False with no scene.
 bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays);
+/// The same rule for a TIER rather than a scene: the tier's quality column
+/// traces its reflections (`giQualityFacts(...).rayReflections`) and the scene
+/// traces rays on this machine. What every machine-dependent row text reads.
+bool tierRaysResolve(PhotonTier t, bool sceneTracesRays);
+/// THE TECHNIQUE'S NAME — one source for the World rows, the GI panel and the
+/// docs: 0 "Off", 1 "VCT", 2 "VCT + rays" where `raysResolve`, else
+/// "VCT + probes".
+QString techniqueLabel(int technique, bool raysResolve);
 /// The one sentence both surfaces give for it (the verb's refusal, the rows'
 /// tooltip).
 QString probeGridByRaysReason();
