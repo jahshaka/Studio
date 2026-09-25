@@ -205,6 +205,9 @@ public:
     /// why "the Save button is hidden on every default install" (owner,
     /// 2026-09-18) could be true for as long as it was: nothing could ask.
     QVariantList toolbarActions() const;
+    /// What the View Options menu's checkmarks show ({grid, lightWires, stats,
+    /// physicsDebug}) — editor.overlays().menu, the proof they follow the state.
+    QVariantMap viewOptionChecks() const;
     /// The ONE place the frame-stats readout is switched: F3, the View Options
     /// row, the Preferences checkbox and editor.setOverlays({stats}) all land
     /// here, and it persists `show_fps` (STATS_OVERLAY_SPEC.md §5.3).
@@ -827,6 +830,9 @@ public slots:
     void takeScreenshot();
     void toggleLightWires(bool state);
     void toggleGrid(bool state);
+    /// The View Options checkmarks := the viewport's overlay state (the one
+    /// owner; driven by EditorViewportEvents::overlaysChanged).
+    void syncOverlayChecks();
     void toggleImmersiveFullscreen();
     /// The LEAVE half of the toggle above, callable on its own. `restoreWindow`
     /// is false when the window state has already been changed by somebody else

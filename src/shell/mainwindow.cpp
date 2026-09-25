@@ -1919,8 +1919,8 @@ void MainWindow::openStageBind(bool playMode)
 		// needs to be done so controllers can have the correct
 		// camera
 		playerView->setScene(scene);
-		wireCheckAction->setChecked(editorData->showLightWires);
-		gridCheckAction->setChecked(editorData->showGrid);
+		// (The grid and light-wire checkmarks follow setEditorData's
+		// overlaysChanged — syncOverlayChecks.)
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
 	}
 
@@ -4254,8 +4254,13 @@ void MainWindow::setupViewPort()
 	}
 	playerView = new PlayerWidget(viewPort, playerBackend);
 
-    wireCheckAction->setChecked(sceneView->getShowLightWires());
-    gridCheckAction->setChecked(sceneView->getShowGrid());
+    // ONE DOOR (STUDIO-CRUD-1 item 8): the menu's grid / light-wire / stats
+    // checkmarks follow the viewport's state through overlaysChanged — so
+    // editor.setOverlays, the shortcuts and a scene open move them exactly as
+    // a click does — and the actions' toggled() call the path the verb calls.
+    connect(sceneView->events(), &EditorViewportEvents::overlaysChanged,
+            this, &MainWindow::syncOverlayChecks);
+    syncOverlayChecks();
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
     // The persisted readout state reaches the viewport HERE, not when the menu
     // action was built: the View Options menu is constructed before sceneView
@@ -4776,7 +4781,7 @@ void MainWindow::setupShortcuts()
                     sceneView->setGameView(!sceneView->isGameView());
             });
     reg.add("view.grid", "Toggle Ground Grid", "View", QKeySequence(), this,
-            [this]() { if (gridCheckAction) gridCheckAction->toggle(); });
+            [this]() { if (sceneView) sceneView->setShowGrid(!sceneView->getShowGrid()); });
     // F3 — the games convention (Minecraft, idTech-adjacent), and the only free
     // F-key in this registry besides F11 (STATS_OVERLAY_SPEC D3). Category
     // "View" so it lands beside gameView/grid/fullscreen in the generated
@@ -5493,6 +5498,32 @@ void MainWindow::toggleGrid(bool state)
     if (sceneView) sceneView->setShowGrid(state);
 }
 
+void MainWindow::syncOverlayChecks()
+{
+    if (!sceneView) return;
+    // Not signal-blocked: the World panel's Show Grid row follows the grid
+    // action's toggled(), and the round trip ends at the viewport's setter,
+    // which ignores a value it already holds.
+    if (gridCheckAction) gridCheckAction->setChecked(sceneView->getShowGrid());
+    if (wireCheckAction) wireCheckAction->setChecked(sceneView->getShowLightWires());
+    // The stats action's toggled() persists show_fps (setShowFrameStats), so it
+    // is blocked: the state it follows was written by whoever moved it.
+    if (statsCheckAction && statsCheckAction->isChecked() != sceneView->getShowFps()) {
+        QSignalBlocker block(statsCheckAction);
+        statsCheckAction->setChecked(sceneView->getShowFps());
+    }
+}
+
+QVariantMap MainWindow::viewOptionChecks() const
+{
+    QVariantMap out;
+    if (gridCheckAction) out[QStringLiteral("grid")] = gridCheckAction->isChecked();
+    if (wireCheckAction) out[QStringLiteral("lightWires")] = wireCheckAction->isChecked();
+    if (statsCheckAction) out[QStringLiteral("stats")] = statsCheckAction->isChecked();
+    if (physicsCheckAction) out[QStringLiteral("physicsDebug")] = physicsCheckAction->isChecked();
+    return out;
+}
+
 // F11: immersive fullscreen — the window goes fullscreen and (in the editor
 // space) the docks and toolbar hide; a second F11 restores exactly what was
 // visible before (EDITOR_SHORTCUTS_SPEC §3).
@@ -5932,8 +5963,6 @@ void MainWindow::newScene(bool empty)
     sceneView->setShowGrid(defaults.showGrid);
     sceneView->setShowLightWires(defaults.showLightWires);
     sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
-    if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
-    if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
     if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
 }
 
@@ -6153,8 +6182,6 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         sceneView->setShowGrid(defaults.showGrid);
         sceneView->setShowLightWires(defaults.showLightWires);
         sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
-        if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
-        if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
         if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
         refreshClaudeChatContext();   // D1: rebind an open chat to the new project
         if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project

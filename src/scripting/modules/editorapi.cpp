@@ -167,7 +167,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor, menu}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
@@ -196,6 +196,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
           "render through an offscreen view and the overlay is excluded from those by construction. "
+          "`menu` is what the View Options menu's checkmarks SHOW ({grid, lightWires, stats, "
+          "physicsDebug}; empty with no editor window): they follow the viewport's state, so after "
+          "any editor.setOverlays they equal the keys above — a difference is a defect. "
           "`outlineWidth`, `outlineColor` and `outlinePrimaryColor` are the selection highlight's "
           "LOOK, READ-ONLY here (they are persisted preferences, written by editor.setOutline): "
           "`outlinePrimaryColor` is the brighter colour the PRIMARY member of a multi-selection is "
@@ -209,9 +212,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`stats` persists as the `show_fps` preference and survives Game View and fullscreen; the "
           "others are viewport state for this session. `physicsDebug` draws the physics world's "
           "collision shapes, and shows nothing at all until a simulation is running "
-          "(editor.simulate / editor.play). NOTE the View Options menu's checkmarks do "
-          "not yet follow a script-driven change (same as editor.setCameraMode) — the viewport "
-          "does; `physicsDebug` is the exception, its menu checkmark follows.",
+          "(editor.simulate / editor.play). The View Options menu's checkmarks FOLLOW a "
+          "script-driven change of `grid`, `lightWires`, `stats` and `physicsDebug` "
+          "(editor.overlays().menu reads them): the viewport owns the state and the menu is a "
+          "view of it.",
           Needs::Engine },
         { "outline", "editor.outline() -> {width, color, primaryColor, primaryColorStored}",
           "The SELECTION OUTLINE's three persisted values (Preferences \u2192 Viewport): `width` in "
@@ -1318,6 +1322,9 @@ QVariantMap EditorApi::overlays()
     out["outlineWidth"] = outlinesettings::width();
     out["outlineColor"] = outlinesettings::color().name();
     out["outlinePrimaryColor"] = outlinesettings::primaryColor().name();
+    // The View Options menu's checkmarks, read back (STUDIO-CRUD-1 item 8):
+    // one owner (the viewport), and the menu follows it.
+    out["menu"] = host.mainWindow ? host.mainWindow->viewOptionChecks() : QVariantMap();
     return out;
 }
 
