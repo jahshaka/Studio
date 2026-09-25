@@ -303,6 +303,18 @@ int main()
     std::printf("   worst metal dark fraction across an 8-step camera pan: %.4f\n", worstPan);
     CHECK(worstPan < 0.02f, "panning the camera never blacks out the metal");
 
+    // THE RAY TIER (PHOTON-F12-PCC): the same hybrid at High builds NO grid
+    // wherever the scene traces — this suite's Medium grid is the non-ray tier.
+    if (engine->rayQueryAvailable()) {
+        GiParams high = gi;
+        high.quality = GiQuality::High;
+        CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
+        render(engine.get(), 4);
+        const GiStatus rt = s->giStatus();
+        CHECK(rt.probeGridByRays && rt.probeCount == 0 && rt.probesDropped == 0 && !rt.pccBound,
+              "ray tier: High with rays builds no probe grid");
+    }
+
     engine->destroyView(view);
     engine->destroyScene(s);
     engine.reset();

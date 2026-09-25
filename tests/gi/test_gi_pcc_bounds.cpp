@@ -516,6 +516,18 @@ static void occluderShapeCase(Engine *engine, View *view)
     CHECK(dark == 0,
           "no pixel on the metal is a hard black hole (the A2 artifact)");
 
+    // THE RAY TIER (PHOTON-F12-PCC): the same hybrid at High builds NO grid
+    // wherever the scene traces — this suite's Medium grid is the non-ray tier.
+    if (engine->rayQueryAvailable()) {
+        GiParams high = gi;
+        high.quality = GiQuality::High;
+        CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
+        render(engine, 4);
+        const GiStatus rt = s->giStatus();
+        CHECK(rt.probeGridByRays && rt.probeCount == 0 && rt.probesDropped == 0 && !rt.pccBound,
+              "ray tier: High with rays builds no probe grid");
+    }
+
     GiParams off;
     s->setGlobalIllumination(off);
     view->setScene(nullptr);

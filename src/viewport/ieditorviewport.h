@@ -606,6 +606,12 @@ public:
         /// is the open-scene answer (the sky reflects); with it zero, in the
         /// hybrid, it is a build failure.
         int  probesDropped = 0;
+        /// The hybrid at a RAY tier (PHOTON-F12-PCC): no grid by design — the
+        /// rays are the reflection (GiStatus::probeGridByRays), and the two
+        /// cumulative counters that prove nothing was placed or captured.
+        bool probeGridByRays = false;
+        unsigned probePlacements = 0;
+        unsigned long long probeCapturesTotal = 0;
         /// Material edits that CROSSED the reflection-probe gate on this scene
         /// (ogre-patch 0028): the one material edit that rebuilds a shader.
         /// Cumulative, never reset.
@@ -969,6 +975,14 @@ public:
         QString reason;          ///< why it is not running while `on`
     };
     virtual SunContactInfo sunContactInfo() const { return {}; }
+
+    /// THIS SCENE TRACES ON THIS MACHINE: the DOCUMENT's Ray Tracing row met
+    /// with the process latch and the device — Scene::rayTracingResolved's
+    /// three terms, current the moment the row is written rather than a frame
+    /// later when the mirror pushes it. False with no engine. Read by the probe
+    /// grid's ray-tier rule (worldmodes::probeGridByRays: world.gi's refusal and
+    /// the World panel's greyed probe rows) and by sunContactInfo.
+    virtual bool sceneTracesRays() const { return false; }
 
     /// Whether the renderer ACCEPTED this node as a planar-reflection plane.
     /// The plane, its size and its normal are derived from the mesh's own

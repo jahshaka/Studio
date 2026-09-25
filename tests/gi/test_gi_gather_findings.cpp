@@ -521,6 +521,10 @@ static int nestMain(Engine *e)
             enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 3.5f), Vec3(0.0f, 0.8f, -1.0f));
             GiParams gi = chainGi(gather);
             gi.mode = GiMode::VctPccHybrid;
+            // MEDIUM, NOT HIGH (PHOTON-F12-PCC): High with rays builds no probe
+            // grid, so the probes this arm watches exist only below it; the
+            // gather row is pinned, so it still runs.
+            gi.quality = GiQuality::Medium;
             GatherTuning t;
             t.freezeFrameIndex = true;
             s->setGatherTuning(t);

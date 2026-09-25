@@ -197,7 +197,10 @@ void WorldGiPropertyWidget::rebuild()
                "and the sky itself is both cheaper and sharper than a grid of photographs of it: "
                "that is \"Sky\", and it is the right answer rather than a failure. Build "
                "something for the reflections to stand in — walls, a vehicle, a room — and the "
-               "probes that can see it appear."));
+               "probes that can see it appear.\n\n"
+               "\"Rays\" is High and Epic wherever this scene traces rays: no probe grid is "
+               "built there, because the screen march, the traced rays and the voxel cone with "
+               "the sky as its escape are the reflection."));
         PropertyRows::setPanelVisible(reflectionsRow, false);
     }
 
@@ -319,8 +322,17 @@ void WorldGiPropertyWidget::rebuild()
         // and it is reported by world.giStatus().
 
         if (scene->giMode == iris::GiMode::VCT_PCC_HYBRID) {
+            // AT A RAY TIER THE GRID IS NOT BUILT (PHOTON-F12-PCC), so its two
+            // rows are GREYED with the reason — the same rule and the same
+            // sentence world.gi refuses the keys with (API-first: the verb's
+            // refusal came first, these rows follow it).
+            const bool byRays = worldmodes::probeGridByRays(
+                scene, sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays());
+            const QString byRaysTip =
+                tr("Greyed: %1").arg(worldmodes::probeGridByRaysReason());
             this->addLabel(tr("Reflection Probes"),
-                           tr("Probe counts along each axis of the lit volume"));
+                           byRays ? tr("None — the rays are the reflection here")
+                                  : tr("Probe counts along each axis of the lit volume"));
             // Counts, not lengths: whole numbers, a coarse scrub, and a range
             // that cannot ask for a probe grid nobody could afford.
             //
@@ -340,6 +352,10 @@ void WorldGiPropertyWidget::rebuild()
                                                                   qBound(1, qRound(g.y()), 8),
                                                                   qBound(1, qRound(g.z()), 8)));
                          });
+            if (pccGrid && byRays) {
+                pccGrid->setEnabled(false);
+                pccGrid->setToolTip(byRaysTip);
+            }
 
             // PROBE CAPTURE SIZE (owner, 2026-09-13: "yes halve it but add it
             // to the world settings"). A Photon tier row like Quality above —
@@ -370,12 +386,17 @@ void WorldGiPropertyWidget::rebuild()
                    "Automatic follows the quality dial (%1 px at Low, %2 at Medium, %3 at "
                    "High and Epic) and is the shipped answer, because the roughness blur the "
                    "renderer convolves into these captures hides the difference on everything "
-                   "but a mirror. Only High and Epic build a probe grid at all.")
+                   "but a mirror. At High and Epic a grid is built only where the scene does not "
+                   "trace rays — where it does, the rays are the reflection.")
                     .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Low))
                     .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::Medium))
                     .arg(worldmodes::photonTierProbeFaceSize(worldmodes::PhotonTier::High)));
             connect(probeSize, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                     this, &WorldGiPropertyWidget::onProbeSizeChanged);
+            if (byRays) {
+                probeSize->setEnabled(false);
+                probeSize->setToolTip(byRaysTip);
+            }
         }
 
         // THE IRRADIANCE FIELD (GI_UNIFIED_SPEC P1). On at every voxel tier
@@ -426,9 +447,11 @@ void WorldGiPropertyWidget::refreshReflectionsRow()
         return;
     }
     // "Sky" is the DECIDED answer — every candidate probe was photographed and
-    // dropped — while probeCount 0 with nothing dropped is a build that failed
-    // and must not read as a decision (gi.pcc_mirror's subject).
-    const QString text = st.probeCount == 0
+    // dropped — and "Rays" the ray tier's (PHOTON-F12-PCC: no grid is built,
+    // the rays are the reflection), while probeCount 0 with neither is a build
+    // that failed and must not read as a decision (gi.pcc_mirror's subject).
+    const QString text = st.probeGridByRays ? tr("Rays")
+                         : st.probeCount == 0
                              ? (st.probesDropped > 0 ? tr("Sky") : QString())
                              : (st.probeCount == 1 ? tr("1 probe")
                                                    : tr("%1 probes").arg(st.probeCount));

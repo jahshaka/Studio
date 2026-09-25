@@ -692,14 +692,74 @@ int main()
         render(engine.get(), 1);
         CHECK(!s->giStatus().probeShadows && !s->giStatus().probeHdr,
               "shadows: Auto at Medium quality means unshadowed, LDR captures");
+        // HIGH IS A RAY TIER (PHOTON-F12-PCC): wherever the scene traces it
+        // builds no grid at all, so the grid's High defaults are read with the
+        // scene's rays OFF — the one way a High scene keeps a grid.
+        s->setRayTracing(RayTracingMode::Off);
         GiParams autoHigh = hybrid;
         autoHigh.quality = GiQuality::High;
         CHECK(s->setGlobalIllumination(autoHigh), "shadows: auto at High builds");
         render(engine.get(), 1);
         CHECK(s->giStatus().probeShadows && s->giStatus().probeHdr,
               "shadows: Auto at High quality means shadowed, HDR captures");
+        s->setRayTracing(RayTracingMode::Auto);
 
         CHECK(s->removeNode(blocker), "shadows: occluder removed");
+    }
+
+    // ---- (i) THE RAY TIER BUILDS NO GRID (PHOTON-F12-PCC) ------------------
+    // At High (and Epic, which reads High's rows) wherever the scene traces on
+    // this machine the hybrid places, photographs and captures NOTHING: the
+    // screen march, the rays and the cone with the sky as its escape are the
+    // reflection (the picture's A/B is gi.pcc_mirror.ray_tier, on Grand
+    // Showroom 2 through the app — this arm is the engine's books). The rays
+    // coming off build the grid like a technique change does, and coming back
+    // on take it down again. On a machine without ray queries High is not a ray
+    // tier and the arm says so instead.
+    {
+        GiParams high = hybrid;
+        high.quality = GiQuality::High;
+        const bool rays = engine->rayQueryAvailable() && s->rayTracingResolved();
+        const GiStatus before = s->giStatus();
+        CHECK(s->setGlobalIllumination(high), "ray tier: the hybrid at High builds");
+        render(engine.get(), 4);
+        const GiStatus st = s->giStatus();
+        std::printf("   ray tier: rays %s, probes %d, dropped %d, pccBound %s, byRays %s, "
+                    "placements %u -> %u, captures %llu -> %llu\n",
+                    rays ? "yes" : "no", st.probeCount, st.probesDropped,
+                    st.pccBound ? "true" : "false", st.probeGridByRays ? "true" : "false",
+                    before.probePlacements, st.probePlacements,
+                    before.probeCapturesTotal, st.probeCapturesTotal);
+        if (rays) {
+            CHECK(st.probeGridByRays, "ray tier: giStatus says the rays are the reflection");
+            CHECK(st.probeCount == 0 && st.probesDropped == 0 && !st.pccBound,
+                  "ray tier: NO grid — probeCount 0, probesDropped 0, pccBound false");
+            CHECK(st.probePlacements == before.probePlacements &&
+                      st.probeCapturesTotal == before.probeCapturesTotal,
+                  "ray tier: nothing was scouted, fitted or captured (the cumulative counters "
+                  "did not move)");
+            CHECK(st.vctBound, "ray tier: the voxel lighting is still bound");
+
+            s->setRayTracing(RayTracingMode::Off);
+            render(engine.get(), 4);
+            const GiStatus off = s->giStatus();
+            CHECK(!off.probeGridByRays && off.probeCount == expectedProbes && off.pccBound,
+                  "ray tier: the scene's rays OFF make High a grid tier — the grid builds");
+            CHECK(off.probePlacements == st.probePlacements + 1,
+                  "ray tier: ...through exactly one placement");
+
+            s->setRayTracing(RayTracingMode::Auto);
+            render(engine.get(), 2);
+            const GiStatus back = s->giStatus();
+            CHECK(back.probeGridByRays && back.probeCount == 0 && back.probesDropped == 0 &&
+                      !back.pccBound,
+                  "ray tier: the rays back ON take the grid down again");
+            CHECK(back.probePlacements == off.probePlacements,
+                  "ray tier: ...without placing anything");
+        } else {
+            CHECK(!st.probeGridByRays && st.probeCount == expectedProbes && st.pccBound,
+                  "no rays on this machine: High keeps its grid (not a ray tier)");
+        }
     }
 
     // ---- (h) A SKY IBL *AND* THE HYBRID -----------------------------------

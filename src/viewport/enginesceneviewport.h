@@ -220,6 +220,7 @@ public:
     GiVoxelStatsInfo giVoxelStats(int cascade) override;
     ShadowStatusInfo shadowStatus() const override;
     SunContactInfo sunContactInfo() const override;
+    bool sceneTracesRays() const override;
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;

@@ -40,7 +40,8 @@ assert(near(wf.density, 0.05) && near(wf.heightDensity, 0.02) && near(wf.heightF
        "exponential + height fog round-trip");
 assert(near(w.gravity, 12), "gravity round-trips");
 assert(w.gi.mode === "vct" && w.gi.quality === "high" && w.gi.bounces === 2, "gi round-trips");
-world.gi({ mode: "vct_pcc_hybrid", pccGrid: { x: 2, y: 1, z: 2 } });
+// MEDIUM: the probe grid's keys are refused at a ray tier (PHOTON-F12-PCC).
+world.gi({ mode: "vct_pcc_hybrid", quality: "medium", pccGrid: { x: 2, y: 1, z: 2 } });
 var g = world.get().gi;
 assert(g.mode === "vct_pcc_hybrid" && g.pccGrid.x === 2 && g.pccGrid.y === 1 && g.pccGrid.z === 2,
        "vct hybrid mode + pccGrid round-trip");

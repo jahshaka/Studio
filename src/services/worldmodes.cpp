@@ -1327,6 +1327,24 @@ int photonTierProbeFaceSize(PhotonTier t)
     return pinned > 0 ? pinned : int(factsFor(t).probeFaceSize);
 }
 
+bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays)
+{
+    if (!scene || !sceneTracesRays) return false;
+    return jahshaka::engine::giQualityFacts(
+               jahshaka::engine::GiQuality(qBound(0, int(scene->giQuality), 2)))
+        .rayReflections;
+}
+
+QString probeGridByRaysReason()
+{
+    return QStringLiteral(
+        "the rays are the reflection here — at High and Epic, wherever this scene traces on this "
+        "machine, no reflection-probe grid is built: the screen march, the traced rays (a hit lit "
+        "from its surface card, the decode or the voxels) and the voxel cone with the sky as its "
+        "escape are the reflection, and a planar mirror stays a planar mirror. Turn the scene's "
+        "Ray Tracing row off (world.rayTracing(\"off\")) or pick Low or Medium for a probe grid.");
+}
+
 QString photonTierSentence(PhotonTier t)
 {
     const auto facts = factsFor(t);
@@ -1372,9 +1390,14 @@ QString photonTierSentence(PhotonTier t)
                .arg(photonBounces(t) == 1 ? QString() : QStringLiteral("s"));
 
     // The probe grid is the TECHNIQUE column, not the quality one: only the
-    // hybrid (ordinal 2) builds one.
+    // hybrid (ordinal 2) builds one — and at a RAY tier only where the scene
+    // does not trace (PHOTON-F12-PCC: the rays are the reflection there).
     if (photonTechnique(t) == 2) {
-        out += QStringLiteral("; a reflection-probe grid at %1 px per cube face")
+        out += (facts.rayReflections
+                    ? QStringLiteral("; where rays run the reflections are traced and no "
+                                     "reflection-probe grid is built, elsewhere a grid at %1 px "
+                                     "per cube face")
+                    : QStringLiteral("; a reflection-probe grid at %1 px per cube face"))
                    .arg(photonTierProbeFaceSize(t));
         if (facts.probeHdrDefault) out += QStringLiteral(", HDR");
         if (facts.probeShadowsDefault) out += QStringLiteral(", shadowed");

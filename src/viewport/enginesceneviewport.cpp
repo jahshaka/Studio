@@ -2630,6 +2630,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeHdr       = st.probeHdr;
     out.probeCaptureSize   = st.probeCaptureSize;
     out.probesDropped      = st.probesDropped;
+    out.probeGridByRays    = st.probeGridByRays;
+    out.probePlacements    = st.probePlacements;
+    out.probeCapturesTotal = st.probeCapturesTotal;
     out.probeGateCrossings = st.probeGateCrossings;
     out.probeShadows   = st.probeShadows;
     out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;
@@ -2864,16 +2867,21 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     refreshOverlay();
 }
 
+bool EngineSceneViewport::sceneTracesRays() const
+{
+    // Scene::rayTracingResolved's own three terms, with the ROW read from the
+    // document rather than from the engine scene the mirror updates next frame.
+    return mEngine && mEngine->rayTracing() && mEngine->rayQueryAvailable() && mScene &&
+           mScene->rayTracing != iris::RayTracingMode::Off;
+}
+
 IEditorViewport::SunContactInfo EngineSceneViewport::sunContactInfo() const
 {
     SunContactInfo out;
     const jahshaka::engine::Scene *es = mEngineScene;
     if (!es || !mEngine) return out;          // available stays false
     out.available = true;
-    // Scene::rayTracingResolved's own three terms, with the ROW read from the
-    // document rather than from the engine scene the mirror updates next frame.
-    out.rays = mEngine->rayTracing() && mEngine->rayQueryAvailable() && mScene &&
-               mScene->rayTracing != iris::RayTracingMode::Off;
+    out.rays = sceneTracesRays();
     const jahshaka::engine::SunContactStatus st = es->sunContactStatus();
     out.on = st.on;
     out.running = st.running;

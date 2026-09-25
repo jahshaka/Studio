@@ -110,7 +110,9 @@ class StubViewport : public HeadlessEditorViewport
 {
 public:
     GiStatusInfo status;
+    bool rays = false;
     GiStatusInfo giStatus() const override { return status; }
+    bool sceneTracesRays() const override { return rays; }
 };
 
 int main(int argc, char **argv)
@@ -482,6 +484,71 @@ int main(int argc, char **argv)
             CHECK(box->count() == 4 && box->currentText().contains(QStringLiteral("512")),
                   "an on-dial value keeps the four-row dial and picks its own row");
         }
+    }
+
+    // ---- 8. AT A RAY TIER THE PROBE ROWS ARE GREYED (PHOTON-F12-PCC) --------
+    // High and Epic build no grid wherever the scene traces, so the two rows
+    // that shape only the grid are GREYED with the reason — the same rule and
+    // the same sentence world.gi refuses their keys with (e2e_gi_status) — and
+    // the Reflections row reads "Rays". Without rays the rows are live again.
+    {
+        const auto probeCombo = [&panel]() -> ComboBoxWidget * {
+            for (ComboBoxWidget *c : panel.findChildren<ComboBoxWidget *>())
+                for (QLabel *l : c->findChildren<QLabel *>())
+                    if (l->text().startsWith(QStringLiteral("Probe Capture"))) return c;
+            return nullptr;
+        };
+        const auto gridRow = [&panel]() -> DragVector3Widget * {
+            const auto rows = panel.findChildren<DragVector3Widget *>();
+            return rows.isEmpty() ? nullptr : rows.first();
+        };
+        const auto reflections = [&panel]() -> QString {
+            for (LabelWidget *l : panel.findChildren<LabelWidget *>())
+                for (QLabel *q : l->findChildren<QLabel *>())
+                    if (q->text().startsWith(QStringLiteral("Reflections"))) {
+                        QStringList texts;
+                        for (QLabel *t : l->findChildren<QLabel *>()) texts << t->text();
+                        return l->isHidden() ? QString() : texts.join(QStringLiteral("|"));
+                    }
+            return QString();
+        };
+        worldmodes::setMode(scene, worldmodes::Mode::Epic);
+        scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        StubViewport viewport;
+        viewport.rays = true;
+        viewport.status.available = true;
+        viewport.status.mode = QStringLiteral("vct_pcc_hybrid");
+        viewport.status.probeGridByRays = true;
+        panel.setSceneView(&viewport);
+        panel.setScene(scene);
+        pump();
+        if (auto *adv = buttonWith(&panel, QStringLiteral("Advanced"))) adv->setChecked(true);
+        pump();
+        ComboBoxWidget *combo = probeCombo();
+        DragVector3Widget *grid = gridRow();
+        CHECK(combo && grid, "ray tier: the Advanced block still shows the two probe rows");
+        CHECK(combo && !combo->isEnabled() && grid && !grid->isEnabled(),
+              "ray tier: the probe grid and capture-size rows are GREYED");
+        CHECK(combo && combo->toolTip().contains(QStringLiteral("the rays are the reflection")) &&
+                  grid && grid->toolTip().contains(QStringLiteral("the rays are the reflection")),
+              "ray tier: ...and each says why, in world.gi's words");
+        CHECK(reflections().contains(QStringLiteral("Rays")),
+              "ray tier: the Reflections row reads 'Rays'");
+
+        viewport.rays = false;                          // the scene's rays off
+        viewport.status.probeGridByRays = false;
+        viewport.status.probeCount = 32;
+        panel.setScene(scene);
+        pump();
+        if (auto *adv = buttonWith(&panel, QStringLiteral("Advanced"))) adv->setChecked(true);
+        pump();
+        combo = probeCombo();
+        grid = gridRow();
+        CHECK(combo && combo->isEnabled() && grid && grid->isEnabled(),
+              "no rays: High is a grid tier and the probe rows are live");
+        CHECK(reflections().contains(QStringLiteral("32 probes")),
+              "no rays: the Reflections row reads the grid's count");
+        panel.setSceneView(nullptr);
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

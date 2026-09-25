@@ -73,6 +73,10 @@ function settle(what) {
 
 var guid = project.create("Page GI " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
+// THE GRID IS THE COSTLIEST ARM A RETURN COULD REBUILD, so this scene keeps one:
+// a new project is Epic, which builds no probe grid where the scene traces
+// (PHOTON-F12-PCC) — with the scene's rays off it is a grid tier again.
+assert(world.rayTracing("off") === "off", "the scene's rays off (a probe grid to watch)");
 var box = scene.addPrimitive("cube", { position: { x: 0, y: 0.5, z: 0 } });
 assert(box.length > 10, "a cube in the default scene");
 

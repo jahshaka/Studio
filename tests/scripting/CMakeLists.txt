@@ -1428,6 +1428,28 @@ set_tests_properties(gi.one_writer PROPERTIES
     LABELS "scripting"
     TIMEOUT 600)
 
+# gi.pcc_mirror.ray_tier — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on
+# Showroom 2 at Epic: no grid with rays on, the grid with rays off, gone again with rays back
+# on, and the roughness-0 sphere's reflection A/B against the grid's answer. The engine's books
+# for the same rule are gi.pcc_mirror's arm (i). A FRESH home per run (the sample is imported).
+set(JAH_PCC_RAY_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pcc_ray_tier)
+set(JAH_PCC_RAY_OUT "${_home}/run/")
+configure_file(scripts/gi_pcc_mirror_ray_tier.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js @ONLY)
+add_test(NAME gi.pcc_mirror.ray_tier.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(gi.pcc_mirror.ray_tier.fresh_home PROPERTIES
+    FIXTURES_SETUP pcc_ray_tier_home LABELS "scripting" TIMEOUT 60)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME gi.pcc_mirror.ray_tier
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED pcc_ray_tier_home
+    LABELS "scripting"
+    TIMEOUT 600)
+
 # gi.chain_converge_scenes — ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT on the
 # default scene and Showroom 2 at High (PHOTON-WRITER-1 SWEEPS-3; the room half is
 # gi.chain_converge): from a perturbed history a second sweep changes no byte of

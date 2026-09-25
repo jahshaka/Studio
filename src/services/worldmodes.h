@@ -276,6 +276,19 @@ QString photonTierVoxelPhrase(PhotonTier t);
 /// quality dial; 0 is never returned).
 int photonTierProbeFaceSize(PhotonTier t);
 
+/// AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC) — the engine's
+/// rule (`OgreScene::probeGridByRays`) read from the DOCUMENT: the scene's
+/// quality column says its reflections are traced (the engine's
+/// `giQualityFacts(...).rayReflections`: High, which Epic reads) AND
+/// `sceneTracesRays` — the scene's Ray Tracing row met with this machine
+/// (IEditorViewport::sceneTracesRays; false with no engine). Technique-free on
+/// purpose: it answers "would a grid be built here", which is what world.gi's
+/// probe keys and the World panel's probe rows ask. False with no scene.
+bool probeGridByRays(const iris::ScenePtr &scene, bool sceneTracesRays);
+/// The one sentence both surfaces give for it (the verb's refusal, the rows'
+/// tooltip).
+QString probeGridByRaysReason();
+
 /// Applies a Photon state: records the tier, writes each Photon-tiered row's
 /// tier value into its backing field EXCEPT rows the user pinned, and writes
 /// giMode (OFF when disabled, the resolved technique when enabled).
