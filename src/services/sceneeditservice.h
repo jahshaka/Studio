@@ -99,19 +99,13 @@ public:
     iris::ScenePtr scene() const { return sceneProvider ? sceneProvider() : iris::ScenePtr(); }
 
     // Built-in primitives (each pairs a bundled mesh with a DB object row).
-    void addPlane();
     void addGround();
     void addCone();
-    void addCapsule();
     void addCube();
     void addTorus();
     void addSphere();
     void addCylinder();
-    void addPyramid();
-    void addStar();
-    void addWedge();
     void addTube();
-    void addHemisphere();
     // (addTeapot / addSponge / addSteps / addGear: DELETED, owner review R6.)
     /// Name-dispatch over the primitives above ("Plane", "Cone", ...).
     ///

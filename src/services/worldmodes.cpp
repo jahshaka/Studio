@@ -1697,15 +1697,6 @@ bool setRowValue(const iris::ScenePtr &scene, const QString &id, int value, bool
     return true;
 }
 
-bool setRowValueByOptionId(const iris::ScenePtr &scene, const QString &id, const QString &optionId)
-{
-    const Row *r = row(id);
-    if (!r) return false;
-    int value = 0;
-    if (!valueFromId(*r, optionId, value)) return false;
-    return setRowValue(scene, id, value);
-}
-
 void pinRowValue(const iris::ScenePtr &scene, const QString &id, int value)
 {
     if (!scene || !row(id)) return;

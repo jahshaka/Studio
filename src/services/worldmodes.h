@@ -348,9 +348,6 @@ QString source(const iris::ScenePtr &scene, const Row &r);
 /// invalid value is refused and returns false.
 bool setRowValue(const iris::ScenePtr &scene, const QString &id, int value,
                  bool recordOverride = true);
-/// Convenience for Enum rows: sets by option id ("vct", "4x", "auto").
-bool setRowValueByOptionId(const iris::ScenePtr &scene, const QString &id,
-                           const QString &optionId);
 
 /// Records a pin for a value the caller has ALREADY written to the backing
 /// field. This is the path the pre-existing setters take (world.setAntiAliasing,

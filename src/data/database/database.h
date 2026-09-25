@@ -656,7 +656,6 @@ public:
     /// the very class this lane closes. As statics such a call is merely
     /// pointless.)
     static QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
-    static QString fetchMeshObject(const QString &guid, const int ertype, const int eetype);
 
     QStringList hasMultipleDependers(const QString &guid);
     bool hasDependencies(const QString &guid);
@@ -692,7 +691,6 @@ public:
     void createExportScene(const QString& outTempFilePath, const QString &projectGuid);
     void createExportBundle(const QStringList& objectGuids, const QString& outTempFilePath);
 
-    int getTableCount();
     bool checkIfTableExists(const QString &tableName);
     bool checkIfColumnExists(const QString &tableName, const QString &columnName);
     // Guarded, idempotent schema evolution for the projects table (desktops feature).

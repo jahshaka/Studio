@@ -112,9 +112,6 @@ private:
 
     // context menu actions
 
-    void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
-
-    void buildTreeFromKeyFrameGroups(QHash<QString,KeyFrameGroup*> groups);
 
     void calculateSummaryKeys(iris::PropertyAnim *prop, KeyFrameData& keyFrameData);
 

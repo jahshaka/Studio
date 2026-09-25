@@ -1307,11 +1307,6 @@ void SceneHierarchyWidget::createMaterial()
 	mainWindow->createMaterial();
 }
 
-void SceneHierarchyWidget::exportParticleSystem(const iris::SceneNodePtr &node)
-{
-	mainWindow->exportNode(node, ModelTypes::ParticleSystem);
-}
-
 void SceneHierarchyWidget::attachAllChildren()
 {
 	attachAllChildren(selectedNode);

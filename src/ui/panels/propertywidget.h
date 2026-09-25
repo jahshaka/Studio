@@ -43,7 +43,6 @@ public:
     /// pickers this widget builds.
     Project *project = nullptr;
 
-    void addProperty(const iris::Property*);
     void setProperties(QList<iris::Property*>);
 
     /// CAN THESE ROWS SHOW THAT LIST? (ADD-1) True when `props` has the same

@@ -470,11 +470,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	MainThreadWatchdog::start();
 }
 
-void MainWindow::grabOpenGLContextHack()
-{
-    //switchSpace(WindowSpaces::PLAYER);
-}
-
 void MainWindow::goToDesktop()
 {
     show();
@@ -875,30 +870,6 @@ void MainWindow::refreshVrUi()
 SettingsManager* MainWindow::getSettingsManager()
 {
     return settings;
-}
-
-bool MainWindow::handleMousePress(QMouseEvent *event)
-{
-    mousePressPos = event->pos();
-
-    return true;
-}
-
-bool MainWindow::handleMouseRelease(QMouseEvent *event)
-{
-    return true;
-}
-
-bool MainWindow::handleMouseMove(QMouseEvent *event)
-{
-    mousePos = event->pos();
-    return false;
-}
-
-// TODO - disable scrolling while doing gizmo transform ?
-bool MainWindow::handleMouseWheel(QWheelEvent *event)
-{
-    return false;
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
@@ -2673,11 +2644,6 @@ void MainWindow::removeScene()
     sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
 }
 
-void MainWindow::setupPropertyUi()
-{
-    animWidget = new AnimationWidget();
-}
-
 void MainWindow::assetItemSelected(QListWidgetItem *item)
 {
 	emit sceneNodeSelected(iris::SceneNodePtr());
@@ -2853,17 +2819,6 @@ void MainWindow::addAssetParticleSystem(bool ignore, iris::Vec3 position, QStrin
     sceneEditService->addAssetParticleSystem(ignore, position, guid, assetName);
 }
 
-void MainWindow::addDragPlaceholder()
-{
-    /*
-    auto node = iris::MeshNode::create();
-    node->scale = iris::Vec3(.5f, .5f, .5f);
-    node->setMesh(":app/content/primitives/arrow.obj");
-    node->setName("Arrow");
-    addNodeToScene(node, true);
-    */
-}
-
 /**
  * Adds sceneNode to selected scene node. If there is no selected scene node,
  * sceneNode is added to the root node
@@ -2882,11 +2837,6 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
 {
     sceneEditService->addNodeToScene(sceneNode, ignore);
-}
-
-void MainWindow::repopulateSceneTree()
-{
-    this->sceneHierarchyWidget->repopulateTree();
 }
 
 // THE SELECTION, not the primary (EDITOR_MULTISELECT_SPEC §2.5). Both of these

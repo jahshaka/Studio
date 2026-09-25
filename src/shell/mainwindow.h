@@ -175,8 +175,6 @@ public:
 
     void stopAnimWidget();
 
-    void grabOpenGLContextHack();
-
     /// The editor viewport (engine-backed, or the headless stand-in).
     IEditorViewport *viewport() { return sceneView; }
     /// The outliner panel. Public because the OUTLINER is the authority on
@@ -294,10 +292,6 @@ public:
     bool enterEditorSpace();
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
-    bool handleMousePress(QMouseEvent *event);
-    bool handleMouseRelease(QMouseEvent *event);
-    bool handleMouseMove(QMouseEvent *event);
-    bool handleMouseWheel(QWheelEvent *event);
     bool eventFilter(QObject *obj, QEvent *event);
 
     virtual void closeEvent(QCloseEvent *event);
@@ -575,17 +569,10 @@ public:
     void refreshThumbnail(const QString &guid);
     void refreshThumbnail(QListWidgetItem *item);
 
-    /**
-     * Returns absolute path of file copied as an asset
-     * @param relToApp file path relative to application
-     * @return
-     */
-    QString getAbsoluteAssetPath(QString pathRelativeToApp);
     QString originalTitle;
 
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
-    void repopulateSceneTree();
 
     // (evalShadowMapType / getLightTypeFromName / createLight — a SECOND scene
     // reader that lived here, knew neither Area nor Sky nor the sun rows, and
@@ -613,25 +600,8 @@ private:
     // menus
     void setupFileMenu();
 
-    //ui setup
-    void setupLayerButtonMenu();
-    void initLightLayerUi();
-    void initTorusLayerUi();
-
-    void setupPropertyUi();
-
-    void setupLayerManager();
-
-    void rebuildTree();
-    void deselectTreeItems();
-
-    void setupDefaultScene();
-
-    QIcon getIconFromSceneNodeType(SceneNodeType type);
-
     void removeScene();
     void setScene(QSharedPointer<iris::Scene> scene);
-    void updateGizmoTransform();    // @TODO - move this into updateSceneSettings
 
     /// IMMERSIVE FULLSCREEN IS TWO THINGS — a window state and a set of hidden
     /// docks — and the window state can be left without this class being asked
@@ -686,7 +656,6 @@ public slots:
 	                     const QString &name = QString(),
 	                     surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
-    void addDragPlaceholder();
 
     //context menu functions
     void duplicateNode();
@@ -991,10 +960,6 @@ private:
 
     AnimationWidget* animWidget = nullptr;
 
-    QPoint mousePressPos;
-    QPoint mouseReleasePos;
-    QPoint mousePos;
-    iris::Vec3 dragScenePos;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;

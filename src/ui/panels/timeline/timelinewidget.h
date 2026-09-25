@@ -60,7 +60,6 @@ public:
     void showHighlight(float start,float end);
     void hideHighlight();
 
-    void setSceneNode(iris::SceneNodePtr node);
 
     void paintEvent(QPaintEvent *painter);
     void mousePressEvent(QMouseEvent* evt);

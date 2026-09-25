@@ -93,11 +93,6 @@ public:
     void refreshAnimationList();
     void clearAnimationList();
 
-    //startRange and endRange are in seconds
-    void setTimeViewRange(float startRange,float endRange);
-
-    //sets cursor position at time
-    void setCursorPositionAtTime(float timeInSeconds);
 
     void removeProperty(QString propertyName);
     void clearPropertyKeys(QString propertyName);

@@ -132,14 +132,9 @@ public:
     void setSceneNode(iris::SceneNodePtr node);
     void adjustLength();
 
-    float getStartTimeRange();
-    float getEndTimeRange();
-
-    float getTimeAtCursor();
 
     void drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop);
     void drawBackgroundLines(QPainter& paint);
-    int getXPosFromSeconds(float seconds);
 
     void mousePressEvent(QMouseEvent* evt);
     void mouseReleaseEvent(QMouseEvent* evt);

@@ -36,8 +36,6 @@ public:
 
     QSettings* settings = nullptr;
 
-    int recentlyOpenedFilesSize;
-
     // WHERE THE SETTINGS FILE IS, in one place: AppPaths::settingsFilePath.
     //
     // The four #ifdef branches this replaced were two distinct answers written
@@ -55,7 +53,6 @@ public:
     // library and the store, which is the whole point: one flag, one hermetic
     // run (services/apppaths.h).
     SettingsManager(QString fileName = "jahsettings.ini") {
-        recentlyOpenedFilesSize = 9;
         loadSettings(AppPaths::settingsFilePath(fileName));
     }
 
@@ -69,43 +66,6 @@ public:
 
     QVariant getValue(QString name, QVariant def) {
         return settings->value(name,def);
-    }
-
-    QStringList getRecentlyOpenedScenes() {
-        return settings->value("recent_files", QStringList()).toStringList();
-    }
-
-    void removeRecentlyOpenedEntry(const QString &entry) {
-        auto list = settings->value("recent_files", QStringList()).toStringList();
-
-        if (list.contains(entry)) {
-            list.removeAt(list.indexOf(entry));
-        }
-
-        if (list.count()) {
-            settings->setValue("recent_files", list);
-        } else {
-            settings->remove("recent_files");
-        }
-    }
-
-    void addRecentlyOpenedScene(QString path) {
-        auto list = settings->value("recent_files", QStringList()).toStringList();
-
-        // if it already exists, remove it from the list
-        // it will be added back to the top
-        if (list.contains(path)) {
-            list.removeAt(list.indexOf(path));
-        }
-
-        // prevents list from adding too much
-        while (list.size() > recentlyOpenedFilesSize - 1) {
-            list.removeLast();
-        }
-
-        list.push_front(path);
-
-        settings->setValue("recent_files", list);
     }
 };
 

@@ -170,19 +170,13 @@ void SceneEditService::addPrimitive(const QString &text,
 
 // The menu slots, over the ONE table below (they used to carry a second copy
 // of every resource path — thirteen strings maintained in two places).
-void SceneEditService::addPlane()    { addPrimitive(QStringLiteral("Plane")); }
 void SceneEditService::addGround()   { addPrimitive(QStringLiteral("Ground")); }
 void SceneEditService::addCone()     { addPrimitive(QStringLiteral("Cone")); }
-void SceneEditService::addCapsule()  { addPrimitive(QStringLiteral("Capsule")); }
 void SceneEditService::addCube()     { addPrimitive(QStringLiteral("Cube")); }
 void SceneEditService::addTorus()    { addPrimitive(QStringLiteral("Torus")); }
 void SceneEditService::addSphere()   { addPrimitive(QStringLiteral("Sphere")); }
 void SceneEditService::addCylinder() { addPrimitive(QStringLiteral("Cylinder")); }
-void SceneEditService::addPyramid()  { addPrimitive(QStringLiteral("Pyramid")); }
-void SceneEditService::addStar()     { addPrimitive(QStringLiteral("Star")); }
-void SceneEditService::addWedge()    { addPrimitive(QStringLiteral("Wedge")); }
 void SceneEditService::addTube()     { addPrimitive(QStringLiteral("Tube")); }
-void SceneEditService::addHemisphere() { addPrimitive(QStringLiteral("Hemisphere")); }
 // (addTeapot / addSponge / addSteps / addGear are DELETED — owner review R6:
 // PRIMITIVES ONLY. The four slots were dead in MainWindow too; nothing but
 // this line ever called them.)

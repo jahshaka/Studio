@@ -597,20 +597,6 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 }
 
 // Use this a force thumbnail generator in the future
-void AssetWidget::generateAssetThumbnails()
-{
-	//foreach (auto asset, AssetManager::assets) {
-	//    if (asset->type == AssetType::Object) {
-	//        // TODO - fetch a list and check that instead of hitting the db, low cost but better way
-	//        if (!db->hasCachedThumbnail(asset->fileName)) {
-	//            ThumbnailGenerator::getSingleton()->requestThumbnail(
-	//                ThumbnailRequestType::Mesh, asset->path, asset->path
-	//            );
-	//        }
-	//    }
-	//}
-}
-
 void AssetWidget::addItem(const FolderRecord &folderData)
 {
     if (!folderData.visible) return;

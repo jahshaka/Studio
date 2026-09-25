@@ -513,20 +513,6 @@ void Database::closeDatabase()
     if (!name.isEmpty()) QSqlDatabase::removeDatabase(name);
 }
 
-int Database::getTableCount()
-{
-	QSqlQuery query;
-	query.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'");
-	if (query.exec()) {
-		if (query.first()) return query.value(0).toInt();
-	}
-	else {
-		irisLog(QString("There was an error getting the table count! ").arg(query.lastError().text()));
-	}
-
-	return 0;
-}
-
 bool Database::checkIfTableExists(const QString &tableName)
 {
     QSqlQuery query;
@@ -4126,28 +4112,6 @@ QString Database::fetchObjectMesh(const QString &guid, const int ertype, const i
 {
 	QSqlQuery query;
 	query.prepare("SELECT dependee FROM dependencies WHERE depender = ? AND depender_type = ? AND dependee_type = ?");
-	query.addBindValue(guid);
-	query.addBindValue(ertype);
-	query.addBindValue(eetype);
-
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toString();
-		}
-	}
-	else {
-		irisLog(
-			"There was an error fetching a guid" + query.lastError().text()
-		);
-	}
-
-	return QString();
-}
-
-QString Database::fetchMeshObject(const QString &guid, const int ertype, const int eetype)
-{
-	QSqlQuery query;
-	query.prepare("SELECT depender FROM dependencies WHERE dependee = ? AND depender_type = ? AND dependee_type == ?");
 	query.addBindValue(guid);
 	query.addBindValue(ertype);
 	query.addBindValue(eetype);

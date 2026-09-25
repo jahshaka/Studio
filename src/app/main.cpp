@@ -402,13 +402,6 @@ int main(int argc, char *argv[])
     if (cli.mcpServe)
         return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);
 
-    //window.setAttribute(Qt::WA_DontShowOnScreen);
-    //window.show();
-    //window.grabOpenGLContextHack();
-    //window.hide();
-
-    // Make our window render as normal going forward
-    //window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();   // splash.finish above hides the splash here
 
     // FIRST LAUNCH, ONCE: the donate greeting (owner decision D3, 2026-09-12).

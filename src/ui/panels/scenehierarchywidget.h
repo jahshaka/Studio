@@ -194,7 +194,6 @@ protected slots:
 	void focusOnNode();
 	void exportNode(const iris::SceneNodePtr &node, ModelTypes modelType);
 	void createMaterial();
-	void exportParticleSystem(const iris::SceneNodePtr &node);
 
 	void attachAllChildren();
 	void detachFromParent();

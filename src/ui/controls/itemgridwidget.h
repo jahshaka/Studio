@@ -83,7 +83,6 @@ public:
     static int prefetchThumbnails(const QVector<ProjectTileData> &rows, const QSize &tileSize);
 
     void setTileSize(QSize size, QSize iSize);
-    void updateImage();
     void updateLabel(QString);
 
     // Switches the tile between "ordinary" and "the open project" — every

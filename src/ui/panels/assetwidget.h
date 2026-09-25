@@ -249,7 +249,6 @@ public:
 	/// A pin change for the open project queued a repopulate (coalesced).
 	bool membershipRefreshPending = false;
 
-    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
 
     void populateAssetTree(bool initialRun);
 
@@ -271,7 +270,6 @@ public:
     /// process exit rather than tear down objects the worker still uses.
     bool shutdownImports(int msTimeout);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
-    void generateAssetThumbnails();
     void syncTreeAndView(const QString&);
 	void addItem(const FolderRecord &folderData);
 	void addItem(const AssetRecord &assetData);

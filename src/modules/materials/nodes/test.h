@@ -116,9 +116,6 @@ class TextureSamplerNode : public NodeModel
 	QString uv;
 public:
 	TextureSamplerNode();
-
-
-	void comboTextChanged(const QString& text);
 };
 
 class GraphTexture;

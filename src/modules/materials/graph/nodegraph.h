@@ -128,8 +128,6 @@ public:
 
 	void removeConnection(QString connectionId);
 
-	// gets the output node and socket for a given input node and socket
-	ConnectionModel* getConnectionFromOutputNode(NodeModel* node, int socketIndex);
 	QJsonObject serialize();
 	/// Loads a saved graph, or REFUSES it.
 	///
