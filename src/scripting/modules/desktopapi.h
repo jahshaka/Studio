@@ -34,6 +34,8 @@ public:
     Q_INVOKABLE bool setViewMode(const QString &mode);
     Q_INVOKABLE bool moveTile(const QString &guid, int row, int index = -1);
     Q_INVOKABLE QVariantList tiles();
+    Q_INVOKABLE QVariantMap gridStats();
+    Q_INVOKABLE bool exportTile(const QString &guid, const QString &zipPath);
     Q_INVOKABLE int sliderRows();
     Q_INVOKABLE int setSliderRows(int rows);
 };

@@ -70,16 +70,26 @@ public:
     int  sliderIndex = 0;           // 0-based order within the row
     int  sliderRowCount = 0;
 
-	void updateTile(const QByteArray &arr);
+    /// Shows `png` as this tile's thumbnail (a save's new one). Decoded through
+    /// the session's thumbnail cache: bytes this project has already shown are
+    /// never inflated twice (CREATE-GAP-1).
+    void setThumbnail(const QByteArray &png);
+    /// PNG decodes the thumbnail cache has performed this session (the suites
+    /// read it to prove a rebuild decodes nothing it has seen).
+    static int thumbnailDecodeCount();
+    /// Decodes (and scales to `tileSize`) every thumbnail of `rows` the cache
+    /// does not hold, in parallel on the thread pool, before a desktop builds
+    /// its tiles; returns how many it decoded.
+    static int prefetchThumbnails(const QVector<ProjectTileData> &rows, const QSize &tileSize);
 
     void setTileSize(QSize size, QSize iSize);
     void updateImage();
     void updateLabel(QString);
 
     // Switches the tile between "ordinary" and "the open project" — every
-    // piece of the open look in one place. The desktop rebuilds its tiles on
-    // open/close (ProjectManager::populateDesktop), so this is also the live
-    // path for a tile that must change state without a rebuild.
+    // piece of the open look in one place, and the ONLY path: the desktop no
+    // longer rebuilds its tiles on open/close (ProjectManager::refreshOpenTiles
+    // calls this on the live tiles).
     void setOpenProject(bool open);
     void removeHighlight();   // setOpenProject(false), kept for its call sites
     QString labelText;
@@ -139,7 +149,6 @@ private:
     void applyCaptionBarStyle();
 
     QPixmap image;
-    QPixmap oimage;
     QWidget *parent;
 
     // freeform drag state

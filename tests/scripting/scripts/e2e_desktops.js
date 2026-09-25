@@ -15,37 +15,71 @@ function throws(fn, msg) {
     if (!threw) throw new Error("assert failed (no error): " + msg);
 }
 
-// ---- THE GRID IS BUILT ONCE PER DESKTOP ENTRY (SMALL-FIXES-1 F2) ----
-// A person's boot built it twice: the ProjectManager constructor, then the
-// Desktop entry the boot makes. Every build writes one "desktop: grid built"
-// line. A script boot shows the EDITOR page without entering any space, so it
-// must have built NONE (the constructor's build is gone); a Desktop entry then
-// builds exactly one (below) — a person's boot is those two: construct, then
-// enter the Desktop (main.cpp goToDesktop).
-function gridBuilds() {
-    return log.tail(2000).filter(function (l) { return l.indexOf("desktop: grid built") >= 0; }).length;
-}
+// ---- THE GRID IS BUILT ONCE PER DESKTOP CHANGE, NEVER FOR ONE PROJECT'S
+// (SMALL-FIXES-1 F2, then CREATE-GAP-1) ----
+// desktop.gridStats() counts the builds (each also writes one "desktop: grid
+// built" line to the log, with its cost). A script boot shows the
+// EDITOR page without entering any space, so it must have built NONE. The grid
+// is then built ONCE, the first time the Desktop shows (here: the close inside
+// the second create), and after that only when the DESKTOP changes (another
+// desktop selected). A create, a close, a Desktop entry, a move, an import, a
+// rename and a delete each change ONE tile and build nothing — the grid is a
+// model (CREATE-GAP-1: the rebuild on every entry cost ~11 ms a tile inside
+// every close, 450 ms at 40 tiles).
+function gridBuilds() { return desktop.gridStats().builds; }
+function outOfStep() { return desktop.gridStats().outOfStep; }
 assert(gridBuilds() === 0, "a script boot (editor page) has built no Desktop grid: " + gridBuilds());
 
 // ---- registry: the desktop module is present and documented ----
 var mods = api.verbs().filter(function (m) { return m.module === "desktop"; });
 assert(mods.length === 1, "desktop module registered");
 var names = mods[0].verbs.map(function (v) { return v.name; }).sort().join(",");
-assert(names === "moveTile,setSliderRows,setViewMode,sliderRows,tiles,viewMode",
+assert(names === "exportTile,gridStats,moveTile,setSliderRows,setViewMode,sliderRows,tiles,viewMode",
        "desktop verbs: " + names);
 
 // ---- fixtures: three fresh (never-assigned) projects on desktop 1 ----
+app.desktop(1);
 var t = Date.now();
 var g1 = project.create("Slider A " + t);
+assert(gridBuilds() === 0, "a create with no world open builds no grid (nothing closed)");
 var g2 = project.create("Slider B " + t);
+assert(gridBuilds() === 1,
+       "the session's FIRST Desktop showing (the close inside a create) builds the grid once ("
+       + gridBuilds() + ")");
 var g3 = project.create("Slider C " + t);
 assert(g1.length > 10 && g2.length > 10 && g3.length > 10, "three projects created");
+assert(gridBuilds() === 1, "a create's close over a built grid rebuilds nothing");
 
-app.desktop(1);
-var buildsBefore = gridBuilds();
+function tileGuids() { return desktop.tiles().map(function (x) { return x.guid; }); }
+function onDesktop1() { return project.list({ desktop: 1 }).length; }
+var builds = gridBuilds();
 app.space("desktop");
-assert(gridBuilds() - buildsBefore === 1,
-       "a Desktop entry builds the grid exactly ONCE (" + (gridBuilds() - buildsBefore) + ")");
+assert(gridBuilds() === builds, "a Desktop entry rebuilds nothing");
+[g1, g2, g3].forEach(function (g) {
+    assert(tileGuids().indexOf(g) >= 0, "the created project " + g + " is a tile (added with its row)");
+});
+assert(desktop.tiles().length === onDesktop1(),
+       "one tile per project on the desktop (" + desktop.tiles().length + "/" + onDesktop1() + ")");
+
+// ---- ONE TILE PER MEMBERSHIP CHANGE, NO BUILD (CREATE-GAP-1) ----
+var n = desktop.tiles().length;
+var gx = project.create("Member X " + t);
+assert(desktop.tiles().length === n + 1 && tileGuids().indexOf(gx) >= 0,
+       "a create adds exactly its tile");
+assert(tileGuids()[0] === gx, "...first in the order, where a rebuild puts the newest project");
+project.close();
+assert(project.moveToDesktop(gx, 2) === true, "moveToDesktop(gx, 2)");
+assert(desktop.tiles().length === n && tileGuids().indexOf(gx) < 0, "a move away takes its one tile off");
+assert(project.moveToDesktop(gx, 1) === true, "moveToDesktop(gx, 1)");
+assert(desktop.tiles().length === n + 1 && tileGuids().indexOf(gx) >= 0, "a move back puts it on");
+assert(project.rename(gx, "Member Renamed " + t) === true, "rename gx");
+assert(desktop.tiles().filter(function (x) { return x.guid === gx; })[0].name === "Member Renamed " + t,
+       "a rename changes the tile's caption in place");
+assert(project.remove(gx) === true, "remove gx");
+assert(desktop.tiles().length === n && tileGuids().indexOf(gx) < 0, "a delete removes exactly its tile");
+assert(gridBuilds() === builds, "none of create / close / move / rename / delete built the grid");
+app.space("desktop");
+assert(outOfStep() === 0, "a Desktop entry found the tiles in step with the library (every path used its tile verb)");
 
 // ---- view mode: valid value, forced reset, round-trip, validation ----
 var mode = desktop.viewMode();
@@ -115,8 +149,15 @@ assert(desktop.moveTile(g3, 2, 0) === true, "re-place g3 after the row-count chu
 assert(desktop.moveTile(g1, 2, 1) === true, "re-place g1 after the row-count churn");
 
 // ---- persistence: survives a desktop switch (full repopulate from the DB) ----
+var buildsBeforeSwitch = gridBuilds();
 app.desktop(2);
 app.desktop(1);
+assert(gridBuilds() - buildsBeforeSwitch === 2,
+       "a DESKTOP CHANGE is the one thing that builds the grid: one build per switch");
+var st = desktop.gridStats();
+assert(st.lastBuildTiles === onDesktop1() && st.lastBuildDecodes === 0,
+       "a rebuild of a desktop the session has shown decodes NO thumbnail (" + st.lastBuildDecodes
+       + " decodes over " + st.lastBuildTiles + " tiles, " + st.lastBuildMs + " ms)");
 assert(desktop.viewMode() === "sliders", "view mode persisted per desktop");
 assert(tileOf(g3).row === 2 && tileOf(g3).index === 0, "assignment survives a repopulate");
 assert(tileOf(g1).row === 2 && tileOf(g1).index === 1, "row order survives a repopulate");
@@ -157,7 +198,6 @@ var imports = [project.importArchive(exported.path), project.importArchive(expor
 imports.forEach(function (r, i) {
     assert(r && r.guid, "desktop_tiles: import " + (i + 1) + " -> " + (r && r.guid));
 });
-function tileGuids() { return desktop.tiles().map(function (x) { return x.guid; }); }
 imports.forEach(function (r) {
     assert(tileGuids().indexOf(r.guid) >= 0, "desktop_tiles: the import is a tile at once");
 });
@@ -170,6 +210,35 @@ imports.concat([{ guid: src }]).forEach(function (r) {
 assert(desktop.tiles().length === onDesktop.length,
        "desktop_tiles: the grid after the close is every project on the desktop ("
        + desktop.tiles().length + " tiles, " + onDesktop.length + " projects)");
+
+// ---- A TILE'S EXPORT NEVER TOUCHES THE OPEN WORLD (CREATE-GAP-1's fix round) ----
+// The tile's Export used to re-point the LIVE project at the exported tile and
+// save "the scene" — the open world, written into the exported project's row —
+// and the pointer stayed there, so every later autosave of the open world
+// landed in that row too. A open with an edit, B exported from the Desktop,
+// then A saved: B's row is untouched and A's row has the edit.
+var expA = project.create("Export A " + t);
+var expB = project.create("Export B " + t);
+var bNodes = scene.nodes().length;
+assert(project.open(expA) === true, "export: A opened");
+scene.addPrimitive("cube", { count: 3 });
+var aNodes = scene.nodes().length;
+app.space("desktop");
+var expPath = project.current().folder + "-export-b.zip";
+assert(desktop.exportTile(expB, expPath) === true, "export: B exported from its tile (" + app.lastError() + ")");
+var turns = 0;
+while (project.archiveState() === "running") { editor.frame(1); if (++turns > 40000) break; }
+assert(project.archiveResult().ok === true, "export: the archive finished ok (" + project.archiveResult().error + ")");
+assert(project.current().guid === expA, "export: the current project is still A");
+assert(project.save() === true, "export: A saved after the export");
+assert(project.open(expB) === true, "export: B reopened");
+assert(scene.nodes().length === bNodes,
+       "export: B's row is B's world (" + scene.nodes().length + " nodes, created with " + bNodes + ")");
+assert(project.open(expA) === true, "export: A reopened");
+assert(scene.nodes().length === aNodes, "export: A's row has A's edit (" + scene.nodes().length + "/" + aNodes + ")");
+project.close();
+
+assert(outOfStep() === 0, "no path left the grid out of step with the library");
 
 // leave the desktop in rows mode for whoever runs next
 assert(desktop.setViewMode("rows") === true, "restored rows mode");

@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QActionGroup>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QSet>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QFontDatabase>
@@ -366,6 +367,10 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
     auto pDir = projectService->projectFolderFor(result.projectGuid);
     QDir().mkpath(pDir);
 
+    // THE IMPORT IS A TILE AT ONCE, whether or not it opens next (CREATE-GAP-1:
+    // the import-and-open used to find its tile at the next Desktop rebuild).
+    addTile(result.projectGuid);
+
     if (mImportOpenMode) {
         // The dialog stays up THROUGH the scene load (owner: it must close when
         // the scene has loaded, not before the 3-second open runs "naked").
@@ -391,7 +396,6 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         return;
     }
 
-    addImportedTileToDesktop(result.projectGuid);
     hideOpenProgress();
 }
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
@@ -407,11 +411,10 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
                                 .arg(widget->tileData.name, whyMissing));
         return;
     }
-    project->setProjectPath(projectService->projectFolderFor(widget->tileData.guid),
-                            widget->tileData.name);
-    project->setProjectGuid(widget->tileData.guid);
-
-    emit exportProject();
+    // BY GUID, NEVER BY RE-POINTING (CREATE-GAP-1's fix round): this used to
+    // aim the LIVE project at the exported tile, so the export's save wrote the
+    // OPEN world into this tile's row — and so did every autosave after it.
+    emit exportProject(widget->tileData.guid, widget->tileData.name);
 }
 
 void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
@@ -656,7 +659,7 @@ void ProjectManager::switchDesktop(int desktop)
     // a rows desktop must not cascade-assign freeform positions), then its projects
     applyDesktopLayoutMode(
         settings->getValue(desktopLayoutKey(desktop), "rows").toString(), false);
-    populateDesktop(true);
+    populateDesktop();      // THE DESKTOP CHANGED: the one rebuild there is
 }
 
 void ProjectManager::moveProjectToDesktop(ItemGridWidget *widget, int desktop)
@@ -689,39 +692,111 @@ void ProjectManager::projectTileSliderChanged(ItemGridWidget *widget)
                                widget->sliderIndex);
 }
 
-void ProjectManager::addImportedTileToDesktop(const QString &guid)
+void ProjectManager::addTile(const QString &guid)
 {
-	int i = 0;
-	ProjectTileData importedScene;
-	foreach(const ProjectTileData &record, db->fetchProjects(currentDesktop)) {
-		if (record.guid == guid) importedScene = record;
-		i++;
-	}
-
-	dynamicGrid->addToGridView(importedScene, i - 1, isOpenProjectTile(importedScene.guid));
-
-	checkForEmptyState();
-
-    update();
+    if (!gridBuilt || guid.isEmpty() || dynamicGrid->tile(guid)) return;
+    ProjectTileData record;
+    if (!db->fetchProjectTile(guid, &record) || record.desktop != currentDesktop) return;
+    dynamicGrid->insertTileAtHead(record, isOpenProjectTile(guid));
+    checkForEmptyState();
+    irisLog(QStringLiteral("desktop: tile added — %1 on desktop %2 (%3 tile(s))")
+                .arg(guid).arg(currentDesktop).arg(dynamicGrid->originalItems.size()));
 }
 
-void ProjectManager::populateDesktop(bool reset)
+void ProjectManager::removeTile(const QString &guid)
+{
+    ItemGridWidget *widget = dynamicGrid->tile(guid);
+    if (!widget) return;
+    dynamicGrid->deleteTile(widget);
+    checkForEmptyState();
+}
+
+void ProjectManager::moveTile(const QString &guid, int desktop)
+{
+    if (desktop == currentDesktop) addTile(guid);
+    else removeTile(guid);
+}
+
+void ProjectManager::renameTile(const QString &guid, const QString &name)
+{
+    if (ItemGridWidget *widget = dynamicGrid->tile(guid)) widget->updateLabel(name);
+}
+
+void ProjectManager::touchTile(const QString &guid)
+{
+    if (ItemGridWidget *widget = dynamicGrid->tile(guid)) dynamicGrid->moveTileToHead(widget);
+    else addTile(guid);
+}
+
+void ProjectManager::enterDesktop()
+{
+    if (!gridBuilt) {
+        populateDesktop();
+        return;
+    }
+    refreshOpenTiles();
+
+    // THE CHECK, not a rebuild: the desktop's guids (no thumbnails read)
+    // against the tiles. Every path that changes the library calls its tile
+    // verb, so this finds nothing — and when it does find something the fix
+    // is one tile, and the log names it as the defect it is.
+    const QStringList guids = db->fetchProjectGuids(currentDesktop);
+    QStringList added, removed;
+    for (const QString &guid : guids)
+        if (!dynamicGrid->tile(guid)) added.append(guid);
+    const QSet<QString> onDesktop(guids.cbegin(), guids.cend());
+    for (ItemGridWidget *widget : std::as_const(dynamicGrid->originalItems))
+        if (!onDesktop.contains(widget->tileData.guid)) removed.append(widget->tileData.guid);
+    if (added.isEmpty() && removed.isEmpty()) return;
+    for (const QString &guid : std::as_const(removed)) removeTile(guid);
+    for (const QString &guid : std::as_const(added)) addTile(guid);
+    ++outOfStepEntries;
+    irisLog(QStringLiteral("desktop: tile set out of step on entry — added %1, removed %2 "
+                           "(a path changed the library without its tile verb): %3")
+                .arg(added.size()).arg(removed.size())
+                .arg((added + removed).join(QLatin1Char(' '))));
+}
+
+void ProjectManager::populateDesktop()
 {
     QElapsedTimer timer;
     timer.start();
-    if (reset) dynamicGrid->resetView();
+    const int decodesBefore = ItemGridWidget::thumbnailDecodeCount();
+    dynamicGrid->resetView();
 
+    const QVector<ProjectTileData> rows = db->fetchProjects(currentDesktop);
+    ItemGridWidget::prefetchThumbnails(rows, dynamicGrid->tileSize);
     int i = 0;
-    foreach (const ProjectTileData &record, db->fetchProjects(currentDesktop)) {
+    for (const ProjectTileData &record : rows) {
         dynamicGrid->addToGridView(record, i, isOpenProjectTile(record.guid));
         i++;
     }
+    gridBuilt = true;
+    ++gridBuildCount;
+    lastBuildMs = timer.elapsed();
+    lastBuildTiles = i;
+    lastBuildDecodes = ItemGridWidget::thumbnailDecodeCount() - decodesBefore;
 
     checkForEmptyState();
     // ONE LINE PER BUILD: the count scripting.e2e.desktops reads (log.tail) to
-    // prove a Desktop entry builds the grid once, and what one build costs.
-    irisLog(QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms")
-                .arg(i).arg(currentDesktop).arg(timer.elapsed()));
+    // prove the grid is built once per DESKTOP CHANGE and never for one
+    // project's, what one build costs, and how many thumbnails it had to
+    // decode (0 for a desktop whose thumbnails the session has seen).
+    irisLog(QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms, %4 decode(s)")
+                .arg(i).arg(currentDesktop).arg(lastBuildMs).arg(lastBuildDecodes));
+}
+
+QVariantMap ProjectManager::gridStats() const
+{
+    QVariantMap stats;
+    stats["builds"] = gridBuildCount;
+    stats["lastBuildMs"] = lastBuildMs;
+    stats["lastBuildTiles"] = lastBuildTiles;
+    stats["lastBuildDecodes"] = lastBuildDecodes;
+    stats["decodes"] = ItemGridWidget::thumbnailDecodeCount();
+    stats["outOfStep"] = outOfStepEntries;
+    stats["tiles"] = dynamicGrid->originalItems.size();
+    return stats;
 }
 
 void ProjectManager::refreshOpenTiles()
@@ -739,16 +814,6 @@ bool ProjectManager::checkForEmptyState()
 
     ui->stackedWidget->setCurrentIndex(1);
     return true;
-}
-
-void ProjectManager::cleanupOnClose()
-{
-    // clearAssetList(), not getAssets().clear(): the registry OWNS its assets
-    // (io/assetmanager.h) and a bare clear() dropped every pointer on the
-    // floor — including, for model assets, the SceneNodePtr subtree the
-    // payload QVariant pins. Reached from showProjectManagerInternal(), which
-    // does not always run after closeProject().
-    AssetManager::clearAssetList();
 }
 
 // THE TWO DIRECTORIES THE SHIPPED SAMPLES LIVE IN: the Jahshaka set at the top
@@ -840,9 +905,9 @@ void ProjectManager::newProject()
 	const ProjectInfo info = dialog.getProjectInfo();
 	if (!projectService) return;   // headless/stub host: nothing to create with
 
-	QString why;
+	QString why, folder;
 	const QString projectGuid =
-	    projectService->createProjectShell(info.projectName, info.projectPath, &why);
+	    projectService->createProjectShell(info.projectName, info.projectPath, &why, &folder);
 	if (projectGuid.isEmpty()) {
 		// A CANCELLED DIALOG IS NOT AN ERROR: it comes back with no name, which
 		// is exactly the refusal the service gives an empty one, and a person
@@ -853,7 +918,7 @@ void ProjectManager::newProject()
 		return;
 	}
 
-	emit fileToCreate(info.projectName.trimmed(), project->getProjectFolder(), info.empty);
+	emit fileToCreate(projectGuid, info.projectName.trimmed(), folder, info.empty);
 
 	this->hide();
 }
@@ -1242,7 +1307,7 @@ QStringList ProjectManager::sessionAssetGuids()
 	return guids;
 }
 
-void ProjectManager::updateTile(const QString &id, const QByteArray & arr)
+void ProjectManager::updateTile(const QString &id, const QByteArray &arr)
 {
 	dynamicGrid->updateTile(id, arr);
 }

@@ -16,7 +16,13 @@
 #     Showroom 2 open's worst frame is printed against the same 300 and
 #     asserted at 600 until PCC-BUDGET-1 lands, the watchdog reports no stall
 #     at its default 2,000 ms, app.openTimings() carries the CREATE's ledger,
-#     and project.createAsync hands back a guid before the world is installed.
+#     and project.createAsync hands back a guid before the world is installed,
+#   * AND (CREATE-GAP-1) THE FULL LIBRARY: a create over a 40-project desktop
+#     stays inside the same budget, rebuilds no grid, leaves one tile per
+#     project, and its ledger carries the close it began with.
+# EVERY RUN STARTS FROM A FIXED LIBRARY: the suite deletes the home's library
+# database, its lock, the asset store and the project folders before it spawns
+# the app (the shader cache stays) — the home used to grow ~14 projects a run.
 find_package(Qt6 REQUIRED COMPONENTS Core Network)
 add_executable(test_open_responsive test_open_responsive.cpp)
 set_target_properties(test_open_responsive PROPERTIES CXX_STANDARD 17

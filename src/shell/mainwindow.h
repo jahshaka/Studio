@@ -650,7 +650,22 @@ private:
     // bool isModelExtension(QString extension);
 
 public slots:
+    /// File > Export: the OPEN project, through a save dialog.
     void exportSceneAsZip();
+    /// A desktop tile's Export: project `guid`, through a save dialog. The
+    /// current project is never re-pointed (CREATE-GAP-1's fix round).
+    void exportProjectWithDialog(const QString &guid, const QString &name);
+
+public:
+    /// THE ONE EXPORT OF A PROJECT BY GUID (threaded, the window's archiver):
+    /// what the tile's Export and `desktop.exportTile` both run. Reads the
+    /// project's ROW; the current project, the open world and its autosave are
+    /// untouched — except that exporting the project that IS open first saves
+    /// it, so the archive carries what is on screen. False (and `why`) when an
+    /// archive operation is already running or the project is unknown.
+    bool startProjectExport(const QString &guid, const QString &zipPath, QString *why = nullptr);
+
+public slots:
 
     void setupDockWidgets();
     void setupViewPort();
@@ -709,11 +724,17 @@ public slots:
     /// `{empty: true}`. See createDefaultScene for what each of the two holds.
     void newScene(bool empty = false);
 
-    void newProject(const QString&, const QString&, bool empty = false);
+    /// Creates the world of the project `guid` (a row createProjectShell has
+    /// just made) named `filename` in `projectPath`: closes the world that is
+    /// open — its autosave lands in ITS OWN row — then points the current
+    /// project at `guid` and runs the create.
+    void newProject(const QString &guid, const QString &filename, const QString &projectPath,
+                    bool empty = false);
     /// THE SAME CREATE, WITHOUT THE DRAIN (OPEN_COVER_SPEC §2 C/§4,
     /// `project.createAsync`): the slices are queued and this returns at once.
     /// The caller polls `isOpeningProject()` — one runner serves both routes.
-    void newProjectAsync(const QString&, const QString&, bool empty = false);
+    void newProjectAsync(const QString &guid, const QString &filename,
+                         const QString &projectPath, bool empty = false);
     /// The BLOCKING open: returns with the world open, which is the contract
     /// `project.open()` and every headless script are written against.
     ///
@@ -841,7 +862,6 @@ public slots:
     /// left exactly as it was found.
     void leaveImmersiveFullscreen(bool restoreWindow);
     void toggleDebugDrawer(bool state);
-    void showProjectManagerInternal();
 
 signals:
 	void projectionChangeRequested(bool val);
@@ -902,7 +922,8 @@ private:
     /// Cover up + tear the previous world down. Always first.
     /// The sliced CREATE (OPEN_COVER_SPEC §2 C) — the same runner, the same
     /// stage order. `newProject` is this plus the pumped drain.
-    void startCreateRun(const QString &filename, const QString &projectPath, bool empty);
+    void startCreateRun(const QString &guid, const QString &filename, const QString &projectPath,
+                        bool empty);
     /// Builds the open/create runner and its slice boundary, once per window.
     void startOpenRunnerIfNeeded();
     void openStageBegin();
@@ -990,6 +1011,9 @@ private:
     /// Created on first use, parented here; shutdownBackgroundWork cancels and
     /// joins it (ProjectArchiver::shutdownArchives).
     class ProjectArchiver *archiver = nullptr;
+    /// The archiver's export target: a Project naming the row being exported,
+    /// never the live one (an export used to re-point the live project).
+    std::unique_ptr<Project> exportTarget;
     QPointer<class ProgressDialog> archiveProgress;
 
     /// A NON-owning watch on the process's Engine, taken when the viewport is

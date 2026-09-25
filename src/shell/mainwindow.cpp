@@ -1170,6 +1170,16 @@ void MainWindow::shutdownBackgroundWork()
 
     ThumbnailGenerator::getSingleton()->shutdown();
 
+    // THE LAST SAVE'S THUMBNAIL (CREATE-GAP-1): a save encodes its PNG on a
+    // worker and writes it when the worker is done — closeEvent's autosave
+    // above is exactly such a save. Waited for and WRITTEN here, while the
+    // database is still open, so a quit never drops the picture of the world
+    // it just saved. Bounded by one PNG encode (~100 ms).
+    if (projectService) {
+        const int drained = projectService->drainThumbnailEncodes();
+        if (drained) qInfo("shutdown: wrote %d pending project thumbnail(s)", drained);
+    }
+
     // Reap the remaining pool workers (metadata/peaks/bake futures) so
     // QThreadPool's exit-time wait finds an empty pool.
     workersStopped &= QThreadPool::globalInstance()->waitForDone(3000);
@@ -1633,12 +1643,17 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
         case WindowSpaces::DESKTOP: {
 			if (projectService->isSceneOpen() && sceneView->isInitialized())
 				updateCurrentSceneThumbnail();
-			// THE GRID IS REBUILT ON EVERY ENTRY (TRAY-REPOP-1). It used to be
-			// rebuilt only while a scene was open — and closeProject clears
-			// that flag BEFORE it switches here, so every close came back to a
-			// grid that had never seen the projects created or imported since
-			// boot (measured: 3 projects in the library, 0 tiles). One query.
-			pmContainer->populateDesktop(true);
+			// THE GRID IS NOT REBUILT HERE (CREATE-GAP-1). It was, on every entry
+			// (TRAY-REPOP-1: a close used to come back to a grid that had never
+			// seen the projects made since boot) — correct, and O(N) PNG decodes
+			// on the UI thread inside every close: 450 ms at 40 tiles, the create
+			// gap open.responsive reds on. The grid is a MODEL now: a project's
+			// tile is added when its row is made, removed with it, re-ordered and
+			// re-thumbnailed by its saves — so a close has nothing to rebuild.
+			// The entry builds the grid only the first time the desktop shows,
+			// and otherwise refreshes the open markers (ProjectManager::
+			// enterDesktop).
+			pmContainer->enterDesktop();
 
 			ui->stackedWidget->setCurrentIndex(0);
 
@@ -2477,6 +2492,9 @@ void MainWindow::closeProject(CloseIntent intent)
             scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 
         if (projectService->isSceneOpen()) {
+            // closePrevious:save — a create's ledger shows its close now
+            // (CREATE-GAP-1); a no-op outside a LoadTimeline run.
+            LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
             if (settings->getValue("auto_save", true).toBool()) saveScene();
         }
 
@@ -2532,11 +2550,13 @@ void MainWindow::closeProject(CloseIntent intent)
     // switchSpace below — so a close with the headset on reached the engine's
     // own safety net in OgreEngine::destroyScene instead of the Player's end.
     // The net stays; the ordinary flow does not need it.
+    LoadTimeline::Accumulate teardown(QStringLiteral("closePrevious:teardown"));
     playerView->endVrForSceneClose();
     removeScene();
 
     scene->cleanup();
     scene.clear();
+    teardown.stop();
 
     // R4: the document's nodes are gone from the staging manager now, and
     // the engine scene went with removeScene() — the one moment a SIMD-pool
@@ -2587,6 +2607,7 @@ void MainWindow::closeProject(CloseIntent intent)
 	// The reveal calls enterEditorSpace() itself when the page never left.
 	if (intent == CloseIntent::ReopenInPlace) return;
 
+    LoadTimeline::Accumulate toDesktop(QStringLiteral("closePrevious:switch"));
     switchSpace(WindowSpaces::DESKTOP);
 
 	if (sceneView->isInitialized())
@@ -2948,27 +2969,53 @@ bool MainWindow::isModelExtension(QString extension)
 */
 void MainWindow::exportSceneAsZip()
 {
+    if (!projectService->isSceneOpen() || project->getProjectGuid().isEmpty()) return;
+    exportProjectWithDialog(project->getProjectGuid(), project->getProjectName());
+}
+
+void MainWindow::exportProjectWithDialog(const QString &guid, const QString &name)
+{
     // get the export file path from a save dialog
     auto filePath = QFileDialog::getSaveFileName(
                         this,
                         "Choose export path",
-                        QString("%1_export").arg(project->getProjectName()),
+                        QString("%1_export").arg(name),
                         "Supported Export Formats (*.zip)"
                     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;
     if (!filePath.endsWith(".zip")) filePath += ".zip";
-    if (!!scene) saveScene();
+    QString why;
+    if (!startProjectExport(guid, filePath, &why))
+        QMessageBox::information(this, tr("Export"), why, QMessageBox::Ok);
+}
 
-    if (archiver && archiver->isRunning()) {
-        QMessageBox::information(this, tr("Export"),
-                                 tr("An archive operation is already running."), QMessageBox::Ok);
-        return;
-    }
+bool MainWindow::startProjectExport(const QString &guid, const QString &zipPath, QString *why)
+{
+    const auto refuse = [why](const QString &reason) {
+        if (why) *why = reason;
+        return false;
+    };
+    if (archiver && archiver->isRunning())
+        return refuse(tr("An archive operation is already running."));
+    if (guid.isEmpty() || !db->fetchProjectTile(guid, nullptr))
+        return refuse(tr("No project with guid '%1'.").arg(guid));
+
+    // THE OPEN WORLD IS SAVED ONLY WHEN IT IS THE ONE BEING EXPORTED (CREATE-
+    // GAP-1's fix round). The tile's Export used to re-point the LIVE project
+    // at the exported tile and then save "the scene" — the open world, written
+    // into the exported project's row and folder — and the pointer stayed
+    // there, so every later autosave of the open world landed in that row too.
+    const bool exportingOpenWorld = scene && projectService->isSceneOpen()
+                                    && guid == project->getProjectGuid();
+    if (exportingOpenWorld) saveScene();
+
     if (!archiver) {
         // Parented: it dies with this window (step 5 of the shutdown order),
-        // and shutdownBackgroundWork cancels + joins it before that.
-        archiver = new ProjectArchiver(db, project, this);
+        // and shutdownBackgroundWork cancels + joins it before that. It exports
+        // `exportTarget` — a Project naming the row — never the live project.
+        exportTarget = std::make_unique<Project>();
+        archiver = new ProjectArchiver(db, exportTarget.get(), this);
         archiveProgress = new ProgressDialog(this);
         // SIGNAL-driven, never pumping: a pump from inside a slice re-enters
         // the loop and can destroy objects the slice is still using
@@ -2982,11 +3029,13 @@ void MainWindow::exportSceneAsZip()
                 });
         connect(archiver, &ProjectArchiver::finished, this, [this](bool canceled) {
             if (archiveProgress) archiveProgress->close();
-            if (!canceled && !archiver->result().ok())
+            if (!canceled && !archiver->result().ok() && !FirstRun::isDrivenSession())
                 QMessageBox::warning(this, tr("Export failed"),
                                      archiver->result().error, QMessageBox::Ok);
         });
     }
+    exportTarget->setProjectPath(projectService->projectFolderFor(guid), QString());
+    exportTarget->setProjectGuid(guid);
 
     // Pin-world archives (phase 4): catalog snapshot + manifest v2 + the
     // pinned CAS objects, through the one archive implementation the
@@ -3000,11 +3049,16 @@ void MainWindow::exportSceneAsZip()
         archiveProgress->show();
     }
     // The manifest's scene-scale block, measured from the live document — the
-    // archiver only ever sees the database (services/sceneextents.h).
-    if (sceneView)
-        archiver->setSceneMetadata(sceneextents::describe(sceneView->getScene(),
-                                                          sceneView->editorCamera()));
-    archiver->startExport(filePath);
+    // archiver only ever sees the database (services/sceneextents.h). Only
+    // the OPEN world has a live document; another project's archive carries
+    // no scale block rather than the open world's.
+    archiver->setSceneMetadata(exportingOpenWorld && sceneView
+                                   ? sceneextents::describe(sceneView->getScene(),
+                                                            sceneView->editorCamera())
+                                   : exportformat::ManifestScene());
+    if (!archiver->startExport(zipPath))
+        return refuse(archiver->result().error);
+    return true;
 }
 
 namespace {
@@ -4432,10 +4486,10 @@ void MainWindow::setupDesktop()
 
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
 	connect(pmContainer, &ProjectManager::fileToCreate,
-	        this, [this](const QString &name, const QString &path, bool empty) {
-		newProject(name, path, empty);
+	        this, [this](const QString &guid, const QString &name, const QString &path, bool empty) {
+		newProject(guid, name, path, empty);
 	});
-	connect(pmContainer, SIGNAL(exportProject()), SLOT(exportSceneAsZip()));
+	connect(pmContainer, &ProjectManager::exportProject, this, &MainWindow::exportProjectWithDialog);
 }
 
 void MainWindow::setupToolBar()
@@ -5923,28 +5977,6 @@ void MainWindow::captureEditorDockState()
     editorDockState = DockState::snapshot(viewPort);
 }
 
-void MainWindow::showProjectManagerInternal()
-{
-    if (undoService->isDirty()) {
-        QMessageBox::StandardButton option;
-        option = QMessageBox::question(this,
-                                       "Unsaved Changes",
-                                       "There are unsaved changes, save before closing?",
-                                       QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-
-        if (option == QMessageBox::Yes) {
-            saveScene();
-        } else if (option == QMessageBox::Cancel) {
-            return;
-        }
-    }
-
-    if (playbackService->isPlaying()) enterEditMode();
-    hide();
-    pmContainer->populateDesktop(true);
-    pmContainer->cleanupOnClose();
-}
-
 // A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07). Opening a
 // scene pushes its saved EditorData into the viewport and the View menu
 // (openStage's `editorData` branch); creating one pushed NOTHING, so a new
@@ -6108,9 +6140,10 @@ void MainWindow::refreshClaudeChatContext()
 // so `project.create` keeps its synchronous promise to scripts and the desktop's
 // Create button keeps a window that answers. `project.createAsync` — a create
 // that returns before the world is installed — is phase 2b.
-void MainWindow::newProject(const QString &filename, const QString &projectPath, bool empty)
+void MainWindow::newProject(const QString &guid, const QString &filename,
+                            const QString &projectPath, bool empty)
 {
-    startCreateRun(filename, projectPath, empty);
+    startCreateRun(guid, filename, projectPath, empty);
     waitForOpen();
 }
 
@@ -6120,20 +6153,40 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath,
 // reads — covers a create exactly as it covers an open. It exists because a
 // caller that wants to WATCH a world arrive has to own the frames between the
 // slices, and `newProject` spends them itself inside `waitForOpen`.
-void MainWindow::newProjectAsync(const QString &filename, const QString &projectPath, bool empty)
+void MainWindow::newProjectAsync(const QString &guid, const QString &filename,
+                                 const QString &projectPath, bool empty)
 {
-    startCreateRun(filename, projectPath, empty);
+    startCreateRun(guid, filename, projectPath, empty);
 }
 
-void MainWindow::startCreateRun(const QString &filename, const QString &projectPath, bool empty)
+void MainWindow::startCreateRun(const QString &guid, const QString &filename,
+                                const QString &projectPath, bool empty)
 {
-    if (projectService->isSceneOpen()) closeProject();
+    // AN OPEN IN FLIGHT FINISHES FIRST — before this create's ledger begins:
+    // its run is the one LoadTimeline holds until the open ends it, so a begin
+    // skipped because "a run is running" would leave the create's marks on no
+    // run at all once the drain's end() closed the open's (fix round).
     if (isOpeningProject()) {
         qWarning("project create: an open was still in flight — draining it first");
         openRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
     }
+    // THE LEDGER COVERS THE CLOSE (CREATE-GAP-1). It began after it, so the
+    // create's own record was the smaller half of the verb: 800-1200 ms of a
+    // create over an open world — the autosave, the teardown, the page switch
+    // — sat in front of the run and in no stage. `closePrevious` is that
+    // span, and its counters (closePrevious:save / :teardown / :switch, and
+    // the save's own saveOpen:*) say where it went.
     if (!LoadTimeline::isRunning())
         LoadTimeline::begin(QStringLiteral("create %1").arg(filename));
+    if (projectService->isSceneOpen()) {
+        LoadTimeline::mark(QStringLiteral("closePrevious"));
+        closeProject();
+    }
+    // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the close above
+    // autosaved the old world into the old project's own row (createProject-
+    // Shell used to re-point first, and the old project's edits went into the
+    // new one's row — CREATE-GAP-1).
+    projectService->pointAtProject(guid, filename);
 
     // The runner and its slice boundary are set up once, by whichever route
     // reaches them first, so there is ONE definition of what a boundary does.
@@ -6363,6 +6416,11 @@ MainWindow::~MainWindow()
     // say what it means.
     if (undoStack) undoStack->clear();
     if (db) db->flushPendingAssetDeletes();
+    // ...and the last save's thumbnail, for the same reason and the same exits:
+    // the --script / --dump-api-docs paths never reach shutdownBackgroundWork,
+    // where a window close drains it (CREATE-GAP-1). Idempotent; nothing left
+    // is nothing done.
+    if (projectService) projectService->drainThumbnailEncodes();
 
     // The modules. They are plain heap objects the shell news up in
     // setupViewPort() and nothing ever deleted them (deep audit 2026-09,

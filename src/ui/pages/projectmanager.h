@@ -60,9 +60,7 @@ class ProjectManager : public QWidget
 
 public:
     /// `project` is the one live Project instance, owned by the shell
-    /// (Phase 4: was the Globals::project static). A constructor parameter
-    /// because populateDesktop() runs during construction and reaches it
-    /// through isOpenProjectTile().
+    /// (Phase 4: was the Globals::project static); isOpenProjectTile() reads it.
     ProjectManager(Database *handle, Project *project, QWidget *parent = nullptr);
     ~ProjectManager();
 
@@ -71,22 +69,50 @@ public:
     /// the same pairing). The New Scene button's create goes through it.
     void setProjectService(ProjectService *service) { projectService = service; }
 
-	void updateTile(const QString &id, const QByteArray &arr);
-	void addImportedTileToDesktop(const QString &guid);
-    void populateDesktop(bool reset = false);
+    // ---- THE GRID IS A MODEL (CREATE-GAP-1) --------------------------------
+    // The desktop's tiles are kept current one project at a time: a create or
+    // an import ADDS its tile when the row is made, a delete REMOVES it, a
+    // move to another desktop takes it off (or puts it on) this one, a save
+    // brings it to the head of the order and shows its new thumbnail. Nothing
+    // on that list rebuilds the grid. populateDesktop() — the whole desktop,
+    // one query, a widget per row — runs only when the DESKTOP changes: its
+    // first showing, and another desktop selected (switchDesktop).
+
+    /// A save's new thumbnail for `id`'s tile (decoded through the tile cache).
+    void updateTile(const QString &id, const QByteArray &arr);
+    /// The project's row was just made or arrived on this desktop: ONE query
+    /// by guid, ONE tile, first in the order. No-op before the first build
+    /// (that build will read it) and for a row on another desktop.
+    void addTile(const QString &guid);
+    /// The project is gone (or left this desktop): its tile goes.
+    void removeTile(const QString &guid);
+    /// The project now lives on `desktop`: off this desktop's grid, or on it.
+    void moveTile(const QString &guid, int desktop);
+    /// The project was renamed: its caption follows.
+    void renameTile(const QString &guid, const QString &name);
+    /// The project's row was just WRITTEN (a save stamps last_written): its
+    /// tile moves to the head, where a rebuild would put it — or is added if
+    /// this desktop does not show it yet.
+    void touchTile(const QString &guid);
+    /// The Desktop page is being shown: builds the grid the FIRST time, and
+    /// after that rebuilds nothing — it refreshes the open markers and checks
+    /// the tile set against the desktop's guids (one blob-free query), fixing
+    /// and LOGGING any difference, because a difference means some path
+    /// changed the library without its tile verb.
+    void enterDesktop();
+    /// Rebuilds the whole grid from the database: the DESKTOP CHANGED.
+    void populateDesktop();
+    /// desktop.gridStats(): builds so far, the last build's cost, the
+    /// session's thumbnail decodes, out-of-step entries, tiles now.
+    QVariantMap gridStats() const;
 
     // Re-reads the OPEN state of the live tiles in place — no rebuild, no
-    // thumbnail decode, no layout churn (ItemGridWidget::setOpenProject).
-    // populateDesktop(true) does this too, as a side effect of rebuilding
-    // everything, but the CLOSE edge has no repopulate at all: closing from
-    // the desktop returns early in MainWindow::closeProject, and the
-    // switchSpace(DESKTOP) path's repopulate is gated on a scene being open —
-    // which it no longer is. Without this call the closed project's tile kept
-    // its "[ Open ]" caption, its dark blue bar and its Close control.
+    // thumbnail decode, no layout churn (ItemGridWidget::setOpenProject). The
+    // close edge calls it (closing FROM the desktop never switches space) and
+    // so does every Desktop entry (enterDesktop).
     void refreshOpenTiles();
 
     bool checkForEmptyState();
-    void cleanupOnClose();
 
 	MainWindow *mainWindow = nullptr;
 	/// Is this tile the project whose scene is open right now? (highlight rule)
@@ -207,9 +233,12 @@ signals:
     /// `empty` = the dialog's "Empty scene" checkbox (owner review R1a). It
     /// rides the signal rather than being read back off the dialog because the
     /// dialog is gone by the time the shell builds the scene.
-    void fileToCreate(const QString &name, const QString &path, bool empty);
+    /// `guid` is the row createProjectShell just made; the shell points the
+    /// current project at it only after closing the world that is open.
+    void fileToCreate(const QString &guid, const QString &name, const QString &path, bool empty);
     void importProject();
-    void exportProject();
+    /// A tile's Export: the project `guid` (the current project is untouched).
+    void exportProject(const QString &guid, const QString &name);
     void closeProject();
 
 private:
@@ -228,6 +257,14 @@ private:
     static QString normalizedLayoutMode(const QString &name);   // unknown -> "rows"
 
     int currentDesktop = 1;
+    /// The grid has been built once (enterDesktop's first showing); before it,
+    /// the incremental verbs have nothing to keep current.
+    bool gridBuilt = false;
+    int gridBuildCount = 0;
+    qint64 lastBuildMs = 0;
+    int lastBuildTiles = 0;
+    int lastBuildDecodes = 0;
+    int outOfStepEntries = 0;
     QString currentLayoutMode = QStringLiteral("rows");
     QMenu *desktopMenu = nullptr;
     QMenu *layoutMenu = nullptr;
