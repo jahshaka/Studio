@@ -62,7 +62,7 @@ assert(world.atomStatus().on, "the split is live again");
 // says so, and nothing throws (a window shape that carried the id pass threw in
 // 'Jahshaka opaque' every frame).
 app.engineErrors(true);
-world.setMode({ mode: "low" });
+world.mode({ mode: "low" });
 editor.frame(6);
 var low = world.atomStatus();
 console.log("low: " + J(low));
@@ -72,7 +72,7 @@ var thrown = 0;
 for (var k = 0; k < (errs.entries || []).length; ++k)
     if (/incompatible|Jahshaka opaque/.test(errs.entries[k].message)) ++thrown;
 assert(thrown === 0, "no compositor pass threw at Low (" + J(errs.entries) + ")");
-world.setMode({ mode: "epic" });
+world.mode({ mode: "epic" });
 editor.frame(6);
 assert(world.atomStatus().passthroughViews === 0, "back at Epic the viewport carries the id pass again");
 "ok";

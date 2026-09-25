@@ -268,7 +268,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
+        { "renderStats", "app.renderStats() -> {sceneTriangles, submittedTriangles, gpuCountLagFrames, draws, perPass:[{name, triangles, draws}], perObject:[{id, name, level, levels, triangles}], metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, batches, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget, resourceAdvances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
@@ -282,7 +282,10 @@ QVector<VerbInfo> AppApi::verbs() const
           "LOD actually drawn. `submittedTriangles` is the other question — what the renderer handed "
           "the GPU last frame, EVERY pass included (the same geometry drawn again for the SSR depth "
           "pre-pass, each shadow cascade, probe captures, one full-screen quad per post step) — and it "
-          "is the number the readout used to show unlabelled as \"triangles\". `perPass` breaks that "
+          "is the number the readout used to show unlabelled as \"triangles\". Where the visibility buffer "
+          "draws (world.atomStatus), its objects and their levels are chosen by the GPU and their share of "
+          "these counts is read back once the frame has retired, so after a change they settle "
+          "`gpuCountLagFrames` frames later (0 while every draw is counted on the CPU). `perPass` breaks that "
           "total down per compositor pass, and it is filled only while the render monitor is capturing "
           "(Ctrl+F4 / perf.start): the per-pass counters cost clock reads and listeners on every "
           "workspace, so nothing pays for them when nobody is looking, and the list is empty "
@@ -1394,6 +1397,10 @@ QVariantMap AppApi::renderStats()
     }
     out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
     out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
+    // THE COUNTS' LAG (ATOM S3-DRAW): where the visibility buffer draws, its share of
+    // the geometry counts is read back from the GPU cull once the frame has retired,
+    // so after a change the counts settle this many frames later (0: CPU-counted).
+    out.insert("gpuCountLagFrames", int(s.gpuCountLagFrames));
     out.insert("incompletePsoRequests", s.incompletePsoRequests);
     // The Forward+ census. `forwardPlusOverBudget` == 0 PROVES no light was
     // dropped from any cell; non-zero says a full cell would have dropped that
