@@ -168,6 +168,9 @@ assert(dist(lit, h0) > 12, "and it is on screen again");
 app.engineErrors(true);   // reset the pump: what follows must add nothing
 // The hybrid builds its probe grid because the scene above is a ROOM: the
 // enclosure comes out of the layout, and there is no pin to state it with.
+// ...AND BECAUSE THE SCENE'S RAYS ARE OFF: a new project is Epic, which builds
+// no grid at all where it traces (PHOTON-F12-PCC) — the fence needs the grid.
+assert(world.rayTracing("off") === "off", "the scene's rays off (the grid tier)");
 assert(world.gi({ mode: "vct_pcc_hybrid" }) === true, "switch the VCT+Probes hybrid ON");
 // The hybrid binds over several frames (voxelize, solve, capture the probes),
 // so this waits for the BINDING rather than assuming it landed in one.
