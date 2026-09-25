@@ -1179,6 +1179,11 @@ set_tests_properties(gi.card_blend PROPERTIES TIMEOUT 300 LABELS "engine")
 add_test(NAME gi.card_view COMMAND test_gi_cards view
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_view PROPERTIES TIMEOUT 300 LABELS "engine")
+# ...and the audit's F3: a capture batch past the relight budget is relit in its
+# own frame (the read never meets the capture's alpha = the world -Z direction).
+add_test(NAME gi.card_view_batch COMMAND test_gi_cards view_batch
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_view_batch PROPERTIES TIMEOUT 300 LABELS "engine")
 # PHOTON-CARDS-2 part A: the pixel's diffuse cones and the card job's are ONE
 # text (JahVoxelCones) — their answers at a point, 1 % apart at most.
 add_test(NAME gi.cone_integrator_parity COMMAND test_gi_cards cone_parity
