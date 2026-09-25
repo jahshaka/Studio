@@ -197,6 +197,12 @@ public:
 	/// single-claimant routing pattern graphUndo established for Ctrl+Z. Tab
 	/// over the view still opens it too. False = no graph to search.
 	bool openNodeSearch();
+	/// F and H on this page (STUDIO-CRUD-1 item 7): frame the selected nodes
+	/// (all of them when nothing is selected) and reset the zoom. Registry
+	/// entries routed here by the shell when the Materials space is active —
+	/// the openNodeSearch pattern. False = no graph view.
+	bool graphFitSelection();
+	bool graphResetZoom();
 
 	// The graph's EDIT chords, page-scoped (EDITOR_MULTISELECT_SPEC §2.6).
 	//

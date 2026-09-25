@@ -4727,8 +4727,15 @@ void MainWindow::setupShortcuts()
             [this]() { spaceKeyActiveSpace(); });
 
     // ---- camera ----
-    reg.add("camera.focus", "Focus Selection", "Camera", QKeySequence(Qt::Key_F), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection(); });
+    // F is page-scoped like Space: ONE registry claimant (the graph view's own
+    // QShortcut made it ambiguous on the Materials page — STUDIO-CRUD-1 item 7),
+    // routed by the active space (see focusActiveSpace).
+    reg.add("camera.focus", "Focus Selection / Frame Graph Nodes", "Camera",
+            QKeySequence(Qt::Key_F), this, [this]() { focusActiveSpace(); });
+    reg.add("graph.resetZoom", "Reset Graph Zoom", "Materials", QKeySequence(Qt::Key_H), this,
+            [this]() {
+                if (currentSpace == WindowSpaces::EFFECT && shaderGraph) shaderGraph->graphResetZoom();
+            });
     reg.add("view.orthographic", "Orthographic Projection", "Camera", QKeySequence(Qt::Key_O), this,
             [this]() { emit projectionChangeRequested(false); });
     reg.add("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), this,
@@ -5440,6 +5447,15 @@ void MainWindow::pasteActiveSpace()
 // means. On the Materials space Space opens the node-SEARCH palette — the graph
 // is the thing being edited there and there is no gizmo to cycle; everywhere
 // else it is the tool cycle it has always been.
+void MainWindow::focusActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->graphFitSelection();
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection();
+}
+
 void MainWindow::spaceKeyActiveSpace()
 {
     if (currentSpace == WindowSpaces::EFFECT) {

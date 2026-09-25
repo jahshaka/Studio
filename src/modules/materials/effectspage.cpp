@@ -2372,6 +2372,20 @@ bool EffectsPage::openNodeSearch()
 	return graphicsView->openNodeSearch();
 }
 
+bool EffectsPage::graphFitSelection()
+{
+	if (!graphicsView) return false;
+	graphicsView->fitSelection();
+	return true;
+}
+
+bool EffectsPage::graphResetZoom()
+{
+	if (!graphicsView) return false;
+	graphicsView->resetZoom();
+	return true;
+}
+
 // The four edit chords, routed here by MainWindow when the Materials space is
 // active (EDITOR_MULTISELECT_SPEC §2.6). Each one is exactly what the graph
 // view's deleted QShortcut did, minus the ambiguity that made the chord

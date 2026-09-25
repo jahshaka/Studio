@@ -819,6 +819,9 @@ public slots:
     void selectAllActiveSpace();
     /// Space: node search on the Materials space, gizmo cycle elsewhere.
     void spaceKeyActiveSpace();
+    /// F: frame the graph selection on the Materials page, focus the scene
+    /// selection in the editor (one claimant, routed like Space).
+    void focusActiveSpace();
     void redoActiveSpace();
 
     void takeScreenshot();
