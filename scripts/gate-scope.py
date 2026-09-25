@@ -33,20 +33,31 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # dirs are tests/<dir>; modules are the `<module>.` prefixes an e2e script calls. The
 # special dir "*vulkan-scripts" means every app-spawning suite that is NOT --headless
 # (anything that renders), "*headless-scripts" the --headless ones, "*all-scripts" both.
+# THE ENGINE FAMILY: the test dirs any change to the engine's pixels or boundary selects.
+# `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING from this list,
+# so no engine change ever selected the ray-traced reflection suites — DRAG-1 changed what
+# the ray arm reads from the voxels and two scoped gates came back green while
+# gi.rt_reflect was red. The entries are test DIRECTORY names, not ctest labels, so a
+# suite whose dir is not named is invisible however it is labelled.
+ENGINE_FAMILY = ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow",
+                 "shadercache", "compute", "hdr", "sky", "pieces", "vr",
+                 "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
+                 "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
+                 "shutdown", "openasync", "*vulkan-scripts"]
+
 AREA_RULES = [
     # --- engine: anything that changes pixels or the boundary ---------------------------
-    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/build-ogre)",
-     # `rtreflect` is tests/rtreflect (the gi.rt_reflect family): it was MISSING
-     # from this list, so no engine change ever selected the ray-traced
-     # reflection suites — DRAG-1 changed what the ray arm reads from the voxels
-     # and two scoped gates came back green while gi.rt_reflect was red. The
-     # entries here are test DIRECTORY names, not ctest labels, so a suite whose
-     # dir is not named is invisible however it is labelled.
-     ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
-      "compute", "hdr", "sky", "pieces", "vr",
-      "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
-      "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
-      "shutdown", "openasync", "*vulkan-scripts"], []),
+    # THE VISIBILITY-BUFFER DECODE (tests/atom: engine.atom_parity and its twins, the
+    # cluster suites): HlmsAtom is a derived HlmsPbs, so its pixels move with ITS OWN
+    # media and C++, the GPU scene tables it reads, the atom pass, EVERY Hlms piece the
+    # engine stages (PBS's pieces are its text too) and the fork pin (Ogre's Pbs pieces,
+    # the Forward+ hook). PHOTON-HIT-SHADE-1 changed all of these and the generic rule
+    # below did not select engine.atom_parity (audit F2): its byte-identity rested on a
+    # hand run.
+    (r"^irisgl/(engine/media/Hlms/|engine/src/(HlmsAtom|OgreAtomPass|AtomPass|OgreGpuScene|GpuScene)\.|"
+     r"thirdparty/ogre-next)",
+     ENGINE_FAMILY + ["atom"], []),
+    (r"^irisgl/(engine/|thirdparty/ogre-next|scripts/build-ogre)", ENGINE_FAMILY, []),
     (r"^irisgl/mirror/",
      ["mirror", "skeletal", "sockets", "cameras", "gizmo", "player", "thumbnails",
       "materialpreview", "samples", "picking", "particles",
@@ -83,11 +94,8 @@ AREA_RULES = [
     # The media-staging CMake (WrapHlmsPiece: plain GLSL wrapped into Hlms pieces) changes what
     # the engine's shaders SEE — the engine family, not the whole tier (DEVPROCESS-2, 2026-09-24:
     # eight lane gates fell back to the MERGE tier this phase on paths like this one).
-    (r"^irisgl/cmake/WrapHlmsPiece",
-     ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow", "shadercache",
-      "compute", "hdr", "sky", "pieces", "vr", "mirror", "cameras", "samples", "picking", "skeletal",
-      "particles", "thumbnails", "materialpreview", "player", "sockets", "threading", "perf", "gizmo",
-      "assets", "log", "shutdown", "openasync", "*vulkan-scripts"], []),
+    # The wrapped pieces are Hlms text HlmsAtom's decode compiles too: the atom dir with it.
+    (r"^irisgl/cmake/WrapHlmsPiece", ENGINE_FAMILY + ["atom"], []),
     (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name

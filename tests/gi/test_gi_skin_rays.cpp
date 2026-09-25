@@ -30,12 +30,13 @@
 //      row (GpuInstance::raster[2]); a static item's names none.
 //   6. THE MIRROR (`--mirror`, its own row): the reflection of the posed
 //      character in a perfect mirror against the raster through the mirror's
-//      reflected camera. WHAT THIS LANE DELIVERS IS THE POSED SILHOUETTE AND
-//      SHADOW, NOT A SHADED CHARACTER REFLECTION: a hit is shaded from cards (a
-//      rigged mesh gets none) or the voxels (which hold the rig's BIND pose), so
-//      the bent arm beyond the bind pose's voxels shows the probe/sky. Asserted:
-//      no T-pose ghost, and the static baseline; the shading gap is printed.
-//      Owed elsewhere: the voxel feed reading the override (SKIN-2).
+//      reflected camera. SINCE PHOTON-HIT-SHADE-1 THE POSED CHARACTER IS SHADED
+//      in the reflection: a hit on a rigged item always goes to the hit decode
+//      (HlmsAtom, over the instance's skin row — the posed triangles), as does a
+//      hit on a MOVER. Asserted: no T-pose ghost; the rigged and the mover arms
+//      cover at least the static control's fraction of their raster silhouettes
+//      (gi.hit_shade's arm (c)). Owed elsewhere: the voxel feed reading the
+//      override (SKIN-2's diffuse).
 //   7. A SHARED SKELETON (a multi-piece character's armour) re-skins with its
 //      MASTER's clip, in the same frame; a RE-ATTACH in place to a different mesh
 //      rebuilds the cache (identity = Item, Mesh, rig generation); a blend index
@@ -741,6 +742,7 @@ int mirrorMain(Engine *e)
         savePpm(img, std::string("skin-mirror-") + tag + ".ppm");
         return img;
     };
+    float fraction[3] = { 0.0f, 0.0f, 0.0f };
     for (int which = 0; which < 3; ++which) {
         arm = which;
         const bool skinned = which == 0;
@@ -757,6 +759,7 @@ int mirrorMain(Engine *e)
         std::printf("mirror %-20s: reflection %u px, raster %u px, both %u (%.1f %% of the raster), IoU %.3f, "
                     "worst reflection->raster %.1f px, worst raster->reflection %.1f px\n",
                     name, c.a, c.b, c.both, c.b ? 100.0 * c.both / c.b : 0.0, c.iou, c.worstAtoB, c.worstBtoA);
+        fraction[which] = c.b ? float(c.both) / float(c.b) : 0.0f;
         if (which == 1) {
             // THE TIER'S OWN BASELINE — an object the voxels hold: its reflection is
             // its raster silhouette to within the voxel shading's edge.
@@ -800,15 +803,20 @@ int mirrorMain(Engine *e)
             CHECK_MSG(ghost == 0, "mirror: NO T-POSE GHOST — %u reflection pixels where only the straight pose "
                                   "would be", ghost);
             std::printf("mirror: the bent arm beyond the straight pose's silhouette: %u raster px, %u of them "
-                        "shown in the reflection (%.1f %%) — a traced hit there is SHADED from the voxels, which "
-                        "hold the rig's bind pose (the voxel feed reads the MESH's rows, not the override)\n",
+                        "shown in the reflection (%.1f %%) — shaded by the hit decode on the POSED triangles\n",
                         beyond, beyondShown, beyond ? 100.0 * beyondShown / beyond : 0.0);
         }
-        if (which == 2)
-            std::printf("mirror: a MOVER (not voxelised) shows %u reflection px of %u — a traced hit the voxels "
-                        "do not hold is handed back to the probe/sky (rq_reflect.comp), for EVERY mover\n",
-                        c.a, c.b);
     }
+    // THE RIGGED AND THE MOVER ARMS AGAINST THE CONTROL (PHOTON-HIT-SHADE-1; the
+    // print this replaced said "a MOVER shows 0 of 435 reflection px ... for EVERY
+    // mover"): each covers at least the static control's fraction of its raster
+    // silhouette, less one point for the silhouette's edge (gi.hit_shade (a)).
+    CHECK_MSG(fraction[0] >= fraction[1] - 0.01f,
+              "mirror: the POSED character's reflection is SHADED — %.1f %% of its raster silhouette, the static "
+              "control's %.1f %%", 100.0f * fraction[0], 100.0f * fraction[1]);
+    CHECK_MSG(fraction[2] >= fraction[1] - 0.01f,
+              "mirror: a MOVER's reflection is SHADED — %.1f %% of its raster silhouette, the static control's "
+              "%.1f %%", 100.0f * fraction[2], 100.0f * fraction[1]);
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
