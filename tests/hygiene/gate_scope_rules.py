@@ -56,6 +56,13 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
      falls back reports a MERGE-tier `command` at -j2, and the printed tier line
      follows `-j` too; `--run` runs that same string.
 
+  8. The decode's own suite (engine.atom_parity) rides the Atom media, HlmsAtom and the pin.
+
+  9. THE TIER DOC QUOTES THE SCRIPT (POST-C-FIXES-1): docs/TESTING_GATE.md carries
+     no literal `-LE` label list — it names `gate-scope.py --merge-tier`, which
+     prints the MERGE tier from NIGHTLY_LABELS | TARGET_LABELS — and an edit to
+     the doc selects this guard.
+
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
@@ -123,8 +130,9 @@ def main(source, build):
         check("NOTHING to gate" not in out,
               "...instead of reporting an empty gate")
 
-    # 4. the honest empty selection: docs only.
-    code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
+    # 4. the honest empty selection: docs only. (Not docs/TESTING_GATE.md: case 9's
+    # lint reads that one, so it selects the hygiene rows.)
+    code, out, err = run([tool, "--files", "docs/BUILDING_LINUX.md", "--build", build], source)
     check(code == 0, "a docs-only change exits 0 (%d)" % code)
     check("NOTHING to gate" in out,
           "a docs-only change still selects nothing (the case lanes rely on)")
@@ -209,6 +217,29 @@ def main(source, build):
         code, out, err = run([tool, "--files", path, "--build", build], source)
         check(code == 0 and ("engine.atom_parity|" in plain(out) or "engine.atom_parity)" in plain(out)),
               "%s selects engine.atom_parity" % path)
+
+    # 9. THE TIER DOC QUOTES THE SCRIPT, NEVER A COPY OF ITS SET (POST-C-FIXES-1).
+    # docs/TESTING_GATE.md's MERGE row carried a literal
+    # -LE "^(benchmark|shadercache-attack)$" that went stale the day TARGET_LABELS
+    # joined the tier (it never named photon-target). The set lives in
+    # gate-scope.py alone; the doc names `--merge-tier`, which prints the command.
+    import re as _re
+    doc_path = os.path.join(source, "docs", "TESTING_GATE.md")
+    with open(doc_path, errors="replace") as fh:
+        doc_lines = fh.read().splitlines()
+    literal = [i + 1 for i, l in enumerate(doc_lines) if _re.search(r'-LE\s+["\']\^?\(', l)]
+    check(not literal,
+          "docs/TESTING_GATE.md quotes no literal -LE label list (lines %s) - it names "
+          "`gate-scope.py --merge-tier`" % literal)
+    check(any("--merge-tier" in l for l in doc_lines),
+          "...and it names `gate-scope.py --merge-tier` as the tier's command")
+    code, out, err = run([tool, "--merge-tier", "-j", "2"], source)
+    check(code == 0 and out.strip().startswith("ctest -j2 ") and "photon-target" in plain(out)
+          and "benchmark" in plain(out) and "shadercache-attack" in plain(out),
+          "`--merge-tier -j 2` prints the MERGE tier at -j2 with every excluded label (%r)" % out.strip())
+    code, out, err = run([tool, "--files", "docs/TESTING_GATE.md", "--build", build], source)
+    check(code == 0 and "source.gate_scope_rules" in plain(out),
+          "an edit to docs/TESTING_GATE.md selects this guard")
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
