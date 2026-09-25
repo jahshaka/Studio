@@ -746,7 +746,21 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
                 { "radius", double(s.gi.cards.residencyRadius) },
                 { "bytesPerTexel", int(s.gi.cards.bytesPerTexel) },
                 { "megabytes", double(s.gi.cards.bytes) / (1024.0 * 1024.0) },
-                { "emissiveFormat", qs(s.gi.cards.emissiveFormat) } } } } },
+                { "emissiveFormat", qs(s.gi.cards.emissiveFormat) } } },
+            // ...and THE MOVERS' SHADOW ON THEM (PHOTON-CARDS-4): the traced
+            // term's cards, texels and GPU milliseconds (with the relight's), the
+            // cards past the budget, and the still casters' recaptures.
+            { "cardsMovers", QJsonObject{
+                { "movers", int(s.gi.cards.moverCasters) },
+                { "tracedLastFrame", int(s.gi.cards.moverTracedLastFrame) },
+                { "texelsLastFrame", int(s.gi.cards.moverTexelsLastFrame) },
+                { "pending", int(s.gi.cards.moverPending) },
+                { "pendingAgeFrames", int(s.gi.cards.moverPendingAge) },
+                { "traces", double(s.gi.cards.moverTraces) },
+                { "retired", double(s.gi.cards.moverRetired) },
+                { "casterRecaptures", double(s.gi.cards.casterRecaptures) },
+                { "traceGpuMs", double(s.gi.cards.moverGpuMs) },
+                { "relightGpuMs", double(s.gi.cards.relightGpuMs) } } } } },
         { "shaderCache", QJsonObject{
             { "enabled", s.shaderCache.enabled },
             { "dir", qs(s.shaderCache.dir) },

@@ -33,10 +33,21 @@
 //       frames: no trace, no relight.
 //   (f) a STILL crate moved 3 m: the old footprint reads lit and the new one
 //       dark within the capture budget's frames for the cards it queued.
+//   (g) GI-ON, the editor's drag: a still crate dragged 2 m is promoted to the
+//       mover channel on its second move and demoted 10 quiet GI ticks after
+//       the release with no transform write — its shadow reads at the crate on
+//       every frame from the promotion to 20 frames past the demotion, the
+//       place it left lit (a class change is a caster move).
+//   (h) the still crate DELETED (not the tail slot: the swap-remove renumbers
+//       the tail into it): its footprint reads lit within the capture budget.
+//   (i) a still crate ARRIVES: its shadow reads in the captured term within
+//       the capture budget.
 //
 // `--cost` (not a ctest row; run under scripts/gpu-exclusive.sh): paired arms
 // of 0 / 1 / 30 moving movers on a Showroom-2-shaped floor at 1920x1080: the
-// trace's and the relight's GPU milliseconds and the cards they touch a frame.
+// trace's and the relight's GPU milliseconds and the cards they touch a frame, and
+// THE STARVATION BOUND: no pending card waits N = ceil(selected / traced a frame)
+// frames (exit 1 if one does).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -404,6 +415,123 @@ int main(int argc, char **argv)
                   "frames (%d, bar %d)", frames, bar);
     }
 
+    // ---- (g) A STILL CRATE DRAGGED UNDER GI-ON (the drag's class change) ------
+    // The editor's drag: with the cascades and the drag-mover channel on, the
+    // SECOND move inside the settle window PROMOTES the still crate to the mover
+    // channel (it leaves the captured world and its shadow becomes the traced
+    // term's), and 10 quiet GI ticks after the release DEMOTES it with no
+    // transform write at all (its shadow must pass back to the capture). The
+    // floor texel at the crate's shadow must read dark on every frame from the
+    // promotion on — through the drag, the release, the demotion and 20 frames
+    // after it — and the place it left must read lit.
+    std::printf("\n== (g) a still crate dragged 2 m under GI-on (promotion, release, demotion)\n");
+    float stillZ = -2.0f;
+    {
+        GiParams on = gi;
+        on.mode = GiMode::Vct;
+        on.ddgi = GiToggle::Off;
+        on.cascades = true;
+        on.cascadeCount = 3;
+        on.dragMoverChannel = true;
+        s->setGlobalIllumination(on);
+        aim(true);
+        render(e, 120);
+        const float startZ = stillZ;
+        const float litAt = cardRadiance(s, 3.0f, -3.0f);
+        CHECK_MSG(cardShadow(s, 0.6f, startZ) >= 0.0f && cardShadow(s, 0.6f, startZ) < 0.1f,
+                  "(g) before the drag the crate's shadow is the captured term's (%.3f)",
+                  cardShadow(s, 0.6f, startZ));
+        const auto dark = [&](float z) { return cardRadiance(s, 0.6f, z) < 0.5f * litAt; };
+        int promotedAt = -1, lateDrag = 0, dragFrames = 0;
+        for (int f = 0; f < 20; ++f) {
+            stillZ -= 0.1f;
+            enginetest::setNodePosition(s, still, Vec3(-0.6f, 0.6f, stillZ));
+            render(e, 1);
+            if (promotedAt < 0 && s->giStatus().dragMovers == 1) promotedAt = f;
+            if (promotedAt < 0) continue;
+            ++dragFrames;
+            if (!dark(stillZ)) ++lateDrag;
+        }
+        int demotedAt = -1, lateRest = 0, restFrames = 0;
+        for (int f = 1; f <= 240; ++f) {
+            render(e, 1);
+            ++restFrames;
+            if (!dark(stillZ)) ++lateRest;
+            if (demotedAt < 0 && s->giStatus().dragMovers == 0) demotedAt = f;
+            if (demotedAt > 0 && f >= demotedAt + 20) break;
+        }
+        const float leftR = cardRadiance(s, 0.6f, startZ);
+        std::printf("    lit %.4f; promoted at drag frame %d; demoted %d frames after the release; late: "
+                    "%d of %d drag frames, %d of %d rest frames; the place it left %.4f; captured term "
+                    "there %.3f, at the new place %.3f\n", litAt, promotedAt, demotedAt, lateDrag, dragFrames,
+                    lateRest, restFrames, leftR, cardShadow(s, 0.6f, startZ), cardShadow(s, 0.6f, stillZ));
+        CHECK_MSG(litAt > 0.05f, "(g) the card lights the floor under GI-on (%.4f)", litAt);
+        CHECK_MSG(promotedAt >= 0, "(g) the drag promoted the crate (drag frame %d)",
+                  promotedAt);
+        CHECK_MSG(demotedAt > 0, "(g) the release demoted it (%d frames after)", demotedAt);
+        CHECK_MSG(dragFrames > 0 && lateDrag == 0,
+                  "(g) the shadow is at the crate on every drag frame from the promotion (%d of %d late)",
+                  lateDrag, dragFrames);
+        CHECK_MSG(demotedAt > 0 && lateRest == 0,
+                  "(g) ...and on every frame of the release, the demotion and 20 frames after it "
+                  "(%d of %d late)", lateRest, restFrames);
+        CHECK_MSG(cardShadow(s, 0.6f, stillZ) >= 0.0f && cardShadow(s, 0.6f, stillZ) < 0.1f,
+                  "(g) at rest the shadow is the captured term's again (%.3f)", cardShadow(s, 0.6f, stillZ));
+        CHECK_MSG(leftR > 0.8f * litAt, "(g) the place it left reads lit (%.4f of lit %.4f)", leftR, litAt);
+    }
+
+    // The capture budget's bar for a recapture: the cards queued, at the cards a
+    // frame the budget holds, and two frames of slack (arm (f)'s).
+    const auto recaptureBar = [&](unsigned long long queued) {
+        const unsigned perFrame = std::max(1u, s->giStatus().cards.budgetTexels / (128u * 128u));
+        return int((queued + perFrame - 1u) / perFrame) + 2;
+    };
+
+    // ---- (h) THE STILL CRATE DELETED -------------------------------------------
+    // Not the tail slot (the far mover of (d) is): the swap-remove renumbers the
+    // tail into its slot, which is the case a per-slot comparison missed.
+    std::printf("\n== (h) the still crate deleted\n");
+    {
+        const GiStatus s0 = s->giStatus();
+        const bool removed = s->removeNode(still);   // once: CHECK_MSG evaluates twice
+        CHECK_MSG(removed, "(h) the still crate is removed");
+        int frames = -1;
+        for (int f = 1; f <= 60; ++f) {
+            render(e, 1);
+            if (cardShadow(s, 0.6f, stillZ) > 0.9f) { frames = f; break; }
+        }
+        const unsigned long long queued = s->giStatus().cards.casterRecaptures - s0.cards.casterRecaptures;
+        const int bar = recaptureBar(queued);
+        std::printf("    %llu cards queued; its footprint lit after %d frames (bar %d)\n", queued, frames, bar);
+        CHECK_MSG(queued > 0u, "(h) the deletion queued its footprint's cards (%llu)", queued);
+        CHECK_MSG(frames > 0 && frames <= bar,
+                  "(h) the deleted crate's footprint reads lit within the capture budget's frames (%d, bar %d)",
+                  frames, bar);
+    }
+
+    // ---- (i) A STILL CRATE ARRIVES ---------------------------------------------
+    std::printf("\n== (i) a still crate arrives\n");
+    {
+        const GiStatus s0 = s->giStatus();
+        const NodeId born = s->createNode();
+        s->attachMesh(born, cube, crateMat);
+        enginetest::setNodeScale(s, born, Vec3(1.2f, 1.2f, 1.2f));
+        enginetest::setNodePosition(s, born, Vec3(-0.6f, 0.6f, stillZ));
+        int frames = -1;
+        for (int f = 1; f <= 60; ++f) {
+            render(e, 1);
+            const float sh = cardShadow(s, 0.6f, stillZ);
+            if (sh >= 0.0f && sh < 0.1f) { frames = f; break; }
+        }
+        const unsigned long long queued = s->giStatus().cards.casterRecaptures - s0.cards.casterRecaptures;
+        const int bar = recaptureBar(queued);
+        std::printf("    %llu cards queued; its footprint dark after %d frames (bar %d)\n", queued, frames, bar);
+        CHECK_MSG(queued > 0u, "(i) the arrival queued its footprint's cards (%llu)", queued);
+        CHECK_MSG(frames > 0 && frames <= bar,
+                  "(i) the new crate's shadow reads in the captured term within the capture budget's "
+                  "frames (%d, bar %d)", frames, bar);
+    }
+
     std::printf("\n%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
@@ -488,6 +616,10 @@ static int costMain(Engine *e)
     const int arms[3] = { 0, 1, 30 };
     double traceMs[3] = {}, relightMs[3] = {}, traced[3] = {}, relit[3] = {}, texels[3] = {};
     int traceN[3] = {}, relightN[3] = {}, frames[3] = {};
+    // THE STARVATION READING (every frame, every arm): the oldest pending card's
+    // age, the cards selected in a frame (traced + pending) and the fewest cards
+    // a frame traced while any waited — the budget's cards a frame.
+    unsigned maxAge = 0u, maxSelected = 0u, minPerFrame = ~0u;
     int tick = 0;
     for (int round = 0; round < 4; ++round)
         for (int a = 0; a < 3; ++a) {
@@ -499,6 +631,12 @@ static int costMain(Engine *e)
                                                 Vec3(home[size_t(m)].x, home[size_t(m)].y, home[size_t(m)].z + dz));
                 }
                 e->renderOneFrame();
+                {
+                    const CardCacheStatus c = s->giStatus().cards;
+                    maxAge = std::max(maxAge, c.moverPendingAge);
+                    maxSelected = std::max(maxSelected, c.moverTracedLastFrame + c.moverPending);
+                    if (c.moverPending) minPerFrame = std::min(minPerFrame, c.moverTracedLastFrame);
+                }
                 if (f < 6) continue;   // the arm's first frames carry the last arm's timestamps
                 const CardCacheStatus c = s->giStatus().cards;
                 traced[a] += c.moverTracedLastFrame;
@@ -518,5 +656,21 @@ static int costMain(Engine *e)
                     traceN[a] ? traceMs[a] / traceN[a] : 0.0, frames[a] ? relit[a] / frames[a] : 0.0,
                     relightN[a] ? relightMs[a] / relightN[a] : 0.0);
     std::printf("cost: pending past the budget at the end: %u\n", s->giStatus().cards.moverPending);
-    return 0;
+    // NO STARVATION (oldest pending first): a card pending since frame F waits
+    // only behind cards pending at F, at most `maxSelected`, and each frame
+    // traces at least `minPerFrame` of them — so it is traced within
+    // N = ceil(maxSelected / minPerFrame) frames and no card left waiting is
+    // ever N frames old. (Nearest first alone left the far cards waiting for the
+    // whole motion: an age that grows with the arm.)
+    if (minPerFrame == ~0u) {
+        std::printf("cost: no card ever waited past the budget (max selected %u a frame)\n", maxSelected);
+        return 0;
+    }
+    const unsigned per = std::max(1u, minPerFrame);
+    const unsigned bound = (maxSelected + per - 1u) / per;
+    const bool starved = maxAge >= bound;
+    std::printf("cost: %s the oldest pending card waited %u frames; bound N = ceil(%u selected / %u traced "
+                "a frame) = %u\n", starved ? "FAIL: starvation:" : "ok: no starvation:", maxAge, maxSelected,
+                per, bound);
+    return starved ? 1 : 0;
 }
