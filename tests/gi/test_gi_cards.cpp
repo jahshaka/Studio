@@ -196,11 +196,12 @@ static int caseCapture()
     // ...and THE SIXTH LAYER, radiance (PHOTON-CARDS-1): four more bytes where
     // the device stores R11G11B10F from a compute job (RGBA16F's eight else).
     // ...and the cached INDIRECT half beside it, in the same format.
+    // ...and THE MOVERS' VISIBILITY (PHOTON-CARDS-4): one R8 byte.
     const unsigned radBytes = c0.radianceFormat == "R11G11B10F" ? 4u : 8u;
-    CHECK_MSG(c0.bytesPerTexel == 16u + 2u * radBytes,
+    CHECK_MSG(c0.bytesPerTexel == 17u + 2u * radBytes,
               "the card texel is %u bytes (albedo 4 + normal 4 + depth 2 + emissive 4 +"
-              " shadow/rough 2 + radiance %u + indirect %u, %s), measured %u",
-              16u + 2u * radBytes, radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
+              " shadow/rough 2 + radiance %u + indirect %u, %s + movers 1), measured %u",
+              17u + 2u * radBytes, radBytes, radBytes, c0.radianceFormat.c_str(), c0.bytesPerTexel);
     CHECK_MSG(c0.pageSize == 128u && c0.pages == 256u,
               "the atlas is 2k square = %u pages of %u texels", c0.pages, c0.pageSize);
     CHECK_MSG(c0.instancesResident == 2u, "both crates are resident (%u)", c0.instancesResident);

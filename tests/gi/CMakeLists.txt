@@ -1118,6 +1118,25 @@ set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RUN_S
 # SEVEN ctest names (gi.card_lighting + _indirect: PHOTON-CARDS-1's lit card; gi.cone_integrator_parity, gi.card_read_parity: PHOTON-CARDS-2) out of ONE binary, selected by argv: five different scenes
 # are needed, one process each — while the fixture scaffolding is the same in
 # all five. RUN_SERIAL on the shadow case: it renders a shadow atlas per capture.
+# PHOTON-CARDS-4: a mover's shadow on the cached surfaces (the mirror umbra vs the
+# raster, the slide at 0 frames' latency, rest costs nothing, a missed footprint
+# relights nothing, a still crate's move recaptured). `--cost` is not a row.
+add_executable(test_gi_cards_mover test_gi_cards_mover.cpp)
+set_target_properties(test_gi_cards_mover PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cards_mover PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cards_mover PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cards_mover JahshakaEngineMedia)
+add_test(NAME gi.cards_mover_shadow COMMAND test_gi_cards_mover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cards_mover_shadow PROPERTIES TIMEOUT 300 LABELS "engine")
+
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
