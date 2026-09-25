@@ -137,32 +137,3 @@ set(HEADERS
 #		src/modules/materials/images.qrc
 #		src/modules/materials/icons.qrc
 #		)
-
-# set(shaderSource ${CMAKE_CURRENT_SOURCE_DIR})
-# message("${CMAKE_CURRENT_SOURCE_DIR}  shader graph source")
-
-# macro(copy_dirs dirs)
-# foreach(dir ${dirs})
-#     # Replace / at the end of the path (copy dir content VS copy dir)
-#     string(REGEX REPLACE "/+$" "" dirclean "${dir}")
-#     message(STATUS "Copying resource ${dirclean}")
-#     file(COPY ${dirclean} DESTINATION ${DestDir})
-# endforeach()
-# endmacro()
-
-# set(dir assets)
-
-# if (APPLE)
-# 	add_custom_command(
-# 		TARGET ${PROJECT_NAME} POST_BUILD
-# 		COMMAND ${CMAKE_COMMAND} -E copy_directory
-# 				${shaderSource}/${dir}
-# 				${DestDir}/${APP_OUTPUT_NAME}.app/Contents/MacOS/${dir})
-# else()
-# 	add_custom_command(
-# 		TARGET ${PROJECT_NAME} POST_BUILD
-# 		COMMAND ${CMAKE_COMMAND} -E copy_directory
-# 				${shaderSource}/${dir}
-# 				${DestDir}/${dir})
-# endif()
-		
