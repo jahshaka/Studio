@@ -54,8 +54,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
 {
     CliOptions o;
     for (int i = 1; i < argc; ++i) {
-        if (qstrcmp(argv[i], "--engine-preview") == 0) o.enginePreviewOnly = true;
-        else if (qstrcmp(argv[i], "--engine-selftest") == 0 && i + 1 < argc) o.selftestPng = QString::fromLocal8Bit(argv[++i]);
+        if (qstrcmp(argv[i], "--engine-selftest") == 0 && i + 1 < argc) o.selftestPng = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) o.scriptPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
         else if (qstrcmp(argv[i], "--script-live") == 0) o.liveScript = true;

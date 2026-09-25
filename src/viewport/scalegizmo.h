@@ -58,8 +58,6 @@ class ScaleGizmo : public Gizmo
 	iris::Vec3 handleVisualScale;
 
 	bool dragging;
-private:
-	void createAxisLine(GizmoAxis axis);
 public:
 	ScaleGizmo();
 

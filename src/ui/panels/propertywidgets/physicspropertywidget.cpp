@@ -36,7 +36,6 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     physicsTypes.insert(static_cast<int>(PhysicsType::None), "None");
     physicsTypes.insert(static_cast<int>(PhysicsType::Static), "Static (Inanimate)");
     physicsTypes.insert(static_cast<int>(PhysicsType::RigidBody), "Rigid Body (Dynamic)");
-    //physicsTypes.insert(static_cast<int>(PhysicsType::SoftBody), "Soft Body");
 
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::None), "None");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Compound), "Compound");

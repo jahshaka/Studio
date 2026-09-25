@@ -199,8 +199,7 @@ world.gi({ mode: "vct", quality: "medium", bounces: 2 });
 world.get();                                  // read everything back
 ```
 
-Every noun-setter also answers to `set*` (`world.setFog`, `world.setSky`, …) —
-same arguments, same result. Quality tiers, MSAA and the post chain live in the
+Quality tiers, MSAA and the post chain live in the
 `jahshaka-world` skill.
 
 ## Materials (quick path)

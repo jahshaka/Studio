@@ -117,27 +117,6 @@ public:
                                     const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantList lookCatalogue();
 
-    // ---- set* aliases (AI_SURFACE_PROGRAM_SPEC §3.A item #10, owner D5) ----
-    // Nine of this module's verbs are NOUNS that write (world.fog({...}) sets
-    // the fog) while the rest of the surface spells a write set* — so an agent
-    // reaches for world.setFog, gets a TypeError, and burns a turn. These are
-    // one-line delegations, never a second implementation; each doc string
-    // names its twin so api_docs does not read as eighteen unrelated verbs.
-    // Both spellings are supported forever: the nouns are what every existing
-    // script and skill already calls.
-    Q_INVOKABLE bool setGravity(double value) { return gravity(value); }
-    Q_INVOKABLE bool setFog(const QVariantMap &params) { return fog(params); }
-    Q_INVOKABLE bool setShadows(const QVariantMap &params) { return shadows(params); }
-    Q_INVOKABLE bool setGi(const QVariantMap &params) { return gi(params); }
-    Q_INVOKABLE QVariantMap setPhoton(const QVariantMap &params = QVariantMap())
-    { return photon(params); }
-    Q_INVOKABLE QString setSunLight(const QVariant &light) { return sunLight(light); }
-    Q_INVOKABLE bool setSky(const QString &type, const QVariantMap &params = QVariantMap())
-    { return sky(type, params); }
-    Q_INVOKABLE QString setMode(const QVariantMap &params = QVariantMap()) { return mode(params); }
-    Q_INVOKABLE QVariantMap setPostFx(const QVariantMap &params = QVariantMap()) { return postFx(params); }
-    Q_INVOKABLE QVariantMap setVr(const QVariantMap &params = QVariantMap()) { return vr(params); }
-
 private:
     iris::ScenePtr sceneOrFail(const QString &verb);
     /// Resolves a texture ASSET GUID to {guid, pinned absolute path}; false

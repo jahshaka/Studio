@@ -170,19 +170,13 @@ void SceneEditService::addPrimitive(const QString &text,
 
 // The menu slots, over the ONE table below (they used to carry a second copy
 // of every resource path — thirteen strings maintained in two places).
-void SceneEditService::addPlane()    { addPrimitive(QStringLiteral("Plane")); }
 void SceneEditService::addGround()   { addPrimitive(QStringLiteral("Ground")); }
 void SceneEditService::addCone()     { addPrimitive(QStringLiteral("Cone")); }
-void SceneEditService::addCapsule()  { addPrimitive(QStringLiteral("Capsule")); }
 void SceneEditService::addCube()     { addPrimitive(QStringLiteral("Cube")); }
 void SceneEditService::addTorus()    { addPrimitive(QStringLiteral("Torus")); }
 void SceneEditService::addSphere()   { addPrimitive(QStringLiteral("Sphere")); }
 void SceneEditService::addCylinder() { addPrimitive(QStringLiteral("Cylinder")); }
-void SceneEditService::addPyramid()  { addPrimitive(QStringLiteral("Pyramid")); }
-void SceneEditService::addStar()     { addPrimitive(QStringLiteral("Star")); }
-void SceneEditService::addWedge()    { addPrimitive(QStringLiteral("Wedge")); }
 void SceneEditService::addTube()     { addPrimitive(QStringLiteral("Tube")); }
-void SceneEditService::addHemisphere() { addPrimitive(QStringLiteral("Hemisphere")); }
 // (addTeapot / addSponge / addSteps / addGear are DELETED — owner review R6:
 // PRIMITIVES ONLY. The four slots were dead in MainWindow too; nothing but
 // this line ever called them.)
@@ -1556,7 +1550,6 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
         materialDef["values"] = materialValues;
 
         QJsonDocument saveDoc;
-        //saveDoc.setObject(materialDef);
         saveDoc.setObject(materialDefOriginal);
 
         QString fileName = IrisUtils::join(
@@ -1634,15 +1627,24 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
     }
 }
 
-void SceneEditService::exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,
-                                    const QString &filePath)
+SceneEditService::NodeExportResult SceneEditService::exportNodeTo(const iris::SceneNodePtr &node,
+                                                                  ModelTypes modelType,
+                                                                  const QString &filePath)
 {
-    if (!node) return;
-    if (filePath.isEmpty() || filePath.isNull()) return;
+    NodeExportResult result;
+    if (!node) { result.error = QStringLiteral("no node"); return result; }
+    if (filePath.isEmpty()) { result.error = QStringLiteral("no path"); return result; }
+    if (!db || !project || project->getProjectGuid().isEmpty()) {
+        result.error = QStringLiteral("no project is open");
+        return result;
+    }
 
     // Construct a temporary dir to place all the files that will be packaged
     QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) return;
+    if (!temporaryDir.isValid()) {
+        result.error = QStringLiteral("could not create a temporary directory");
+        return result;
+    }
 
     const QString writePath = temporaryDir.path();
 
@@ -1695,10 +1697,34 @@ void SceneEditService::exportNodeTo(const iris::SceneNodePtr &node, ModelTypes m
             if (assetPath.isEmpty()) continue;
             if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
             if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
-            QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
+            if (QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name)))
+                ++result.assets;
         }
     }
 
-    // ONE zip loop (amendment 7): shared helper.
-    ZipHelper::zipDirectory(writePath, filePath);
+    // ONE zip loop (amendment 7): shared helper. WRITTEN BESIDE, RENAMED OVER
+    // (the QSaveFile shape): an archive already at `filePath` is replaced only
+    // by a complete one, so a failed export never leaves the user with less
+    // than they had.
+    const QString partial = filePath + QStringLiteral(".partial");
+    QFile::remove(partial);
+    QString zipError;
+    if (!ZipHelper::zipDirectory(writePath, partial, &zipError)) {
+        QFile::remove(partial);
+        result.error = zipError.isEmpty() ? QStringLiteral("the archive could not be written")
+                                          : zipError;
+        return result;
+    }
+    if (QFile::exists(filePath) && !QFile::remove(filePath)) {
+        QFile::remove(partial);
+        result.error = QStringLiteral("the existing file at %1 could not be replaced").arg(filePath);
+        return result;
+    }
+    if (!QFile::rename(partial, filePath)) {
+        QFile::remove(partial);
+        result.error = QStringLiteral("the archive could not be moved to %1").arg(filePath);
+        return result;
+    }
+    result.bytes = QFileInfo(filePath).size();
+    return result;
 }

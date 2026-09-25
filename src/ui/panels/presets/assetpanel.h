@@ -35,7 +35,6 @@ class FMListViewDelegate : public QStyledItemDelegate
 protected:
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
     {
-        //        painter->save();
         QPalette::ColorRole textRole = QPalette::NoRole;
 
         if (option.state & QStyle::State_Selected) {
@@ -46,16 +45,6 @@ protected:
         if (option.state & QStyle::State_MouseOver) {
             painter->fillRect(option.rect, QColor(64, 64, 64));
         }
-
-        // handle selection
-        //if (option.state & QStyle::State_Selected) {
-        //	//          painter->save();
-        //	textRole = QPalette::Mid;
-        //	//          QBrush selectionBrush(QColor(128, 128, 128, 128));
-        //	//          painter->setBrush(selectionBrush);
-        //	//          painter->drawRect(r.adjusted(1, 1,-1,-1));
-        //	//          painter->restore();
-        //}
 
         painter->setRenderHint(QPainter::Antialiasing);
 
@@ -69,7 +58,6 @@ protected:
         QString clippedText = metrix.elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, width);
 
         QString title = clippedText;
-        //        QString description = index.data(Qt::UserRole + 1).toString();
 
         QPalette::ColorGroup cg = opt.state & QStyle::State_Enabled ? QPalette::Normal : QPalette::Disabled;
         if (cg == QPalette::Normal && !(opt.state & QStyle::State_Active))
@@ -83,36 +71,17 @@ protected:
 
 
         QStyle *style = opt.widget ? opt.widget->style() : QApplication::style();
-        //        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
 
         QIcon ic = QIcon(qvariant_cast<QIcon>(index.data(Qt::DecorationRole)));
         r = option.rect.adjusted(0, 0, 0, 0);
         style->drawItemPixmap(painter, r, Qt::AlignCenter, ic.pixmap(QSize(64, 64)));
 
-        //r = option.rect.adjusted(50, 0, 0, -50);
-        //        painter->drawText(r.left(), r.top(), r.width(), r.height(),
-        //                          Qt::AlignBottom|Qt::AlignCenter|Qt::TextWordWrap, title, &r);
         style->drawItemText(painter, opt.rect, Qt::AlignBottom | Qt::AlignCenter | Qt::TextSingleLine,
             opt.palette, true, title, textRole);
 
 
-        //        painter->restore();
-        //r = option.rect.adjusted(50, 50, 0, 0);
-        //        painter->drawText(r.left(), r.top(), r.width(), r.height(), Qt::AlignLeft|Qt::TextWordWrap, description, &r);
-        //        auto opt = option;
-        //        initStyleOption(&opt, index);
-
-        //        QString line0 = index.model()->data(index.model()->index(index.row(), 0)).toString();
-        //        QString line1 = index.model()->data(index.model()->index(index.row(), 2)).toString();
-
-        //        // draw correct background
-        //        opt.text = "";
 
 
-        //        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
-
-
-        //        painter->drawText(QRect(rect.left(), rect.height(), rect.width(), rect.height()), opt.displayAlignment, line0);
     }
 
     QSize sizeHint(const QStyleOptionViewItem & option, const QModelIndex & index) const
@@ -142,7 +111,6 @@ protected:
         if (index.data().canConvert<QString>()) {
             const QString text = index.data().toString();
             QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
-            //lineEdit->setMaxLength(15);
             lineEdit->setText(text);
         }
         else {

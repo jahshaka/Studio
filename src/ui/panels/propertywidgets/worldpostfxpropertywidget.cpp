@@ -44,6 +44,11 @@ void WorldPostFxPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
     }
 }
 
+bool WorldPostFxPropertyWidget::sceneTracesRays() const
+{
+    return sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays();
+}
+
 void WorldPostFxPropertyWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
@@ -89,6 +94,7 @@ void WorldPostFxPropertyWidget::build()
 {
     if (!effectRows.isEmpty() || !scene) return;
 
+    const bool rays = sceneTracesRays();
     for (const QString &rowId : worldmodes::postFxRowIds()) {
         const worldmodes::Row *r = worldmodes::row(rowId);
         if (!r) continue;                       // a table entry was renamed; say nothing
@@ -101,11 +107,11 @@ void WorldPostFxPropertyWidget::build()
             // the section is a complete account of the chain, disabled so it
             // cannot be set to something the renderer would ignore.
             row.unavailable = this->addLabel(r->label, QStringLiteral("not available yet"));
-            if (row.unavailable) row.unavailable->setToolTip(r->cost);
+            if (row.unavailable) row.unavailable->setToolTip(worldmodes::rowCost(*r, rays));
             identifyRow(row.unavailable, *r);
         } else if (r->type == worldmodes::RowType::Bool) {
             row.box = this->addCheckBox(r->label, false);
-            row.box->setToolTip(r->cost);
+            row.box->setToolTip(worldmodes::rowCost(*r, rays));
             identifyRow(row.box, *r);
             const QString id = r->id;
             const QString label = r->label;
@@ -118,8 +124,8 @@ void WorldPostFxPropertyWidget::build()
         } else {
             row.combo = this->addComboBox(r->label);
             for (const worldmodes::EnumOption &o : r->options)
-                row.combo->addItem(o.label, o.value);
-            row.combo->setToolTip(r->cost);
+                row.combo->addItem(worldmodes::optionLabel(*r, o, scene, rays), o.value);
+            row.combo->setToolTip(worldmodes::rowCost(*r, rays));
             identifyRow(row.combo, *r);
             const QString id = r->id;
             const QString label = r->label;
@@ -197,9 +203,16 @@ void WorldPostFxPropertyWidget::refreshRows()
     if (!scene) return;
     loading = true;
 
+    const bool rays = sceneTracesRays();
     for (const EffectRow &row : effectRows) {
         const worldmodes::Row *r = worldmodes::row(row.id);
         if (!r) continue;
+        // The texts follow the machine (worldmodes::rowCost): the scene's Ray
+        // Tracing row can move after the section was built.
+        const QString tip = worldmodes::rowCost(*r, rays);
+        if (row.box) row.box->setToolTip(tip);
+        if (row.combo) row.combo->setToolTip(tip);
+        if (row.unavailable) row.unavailable->setToolTip(tip);
         const bool pinned = worldmodes::source(scene, *r) == QLatin1String("override");
         // The World Mode section marks a pinned row with a star and this section
         // writes through the same setRowValue, so it marks them the same way —

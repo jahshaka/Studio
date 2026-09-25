@@ -10,8 +10,8 @@
 // Three verbs were wrong (and app.input_keys had to route around the
 // first of them): node.info() raised for a node that was gone,
 // editor.selection() answered `undefined` where it documents `null`, and
-// editor.copy() raised on an empty selection although its own doc says copying
-// nothing is fine. Document verbs only -> --headless.
+// the copy raised on an empty selection although its own doc says copying
+// nothing is fine (then editor.copy; clipboard.copy since the alias went). Document verbs only -> --headless.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -53,13 +53,13 @@ editor.select(null);
 var sel = editor.selection();
 assert(sel === null, "editor.selection() with nothing selected is null (got " + typeof sel + ")");
 
-// ---- editor.copy() with an empty selection ----------------------------------
-var n = editor.copy();                 // must NOT throw
-assert(n === 0, "editor.copy() with nothing selected returns 0 (got " + n + ")");
+// ---- clipboard.copy() with an empty selection -------------------------------
+var n = clipboard.copy().items;        // must NOT throw
+assert(n === 0, "clipboard.copy() with nothing selected copies 0 items (got " + n + ")");
 assert(String(app.lastError()).indexOf("nothing is selected") >= 0,
        "app.lastError explains it: " + app.lastError());
 editor.select(live);
-assert(editor.copy() === 1, "and copying a real selection still reports 1");
+assert(clipboard.copy().items === 1, "and copying a real selection still reports 1");
 
 // ---- the other half: real MISUSE still throws -------------------------------
 // The correction is about refusals, not about swallowing errors. A verb asked

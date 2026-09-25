@@ -9,7 +9,6 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "ui/dialogs/ogrepreviewdialog.h"
 #include "bridge/enginehost.h"
 #include "viewport/ieditorviewport.h"
 #include <QImage>
@@ -55,6 +54,7 @@ For more information see the LICENSE file
 #include "app/versionsplashscreen.h"
 #include "app/shaderbuildgate.h"
 #include "ui/style/thememanager.h"
+#include "services/framepacing.h"
 #include "services/jahlog.h"
 #include "services/sessionheader.h"
 
@@ -221,23 +221,9 @@ int main(int argc, char *argv[])
         });
 
     // Apply the app theme (Qlementine Dark by default, archived Classic on
-    // request) BEFORE any widget exists — the Upgrader dialog and the engine
-    // preview dialog are the first widgets alive. See THEME_AUDIT.md §4.
+    // request) BEFORE any widget exists — the Upgrader dialog is the first
+    // widget alive. See THEME_AUDIT.md §4.
     ThemeManager::applyAtStartup(app);
-
-    if (cli.enginePreviewOnly) {
-        // No MainWindow, no IrisGL, no legacy GL context.
-        OgrePreviewDialog preview;
-        preview.setAttribute(Qt::WA_QuitOnClose, true);
-        preview.show();
-        return app.exec();
-    }
-	
-	/*
-	QtConcurrent::run([&updateChecker]() {
-		updateChecker.checkForUpdate();
-	});
-	*/
 
 	Upgrader upgrader;
 	upgrader.checkIfSchemaNeedsUpdating();
@@ -282,18 +268,24 @@ int main(int argc, char *argv[])
         SessionHeader::Rows r;
         SettingsManager *sm = SettingsManager::getDefaultManager();
         r << SessionHeader::Row { QStringLiteral("file"), sm->settings->fileName() };
+        // Every key through its ONE owner (STUDIO-CRUD-1 item 10): this block
+        // used to re-type six keys and their defaults.
+        auto yesNo = [](bool on) { return on ? QStringLiteral("true") : QStringLiteral("false"); };
         r << SessionHeader::Row { QStringLiteral("theme"),
-                                  sm->getValue("appearance/theme", "qlementine-dark").toString() };
+                                  sm->getValue(ThemeManager::settingsKey(),
+                                               ThemeManager::defaultThemeId()).toString() };
         r << SessionHeader::Row { QStringLiteral("pacing"),
-                                  sm->getValue("viewport/pacing", "display").toString() };
+                                  sm->getValue(QString::fromLatin1(framepacing::settingsKey()),
+                                               framepacing::modeName(framepacing::Mode::Display))
+                                      .toString() };
         r << SessionHeader::Row { QStringLiteral("watchdog"),
-                                  sm->getValue("watchdog_enabled", true).toString() };
+                                  yesNo(sm->get(settingkeys::watchdogEnabled)) };
         r << SessionHeader::Row { QStringLiteral("shadowMeshOptimization"),
-                                  sm->getValue("shadow_mesh_optimization", true).toString() };
+                                  yesNo(sm->get(settingkeys::shadowMeshOptimization)) };
         r << SessionHeader::Row { QStringLiteral("shaderWarmupSamples"),
-                                  sm->getValue("shader_warmup_samples", 1).toString() };
+                                  QString::number(sm->get(settingkeys::shaderWarmupSamples)) };
         r << SessionHeader::Row { QStringLiteral("shaderWarmupShadows"),
-                                  sm->getValue("shader_warmup_shadows", true).toString() };
+                                  yesNo(sm->get(settingkeys::shaderWarmupShadows)) };
         return r;
     });
     SessionHeader::addProvider(QStringLiteral("assets"), [] {
@@ -347,20 +339,17 @@ int main(int argc, char *argv[])
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
-//#ifdef QT_DEBUG
 #ifdef GIT_COMMIT_HASH
     if (GIT_COMMIT_HASH != "0000")
         splash.showMessage(QString("Revision - %1 %2").arg(GIT_COMMIT_HASH).arg(GIT_COMMIT_DATE),
                            Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
 #endif // GIT_COMMIT_HASH
-//#endif // QT_DEBUG
 
     splash.updateVersion(Constants::CONTENT_VERSION);
 
     splash.show();
 
     app.processEvents();
-    //app.setOverrideCursor( QCursor( Qt::BlankCursor ) );
 
     // Create our main app window but hide it at the same time while showing the EDITOR first
     // Set the attribute to render invisible while running as normal then hiding it after
@@ -410,13 +399,6 @@ int main(int argc, char *argv[])
     if (cli.mcpServe)
         return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);
 
-    //window.setAttribute(Qt::WA_DontShowOnScreen);
-    //window.show();
-    //window.grabOpenGLContextHack();
-    //window.hide();
-
-    // Make our window render as normal going forward
-    //window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();   // splash.finish above hides the splash here
 
     // FIRST LAUNCH, ONCE: the donate greeting (owner decision D3, 2026-09-12).

@@ -327,7 +327,6 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library,
 			nodeModel = new PbrMasterNode();
 		}
 		else {
-			//nodeModel = graph->modelFactories[type]();
 			nodeModel = graph->library->createNode(type);
 		}
 		// §3b migration: a PropertyNode instance becomes the real node for

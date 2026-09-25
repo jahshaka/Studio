@@ -537,9 +537,6 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 					? normalised[prop->name].toString()
 					: QString();
 				material->setValue(prop->name, textureStr);
-				//if (!textureStr.isEmpty()) {
-				//	textureList.append(QFileInfo(textureStr).fileName());
-				//}
 			}
 			else {
 				material->setValue(prop->name, normalised[prop->name].toVariant());
@@ -597,20 +594,6 @@ void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 }
 
 // Use this a force thumbnail generator in the future
-void AssetWidget::generateAssetThumbnails()
-{
-	//foreach (auto asset, AssetManager::assets) {
-	//    if (asset->type == AssetType::Object) {
-	//        // TODO - fetch a list and check that instead of hitting the db, low cost but better way
-	//        if (!db->hasCachedThumbnail(asset->fileName)) {
-	//            ThumbnailGenerator::getSingleton()->requestThumbnail(
-	//                ThumbnailRequestType::Mesh, asset->path, asset->path
-	//            );
-	//        }
-	//    }
-	//}
-}
-
 void AssetWidget::addItem(const FolderRecord &folderData)
 {
     if (!folderData.visible) return;
@@ -681,8 +664,6 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 
     if (assetData.type == static_cast<int>(ModelTypes::File)) {
         item->setData(MODEL_TYPE_ROLE, assetData.type);
-        // TODO - make this some generic value all assets can use
-        //item->setData(MODEL_MESH_ROLE, shaderAssetName.name);
         item->setIcon(QIcon(":/icons/icons8-file-72-file.png"));
     }
 	
@@ -1336,23 +1317,8 @@ void AssetWidget::syncTreeAndView(const QString &path)
 void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
 {
     if (item->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
-        //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
-        //    editFileExternally();
-        //}
-
-        //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::File)) {
-        //    editFileExternally();
-        //}
 
         //// Maybe  have an internal viewer?
-        //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Texture)) {
-        //    QDesktopServices::openUrl(QUrl(
-        //        IrisUtils::join(
-        //            project->getProjectFolder(), "Textures",
-        //            db->fetchAsset(item->data(MODEL_GUID_ROLE).toString()).name
-        //        )
-        //    ));
-        //}
 
         // If item has dependencies
         const QString guid = item->data(MODEL_GUID_ROLE).toString();
@@ -1360,7 +1326,6 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
         assetItem.selectedGuid = guid;
         updateAssetContentsView(guid);
         goUpOneControl->setEnabled(true);
-        //syncTreeAndView(guid);
     } else if (item->data(MODEL_ITEM_TYPE) == MODEL_FOLDER) {
         const QString guid = item->data(MODEL_GUID_ROLE).toString();
         assetItem.selectedGuid = guid;
@@ -1386,36 +1351,6 @@ void AssetWidget::refreshThumbnail()
 
 void AssetWidget::editFileExternally()
 {
-	//for (auto asset : AssetManager::getAssets()) {
- //       if (asset->type == ModelTypes::File) {
- //           if (asset->fileName == assetItem.wItem->text()) {
- //               auto editor = SettingsManager::getDefaultManager()->getValue("editor_path", "");
- //               if (!editor.toString().isEmpty()) {
- //                   QProcess *process = new QProcess(this);
- //                   QStringList argument;
- //                   argument << asset->path;
- //                   process->start(editor.toString(), argument);
- //               }
- //               else {
- //                   QDesktopServices::openUrl(QUrl(asset->path));
- //               }
- //           }
- //       }
-	//	else if (asset->type == ModelTypes::Shader) {
-			//if (asset->fileName == assetItem.wItem->text()) {
-   //             auto editor = SettingsManager::getDefaultManager()->getValue("editor_path", "");
-   //             if (!editor.toString().isEmpty()) {
-   //                 QProcess *process = new QProcess(this);
-   //                 QStringList argument;
-   //                 argument << asset->path;
-   //                 process->start(editor.toString(), argument);
-   //             }
-   //             else {
-   //                 QDesktopServices::openUrl(QUrl(asset->path));
-   //             }
-			//}
-	//	}
-	//}
 }
 
 void AssetWidget::createMaterialFromImage()
@@ -1650,7 +1585,6 @@ void AssetWidget::exportMaterialPreview()
         ThumbnailRequestType::Material, fileName, assetGuid, true
     );
 
-    //QFile::remove(fileName);
 }
 
 void AssetWidget::exportShader()
@@ -1798,7 +1732,6 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 			QString newFileName = IrisUtils::buildFileName(newName, QFileInfo(oldName).suffix());
             db->renameAsset(guid, newFileName);
 			QFile assetToRename(QDir(project->getProjectFolder()).filePath(oldName));
-			//if (!assetToRename.exists()) return;
 			if (!assetToRename.rename(QDir(project->getProjectFolder()).filePath(newFileName))) {
 				if (rename(
 					QDir(project->getProjectFolder()).filePath(oldName).toStdString().c_str(),
@@ -2014,7 +1947,6 @@ void AssetWidget::deleteItem()
                     if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
                 }
 
-                //delete ui->assetView->takeItem(ui->assetView->row(item));
                 updateAssetView(assetItem.selectedGuid, activeFilter);
                 populateAssetTree(false);
             });
@@ -2036,7 +1968,6 @@ void AssetWidget::deleteItem()
                     }
                 }
 
-                //delete ui->assetView->takeItem(ui->assetView->row(item));
                 updateAssetView(assetItem.selectedGuid, activeFilter);
                 populateAssetTree(false);
             });
@@ -2075,8 +2006,6 @@ void AssetWidget::createSky()
 
 	QJsonObject skyDescription;
 	// Need to leave the defaut sky properties empty, the widget will set it
-	//skyDescription.insert("guid", assetGuid);
-	//skyDescription.insert("skyColor", SceneWriter::jsonColor(QColor(255, 255, 255, 255)));
 
 	db->createAssetEntry(
 		assetGuid,

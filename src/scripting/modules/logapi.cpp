@@ -225,8 +225,7 @@ QVariantMap LogApi::perf(const QVariant &seconds, bool persist)
         // silently reconfigure tomorrow's launch. Preferences -> General writes
         // the key; this verb only writes it when told to.
         if (persist)
-            SettingsManager::getDefaultManager()->setValue(
-                QStringLiteral("log/perfSampleSeconds"), s);
+            SettingsManager::getDefaultManager()->set(settingkeys::perfSampleSeconds, s);
         JAH_LOG(JahLog::perf, Display,
                 s > 0 ? QStringLiteral("perf sampler: every %1 s").arg(s)
                       : QStringLiteral("perf sampler: off"));

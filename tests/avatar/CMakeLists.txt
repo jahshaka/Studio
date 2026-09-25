@@ -321,8 +321,7 @@ target_include_directories(test_avatar_assets PRIVATE ${CMAKE_SOURCE_DIR} ${CMAK
     ${CMAKE_SOURCE_DIR}/src/modules/materials
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(test_avatar_assets PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    EFFECT_BUILD_AS_LIB)
+target_compile_definitions(test_avatar_assets PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_avatar_assets PRIVATE IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql
     Qt6::Multimedia)
 jah_document_graph(test_avatar_assets)

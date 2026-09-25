@@ -20,8 +20,6 @@ For more information see the LICENSE file
 
 struct CliOptions
 {
-    /// --engine-preview: only the engine preview dialog, no MainWindow.
-    bool enginePreviewOnly = false;
     /// --engine-selftest <out.png>: default scene, one screenshot, exit 0/1.
     QString selftestPng;
     /// --script <file.js> [--headless]: run a script and exit (SCRIPTING_SPEC §3.2).

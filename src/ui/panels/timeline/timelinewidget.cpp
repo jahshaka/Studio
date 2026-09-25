@@ -80,9 +80,6 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
     paint.setRenderHint(QPainter::Antialiasing);
     paint.setRenderHint(QPainter::Antialiasing);
 
-    //black bg
-    //paint.fillRect(0,0,widgetWidth,widgetHeight,bgColor);
-
     // draws the dark part of the bottom of the frame
     paint.setPen(QColor::fromRgb(100,100,100));
     paint.fillRect(0,0,widgetWidth,widgetHeight,QColor::fromRgb(80, 80, 80));
@@ -149,7 +146,6 @@ void TimelineWidget::paintEvent(QPaintEvent *painter)
     path.lineTo(cursorX + halfHandleWidth, handleHeight);
     path.lineTo(cursorX, handleHeight+5);
     path.lineTo(cursorX - halfHandleWidth, handleHeight);
-    //path.lineTo();
     paint.fillPath(path, QBrush(QColor(255, 255, 255)));
 }
 
@@ -213,7 +209,6 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* evt)
 
     if(middleButtonDown)
     {
-        //qDebug()<<"middle mouse dragging"<<endl;
         auto timeDiff = posToTime(evt->x()) - posToTime(mousePos.x());
         animWidgetData->rangeStart-=timeDiff;
         animWidgetData->rangeEnd-=timeDiff;

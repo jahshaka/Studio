@@ -129,7 +129,6 @@ void BasePropertyWidget::paintEvent(QPaintEvent * event)
 
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing);
-    // painter.setRenderHint(QPainter::HighQualityAntialiasing);
 
 	// draw title border
 	QPainterPath path;

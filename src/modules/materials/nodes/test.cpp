@@ -196,7 +196,6 @@ TextureNode::TextureNode()
 
 	auto pushLayout = new QVBoxLayout;
 	texture->setLayout(pushLayout);
-	//pushLayout->addWidget(label);
 
 	layout->setContentsMargins(3, 0, 3, 2);
 	layout->addWidget(texture);
@@ -611,7 +610,6 @@ void Vector4Node::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 }
 
 
-#if(EFFECT_BUILD_AS_LIB)
 ColorPickerNode::ColorPickerNode()
 {
 	setNodeType(NodeCategory::Constants);
@@ -661,4 +659,3 @@ void ColorPickerNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 
 	colorWidget->setColor(col);
 }
-#endif

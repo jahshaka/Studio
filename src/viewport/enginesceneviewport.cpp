@@ -2213,9 +2213,12 @@ void EngineSceneViewport::setEditorData(EditorData *data)
             if (data->editorCamera != mEditorCam) clearViewStates();
             adoptEditorCamera(data->editorCamera);
         }
+        const bool moved = mShowLightWires != data->showLightWires
+                           || mShowGrid != data->showGrid;
         mShowLightWires = data->showLightWires;
         mShowGrid = data->showGrid;
         mShowDebugDraw = data->showDebugDrawFlags;
+        if (moved) emit mEvents.overlaysChanged();
     }
     // The controller must steer the SAME camera the view renders; without this a
     // project load leaves the mouse driving the old, no-longer-rendered camera.
@@ -3392,6 +3395,7 @@ void EngineSceneViewport::setShowFps(bool value)
     mStatsLines.clear();
     mStatsClock.invalidate();   // rebuild the text on the very next refresh
     refreshOverlay();
+    emit mEvents.overlaysChanged();
 }
 
 jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const

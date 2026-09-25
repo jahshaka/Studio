@@ -175,8 +175,6 @@ public:
 
     void stopAnimWidget();
 
-    void grabOpenGLContextHack();
-
     /// The editor viewport (engine-backed, or the headless stand-in).
     IEditorViewport *viewport() { return sceneView; }
     /// The outliner panel. Public because the OUTLINER is the authority on
@@ -207,6 +205,9 @@ public:
     /// why "the Save button is hidden on every default install" (owner,
     /// 2026-09-18) could be true for as long as it was: nothing could ask.
     QVariantList toolbarActions() const;
+    /// What the View Options menu's checkmarks show ({grid, lightWires, stats,
+    /// physicsDebug}) — editor.overlays().menu, the proof they follow the state.
+    QVariantMap viewOptionChecks() const;
     /// The ONE place the frame-stats readout is switched: F3, the View Options
     /// row, the Preferences checkbox and editor.setOverlays({stats}) all land
     /// here, and it persists `show_fps` (STATS_OVERLAY_SPEC.md §5.3).
@@ -294,10 +295,6 @@ public:
     bool enterEditorSpace();
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
-    bool handleMousePress(QMouseEvent *event);
-    bool handleMouseRelease(QMouseEvent *event);
-    bool handleMouseMove(QMouseEvent *event);
-    bool handleMouseWheel(QWheelEvent *event);
     bool eventFilter(QObject *obj, QEvent *event);
 
     virtual void closeEvent(QCloseEvent *event);
@@ -564,8 +561,6 @@ public:
     /// Pushes the current project / MCP state into the chat window + host.
     void refreshClaudeChatContext();
 
-    //void setGizmoTransformMode(GizmoTransformMode mode);
-
     /**
      * Applies material preset to active scene node and refreshes material property widget
      * @param preset
@@ -575,17 +570,10 @@ public:
     void refreshThumbnail(const QString &guid);
     void refreshThumbnail(QListWidgetItem *item);
 
-    /**
-     * Returns absolute path of file copied as an asset
-     * @param relToApp file path relative to application
-     * @return
-     */
-    QString getAbsoluteAssetPath(QString pathRelativeToApp);
     QString originalTitle;
 
     void addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode);
     void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore = false);
-    void repopulateSceneTree();
 
     // (evalShadowMapType / getLightTypeFromName / createLight — a SECOND scene
     // reader that lived here, knew neither Area nor Sky nor the sun rows, and
@@ -613,25 +601,8 @@ private:
     // menus
     void setupFileMenu();
 
-    //ui setup
-    void setupLayerButtonMenu();
-    void initLightLayerUi();
-    void initTorusLayerUi();
-
-    void setupPropertyUi();
-
-    void setupLayerManager();
-
-    void rebuildTree();
-    void deselectTreeItems();
-
-    void setupDefaultScene();
-
-    QIcon getIconFromSceneNodeType(SceneNodeType type);
-
     void removeScene();
     void setScene(QSharedPointer<iris::Scene> scene);
-    void updateGizmoTransform();    // @TODO - move this into updateSceneSettings
 
     /// IMMERSIVE FULLSCREEN IS TWO THINGS — a window state and a set of hidden
     /// docks — and the window state can be left without this class being asked
@@ -645,9 +616,6 @@ private:
 
 
     void updateCurrentSceneThumbnail();
-
-    // determines if file extension is that of a model (obj, fbx, 3ds)
-    // bool isModelExtension(QString extension);
 
 public slots:
     /// File > Export: the OPEN project, through a save dialog.
@@ -686,7 +654,6 @@ public slots:
 	                     const QString &name = QString(),
 	                     surfaceplacement::Placement placement = surfaceplacement::Placement::Pivot);
     void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
-    void addDragPlaceholder();
 
     //context menu functions
     void duplicateNode();
@@ -723,6 +690,9 @@ public slots:
     /// New Scene dialog's "Empty scene" checkbox and `project.create`'s
     /// `{empty: true}`. See createDefaultScene for what each of the two holds.
     void newScene(bool empty = false);
+    /// The grid, light-wire and physics-debug overlays back to EditorData's
+    /// defaults — newScene and the create run, one body.
+    void resetOverlaysToDefaults();
 
     /// Creates the world of the project `guid` (a row createProjectShell has
     /// just made) named `filename` in `projectPath`: closes the world that is
@@ -850,11 +820,17 @@ public slots:
     void selectAllActiveSpace();
     /// Space: node search on the Materials space, gizmo cycle elsewhere.
     void spaceKeyActiveSpace();
+    /// F: frame the graph selection on the Materials page, focus the scene
+    /// selection in the editor (one claimant, routed like Space).
+    void focusActiveSpace();
     void redoActiveSpace();
 
     void takeScreenshot();
     void toggleLightWires(bool state);
     void toggleGrid(bool state);
+    /// The View Options checkmarks := the viewport's overlay state (the one
+    /// owner; driven by EditorViewportEvents::overlaysChanged).
+    void syncOverlayChecks();
     void toggleImmersiveFullscreen();
     /// The LEAVE half of the toggle above, callable on its own. `restoreWindow`
     /// is false when the window state has already been changed by somebody else
@@ -991,10 +967,6 @@ private:
 
     AnimationWidget* animWidget = nullptr;
 
-    QPoint mousePressPos;
-    QPoint mouseReleasePos;
-    QPoint mousePos;
-    iris::Vec3 dragScenePos;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;

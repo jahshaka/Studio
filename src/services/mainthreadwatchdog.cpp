@@ -187,7 +187,7 @@ bool enabledByConfiguration()
     // The preference, default ON in a dev build (this code does not compile in
     // a release one).
     if (SettingsManager *s = SettingsManager::getDefaultManager())
-        return s->getValue("watchdog_enabled", true).toBool();
+        return s->get(settingkeys::watchdogEnabled);
     return true;
 }
 

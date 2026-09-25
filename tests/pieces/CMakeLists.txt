@@ -63,7 +63,7 @@ set_target_properties(test_emitter_parity PROPERTIES
     AUTOMOC ON AUTOUIC ON AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_emitter_parity PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_emitter_parity PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_include_directories(test_emitter_parity PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
@@ -105,7 +105,6 @@ add_executable(test_emitter_pieces test_emitter_pieces.cpp
 set_target_properties(test_emitter_pieces PROPERTIES
     AUTOMOC ON AUTOUIC ON AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_emitter_pieces PRIVATE EFFECT_BUILD_AS_LIB)
 target_include_directories(test_emitter_pieces PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
@@ -153,7 +152,7 @@ set_target_properties(test_piece_mirror PROPERTIES
     AUTOMOC ON AUTOUIC ON AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_piece_mirror PRIVATE EFFECT_BUILD_AS_LIB
+target_compile_definitions(test_piece_mirror PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_include_directories(test_piece_mirror PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl

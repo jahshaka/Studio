@@ -167,9 +167,19 @@ public:
     void stopPhysicsSimulation() override;
 
     bool getShowLightWires() const override { return mShowLightWires; }
-    void setShowLightWires(bool value) override { mShowLightWires = value; }
+    void setShowLightWires(bool value) override
+    {
+        if (mShowLightWires == value) return;
+        mShowLightWires = value;
+        emit mEvents.overlaysChanged();
+    }
     bool getShowGrid() const override { return mShowGrid; }
-    void setShowGrid(bool value) override { mShowGrid = value; }
+    void setShowGrid(bool value) override
+    {
+        if (mShowGrid == value) return;
+        mShowGrid = value;
+        emit mEvents.overlaysChanged();
+    }
     bool getShowGiVolume() const override { return mShowGiVolume; }
     void setShowGiVolume(bool value) override { mShowGiVolume = value; }
     /// The shadow-atlas inspector (SHADOW_TOOLING_SPEC.md §4.4). Not persisted,

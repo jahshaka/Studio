@@ -42,7 +42,6 @@ struct KeyFrameData
     QString subPropertyName;
     iris::FloatKeyFrame* keyFrame;
     QMap<float,SummaryKey> summaryKeys;
-    //iris::PropertyAnim *prop;
 
     KeyFrameData()
     {
@@ -112,9 +111,6 @@ private:
 
     // context menu actions
 
-    void parseKeyFramesToGroups(iris::KeyFrameSetPtr frameSet);
-
-    void buildTreeFromKeyFrameGroups(QHash<QString,KeyFrameGroup*> groups);
 
     void calculateSummaryKeys(iris::PropertyAnim *prop, KeyFrameData& keyFrameData);
 

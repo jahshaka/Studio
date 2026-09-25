@@ -142,14 +142,6 @@ public:
 	LerpNode();
 
 };
-/*
-class PosterizeNode : public NodeModel
-{
-public:
-	PosterizeNode();
-
-};
-*/
 class OneMinusNode : public NodeModel
 {
 public:

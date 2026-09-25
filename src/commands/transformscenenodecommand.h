@@ -29,8 +29,6 @@ For more information see the LICENSE file
 /// writes) permanently so across saves. See commands/structuralundo.h.
 class TransformSceneNodeCommand : public StudioCommand
 {
-    //iris::Mat4 oldTransform;
-    //iris::Mat4 newTransform;
 	iris::Vec3 oldPos, oldScale;
 	iris::Quat oldRot;
 

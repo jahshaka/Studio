@@ -55,7 +55,6 @@ TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 	switch (axis) {
 	case GizmoAxis::Center:
 		handleExtent = iris::Vec3(0, 0, 0);
-		//planes.append(iris::Vec3(0, 1, 0)); // this will change based on the view direction
 		setHandleColor(QColor(255, 255, 255));
 		break;
 	case GizmoAxis::X:
@@ -385,9 +384,7 @@ iris::Vec3 TranslationHandle::getHitPos(iris::Vec3 rayPos, iris::Vec3 rayDir, ir
 		// sphere center intersection
 		float t;
 		iris::Vec3 hitPoint;
-		//iris::IntersectionHelper::raySphereIntersects(rayPos, rayDir, iris::Vec3(0, 0, 0), 1, t, hitPoint);
 
-		//return gizmoTransform * hitPoint;
 		auto normal = iris::Quat::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(-viewDir);
 		iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 10000000, iris::Plane(normal, 0), t, hitPoint);
 
@@ -570,7 +567,6 @@ void TranslationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 vie
 	auto localTarget = parentNode ? parentNode->getGlobalTransform().inverted() * targetPos
 	                              : targetPos;
 	
-	//selectedNode->setLocalPos(localTarget);
 	selectedNode->setGlobalPos(targetPos);
 	// The rest of the selection follows the primary's delta (one place,
 	// EDITOR_MULTISELECT_SPEC §2.4); a no-op when nothing else is selected.

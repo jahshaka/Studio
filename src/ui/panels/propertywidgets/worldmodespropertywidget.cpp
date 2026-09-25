@@ -51,6 +51,11 @@ void WorldModesPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
     }
 }
 
+bool WorldModesPropertyWidget::sceneTracesRays() const
+{
+    return sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays();
+}
+
 void WorldModesPropertyWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
@@ -81,6 +86,7 @@ void WorldModesPropertyWidget::build()
             this, &WorldModesPropertyWidget::onModeChanged);
 
     // One control per registry row, in registry order (which groups them).
+    const bool rays = sceneTracesRays();
     for (int i = 0; i < rows.size(); ++i) {
         const worldmodes::Row &r = rows[i];
 
@@ -99,7 +105,7 @@ void WorldModesPropertyWidget::build()
             // tier table is honest about what a mode WILL mean, disabled so it
             // cannot be set to something the renderer would ignore.
             auto *lbl = this->addLabel(r.label, QStringLiteral("not available yet"));
-            if (lbl) lbl->setToolTip(r.cost);
+            if (lbl) lbl->setToolTip(worldmodes::rowCost(r, rays));
             identifyRow(lbl, r);
             rowControls.append(nullptr);
             continue;
@@ -107,7 +113,7 @@ void WorldModesPropertyWidget::build()
 
         if (r.type == worldmodes::RowType::Bool) {
             auto *box = this->addCheckBox(r.label, false);
-            box->setToolTip(r.cost);
+            box->setToolTip(worldmodes::rowCost(r, rays));
             identifyRow(box, r);
             const int index = i;
             connect(box, &CheckBoxWidget::valueChanged, this, [this, index](bool on) {
@@ -125,12 +131,13 @@ void WorldModesPropertyWidget::build()
         // small budget (0..8 planes), and a combo makes the tier values legible.
         auto *combo = this->addComboBox(r.label);
         if (r.type == worldmodes::RowType::Enum) {
-            for (const worldmodes::EnumOption &o : r.options) combo->addItem(o.label, o.value);
+            for (const worldmodes::EnumOption &o : r.options)
+                combo->addItem(worldmodes::optionLabel(r, o, scene, rays), o.value);
         } else {
             for (int v = r.minValue; v <= r.maxValue; ++v)
                 combo->addItem(QString::number(v), v);
         }
-        combo->setToolTip(r.cost);
+        combo->setToolTip(worldmodes::rowCost(r, rays));
         identifyRow(combo, r);
         connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldModesPropertyWidget::onRowChanged);
@@ -202,10 +209,14 @@ void WorldModesPropertyWidget::refreshRows()
     }
 
     const auto &rows = worldmodes::rows();
+    // The texts follow the machine too: the scene's Ray Tracing row can move
+    // after the blade was built (worldmodes::rowCost).
+    const bool rays = sceneTracesRays();
     for (int i = 0; i < rows.size() && i < rowControls.size(); ++i) {
         const worldmodes::Row &r = rows[i];
         QWidget *control = rowControls[i];
         if (!control) continue;
+        control->setToolTip(worldmodes::rowCost(r, rays));
         const int value = worldmodes::resolved(scene, r);
         const bool pinned = worldmodes::source(scene, r) == QLatin1String("override");
         // A pinned row says so in its label: without the marker "why did Epic
@@ -218,6 +229,9 @@ void WorldModesPropertyWidget::refreshRows()
         } else if (auto *combo = qobject_cast<ComboBoxWidget *>(control)) {
             combo->setLabel(label);
             const QSignalBlocker quiet(combo->getWidget());
+            if (r.type == worldmodes::RowType::Enum)
+                for (int o = 0; o < r.options.size() && o < combo->getWidget()->count(); ++o)
+                    combo->getWidget()->setItemText(o, worldmodes::optionLabel(r, r.options[o], scene, rays));
             const int index = combo->findData(value);
             combo->setCurrentIndex(index >= 0 ? index : 0);
         }

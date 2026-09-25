@@ -107,7 +107,6 @@ MeshPropertyWidget::MeshPropertyWidget()
     connect(lightChannels, &LightChannelsWidget::maskChanged,
             this, &MeshPropertyWidget::onLightChannelsChanged);
 
-    //connect(meshPicker, SIGNAL(onPathChanged(QString)), SLOT(onMeshPathChanged(QString)));
 }
 
 MeshPropertyWidget::~MeshPropertyWidget()
@@ -119,7 +118,6 @@ void MeshPropertyWidget::onMeshPathChanged(const QString &path)
 {
     // Nothing connects here; the row that would is off (see the ctor).
     Q_UNUSED(path);
-    //meshNode->setMesh(path);
 }
 
 void MeshPropertyWidget::onCullModeChanged(const QString& cullMode)
@@ -183,7 +181,6 @@ void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         // setMask does not emit, so this cannot write the value back into the
         // node it was just read from.
         lightChannels->setMask(meshNode->getLightMask());
-        //meshPicker->setFilepath(meshNode->meshPath);
 
 		switch (meshNode->getFaceCullingMode())
 		{

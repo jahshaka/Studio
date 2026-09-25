@@ -145,7 +145,6 @@ public:
 	~AssetView();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
-    void checkForEmptyState();
     void toggleFilterPane(bool);
 	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);
     void addToLibrary(const QString& main_guid, bool jfx = false);

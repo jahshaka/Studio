@@ -237,7 +237,6 @@ void ToolTip::leaveEvent(QEvent *event)
 
 void ToolTip::mousePressEvent(QEvent *event)
 {
-	//mousePressEvent(event);
     Q_UNUSED(event);
 }
 

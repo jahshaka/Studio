@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "data/settingkeys.h"
 #include "claudelaunchconfig.h"
 
 #include <QDir>
@@ -70,7 +71,7 @@ QString ClaudeLaunchConfig::jahshakaMcpToolPattern()
 
 QString ClaudeLaunchConfig::defaultModel()
 {
-    return QStringLiteral("fable");
+    return QString::fromLatin1(settingkeys::claudeModel.fallback);   // the key's ONE default
 }
 
 QList<ClaudeLaunchConfig::ModelChoice> ClaudeLaunchConfig::modelChoices()

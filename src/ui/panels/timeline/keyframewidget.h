@@ -108,7 +108,6 @@ private:
     QPoint mousePos;
     QPoint clickPos;
 
-    //iris::FloatKey* selectedKey;
     DopeKey selectedKey;
     DopeKey contextKey;
 
@@ -132,20 +131,14 @@ public:
     void setSceneNode(iris::SceneNodePtr node);
     void adjustLength();
 
-    float getStartTimeRange();
-    float getEndTimeRange();
-
-    float getTimeAtCursor();
 
     void drawFrame(QPainter& paint, QTreeWidget* tree, QTreeWidgetItem* item, int& yTop);
     void drawBackgroundLines(QPainter& paint);
-    int getXPosFromSeconds(float seconds);
 
     void mousePressEvent(QMouseEvent* evt);
     void mouseReleaseEvent(QMouseEvent* evt);
     void mouseMoveEvent(QMouseEvent* evt);
     void wheelEvent(QWheelEvent* evt);
-    //void resizeEvent(QResizeEvent* event);
     void paintEvent(QPaintEvent *painter);
     void drawPoint(QPainter& paint, QPoint point, bool isHighlight = false);
 

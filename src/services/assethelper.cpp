@@ -351,7 +351,6 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     if (node) getUsedTexture(node);
 
     textureList = texturesToCopy;
-    // SceneWriter::writeSceneNode(QJsonObject(), node, false);
 
     return node;
 }

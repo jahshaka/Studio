@@ -120,8 +120,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	shortcutsWidget	= new QWidget;
 	databaseWidget	= new QWidget;
 
-	//StyleSheet::setStyle(buttonGroup);
-
 	stack = new QStackedWidget;
 
 	auto mainLayout = new QVBoxLayout;
@@ -139,8 +137,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	buttonLayout->addWidget(desktopBtn);
 	buttonLayout->addWidget(editor);
 	buttonLayout->addWidget(content);
-	//buttonLayout->addWidget(mining);
-	//buttonLayout->addWidget(help);
 	buttonLayout->addWidget(about);
 	buttonLayout->addWidget(shortcuts);
 	buttonLayout->addWidget(database);
@@ -186,9 +182,6 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 void WorldSettingsWidget::changeDefaultDirectory()
 {
     QFileDialog projectDir;
-    //defaultProjectDirectory = projectDir.getExistingDirectory(nullptr, "Select project dir", defaultProjectDirectory);
-    //if (!defaultProjectDirectory.isNull())
-    //    ui->projectDefault->setText(defaultProjectDirectory);
 }
 
 void WorldSettingsWidget::outlineWidthChanged(double width)
@@ -214,7 +207,7 @@ void WorldSettingsWidget::showFpsChanged(bool show)
     // nothing to forget. Both halves are fixed together: `show_fps` is the one
     // stored value behind the checkbox, the F3 key, the View Options row and
     // editor.setOverlays({stats}).
-    settings->setValue("show_fps", show);
+    settings->set(settingkeys::showFps, show);
     if (editorViewport) editorViewport->setShowFps(show);
 }
 
@@ -230,12 +223,12 @@ void WorldSettingsWidget::setShowPerspectiveLabel(bool show)
 
 void WorldSettingsWidget::enableAutoSave(bool state)
 {
-	settings->setValue("auto_save", state);
+	settings->set(settingkeys::autoSave, state);
 }
 
 void WorldSettingsWidget::shadowMeshOptimizationChanged(bool on)
 {
-	settings->setValue("shadow_mesh_optimization", on);
+	settings->set(settingkeys::shadowMeshOptimization, on);
 	// Process-wide static inside the engine: push it now so meshes imported
 	// during this session honour the new choice without a restart. Meshes that
 	// already exist keep the buffers they were built with (POST_CHAIN_SPEC §11).
@@ -245,7 +238,7 @@ void WorldSettingsWidget::shadowMeshOptimizationChanged(bool on)
 
 void WorldSettingsWidget::enableOpenInPlayer(bool state)
 {
-	settings->setValue("open_in_player", state);
+	settings->set(settingkeys::openInPlayer, state);
 }
 
 void WorldSettingsWidget::enableAutoUpdate(bool state)
@@ -268,14 +261,14 @@ void WorldSettingsWidget::enableAutoUpdate(bool state)
 void WorldSettingsWidget::mouseControlChanged(const QString& value)
 {
 	if (value == "Jahshaka")
-		settings->setValue("mouse_controls", "jahshaka");
+		settings->set(settingkeys::mouseControls, QStringLiteral("jahshaka"));
 	else
-		settings->setValue("mouse_controls", "default");
+		settings->set(settingkeys::mouseControls, QStringLiteral("default"));
 }
 
 void WorldSettingsWidget::projectDirectoryChanged(QString path)
 {
-    settings->setValue("default_directory", path);
+    settings->set(settingkeys::defaultDirectory, path);
     defaultProjectDirectory = path;
 }
 
@@ -283,8 +276,6 @@ void WorldSettingsWidget::changeEditorPath()
 {
     QFileDialog editorBrowser;
     defaultEditorPath = editorBrowser.getExistingDirectory(Q_NULLPTR, "Select Editor", defaultProjectDirectory);
-    //if (!defaultEditorPath.isNull())
-    //    ui->editorPath->setText(defaultEditorPath);
 }
 
 void WorldSettingsWidget::editorPathChanged(QString path)
@@ -295,24 +286,12 @@ void WorldSettingsWidget::editorPathChanged(QString path)
 
 void WorldSettingsWidget::saveSettings()
 {
-	//if (!ui->author->text().isEmpty()) {
-	//	db->updateAuthorInfo(ui->author->text());
-	//}
 }
 
 WorldSettingsWidget::~WorldSettingsWidget()
 {
   //  delete ui;
 }
-//
-//void WorldSettingsWidget::setupDirectoryDefaults()
-//{
-//    auto path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-//                + Constants::PROJECT_FOLDER;
-//    defaultProjectDirectory = settings->getValue("default_directory", path).toString();
-//
-//   // ui->projectDefault->setText(defaultProjectDirectory);
-//}
 
 void WorldSettingsWidget::configureViewport()
 {
@@ -494,10 +473,9 @@ void WorldSettingsWidget::configureViewport()
 	StyleSheet::setStyle({ perfLabel, perfSpin });
 	layout->addWidget(perfLabel, 8, 0);
 	layout->addWidget(perfSpin, 8, 2);
-	perfSpin->setValue(qBound(0, settings->getValue("log/perfSampleSeconds",
-	                                                PerfSampler::defaultSeconds()).toInt(), 3600));
+	perfSpin->setValue(qBound(0, settings->get(settingkeys::perfSampleSeconds), 3600));
 	connect(perfSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int seconds) {
-		settings->setValue("log/perfSampleSeconds", seconds);
+		settings->set(settingkeys::perfSampleSeconds, seconds);
 		// The LIVE sampler is re-timed too — a preference that only takes
 		// effect next launch is a preference nobody trusts.
 		if (mainWindow && mainWindow->studioServices()
@@ -574,8 +552,8 @@ void WorldSettingsWidget::configureViewport()
 	// derived one (the outline colour lifted halfway to white) is what the
 	// viewport actually draws, so showing it is showing the truth.
 	primaryColorPicker->setColor(outlinesettings::primaryColor());
-	checkbox->setChecked(settings->getValue("auto_save", true).toBool());
-	shadowMeshCheckbox->setChecked(settings->getValue("shadow_mesh_optimization", true).toBool());
+	checkbox->setChecked(settings->get(settingkeys::autoSave));
+	shadowMeshCheckbox->setChecked(settings->get(settingkeys::shadowMeshOptimization));
 	connect(spinbox, SIGNAL(valueChanged(double)), this, SLOT(outlineWidthChanged(double)));
 	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QColor)));
 	connect(primaryColorPicker, SIGNAL(onColorChanged(QColor)),
@@ -609,7 +587,7 @@ void WorldSettingsWidget::configureDesktop()
 	layout->setColumnStretch(1, 50);
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
-	spinbox->setValue(qBound(2, settings->getValue("slider_rows", 6).toInt(), 10));
+	spinbox->setValue(qBound(2, settings->get(settingkeys::sliderRows), 10));
 
 	connect(spinbox, SIGNAL(valueChanged(int)), this, SLOT(sliderRowsChanged(int)));
 }
@@ -619,7 +597,7 @@ void WorldSettingsWidget::sliderRowsChanged(int rows)
 	// The setting is written here so that a session with no desktop page (and
 	// the very first run) still persists the choice; the shell's connection
 	// writes it again through ProjectManager, which is idempotent.
-	settings->setValue("slider_rows", rows);
+	settings->set(settingkeys::sliderRows, rows);
 	emit sliderRowsSettingChanged(rows);
 }
 
@@ -714,8 +692,8 @@ void WorldSettingsWidget::configureEditor()
 
 
 
-	fps->setChecked(settings->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
-	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
+	fps->setChecked(settings->get(settingkeys::showFps));
+	openInPlayer->setChecked(settings->get(settingkeys::openInPlayer));
 	openInPlayer->setToolTip("Open Worlds In Player | Opening a world from a tile on the Worlds "
 	                         "page puts you straight into the Player instead of the Editor. "
 	                         "Samples, imported archives and scripts are unaffected — they say "
@@ -734,7 +712,7 @@ void WorldSettingsWidget::configureEditor()
 	list << "Jahshaka" << "Default";
 	mouseCon->addItems(list);
 
-	auto mode = settings->getValue("mouse_controls", "default").toString();
+	auto mode = settings->get(settingkeys::mouseControls);
 	if (mode == "jahshaka")		mouseCon->setCurrentIndex(0);
 	else						mouseCon->setCurrentIndex(1);
 
@@ -797,7 +775,7 @@ void WorldSettingsWidget::configureContent()
 	// `default_directory` preference otherwise (S-extra2) — the dial shows
 	// where projects REALLY go, not where they would go on a plain launch.
 	defaultProjectDirectory = AppPaths::projectsRoot(
-	    settings->getValue("default_directory", QString()).toString(), Constants::PROJECT_FOLDER);
+	    settings->get(settingkeys::defaultDirectory), Constants::PROJECT_FOLDER);
 
 	projectDir->setText(defaultProjectDirectory);
 	//set editor path

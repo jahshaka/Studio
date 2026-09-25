@@ -72,7 +72,7 @@ CacheSettingsWidget::CacheSettingsWidget(SettingsManager *settings, QWidget *par
         sw->setText(tr("Keep compiled shaders between launches"));
         mEnabled = sw;
     }
-    mEnabled->setChecked(mSettings->getValue("shader_cache_enabled", true).toBool());
+    mEnabled->setChecked(mSettings->get(settingkeys::shaderCacheEnabled));
     layout->addWidget(mEnabled);
 
     // SHADER_CACHE_SPEC §5. ON by default (SHADER_CACHE_AUDIT F3): re-measured
@@ -90,7 +90,7 @@ CacheSettingsWidget::CacheSettingsWidget(SettingsManager *settings, QWidget *par
         sw->setText(tr("Precompile a world's shaders while it opens"));
         mWarmUpOnOpen = sw;
     }
-    mWarmUpOnOpen->setChecked(mSettings->getValue("shader_warmup_on_open", true).toBool());
+    mWarmUpOnOpen->setChecked(mSettings->get(settingkeys::shaderWarmupOnOpen));
     mWarmUpOnOpen->setToolTip(tr(
         "Builds the shaders a world needs behind the loading screen instead of on the first "
         "frames you see — including the ones for objects the camera cannot see yet."));
@@ -207,7 +207,7 @@ void CacheSettingsWidget::saveSettings()
     // Next-launch only, and deliberately not hidden behind a restart prompt: the
     // directory is resolved once, when the engine starts, and re-resolving it
     // under a live Hlms would mean tearing the engine down.
-    mSettings->setValue("shader_cache_enabled", mEnabled->isChecked());
+    mSettings->set(settingkeys::shaderCacheEnabled, mEnabled->isChecked());
     // Read on every open, so this one takes effect immediately.
-    mSettings->setValue("shader_warmup_on_open", mWarmUpOnOpen->isChecked());
+    mSettings->set(settingkeys::shaderWarmupOnOpen, mWarmUpOnOpen->isChecked());
 }

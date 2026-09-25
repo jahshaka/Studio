@@ -64,20 +64,6 @@ private:
 	int left, right;
 };
 
-class MoveNodeCommand : public UndoRedo
-{
-public:
-	MoveNodeCommand(GraphNode *node, GraphNodeScene *,  QPointF oldPos, QPointF newPos);
-
-	void undo() override;
-	void redo() override;
-private:
-	QPointF oldPos;
-	QPointF newPos;
-	GraphNode* node = nullptr;
-	GraphNodeScene* scene = nullptr;
-};
-
 class MoveMultipleCommand : public UndoRedo
 {
 public:

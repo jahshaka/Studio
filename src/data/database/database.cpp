@@ -513,20 +513,6 @@ void Database::closeDatabase()
     if (!name.isEmpty()) QSqlDatabase::removeDatabase(name);
 }
 
-int Database::getTableCount()
-{
-	QSqlQuery query;
-	query.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'");
-	if (query.exec()) {
-		if (query.first()) return query.value(0).toInt();
-	}
-	else {
-		irisLog(QString("There was an error getting the table count! ").arg(query.lastError().text()));
-	}
-
-	return 0;
-}
-
 bool Database::checkIfTableExists(const QString &tableName)
 {
     QSqlQuery query;
@@ -658,39 +644,6 @@ void Database::migrateAssetsTable()
         addListed.prepare("ALTER TABLE assets ADD COLUMN listed INTEGER NOT NULL DEFAULT 1");
         executeAndCheckQuery(addListed, "MigrateAssetsAddListed");
     }
-}
-
-QString Database::getVersion()
-{
-    //QSqlQuery pquery;
-    //pquery.prepare("SELECT COUNT(*) FROM projects");
-    //executeAndCheckQuery(pquery, "projectsCount");
-
-    //bool getVersion = false;
-    //if (pquery.exec()) {
-    //    if (pquery.first()) {
-    //        getVersion = pquery.value(0).toBool();
-    //    }
-    //}
-    //else {
-    //    irisLog("There was an error getting the projects count! " + pquery.lastError().text());
-    //}
-
-    //if (getVersion) {
-    //    QSqlQuery query1;
-    //    query1.prepare("SELECT version FROM projects LIMIT 1");
-
-    //    if (query1.exec()) {
-    //        if (query1.first()) {
-    //            return query1.value(0).toString();
-    //        }
-    //    }
-    //    else {
-    //        irisLog("There was an error getting the db version! " + query1.lastError().text());
-    //    }
-    //}
-
-    return QString();
 }
 
 // Both of these bound by NAME (":depender", ...) against POSITIONAL '?'
@@ -2723,16 +2676,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         insertExportAssetQuery.bindValue(":parent", asset.parent);
         insertExportAssetQuery.bindValue(":tags", asset.tags);
         insertExportAssetQuery.bindValue(":properties", asset.properties);
-
-        //if (asset.type == static_cast<int>(ModelTypes::Object)) {
-        //    QJsonObject assetJson;
-        //    SceneWriter::writeSceneNode(assetJson, node);
-        //    qDebug() << assetJson;
-        //    insertExportAssetQuery.bindValue(":asset", QJsonDocument(assetJson).toBinaryData());
-        //}
-        //else {
-            insertExportAssetQuery.bindValue(":asset", asset.asset);
-        //}
+        insertExportAssetQuery.bindValue(":asset", asset.asset);
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
@@ -4144,28 +4088,6 @@ QString Database::fetchObjectMesh(const QString &guid, const int ertype, const i
 	return QString();
 }
 
-QString Database::fetchMeshObject(const QString &guid, const int ertype, const int eetype)
-{
-	QSqlQuery query;
-	query.prepare("SELECT depender FROM dependencies WHERE dependee = ? AND depender_type = ? AND dependee_type == ?");
-	query.addBindValue(guid);
-	query.addBindValue(ertype);
-	query.addBindValue(eetype);
-
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toString();
-		}
-	}
-	else {
-		irisLog(
-			"There was an error fetching a guid" + query.lastError().text()
-		);
-	}
-
-	return QString();
-}
-
 QStringList Database::hasMultipleDependers(const QString &guid)
 {
     QSqlQuery query;
@@ -4808,15 +4730,9 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         QSqlRecord record = selectAssetQuery.record();
 
         for (int i = 0; i < record.count(); i++) {
-            //if (selectAssetQuery.value(1).toInt() == static_cast<int>(jafType)) {
-            //    data.guid = guidToReturn;
-            //    assetGuids.insert(record.value(0).toString(), guidToReturn);
-            //}
-            //else {
-                QString guid = GUIDManager::generateGUID();
-                assetGuids.insert(record.value(0).toString(), guid);
-                data.guid = guid;
-            //}
+            QString guid = GUIDManager::generateGUID();
+            assetGuids.insert(record.value(0).toString(), guid);
+            data.guid = guid;
 
             outGuids.insert(record.value(0).toString(), data.guid);
 
@@ -4914,10 +4830,6 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
             " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, :listed)"
         );
-
-        //if (jafType == ModelTypes::Texture) {
-        //    guidToReturn = asset.guid;
-        //}
 
         insertAssetQuery.bindValue(":guid", asset.guid);
         insertAssetQuery.bindValue(":type", asset.type);

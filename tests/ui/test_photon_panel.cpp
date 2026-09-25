@@ -51,6 +51,7 @@ For more information see the LICENSE file
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "ui/panels/propertywidgets/worldmodespropertywidget.h"
 #include "viewport/headlesseditorviewport.h"
 #include "ui_hfloatsliderwidget.h"
 
@@ -213,7 +214,7 @@ int main(int argc, char **argv)
         CHECK(technique && technique->count() == 3,
               "the technique picker offers the three modes there are (Instant Radiosity "
               "was deleted with PHOTON_SPEC E2 (4))");
-        if (technique) technique->setCurrentIndex(2);   // VCT + Probes
+        if (technique) technique->setCurrentIndex(2);   // the hybrid (VCT + probes / VCT + rays)
         pump();
         CHECK(scene->giMode == iris::GiMode::VCT_PCC_HYBRID, "picking one writes it through");
         CHECK(panel.findChildren<DragVector3Widget *>().size() == 1,
@@ -549,6 +550,59 @@ int main(int argc, char **argv)
         CHECK(reflections().contains(QStringLiteral("32 probes")),
               "no rays: the Reflections row reads the grid's count");
         panel.setSceneView(nullptr);
+    }
+
+    // ---- ONE NAME FOR THE TECHNIQUE ON BOTH SURFACES (STUDIO-CRUD-1 fix) ----
+    // The World Modes section's "Photon Technique" combo and this section's
+    // Advanced "Technique" combo name ordinal 2 through ONE call
+    // (worldmodes::optionLabel with the scene), so on a tracing machine a
+    // scene at Medium reads "VCT + probes" on both and at High "VCT + rays" on
+    // both — and flipping the Ray Tracing row (the refresh both sections take,
+    // SceneNodePropertiesWidget's observer: setScene) moves both.
+    {
+        const auto comboLabelled = [](QWidget *root, const QString &label) -> QComboBox * {
+            for (ComboBoxWidget *c : root->findChildren<ComboBoxWidget *>())
+                for (QLabel *l : c->findChildren<QLabel *>())
+                    if (l->text().startsWith(label) && !c->isHidden()) return c->getWidget();
+            return nullptr;
+        };
+        WorldGiPropertyWidget gi;
+        WorldModesPropertyWidget modes;
+        StubViewport viewport;
+        worldmodes::setMode(scene, worldmodes::Mode::Epic);
+        scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        gi.setSceneView(&viewport);
+        modes.setSceneView(&viewport);
+        const auto both = [&](bool rays, int quality) {
+            viewport.rays = rays;
+            scene->giQuality = iris::GiQuality(quality);
+            gi.setScene(scene);
+            modes.setScene(scene);
+            pump();
+            if (auto *adv = buttonWith(&gi, QStringLiteral("Advanced"))) adv->setChecked(true);
+            pump();
+            QComboBox *a = comboLabelled(&gi, QStringLiteral("Technique"));
+            QComboBox *b = comboLabelled(&modes, QStringLiteral("Photon Technique"));
+            const QString ta = a && a->count() > 2 ? a->itemText(2) : QStringLiteral("<none>");
+            const int bi = b ? b->findData(2) : -1;
+            const QString tb = bi >= 0 ? b->itemText(bi) : QStringLiteral("<none>");
+            return qMakePair(ta, tb);
+        };
+        auto t = both(true, 1);
+        CHECK(t.first == QStringLiteral("VCT + probes") && t.second == t.first,
+              qPrintable(QStringLiteral("tracing machine, scene at Medium: both say 'VCT + probes' "
+                                        "(Photon '%1', World Modes '%2')").arg(t.first, t.second)));
+        t = both(true, 2);
+        CHECK(t.first == QStringLiteral("VCT + rays") && t.second == t.first,
+              qPrintable(QStringLiteral("tracing machine, scene at High: both say 'VCT + rays' "
+                                        "(Photon '%1', World Modes '%2')").arg(t.first, t.second)));
+        t = both(false, 2);
+        CHECK(t.first == QStringLiteral("VCT + probes") && t.second == t.first,
+              qPrintable(QStringLiteral("the Ray Tracing row flipped off, scene at High: both "
+                                        "follow to 'VCT + probes' (Photon '%1', World Modes '%2')")
+                             .arg(t.first, t.second)));
+        gi.setSceneView(nullptr);
+        modes.setSceneView(nullptr);
     }
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);

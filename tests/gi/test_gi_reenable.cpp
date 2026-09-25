@@ -1,6 +1,6 @@
 // gi.reenable — GI TURNED OFF AND BACK ON AT RUNTIME, in every arm.
 //
-// The document can push any GiParams at any time (`world.setGi`, the World
+// The document can push any GiParams at any time (`world.gi`, the World
 // panel's dropdowns, a script, a scene open), and the engine answers every push
 // by tearing the arm down and building the one that was asked for. Nothing in
 // the tree used to drive that transition: every GI suite pushes its mode once.

@@ -66,7 +66,6 @@ DistanceVectorNode::DistanceVectorNode()
 	setNodeType(NodeCategory::Vector);
 	title = "Distance";
 	typeName = "distance";
-	//enablePreview = true;
 
 	// distance(p0, p1) takes two points; the old single-input emission
 	// produced GLSL that could not compile

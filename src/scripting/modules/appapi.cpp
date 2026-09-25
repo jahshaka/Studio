@@ -1011,7 +1011,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     const QString projectsRoot =
         projects ? projects->projectsRoot()
                  : AppPaths::projectsRoot(SettingsManager::getDefaultManager()
-                                              ->getValue("default_directory", QString()).toString(),
+                                              ->get(settingkeys::defaultDirectory),
                                           Constants::PROJECT_FOLDER);
     const auto folderFor = [projects](const QString &guid) -> QString {
         return projects ? projects->projectFolderFor(guid) : QString();
@@ -1231,8 +1231,7 @@ QVariantMap AppApi::scriptPolicy(const QString &mode)
         // Persisted like every other preference, so the next session opens the
         // way the user left it.
         if (SettingsManager *settings = SettingsManager::getDefaultManager())
-            settings->setValue(QStringLiteral("script_feedback_live"),
-                               wanted == ScriptRunPolicy::Live);
+            settings->set(settingkeys::scriptFeedbackLive, wanted == ScriptRunPolicy::Live);
     }
     QVariantMap out;
     out["mode"] = ScriptEngine::policyName(engine->interactivePolicy());

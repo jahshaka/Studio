@@ -83,7 +83,6 @@ public:
     static int prefetchThumbnails(const QVector<ProjectTileData> &rows, const QSize &tileSize);
 
     void setTileSize(QSize size, QSize iSize);
-    void updateImage();
     void updateLabel(QString);
 
     // Switches the tile between "ordinary" and "the open project" — every
@@ -113,7 +112,6 @@ protected slots:
     void renameFromWidgetStr(QString);
 
 protected:
-//    void keyPressEvent(QKeyEvent* event);
     void enterEvent(QEnterEvent*);
     void leaveEvent(QEvent*);
     void mousePressEvent(QMouseEvent*);
@@ -122,11 +120,8 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent*);
 
 signals:
-//    void arrowPressed(QWidget *current, QString keypress);
-//    void enterPressed(QWidget *current);
     void hovered();
     void left();
-    //void edit(ItemGridWidget*, bool playMode);
     void remove(ItemGridWidget*);
     void singleClicked(ItemGridWidget*);
     void doubleClicked(ItemGridWidget*);

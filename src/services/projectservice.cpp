@@ -137,7 +137,7 @@ QString ProjectService::projectsRoot() const
     // One rule, in services/apppaths.h: the data root when a run forces one
     // (so a scripted run stops writing project folders into the developer's
     // Documents), the `default_directory` preference otherwise.
-    return AppPaths::projectsRoot(settings->getValue("default_directory", QString()).toString(),
+    return AppPaths::projectsRoot(settings->get(settingkeys::defaultDirectory),
                                   Constants::PROJECT_FOLDER);
 }
 
@@ -285,7 +285,6 @@ bool ProjectService::removeProject(const QString &guid)
 }
 
 iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
-                                                iris::PostProcessManagerPtr &postMan,
                                                 const iris::MeshPrewarmPtr &prewarm)
 {
     std::unique_ptr<SceneReader> reader(new SceneReader);
@@ -293,14 +292,12 @@ iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
     reader->setProject(project);
     reader->setPrewarm(prewarm);
 
-    postMan = iris::PostProcessManagerPtr();
     QByteArray blob;
     {
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
         blob = db->getSceneBlobGlobal(project->getProjectGuid());
     }
-    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob,
-                                             postMan, editorData);
+    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob, editorData);
 
     // A REPAIRED LOAD IS A DIRTY DOCUMENT (the GLB texture-loss defect,
     // io/scenereader.cpp): the reader healed texture slots that the stored

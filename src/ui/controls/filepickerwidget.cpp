@@ -41,19 +41,6 @@ void FilePickerWidget::filePicker()
 {
     auto picker = new AssetPickerWidget(ModelTypes::Object);
     connect(picker, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(pickFile(QListWidgetItem*)));
-//    auto file = openFile();
-
-//    if (file.isNull() || file.isEmpty()) return;
-//    else {
-//        QFileInfo fileInfo(file);
-//        filename = fileInfo.fileName();
-//        filepath = fileInfo.filePath();
-//        ui->filename->setText(filename);
-//        ui->filename->setToolTip(filepath);
-//        ui->filename->scroll(ui->filename->width(), 0);
-
-//        emit onPathChanged(filepath);
-    //    }
 }
 
 void FilePickerWidget::pickFile(QListWidgetItem *item)

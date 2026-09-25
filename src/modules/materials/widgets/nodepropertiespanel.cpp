@@ -32,11 +32,9 @@ For more information see the LICENSE file
 #include "../nodes/test.h"
 #include "../core/texturemanager.h"
 
-#if (EFFECT_BUILD_AS_LIB)
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
-#endif
 
 namespace
 {
@@ -358,7 +356,6 @@ void NodePropertiesPanel::rebuildNodeEditors()
 		return;
 	}
 
-#if (EFFECT_BUILD_AS_LIB)
 	if (type == "color") {
 		auto swatch = new ColorPickerWidget;
 		swatch->setFixedHeight(22);
@@ -381,7 +378,6 @@ void NodePropertiesPanel::rebuildNodeEditors()
 		addRow(tr("Color"), swatch);
 		return;
 	}
-#endif
 
 	// THE UV NODE (MATERIAL_UV_NODES_SPEC phase 3). Five numbers and a combo:
 	// the card's inline editors are deliberately cramped into 158px, and this
@@ -567,7 +563,6 @@ void NodePropertiesPanel::refreshFromNode()
 			mNumberBoxes[i]->blockSignals(false);
 		}
 	}
-#if (EFFECT_BUILD_AS_LIB)
 	else if (type == "color" && mColorSwatch != nullptr) {
 		auto obj = value.toObject();
 		QColor col;
@@ -577,7 +572,6 @@ void NodePropertiesPanel::refreshFromNode()
 		col.setAlphaF(obj["a"].toDouble(1.0));
 		mColorSwatch->setColor(col);
 	}
-#endif
 	else if (type == "uv" && mNumberBoxes.size() >= 5) {
 		auto obj = value.toObject();
 		static const char* keys[5] = { "tileX", "tileY", "offsetX", "offsetY", "rotation" };

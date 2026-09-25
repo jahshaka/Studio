@@ -54,7 +54,7 @@ McpSettingsWidget::McpSettingsWidget(SettingsManager *settings, QWidget *parent)
         mEnabled = sw;
     }
     mEnabled->setObjectName(QStringLiteral("mcpEnabled"));
-    mEnabled->setChecked(mSettings->getValue("mcp_enabled", false).toBool());
+    mEnabled->setChecked(mSettings->get(settingkeys::mcpEnabled));
     connect(mEnabled, &QAbstractButton::toggled, this,
             [this]() { mEnabledTouched = true; });
     layout->addWidget(mEnabled);
@@ -62,7 +62,7 @@ McpSettingsWidget::McpSettingsWidget(SettingsManager *settings, QWidget *parent)
     auto *form = new QFormLayout;
     mPort = new QSpinBox(this);
     mPort->setRange(1024, 65535);
-    mPort->setValue(mSettings->getValue("mcp_port", McpServer::kDefaultPort).toInt());
+    mPort->setValue(mSettings->get(settingkeys::mcpPort));
     form->addRow("Port", mPort);
 
     mToken = new QLineEdit(this);
@@ -176,7 +176,7 @@ void McpSettingsWidget::reloadFromLiveState()
     // with --mcp-port has no mcp_enabled setting and the switch showed "off"
     // while the server was serving.
     mEnabled->setChecked(mServer ? mServer->isRunning()
-                                 : mSettings->getValue("mcp_enabled", false).toBool());
+                                 : mSettings->get(settingkeys::mcpEnabled));
     mEnabledTouched = false;
     mLogSessions->setChecked(McpLog::instance().sessionRecording());
     mLogSource->setChecked(McpLog::instance().recordScriptSource());
@@ -206,8 +206,8 @@ void McpSettingsWidget::saveSettings()
     // A session whose server came from --mcp-port would otherwise have its
     // command-line choice written into the preferences by any OK on any page,
     // and (before this) an untouched OK STOPPED that server outright.
-    if (mEnabledTouched) mSettings->setValue("mcp_enabled", enabled);
-    mSettings->setValue("mcp_port", int(port));
+    if (mEnabledTouched) mSettings->set(settingkeys::mcpEnabled, enabled);
+    mSettings->set(settingkeys::mcpPort, int(port));
     // McpLog owns these two (it persists them itself and the scripting verb
     // writes the same pair) — the page only tells it what the user chose.
     McpLog::instance().setSessionRecording(mLogSessions->isChecked());

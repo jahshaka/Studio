@@ -70,7 +70,6 @@ class ListViewDelegate : public QStyledItemDelegate
 protected:
 	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
 	{
-		// painter->save();
 		QPalette::ColorRole textRole = QPalette::NoRole;
 
 		painter->setRenderHint(QPainter::Antialiasing);
@@ -87,7 +86,6 @@ protected:
         if (option.state & QStyle::State_Selected) {
             painter->save();
             textRole = QPalette::HighlightedText;
-            //painter->drawRect(r);
             painter->fillRect(r, QColor(76, 74, 72, 200));
             painter->restore();
         }
@@ -104,7 +102,6 @@ protected:
         QString clippedText = metrix.elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, width);
 
 		QString title = clippedText;
-		//        QString description = index.data(Qt::UserRole + 1).toString();
 
 		QPalette::ColorGroup cg = opt.state & QStyle::State_Enabled ? QPalette::Normal : QPalette::Disabled;
 		if (cg == QPalette::Normal && !(opt.state & QStyle::State_Active)) cg = QPalette::Inactive;
@@ -114,38 +111,19 @@ protected:
 		else painter->setPen(opt.palette.color(cg, QPalette::Text));
 
 		QStyle *style = opt.widget ? opt.widget->style() : QApplication::style();
-		//        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
 
 		QIcon ic = QIcon(qvariant_cast<QIcon>(index.data(Qt::DecorationRole)));
 		r = option.rect.adjusted(0, 0, 0, 0);
 		style->drawItemPixmap(painter, r, Qt::AlignCenter, ic.pixmap(QSize(128, 128)));
 
-		//r = option.rect.adjusted(50, 0, 0, -50);
-		//        painter->drawText(r.left(), r.top(), r.width(), r.height(),
-		//                          Qt::AlignBottom|Qt::AlignCenter|Qt::TextWordWrap, title, &r);
 		style->drawItemText(
             painter, opt.rect.adjusted(0, 0, 0, -2),
             Qt::AlignBottom | Qt::AlignCenter | Qt::TextSingleLine,
 			opt.palette, true, title, textRole
         );
 
-		//        painter->restore();
-		//r = option.rect.adjusted(50, 50, 0, 0);
-		//        painter->drawText(r.left(), r.top(), r.width(), r.height(), Qt::AlignLeft|Qt::TextWordWrap, description, &r);
-		//        auto opt = option;
-		//        initStyleOption(&opt, index);
-
-		//        QString line0 = index.model()->data(index.model()->index(index.row(), 0)).toString();
-		//        QString line1 = index.model()->data(index.model()->index(index.row(), 2)).toString();
-
-		//        // draw correct background
-		//        opt.text = "";
 
 
-		//        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
-
-
-		//        painter->drawText(QRect(rect.left(), rect.height(), rect.width(), rect.height()), opt.displayAlignment, line0);
 	}
 
 	QSize sizeHint(const QStyleOptionViewItem & option, const QModelIndex & index) const
@@ -175,7 +153,6 @@ protected:
         if (index.data().canConvert<QString>()) {
             const QString text = index.data().toString();
             QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor);
-            //lineEdit->setMaxLength(15);
             lineEdit->setText(text);
         }
         else {
@@ -213,13 +190,6 @@ struct find_asset_thumbnail
 	}
 };
 
-// typedef struct directory_tuple
-// {
-// 	QString path;
-// 	QString guid;
-// 	QString parent_guid;
-// };
-
 class AssetWidget : public QWidget
 {
     Q_OBJECT
@@ -249,7 +219,6 @@ public:
 	/// A pin change for the open project queued a repopulate (coalesced).
 	bool membershipRefreshPending = false;
 
-    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
 
     void populateAssetTree(bool initialRun);
 
@@ -271,7 +240,6 @@ public:
     /// process exit rather than tear down objects the worker still uses.
     bool shutdownImports(int msTimeout);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
-    void generateAssetThumbnails();
     void syncTreeAndView(const QString&);
 	void addItem(const FolderRecord &folderData);
 	void addItem(const AssetRecord &assetData);

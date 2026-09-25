@@ -41,7 +41,6 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "ui/panels/assetwidget.h"
 #include "ui/panels/scenehierarchywidget.h"
-#include "io/sceneformat.h"
 #include "services/editgate.h"
 #include "services/services.h"
 #include "services/playerservice.h"
@@ -49,7 +48,6 @@ For more information see the LICENSE file
 #include "services/sceneissues.h"
 #include "services/sceneeditservice.h"
 #include "services/vrworld.h"
-#include "services/clipboardservice.h"
 #include "services/selectionservice.h"
 #include "services/outlinesettings.h"
 #include "services/undoservice.h"
@@ -130,24 +128,6 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Duplicates the selection as ONE undo step — each copy lands right after its own "
           "original — and selects the copies. Returns the new ids, the primary's copy first.",
           Needs::Document },
-        { "copy", "editor.copy() -> n",
-          "DEPRECATED — call clipboard.copy(). An alias kept for scripts written before the "
-          "clipboard became one component: it copies the selection onto the SAME system clipboard "
-          "clipboard.copy writes to (with the asset closure) and returns how many objects went. Not "
-          "an undo entry; copying nothing leaves the previous clipboard alone and returns 0.",
-          Needs::Document },
-        { "paste", "editor.paste() -> [id]",
-          "DEPRECATED — call clipboard.paste(). An alias: pastes the clipboard's scene objects "
-          "beside the primary — same parent, sibling index + 1, local transform kept — or at the "
-          "scene root when nothing is selected. Fresh guids, one undo step, and the pasted nodes "
-          "become the selection. It returns the new ids only; the missing-asset and skipped-item "
-          "reports are clipboard.paste's.",
-          Needs::Document },
-        { "clipboard", "editor.clipboard() -> [{format, version, node, parent, index}]",
-          "DEPRECATED — call clipboard.contents() (a description) or clipboard.text() (the "
-          "payload). An alias: the clipboard's SCENE-OBJECT items in the shape node.serialize "
-          "returns. Empty when the clipboard holds something that is not a Jahshaka payload.",
-          Needs::Document },
         { "gizmoMode", "editor.gizmoMode() -> \"translate\" | \"rotate\" | \"scale\"",
           "The active transform gizmo mode (W/E/R in the viewport; Space cycles).",
           Needs::Engine },
@@ -187,7 +167,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane, shadowAtlas, outlineWidth, outlineColor, outlinePrimaryColor, menu}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
@@ -216,6 +196,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
           "render through an offscreen view and the overlay is excluded from those by construction. "
+          "`menu` is what the View Options menu's checkmarks SHOW ({grid, lightWires, stats, "
+          "physicsDebug}; empty with no editor window): they follow the viewport's state, so after "
+          "any editor.setOverlays they equal the keys above — a difference is a defect. "
           "`outlineWidth`, `outlineColor` and `outlinePrimaryColor` are the selection highlight's "
           "LOOK, READ-ONLY here (they are persisted preferences, written by editor.setOutline): "
           "`outlinePrimaryColor` is the brighter colour the PRIMARY member of a multi-selection is "
@@ -229,9 +212,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`stats` persists as the `show_fps` preference and survives Game View and fullscreen; the "
           "others are viewport state for this session. `physicsDebug` draws the physics world's "
           "collision shapes, and shows nothing at all until a simulation is running "
-          "(editor.simulate / editor.play). NOTE the View Options menu's checkmarks do "
-          "not yet follow a script-driven change (same as editor.setCameraMode) — the viewport "
-          "does; `physicsDebug` is the exception, its menu checkmark follows.",
+          "(editor.simulate / editor.play). The View Options menu's checkmarks FOLLOW a "
+          "script-driven change of `grid`, `lightWires`, `stats` and `physicsDebug` "
+          "(editor.overlays().menu reads them): the viewport owns the state and the menu is a "
+          "view of it.",
           Needs::Engine },
         { "outline", "editor.outline() -> {width, color, primaryColor, primaryColorStored}",
           "The SELECTION OUTLINE's three persisted values (Preferences \u2192 Viewport): `width` in "
@@ -1237,65 +1221,6 @@ QVariantList EditorApi::duplicateSelection()
     return out;
 }
 
-// ---- the clipboard aliases (CLIPBOARD_SPEC §8) ------------------------------
-//
-// One clipboard, three older names. These three verbs shipped against the
-// in-app QList<SceneFragment> that ClipboardService replaced; they are kept as
-// thin delegates so scripts and the MCP tools written against them keep
-// working, and they now read and write exactly what clipboard.* does. New code
-// calls the clipboard module — the doc strings say so.
-
-int EditorApi::copy()
-{
-    if (!host.services || !host.services->selection || !host.services->clipboard) {
-        fail("editor: not available in this session");
-        return 0;
-    }
-    const auto set = host.services->selection->selectedSet();
-    // "How many did I copy?" is the verb's whole contract, and zero is a
-    // perfectly good answer — the doc already promised the previous clipboard
-    // survives it. Throwing aborted the caller's script over a documented
-    // outcome (hygiene lane, 2026-09-09).
-    if (set.isEmpty()) { refuse("editor.copy: nothing is selected"); return 0; }
-    const auto result = host.services->clipboard->copyNodes(set);
-    if (!result.ok()) { refuse(QStringLiteral("editor.copy: %1").arg(result.error)); return 0; }
-    return result.items;
-}
-
-QVariantList EditorApi::paste()
-{
-    QVariantList out;
-    if (!host.services || !host.services->clipboard) {
-        fail("editor: not available in this session");
-        return out;
-    }
-    if (host.services->clipboard->contents().isNull()) {
-        fail("editor.paste: the clipboard is empty");
-        return out;
-    }
-    for (const QString &id : host.services->clipboard->paste().pasted) out.append(id);
-    return out;
-}
-
-QVariantList EditorApi::clipboard()
-{
-    QVariantList out;
-    if (!host.services || !host.services->clipboard) return out;
-    const auto envelope = host.services->clipboard->contents();
-    for (const auto &item : envelope.items) {
-        if (item.kind != QLatin1String(clipboardformat::kind::node())) continue;
-        // The same shape node.serialize returns — session node ids deliberately
-        // left out for the same reason it leaves them out.
-        out.append(QVariantMap{
-            { "format", QString::fromLatin1(sceneformat::kFormatId()) },
-            { "version", envelope.sceneFormat > 0 ? envelope.sceneFormat : sceneformat::kVersion },
-            { "node", item.nodeObject().toVariantMap() },
-            { "parent", item.parentGuid() },
-            { "index", item.siblingIndex() } });
-    }
-    return out;
-}
-
 QString EditorApi::gizmoMode()
 {
     if (!requireEngine()) return QString();
@@ -1397,6 +1322,9 @@ QVariantMap EditorApi::overlays()
     out["outlineWidth"] = outlinesettings::width();
     out["outlineColor"] = outlinesettings::color().name();
     out["outlinePrimaryColor"] = outlinesettings::primaryColor().name();
+    // The View Options menu's checkmarks, read back (STUDIO-CRUD-1 item 8):
+    // one owner (the viewport), and the menu follows it.
+    out["menu"] = host.mainWindow ? host.mainWindow->viewOptionChecks() : QVariantMap();
     return out;
 }
 
@@ -1440,7 +1368,7 @@ bool EditorApi::setOverlays(const QVariantMap &change)
         // Persisted, unlike the other rows: `stats` is the Preferences
         // `show_fps` setting, and the checkbox, the F3 key and this verb are one
         // code path with one stored value (STATS_OVERLAY_SPEC §5.3 step 3).
-        SettingsManager::getDefaultManager()->setValue("show_fps", on);
+        SettingsManager::getDefaultManager()->set(settingkeys::showFps, on);
     }
     if (change.contains("physicsDebug")) {
         const bool on = change.value("physicsDebug").toBool();

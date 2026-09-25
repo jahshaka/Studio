@@ -116,19 +116,6 @@ assert(pastedBack.pasted.length === 1, "a cut object is still on the clipboard a
 assert(nameOf(pastedBack.pasted[0]).indexOf("Cone") === 0,
        "as the same thing: " + nameOf(pastedBack.pasted[0]));
 
-// ---- 5. the editor.* aliases share this one clipboard ---------------------
-editor.select([cube]);
-assert(editor.copy() === 1, "editor.copy still answers with a count");
-var aliasText = clipboard.text();
-assert(JSON.parse(aliasText).items.length === 1,
-       "and it wrote the SAME system clipboard — one clipboard, three names");
-var aliasFragments = editor.clipboard();
-assert(aliasFragments.length === 1 && aliasFragments[0].format === "jahshaka.scene",
-       "editor.clipboard still reports the fragment shape node.serialize returns");
-assert(aliasFragments[0].node.name === "Cube", "with the node object in it");
-var aliasPasted = editor.paste();
-assert(aliasPasted.length === 1 && !!nameOf(aliasPasted[0]), "editor.paste pastes the same payload");
-
 // ---- 6. NODE-GUID REFERENCES FOLLOW THE COPY ------------------------------
 //
 // iris::SceneNode::remapNodeReferences, live: a pasted subtree's internal

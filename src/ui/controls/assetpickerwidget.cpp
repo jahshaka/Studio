@@ -135,8 +135,6 @@ void AssetPickerWidget::changeView(bool toggle)
         ui->assetView->setViewMode(QListWidget::IconMode);
         ui->assetView->setIconSize(QSize(88, 88));
         ui->assetView->setResizeMode(QListWidget::Adjust);
-//        ui->assetView->setMovement(QListView::Static);
-//        ui->assetView->setSelectionBehavior(QAbstractItemView::SelectItems);
         ui->assetView->setSelectionMode(QAbstractItemView::SingleSelection);
 
         for (int i = 0; i < ui->assetView->count(); ++i) {

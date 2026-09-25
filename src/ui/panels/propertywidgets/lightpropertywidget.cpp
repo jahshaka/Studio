@@ -212,7 +212,6 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
            "exception: the light still lights everything it reaches, straight through walls and "
            "floors, which is what a fill light is for and is also the commonest cause of a room "
            "that is lit from outside."));
-    //shadowType->addItem("Softer");
     shadowSize = this->addComboBox("Shadow Size");
     shadowSize->addItem("512");
     shadowSize->addItem("1024");

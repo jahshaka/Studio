@@ -109,7 +109,6 @@ For more information see the LICENSE file
 // otherwise be a second copy of it.
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,
-                                      iris::PostProcessManagerPtr postMan,
                                       EditorData **editorData)
 {
     dir = projectPath;
@@ -142,8 +141,6 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     // come back with its folders, because the next save would otherwise write
     // an empty list over them.
     scenefolders::readEditorBlock(projectObj["editor"].toObject(), scene);
-	if (!!postMan)
-		readPostProcessData(projectObj, postMan);
 
     for (auto node : scene->rootNode->children()) {
         node->applyDefaultPose();
@@ -210,52 +207,6 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->showGrid = editorObj.value("showGrid").toBool(editorData->showGrid);
 
     return editorData;
-}
-
-void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
-{
-	/*
-    if (projectObj.contains("postprocesses")) {
-        auto processListObj = projectObj["postprocesses"].toArray();
-
-        for (auto processVal : processListObj) {
-            auto processObj = processVal.toObject();
-            auto name = processObj["name"].toString("");
-
-            iris::PostProcessPtr process;
-
-            if(name == "bloom")
-               process = iris::BloomPostProcess::create();
-            if(name == "color_overlay")
-               process = iris::ColorOverlayPostProcess::create();
-            //if(name == "greyscale")
-            //   process = iris::GreyscalePostProcess::create();
-            if(name == "radial_blur")
-               process = iris::RadialBlurPostProcess::create();
-            if(name == "ssao")
-               process = iris::SSAOPostProcess::create();
-            if(name == "fxaa")
-               process = iris::FxaaPostProcess::create();
-            //if(name == "material")
-            //   process = iris::MaterialPostProcess::create();
-
-            if (!!process) {
-                auto propertyObj = processObj["properties"].toObject();
-                auto props = process->getProperties();
-                for ( auto prop : props) {
-
-                    if (propertyObj.contains(prop->name)) {
-
-                        prop->setValue(propertyObj[prop->name].toVariant());
-                        process->setProperty(prop);
-                    }
-                }
-            }
-
-            postMan->addPostProcess(process);
-        }
-    }
-	*/
 }
 
 /// THE GLB TEXTURE-LOSS REPAIR (2026-09-09), reader half.
@@ -1355,8 +1306,6 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
         }
 
         sceneNode->addAnimation(animation);
-        //if (animation->getName() == activeAnim)
-        //    sceneNode->setAnimation(animation);
     }
     // BOUNDS-CHECKED. This was a bare operator[] on the index the file happens
     // to carry: a blob whose activeAnimation points past its (possibly empty)

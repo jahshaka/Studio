@@ -122,8 +122,6 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         writePostProcessData(projectObj, postMan);
     }
 
-    //qDebug() << projectObj;
-
     return QJsonDocument(projectObj).toJson();
 }
 
@@ -654,7 +652,6 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
         sceneNodeObj["activeAnimation"] = animations.indexOf(activeAnim);
     else
         sceneNodeObj["activeAnimation"] = -1;
-        //sceneNodeObj["activeAnimation"] = activeAnim->getName();
 
 
     // todo: add all animations
@@ -809,9 +806,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
     QJsonObject matObj;
     writeSceneNodeMaterial(matObj, meshNode->getMaterial(), relative);
 	sceneNodeObject["material"] = matObj;
-	//auto matDef = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
-	//qDebug() << QJsonDocument(matDef).toJson(QJsonDocument::Indented);
-	//sceneNodeObject["material"] = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
 }
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
@@ -980,7 +974,6 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 				valuesObj[prop->name] = QString();
 				continue;
 			}
-			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
 			auto id = relative
 				? assetGuidForTexturePath(prop->getValue().toString())
 				: relativeToStaticBase(prop->getValue().toString());

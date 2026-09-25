@@ -58,7 +58,7 @@ assert(marbleRough.length > 10, "MRAMOR-bump.jpg imported");
 // reading the sky, so a black sky delivers exactly zero ambient at any
 // intensity and this scene's fill would vanish. The old flat 0x808080 ambient
 // becomes a 0x808080 SKY at skylight 1.0 — the same grey, said once.
-assert(world.setSky("color", { color: "#808080" }) === true, "a flat grey sky");
+assert(world.sky("color", { color: "#808080" }) === true, "a flat grey sky");
 assert(world.gi({ mode: "off" }) === true, "GI OFF");
 var sl = world.skyLight();
 if (sl.light !== "") node.setProperty(sl.light, "intensity", 1.0);

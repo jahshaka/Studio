@@ -63,7 +63,6 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     keyFrameWidget = new KeyFrameWidget(this);
     keyFrameWidget->setLabelWidget(ui->keylabelView);
     keyFrameWidget->setAnimWidgetData(animWidgetData);
-    //keyFrameWidget->hide();
 
     curveWidget = new KeyFrameCurveWidget();
     curveWidget->setLabelWidget(ui->keylabelView);
@@ -88,7 +87,6 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     animWidgetData->addDisplayWidget(curveWidget);
     animWidgetData->addDisplayWidget(ui->timeline);
 
-    //ui->keywidgetView->setLabelWidget(ui->keylabelView);
     ui->keylabelView->setAnimWidget(this);
 
     //timer
@@ -98,7 +96,6 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 
     ui->sceneNodeName->setText("");
 
-    //timeAtCursor = 0;
     timerSpeed = 1.0f/60;//60 fps
     loopAnim = false;
 
@@ -106,9 +103,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     connect(ui->playBtn,SIGNAL(pressed()),this,SLOT(startTimer()));
     connect(ui->stopBtn,SIGNAL(pressed()),this,SLOT(stopTimer()));
 
-    //connect(ui->keywidgetView,SIGNAL(cursorTimeChanged(float)),this,SLOT(onObjectAnimationTimeChanged(float)));
     connect(ui->timeline,SIGNAL(cursorMoved(float)),this,SLOT(onSceneAnimationTimeChanged(float)));
-    //connect(ui->timeline,SIGNAL(cursorMoved(float)),keyFrameWidget,SLOT(cursorTimeChanged(float)));
 
     //dopesheet and curve buttons
     connect(ui->dopeSheetBtn,SIGNAL(pressed()),this,SLOT(showKeyFrameWidget()));
@@ -158,7 +153,6 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     timer->stop();
 
     keyFrameWidget->setSceneNode(node);
-    //ui->timeline->setSceneNode(node);
     ui->keylabelView->setSceneNode(node);
 
     // UPDATE, NOT REPAINT (SELECT-COST-1, 2026-09-18). `repaint()` paints the
@@ -243,25 +237,6 @@ void AnimationWidget::buildPropertiesMenu()
         menu->addAction(action);
     }
 
-    // todo: add materials
-//    if (node->sceneNodeType == iris::SceneNodeType::Mesh ) {
-//        int index = 0;
-//        auto mat = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
-//        auto props = mat->getProperties();
-
-//        auto matMenu = new QMenu("Material");
-
-//        for(auto prop : props) {
-//            auto action = new QAction();
-//            action->setText(prop->displayName);
-//            action->setData(index++);
-
-//            matMenu->addAction(action);
-//        }
-
-//        menu->addMenu(matMenu);
-//    }
-
 
     connect(menu, SIGNAL(triggered(QAction*)), this ,SLOT(addPropertyKey(QAction*)));
     ui->insertFrame->setMenu(menu);
@@ -285,8 +260,6 @@ void AnimationWidget::updateAnim()
 void AnimationWidget::startTimer()
 {
     if (!timer->isActive()) {
-        //timeAtCursor = keyFrameWidget->getTimeAtCursor();
-        //startedTime = timeAtCursor;
         startedTime = animWidgetData->cursorPosInSeconds;
 
         timer->start(timerSpeed);
@@ -327,7 +300,6 @@ void AnimationWidget::fixLayout()
 void AnimationWidget::repaintViews()
 {
     keyFrameWidget->repaint();
-    //curveWidget->repaint();
     ui->keylabelView->repaint();
 }
 

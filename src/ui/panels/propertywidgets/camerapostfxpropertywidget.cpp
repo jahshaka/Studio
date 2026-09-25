@@ -60,10 +60,10 @@ QString labelFor(const QString &key)
     return key;
 }
 
-QString tooltipFor(const QString &key)
+QString tooltipFor(const QString &key, bool sceneTracesRays)
 {
     if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key)) return p->doc;
-    if (const worldmodes::Row *r = worldmodes::row(key)) return r->cost;
+    if (const worldmodes::Row *r = worldmodes::row(key)) return worldmodes::rowCost(*r, sceneTracesRays);
     return QString();
 }
 
@@ -94,6 +94,11 @@ rowundo::Binding CameraPostFxPropertyWidget::row(const QString &key,
     return rows(key, std::move(toDocument));
 }
 
+bool CameraPostFxPropertyWidget::sceneTracesRays() const
+{
+    return sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays();
+}
+
 void CameraPostFxPropertyWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
@@ -109,7 +114,7 @@ QString CameraPostFxPropertyWidget::inheritedText(const QString &key) const
         const int v = worldmodes::resolved(scene, *r);
         if (r->type == worldmodes::RowType::Bool) return v ? QStringLiteral("on") : QStringLiteral("off");
         for (const worldmodes::EnumOption &o : r->options)
-            if (o.value == v) return o.label;
+            if (o.value == v) return worldmodes::optionLabel(*r, o, scene, sceneTracesRays());
         return QString::number(v);
     }
     return QStringLiteral("world");
@@ -216,7 +221,7 @@ void CameraPostFxPropertyWidget::rebuild()
             // so it cannot be pinned to something the renderer would ignore —
             // the same choice the World section makes.
             auto *lbl = this->addLabel(label, QStringLiteral("not available yet"));
-            if (lbl) lbl->setToolTip(tooltipFor(key));
+            if (lbl) lbl->setToolTip(tooltipFor(key, sceneTracesRays()));
             continue;
         }
 
@@ -306,7 +311,7 @@ void CameraPostFxPropertyWidget::rebuild()
             auto *box = this->addCheckBox(QStringLiteral("Override %1").arg(label),
                                           own.isValid());
             box->setValue(own.isValid());
-            box->setToolTip(tooltipFor(key));
+            box->setToolTip(tooltipFor(key, sceneTracesRays()));
             {
                 // The tri-state, through the reflected door: an INVALID value
                 // clears the override, a number pins it. Turning an override on
@@ -336,7 +341,7 @@ void CameraPostFxPropertyWidget::rebuild()
                                      : ((p && p->get && scene) ? p->get(scene) : 0.0);
             auto *field = this->addDragFloat(label, shown, minV, maxV, step, decimals);
             field->setEnabled(own.isValid());
-            field->setToolTip(tooltipFor(key));
+            field->setToolTip(tooltipFor(key, sceneTracesRays()));
             connect(field, &DragFloatWidget::valueChanged, this, [this, key, minV, maxV](double v) {
                 if (!camera) return;
                 camera->setPostOverride(key, qBound(minV, v, maxV));
@@ -369,13 +374,15 @@ void CameraPostFxPropertyWidget::rebuild()
             int current = 0;
             if (r) {
                 for (int o = 0; o < r->options.size(); ++o) {
-                    combo->addItem(r->options[o].label, r->options[o].value);
+                    combo->addItem(worldmodes::optionLabel(*r, r->options[o], sceneOf(camera),
+                                                           sceneTracesRays()),
+                                   r->options[o].value);
                     if (own.isValid() && r->options[o].value == own.toInt()) current = o + 1;
                 }
             }
             combo->setCurrentIndex(current);
         }
-        if (combo->toolTip().isEmpty()) combo->setToolTip(tooltipFor(key));
+        if (combo->toolTip().isEmpty()) combo->setToolTip(tooltipFor(key, sceneTracesRays()));
         {
             rowundo::Binding b = row(QStringLiteral("postFx.") + key,
                                      [combo](const QVariant &r) { return combo->getItemData(r.toInt()); });

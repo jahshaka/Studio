@@ -192,7 +192,6 @@ set(SRCS
     src/viewport/scenepicker.cpp
     src/viewport/gizmooverlay.cpp
     src/viewport/enginerenderdriver.cpp
-    src/ui/dialogs/ogrepreviewdialog.cpp
     src/bridge/enginehost.cpp
     src/scripting/apimodule.cpp
     src/scripting/apiregistry.cpp
@@ -518,6 +517,7 @@ set(HEADERS
     src/ui/panels/timeline/nodekeyframeanimation.h 
     src/data/project.h 
     src/data/settingsmanager.h 
+    src/data/settingkeys.h
     src/viewport/editorcameracontroller.h 
     src/viewport/engineviewwidget.h
     irisgl/mirror/scenemirror.h
@@ -527,7 +527,6 @@ set(HEADERS
     src/viewport/scenepicker.h
     src/viewport/gizmooverlay.h
     src/viewport/enginerenderdriver.h
-    src/ui/dialogs/ogrepreviewdialog.h
     src/bridge/enginehost.h
     src/scripting/scripthost.h
     src/scripting/apimodule.h
@@ -619,6 +618,7 @@ set(HEADERS
     src/services/projectservice.h
     src/services/imagematerial.h
     src/services/sceneeditservice.h
+    src/services/nodeexport.h
     src/services/clipboardservice.h
     src/services/clipboardbackend.h
     src/services/clipboardresolver.h

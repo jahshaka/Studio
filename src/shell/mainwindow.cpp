@@ -47,7 +47,6 @@ For more information see the LICENSE file
 
 #include "data/guidmanager.h"
 #include "services/thumbnailmanager.h"
-#include "ui/dialogs/ogrepreviewdialog.h"
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginematerialpreview.h"
@@ -408,7 +407,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// app.scriptPolicy). Live is the default: a person or an agent driving the
 	// editor should see it work.
 	scriptEngine->setInteractivePolicy(
-		SettingsManager::getDefaultManager()->getValue("script_feedback_live", true).toBool()
+		SettingsManager::getDefaultManager()->get(settingkeys::scriptFeedbackLive)
 			? ScriptRunPolicy::Live : ScriptRunPolicy::Off);
 	if (prefsDialog) prefsDialog->wireScripting(scriptEngine);
 	registerStudioModules(*scriptEngine);
@@ -431,9 +430,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// it from the CLI path instead.
 	mcpServer = new McpServer(scriptEngine, this);
 	prefsDialog->wireMcp(mcpServer, this);
-	if (settings->getValue("mcp_enabled", false).toBool()) {
+	if (settings->get(settingkeys::mcpEnabled)) {
 		QString mcpError;
-		if (!startMcpServer(quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt()), &mcpError))
+		if (!startMcpServer(quint16(settings->get(settingkeys::mcpPort)), &mcpError))
 			qWarning("MCP: %s", qPrintable(mcpError));
 	}
 
@@ -471,11 +470,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	MainThreadWatchdog::start();
 }
 
-void MainWindow::grabOpenGLContextHack()
-{
-    //switchSpace(WindowSpaces::PLAYER);
-}
-
 void MainWindow::goToDesktop()
 {
     show();
@@ -486,13 +480,11 @@ void MainWindow::setShowFrameStats(bool on)
 {
     // ONE code path for the F3 key, the View Options row, the Preferences
     // checkbox and editor.setOverlays({stats}) — and one stored value, so the
-    // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3).
+    // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3). The
+    // View Options checkmark follows the viewport's overlaysChanged
+    // (syncOverlayChecks), never this call.
     if (sceneView) sceneView->setShowFps(on);
-    SettingsManager::getDefaultManager()->setValue("show_fps", on);
-    if (statsCheckAction && statsCheckAction->isChecked() != on) {
-        QSignalBlocker block(statsCheckAction);   // no toggled() round trip
-        statsCheckAction->setChecked(on);
-    }
+    SettingsManager::getDefaultManager()->set(settingkeys::showFps, on);
 }
 
 bool MainWindow::bounceIfViewportIsDead()
@@ -878,30 +870,6 @@ SettingsManager* MainWindow::getSettingsManager()
     return settings;
 }
 
-bool MainWindow::handleMousePress(QMouseEvent *event)
-{
-    mousePressPos = event->pos();
-
-    return true;
-}
-
-bool MainWindow::handleMouseRelease(QMouseEvent *event)
-{
-    return true;
-}
-
-bool MainWindow::handleMouseMove(QMouseEvent *event)
-{
-    mousePos = event->pos();
-    return false;
-}
-
-// TODO - disable scrolling while doing gizmo transform ?
-bool MainWindow::handleMouseWheel(QWheelEvent *event)
-{
-    return false;
-}
-
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     // THE TITLE-BAR X IS A DOCK TOGGLE (lane SPACE-1 round 2). `widgetStates`
@@ -989,7 +957,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	}
 
     bool closing = false;
-	bool autoSave = settings->getValue("auto_save", true).toBool();
+	bool autoSave = settings->get(settingkeys::autoSave);
 
 	if (autoSave && projectService->isSceneOpen()) {
 		saveScene();
@@ -1921,9 +1889,8 @@ void MainWindow::openStageBegin()
 void MainWindow::openStageRead(const iris::MeshPrewarmPtr &prewarm)
 {
 	LoadTimeline::mark(QStringLiteral("readProjectScene"));
-	iris::PostProcessManagerPtr postMan;
 	openPendingEditorData = Q_NULLPTR;
-	openPendingScene = projectService->readProjectScene(&openPendingEditorData, postMan, prewarm);
+	openPendingScene = projectService->readProjectScene(&openPendingEditorData, prewarm);
 }
 
 void MainWindow::openStageBind(bool playMode)
@@ -1949,8 +1916,8 @@ void MainWindow::openStageBind(bool playMode)
 		// needs to be done so controllers can have the correct
 		// camera
 		playerView->setScene(scene);
-		wireCheckAction->setChecked(editorData->showLightWires);
-		gridCheckAction->setChecked(editorData->showGrid);
+		// (The grid and light-wire checkmarks follow setEditorData's
+		// overlaysChanged — syncOverlayChecks.)
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
 	}
 
@@ -2399,7 +2366,7 @@ void MainWindow::startOpenRun(bool playMode)
 	// kills the app on the second world of a session, so it ships behind
 	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
 	// The switch stays in Preferences -> Cache for anyone who wants it off.
-	if (settings->getValue("shader_warmup_on_open", true).toBool()) {
+	if (settings->get(settingkeys::shaderWarmupOnOpen)) {
 		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
 			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
 			const unsigned built = sceneView->warmUpShaders();
@@ -2495,12 +2462,11 @@ void MainWindow::closeProject(CloseIntent intent)
             // closePrevious:save — a create's ledger shows its close now
             // (CREATE-GAP-1); a no-op outside a LoadTimeline run.
             LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
-            if (settings->getValue("auto_save", true).toBool()) saveScene();
+            if (settings->get(settingkeys::autoSave)) saveScene();
         }
 
         scene->getPhysicsEnvironment()->destroyPhysicsWorld();
 
-        //playbackService->stopSimulation();
         playSimBtn->setText("Simulate Physics");
         playSimBtn->setToolTip("Simulate physics only");
 
@@ -2672,11 +2638,6 @@ void MainWindow::removeScene()
     sceneView->clearScene();
     sceneNodePropertiesWidget->setScene(iris::ScenePtr());
     sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
-}
-
-void MainWindow::setupPropertyUi()
-{
-    animWidget = new AnimationWidget();
 }
 
 void MainWindow::assetItemSelected(QListWidgetItem *item)
@@ -2854,17 +2815,6 @@ void MainWindow::addAssetParticleSystem(bool ignore, iris::Vec3 position, QStrin
     sceneEditService->addAssetParticleSystem(ignore, position, guid, assetName);
 }
 
-void MainWindow::addDragPlaceholder()
-{
-    /*
-    auto node = iris::MeshNode::create();
-    node->scale = iris::Vec3(.5f, .5f, .5f);
-    node->setMesh(":app/content/primitives/arrow.obj");
-    node->setName("Arrow");
-    addNodeToScene(node, true);
-    */
-}
-
 /**
  * Adds sceneNode to selected scene node. If there is no selected scene node,
  * sceneNode is added to the root node
@@ -2883,11 +2833,6 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
 {
     sceneEditService->addNodeToScene(sceneNode, ignore);
-}
-
-void MainWindow::repopulateSceneTree()
-{
-    this->sceneHierarchyWidget->repopulateTree();
 }
 
 // THE SELECTION, not the primary (EDITOR_MULTISELECT_SPEC §2.5). Both of these
@@ -2933,7 +2878,16 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
     if (filePath.isEmpty() || filePath.isNull()) return;
 
-    sceneEditService->exportNodeTo(node, modelType, filePath);
+    // THE VERB'S PATH (node.exportArchive calls the same service).
+    const auto result = sceneEditService->exportNodeTo(node, modelType, filePath);
+    if (!result.ok()) {
+        // TOLD, not only logged — this was a silent void (the project export's
+        // shape, exportSceneAsZip).
+        irisLog(QStringLiteral("Export failed: %1").arg(result.error));
+        if (!FirstRun::isDrivenSession())
+            QMessageBox::warning(this, tr("Export failed"),
+                                 tr("%1 could not be exported: %2").arg(node->getName(), result.error));
+    }
 }
 
 void MainWindow::deleteNode()
@@ -2954,19 +2908,6 @@ void MainWindow::updateCurrentSceneThumbnail()
     projectService->updateCurrentSceneThumbnail();
 }
 
-/*
-bool MainWindow::isModelExtension(QString extension)
-{
-    if(extension == "obj"   ||
-       extension == "3ds"   ||
-       extension == "fbx"   ||
-       extension == "dae"   ||
-       extension == "blend" ||
-       extension == "c4d"   )
-        return true;
-    return false;
-}
-*/
 void MainWindow::exportSceneAsZip()
 {
     if (!projectService->isSceneOpen() || project->getProjectGuid().isEmpty()) return;
@@ -3827,7 +3768,6 @@ void MainWindow::toggleScriptConsole()
 
 void MainWindow::setupViewPort()
 {
-	// ui->MenuBar->setVisible(false);
 
 	worlds_menu = new QPushButton("Desktop");
 	worlds_menu->setObjectName("worlds_menu");
@@ -3898,7 +3838,6 @@ void MainWindow::setupViewPort()
 	help->setObjectName("helpButton");
     // for adapting Qt6.9.0
     help->setText(QChar(static_cast<ushort>(fa::questioncircle)));
-    //help->setText(QChar(fa::questioncircle));
 	// Sheet + font together, through the one helper: the three header glyphs
 	// (Publish, Help, Preferences) are the same size and sit on the header's
 	// own colour instead of Qlementine's grey button plate.
@@ -3912,7 +3851,6 @@ void MainWindow::setupViewPort()
 	prefs = new QPushButton;
 	prefs->setObjectName("prefsButton");
 
-    //prefs->setText(QChar(fa::cog));
     // for adapting Qt6.9.0
     prefs->setText(QChar(static_cast<ushort>(fa::cog)));
 	// (Classic still gets PrefsButton() — the helper picks by object name.)
@@ -4020,38 +3958,10 @@ void MainWindow::setupViewPort()
     statsCheckAction = new QAction(QIcon(), "Frame Stats (F3)");
     statsCheckAction->setCheckable(true);
     statsCheckAction->setChecked(
-        SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
+        SettingsManager::getDefaultManager()->get(settingkeys::showFps));
     connect(statsCheckAction, &QAction::toggled, this,
             [this](bool on) { setShowFrameStats(on); });
     wireFramesMenu->addAction(statsCheckAction);
-
-    // --- Engine preview (Ogre-Next) -------------------------------------
-    // Scaffolding for the engine migration: opens a window driven entirely
-    // through the engine abstraction. Removed once the editor viewport moves over.
-    {
-        QAction *enginePreviewAction = new QAction(QIcon(), "Engine Preview (Ogre-Next)", this);
-        enginePreviewAction->setShortcut(QKeySequence("Ctrl+Shift+O"));
-        // Register on the window itself, application-wide: an action living only in a
-        // toolbar-button menu does not reliably deliver its shortcut.
-        enginePreviewAction->setShortcutContext(Qt::ApplicationShortcut);
-        this->addAction(enginePreviewAction);
-        wireFramesMenu->addSeparator();
-        wireFramesMenu->addAction(enginePreviewAction);
-        connect(enginePreviewAction, &QAction::triggered, this, [this]() {
-            // ONE dialog for the life of the process: it owns the Engine, which is
-            // one-per-process and (with the current Ogre build) cannot be re-created
-            // after destruction. Closing merely hides it; a second trigger raises it.
-            static OgrePreviewDialog *dlg = nullptr;
-            if (!dlg) {
-                dlg = new OgrePreviewDialog(this);
-                connect(dlg, &QObject::destroyed, this, [] { dlg = nullptr; });
-            }
-            dlg->show();
-            dlg->raise();
-            dlg->activateWindow();
-        });
-    }
-    // --------------------------------------------------------------------
 
     // Qlementine: the checkable actions become Switch rows (and stay in sync
     // with their QActions); a bonus is the menu no longer closes per toggle.
@@ -4333,13 +4243,18 @@ void MainWindow::setupViewPort()
 	}
 	playerView = new PlayerWidget(viewPort, playerBackend);
 
-    wireCheckAction->setChecked(sceneView->getShowLightWires());
-    gridCheckAction->setChecked(sceneView->getShowGrid());
+    // ONE DOOR (STUDIO-CRUD-1 item 8): the menu's grid / light-wire / stats
+    // checkmarks follow the viewport's state through overlaysChanged — so
+    // editor.setOverlays, the shortcuts and a scene open move them exactly as
+    // a click does — and the actions' toggled() call the path the verb calls.
+    connect(sceneView->events(), &EditorViewportEvents::overlaysChanged,
+            this, &MainWindow::syncOverlayChecks);
+    syncOverlayChecks();
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
     // The persisted readout state reaches the viewport HERE, not when the menu
     // action was built: the View Options menu is constructed before sceneView
     // exists, so its initial setChecked found nothing to switch on.
-    setShowFrameStats(SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
+    setShowFrameStats(SettingsManager::getDefaultManager()->get(settingkeys::showFps));
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView->asWidget(), 0, 0);
@@ -4447,7 +4362,6 @@ void MainWindow::setupDesktop()
 	
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
-	//ui->stackedWidget->addWidget(new QWidget(this));
 	// The modules (audit §6.2): the shell constructs them against the full
 	// host context and drives pages through the one interface. Stack order is
 	// load-bearing (WindowSpaces indexes): EFFECT = 3, PLAYER = 4, PUBLISH = 5.
@@ -4806,8 +4720,15 @@ void MainWindow::setupShortcuts()
             [this]() { spaceKeyActiveSpace(); });
 
     // ---- camera ----
-    reg.add("camera.focus", "Focus Selection", "Camera", QKeySequence(Qt::Key_F), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection(); });
+    // F is page-scoped like Space: ONE registry claimant (the graph view's own
+    // QShortcut made it ambiguous on the Materials page — STUDIO-CRUD-1 item 7),
+    // routed by the active space (see focusActiveSpace).
+    reg.add("camera.focus", "Focus Selection / Frame Graph Nodes", "Camera",
+            QKeySequence(Qt::Key_F), this, [this]() { focusActiveSpace(); });
+    reg.add("graph.resetZoom", "Reset Graph Zoom", "Materials", QKeySequence(Qt::Key_H), this,
+            [this]() {
+                if (currentSpace == WindowSpaces::EFFECT && shaderGraph) shaderGraph->graphResetZoom();
+            });
     reg.add("view.orthographic", "Orthographic Projection", "Camera", QKeySequence(Qt::Key_O), this,
             [this]() { emit projectionChangeRequested(false); });
     reg.add("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), this,
@@ -4848,7 +4769,7 @@ void MainWindow::setupShortcuts()
                     sceneView->setGameView(!sceneView->isGameView());
             });
     reg.add("view.grid", "Toggle Ground Grid", "View", QKeySequence(), this,
-            [this]() { if (gridCheckAction) gridCheckAction->toggle(); });
+            [this]() { if (sceneView) sceneView->setShowGrid(!sceneView->getShowGrid()); });
     // F3 — the games convention (Minecraft, idTech-adjacent), and the only free
     // F-key in this registry besides F11 (STATS_OVERLAY_SPEC D3). Category
     // "View" so it lands beside gameView/grid/fullscreen in the generated
@@ -5254,11 +5175,9 @@ void MainWindow::toggleDockWidgets()
 
 	QPushButton *closeAll = new QPushButton("Close All");
 	closeAll->setCheckable(true);
-	//closeAll->setChecked(true);
 
 	QPushButton *restoreAll = new QPushButton("Restore All");
 	restoreAll->setCheckable(true);
-	//restoreAll->setChecked(true);
 
 	QLabel *label = new QLabel("Toggle Widgets");
 	label->setAlignment(Qt::AlignCenter);
@@ -5519,6 +5438,15 @@ void MainWindow::pasteActiveSpace()
 // means. On the Materials space Space opens the node-SEARCH palette — the graph
 // is the thing being edited there and there is no gizmo to cycle; everywhere
 // else it is the tool cycle it has always been.
+void MainWindow::focusActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->graphFitSelection();
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection();
+}
+
 void MainWindow::spaceKeyActiveSpace()
 {
     if (currentSpace == WindowSpaces::EFFECT) {
@@ -5554,6 +5482,32 @@ void MainWindow::toggleLightWires(bool state)
 void MainWindow::toggleGrid(bool state)
 {
     if (sceneView) sceneView->setShowGrid(state);
+}
+
+void MainWindow::syncOverlayChecks()
+{
+    if (!sceneView) return;
+    // Not signal-blocked: the World panel's Show Grid row follows the grid
+    // action's toggled(), and the round trip ends at the viewport's setter,
+    // which ignores a value it already holds.
+    if (gridCheckAction) gridCheckAction->setChecked(sceneView->getShowGrid());
+    if (wireCheckAction) wireCheckAction->setChecked(sceneView->getShowLightWires());
+    // The stats action's toggled() persists show_fps (setShowFrameStats), so it
+    // is blocked: the state it follows was written by whoever moved it.
+    if (statsCheckAction && statsCheckAction->isChecked() != sceneView->getShowFps()) {
+        QSignalBlocker block(statsCheckAction);
+        statsCheckAction->setChecked(sceneView->getShowFps());
+    }
+}
+
+QVariantMap MainWindow::viewOptionChecks() const
+{
+    QVariantMap out;
+    if (gridCheckAction) out[QStringLiteral("grid")] = gridCheckAction->isChecked();
+    if (wireCheckAction) out[QStringLiteral("lightWires")] = wireCheckAction->isChecked();
+    if (statsCheckAction) out[QStringLiteral("stats")] = statsCheckAction->isChecked();
+    if (physicsCheckAction) out[QStringLiteral("physicsDebug")] = physicsCheckAction->isChecked();
+    return out;
 }
 
 // F11: immersive fullscreen — the window goes fullscreen and (in the editor
@@ -5990,13 +5944,19 @@ void MainWindow::newScene(bool empty)
     auto scene = this->createDefaultScene(empty);
     this->setScene(scene);
     this->sceneView->resetEditorCam();
+    resetOverlaysToDefaults();
+}
 
+// A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07) — the
+// three overlays the open path pushes out of the saved EditorData. ONE body for
+// newScene and the create run (it was two copies). The grid and light-wire
+// checkmarks follow through overlaysChanged (syncOverlayChecks).
+void MainWindow::resetOverlaysToDefaults()
+{
     const EditorData defaults;
     sceneView->setShowGrid(defaults.showGrid);
     sceneView->setShowLightWires(defaults.showLightWires);
     sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
-    if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
-    if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
     if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
 }
 
@@ -6061,16 +6021,15 @@ void MainWindow::toggleClaudeChat()
     // model instead of silently inheriting the user's terminal default. The
     // setting is what a header picker will write; absent, the shipped default
     // applies, and an explicit empty string restores "inherit".
-    claudeChatHost->setModel(settings->getValue("claude_model",
-                                                ClaudeLaunchConfig::defaultModel()).toString());
+    claudeChatHost->setModel(settings->get(settingkeys::claudeModel));
     if (!claudeChatWindow) {
         claudeChatWindow = new ClaudeChatWindow(settings->settings, claudeChatHost, this);
         connect(claudeChatWindow, &ClaudeChatWindow::enableMcpRequested, this, [this]() {
             const quint16 port =
-                quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt());
+                quint16(settings->get(settingkeys::mcpPort));
             QString error;
             if (startMcpServer(port, &error)) {
-                settings->setValue("mcp_enabled", true);
+                settings->set(settingkeys::mcpEnabled, true);
             } else if (scriptConsole) {
                 scriptConsole->announce(QStringLiteral("MCP enable failed: %1").arg(error));
             }
@@ -6210,15 +6169,7 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         ui->actionClose->setDisabled(false);
         setScene(created);
         sceneView->resetEditorCam();
-        // A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07) —
-        // the three settings the open path pushes out of the saved EditorData.
-        const EditorData defaults;
-        sceneView->setShowGrid(defaults.showGrid);
-        sceneView->setShowLightWires(defaults.showLightWires);
-        sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
-        if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
-        if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
-        if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
+        resetOverlaysToDefaults();   // a brand-new scene starts at the defaults
         refreshClaudeChatContext();   // D1: rebind an open chat to the new project
         if (shaderGraph) shaderGraph->onProjectChanged();   // its tabs are per project
         if (services) services->announceSceneOpened();
@@ -6237,7 +6188,7 @@ void MainWindow::startCreateRun(const QString &guid, const QString &filename,
         LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
         sceneView->primeSceneEnvironment();
     } });
-    if (settings->getValue("shader_warmup_on_open", true).toBool()) {
+    if (settings->get(settingkeys::shaderWarmupOnOpen)) {
         slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
             LoadTimeline::mark(QStringLiteral("warmUpShaders"));
             const unsigned built = sceneView->warmUpShaders();
@@ -6536,12 +6487,10 @@ void MainWindow::onPlaySceneButton()
 
     if (playbackService->isPlaying()) {
         enterEditMode();
-		//playbackService->restartSimulation();
 		sceneView->stopPlayingScene();
     }
     else {
         enterPlayMode();
-		//playbackService->startSimulation();
 		sceneView->startPlayingScene();
     }
 

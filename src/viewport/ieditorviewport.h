@@ -64,6 +64,12 @@ signals:
     /// speed button; CameraSpeed already holds the new integer.
     void cameraSpeedChanged();
     void changeSkyFromAssetWidget(int index);
+    /// An editor overlay the View Options menu shows a checkmark for (the
+    /// ground grid, the light wires, the frame-stats readout) CHANGED — from
+    /// the menu, a shortcut, editor.setOverlays or a scene open alike. The
+    /// viewport is the one owner of that state; the menu's checkmarks follow
+    /// this signal, never the click (STUDIO-CRUD-1 item 8).
+    void overlaysChanged();
 };
 
 /// What `editor.setCamera` asks the viewport for (AI_SURFACE_PROGRAM_SPEC lane
