@@ -66,7 +66,9 @@ QVector<VerbInfo> PerfApi::verbs() const
           "including the four assertions behind 'zero cost when off' (attachedListeners, "
           "ringCapacity, ring contents, GPU query pools — all 0 when idle) and whether GPU "
           "timing is compiled in, supported by this device and active, with the reason when it "
-          "is not. `toast` is the last message the shell was asked to show, so a test can assert "
+          "is not, and `engine.gpu.marksDropped`: the GPU timing marks the query pool could not "
+          "hold since the capture began (0 means every pass that asked was timed; each frame's "
+          "own count is `gpuMarksDropped` in frames.jsonl, the total in machine.json). `toast` is the last message the shell was asked to show, so a test can assert "
           "the two toasts without a screenshot.",
           Needs::Document },
         { "mark", "perf.mark(label) -> bool",

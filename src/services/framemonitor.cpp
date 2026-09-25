@@ -304,10 +304,12 @@ public:
     void writeFrame(const FrameRecord &r);
     void writeEvent(const MonitorEvent &e);
     void writeSnapshot(const EngineSnapshot &s, const QString &file);
-    /// The worst per-frame GPU-sample overflow this capture saw (see
+    /// GPU timing marks the engine's query pool could not hold over this
+    /// capture (MonitorStatus::gpuMarksDropped, cumulative — see
     /// FrameMonitor::drainOnce) — reported in machine.json's truncation block,
-    /// because incomplete GPU times are a truncation like any other.
-    void noteGpuSamplesTruncated(unsigned n) { mGpuSamplesTruncated = qMax(mGpuSamplesTruncated, n); }
+    /// because incomplete GPU times are a truncation like any other. Each
+    /// frame's own count is in frames.jsonl (`gpuMarksDropped`).
+    void noteGpuMarksDropped(unsigned long long n) { mGpuMarksDropped = qMax(mGpuMarksDropped, n); }
     /// What the ENGINE dropped: ring records nobody drained in time, and events
     /// past the event queue's cap. Both are counted on the engine's side of the
     /// boundary and neither is visible in the files — so a bundle that did not
@@ -347,7 +349,7 @@ private:
     unsigned long long mFrameCount = 0, mEventCount = 0;
     unsigned long long mFramesCut = 0, mEventsCut = 0, mTraceCut = 0;
     bool    mOgreCut = false;
-    unsigned mGpuSamplesTruncated = 0;
+    unsigned long long mGpuMarksDropped = 0;
     unsigned long long mEngineFramesDropped = 0, mEngineEventsDropped = 0;
     QElapsedTimer mWall;
     QDateTime mStartedAt;
@@ -481,6 +483,7 @@ void FrameMonitor::Bundle::writeFrame(const FrameRecord &r)
         { "textureWaitMs", double(r.textureWaitMs) },
         { "gpuMs", double(r.gpuMs) },
         { "overheadMs", double(r.overheadMs) },
+        { "gpuMarksDropped", int(r.gpuMarksDropped) },
         { "stages", stages },
         { "passes", passes },
         { "cacheWork", work },
@@ -1079,7 +1082,7 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         { "eventRecordsDropped", double(mEventsCut) },
         { "traceRecordsDropped", double(mTraceCut) },
         { "ogreLogTruncated", mOgreCut },
-        { "gpuSamplesTruncated", int(mGpuSamplesTruncated) },
+        { "gpuMarksDropped", double(mGpuMarksDropped) },
         // THE ENGINE'S OWN LOSSES, which no file in the bundle could reveal:
         // frame records the ring overwrote before the host drained them, and
         // events past the engine's event-queue cap.
@@ -1090,7 +1093,7 @@ void FrameMonitor::Bundle::writeMachine(bool early)
         // query pool and the log window — is ANDed in here. A bundle must never
         // claim a completeness it cannot prove (review item, lane MON-P1b).
         { "complete", mFramesCut == 0 && mEventsCut == 0 && mTraceCut == 0 && !mOgreCut
-                          && mGpuSamplesTruncated == 0
+                          && mGpuMarksDropped == 0
                           && mEngineFramesDropped == 0 && mEngineEventsDropped == 0 },
         { "note", QStringLiteral(
               "Per-file caps: frames.jsonl 50%, trace.json 35%, events.jsonl 10%, "
@@ -1319,7 +1322,7 @@ bool FrameMonitor::start(const Request &request, QString *error)
     mPlannedSeconds = seconds;
     mPlannedFrames = frames;
     mFramesDrawn = 0;
-    mGpuSamplesTruncated = 0;
+    mGpuMarksDropped = 0;
     mEngineFramesDropped = mEngineEventsDropped = 0;
     // A breakdown from the PREVIOUS capture must not be readable as this
     // frame's (app.renderStats().perPass).
@@ -1454,15 +1457,16 @@ unsigned FrameMonitor::drainOnce()
 {
     auto eng = engine();
     if (!eng || !mBundle) return 0;
-    // GPU SAMPLES THE QUERY POOL COULD NOT HOLD (MonitorStatus, P1a's review
-    // round). It is a per-frame number, so the capture keeps the worst it ever
-    // saw and machine.json states it: a bundle whose GPU times are incomplete
-    // has to say so rather than let analysis discover that some passes have no
-    // time.
+    // GPU TIMING MARKS THE QUERY POOL COULD NOT HOLD (MonitorStatus). The
+    // engine counts them per frame and CUMULATIVELY since the capture began, so
+    // this 250 ms drain misses none (it used to read the LAST frame's count and
+    // missed every dropping frame between two drains); machine.json states the
+    // total: a bundle whose GPU times are incomplete has to say so rather than
+    // let analysis discover that some passes have no time.
     const MonitorStatus st = eng->monitorStatus();
-    if (st.gpuSamplesTruncated > mGpuSamplesTruncated) {
-        mGpuSamplesTruncated = st.gpuSamplesTruncated;
-        mBundle->noteGpuSamplesTruncated(st.gpuSamplesTruncated);
+    if (st.gpuMarksDropped > mGpuMarksDropped) {
+        mGpuMarksDropped = st.gpuMarksDropped;
+        mBundle->noteGpuMarksDropped(st.gpuMarksDropped);
     }
     // The engine's own losses, sampled on every drain — they are monotonic, and
     // the LAST read while the monitor is still on is the capture's total (the
@@ -1743,10 +1747,10 @@ QVariantMap FrameMonitor::status() const
         gpu["active"] = s.gpuActive;
         gpu["queryPools"] = s.gpuQueryPools;
         gpu["reason"] = qs(s.gpuReason);
-        gpu["samplesTruncated"] = s.gpuSamplesTruncated;
+        gpu["marksDropped"] = double(s.gpuMarksDropped);
         eng["gpu"] = gpu;
     }
-    out["gpuSamplesTruncated"] = mGpuSamplesTruncated;
+    out["gpuMarksDropped"] = double(mGpuMarksDropped);
     out["engineFramesDropped"] = double(mEngineFramesDropped);
     out["engineEventsDropped"] = double(mEngineEventsDropped);
     out["engine"] = eng;

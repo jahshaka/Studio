@@ -226,7 +226,11 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     open.responsive app.engine_selftest_validation app.input_keys threading.newproject_stall
     scenegraph.benchmark shadergraph.bake_output claude.chat scripting.e2e.space_switch
     scripting.e2e.sun_light ui.media_lazy gi.budget scripting.e2e.reflection_map
-    app.watchdog_stall)
+    app.watchdog_stall
+    # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
+    # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
+    # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).
+    gi.field_scroll gi.rt_reflect_cost)
 # The wrapper waits at most this long for the lock (its default, JAH_GPU_LOCK_WAIT), and the wait
 # counts against ctest's TIMEOUT — so a wrapped suite's TIMEOUT is ITS OWN run budget (the value
 # its site measured and documented) PLUS this wait, set here from RUN_TIMEOUT and never again at

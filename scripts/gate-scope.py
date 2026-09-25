@@ -170,6 +170,11 @@ AREA_RULES = [
     (r"^src/", ["*merge-tier"], []),
     # --- data, docs, build ---------------------------------------------------------------
     (r"^docs/SCRIPTING\.md$", ["api"], []),
+    # THE TIER DOC'S OWN GUARD (POST-C-FIXES-1): docs/TESTING_GATE.md must quote the
+    # MERGE tier through `gate-scope.py --merge-tier`, never a copy of its -LE set
+    # (a copy went stale once: it lacked photon-target). source.gate_scope_rules case 9
+    # greps it, so an edit to the doc selects the hygiene rows.
+    (r"^docs/TESTING_GATE\.md$", ["hygiene"], []),
     (r"^(docs/|README|LICENSE|\.claude/|\.github/|[A-Za-z_\-]+\.md$|\.gitignore$|\.gitmodules$)", [], []),   # no suite at all
     (r"^(scenes/|app/content/|app/samples/)", ["samples", "reopen", "assets"], ["project"]),
     (r"^app/", ["ui", "theme", "app"], []),
@@ -290,10 +295,26 @@ def load_inventory(build):
     bt = j["backtraceGraph"]; files = bt["files"]; nodes = bt["nodes"]
     inv = {}
     for t in j["tests"]:
+        # THE SUITE'S OWN DIRECTORY IS WHERE IT WAS REGISTERED, NOT WHERE add_test RAN
+        # (POST-C-FIXES-1). A suite registered through a helper function has its
+        # add_test in the file that DEFINES the helper: every jah_gpu_exclusive_test
+        # suite (tests/CMakeLists.txt) came out as dir "tests", which no rule names —
+        # so open.responsive, gi.budget and the rest of the GPU-lock list were never
+        # selected by a change to their own sources. Walk the backtrace outward and
+        # take the first frame that lies in a tests/<dir>/ (the call site); the
+        # add_test frame is kept only when no such frame exists.
         n = nodes[t["backtrace"]]
-        while n.get("file") is None and "parent" in n:
+        frames = []
+        while True:
+            if n.get("file") is not None:
+                frames.append(files[n["file"]])
+            if "parent" not in n:
+                break
             n = nodes[n["parent"]]
-        cm = files[n["file"]]
+        def _in_test_dir(f):
+            r = os.path.relpath(os.path.dirname(f), ROOT).split(os.sep)
+            return len(r) >= 2 and r[0] == "tests"
+        cm = next((f for f in frames if _in_test_dir(f)), frames[0] if frames else ROOT)
         d = os.path.relpath(os.path.dirname(cm), ROOT)          # tests/<dir>
         cmd = t.get("command", [])   # absent for a not-yet-built executable (partial build dir)
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
@@ -434,9 +455,14 @@ def main():
                     help="ctest parallelism (default 4 — the tier's contract; a lane beside other live lanes runs 2)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--record-times", metavar="CTEST_LOG", help="snapshot suite seconds from a ctest output log")
+    ap.add_argument("--merge-tier", action="store_true",
+                    help="print the MERGE tier's ctest command (at -j) and exit — the one source "
+                         "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
     a = ap.parse_args()
     if a.record_times:
         record_times(a.record_times); return
+    if a.merge_tier:
+        print(merge_tier(a.jobs)); return
     build = resolve_build(a.build)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
