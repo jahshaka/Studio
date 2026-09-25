@@ -47,7 +47,6 @@ For more information see the LICENSE file
 
 #include "data/guidmanager.h"
 #include "services/thumbnailmanager.h"
-#include "ui/dialogs/ogrepreviewdialog.h"
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginematerialpreview.h"
@@ -4024,34 +4023,6 @@ void MainWindow::setupViewPort()
     connect(statsCheckAction, &QAction::toggled, this,
             [this](bool on) { setShowFrameStats(on); });
     wireFramesMenu->addAction(statsCheckAction);
-
-    // --- Engine preview (Ogre-Next) -------------------------------------
-    // Scaffolding for the engine migration: opens a window driven entirely
-    // through the engine abstraction. Removed once the editor viewport moves over.
-    {
-        QAction *enginePreviewAction = new QAction(QIcon(), "Engine Preview (Ogre-Next)", this);
-        enginePreviewAction->setShortcut(QKeySequence("Ctrl+Shift+O"));
-        // Register on the window itself, application-wide: an action living only in a
-        // toolbar-button menu does not reliably deliver its shortcut.
-        enginePreviewAction->setShortcutContext(Qt::ApplicationShortcut);
-        this->addAction(enginePreviewAction);
-        wireFramesMenu->addSeparator();
-        wireFramesMenu->addAction(enginePreviewAction);
-        connect(enginePreviewAction, &QAction::triggered, this, [this]() {
-            // ONE dialog for the life of the process: it owns the Engine, which is
-            // one-per-process and (with the current Ogre build) cannot be re-created
-            // after destruction. Closing merely hides it; a second trigger raises it.
-            static OgrePreviewDialog *dlg = nullptr;
-            if (!dlg) {
-                dlg = new OgrePreviewDialog(this);
-                connect(dlg, &QObject::destroyed, this, [] { dlg = nullptr; });
-            }
-            dlg->show();
-            dlg->raise();
-            dlg->activateWindow();
-        });
-    }
-    // --------------------------------------------------------------------
 
     // Qlementine: the checkable actions become Switch rows (and stay in sync
     // with their QActions); a bonus is the menu no longer closes per toggle.

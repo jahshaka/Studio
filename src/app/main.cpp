@@ -9,7 +9,6 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "ui/dialogs/ogrepreviewdialog.h"
 #include "bridge/enginehost.h"
 #include "viewport/ieditorviewport.h"
 #include <QImage>
@@ -221,17 +220,10 @@ int main(int argc, char *argv[])
         });
 
     // Apply the app theme (Qlementine Dark by default, archived Classic on
-    // request) BEFORE any widget exists — the Upgrader dialog and the engine
-    // preview dialog are the first widgets alive. See THEME_AUDIT.md §4.
+    // request) BEFORE any widget exists — the Upgrader dialog is the first
+    // widget alive. See THEME_AUDIT.md §4.
     ThemeManager::applyAtStartup(app);
 
-    if (cli.enginePreviewOnly) {
-        // No MainWindow, no IrisGL, no legacy GL context.
-        OgrePreviewDialog preview;
-        preview.setAttribute(Qt::WA_QuitOnClose, true);
-        preview.show();
-        return app.exec();
-    }
 	
 	/*
 	QtConcurrent::run([&updateChecker]() {

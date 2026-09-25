@@ -192,7 +192,6 @@ set(SRCS
     src/viewport/scenepicker.cpp
     src/viewport/gizmooverlay.cpp
     src/viewport/enginerenderdriver.cpp
-    src/ui/dialogs/ogrepreviewdialog.cpp
     src/bridge/enginehost.cpp
     src/scripting/apimodule.cpp
     src/scripting/apiregistry.cpp
@@ -527,7 +526,6 @@ set(HEADERS
     src/viewport/scenepicker.h
     src/viewport/gizmooverlay.h
     src/viewport/enginerenderdriver.h
-    src/ui/dialogs/ogrepreviewdialog.h
     src/bridge/enginehost.h
     src/scripting/scripthost.h
     src/scripting/apimodule.h

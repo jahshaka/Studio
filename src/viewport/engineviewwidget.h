@@ -12,8 +12,8 @@
 // holds the Engine through a weak_ptr so it can never touch a dead Engine: if the
 // Engine is still alive when the widget goes, the widget destroys its View; if the
 // Engine went first, the View is already gone and nothing is touched. Owners
-// should still destroy their EngineViewWidgets BEFORE the Engine (see
-// OgrePreviewDialog) so teardown is deterministic rather than merely safe.
+// should still destroy their EngineViewWidgets BEFORE the Engine so teardown
+// is deterministic rather than merely safe.
 #include <QWidget>
 #include <memory>
 #include "jahshaka/engine/Engine.h"
