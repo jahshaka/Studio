@@ -2251,6 +2251,33 @@ static void bakeDeterminism()
                                              .arg(hardware)));
     }
     CHECK_LOUD(subjects.size() == 2, "both subjects ran");
+
+    // AND A BAKE THAT THROWS IS NO BAKE — NOT A DEAD APP (IMPORT-SPEED-1 F1). An
+    // exception in any unit of work (the test hook throws in the n-th: early = the
+    // caller's own first chunks, later = worker threads and nested jobs inside a
+    // mesh's stages) must come back to buildFromScene as an invalid model — before,
+    // a worker's throw was std::terminate — and the pool must then bake the same
+    // file whole, byte for byte.
+    {
+        QTemporaryDir scratch;
+        iris::MeshBake::setBakeThreads(1);
+        const QByteArray reference = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
+        for (const int width : { 1, 0 }) {
+            iris::MeshBake::setBakeThreads(width);
+            for (const int n : { 1, 3, 40, 400, 2000 }) {
+                iris::MeshBake::failBakeAfterChunksForTest(n);
+                const iris::MeshBake::Model failed = iris::MeshBake::buildFromFile(twoPath, fp, scratch.path());
+                iris::MeshBake::failBakeAfterChunksForTest(0);
+                CHECK_LOUD(!failed.valid, qUtf8Printable(QStringLiteral(
+                    "%1 thread(s): a throw in unit %2 of the bake answers 'no bake' (and the process lives)")
+                    .arg(width == 1 ? 1 : hardware).arg(n)));
+                const QByteArray again = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
+                CHECK_LOUD(!reference.isEmpty() && again == reference, qUtf8Printable(QStringLiteral(
+                    "%1 thread(s): ...and the next bake is whole and byte-identical").arg(width == 1 ? 1 : hardware)));
+            }
+        }
+        iris::MeshBake::setBakeThreads(0);
+    }
 }
 
 static void boundBar()
