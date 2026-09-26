@@ -124,7 +124,8 @@ public:
 
 private:
     /// Lays the SHOWN tiles out row-major in `rect` (when `apply`) and answers
-    /// the height they need. A hidden tile (a search, a queued show) takes no
+    /// the height they need. The cell is measured ONCE per pass and handed down
+    /// (a per-slot measure made the pass quadratic in the tile count). A hidden tile (a search, a queued show) takes no
     /// slot; the moment it is shown the layout is invalidated and runs again.
     int arrange(const QRect &rect, bool apply) const
     {
@@ -134,13 +135,14 @@ private:
         for (QLayoutItem *item : mItems) {
             if (item->isEmpty()) continue;
             if (apply) {
-                const QPoint p = slotPos(shown, rect.width()) + rect.topLeft();
+                const QPoint p = slotPos(shown, rect.width(), cell) + rect.topLeft();
                 item->setGeometry(QRect(p, cell));
             }
             ++shown;
         }
         if (shown == 0) return m.top() + m.bottom();
-        const int rows = (shown + columnsFor(rect.width()) - 1) / columnsFor(rect.width());
+        const int cols = columnsFor(rect.width(), cell);
+        const int rows = (shown + cols - 1) / cols;
         return m.top() + rows * cell.height() + (rows - 1) * spacing() + m.bottom();
     }
 
