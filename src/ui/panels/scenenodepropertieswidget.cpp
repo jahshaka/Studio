@@ -670,16 +670,43 @@ void SceneNodePropertiesWidget::flushPendingMount()
 }
 
 /// THE DOCK OPENED (or the panel was realised for the first time). Whatever the
-/// column owes, it owes now — in this turn, so the dock is never seen holding
-/// the previous selection.
+/// column owes, it owes in THIS turn, so the dock is never seen holding the
+/// previous selection — but not in this CALL.
 ///
-/// ...unless the dock it opened into is a tab behind another one, in which case
-/// nobody can see it yet and the debt waits for the raise (onScreen()).
+/// ...and unless the dock it opened into is a tab behind another one, in which
+/// case nobody can see it yet and the debt waits for the raise (onScreen()).
+///
+/// NOT INSIDE THE SHOW (CREATE-CRASH-1, the create-loop SIGSEGV). This handler
+/// runs inside QWidgetPrivate::showChildren of the scroll area's VIEWPORT, and
+/// that walk iterates a SNAPSHOT of the viewport's children: this panel and,
+/// after it, one QFocusFrame per focusable row — Qlementine's frames, which
+/// QFocusFrame::setWidget re-parents into the enclosing scroll viewport. A
+/// mount paid here rebuilds blades, a rebuild frees the rows its ring retired
+/// kRetiredGenerations rebuilds ago when they are still alive
+/// (AccordianBladeWidget::clearPanel), and a freed row takes its frame with it
+/// — a sibling the walk has not reached yet. The walk then read the freed
+/// frame (spikes/create-crash-1/: the provoked stack is frame-for-frame the
+/// create loop's). Posting the settlement is the Qt lifecycle rule for show
+/// handlers: nothing is destroyed while Qt is still showing.
 void SceneNodePropertiesWidget::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
     watchDock();
-    if (onScreen()) flushPendingMount();
+    flushPendingMountAfterShow();
+}
+
+void SceneNodePropertiesWidget::flushPendingMountAfterShow()
+{
+    if (showFlushQueued) return;
+    showFlushQueued = true;
+    // A posted call at normal priority: it is delivered before the dock's
+    // first paint (Qt posts UpdateRequest at LowEventPriority), inside the
+    // same turn — and inside the same pump, when a threaded install's reveal
+    // showed the dock. `this` as the context drops it if the panel dies first.
+    QMetaObject::invokeMethod(this, [this]() {
+        showFlushQueued = false;
+        if (onScreen()) flushPendingMount();
+    }, Qt::QueuedConnection);
 }
 
 void SceneNodePropertiesWidget::mountNow()

@@ -105,6 +105,14 @@ public:
     /// caller who is about to READ the column's widgets (a test, the row
     /// listing verb) is exactly such a question.
     void flushPendingMount();
+    /// PAY IT AS SOON AS THE SHOW IS OVER (CREATE-CRASH-1): the same event-loop
+    /// turn, but never inside the show itself — for the two "the dock opened"
+    /// signals, this panel's showEvent and the dock's visibilityChanged(true).
+    /// A mount rebuilds blades, and a rebuild can free retired rows; a row's
+    /// Qlementine focus frame lives in the scroll viewport as a SIBLING of this
+    /// panel, in the child list Qt's show walk is still iterating. Pays only
+    /// when the column is on screen by then (see onScreen()).
+    void flushPendingMountAfterShow();
     /// True while the column is out of date — a mount is owed (to this turn, to
     /// the moment the dock opens, or to the end of a batch). Reported by
     /// `editor.propertiesStats()` so the coalescing is pinnable.
@@ -210,8 +218,9 @@ public slots:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
-    /// Pays an owed mount when the dock opens (see applyTab) — unless the dock
-    /// opened behind another tab, where nobody can see it yet (onScreen()).
+    /// Pays an owed mount when the dock opens (see applyTab) — after the show,
+    /// never inside it (flushPendingMountAfterShow) — unless the dock opened
+    /// behind another tab, where nobody can see it yet (onScreen()).
     void showEvent(QShowEvent *event) override;
     /// Watches the ancestor dock for the tab raise Qt sends this panel no event
     /// for (see watchDock()).
@@ -334,6 +343,8 @@ private:
     bool mountOwed = false;
     /// A zero-timer is already posted to settle it at the end of this turn.
     bool mountScheduled = false;
+    /// A show's settlement is already posted (flushPendingMountAfterShow).
+    bool showFlushQueued = false;
     /// The scene the world blades are currently pointed at (see bindScene).
     QSharedPointer<iris::Scene> worldBoundScene;
     /// Sections an external sceneprops write made stale, re-read once per
