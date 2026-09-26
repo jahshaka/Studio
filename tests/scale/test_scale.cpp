@@ -425,6 +425,15 @@ static void geometryDoc(Env &env)
 /// The id pass's drawn triangles and GPU ms, and the decode's GPU ms, over `frames`
 /// still frames (medians; the id pass row's triangles are the GPU's own count).
 struct IdRead { double tris = -1, idMs = -1, decodeMs = -1; unsigned survivors = 0; };
+/// A GPU reading for a report line: its ms, or "unsampled" (never a -1 as a number).
+static std::string msText(double ms)
+{
+    if (ms < 0) return "unsampled";
+    char b[32];
+    std::snprintf(b, sizeof(b), "%.3f ms", ms);
+    return b;
+}
+
 static IdRead readIdPass(Env &env, int frames)
 {
     // FRAME-COUNTED RE-READS, never a CPU pause: a heavy frame (7 M triangles through
@@ -522,9 +531,10 @@ static int clusterCutMain()
         frame(env, 10);
         const IdRead r = readIdPass(env, 30);
         const size_t cut = cutTriangles(env, shell, at, radius);
-        std::printf("W3 %-24s id pass draws %12.0f tris (id %.3f ms, decode %.3f ms GPU) | the cluster cut: %10zu "
+        std::printf("W3 %-24s id pass draws %12.0f tris (id %s, decode %s GPU) | the cluster cut: %10zu "
                     "tris | ratio %.2fx\n",
-                    p.name, r.tris, r.idMs, r.decodeMs, cut, cut ? r.tris / double(cut) : 0.0);
+                    p.name, r.tris, msText(r.idMs).c_str(), msText(r.decodeMs).c_str(), cut,
+                    cut ? r.tris / double(cut) : 0.0);
         const std::string what = std::string("triangles drawn at ") + p.name + " (the cut would draw " +
                                  std::to_string(cut) + ")";
         target("W3", r.tris, "tris", what.c_str());
@@ -548,8 +558,9 @@ static int clusterCutMain()
         setCamera(env, at + iris::Vec3(0, 0.2f * radius, 1.3f * radius), at);
         frame(env, 10);
         const IdRead r = readIdPass(env, 30);
-        std::printf("OWED id pass on %s (%zu tris, %d pieces) inside its bounds: draws %.0f tris, id %.3f ms, decode %.3f ms "
-                    "GPU\n", qPrintable(bi.name), bi.triangles, bi.pieces, r.tris, r.idMs, r.decodeMs);
+        std::printf("OWED id pass on %s (%zu tris, %d pieces) inside its bounds: draws %.0f tris, id %s, decode %s GPU\n",
+                    qPrintable(bi.name), bi.triangles, bi.pieces, r.tris, msText(r.idMs).c_str(),
+                    msText(r.decodeMs).c_str());
         for (auto &n : nodes) n->removeFromParent();
         frame(env, 10);
     }
@@ -697,9 +708,10 @@ static int decodeMain()
         pathStill(env, 30);
         const AtomDrawStatus st = env.scene->atomDrawStatus();
         const IdRead r = readIdPass(env, 60);
-        std::printf("W6 materials %4d textures %4d -> buckets %4u screen draws %4u decode draws %4u | decode GPU ms %.3f"
-                    " (id %.3f)\n",
-                    a.materials, a.textures, st.buckets, st.screenDraws, st.decodeDraws, r.decodeMs, r.idMs);
+        std::printf("W6 materials %4d textures %4d -> buckets %4u screen draws %4u decode draws %4u | decode GPU %s"
+                    " (id %s)\n",
+                    a.materials, a.textures, st.buckets, st.screenDraws, st.decodeDraws, msText(r.decodeMs).c_str(),
+                    msText(r.idMs).c_str());
         rows.push_back({ st.buckets, r.decodeMs });
         const std::string what = "decode GPU ms at " + std::to_string(st.buckets) + " buckets (1080p)";
         target("W6", r.decodeMs, "ms", what.c_str());
