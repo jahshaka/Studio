@@ -2569,7 +2569,15 @@ void EngineSceneViewport::syncFrame(float dtOverride)
 
 QImage EngineSceneViewport::takeScreenshot(QSize dimension)
 {
-    return takeScreenshot(dimension.width(), dimension.height());
+    // THE PROJECT TILE'S SHOT (ProjectService's four thumbnail captures are this
+    // overload's only callers): the Atom view (world.setAtomView) is a viewing aid,
+    // never the project's picture, so it is parked Off for the length of the shot.
+    jahshaka::engine::Scene *es = engineScene();
+    const jahshaka::engine::AtomView parked = es ? es->atomView() : jahshaka::engine::AtomView::Off;
+    if (es && parked != jahshaka::engine::AtomView::Off) es->setAtomView(jahshaka::engine::AtomView::Off);
+    QImage img = takeScreenshot(dimension.width(), dimension.height());
+    if (es && parked != jahshaka::engine::AtomView::Off) es->setAtomView(parked);
+    return img;
 }
 
 bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
