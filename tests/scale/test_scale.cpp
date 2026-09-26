@@ -500,12 +500,14 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
 }
 
 // ===========================================================================
-// scale.cluster_cut — W3: WHOLE-MESH LOD, NO CLUSTER CUT IN THE PRODUCT.
-// Anchor: irisgl/engine/media/Hlms/Jahshaka/JahCullTest_cs.glsl:181-196 (one level per
-// INSTANCE; inside the bounds d = 0 forces level 0). Number: triangles the id pass draws
-// for the large asset at three camera distances (inside its bounds, 5 radii, 30 radii)
-// against what the DAG's cluster cut would draw at the same tolerance. Also the owed
-// row: the id pass's and the decode's GPU ms on the asset.
+// scale.cluster_cut — W3: THE CUT PER CLUSTER GROUP (ATOM-CLUSTER-CUT closed the wall:
+// until then the id pass drew one LEVEL per instance, and inside the bounds d = 0 forced
+// level 0). Anchor: irisgl/engine/media/Hlms/Jahshaka/JahCullCut_cs.glsl (the cull's cut
+// job). Number: triangles the id pass draws for the large asset at three camera distances
+// (inside its bounds, 5 radii, 30 radii) against Types.h clusterCut at the same tolerance
+// — the acceptance is within 1.2x (the GPU's count is the stats ring's, a few frames
+// late, so the reading waits for the still pose). Also the owed row: the id pass's and
+// the decode's GPU ms on the asset.
 // ===========================================================================
 static int clusterCutMain()
 {
@@ -633,11 +635,11 @@ static int cutCostMain()
 }
 
 // ===========================================================================
-// scale.levels — W4: ONLY THE FINEST 8 LEVELS REACH THE GPU PATH.
-// Anchor: irisgl/engine/src/GpuScene.h:220 (kLevelsPerMesh = 8u); OgreGpuScene.cpp:462-470
-// (take = min(levelCount, 8), one warning line). Number: the chain's level count (per
-// piece) against 8, and the triangles the id pass draws for the asset at 1 km against
-// what the chain's coarsest level would draw.
+// scale.levels — W4: THE COARSEST END IS REACHABLE. Until ATOM-CLUSTER-CUT only the
+// finest 8 LEVELS reached the GPU path (GpuScene::kLevelsPerMesh); the id pass now draws
+// the cut, whose terminal groups' clusters are drawn when nothing finer is affordable.
+// Number: the triangles the id pass draws for the asset at 1 km against the chain's
+// coarsest level (the level table keeps 8 levels for the voxeliser and the casters, D6).
 // ===========================================================================
 static int levelsMain()
 {
@@ -663,13 +665,11 @@ static int levelsMain()
     setCamera(env, at + iris::Vec3(0, 50.0f, 1000.0f), at);
     frame(env, 10);
     const IdRead r = readIdPass(env, 30);
-    std::printf("W4 at 1 km: the id pass draws %.0f tris; the chain's coarsest level holds %zu (%d levels, the GPU "
-                "path keeps 8)\n",
+    std::printf("W4 at 1 km: the id pass's cut draws %.0f tris; the chain's coarsest level holds %zu (%d levels)\n",
                 r.tris, info.coarsestTriangles, info.levels);
-    target("W4", double(std::min(info.levels, 8) - 1), "level", "the coarsest level the GPU path can draw (of the chain)");
     target("W4", double(info.levels), "levels", "the asset's chain length (longest piece, level 0 included)");
-    target("W4", r.tris, "tris", "triangles the id pass draws for the asset at 1 km (the coarsest level would be "
-           "fewer; see the W4 line)");
+    target("W4", r.tris, "tris", "triangles the id pass's CUT draws for the asset at 1 km (the chain's coarsest "
+           "level beside it on the W4 line)");
     // THE 100-LEVEL CASE (brief §4.4): the chain halves until 128 triangles
     // (meshbake.cpp kRatio 0.5, kMinTriangles 128, kMaxLevels 254), so a chain reaches
     // log2(T/128)+1 levels: 17 at 10 M in ONE mesh — and the import splits above 1 M
