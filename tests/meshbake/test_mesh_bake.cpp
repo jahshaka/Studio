@@ -2223,6 +2223,10 @@ static int dagTerms(const QString &path, bool dense)
         }
         std::printf("      (DAG %lld ms: build %.0f + measure %.0f; %d clusters, %d groups, depth %d)\n",
                     qint64(t.elapsed()), st.buildMs, st.measureMs, st.clusters, st.groups, st.depth);
+    }
+    return 0;
+}
+
 /// `--bake-blob <model>`: the whole bake of any model file — its sha256, its size
 /// and its wall time. The blob is a pure function of the model (serialize), so two
 /// builds, two thread counts or two optimisation levels that print the same sha
@@ -2323,6 +2327,8 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
                 "(%3 over)").arg(name).arg(drops).arg(oversize)));
     }
     return checked;
+}
+
 /// bake.determinism (IMPORT-SPEED-1): THE BAKE IS A FUNCTION OF THE MODEL, NOT OF
 /// THE THREADS. The same file baked on ONE thread (every chunk of every parallel
 /// loop walked in order by the caller — the serial answer) and on every hardware
