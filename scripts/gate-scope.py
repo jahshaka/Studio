@@ -215,7 +215,11 @@ NIGHTLY_LABELS = {"benchmark", "shadercache-attack"}
 # and PUSH tiers drop them with -LE, which is the only shape ctest offers for
 # "do not let these decide the tier"; their values are read from a lane's scoped
 # run, where they are printed.
-TARGET_LABELS = {"photon-target"}
+# `scale-target` (lane D1-SCALE-FIXTURES): phase E's measuring stick — one `scale.*`
+# suite per wall (tests/scale), each printing today's number as a `target:` line with
+# no bar yet. Split out exactly like a photon target: reported, never gating, until the
+# part that closes a wall writes its bar and removes the label from that row.
+TARGET_LABELS = {"photon-target", "scale-target"}
 
 NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET_LABELS))
 # The MERGE tier at a given ctest parallelism. -j4 is the tier's contract on a quiet box

@@ -11,7 +11,7 @@ carries the rules.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | the command `python3 scripts/gate-scope.py --merge-tier [-j N]` prints — `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` (today: the wall-clock benches, label `benchmark` — their `--smoke` rows, label `benchmark-smoke`, DO run —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target`, §1b). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here). `--timeout 120` is the default for rows that set none; `-j 2` while another lane's gate is live. **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **MERGE** | the command `python3 scripts/gate-scope.py --merge-tier [-j N]` prints — `ctest -j4 --timeout 120 --output-on-failure -LE` over `gate-scope.py`'s `NIGHTLY_LABELS` ∪ `TARGET_LABELS` (today: the wall-clock benches, label `benchmark` — their `--smoke` rows, label `benchmark-smoke`, DO run —, the ASan shader-cache attack `shadercache-attack`, and the target tests `photon-target` and `scale-target`, §1b/§1c). The set lives in the script ONLY; this doc never copies it (`source.gate_scope_rules` case 9 fails on a literal `-LE` list here). `--timeout 120` is the default for rows that set none; `-j 2` while another lane's gate is live. **Measured 488-680 s at -j4 on the last three push gates (§5 has the three runs and what the spread is; 475 s at push #19, 572 s on the main tree 2026-09-10 — the older figures are history and the suite count moves most weeks)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
 | **PUSH** | the MERGE tier + the `--engine-selftest` sha256 lines — **FOUR of them since lane FENCE-1**: `pose 1`, `pose 2`, `pose B1 (rays)`, `pose B2 (no rays)`. Poses 1-2 are the default scene at the PLAIN grade; pose pair B is a purpose-built fixture (glossy floor, cascade crossing, emissive 3.0, mirror pillar) at the VIEWPORT grade, which is the only grade that carries the SSR prepass and therefore the ray tier. Quote all four. (The moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, the rigperf bench, **open.crash_soak** (OPEN-FRAMES-1: the async-open teardown repro twelve times under `glibc's built-in malloc checks + MALLOC_PERTURB_ (the real checker is an opt-in — it aborts under the NVIDIA GLX library)`; ~110 s, RUN_SERIAL, labelled `benchmark` because that label IS the nightly marker the MERGE/PUSH commands exclude — read one failure as "run it again", three as a regression of the open's slice-boundary drive) — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box, and whenever a batch touched the open path, the scene teardown or the engine's resource handling | the lead |
 
@@ -66,6 +66,23 @@ the store alone. Measured 1.255x unpatched / 3.745x patched.
 probe-shadow merge of 2026-09-10, ~3 GB before; boots are CPU-bound too — expect ~1.6× over
 -j2, not 2×). One sibling gate at -j4 fits beside yours; drop to `-j2` only when two or more
 other Vulkan gates (or the owner's app plus one) are live.
+
+
+### 1c. SCALE TARGETS — the `scale-target` label (lane D1-SCALE-FIXTURES)
+
+Phase E's measuring stick: `tests/scale/`, one `scale.*` row per wall of
+`SPECS/audits/V2_ATOM_PHOTON_STRATEGY_2026-09-25.md` §3 (W1-W14), over three fixtures built at
+test time (the 10k-instance WORLD through the product's mirror and tier tables, the 1 M / 5 M /
+10 M ASSETS through the product's bake, the 10k-asset / 500-project LIBRARY through the import
+door). Each row PRINTS today's number as a `target:` line with no bar (`bar none yet`) and
+fails only when the measurement could not be taken. The label sits in `TARGET_LABELS` beside
+`photon-target` and is handled the same way: selected and run by a scoped gate, reported and
+discarded; dropped from the MERGE and PUSH tiers. The part that closes a wall writes the bar
+into its row and removes the label. The rows that time the GPU or the frame are registered
+through the GPU-timing lock (§4). The 1 M / 5 M / 10 M bakes are W11 itself (tens of minutes
+in Debug), so they are made once by the tool `scale_assets_gen` (EXCLUDE_FROM_ALL) into the
+build tree's bake cache (`$JAH_SCALE_ASSET_CACHE` moves it); a row whose asset is not cached
+measures the largest one that is, or a 250 k shell it bakes, and says so.
 
 ## 2. Every gate, regardless of tier
 
