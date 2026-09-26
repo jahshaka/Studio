@@ -76,7 +76,8 @@ assert(byTier.epic.bounces === 3 && byTier.high.bounces === 1,
 // A PROJECTION of the engine's tier table (Types.h GiGatherFacts through
 // giQualityFacts), never a copy: High and Epic on, Medium on at 36 rays, Low off;
 // Epic's density keyed on the tier (a probe per 8 px), not on the SSR row; the
-// VR column off (GA-VR).
+// VR column THE SAME ROW (PHOTON-GA-VR: per eye, measured cheaper in a headset than
+// the cone and field diffuse it removes).
 function g(t) { return byTier[t].gather; }
 assert(g("low").on === false, "Low: no gather — the cones and the field are its diffuse");
 assert(g("medium").on === true && g("medium").raysPerProbe === 36 && g("medium").stride === 16,
@@ -88,8 +89,12 @@ assert(g("epic").on === true && g("epic").raysPerProbe === 64 && g("epic").strid
 for (var gt in byTier) {
     assert(byTier[gt].gather.adaptiveCapDivisor === 4,
            gt + ": the adaptive probes are capped at a quarter of the grid");
-    assert(byTier[gt].vrGather.on === false, gt + ": the VR column keeps the gather OFF (GA-VR)");
+    var dg = byTier[gt].gather, vg = byTier[gt].vrGather;
+    assert(vg.on === dg.on && vg.stride === dg.stride && vg.raysPerProbe === dg.raysPerProbe,
+           gt + ": the VR column's gather is the desktop row (PHOTON-GA-VR) " + JSON.stringify(vg));
 }
+assert(byTier.high.description.indexOf("in a headset too, per eye") >= 0,
+       "the generated tier sentence says the headset gathers too: " + byTier.high.description);
 assert(byTier.high.description.indexOf("screen-probe gather") >= 0 &&
        byTier.low.description.indexOf("screen-probe gather") < 0,
        "the generated tier sentence names the gather where the table has it and nowhere else");

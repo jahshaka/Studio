@@ -70,7 +70,8 @@ var rays = world.giStatus().rayQuery;
 console.log("   gather: on " + st.on + ", running " + st.running + ", probes " + st.probes +
             " (" + st.probesX + "x" + st.probesY + "), adaptive " + st.adaptive +
             " of " + st.adaptiveCap + " (requested " + st.adaptiveRequested + "), rays/probe " +
-            st.raysPerProbe + ", atlas " + (st.atlasBytes / 1048576).toFixed(2) + " MB; " +
+            st.raysPerProbe + ", VRAM " + (st.vramBytes / 1048576).toFixed(2) + " MB (history " +
+            (st.historyBytes / 1048576).toFixed(2) + " MB); " +
             "rayQuery available " + rays.available + ", enabled " + rays.enabled);
 if (rays.available && rays.enabled) {
     assert(st.on, "THE ROW RESOLVED ON: this machine traces, so the project's row is honoured");

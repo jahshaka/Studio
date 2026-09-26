@@ -438,7 +438,7 @@ int main()
                     stats.raysPerProbe, (unsigned long long)stats.raysPerFrame, stats.targetW,
                     stats.targetH, double(stats.placeMs), double(stats.traceMs),
                     double(stats.filterMs), double(stats.integrateMs), double(stats.cpuMs),
-                    (unsigned long long)stats.atlasBytes);
+                    (unsigned long long)stats.vramBytes);
         CHECK(stats.on && stats.running,
               "the scene reports the gather ON and a view RUNNING it (giStatus().gather)");
         CHECK_MSG(gatherRed > offRed + 0.01f,
@@ -905,7 +905,7 @@ static int costMain(Engine *e)
                     what, fin.probes, fin.adaptive, fin.raysPerProbe,
                     (unsigned long long)fin.raysPerFrame, double(pm), double(tm), double(fm),
                     double(im), double(pm + tm + fm + im), double(fin.cpuMs),
-                    double(fin.atlasBytes) / (1024.0 * 1024.0));
+                    double(fin.vramBytes) / (1024.0 * 1024.0));
         CHECK_MSG(pm > 0.0f && tm > 0.0f && fm > 0.0f && im > 0.0f,
                   "%s: all four stages were timed", what);
         ::unsetenv("JAHSHAKA_GATHER_NO_TEMPORAL");
