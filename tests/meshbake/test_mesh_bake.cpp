@@ -2112,15 +2112,16 @@ static float switchDistance(float bound, float radius, float fovDeg = 45.0f, flo
 static void printTerms(const QString &label, const QVector<iris::MeshBake::LodLevelTerms> &terms,
                        float radius)
 {
-    std::printf("      %-22s %5s %7s %9s %9s %9s %9s %5s %6s %5s %8s %8s\n", "mesh", "level", "tris",
-                "quadric", "area", "vertex", "bound", "x", "drop", "lock", "dropExt", "L@1080");
+    std::printf("      %-22s %5s %7s %9s %9s %9s %9s %9s %5s %6s %5s %4s %8s %8s\n", "mesh", "level",
+                "tris", "quadric", "area", "vertex", "facet", "bound", "x", "drop", "lock", "pass",
+                "dropExt", "L@1080");
     for (int i = 0; i < terms.size(); ++i) {
         const auto &t = terms.at(i);
-        std::printf("      %-22s %5d %7d %9.5f %9.5f %9.5f %9.5f %5.2f %6d %5d %8.4f %7.0fm\n",
+        std::printf("      %-22s %5d %7d %9.5f %9.5f %9.5f %9.5f %9.5f %5.2f %6d %5d %4d %8.4f %7.0fm\n",
                     qUtf8Printable(label), i + 1, t.triangles, double(t.quadric), double(t.areaTerm),
-                    double(t.vertexTerm), double(t.bound),
+                    double(t.vertexTerm), double(t.facetTerm), double(t.bound),
                     t.quadric > 0.0f ? double(t.bound / t.quadric) : 0.0, t.islandsDropped,
-                    t.verticesLocked, double(t.droppedMaxExtent),
+                    t.verticesLocked, t.passes, double(t.droppedMaxExtent),
                     double(switchDistance(t.bound, radius)));
     }
 }
@@ -2182,7 +2183,7 @@ static void boundBar()
             QVector<float> reference;
             const bool honest = iris::MeshBake::checkLodBounds(mesh, 8, &worst, &reference);
             CHECK_LOUD(honest, qUtf8Printable(QStringLiteral(
-                "%1: (a) every stored bound >= the dense two-sided reference (worst reference/stored %2)")
+                "%1: (a) every stored bound >= the per-facet two-sided reference (worst reference/stored %2)")
                 .arg(name).arg(worst, 0, 'f', 4)));
 
             // (b) 2x where the level dropped no island — the displacement lock's
