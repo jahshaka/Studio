@@ -959,6 +959,16 @@ bool Database::createFolder(const QString &folderName, const QString &parentFold
 // reachable from the asset panel: the row exists, resolves by guid and is
 // invisible. One helper, one query, no fresh guid unless a folder is really
 // created.
+bool Database::isProjectOwned(const AssetRecord &row)
+{
+    if (row.guid.isEmpty() || row.view_filter != AssetViewFilter::Editor || row.projectGuid.isEmpty())
+        return false;
+    if (row.parent.isEmpty()) return true;
+    const AssetRecord parent = fetchAsset(row.parent);
+    if (parent.guid.isEmpty()) return true;        // filed in a folder / the project root
+    return parent.view_filter == AssetViewFilter::Editor && parent.projectGuid == row.projectGuid;
+}
+
 QString Database::ensureFolder(const QString &folderName, const QString &projectGuid, bool visible)
 {
     if (folderName.isEmpty() || projectGuid.isEmpty()) return QString();
@@ -1432,8 +1442,35 @@ bool Database::deleteProject(const QString &guid)
     for (const QString &orphan : unlistedPins)
         if (countAssetPins(orphan) == 0)
             reaped = deleteAssetRow(orphan, /*force*/ true, &scrubs) && reaped;
+
+    // AND THE PROJECT'S OWN ROWS (ASSETS-SCOPE-1 fix round F2): its materials,
+    // companions, make-unique copies, baked maps and scene-node rows were never
+    // library rows — with the project gone and no other project pinning one
+    // (a cross-project paste pins by guid), nothing can reach it any more, and
+    // its stored bytes must not stay referenced. The same predicate as
+    // isProjectOwned, in SQL: Editor, this project, not a member of a row that
+    // is not this project's own, and no pin left.
+    {
+        QSqlQuery oquery;
+        oquery.prepare("SELECT A.guid FROM assets A "
+                       "WHERE A.view_filter = ? AND A.project_guid = ? "
+                       "AND NOT EXISTS (SELECT 1 FROM assets P WHERE P.guid = A.parent "
+                       "                AND NOT (P.view_filter = ? AND P.project_guid = ?)) "
+                       "AND NOT EXISTS (SELECT 1 FROM project_assets PA WHERE PA.asset_guid = A.guid)");
+        oquery.addBindValue(static_cast<int>(AssetViewFilter::Editor));
+        oquery.addBindValue(guid);
+        oquery.addBindValue(static_cast<int>(AssetViewFilter::Editor));
+        oquery.addBindValue(guid);
+        QStringList owned;
+        if (executeAndCheckQuery(oquery, "FetchUnpinnedProjectRows"))
+            while (oquery.next()) owned << oquery.value(0).toString();
+        else
+            reaped = false;
+        for (const QString &row : std::as_const(owned))
+            reaped = deleteAssetRow(row, /*force*/ true, &scrubs) && reaped;
+    }
     if (!reaped) {
-        irisLog(QString("deleteProject('%1'): an orphaned unlisted asset could not be reaped — "
+        irisLog(QString("deleteProject('%1'): an orphaned unlisted or project-owned asset could not be reaped — "
                         "the whole project delete was rolled back.").arg(guid));
         return false;   // ~DbTransaction rolls back; nothing was scrubbed
     }
@@ -3422,8 +3459,11 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     auto sceneBlob  = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
-    auto sceneLastW = query.value(4).toDateTime();
-    auto sceneLastA = query.value(5).toDateTime();
+    // Our own column, already the one format (written by datetime()), carried
+    // as TEXT into the archive's .db — which nothing ever reads back: an import
+    // stamps the import moment (importProject).
+    const QString sceneLastW = query.value(4).toString();
+    const QString sceneLastA = query.value(5).toString();
     auto sceneGuid  = query.value(6).toString();
 
     // ScopedConnection: "myUniqueSQLITEConnection" was registered here and
@@ -4146,7 +4186,11 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     DbTransaction tx(db);
 
     QSqlQuery query(dbe);
-    query.prepare("SELECT name, scene, thumbnail, version, last_written, last_accessed, guid FROM projects");
+    // NO STAMP IS READ FROM THE ARCHIVE (D0, lead decision): an import is a
+    // WRITE into this library, so the row is stamped with the import moment
+    // by datetime() below — whatever form an older build wrote into the
+    // archive, nothing here reads it.
+    query.prepare("SELECT name, scene, thumbnail, version, guid FROM projects");
 
     if (query.exec()) {
         query.next();
@@ -4161,9 +4205,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     auto sceneBlob = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
-    auto sceneLastW = query.value(4).toDateTime();
-    auto sceneLastA = query.value(5).toDateTime();
-    auto oldSceneGuid = query.value(6).toString();
+    auto oldSceneGuid = query.value(4).toString();
 
     QVector<AssetRecord> assetList;
 
@@ -4272,7 +4314,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     query3.prepare(
         "INSERT INTO projects "
         "(name, scene, thumbnail, version, last_written, last_accessed, guid) "
-        "VALUES (:name, :scene, :thumbnail, :version, :last_written, :last_accessed, :guid)"
+        "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), :guid)"
     );
 
     auto doc = QJsonDocument::fromJson(sceneBlob);
@@ -4291,8 +4333,6 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     query3.bindValue(":scene", sceneBlob);
     query3.bindValue(":thumbnail", sceneThumb);
     query3.bindValue(":version", sceneVersion);
-    query3.bindValue(":last_written", sceneLastW);
-    query3.bindValue(":last_accessed", sceneLastA);
     query3.bindValue(":guid", newSceneGuid);
 
     executeAndCheckQuery(query3, "insertSceneGlobal");

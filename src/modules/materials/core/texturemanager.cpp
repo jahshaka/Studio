@@ -95,7 +95,7 @@ QString TextureManager::loadTextureFromDatabase(QString guid)
 	return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
-GraphTexture* TextureManager::importTexture(QString path)
+GraphTexture* TextureManager::importTexture(QString path, const assethome::Home &home)
 {
 	// THROUGH THE ONE IMPORT PIPELINE, BY CONTENT (MATERIAL_BUNDLE_SPEC P-2,
 	// owner decision Q1). This routine used to write AROUND the store: a fresh
@@ -109,7 +109,7 @@ GraphTexture* TextureManager::importTexture(QString path)
 	// It is now the ordinary image import: a real library Texture row keyed on
 	// the bytes (so a second pick of the same image answers the SAME row —
 	// byte-identical duplicates are impossible by construction), pinned into
-	// the open project when there is one.
+	// the open project when there is one, and OWNED by the material's home.
 	auto tex = createTexture();
 	if (database == nullptr) {
 		// No library behind us (the headless slice, the standalone build): the
@@ -119,7 +119,7 @@ GraphTexture* TextureManager::importTexture(QString path)
 	}
 
 	const ShippedAssets::Pinned imported =
-	    ShippedAssets::importTexture(path, QFileInfo(path).fileName(), database, project);
+	    ShippedAssets::importTexture(path, QFileInfo(path).fileName(), database, project, home);
 	if (!imported.ok()) {
 		qWarning("TextureManager::importTexture: %s", qUtf8Printable(imported.error));
 		tex->path = path;

@@ -156,7 +156,7 @@ int main(int argc, char **argv)
     definition["shadergraph"] = graph;
 
     QString error;
-    const QString woody = MaterialBundle::create(&db, "woody", definition, QByteArray(), &error);
+    const QString woody = MaterialBundle::create(&db, "woody", definition, assethome::library(), QByteArray(), &error);
     CHECK(!woody.isEmpty(), qPrintable(QStringLiteral("a bundle was minted (%1)").arg(error)));
 
     // =======================================================================
@@ -186,7 +186,7 @@ int main(int argc, char **argv)
     QJsonObject sharedValues;
     sharedValues["baseColorMap"] = "tex-wood";
     shared["values"] = sharedValues;
-    const QString planks = MaterialBundle::create(&db, "planks", shared, QByteArray(), &error);
+    const QString planks = MaterialBundle::create(&db, "planks", shared, assethome::library(), QByteArray(), &error);
     CHECK(!planks.isEmpty(), "1: a second bundle on the same picture");
     CHECK(materialmembers::usedBy(&db, "tex-wood") == 2,
           "1: 'used by' counts EVERY material that names it (one object, two bundles)");
@@ -479,7 +479,7 @@ int main(int argc, char **argv)
         graphed["materialType"] = "pbr";
         graphed["values"] = bakeValues;
         graphed["bake"] = bake2;
-        const QString original = MaterialBundle::create(&db, "Graphed", graphed, QByteArray(), &error);
+        const QString original = MaterialBundle::create(&db, "Graphed", graphed, assethome::library(), QByteArray(), &error);
         CHECK(!original.isEmpty(), "8: a bundle with a picture and a baked map");
 
         QString dupError;

@@ -79,7 +79,7 @@ static QString materialRow(Database &db, const QString &name, const QString &tex
     definition[QStringLiteral("materialType")] = QStringLiteral("pbr");
     definition[QStringLiteral("values")] = values;
     QString error;
-    const QString guid = MaterialBundle::create(&db, name, definition, QByteArray(), &error);
+    const QString guid = MaterialBundle::create(&db, name, definition, assethome::library(), QByteArray(), &error);
     if (guid.isEmpty()) printf("info: material '%s' not created: %s\n",
                                qPrintable(name), qPrintable(error));
     return guid;

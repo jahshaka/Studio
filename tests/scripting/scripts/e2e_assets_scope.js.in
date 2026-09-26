@@ -1,0 +1,106 @@
+// scripting.e2e.assets_scope — ASSETS-SCOPE-1 (owner, 2026-09-26): "a project's
+// assets should not be in the Assets module, they belong to the project. The
+// Assets module is for things we import or add to assets. Adding a material to
+// a project in the editor should add it to the editor, not the default assets
+// drawer." (services/assethome.h holds the one rule.)
+//
+//   1. materials.create({folder}) + a texture member picked from disk in an
+//      open project -> NOT in assets.list({scope:'store'}) (members shown or
+//      not), IN assets.list({scope:'project'}) / the tray.
+//   2. the project-side companions: materials.createFromImage in the project,
+//      an image's companion material, a preset's project copy (materials.edit)
+//      -> none of them is a library row.
+//   3. an import into the library (assets.importFile) -> the store lists it;
+//      and materials.create WITHOUT {folder} is the explicit library gesture.
+//
+// Document verbs only -> --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+var IMAGE = "@SOURCE_DIR@/tests/scripting/fixtures/implane_wide.png";
+var IMAGE2 = "@SOURCE_DIR@/tests/scripting/fixtures/implane_tall.png";
+
+function guids(rows) { return rows.map(function (r) { return r.guid; }); }
+function store() { return guids(assets.list({ scope: "store", members: true })); }
+function inStore(g) { return store().indexOf(g) >= 0; }
+function inProject(g, type) {
+    return guids(assets.list({ scope: "project", type: type })).indexOf(g) >= 0;
+}
+
+var projA = project.create("Assets scope " + Date.now());
+materials.seedPresets();          // the shipped library, before the count
+var storeBefore = store().length;
+
+// ---- 1. a material made in the editor, with a picture from disk -----------
+var mat = materials.create("Scope Mat " + Date.now(), { folder: "" });
+assert(mat.length > 10, "materials.create({folder}) -> " + mat);
+var tex = materials.addTexture(mat, IMAGE, { slot: "baseColorMap" });
+assert(tex.length > 10, "materials.addTexture from disk -> " + tex);
+assert(!inStore(mat), "the editor's material is NOT in the Assets module (store)");
+assert(!inStore(tex), "...nor is its member texture, even with members shown");
+assert(inProject(mat, "material"), "the material IS in the project's listing");
+assert(inProject(tex, "texture"), "...and so is its texture");
+assert(guids(assets.list({ scope: "project", tray: true, members: true })).indexOf(mat) >= 0,
+       "...and the editor tray shows the material");
+assert(materials.edit(assets.metadata(mat).name).guid === mat,
+       "the project's material still resolves by NAME in the project");
+
+// ---- 2. every other editor door is the project's too -----------------------
+var imported = assets.importFile(IMAGE2);             // a library import (section 3)
+var fromImage = materials.createFromImage(imported);
+assert(!inStore(fromImage) && inProject(fromImage, "material"),
+       "materials.createFromImage in a project is the project's material");
+var companionBefore = guids(assets.list({ scope: "project", type: "material" }));
+assets.addToProject(imported);
+var companions = guids(assets.list({ scope: "project", type: "material" }))
+                     .filter(function (g) { return companionBefore.indexOf(g) < 0; });
+companions.forEach(function (g) {
+    assert(!inStore(g), "an image's companion material (" + g + ") is not a library row");
+});
+var cube = scene.addPrimitive("Cube");
+material.apply(cube, "Wood PBR");
+var wood = materials.edit("Wood PBR");
+assert(wood.copied === true, "the first edit of Wood PBR copies it");
+assert(!inStore(wood.guid) && inProject(wood.guid, "material"),
+       "the preset's project copy is the project's, never the library's");
+assert(store().length === storeBefore + 1,
+       "the store grew by exactly the ONE import this script asked for ("
+       + store().length + " vs " + storeBefore + " + 1)");
+
+// ---- 3. the library doors ---------------------------------------------------
+assert(inStore(imported), "an import into the library IS in the store");
+var libMat = materials.create("Library Mat " + Date.now());
+assert(inStore(libMat), "materials.create without {folder} is a library material");
+assert(!inProject(libMat, "material"), "...and the project does not hold it");
+// ---- 4. F1: a LIBRARY material's picture is a LIBRARY row, project or not ---
+// Project open, a library material edited, a picture picked from disk: the
+// row is the library's (the material's home decides, never "a project is
+// open") — and it is NOT the project's own row on the same bytes (section 1
+// picked IMAGE for the project's material). The project letting go of it must
+// leave the library material whole.
+var libEdit = materials.create("Library Edit " + Date.now());
+var libTex = materials.addTexture(libEdit, IMAGE, { slot: "baseColorMap" });
+assert(libTex !== tex, "the library material's picture is NOT the project's row on the same bytes");
+assert(inStore(libTex), "...it is a LIBRARY row (members shown)");
+assets.removeFromProject(libTex);
+assert(assets.metadata(libTex).name.length > 0, "...and it survives the project's remove");
+assert(materials.members(libEdit).some(function (m) { return m.guid === libTex; }),
+       "...so the library material still names a picture that exists");
+// ---- 5. F3: an own row goes with its LAST pin, whoever let go ---------------
+// Project A makes a material (A's own row); project B pins it by guid (what a
+// cross-project paste does). A lets go first — B still holds it, it stays; B
+// lets go last — nothing holds it, it goes, although B never owned it.
+var shared = materials.create("Shared Own " + Date.now(), { folder: "" });
+var projB = project.create("Assets scope B " + Date.now());
+assert(assets.addToProject(shared) === shared, "project B pins A's own material by guid");
+assert(project.open(projA) === true, "back to A");
+assert(assets.removeFromProject(shared) === true, "A (the owner) lets go first");
+assert(assets.metadata(shared).name.length > 0, "...B still pins it, so the row stays");
+assert(project.open(projB) === true, "to B");
+assert(assets.removeFromProject(shared) === true, "B lets go last");
+var sharedGone = false;
+try { assets.metadata(shared); } catch (e) { sharedGone = true; }
+assert(sharedGone, "...no pin left: A's own row is reaped although B let go last");
+console.log("assets_scope: ok");

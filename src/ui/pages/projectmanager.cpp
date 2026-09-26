@@ -765,15 +765,12 @@ void ProjectManager::populateDesktop()
 
     const QVector<ProjectTileData> rows = db->fetchProjects(currentDesktop);
     ItemGridWidget::prefetchThumbnails(rows, dynamicGrid->tileSize);
-    int i = 0;
-    for (const ProjectTileData &record : rows) {
-        dynamicGrid->addToGridView(record, i, isOpenProjectTile(record.guid));
-        i++;
-    }
+    for (const ProjectTileData &record : rows)
+        dynamicGrid->addToGridView(record, isOpenProjectTile(record.guid));
     gridBuilt = true;
     ++gridBuildCount;
     lastBuildMs = timer.elapsed();
-    lastBuildTiles = i;
+    lastBuildTiles = int(rows.size());
     lastBuildDecodes = ItemGridWidget::thumbnailDecodeCount() - decodesBefore;
 
     checkForEmptyState();
@@ -782,7 +779,7 @@ void ProjectManager::populateDesktop()
     // project's, what one build costs, and how many thumbnails it had to
     // decode (0 for a desktop whose thumbnails the session has seen).
     irisLog(QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms, %4 decode(s)")
-                .arg(i).arg(currentDesktop).arg(lastBuildMs).arg(lastBuildDecodes));
+                .arg(lastBuildTiles).arg(currentDesktop).arg(lastBuildMs).arg(lastBuildDecodes));
 }
 
 QVariantMap ProjectManager::gridStats() const

@@ -7,7 +7,9 @@
 // JahLibrary.db is never touched. Runs under QT_QPA_PLATFORM=offscreen.
 // Framework-free; non-zero exit on failure.
 #include <QApplication>
+#include <QDir>
 #include <QFile>
+#include <QRegularExpression>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <cmath>
@@ -15,6 +17,8 @@
 
 #include "data/database/database.h"
 #include "data/project.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -209,6 +213,113 @@ int main(int argc, char **argv)
                "VALUES ('Downgrade', datetime(), 'guid-d', NULL)");
         auto d = findTile(db.fetchProjects(1), "guid-d");
         CHECK(d.guid == "guid-d" && d.desktop == 1, "NULL desktop value reads as Desktop 1");
+    }
+
+    // --- ONE TIMESTAMP FORMAT (D0): last_written / last_accessed keep SQLite
+    //     datetime()'s shape through a project export + import round trip. The
+    //     archive path used to bind a QDateTime, which lands as ISO text with a
+    //     'T' and milliseconds — a second format in the column the Desktop
+    //     orders by as TEXT ('T' > ' ', so every imported project sorted first).
+    {
+        const QRegularExpression shape(QStringLiteral("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"));
+        auto columns = [](const QString &guid) {
+            QSqlQuery q;
+            q.prepare("SELECT last_written, last_accessed FROM projects WHERE guid = ?");
+            q.addBindValue(guid);
+            q.exec();
+            q.next();
+            return QStringList{ q.value(0).toString(), q.value(1).toString() };
+        };
+        CHECK(db.createProject("guid-rt", "Round Trip"), "a project to round-trip");
+        const QStringList before = columns("guid-rt");
+        CHECK(shape.match(before[0]).hasMatch() && shape.match(before[1]).hasMatch(),
+              qPrintable("a created project's stamps are datetime()'s shape: " + before.join(" | ")));
+        QDir().mkpath("rt-export");
+        db.createExportScene(QStringLiteral("rt-export"), "guid-rt");
+        // THE ARCHIVE'S STAMPS ARE NEVER READ (an import is a write here): an
+        // archive an older build wrote in the ISO form imports all the same,
+        // stamped with the import moment.
+        {
+            QSqlDatabase arc = QSqlDatabase::addDatabase("QSQLITE", "rt-arc");
+            arc.setDatabaseName("rt-export/guid-rt.db");
+            arc.open();
+            QSqlQuery q(arc);
+            q.exec("UPDATE projects SET last_written = '2018-04-18T05:49:43.000', "
+                   "last_accessed = '2018-04-18T05:49:43.000'");
+            arc.close();
+        }
+        QSqlDatabase::removeDatabase("rt-arc");
+        const QString importMoment = [] {
+            QSqlQuery q;
+            q.exec("SELECT datetime()");
+            q.next();
+            return q.value(0).toString();
+        }();
+        QString worldName;
+        QMap<QString, QString> guidMap;
+        CHECK(db.importProject(QStringLiteral("rt-export/guid-rt"), "guid-rt-2", worldName, guidMap),
+              "the export (its stamps rewritten to the old ISO form) imports back");
+        const QStringList after = columns("guid-rt-2");
+        CHECK(shape.match(after[0]).hasMatch() && shape.match(after[1]).hasMatch(),
+              qPrintable("...and ITS stamps are the same shape: " + after.join(" | ")));
+        CHECK(after[0] >= importMoment && after[1] >= importMoment,
+              qPrintable("...stamped with the IMPORT moment, not the archive's (" + after.join(" | ")
+                         + " >= " + importMoment + ")"));
+        QDir("rt-export").removeRecursively();
+    }
+
+    // --- A DELETED PROJECT TAKES ITS OWN ROWS WITH IT (ASSETS-SCOPE-1 fix round
+    //     F2): a material made in it, the material's member picture (with its
+    //     stored-file mapping) and a scene node's row are the project's own and
+    //     go; an import's MEMBER row stamped with the project (it belongs to its
+    //     LIBRARY Object) and an own row another project still pins stay.
+    {
+        QDir().mkpath("own-store");
+        AssetStorePaths::setRootOverride(QDir("own-store").absolutePath());
+        QFile png("own-pic.png");
+        png.open(QIODevice::WriteOnly); png.write("not really a png, bytes are bytes"); png.close();
+        const int mat = static_cast<int>(ModelTypes::Material);
+        const int tex = static_cast<int>(ModelTypes::Texture);
+        const int obj = static_cast<int>(ModelTypes::Object);
+        CHECK(db.createProject("guid-own", "Owner"), "a project that owns rows");
+        CHECK(db.createProject("guid-other", "Other"), "...and another project");
+        auto row = [&](const QString &g, int type, const QString &parent, const QString &project,
+                       AssetViewFilter vf) {
+            db.createAssetEntry(g, g, type, parent, project, QString(), QString(), QByteArray(),
+                                QByteArray(), QByteArray(), QByteArray(), vf);
+        };
+        row("own-mat", mat, QString(), "guid-own", AssetViewFilter::Editor);
+        row("own-tex", tex, "own-mat", "guid-own", AssetViewFilter::Editor);
+        row("own-node", obj, "guid-own", "guid-own", AssetViewFilter::Editor);
+        row("own-shared", mat, QString(), "guid-own", AssetViewFilter::Editor);
+        row("lib-obj", obj, QString(), "guid-own", AssetViewFilter::AssetsView);
+        row("lib-member", tex, "lib-obj", "guid-own", AssetViewFilter::Editor);
+        QString oid, err;
+        CHECK(AssetCas::ingestFile(QSqlDatabase::database(), AssetStorePaths::root(), "own-pic.png",
+                                   "own-tex", "source", "own-pic.png", &oid, &err),
+              qPrintable("the owned picture's bytes are stored: " + err));
+        for (const char *g : { "own-mat", "own-tex", "own-shared", "lib-obj", "lib-member" })
+            AssetCas::writePin(QSqlDatabase::database(), "guid-own", g, QString());
+        AssetCas::writePin(QSqlDatabase::database(), "guid-other", "own-shared", QString());
+        auto filesOf = [](const QString &g) {
+            QSqlQuery q;
+            q.prepare("SELECT COUNT(*) FROM asset_files WHERE asset_guid = ?");
+            q.addBindValue(g);
+            q.exec(); q.next();
+            return q.value(0).toInt();
+        };
+        CHECK(filesOf("own-tex") == 1, "the owned picture has its stored-file mapping");
+        CHECK(db.deleteProject("guid-own"), "the owning project is deleted");
+        CHECK(db.fetchAsset("own-mat").guid.isEmpty(), "...its own MATERIAL row is gone");
+        CHECK(db.fetchAsset("own-tex").guid.isEmpty() && filesOf("own-tex") == 0,
+              "...its material's PICTURE row is gone, and its stored-file mapping with it");
+        CHECK(db.fetchAsset("own-node").guid.isEmpty(), "...its scene node's row is gone");
+        CHECK(!db.fetchAsset("own-shared").guid.isEmpty(),
+              "an own row ANOTHER project still pins stays (it goes with the last pin)");
+        CHECK(!db.fetchAsset("lib-obj").guid.isEmpty() && !db.fetchAsset("lib-member").guid.isEmpty(),
+              "a LIBRARY import and its member row (Editor, stamped with the project) stay");
+        QDir("own-store").removeRecursively();
+        QFile::remove("own-pic.png");
     }
 
     db.closeDatabase();

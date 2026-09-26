@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include <QStringList>
 
 #include "irisgl/irisglfwd.h"
+#include "services/assethome.h"
 
 class Database;
 class Project;
@@ -60,19 +61,25 @@ iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
                                  bool *hasAlphaOut = nullptr);
 
 /// Option B1: serializes the standard image material as a Material ASSET —
-/// a LIBRARY row (materialType "pbr", values.baseColorMap = the texture's
-/// GUID so readers resolve pin-first), a Material→Texture dependency row,
-/// and a thumbnail scaled straight from the image (headless-safe, no
-/// engine). Callers in project context pin it via ProjectAssets::
-/// addToProject so it lands in the bin. Returns the new material guid,
-/// empty on failure.
+/// a row (materialType "pbr", values.baseColorMap = the texture's GUID so
+/// readers resolve pin-first), a Material→Texture dependency row, and a
+/// thumbnail scaled straight from the image (headless-safe, no engine).
+/// `home` is where the row lives (services/assethome.h, ASSETS-SCOPE-1): the
+/// Assets page's gesture makes a LIBRARY material, every editor gesture (the
+/// tray's action, an image added to a project, the verb with a project open)
+/// makes THE PROJECT'S own. Callers in project context pin it via
+/// ProjectAssets::addToProject so it lands in the bin. Returns the new
+/// material guid, empty on failure.
 QString createMaterialAsset(const QString &textureGuid, Database *db,
-                            Project *project, QString *errorOut = nullptr);
+                            Project *project, const assethome::Home &home,
+                            QString *errorOut = nullptr);
 
-/// True when a Material asset already depends on this texture — the
-/// idempotence guard for the automatic companion material (a re-add of the
-/// same image must not mint a second material).
-bool hasCompanionMaterial(const QString &textureGuid);
+/// True when a Material THIS PROJECT holds (its own row, or one it pins)
+/// already depends on this texture — the idempotence guard for the automatic
+/// companion material (a re-add of the same image must not mint a second
+/// material). Per project since ASSETS-SCOPE-1: a companion is its project's
+/// own row, so another project's companion is no answer for this one.
+bool hasCompanionMaterial(const QString &textureGuid, const QString &projectGuid);
 
 /// The AUTO-MINTED companions of a texture: Material rows STAMPED
 /// `companionOf: <textureGuid>` by createMaterialAsset — the stamp is the

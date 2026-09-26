@@ -48,18 +48,31 @@ namespace {
 /// user deleted from the library but a project still pins is legitimate
 /// reuse, just not the first choice), then the guid, so two equal candidates
 /// always answer the same way.
-QString libraryTextureForOn(QSqlDatabase conn, const QString &oid, const QString &projectGuid)
+///
+/// ONLY A ROW OF THE RIGHT HOME ANSWERS (ASSETS-SCOPE-1 F1): a library row
+/// always may; a project's OWN row (Editor) only when `ownerProject` is that
+/// project. A library material's picture must never be answered with some
+/// project's private row — that project's remove would delete it under the
+/// library definition naming it.
+QString libraryTextureForOn(QSqlDatabase conn, const QString &oid, const QString &projectGuid,
+                            const QString &ownerProject = QString())
 {
     QSqlQuery query(conn);
-    query.prepare("SELECT AF.asset_guid FROM asset_files AF "
-                  "JOIN assets A ON A.guid = AF.asset_guid "
-                  "LEFT JOIN project_assets PA ON PA.asset_guid = AF.asset_guid "
-                  "                           AND PA.project_guid = ? "
-                  "WHERE AF.oid = ? AND AF.role = 'source' AND A.type = ? "
-                  "ORDER BY (PA.asset_guid IS NOT NULL) DESC, A.listed DESC, AF.asset_guid");
+    query.prepare(QStringLiteral(
+                      "SELECT AF.asset_guid FROM asset_files AF "
+                      "JOIN assets A ON A.guid = AF.asset_guid "
+                      "LEFT JOIN project_assets PA ON PA.asset_guid = AF.asset_guid "
+                      "                           AND PA.project_guid = ? "
+                      "WHERE AF.oid = ? AND AF.role = 'source' AND A.type = ? "
+                      "AND (A.view_filter IS NOT ?%1) "
+                      "ORDER BY (PA.asset_guid IS NOT NULL) DESC, A.listed DESC, AF.asset_guid")
+                      .arg(ownerProject.isEmpty() ? QString()
+                                                  : QStringLiteral(" OR A.project_guid = ?")));
     query.addBindValue(projectGuid);
     query.addBindValue(oid);
     query.addBindValue(static_cast<int>(ModelTypes::Texture));
+    query.addBindValue(static_cast<int>(AssetViewFilter::Editor));
+    if (!ownerProject.isEmpty()) query.addBindValue(ownerProject);
     if (query.exec() && query.next()) return query.value(0).toString();
     return QString();
 }
@@ -84,7 +97,7 @@ namespace {
 /// IS the same route.
 Pinned importTextureContent(const QString &sourcePath, const QString &displayName,
                             Database *db, Project *project, Ownership ownership, bool pin,
-                            const QString &knownOid = QString())
+                            bool ownedByProject, bool shipped, const QString &knownOid = QString())
 {
     Pinned out;
     if (sourcePath.isEmpty() || !QFileInfo(sourcePath).isFile()) {
@@ -116,7 +129,8 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         return out;
     }
 
-    QString guid = libraryTextureForOn(conn, oid, projectGuid);
+    const QString ownerProject = (ownedByProject && haveProject) ? projectGuid : QString();
+    QString guid = libraryTextureForOn(conn, oid, projectGuid, ownerProject);
     // A row whose object is no longer in the store (purged, a store moved
     // without its objects) cannot serve a scene; a fresh import brings the
     // bytes back under a new row rather than handing out a guid that
@@ -156,6 +170,12 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         // still stated, because the next caller of this function will inherit
         // whatever it says.
         request.intent = ImportRequest::Intent::Material;
+        // WHOSE ROW IT MINTS is the caller's answer (ASSETS-SCOPE-1): the
+        // platform's furniture for the open project, or the picture of a
+        // PROJECT'S material, is that project's own; a library material's
+        // picture is a library row even with a project open.
+        request.ownedByProject = ownedByProject && haveProject;
+        request.shipped = shipped;
         AssetImportService importer(db, project);
         const ImportResult result = importer.import(request);
         if (!result.ok()) {
@@ -222,18 +242,25 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
 Pinned pinTexture(const QString &sourcePath, const QString &displayName,
                   Database *db, Project *project, Ownership ownership)
 {
-    return importTextureContent(sourcePath, displayName, db, project, ownership, /*pin=*/true);
+    // The floor's checker, an emitter's image: FILES THE APP SHIPS — one
+    // platform row per content, pinned by every project that uses it.
+    return importTextureContent(sourcePath, displayName, db, project, ownership, /*pin=*/true,
+                                /*ownedByProject=*/false, /*shipped=*/true);
 }
 
 Pinned importTexture(const QString &sourcePath, const QString &displayName,
-                     Database *db, Project *project, const QString &knownOid)
+                     Database *db, Project *project, const assethome::Home &home,
+                     const QString &knownOid)
 {
     // A LIBRARY row always; PINNED as well when a project is open. That is the
     // owner's answer to spec Q1 in one call: "into the library once, a member
     // of that material, and pinned into the open project".
     const bool haveProject = db && project && !project->getProjectGuid().isEmpty();
+    const bool ownedByProject = home.isProject() && haveProject
+                                && home.projectGuid == project->getProjectGuid();
     return importTextureContent(sourcePath, displayName, db, project,
-                                Ownership::Project, /*pin=*/haveProject, knownOid);
+                                Ownership::Project, /*pin=*/haveProject, ownedByProject,
+                                /*shipped=*/false, knownOid);
 }
 
 QStringList SkyPreset::faces() const

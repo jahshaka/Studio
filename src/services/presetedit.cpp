@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "services/presetedit.h"
 
 #include <QObject>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 
 #include "commands/presetcopycommand.h"
 #include "data/database/database.h"
@@ -46,10 +48,15 @@ QStringList copiesOf(Database *db, const QString &masterGuid)
 {
     QStringList out;
     if (!db || masterGuid.isEmpty()) return out;
-    for (const auto &row : db->fetchAssetsForAssetView()) {
-        if (row.type != static_cast<int>(ModelTypes::Material)) continue;
-        if (MaterialBundle::presetMasterOf(row.properties) == masterGuid) out << row.guid;
-    }
+    // EVERY MATERIAL ROW, not a library listing: a copy is its project's OWN
+    // row (ASSETS-SCOPE-1), which no library listing contains.
+    QSqlQuery query(QSqlDatabase::database());
+    query.prepare("SELECT guid, properties FROM assets WHERE type = ? ORDER BY rowid");
+    query.addBindValue(static_cast<int>(ModelTypes::Material));
+    if (!query.exec()) return out;
+    while (query.next())
+        if (MaterialBundle::presetMasterOf(query.value(1).toByteArray()) == masterGuid)
+            out << query.value(0).toString();
     return out;
 }
 

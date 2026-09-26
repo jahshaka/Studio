@@ -2750,7 +2750,7 @@ void AssetView::createMaterialFromImageTile(AssetGridItem *item)
 
 	QString error;
 	const QString materialGuid =
-	    ImageMaterial::createMaterialAsset(textureGuid, db, project, &error);
+	    ImageMaterial::createMaterialAsset(textureGuid, db, project, assethome::library(), &error);
 	if (materialGuid.isEmpty()) {
 		QMessageBox::warning(this, tr("Create Material from Image"),
 		                     tr("Could not create the material: %1").arg(error));

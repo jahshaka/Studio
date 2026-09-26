@@ -274,11 +274,11 @@ QString duplicate(Database *db, Project *project, const QString &materialGuid,
     }
     definition.remove(QStringLiteral("bake"));
 
-    // A NAME NOBODY ELSE HAS, decided against the LIBRARY (a drawer is a view
-    // of it, and with a project open it does not even list every material).
+    // A NAME NOBODY ELSE HAS, decided against EVERY material row — the
+    // library's and every project's own (a drawer is a view of them, and with
+    // a project open it does not even list every material).
     QSet<QString> taken;
-    for (const auto &existing : db->fetchAssetsForAssetView())
-        if (existing.type == static_cast<int>(ModelTypes::Material)) taken.insert(existing.name);
+    for (const QString &existing : MaterialBundle::materialNames(db)) taken.insert(existing);
     QString chosen = name.trimmed().isEmpty()
                          ? QStringLiteral("%1 copy").arg(row.name)
                          : name.trimmed();
@@ -287,7 +287,11 @@ QString duplicate(Database *db, Project *project, const QString &materialGuid,
     definition[QStringLiteral("name")] = chosen;
 
     QString error;
-    const QString copy = MaterialBundle::create(db, chosen, definition, row.thumbnail, &error);
+    // THE COPY LIVES WHERE ITS ORIGINAL LIVES (ASSETS-SCOPE-1): a library
+    // material's copy is a library material, a project's is that project's.
+    const QString copy = MaterialBundle::create(db, chosen, definition,
+                                                assethome::of(db, materialGuid),
+                                                row.thumbnail, &error);
     if (copy.isEmpty()) return fail(error.isEmpty() ? QStringLiteral("the library refused the copy")
                                                     : error);
     return copy;
@@ -395,12 +399,19 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     QString parent = texture.parent;
     if (!parent.isEmpty() && !db->fetchAsset(parent).guid.isEmpty()) parent.clear();
 
+    // THE COPY'S HOME (ASSETS-SCOPE-1): the open project's when that project
+    // holds the material (the swap below is its copy-on-write), else the
+    // material's own — never a library tile minted for a project's edit.
+    const bool projectHolds = project && !project->getProjectGuid().isEmpty()
+                              && db->isAssetPinnedBy(project->getProjectGuid(), materialGuid);
+    const assethome::Home home = projectHolds ? assethome::project(project->getProjectGuid())
+                                              : assethome::of(db, materialGuid);
     DbBatch batch(db);
     db->createAssetEntry(newGuid, texture.name, static_cast<int>(ModelTypes::Texture),
-                         parent, QString(),
+                         parent, home.projectGuid,
                          texture.license, texture.author, texture.thumbnail,
                          props, texture.tags, QByteArray(),
-                         AssetViewFilter::AssetsView);
+                         home.viewFilter());
 
     QString error;
     QString oid;

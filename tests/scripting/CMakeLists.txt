@@ -1002,6 +1002,30 @@ set_tests_properties(scripting.e2e.assets_page PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# scripting.e2e.assets_scope — ASSETS-SCOPE-1 (owner 2026-09-26): the Assets
+# module lists ONLY what was imported into the library or made there
+# explicitly; every row minted while editing a project (a material created in
+# the editor, its textures, an image's companion, a preset's project copy) is
+# that project's own (services/assethome.h). Document verbs only -> --headless.
+configure_file(scripts/e2e_assets_scope.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_scope.js @ONLY)
+# The home is WIPED before every run: which ROW a picture answers depends on
+# which rows already hold those bytes (the by-content dedup), so the cases are
+# only meaningful on a library that has never seen them.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-assets_scope)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.assets_scope.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.assets_scope.fresh_home PROPERTIES
+    FIXTURES_SETUP assetsScopeFreshHome LABELS "scripting")
+add_test(NAME scripting.e2e.assets_scope
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_scope.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.assets_scope PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED assetsScopeFreshHome
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # scripting.e2e.thumbnails_order — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
 # A material thumbnail FIRST, a model import SECOND: the renderer named its
 # offscreen View with a fixed string and a second instance could not create it,

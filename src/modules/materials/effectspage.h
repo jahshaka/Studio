@@ -38,7 +38,6 @@ class NodeLibraryItem;
 class Database;
 class Project;
 class SettingsManager;
-class TexturePropertyWidget;
 class UndoRedo;
 class AssetView;
 struct ThumbnailResult;

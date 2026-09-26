@@ -53,7 +53,6 @@ set(SRCS
 	src/modules/materials/propertywidgets/floatpropertywidget.cpp
     src/modules/materials/propertywidgets/vectorpropertywidget.cpp
     src/modules/materials/propertywidgets/intpropertywidget.cpp
-    src/modules/materials/propertywidgets/texturepropertywidget.cpp
     src/modules/materials/propertywidgets/basepropertywidget.cpp
     src/modules/materials/propertywidgets/propertywidgetbase.cpp
 
@@ -111,7 +110,6 @@ set(HEADERS
 	src/modules/materials/propertywidgets/floatpropertywidget.h
     src/modules/materials/propertywidgets/vectorpropertywidget.h
     src/modules/materials/propertywidgets/intpropertywidget.h
-    src/modules/materials/propertywidgets/texturepropertywidget.h
     src/modules/materials/propertywidgets/basepropertywidget.h
     src/modules/materials/propertywidgets/propertywidgetbase.h
 

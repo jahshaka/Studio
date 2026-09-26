@@ -95,7 +95,7 @@ static QString bundle(Database &db, const QString &name, const QVariantMap &maps
     definition["materialType"] = "pbr";
     definition["values"] = values;
     QString error;
-    const QString guid = MaterialBundle::create(&db, name, definition, QByteArray(), &error);
+    const QString guid = MaterialBundle::create(&db, name, definition, assethome::library(), QByteArray(), &error);
     if (guid.isEmpty()) printf("info: bundle '%s' failed: %s\n", qPrintable(name), qPrintable(error));
     return guid;
 }

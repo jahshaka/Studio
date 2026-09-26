@@ -556,6 +556,21 @@ public:
     /// question the editor tray asks in services/assettray.h, so the two
     /// listings cannot disagree. Definition + rationale: database.cpp.
     static QString memberSubquery(const QString &column);
+
+    /// A PROJECT'S OWN ROW (ASSETS-SCOPE-1) — THE ONE PREDICATE: `view_filter`
+    /// Editor, a project guid, and not a MEMBER of somebody else's row (an
+    /// import's member rows are Editor too and carry the project the import was
+    /// made in, but they belong to their library Object). Such a row exists
+    /// only for its project's pins: once none is left it goes — whoever let go
+    /// last, and when its project is deleted (deleteProject).
+    bool isProjectOwned(const AssetRecord &row);
+
+    // THE ONE TIMESTAMP FORMAT of the projects table's `last_written` and
+    // `last_accessed`: SQLite `datetime()`'s own UTC `YYYY-MM-DD HH:MM:SS`,
+    // written by `datetime()` in SQL on every write — create, save AND an
+    // archive import (which stamps the import moment and reads no stamp from
+    // the archive). The Desktop orders by the column as TEXT.
+
     /// BATCH READS for the listing rules (small-items round B). Each is ONE
     /// query for a whole listing's worth of rows; the per-row reads they
     /// replace made the editor tray cost a query per tile, on every edge write

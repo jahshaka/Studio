@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
+#include "services/assethome.h"
 #include "services/assetcas.h"
 #include "services/assetmetadata.h"
 #include "services/assetstorepaths.h"
@@ -209,10 +210,16 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
 
     // The tile: an avatar LOOKS like its character, so it inherits the model's
     // thumbnail rather than showing a generic placeholder for a JSON file.
+    // ITS HOME IS ITS SCOPE (ASSETS-SCOPE-1): an avatar made in the Avatar
+    // module's library is a library asset; one made for a project is that
+    // project's own row (pinned below) and never a library tile.
+    const assethome::Home home = scope == Scope::Project
+                                     ? assethome::project(project->getProjectGuid())
+                                     : assethome::library();
     db->createAssetEntry(guid, definition.name, static_cast<int>(ModelTypes::Avatar), QString(),
-                         scope == Scope::Project ? project->getProjectGuid() : QString(),
+                         home.projectGuid,
                          QString(), QString(), record.thumbnail, QByteArray(), QByteArray(),
-                         QByteArray(), AssetViewFilter::AssetsView);
+                         QByteArray(), home.viewFilter());
     reconcileDependencies(guid, definition, db, project);
     AssetCas::writeSidecar(conn, AssetStorePaths::root(), guid, nullptr);
 

@@ -454,6 +454,12 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
         ImportResult back;
         back.assetGuid = mine;
         back.warnings = result.warnings;
+        // AND IT IS A LIBRARY ROW NOW (ASSETS-SCOPE-1): a picture a project's
+        // material brought in is that project's own row, and the user's import
+        // of the same bytes is the explicit "add to Assets" — the one door that
+        // moves a row into the library.
+        if (db->fetchAsset(mine).view_filter != AssetViewFilter::AssetsView)
+            db->updateAssetViewFilter(mine, static_cast<int>(AssetViewFilter::AssetsView));
         if (!request.projectGuid.isEmpty()) db->updateAssetProject(mine, request.projectGuid);
         if (request.drawerId > 0) {
             if (db->fetchCollectionSubtree(request.drawerId).isEmpty())
@@ -683,10 +689,16 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
                 props["import"] = staged.importRecord;
                 properties = QJsonDocument(props).toJson();
             }
+            // A library row unless the request says the project owns what it
+            // mints (ASSETS-SCOPE-1): then every row is the project's own.
+            const AssetViewFilter viewFilter =
+                request.shipped ? AssetViewFilter::DontShow
+                : (request.ownedByProject && !projectGuid.isEmpty())
+                    ? AssetViewFilter::Editor
+                    : static_cast<AssetViewFilter>(row.viewFilter);
             db->createAssetEntry(row.guid, row.name, row.type, row.parent, projectGuid,
                                  QString(), QString(), row.thumbnail, properties,
-                                 row.tags, row.asset,
-                                 static_cast<AssetViewFilter>(row.viewFilter));
+                                 row.tags, row.asset, viewFilter);
             touchedGuids.append(row.guid);
         }
         for (const StagedDep &dep : staged.deps)
