@@ -42,13 +42,35 @@ struct ShellMesh
     size_t triangles() const { return indices.size() / 3u; }
 };
 
+/// THE SHAPE'S PARAMETERS, in one table the radius reads AND the cache key hashes
+/// (proceduralShellKey): three lobe terms, amplitude then six frequency/phase terms.
+constexpr double kShellLobes[3][7] = {
+    { 0.09, 3.0, 1.3, 2.0, -0.4, 2.5, 0.7 },
+    { 0.05, 11.0, 7.0, 9.0, -3.0, 0.0, 0.0 },
+    { 0.02, 37.0, -23.0, 5.0, 31.0, 17.0, 0.0 },
+};
+/// Bumped by hand ONLY when the CONSTRUCTION changes (the mapping, the winding, the
+/// lobe formulas); a change to a number in kShellLobes moves the key by itself.
+constexpr int kProceduralShellVersion = 1;
+
 /// The radius of the displaced shell along unit direction (x, y, z). Mean radius
 /// 1, amplitude ~0.16 across three scales.
 inline double shellRadius(double x, double y, double z)
 {
-    return 1.0 + 0.09 * std::sin(3.0 * x + 1.3) * std::cos(2.0 * y - 0.4) * std::sin(2.5 * z + 0.7) +
-           0.05 * std::sin(11.0 * x + 7.0 * y) * std::cos(9.0 * z - 3.0 * y) +
-           0.02 * std::sin(37.0 * x - 23.0 * z + 5.0) * std::sin(31.0 * y + 17.0 * x);
+    const auto &a = kShellLobes[0], &b = kShellLobes[1], &c = kShellLobes[2];
+    return 1.0 + a[0] * std::sin(a[1] * x + a[2]) * std::cos(a[3] * y + a[4]) * std::sin(a[5] * z + a[6]) +
+           b[0] * std::sin(b[1] * x + b[2] * y) * std::cos(b[3] * z + b[4] * y) +
+           c[0] * std::sin(c[1] * x + c[2] * z + c[3]) * std::sin(c[4] * y + c[5] * x);
+}
+
+/// What identifies a shell's BYTES without writing them: the version, every shape
+/// parameter and the triangle count — the scale suites' bake-cache key hashes this.
+inline std::string proceduralShellKey(size_t triangles)
+{
+    std::string k = "enginetest::proceduralShell v" + std::to_string(kProceduralShellVersion);
+    for (const auto &lobe : kShellLobes)
+        for (double v : lobe) k += " " + std::to_string(v);
+    return k + " tris " + std::to_string(triangles);
 }
 
 inline ShellMesh proceduralShell(size_t triangles)

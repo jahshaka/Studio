@@ -199,14 +199,14 @@ iris::MeshPtr bakedMesh(const QString &sourcePath, const QString &name, BakeInfo
     return ms.isEmpty() ? iris::MeshPtr() : ms.first();
 }
 
-/// The shell's oid is its GENERATOR's identity, not its bytes: the same triangle
-/// count always writes the same file, so the key can be known without writing
-/// the 290 MB PLY first. "v1" moves if proceduralShell's shape ever changes.
+/// The shell's oid is its GENERATOR's identity, not its bytes: the same parameters
+/// always write the same file, so the key is known without writing the 290 MB PLY.
+/// proceduralShellKey hashes the version constant AND every shape parameter, so a
+/// shape change can never reuse an old blob.
 static QString shellOid(size_t triangles)
 {
     return QString::fromLatin1(QCryptographicHash::hash(
-        QStringLiteral("enginetest::proceduralShell v1 %1").arg(qulonglong(triangles)).toUtf8(),
-        QCryptographicHash::Sha256).toHex());
+        QByteArray::fromStdString(enginetest::proceduralShellKey(triangles)), QCryptographicHash::Sha256).toHex());
 }
 
 QString shellBlobPath(size_t triangles)
