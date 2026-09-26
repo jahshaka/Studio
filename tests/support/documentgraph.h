@@ -29,6 +29,7 @@
 #include <string>
 
 #include "irisgl/document/scenegraph/nodegraph.h"
+#include "wiredocumentgraph.h"
 #include "jahshaka/engine/Engine.h"
 
 namespace enginetest {
@@ -43,19 +44,13 @@ public:
         cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
         cfg.logFile = logFile;
         mEngine = jahshaka::engine::Engine::create(cfg, mError);
-        if (mEngine) {
-            iris::graph::setStagingScene(reinterpret_cast<iris::graph::SceneHandle>(
-                mEngine->documentGraphScene()));
-            // Wired exactly as the app wires it (EngineHost): the renderer
-            // learns "nothing moved" from the document's transform-write
-            // counter instead of walking every item every frame.
-            mEngine->setTransformWriteCounter(&iris::graph::transformWriteCounter());
-        }
+        // Wired exactly as the app wires it (EngineHost): wiredocumentgraph.h.
+        if (mEngine) wireDocumentGraph(mEngine.get());
     }
 
     ~DocumentGraph()
     {
-        iris::graph::setStagingScene(nullptr);
+        unwireDocumentGraph();
         mEngine.reset();
     }
 
