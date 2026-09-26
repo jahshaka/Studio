@@ -42,6 +42,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include "EnginePrivate.h"
+#include "GpuScene.h"
 #include "HlmsAtom.h"
 #include "validation_probe.h"
 
@@ -295,8 +296,13 @@ static bool rasteriseCell(const Cell &c, const float vp[4][4], unsigned cellSlot
                 const size_t p = size_t(y) * kW + size_t(x);
                 if (inv > invW[p]) {
                     invW[p] = inv;
-                    ids0[p] = AtomId::pack(cellSlot, 0u);
-                    ids1[p] = uint32_t(t);
+                    // THE CUT'S ENCODING (HlmsAtom.h AtomId): these meshes carry no baked
+                    // DAG, so the engine gives each a FLAT one — level 0 in runs of
+                    // GpuScene::kFlatClusterTriangles, every run a leaf (depth 0) — and
+                    // level-0 triangle t is triangle t % run of cluster t / run.
+                    ids0[p] = AtomId::packX(cellSlot, 0u);
+                    ids1[p] = AtomId::packY(uint32_t(t) / jahshaka::engine::detail::GpuScene::kFlatClusterTriangles,
+                                            uint32_t(t) % jahshaka::engine::detail::GpuScene::kFlatClusterTriangles);
                 }
             }
     }
@@ -404,6 +410,9 @@ struct DecodeListener final : public Ogre::CompositorWorkspaceListener {
         src.instances = scene->gpuScene().instanceBuffer();
         src.levels = scene->gpuScene().levelBuffer();
         src.geomRows = scene->gpuScene().geomBuffer();
+        scene->gpuScene().flushClusterTables();
+        src.meshes = scene->gpuScene().meshBuffer();
+        src.clusters = scene->gpuScene().clusterBuffer();
         atom->setDecodeSource(src);
         for (AtomDecodeRenderable *d : *decodes) d->setVisible(true);
     }

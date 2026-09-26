@@ -22,15 +22,16 @@
 //       the per-scene binding: HlmsAtom binds SceneGiBinding.pcc like PBS);
 //   (f) 640 buckets — past one 512-slot pool of twins — each shading only its own
 //       pixels (the bucket id, never the twin's slot);
-//   (g) an ORTHOGRAPHIC view picks the level the CPU strategy picks;
-//   (h) so does a LETTERBOXED one (the inset's rows are the currency);
-//   (i) the LOD band's state follows the object: one renumbered into a removed object's
-//       slot takes the rule's level on the next frame.
+//   (g) an ORTHOGRAPHIC view: the id pass's CLUSTER CUT takes no distance term and draws
+//       the depth whose group the window affords (a hand-made DAG whose group errors are
+//       the chain's bounds, so it agrees with the CPU strategy's level);
+//   (h) so does a LETTERBOXED one (the inset's rows are the currency).
 // FRAMES, NEVER TIME: every picture is read until two consecutive reads agree to a code.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
 #include "EnginePrivate.h"
+#include "GpuScene.h"
 #include "HlmsAtom.h"
 
 #include <Compositor/OgreCompositorNode.h>
@@ -48,6 +49,7 @@
 #include <Vao/OgreVertexArrayObject.h>
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -140,6 +142,49 @@ static MeshData wavySheet(int n, float size, float amp, float waves, Geometry &g
     g.pos = d.positions;
     g.idx = d.indices;
     return d;
+}
+
+/// A HAND-MADE THREE-DEPTH CLUSTER DAG over `m`'s level 0 (ATOM-CLUSTER-CUT): the
+/// leaves (level 0 in runs of 128 triangles) are members of group 0 (error 0.002),
+/// the SAME triangles again as depth-1 clusters produced by group 0 and members of
+/// group 1 (error 0.02), and again at depth 2, produced by group 1 and members of
+/// the terminal group 2 — the level test's two bounds as the cut's two group errors,
+/// so the depth the id pass draws is the level the old rule drew. Every group's
+/// sphere is the mesh box's (centre, half-diagonal): the distance the level rule
+/// measured. The TRIANGLES are the subject's, not the geometry's.
+static void addHandDag(MeshData &m)
+{
+    float lo[3] = { 1e30f, 1e30f, 1e30f }, hi[3] = { -1e30f, -1e30f, -1e30f };
+    for (size_t v = 0; v * 3 < m.positions.size(); ++v)
+        for (int k = 0; k < 3; ++k) {
+            lo[k] = std::min(lo[k], m.positions[v * 3 + size_t(k)]);
+            hi[k] = std::max(hi[k], m.positions[v * 3 + size_t(k)]);
+        }
+    MeshClusterGroup g;
+    for (int k = 0; k < 3; ++k) g.centre[k] = 0.5f * (lo[k] + hi[k]);
+    g.radius = 0.5f * std::sqrt((hi[0] - lo[0]) * (hi[0] - lo[0]) + (hi[1] - lo[1]) * (hi[1] - lo[1]) +
+                                (hi[2] - lo[2]) * (hi[2] - lo[2]));
+    const float errors[3] = { 0.002f, 0.02f, FLT_MAX };
+    for (int d = 0; d < 3; ++d) {
+        g.depth = d;
+        g.error = g.estimate = errors[d];
+        m.clusterGroups.push_back(g);
+    }
+    const size_t run = 128u * 3u;
+    for (int d = 0; d < 3; ++d)
+        for (size_t first = 0; first < m.indices.size(); first += run) {
+            MeshCluster c;
+            c.firstIndex = unsigned(m.clusterIndices.size());
+            const size_t n = std::min(run, m.indices.size() - first);
+            m.clusterIndices.insert(m.clusterIndices.end(), m.indices.begin() + ptrdiff_t(first),
+                                    m.indices.begin() + ptrdiff_t(first + n));
+            c.indexCount = unsigned(n);
+            c.group = d;
+            c.refined = d == 0 ? -1 : d - 1;
+            std::memcpy(c.centre, g.centre, sizeof(c.centre));
+            c.radius = g.radius;
+            m.clusters.push_back(c);
+        }
 }
 
 /// Smooth, LOW-FREQUENCY textures (64x64, magnified on screen): a hard texel edge
@@ -264,8 +309,13 @@ static bool rasteriseCell(const Cell &c, const float vp[4][4], unsigned cellSlot
                 const size_t p = size_t(y) * kW + size_t(x);
                 if (inv > invW[p]) {
                     invW[p] = inv;
-                    ids0[p] = AtomId::pack(cellSlot, 0u);
-                    ids1[p] = uint32_t(t);
+                    // THE CUT'S ENCODING (HlmsAtom.h AtomId): these meshes carry no baked
+                    // DAG, so the engine gives each a FLAT one — level 0 in runs of
+                    // GpuScene::kFlatClusterTriangles, every run a leaf (depth 0) — and
+                    // level-0 triangle t is triangle t % run of cluster t / run.
+                    ids0[p] = AtomId::packX(cellSlot, 0u);
+                    ids1[p] = AtomId::packY(uint32_t(t) / jahshaka::engine::detail::GpuScene::kFlatClusterTriangles,
+                                            uint32_t(t) % jahshaka::engine::detail::GpuScene::kFlatClusterTriangles);
                 }
             }
     }
@@ -884,18 +934,20 @@ int main()
         for (NodeId t : tiles) scene->setNodeVisible(t, false);
     }
 
-    // ---- (g) AN ORTHOGRAPHIC VIEW PICKS THE CPU STRATEGY'S LEVEL -------------------
+    // ---- (g) AN ORTHOGRAPHIC VIEW: THE CUT TAKES NO DISTANCE TERM -------------------
     // One sample of an orthographic view is the same world length at every depth, so
-    // the level rule has no distance term there (OgreMesh.cpp's strategy): the id
-    // pass's GPU rule must take the same level Ogre's CPU strategy takes for the same
-    // view — read from the ids image's level bits with the split on, and from the
-    // Item's own mCurrentMeshLod with it shut. Two window sizes, two levels.
+    // the cluster rule has no distance term there (JahClusterCut.glsl's orthographic
+    // case, the level walk's): the id pass's CUT must draw the depth whose group the
+    // window affords — read from the id image's depth bits — and it agrees with the
+    // level Ogre's CPU strategy takes for the same view (the chain's bounds are the hand
+    // DAG's group errors). Two window sizes, two depths.
     {
         Geometry lg;
         MeshData lm = sphereMesh(48, 24, 0.5f, lg);
         lm.lodIndices = { lm.indices, lm.indices };      // same triangles: the LEVEL is the subject
         lm.lodErrors = { 0.002f, 0.02f };
         lm.lodBounds = { 0.002f, 0.02f };
+        addHandDag(lm);
         PbrParams lp;
         lp.roughness = 0.6f;
         const NodeId ln = scene->createNode();
@@ -932,24 +984,24 @@ int main()
             std::map<unsigned, size_t> gpuLevels;
             for (size_t px = 0; read && px < gx.size(); ++px)
                 if (gx[px] != AtomId::kEmpty && (gx[px] & AtomId::kSlotMask) == slot)
-                    ++gpuLevels[(gx[px] >> 24u) & 0x7u];
+                    ++gpuLevels[AtomId::depthOf(gx[px])];
             scene->setAtomDrawEnabled(false);
             for (int i = 0; i < 8; ++i) e->renderOneFrame();
             const unsigned cpu = litem ? unsigned(litem->getCurrentMeshLod()) : 99u;
             const unsigned gpu = gpuLevels.size() == 1u ? gpuLevels.begin()->first : 98u;
-            std::printf("  (g) ortho half-height %.1f m: GPU level %u (%zu level(s) seen), CPU level %u\n", A.half,
-                        gpu, gpuLevels.size(), cpu);
+            std::printf("  (g) ortho half-height %.1f m: the cut's depth %u (%zu depth(s) seen), CPU level %u\n",
+                        A.half, gpu, gpuLevels.size(), cpu);
             CHECK_MSG(read && gpu == cpu && cpu == A.want,
-                      "(g) orthographic, window %.0f m: the id pass draws level %u, the CPU strategy's (%u; wanted %u)",
-                      2.0f * A.half, gpu, cpu, A.want);
+                      "(g) orthographic, window %.0f m: the id pass's cut draws depth %u, the CPU strategy's level "
+                      "(%u; wanted %u)", 2.0f * A.half, gpu, cpu, A.want);
         }
         scene->setNodeVisible(ln, false);
         scene->setLodBias(0.0f);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f));
     }
 
-    // The GPU level a node's pixels carry in the id image this frame (its slot's level
-    // bits over every pixel of it; 98 = more than one level seen, 99 = no pixel).
+    // The cut's DEPTH a node's pixels carry in the id image this frame (its slot's
+    // depth bits over every pixel of it; 98 = more than one depth seen, 99 = no pixel).
     auto gpuLevelOf = [&](NodeId node) -> unsigned {
         ogreScene->ensureGpuScene(false);
         uint32_t slot = 0xFFFFFFFFu;
@@ -959,7 +1011,7 @@ int main()
         if (slot == 0xFFFFFFFFu || !readIds(ogreView, gx, gy)) return 99u;
         std::map<unsigned, size_t> seen;
         for (size_t px = 0; px < gx.size(); ++px)
-            if (gx[px] != AtomId::kEmpty && (gx[px] & AtomId::kSlotMask) == slot) ++seen[(gx[px] >> 24u) & 0x7u];
+            if (gx[px] != AtomId::kEmpty && (gx[px] & AtomId::kSlotMask) == slot) ++seen[AtomId::depthOf(gx[px])];
         return seen.empty() ? 99u : (seen.size() == 1u ? seen.begin()->first : 98u);
     };
     auto lodSphere = [&](const Vec3 &at, Ogre::Item **itemOut) -> NodeId {
@@ -968,6 +1020,7 @@ int main()
         lm.lodIndices = { lm.indices, lm.indices };
         lm.lodErrors = { 0.002f, 0.02f };
         lm.lodBounds = { 0.002f, 0.02f };
+        addHandDag(lm);
         PbrParams lp;
         lp.roughness = 0.6f;
         const NodeId n = scene->createNode();
@@ -987,11 +1040,12 @@ int main()
         return n;
     };
 
-    // ---- (h) A LETTERBOXED VIEW PICKS THE CPU STRATEGY'S LEVEL -----------------------
-    // The level rule's currency is the pass's own rows (Viewport::getActualHeight, the
-    // inset in a letterboxed chain), never the whole target's: the id pass fed it the
+    // ---- (h) A LETTERBOXED VIEW: THE CUT SPENDS THE INSET'S ROWS ---------------------
+    // The rule's currency is the pass's own rows (Viewport::getActualHeight, the inset
+    // in a letterboxed chain), never the whole target's: the id pass once fed it the
     // full 540 rows while the casters' strategy read the 320-row inset. At 10 m from the
-    // surface the inset affords 0.0259 (level 2) and the full target 0.0153 (level 1).
+    // surface the inset affords 0.0259 (depth 2 / level 2) and the full target 0.0153
+    // (depth 1).
     {
         scene->setLodBias(1.0f);
         Ogre::Item *hitem = nullptr;
@@ -1007,45 +1061,20 @@ int main()
         for (int i = 0; i < 8; ++i) e->renderOneFrame();
         const unsigned cpu = hitem ? unsigned(hitem->getCurrentMeshLod()) : 97u;
         scene->setAtomDrawEnabled(true);
-        std::printf("  (h) letterboxed 3:1: GPU level %u, CPU level %u\n", gpu, cpu);
+        std::printf("  (h) letterboxed 3:1: the cut's depth %u, CPU level %u\n", gpu, cpu);
         CHECK_MSG(gpu == cpu && cpu == 2u,
-                  "(h) a letterboxed view: the id pass draws level %u, the CPU strategy's (%u; wanted 2 - the "
-                  "inset's rows)", gpu, cpu);
+                  "(h) a letterboxed view: the id pass's cut draws depth %u, the CPU strategy's level (%u; wanted 2 "
+                  "- the inset's rows)", gpu, cpu);
         scene->setNodeVisible(hn, false);
+        scene->setLodBias(0.0f);
         view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f)));
     }
 
-    // ---- (i) THE BAND'S STATE BELONGS TO THE OBJECT, NOT THE SLOT ----------------------
-    // The table is swap-on-remove: deleting A moves the LAST slot's object B into A's
-    // slot. With the band on (a watched view's), A held level 0; B sits 0.0021 of
-    // allowed error out - inside level 0's band above its 0.002 threshold - so a band
-    // keyed by the slot would HOLD B at A's level 0 on the frame after the delete. The
-    // rule's level for B is 1.
-    {
-        scene->setLodBias(1.0f);
-        view->setLodHysteresisOffscreen(true);
-        // allowed = d * 2 / (proj11 * 540), proj11 = 2.4142 at 45 degrees, d = the
-        // centre's distance less the bounds' half-diagonal (0.866 for this sphere):
-        // A at 1.253 m -> d 0.387, 0.00059 (level 0); B at 2.235 m -> d 1.369, 0.0021.
-        const NodeId na = lodSphere(Vec3(-0.6f, 1.0f, 6.0f - 1.1f), nullptr);
-        const NodeId nb = lodSphere(Vec3(0.6f, 1.0f, 6.0f - 2.153f), nullptr);
-        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f)));
-        scene->setAtomDrawEnabled(true);
-        for (int i = 0; i < 8; ++i) e->renderOneFrame();
-        const unsigned before = gpuLevelOf(nb), aBefore = gpuLevelOf(na);
-        scene->removeNode(na);
-        e->renderOneFrame();
-        const unsigned after = gpuLevelOf(nb);
-        std::printf("  (i) banded: A level %u, B level %u before A's removal, B level %u the frame after\n", aBefore,
-                    before, after);
-        CHECK_MSG(aBefore == 0u && before == 1u && after == 1u,
-                  "(i) the object renumbered into a removed object's slot keeps the rule's level (A %u, B %u -> %u; "
-                  "wanted 0, 1 -> 1)", aBefore, before, after);
-        scene->setNodeVisible(nb, false);
-        view->setLodHysteresisOffscreen(false);
-        scene->setLodBias(0.0f);
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.55f, 7.2f), Vec3(0.0f, 0.55f, 0.0f));
-    }
+    // (i) — THE LOD BAND'S PER-SLOT STATE — IS DELETED WITH THE BAND (ATOM-CLUSTER-CUT,
+    // D4): the id pass draws the cut, which holds no state between frames at all (every
+    // frame's frontier is a function of that frame's view), so there is nothing a
+    // renumbered slot could inherit. The frontier's frame-to-frame stability is
+    // atom.lod_switch's slow-zoom arm.
 
     // ---- (b) THE GROUND FROM A STANDING EYE: the grid hidden, the tiled, streamed
     // ground filling the frame and running past the camera (the default scene's
