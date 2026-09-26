@@ -200,13 +200,17 @@ app-spawning lanes; a measurement lane (debug-runner) takes the lock around ever
 box-wide `flock` on `/tmp/jah-gpu-timing.lock` (a lock file in RAM is fine: the lock lives in
 the kernel and dies with its holder), a bounded 900 s wait (exit 75, the command never runs),
 the command exec'd in place so a ctest timeout still kills the suite itself. The suites above
-plus `app.watchdog_stall`, `gi.field_scroll` and `gi.rt_reflect_cost` (POST-C-FIXES-1) — fifteen, listed once in `JAH_GPU_EXCLUSIVE_SUITES`
+plus `app.watchdog_stall`, `gi.field_scroll` and `gi.rt_reflect_cost` (POST-C-FIXES-1) and the seven
+timing rows of the scale suites (`scale.world`, `scale.voxel_scroll`, `scale.cluster_cut`,
+`scale.decode`, `scale.tlas`, `scale.cpu_walks`, `scale.library`; D1-SCALE-FIXTURES, §1c) —
+twenty-two, listed once in `JAH_GPU_EXCLUSIVE_SUITES`
 (`tests/CMakeLists.txt`) — are REGISTERED through it by `jah_gpu_exclusive_test()`, whose
 `RUN_TIMEOUT` is the suite's own budget and whose TIMEOUT is that plus the 900 s wait; configure
 fails if a listed suite is registered any other way. Only those suites take it: a lane's
 pixel/logic suites, gate-scope's `-j1` target run and the rc-gate's ctest line still overlap
-freely. `ctest -N -V | grep -c gpu-exclusive` = 15. Its guard is `devprocess.gpu_lock` (label
-`tooling`). A contention verdict on one of the fifteen now needs a sibling that was NOT under
+freely. `ctest -N -V | grep -c 'Test command: .*gpu-exclusive.sh'` = 22 (a bare `grep -c
+gpu-exclusive` also counts the guard's own command line, which names the script: 23). Its guard is `devprocess.gpu_lock` (label
+`tooling`). A contention verdict on one of the twenty-two now needs a sibling that was NOT under
 the lock (an app on `:0`, a measurement run outside the wrapper) — say which.
 
 ## 5. Why the full gate cost 25 minutes, and what the cleanup changed
