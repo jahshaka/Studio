@@ -57,6 +57,11 @@ static const QString kBase = QStringLiteral(SCALE_LIBRARY_DIR);
 
 static void target(double v, const char *unit, const QString &what)
 {
+    if (v < 0) {   // never measured (no sample, no project to open): never printed as a number
+        std::printf("target: unsampled (bar none yet) W14 %s: %s\n", unit, qPrintable(what));
+        std::fflush(stdout);
+        return;
+    }
     std::printf("target: %.4f (bar none yet) W14 %s: %s\n", v, unit, qPrintable(what));
     std::fflush(stdout);
 }
@@ -296,7 +301,7 @@ int main(int argc, char **argv)
     target(f.bootMs, "ms", QStringLiteral("boot to the MCP answering with 10k assets + 500 projects (empty: %1 ms)").arg(e.bootMs));
     target(f.bootMs - e.bootMs, "ms", QStringLiteral("what the library adds to the boot"));
     target(f.gridMs, "ms", QStringLiteral("the Desktop grid's first build (inside a create's close) over %1 tiles, %2 decodes").arg(f.gridTiles).arg(f.gridDecodes));
-    target(f.openGap, "ms", QStringLiteral("the worst UI gap of a project open over the library (empty: %1)").arg(e.openGap));
+    target(f.openGap, "ms", QStringLiteral("the worst UI gap of a project open over the library (the empty control has no project to open)"));
     target(f.createGap, "ms", QStringLiteral("the worst UI gap of a project create over the library (empty: %1)").arg(e.createGap));
     target(f.listMs, "ms", QStringLiteral("assets.list() over %1 rows (empty: %2 ms)").arg(f.listCount).arg(e.listMs));
     target(f.trayMs, "ms", QStringLiteral("a tray populate after the open (empty: %1 ms)").arg(e.trayMs));

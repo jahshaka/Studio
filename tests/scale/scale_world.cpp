@@ -608,6 +608,13 @@ double medianD(std::vector<double> v)
 
 void target(const char *wall, double value, const char *unit, const char *what, const char *bar)
 {
+    // A NEGATIVE READING IS "NOT MEASURED" (the monitor's convention: an unsampled GPU
+    // ms, an empty median) and is never printed as a number.
+    if (value < 0.0) {
+        std::printf("target: unsampled (bar %s) %s %s: %s\n", bar, wall, unit, what);
+        std::fflush(stdout);
+        return;
+    }
     std::printf("target: %.4f (bar %s) %s %s: %s\n", value, bar, wall, unit, what);
     std::fflush(stdout);
 }

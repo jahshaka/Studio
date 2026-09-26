@@ -23,7 +23,6 @@
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QImage>
-#include <QThread>
 
 #include <algorithm>
 #include <array>
@@ -428,37 +427,40 @@ static void geometryDoc(Env &env)
 struct IdRead { double tris = -1, idMs = -1, decodeMs = -1; unsigned survivors = 0; };
 static IdRead readIdPass(Env &env, int frames)
 {
+    // FRAME-COUNTED RE-READS, never a CPU pause: a heavy frame (7 M triangles through
+    // the id pass and the shadow casters) can retire from the monitor's holding window
+    // (kGpuLatencyFrames) before its timestamps come back, so a batch may carry few GPU
+    // samples (measured: 0-4 of 38 inside the 10 M shell's bounds). Batches of `frames`
+    // are read until each pass holds kWant samples or kMaxFrames have been drawn; a
+    // reading that never landed is UNSAMPLED (negative) and printed as such.
+    static const size_t kWant = 8;
+    static const int kMaxFrames = 600;
     IdRead out;
     std::vector<double> tris, id, dec;
-    // PACED: a heavy frame (7 M triangles through the id pass and the shadow casters)
-    // runs longer on the GPU than the monitor's holding window, whose records then retire
-    // with no GPU sample (measured: 0-4 of 38 inside the 10 M shell's bounds). A pause on
-    // the CPU between frames lets each frame's timestamps land; the GPU's work per frame
-    // is unchanged.
-    const auto recs = collect(env, [&] {
-        for (int f = 0; f < frames; ++f) { frame(env, 1); QThread::msleep(40); }
-    }, 8);
-    for (const FrameRecord &r : recs) {
-        if (const FramePass *p = passNamed(r, "Jahshaka atom id")) {
-            tris.push_back(double(p->triangles));
-            if (p->gpuMs >= 0) id.push_back(p->gpuMs);
+    int drawn = 0;
+    unsigned dropped = 0;
+    size_t records = 0;
+    while (drawn < kMaxFrames) {
+        const auto recs = collect(env, [&] { frame(env, frames); }, 8);
+        drawn += frames + 12;
+        records += recs.size();
+        for (const FrameRecord &r : recs) {
+            dropped += r.gpuMarksDropped;
+            if (const FramePass *p = passNamed(r, "Jahshaka atom id")) {
+                tris.push_back(double(p->triangles));
+                if (p->gpuMs >= 0) id.push_back(p->gpuMs);
+            }
+            if (const FramePass *p = passNamed(r, "Jahshaka opaque"))
+                if (p->gpuMs >= 0) dec.push_back(p->gpuMs);
         }
-        if (const FramePass *p = passNamed(r, "Jahshaka opaque"))
-            if (p->gpuMs >= 0) dec.push_back(p->gpuMs);
+        if (id.size() >= kWant && dec.size() >= kWant) break;
     }
     out.tris = stats(tris).median;
     out.idMs = stats(id).median;
     out.decodeMs = stats(dec).median;
-    if (id.empty() || dec.empty()) {
-        // SAY WHY a GPU number is missing (never print a -1 as if it were measured).
-        unsigned dropped = 0, withDecode = 0;
-        for (const FrameRecord &r : recs) {
-            dropped += r.gpuMarksDropped;
-            if (passNamed(r, "Jahshaka opaque")) ++withDecode;
-        }
-        std::printf("   (GPU ms missing: %zu records, %u carry the decode pass, %u GPU marks dropped, id samples %zu, "
-                    "decode samples %zu)\n", recs.size(), withDecode, dropped, id.size(), dec.size());
-    }
+    if (id.size() < kWant || dec.size() < kWant)
+        std::printf("   (GPU samples short after %d frames: %zu records, id %zu, decode %zu, %u GPU marks dropped)\n",
+                    drawn, records, id.size(), dec.size(), dropped);
     return out;
 }
 
@@ -527,7 +529,8 @@ static int clusterCutMain()
                                  std::to_string(cut) + ")";
         target("W3", r.tris, "tris", what.c_str());
         const std::string owed = std::string("id pass GPU ms on the ") + std::to_string(info.triangles) +
-                                 "-triangle asset at " + p.name + " (decode " + std::to_string(r.decodeMs) + " ms)";
+                                 "-triangle asset at " + p.name + " (decode " +
+                                 (r.decodeMs >= 0 ? std::to_string(r.decodeMs) + " ms" : std::string("unsampled")) + ")";
         target("W3", r.idMs, "ms", owed.c_str());
     }
     std::printf("   memory: RSS %.0f MB before the asset, %.0f MB now, peak %.0f MB\n", double(rss0) / 1024.0,
