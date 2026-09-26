@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QImage>
+#include <QThread>
 
 #include <algorithm>
 #include <array>
@@ -429,7 +430,14 @@ static IdRead readIdPass(Env &env, int frames)
 {
     IdRead out;
     std::vector<double> tris, id, dec;
-    const auto recs = collect(env, [&] { frame(env, frames); }, 8);
+    // PACED: a heavy frame (7 M triangles through the id pass and the shadow casters)
+    // runs longer on the GPU than the monitor's holding window, whose records then retire
+    // with no GPU sample (measured: 0-4 of 38 inside the 10 M shell's bounds). A pause on
+    // the CPU between frames lets each frame's timestamps land; the GPU's work per frame
+    // is unchanged.
+    const auto recs = collect(env, [&] {
+        for (int f = 0; f < frames; ++f) { frame(env, 1); QThread::msleep(40); }
+    }, 8);
     for (const FrameRecord &r : recs) {
         if (const FramePass *p = passNamed(r, "Jahshaka atom id")) {
             tris.push_back(double(p->triangles));
@@ -441,6 +449,16 @@ static IdRead readIdPass(Env &env, int frames)
     out.tris = stats(tris).median;
     out.idMs = stats(id).median;
     out.decodeMs = stats(dec).median;
+    if (id.empty() || dec.empty()) {
+        // SAY WHY a GPU number is missing (never print a -1 as if it were measured).
+        unsigned dropped = 0, withDecode = 0;
+        for (const FrameRecord &r : recs) {
+            dropped += r.gpuMarksDropped;
+            if (passNamed(r, "Jahshaka opaque")) ++withDecode;
+        }
+        std::printf("   (GPU ms missing: %zu records, %u carry the decode pass, %u GPU marks dropped, id samples %zu, "
+                    "decode samples %zu)\n", recs.size(), withDecode, dropped, id.size(), dec.size());
+    }
     return out;
 }
 
