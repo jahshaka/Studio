@@ -6,7 +6,7 @@
 // lives (a T-junction or a moved boundary vertex between two clusters of
 // different depth), and measures what the per-cluster cut buys. The draws go
 // through the TEST HARNESS (cluster_draw.h, route B2: a rewritten BT_DEFAULT
-// index buffer + setPrimitiveRange) — the product draws no cut in stage 2.
+// index buffer + setPrimitiveRange); D drives the PRODUCT's cut (the id pass).
 //
 //   0. THE UPLOAD: the engine's cluster stream (MeshRec::clusterStream), read
 //      back from the GPU, is the mirror's expansion of the bake, index for index.
@@ -24,6 +24,9 @@
 //      pixel budget, against the level-0 control at the same poses — the excess
 //      of every step over the control <= 3x the walk's ordinary step. The chain
 //      is walked over the same poses for the comparison the design asks to quote.
+//   D. THE DEVICE'S CUT (ATOM-CLUSTER-CUT): the product draws the cut through the id
+//      pass; the fixtures attached as ordinary meshes (their inside copies too) are
+//      crack-free at six tolerances, judged against the drawn set the cull reads back.
 //   C. THE NUMBERS: a 40 m bar seen end-on — the DAG's triangles against the
 //      chain's at the same allowed error (the chain has to pick ONE level for the
 //      whole bar from its nearest point). The DAG must draw fewer.
@@ -31,6 +34,7 @@
 // THE INSTRUMENT SATURATES AT 1.0 (PFG_RGBA8_UNORM), so the lit fixture sits
 // mid-range: mid-grey, one moderate directional light, an ambient floor.
 #include "cluster_draw.h"
+#include "EnginePrivate.h"
 #include "cluster_fixtures.h"
 #include "../support/enginetesthelpers.h"
 
@@ -513,6 +517,148 @@ static void crackSweep(Rig &r, const clusterfix::Fixture &f, const float dirIn[3
     back.destroy();
 }
 
+// ---- D. THE DEVICE'S CUT, RENDERED (ATOM-CLUSTER-CUT) ------------------------------
+//
+// The sweep above renders the CPU rule's cuts through the harness. The PRODUCT draws
+// the cut itself: the id pass's cull evaluates the rule per cluster on the device,
+// compacts the drawn clusters into its stream and the decode shades them. So the
+// fixture is attached as an ordinary mesh (its baked DAG) to a view whose chain
+// carries the id pass, with its inside copy (the same DAG, every triangle wound
+// backwards, the emissive inside material) — both drawn by the id pass — and the
+// view's LOD bias walks the tolerance from 0 (every leaf: the level-0 silhouette)
+// to 16 samples. The crack rule is the sweep's: background, or inside colour that
+// the pixel's own ray against THE DEVICE'S DRAWN SET (read back from the cull,
+// gpuCull mode 3) calls a hole, inside the level-0 silhouette eroded by the
+// tolerance plus one.
+struct DeviceRig { Engine *e = nullptr; View *view = nullptr; Scene *scene = nullptr; MaterialId lit = 0, inside = 0; };
+
+static MeshData reversedWinding(const MeshData &d)
+{
+    MeshData r = d;
+    auto flip = [](std::vector<unsigned> &idx) {
+        for (size_t t = 0; t + 2 < idx.size(); t += 3) std::swap(idx[t + 1], idx[t + 2]);
+    };
+    flip(r.indices);
+    flip(r.clusterIndices);
+    for (auto &l : r.lodIndices) flip(l);
+    return r;
+}
+
+static void deviceCrackSweep(DeviceRig &d, const clusterfix::Fixture &f, const float dirIn[3], SweepResult &total)
+{
+    const MeshId bodyMesh = d.scene->createMesh(f.data);
+    const MeshId insideMesh = d.scene->createMesh(reversedWinding(f.data));
+    const NodeId body = d.scene->createNode(), inside = d.scene->createNode();
+    d.scene->attachMesh(body, bodyMesh, d.lit);
+    d.scene->attachMesh(inside, insideMesh, d.inside);
+    GpuCullRequest vr;
+    d.e->fillCullView(d.view, vr);
+    const float p11 = vr.projScaleY;
+    const Sphere s = boundsOf(f.data);
+    float dir[3] = { dirIn[0], dirIn[1], dirIn[2] };
+    const float dl = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+    for (float &v : dir) v /= dl;
+    const float dist = s.r / std::sin(std::atan(1.0f / p11)) * 1.05f;
+    const Vec3 eye(s.c[0] + dir[0] * dist, s.c[1] + dir[1] * dist, s.c[2] + dir[2] * dist);
+    const Vec3 target(s.c[0], s.c[1], s.c[2]);
+    enginetest::testCameraLookAt(d.view, eye, target);
+    auto *os = static_cast<jahshaka::engine::detail::OgreScene *>(d.scene);
+
+    // The body's slot, for the drawn set's readback.
+    auto bodySlot = [&]() -> unsigned {
+        os->ensureGpuScene(false);
+        const unsigned n = d.scene->gpuSceneStatus().slotCount;
+        for (unsigned i = 0; i < n; ++i) {
+            GpuSceneEntry en;
+            if (d.scene->gpuSceneEntry(i, en) && en.nodeId == unsigned(body)) return i;
+        }
+        return 0xFFFFFFFFu;
+    };
+    auto frames = [&](int n, Image &img) {
+        for (int i = 0; i < n; ++i) d.e->renderOneFrame();
+        return d.view->readPixels(img);
+    };
+    d.scene->setLodBias(0.0f);
+    Image img;
+    const bool read = frames(8, img);
+    const AtomDrawStatus st = d.scene->atomDrawStatus();
+    CHECK(read && st.on && st.atomItems >= 2u, "%s: the id pass draws the body and its inside copy (%u atom items)",
+          f.name.c_str(), st.atomItems);
+    const std::vector<unsigned char> level0 = classify(img);
+    std::vector<unsigned char> mask(level0.size());
+    size_t surface0 = 0;
+    for (size_t i = 0; i < level0.size(); ++i) {
+        mask[i] = level0[i] == Surface ? 1 : 0;
+        surface0 += mask[i];
+    }
+    const std::vector<int> depthIn = insideDistance(mask, img.width, img.height);
+    const RayCam cam = rayCam(eye, target, p11, img.width, img.height);
+    std::printf("\n-- D. %s on the device: level 0 covers %zu px\n", f.name.c_str(), surface0);
+    std::printf("   %-9s %-10s %-7s %-9s %-10s %-9s %-9s %s\n", "tolerance", "triangles", "depths", "erode px",
+                "evaluated", "bg-crack", "in-crack", "(folds/holes/other)");
+    size_t worst = 0, firstTris = 0, lastTris = 0;
+    for (float bias : { 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f }) {
+        d.scene->setLodBias(bias);
+        frames(4, img);
+        const std::vector<unsigned char> px = classify(img);
+        // THE DEVICE'S DRAWN SET for the body, from the same request the id pass makes.
+        GpuCullRequest r;
+        d.e->fillCullView(d.view, r);
+        r.mode = 3u;
+        r.pixelTolerance = kLodBudgetPixels * bias;
+        r.flagsRequired = r.flagsForbidden = 0u;
+        GpuCullResult res;
+        const unsigned slot = bodySlot();
+        std::vector<unsigned> cutIdx;
+        std::map<unsigned, unsigned> depths;
+        size_t tris = 0;
+        if (d.e->gpuCull(d.scene, d.view, r, /*readBack=*/true, res))
+            for (size_t k = 0; k + 2 < res.cutDrawn.size(); k += 3) {
+                if (res.cutDrawn[k] != slot) continue;
+                const MeshCluster &c = f.data.clusters[res.cutDrawn[k + 1]];
+                cutIdx.insert(cutIdx.end(), f.data.clusterIndices.begin() + c.firstIndex,
+                              f.data.clusterIndices.begin() + c.firstIndex + c.indexCount);
+                tris += c.indexCount / 3u;
+                ++depths[res.cutDrawn[k + 2]];
+            }
+        if (!firstTris) firstTris = tris;
+        lastTris = tris;
+        const int erode = int(std::ceil(kLodBudgetPixels * bias)) + 1;
+        size_t evaluated = 0, bg = 0, in = 0, folds = 0, holes = 0, other = 0;
+        for (size_t i = 0; i < px.size(); ++i) {
+            if (!mask[i] || depthIn[i] <= erode) continue;
+            ++evaluated;
+            if (px[i] == Background) ++bg;
+            if (px[i] != Inside) continue;
+            ++in;
+            double w = 0.0;
+            const int v = foldOrHole(cam, unsigned(i % img.width), unsigned(i / img.width), f.data.positions, cutIdx,
+                                     f.extent, &w);
+            if (v < 0) ++folds; else if (v > 0) ++holes; else ++other;
+        }
+        const size_t cracks = bg + holes;
+        worst = std::max(worst, cracks);
+        total.folds += folds;
+        total.holes += holes;
+        total.unexplained += other;
+        if (cracks > total.worstCracks) {
+            total.worstCracks = cracks;
+            total.worstAt = f.name + " @ device " + std::to_string(bias);
+        }
+        std::printf("   %-9.1f %-10zu %-7zu %-9d %-10zu %-9zu %-9zu %zu/%zu/%zu\n", double(bias), tris,
+                    depths.size(), erode, evaluated, bg, in, folds, holes, other);
+    }
+    CHECK(worst == 0, "%s: NO CRACK in the DEVICE'S cut at any of six tolerances (worst %zu px)", f.name.c_str(),
+          worst);
+    CHECK(lastTris < firstTris, "%s: the device's cut coarsens with the tolerance (%zu -> %zu triangles)",
+          f.name.c_str(), firstTris, lastTris);
+    d.scene->setLodBias(0.0f);
+    d.scene->removeNode(body);
+    d.scene->removeNode(inside);
+    d.scene->destroyMesh(bodyMesh);
+    d.scene->destroyMesh(insideMesh);
+}
+
 // ---- B. the dolly ---------------------------------------------------------------
 static double maskedMeanAbsDiff(const Image &a, const Image &b)
 {
@@ -800,6 +946,32 @@ int main(int argc, char **argv)
         const float along[3] = { 0.05f, 0.08f, 1.0f };
         const float eye[3] = { 0.55f, 0.4f, 1.2f }, target[3] = { 0.0f, 0.0f, -6.0f };
         crackSweep(r, bumpy, along, sweep, eye, target);
+    }
+
+    // ---- D. the device's cut, rendered ------------------------------------------
+    {
+        DeviceRig d;
+        d.e = r.e;
+        d.view = r.e->createOffscreenView("crack-device", kSize, kSize, Colour(0, 0, 0));
+        d.scene = r.e->createScene("crack-device");
+        d.view->setScene(d.scene);
+        PostFxDesc post;
+        post.allowOffscreen = true;   // a post chain: the view carries the id pass
+        post.ssr = 0;
+        d.view->setPostFx(post);
+        d.scene->setAmbient(Colour(0.10f, 0.10f, 0.12f), Colour(0.06f, 0.06f, 0.08f));
+        enginetest::addDirectionalLight(d.scene, Vec3(-0.5f, -0.6f, -0.62f), 2.2f);
+        d.lit = d.scene->createPbrMaterial(p);
+        d.inside = d.scene->createPbrMaterial(q);
+        SweepResult dev;
+        const float dirs[][3] = { { 0.45f, 0.35f, 1.0f }, { -0.8f, 0.5f, -0.3f } };
+        for (const auto &f : fx)
+            if (f.name == "uv-sphere-20k" || f.name == "matcaps-dragon" || f.name == "physics-model" ||
+                f.name == "torus.obj")
+                for (int k = 0; k < 2; ++k) deviceCrackSweep(d, f, dirs[k], dev);
+        std::printf("\n   THE DEVICE'S CUT: worst %zu crack px (%s); inside colour: %zu folds, %zu holes, %zu ties\n",
+                    dev.worstCracks, dev.worstAt.empty() ? "none" : dev.worstAt.c_str(), dev.folds, dev.holes,
+                    dev.unexplained);
     }
 
     std::printf("\n%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);

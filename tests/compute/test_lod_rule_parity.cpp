@@ -32,6 +32,7 @@
 // numbers are printed.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "EnginePrivate.h"
 #include "cluster_draw.h"
 #include "cluster_fixtures.h"
 
@@ -41,6 +42,8 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <map>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -99,8 +102,8 @@ static MeshData chainedMesh()
 // The cut's rule is the same currency applied PER GROUP of a mesh's cluster DAG
 // (Types.h `clusterGroupAllowed` / `clusterGroupAffordable` / `clusterDrawn`), and
 // its GLSL twin is the product piece media/Hlms/Jahshaka/JahClusterCut.glsl — the
-// piece stage 3's GPU cut will include. There is no product job running it yet,
-// so the device half runs through a TEST job (tests/atom/media) the cluster
+// piece the product's cut job includes (the FIFTH copy below drives that job). This
+// copy isolates the rule: the device half runs through a TEST job (tests/atom/media) the cluster
 // harness dispatches over the DAG's own tables: one thread per (view, cluster),
 // each writing whether the rule draws that cluster. It must pick THE SAME SET as
 // the C++ `clusterCut`, bit for bit, over the shipped meshes (their DAGs baked by
@@ -215,6 +218,170 @@ static void clusterCutParity(Engine *e)
                   "of a threshold",
                   evaluated, drawnTotal, mismatched + nearMismatched, nearMismatched, nearThreshold);
     CHECK(mismatched == 0u && nearMismatched == 0u, msg);
+}
+
+// ---- THE FIFTH COPY: THE PRODUCT'S CUT (ATOM-CLUSTER-CUT) --------------------------
+//
+// The fourth copy runs the GLSL rule through a TEST job over one mesh's tables. The
+// PRODUCT runs it in the cull's cut job (JahCullCut_cs.glsl) over the GPU scene's
+// cluster tables, with the instance's rows from the scene's table, the eye and
+// footprint from the request, and the drawn set COMPACTED into records — so this
+// arm drives the real thing: each shipped mesh's baked DAG attached to eight
+// instances (inside its bounds out to 500 radii, scaled 0.5-4, one rotated and
+// scaled non-uniformly), the cull asked in mode 3 through the public gpuCull door
+// at five parameter sets (tolerance, lens, height; one orthographic), and the drawn
+// set read back per instance. It must be CELL-IDENTICAL to Types.h's clusterCut on
+// the same rows; disagreements at a threshold (within 1e-4 of a group's error) are
+// reported apart and still fail. Nothing may overflow the stream's budget here.
+static void productCutParity(Engine *e, View *view)
+{
+    std::printf("\n== the fifth copy: THE PRODUCT'S CUT (the cull's mode 3) against Types.h clusterCut ==\n");
+    const std::string prim = std::string(JAHSHAKA_TEST_SOURCE_DIR) + "/app/content/primitives/";
+    std::vector<std::pair<std::string, iris::MeshPtr>> meshes;
+    for (const char *name : { "hp_sphere.obj", "torus.obj", "teapot.obj", "capsule.obj", "hemisphere.obj" }) {
+        const auto ms = clusterfix::loadModel(prim + name);
+        if (!ms.empty()) meshes.push_back({ name, ms.front() });
+    }
+    const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
+    if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
+    meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
+
+    struct Set { float tol, fovDeg, height; bool ortho; };
+    const Set sets[5] = { { 0.5f, 45.0f, 1080.0f, false }, { 1.0f, 45.0f, 1080.0f, false },
+                          { 4.0f, 90.0f, 720.0f, false },  { 1.0f, 110.0f, 2376.0f, false },
+                          { 1.0f, 45.0f, 1080.0f, true } };
+    unsigned long long pairs = 0, bad = 0, nearBad = 0, nearCount = 0, drawnTotal = 0, overflow = 0;
+    unsigned depthHist[16] = {};
+    size_t meshesRun = 0;
+    for (const auto &m : meshes) {
+        clusterfix::Fixture f;
+        if (!clusterfix::bake(f, m.second, m.first) || f.data.clusters.empty()) continue;
+        Scene *sc = e->createScene("cut-" + m.first);
+        view->setScene(sc);
+        const MeshId mesh = sc->createMesh(f.data);
+        PbrParams p; p.albedo = Colour(0.7f, 0.7f, 0.7f); p.roughness = 0.6f;
+        const MaterialId mat = sc->createPbrMaterial(p);
+        const float ext = std::max(f.extent, 1e-3f);
+        // Eight instances: at 0.3 extents (inside the bounds), then 2 .. 500 extents.
+        const float at[8] = { 0.3f, 2.0f, 5.0f, 12.0f, 30.0f, 80.0f, 200.0f, 500.0f };
+        const float scl[8] = { 1.0f, 0.5f, 2.0f, 1.0f, 4.0f, 1.0f, 0.5f, 2.0f };
+        const Quat tilt(0.2f, 0.3f, -0.1f, 0.93f);
+        std::map<unsigned, int> nodeOf;   // node id -> instance index
+        for (int i = 0; i < 8; ++i) {
+            const NodeId n = sc->createNode();
+            sc->attachMesh(n, mesh, mat);
+            const Vec3 pos(0.0f, 0.0f, -at[i] * ext);
+            if (i == 3) sc->setNodeTransform(n, pos, tilt, Vec3(1.0f, 0.6f, 1.3f));
+            else sc->setNodeTransform(n, pos, Quat(), Vec3(scl[i], scl[i], scl[i]));
+            nodeOf[unsigned(n)] = i;
+        }
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
+        // FRAMES UNTIL THE TABLE HOLDS THEM (a freshly bound scene's first frames can
+        // precede its first staged entries), never a fixed count.
+        unsigned slots = 0, inTable = 0;
+        std::vector<GpuSceneEntry> table;
+        for (int frame = 0; frame < 60 && inTable < 8u; ++frame) {
+            e->renderOneFrame();
+            // The table's dirty scan (engine.atom_draw's door): a scene whose frames
+            // nothing in the view reads the table in (no GI, no rays) stages nothing.
+            static_cast<jahshaka::engine::detail::OgreScene *>(sc)->ensureGpuScene(false);
+            slots = sc->gpuSceneStatus().slotCount;
+            table.assign(slots, GpuSceneEntry());
+            inTable = 0;
+            for (unsigned i = 0; i < slots; ++i)
+                if (sc->gpuSceneEntry(i, table[i]) && nodeOf.count(table[i].nodeId)) ++inTable;
+        }
+        std::printf("   %-16s %u of 8 instances in the GPU scene's table (%u slots)\n", m.first.c_str(), inTable,
+                    slots);
+        unsigned long long meshBad = 0, meshNearBad = 0, meshNear = 0, meshPairs = 0;
+        std::set<std::vector<unsigned>> distinctCuts;
+        for (const Set &ps : sets) {
+            GpuCullRequest r;
+            if (!e->fillCullView(view, r)) { std::printf("FAIL: fillCullView\n"); ++failures; break; }
+            for (int i = 0; i < 24; ++i) r.planes[i] = 0.0f;
+            for (int i = 0; i < 6; ++i) r.planes[i * 4 + 3] = 1.0e9f;
+            r.hzbLevels = 0u;
+            r.mode = 3u;
+            r.flagsRequired = r.flagsForbidden = 0u;
+            r.pixelTolerance = ps.tol;
+            r.projScaleY = 1.0f / std::tan(ps.fovDeg * 0.5f * 3.14159265f / 180.0f);
+            r.viewportHeight = ps.height;
+            r.orthographic = ps.ortho;
+            GpuCullResult res;
+            if (!e->gpuCull(sc, view, r, /*readBack=*/true, res)) {
+                std::printf("FAIL: %s: gpuCull: %s\n", m.first.c_str(), e->takeLastError().c_str());
+                ++failures;
+                break;
+            }
+            overflow += res.cutOverflow;
+            std::map<unsigned, std::vector<unsigned>> gpuBySlot;
+            for (size_t k = 0; k + 2 < res.cutDrawn.size(); k += 3) {
+                gpuBySlot[res.cutDrawn[k]].push_back(res.cutDrawn[k + 1]);
+                ++depthHist[std::min(res.cutDrawn[k + 2], 15u)];
+            }
+            for (unsigned slot = 0; slot < slots; ++slot) {
+                if (!nodeOf.count(table[slot].nodeId)) continue;
+                ClusterCutView v;
+                for (int rr = 0; rr < 3; ++rr)
+                    for (int c = 0; c < 4; ++c) v.worldRow[rr][c] = table[slot].world[rr * 4 + c];
+                v.scale = worldMaxAxisScale(table[slot].world);
+                for (int k = 0; k < 3; ++k) v.eye[k] = r.eye[k];
+                v.tolerance = r.pixelTolerance;
+                v.projScaleY = r.projScaleY;
+                v.viewportHeight = r.viewportHeight;
+                v.orthographic = r.orthographic;
+                std::vector<unsigned> cpu;
+                clusterCut(f.data.clusterGroups, f.data.clusters, v, cpu);
+                std::vector<unsigned> gpu = gpuBySlot[slot];
+                std::sort(gpu.begin(), gpu.end());
+                std::sort(cpu.begin(), cpu.end());
+                distinctCuts.insert(cpu);
+                ++meshPairs;
+                drawnTotal += cpu.size();
+                // Near a threshold: any group of the mesh afforded within 1e-4 of its error.
+                bool near = false;
+                for (const MeshClusterGroup &gr : f.data.clusterGroups) {
+                    if (gr.error >= FLT_MAX) continue;
+                    const float a = clusterGroupAllowed(gr, v);
+                    if (std::fabs(a - gr.error) <= 1.0e-4f * gr.error) { near = true; break; }
+                }
+                meshNear += near ? 1u : 0u;
+                if (gpu == cpu) continue;
+                if (near) ++meshNearBad; else ++meshBad;
+                if (meshBad + meshNearBad <= 2u)
+                    std::printf("   CUT DISAGREES: %s instance %d set %.1f px/%.0f deg/%.0f%s: GPU %zu clusters, "
+                                "CPU %zu\n", m.first.c_str(), nodeOf[table[slot].nodeId], double(ps.tol),
+                                double(ps.fovDeg), double(ps.height), ps.ortho ? " ortho" : "", gpu.size(), cpu.size());
+            }
+        }
+        ++meshesRun;
+        pairs += meshPairs;
+        bad += meshBad;
+        nearBad += meshNearBad;
+        nearCount += meshNear;
+        std::printf("   %-16s %5zu clusters %4zu groups: %llu (instance, view) cuts, %zu distinct, %llu differ "
+                    "(+%llu at a threshold)\n", m.first.c_str(), f.data.clusters.size(),
+                    f.data.clusterGroups.size(), meshPairs, distinctCuts.size(), meshBad, meshNearBad);
+        char msg[160];
+        std::snprintf(msg, sizeof(msg), "%s: the product's sweep reaches %zu distinct cuts", m.first.c_str(),
+                      distinctCuts.size());
+        CHECK(distinctCuts.size() >= 3u, msg);
+        view->setScene(nullptr);
+        e->destroyScene(sc);
+    }
+    std::printf("   the drawn clusters' depths: ");
+    for (int i = 0; i < 16; ++i) if (depthHist[i]) std::printf("%d:%u ", i, depthHist[i]);
+    std::printf("\n");
+    char msg[260];
+    std::snprintf(msg, sizeof(msg), "the product's cut ran on %zu shipped meshes", meshesRun);
+    CHECK(meshesRun >= 6u, msg);
+    std::snprintf(msg, sizeof(msg), "no instance overflowed the cut's stream (%llu)", overflow);
+    CHECK(overflow == 0u, msg);
+    std::snprintf(msg, sizeof(msg),
+                  "THE PRODUCT'S CUT IS CELL-IDENTICAL TO clusterCut: %llu (instance, view) cuts, %llu clusters "
+                  "drawn, %llu differ (%llu of them at a threshold; %llu cuts had a group within 1e-4)",
+                  pairs, drawnTotal, bad + nearBad, nearBad, nearCount);
+    CHECK(bad == 0u && nearBad == 0u, msg);
 }
 
 int main(int argc, char **argv)
@@ -508,6 +675,7 @@ int main(int argc, char **argv)
     CHECK(distinct >= 5u, msg);
 
     clusterCutParity(e);
+    productCutParity(e, view);
 
     std::printf("\n%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
