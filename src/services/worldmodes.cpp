@@ -1389,6 +1389,14 @@ jahshaka::engine::GiGatherFacts photonGather(PhotonTier t)
         .gather;
 }
 
+jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t)
+{
+    return jahshaka::engine::giQualityFacts(
+               jahshaka::engine::GiQuality(qBound(0, photonQuality(t), 2)),
+               jahshaka::engine::GiViewProfile::Vr, t == PhotonTier::Epic)
+        .gather;
+}
+
 // ---------------------------------------------------------------------------
 // WHAT A TIER IS, IN WORDS, GENERATED (render audit A5).
 //
@@ -1523,6 +1531,17 @@ QString photonTierSentence(PhotonTier t)
                    .arg(gather.stride);
         out += photonDdgi(t) ? QStringLiteral(", the irradiance field its fallback")
                              : QStringLiteral(", no irradiance field");
+        // ...AND IN A HEADSET (PHOTON-GA-VR): the tier table's VR column, read,
+        // never assumed — the same gather, or its own density, or the field.
+        const jahshaka::engine::GiGatherFacts vr = photonVrGather(t);
+        if (!vr.on)
+            out += QStringLiteral(" (in a headset the irradiance field and the cones instead)");
+        else if (vr.stride != gather.stride || vr.octRes != gather.octRes)
+            out += QStringLiteral(" (in a headset a probe per %1x%1 px, %2 rays)")
+                       .arg(vr.stride)
+                       .arg(vr.octRes * vr.octRes);
+        else
+            out += QStringLiteral(" (in a headset too, per eye)");
     } else {
         out += photonDdgi(t) ? QStringLiteral("; the irradiance field ON")
                              : QStringLiteral("; no irradiance field");

@@ -221,9 +221,17 @@ int main()
     std::printf("   near length (outer half extent) %.2f m\n", double(reach));
 
     // ---- 4a. nothing beyond the near length: the far query changes no byte.
+    // BOTH ARMS AT THE HOLD (PHOTON-GA-VR): the tuning change restarts the second
+    // arm's pixel history while the first holds its rest mean, and since the
+    // history is PACKED (a 9-bit shared-exponent mean) a young view's second frame
+    // mixes this frame's estimate with its stored predecessor's 0.2 % rounding —
+    // a code at a boundary moves with no far query anywhere (3,855-5,360 px at
+    // 4 frames). The subject is the far query, so both arms are compared as the
+    // still pictures they settle to: 20 frames is past the rest's N = 16, where
+    // the answer IS the rest mean (rgba16f) of the frozen frame's estimate.
     Image farOnEmpty, farOffEmpty;
-    tune(s, false); render(e, 4); view->readPixels(farOnEmpty);
-    tune(s, true);  render(e, 4); view->readPixels(farOffEmpty);
+    tune(s, false); render(e, 20); view->readPixels(farOnEmpty);
+    tune(s, true);  render(e, 20); view->readPixels(farOffEmpty);
     const Delta empty = deltaOf(farOffEmpty, farOnEmpty);
     CHECK_MSG(empty.moved == 0u,
               "with nothing beyond the near length the far query on and off draw the same bytes "

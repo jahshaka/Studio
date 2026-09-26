@@ -162,6 +162,36 @@ set_tests_properties(vr.session_undithered PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_NO_DITHER=1;JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-session-nodither-home")
 
 # ---------------------------------------------------------------------------
+# vr.gather_stereo — THE SCREEN-PROBE GATHER ON A TWO-EYE TARGET (PHOTON-GA-VR).
+# An engine suite in vr.session's shape and wrapper: both eyes record a probe
+# grid split at the seam (an eye width the stride does not divide), the
+# worldScale-0 control's two halves IDENTICAL, the parallax arm's halves
+# different and equally lit, the history at its packed size. SKIPS (77) with
+# no Monado, no display or no ray-query device.
+add_executable(test_vr_gather "${CMAKE_CURRENT_SOURCE_DIR}/test_vr_gather.cpp")
+set_target_properties(test_vr_gather PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_vr_gather PRIVATE JahshakaEngine)
+target_compile_definitions(test_vr_gather PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_vr_gather JahshakaEngineMedia)
+add_test(NAME vr.gather_stereo
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
+                 "$<TARGET_FILE:test_vr_gather>" "${JAH_MONADO_MANIFEST}"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.gather_stereo PROPERTIES
+    LABELS "engine"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-gather-home")
+
+# ---------------------------------------------------------------------------
 # vr.verbs_session — the `vr.*` verbs through the APP, against the simulated
 # runtime (VR_SPEC §6 / §4.6). The other half of scripting.e2e.vr_verbs, which
 # proves the same verbs refuse cleanly with no runtime at all.

@@ -283,6 +283,9 @@ int photonCascades(PhotonTier t);
 /// probe at Epic), Medium on at 36 rays, Low off. What it resolves to still
 /// needs a machine that traces; the document row `giGather` = auto follows it.
 jahshaka::engine::GiGatherFacts photonGather(PhotonTier t);
+/// ...and its VR COLUMN (PHOTON-GA-VR): the gather a HEADSET gets at this tier —
+/// the same projection through `GiViewProfile::Vr`.
+jahshaka::engine::GiGatherFacts photonVrGather(PhotonTier t);
 
 /// WHAT A TIER IS, GENERATED FROM THE TABLES — the cure for the five tier
 /// tooltips that described a renderer which did not exist (render audit A5,

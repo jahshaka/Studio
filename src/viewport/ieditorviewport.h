@@ -852,8 +852,12 @@ public:
             int   adaptiveRequested = 0;                  ///< ...before the cap
             double raysPerFrame = 0.0;
             int   targetW = 0, targetH = 0;
-            double atlasBytes = 0.0; ///< the atlas + records + irradiance, resident
-            float placeMs = -1.0f, traceMs = -1.0f, integrateMs = -1.0f;
+            /// A two-eye target (PHOTON-GA-VR): two grids of `eyeProbesX` columns.
+            bool  stereo = false;
+            int   eyeProbesX = 0;
+            double vramBytes = 0.0;    ///< the view's resident VRAM (engine GatherStatus)
+            double historyBytes = 0.0; ///< ...of which the pixel history's packed pair
+            float placeMs = -1.0f, traceMs = -1.0f, filterMs = -1.0f, integrateMs = -1.0f;
             float cpuMs = -1.0f;     ///< the CPU cost of RECORDING the three jobs
             /// THE SETTLED HISTORY (PHOTON-GATHER-1d; engine GatherStatus): the
             /// pixel history ran, its age, the consecutive frames at rest (the

@@ -345,6 +345,31 @@ static int stableMain(Engine *e)
                     double(whole));
         return arrived;
     };
+    // THE PACKED HISTORY'S FLICKER (PHOTON-GA-VR). At rest the view holds its
+    // rest mean, so the bar above never reads the history's own storage; with
+    // the rest door shut every frame is the history's EMA, reprojected and
+    // stored in its one 8-byte texel (the premultiplied mean as a shared-
+    // exponent word, the coverage in 6 bits, both rounded stochastically). The
+    // bar is the same: a still view steps by at most 1/255 at every sampled
+    // pixel after the warm-up — which is what a tracked head's view, never at
+    // rest, shows every frame. (Measured on the rgba16f + r32ui pair it
+    // replaced, the same arm: spikes/photon-ga-vr/EVIDENCE.md.)
+    {
+        GatherTuning tr;
+        tr.restOff = true;
+        s->setGatherTuning(tr);
+        render(e, 120);
+        const StableReading ema = stableReading(e, view, 60, "packed-ema");
+        std::printf("     the history's EMA every frame (restOff): worst step at the 128 sampled pixels "
+                    "%u, mean |step| %.3f, pixels whose worst step reached 2: %.2f %%\n",
+                    ema.worstStep, ema.meanStep, 100.0 * ema.overTwo);
+        CHECK_MSG(ema.worstStep < 2u && ema.overTwo < 0.01,
+                  "THE PACKED HISTORY IS STILL: its EMA, shown every frame, steps no sampled pixel "
+                  "by 2/255 (worst %u) and %.2f %% of the region (bar < 1 %%)",
+                  ema.worstStep, 100.0 * ema.overTwo);
+        s->setGatherTuning(GatherTuning());
+        render(e, 30);
+    }
     const int lagHistory = lagOf(true, 0u);
     const int lagAlone = lagOf(false, 0u);
     CHECK_MSG(lagHistory >= 0 && lagAlone >= 0 && lagHistory <= lagAlone + 30,

@@ -2793,9 +2793,13 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.raysPerFrame = double(st.gather.raysPerFrame);
     out.gather.targetW      = int(st.gather.targetW);
     out.gather.targetH      = int(st.gather.targetH);
-    out.gather.atlasBytes   = double(st.gather.atlasBytes);
+    out.gather.stereo       = st.gather.stereo;
+    out.gather.eyeProbesX   = int(st.gather.eyeProbesX);
+    out.gather.vramBytes    = double(st.gather.vramBytes);
+    out.gather.historyBytes = double(st.gather.historyBytes);
     out.gather.placeMs      = st.gather.placeMs;
     out.gather.traceMs      = st.gather.traceMs;
+    out.gather.filterMs     = st.gather.filterMs;
     out.gather.integrateMs  = st.gather.integrateMs;
     out.gather.cpuMs        = st.gather.cpuMs;
     out.gather.temporal     = st.gather.temporal;
