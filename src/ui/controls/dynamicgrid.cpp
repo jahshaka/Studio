@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "ui/controls/dynamicgrid.h"
 #include <QGraphicsDropShadowEffect>
-#include <QGridLayout>
+#include <QLayout>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QResizeEvent>
@@ -24,18 +24,139 @@ For more information see the LICENSE file
 #include "ui/controls/itemgridwidget.h"
 #include "data/constants.h"
 #include "data/settingsmanager.h"
-#include "ui/pages/projectmanager.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/themeroles.h"
+
+
+// THE ROWS GRID IS A LAYOUT THAT LAYS ITSELF OUT (DESKTOP-1, owner smoke C).
+//
+// The old grid placed tiles into a QGridLayout by hand and then SNAPSHOT the
+// canvas size with `adjustSize()` — after each add, after a column change.
+// At boot the window is shown before the grid is populated, so every tile was
+// added to a VISIBLE parent, which Qt shows through a queued call: each
+// snapshot ran while the newcomer was still hidden (a hidden widget is empty to
+// a layout), the canvas stayed 32x32 and the tiles were clipped to a speck.
+// Nothing re-took the snapshot when the tiles appeared: only a resize that
+// changed the column count, an import or the layout-mode toggle did — which is
+// why the toggle "fixed" it. An insert at the head had the same race (a canvas
+// sized for N-1 tiles squeezing N: the overlap).
+//
+// This layout has no snapshot to forget. The canvas is the scroll area's
+// RESIZABLE widget, its height is this layout's heightForWidth, and a tile
+// that is shown, hidden or resized invalidates the layout like any child —
+// so the first showing, a search, a resize and an insert all lay out through
+// the one path Qt already runs. Columns count the spacing and the margins:
+// (w - margins + spacing) / (tileW + spacing).
+class TileFlowLayout : public QLayout
+{
+public:
+    explicit TileFlowLayout(QWidget *parent) : QLayout(parent) {}
+    ~TileFlowLayout() override { while (QLayoutItem *item = takeAt(0)) delete item; }
+
+    void addItem(QLayoutItem *item) override { mItems.append(item); }
+    int count() const override { return int(mItems.size()); }
+    QLayoutItem *itemAt(int index) const override { return mItems.value(index); }
+    QLayoutItem *takeAt(int index) override
+    {
+        if (index < 0 || index >= mItems.size()) return nullptr;
+        return mItems.takeAt(index);
+    }
+    Qt::Orientations expandingDirections() const override { return {}; }
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int width) const override { return arrange(QRect(0, 0, width, 0), false); }
+    QSize minimumSize() const override
+    {
+        const QMargins m = contentsMargins();
+        const QSize cell = cellSize();
+        return QSize(cell.width() + m.left() + m.right(), cell.height() + m.top() + m.bottom());
+    }
+    QSize sizeHint() const override { return minimumSize(); }
+    void setGeometry(const QRect &rect) override
+    {
+        QLayout::setGeometry(rect);
+        arrange(rect, true);
+    }
+
+    /// The order the tiles flow in: `order`'s, each widget once. A widget the
+    /// layout does not hold yet is added.
+    void setOrder(const QList<ItemGridWidget *> &order)
+    {
+        QList<QLayoutItem *> sorted;
+        for (ItemGridWidget *widget : order) {
+            int at = -1;
+            for (int i = 0; i < mItems.size(); ++i)
+                if (mItems[i]->widget() == widget) { at = i; break; }
+            if (at >= 0) sorted.append(mItems.takeAt(at));
+            else { addChildWidget(widget); sorted.append(new QWidgetItem(widget)); }
+        }
+        sorted.append(mItems);          // anything not in `order` keeps its place at the end
+        mItems = sorted;
+        invalidate();
+    }
+
+    /// Columns at a canvas `width` — the ONE formula (freeform's first-entry
+    /// slots read it too).
+    int columnsFor(int width) const { return columnsFor(width, cellSize()); }
+    int columnsFor(int width, const QSize &cell) const
+    {
+        const QMargins m = contentsMargins();
+        const int avail = width - m.left() - m.right() + spacing();
+        return qMax(1, avail / qMax(1, cell.width() + spacing()));
+    }
+    /// Where slot `index` sits on a canvas `width` wide, for tiles of `cell`.
+    QPoint slotPos(int index, int width) const { return slotPos(index, width, cellSize()); }
+    QPoint slotPos(int index, int width, const QSize &cell) const
+    {
+        const QMargins m = contentsMargins();
+        const int cols = columnsFor(width, cell);
+        const int used = cols * cell.width() + (cols - 1) * spacing();
+        const int x0 = m.left() + qMax(0, (width - m.left() - m.right() - used) / 2);
+        return QPoint(x0 + (index % cols) * (cell.width() + spacing()),
+                      m.top() + (index / cols) * (cell.height() + spacing()));
+    }
+    QSize cellSize() const
+    {
+        QSize cell;
+        for (QLayoutItem *item : mItems)
+            if (!item->isEmpty()) cell = cell.expandedTo(item->sizeHint());
+        return cell;
+    }
+
+private:
+    /// Lays the SHOWN tiles out row-major in `rect` (when `apply`) and answers
+    /// the height they need. A hidden tile (a search, a queued show) takes no
+    /// slot; the moment it is shown the layout is invalidated and runs again.
+    int arrange(const QRect &rect, bool apply) const
+    {
+        const QMargins m = contentsMargins();
+        const QSize cell = cellSize();
+        int shown = 0;
+        for (QLayoutItem *item : mItems) {
+            if (item->isEmpty()) continue;
+            if (apply) {
+                const QPoint p = slotPos(shown, rect.width()) + rect.topLeft();
+                item->setGeometry(QRect(p, cell));
+            }
+            ++shown;
+        }
+        if (shown == 0) return m.top() + m.bottom();
+        const int rows = (shown + columnsFor(rect.width()) - 1) / columnsFor(rect.width());
+        return m.top() + rows * cell.height() + (rows - 1) * spacing() + m.bottom();
+    }
+
+    QList<QLayoutItem *> mItems;
+};
 
 DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 {
     this->parent = parent;
 
-    setAlignment(Qt::AlignHCenter);
-
     gridWidget = new QWidget(this);
     gridWidget->setObjectName("gridWidget");
+    // THE CANVAS SIZES ITSELF (DESKTOP-1): resizable, so the scroll area keeps
+    // it as wide as the viewport and as tall as the flow layout's
+    // heightForWidth — re-asked whenever the layout is invalidated.
+    setWidgetResizable(true);
     setWidget(gridWidget);
     setStyleSheet(StyleSheet::BackgroundTransparent());
     // Qlementine: the desktop shows through the grid, no frame around it
@@ -45,14 +166,12 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     offset = 10;
-    lastWidth = 0;
     settings = SettingsManager::getDefaultManager();
     tileSize = sizeFromString(settings->get(settingkeys::tileSize));
 
-    gridLayout = new QGridLayout(gridWidget);
-
-    gridWidget->setLayout(gridLayout);
+    gridLayout = new TileFlowLayout(gridWidget);
     gridLayout->setSpacing(12);
+    gridLayout->setContentsMargins(16, 16, 16, 16);
 
     // sliders: empty-space press pans a row, wheel over a row slides it —
     // both arrive on the canvas (tiles swallow their own presses first)
@@ -60,7 +179,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
 }
 
-void DynamicGrid::addToGridView(ProjectTileData tileData, int count, bool highlight)
+void DynamicGrid::addToGridView(ProjectTileData tileData, bool highlight)
 {
     ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, iconSize, gridWidget, highlight);
 
@@ -81,8 +200,12 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count, bool highli
     connect(gameGridItem,   SIGNAL(exportFromWidget(ItemGridWidget*)),
             parent,         SLOT(exportProjectFromWidget(ItemGridWidget*)));
 
+    // By NAME, like every connection above: the grid knows its owner only as
+    // the QObject that answers these slots (desktops.grid_layout builds the grid
+    // without a ProjectManager).
     connect(gameGridItem,   &ItemGridWidget::doubleClicked, parent, [this](ItemGridWidget *item) {
-        static_cast<ProjectManager*>(parent)->openProjectFromWidget(item, false);
+        QMetaObject::invokeMethod(parent, "openProjectFromWidget",
+                                  Q_ARG(ItemGridWidget*, item), Q_ARG(bool, false));
     });
 
     connect(gameGridItem,   SIGNAL(renameFromWidget(ItemGridWidget*)),
@@ -129,12 +252,10 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count, bool highli
         return;
     }
 
-    int columnCount = viewport()->width() / (tileSize.width());
-
-    if (columnCount == 0) columnCount = 1;
-
-    gridLayout->addWidget(gameGridItem, count / columnCount + 1, count % columnCount + 1);
-    gridWidget->adjustSize();
+    // Rows: into the flow, in order. No size is taken here — the layout lays
+    // the tile out when it is SHOWN (a tile added to a visible grid is shown by
+    // Qt one turn later), and sizes the canvas with it.
+    gridLayout->addWidget(gameGridItem);
 }
 
 void DynamicGrid::setLayoutMode(LayoutMode newMode)
@@ -145,6 +266,8 @@ void DynamicGrid::setLayoutMode(LayoutMode newMode)
     // detach every tile from the flow layout (keep the widgets)
     QLayoutItem *item;
     while ((item = gridLayout->takeAt(0)) != Q_NULLPTR) delete item;
+    // Only Sliders asks the canvas to be taller than the viewport.
+    gridWidget->setMinimumHeight(0);
 
     if (mode == LayoutMode::Freeform) {
         foreach (ItemGridWidget *gridItem, originalItems) {
@@ -167,7 +290,7 @@ void DynamicGrid::setLayoutMode(LayoutMode newMode)
             gridItem->sliderDraggable = false;
             gridItem->sliderRowCount = 0;
         }
-        updateGridColumns(qMax(lastWidth, tileSize.width()));
+        gridLayout->setOrder(originalItems);
     }
 
     // panning affordance on the canvas itself (tiles keep their own cursors)
@@ -283,6 +406,10 @@ void DynamicGrid::applySliderLayout()
 
     const int rowH = sliderRowHeight();
     const int contentH = offset + sliderRows * rowH + offset;
+    // The strips are not in the flow, so the canvas's height is ASKED for:
+    // the resizable scroll area honours the minimum (vertical scroll when the
+    // rows overflow) and sizes the canvas now.
+    gridWidget->setMinimumHeight(contentH);
     gridWidget->resize(qMax(viewport()->width(), tileSize.width()),
                        qMax(viewport()->height(), contentH));
 
@@ -408,6 +535,14 @@ bool DynamicGrid::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    // FREEFORM FOLLOWS ITS CANVAS: the scroll area resizes the canvas on its
+    // own (a scroll bar coming or going changes the viewport without resizing
+    // this widget), and the stored positions are fractions of the canvas.
+    if (mode == LayoutMode::Freeform && watched == gridWidget && event->type() == QEvent::Resize) {
+        foreach (ItemGridWidget *gridItem, originalItems)
+            if (gridItem->hasFreeformPos) gridItem->move(pixelPosFor(gridItem));
+    }
+
     return QScrollArea::eventFilter(watched, event);
 }
 
@@ -417,14 +552,30 @@ void DynamicGrid::applyFreeformLayout()
     // resizes keep relative placement
     gridWidget->resize(viewport()->size().expandedTo(QSize(tileSize.width(), tileSize.height())));
 
-    // two passes: settle every placed tile first so the cascade for unplaced ones
-    // tests against real positions, not stale ones
+    // Placed tiles first; then the never-placed ones take THE ROWS GRID'S
+    // SLOTS (DESKTOP-1) — the first entry into Freeform shows the desktop as
+    // the grid had it, instead of cascading every tile onto one pile at the
+    // top-left and persisting the pile.
+    int slot = 0;
+    const bool realized = gridWidget->width() >= tileSize.width() * 2
+                          && gridWidget->height() >= tileSize.height();
     foreach (ItemGridWidget *gridItem, originalItems) {
         if (gridItem->hasFreeformPos) placeFreeformTile(gridItem);
         gridItem->show();
     }
     foreach (ItemGridWidget *gridItem, originalItems) {
-        if (!gridItem->hasFreeformPos) placeFreeformTile(gridItem);
+        if (gridItem->hasFreeformPos) { ++slot; continue; }
+        if (!realized) { placeFreeformTile(gridItem); ++slot; continue; }   // deferred, as before
+        const QSize cell = gridItem->size();
+        const QPoint at = gridLayout->slotPos(slot, gridWidget->width(), cell);
+        const int availW = qMax(1, gridWidget->width() - cell.width());
+        const int availH = qMax(1, gridWidget->height() - cell.height());
+        gridItem->normX = qBound(0.0, qreal(at.x()) / availW, 1.0);
+        gridItem->normY = qBound(0.0, qreal(at.y()) / availH, 1.0);
+        gridItem->hasFreeformPos = true;
+        gridItem->move(pixelPosFor(gridItem));
+        emit tilePositionChanged(gridItem);     // persist the assigned position
+        ++slot;
     }
 }
 
@@ -513,16 +664,9 @@ void DynamicGrid::scaleTile(QString scale)
         return;
     }
 
-    int columnCount = qMax(1, lastWidth / tileSize.width());
-
-    int count = 0;
-    foreach(ItemGridWidget *gridItem, originalItems) {
-        gridItem->setTileSize(tileSize, iconSize);
-        gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
-        count++;
-    }
-
-    gridWidget->adjustSize();
+    // Rows: the new size is each tile's; the flow re-lays itself out.
+    foreach (ItemGridWidget *gridItem, originalItems) gridItem->setTileSize(tileSize, iconSize);
+    gridLayout->invalidate();
 }
 
 void DynamicGrid::searchTiles(QString searchString)
@@ -546,30 +690,11 @@ void DynamicGrid::searchTiles(QString searchString)
         return;
     }
 
-    int columnCount = qMax(1, lastWidth / tileSize.width());
-
-    int count = 0;
-    if (!searchString.isEmpty()) {
-        foreach(ItemGridWidget *gridItem, originalItems) {
-            if (gridItem->tileData.name.toLower().contains(searchString)) {
-                gridItem->setVisible(true);
-                gridItem->setTileSize(tileSize, iconSize);
-                gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
-                count++;
-            } else {
-                gridItem->setVisible(false);
-            }
-        }
-    } else {
-        foreach (ItemGridWidget *gridItem, originalItems) {
-            gridItem->setVisible(true);
-            gridItem->setTileSize(tileSize, iconSize);
-            gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
-            count++;
-        }
-    }
-
-    gridWidget->adjustSize();
+    // Rows: a hidden tile takes no slot in the flow, so the matches close up
+    // on their own.
+    foreach (ItemGridWidget *gridItem, originalItems)
+        gridItem->setVisible(searchString.isEmpty()
+                             || gridItem->tileData.name.toLower().contains(searchString));
 }
 
 bool DynamicGrid::containsTiles()
@@ -578,48 +703,17 @@ bool DynamicGrid::containsTiles()
     return !originalItems.isEmpty();
 }
 
-/**
- * Helper function. Deletes all child widgets of the given layout @a item.
- */
-void deleteChildWidgets(QLayoutItem *item) {
-    if (item->layout()) {
-        // Process all child items recursively.
-        for (int i = 0; i < item->layout()->count(); i++) {
-            deleteChildWidgets(item->layout()->itemAt(i));
-        }
-    }
-
-    item->widget()->deleteLater();
-}
-
 void DynamicGrid::deleteTile(ItemGridWidget *widget)
 {
-    int index = gridLayout->indexOf(widget);
-    if (index == -1) {
-        // freeform/slider tiles are free children of the canvas, not layout items
-        originalItems.removeOne(widget);
-        if (mode == LayoutMode::Sliders) {
-            sliderModel.removeTile(widget->tileData.guid);
-            widget->deleteLater();
-            applySliderLayout();    // close the gap in its strip
-            return;
-        }
-        widget->deleteLater();
-        return;
-    }
-    if (index != -1) {
-        int row, col, col_span, row_span;
-        gridLayout->getItemPosition(index, &row, &col, &col_span, &row_span);
-
-        auto w = gridLayout->itemAtPosition(row, col)->widget();
-        auto idx = gridLayout->layout()->indexOf(w);
-        auto item = gridLayout->takeAt(idx);
-        deleteChildWidgets(item);
-        item->widget()->deleteLater();
-
-        originalItems.removeOne(widget);
-        updateGridColumns(lastWidth);
-    }
+    originalItems.removeOne(widget);
+    // Rows: out of the flow (freeform/slider tiles are free children of the
+    // canvas and never in it); the flow closes the gap itself.
+    const int index = gridLayout->indexOf(widget);
+    if (index >= 0) delete gridLayout->takeAt(index);
+    if (mode == LayoutMode::Sliders) sliderModel.removeTile(widget->tileData.guid);
+    widget->hide();
+    widget->deleteLater();
+    if (mode == LayoutMode::Sliders) applySliderLayout();    // close the gap in its strip
 }
 
 void DynamicGrid::updateTile(const QString &id, const QByteArray &arr)
@@ -639,9 +733,9 @@ ItemGridWidget *DynamicGrid::tile(const QString &guid) const
 // freeform canvas places the one newcomer, the filmstrips reseed once.
 void DynamicGrid::insertTileAtHead(const ProjectTileData &tileData, bool highlight)
 {
-    addToGridView(tileData, originalItems.size(), highlight);
+    addToGridView(tileData, highlight);
     originalItems.move(originalItems.size() - 1, 0);
-    if (mode == LayoutMode::Rows) updateGridColumns(qMax(lastWidth, tileSize.width()));
+    if (mode == LayoutMode::Rows) gridLayout->setOrder(originalItems);
 }
 
 void DynamicGrid::moveTileToHead(ItemGridWidget *widget)
@@ -649,7 +743,7 @@ void DynamicGrid::moveTileToHead(ItemGridWidget *widget)
     const int at = originalItems.indexOf(widget);
     if (at <= 0) return;
     originalItems.move(at, 0);
-    if (mode == LayoutMode::Rows) updateGridColumns(qMax(lastWidth, tileSize.width()));
+    if (mode == LayoutMode::Rows) gridLayout->setOrder(originalItems);
 }
 
 void DynamicGrid::resetView()
@@ -670,42 +764,11 @@ void DynamicGrid::resetView()
 
 void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
-    lastWidth = event->size().width();
-
-    if (mode == LayoutMode::Freeform) {
-        QScrollArea::resizeEvent(event);
-        applyFreeformLayout();  // normalized positions -> new canvas size
-        return;
-    }
-
-    if (mode == LayoutMode::Sliders) {
-        QScrollArea::resizeEvent(event);
-        applySliderLayout();    // re-clamp offsets; vertical scroll if rows overflow
-        return;
-    }
-
-    int check = event->size().width() / (tileSize.width());
-    bool autoAdjustColumns = true;
-
-    if (autoAdjustColumns && check != autoColumnCount && check != 0) {
-        autoColumnCount = check;
-        updateGridColumns(event->size().width());
-    } else
-        QScrollArea::resizeEvent(event);
-}
-
-void DynamicGrid::updateGridColumns(int width)
-{
-    int columnCount = qMax(1, width / tileSize.width());
-
-    int count = 0;
-    foreach(ItemGridWidget *gridItem, originalItems) {
-        gridItem->setTileSize(tileSize, iconSize);
-        gridLayout->addWidget(gridItem, count / columnCount + 1, count % columnCount + 1);
-        count++;
-    }
-
-    gridWidget->adjustSize();
+    // The scroll area sizes the canvas (Rows: its flow lays itself out at the
+    // new width — there is no column count to compare and nothing to skip).
+    QScrollArea::resizeEvent(event);
+    if (mode == LayoutMode::Freeform) applyFreeformLayout();  // normalized positions -> new canvas
+    else if (mode == LayoutMode::Sliders) applySliderLayout(); // re-clamp offsets; vertical scroll
 }
 
 QSize DynamicGrid::sizeFromString(QString size)

@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "ui/controls/sliderlayoutmodel.h"
 
-class QGridLayout;
+class TileFlowLayout;
 class SettingsManager;
 class ItemGridWidget;
 
@@ -33,7 +33,10 @@ public:
     enum class LayoutMode { Rows, Freeform, Sliders };
 
     explicit DynamicGrid(QWidget *parent = Q_NULLPTR);
-    void addToGridView(ProjectTileData tileData, int count, bool highlight = false);
+    /// Adds a tile at the end of the order. Rows lays it out when it is SHOWN
+    /// (the flow layout owns the canvas size — DESKTOP-1); Freeform places it;
+    /// Sliders reseeds once per batch.
+    void addToGridView(ProjectTileData tileData, bool highlight = false);
 
     void setLayoutMode(LayoutMode mode);
     LayoutMode layoutMode() const { return mode; }
@@ -54,12 +57,8 @@ public:
     bool eventFilter(QObject *watched, QEvent *event) override;
     QSize tileSize;
     QSize iconSize;
-    QSize baseSize;
-    int lastWidth;
     QList<ItemGridWidget*> originalItems;
-    int scale = 0;
     int offset;
-    float scl = 0.0f;
     void scaleTile(QString);
     void searchTiles(QString);
     bool containsTiles();
@@ -89,8 +88,6 @@ signals:
     void tileSliderPositionChanged(ItemGridWidget *widget);
 
 private:
-    void updateGridColumns(int width);
-    int autoColumnCount = 0;
     QSize sizeFromString(QString);
 
     // freeform helpers
@@ -111,7 +108,7 @@ private:
 
     QWidget *parent;
     QWidget *gridWidget;
-    QGridLayout *gridLayout;
+    TileFlowLayout *gridLayout;     ///< the Rows flow (freeform/slider tiles are free children)
     SettingsManager *settings;
 
     LayoutMode mode = LayoutMode::Rows;
