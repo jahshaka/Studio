@@ -110,7 +110,8 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     if (kind == AddKind::Direct
         && static_cast<ModelTypes>(record.type) == ModelTypes::Texture
         && !ImageMaterial::hasCompanionMaterial(guid)) {
-        const QString materialGuid = ImageMaterial::createMaterialAsset(guid, db, project);
+        const QString materialGuid = ImageMaterial::createMaterialAsset(
+            guid, db, project, assethome::project(projectGuid));
         if (!materialGuid.isEmpty()) {
             const Result companion = addToProject(materialGuid, db, project, AddKind::Direct);
             result.pinnedGuids.append(companion.pinnedGuids);

@@ -74,7 +74,8 @@ iris::PbrMaterialPtr fromTexture(const QString &textureGuid, Database *db,
 }
 
 QString createMaterialAsset(const QString &textureGuid, Database *db,
-                            Project *project, QString *errorOut)
+                            Project *project, const assethome::Home &home,
+                            QString *errorOut)
 {
     if (errorOut) errorOut->clear();
     auto failWith = [errorOut](const QString &message) {
@@ -147,7 +148,8 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     // shipped preset's (an image called "Gold PBR.png" gets "Gold PBR-1").
     const QString chosenName = MaterialBundle::uniqueName(db, matName);
     QString createError;
-    const QString materialGuid = MaterialBundle::create(db, chosenName, blob, thumbnail, &createError);
+    const QString materialGuid = MaterialBundle::create(db, chosenName, blob, home, thumbnail,
+                                                        &createError);
     if (materialGuid.isEmpty())
         return failWith(createError.isEmpty() ? QStringLiteral("the companion material could not be stored")
                                               : createError);

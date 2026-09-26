@@ -60,6 +60,7 @@ For more information see the LICENSE file
 #include <QStringList>
 
 #include "data/constants.h"
+#include "services/assethome.h"
 
 class Database;
 class Project;
@@ -171,17 +172,6 @@ QString presetMasterOf(const QByteArray &rowProperties);
 /// (PresetCopyCommand) and the reader (presetMasterOf).
 inline constexpr QLatin1StringView kPresetMasterKey{"presetMaster"};
 
-/// A PROJECT'S COPY of a shipped preset — THE ONE PREDICATE every library view
-/// folds by (PRESET-FOLD-1): the Assets page's grid, `assets.list({scope:
-/// 'store'})` and the material picker's browse list (assettray::libraryHidden)
-/// and the Materials module's Custom drawer. A copy is "Wood PBR" inside its own
-/// project's views (the tray, the Project drawer) and nowhere else; everywhere
-/// else the master's tile stands for it.
-inline bool isProjectCopy(const QByteArray &rowProperties)
-{
-    return !presetMasterOf(rowProperties).isEmpty();
-}
-
 /// WHY `projectGuid` MAY NOT PIN `guid`, in the user's words, or empty when it
 /// may. One reason: `guid` is ANOTHER project's copy of a shipped preset
 /// (pinned by some project and not by this one). Pinned here it would become
@@ -210,12 +200,16 @@ inline QString shippedPresetGuidForName(const QString &name)
 /// THE NAME A NEW MATERIAL MAY TAKE (BUNDLE-P4; the rule was
 /// MaterialPresetAssets::customiseName, which forwards here now): `wanted`
 /// itself, or the first free `<wanted>-N`, judged case-insensitively against
-/// every LIBRARY material's name AND every shipped preset's reserved name —
+/// every material's name (`materialNames`) AND every shipped preset's reserved name —
 /// whether or not the preset has been seeded (R18: "Gold PBR" is taken, so a
 /// customise of it is "Gold PBR-1" on the first press). One rule for every
 /// door that mints a material: Customise, the New dialog, an image's
 /// companion. Empty in, empty out.
 QString uniqueName(Database *db, const QString &wanted);
+
+/// Every Material row's name — the library's and every project's own
+/// (ASSETS-SCOPE-1) — the set a new material's name is judged against.
+QStringList materialNames(Database *db);
 
 /// THE SEEDER'S DOOR, and the only writer allowed on a reserved preset guid
 /// (`MaterialPresetAssets::ensureSeeded` is its one caller). It publishes to
@@ -226,12 +220,16 @@ QString uniqueName(Database *db, const QString &wanted);
 /// than an exception a caller can fall into.
 WriteResult writeShipped(Database *db, const QString &guid, const QJsonObject &definition);
 
-/// Mint a LIBRARY Material row carrying `definition` and write it through
-/// `write`. `thumbnail` is the stored fallback (a render is asked for by
+/// Mint a Material row carrying `definition` and write it through `write`.
+/// `home` is WHERE THE ROW LIVES (services/assethome.h, ASSETS-SCOPE-1) and
+/// every caller states it: the library (an explicit library gesture) or the
+/// project whose editing made it (the project's own row, never a library
+/// tile). `thumbnail` is the stored fallback (a render is asked for by
 /// whoever made the gesture — THUMBS-1). Returns the new guid, empty on
 /// failure.
 QString create(Database *db, const QString &name, const QJsonObject &definition,
-               const QByteArray &thumbnail = QByteArray(), QString *errorOut = nullptr);
+               const assethome::Home &home, const QByteArray &thumbnail = QByteArray(),
+               QString *errorOut = nullptr);
 
 /// THE PROJECT'S OWN COPY OF A SHIPPED PRESET (PRESET-EDIT-1, the owner's
 /// rule: "only the MASTER materials should be locked; if they are added to a
@@ -253,8 +251,11 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
 ///
 /// Not a door for anything else: `create` is the one every other mint comes
 /// through.
-QString createPresetCopy(Database *db, const QString &guid, const QString &name,
-                         const QJsonObject &definition,
+///
+/// The copy is `projectGuid`'s OWN row (ASSETS-SCOPE-1) — never a library tile;
+/// an empty `projectGuid` is refused.
+QString createPresetCopy(Database *db, const QString &guid, const QString &projectGuid,
+                         const QString &name, const QJsonObject &definition,
                          const QByteArray &thumbnail = QByteArray(),
                          QString *errorOut = nullptr);
 

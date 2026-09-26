@@ -83,6 +83,13 @@ struct ImportRequest
     QJsonObject settings;       // recorded per-import; part of the determinism key
     bool wantViewerThumbnail = false;  // UI refreshes the thumbnail after preview
     Intent intent = Intent::User;      // see above — every user-facing door
+    /// THE ROWS THIS IMPORT MINTS ARE THE PROJECT'S OWN (ASSETS-SCOPE-1,
+    /// services/assethome.h): an image a MATERIAL brought into a project while
+    /// the user edited it (the texture picker, a graph texture node) belongs to
+    /// that project — `view_filter` Editor, never a library tile. False — the
+    /// default — for every import a person asks for: an import IS the library.
+    /// Needs a project guid (the request's or the service's project).
+    bool ownedByProject = false;
 };
 
 /// Is this path a MODEL file — the one kind the import dialog asks about?

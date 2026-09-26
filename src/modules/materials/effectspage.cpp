@@ -2059,12 +2059,9 @@ void EffectsPage::updateAssetDock()
 				// in Presets, read-only, and its Customise copy — an
 				// ordinary guid — is what lands here.
 				if (!MaterialBundle::shippedPresetName(asset.guid).isEmpty()) continue;
-				// NOR A PROJECT'S COPY OF ONE (PRESET-FOLD-1): the open
-				// project's own copy is in the PROJECT drawer (the pin test
-				// below), and another project's is that project's — listing it
-				// here put a second "Wood PBR" with the master's picture in
-				// every other project's Custom drawer.
-				if (MaterialBundle::isProjectCopy(asset.properties)) continue;
+				// (A project's copy of a preset — and every material made in the
+				// editor — is its project's OWN row since ASSETS-SCOPE-1: the
+				// library listing above never contains one.)
 				if (mProject && !mProject->getProjectGuid().isEmpty()
 				    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), asset.guid))
 					continue;

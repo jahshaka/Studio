@@ -97,8 +97,8 @@ void PresetCopyCommand::redo()
     // re-makes the SAME material (see the header).
     const QString guid = mCopyGuid.isEmpty() ? GUIDManager::generateGUID() : mCopyGuid;
     QString error;
-    const QString made = MaterialBundle::createPresetCopy(mDb, guid, mName, mDefinition,
-                                                          mThumbnail, &error);
+    const QString made = MaterialBundle::createPresetCopy(mDb, guid, mProjectGuid, mName,
+                                                          mDefinition, mThumbnail, &error);
     if (made.isEmpty()) {
         mError = error.isEmpty() ? QObject::tr("the library refused the copy") : error;
         return;

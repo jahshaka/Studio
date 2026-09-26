@@ -414,7 +414,11 @@ QString customise(const QString &presetOrGuid, const QString &name,
     // makes the copy editable where the preset is not. Its member textures
     // are the preset's own rows — one object, "used by 2" — which is the
     // point of a bundle owning members by reference.
+    // WITH A PROJECT OPEN IT IS THAT PROJECT'S (ASSETS-SCOPE-1): the copy is
+    // pinned into the project below and is never a library tile; with none it
+    // is a library material.
     const QString copy = MaterialBundle::create(db, chosen, definition,
+                                                assethome::current(project),
                                                 thumbnailFor(preset), &error);
     if (copy.isEmpty())
         return fail(error.isEmpty() ? QStringLiteral("the library refused the copy") : error);

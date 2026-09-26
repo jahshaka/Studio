@@ -67,7 +67,7 @@ namespace presetedit
 /// later definition write.
 QString masterOf(Database *db, const QString &guid);
 
-/// Every project copy of `masterGuid` in the library, newest last. The
+/// Every project copy of `masterGuid` (each is its project's own row), newest last. The
 /// catalog has no index for it, so this is a walk of the material rows —
 /// meant for a test and for the "which of these is mine?" question, never for
 /// a per-frame path.

@@ -855,7 +855,7 @@ int main(int argc, char **argv)
         // (1) the companion the app would mint
         QString mintError;
         const QString companion =
-            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, &mintError);
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, assethome::library(), &mintError);
         CHECK(!companion.isEmpty(),
               qPrintable(QStringLiteral("the companion material was minted -> %1 %2")
                              .arg(companion, mintError)));
@@ -895,7 +895,7 @@ int main(int argc, char **argv)
         // (3) a second stamped companion that an OBJECT depends on — applied
         // to something in the project, so the project keeps it.
         const QString applied =
-            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, nullptr);
+            ImageMaterial::createMaterialAsset(texGuid, &db, nullptr, assethome::library(), nullptr);
         CHECK(!applied.isEmpty() && applied != companion, "a second stamped material exists");
         const QString userObject = db.createAssetEntry(
             "guid-companion-object", "thing.obj", static_cast<int>(ModelTypes::Object),

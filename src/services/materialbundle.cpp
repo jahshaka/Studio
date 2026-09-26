@@ -529,13 +529,25 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
 
 } // namespace
 
+QStringList materialNames(Database *db)
+{
+    QStringList out;
+    if (!db) return out;
+    // EVERY Material row, the library's AND every project's own (ASSETS-SCOPE-1):
+    // a project's material is not a library row, and a name judged against the
+    // library alone would hand the next Customise the same "Gold PBR-1".
+    QSqlQuery query(QSqlDatabase::database());
+    query.prepare("SELECT name FROM assets WHERE type = ?");
+    query.addBindValue(static_cast<int>(ModelTypes::Material));
+    if (query.exec())
+        while (query.next()) out << query.value(0).toString();
+    return out;
+}
+
 QString uniqueName(Database *db, const QString &wanted)
 {
     QSet<QString> taken;
-    if (db)
-        for (const auto &row : db->fetchAssetsForAssetView())
-            if (row.type == static_cast<int>(ModelTypes::Material))
-                taken.insert(row.name.toCaseFolded());
+    for (const QString &name : materialNames(db)) taken.insert(name.toCaseFolded());
     for (auto it = Constants::Reserved::DefaultMaterials.constBegin();
          it != Constants::Reserved::DefaultMaterials.constEnd(); ++it)
         taken.insert(it.value().toCaseFolded());
@@ -554,17 +566,20 @@ namespace {
 /// a refused mint leaves nothing behind.
 QString mintRow(Database *db, const QString &guid, const QString &name,
                 const QJsonObject &definition, const QByteArray &thumbnail,
-                QString *errorOut)
+                const assethome::Home &home, QString *errorOut)
 {
     QJsonObject stored = definition;
     stored[QStringLiteral("name")] = name;
 
+    // THE ROW'S HOME IS THE CALLER'S GESTURE (ASSETS-SCOPE-1): a library row
+    // (AssetsView, no project) or the project's own (Editor, owned) — never a
+    // library tile minted for a project's content.
     db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Material),
-                         QString(),          // a library row: no parent folder
-                         QString(),          // a library row: no project guid
+                         QString(),          // no parent folder: filing rides the pin
+                         home.projectGuid,
                          QString(), QString(), thumbnail,
                          QByteArray(), QByteArray(), QByteArray(),
-                         AssetViewFilter::AssetsView);
+                         home.viewFilter());
 
     const WriteResult written = write(db, nullptr, guid, stored, Scope::Library);
     if (!written.ok) {
@@ -578,7 +593,7 @@ QString mintRow(Database *db, const QString &guid, const QString &name,
 } // namespace
 
 QString create(Database *db, const QString &name, const QJsonObject &definition,
-               const QByteArray &thumbnail, QString *errorOut)
+               const assethome::Home &home, const QByteArray &thumbnail, QString *errorOut)
 {
     if (!db) {
         if (errorOut) *errorOut = QStringLiteral("no database");
@@ -599,12 +614,12 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
         return QString();
     }
 
-    return mintRow(db, GUIDManager::generateGUID(), name, definition, thumbnail, errorOut);
+    return mintRow(db, GUIDManager::generateGUID(), name, definition, thumbnail, home, errorOut);
 }
 
-QString createPresetCopy(Database *db, const QString &guid, const QString &name,
-                         const QJsonObject &definition, const QByteArray &thumbnail,
-                         QString *errorOut)
+QString createPresetCopy(Database *db, const QString &guid, const QString &projectGuid,
+                         const QString &name, const QJsonObject &definition,
+                         const QByteArray &thumbnail, QString *errorOut)
 {
     if (!db) {
         if (errorOut) *errorOut = QStringLiteral("no database");
@@ -612,8 +627,14 @@ QString createPresetCopy(Database *db, const QString &guid, const QString &name,
     }
     // NO NAME GUARD HERE, ON PURPOSE — see the header: this copy IS the
     // preset as far as the project is concerned, so it carries its name.
+    if (projectGuid.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("a preset's copy belongs to a project, and none was named");
+        return QString();
+    }
+    // THE PROJECT'S OWN ROW (ASSETS-SCOPE-1): it is that project's material,
+    // never a library tile.
     return mintRow(db, guid.isEmpty() ? GUIDManager::generateGUID() : guid, name,
-                   definition, thumbnail, errorOut);
+                   definition, thumbnail, assethome::project(projectGuid), errorOut);
 }
 
 } // namespace MaterialBundle

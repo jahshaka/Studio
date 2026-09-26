@@ -35,6 +35,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QUndoStack>
 #include <cstdio>
@@ -145,14 +146,22 @@ int main(int argc, char **argv)
     // ---- 1. the copy ------------------------------------------------------
     const QStringList copies = [&] {
         QStringList out;
-        for (const auto &row : db.fetchAssetsForAssetView())
-            if (row.type == static_cast<int>(ModelTypes::Material) && row.guid != master)
-                out << row.guid;
+        // EVERY Material row: the copy is the PROJECT's own (ASSETS-SCOPE-1),
+        // which no library listing contains.
+        QSqlQuery q;
+        q.prepare("SELECT guid FROM assets WHERE type = ?");
+        q.addBindValue(static_cast<int>(ModelTypes::Material));
+        q.exec();
+        while (q.next())
+            if (q.value(0).toString() != master) out << q.value(0).toString();
         return out;
     }();
     CHECK(copies.size() == 1, "1: exactly one new material row");
     const QString copy = copies.value(0);
     CHECK(!copy.isEmpty() && copy != master, "1: …on a guid of its own");
+    CHECK(db.fetchAsset(copy).view_filter == AssetViewFilter::Editor
+              && db.fetchAsset(copy).projectGuid == projectGuid,
+          "1: …the PROJECT'S OWN row (Editor, owned), never a library tile");
     CHECK(db.fetchAsset(copy).name == presetName,
           "1: …carrying the PRESET'S NAME (the user sees one material)");
     CHECK(QJsonDocument::fromJson(db.fetchAsset(copy).properties).object()
@@ -202,6 +211,9 @@ int main(int argc, char **argv)
     // ---- 5. redo re-makes the same material -------------------------------
     stack.redo();
     CHECK(!db.fetchAsset(copy).guid.isEmpty(), "5: redo re-makes the copy on THE SAME guid");
+    CHECK(db.fetchAsset(copy).view_filter == AssetViewFilter::Editor
+              && db.fetchAsset(copy).projectGuid == projectGuid,
+          "5: …still the project's own row");
     CHECK(db.fetchAsset(copy).name == presetName, "5: …with the same name");
     CHECK(db.isAssetPinnedBy(projectGuid, copy) && !db.isAssetPinnedBy(projectGuid, master),
           "5: …and the pin is on the copy again");

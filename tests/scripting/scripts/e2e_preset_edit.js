@@ -43,17 +43,23 @@ function assert(cond, msg) {
     if (!cond) throw new Error("FAILED: " + msg);
     console.log("ok: " + msg);
 }
-// EVERY library material row, a project's copy included: the store listing
-// folds copies under their master (PRESET-FOLD-1, section 5b), and these two
-// count and name the rows the copy-on-write MINTS — `includeCopies` is the
-// tooling flag for exactly that.
+// EVERY material row the open project can see: the library's AND the
+// project's own. A project's copy is THAT PROJECT'S row (ASSETS-SCOPE-1) — it
+// is never in the store listing (section 5b) — so these two count and name the
+// rows the copy-on-write MINTS through the union and the by-guid read.
 function materialRows() {
-    return assets.list({ scope: "store", type: "material", includeCopies: true });
+    var seen = {};
+    var rows = assets.list({ scope: "store", type: "material" })
+                   .concat(assets.list({ scope: "project", type: "material" }));
+    return rows.filter(function (a) {
+        if (seen[a.guid]) return false;
+        seen[a.guid] = true;
+        return true;
+    });
 }
 function nameOf(guid) {
-    var hit = assets.list({ scope: "store", includeCopies: true })
-                  .filter(function (a) { return a.guid === guid; });
-    return hit.length ? hit[0].name : "";
+    var meta = assets.metadata(guid);
+    return meta && meta.name ? meta.name : "";
 }
 function projectMaterials() {
     return assets.list({ scope: "project", type: "material" }).map(function (a) { return a.guid; });
@@ -191,19 +197,19 @@ assert(nameOf(copy) === "Wood PBR" && materials.masterOf(copy) === WOOD,
 // ---- 5b. PRESET-FOLD-1: a project's copy is that project's ---------------
 //
 // Two projects now hold a copy of Wood PBR. The LIBRARY listing — the Assets
-// page's grid, assets.list({scope:'store'}) — shows the preset ONCE: a copy
-// folds under its master's tile the way a member folds under its bundle, and
-// is shown only in its own project's views. And B cannot pin A's copy: that
-// would make it B's copy too (projectCopyOf answers the first copy pinned).
+// page's grid, assets.list({scope:'store'}) — shows the preset ONCE: a copy is
+// its project's own row (ASSETS-SCOPE-1) and is shown only in its own
+// project's views. And B cannot pin A's copy: that would make it B's copy too
+// (projectCopyOf answers the first copy pinned).
 function woodIn(rows) { return rows.filter(function (a) { return a.name === "Wood PBR"; }); }
 var libWood = woodIn(assets.list({ scope: "store" }));
 assert(libWood.length === 1 && libWood[0].guid === WOOD,
        "the library list shows ONE 'Wood PBR' — the master (" + JSON.stringify(libWood) + ")");
-var everyWood = woodIn(assets.list({ scope: "store", includeCopies: true }))
-                    .map(function (a) { return a.guid; });
-assert(everyWood.indexOf(WOOD) >= 0 && everyWood.indexOf(copy) >= 0
-       && everyWood.indexOf(editB.guid) >= 0,
-       "…and includeCopies lists the master and both projects' copies (tooling)");
+var storeGuids = assets.list({ scope: "store", members: true }).map(function (a) { return a.guid; });
+assert(storeGuids.indexOf(copy) < 0 && storeGuids.indexOf(editB.guid) < 0,
+       "…and neither project's copy is a library row at all, members shown or not");
+assert(nameOf(copy) === "Wood PBR" && nameOf(editB.guid) === "Wood PBR",
+       "…while both still resolve by guid");
 var refusedPin = "";
 try { assets.addToProject(copy); } catch (e) { refusedPin = e.message; }
 console.log("   refusal: " + refusedPin);

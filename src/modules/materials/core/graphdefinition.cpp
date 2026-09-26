@@ -80,11 +80,14 @@ QString bakedMemberRow(Database *db, const QString &materialGuid, const QString 
         guid = GUIDManager::generateGUID();
         // `parent` = the MATERIAL (M-A, the one relation that is right for a
         // baked map: it is born inside exactly one material and is never
-        // shared), which is what makes both browsers hide it already.
+        // shared), which is what makes both browsers hide it already. AND
+        // ITS HOME IS THE MATERIAL'S (ASSETS-SCOPE-1): a project's material
+        // bakes project rows, a library material library rows.
+        const assethome::Home home = assethome::of(db, materialGuid);
         db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                             materialGuid, QString(), QString(), QString(),
+                             materialGuid, home.projectGuid, QString(), QString(),
                              QByteArray(), QByteArray(), QByteArray(), QByteArray(),
-                             AssetViewFilter::AssetsView);
+                             home.viewFilter());
     }
 
     QSqlDatabase conn = QSqlDatabase::database();

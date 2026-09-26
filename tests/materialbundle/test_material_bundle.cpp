@@ -142,7 +142,7 @@ int main(int argc, char **argv)
     definition["values"] = values;
 
     QString createError;
-    const QString woodyGuid = MaterialBundle::create(&db, "woody", definition,
+    const QString woodyGuid = MaterialBundle::create(&db, "woody", definition, assethome::library(),
                                                      QByteArray(), &createError);
     CHECK(!woodyGuid.isEmpty(), qPrintable(QStringLiteral("1: the bundle was minted (%1)").arg(createError)));
     CHECK(db.fetchAsset(woodyGuid).type == static_cast<int>(ModelTypes::Material),
@@ -288,7 +288,7 @@ int main(int argc, char **argv)
     graphDefinition["values"] = graphValues;
     graphDefinition["shadergraph"] = okGraph;
 
-    const QString graphyGuid = MaterialBundle::create(&db, "graphy", graphDefinition,
+    const QString graphyGuid = MaterialBundle::create(&db, "graphy", graphDefinition, assethome::library(),
                                                       QByteArray(), &createError);
     CHECK(!graphyGuid.isEmpty(), "5: a graph material is minted");
     CHECK(countWhere("SELECT COUNT(*) FROM assets") == rowsBefore + 1,
@@ -393,7 +393,7 @@ int main(int argc, char **argv)
         colourDef["materialType"] = "pbr";
         colourDef["values"] = colourValues;
 
-        const QString redGuid = MaterialBundle::create(&db, "red", colourDef,
+        const QString redGuid = MaterialBundle::create(&db, "red", colourDef, assethome::library(),
                                                        QByteArray(), &createError);
         CHECK(!redGuid.isEmpty(), "8b: a definition with an object-valued colour is accepted");
         const QJsonObject stored = MaterialBundle::read(&db, redGuid);
@@ -425,7 +425,7 @@ int main(int argc, char **argv)
         QJsonObject libDef;
         libDef["materialType"] = "pbr";
         libDef["values"] = libValues;
-        const QString sharedGuid = MaterialBundle::create(&db, "shared", libDef,
+        const QString sharedGuid = MaterialBundle::create(&db, "shared", libDef, assethome::library(),
                                                           QByteArray(), &createError);
         CHECK(!sharedGuid.isEmpty(), "9: a library bundle naming tex-wood");
         CHECK(AssetCas::writePin(conn, projectGuid, sharedGuid,

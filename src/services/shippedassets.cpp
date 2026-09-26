@@ -156,6 +156,12 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         // still stated, because the next caller of this function will inherit
         // whatever it says.
         request.intent = ImportRequest::Intent::Material;
+        // A PINNED import is made FOR the open project — a material's picture
+        // or the platform's furniture while the user edits it — so the row it
+        // mints is the project's own and never a library tile (ASSETS-SCOPE-1).
+        // An unpinned one (a library material's picker, the preset seed) is a
+        // library row.
+        request.ownedByProject = pin && haveProject;
         AssetImportService importer(db, project);
         const ImportResult result = importer.import(request);
         if (!result.ok()) {

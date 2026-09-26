@@ -441,6 +441,9 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
     candidateNeeds.unite(needsOf(assetCandidates));
 
     ClipboardResolver resolver(db, project);
+    // Rows landed by a paste into the EDITOR are the project's own; a paste
+    // into the Assets page lands library rows (ASSETS-SCOPE-1).
+    resolver.setHome(toAssets ? assethome::library() : assethome::current(project));
     const ClipboardResolveReport plan = resolver.plan(envelope, &candidateNeeds);
     result.missing = plan.missing;
     if (!plan.error.isEmpty()) {

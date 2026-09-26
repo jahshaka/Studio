@@ -63,6 +63,7 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "io/clipboardformat.h"
+#include "services/assethome.h"
 
 class Database;
 class Project;
@@ -115,6 +116,13 @@ public:
     ClipboardResolveReport apply(const clipboardformat::Envelope &envelope,
                                  const QSet<QString> *limitTo = nullptr);
 
+    /// WHERE THE ROWS A PASTE REGISTERS LIVE (ASSETS-SCOPE-1, services/
+    /// assethome.h). The library (the default — a paste into the Assets page:
+    /// each row keeps the placement its payload carries) or the project the
+    /// paste lands in (a paste into the editor: every row is that project's
+    /// own and never a library tile).
+    void setHome(const assethome::Home &home) { mHome = home; }
+
 private:
     ClipboardResolveReport run(const clipboardformat::Envelope &envelope, bool commit,
                                const QSet<QString> *limitTo) const;
@@ -125,6 +133,7 @@ private:
 
     Database *db = nullptr;
     Project *project;
+    assethome::Home mHome;
 };
 
 #endif // CLIPBOARDRESOLVER_H

@@ -220,7 +220,8 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "node graph as its PAYLOAD and the graph opens as the current one for graph.* verbs — there is no "
           "separate shader/effect asset any more, and no second row. Adding it to a project is a separate gesture "
           "(assets.addToProject), which pins the bundle and its members at the version the project took. "
-          "{folder} DOES BOTH IN ONE CALL (DRAWERS-1): the material is pinned into the OPEN project and filed in "
+          "{folder} IS THE EDITOR'S CREATE (DRAWERS-1, ASSETS-SCOPE-1): the material is THE OPEN PROJECT'S OWN — "
+          "never a library row, so the Assets module does not list it — pinned into the project and filed in "
           "that folder — a folder guid from assets.folders(), or the project's own guid (or an empty string) for "
           "the root — and both project drawers, the editor's asset tray and the Materials module's, show it at "
           "once. It is what the tray's right-click > Create Material passes. Without the key nothing is pinned.",
@@ -308,8 +309,8 @@ QVector<VerbInfo> MaterialsApi::verbs() const
         { "createFromImage", "materials.createFromImage(textureGuid, {graph}) -> materialGuid",
           "Creates the standard image material asset for a Texture (IMAGE_PLANE_SPEC option B1): a PBR .material "
           "with the image as baseColorMap (roughness 1, metallic 0; alpha images blend), a Material→Texture "
-          "dependency row and an image-derived thumbnail. Created in the library; with a project open it is also "
-          "pinned into the project (bin-visible, droppable). Direct image add-to-project runs this automatically; "
+          "dependency row and an image-derived thumbnail. With a project open it is THAT PROJECT'S OWN material "
+          "(ASSETS-SCOPE-1: pinned, bin-visible, droppable, never a library row); with none, a library material. Direct image add-to-project runs this automatically; "
           "re-creating for the same image returns a fresh asset. With {graph: true} (B2, needs an open project) "
           "it instead creates an editable Shader GRAPH asset — texture → textureSampler → PbrMaster.BaseColor — "
           "returning the new MATERIAL's guid (one row: the graph rides its definition as a payload; opens in the "
@@ -333,14 +334,16 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "means (PRESET-UNIFY-1). "
           "The copy names the preset's own member textures (one object, shared) and takes the name "
           "'<Preset>-1', the suffix bumped against the material names the library already holds, unless {name} "
-          "says otherwise. With a project open it is added to the project too, so it lands in the project's "
-          "materials drawer and the editor's asset tray. NOT undoable (it is an asset, like an import).",
+          "says otherwise. With a project open it is THAT PROJECT'S OWN material (ASSETS-SCOPE-1: pinned, in the "
+          "project's materials drawer and the editor's asset tray, never a library row); with none, a library "
+          "material. NOT undoable (it is an asset, like an import).",
           Needs::Document },
         { "edit", "materials.edit(guidOrName) -> {guid, master, copied, editable}",
           "MAKE THIS MATERIAL EDITABLE IN THE OPEN PROJECT, and answer the guid every later edit "
           "must use. A shipped preset that a project holds is the project's to edit (the owner's "
           "rule, 2026-09-21: only the MASTER is locked), and THE FIRST EDIT IS WHAT MAKES THE "
-          "COPY: this mints the project's own material bundle from the preset — keeping its NAME, "
+          "COPY: this mints the project's own material bundle from the preset (a project row, never a "
+          "library one — ASSETS-SCOPE-1) — keeping its NAME, "
           "sharing its member textures — moves the project's pin from the shared master to it, "
           "re-points every scene node that wore the master, and leaves the library master and "
           "every other project untouched. `copied` says whether THIS call did it; `guid` is the "
@@ -427,14 +430,16 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
     // that has copied nothing. (Everywhere else a preset name still means the
     // preset: `material.apply('Wood PBR')` is the shipped one, and every gesture
     // the user actually makes carries a guid in its drag payload.)
+    // (A project's copy is the project's OWN row since ASSETS-SCOPE-1, so it is
+    // found among the project's pins, never in a library listing.)
+    QVector<AssetRecord> pinnedMaterials;
     if (host.db && host.isProjectOpen()) {
-        const QString projectGuid = host.project->getProjectGuid();
-        for (const auto &asset : host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView)) {
-            if (asset.type != static_cast<int>(ModelTypes::Material)) continue;
+        for (const auto &asset : host.db->fetchProjectPinnedAssets(host.project->getProjectGuid()))
+            if (asset.type == static_cast<int>(ModelTypes::Material)) pinnedMaterials.append(asset);
+        for (const auto &asset : pinnedMaterials) {
             if (asset.name.compare(wanted, Qt::CaseInsensitive) != 0) continue;
             // The row already carries its properties: no query per row.
-            if (MaterialBundle::presetMasterOf(asset.properties).isEmpty()) continue;
-            if (host.db->isAssetPinnedBy(projectGuid, asset.guid)) return asset.guid;
+            if (!MaterialBundle::presetMasterOf(asset.properties).isEmpty()) return asset.guid;
         }
     }
     // A SHIPPED PRESET BY NAME, or by a reserved guid whose row has not been
@@ -442,6 +447,10 @@ QString MaterialsApi::resolveMaterialGuid(const QString &guidOrName) const
     // materials.* verb accepts).
     if (MaterialPresetAssets::isPreset(wanted)) return MaterialPresetAssets::guidFor(wanted);
     if (!host.db) return QString();
+    // ...or THE OPEN PROJECT'S OWN MATERIAL by name (ASSETS-SCOPE-1: a material
+    // made in the editor is the project's row, absent from the library)...
+    for (const auto &asset : pinnedMaterials)
+        if (asset.name.compare(wanted, Qt::CaseInsensitive) == 0) return asset.guid;
     // ...or a library material's NAME, which is what the user calls it.
     const auto assets = host.db->fetchAssetsByViewFilter(AssetViewFilter::AssetsView);
     for (const auto &asset : assets) {
@@ -597,7 +606,8 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
 
     QString error;
     const QString materialGuid =
-        ImageMaterial::createMaterialAsset(textureGuid, host.db, host.project, &error);
+        ImageMaterial::createMaterialAsset(textureGuid, host.db, host.project,
+                                           assethome::current(host.project), &error);
     if (materialGuid.isEmpty()) {
         fail(QStringLiteral("materials.createFromImage: %1").arg(error));
         return QString();
@@ -698,8 +708,11 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     seed["materialType"] = "pbr";
     seed["name"] = shaderName;
     QString error;
+    // THE GRAPH TWIN IS A LIBRARY MATERIAL (its documented contract: adding it
+    // to a project is a separate gesture), so its home is the library's
+    // (ASSETS-SCOPE-1: an explicit library gesture) — no editor door mints it.
     const QString assetGuid = MaterialBundle::create(host.db, shaderName, seed,
-                                                     QByteArray(), &error);
+                                                     assethome::library(), QByteArray(), &error);
     if (assetGuid.isEmpty()) {
         delete graph;
         fail(QStringLiteral("materials.createFromImage: %1").arg(error));
@@ -790,9 +803,20 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     if (name.trimmed().isEmpty()) { fail("materials.create: a name is required"); return QString(); }
     const QString materialName = name.trimmed();
 
-    // A LIBRARY BUNDLE — no project needed, and nothing minted in one. Adding
-    // it to a project is a separate, explicit gesture (`assets.addToProject`),
-    // which is the four-drawer rule (OWNER_REVIEW 9).
+    // WITHOUT {folder}: A LIBRARY BUNDLE — no project needed, and adding it to a
+    // project is a separate, explicit gesture (`assets.addToProject`). WITH
+    // {folder}: the editor's Create Material, so it is THE PROJECT'S OWN
+    // material (ASSETS-SCOPE-1, owner 2026-09-26: "adding a material to a
+    // project in the editor should add it to the editor, not the default
+    // assets drawer") — pinned and filed there, and never a library tile.
+    const bool inProject = options.contains(QStringLiteral("folder"));
+    if (inProject && (!host.project || host.project->getProjectGuid().isEmpty())) {
+        fail("materials.create: {folder} files the material in the OPEN project, and no "
+             "project is open");
+        return QString();
+    }
+    const assethome::Home home = inProject ? assethome::project(host.project->getProjectGuid())
+                                           : assethome::library();
     NodeGraph *graph = nullptr;
     QJsonObject definition;
     definition["materialType"] = "pbr";
@@ -818,7 +842,7 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     }
 
     QString error;
-    const QString assetGuid = MaterialBundle::create(host.db, materialName, definition,
+    const QString assetGuid = MaterialBundle::create(host.db, materialName, definition, home,
                                                      QByteArray(), &error);
     if (assetGuid.isEmpty()) {
         delete graph;
@@ -843,12 +867,7 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     // Material passes the folder the user is looking at, the project's own
     // guid at the root — the material is pinned into the open project and
     // filed there, and the ONE announcement repopulates both drawers.
-    if (options.contains(QStringLiteral("folder"))) {
-        if (!host.project || host.project->getProjectGuid().isEmpty()) {
-            fail("materials.create: {folder} files the material in the OPEN project, and no "
-                 "project is open");
-            return QString();
-        }
+    if (inProject) {
         const ProjectAssets::Result pinned = ProjectAssets::addToProject(
             assetGuid, host.db, host.project, ProjectAssets::AddKind::Direct);
         if (!pinned.ok()) {

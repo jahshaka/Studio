@@ -20,7 +20,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/imagematerial.h"
 #include "services/materialmembers.h"
-#include "services/materialbundle.h"
 #include "services/memberstamp.h"
 
 namespace assettray {
@@ -361,18 +360,12 @@ namespace {
 
 /// WHICH LIBRARY RULE DROPS A ROW, if any — the one classification behind
 /// libraryHidden and libraryMembers, so the two can never disagree.
-enum class LibraryFold { Shown, Shader, ProjectCopy, Member };
+enum class LibraryFold { Shown, Shader, Member };
 
 LibraryFold libraryFoldOf(Database *db, const AssetRecord &record, bool askMembers)
 {
     // 2b. a legacy Shader row (the Assets page used to skip it inline).
     if (isType(record, ModelTypes::Shader)) return LibraryFold::Shader;
-    // 7. A PROJECT'S COPY OF A SHIPPED PRESET (PRESET-FOLD-1) folds under the
-    //    master's tile the way a member folds under its bundle: it is "Wood PBR"
-    //    inside its own project, and a second "Wood PBR" with the same picture
-    //    everywhere else.
-    if (isType(record, ModelTypes::Material) && MaterialBundle::isProjectCopy(record.properties))
-        return LibraryFold::ProjectCopy;
     // 6. a picture that arrived inside a material bundle (V-2). The cheap half
     //    of the test reads the record's own properties; only a stamped row costs
     //    a query, and a library holds few of those (the preset seed's maps, a
@@ -383,15 +376,13 @@ LibraryFold libraryFoldOf(Database *db, const AssetRecord &record, bool askMembe
 
 }   // namespace
 
-QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records, bool showMembers,
-                          bool includeCopies)
+QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records, bool showMembers)
 {
     QStringList out;
     if (!db) return out;
     for (const AssetRecord &record : records) {
         switch (libraryFoldOf(db, record, /*askMembers=*/!showMembers)) {
         case LibraryFold::Shader:      out.append(record.guid); break;
-        case LibraryFold::ProjectCopy: if (!includeCopies) out.append(record.guid); break;
         case LibraryFold::Member:      if (!showMembers) out.append(record.guid); break;
         case LibraryFold::Shown:       break;
         }
@@ -408,12 +399,12 @@ QStringList libraryMembers(Database *db, const QVector<AssetRecord> &records)
     return out;
 }
 
-QVector<AssetRecord> libraryList(Database *db, bool showMembers, bool includeCopies)
+QVector<AssetRecord> libraryList(Database *db, bool showMembers)
 {
     QVector<AssetRecord> out;
     if (!db) return out;
     const QVector<AssetRecord> records = db->fetchAssetsForAssetView();
-    const QStringList drop = libraryHidden(db, records, showMembers, includeCopies);
+    const QStringList drop = libraryHidden(db, records, showMembers);
     if (drop.isEmpty()) return records;
     const QSet<QString> dropped(drop.begin(), drop.end());
     out.reserve(records.size());

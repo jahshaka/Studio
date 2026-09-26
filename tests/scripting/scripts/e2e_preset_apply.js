@@ -264,22 +264,22 @@ assert(stillThree === 3, "…and the preset's definition did not move (" + still
 var copy1 = materials.createFromPreset("Gold PBR");
 assert(copy1 && copy1.length > 10, "materials.createFromPreset -> a guid");
 assert(copy1 !== GOLD, "…a NEW guid: the copy is not the preset");
-var copy1Name = assets.list({ scope: "store" }).filter(function (a) {
-    return a.guid === copy1;
-})[0].name;
+var copy1Name = assets.metadata(copy1).name;
 assert(copy1Name === "Gold PBR-1", "…named 'Gold PBR-1' (got '" + copy1Name + "')");
+// WITH A PROJECT OPEN THE COPY IS THE PROJECT'S (ASSETS-SCOPE-1): pinned into
+// it, and never a library tile.
+assert(assets.list({ scope: "store" }).map(function (a) { return a.guid; }).indexOf(copy1) < 0
+       && assets.list({ scope: "project", type: "material" })
+              .map(function (a) { return a.guid; }).indexOf(copy1) >= 0,
+       "…and it is the open project's material, not a library row");
 
 var copy2 = materials.createFromPreset(GOLD);
-var copy2Name = assets.list({ scope: "store" }).filter(function (a) {
-    return a.guid === copy2;
-})[0].name;
+var copy2Name = assets.metadata(copy2).name;
 assert(copy2Name === "Gold PBR-2", "…and the suffix bumps against the rows already there ('"
        + copy2Name + "')");
 
 var named = materials.createFromPreset("Brick PBR", { name: "My Bricks" });
-var namedName = assets.list({ scope: "store" }).filter(function (a) {
-    return a.guid === named;
-})[0].name;
+var namedName = assets.metadata(named).name;
 assert(namedName === "My Bricks", "…and {name} wins when it is given");
 
 // THE COPY SHARES THE PRESET'S MEMBERS (one object, used by two) and IS
@@ -521,9 +521,7 @@ assert(materials.createFromPreset("Gold PBR") !== "",
 // …and a name that differs from a preset's only in CASE is a preset's name:
 // `MaterialPresets::find` matches case-insensitively, so the namer must too.
 var lowerCopy = materials.createFromPreset("Gold PBR", { name: "gold pbr" });
-var lowerName = assets.list({ scope: "store" }).filter(function (a) {
-    return a.guid === lowerCopy;
-})[0].name;
+var lowerName = assets.metadata(lowerCopy).name;
 assert(lowerName.toLowerCase() !== "gold pbr",
        "…and a lowercase 'gold pbr' is bumped too (got '" + lowerName + "')");
 
