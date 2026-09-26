@@ -54,6 +54,7 @@
 #include <QSqlQuery>
 #include <QRegularExpression>
 #include <QElapsedTimer>
+#include <cfloat>
 #include <cmath>
 #include <vector>
 #include <QTemporaryDir>
@@ -1419,34 +1420,17 @@ static void surfaceCards()
 // no point of that level's surface lies further from level 0's surface than the
 // length the bake stored — measured INDEPENDENTLY of the bake's own sampler.
 //
-// WHAT THIS IS, SAID ACCURATELY (the lane's audit corrected the first wording).
-// It is a REGRESSION CHECK, not an independent derivation. The bake's maximum comes
-// from the REMOVED BASE VERTICES, computed EXACTLY — `meshopt_simplify` only ever
-// removes vertices, so the worst case sits on the ones the level no longer has, and
-// there is nothing to sample there. A check that walked them too would reproduce
-// that term bit for bit and pass by construction, which is what the first cut did:
-// its worst measured/stored came out at 0.8000 = 1/1.25 on seven of eight subjects,
-// i.e. it was reading back the bake's own maximum and dividing by the margin.
-//
-// So the dense set here is AREA-ONLY, eight times as dense, at strata the bake
-// never used (a different sample count moves every stratum, and the van der Corput
-// index is the sample number). That leaves the SAMPLING-GAP MARGIN exposed, which
-// is the one thing a margin should be judged on, and it exercises the whole
-// pipeline — sampler, grid resolution, precision floor, monotonicity — against
-// numbers the bake did not produce.
-//
-// AND WHAT IT MEASURES, STATED SO NOBODY READS MORE INTO A PASS: area-only at 8x
-// density NEVER EXCEEDS the stored bound on any shipped mesh, and on eight of ten
-// subjects it lands at exactly 0.8000 of it — which is 1/1.25, the margin, meaning
-// the dense sampling found precisely the same maximum the bake's 4096 samples did.
-// For smooth simplification the area maximum has already CONVERGED at 4096, so the
-// margin is headroom and not a necessity. `axis_sphere.obj` is the one subject where
-// density found more (0.8094, i.e. 1.2 % past the bake's own figure), and
-// `ground.obj` reads 0.2037 because its bound is the precision floor. So this suite
-// is a REGRESSION CHECK on a converged number, and the term that actually carries
-// the maximum on a hard mesh is the removed-vertex walk — measured at 13.08x the
-// area-only figure on `endlessplane.obj` (JAH_BAKE_BOUND_TERMS in meshbake.cpp
-// prints the split), which is exactly why that walk is in the bake and not here.
+// WHAT THIS IS, SAID ACCURATELY. It is a REGRESSION CHECK, not an independent
+// derivation: `checkLodBounds` re-measures at 8x the area samples, at strata the bake
+// never used, plus the SAME exact removed-vertex walk, under the same island caps and
+// without the margin. Where the exact vertex term carries the maximum (the dragon,
+// the endless plane, most levels since ATOM-LOD-BOUND-1 stopped multiplying that
+// exact term by the sampling margin) the check reproduces the stored number and reads
+// 1.0000; where the sampled term carries it, the ratio is the dense samples against
+// 1.25x the bake's (0.80-0.90 on the shipped meshes), which is the margin being judged.
+// `ground.obj` reads ~0.20 because its bound is the precision floor. The physics bar —
+// bound >= the dense reference AND <= 2x the simplifier's error — is
+// atom.lod_bound_bar; `test_mesh_bake --bound-terms <file>` prints a chain's terms.
 //
 // AND `lodBounds[k] >= lodErrors[k]` IS DELIBERATELY NOT ASSERTED. The quadric can
 // over-state as easily as it under-states — it is a different quantity, not a
@@ -1988,6 +1972,261 @@ static void windingAgreesWithNormals()
     }
 }
 
+// ---------------------------------------------------------------------------
+// 14. THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — the `atom.lod_bound_bar`
+// suite, and the scan stand-in `atom.lod_switch` imports.
+//
+// THE DEFECT IT GUARDS. A scan's debris islands (1-6 triangle components floating
+// round the surface) were collapsed away by the simplifier and then measured
+// against the nearest SURVIVING surface metres off, so the owner's temple stored a
+// level-1 bound 100-115x its simplifier error and never left level 0 inside 1 km.
+// The bake now measures REPRESENTED surface (a dropped island costs its own
+// extent) and locks what would be displaced past twice the level's own error
+// (irisgl/import/meshbake.cpp, `Islands` and the displacement lock).
+//
+// THE BAR, per level of every chained mesh:
+//   (a) HONEST: the stored bound is at least a dense reference of the two-sided
+//       distance (MeshBake::checkLodBounds at 8x the samples, exact vertex walk, no
+//       margin) — on a one-component mesh that reference IS the sampled Hausdorff;
+//   (b) TIGHT: the stored bound is at most twice the simplifier's own error (or the
+//       precision floor, where the level is exact);
+//   (c) on the stand-in, every island a level dropped is no bigger than the level's
+//       bound (the cap is the island's size, never more), and level 1 is reached by
+//       150 m on a 1080-line, 45-degree view — the owner's bar for the temple.
+
+namespace standin {
+
+/// A 60 m scanned-ground stand-in: a gently bumped floor grid, eight columns and
+/// 600 single-triangle debris islands floating 0.5-5 m above it — the owner's
+/// scan's shape (one big surface, a few big parts, hundreds of islands) at a
+/// fixture's size. Deterministic (a fixed LCG); written as a positions-only OBJ.
+inline float floorHeight(float x, float z)
+{
+    return 0.15f * std::sin(x * 0.7f) * std::cos(z * 0.9f) + 0.05f * std::sin(x * 2.3f + z * 1.7f);
+}
+
+inline bool write(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    QByteArray out;
+    int base = 1;
+    const auto v = [&](float x, float y, float z) {
+        out += QByteArray("v ") + QByteArray::number(x, 'f', 5) + ' ' + QByteArray::number(y, 'f', 5)
+               + ' ' + QByteArray::number(z, 'f', 5) + '\n';
+    };
+    const auto face = [&](int a, int b, int c) {
+        out += QByteArray("f ") + QByteArray::number(a) + ' ' + QByteArray::number(b) + ' '
+               + QByteArray::number(c) + '\n';
+    };
+    out += "# ATOM-LOD-BOUND-1 scan stand-in (tests/meshbake/test_mesh_bake.cpp standin::write)\n";
+    // The floor: 100 x 100 cells over 60 m, facing +Y.
+    const int N = 100;
+    const float half = 30.0f, cell = 2.0f * half / float(N);
+    for (int j = 0; j <= N; ++j)
+        for (int i = 0; i <= N; ++i) {
+            const float x = -half + cell * float(i), z = -half + cell * float(j);
+            v(x, floorHeight(x, z), z);
+        }
+    for (int j = 0; j < N; ++j)
+        for (int i = 0; i < N; ++i) {
+            const int a = base + j * (N + 1) + i, b = a + 1, c = a + (N + 1), d = c + 1;
+            face(a, c, b);
+            face(b, c, d);
+        }
+    base += (N + 1) * (N + 1);
+    // Eight columns: open cylinders r 0.9 m, 8 m tall, on an 18 m ring.
+    const int segs = 24, rings = 12;
+    for (int k = 0; k < 8; ++k) {
+        const float cx = 18.0f * std::cos(float(k) * 0.785398f), cz = 18.0f * std::sin(float(k) * 0.785398f);
+        const float y0 = floorHeight(cx, cz);
+        for (int r = 0; r <= rings; ++r)
+            for (int s = 0; s < segs; ++s) {
+                const float t = float(s) * 6.2831853f / float(segs);
+                v(cx + 0.9f * std::cos(t), y0 + 8.0f * float(r) / float(rings), cz + 0.9f * std::sin(t));
+            }
+        for (int r = 0; r < rings; ++r)
+            for (int s = 0; s < segs; ++s) {
+                const int a = base + r * segs + s, b = base + r * segs + (s + 1) % segs;
+                const int c = a + segs, d = b + segs;
+                face(a, c, b);
+                face(b, c, d);
+            }
+        base += (rings + 1) * segs;
+    }
+    // 600 debris islands: one triangle each, 0.1-0.6 m, 0.5-5 m above the floor.
+    quint32 seed = 0x9E3779B9u;
+    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / 16777216.0f; };
+    for (int k = 0; k < 600; ++k) {
+        const float x = -28.0f + 56.0f * rnd(), z = -28.0f + 56.0f * rnd();
+        const float y = floorHeight(x, z) + 0.5f + 4.5f * rnd();
+        const float s = 0.1f + 0.5f * rnd();
+        for (int c = 0; c < 3; ++c) {
+            float dx = rnd() - 0.5f, dy = rnd() - 0.5f, dz = rnd() - 0.5f;
+            const float l = std::sqrt(dx * dx + dy * dy + dz * dz) + 1e-6f;
+            v(x + s * dx / l, y + s * dy / l, z + s * dz / l);
+        }
+        face(base, base + 1, base + 2);
+        base += 3;
+    }
+    return f.write(out) == out.size();
+}
+
+}   // namespace standin
+
+/// The largest axis extent of a mesh's positions (meshoptimizer's simplifyScale:
+/// what the bake's precision floor is a fraction of) and its box half-diagonal
+/// (the radius the GPU level rule subtracts from the view distance).
+static void meshExtents(const iris::MeshPtr &mesh, float *maxAxis, float *halfDiagonal)
+{
+    iris::Vec3 lo(FLT_MAX, FLT_MAX, FLT_MAX), hi(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    for (const iris::VertexBufferPtr &vb : mesh->getVertexBuffers()) {
+        const auto &attribs = vb->vertexLayout.getAttribs();
+        if (attribs.isEmpty() || attribs[0].usage != iris::VertexAttribUsage::Position) continue;
+        const int comps = attribs[0].count > 0 ? attribs[0].count : 3;
+        const int count = vb->dataSize / int(sizeof(float) * comps);
+        const float *p = reinterpret_cast<const float *>(vb->data);
+        for (int i = 0; i < count; ++i) {
+            const iris::Vec3 q(p[i * comps], p[i * comps + 1], p[i * comps + 2]);
+            lo = iris::Vec3(std::min(lo.x(), q.x()), std::min(lo.y(), q.y()), std::min(lo.z(), q.z()));
+            hi = iris::Vec3(std::max(hi.x(), q.x()), std::max(hi.y(), q.y()), std::max(hi.z(), q.z()));
+        }
+        break;
+    }
+    const iris::Vec3 size = hi - lo;
+    if (maxAxis) *maxAxis = std::max(std::max(size.x(), size.y()), size.z());
+    if (halfDiagonal) *halfDiagonal = 0.5f * size.length();
+}
+
+/// The view distance at which a level whose bound is `bound` becomes affordable at
+/// one pixel on a `lines`-line view with a `fovDeg` vertical field of view: the GPU
+/// rule (JahCullTest_cs.glsl) affords bound <= (d - radius) * 2 / (P * lines).
+static float switchDistance(float bound, float radius, float fovDeg = 45.0f, float lines = 1080.0f)
+{
+    const float P = 1.0f / std::tan(0.5f * fovDeg * 3.14159265f / 180.0f);
+    return bound * P * lines * 0.5f + radius;
+}
+
+/// Prints one mesh's chain as the bound's terms (the test-time window that
+/// replaced the JAH_BAKE_BOUND_TERMS latch).
+static void printTerms(const QString &label, const QVector<iris::MeshBake::LodLevelTerms> &terms,
+                       float radius)
+{
+    std::printf("      %-22s %5s %7s %9s %9s %9s %9s %9s %5s %6s %5s %4s %8s %8s\n", "mesh", "level",
+                "tris", "quadric", "area", "vertex", "facet", "bound", "x", "drop", "lock", "pass",
+                "dropExt", "L@1080");
+    for (int i = 0; i < terms.size(); ++i) {
+        const auto &t = terms.at(i);
+        std::printf("      %-22s %5d %7d %9.5f %9.5f %9.5f %9.5f %9.5f %5.2f %6d %5d %4d %8.4f %7.0fm\n",
+                    qUtf8Printable(label), i + 1, t.triangles, double(t.quadric), double(t.areaTerm),
+                    double(t.vertexTerm), double(t.facetTerm), double(t.bound),
+                    t.quadric > 0.0f ? double(t.bound / t.quadric) : 0.0, t.islandsDropped,
+                    t.verticesLocked, t.passes, double(t.droppedMaxExtent),
+                    double(switchDistance(t.bound, radius)));
+    }
+}
+
+/// `--bound-terms <model>`: the chain of every mesh of any model file, as terms.
+/// The tool the lead re-runs on a file nobody can ship (the owner's scan).
+static int boundTerms(const QString &path)
+{
+    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+    if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
+    for (int i = 0; i < meshes.size(); ++i) {
+        QVector<iris::MeshBake::LodLevelTerms> terms;
+        QElapsedTimer t; t.start();
+        iris::MeshBake::buildLodChain(meshes.at(i), &terms);
+        float radius = 0.0f;
+        meshExtents(meshes.at(i), nullptr, &radius);
+        printTerms(QStringLiteral("%1#%2").arg(QFileInfo(path).fileName()).arg(i), terms, radius);
+        std::printf("      (chain %lld ms, radius %.2f m)\n", qint64(t.elapsed()), double(radius));
+    }
+    return 0;
+}
+
+static void boundBar()
+{
+    QTemporaryDir tmp;
+    const QString standinPath = tmp.path() + QStringLiteral("/lod_standin.obj");
+    CHECK_LOUD(standin::write(standinPath), "the scan stand-in is written");
+
+    struct Subject { QString path; bool standin; };
+    const QVector<Subject> subjects = {
+        { fixture(QStringLiteral("app/content/primitives/sphere.obj")), false },
+        { fixture(QStringLiteral("app/content/primitives/hp_sphere.obj")), false },
+        { fixture(QStringLiteral("app/content/primitives/capsule.obj")), false },
+        { fixture(QStringLiteral("app/content/primitives/torus.obj")), false },
+        { fixture(QStringLiteral("app/content/primitives/hemisphere.obj")), false },
+        { fixture(QStringLiteral("app/content/primitives/teapot.obj")), false },
+        { fixture(QStringLiteral("app/content/primitives/tube.obj")), false },
+        { fixture(QStringLiteral("app/content/primitives/endlessplane.obj")), false },
+        { fixture(QStringLiteral("app/models/ground.obj")), false },
+        { fixture(QStringLiteral("app/models/axis_sphere.obj")), false },
+        { QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj"), false },
+        { standinPath, true },
+    };
+    int chained = 0;
+    for (const Subject &s : subjects) {
+        const QString name = s.standin ? QStringLiteral("scan stand-in") : QFileInfo(s.path).fileName();
+        const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(s.path);
+        CHECK_LOUD(!meshes.isEmpty(), qUtf8Printable(name + ": parses"));
+        for (const iris::MeshPtr &mesh : meshes) {
+            QVector<iris::MeshBake::LodLevelTerms> terms;
+            iris::MeshBake::buildLodChain(mesh, &terms);
+            if (mesh->lodIndices.isEmpty()) continue;
+            ++chained;
+            float maxAxis = 0.0f, radius = 0.0f;
+            meshExtents(mesh, &maxAxis, &radius);
+            printTerms(name, terms, radius);
+
+            double worst = 0.0;
+            QVector<float> reference;
+            const bool honest = iris::MeshBake::checkLodBounds(mesh, 8, &worst, &reference);
+            CHECK_LOUD(honest, qUtf8Printable(QStringLiteral(
+                "%1: (a) every stored bound >= the per-facet two-sided reference (worst reference/stored %2)")
+                .arg(name).arg(worst, 0, 'f', 4)));
+
+            // (b) 2x where the level dropped no island — the displacement lock's
+            // budget on the exact term, which on these subjects also bounds the
+            // sampled one. Where islands WERE dropped the sampled term may carry an
+            // island's capped distance (<= the budget) times the sampling margin, so
+            // the arithmetic ceiling of the rule there is 2 x 1.25.
+            bool tight = true;
+            QString tightWhy;
+            const float floorBound = maxAxis * 1e-5f;
+            for (int k = 0; k < terms.size(); ++k) {
+                const float factor = terms.at(k).islandsDropped > 0 ? 2.5f : 2.0f;
+                const float allowed = std::max(factor * terms.at(k).quadric, floorBound * 1.0001f);
+                if (terms.at(k).bound > allowed * (1.0f + 1e-6f)) {
+                    tight = false;
+                    tightWhy += QStringLiteral(" L%1 %2 > %4 x %3").arg(k + 1)
+                                    .arg(double(terms.at(k).bound), 0, 'f', 5)
+                                    .arg(double(terms.at(k).quadric), 0, 'f', 5).arg(double(factor));
+                }
+            }
+            CHECK_LOUD(tight, qUtf8Printable(name + QStringLiteral(": (b) every bound <= 2x the "
+                                                                   "simplifier's error (2.5x on a level "
+                                                                   "that dropped islands)") + tightWhy));
+            if (!s.standin) continue;
+
+            bool capped = true;
+            int droppedAny = 0;
+            for (const auto &t : terms) {
+                droppedAny += t.islandsDropped;
+                if (t.droppedMaxExtent > t.bound * (1.0f + 1e-6f)) capped = false;
+            }
+            CHECK_LOUD(capped && droppedAny > 0, qUtf8Printable(QStringLiteral(
+                "%1: (c) the levels drop islands (%2 in all) and none is bigger than its level's bound")
+                .arg(name).arg(droppedAny)));
+            const float d1 = switchDistance(terms.first().bound, radius);
+            CHECK_LOUD(d1 <= 150.0f, qUtf8Printable(QStringLiteral(
+                "%1: (c) level 1 (bound %2 m) is affordable from %3 m on a 1080-line 45-degree view "
+                "(bar: 150 m)").arg(name).arg(double(terms.first().bound), 0, 'f', 4).arg(double(d1), 0, 'f', 0)));
+        }
+    }
+    CHECK_LOUD(chained >= 10, "the subject list really does carry chained meshes");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -2035,6 +2274,18 @@ int main(int argc, char **argv)
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
     }
+    // ATOM-LOD-BOUND-1: the bar, the stand-in the app suite imports, and the terms tool.
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-bar")) {
+        std::printf("== 14. the LOD bound's physics bar ==\n");
+        boundBar();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--write-standin"))
+        return standin::write(QString::fromLocal8Bit(argv[2])) ? 0 : 1;
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-terms"))
+        return boundTerms(QString::fromLocal8Bit(argv[2]));
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--hemisphere-winding")) {
         std::printf("== 13. winding against declared normals ==\n");
         windingAgreesWithNormals();
