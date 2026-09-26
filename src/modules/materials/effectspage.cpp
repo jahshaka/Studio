@@ -78,7 +78,6 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "data/settingsmanager.h"
 #include "core/texturemanager.h"
-#include "propertywidgets/texturepropertywidget.h"
 #include "ui/pages/assetview.h"
 #include "ui/style/stylesheet.h"
 
@@ -1050,7 +1049,7 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	// thread that draws, for a gesture that reads.
 	if (!shipped.isEmpty())
 		MaterialHelper::resolveAppRelativeTextures(
-		    graph, MaterialHelper::TextureBinding::PathOnly);
+		    graph, MaterialHelper::TextureBinding::PathOnly, assethome::library());
 	progressDialog->setValueAndText(6, "Deserialize Graph");
 
 	// A TAB OF ITS OWN (MATERIALS_TABS_SPEC §2.2). This is the line the whole
@@ -1147,7 +1146,8 @@ void EffectsPage::adoptProjectCopy(MaterialDocument *doc, const QString &copyGui
 	// seeding put the bytes in the store — so this costs a hash each and no
 	// device wait.
 	MaterialHelper::resolveAppRelativeTextures(doc->graph,
-	                                           MaterialHelper::TextureBinding::Import);
+	                                           MaterialHelper::TextureBinding::Import,
+	                                           assethome::of(dataBase, copyGuid));
 	applyReadOnlyUi();
 	syncTabBar();
 	// The drawers: the copy is a new tile in the project's, and the master has
@@ -1639,7 +1639,8 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	// assets. One import by content each, so the new material's slots name
 	// guids (a definition may never name a path — F3) and the pictures are
 	// the same objects the preset's own bundle uses.
-	MaterialHelper::resolveAppRelativeTextures(graph);
+	MaterialHelper::resolveAppRelativeTextures(graph, MaterialHelper::TextureBinding::Import,
+	                                           assethome::library());   // New Material is a library gesture
 
 	// THE GRAPH CARRIES THE NEW MATERIAL'S NAME, not the preset's (fix round
 	// 2, found on the rig). `buildDefinition` writes the graph's settings name
@@ -1695,8 +1696,15 @@ void EffectsPage::configureUI()
 	// asks through this so the graph layer never includes the shell's UI.
 	nodePropertiesPanel->setTexturePicker([this](std::function<void(const QString &)> chosen) {
 		auto *picker = new AssetPickerWidget(ModelTypes::Texture);
-		picker->setImportFromDisk([](const QString &path) -> QString {
-			auto *tex = TextureManager::getSingleton()->importTexture(path);
+		picker->setImportFromDisk([this](const QString &path) -> QString {
+			// THE ACTIVE DOCUMENT'S HOME (ASSETS-SCOPE-1 F1): a picture picked
+			// for the project's material is the project's; for a LIBRARY
+			// material it is a library row, whatever project is open.
+			const MaterialDocument *doc = activeDoc();
+			const assethome::Home home =
+			    (doc && doc->info.origin == shaderInfo::Origin::Project)
+			        ? assethome::current(mProject) : assethome::library();
+			auto *tex = TextureManager::getSingleton()->importTexture(path, home);
 			return tex ? tex->guid : QString();
 		});
 		QObject::connect(picker, &AssetPickerWidget::itemDoubleClicked, this,

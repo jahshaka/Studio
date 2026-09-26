@@ -217,7 +217,7 @@ QJsonObject definitionFor(const MaterialPreset &preset, Database *db, QString *e
         // of the thread that draws (see `Prepared`).
         const QString knownOid = prepared ? prepared->mapOids.value(file) : QString();
         const ShippedAssets::Pinned pinned =
-            ShippedAssets::importTexture(file, QString(), db, nullptr, knownOid);
+            ShippedAssets::importTexture(file, QString(), db, nullptr, assethome::library(), knownOid);
         if (!pinned.error.isEmpty() || pinned.guid.isEmpty()) {
             if (errorOut)
                 *errorOut = QStringLiteral("'%1' could not import %2: %3")

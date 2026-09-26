@@ -12,7 +12,6 @@
 #include "../models/nodemodel.h"
 #include "../graph/sockets.h"
 #include "../propertywidgets/propertywidgetbase.h"
-#include "../propertywidgets/texturepropertywidget.h"
 
 
 class QDoubleSpinBox;

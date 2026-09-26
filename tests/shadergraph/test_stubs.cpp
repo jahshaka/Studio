@@ -38,7 +38,7 @@ GraphTexture* TextureManager::loadTextureFromGuid(QString guid)
 
 // The panel's DB-backed picker path (never taken without a database, but the
 // symbol must link): behave like a plain path import.
-GraphTexture* TextureManager::importTexture(QString path)
+GraphTexture* TextureManager::importTexture(QString path, const assethome::Home &)
 {
     auto tex = createTexture();
     tex->path = path;

@@ -74,4 +74,18 @@ assert(inStore(imported), "an import into the library IS in the store");
 var libMat = materials.create("Library Mat " + Date.now());
 assert(inStore(libMat), "materials.create without {folder} is a library material");
 assert(!inProject(libMat, "material"), "...and the project does not hold it");
+// ---- 4. F1: a LIBRARY material's picture is a LIBRARY row, project or not ---
+// Project open, a library material edited, a picture picked from disk: the
+// row is the library's (the material's home decides, never "a project is
+// open") — and it is NOT the project's own row on the same bytes (section 1
+// picked IMAGE for the project's material). The project letting go of it must
+// leave the library material whole.
+var libEdit = materials.create("Library Edit " + Date.now());
+var libTex = materials.addTexture(libEdit, IMAGE, { slot: "baseColorMap" });
+assert(libTex !== tex, "the library material's picture is NOT the project's row on the same bytes");
+assert(inStore(libTex), "...it is a LIBRARY row (members shown)");
+assets.removeFromProject(libTex);
+assert(assets.metadata(libTex).name.length > 0, "...and it survives the project's remove");
+assert(materials.members(libEdit).some(function (m) { return m.guid === libTex; }),
+       "...so the library material still names a picture that exists");
 console.log("assets_scope: ok");

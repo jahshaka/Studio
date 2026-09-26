@@ -973,8 +973,11 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
             ProjectAssets::addToProject(textureGuid, host.db, host.project,
                                         ProjectAssets::AddKind::Binding);
     } else {
+        // THE MATERIAL'S HOME decides whose row the picture is (F1): a
+        // library material's picture stays a library row with a project open.
         const ShippedAssets::Pinned imported = ShippedAssets::importTexture(
-            pathOrGuid, QFileInfo(pathOrGuid).fileName(), host.db, host.project);
+            pathOrGuid, QFileInfo(pathOrGuid).fileName(), host.db, host.project,
+            assethome::of(host.db, materialGuid));
         if (!imported.ok() || imported.guid.isEmpty()) {
             fail(QStringLiteral("materials.addTexture: %1").arg(
                      imported.error.isEmpty() ? QStringLiteral("the import refused the image")
@@ -1229,7 +1232,8 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     // makes the copy.
     out["texturesResolved"] = MaterialHelper::resolveAppRelativeTextures(
         graph, preset ? MaterialHelper::TextureBinding::PathOnly
-                      : MaterialHelper::TextureBinding::Import);
+                      : MaterialHelper::TextureBinding::Import,
+        assethome::of(host.db, assetGuid));
     out["texturesImported"] = preset ? 0 : out["texturesResolved"];
     mGraphApi->setCurrent(graph, assetGuid);
 
@@ -2543,7 +2547,7 @@ bool GraphApi::save()
             // import answers "I already have this" for every one of them
             // (seeding put the bytes in the store), so this costs a hash each.
             MaterialHelper::resolveAppRelativeTextures(
-                graph, MaterialHelper::TextureBinding::Import);
+                graph, MaterialHelper::TextureBinding::Import, assethome::of(host.db, target.guid));
             // Only a MINT is news to the drawers; adopting the copy that was
             // already there changes no tile.
             if (target.copied && host.services && host.services->sceneEdit)

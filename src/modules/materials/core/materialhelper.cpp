@@ -61,7 +61,8 @@ QString MaterialHelper::assetPath(QString relPath)
 	return IrisUtils::getAbsoluteAssetPath(QString("app") + QDir::separator() + QString("shadergraph") + QDir::separator() + relPath);
 }
 
-int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph, TextureBinding binding)
+int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph, TextureBinding binding,
+                                               const assethome::Home &home)
 {
 	if (!graph) return 0;
 	int resolved = 0;
@@ -96,7 +97,7 @@ int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph, TextureBinding 
 			continue;
 		}
 
-		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs);
+		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs, home);
 		// AN IMPORT THAT FAILED IS NOT A RESOLUTION (the same rule as the
 		// picker's). `importTexture` answers a GraphTexture holding the PATH
 		// when the library refuses the bytes, and writing that back into the
@@ -215,7 +216,7 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 		if (NodeGraph* graph = extractNodeGraphFromMaterialDefinition(matObj)) {
 			// BUILDING a material for display is a read: PathOnly, never an
 			// import (PRESET-UNIFY-1 fix round).
-			resolveAppRelativeTextures(graph, TextureBinding::PathOnly);
+			resolveAppRelativeTextures(graph, TextureBinding::PathOnly, assethome::library());
 			const QJsonObject pieces =
 			    materials::PieceEmitter::emitAndStore(graph, textureResolver());
 			material->setCustomPiecePixel(pieces["customPiecePixel"].toString());

@@ -1008,13 +1008,21 @@ set_tests_properties(scripting.e2e.assets_page PROPERTIES
 # the editor, its textures, an image's companion, a preset's project copy) is
 # that project's own (services/assethome.h). Document verbs only -> --headless.
 configure_file(scripts/e2e_assets_scope.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_scope.js @ONLY)
+# The home is WIPED before every run: which ROW a picture answers depends on
+# which rows already hold those bytes (the by-content dedup), so the cases are
+# only meaningful on a library that has never seen them.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-assets_scope)
 file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.assets_scope.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(scripting.e2e.assets_scope.fresh_home PROPERTIES
+    FIXTURES_SETUP assetsScopeFreshHome LABELS "scripting")
 add_test(NAME scripting.e2e.assets_scope
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_scope.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.assets_scope PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED assetsScopeFreshHome
     LABELS "scripting"
     TIMEOUT 180)
 

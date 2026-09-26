@@ -488,7 +488,8 @@ void NodePropertiesPanel::pickTextureForNode()
 	// dialog, still through the ONE content import.
 	const auto filename = QFileDialog::getOpenFileName(this, tr("Choose an image"));
 	if (filename.isEmpty()) return;
-	auto *tex = TextureManager::getSingleton()->importTexture(filename);
+	// No page, no document: the standalone build's picker makes a library row.
+	auto *tex = TextureManager::getSingleton()->importTexture(filename, assethome::library());
 	// AN IMPORT THAT FAILED IS A PICK THAT FAILED. This used to fall back to
 	// the PATH — and a path in a texture node makes every later save of that
 	// material refuse (the definition writer's F3 guard), with a log line as

@@ -31,6 +31,7 @@
 #include <QMessageBox>
 
 #include "data/database/database.h"
+#include "services/assethome.h"
 
 class GraphTexture
 {
@@ -71,7 +72,9 @@ public:
 	QString loadTextureFromDisk(QString guid);
 	QString loadTextureFromDatabase(QString guid);
 
-	GraphTexture* importTexture(QString path);
+	/// `home` is the home of the MATERIAL the picture is for (ASSETS-SCOPE-1
+	/// F1) — never "whether a project is open".
+	GraphTexture* importTexture(QString path, const assethome::Home &home);
 	static TextureManager* getSingleton();
 
 	// whether a project database backs guid lookups (headless slices and the

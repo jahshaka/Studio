@@ -40,6 +40,8 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 
+#include "services/assethome.h"
+
 class Database;
 class Project;
 
@@ -116,8 +118,15 @@ Pinned pinTexture(const QString &sourcePath, const QString &displayName,
 /// worker (the preset seeder does). It skips the hash here, which is 19-96 ms
 /// of the UI thread per preset; wrong bytes for the oid are impossible,
 /// because the same file is what both sides read.
+///
+/// `home` IS THE MATERIAL'S HOME (ASSETS-SCOPE-1 fix round F1): a picture a
+/// PROJECT'S material brings in is that project's own row; one a LIBRARY
+/// material brings in is a library row — whatever project happens to be open
+/// (it is still pinned there, a binding, when one is). Every picker door names
+/// the material's home; "a project is open" never decides ownership.
 Pinned importTexture(const QString &sourcePath, const QString &displayName,
-                     Database *db, Project *project, const QString &knownOid = QString());
+                     Database *db, Project *project, const assethome::Home &home,
+                     const QString &knownOid = QString());
 
 /// The LIBRARY Texture row whose stored bytes are `oid`, or empty. The same
 /// by-content lookup the imports above use to answer "I already have this" —

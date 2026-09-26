@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include "pbrgraphevaluator.h"
 #include "pieceemitter.h"
+#include "services/assethome.h"
 
 class GraphNodeScene;
 class NodeGraph;
@@ -40,8 +41,10 @@ public:
 		Import,
 		PathOnly,
 	};
-	static int resolveAppRelativeTextures(NodeGraph* graph,
-	                                      TextureBinding binding = TextureBinding::Import);
+	/// `home` is the graph's MATERIAL's home: an Import mints the pictures'
+	/// rows there (ASSETS-SCOPE-1 F1).
+	static int resolveAppRelativeTextures(NodeGraph* graph, TextureBinding binding,
+	                                      const assethome::Home &home);
 
 	// Converts a NodeGraph to the Material json format.
 	// Since Option B phase 1 the result also carries "pbrMaterial", the
