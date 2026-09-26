@@ -570,6 +570,69 @@ static int clusterCutMain()
 }
 
 // ===========================================================================
+// scale.cut_cost — D1's decision number (ATOM-CLUSTER-CUT, SPECS/v2/CLUSTER_CUT_DESIGN.md
+// D1): THE FLAT CUT'S COST AT 10k INSTANCES. The world fixture, the id pass's own request
+// (visible | Atom, one sample x the LOD bias, mode 3) at five poses across it. THE GPU
+// NUMBER IS THE ID PASS'S OWN ROW (the monitor's timestamp pair around the pass: the four
+// cull jobs AND the draw), which bounds the cut from above. GpuCullResult's per-job
+// "slopes" are printed beside it and are NOT GPU time: `measureJob` flushes without waiting
+// (VulkanRenderSystem::flushCommands submits, it does not block), so they are the CPU's
+// recording and submission per dispatch — a finding about the substrate's door, reported.
+// The design owes the hierarchical traversal (E) IF the flat evaluation reads above 0.5 ms.
+// ===========================================================================
+static int cutCostMain()
+{
+    Env env;
+    World w;
+    if (!bootWorld(env, w, "test-scale-cut-cost-ogre.log")) return 1;
+    frame(env, 10);
+    std::vector<double> cutMs, emitMs, testMs, compactMs, idMs, evaluated, clusters, tris, indices;
+    unsigned overflow = 0, sampled = 0;
+    for (int s = 0; s < 5; ++s) {
+        const float x = -120.0f + 60.0f * float(s);
+        setCamera(env, iris::Vec3(x, 12.0f, 60.0f), iris::Vec3(x + 20.0f, 0.0f, -60.0f));
+        frame(env, 6);
+        const IdRead ir = readIdPass(env, 20);
+        GpuCullRequest req;
+        if (!env.engine->fillCullView(env.view, req)) continue;
+        req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
+        req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+        req.mode = 3u;
+        req.measureIterations = 20u;
+        GpuCullResult r;
+        if (!env.engine->gpuCull(env.scene, env.view, req, false, r)) continue;
+        ++sampled;
+        overflow += r.cutOverflow;
+        cutMs.push_back(r.cutMs);
+        emitMs.push_back(r.emitMs);
+        testMs.push_back(r.testMs);
+        compactMs.push_back(r.compactMs);
+        if (ir.idMs >= 0) idMs.push_back(ir.idMs);
+        evaluated.push_back(r.cutEvaluated);
+        clusters.push_back(r.cutClusters);
+        tris.push_back(r.cutTriangles);
+        indices.push_back(r.cutIndices);
+        std::printf("CUT pose %d: %u of %u instances survive, %u (instance, cluster) pairs evaluated, %u clusters / %u "
+                    "tris / %u indices drawn (budget %u, overflow %u) | test %.3f compact %.3f CUT %.3f emit %.3f ms "
+                    "(slopes) | the id pass %s GPU\n",
+                    s, r.survivors, r.instances, r.cutEvaluated, r.cutClusters, r.cutTriangles, r.cutIndices,
+                    r.cutIndexBudget, r.cutOverflow, r.testMs, r.compactMs, r.cutMs, r.emitMs, msText(ir.idMs).c_str());
+    }
+    REQUIRE(sampled >= 3, "the cut was measured at %u poses", sampled);
+    REQUIRE(overflow == 0, "no pose overflowed the cut's stream (%u)", overflow);
+    target("D1", stats(cutMs).median, "ms", "the cut job's CPU recording + submission per dispatch (slope; not GPU)");
+    target("D1", stats(emitMs).median, "ms", "the emit job's, likewise (slope; not GPU)");
+    target("D1", stats(evaluated).median, "pairs", "(instance, cluster) pairs the rule evaluated");
+    target("D1", stats(tris).median, "tris", "triangles the cut draws");
+    target("D1", stats(indices).median, "indices", "the compacted stream per frame");
+    if (!idMs.empty())
+        target("D1", stats(idMs).median, "ms", "THE GPU BOUND: the id pass (the four cull jobs + the draw), the "
+               "monitor's row, locked clocks (the flat cut's ms at 10k instances is below it)");
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
+// ===========================================================================
 // scale.levels — W4: ONLY THE FINEST 8 LEVELS REACH THE GPU PATH.
 // Anchor: irisgl/engine/src/GpuScene.h:220 (kLevelsPerMesh = 8u); OgreGpuScene.cpp:462-470
 // (take = min(levelCount, 8), one warning line). Number: the chain's level count (per
@@ -1326,6 +1389,7 @@ int main(int argc, char **argv)
     if (mode == "--lights") return lightsMain();
     if (mode == "--cluster-cut") return clusterCutMain();
     if (mode == "--levels") return levelsMain();
+    if (mode == "--cut-cost") return cutCostMain();
     if (mode == "--residency") return residencyMain();
     if (mode == "--decode") return decodeMain();
     if (mode == "--occlusion") return occlusionMain();
@@ -1336,7 +1400,7 @@ int main(int argc, char **argv)
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
     if (mode == "--lattice-owed") return latticeOwedMain();
-    std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--residency|--decode|"
+    std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
                 "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed\n");
     return 2;
 }
