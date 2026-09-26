@@ -692,7 +692,8 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
             // A library row unless the request says the project owns what it
             // mints (ASSETS-SCOPE-1): then every row is the project's own.
             const AssetViewFilter viewFilter =
-                (request.ownedByProject && !projectGuid.isEmpty())
+                request.shipped ? AssetViewFilter::DontShow
+                : (request.ownedByProject && !projectGuid.isEmpty())
                     ? AssetViewFilter::Editor
                     : static_cast<AssetViewFilter>(row.viewFilter);
             db->createAssetEntry(row.guid, row.name, row.type, row.parent, projectGuid,

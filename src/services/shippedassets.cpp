@@ -97,7 +97,7 @@ namespace {
 /// IS the same route.
 Pinned importTextureContent(const QString &sourcePath, const QString &displayName,
                             Database *db, Project *project, Ownership ownership, bool pin,
-                            bool ownedByProject, const QString &knownOid = QString())
+                            bool ownedByProject, bool shipped, const QString &knownOid = QString())
 {
     Pinned out;
     if (sourcePath.isEmpty() || !QFileInfo(sourcePath).isFile()) {
@@ -175,6 +175,7 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         // PROJECT'S material, is that project's own; a library material's
         // picture is a library row even with a project open.
         request.ownedByProject = ownedByProject && haveProject;
+        request.shipped = shipped;
         AssetImportService importer(db, project);
         const ImportResult result = importer.import(request);
         if (!result.ok()) {
@@ -241,9 +242,10 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
 Pinned pinTexture(const QString &sourcePath, const QString &displayName,
                   Database *db, Project *project, Ownership ownership)
 {
-    // The floor's checker, an emitter's image: minted FOR the open project.
+    // The floor's checker, an emitter's image: FILES THE APP SHIPS — one
+    // platform row per content, pinned by every project that uses it.
     return importTextureContent(sourcePath, displayName, db, project, ownership, /*pin=*/true,
-                                /*ownedByProject=*/true);
+                                /*ownedByProject=*/false, /*shipped=*/true);
 }
 
 Pinned importTexture(const QString &sourcePath, const QString &displayName,
@@ -257,7 +259,8 @@ Pinned importTexture(const QString &sourcePath, const QString &displayName,
     const bool ownedByProject = home.isProject() && haveProject
                                 && home.projectGuid == project->getProjectGuid();
     return importTextureContent(sourcePath, displayName, db, project,
-                                Ownership::Project, /*pin=*/haveProject, ownedByProject, knownOid);
+                                Ownership::Project, /*pin=*/haveProject, ownedByProject,
+                                /*shipped=*/false, knownOid);
 }
 
 QStringList SkyPreset::faces() const

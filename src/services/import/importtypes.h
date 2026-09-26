@@ -90,6 +90,13 @@ struct ImportRequest
     /// default — for every import a person asks for: an import IS the library.
     /// Needs a project guid (the request's or the service's project).
     bool ownedByProject = false;
+    /// A FILE THE APP SHIPS (the default floor's checker, the emitter's default
+    /// image — ShippedAssets::pinTexture): the row it mints is the PLATFORM's,
+    /// `view_filter` DontShow — one row per content shared by every project
+    /// that pins it ("the same shipped bytes are the same row in every
+    /// project"), never a library tile and never any project's own row, so no
+    /// project's remove or delete can reap it from under the others.
+    bool shipped = false;
 };
 
 /// Is this path a MODEL file — the one kind the import dialog asks about?
