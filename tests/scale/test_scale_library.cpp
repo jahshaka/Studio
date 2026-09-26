@@ -281,6 +281,15 @@ int main(int argc, char **argv)
     t.start();
     const int cp = QProcess::execute(QStringLiteral("cp"), { QStringLiteral("-a"), kBase + "/library-template", full });
     CHECK(cp == 0, "the template copied (%.1f s)", t.elapsed() / 1000.0);
+    // ONE CACHE STATE FOR BOTH ARMS: the template carries the generator run's shader
+    // cache (and the driver's cache under its HOME), so the EMPTY control is given the
+    // same copies — a bare control root pays the PSO compile storm the library arm does
+    // not, and the difference would be the cache, not the library (DOCS/traps/
+    // GATE_AND_RIG.md: a first-seconds measurement is the shader storm).
+    QDir().mkpath(empty);
+    const int cpCache = QProcess::execute(QStringLiteral("cp"),
+        { QStringLiteral("-a"), kBase + "/library-template/shadercache", kBase + "/library-template/home", empty });
+    CHECK(cpCache == 0, "the control root holds the template's shader and driver caches");
     Arm e, f;
     CHECK(runArm("empty", empty, e), "the EMPTY-library control ran");
     CHECK(runArm("10k+500", full, f), "the 10k-asset / 500-project library ran");
