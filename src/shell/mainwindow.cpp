@@ -3113,11 +3113,14 @@ void MainWindow::setupDockWidgets()
     // this dock sitting behind another tab of its group, which Qt SHOWS and
     // parks off-screen. Qt emits visibilityChanged(true) both when the dock is
     // opened and when its tab is raised (QMainWindowLayout::tabChanged), so
-    // this is the one wire that settles the debt in the SAME turn as the click.
+    // this is the one wire that settles the debt in the SAME turn as the click
+    // — posted, not paid inline: the signal fires from the dock's own Show
+    // event, and a mount frees retired rows (CREATE-CRASH-1; see
+    // SceneNodePropertiesWidget::showEvent).
     connect(sceneNodePropertiesDock, &QDockWidget::visibilityChanged,
             this, [this](bool shown) {
                 if (shown && sceneNodePropertiesWidget)
-                    sceneNodePropertiesWidget->flushPendingMount();
+                    sceneNodePropertiesWidget->flushPendingMountAfterShow();
             });
 
     // Presets Dock
