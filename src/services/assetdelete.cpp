@@ -228,11 +228,12 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         // it the way deleteProject reaps its orphans.
         // So does a PROJECT'S OWN row (ASSETS-SCOPE-1: a material made in the
         // editor, an image's companion) — it never was a library row, so once
-        // its project lets go of it there is nowhere left for it to be.
+        // the LAST pin lets go of it there is nowhere left for it to be,
+        // WHOEVER let go (fix round F3: the owner may have left first and a
+        // project that pinned it by guid — a cross-project paste — last).
         const AssetRecord m = member == guid ? record : db->fetchAsset(member);
-        const bool projectsOwn = m.view_filter == AssetViewFilter::Editor
-                                 && m.projectGuid == projectGuid;
-        if (!m.guid.isEmpty() && (!m.listed || projectsOwn) && db->countAssetPins(member) == 0) {
+        if (!m.guid.isEmpty() && (!m.listed || db->isProjectOwned(m))
+            && db->countAssetPins(member) == 0) {
             if (db->deleteAsset(member, /*force*/ true)) out.unlisted = true;
             else ok = false;
         }

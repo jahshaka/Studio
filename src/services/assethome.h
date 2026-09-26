@@ -71,9 +71,7 @@ inline Home of(Database *db, const QString &guid)
 {
     if (!db || guid.isEmpty()) return Home{};
     const AssetRecord row = db->fetchAsset(guid);
-    if (row.view_filter == AssetViewFilter::Editor && !row.projectGuid.isEmpty())
-        return Home{ row.projectGuid };
-    return Home{};
+    return db->isProjectOwned(row) ? Home{ row.projectGuid } : Home{};
 }
 
 }   // namespace assethome

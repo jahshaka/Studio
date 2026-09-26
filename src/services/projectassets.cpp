@@ -77,6 +77,9 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     // would become this project's copy too, and two projects would edit one
     // material. The library views never offer it (they show the master); a
     // verb or a stale drag that names it gets the reason.
+    // (Any OTHER project's own row MAY be pinned — ASSETS-SCOPE-1 F3: a
+    // cross-project paste pins the guids its nodes name. The row lives while
+    // any project pins it and goes with the last pin, whoever let go.)
     const QString foreign = MaterialBundle::foreignCopyRefusal(db, guid, projectGuid);
     if (!foreign.isEmpty()) {
         result.error = foreign;

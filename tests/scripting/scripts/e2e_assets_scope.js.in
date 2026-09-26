@@ -29,7 +29,7 @@ function inProject(g, type) {
     return guids(assets.list({ scope: "project", type: type })).indexOf(g) >= 0;
 }
 
-project.create("Assets scope " + Date.now());
+var projA = project.create("Assets scope " + Date.now());
 materials.seedPresets();          // the shipped library, before the count
 var storeBefore = store().length;
 
@@ -88,4 +88,19 @@ assets.removeFromProject(libTex);
 assert(assets.metadata(libTex).name.length > 0, "...and it survives the project's remove");
 assert(materials.members(libEdit).some(function (m) { return m.guid === libTex; }),
        "...so the library material still names a picture that exists");
+// ---- 5. F3: an own row goes with its LAST pin, whoever let go ---------------
+// Project A makes a material (A's own row); project B pins it by guid (what a
+// cross-project paste does). A lets go first — B still holds it, it stays; B
+// lets go last — nothing holds it, it goes, although B never owned it.
+var shared = materials.create("Shared Own " + Date.now(), { folder: "" });
+var projB = project.create("Assets scope B " + Date.now());
+assert(assets.addToProject(shared) === shared, "project B pins A's own material by guid");
+assert(project.open(projA) === true, "back to A");
+assert(assets.removeFromProject(shared) === true, "A (the owner) lets go first");
+assert(assets.metadata(shared).name.length > 0, "...B still pins it, so the row stays");
+assert(project.open(projB) === true, "to B");
+assert(assets.removeFromProject(shared) === true, "B lets go last");
+var sharedGone = false;
+try { assets.metadata(shared); } catch (e) { sharedGone = true; }
+assert(sharedGone, "...no pin left: A's own row is reaped although B let go last");
 console.log("assets_scope: ok");
