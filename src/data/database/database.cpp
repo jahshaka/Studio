@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QSqlRecord>
 #include <QDateTime>
+#include <QTimeZone>
 #include <QMessageBox>
 #include <QObject>
 #include <QUuid>
@@ -959,6 +960,26 @@ bool Database::createFolder(const QString &folderName, const QString &parentFold
 // reachable from the asset panel: the row exists, resolves by guid and is
 // invisible. One helper, one query, no fresh guid unless a folder is really
 // created.
+QString Database::sqlTimestamp(const QDateTime &when)
+{
+    return when.toUTC().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+}
+
+QDateTime Database::readSqlTimestamp(const QVariant &stored)
+{
+    QDateTime when = QDateTime::fromString(stored.toString(), QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    if (when.isValid()) when.setTimeZone(QTimeZone::UTC);
+    return when;
+}
+
+// The column's value as a project archive carries it: our own shape, or — for a
+// row with none — the moment of the write.
+static QString archiveTimestamp(const QVariant &stored)
+{
+    const QDateTime when = Database::readSqlTimestamp(stored);
+    return Database::sqlTimestamp(when.isValid() ? when : QDateTime::currentDateTimeUtc());
+}
+
 QString Database::ensureFolder(const QString &folderName, const QString &projectGuid, bool visible)
 {
     if (folderName.isEmpty() || projectGuid.isEmpty()) return QString();
@@ -3422,8 +3443,8 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     auto sceneBlob  = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
-    auto sceneLastW = query.value(4).toDateTime();
-    auto sceneLastA = query.value(5).toDateTime();
+    const QString sceneLastW = archiveTimestamp(query.value(4));
+    const QString sceneLastA = archiveTimestamp(query.value(5));
     auto sceneGuid  = query.value(6).toString();
 
     // ScopedConnection: "myUniqueSQLITEConnection" was registered here and
@@ -4161,8 +4182,8 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     auto sceneBlob = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
-    auto sceneLastW = query.value(4).toDateTime();
-    auto sceneLastA = query.value(5).toDateTime();
+    const QString sceneLastW = archiveTimestamp(query.value(4));
+    const QString sceneLastA = archiveTimestamp(query.value(5));
     auto oldSceneGuid = query.value(6).toString();
 
     QVector<AssetRecord> assetList;

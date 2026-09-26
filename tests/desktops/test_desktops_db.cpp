@@ -7,7 +7,9 @@
 // JahLibrary.db is never touched. Runs under QT_QPA_PLATFORM=offscreen.
 // Framework-free; non-zero exit on failure.
 #include <QApplication>
+#include <QDir>
 #include <QFile>
+#include <QRegularExpression>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <cmath>
@@ -209,6 +211,41 @@ int main(int argc, char **argv)
                "VALUES ('Downgrade', datetime(), 'guid-d', NULL)");
         auto d = findTile(db.fetchProjects(1), "guid-d");
         CHECK(d.guid == "guid-d" && d.desktop == 1, "NULL desktop value reads as Desktop 1");
+    }
+
+    // --- ONE TIMESTAMP FORMAT (D0): last_written / last_accessed keep SQLite
+    //     datetime()'s shape through a project export + import round trip. The
+    //     archive path used to bind a QDateTime, which lands as ISO text with a
+    //     'T' and milliseconds — a second format in the column the Desktop
+    //     orders by as TEXT ('T' > ' ', so every imported project sorted first).
+    {
+        const QRegularExpression shape(QStringLiteral("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"));
+        auto columns = [](const QString &guid) {
+            QSqlQuery q;
+            q.prepare("SELECT last_written, last_accessed FROM projects WHERE guid = ?");
+            q.addBindValue(guid);
+            q.exec();
+            q.next();
+            return QStringList{ q.value(0).toString(), q.value(1).toString() };
+        };
+        CHECK(db.createProject("guid-rt", "Round Trip"), "a project to round-trip");
+        const QStringList before = columns("guid-rt");
+        CHECK(shape.match(before[0]).hasMatch() && shape.match(before[1]).hasMatch(),
+              qPrintable("a created project's stamps are datetime()'s shape: " + before.join(" | ")));
+        QDir().mkpath("rt-export");
+        db.createExportScene(QStringLiteral("rt-export"), "guid-rt");
+        QString worldName;
+        QMap<QString, QString> guidMap;
+        CHECK(db.importProject(QStringLiteral("rt-export/guid-rt"), "guid-rt-2", worldName, guidMap),
+              "the export imports back as a second project");
+        const QStringList after = columns("guid-rt-2");
+        CHECK(shape.match(after[0]).hasMatch() && shape.match(after[1]).hasMatch(),
+              qPrintable("...and ITS stamps are the same shape: " + after.join(" | ")));
+        CHECK(after == before, "...carrying the exported values unchanged");
+        CHECK(Database::readSqlTimestamp(after[0]).isValid(), "the one reader reads it");
+        CHECK(!Database::readSqlTimestamp(QStringLiteral("2026-09-26T03:04:05.000")).isValid(),
+              "the one reader refuses the ISO 'T' form (no reader of the old shape)");
+        QDir("rt-export").removeRecursively();
     }
 
     db.closeDatabase();

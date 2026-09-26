@@ -556,6 +556,16 @@ public:
     /// question the editor tray asks in services/assettray.h, so the two
     /// listings cannot disagree. Definition + rationale: database.cpp.
     static QString memberSubquery(const QString &column);
+
+    /// THE ONE TIMESTAMP FORMAT of the projects table's `last_written` and
+    /// `last_accessed` (D0: the export/import path bound a QDateTime, which Qt
+    /// writes as ISO text with a 'T' and milliseconds — a second format in a
+    /// column the Desktop ORDERS BY as text). SQLite `datetime()`'s own shape,
+    /// UTC `YYYY-MM-DD HH:MM:SS`: every writer either calls `datetime()` in SQL
+    /// or binds `sqlTimestamp`, and every reader goes through `readSqlTimestamp`,
+    /// which accepts that shape and nothing else (an invalid QDateTime otherwise).
+    static QString sqlTimestamp(const QDateTime &when);
+    static QDateTime readSqlTimestamp(const QVariant &stored);
     /// BATCH READS for the listing rules (small-items round B). Each is ONE
     /// query for a whole listing's worth of rows; the per-row reads they
     /// replace made the editor tray cost a query per tile, on every edge write
