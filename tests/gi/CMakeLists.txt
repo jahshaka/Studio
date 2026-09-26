@@ -1793,3 +1793,24 @@ add_test(NAME gi.skin_rays_norays COMMAND test_gi_skin_rays
 set_tests_properties(gi.skin_rays_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
+
+# ---------------------------------------------------------------------------
+# photon.view — THE PHOTON VIEW (lane PHOTON-VIEW-1): world.setPhotonView's seven
+# debug pictures. On the default scene every mode that can paint changes pixels and
+# 'off' after each is the off picture, pixel for pixel; on Showroom 2 at the High
+# Photon tier each of the seven repaints more than 20 % of the frame; every refusal
+# names its reason (no field, no cards, no rays, the Low mode's passthrough viewport,
+# GI off); the thumbnail's shot parks the view. Every shot is the "scene" grade at
+# 160 x 90 with every pixel probed. An app run on the rig's display, like atom.view.
+set(_photon_view_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon_view)
+file(MAKE_DIRECTORY ${_photon_view_home}/run)
+set(PHOTON_VIEW_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/photon_view.js.in
+               ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js @ONLY)
+add_test(NAME photon.view
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/photon_view.js
+         WORKING_DIRECTORY ${_photon_view_home}/run)
+set_tests_properties(photon.view PROPERTIES
+    TIMEOUT 400 LABELS "scripting"
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_photon_view_home};JAHSHAKA_DATA_ROOT=${_photon_view_home}/.local/share/Jahshaka")
