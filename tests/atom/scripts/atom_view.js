@@ -7,11 +7,13 @@
 //   (a) each mode changes > 20 % of the default scene's pixels against 'off', in the
 //       "scene" grade (the post chain) and the "plain" grade (the passthrough shape);
 //   (b) 'off' after all four is the 'off' picture, pixel for pixel;
-//   (c) with the split shut (world.setAtomDraw(false)) no view paints anything;
+//   (c) with the split shut (world.setAtomDraw(false)) nothing is painted and the verb
+//       refuses every mode but 'off';
 //   (d) a stock-PBR object (a two-sided cube, atomStatus().twoSided) standing on the
 //       floor keeps its lit picture: the id image still names the floor under it, and
 //       the view paints only where the final depth is the id pass's;
-//   (e) the verb refuses an unknown name, and world.atomStatus() reports the view.
+//   (e) the verb refuses an unknown name, and world.atomStatus() reports the view;
+//   (f) at the Low tier (a passthrough viewport, no id pass) the verb refuses.
 // Frames, never time: every shot renders until the scene is at rest.
 
 function assert(cond, msg) {
@@ -77,16 +79,37 @@ for (var g = 0; g < grades.length; ++g) {
            " pixels differ)");
 }
 
-// (c) with the split shut there is no id image, and nothing is painted.
+// (c) with the split shut there is no id image: a view already on paints nothing,
+// and the verb refuses to turn one on.
+function refuses(name) {
+    try { world.setAtomView(name); } catch (e) { return /no id pass/.test(String(e)); }
+    return false;
+}
+assert(world.setAtomView("triangles") === true, "triangles on");
 assert(world.setAtomDraw(false) === false, "world.setAtomDraw(false) shuts the split");
 editor.frame(4);
-var pbsOff = shot("pbs_off", "scene");
-assert(world.setAtomView("triangles") === true, "the view is accepted with the split shut");
+assert(world.atomStatus().viewPaintable === false, "atomStatus().viewPaintable is false with the split shut");
 var pbsTri = shot("pbs_triangles", "scene");
+assert(world.setAtomView("off") === true, "'off' is always accepted");
+var pbsOff = shot("pbs_off", "scene");
 assert(same(pbsOff, pbsTri), "with the split shut the view paints nothing (" + changed(pbsOff, pbsTri) +
        " pixels differ)");
-assert(world.setAtomView("off") === true && world.setAtomDraw(true) === true, "the split is restored");
+assert(refuses("levels") && world.atomView() === "off", "with the split shut the verb refuses, naming why");
+assert(world.setAtomDraw(true) === true, "the split is restored");
 editor.frame(4);
+assert(world.atomStatus().viewPaintable === true, "...and the view can paint again");
+
+// (f) THE LOW TIER: the viewport is a passthrough view into its window with no id
+// pass (atomStatus().passthroughViews) — the verb refuses and the view stays off.
+world.mode({ mode: "low" });
+editor.frame(6);
+var low = world.atomStatus();
+assert(low.passthroughViews >= 1 && low.viewPaintable === false,
+       "at Low the viewport carries no id pass (passthroughViews " + low.passthroughViews + ")");
+assert(refuses("triangles") && world.atomView() === "off", "at Low the verb refuses and the view stays off");
+world.mode({ mode: "epic" });
+editor.frame(6);
+assert(world.atomStatus().viewPaintable === true, "back at Epic the view can paint");
 
 // (d) a stock-PBR object in front of an atom surface keeps its lit picture. A thin
 // slab held above the floor as a planar mirror stays on the stock shader ('planar':

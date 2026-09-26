@@ -267,7 +267,7 @@ add_test(NAME atom.view
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js
          WORKING_DIRECTORY ${_atom_view_home}/run)
-# 22 s solo on the rig (twenty-three settled shots); the rest is gate-load headroom.
+# 38 s solo on the rig (twenty-three settled shots and a Low-tier round trip); the rest is gate-load headroom.
 set_tests_properties(atom.view PROPERTIES
     TIMEOUT 300 LABELS "scripting"
     ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")

@@ -3980,9 +3980,17 @@ void MainWindow::setupViewPort()
             connect(action, &QAction::triggered, this, [this, mode]() { setAtomViewMode(mode); });
             atomViewActions.push_back(action);
         }
+        // ...and DISABLES the painting rows where nothing could paint (the Low
+        // tier's passthrough viewport, the split shut) — the verb refuses there too.
+        // Off stays enabled: a view left on can always be switched off.
         connect(atomMenu, &QMenu::aboutToShow, this, [this]() {
             const int mode = atomViewMode();
-            for (int i = 0; i < atomViewActions.size(); ++i) atomViewActions[i]->setChecked(i == mode);
+            jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+            const bool paintable = es && es->atomViewPaintable();
+            for (int i = 0; i < atomViewActions.size(); ++i) {
+                atomViewActions[i]->setChecked(i == mode);
+                atomViewActions[i]->setEnabled(i == 0 || paintable);
+            }
         });
     }
 
@@ -5493,6 +5501,7 @@ void MainWindow::setAtomViewMode(int mode)
 {
     jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
     if (!es || mode < 0 || mode > 4) return;
+    if (mode != 0 && !es->atomViewPaintable()) return;   // world.setAtomView's refusal
     es->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
     for (int i = 0; i < atomViewActions.size(); ++i) atomViewActions[i]->setChecked(i == mode);
 }
