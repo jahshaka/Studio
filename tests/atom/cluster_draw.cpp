@@ -209,7 +209,7 @@ bool GpuCut::run(const std::vector<MeshClusterGroup> &groups, const std::vector<
         std::memcpy(p.row, s.worldRow, sizeof(p.row));
         p.eyeScale[0] = s.eye[0]; p.eyeScale[1] = s.eye[1]; p.eyeScale[2] = s.eye[2];
         p.eyeScale[3] = 0.0f;   // the device derives the scale from the rows
-        p.lod[0] = s.tolerance; p.lod[1] = s.projScaleY; p.lod[2] = s.viewportHeight; p.lod[3] = 0.0f;
+        p.lod[0] = s.tolerance; p.lod[1] = s.projScaleY; p.lod[2] = s.viewportHeight; p.lod[3] = s.orthographic ? 1.0f : 0.0f;
         v[i] = p;
     }
     const unsigned total = unsigned(clusters.size() * views.size());

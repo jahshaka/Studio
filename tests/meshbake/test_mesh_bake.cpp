@@ -55,7 +55,9 @@
 #include <QSqlQuery>
 #include <QRegularExpression>
 #include <QElapsedTimer>
+#include <algorithm>
 #include <cfloat>
+#include <map>
 #include <cmath>
 #include <vector>
 #include <QTemporaryDir>
@@ -2145,6 +2147,86 @@ static int boundTerms(const QString &path)
     return 0;
 }
 
+/// THE DAG'S GROUPS AS TERMS (ATOM-CLUSTER-CUT: the bound rule applied to every
+/// group). One row per DAG depth — groups, how many dropped an island, the worst
+/// and the median bound/estimate ratio, the largest dropped island — and the ten
+/// worst groups by ratio with their terms.
+static void printDagTerms(const QString &label, const iris::MeshBake::ClusterDagStats &st)
+{
+    using Row = iris::MeshBake::ClusterDagStats::GroupTerms;
+    std::map<int, std::vector<const Row *>> byDepth;
+    for (const Row &r : st.groupTerms)
+        if (r.estimate != FLT_MAX && r.bound != FLT_MAX) byDepth[r.depth].push_back(&r);
+    std::printf("      %-26s %5s %6s %6s %7s %7s %9s %9s %9s\n", "mesh (DAG)", "depth", "groups", "drops",
+                "x med", "x worst", "estimate", "bound", "dropExt");
+    for (auto &kv : byDepth) {
+        std::vector<float> x;
+        int drops = 0;
+        float ext = 0.0f;
+        double est = 0.0, bnd = 0.0;
+        for (const Row *r : kv.second) {
+            x.push_back(r->estimate > 0.0f ? r->bound / r->estimate : 0.0f);
+            drops += r->islandsDropped > 0 ? 1 : 0;
+            ext = std::max(ext, r->droppedMaxExtent);
+            est += r->estimate;
+            bnd += r->bound;
+        }
+        std::sort(x.begin(), x.end());
+        std::printf("      %-26s %5d %6zu %6d %7.2f %7.2f %9.5f %9.5f %9.4f\n", qUtf8Printable(label), kv.first,
+                    kv.second.size(), drops, double(x[x.size() / 2]), double(x.back()),
+                    est / double(kv.second.size()), bnd / double(kv.second.size()), double(ext));
+    }
+    std::vector<const Row *> all;
+    for (const Row &r : st.groupTerms)
+        if (r.estimate != FLT_MAX && r.bound != FLT_MAX && r.estimate > 0.0f) all.push_back(&r);
+    std::sort(all.begin(), all.end(), [](const Row *a, const Row *b) {
+        return a->bound / a->estimate > b->bound / b->estimate;
+    });
+    std::printf("      worst groups: depth  R-verts S-tris  estimate   sampled    vertex     facet     bound   ref      x  drop cap\n");
+    for (size_t i = 0; i < all.size() && i < 10; ++i) {
+        const Row *r = all[i];
+        std::printf("                    %5d %8d %6d %9.5f %9.5f %9.5f %9.5f %9.5f %7.4f %5.2f %4d %3d\n", r->depth,
+                    r->regionVertices, r->simplifiedTriangles, double(r->estimate), double(r->sampled),
+                    double(r->vertex), double(r->facet), double(r->bound), double(r->reference),
+                    double(r->bound / r->estimate), r->islandsDropped, r->capBound ? 1 : 0);
+    }
+    for (const Row &r : st.groupTerms)
+        if (r.reference > r.bound * (1.0f + 1e-6f) + 1e-9f && r.bound != FLT_MAX)
+            std::printf("      UNDER ITS REFERENCE: depth %d R %d S %d estimate %.5f sampled %.5f vertex %.5f "
+                        "facet %.5f bound %.5f reference %.5f\n", r.depth, r.regionVertices,
+                        r.simplifiedTriangles, double(r.estimate), double(r.sampled), double(r.vertex),
+                        double(r.facet), double(r.bound), double(r.reference));
+}
+
+/// `--dag-terms <model> [--dense]`: every mesh's DAG as group terms (the lead's
+/// tool on a file nobody can ship — the owner's scan). Times the DAG build.
+static int dagTerms(const QString &path, bool dense)
+{
+    const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+    if (meshes.isEmpty()) { std::printf("FAIL: %s parses\n", qUtf8Printable(path)); return 1; }
+    for (int i = 0; i < meshes.size(); ++i) {
+        iris::MeshBake::ClusterDagStats st;
+        st.wantTerms = true;
+        st.denseReference = dense;
+        QElapsedTimer t; t.start();
+        iris::MeshBake::buildClusterDag(meshes.at(i), &st);
+        printDagTerms(QStringLiteral("%1#%2").arg(QFileInfo(path).fileName()).arg(i), st);
+        // THE STORED ERRORS per depth (what the cut reads), from the DAG itself.
+        std::map<int, std::vector<float>> stored;
+        for (const auto &g : meshes.at(i)->clusterDag.groups)
+            if (g.error != FLT_MAX && g.estimate > 0.0f && g.estimate != FLT_MAX)
+                stored[g.depth].push_back(g.error / g.estimate);
+        for (auto &kv : stored) {
+            std::sort(kv.second.begin(), kv.second.end());
+            std::printf("      stored/estimate depth %2d: %4zu groups, median %.2f, worst %.2f\n", kv.first,
+                        kv.second.size(), double(kv.second[kv.second.size() / 2]), double(kv.second.back()));
+        }
+        std::printf("      (DAG %lld ms: build %.0f + measure %.0f; %d clusters, %d groups, depth %d)\n",
+                    qint64(t.elapsed()), st.buildMs, st.measureMs, st.clusters, st.groups, st.depth);
+    }
+    return 0;
+}
+
 /// `--bake-blob <model>`: the whole bake of any model file — its sha256, its size
 /// and its wall time. The blob is a pure function of the model (serialize), so two
 /// builds, two thread counts or two optimisation levels that print the same sha
@@ -2175,6 +2257,76 @@ static int bakeBlobTool(const QString &path, int threads, const QString &outPath
         if (!f.open(QIODevice::WriteOnly) || f.write(blob) != blob.size()) return 1;
     }
     return 0;
+}
+
+/// THE BAR ON THE DAG'S GROUPS (ATOM-CLUSTER-CUT) — the chain's (a) and (b) per group:
+/// (a) HONEST: the group's own measured error >= its dense reference;
+/// (b) TIGHT: <= 2x clusterlod's own error for the group (2.5x where the group dropped
+///     an island or an island cap bound one of its points — the capped island x the
+///     sampling margin), or the precision floor;
+/// and on the stand-in (c) the groups drop islands and none is bigger than its
+/// group's error. Returns the groups checked.
+static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, bool target)
+{
+    iris::MeshBake::ClusterDagStats st;
+    st.wantTerms = true;
+    st.denseReference = !target;      // the target row judges (b) and (c) only
+    iris::MeshBake::buildClusterDag(mesh, &st);
+    if (!st.groups) return 0;
+    float maxAxis = 0.0f;
+    meshExtents(mesh, &maxAxis, nullptr);
+    printDagTerms(name, st);
+    const float floorBound = maxAxis * 1e-5f;
+    int checked = 0, dishonest = 0, loose = 0, drops = 0, oversize = 0;
+    double worstRef = 0.0, worstX = 0.0;
+    QString why;
+    for (const auto &r : st.groupTerms) {
+        if (r.estimate == FLT_MAX || r.bound == FLT_MAX) continue;   // terminal
+        ++checked;
+        // BELOW TWICE THE PRECISION FLOOR THE BAKE CLAIMS NOTHING: a group whose every
+        // term sits under the floor stores the floor (1e-5 of the extent), and a denser
+        // sampling finding 1.1-1.5x of that (the ground's flat groups, the stand-in's
+        // floor patches — measured) is below what the bound resolves.
+        if (r.reference > r.bound * (1.0f + 1e-6f) + 1e-9f && r.reference > 2.0f * floorBound) ++dishonest;
+        if (r.bound > 0.0f) worstRef = std::max(worstRef, double(r.reference) / double(r.bound));
+        const float factor = (r.islandsDropped > 0 || r.capBound) ? 2.5f : 2.0f;
+        const float allowed = std::max(factor * r.estimate, floorBound * 1.0001f);
+        if (r.estimate > 0.0f) worstX = std::max(worstX, double(r.bound) / double(r.estimate));
+        if (r.bound > allowed * (1.0f + 1e-6f)) {
+            if (++loose <= 4)
+                why += QStringLiteral(" d%1 %2 > %3 x %4").arg(r.depth).arg(double(r.bound), 0, 'f', 5)
+                           .arg(double(factor)).arg(double(r.estimate), 0, 'f', 5);
+        }
+        drops += r.islandsDropped;
+        if (r.droppedMaxExtent > r.bound * (1.0f + 1e-6f)) ++oversize;
+    }
+    if (!target)
+        CHECK_LOUD(dishonest == 0, qUtf8Printable(QStringLiteral(
+        "%1 DAG: (a) every group's error >= its dense reference (%2 of %3 below; worst reference/error %4)")
+        .arg(name).arg(dishonest).arg(checked).arg(worstRef, 0, 'f', 4)));
+    // (b) and (c) ARE A TARGET, NOT YET A BAR: the chain holds them with its
+    // DISPLACEMENT LOCK (a level re-simplified with every vertex it would displace
+    // past 2x its own error locked, every island bigger than that keeping a
+    // triangle), and the DAG's build has no per-group lock — clusterlod's
+    // `vertex_lock` is one array for the whole build, so a dropped island costs
+    // its own extent in the group that dropped it (measured: the stand-in's
+    // depth-0 groups 11x median, the temple's 6-10x). PRINTED here; gated only by
+    // `--target` (atom.dag_bound_target, label photon-target).
+    std::printf("target: %s DAG (b) %d of %d groups over 2x/2.5x clusterlod's error, worst x %.2f (bar 0)%s\n",
+                qUtf8Printable(name), loose, checked, worstX, qUtf8Printable(why));
+    if (standin)
+        std::printf("target: %s DAG (c) %d dropped islands, %d bigger than their group's error (bar 0)\n",
+                    qUtf8Printable(name), drops, oversize);
+    if (target) {
+        CHECK_LOUD(loose == 0, qUtf8Printable(QStringLiteral(
+            "%1 DAG: (b) every group's error <= 2x clusterlod's (2.5x where an island dropped or a cap bound; "
+            "%2 of %3 over, worst x %4)").arg(name).arg(loose).arg(checked).arg(worstX, 0, 'f', 2) + why));
+        if (standin)
+            CHECK_LOUD(drops > 0 && oversize == 0, qUtf8Printable(QStringLiteral(
+                "%1 DAG: (c) the groups drop islands (%2 in all) and none is bigger than its group's error "
+                "(%3 over)").arg(name).arg(drops).arg(oversize)));
+    }
+    return checked;
 }
 
 /// bake.determinism (IMPORT-SPEED-1): THE BAKE IS A FUNCTION OF THE MODEL, NOT OF
@@ -2363,6 +2515,39 @@ static void boundBar()
     CHECK_LOUD(chained >= 10, "the subject list really does carry chained meshes");
 }
 
+/// `atom.dag_bound_bar` (and, with `target`, `atom.dag_bound_target`): the bound
+/// bar's subjects, their CLUSTER DAG's groups (dagBar).
+static void dagBoundBar(bool target)
+{
+    QTemporaryDir tmp;
+    const QString standinPath = tmp.path() + QStringLiteral("/lod_standin.obj");
+    CHECK_LOUD(standin::write(standinPath), "the scan stand-in is written");
+    const QStringList subjects = {
+        fixture(QStringLiteral("app/content/primitives/sphere.obj")),
+        fixture(QStringLiteral("app/content/primitives/hp_sphere.obj")),
+        fixture(QStringLiteral("app/content/primitives/capsule.obj")),
+        fixture(QStringLiteral("app/content/primitives/torus.obj")),
+        fixture(QStringLiteral("app/content/primitives/hemisphere.obj")),
+        fixture(QStringLiteral("app/content/primitives/teapot.obj")),
+        fixture(QStringLiteral("app/content/primitives/tube.obj")),
+        fixture(QStringLiteral("app/content/primitives/endlessplane.obj")),
+        fixture(QStringLiteral("app/models/ground.obj")),
+        fixture(QStringLiteral("app/models/axis_sphere.obj")),
+        QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj"),
+        standinPath,
+    };
+    int groups = 0;
+    for (const QString &path : subjects) {
+        const bool standin = path == standinPath;
+        const QString name = standin ? QStringLiteral("scan stand-in") : QFileInfo(path).fileName();
+        const QList<iris::MeshPtr> meshes = iris::GraphicsHelper::loadAllMeshesFromFile(path);
+        CHECK_LOUD(!meshes.isEmpty(), qUtf8Printable(name + ": parses"));
+        for (const iris::MeshPtr &mesh : meshes) groups += dagBar(name, mesh, standin, target);
+    }
+    CHECK_LOUD(groups >= 100, qUtf8Printable(QStringLiteral(
+        "the subjects really do carry DAG groups (%1 checked)").arg(groups)));
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -2418,10 +2603,21 @@ int main(int argc, char **argv)
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
     }
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-bar")) {
+        const bool target = argc > 2 && QString::fromLocal8Bit(argv[2]) == QStringLiteral("--target");
+        std::printf("== 15. the cluster DAG's group bound (%s) ==\n", target ? "the target" : "the bar");
+        dagBoundBar(target);
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--write-standin"))
         return standin::write(QString::fromLocal8Bit(argv[2])) ? 0 : 1;
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-terms"))
         return boundTerms(QString::fromLocal8Bit(argv[2]));
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-terms"))
+        return dagTerms(QString::fromLocal8Bit(argv[2]),
+                        argc > 3 && QString::fromLocal8Bit(argv[3]) == QStringLiteral("--dense"));
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bake-blob"))
         return bakeBlobTool(QString::fromLocal8Bit(argv[2]), argc > 3 ? QString::fromLocal8Bit(argv[3]).toInt() : 0,
                             argc > 4 ? QString::fromLocal8Bit(argv[4]) : QString());

@@ -235,7 +235,9 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # thread's gaps (tests/scale/CMakeLists.txt) — measurements by design, so a sibling's
     # GPU work inside their window would print someone else's number.
     scale.world scale.voxel_scroll scale.cluster_cut scale.decode scale.tlas scale.cpu_walks
-    scale.library)
+    scale.library
+    # ATOM-CLUSTER-CUT: the flat cut's milliseconds at 10k instances (D1's decision number).
+    scale.cut_cost)
 # The wrapper waits at most this long for the lock (its default, JAH_GPU_LOCK_WAIT), and the wait
 # counts against ctest's TIMEOUT — so a wrapped suite's TIMEOUT is ITS OWN run budget (the value
 # its site measured and documented) PLUS this wait, set here from RUN_TIMEOUT and never again at

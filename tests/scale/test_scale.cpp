@@ -500,12 +500,14 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
 }
 
 // ===========================================================================
-// scale.cluster_cut — W3: WHOLE-MESH LOD, NO CLUSTER CUT IN THE PRODUCT.
-// Anchor: irisgl/engine/media/Hlms/Jahshaka/JahCullTest_cs.glsl:181-196 (one level per
-// INSTANCE; inside the bounds d = 0 forces level 0). Number: triangles the id pass draws
-// for the large asset at three camera distances (inside its bounds, 5 radii, 30 radii)
-// against what the DAG's cluster cut would draw at the same tolerance. Also the owed
-// row: the id pass's and the decode's GPU ms on the asset.
+// scale.cluster_cut — W3: THE CUT PER CLUSTER GROUP (ATOM-CLUSTER-CUT closed the wall:
+// until then the id pass drew one LEVEL per instance, and inside the bounds d = 0 forced
+// level 0). Anchor: irisgl/engine/media/Hlms/Jahshaka/JahCullCut_cs.glsl (the cull's cut
+// job). Number: triangles the id pass draws for the large asset at three camera distances
+// (inside its bounds, 5 radii, 30 radii) against Types.h clusterCut at the same tolerance
+// — the acceptance is within 1.2x (the GPU's count is the stats ring's, a few frames
+// late, so the reading waits for the still pose). Also the owed row: the id pass's and
+// the decode's GPU ms on the asset.
 // ===========================================================================
 static int clusterCutMain()
 {
@@ -538,6 +540,11 @@ static int clusterCutMain()
         const std::string what = std::string("triangles drawn at ") + p.name + " (the cut would draw " +
                                  std::to_string(cut) + ")";
         target("W3", r.tris, "tris", what.c_str());
+        // THE BAR THIS LANE CLOSES W3 WITH (ATOM-CLUSTER-CUT; the D1 convention: the bar
+        // comes with the part that closes the wall): the id pass draws the cut, within
+        // 1.2x of Types.h clusterCut at the same tolerance, either way.
+        REQUIRE(cut > 0 && r.tris <= 1.2 * double(cut) && r.tris * 1.2 >= double(cut),
+                "W3 %s: the id pass draws %.0f tris, within 1.2x of the cut's %zu", p.name, r.tris, cut);
         const std::string owed = std::string("id pass GPU ms on the ") + std::to_string(info.triangles) +
                                  "-triangle asset at " + p.name + " (decode " +
                                  (r.decodeMs >= 0 ? std::to_string(r.decodeMs) + " ms" : std::string("unsampled")) + ")";
@@ -570,11 +577,74 @@ static int clusterCutMain()
 }
 
 // ===========================================================================
-// scale.levels — W4: ONLY THE FINEST 8 LEVELS REACH THE GPU PATH.
-// Anchor: irisgl/engine/src/GpuScene.h:220 (kLevelsPerMesh = 8u); OgreGpuScene.cpp:462-470
-// (take = min(levelCount, 8), one warning line). Number: the chain's level count (per
-// piece) against 8, and the triangles the id pass draws for the asset at 1 km against
-// what the chain's coarsest level would draw.
+// scale.cut_cost — D1's decision number (ATOM-CLUSTER-CUT, SPECS/v2/CLUSTER_CUT_DESIGN.md
+// D1): THE FLAT CUT'S COST AT 10k INSTANCES. The world fixture, the id pass's own request
+// (visible | Atom, one sample x the LOD bias, mode 3) at five poses across it. THE GPU
+// NUMBER IS THE ID PASS'S OWN ROW (the monitor's timestamp pair around the pass: the four
+// cull jobs AND the draw), which bounds the cut from above. GpuCullResult's per-job
+// "slopes" are printed beside it and are NOT GPU time: `measureJob` flushes without waiting
+// (VulkanRenderSystem::flushCommands submits, it does not block), so they are the CPU's
+// recording and submission per dispatch — a finding about the substrate's door, reported.
+// The design owes the hierarchical traversal (E) IF the flat evaluation reads above 0.5 ms.
+// ===========================================================================
+static int cutCostMain()
+{
+    Env env;
+    World w;
+    if (!bootWorld(env, w, "test-scale-cut-cost-ogre.log")) return 1;
+    frame(env, 10);
+    std::vector<double> cutMs, emitMs, testMs, compactMs, idMs, evaluated, clusters, tris, indices;
+    unsigned overflow = 0, sampled = 0;
+    for (int s = 0; s < 5; ++s) {
+        const float x = -120.0f + 60.0f * float(s);
+        setCamera(env, iris::Vec3(x, 12.0f, 60.0f), iris::Vec3(x + 20.0f, 0.0f, -60.0f));
+        frame(env, 6);
+        const IdRead ir = readIdPass(env, 20);
+        GpuCullRequest req;
+        if (!env.engine->fillCullView(env.view, req)) continue;
+        req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
+        req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+        req.mode = 3u;
+        req.measureIterations = 20u;
+        GpuCullResult r;
+        if (!env.engine->gpuCull(env.scene, env.view, req, false, r)) continue;
+        ++sampled;
+        overflow += r.cutOverflow;
+        cutMs.push_back(r.cutMs);
+        emitMs.push_back(r.emitMs);
+        testMs.push_back(r.testMs);
+        compactMs.push_back(r.compactMs);
+        if (ir.idMs >= 0) idMs.push_back(ir.idMs);
+        evaluated.push_back(r.cutEvaluated);
+        clusters.push_back(r.cutClusters);
+        tris.push_back(r.cutTriangles);
+        indices.push_back(r.cutIndices);
+        std::printf("CUT pose %d: %u of %u instances survive, %u (instance, cluster) pairs evaluated, %u clusters / %u "
+                    "tris / %u indices drawn (budget %u, overflow %u) | test %.3f compact %.3f CUT %.3f emit %.3f ms "
+                    "(slopes) | the id pass %s GPU\n",
+                    s, r.survivors, r.instances, r.cutEvaluated, r.cutClusters, r.cutTriangles, r.cutIndices,
+                    r.cutIndexBudget, r.cutOverflow, r.testMs, r.compactMs, r.cutMs, r.emitMs, msText(ir.idMs).c_str());
+    }
+    REQUIRE(sampled >= 3, "the cut was measured at %u poses", sampled);
+    REQUIRE(overflow == 0, "no pose overflowed the cut's stream (%u)", overflow);
+    target("D1", stats(cutMs).median, "ms", "the cut job's CPU recording + submission per dispatch (slope; not GPU)");
+    target("D1", stats(emitMs).median, "ms", "the emit job's, likewise (slope; not GPU)");
+    target("D1", stats(evaluated).median, "pairs", "(instance, cluster) pairs the rule evaluated");
+    target("D1", stats(tris).median, "tris", "triangles the cut draws");
+    target("D1", stats(indices).median, "indices", "the compacted stream per frame");
+    if (!idMs.empty())
+        target("D1", stats(idMs).median, "ms", "THE GPU BOUND: the id pass (the four cull jobs + the draw), the "
+               "monitor's row, locked clocks (the flat cut's ms at 10k instances is below it)");
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
+// ===========================================================================
+// scale.levels — W4: THE COARSEST END IS REACHABLE. Until ATOM-CLUSTER-CUT only the
+// finest 8 LEVELS reached the GPU path (GpuScene::kLevelsPerMesh); the id pass now draws
+// the cut, whose terminal groups' clusters are drawn when nothing finer is affordable.
+// Number: the triangles the id pass draws for the asset at 1 km against the chain's
+// coarsest level (the level table keeps 8 levels for the voxeliser and the casters, D6).
 // ===========================================================================
 static int levelsMain()
 {
@@ -600,13 +670,16 @@ static int levelsMain()
     setCamera(env, at + iris::Vec3(0, 50.0f, 1000.0f), at);
     frame(env, 10);
     const IdRead r = readIdPass(env, 30);
-    std::printf("W4 at 1 km: the id pass draws %.0f tris; the chain's coarsest level holds %zu (%d levels, the GPU "
-                "path keeps 8)\n",
+    std::printf("W4 at 1 km: the id pass's cut draws %.0f tris; the chain's coarsest level holds %zu (%d levels)\n",
                 r.tris, info.coarsestTriangles, info.levels);
-    target("W4", double(std::min(info.levels, 8) - 1), "level", "the coarsest level the GPU path can draw (of the chain)");
     target("W4", double(info.levels), "levels", "the asset's chain length (longest piece, level 0 included)");
-    target("W4", r.tris, "tris", "triangles the id pass draws for the asset at 1 km (the coarsest level would be "
-           "fewer; see the W4 line)");
+    target("W4", r.tris, "tris", "triangles the id pass's CUT draws for the asset at 1 km (the chain's coarsest "
+           "level beside it on the W4 line)");
+    // THE BAR (ATOM-CLUSTER-CUT closes W4): the coarsest end is reached — at 1 km the cut
+    // draws no more than 1.2x the chain's coarsest level.
+    REQUIRE(r.tris > 0 && r.tris <= 1.2 * double(info.coarsestTriangles),
+            "W4: at 1 km the cut draws %.0f tris, within 1.2x of the chain's coarsest %zu", r.tris,
+            info.coarsestTriangles);
     // THE 100-LEVEL CASE (brief §4.4): the chain halves until 128 triangles
     // (meshbake.cpp kRatio 0.5, kMinTriangles 128, kMaxLevels 254), so a chain reaches
     // log2(T/128)+1 levels: 17 at 10 M in ONE mesh — and the import splits above 1 M
@@ -1326,6 +1399,7 @@ int main(int argc, char **argv)
     if (mode == "--lights") return lightsMain();
     if (mode == "--cluster-cut") return clusterCutMain();
     if (mode == "--levels") return levelsMain();
+    if (mode == "--cut-cost") return cutCostMain();
     if (mode == "--residency") return residencyMain();
     if (mode == "--decode") return decodeMain();
     if (mode == "--occlusion") return occlusionMain();
@@ -1336,7 +1410,7 @@ int main(int argc, char **argv)
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
     if (mode == "--lattice-owed") return latticeOwedMain();
-    std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--residency|--decode|"
+    std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
                 "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed\n");
     return 2;
 }
