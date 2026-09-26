@@ -594,6 +594,40 @@ set_tests_properties(ui.components PROPERTIES
 jah_no_display(ui.components)
 jah_no_display(ui.selection_cost)
 
+# ui.show_walk — SHOWING THE PROPERTIES DOCK DESTROYS NOTHING WHILE QT IS STILL
+# SHOWING IT (CREATE-CRASH-1). The create loop's SIGSEGV: Qt walks a snapshot of
+# the properties viewport's children — the column AND the rows' Qlementine focus
+# frames, which QFocusFrame re-parents into that viewport — and the column's
+# showEvent paid its owed mount inline, freeing retired rows (and with them
+# their frames) the walk still held. The real column and blades under the real
+# style, in a dock shaped the way MainWindow builds it. Offscreen, no display.
+add_executable(test_show_walk
+    test_show_walk.cpp
+    ${JAH_PROPERTIES_COLUMN_SOURCES})
+set_target_properties(test_show_walk PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_show_walk PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_show_walk PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_show_walk
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+jah_document_graph(test_show_walk)
+add_test(NAME ui.show_walk COMMAND test_show_walk
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.show_walk PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.show_walk)
+
 # ui.panel_undo — EVERY properties row is undoable, as ONE step per gesture
 # (debt L6 / N5). The claim is about gestures, not about the document, so the
 # suite builds the real blades over a real document with a real UndoService and

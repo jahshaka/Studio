@@ -114,6 +114,7 @@ struct ImportResult
     QString jafKind;            // .jaf imports: the manifest kind ("object", …)
     QMap<QString, QString> guidMap;   // .jaf imports: archive guid → new guid
     QJsonObject metadata;       // the describe-stage block recorded on the row
+    QString bakeStages;         // the mesh bake's per-mesh, per-stage ms (MeshBake::Model::stageSummary) — the log line's, never recorded
     bool ok() const { return error.isEmpty() && !assetGuid.isEmpty(); }
 };
 
@@ -171,6 +172,7 @@ struct StagedAsset
     QVector<StagedDep> deps;
     QJsonObject metadata;                // describe-stage block ("metadata" property)
     QJsonObject importRecord;            // determinism record ("import" property)
+    QString bakeStages;                  // the bake's per-stage ms, for the import's log line only (never on the row: it is the run, not the content)
     QString jafKind;
     StagedJaf jaf;
     QStringList warnings;

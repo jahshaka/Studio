@@ -223,6 +223,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
             modelScene, request.sourcePath,
             iris::MeshBake::fingerprintFor(out.sourceOid, settingsHash), stagingDir, xf);
         QString bakeError;
+        if (baked.valid) out.bakeStages = baked.stageSummary();
         if (baked.valid && iris::MeshBake::write(bakePath, baked, &bakeError)) {
             out.files.append({ bakePath, out.mainGuid, iris::MeshBake::casRole(), bakeName });
             out.files.append({ bakePath, out.meshGuid, iris::MeshBake::casRole(), bakeName });

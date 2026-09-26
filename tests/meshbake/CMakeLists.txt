@@ -199,6 +199,18 @@ set_tests_properties(meshbake.hemisphere_winding PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
     TIMEOUT 120 LABELS "meshbake")
 
+# THE BAKE DOES NOT DEPEND ON ITS THREADS (IMPORT-SPEED-1) — `bake.determinism`.
+# The bake runs its meshes, its chains/DAGs and every nearest-surface loop on the
+# hardware's threads with ordered reductions; the claim that the OUTPUT is the
+# serial one is this suite: a multi-mesh model and the Stanford dragon baked on 1
+# thread and on every thread (twice) give byte-identical blobs.
+add_test(NAME bake.determinism COMMAND test_mesh_bake --determinism
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.determinism PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
+    TIMEOUT 600 LABELS "meshbake")
+jah_no_display(bake.determinism)
+
 jah_no_display(meshbake.primitives_baked)
 jah_no_display(meshbake.rebake_generation)
 jah_no_display(meshbake.hemisphere_winding)

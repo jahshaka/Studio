@@ -42,6 +42,7 @@
 // No engine, no display: all of this is document-side by construction.
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 
 #include "bridge/previewmesh.h"
 #include <QDir>
@@ -2222,6 +2223,34 @@ static int dagTerms(const QString &path, bool dense)
         }
         std::printf("      (DAG %lld ms: build %.0f + measure %.0f; %d clusters, %d groups, depth %d)\n",
                     qint64(t.elapsed()), st.buildMs, st.measureMs, st.clusters, st.groups, st.depth);
+/// `--bake-blob <model>`: the whole bake of any model file — its sha256, its size
+/// and its wall time. The blob is a pure function of the model (serialize), so two
+/// builds, two thread counts or two optimisation levels that print the same sha
+/// baked the same bytes: the tool IMPORT-SPEED-1 proves "bake-output: unchanged"
+/// with against the base binary on a file nobody can ship (the owner's scan).
+/// `--bake-blob <model> [threads] [out.jmb]` bakes on that many threads (0 = the
+/// hardware's), prints the per-stage table the import's log line carries and the
+/// producer id the fingerprint was keyed on (so a blob can be compared with one
+/// another build wrote: they differ in the fingerprint alone when the payload is
+/// the same), and writes the blob when asked.
+static int bakeBlobTool(const QString &path, int threads, const QString &outPath)
+{
+    iris::MeshBake::setBakeThreads(threads);
+    const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("deadbeef").repeated(8));
+    QElapsedTimer t; t.start();
+    QTemporaryDir scratch;
+    const iris::MeshBake::Model model = iris::MeshBake::buildFromFile(path, fp, scratch.path());
+    const QByteArray blob = model.valid ? iris::MeshBake::serialize(model) : QByteArray();
+    const qint64 ms = t.elapsed();
+    if (blob.isEmpty()) { std::printf("FAIL: %s bakes\n", qUtf8Printable(path)); return 1; }
+    std::printf("bake-blob %s  sha256 %s  bytes %lld  wall %lld ms\n  %s\n  producer %s  settings %s\n",
+                qUtf8Printable(QFileInfo(path).fileName()),
+                QCryptographicHash::hash(blob, QCryptographicHash::Sha256).toHex().constData(),
+                qint64(blob.size()), ms, qUtf8Printable(model.stageSummary()),
+                qUtf8Printable(iris::MeshBake::producerId()), qUtf8Printable(iris::ImportSettings::identityHash()));
+    if (!outPath.isEmpty()) {
+        QFile f(outPath);
+        if (!f.open(QIODevice::WriteOnly) || f.write(blob) != blob.size()) return 1;
     }
     return 0;
 }
@@ -2294,6 +2323,107 @@ static int dagBar(const QString &name, const iris::MeshPtr &mesh, bool standin, 
                 "(%3 over)").arg(name).arg(drops).arg(oversize)));
     }
     return checked;
+/// bake.determinism (IMPORT-SPEED-1): THE BAKE IS A FUNCTION OF THE MODEL, NOT OF
+/// THE THREADS. The same file baked on ONE thread (every chunk of every parallel
+/// loop walked in order by the caller — the serial answer) and on every hardware
+/// thread (the meshes concurrently, each mesh's chain and DAG as two tasks, every
+/// query loop chunked across the pool) must give byte-identical blobs. Subjects
+/// that reach every parallel path: a MULTI-MESH model (two copies of the scan
+/// stand-in as two objects — concurrent meshes, the displacement lock's passes,
+/// island caps, the DAG's waves) and the Stanford dragon (normals + UVs in the
+/// attribute metric, a 68k-triangle DAG, the SDF's band). Each hardware bake runs
+/// TWICE, so a race that happens to reproduce the serial bytes once is still
+/// asked again.
+static void bakeDeterminism()
+{
+    QTemporaryDir tmp;
+    const QString standinPath = tmp.path() + QStringLiteral("/standin.obj");
+    CHECK_LOUD(standin::write(standinPath), "the scan stand-in is written");
+    // Two objects: the stand-in, and the stand-in again 100 m along +X.
+    const QString twoPath = tmp.path() + QStringLiteral("/two_standins.obj");
+    {
+        QFile in(standinPath);
+        CHECK_LOUD(in.open(QIODevice::ReadOnly), "the stand-in reads back");
+        const QList<QByteArray> lines = in.readAll().split('\n');
+        int vertices = 0;
+        for (const QByteArray &l : lines) if (l.startsWith("v ")) ++vertices;
+        QByteArray out = "o first\n";
+        for (const QByteArray &l : lines) if (l.startsWith("v ") || l.startsWith("f ")) out += l + '\n';
+        out += "o second\n";
+        for (const QByteArray &l : lines) {
+            const QList<QByteArray> t = l.split(' ');
+            if (l.startsWith("v ") && t.size() == 4)
+                out += "v " + QByteArray::number(t[1].toDouble() + 100.0, 'f', 5) + ' ' + t[2] + ' ' + t[3] + '\n';
+            else if (l.startsWith("f ") && t.size() == 4)
+                out += "f " + QByteArray::number(t[1].toInt() + vertices) + ' ' + QByteArray::number(t[2].toInt() + vertices)
+                       + ' ' + QByteArray::number(t[3].toInt() + vertices) + '\n';
+        }
+        QFile f(twoPath);
+        CHECK_LOUD(f.open(QIODevice::WriteOnly) && f.write(out) == out.size(), "the two-object model is written");
+    }
+    const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("deadbeef").repeated(8));
+    const int hardware = [] { iris::MeshBake::setBakeThreads(0); return iris::MeshBake::bakeThreads(); }();
+    std::printf("  hardware threads: %d\n", hardware);
+    CHECK_LOUD(hardware >= 2, "the box has more than one thread (else this suite proves nothing)");
+    const QStringList subjects = { twoPath, QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj") };
+    for (const QString &path : subjects) {
+        const QString name = QFileInfo(path).fileName();
+        QByteArray blob[3];
+        qint64 ms[3] = { 0, 0, 0 };
+        int meshes = 0, chained = 0, dags = 0;
+        for (int run = 0; run < 3; ++run) {
+            iris::MeshBake::setBakeThreads(run == 0 ? 1 : 0);
+            QTemporaryDir scratch;
+            QElapsedTimer t; t.start();
+            const iris::MeshBake::Model model = iris::MeshBake::buildFromFile(path, fp, scratch.path());
+            ms[run] = t.elapsed();
+            blob[run] = model.valid ? iris::MeshBake::serialize(model) : QByteArray();
+            if (run == 0) {
+                meshes = model.meshes.size();
+                for (const iris::MeshPtr &m : model.meshes) {
+                    if (!m->lodIndices.isEmpty()) ++chained;
+                    if (!m->clusterDag.groups.isEmpty()) ++dags;
+                }
+            }
+        }
+        iris::MeshBake::setBakeThreads(0);
+        std::printf("  %-20s %d mesh(es), %d chained, %d DAGs: 1 thread %lld ms, %d threads %lld / %lld ms, "
+                    "sha256 %s\n", qUtf8Printable(name), meshes, chained, dags, ms[0], hardware, ms[1], ms[2],
+                    QCryptographicHash::hash(blob[0], QCryptographicHash::Sha256).toHex().left(16).constData());
+        CHECK_LOUD(!blob[0].isEmpty() && chained == meshes && dags == meshes,
+                   qUtf8Printable(name + QStringLiteral(": bakes, every mesh with a chain and a DAG")));
+        CHECK_LOUD(blob[1] == blob[0] && blob[2] == blob[0],
+                   qUtf8Printable(name + QStringLiteral(": 1 thread and %1 threads (twice) bake byte-identical blobs")
+                                             .arg(hardware)));
+    }
+    CHECK_LOUD(subjects.size() == 2, "both subjects ran");
+
+    // AND A BAKE THAT THROWS IS NO BAKE — NOT A DEAD APP (IMPORT-SPEED-1 F1). An
+    // exception in any unit of work (the test hook throws in the n-th: early = the
+    // caller's own first chunks, later = worker threads and nested jobs inside a
+    // mesh's stages) must come back to buildFromScene as an invalid model — before,
+    // a worker's throw was std::terminate — and the pool must then bake the same
+    // file whole, byte for byte.
+    {
+        QTemporaryDir scratch;
+        iris::MeshBake::setBakeThreads(1);
+        const QByteArray reference = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
+        for (const int width : { 1, 0 }) {
+            iris::MeshBake::setBakeThreads(width);
+            for (const int n : { 1, 3, 40, 400, 2000 }) {
+                iris::MeshBake::failBakeAfterChunksForTest(n);
+                const iris::MeshBake::Model failed = iris::MeshBake::buildFromFile(twoPath, fp, scratch.path());
+                iris::MeshBake::failBakeAfterChunksForTest(0);
+                CHECK_LOUD(!failed.valid, qUtf8Printable(QStringLiteral(
+                    "%1 thread(s): a throw in unit %2 of the bake answers 'no bake' (and the process lives)")
+                    .arg(width == 1 ? 1 : hardware).arg(n)));
+                const QByteArray again = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
+                CHECK_LOUD(!reference.isEmpty() && again == reference, qUtf8Printable(QStringLiteral(
+                    "%1 thread(s): ...and the next bake is whole and byte-identical").arg(width == 1 ? 1 : hardware)));
+            }
+        }
+        iris::MeshBake::setBakeThreads(0);
+    }
 }
 
 static void boundBar()
@@ -2482,6 +2612,16 @@ int main(int argc, char **argv)
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-terms"))
         return dagTerms(QString::fromLocal8Bit(argv[2]),
                         argc > 3 && QString::fromLocal8Bit(argv[3]) == QStringLiteral("--dense"));
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bake-blob"))
+        return bakeBlobTool(QString::fromLocal8Bit(argv[2]), argc > 3 ? QString::fromLocal8Bit(argv[3]).toInt() : 0,
+                            argc > 4 ? QString::fromLocal8Bit(argv[4]) : QString());
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--determinism")) {
+        std::printf("== 15. the bake does not depend on its threads ==\n");
+        bakeDeterminism();
+        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+        else          std::printf("ALL %d CHECKS PASSED\n", checks);
+        return failures ? 1 : 0;
+    }
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--hemisphere-winding")) {
         std::printf("== 13. winding against declared normals ==\n");
         windingAgreesWithNormals();
