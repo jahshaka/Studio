@@ -492,7 +492,7 @@ static int clusterCutMain()
     geometryDoc(env);
     const float radius = 10.0f;   // a building-sized asset: the shell's mean radius 1 -> 10 m
     const iris::Vec3 at(0, radius, 0);
-    placeModel(env, shell, at, radius);
+    auto placed = placeModel(env, shell, at, radius);
     env.doc->getRootNode()->applyStaticDefaults();
     armMonitor(env);
     const struct { const char *name; float d; } poses[] = {
@@ -514,6 +514,24 @@ static int clusterCutMain()
     }
     std::printf("   memory: RSS %.0f MB before the asset, %.0f MB now, peak %.0f MB\n", double(rss0) / 1024.0,
                 double(rssKb()) / 1024.0, double(peakRssKb()) / 1024.0);
+    // THE OWED ROW: the id pass (and the decode) on EACH cached asset, inside its bounds
+    // (the whole-mesh level 0 — the worst case the id pass draws today).
+    for (auto &n : placed) n->removeFromParent();
+    frame(env, 10);
+    for (size_t t : { size_t(1000000), size_t(5000000), size_t(10000000) }) {
+        BakeInfo bi;
+        const QList<iris::MeshPtr> m = shellAsset(t, &bi, false);
+        if (m.isEmpty()) { std::printf("OWED id pass %zu: not cached (scale_assets_gen)\n", t); continue; }
+        auto nodes = placeModel(env, m, at, radius);
+        env.doc->getRootNode()->applyStaticDefaults();
+        setCamera(env, at + iris::Vec3(0, 0.2f * radius, 1.3f * radius), at);
+        frame(env, 10);
+        const IdRead r = readIdPass(env, 30);
+        std::printf("OWED id pass on %s (%zu tris, %d pieces) inside its bounds: draws %.0f tris, id %.3f ms, decode %.3f ms "
+                    "GPU\n", qPrintable(bi.name), bi.triangles, bi.pieces, r.tris, r.idMs, r.decodeMs);
+        for (auto &n : nodes) n->removeFromParent();
+        frame(env, 10);
+    }
     std::printf("   VS invocations: not available (the monitor has no pipeline-statistics query)\n");
     shutdown(env);
     return failures ? 1 : 0;
@@ -1198,46 +1216,69 @@ static int latticeOwedMain()
     if (!boot(env, "test-scale-lattice-ogre.log")) return 1;
     buildLattice(env);
     armMonitor(env);
-    const AtomDrawStatus st = env.scene->atomDrawStatus();
-    std::vector<double> dec, id;
-    unsigned decodePasses = 0;
-    const auto recs = collect(env, [&] { frame(env, 90); });
-    for (const FrameRecord &r : recs) {
-        unsigned passes = 0;
-        double ms = 0;
-        for (const FramePass &p : r.passes)
-            if (p.pass == "Jahshaka opaque" && p.gpuMs >= 0) { ms += p.gpuMs; ++passes; }
-        if (passes) { dec.push_back(ms); decodePasses = std::max(decodePasses, passes); }
-        if (const FramePass *p = passNamed(r, "Jahshaka atom id")) if (p->gpuMs >= 0) id.push_back(p->gpuMs);
+    // S3-DRAW'S COST ROW, at High and at Epic (the tier whose chain carries the SSR
+    // prepass): the decode's passes a frame, their GPU ms, and the classification's
+    // arithmetic — ms / (buckets x passes), and per Mpx.
+    for (int tierArm = 0; tierArm < 2; ++tierArm) {
+        const worldmodes::PhotonTier t = tierArm ? worldmodes::PhotonTier::Epic : worldmodes::PhotonTier::High;
+        worldmodes::setMode(env.doc, worldmodes::Mode(int(t)));
+        worldmodes::setPhoton(env.doc, true, t);
+        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        std::vector<double> dec, id;
+        unsigned decodePasses = 0;
+        const auto recs = collect(env, [&] { frame(env, 90); });
+        for (const FrameRecord &r : recs) {
+            unsigned passes = 0;
+            double ms = 0;
+            for (const FramePass &p : r.passes)
+                if (p.pass == "Jahshaka opaque" && p.gpuMs >= 0) { ms += p.gpuMs; ++passes; }
+            if (passes) { dec.push_back(ms); decodePasses = std::max(decodePasses, passes); }
+            if (const FramePass *p = passNamed(r, "Jahshaka atom id")) if (p->gpuMs >= 0) id.push_back(p->gpuMs);
+        }
+        const double mpx = 1920.0 * 1080.0 / 1e6, d = stats(dec).median;
+        std::printf("OWED S3-DRAW lattice at %s: buckets %u, decode passes a frame %u, decode GPU ms med %.3f (id %.3f) -> "
+                    "%.4f ms per bucket-pass, %.4f ms per bucket-pass-Mpx (the prologue's cost per pixel x buckets x "
+                    "passes)\n",
+                    tierArm ? "Epic" : "High", st.buckets, decodePasses, d, stats(id).median,
+                    d / std::max(1u, st.buckets * decodePasses), d / std::max(1u, st.buckets * decodePasses) / mpx);
     }
-    const double mpx = 1920.0 * 1080.0 / 1e6, d = stats(dec).median;
-    std::printf("OWED S3-DRAW lattice: buckets %u, decode passes a frame %u, decode GPU ms med %.3f (id %.3f) -> %.4f "
-                "ms per bucket-pass, %.4f ms per bucket-pass-Mpx (the prologue's cost per pixel x buckets x passes)\n",
-                st.buckets, decodePasses, d, stats(id).median, d / std::max(1u, st.buckets * decodePasses),
-                d / std::max(1u, st.buckets * decodePasses) / mpx);
-    // THE DRAG: one cube moved every frame for 60 frames — the scene-graph updates the
-    // GI ticks add per frame (the gi.sceneGraph monitor stages, one per call).
+    worldmodes::setMode(env.doc, worldmodes::Mode::High);
+    worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
+    // THE DRAG: one cube moved every frame for 60 frames — a still node moved on
+    // consecutive ticks IS the engine's drag (OgreGi.cpp:4053, MOVER-1's promotion) —
+    // and the scene-graph updates the GI side adds per frame (the gi.sceneGraph monitor
+    // stages, one per call). Two arms: the mover channel ON (the default, per project)
+    // and OFF (giDragMoverChannel 0, the older behaviour a project may still choose).
     auto doc = env.doc;
     iris::SceneNodePtr cubeNode = doc->getRootNode()->children().at(4210);
-    const iris::Vec3 p0 = cubeNode->getLocalPos();
-    const auto drag = collect(env, [&] {
-        for (int f = 0; f < 60; ++f) {
-            cubeNode->setLocalPos(p0 + iris::Vec3(0.05f * float(f), 0, 0));
-            frame(env, 1);
+    for (int arm = 0; arm < 2; ++arm) {
+        doc->giDragMoverChannel = arm == 0 ? 1 : 0;
+        for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+        const iris::Vec3 p0 = cubeNode->getLocalPos();
+        int dragMovers = 0;
+        const auto drag = collect(env, [&] {
+            for (int f = 0; f < 60; ++f) {
+                cubeNode->setLocalPos(p0 + iris::Vec3(0.05f * float(f), 0, 0));
+                frame(env, 1);
+                dragMovers = std::max(dragMovers, env.scene->giStatus().dragMovers);
+            }
+        });
+        std::vector<double> calls, ms;
+        for (const FrameRecord &r : drag) {
+            unsigned n = 0;
+            double t = 0;
+            for (const FrameStage &st2 : r.stages)
+                if (st2.name == "gi.sceneGraph") { ++n; t += st2.ms; }
+            calls.push_back(n);
+            ms.push_back(t);
         }
-    });
-    std::vector<double> calls, ms;
-    for (const FrameRecord &r : drag) {
-        unsigned n = 0;
-        double t = 0;
-        for (const FrameStage &s : r.stages)
-            if (s.name == "gi.sceneGraph") { ++n; t += s.ms; }
-        calls.push_back(n);
-        ms.push_back(t);
+        std::printf("OWED drag on the lattice, mover channel %s (dragMovers seen %d): extra updateSceneGraph calls "
+                    "from GI per frame med %.1f max %.0f, their ms med %.3f max %.3f (over %zu frames)\n",
+                    arm == 0 ? "ON (default)" : "OFF", dragMovers, stats(calls).median, stats(calls).max,
+                    stats(ms).median, stats(ms).max, drag.size());
+        cubeNode->setLocalPos(p0);
     }
-    std::printf("OWED drag on the lattice: extra updateSceneGraph calls from GI per frame med %.1f max %.0f, their "
-                "ms med %.3f max %.3f (over %zu frames)\n",
-                stats(calls).median, stats(calls).max, stats(ms).median, stats(ms).max, drag.size());
     shutdown(env);
     return 0;
 }

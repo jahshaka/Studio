@@ -85,22 +85,26 @@ target_compile_definitions(test_scale_library PRIVATE
 # count things, read pictures or measure memory and share the GPU like any suite.
 # TIMEOUTS: 6x the measured solo seconds (the rig, Debug, 2026-09-26), floor 120; a
 # locked row's RUN_TIMEOUT is its own budget, the lock's wait is added by the helper.
-# measured solo seconds (the rig, Debug, 2026-09-26) -> 6x, floor 120:
-set(SCALE_T_WORLD 1500)       # PLACEHOLDER
-set(SCALE_T_VOXEL 1500)       # PLACEHOLDER
+# Measured solo seconds (the rig, Debug, 2026-09-26) -> 6x, floor 120. The rows that
+# load the 1 M / 5 M / 10 M shells are sized for the 10 M one's deserialize + upload.
+set(SCALE_T_WORLD 1300)       # 210 s (still + the 30 s fly: 1,928 frames)
+set(SCALE_T_VOXEL 1100)       # 180 s (the 200 m walk + 8 teleports: 1,697 frames)
 set(SCALE_T_LIGHTS 120)       # 11 s
-set(SCALE_T_CUT 600)          # PLACEHOLDER
-set(SCALE_T_LEVELS 600)       # PLACEHOLDER
-set(SCALE_T_RESIDENCY 600)    # PLACEHOLDER
-set(SCALE_T_DECODE 840)       # 139 s
+set(SCALE_T_CUT 600)          # 12 s on the 5 M shell; the 10 M one and the owed 1/5/10 M table
+set(SCALE_T_LEVELS 300)       # 8 s on the 5 M shell
+set(SCALE_T_RESIDENCY 600)    # 9 s over 1 M + 5 M; every cached shell loaded in turn
+set(SCALE_T_DECODE 840)       # 139 s (four material arms, GI to rest after each)
 set(SCALE_T_OCCLUSION 210)    # 34 s
 set(SCALE_T_TLAS 300)         # 42-51 s
 set(SCALE_T_ATLAS 320)        # 53 s
-set(SCALE_T_FAR 120)          # ~12 s
-set(SCALE_T_BAKE 300)         # 48 s
+set(SCALE_T_FAR 120)          # ~12 s (two pictures)
+set(SCALE_T_BAKE 300)         # 48 s (a 250 k shell baked: W11 itself)
 set(SCALE_T_HIT 430)          # 71 s
 set(SCALE_T_WALKS 340)        # 47-57 s
-set(SCALE_T_LIBRARY 1800)     # PLACEHOLDER
+# scale.library: 108-110 s over a GENERATED library; a tree without one first generates it
+# (10,000 imports at ~84 ms each = ~14 min, 25 creates, 475 archive imports ~15 s) — the
+# one-time fixture cost, the reason this row's budget is 30 minutes and not 6 x 110 s.
+set(SCALE_T_LIBRARY 1800)
 function(jah_scale_row _name _mode _timeout _locked)
     if(_locked)
         jah_gpu_exclusive_test(NAME ${_name} RUN_TIMEOUT ${_timeout} COMMAND test_scale ${_mode}

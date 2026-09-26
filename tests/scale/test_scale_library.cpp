@@ -10,8 +10,9 @@
 // THE LIBRARY FIXTURE: a data root holding 10,000 library assets and 500 projects, made
 // THROUGH THE PRODUCT'S DOORS — every asset an `assets.importFile` of a distinct small PNG
 // (so each is a LIBRARY row with a real thumbnail, minted by the import pipeline — never a
-// raw insert: since ASSETS-SCOPE-1 a project's own rows are a different shape), every
-// project a `project.create` (its own world, floor tile and thumbnail). It is generated
+// raw insert: since ASSETS-SCOPE-1 a project's own rows are a different shape), and every
+// project through a project door (25 `project.create`, the rest `project.importArchive`
+// of one of them — see kCreates). It is generated
 // ONCE into the build tree (library-template/, marked complete by a file) and COPIED for
 // each run, because making it is minutes of the app's own work; the generation time is
 // printed when it happens.
@@ -105,12 +106,21 @@ static QJsonValue eval(App &app, const QString &script)
     return app.mcp.runScript(script).value("result");
 }
 
-/// THE FIXTURE, generated once. Returns false when it could not be made.
+/// THE FIXTURE, generated once — and RESUMABLE: a run that stopped part-way (a crash,
+/// a timeout) continues from the counts the library already holds.
+///
+/// THE PROJECTS: the first kCreates through project.create (a world each: floor tile,
+/// sun, sky, thumbnail), the rest through project.importArchive of one of them (the
+/// archive door: a new guid, its own rows and thumbnail, ~10 ms each) and renamed. Not
+/// 500 creates: a create loop over this library crashed the app at the 33rd create
+/// (SIGSEGV in MainWindow::applyDockVisibilityForSpace under startCreateRun's reveal —
+/// spikes/d1-scale-fixtures/library-crash/), and 500 creates are ~8 minutes of the app.
+static const int kCreates = 25;
+
 static bool ensureTemplate()
 {
     const QString tmpl = kBase + "/library-template";
     if (QFileInfo::exists(tmpl + "/.complete")) return true;
-    QDir(tmpl).removeRecursively();
     const QString src = kBase + "/library-src";
     QDir().mkpath(src);
     QElapsedTimer t;
@@ -125,30 +135,62 @@ static bool ensureTemplate()
         img.save(path);
     }
     std::printf("library: %d source PNGs ready (%.1f s)\n", kAssets, t.elapsed() / 1000.0);
+    std::fflush(stdout);
     App app;
     if (!launch(app, tmpl)) { std::printf("FAIL: the generator's app did not boot\n%s\n", app.log.constData()); return false; }
+    // RESUME: the library's own counts (a row per imported file: the sources are imported
+    // in index order, so the count IS the next index).
+    int have = eval(app, QStringLiteral("assets.list().length")).toInt();
     t.restart();
-    for (int a = 0; a < kAssets; a += 250) {
+    for (int a = have; a < kAssets; a += 250) {
+        const int b = std::min(kAssets, a + 250);
         const QJsonObject r = app.mcp.runScript(QStringLiteral(
             "var n=0;for(var i=%1;i<%2;i++){var s=''+i;while(s.length<5)s='0'+s;"
-            "if(assets.importFile('%3/scale-asset-'+s+'.png'))n++;} n").arg(a).arg(std::min(kAssets, a + 250)).arg(src));
-        if (r.value("result").toInt() != std::min(kAssets, a + 250) - a) {
+            "if(assets.importFile('%3/scale-asset-'+s+'.png'))n++;} n").arg(a).arg(b).arg(src));
+        if (r.value("result").toInt() != b - a) {
             std::printf("FAIL: an import batch at %d: %s\n", a, QJsonDocument(r).toJson(QJsonDocument::Compact).constData());
             quit(app);
             return false;
         }
     }
     const double importS = t.elapsed() / 1000.0;
+    const int imported = kAssets - have;
+    int projects = eval(app, QStringLiteral("project.list().length")).toInt();
     t.restart();
-    for (int p = 0; p < kProjects; p += 10)
-        app.mcp.runScript(QStringLiteral("for(var i=%1;i<%2;i++)project.create('Scale project '+i); 1").arg(p).arg(p + 10));
+    int created = 0;
+    for (; projects < kCreates; ++projects, ++created)
+        app.mcp.runScript(QStringLiteral("project.create('Scale project %1'); 1").arg(projects));
     const double createS = t.elapsed() / 1000.0;
+    t.restart();
+    int archived = 0;
+    if (projects < kProjects) {
+        const QString seed = kBase + "/library-seed.jaf";
+        QFile::remove(seed);
+        const QJsonValue ex = eval(app, QStringLiteral(
+            "(function(){var l=project.list();project.open(l[0].guid);return project.exportArchive('%1')})()").arg(seed));
+        if (!QFileInfo::exists(seed)) {
+            std::printf("FAIL: the seed archive: %s\n", QJsonDocument(ex.toObject()).toJson(QJsonDocument::Compact).constData());
+            quit(app);
+            return false;
+        }
+        for (; projects < kProjects; projects += 25) {
+            const int b = std::min(kProjects, projects + 25);
+            app.mcp.runScript(QStringLiteral(
+                "for(var i=%1;i<%2;i++){var r=project.importArchive('%3');project.rename(r.guid,'Scale project '+i)} 1")
+                                  .arg(projects).arg(b).arg(seed));
+            archived += b - projects;
+        }
+    }
+    const double archiveS = t.elapsed() / 1000.0;
     const int assets = eval(app, QStringLiteral("assets.list().length")).toInt();
-    const int projects = eval(app, QStringLiteral("project.list().length")).toInt();
+    projects = eval(app, QStringLiteral("project.list().length")).toInt();
     quit(app);
-    std::printf("library: GENERATED %d library assets through assets.importFile in %.1f s (%.1f ms each), %d "
-                "projects through project.create in %.1f s (%.0f ms each)\n",
-                assets, importS, 1000.0 * importS / kAssets, projects, createS, 1000.0 * createS / kProjects);
+    std::printf("library: GENERATED — %d assets imported now through assets.importFile in %.1f s (%.1f ms each); "
+                "%d projects created in %.1f s, %d through project.importArchive in %.1f s; the library holds %d "
+                "assets and %d projects\n",
+                imported, importS, imported ? 1000.0 * importS / imported : 0.0, created, createS, archived, archiveS,
+                assets, projects);
+    std::fflush(stdout);
     if (assets < kAssets || projects < kProjects) {
         std::printf("FAIL: the template holds %d assets and %d projects\n", assets, projects);
         return false;
@@ -188,10 +230,7 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     if (!launch(app, dataRoot)) { std::printf("FAIL: [%s] boot\n", label); return false; }
     a.bootMs = app.bootMs;
     app.mcp.runScript(QStringLiteral("editor.frame(10)"));
-    const QJsonObject g = eval(app, QStringLiteral("desktop.gridStats()")).toObject();
-    a.gridMs = g.value("lastBuildMs").toDouble();
-    a.gridDecodes = g.value("lastBuildDecodes").toDouble();
-    a.gridTiles = g.value("tiles").toDouble();
+
     // THE OPEN: the first project the library lists that is not open.
     const QString guid = eval(app, QStringLiteral(
         "(function(){var l=project.list();var c=project.current();for(var i=0;i<l.length;i++)"
@@ -208,8 +247,20 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
     // THE CREATE (CREATE-GAP-1's measurement): over this library.
     a.createGap = gapAround(app, QStringLiteral("project.create('Scale create %1')")
                                      .arg(QDateTime::currentMSecsSinceEpoch()), &a.createMs);
+    // THE DESKTOP GRID: a driven session boots with the Desktop never SHOWN, so its grid
+    // (a tile per project, a thumbnail decode each) is first built when a create's close
+    // passes through the Desktop — INSIDE the create above. Its own ledger, read after.
+    const QJsonObject g = eval(app, QStringLiteral("desktop.gridStats()")).toObject();
+    a.gridMs = g.value("lastBuildMs").toDouble();
+    a.gridDecodes = g.value("lastBuildDecodes").toDouble();
+    a.gridTiles = g.value("tiles").toDouble();
+    std::printf("   [%s] desktop.gridStats() after the create %s\n", label,
+                QJsonDocument(g).toJson(QJsonDocument::Compact).constData());
     quit(app);
-    std::printf("W14 [%-7s] boot->MCP %8.0f ms | grid build %7.1f ms, %5.0f decodes, %5.0f tiles | open: worst UI gap "
+    // THE APP'S OWN OUTPUT, kept beside the run (an Xid or a crash is triaged from it).
+    QFile out(kBase + QStringLiteral("/library-%1-app.log").arg(QString::fromLatin1(label).section('+', 0, 0)));
+    if (out.open(QIODevice::WriteOnly)) out.write(app.log + app.proc.readAll());
+    std::printf("W14 [%-7s] boot->MCP %8.0f ms | grid build (inside the create) %7.1f ms, %5.0f decodes, %5.0f tiles | open: worst UI gap "
                 "%7.1f ms, ledger %7.1f ms | tray %4.0f ms (%3.0f tiles) | assets.list %6.0f ms (%5.0f rows) | "
                 "create: worst UI gap %7.1f ms, ledger %7.1f ms\n",
                 label, a.bootMs, a.gridMs, a.gridDecodes, a.gridTiles, a.openGap, a.openMs, a.trayMs, a.trayCount,
@@ -220,6 +271,7 @@ static bool runArm(const char *label, const QString &dataRoot, Arm &a)
 int main(int argc, char **argv)
 {
     QCoreApplication qapp(argc, argv);
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);   // a line at a time: the log is read while it runs
     if (!ensureTemplate()) return 1;
     // THE RUN'S COPY of the template, and an EMPTY control root — both fresh.
     const QString full = kBase + "/library-run", empty = kBase + "/library-empty";
@@ -234,7 +286,7 @@ int main(int argc, char **argv)
     CHECK(runArm("10k+500", full, f), "the 10k-asset / 500-project library ran");
     target(f.bootMs, "ms", QStringLiteral("boot to the MCP answering with 10k assets + 500 projects (empty: %1 ms)").arg(e.bootMs));
     target(f.bootMs - e.bootMs, "ms", QStringLiteral("what the library adds to the boot"));
-    target(f.gridMs, "ms", QStringLiteral("the Desktop grid's build over %1 tiles (%2 decodes)").arg(f.gridTiles).arg(f.gridDecodes));
+    target(f.gridMs, "ms", QStringLiteral("the Desktop grid's first build (inside a create's close) over %1 tiles, %2 decodes").arg(f.gridTiles).arg(f.gridDecodes));
     target(f.openGap, "ms", QStringLiteral("the worst UI gap of a project open over the library (empty: %1)").arg(e.openGap));
     target(f.createGap, "ms", QStringLiteral("the worst UI gap of a project create over the library (empty: %1)").arg(e.createGap));
     target(f.listMs, "ms", QStringLiteral("assets.list() over %1 rows (empty: %2 ms)").arg(f.listCount).arg(e.listMs));
