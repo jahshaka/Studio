@@ -245,13 +245,18 @@ void AssetImportService::logImportRecord(const ImportRequest &request, const Imp
     const QString source = QFileInfo(request.sourcePath).fileName();
     if (result.ok()) {
         JAH_LOG(JahLog::assets, Display,
-                QStringLiteral("import: '%1' -> %2 (%3 object(s), %4 ms)%5")
+                QStringLiteral("import: '%1' -> %2 (%3 object(s), %4 ms)%5%6")
                     .arg(source, result.assetGuid)
                     .arg(result.objectOids.size())
                     .arg(elapsedMs)
                     .arg(result.warnings.isEmpty()
                              ? QString()
-                             : QStringLiteral(" — %1 warning(s)").arg(result.warnings.size())));
+                             : QStringLiteral(" — %1 warning(s)").arg(result.warnings.size()))
+                    // The bake's stage table (IMPORT-SPEED-1): the next slow
+                    // model is diagnosed from this line alone.
+                    .arg(result.bakeStages.isEmpty()
+                             ? QString()
+                             : QStringLiteral(" — bake: %1").arg(result.bakeStages)));
         for (const QString &w : result.warnings)
             JAH_LOG(JahLog::assets, Warning, QStringLiteral("import '%1': %2").arg(source, w));
     } else {
@@ -484,6 +489,7 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     result.meshGuid = staged.meshGuid;
     result.jafKind = staged.jafKind;
     result.metadata = staged.metadata;
+    result.bakeStages = staged.bakeStages;
 
     // ---- drawer filing (post-commit, exactly the old importFile contract) ----
     if (request.drawerId > 0) {
