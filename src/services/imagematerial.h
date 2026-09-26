@@ -74,10 +74,12 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
                             Project *project, const assethome::Home &home,
                             QString *errorOut = nullptr);
 
-/// True when a Material asset already depends on this texture — the
-/// idempotence guard for the automatic companion material (a re-add of the
-/// same image must not mint a second material).
-bool hasCompanionMaterial(const QString &textureGuid);
+/// True when a Material THIS PROJECT holds (its own row, or one it pins)
+/// already depends on this texture — the idempotence guard for the automatic
+/// companion material (a re-add of the same image must not mint a second
+/// material). Per project since ASSETS-SCOPE-1: a companion is its project's
+/// own row, so another project's companion is no answer for this one.
+bool hasCompanionMaterial(const QString &textureGuid, const QString &projectGuid);
 
 /// The AUTO-MINTED companions of a texture: Material rows STAMPED
 /// `companionOf: <textureGuid>` by createMaterialAsset — the stamp is the

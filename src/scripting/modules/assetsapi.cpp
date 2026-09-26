@@ -344,7 +344,9 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "The library row, its content and "
           "every other project's pin are untouched. A row that was already removed from the "
           "library (assets.remove on a pinned asset) and has just lost its LAST pin is deleted "
-          "for good, because nothing can reach it any more. This is what the project panel's "
+          "for good, because nothing can reach it any more — and so is THE PROJECT'S OWN row (a material "
+          "made in the editor, an image's companion: ASSETS-SCOPE-1), which was never a library row "
+          "and has nowhere left to be. This is what the project panel's "
           "Delete does; assets.remove is the library's delete. False with app.lastError when "
           "no project is open or the guid is unknown.",
           Needs::Document },

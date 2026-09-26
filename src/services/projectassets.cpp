@@ -97,19 +97,19 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
         registerSessionAsset(member, db, project);
 
     // Owner call (IMAGE_PLANE_SPEC §8.1, 2026-08-31): an image added to a
-    // project ALSO gets its companion material asset — created in the
-    // library, then pinned in through this same function so it lands in the
+    // project ALSO gets its companion material asset — THE PROJECT'S OWN row
+    // (ASSETS-SCOPE-1), then pinned in through this same function so it lands in the
     // bin, session-registered and droppable. BOUNDARY: only the DIRECTLY
     // added asset auto-creates — dependency textures riding an object's
     // closure never do (an object with 30 textures must not explode into 30
     // materials), a texture pinned as a BINDING (a light's mask or IES
     // profile, and later a decal's maps — AddKind::Binding) never does
-    // either, and re-adding the same image is a no-op (a Material depending
-    // on the texture already exists). The recursive addToProject cannot loop:
+    // either, and re-adding the same image is a no-op (a Material THIS
+    // project holds already depends on the texture). The recursive addToProject cannot loop:
     // the companion is a Material, and Materials never auto-create.
     if (kind == AddKind::Direct
         && static_cast<ModelTypes>(record.type) == ModelTypes::Texture
-        && !ImageMaterial::hasCompanionMaterial(guid)) {
+        && !ImageMaterial::hasCompanionMaterial(guid, projectGuid)) {
         const QString materialGuid = ImageMaterial::createMaterialAsset(
             guid, db, project, assethome::project(projectGuid));
         if (!materialGuid.isEmpty()) {

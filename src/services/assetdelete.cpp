@@ -201,7 +201,8 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
     //     keeps it. (The scene blob cannot answer this — writeSceneNodeMaterial
     //     inlines a material's VALUES into the node and never names the asset
     //     guid, so the guard that read it never fired.)
-    // The LIBRARY row is never touched — this is a project-side remove — so
+    // A LIBRARY row is never touched — this is a project-side remove (a
+    // companion is the project's own row now, reaped below with its last pin) — so
     // the worst case of a wrong guess is a pin the user re-adds with one drag.
     if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture) {
         for (const QString &companion : ImageMaterial::companionMaterials(guid)) {
@@ -225,8 +226,13 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         }
         // An UNLISTED row that just lost its last pin exists for nobody: reap
         // it the way deleteProject reaps its orphans.
+        // So does a PROJECT'S OWN row (ASSETS-SCOPE-1: a material made in the
+        // editor, an image's companion) — it never was a library row, so once
+        // its project lets go of it there is nowhere left for it to be.
         const AssetRecord m = member == guid ? record : db->fetchAsset(member);
-        if (!m.guid.isEmpty() && !m.listed && db->countAssetPins(member) == 0) {
+        const bool projectsOwn = m.view_filter == AssetViewFilter::Editor
+                                 && m.projectGuid == projectGuid;
+        if (!m.guid.isEmpty() && (!m.listed || projectsOwn) && db->countAssetPins(member) == 0) {
             if (db->deleteAsset(member, /*force*/ true)) out.unlisted = true;
             else ok = false;
         }

@@ -67,14 +67,18 @@ var presetName = presets[0].name;
 assert(presetGuid && presetGuid.length > 10,
        "the tray's payload is a reserved guid (" + presetName + ")");
 
-// 2. A LIBRARY MATERIAL ROW. `materials.createFromImage`
-//    against a library texture is the "created from an image in the asset
-//    manager" path — the ONE source that used to preview.
-var shippedTex = assets.list({ scope: "store", type: "texture" })[0];
-assert(shippedTex, "the library has a texture to build a material from");
+// 2. A MATERIAL MADE FROM AN IMAGE. `materials.createFromImage` is the
+//    "created from an image" path — the ONE source that used to preview. With
+//    a project open it is the PROJECT's own row (ASSETS-SCOPE-1); the graph twin
+//    below is the LIBRARY row the project does not own. The picture is any
+//    texture the session can see: the library's, else the project's own (the
+//    default floor's checker is the project's since ASSETS-SCOPE-1).
+var shippedTex = assets.list({ scope: "store", type: "texture" })[0]
+                 || assets.list({ scope: "project", type: "texture" })[0];
+assert(shippedTex, "there is a texture to build a material from");
 var imageMatGuid = materials.createFromImage(shippedTex.guid);
 assert(imageMatGuid && imageMatGuid.length > 10,
-       "materials.createFromImage -> a library material row");
+       "materials.createFromImage -> a material row");
 
 // 3. A GRAPH MATERIAL CREATED IN-SESSION — the Materials module's own path, and
 //    one of the two the owner found dead. Headlessly the module's own row is a
@@ -91,7 +95,7 @@ assert(materials.regenerate(graphGuid) === true, "the graph re-bakes after creat
 
 var sources = [
     { what: "a TRAY PRESET", id: presetGuid },
-    { what: "a LIBRARY material row (made from an image)", id: imageMatGuid },
+    { what: "a material made from an image (the project's own)", id: imageMatGuid },
     { what: "a GRAPH material (created in-session)", id: graphGuid },
     { what: "a GRAPH material (re-baked after creation)", id: graphGuid }
 ];

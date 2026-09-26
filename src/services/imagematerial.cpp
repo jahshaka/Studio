@@ -156,12 +156,20 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     return materialGuid;
 }
 
-bool hasCompanionMaterial(const QString &textureGuid)
+bool hasCompanionMaterial(const QString &textureGuid, const QString &projectGuid)
 {
     QSqlQuery query(QSqlDatabase::database());
-    query.prepare("SELECT 1 FROM dependencies WHERE dependee = ? AND depender_type = ? LIMIT 1");
+    query.prepare("SELECT 1 FROM dependencies D JOIN assets A ON A.guid = D.depender "
+                  "WHERE D.dependee = ? AND D.depender_type = ? "
+                  "AND ((A.project_guid = ? AND A.view_filter = ?) "
+                  "     OR EXISTS (SELECT 1 FROM project_assets PA "
+                  "                WHERE PA.asset_guid = A.guid AND PA.project_guid = ?)) "
+                  "LIMIT 1");
     query.addBindValue(textureGuid);
     query.addBindValue(static_cast<int>(ModelTypes::Material));
+    query.addBindValue(projectGuid);
+    query.addBindValue(static_cast<int>(AssetViewFilter::Editor));
+    query.addBindValue(projectGuid);
     return query.exec() && query.next();
 }
 

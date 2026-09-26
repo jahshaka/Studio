@@ -132,7 +132,10 @@ int main(int argc, char **argv)
 
     // ---- the three sources, as the three tiles a user would drag -----------
     const QString sources = runValue(mcp, QStringLiteral(R"JS((function () {
-        var tex = assets.list({scope: "store", type: "texture"})[0];
+        // Any picture the session can see: the library's, else the project's
+        // own (the default floor's checker is the project's since ASSETS-SCOPE-1).
+        var tex = assets.list({scope: "store", type: "texture"})[0]
+                  || assets.list({scope: "project", type: "texture"})[0];
         SOURCES = [
             ["a TRAY PRESET",            materials.presets()[0].guid],
             ["a MATERIAL made from an image", materials.createFromImage(tex.guid)],
