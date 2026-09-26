@@ -557,6 +557,14 @@ public:
     /// listings cannot disagree. Definition + rationale: database.cpp.
     static QString memberSubquery(const QString &column);
 
+    /// A PROJECT'S OWN ROW (ASSETS-SCOPE-1) — THE ONE PREDICATE: `view_filter`
+    /// Editor, a project guid, and not a MEMBER of somebody else's row (an
+    /// import's member rows are Editor too and carry the project the import was
+    /// made in, but they belong to their library Object). Such a row exists
+    /// only for its project's pins: once none is left it goes — whoever let go
+    /// last, and when its project is deleted (deleteProject).
+    bool isProjectOwned(const AssetRecord &row);
+
     /// THE ONE TIMESTAMP FORMAT of the projects table's `last_written` and
     /// `last_accessed` (D0: the export/import path bound a QDateTime, which Qt
     /// writes as ISO text with a 'T' and milliseconds — a second format in a

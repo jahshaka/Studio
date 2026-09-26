@@ -17,6 +17,8 @@
 
 #include "data/database/database.h"
 #include "data/project.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -246,6 +248,60 @@ int main(int argc, char **argv)
         CHECK(!Database::readSqlTimestamp(QStringLiteral("2026-09-26T03:04:05.000")).isValid(),
               "the one reader refuses the ISO 'T' form (no reader of the old shape)");
         QDir("rt-export").removeRecursively();
+    }
+
+    // --- A DELETED PROJECT TAKES ITS OWN ROWS WITH IT (ASSETS-SCOPE-1 fix round
+    //     F2): a material made in it, the material's member picture (with its
+    //     stored-file mapping) and a scene node's row are the project's own and
+    //     go; an import's MEMBER row stamped with the project (it belongs to its
+    //     LIBRARY Object) and an own row another project still pins stay.
+    {
+        QDir().mkpath("own-store");
+        AssetStorePaths::setRootOverride(QDir("own-store").absolutePath());
+        QFile png("own-pic.png");
+        png.open(QIODevice::WriteOnly); png.write("not really a png, bytes are bytes"); png.close();
+        const int mat = static_cast<int>(ModelTypes::Material);
+        const int tex = static_cast<int>(ModelTypes::Texture);
+        const int obj = static_cast<int>(ModelTypes::Object);
+        CHECK(db.createProject("guid-own", "Owner"), "a project that owns rows");
+        CHECK(db.createProject("guid-other", "Other"), "...and another project");
+        auto row = [&](const QString &g, int type, const QString &parent, const QString &project,
+                       AssetViewFilter vf) {
+            db.createAssetEntry(g, g, type, parent, project, QString(), QString(), QByteArray(),
+                                QByteArray(), QByteArray(), QByteArray(), vf);
+        };
+        row("own-mat", mat, QString(), "guid-own", AssetViewFilter::Editor);
+        row("own-tex", tex, "own-mat", "guid-own", AssetViewFilter::Editor);
+        row("own-node", obj, "guid-own", "guid-own", AssetViewFilter::Editor);
+        row("own-shared", mat, QString(), "guid-own", AssetViewFilter::Editor);
+        row("lib-obj", obj, QString(), "guid-own", AssetViewFilter::AssetsView);
+        row("lib-member", tex, "lib-obj", "guid-own", AssetViewFilter::Editor);
+        QString oid, err;
+        CHECK(AssetCas::ingestFile(QSqlDatabase::database(), AssetStorePaths::root(), "own-pic.png",
+                                   "own-tex", "source", "own-pic.png", &oid, &err),
+              qPrintable("the owned picture's bytes are stored: " + err));
+        for (const char *g : { "own-mat", "own-tex", "own-shared", "lib-obj", "lib-member" })
+            AssetCas::writePin(QSqlDatabase::database(), "guid-own", g, QString());
+        AssetCas::writePin(QSqlDatabase::database(), "guid-other", "own-shared", QString());
+        auto filesOf = [](const QString &g) {
+            QSqlQuery q;
+            q.prepare("SELECT COUNT(*) FROM asset_files WHERE asset_guid = ?");
+            q.addBindValue(g);
+            q.exec(); q.next();
+            return q.value(0).toInt();
+        };
+        CHECK(filesOf("own-tex") == 1, "the owned picture has its stored-file mapping");
+        CHECK(db.deleteProject("guid-own"), "the owning project is deleted");
+        CHECK(db.fetchAsset("own-mat").guid.isEmpty(), "...its own MATERIAL row is gone");
+        CHECK(db.fetchAsset("own-tex").guid.isEmpty() && filesOf("own-tex") == 0,
+              "...its material's PICTURE row is gone, and its stored-file mapping with it");
+        CHECK(db.fetchAsset("own-node").guid.isEmpty(), "...its scene node's row is gone");
+        CHECK(!db.fetchAsset("own-shared").guid.isEmpty(),
+              "an own row ANOTHER project still pins stays (it goes with the last pin)");
+        CHECK(!db.fetchAsset("lib-obj").guid.isEmpty() && !db.fetchAsset("lib-member").guid.isEmpty(),
+              "a LIBRARY import and its member row (Editor, stamped with the project) stay");
+        QDir("own-store").removeRecursively();
+        QFile::remove("own-pic.png");
     }
 
     db.closeDatabase();
