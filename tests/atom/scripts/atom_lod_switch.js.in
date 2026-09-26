@@ -1,0 +1,140 @@
+// atom.lod_switch — THE PER-OBJECT LOD RULE WORKS IN THE VIEWPORT (ATOM-LOD-BOUND-1).
+//
+// The owner's scan never left level 0 inside 1 km because its baked bound was
+// 100x too large (debris islands measured against unrelated surface). This drives
+// the scan's stand-in (a 60 m floor, eight columns, 600 debris islands — written by
+// `test_mesh_bake --write-standin`, the same generator atom.lod_bound_bar bakes)
+// through the owner's import route and reads the GPU-selected level per object:
+//   (a) at 30 / 60 / 120 / 250 / 500 m the level steps DOWN with distance: level 0
+//       close, a coarser level by 250 m, coarser still by 500 m, never finer
+//       further out;
+//   (b) walking back in returns to level 0 (nothing sticks);
+//   (c) NO FLICKER AT A BAND EDGE: the camera is walked out in 2 m steps to the
+//       first switch, then rocked +-1 m across that edge ten times — the level may
+//       change at most once (the GPU switch band, ogre-patch 0075's rule);
+//   (d) the Levels view's picture changes with the level: the colour at the object's
+//       centre is a ramp colour whose level never gets finer further out and is
+//       coarser at 500 m than at 30 m. The shot is 320 x 180 and the level rule is
+//       a PIXEL rule, so the shot picks its own (coarser-or-equal) level than the
+//       window's — asserted too: never finer than what the viewport drew.
+// Frames, never time: every reading follows a fixed frame count.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var FIXTURE = "@LOD_STANDIN@";
+var proj = project.create("Atom LOD switch " + Date.now());
+assert(proj.length > 10, "project.create");
+var placed = assets.importAndPlace(FIXTURE, { position: [0, 3, 0] });
+assert(placed && placed.nodeId, "the stand-in imports and is placed (" + J(placed) + ")");
+editor.select(null);
+var st = world.atomStatus();
+for (var i = 0; i < 120 && (st.pending > 0 || st.atomItems < 2); ++i) { editor.frame(2); st = world.atomStatus(); }
+assert(st.live && st.on && st.pending === 0, "the split is live with nothing pending (" + J(st) + ")");
+
+var lods = assets.meshLods(placed.assetGuid);
+var levels = 0;
+for (var l = 0; l < lods.length; ++l) {
+    console.log("meshLods: " + J(lods[l]));
+    levels = Math.max(levels, lods[l].level + 1);
+}
+assert(levels >= 4, "the stand-in's bake carries a chain (" + levels + " levels)");
+
+function row() {
+    var per = app.renderStats().perObject;
+    for (var p = 0; p < per.length; ++p)
+        if (per[p].levels === levels && per[p].id === placed.nodeId) return per[p];
+    for (var q = 0; q < per.length; ++q)
+        if (per[q].levels === levels) return per[q];
+    return null;
+}
+function levelAt(d, frames) {
+    editor.frameNode(placed.nodeId, { yaw: 30, pitch: -20, distance: d });
+    editor.frame(frames || 20);
+    var r = row();
+    assert(!!r, "the stand-in has a perObject row at " + d + " m");
+    return r.level;
+}
+
+// (a) out
+var D = [30, 60, 120, 250, 500];
+var out = [];
+for (var k = 0; k < D.length; ++k) {
+    out.push(levelAt(D[k]));
+    console.log("distance " + D[k] + " m: level " + out[k]);
+}
+assert(out[0] === 0, "level 0 at 30 m");
+for (var m = 1; m < out.length; ++m)
+    assert(out[m] >= out[m - 1], "never finer further out (" + D[m] + " m: L" + out[m] + " after L" + out[m - 1] + ")");
+assert(out[3] >= 1, "a coarser level by 250 m (L" + out[3] + ")");
+assert(out[4] > out[3] || out[4] >= 3, "coarser still by 500 m (L" + out[4] + ")");
+
+// (b) back
+var back = [];
+for (var b = D.length - 1; b >= 0; --b) back.push(levelAt(D[b]));
+console.log("walking back: " + J(back));
+assert(back[back.length - 1] === 0, "back at 30 m the level is 0 again");
+
+// (c) the band edge
+var edge = -1, before = levelAt(40, 20);
+for (var d = 42; d <= 300; d += 2) {
+    if (levelAt(d, 10) !== before) { edge = d; break; }
+}
+assert(edge > 0, "the first switch is found walking out (" + edge + " m)");
+var seen = [], changes = 0, last = levelAt(edge, 20);
+for (var rock = 0; rock < 10; ++rock) {
+    var now = levelAt(edge + (rock % 2 === 0 ? -1 : 1), 10);
+    if (now !== last) ++changes;
+    seen.push(now);
+    last = now;
+}
+console.log("rocking across " + edge + " m: " + J(seen));
+assert(changes <= 1, "rocking +-1 m across the switch changes the level at most once (" + changes + ")");
+
+// (d) the Levels view
+assert(world.setAtomView("levels") === true, "world.setAtomView('levels')");
+// JahAtomView_ps.glsl's ramp, level 0 warm to 7 cold, as the plain grade stores it.
+var RAMP = [[1.0, 0.15, 0.1], [1.0, 0.55, 0.0], [1.0, 0.95, 0.1], [0.6, 1.0, 0.1],
+            [0.1, 0.85, 0.2], [0.1, 0.9, 0.95], [0.15, 0.35, 1.0], [0.6, 0.2, 1.0]];
+function rampLevel(px) {
+    var best = -1, bestD = 1e9;
+    for (var r = 0; r < RAMP.length; ++r) {
+        var dr = px.r - 255 * RAMP[r][0], dg = px.g - 255 * RAMP[r][1], db = px.b - 255 * RAMP[r][2];
+        var dd = dr * dr + dg * dg + db * db;
+        if (dd < bestD) { bestD = dd; best = r; }
+    }
+    return bestD < 12 * 12 * 3 ? best : -1;
+}
+var probes = [];
+for (var py = -2; py <= 2; ++py)
+    for (var px = -2; px <= 2; ++px) probes.push({ x: 0.5 + px * 0.004, y: 0.5 + py * 0.004 });
+function centreLevel(d) {
+    editor.frameNode(placed.nodeId, { yaw: 30, pitch: -20, distance: d });
+    editor.frame(20);
+    var drawn = row().level;
+    var shot = editor.screenshot("atom_lod_switch_levels_" + d + ".png", 320, 180, probes, "plain");
+    var votes = [0, 0, 0, 0, 0, 0, 0, 0], best = -1;
+    for (var s = 0; s < shot.probes.length; ++s) {
+        var lv = rampLevel(shot.probes[s]);
+        if (lv >= 0 && ++votes[lv] > (best >= 0 ? votes[best] : 0)) best = lv;
+    }
+    return { drawn: drawn, painted: best, votes: best >= 0 ? votes[best] : 0 };
+}
+var painted = [];
+for (var c = 0; c < D.length; ++c) {
+    var pc = centreLevel(D[c]);
+    painted.push(pc.painted);
+    console.log("levels view at " + D[c] + " m: the window drew L" + pc.drawn + ", the shot paints L" +
+                pc.painted + " (" + pc.votes + "/25 centre pixels)");
+    assert(pc.painted >= 0 && pc.votes >= 13, "the centre of the shot is a Levels colour at " + D[c] + " m");
+    assert(pc.painted >= pc.drawn, "the 320 x 180 shot never draws a finer level than the window (L" +
+           pc.painted + " vs L" + pc.drawn + ")");
+    if (c > 0) assert(painted[c] >= painted[c - 1], "the painted level never gets finer further out");
+}
+assert(painted[D.length - 1] > painted[0], "the Levels picture changes: L" + painted[0] + " at 30 m, L" +
+       painted[D.length - 1] + " at 500 m");
+world.setAtomView("off");
+"ok";

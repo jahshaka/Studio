@@ -271,3 +271,27 @@ add_test(NAME atom.view
 set_tests_properties(atom.view PROPERTIES
     TIMEOUT 300 LABELS "scripting"
     ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")
+
+# ---------------------------------------------------------------------------
+# atom.lod_switch — THE PER-OBJECT LOD RULE IN THE VIEWPORT (ATOM-LOD-BOUND-1). A scan
+# stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar bakes)
+# imported through the owner's route: the GPU-selected level steps down over 30-500 m,
+# comes back to 0, holds across a band edge, and the Levels view paints the level's
+# colour. The fixture is WRITTEN by test_mesh_bake before the run (a setup test), so no
+# mesh is checked in. An app run on the rig's display, like atom.view.
+set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
+set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
+configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js @ONLY)
+add_test(NAME atom.lod_switch.fixture
+         COMMAND sh -c "rm -rf '${_lod_switch_home}' && mkdir -p '${_lod_switch_home}/run' && '$<TARGET_FILE:test_mesh_bake>' --write-standin '${LOD_STANDIN}'")
+set_tests_properties(atom.lod_switch.fixture PROPERTIES
+    FIXTURES_SETUP atomLodSwitchHome LABELS "scripting")
+add_test(NAME atom.lod_switch
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js
+         WORKING_DIRECTORY ${_lod_switch_home}/run)
+# The stand-in's bake (~25 k triangles: chain + DAG + SDF + cards) is most of the run.
+set_tests_properties(atom.lod_switch PROPERTIES
+    FIXTURES_REQUIRED atomLodSwitchHome
+    TIMEOUT 300 LABELS "scripting"
+    ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
