@@ -253,3 +253,21 @@ else()
     message(STATUS "Jahshaka: engine.atom_negative_control NOT built — vulkan=${Vulkan_FOUND} "
                    "glslang='${JAH_ATOM_GLSLANG}' vulkanRs='${OGRE_NEXT_VULKAN_RS_LIB}'")
 endif()
+
+# ---------------------------------------------------------------------------
+# atom.view — THE ATOM VIEW (lane D0-ATOM-VIEW): world.setAtomView's four false-colour
+# modes over the default scene in both chain shapes (the "scene" grade's post chain,
+# the "plain" grade's passthrough), 'off' pixel-identical after them, nothing painted
+# with the split shut, and a stock-PBR object in front of the floor left lit (the
+# depth-equality test). Every shot is 160 x 90 with every pixel probed. An app run on
+# the rig's display, like the scripting e2e suites.
+set(_atom_view_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_view)
+file(MAKE_DIRECTORY ${_atom_view_home}/run)
+add_test(NAME atom.view
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js
+         WORKING_DIRECTORY ${_atom_view_home}/run)
+# 38 s solo on the rig (twenty-three settled shots and a Low-tier round trip); the rest is gate-load headroom.
+set_tests_properties(atom.view PROPERTIES
+    TIMEOUT 300 LABELS "scripting"
+    ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")

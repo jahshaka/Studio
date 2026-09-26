@@ -3963,6 +3963,37 @@ void MainWindow::setupViewPort()
             [this](bool on) { setShowFrameStats(on); });
     wireFramesMenu->addAction(statsCheckAction);
 
+    // THE ATOM VIEW (D0-ATOM-VIEW): the visibility buffer in false colour. The
+    // rows call the scene's setAtomView — the path world.setAtomView takes — and
+    // re-read it whenever the menu opens, so a script's change shows here too.
+    {
+        QMenu *atomMenu = wireFramesMenu->addMenu(tr("Atom View"));
+        auto *atomGroup = new QActionGroup(atomMenu);
+        atomGroup->setExclusive(true);
+        const QStringList atomLabels = { tr("Off"), tr("Triangles"), tr("Levels"), tr("Buckets"),
+                                         tr("Objects") };
+        for (int mode = 0; mode < atomLabels.size(); ++mode) {
+            QAction *action = atomMenu->addAction(atomLabels[mode]);
+            action->setCheckable(true);
+            action->setChecked(mode == 0);
+            atomGroup->addAction(action);
+            connect(action, &QAction::triggered, this, [this, mode]() { setAtomViewMode(mode); });
+            atomViewActions.push_back(action);
+        }
+        // ...and DISABLES the painting rows where nothing could paint (the Low
+        // tier's passthrough viewport, the split shut) — the verb refuses there too.
+        // Off stays enabled: a view left on can always be switched off.
+        connect(atomMenu, &QMenu::aboutToShow, this, [this]() {
+            const int mode = atomViewMode();
+            jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+            const bool paintable = es && es->atomViewPaintable();
+            for (int i = 0; i < atomViewActions.size(); ++i) {
+                atomViewActions[i]->setChecked(i == mode);
+                atomViewActions[i]->setEnabled(i == 0 || paintable);
+            }
+        });
+    }
+
     // Qlementine: the checkable actions become Switch rows (and stay in sync
     // with their QActions); a bonus is the menu no longer closes per toggle.
     ThemeManager::switchifyMenuToggles(wireFramesMenu);
@@ -4778,6 +4809,10 @@ void MainWindow::setupShortcuts()
     // switch on again after every restart is a diagnostic nobody uses.
     reg.add("view.stats", "Show Frame Stats", "View", QKeySequence(Qt::Key_F3), this,
             [this]() { setShowFrameStats(!sceneView->getShowFps()); });
+    // F6 — THE ATOM VIEW, cycled Off -> Triangles -> Levels -> Buckets -> Objects
+    // -> Off (the View Options sub-menu picks one directly).
+    reg.add("view.atomView", "Cycle Atom View", "View", QKeySequence(Qt::Key_F6), this,
+            [this]() { setAtomViewMode((atomViewMode() + 1) % 5); });
     reg.add("window.fullscreen", "Immersive Fullscreen", "View", QKeySequence(Qt::Key_F11), this,
             [this]() { toggleImmersiveFullscreen(); });
     // Ctrl+F4 — THE CAPTURE KEY (owner, 2026-09-12: "I would prefer to activate
@@ -5454,6 +5489,21 @@ void MainWindow::spaceKeyActiveSpace()
         return;
     }
     if (currentSpace == WindowSpaces::EDITOR) cycleGizmoMode();
+}
+
+int MainWindow::atomViewMode()
+{
+    jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+    return es ? int(es->atomView()) : 0;
+}
+
+void MainWindow::setAtomViewMode(int mode)
+{
+    jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+    if (!es || mode < 0 || mode > 4) return;
+    if (mode != 0 && !es->atomViewPaintable()) return;   // world.setAtomView's refusal
+    es->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
+    for (int i = 0; i < atomViewActions.size(); ++i) atomViewActions[i]->setChecked(i == mode);
 }
 
 void MainWindow::takeScreenshot()

@@ -52,6 +52,8 @@ public:
     Q_INVOKABLE QVariantMap atomStatus();
     /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
     Q_INVOKABLE bool setAtomDraw(bool on);
+    Q_INVOKABLE bool setAtomView(const QString &view);
+    Q_INVOKABLE QString atomView();
     Q_INVOKABLE bool refreshGi();
     /// Re-render every cached point/spot shadow map once (ENGINE_CACHE_POLICY_SPEC P2).
     Q_INVOKABLE bool refreshShadows();

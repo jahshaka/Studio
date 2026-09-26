@@ -1160,6 +1160,12 @@ private:
     QAction *physicsCheckAction = nullptr;
     QAction *gridCheckAction = nullptr;
     QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
+    /// THE ATOM VIEW sub-menu of View Options (D0-ATOM-VIEW): Off, Triangles,
+    /// Levels, Buckets, Objects — exclusive, in AtomView's order; F6 cycles it.
+    /// Both call the scene's setAtomView, the one path world.setAtomView takes.
+    QVector<QAction *> atomViewActions;
+    void setAtomViewMode(int mode);
+    int atomViewMode();
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
     /// THE CAMERA-SPEED BUTTON and the two controls in its popover (owner
     /// R15). Owned by the toolbar and the popover menu; held to keep all three
