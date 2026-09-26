@@ -565,15 +565,12 @@ public:
     /// last, and when its project is deleted (deleteProject).
     bool isProjectOwned(const AssetRecord &row);
 
-    /// THE ONE TIMESTAMP FORMAT of the projects table's `last_written` and
-    /// `last_accessed` (D0: the export/import path bound a QDateTime, which Qt
-    /// writes as ISO text with a 'T' and milliseconds — a second format in a
-    /// column the Desktop ORDERS BY as text). SQLite `datetime()`'s own shape,
-    /// UTC `YYYY-MM-DD HH:MM:SS`: every writer either calls `datetime()` in SQL
-    /// or binds `sqlTimestamp`, and every reader goes through `readSqlTimestamp`,
-    /// which accepts that shape and nothing else (an invalid QDateTime otherwise).
-    static QString sqlTimestamp(const QDateTime &when);
-    static QDateTime readSqlTimestamp(const QVariant &stored);
+    // THE ONE TIMESTAMP FORMAT of the projects table's `last_written` and
+    // `last_accessed`: SQLite `datetime()`'s own UTC `YYYY-MM-DD HH:MM:SS`,
+    // written by `datetime()` in SQL on every write — create, save AND an
+    // archive import (which stamps the import moment and reads no stamp from
+    // the archive). The Desktop orders by the column as TEXT.
+
     /// BATCH READS for the listing rules (small-items round B). Each is ONE
     /// query for a whole listing's worth of rows; the per-row reads they
     /// replace made the editor tray cost a query per tile, on every edge write

@@ -236,17 +236,35 @@ int main(int argc, char **argv)
               qPrintable("a created project's stamps are datetime()'s shape: " + before.join(" | ")));
         QDir().mkpath("rt-export");
         db.createExportScene(QStringLiteral("rt-export"), "guid-rt");
+        // THE ARCHIVE'S STAMPS ARE NEVER READ (an import is a write here): an
+        // archive an older build wrote in the ISO form imports all the same,
+        // stamped with the import moment.
+        {
+            QSqlDatabase arc = QSqlDatabase::addDatabase("QSQLITE", "rt-arc");
+            arc.setDatabaseName("rt-export/guid-rt.db");
+            arc.open();
+            QSqlQuery q(arc);
+            q.exec("UPDATE projects SET last_written = '2018-04-18T05:49:43.000', "
+                   "last_accessed = '2018-04-18T05:49:43.000'");
+            arc.close();
+        }
+        QSqlDatabase::removeDatabase("rt-arc");
+        const QString importMoment = [] {
+            QSqlQuery q;
+            q.exec("SELECT datetime()");
+            q.next();
+            return q.value(0).toString();
+        }();
         QString worldName;
         QMap<QString, QString> guidMap;
         CHECK(db.importProject(QStringLiteral("rt-export/guid-rt"), "guid-rt-2", worldName, guidMap),
-              "the export imports back as a second project");
+              "the export (its stamps rewritten to the old ISO form) imports back");
         const QStringList after = columns("guid-rt-2");
         CHECK(shape.match(after[0]).hasMatch() && shape.match(after[1]).hasMatch(),
               qPrintable("...and ITS stamps are the same shape: " + after.join(" | ")));
-        CHECK(after == before, "...carrying the exported values unchanged");
-        CHECK(Database::readSqlTimestamp(after[0]).isValid(), "the one reader reads it");
-        CHECK(!Database::readSqlTimestamp(QStringLiteral("2026-09-26T03:04:05.000")).isValid(),
-              "the one reader refuses the ISO 'T' form (no reader of the old shape)");
+        CHECK(after[0] >= importMoment && after[1] >= importMoment,
+              qPrintable("...stamped with the IMPORT moment, not the archive's (" + after.join(" | ")
+                         + " >= " + importMoment + ")"));
         QDir("rt-export").removeRecursively();
     }
 

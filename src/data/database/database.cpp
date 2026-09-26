@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QSqlRecord>
 #include <QDateTime>
-#include <QTimeZone>
 #include <QMessageBox>
 #include <QObject>
 #include <QUuid>
@@ -968,26 +967,6 @@ bool Database::isProjectOwned(const AssetRecord &row)
     const AssetRecord parent = fetchAsset(row.parent);
     if (parent.guid.isEmpty()) return true;        // filed in a folder / the project root
     return parent.view_filter == AssetViewFilter::Editor && parent.projectGuid == row.projectGuid;
-}
-
-QString Database::sqlTimestamp(const QDateTime &when)
-{
-    return when.toUTC().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
-}
-
-QDateTime Database::readSqlTimestamp(const QVariant &stored)
-{
-    QDateTime when = QDateTime::fromString(stored.toString(), QStringLiteral("yyyy-MM-dd HH:mm:ss"));
-    if (when.isValid()) when.setTimeZone(QTimeZone::UTC);
-    return when;
-}
-
-// The column's value as a project archive carries it: our own shape, or — for a
-// row with none — the moment of the write.
-static QString archiveTimestamp(const QVariant &stored)
-{
-    const QDateTime when = Database::readSqlTimestamp(stored);
-    return Database::sqlTimestamp(when.isValid() ? when : QDateTime::currentDateTimeUtc());
 }
 
 QString Database::ensureFolder(const QString &folderName, const QString &projectGuid, bool visible)
@@ -3480,8 +3459,11 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     auto sceneBlob  = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
-    const QString sceneLastW = archiveTimestamp(query.value(4));
-    const QString sceneLastA = archiveTimestamp(query.value(5));
+    // Our own column, already the one format (written by datetime()), carried
+    // as TEXT into the archive's .db — which nothing ever reads back: an import
+    // stamps the import moment (importProject).
+    const QString sceneLastW = query.value(4).toString();
+    const QString sceneLastA = query.value(5).toString();
     auto sceneGuid  = query.value(6).toString();
 
     // ScopedConnection: "myUniqueSQLITEConnection" was registered here and
@@ -4204,7 +4186,11 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     DbTransaction tx(db);
 
     QSqlQuery query(dbe);
-    query.prepare("SELECT name, scene, thumbnail, version, last_written, last_accessed, guid FROM projects");
+    // NO STAMP IS READ FROM THE ARCHIVE (D0, lead decision): an import is a
+    // WRITE into this library, so the row is stamped with the import moment
+    // by datetime() below — whatever form an older build wrote into the
+    // archive, nothing here reads it.
+    query.prepare("SELECT name, scene, thumbnail, version, guid FROM projects");
 
     if (query.exec()) {
         query.next();
@@ -4219,9 +4205,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     auto sceneBlob = query.value(1).toByteArray();
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
-    const QString sceneLastW = archiveTimestamp(query.value(4));
-    const QString sceneLastA = archiveTimestamp(query.value(5));
-    auto oldSceneGuid = query.value(6).toString();
+    auto oldSceneGuid = query.value(4).toString();
 
     QVector<AssetRecord> assetList;
 
@@ -4330,7 +4314,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     query3.prepare(
         "INSERT INTO projects "
         "(name, scene, thumbnail, version, last_written, last_accessed, guid) "
-        "VALUES (:name, :scene, :thumbnail, :version, :last_written, :last_accessed, :guid)"
+        "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), :guid)"
     );
 
     auto doc = QJsonDocument::fromJson(sceneBlob);
@@ -4349,8 +4333,6 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     query3.bindValue(":scene", sceneBlob);
     query3.bindValue(":thumbnail", sceneThumb);
     query3.bindValue(":version", sceneVersion);
-    query3.bindValue(":last_written", sceneLastW);
-    query3.bindValue(":last_accessed", sceneLastA);
     query3.bindValue(":guid", newSceneGuid);
 
     executeAndCheckQuery(query3, "insertSceneGlobal");
