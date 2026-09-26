@@ -202,6 +202,10 @@ int main()
     Scene *scene = gEngine->createScene("lodband");
     if (!gView || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     gView->setScene(scene);
+    // THE BAND IS THE LEVEL PATH'S (ATOM-CLUSTER-CUT, D4/D6): the id pass draws an Atom
+    // item's CLUSTER CUT, which has no band and no level, so the relief is drawn the way
+    // every level-drawing pass draws — stock PBS, the split's measurement door shut.
+    scene->setAtomDrawEnabled(false);
     scene->setAmbient(Colour(0.25f, 0.25f, 0.3f), Colour(0.2f, 0.2f, 0.25f));
     enginetest::addDirectionalLight(scene, Vec3(-0.45f, -0.8f, -0.4f), 3.14159f);
 

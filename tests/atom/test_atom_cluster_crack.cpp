@@ -695,6 +695,11 @@ int main(int argc, char **argv)
     r.scene = r.e->createScene("crack");
     if (!r.view || !r.scene) { std::printf("FAIL: view/scene\n"); return 1; }
     r.view->setScene(r.scene);
+    // THE HARNESS DRAWS THROUGH STOCK PBS BY DESIGN (route B2: a swapped VAO over a
+    // rewritten index buffer — a mechanism of Ogre's render queue), so its scene keeps
+    // the visibility buffer's split shut; D below drives the PRODUCT's cut on its own
+    // scene and view.
+    r.scene->setAtomDrawEnabled(false);
     r.scene->setAmbient(Colour(0.10f, 0.10f, 0.12f), Colour(0.06f, 0.06f, 0.08f));
     enginetest::addDirectionalLight(r.scene, Vec3(-0.5f, -0.6f, -0.62f), 2.2f);
     PbrParams p;
