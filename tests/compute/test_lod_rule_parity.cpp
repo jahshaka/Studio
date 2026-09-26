@@ -251,11 +251,12 @@ static void productCutParity(Engine *e, View *view)
                           { 4.0f, 90.0f, 720.0f, false },  { 1.0f, 110.0f, 2376.0f, false },
                           { 1.0f, 45.0f, 1080.0f, true } };
     unsigned long long pairs = 0, bad = 0, nearBad = 0, nearCount = 0, drawnTotal = 0, overflow = 0;
+    unsigned long long coverageBad = 0, overlapBad = 0;
     unsigned depthHist[16] = {};
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
-        if (!clusterfix::bake(f, m.second, m.first) || f.data.clusters.empty()) continue;
+        if (!clusterfix::bake(f, m.second, m.first, iris::MeshBake::ClusterDagVariant::Shipped, /*wantRegions=*/true) || f.data.clusters.empty()) continue;
         Scene *sc = e->createScene("cut-" + m.first);
         view->setScene(sc);
         const MeshId mesh = sc->createMesh(f.data);
@@ -346,6 +347,27 @@ static void productCutParity(Engine *e, View *view)
                     if (std::fabs(a - gr.error) <= 1.0e-4f * gr.error) { near = true; break; }
                 }
                 meshNear += near ? 1u : 0u;
+                // THE DEVICE'S SET IS ONE CUT ON ITS OWN (the fix round's F2): no drawn
+                // cluster sits under another drawn one (a drawn cluster produced by a
+                // group whose member is drawn), and the drawn clusters' regions cover
+                // every level-0 triangle exactly once (the bake's provenance partition,
+                // atom.cluster_cut's own count).
+                {
+                    std::vector<unsigned char> isDrawn(f.data.clusters.size(), 0);
+                    for (unsigned c : gpu) if (c < isDrawn.size()) isDrawn[c] = 1;
+                    std::vector<unsigned char> groupHasDrawnMember(f.data.clusterGroups.size(), 0);
+                    for (unsigned c : gpu) groupHasDrawnMember[size_t(f.data.clusters[c].group)] = 1;
+                    for (unsigned c : gpu) {
+                        const int ref = f.data.clusters[c].refined;
+                        if (ref >= 0 && groupHasDrawnMember[size_t(ref)]) ++overlapBad;
+                    }
+                    std::vector<unsigned> cover(f.triangles, 0u);
+                    for (unsigned c : gpu)
+                        if (int(c) < f.stats.clusterRegions.size())
+                            for (quint32 t : f.stats.clusterRegions.at(int(c)))
+                                if (t < cover.size()) ++cover[t];
+                    for (unsigned n : cover) coverageBad += n != 1u ? 1u : 0u;
+                }
                 if (gpu == cpu) continue;
                 if (near) ++meshNearBad; else ++meshBad;
                 if (meshBad + meshNearBad <= 2u)
@@ -377,6 +399,10 @@ static void productCutParity(Engine *e, View *view)
     CHECK(meshesRun >= 6u, msg);
     std::snprintf(msg, sizeof(msg), "no instance overflowed the cut's stream (%llu)", overflow);
     CHECK(overflow == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "THE DEVICE'S SETS ARE CUTS: no drawn cluster under a drawn one (%llu) and every "
+                  "level-0 triangle covered exactly once by the drawn regions (%llu triangle-cuts off)",
+                  overlapBad, coverageBad);
+    CHECK(overlapBad == 0u && coverageBad == 0u, msg);
     std::snprintf(msg, sizeof(msg),
                   "THE PRODUCT'S CUT IS CELL-IDENTICAL TO clusterCut: %llu (instance, view) cuts, %llu clusters "
                   "drawn, %llu differ (%llu of them at a threshold; %llu cuts had a group within 1e-4)",

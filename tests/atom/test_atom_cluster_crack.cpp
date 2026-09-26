@@ -27,6 +27,9 @@
 //   D. THE DEVICE'S CUT (ATOM-CLUSTER-CUT): the product draws the cut through the id
 //      pass; the fixtures attached as ordinary meshes (their inside copies too) are
 //      crack-free at six tolerances, judged against the drawn set the cull reads back.
+//   E. THE OVERFLOW (fix round F1): the stream's budget forced tiny, twelve instances,
+//      24 frames: no instance missing from the id image at any frame (the root cut from
+//      the coarse reserve), the overflow reported and the budget doubled until clear.
 //   C. THE NUMBERS: a 40 m bar seen end-on — the DAG's triangles against the
 //      chain's at the same allowed error (the chain has to pick ONE level for the
 //      whole bar from its nearest point). The DAG must draw fewer.
@@ -35,6 +38,13 @@
 // mid-range: mid-grey, one moderate directional light, an ambient floor.
 #include "cluster_draw.h"
 #include "EnginePrivate.h"
+#include "GpuCull.h"
+#include <OgreTextureGpu.h>
+#include <OgreTextureBox.h>
+#include <OgreImage2.h>
+#include <Compositor/OgreCompositorWorkspace.h>
+#include <Compositor/OgreCompositorNode.h>
+#include <set>
 #include "cluster_fixtures.h"
 #include "../support/enginetesthelpers.h"
 
@@ -659,6 +669,99 @@ static void deviceCrackSweep(DeviceRig &d, const clusterfix::Fixture &f, const f
     d.scene->destroyMesh(insideMesh);
 }
 
+// ---- E. THE OVERFLOW LOSES NO OBJECT (ATOM-CLUSTER-CUT fix round, F1) -------------
+//
+// The stream's budget is forced tiny through GpuCull's test door (the scene's
+// high-water mark ignored), so the first frames' cuts cannot all fit: every instance
+// that does not fit must draw its ROOT CUT from the coarse reserve — present in the
+// id image, every frame — while the stats ring reports the overflow and the budget
+// doubles until nothing overflows. Twelve 20k spheres, the view close enough that
+// each one's cut is several times its root.
+static std::set<unsigned> slotsInIds(jahshaka::engine::detail::OgreView *v)
+{
+    std::set<unsigned> out;
+    Ogre::CompositorWorkspace *ws = v->workspace();
+    if (!ws) return out;
+    Ogre::TextureGpu *tex = nullptr;
+    for (Ogre::CompositorNode *n : ws->getNodeSequence())
+        if ((tex = n->getDefinedTexture(Ogre::IdString(jahshaka::engine::detail::kAtomIdTexture))) != nullptr) break;
+    if (!tex) return out;
+    Ogre::Image2 img;
+    img.convertFromTexture(tex, 0u, 0u);
+    const Ogre::TextureBox box = img.getData(0u);
+    for (unsigned r = 0; r < tex->getHeight(); ++r) {
+        const auto *row = reinterpret_cast<const uint32_t *>(box.at(0, r, 0));
+        for (unsigned c = 0; c < tex->getWidth(); ++c)
+            if (row[c * 2u] != 0xFFFFFFFFu) out.insert(row[c * 2u] & 0x00FFFFFFu);
+    }
+    return out;
+}
+
+static void overflowArm(DeviceRig &d, const clusterfix::Fixture &f)
+{
+    const MeshId mesh = d.scene->createMesh(f.data);
+    std::vector<NodeId> nodes;
+    for (int k = 0; k < 12; ++k) {
+        const NodeId n = d.scene->createNode();
+        d.scene->attachMesh(n, mesh, d.lit);
+        d.scene->setNodeTransform(n, Vec3(float(k % 4) * 1.2f - 1.8f, float(k / 4) * 1.2f - 1.2f, 0.0f), Quat(),
+                                  Vec3(1, 1, 1));
+        nodes.push_back(n);
+    }
+    enginetest::testCameraLookAt(d.view, Vec3(0.0f, 0.0f, 4.5f), Vec3(0.0f, 0.0f, 0.0f));
+    d.scene->setLodBias(1.0f);
+    auto *ov = static_cast<jahshaka::engine::detail::OgreView *>(d.view);
+    // THE REFERENCE: a generous budget — which slots the id image names.
+    for (int i = 0; i < 8; ++i) d.e->renderOneFrame();
+    const std::set<unsigned> all = slotsInIds(ov);
+    GpuCullRequest r;
+    d.e->fillCullView(d.view, r);
+    r.mode = 3u;
+    r.pixelTolerance = kLodBudgetPixels;
+    r.flagsRequired = r.flagsForbidden = 0u;
+    GpuCullResult res;
+    d.e->gpuCull(d.scene, d.view, r, false, res);
+    const unsigned need = res.cutOverflowIndices;
+    // THE RESERVE must hold every root cut (the eighth of the budget), the main region
+    // only a third of the cuts.
+    size_t rootIdx = 0;
+    for (const MeshCluster &c : f.data.clusters) {
+        const bool terminal = f.data.clusterGroups[size_t(c.group)].error >= FLT_MAX;
+        if (terminal && (c.refined < 0 || f.data.clusterGroups[size_t(c.refined)].error < FLT_MAX))
+            rootIdx += c.indexCount;
+    }
+    const uint32_t tiny = std::max(uint32_t(need / 3u), uint32_t(8u * 12u * rootIdx + 1024u));
+    ov->atomCull().setCutBudgetForTest(tiny);
+    std::printf("\n-- E. the overflow: 12 x %s, the cuts ask %u indices, root cut %zu indices each; budget "
+                "forced to %u\n", f.name.c_str(), need, rootIdx, tiny);
+    size_t missingFrames = 0, coarseFrames = 0;
+    unsigned firstBudget = 0, lastBudget = 0, lastOverflow = 1u;
+    for (int frame = 0; frame < 24; ++frame) {
+        d.e->renderOneFrame();
+        const std::set<unsigned> seen = slotsInIds(ov);
+        size_t missing = 0;
+        for (unsigned sl : all) missing += seen.count(sl) ? 0u : 1u;
+        AtomCutStats cs;
+        ov->atomCutStats(cs);
+        if (!firstBudget) firstBudget = cs.indexBudget;
+        lastBudget = cs.indexBudget;
+        lastOverflow = cs.overflow;
+        if (missing) ++missingFrames;
+        if (cs.overflow) ++coarseFrames;
+        std::printf("   frame %2d: %zu of %zu instances in the id image; ring: budget %u, drawn coarse %u, missing %u\n",
+                    frame, all.size() - missing, all.size(), cs.indexBudget, cs.overflow, cs.missing);
+    }
+    CHECK(all.size() == 12u, "E: the reference names all twelve instances (%zu)", all.size());
+    CHECK(missingFrames == 0, "E: NO INSTANCE IS MISSING from the id image at any of 24 frames (%zu frames short)",
+          missingFrames);
+    CHECK(coarseFrames > 0, "E: the overflow is reported: %zu frames drew instances coarse", coarseFrames);
+    CHECK(lastBudget > tiny && lastOverflow == 0u, "E: the budget doubled (%u -> %u) until nothing overflowed",
+          tiny, lastBudget);
+    for (NodeId n : nodes) d.scene->removeNode(n);
+    d.scene->destroyMesh(mesh);
+    d.scene->setLodBias(0.0f);
+}
+
 // ---- B. the dolly ---------------------------------------------------------------
 static double maskedMeanAbsDiff(const Image &a, const Image &b)
 {
@@ -977,6 +1080,8 @@ int main(int argc, char **argv)
         std::printf("\n   THE DEVICE'S CUT: worst %zu crack px (%s); inside colour: %zu folds, %zu holes, %zu ties\n",
                     dev.worstCracks, dev.worstAt.empty() ? "none" : dev.worstAt.c_str(), dev.folds, dev.holes,
                     dev.unexplained);
+        for (const auto &f : fx)
+            if (f.name == "uv-sphere-20k") overflowArm(d, f);
     }
 
     std::printf("\n%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);

@@ -540,6 +540,11 @@ static int clusterCutMain()
         const std::string what = std::string("triangles drawn at ") + p.name + " (the cut would draw " +
                                  std::to_string(cut) + ")";
         target("W3", r.tris, "tris", what.c_str());
+        // THE BAR THIS LANE CLOSES W3 WITH (ATOM-CLUSTER-CUT; the D1 convention: the bar
+        // comes with the part that closes the wall): the id pass draws the cut, within
+        // 1.2x of Types.h clusterCut at the same tolerance, either way.
+        REQUIRE(cut > 0 && r.tris <= 1.2 * double(cut) && r.tris * 1.2 >= double(cut),
+                "W3 %s: the id pass draws %.0f tris, within 1.2x of the cut's %zu", p.name, r.tris, cut);
         const std::string owed = std::string("id pass GPU ms on the ") + std::to_string(info.triangles) +
                                  "-triangle asset at " + p.name + " (decode " +
                                  (r.decodeMs >= 0 ? std::to_string(r.decodeMs) + " ms" : std::string("unsampled")) + ")";
@@ -670,6 +675,11 @@ static int levelsMain()
     target("W4", double(info.levels), "levels", "the asset's chain length (longest piece, level 0 included)");
     target("W4", r.tris, "tris", "triangles the id pass's CUT draws for the asset at 1 km (the chain's coarsest "
            "level beside it on the W4 line)");
+    // THE BAR (ATOM-CLUSTER-CUT closes W4): the coarsest end is reached — at 1 km the cut
+    // draws no more than 1.2x the chain's coarsest level.
+    REQUIRE(r.tris > 0 && r.tris <= 1.2 * double(info.coarsestTriangles),
+            "W4: at 1 km the cut draws %.0f tris, within 1.2x of the chain's coarsest %zu", r.tris,
+            info.coarsestTriangles);
     // THE 100-LEVEL CASE (brief §4.4): the chain halves until 128 triangles
     // (meshbake.cpp kRatio 0.5, kMinTriangles 128, kMaxLevels 254), so a chain reaches
     // log2(T/128)+1 levels: 17 at 10 M in ONE mesh — and the import splits above 1 M
