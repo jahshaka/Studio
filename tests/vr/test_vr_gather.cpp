@@ -318,8 +318,8 @@ int main() {
         const HalfDiff d = compareHalves(zero);
         // THE BAR IS A COUNT AND A MEAN, NOT A WORST: the depth's last-bit noise
         // moves a value by a half-float ulp or two, and where it tips a
-        // threshold — a plane test at its tolerance, the 6-bit coverage's
-        // stochastic rounding — by one step of that quantity (up to 0.016 of
+        // threshold — a plane test at its tolerance, the history's 6-bit
+        // coverage quantum — by one step of that quantity (up to 0.016 of
         // coverage, measured 0.010 once in four runs).
         const double bar = zl.meanE / 1000.0;
         CHECK_MSG(d.differ * 100u <= d.values && d.meanAbs <= bar,

@@ -225,7 +225,7 @@ int main()
     // arm's pixel history while the first holds its rest mean, and since the
     // history is PACKED (a 9-bit shared-exponent mean) a young view's second frame
     // mixes this frame's estimate with its stored predecessor's 0.2 % rounding —
-    // a code at a boundary moves with no far query anywhere (3,855 px measured at
+    // a code at a boundary moves with no far query anywhere (3,855-5,360 px at
     // 4 frames). The subject is the far query, so both arms are compared as the
     // still pictures they settle to: 20 frames is past the rest's N = 16, where
     // the answer IS the rest mean (rgba16f) of the frozen frame's estimate.
