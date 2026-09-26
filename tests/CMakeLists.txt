@@ -230,7 +230,12 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
     # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
     # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).
-    gi.field_scroll gi.rt_reflect_cost)
+    gi.field_scroll gi.rt_reflect_cost
+    # D1-SCALE-FIXTURES: the scale rows that print GPU or frame milliseconds or the UI
+    # thread's gaps (tests/scale/CMakeLists.txt) — measurements by design, so a sibling's
+    # GPU work inside their window would print someone else's number.
+    scale.world scale.voxel_scroll scale.cluster_cut scale.decode scale.tlas scale.cpu_walks
+    scale.library)
 # The wrapper waits at most this long for the lock (its default, JAH_GPU_LOCK_WAIT), and the wait
 # counts against ctest's TIMEOUT — so a wrapped suite's TIMEOUT is ITS OWN run budget (the value
 # its site measured and documented) PLUS this wait, set here from RUN_TIMEOUT and never again at
@@ -360,6 +365,10 @@ add_subdirectory(threading)
 # that exists BEFORE the swap, so v1 has a recorded baseline to be judged
 # against. Label `benchmark`: minutes, not seconds; `ctest -LE benchmark` skips it.
 add_subdirectory(benchmarks)
+# THE SCALE SUITES (lane D1-SCALE-FIXTURES): phase E's measuring stick — one
+# `scale.*` suite per wall W1-W14, label `scale-target` (printed, never gating).
+# AFTER tests/atom: the world reads that directory's configure-time model extraction.
+add_subdirectory(scale)
 # The session log (SPECS/SESSION_LOG_SPEC.md): log.core (the sink, no display),
 # log.events (verbs + event markers, real binary), log.engine (the Ogre
 # listener + device rows) and log.perf (the periodic sampler).
