@@ -1166,6 +1166,13 @@ private:
     QVector<QAction *> atomViewActions;
     void setAtomViewMode(int mode);
     int atomViewMode();
+    /// View Options -> Photon View (PHOTON-VIEW-1): Off, Voxels, Probes, Cards,
+    /// Screen Probes, Diffuse GI Only, Reflections Only, Ray Hits — exclusive, in
+    /// PhotonView's order; F7 cycles through the ones that can paint. Both call the
+    /// scene's setPhotonView behind its photonViewRefusal, world.setPhotonView's path.
+    QVector<QAction *> photonViewActions;
+    void setPhotonViewMode(int mode);
+    int photonViewMode();
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
     /// THE CAMERA-SPEED BUTTON and the two controls in its popover (owner
     /// R15). Owned by the toolbar and the popover menu; held to keep all three
