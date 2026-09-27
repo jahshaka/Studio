@@ -25,7 +25,9 @@
 // appended after the view's and so run in the same frame, render into two RGBA8
 // sRGB targets of the view's size:
 //   REFERENCE  the objects, drawn by stock HlmsPbs (the render queues the view draws)
-//   DECODE     one full-screen AtomDecodeRenderable per decode twin, over a HAND-MADE
+//   DECODE     CLASSIFIED like the product's (ATOM-DECODE-CLASS-1): the classifier
+//              writes each pixel's bucket class into the arm's depth, then one
+//              full-screen AtomDecodeRenderable per decode twin tests it EQUAL, over a HAND-MADE
 //              id buffer: the CPU rasterisation of the same instances (snapped to the
 //              device's 1/256 sub-pixel grid, the top-left rule, P-A's reference)
 // With the gather on, both carry the prepass the gather's piece needs
@@ -107,6 +109,10 @@ static const unsigned kW = 960, kH = 540;
 /// V1_FAST and [225, 256) V1_LEGACY, where a v2-only renderable is asked for v1
 /// world transforms (measured: the first run drew nothing but exceptions at 230).
 static const Ogre::uint8 kDecodeRq = 99;
+/// THE CLASSIFIER's queue (ATOM-DECODE-CLASS-1): the decode arm is CLASSIFIED like the
+/// product's screen decode — its first pass draws the classifier (the material depth
+/// in the arm's own depth target) and every bucket draw tests its class EQUAL.
+static const Ogre::uint8 kClassifyRq = 98;
 /// The spike's bar.
 static const double kMeanBar = 1.0, kTailBar = 0.005;
 static const int kTailCodes = 8;
@@ -314,9 +320,11 @@ static bool rasteriseCell(const Cell &c, const float vp[4][4], unsigned cellSlot
 // ---------------------------------------------------------------------------
 /// One node: [prepass] + colour pass over [firstRq, lastRq), into the external
 /// target, with the view's shadow node. `prepass` mirrors what the view's chain does
-/// when the gather is on (OgreChain.cpp's prepass + setUseDepthPrePass).
+/// when the gather is on (OgreChain.cpp's prepass + setUseDepthPrePass). The colour
+/// pass after a prepass starts at `colourFirstRq` (the decode arm's classifier runs in
+/// the first pass only: the colour pass loads the material depth it wrote).
 static std::string defineArm(Ogre::CompositorManager2 *cm, const std::string &name, bool prepass,
-                             Ogre::uint8 firstRq, Ogre::uint8 lastRq)
+                             Ogre::uint8 firstRq, Ogre::uint8 lastRq, Ogre::uint8 colourFirstRq)
 {
     const std::string nodeName = name + "/Node", wsName = name + "/Ws";
     if (cm->hasWorkspaceDefinition(wsName)) return wsName;
@@ -387,7 +395,7 @@ static std::string defineArm(Ogre::CompositorManager2 *cm, const std::string &na
         p->mStoreActionColour[0] = Ogre::StoreAction::Store;
         p->mStoreActionDepth = Ogre::StoreAction::DontCare;
         p->mStoreActionStencil = Ogre::StoreAction::DontCare;
-        p->mFirstRQ = firstRq;
+        p->mFirstRQ = prepass ? colourFirstRq : firstRq;
         p->mLastRQ = lastRq;
         p->mIncludeOverlays = false;
     }
@@ -401,6 +409,7 @@ static std::string defineArm(Ogre::CompositorManager2 *cm, const std::string &na
 /// cached across a frame).
 struct DecodeListener final : public Ogre::CompositorWorkspaceListener {
     std::vector<AtomDecodeRenderable *> *decodes = nullptr;
+    AtomDecodeRenderable *classifier = nullptr;
     HlmsAtom *atom = nullptr;
     OgreScene *scene = nullptr;
     Ogre::TextureGpu *ids = nullptr;
@@ -413,11 +422,14 @@ struct DecodeListener final : public Ogre::CompositorWorkspaceListener {
         scene->gpuScene().flushClusterTables();
         src.meshes = scene->gpuScene().meshBuffer();
         src.clusters = scene->gpuScene().clusterBuffer();
+        src.classified = true;
         atom->setDecodeSource(src);
         for (AtomDecodeRenderable *d : *decodes) d->setVisible(true);
+        if (classifier) classifier->setVisible(true);
     }
     void workspacePosUpdate(Ogre::CompositorWorkspace *) override {
         for (AtomDecodeRenderable *d : *decodes) d->setVisible(false);
+        if (classifier) classifier->setVisible(false);
     }
 };
 
@@ -763,6 +775,12 @@ int main()
         d->setVisible(false);
         decodes.push_back(d);
     }
+    // ...AND THE CLASSIFIER, the product's own (HlmsAtom::classifyDatablock).
+    auto *classifier = new AtomDecodeRenderable(Ogre::Id::generateNewId<Ogre::MovableObject>(),
+                                                &sm->_getEntityMemoryManager(Ogre::SCENE_DYNAMIC), sm, kClassifyRq);
+    classifier->setDatablock(atom->classifyDatablock());
+    decodeNode->attachObject(classifier);
+    classifier->setVisible(false);
     // ATOM_PARITY_DEBUG=<what>: stage 0's debug hook, inherited — both hosts write the
     // same intermediate of the shading to the colour target through a per-datablock
     // custom piece (no media edited), so a failing cell is localised in minutes.
@@ -818,6 +836,7 @@ int main()
     Ogre::CompositorManager2 *cm = root.getCompositorManager2();
     DecodeListener listener;
     listener.decodes = &decodes;
+    listener.classifier = classifier;
     listener.atom = atom;
     listener.scene = ogreScene;
     listener.ids = idTex;
@@ -826,8 +845,9 @@ int main()
         if (refWs) cm->removeWorkspace(refWs);
         if (decWs) cm->removeWorkspace(decWs);
         const std::string tag = prepass ? "Pre" : "Fwd";
-        const std::string refDef = defineArm(cm, "AtomParityRef" + tag, prepass, 0u, kDecodeRq - 1u);
-        const std::string decDef = defineArm(cm, "AtomParityDec" + tag, prepass, kDecodeRq, kDecodeRq + 1u);
+        const std::string refDef = defineArm(cm, "AtomParityRef" + tag, prepass, 0u, kClassifyRq, 0u);
+        const std::string decDef =
+            defineArm(cm, "AtomParityDec" + tag, prepass, kClassifyRq, kDecodeRq + 1u, kDecodeRq);
         refWs = cm->addWorkspace(sm, refTex, cam, refDef, true);
         // ATOM_PARITY_NODECODE=1: the reference alone (a diagnosis arm: attributes a
         // validation report to the stock host or to the decode).
@@ -1057,6 +1077,8 @@ int main()
         decodeNode->detachObject(d);
         delete d;
     }
+    decodeNode->detachObject(classifier);
+    delete classifier;
     sm->destroySceneNode(decodeNode);
     atom->setDecodeSource(HlmsAtom::DecodeSource());
     atom->destroyDecodeTwins();
