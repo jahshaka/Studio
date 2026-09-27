@@ -23,12 +23,12 @@ target_compile_definitions(test_gpu_cull PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gpu_cull PRIVATE JahshakaEngine)
 add_dependencies(test_gpu_cull JahshakaEngineMedia)
-add_test(NAME engine.gpu_cull COMMAND test_gpu_cull
+jah_gpu_row(engine.gpu_cull CLASS engine COMMAND test_gpu_cull
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_cull PROPERTIES TIMEOUT 300 LABELS "engine")
 # engine.gpu_cull.timing — its millisecond bar(s), nightly (lane D6B-GATE-SHAPE; audit §5 F17
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME engine.gpu_cull.timing RUN_TIMEOUT 300 COMMAND test_gpu_cull
+jah_gpu_exclusive_test(NAME engine.gpu_cull.timing CLASS engine RUN_TIMEOUT 300 COMMAND test_gpu_cull
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_cull.timing PROPERTIES
     ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box")
@@ -66,7 +66,7 @@ target_link_libraries(test_lod_rule_parity PRIVATE IrisGL JahshakaEngine OgreNex
 # headers in it now, Qt's `slots` keyword macro would eat it.
 set_source_files_properties(test_lod_rule_parity.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
 add_dependencies(test_lod_rule_parity JahshakaEngineMedia)
-add_test(NAME engine.lod_rule_parity COMMAND test_lod_rule_parity
+jah_gpu_row(engine.lod_rule_parity CLASS engine COMMAND test_lod_rule_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -84,12 +84,12 @@ target_compile_definitions(test_hzb PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_hzb PRIVATE JahshakaEngine)
 add_dependencies(test_hzb JahshakaEngineMedia)
-add_test(NAME chain.hzb COMMAND test_hzb
+jah_gpu_row(chain.hzb CLASS engine COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
 # chain.hzb.timing — its millisecond bar(s), nightly (lane D6B-GATE-SHAPE; audit §5 F17
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME chain.hzb.timing RUN_TIMEOUT 180 COMMAND test_hzb
+jah_gpu_exclusive_test(NAME chain.hzb.timing CLASS engine RUN_TIMEOUT 180 COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(chain.hzb.timing PROPERTIES
     ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box")
@@ -111,6 +111,6 @@ target_compile_definitions(test_voxel_reader_parity PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_voxel_reader_parity PRIVATE JahshakaEngine)
 add_dependencies(test_voxel_reader_parity JahshakaEngineMedia)
-add_test(NAME engine.voxel_reader_parity COMMAND test_voxel_reader_parity
+jah_gpu_row(engine.voxel_reader_parity CLASS engine COMMAND test_voxel_reader_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.voxel_reader_parity PROPERTIES TIMEOUT 120 LABELS "engine")

@@ -28,7 +28,7 @@ endfunction()
 
 jahshaka_looks_test(test_looks)
 target_link_libraries(test_looks PRIVATE JahshakaEngine)
-add_test(NAME looks.engine COMMAND test_looks
+jah_gpu_row(looks.engine CLASS engine COMMAND test_looks
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(looks.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 

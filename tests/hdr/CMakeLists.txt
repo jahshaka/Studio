@@ -22,7 +22,7 @@ endfunction()
 
 jahshaka_hdr_test(test_hdr_drag test_hdr_drag.cpp)
 target_link_libraries(test_hdr_drag PRIVATE JahshakaEngine)
-add_test(NAME hdr.drag_stable COMMAND test_hdr_drag
+jah_gpu_row(hdr.drag_stable CLASS engine COMMAND test_hdr_drag
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.drag_stable PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -45,7 +45,7 @@ endif()
 # radiance. See the file header.
 jahshaka_hdr_test(test_hdr_meter test_hdr_meter.cpp)
 target_link_libraries(test_hdr_meter PRIVATE JahshakaEngine)
-add_test(NAME hdr.meter COMMAND test_hdr_meter
+jah_gpu_row(hdr.meter CLASS engine COMMAND test_hdr_meter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.meter PROPERTIES TIMEOUT 180 LABELS "engine")
 
@@ -70,7 +70,7 @@ endif()
 # of the 256 display codes on its own.
 jahshaka_hdr_test(test_hdr_dither test_hdr_dither.cpp)
 target_link_libraries(test_hdr_dither PRIVATE JahshakaEngine)
-add_test(NAME hdr.dither COMMAND test_hdr_dither
+jah_gpu_row(hdr.dither CLASS engine COMMAND test_hdr_dither
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.dither PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -84,7 +84,7 @@ set_tests_properties(hdr.dither PROPERTIES TIMEOUT 120 LABELS "engine")
 # generation, which is what makes it a dial a person can drag).
 jahshaka_hdr_test(test_hdr_bloom_amount test_hdr_bloom_amount.cpp)
 target_link_libraries(test_hdr_bloom_amount PRIVATE JahshakaEngine)
-add_test(NAME hdr.bloom_amount COMMAND test_hdr_bloom_amount
+jah_gpu_row(hdr.bloom_amount CLASS engine COMMAND test_hdr_bloom_amount
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(hdr.bloom_amount PROPERTIES TIMEOUT 120 LABELS "engine")
 

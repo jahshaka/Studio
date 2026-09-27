@@ -44,7 +44,7 @@ _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]
 # The pools' arm lines (SUITE-POOL-1's runner, tests/support/run_pool.py): `ARM-BEGIN <pool>.<arm>`
 # when an arm starts, `ARM <pool>.<arm> PASS|FAIL <ms> [why]` when it ends; an arm that began
 # and never ended is a CRASH (the runner restarts the app and goes on).
-_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|SKIP)\b(?:\s+(\d+(?:\.\d+)?)\s*(ms|s)?)?")
+_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|NOADMIT|SKIP)\b(?:\s+(\d+(?:\.\d+)?)\s*(ms|s)?)?")
 _ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
 # A pool's boot footprint (TEST-TIER-1, run_pool.py): `MEM <pool> gpuPoolUsed=<MB> textures=<MB>
 # processMiB=<MiB|?> tier=<t>`, once per process the pool started; the row records the largest.
@@ -56,6 +56,19 @@ _ARM_MEM = re.compile(r"^\s*MEM\s+(\S+\.\S+)\s+gpuPoolUsed=(\d+)\s+textures=(\d+
 _LEAK = re.compile(r"^\s*LEAK\s+\S+\s+\+(\d+)\s+over\s+(\d+)\s+arms")
 _GPU = re.compile(r"^\s*gpu_ms:\s*([0-9.]+)")
 _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
+
+
+# THE VRAM BUDGET's cap (GATE-ADMIT-1; scripts/vram_tokens.py): a row that waited past the bound
+# for its tokens exits 75 and never ran — ctest calls it "Failed", the run log calls it NOADMIT
+# (the box was over-subscribed; nothing about the row's code), with the helper's own line as why.
+_NOADMIT = re.compile(r"^\s*(?:\|\s*)*(NOADMIT vram: .*?)\s*$")
+
+
+def noadmit_line(text):
+    for line in (text or "").splitlines():
+        m = _NOADMIT.match(line)
+        if m: return m.group(1)[:300]
+    return None
 
 
 def verdict_of(status):
@@ -295,7 +308,11 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                 "box": dict(box0, load=[round(x, 2) for x in load],
                             load_mean=sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
-        row = dict(base, arm=None, verdict=verdict_of(status), status=status.strip("* "),
+        v, st = verdict_of(status), status.strip("* ")
+        na = noadmit_line(outputs.get(name, "")) if v == "FAIL" else None
+        if na and not arms:
+            v, st = "NOADMIT", na
+        row = dict(base, arm=None, verdict=v, status=st,
                    seconds=secs, gpu_ms=gpu, target=target)
         mem = _mem_of(outputs.get(name, ""))
         if mem is not None:

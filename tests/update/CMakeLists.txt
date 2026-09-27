@@ -18,7 +18,7 @@ set_tests_properties(app.update_check PROPERTIES LABELS "app" TIMEOUT 60)
 # app.update_check.timing — its two upper millisecond bars, nightly (lane D6B-GATE-SHAPE;
 # audit §5 FIX-TIME; the audit's preferred fake clock would change the product's checker,
 # out of this lane's scope): the same binary with JAHSHAKA_TIMING_BARS=1, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME app.update_check.timing RUN_TIMEOUT 60 COMMAND test_update_check
+jah_gpu_exclusive_test(NAME app.update_check.timing CLASS none RUN_TIMEOUT 60 COMMAND test_update_check
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(app.update_check.timing PROPERTIES
     ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "app;nightly;quiet-box")

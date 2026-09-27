@@ -105,7 +105,7 @@ add_dependencies(test_vr_spike_1a JahshakaEngineMedia)
 set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
     CACHE FILEPATH "OpenXR manifest of the simulated-HMD runtime the VR gate uses")
 
-add_test(NAME vr.spike_1a
+jah_gpu_row(vr.spike_1a CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_spike.sh"
                  "$<TARGET_FILE:test_vr_spike_1a>" "${JAH_MONADO_MANIFEST}" 60
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -128,7 +128,7 @@ target_compile_definitions(test_vr_session PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_vr_session JahshakaEngineMedia)
 
-add_test(NAME vr.session
+jah_gpu_row(vr.session CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -152,7 +152,7 @@ set_tests_properties(vr.session PROPERTIES
 # so the strong form gets its own process — and ONLY the strong form: the binary
 # returns after the worldScale-0 arm under JAHSHAKA_NO_DITHER (lane D6B-GATE-SHAPE;
 # audit verdict MERGE — every other case used to be asserted twice, 61 s a gate).
-add_test(NAME vr.session_undithered
+jah_gpu_row(vr.session_undithered CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -182,7 +182,7 @@ target_compile_definitions(test_vr_gather PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_vr_gather JahshakaEngineMedia)
-add_test(NAME vr.gather_stereo
+jah_gpu_row(vr.gather_stereo CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_gather>" "${JAH_MONADO_MANIFEST}"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -224,7 +224,7 @@ set_tests_properties(vr.gather_stereo PROPERTIES
 # that stopped because nothing was enabled, and the session that was stopped
 # with nobody noticing — in the app, through the Player page and the real driver.
 set(_vr_nopic_home "${CMAKE_CURRENT_BINARY_DIR}/vr-nopicture-home")
-add_test(NAME vr.no_picture_start
+jah_gpu_row(vr.no_picture_start CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_no_picture_start.js")
@@ -259,7 +259,7 @@ set_tests_properties(vr.no_picture_start PROPERTIES
 # is a doff; ONE frame is a reprojection hiccup, and the hysteresis that tells
 # them apart is `vr.session`'s case.
 set(_vr_mirror_home "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home")
-add_test(NAME vr.mirror_live
+jah_gpu_row(vr.mirror_live CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_mirror_live.js"
@@ -292,7 +292,7 @@ set_tests_properties(vr.mirror_live PROPERTIES
 # real interaction profile bound, so an injection can never fool a smoke on a
 # real headset.
 set(_vr_input_home "${CMAKE_CURRENT_BINARY_DIR}/vr-input-home")
-add_test(NAME vr.input_session
+jah_gpu_row(vr.input_session CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_input_session.js"
@@ -338,7 +338,7 @@ foreach(_arm warmup warmup_control)
         set(_vr_warm_script "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup_control.js")
     endif()
     jah_fresh_home_fixture(vr.${_arm}.fresh_home vr${_arm}FreshHome "${_vr_warm_home}" LABELS "scripting")
-    add_test(NAME vr.${_arm}
+    jah_gpu_row(vr.${_arm} CLASS vr
              COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                      "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                      "${_vr_warm_script}"
@@ -359,7 +359,7 @@ set(_vr_warm_timing_home "${CMAKE_CURRENT_BINARY_DIR}/vr-warmup-timing-home")
 jah_timing_script("${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js"
                   "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js")
 jah_fresh_home_fixture(vr.warmup.timing.fresh_home vrwarmuptimingFreshHome "${_vr_warm_timing_home}" LABELS "scripting;nightly;quiet-box")
-jah_gpu_exclusive_test(NAME vr.warmup.timing RUN_TIMEOUT 600
+jah_gpu_exclusive_test(NAME vr.warmup.timing CLASS vr RUN_TIMEOUT 600
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
             "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
             "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js"
@@ -399,7 +399,7 @@ target_link_libraries(test_vr_frame_budget PRIVATE Qt6::Core)
 # It renders 2 x (240 settle + 200 recorded) stereo frames at 10.26 Mpx and imports
 # Showroom 2 on the way, on a rig whose present copy is 10-27 ms a frame: this is the
 # longest VR suite there is (run budget 900 s; the lock's wait rides on top).
-jah_gpu_exclusive_test(NAME vr.frame_budget RUN_TIMEOUT 900
+jah_gpu_exclusive_test(NAME vr.frame_budget CLASS vr RUN_TIMEOUT 900
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_budget.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_BINARY_DIR}/vr_frame_budget.js"
@@ -443,7 +443,7 @@ set_target_properties(test_vr_eye_grade PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(test_vr_eye_grade PRIVATE Qt6::Gui)
 
-add_test(NAME vr.eye_grade
+jah_gpu_row(vr.eye_grade CLASS vr
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_eye_grade.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_CURRENT_BINARY_DIR}/eye_grade.js"
@@ -490,7 +490,7 @@ jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scrip
 jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
 jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 9)
 jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 9)
-jah_add_pool(vr_session TIER epic LABELS scripting
+jah_add_pool(vr_session TIER epic CLASS vr LABELS scripting
     LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
     APP_ARGS --vr
     ENV "${JAH_TEST_DISPLAY_ENV}"
