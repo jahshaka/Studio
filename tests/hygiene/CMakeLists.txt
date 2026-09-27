@@ -115,6 +115,16 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
     jah_no_display(source.gate_scope_rules)
+    # gate.selection — THE SELECTOR'S REPLAY (MODULAR-GATE-1): the recorded lanes' diffs
+    # re-selected against this build's graph (gate_selection_cases.json): every REAL red of
+    # theirs must be selected, no lane may fall back, and the graph's precision holds. Needs the
+    # BUILT tree (ninja's deps log) and the recorded shas; a cold run pays ~1 min of `nm` once
+    # (cached in the build dir), a warm one ~15 s.
+    add_test(NAME gate.selection
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_selection.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.selection PROPERTIES TIMEOUT 300 LABELS "hygiene")
+    jah_no_display(gate.selection)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours
