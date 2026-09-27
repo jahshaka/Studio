@@ -178,7 +178,9 @@ target_compile_definitions(test_engine_oom_is_not_loss PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_oom_is_not_loss PRIVATE JahshakaEngine)
 add_dependencies(test_engine_oom_is_not_loss JahshakaEngineMedia)
-add_test(NAME engine.oom_is_not_loss COMMAND test_engine_oom_is_not_loss
+# One engine at a time (the in-record child runs and exits before this process
+# boots its own), so the engine class's tokens cover it.
+jah_gpu_row(engine.oom_is_not_loss CLASS engine COMMAND test_engine_oom_is_not_loss
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.oom_is_not_loss PROPERTIES TIMEOUT 120 LABELS "engine"
     SKIP_RETURN_CODE 77)
