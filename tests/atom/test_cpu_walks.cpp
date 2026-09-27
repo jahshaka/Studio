@@ -7,9 +7,18 @@
 // BYTE against a REFERENCE WRITER kept in this suite — the product's CPU writer,
 // deleted once this suite proved the two equal — run over the same mirror and the
 // same bottom-level structures, with the far copies' hand-over width, the counts and
-// the per-slot rows. Over:
-//   (a) a mixed set — static casters, movers, non-casters, a hidden item, a cut-out
-//       and a blended material (both out of the traced set), LOD chains whose near
+// the per-slot rows.
+// WHAT THE EQUALITY PROVES, AND WHAT IT DOES NOT: the BLAS and skin-structure
+// ADDRESSES the reference writes come from the tier's own inputs (TlasReadback's
+// structures and skins — the same host words the job reads), so on the reference
+// field they prove only that the job reproduces those words. The INDEPENDENT arms
+// are the ones the reference derives itself from the mirror and the scene: the mask
+// (the flags word), the custom index (the slot), the transform (the world rows), the
+// per-slot row, the near level (the scene's own ray-level array, not the table's
+// ids.w — the in-place patch's proof) and which slots are active at all. Over:
+//   (a) a mixed set — static casters, movers, non-casters, a hidden item and a
+//       cut-out (out of the traced set) and a blended material (traced: every BLAS
+//       is opaque and only an alpha test leaves the set), LOD chains whose near
 //       level the ray rule moves with the camera and whose far copy is the coarsest,
 //       scaled instances (the far width grows with the scale), two rigged columns
 //       (their own skinned structures, posed);
