@@ -13,6 +13,8 @@ scripts — rc-gate.sh — and anyone running a whole tier):
     scripts/gate_runlog.py run --tier merge --lane rc-d --jobs 4 [--build build-linux] -- ctest -j4 ...
     scripts/gate_runlog.py import <ctest-output.log> --tier merge --tip <sha> --lane <name>
     scripts/gate_runlog.py times [--days 14]          # suite -> median PASS seconds (gate-scope's estimate)
+    scripts/gate_runlog.py longest [--days 7] [-n 10] # the ten longest suites/arms this week
+    scripts/gate_runlog.py load-reds [--days 7]       # red in a gate, green solo at the same tip
 
 `run` streams ctest's output through (the caller still sees and may redirect every line),
 samples the load average every 2 s, adds `--output-junit` to read each suite's own output
@@ -39,8 +41,11 @@ SCHEMA = 1
 
 # `  12/653 Test  #45: gi.foo ..........   Passed   12.34 sec`
 _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]+)\s+sec\s*$")
-# The pools' arm lines (SUITE-POOL-1's runner): `ARM <name> PASS|FAIL|CRASH [seconds]`.
-_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|SKIP)\b(?:\s+([\d.]+)\s*s)?")
+# The pools' arm lines (SUITE-POOL-1's runner, tests/support/run_pool.py): `ARM-BEGIN <pool>.<arm>`
+# when an arm starts, `ARM <pool>.<arm> PASS|FAIL <ms> [why]` when it ends; an arm that began
+# and never ended is a CRASH (the runner restarts the app and goes on).
+_ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|SKIP)\b(?:\s+(\d+(?:\.\d+)?)\s*(ms|s)?)?")
+_ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
 _GPU = re.compile(r"^\s*gpu_ms:\s*([0-9.]+)")
 _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 
@@ -148,8 +153,10 @@ def _junit_outputs(path):
 
 
 def _suite_facts(text):
-    gpu, target, arms = None, None, []
+    gpu, target, arms, begun = None, None, [], []
     for line in (text or "").splitlines():
+        m = _ARM_BEGIN.match(line)
+        if m: begun.append(m.group(1)); continue
         m = _GPU.match(line)
         if m:
             try: gpu = float(m.group(1))
@@ -157,7 +164,13 @@ def _suite_facts(text):
         m = _TARGET.match(line)
         if m and target is None: target = m.group(1)[:200]
         m = _ARM.match(line)
-        if m: arms.append((m.group(1), m.group(2), float(m.group(3)) if m.group(3) else None))
+        if m:
+            secs = None
+            if m.group(3):
+                secs = float(m.group(3)) if m.group(4) == "s" else float(m.group(3)) / 1000.0
+            arms.append((m.group(1), m.group(2), secs))
+    ended = {a for a, _, _ in arms}
+    arms += [(a, "CRASH", None) for a in dict.fromkeys(begun) if a not in ended]
     return gpu, target, arms
 
 
@@ -291,6 +304,46 @@ def median_times(days=14, verdicts=("PASS",)):
     return {k: statistics.median(v) for k, v in acc.items()}
 
 
+def _records(days):
+    d = log_dir()
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    if not os.path.isdir(d): return
+    for f in sorted(os.listdir(d)):
+        if not f.endswith(".jsonl") or f[:10] < cutoff: continue
+        for line in open(os.path.join(d, f)):
+            try: r = json.loads(line)
+            except ValueError: continue
+            r["_file"] = f
+            yield r
+
+
+def query_longest(days=7, n=10):
+    """The n longest suites/arms by median wall seconds (PASS runs) over the last `days` days."""
+    acc = {}
+    for r in _records(days):
+        if r.get("verdict") != "PASS" or r.get("seconds") is None: continue
+        k = r["suite"] if not r.get("arm") else f"{r['suite']} :: {r['arm']}"
+        acc.setdefault(k, []).append(r["seconds"])
+    rows = sorted(((statistics.median(v), len(v), k) for k, v in acc.items()), reverse=True)[:n]
+    for med, cnt, k in rows: print(f"{med:8.1f} s  x{cnt:<3d} {k}")
+
+
+def query_load_reds(days=7):
+    """Suites that went red in a gate and green on a solo retry at the same tip: the contention
+    class, with the load and the sibling gates each red ran beside."""
+    by_file = {}
+    for r in _records(days):
+        by_file.setdefault(r["_file"], []).append(r)
+    for f, recs in sorted(by_file.items()):
+        for r in recs:
+            if r.get("arm") or r.get("retry") or r.get("verdict") == "PASS": continue
+            solo = [x for x in recs if x["suite"] == r["suite"] and x.get("retry") and not x.get("arm")]
+            if solo and all(x["verdict"] == "PASS" for x in solo):
+                b = r.get("box", {})
+                print(f"{f[:10]} {r['suite']:45s} {r['verdict']:7s} load {b.get('load_mean')} "
+                      f"(siblings {b.get('other_ctests')}, -j{b.get('jobs')})  solo {len(solo)}/{len(solo)} PASS")
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -305,6 +358,10 @@ def main():
     i.add_argument("--lane", default=None); i.add_argument("--jobs", type=int, default=None)
     t = sub.add_parser("times", help="median PASS seconds per suite from the log")
     t.add_argument("--days", type=int, default=14)
+    q = sub.add_parser("longest", help="the longest suites/arms by median PASS seconds")
+    q.add_argument("--days", type=int, default=7); q.add_argument("-n", type=int, default=10)
+    q2 = sub.add_parser("load-reds", help="red in a gate, green solo at the same tip")
+    q2.add_argument("--days", type=int, default=7)
     a = ap.parse_args()
     if a.cmd == "run":
         cmd = a.ctest[1:] if a.ctest and a.ctest[0] == "--" else a.ctest
@@ -321,6 +378,10 @@ def main():
         sys.exit(run_ctest(line, build, a.tier, lane, jobs, labels=inventory_labels(build)))
     if a.cmd == "import":
         import_log(a.log, a.tier, a.tip, a.lane, a.jobs); return
+    if a.cmd == "longest":
+        query_longest(a.days, a.n); return
+    if a.cmd == "load-reds":
+        query_load_reds(a.days); return
     if a.cmd == "times":
         for k, v in sorted(median_times(a.days).items()): print(f"{k} {v:.2f}")
 

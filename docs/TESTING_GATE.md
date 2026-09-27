@@ -117,59 +117,110 @@ nothing else belongs there. The staged `member_init_baseline.txt` is GONE — it
 were closed by 473 default member initialisers and 33 deletions — so the gate now reads
 zero and stays there.
 
-## 3. The SCOPED tier — `scripts/gate-scope.sh`
+## 3. The SCOPED tier — `scripts/gate-scope.sh` (selection by reach, MODULAR-GATE-1)
 
-`-j N` / `--jobs N` sets the ctest parallelism (default 4, the tier's contract). A lane gating beside other live lanes runs `-j 2`
-(the concurrency law); the printed command and the wall estimate follow the value, so a lane never has to re-type the selection —
-AND SO DOES THE FALLBACK: a range that falls back to the MERGE tier prints, reports (`--json` `command`) and `--run`s the tier at
-the same `-j` (DEVPROCESS-1; it used to hardcode `-j4`). The lead's `rc-gate.sh` reads `JAH_GATE_JOBS` (default 4) for its build and ctest.
+THE PRINCIPLE (TESTING_V2 T3; PHOTON_ATOM_CONTRACT §7b rule 1): a lane runs everything its
+change CAN REACH and nothing it cannot — read from the build and the diff, never guessed — and
+the full tiers stay where the process needs them (a stage close, a fork pin bump, nightly, the
+phase's push). `-j N` / `--jobs N` sets the ctest parallelism (default 4); the printed command,
+the wall estimate and a fallback's MERGE tier all follow it.
 
 ```
-scripts/gate-scope.sh <base>..<tip>            # a lane: its base commit .. its tip
-scripts/gate-scope.sh --files src/x.cpp ...    # a file list instead of a range
-scripts/gate-scope.sh <range> --run            # run the selection (DISPLAY, data root set)
-scripts/gate-scope.sh <range> --json           # machine-readable
-scripts/gate-scope.sh --record-times <ctest output log>   # refresh scripts/gate-times.txt
+scripts/gate-scope.sh <base>..<tip>            # a lane: its base commit .. its tip — prints the selection and why
+scripts/gate-scope.sh <range> --run            # run it (DISPLAY, data root set); every row's verdict -> the run log
+scripts/gate-scope.sh <range> --json           # machine-readable: suites, reasons, rationale, command
+scripts/gate-scope.sh --files src/x.cpp ...    # a file list instead of a range (no diff: no symbols, no CMake reading)
+scripts/gate-scope.sh --solo <suite> [--times 3]   # the flake protocol (§4), each run logged as a retry
+scripts/gate-scope.sh --record-times           # scripts/gate-times.txt from the run log (median PASS s, 14 days)
 ```
 
-How a touched path selects suites (all read from the tree and the build dir's
-`ctest --show-only=json-v1`, so a new suite is covered the day it is registered):
+**The three selectors** (the code: `Selection` in `scripts/gate-scope.py`, the graph and the
+symbol reader in `scripts/gate_graph.py`):
 
-1. a file under `tests/<dir>/` → every suite that `tests/<dir>/CMakeLists.txt` registers; a
-   touched script (`.js`, `.js.in`, `.sh`) → exactly the suites that run it;
-2. a source a compiled test target lists (`${CMAKE_SOURCE_DIR}/src/...` in a tests
-   CMakeLists) → that dir's suites;
-3. a changed API module (`src/scripting/modules/<m>api.cpp`, `src/modules/*/api/*api.cpp`,
-   `src/player/api/playerapi.cpp`) → every app-spawning suite whose script calls `<m>.` —
-   a module every script calls (`project.`, `app.`, `console.`) selects nothing on its own,
-   only when its OWN api file changed;
-4. everything else → the AREA_RULES table in `gate-scope.py` (a `src/` or `irisgl/`
-   directory → test dirs + modules; `*headless-scripts` / `*vulkan-scripts` / `*all-scripts`
-   are the app-spawning groups; `*merge-tier` = "cannot be scoped");
-5. any path with NO rule, or a rule saying `*merge-tier` (root CMake, `irisgl/CMakeLists`,
-   unknown `src/` files) → the whole run FALLS BACK to the MERGE tier, loudly. A guessing
-   rule is worse than the merge tier. **Exception (2026-09-11):** an edit to `CMakeLists.txt`,
-   `irisgl/CMakeLists.txt` or `tests/CMakeLists.txt` whose every changed line is a source-file
-   list entry (a `.cpp`/`.h`/`.ui`/`.qrc`/script path), a comment or blank does NOT fall back —
-   the files it names are in the same diff and scope precisely (seven lanes fell back on
-   2026-09-11 for exactly this; replayed, 15c and the Assets lane scope to ~6 min instead of ~9).
-   A flag, target, find_package or condition change still falls back.
-6. Whenever `src/` or `irisgl/` moved, `app.startup_quiet` + `api.contract` ride along
-   (~15 s: one rendering boot, the scripting contract).
+1. **Rebuilt artefacts — the compiled rows.** A C/C++ file (or any other input the build
+   compiles: a `.ui`, a `.qrc`, a shader the build turns into SPIR-V) reaches the executables
+   ninja would relink: `build.ninja`'s edges plus ninja's deps log (which object read which
+   header), refined by the libraries' own link references (`nm`) — an archive member counts
+   only where the linker extracts it, a `libIrisGL` object only where a reference chain from
+   the executable (or the library's static initialisers) reaches it. A compiled row runs iff
+   one of its executables is reached. Measured at the landing: the mesh bake's object is in 24
+   of the 154 executables that load libIrisGL; the engine's facade (`OgreEngine.cpp`) pulls all
+   38 engine objects into every one of the 210 executables that name the engine — so an engine
+   change reaches every engine test by construction, and that is the answer, not a gap.
+2. **Symbols — a header hunk.** A changed header selects through what its changed lines
+   DECLARE or modify: a function by its name; a member's modified type or default by the member
+   AND its struct (every user constructing it); an added or removed member or enumerator by its
+   own name (code that does not name it compiles to the same meaning); a line inside an inline
+   body by its function. The files of `src/`, `irisgl/`, `tests/` that NAME one of those
+   identifiers are the reached paths, each through its own graph reach and rules. A NEW header
+   reaches its includers (all in the same diff). An identifier named by more than 60 files is
+   too common to narrow by: the header then reaches every includer (the graph). A comment- or
+   whitespace-only change to any C/C++ file reaches nothing (the source lints ride).
+3. **Reach — the app rows.** Almost every change relinks `bin/Jahshaka`, so the rows that run
+   the app — the `--script` suites, the wrapper-run ones, and the harnesses compiled with
+   `JAHSHAKA_BINARY` that spawn it (`open.responsive`, `avatar.responsive`, `mcp.e2e`, …) — are
+   chosen by the AREA RULES' families (a `src/`/`irisgl/` directory → test dirs + the API
+   modules its scripts call; `*vulkan-scripts` / `*headless-scripts` / `*all-scripts` /
+   `*app-rows` are the app groups) and by the verb → module map (a changed
+   `src/scripting/modules/<m>api.cpp` selects every script calling `<m>.`; a module more than 40 %
+   of scripts call selects nothing on its own). A path whose app relinked and that no rule
+   narrows selects EVERY app row — never the whole tier. For runtime data the graph cannot see
+   (engine media, scenes, sample content) a rule's dirs pick every row.
 
-The estimate line (`~N suite-seconds, ~M min wall at -j4`) comes from `scripts/gate-times.txt`
-(a full-gate snapshot) overlaid with the build dir's last run; refresh the snapshot after a
-full gate with `--record-times`.
+**Build files** (`CMakeLists.txt`, `*.cmake`) are read by what their CHANGED commands name: the
+rows a command names (an `add_test`, a suite list such as `JAH_GPU_EXCLUSIVE_SUITES`), a helper
+function's rows (ctest's backtrace) and the targets it is called on, a target the command
+changes (`target_*()`, `set_target_properties()`), the sources it names
+(`set_source_files_properties`), a sub-directory, a configured script (`configure_file`, and a
+variable substituted into a `.in` as `@VAR@`), the commands that read a local variable it sets.
+Source-list entries and comments select nothing (the files are in the diff). A NEW build file
+selects its rows and the executables built under it. A directory-scope setting
+(`add_compile_options`, `find_package`, a bare `set`, an `if()`) reaches every target under its
+directory — at the root, in `tests/` or in `irisgl/` that is the MERGE tier BY RULE. A vendored
+archive's flag change (`meshoptimizer`) enters through its first-party callers (the bake's rows).
 
-Measured first cuts (2026-09-09): one API module file → 51 suites / 2.5 min; a viewport
-controller → 47 / 1.1 min; asset service + DB + assets API + Assets page → 155 / 3.8 min; a
-document scene-graph file → 109 / 2.5 min; an engine GI file → 176 / 8 min; docs only →
-api.contract. An engine change scopes to near-full by design (pixels move everywhere).
+**The full tier by rule, and the fallback.** A fork pin bump (`irisgl/thirdparty/ogre-next`)
+selects the MERGE tier BY RULE (§7b rule 4: an Ogre change reaches everything). The FALLBACK to
+the MERGE tier is left for a path with no rule, no symbol and no graph owner — printed loudly with
+the path and the reason; a build dir with no ninja deps log (not built yet) turns the graph off
+and says so (compiled rows then go by the rules' dirs, the old behaviour). `app.startup_quiet` +
+`api.contract` ride every code change; the `quiet-box` rows never ride a scoped gate; TARGET
+tests run in a second, non-gating ctest line (§1b).
 
-**Maintaining the rules:** when a scoped gate MISSES something a later merge/push gate
-catches, the rule for that path gains the suite — that is the feedback loop the owner asked
-for ("test it out as new lanes land"). Rules live in one table; keep the most specific
-prefix first.
+**What it prints:** one rationale line per touched path (`graph: N executable(s) incl. the app;
+rule …`, `symbols [FogDesc, density] named by 7 file(s)`, `names 2 row(s)`, `target meshoptimizer
+(vendored) enters our code through [...]`), then every selected row with its reason
+(`[relinks test_x]`, `symbol FogDesc`, `rule …`, `[module world]`) and the estimate (`N of M tier
+rows, ~S of ~T suite-seconds`, costs from THE RUN LOG's 14-day medians over
+`scripts/gate-times.txt`).
+
+**THE RUN LOG (TESTING_V2 T8).** `--run`, `--solo` and the rc-gate tiers
+(`scripts/gate_runlog.py run --tier <t> -- <ctest line>`) append one JSON record per row and per
+pool arm to `<workspace>/testing/runs/<date>-<tier>-<tip>.jsonl`: verdict (PASS | FAIL | CRASH |
+TIMEOUT | NOTRUN), retries, wall seconds, `gpu_ms` (a suite's `gpu_ms:` line), a target's value,
+the selection reason, the tree's three shas, the box (load over the suite's own window, the GPU
+clock state, -j, the display, sibling gates). The fields are `testing/runs/README.md`; the two
+standing queries are `scripts/gate_runlog.py longest` and `scripts/gate_runlog.py load-reds`.
+
+**The guard: `gate.selection`** (`tests/hygiene/gate_selection.py`, label `hygiene`) replays
+recorded lane diffs (`tests/hygiene/gate_selection_cases.json`: D's last ten lanes, their reds
+with each verdict's evidence) against the current build's graph: every REAL red must be selected,
+no lane may fall back, a fork bump must select the tier by rule, the audit's S1/S2 subjects select
+their suites, and the graph's precision holds (a compiled row whose executable does not contain
+the file is NOT selected). **A red that a stage, nightly or push tier finds and that a lane's
+scoped selection missed is a SELECTOR DEFECT: it is fixed in `gate-scope.py` and added to the
+cases file** — never answered with a wider rule "to be safe". `source.gate_scope_rules` guards the
+tool's own traps (the empty inventory, `--build .`, the targets' split, the fallback's -j).
+
+**Measured at the landing** (twelve recorded diffs of D's last ten lanes, costed with the
+per-row seconds of a -j4 MERGE-tier run; `spikes/modular-gate-1/table.md`): the four that FELL
+BACK (tests/CMakeLists ×2, irisgl/CMakeLists, tests/support) now select 3, 143, 492 and 613 rows
+(VIEWS-DEPTH-1 57 → 1 min, IMPORT-SPEED-1 57 → 13 min); an ENGINE lane selects 502-613 of the
+tier's 653 rows (51-57 min) — the engine's facade puts every engine object into every executable
+that uses the engine, and every rendering app row runs the chain, so that IS its reach (the old
+path rules ran 436-620 and missed the app-spawning harnesses); a fork pin bump is the tier by
+rule. Summed over the twelve: 620 → 538 min. The selector does not make an engine lane short;
+the pools (fewer app boots) and a stage-level full tier are what the engine lanes' time rests on.
 
 ## 3b. Re-gating after a fix (2026-09-11, owner: "no double checking")
 
