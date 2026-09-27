@@ -6,13 +6,16 @@ RUN_SERIAL all stop at the edge of ONE ctest process — so four lanes at -j4 pu
 processes on one 16 GB card and the late ones die of VK_ERROR_OUT_OF_DEVICE_MEMORY
 (SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md A3: 47 such reds on 2026-09-27). The budget has to
 live OUTSIDE ctest, like the GPU-timing lock (scripts/gpu-exclusive.sh): N advisory flock
-files in one directory, 1 token ~ 1 GB, and every process that boots Vulkan in a test holds k
-of them for its life.
+files in one directory, and every process that boots Vulkan in a test holds k of them for its
+life. MEASURED: 1 token = 1,090 MiB at the peak (two MERGE tiers sharing the budget: 13,333 MiB
+with 12 held over a 280 MiB desktop; ~820 MiB at p95).
 
 THE CONTRACT
-  * N tokens: /tmp/jah-vram/token.00 .. token.<N-1>; N = JAH_VRAM_TOKENS (default 12 — 12 GB
-    of the card's 16.4, the rest is the owner's instance, the desktop and a stray agent's app,
-    none of which take a token). JAH_VRAM_TOKENS=0 turns admission off (the command runs at once).
+  * N tokens: /tmp/jah-vram/token.00 .. token.<N-1>; N = JAH_VRAM_TOKENS (default 11 — ~12.2 GB
+    at the measured 1,090 MiB/token + the 280 MiB desktop, leaving ~1.3 GB beside the owner's
+    2.8 GB instance on the 16.4 GB card; 12 left 243 MiB). Nothing untokened is inside it: the
+    owner's instance, the desktop, an app started by hand without this helper.
+    JAH_VRAM_TOKENS=0 turns admission off (the command runs at once).
   * ALL OR NOTHING, LOWEST FIRST, NEVER HOLD-AND-WAIT. An acquirer takes the TURNSTILE
     (/tmp/jah-vram/turnstile) first; holding it, it reads the free tokens from the kernel's lock
     table (/proc/locks) and locks the k LOWEST free ones only when k are free — it never holds
@@ -58,9 +61,9 @@ def token_dir():
 
 def token_count():
     try:
-        return max(0, int(os.environ.get("JAH_VRAM_TOKENS", "12")))
+        return max(0, int(os.environ.get("JAH_VRAM_TOKENS", "11")))
     except ValueError:
-        return 12
+        return 11
 
 
 def wait_bound():
@@ -95,23 +98,31 @@ def _free_indices(n):
     """The free token indices right now, read from the kernel's lock table (/proc/locks) WITHOUT
     touching a token. None where /proc/locks does not exist (macOS: the lock scan is used)."""
     try:
-        with open("/proc/locks") as f:
+        with open(os.environ.get("JAH_VRAM_PROC_LOCKS", "/proc/locks")) as f:   # the override: a test's fake table
             held = set()
             for line in f:
                 p = line.split()
                 # "1: FLOCK  ADVISORY  WRITE 12345 00:1f:67890 0 EOF" (a blocked waiter: "1: -> FLOCK …")
                 if len(p) >= 6 and p[1] == "FLOCK":
-                    held.add(p[5].rsplit(":", 1)[-1])
+                    held.add(p[5].lower())
     except OSError:
         return None
     free = []
     for i, path in enumerate(_paths(n)):
         try:
-            if str(os.stat(path).st_ino) not in held:
+            if lock_key(os.stat(path)) not in held:
                 free.append(i)
         except OSError:
             free.append(i)
     return free
+
+
+def lock_key(st):
+    """A file's identity as /proc/locks prints it: MAJ:MIN:INODE, the device in hex (two digits
+    at least), the inode in decimal. The DEVICE matters: an inode number alone matches a flock on
+    any file of any other filesystem with the same number — a phantom HELD token and a wait of up
+    to the bound for nothing."""
+    return "%02x:%02x:%d" % (os.major(st.st_dev), os.minor(st.st_dev), st.st_ino)
 
 
 def _free_count(n):
@@ -157,7 +168,8 @@ def acquire(k, label="", wait=None, log=sys.stderr):
                      % (k, "?" if f is None else f, (" — " + label) if label else ""))
                 waited = True
             if time.monotonic() > deadline:
-                raise AdmitTimeout("vram: no admission for %d tokens within %.0f s" % (k, wait))
+                raise AdmitTimeout("NOADMIT vram: no admission for %d tokens within %.0f s (%s free, queued behind "
+                                   "another request)%s" % (k, wait, _free_count(n), (" — " + label) if label else ""))
             time.sleep(POLL_S)
         # 2. THE SCAN: lowest free first, all or nothing. On Linux the free set is READ from the
         # kernel's lock table first and the k lowest are locked only when k are free — so a
@@ -189,8 +201,8 @@ def acquire(k, label="", wait=None, log=sys.stderr):
                 _say(log, "vram: waiting for %d tokens, %d free%s" % (k, free, (" — " + label) if label else ""))
                 waited = True
             if time.monotonic() > deadline:
-                raise AdmitTimeout("vram: no admission for %d tokens within %.0f s (%d free at the last look)"
-                                   % (k, wait, free))
+                raise AdmitTimeout("NOADMIT vram: no admission for %d tokens within %.0f s (%d of %d free at "
+                                   "the last look)%s" % (k, wait, free, n, (" — " + label) if label else ""))
             time.sleep(POLL_S)
     finally:
         os.close(turnstile)

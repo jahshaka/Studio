@@ -34,6 +34,8 @@ import threading
 import time
 
 ADMIT, D = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.dirname(os.path.abspath(ADMIT)))
+import vram_tokens  # noqa: E402
 FRAME = 1.0 / 60.0
 failures = 0
 
@@ -71,7 +73,7 @@ def token_inodes(tokdir):
     out = {}
     for f in os.listdir(tokdir) if os.path.isdir(tokdir) else []:
         if f.startswith("token."):
-            out[str(os.stat(os.path.join(tokdir, f)).st_ino)] = int(f.split(".")[1])
+            out[vram_tokens.lock_key(os.stat(os.path.join(tokdir, f)))] = int(f.split(".")[1])
     return out
 
 
@@ -83,7 +85,7 @@ def held_by_pid(tokdir):
         for line in f:
             p = line.split()
             if len(p) >= 6 and p[1] == "FLOCK":
-                ino = p[5].rsplit(":", 1)[-1]
+                ino = p[5].lower()
                 if ino in inodes:
                     res.setdefault(int(p[4]), set()).add(inodes[ino])
     return res
@@ -238,7 +240,7 @@ for _ in range(400):
     if len(held_by_pid(tok).get(full.pid, ())) == 4:
         break
     time.sleep(0.01)
-r = subprocess.run([ADMIT, "1", "--", FAKE, "never", frames(1), ev], env=env_for(tok, 4, JAH_VRAM_WAIT=1),
+r5 = r = subprocess.run([ADMIT, "1", "--", FAKE, "never", frames(1), ev], env=env_for(tok, 4, JAH_VRAM_WAIT=1),
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 check(r.returncode == 75 and "never" not in open(ev).read(),
       "a wait past JAH_VRAM_WAIT exits 75 and never runs the command (rc %d)" % r.returncode)
@@ -256,6 +258,30 @@ r = subprocess.run([ADMIT, "1", "--", ADMIT, "1", "--", "sh", "-c", "echo nested
                    env=env_for(tok, 1, JAH_VRAM_WAIT=2), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 check(r.returncode == 0 and "nested-ran" in r.stdout and "already admitted by the parent" in r.stderr,
       "a nested admission runs on its parent's tokens and never waits (1 token, both levels)")
+
+# ---- 7: the lock table is read by DEVICE AND INODE ---------------------------------------
+print("7. /proc/locks identity = MAJ:MIN:INODE")
+tok = os.path.join(D, "tok7")
+os.makedirs(tok)
+open(os.path.join(tok, "token.00"), "w").close()
+st = os.stat(os.path.join(tok, "token.00"))
+fake = os.path.join(D, "locks7")
+other_dev = "%02x:%02x:%d" % (os.major(st.st_dev) ^ 0x7, os.minor(st.st_dev) ^ 0x5a, st.st_ino)
+with open(fake, "w") as f:
+    f.write("1: FLOCK  ADVISORY  WRITE 4242 %s 0 EOF\n" % other_dev)
+os.environ.update({"JAH_VRAM_DIR": tok, "JAH_VRAM_TOKENS": "1", "JAH_VRAM_PROC_LOCKS": fake})
+check(vram_tokens._free_indices(1) == [0],
+      "a flock on ANOTHER device's file with the same inode number (%s) leaves the token free" % other_dev)
+with open(fake, "w") as f:
+    f.write("1: FLOCK  ADVISORY  WRITE 4242 %s 0 EOF\n" % vram_tokens.lock_key(st))
+check(vram_tokens._free_indices(1) == [], "the token's own MAJ:MIN:INODE reads as held (%s)" % vram_tokens.lock_key(st))
+for k in ("JAH_VRAM_DIR", "JAH_VRAM_TOKENS", "JAH_VRAM_PROC_LOCKS"):
+    os.environ.pop(k, None)
+
+# ---- 8: the cap's line names the request (the run log's NOADMIT class reads it) ------------
+print("8. the NOADMIT line")
+check(r5.returncode == 75 and "NOADMIT vram: no admission for 1 tokens within 1 s" in r5.stderr,
+      "an expired wait prints `NOADMIT vram: no admission for <k> tokens …` (%s)" % r5.stderr.strip()[-120:])
 
 shutil.rmtree(D, ignore_errors=True)
 print("devprocess.vram_admit: %s" % ("%d failure(s)" % failures if failures else "all ok"))

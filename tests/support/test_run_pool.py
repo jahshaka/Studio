@@ -210,9 +210,15 @@ check(not verdicts.twice, "every arm's verdict is ONE `ARM` line, the Xid overri
 held_after = subprocess.run([admit, "status"], env=e, stdout=subprocess.PIPE, text=True).stdout
 check("vram: 0 of 12 tokens held" in held_after, "after the pool ends no token is held (the driver keeps none)")
 # an unreadable journal is a RED, never a silent pass
-rc3, out3 = run([sys.executable, driver, "--pool", "nojournal", "--app", sys.executable, "--arm", "a", "x.js", "30"],
+okapp = os.path.join(vdir, "okapp.py")
+with open(okapp, "w") as f:
+    f.write("#!/usr/bin/env python3\nimport sys\na = sys.argv; p = a[a.index('--pool') + 1]\n"
+            "print('ARM-BEGIN %s.a' % p, flush=True)\nprint('ARM %s.a PASS 1' % p, flush=True)\n")
+os.chmod(okapp, 0o755)
+rc3, out3 = run([sys.executable, driver, "--pool", "nojournal", "--app", okapp, "--arm", "a", "x.js", "30"],
                 {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": os.path.join(vdir, "missing"), "JAH_VRAM_DIR": vdir})
-check(rc3 == 1 and "the kernel journal is unreadable" in out3, "an unreadable kernel journal fails the row")
+check(rc3 == 0 and "FINDING: the kernel journal is unreadable" in out3 and "ARM nojournal.a PASS" in out3,
+      "an unreadable kernel journal is a printed FINDING, not a red of the pool (devprocess.kernel_journal owns it)")
 shutil.rmtree(vdir, ignore_errors=True)
 os.unlink(empty_journal.name)
 

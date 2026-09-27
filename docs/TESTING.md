@@ -155,7 +155,7 @@ the gate on a Vulkan row registered any other way, naming its CMakeLists line.
   `jah_gpu_exclusive_test()` and nothing else takes it. A measurement you run by hand wraps its
   app in the same script.
 - **The VRAM budget.** Every Vulkan row takes box-wide tokens before it starts
-  (`scripts/gpu-admit.sh`, 12 tokens shared by every lane's gate): a row that does not fit
+  (`scripts/gpu-admit.sh`, 11 tokens shared by every lane's gate): a row that does not fit
   WAITS — its output then carries `vram: waiting for <k> tokens, <n> free` — instead of dying of
   `VK_ERROR_OUT_OF_DEVICE_MEMORY`. Gate at `-j4` whoever else is gating; there is no `-j2`
   rule. `scripts/gpu-admit.sh status` shows who holds what. A long hand-started app run on a

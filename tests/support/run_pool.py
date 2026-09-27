@@ -24,13 +24,13 @@ prints one line per arm; this driver owns what the app cannot:
     line) rather than letting the card over-fill; the app inherits them and they are released
     when it ends, so a restart re-takes them and the driver holds none between processes. The
     wait is BEFORE the process starts, outside every arm's budget; a wait past its bound makes
-    every remaining arm `TIMEOUT` ("never admitted"), never a run on a full card.
+    every remaining arm `NOADMIT` (the helper's line as why), never a run on a full card.
   * THE KERNEL'S WORD (GPU_LOSS_AUDIT_2026-09-27 B: a device loss is not always a red arm). After
     each process ends, the driver reads the kernel journal since its launch (`journalctl -k`,
     readable by the adm group, never sudo) and a `NVRM: Xid` line from THAT process's pid turns
     the arm that was running at the fault's second (or the baseline behind it — the arm before)
-    into `CRASH xid <n>`. An unreadable journal on Linux fails the row (the half that matters
-    would be missing); macOS has no NVRM log and says so. JAH_KERNEL_JOURNAL=<file> reads a file
+    into `CRASH xid <n>`. An unreadable journal is printed as a FINDING, never a red of every
+    pool: the one row that reds for it is devprocess.kernel_journal. macOS has no NVRM log. JAH_KERNEL_JOURNAL=<file> reads a file
     of `journalctl -o short-unix` lines instead (the runner's own test).
   * THE VERDICT, PER ARM, ON ONE CHANNEL: each arm's final `ARM <pool>.<arm>
     PASS|FAIL|CRASH|TIMEOUT <ms> [why]` line is printed exactly once, by this driver
@@ -212,12 +212,21 @@ def main():
         """The process ended: read the kernel's word for its pid, then print its arms."""
         if pid is not None and batch:
             if not os.environ.get("JAH_KERNEL_JOURNAL") and sys.platform.startswith("linux"):
-                time.sleep(1.0)     # journald ingests the kernel ring asynchronously
+                # WHY ONE SECOND IS ENOUGH: the Xid is logged by the kernel AT THE FAULT, and the
+                # faulting process outlives it by seconds (the fence wait until VK_ERROR_DEVICE_LOST
+                # surfaces measured 10-11 s, GPU_LOSS_AUDIT B; a driver kill comes later still), so
+                # by the process's exit the line is already in the kernel ring; what is left is
+                # journald's ingest of /dev/kmsg, milliseconds on this box. /dev/kmsg itself is not
+                # readable here (dmesg_restrict=1), so the journal is the only reader.
+                time.sleep(1.0)
             xids = kernel_xids(since, {pid})
-            if xids is None:
+            if xids is None and not journal_bad:
                 journal_bad.append(pid)
-                say("pool: %s — the kernel journal is unreadable (journalctl -k): the zero-Xid half "
-                    "cannot be asserted" % pool)
+                # A FINDING, NOT A RED (one hygiene row owns it: devprocess.kernel_journal) — an
+                # unreadable journal is the box's configuration, never the pool's arms.
+                say("pool: %s — FINDING: the kernel journal is unreadable (journalctl -k; the user is not in "
+                    "the adm/systemd-journal group): Xids cannot be read for this pool — "
+                    "devprocess.kernel_journal names the fix" % pool)
             for t, n, xp in xids or []:
                 arm = None
                 for bt, name in begins:
@@ -264,8 +273,7 @@ def main():
             plog.close()
             say("pool: %s — %s" % (pool, e))
             for n, _, _ in remaining:
-                settle(n, "TIMEOUT", 0, "never admitted: no %d VRAM tokens within the wait bound"
-                       % opt["vram"], now=True)
+                settle(n, "NOADMIT", 0, "never ran: %s" % e, now=True)
             remaining = []
             break
         env = dict(os.environ)
@@ -388,8 +396,7 @@ def main():
         say("solo retry: JAH_POOL_ARMS=%s ctest -R '^pool\\.%s$'" % (
             ",".join("%s.%s" % (pool, n) for n in bad), pool))
     if journal_bad:
-        say("POOL %s: RED — the kernel journal was unreadable for %d process(es)" % (pool, len(journal_bad)))
-        return 1
+        say("POOL %s: FINDING — no Xid check (the kernel journal is unreadable; devprocess.kernel_journal)" % pool)
     return 1 if bad else 0
 
 

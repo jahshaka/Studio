@@ -2,7 +2,7 @@
 """source.gpu_rows_closure — EVERY VULKAN ROW TAKES THE VRAM BUDGET (lane GATE-ADMIT-1;
 docs/TESTING_GATE.md §4b).
 
-The budget (scripts/gpu-admit.sh, 12 box-wide tokens) holds only if EVERY process that boots
+The budget (scripts/gpu-admit.sh, 11 box-wide tokens) holds only if EVERY process that boots
 Vulkan in a test takes its tokens; one unregistered row is an allocation nobody counted, and
 the card over-fills exactly as it did on 2026-09-27 (47 VK_ERROR_OUT_OF_DEVICE_MEMORY reds). So
 the list is closed here, on what ctest will actually RUN (`ctest --show-only=json-v1`: every

@@ -356,9 +356,12 @@ for one lane, 19.5 GB for three, 26 GB for four). So the budget lives outside ct
 GPU-timing lock.
 
 **THE MECHANISM.** `scripts/gpu-admit.sh <k> [--label <row>] -- <command…>` (implementation
-`scripts/vram_tokens.py`): N = 12 flock TOKENS in `/tmp/jah-vram/` (`JAH_VRAM_TOKENS` overrides;
-0 = admission off), 1 token ≈ 1 GB, leaving ~4 GB of the card to the owner's instance, the desktop
-and any stray agent app (none of which takes a token — `nvidia-smi` is never consulted: racy,
+`scripts/vram_tokens.py`): N = 11 flock TOKENS in `/tmp/jah-vram/` (`JAH_VRAM_TOKENS` overrides;
+0 = admission off). DEFAULT 11: 1 token measured 1,090 MiB at the peak (two MERGE tiers sharing
+the budget: 13,333 MiB with 12 held over a 280 MiB desktop; ~820 MiB at p95), so 11 tokens peak at
+~12.2 GB and leave ~1.3 GB beside the owner's 2.8 GB instance on the 16.4 GB card (12 left 243 MiB).
+The owner's instance, the desktop and any app started by hand without the helper take no token
+(start such an app as `scripts/gpu-admit.sh 2 -- ./Jahshaka …` — `nvidia-smi` is never consulted: racy,
 slow, and blind to what a process allocates next; the token count is the contract, tuned by
 measurement). An acquirer takes the TURNSTILE, reads the free tokens from `/proc/locks` and locks
 the k LOWEST only when k are free — all or nothing, never hold-and-wait, and a 3-token row at the
@@ -367,7 +370,11 @@ the token fds inherited: the pid ctest started is the suite, and the tokens are 
 everything it spawned exit, for any reason (a crash, a ctest timeout kill). A nested admission
 (`JAH_VRAM_HELD` in the environment) runs on its parent's tokens. A wait prints ONE line —
 `vram: waiting for <k> tokens, <n> free` — and `vram: admitted with <k> tokens <i,j> after <s> s`;
-it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (exit 75).
+it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (exit 75) and prints
+`NOADMIT vram: no admission for <k> tokens within 900 s (<n> of <N> free …) — <row>`: the run log
+(`scripts/gate_runlog.py`) records that row — or a pool's never-started arms — as verdict
+`NOADMIT` with the line as its status, never a generic FAIL (the box was over-subscribed; nothing
+about the row's code). A burst of NOADMITs means the lanes asked for more than 900 s of queue.
 `scripts/gpu-admit.sh status` lists the holders (the file of a held token names its pid and row).
 
 **THE CLASSES** (the audit's A2 table, nvidia-smi per pid, 2026-09-26) — `jah_vram_tokens()` in
@@ -375,7 +382,7 @@ it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (ex
 
 | class | tokens | what | measured |
 |---|---|---|---|
-| `app` | 2 | an app process (`Jahshaka --script`, a pool process) at the document default, Epic | 1.5 GB (2.4 with the probe grid) |
+| `app` | 2 | an app process (`Jahshaka --script`, a pool process, a harness that spawns it) at the document default, Epic | per pid median 2,000 / p90 2,270 / max 2,600 MiB — a THIN margin against 2 × 1,090 = 2,180; TEST-TIER-1's Low tier widens it |
 | `selftest` | 2 | `--engine-selftest` (the app's route) | = app |
 | `engine` | 1 | a headless engine / Qt+engine suite at its own tier (mostly Medium) | ~0.6-1.2 GB |
 | `vr` | 3 | a VR / Monado row (the app, stereo views, the runtime's compositor) | ~2 GB (est.) |
@@ -416,11 +423,19 @@ kernel's lock table — the bound, all or nothing, lowest first, a killed holder
 **THE KERNEL'S WORD IN A POOL.** After each app process, `run_pool.py` reads the kernel journal
 since its launch (`journalctl -k`, never sudo): an `NVRM: Xid` line from THAT pid turns the arm
 running at the fault's second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts
-are printed once, after that read). An unreadable journal on Linux reds the row. The non-pool
+are printed once, after that read). An unreadable journal is a printed FINDING in the pool, never a red of every pool: the ONE row that
+reds for it is `devprocess.kernel_journal` (tooling; it names the fix — the user joins `adm`).
+The read waits 1 s after the exit: the Xid is logged at the fault, seconds before the process ends
+(the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond ingest is left. The non-pool
 photon.view rows keep `tests/support/no_xid_run.sh`.
 
-**THE MEASUREMENT** — see the lane's evidence (`~/Developer/spikes/gate-admit-1/`): two MERGE
-tiers at -j4 started together on two displays of this box, sharing the one budget.
+**THE MEASUREMENT** (`~/Developer/spikes/gate-admit-1/`, 12 tokens then): two MERGE tiers at -j4
+started together on :63/:64, the box otherwise quiet: 0 `OUT_OF_DEVICE_MEMORY`, 0 Xid, peak 13,333
+MiB (p95 10.1 GB), walls 42.9 / 42.1 min, 56 admission waits (max 160 s). Both tiers ran from ONE
+build dir (a driver slip: `gate_runlog.py run` defaults to `--build build-linux`), so their 42-45
+reds each (`database is locked`, `could not save`, `No such file`) were the two tiers sharing every
+`e2e-home-*`/`pool-home-*` under that dir — the run's own artefact, not a rig defect; the union of
+those reds re-run alone was 100 of 101 green (the one red vr.eye_grade, a base red).
 
 ## 5. What the full gate costs, and where its wall goes
 

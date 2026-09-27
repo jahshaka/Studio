@@ -269,16 +269,20 @@ set(JAH_GPU_LOCK_WAIT_S 900)
 # inside ctest (RESOURCE_GROUPS, RESOURCE_LOCK, RUN_SERIAL) can bound what FOUR gates put on one
 # 16 GB card: the audit's model peaks 19.5 GB for three lanes at -j4 and 26 GB for four, and
 # every one of 2026-09-27's ~47 VK_ERROR_OUT_OF_DEVICE_MEMORY reds sat where four gates
-# overlapped. The budget lives outside ctest, like the GPU-timing lock: 12 flock TOKENS in
+# overlapped. The budget lives outside ctest, like the GPU-timing lock: 11 flock TOKENS in
 # /tmp/jah-vram/ (scripts/gpu-admit.sh -> scripts/vram_tokens.py; JAH_VRAM_TOKENS overrides),
-# 1 token ~ 1 GB, taken ALL OR NOTHING before the process starts and freed when it exits. A row
+# 1 token = 1,090 MiB at the measured peak (GATE-ADMIT-1's two-tier run: 13,333 MiB with 12 held
+# over a 280 MiB desktop; ~820 at p95) — 11 tokens ~12.2 GB, ~1.3 GB beside the owner's 2.8 GB
+# instance on the 16.4 GB card. Taken ALL OR NOTHING before the process starts and freed when it exits. A row
 # that cannot be admitted WAITS (one `vram: waiting for <k> tokens, <n> free` line) instead of
 # failing an allocation mid-run. The owner's instance and a stray agent app take no token: the
-# ~4 GB the tokens leave is theirs.
+# slack the count leaves is theirs.
 #
 # THE CLASSES (the audit's A2 table, measured 2026-09-26 with nvidia-smi per pid):
-#   app      2  an app process or pool process at the document default (Epic: 1.5 GB, 2.4 with
-#               the probe grid) — `Jahshaka --script`, a Qt suite that boots the editor
+#   app      2  an app process or pool process at the document default (Epic) — `Jahshaka
+#               --script`, a harness that spawns it. THIN MARGIN: measured per pid median
+#               2,000 / p90 2,270 / max 2,600 MiB against 2 x 1,090 = 2,180; TEST-TIER-1's Low
+#               tier (~0.65 GB) is what widens it.
 #   selftest 2  `--engine-selftest` (the app's route at Epic)
 #   engine   1  a headless engine suite (its own tier, mostly Medium: ~0.6-1.2 GB)
 #   vr       3  a VR / Monado row (app + stereo views + the runtime's compositor, ~2 GB)
