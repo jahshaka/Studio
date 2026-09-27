@@ -466,22 +466,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         if (fogColor.isValid()) scene->fogColor = fogColor;
     }
     scene->fogEnabled = sceneObj.value("fogEnabled").toBool(scene->fogEnabled);
-    // Fog became EXPONENTIAL, and THE LINEAR PAIR IS GONE FROM THE DOCUMENT
-    // (CRUD law, render audit I-6): `fogStart`/`fogEnd` were two fields nothing
-    // rendered — one disabled panel row said so in its own label — whose last
-    // remaining job was to derive a density for a scene written before
-    // `fogDensity` existed. That job is done HERE, from the file's own keys, and
-    // the two numbers are then forgotten: read, used, never stored and never
-    // written again. 100 and 180 appear in this one expression because they are
-    // the shape of the fog those old files had, not a default of anything.
-    if (sceneObj.contains("fogDensity"))
-        scene->fogDensity = sceneObj.value("fogDensity").toDouble(scene->fogDensity);
-    else if (sceneObj.contains("fogStart") || sceneObj.contains("fogEnd"))
-        scene->fogDensity = iris::Scene::fogDensityFromLinear(
-            float(sceneObj.value("fogStart").toDouble(100.0)),
-            float(sceneObj.value("fogEnd").toDouble(180.0)));
+    // Fog is EXPONENTIAL; `fogDensity` is the whole distance fog. (The retired
+    // LINEAR pair `fogStart`/`fogEnd` and the retired `fogAtmosphere` switch are
+    // not read — forward-building, FOG-ATMO-1: every shipped sample carries
+    // `fogDensity`, and the realistic sky now decides the fog's colour.)
+    scene->fogDensity = sceneObj.value("fogDensity").toDouble(scene->fogDensity);
     scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(scene->fogHeightDensity);
-    scene->fogAtmosphere = sceneObj.value("fogAtmosphere").toBool(scene->fogAtmosphere);
     scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(scene->fogHeightFalloff);
     scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(scene->fogHeightLevel);
     scene->fogBreakMinBrightness =

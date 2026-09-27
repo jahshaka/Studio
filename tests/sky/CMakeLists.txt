@@ -55,3 +55,13 @@ set_tests_properties(sky.env_layout PROPERTIES
     TIMEOUT 180 LABELS "engine"
     ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
     FAIL_REGULAR_EXPRESSION "Validation Error")
+
+# sky.aerial_perspective — THE AIR IS A MEDIUM UNDER THE REALISTIC SKY (lane
+# FOG-ATMO-1). The file header carries the model, the instrument (two emissive
+# levels read back in float) and the physics bar: T(2 km) within 0.01 of
+# exp(-sigma d) at the atmosphere's one density.
+jahshaka_sky_test_src(test_aerial_perspective test_aerial_perspective.cpp)
+target_link_libraries(test_aerial_perspective PRIVATE JahshakaEngine)
+add_test(NAME sky.aerial_perspective COMMAND test_aerial_perspective
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(sky.aerial_perspective PROPERTIES TIMEOUT 180 LABELS "engine")

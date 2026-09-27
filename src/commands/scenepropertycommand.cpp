@@ -160,8 +160,6 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->fogDensity = v.toFloat(); });
     add("fogHeightDensity", [](const ScenePtr &s) { return QVariant(s->fogHeightDensity); },
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightDensity = v.toFloat(); });
-    add("fogAtmosphere", [](const ScenePtr &s) { return QVariant(s->fogAtmosphere); },
-        [](const ScenePtr &s, const QVariant &v) { s->fogAtmosphere = v.toBool(); });
     add("fogHeightFalloff", [](const ScenePtr &s) { return QVariant(s->fogHeightFalloff); },
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightFalloff = v.toFloat(); });
     add("fogHeightLevel", [](const ScenePtr &s) { return QVariant(s->fogHeightLevel); },

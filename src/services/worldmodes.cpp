@@ -1289,6 +1289,84 @@ const ParamRow *postFxParam(const QString &id)
     return nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// THE FOG'S ROWS (FOG-ATMO-1). The ranges are the panel's slider ranges, which
+// they always were; world.fog writes a script's number as given (the engine
+// clamps the densities at zero), so a range here never refuses a script.
+static QVector<ParamRow> buildFogParams()
+{
+    QVector<ParamRow> out;
+    auto add = [&out](const char *id, const char *label, double lo, double hi, int decimals,
+                      const QString &doc, float iris::Scene::*field) {
+        ParamRow p;
+        p.id = QLatin1String(id);
+        p.label = QLatin1String(label);
+        p.ownerRowId = QStringLiteral("fog");
+        p.minValue = lo; p.maxValue = hi; p.decimals = decimals;
+        p.perPixelStep = (hi - lo) / 500.0;
+        p.doc = doc;
+        p.enabled = [](const iris::ScenePtr &s) { return s->fogEnabled; };
+        p.get = [field](const iris::ScenePtr &s) { return double((*s).*field); };
+        p.set = [field](const iris::ScenePtr &s, double v) { (*s).*field = float(v); };
+        out.append(p);
+    };
+    // Density is small by nature (the default scene's 0.0071), so the rows
+    // carry real decimals — a two-decimal row would be a two-step control.
+    add("density", "Fog Density", 0.0, 0.5, 4,
+        QStringLiteral("How much of a surface's colour is lost per world unit, on top of the air "
+                       "itself: a surface 1/density units away keeps half its colour, and by "
+                       "4.32/density it has all but disappeared. 0.01 = half gone at 100 units. "
+                       "Under the Realistic sky the air already hazes the distance on its own "
+                       "(its turbidity, the sky's Sun Haze), and this adds fog to it."),
+        &iris::Scene::fogDensity);
+    add("heightDensity", "Height Fog Density", 0.0, 0.5, 4,
+        QStringLiteral("A second layer of fog whose density falls off with height — ground mist "
+                       "and valley fog — in the same colour as the distance fog. 0 turns it off "
+                       "entirely."),
+        &iris::Scene::fogHeightDensity);
+    add("heightFalloff", "Height Falloff", 0.0, 2.0, 3,
+        QStringLiteral("How fast the height layer thins out as you rise. Larger = a shallower, "
+                       "sharper-edged layer; the density halves every 1/falloff units above the "
+                       "level below."),
+        &iris::Scene::fogHeightFalloff);
+    add("heightLevel", "Height Level", -100.0, 100.0, 2,
+        QStringLiteral("The world height at which the height layer has its full density — the "
+                       "surface of the mist, usually the ground."),
+        &iris::Scene::fogHeightLevel);
+    add("breakMinBrightness", "Breakthrough Brightness", 0.0, 4.0, 3,
+        QStringLiteral("How bright a pixel has to be before it starts cutting through the fog "
+                       "instead of dissolving into it — the sun, a lamp, an emissive sign."),
+        &iris::Scene::fogBreakMinBrightness);
+    add("breakFalloff", "Breakthrough Falloff", 0.0, 2.0, 3,
+        QStringLiteral("How sharply bright pixels break through. 0 switches breakthrough off, "
+                       "leaving plain exponential fog."),
+        &iris::Scene::fogBreakFalloff);
+    return out;
+}
+
+const QVector<ParamRow> &fogParams()
+{
+    static const QVector<ParamRow> table = buildFogParams();
+    return table;
+}
+
+const ParamRow *fogParam(const QString &id)
+{
+    for (const ParamRow &p : fogParams())
+        if (p.id == id) return &p;
+    return nullptr;
+}
+
+QString fogParamSceneKey(const ParamRow &p)
+{
+    return QStringLiteral("fog") + p.id.left(1).toUpper() + p.id.mid(1);
+}
+
+bool fogColourAuthored(const iris::ScenePtr &scene)
+{
+    return !scene || scene->skyType != iris::SkyType::REALISTIC;
+}
+
 const QStringList &postFxRowIds()
 {
     // ORDER IS THE PANEL'S ORDER, and it is the frame's order: the scene target

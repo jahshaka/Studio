@@ -177,6 +177,24 @@ const ParamRow *postFxParam(const QString &id);
 /// sections of their own.)
 const QStringList &postFxRowIds();
 
+/// THE FOG'S CONTINUOUS ROWS (FOG-ATMO-1) — the same one-table pattern as
+/// postFxParams: the World > Fog section builds a slider per entry and
+/// world.fog reads and writes through the same entries, so the keys, the
+/// labels and the ranges cannot mean two different things. `id` is the
+/// world.fog key ("density"); `ownerRowId` is "fog" (the Fog Enabled row, which
+/// the rows are greyed under). Enabled and the colour are not continuous and
+/// stay the section's own two rows.
+const QVector<ParamRow> &fogParams();
+/// The fog row with this world.fog key, or null.
+const ParamRow *fogParam(const QString &id);
+/// The row's document key — the sceneprops / undo key ("fogDensity" for
+/// "density"): what the panel's undo step and world.fog's snapshot name.
+QString fogParamSceneKey(const ParamRow &p);
+/// WHETHER THE AUTHORED FOG COLOUR IS IN FORCE: false under the realistic sky,
+/// whose own scattering colours every fog layer (FOG-ATMO-1). The panel greys
+/// the colour row by it and world.fog's doc states it.
+bool fogColourAuthored(const iris::ScenePtr &scene);
+
 /// The registry. Built once, never mutated.
 const QVector<Row> &rows();
 /// The row with this id, or null.
