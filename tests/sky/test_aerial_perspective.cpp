@@ -30,13 +30,14 @@
 // WHAT IS ASSERTED
 //   1. the control: no atmosphere, T == 1 at 125 m and at 2 km;
 //   2. THE PHYSICS BAR: under the realistic sky with the fog OFF, T(d) matches
-//      exp(-sigma d) within 0.01 at 125/250/500/1000/2000 m — 75.8 % at 2 km;
+//      exp(-sigma d) within 0.003 at 125/250/500/1000/2000 m — 75.8 % at 2 km;
 //   3. the colour it fogs towards is the SKY's: a black far surface moves
 //      towards the sky just above it as the distance grows, and it is blue at
 //      noon;
 //   4. ONE ATMOSPHERE, ONE DENSITY: the turbidity dial moves T(2 km) by the
 //      same law (T 1 -> 97.5 %, T 6 -> 42.3 %) and moves NO sky pixel;
 //   5. the World fog ADDS: fog density D on top gives exp(-sigma d) * 2^(-D d);
+//      and its breakthrough never bends the AIR (a bright surface at 2 km);
 //   6. THE HEIGHT LAYER IS SKY-COLOURED under the realistic sky — a magenta
 //      authored colour shows green — and its colour at sunset differs from
 //      noon (redder); under the single-colour sky it is the authored colour;
@@ -59,6 +60,10 @@ static int failures = 0;
 
 namespace {
 const float kPi = 3.14159265358979323846f;
+// THE BAR ON A TRANSMITTANCE: 0.003 (the fix round's F8). The instrument's
+// noise is 0.0006 (measured, every arm); 0.01 at 2 km was a 4.8 % error in
+// sigma, a bar a wrong density could pass.
+const double kTolT = 0.003;
 // The reference, computed here from the stated model rather than read from the
 // engine (the engine's number is what is being tested).
 double airSigma(double haze)
@@ -140,9 +145,9 @@ Colour centreOf(const ImageF &img)
 
 /// The transmittance at distance d, per the two-emissive instrument (green;
 /// the fog weight is a scalar, so every channel carries the same number).
-double transmittance(Rig &r, float d, Colour *blackPixel = nullptr)
+double transmittance(Rig &r, float d, Colour *blackPixel = nullptr,
+                     float e1 = 0.15f, float e2 = 0.60f)
 {
-    const float e1 = 0.15f, e2 = 0.60f;
     placeBox(r, d);
     ImageF a, b;
     setEmissive(r, e1);
@@ -221,8 +226,8 @@ int main()
     for (float d : dists) {
         const double t = transmittance(r, d);
         const double ref = std::exp(-airSigma(2.5) * d);
-        CHECK_MSG(std::fabs(t - ref) <= 0.01,
-                  "T(%5.0f m) = %.4f against exp(-sigma d) = %.4f (|diff| %.4f <= 0.01)",
+        CHECK_MSG(std::fabs(t - ref) <= kTolT,
+                  "T(%5.0f m) = %.4f against exp(-sigma d) = %.4f (|diff| %.4f <= 0.003)",
                   double(d), t, ref, std::fabs(t - ref));
     }
 
@@ -262,9 +267,9 @@ int main()
         shoot(r, skyHazy);
         const double refClear = std::exp(-airSigma(1.0) * 2000.0);
         const double refHazy = std::exp(-airSigma(6.0) * 2000.0);
-        CHECK_MSG(std::fabs(tClear - refClear) <= 0.01,
+        CHECK_MSG(std::fabs(tClear - refClear) <= kTolT,
                   "pure air (turbidity 1): T(2 km) %.4f against %.4f", tClear, refClear);
-        CHECK_MSG(std::fabs(tHazy - refHazy) <= 0.01,
+        CHECK_MSG(std::fabs(tHazy - refHazy) <= kTolT,
                   "a hazy day (turbidity 6): T(2 km) %.4f against %.4f", tHazy, refHazy);
         // The dome is the top rows (above the box): it may not move a bit.
         size_t differ = 0, total = 0;
@@ -288,15 +293,39 @@ int main()
         r.s->setFog(fog);
         const double t = transmittance(r, 500.0f);
         const double ref = std::exp(-airSigma(2.5) * 500.0) * std::exp2(-0.001 * 500.0);
-        CHECK_MSG(std::fabs(t - ref) <= 0.01,
+        CHECK_MSG(std::fabs(t - ref) <= kTolT,
                   "the World fog adds to the air: T(500 m) %.4f against exp(-sigma d) 2^(-D d) = %.4f",
                   t, ref);
         fog.enabled = false;
         r.s->setFog(fog);
         const double back = transmittance(r, 500.0f);
         const double air = std::exp(-airSigma(2.5) * 500.0);
-        CHECK_MSG(std::fabs(back - air) <= 0.01,
+        CHECK_MSG(std::fabs(back - air) <= kTolT,
                   "...and switching the World fog off leaves the air (%.4f against %.4f)", back, air);
+    }
+
+    // ---- 5b. THE BREAKTHROUGH BENDS THE WORLD FOG, NEVER THE AIR ------------
+    // (the fix round's F4) The World fog ON at the constructor's breakthrough
+    // pair (0.25 / 0.1) but with NO density of its own, and a box glowing at
+    // luminance ~4 at 2 km. Before the fix the breakthrough weight multiplied
+    // the WHOLE exponential — air included — so a bright surface kept a
+    // quarter of the air's haze off. The air is pure extinction whatever the
+    // pixel's brightness: T(2 km) is exp(-sigma d) at emissive 4.0 / 4.5 too.
+    {
+        FogDesc fog;
+        fog.enabled = true;
+        fog.colour = Colour(1.0f, 0.0f, 1.0f);
+        fog.density = 0.0f;
+        fog.breakMinBrightness = 0.25f;
+        fog.breakFalloff = 0.1f;
+        r.s->setFog(fog);
+        const double t = transmittance(r, 2000.0f, nullptr, 4.0f, 4.5f);
+        const double ref = std::exp(-airSigma(2.5) * 2000.0);
+        CHECK_MSG(std::fabs(t - ref) <= kTolT,
+                  "a surface at luminance ~4 under the World fog's breakthrough keeps the AIR's "
+                  "haze: T(2 km) %.4f against exp(-sigma d) %.4f", t, ref);
+        fog.enabled = false;
+        r.s->setFog(fog);
     }
 
     // ---- 6. THE HEIGHT LAYER IS SKY-COLOURED -------------------------------
