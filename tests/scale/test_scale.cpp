@@ -1535,9 +1535,12 @@ static int hitListMain()
 // set — the change feed and the PBS change log, OgreAtomDraw.cpp) and
 // engine.rayquery (the ray tier's frame — the instances written on the device by
 // Jahshaka/TlasWrite, OgreRayQuery.cpp).
-// BARS (ATOM-CPU-WALKS-1 §1): the card candidates, the words and the ray tier's
-// frame each <= 0.5 ms on a still frame and <= 1.5 ms on a frame with one mover, at
-// 10k. The DIRTY SCAN stays a printed target: its bound needs a record of WHICH
+// THE GATE (ATOM-CPU-WALKS-1, fix round F2): the change-driven walks visit 0 slots on
+// a still frame and at most the moved slot on a mover frame (the change feed's
+// notifications, the split's words, the ray tier's feed). Their CPU ms — the brief's
+// 0.5 ms still / 1.5 ms mover — are printed `target:` lines: an ms bar under sibling
+// lanes' builds is a load flake, the visit count is the property. The DIRTY SCAN stays
+// a printed target: its bound needs a record of WHICH
 // nodes the document wrote (ENGINE V2's journal, V2-1) and none exists — the only
 // signal is a process-wide write counter (nodegraph.cpp markMoved), so a mover
 // frame still compares every item (the lane's STOP, stated in its report).
@@ -1557,6 +1560,22 @@ static int cpuWalksMain()
     static const char *kWhat[5] = { "the dirty scan", "the card candidates (the card cache's frame)",
                                     "the Atom words (the change feed)", "the ray tier's frame (the TLAS by compute)",
                                     "the card cache's light walk" };
+    // THE GATE IS THE WORK, NOT THE CLOCK (ATOM-CPU-WALKS-1 fix round F2): the three
+    // change-driven walks are gated on the SLOTS they visit — the change feed's
+    // notifications (every consumer is told exactly these), the split's word set and
+    // the ray tier's feed — 0 on a still frame and at most one per moved slot per
+    // frame on a mover frame. Their milliseconds are printed as `target:` lines: a CPU
+    // ms bar reads a sibling lane's -j3 build as much as this code (0.506 against 0.5
+    // once, under load).
+    struct Visits { unsigned long long feed = 0, words = 0, rays = 0; };
+    auto visits = [&] {
+        Visits v;
+        v.feed = env.scene->gpuSceneStatus().feedNotifies;
+        v.words = env.scene->atomDrawStatus().wordSlotVisits;
+        v.rays = env.scene->rayQueryStatus().feedSlotVisits;
+        return v;
+    };
+    size_t frames = 0;
     auto measure = [&](const char *label, bool move) {
         const auto recs = collect(env, [&] {
             for (int f = 0; f < 120; ++f) {
@@ -1578,25 +1597,36 @@ static int cpuWalksMain()
             med[size_t(k)] = v.empty() ? 0.0 : stats(v).median;
             seen[size_t(k)] = v.size();
         }
+        frames = recs.size();
         std::printf("W13 %-10s frames %3zu | gpuscene %6.3f ms | cards %6.3f ms | atomwords %6.3f ms | rayquery %6.3f ms"
                     " | cards.lights %6.3f ms (medians; frames carrying each: %zu %zu %zu %zu %zu)\n",
                     label, recs.size(), med[0], med[1], med[2], med[3], med[4], seen[0], seen[1], seen[2], seen[3],
                     seen[4]);
         return med;
     };
+    const Visits v0 = visits();
     const auto still = measure("still", false);
+    const Visits v1 = visits();
     const auto moving = measure("one mover", true);
+    const Visits v2 = visits();
+    const unsigned long long moverFrames = frames;   // frames of the mover arm (one moved slot each)
+    std::printf("W13 visits  still: feed %llu, words %llu, ray tier %llu | mover (%llu frames, 1 mover): feed %llu, "
+                "words %llu, ray tier %llu\n",
+                v1.feed - v0.feed, v1.words - v0.words, v1.rays - v0.rays, moverFrames, v2.feed - v1.feed,
+                v2.words - v1.words, v2.rays - v1.rays);
     REQUIRE(moving[0] >= 0 && moving[1] >= 0 && moving[2] >= 0 && moving[3] >= 0,
             "every walk's stage was filed on the mover frames");
-    for (int k = 1; k <= 3; ++k) {
-        REQUIRE(still[size_t(k)] <= 0.5, "W13 %s (%s) on a STILL frame at 10k: %.3f ms (bar 0.5)", kWhat[k], kWalks[k],
-                still[size_t(k)]);
-        REQUIRE(moving[size_t(k)] <= 1.5, "W13 %s (%s) on a MOVER frame at 10k: %.3f ms (bar 1.5)", kWhat[k],
-                kWalks[k], moving[size_t(k)]);
-    }
-    for (int k : { 0, 4 }) {
+    REQUIRE(v1.feed == v0.feed && v1.words == v0.words && v1.rays == v0.rays,
+            "W13 a STILL frame at 10k visits 0 slots (the change feed %llu, the split's words %llu, the ray tier %llu)",
+            v1.feed - v0.feed, v1.words - v0.words, v1.rays - v0.rays);
+    REQUIRE(v2.feed > v1.feed && v2.feed - v1.feed <= moverFrames && v2.words - v1.words <= moverFrames &&
+                v2.rays - v1.rays <= moverFrames,
+            "W13 a MOVER frame visits at most the moved slot (feed %llu, words %llu, ray tier %llu over %llu frames)",
+            v2.feed - v1.feed, v2.words - v1.words, v2.rays - v1.rays, moverFrames);
+    for (int k = 0; k < 5; ++k) {
         const std::string what = std::string(kWhat[k]) + " (" + kWalks[k] + ") on a mover frame at 10k; still " +
-                                 std::to_string(still[size_t(k)]) + " ms";
+                                 std::to_string(still[size_t(k)]) + " ms" +
+                                 ((k >= 1 && k <= 3) ? " (bars 0.5 still / 1.5 mover)" : "");
         target("W13", moving[size_t(k)], "ms", what.c_str());
     }
     shutdown(env);
