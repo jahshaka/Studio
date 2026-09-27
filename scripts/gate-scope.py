@@ -937,8 +937,14 @@ class Selection:
         # users name the WRAPPER, not it, so no name-search can find them — every includer
         # (the Fable read, U1). Counted on the header's code text: more than one occurrence of
         # the name = a declaration plus a use.
-        body = "\n".join(gate_graph.strip_cxx(b))
-        inner = sorted(t for t in ids if len(re.findall(r"\b" + re.escape(t) + r"\b", body)) > 1)
+        # The count is taken OUTSIDE the changed lines: a use on a changed line is new code in
+        # this very diff (StageMs used by the stageMs member added beside it), and its own
+        # identifiers are already in the set.
+        changed_new = set()
+        for _os, _oc, ns, nc in gate_graph.hunks_of(self.revs.diff_u0(p)):
+            changed_new |= set(range(ns - 1, ns - 1 + nc))
+        body = "\n".join(l for k, l in enumerate(gate_graph.strip_cxx(b)) if k not in changed_new)
+        inner = sorted(t for t in ids if re.search(r"\b" + re.escape(t) + r"\b", body))
         if inner:
             notes.append(f"symbol(s) {inner[:6]} used inside the header itself (a wrapper's callers name "
                          f"the wrapper) → every includer")
@@ -961,7 +967,12 @@ class Selection:
             readers = {os.path.relpath(self.graph.obj_src.get(o, ""), ROOT) for o in p_readers}
             for f in [f for f in naming if f.endswith(HEADER_EXT) and f != p]:
                 objs = self.graph.includers(os.path.join(ROOT, f)) & p_readers
-                both[f] = sorted({os.path.relpath(self.graph.obj_src[o], ROOT) for o in objs if o in self.graph.obj_src})
+                # generated sources (the moc TU includes every Q_OBJECT header of its target) are
+                # not readers of their own: the header they wrap is already on this path
+                both[f] = sorted({r for r in (os.path.relpath(self.graph.obj_src[o], ROOT) for o in objs
+                                              if o in self.graph.obj_src)
+                                  if not r.startswith("..") and "_autogen/" not in r
+                                  and not r.startswith(os.path.relpath(self.graph.build, ROOT) + "/")})
             def reads(f):
                 if f.endswith((".js", ".js.in")): return True
                 if f.endswith(HEADER_EXT): return bool(both.get(f))
