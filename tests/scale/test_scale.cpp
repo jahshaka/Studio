@@ -21,6 +21,7 @@
 
 #include <QColor>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QGuiApplication>
 #include <QImage>
 
@@ -1928,6 +1929,7 @@ static int occlusionPyramidMain(int w, int h)
 struct CodeChart {
     std::vector<std::array<unsigned char, 3>> colour;   // per code 0..16
     std::array<unsigned char, 3> clear{ { 0, 0, 0 } };
+    size_t covered = 0;   ///< the chart frame's covered pixels (the coverage floor's reference)
 };
 static constexpr int kCodes = 17;
 static bool learnChart(Env &env, CodeChart &chart)
@@ -1949,6 +1951,8 @@ static bool learnChart(Env &env, CodeChart &chart)
     chart.colour.assign(kCodes, { { 0, 0, 0 } });
     std::vector<std::map<uint32_t, size_t>> seen(kCodes);
     std::map<uint32_t, size_t> clear;
+    chart.covered = 0;
+    for (size_t p = 0; p < size_t(W) * H; ++p) chart.covered += ids[p * 2] != 0xFFFFFFFFu;
     for (unsigned y = 0; y < H; y += 2)
         for (unsigned x = 0; x < W; ++x) {
             const size_t p = size_t(y) * W + x;
@@ -2068,7 +2072,13 @@ static int coverageTraceMain()
         const AtomDrawStatus st = env.scene->atomDrawStatus();
         const double failedShare = fc.covered ? double(fc.failed) / double(fc.covered) : 0.0;
         const bool isBad = failedShare > 0.005;
-        const bool isDrop = exempt <= 0 && prevCovered > 20000u && fc.covered * 2u < prevCovered;
+        // THE FLOOR (the Fable read's W1): a frame whose id image went EMPTY fails nothing
+        // and, exempt, drops nothing — so a non-exempt frame must cover at least HALF the
+        // chart frame's pixels. Measured: the lowest non-exempt frame of the fixed traces
+        // covers 1,029,120 px against the chart's ~1.1 M (the ground alone is ~0.8 M), i.e.
+        // 0.93; half leaves the walk's own change a 2x margin.
+        const bool isDrop = exempt <= 0 && ((prevCovered > 20000u && fc.covered * 2u < prevCovered) ||
+                                            fc.covered * 2u < chart.covered);
         ++frames;
         badFrames += isBad;
         dropFrames += isDrop;
@@ -2113,6 +2123,31 @@ static int coverageTraceMain()
     applyMaterials(w, 200, 200);
     exempt = 2;
     for (int f = 0; f < landingFrames; ++f) sample("landing", f);
+
+    // ---- 1b. A NODE TAKEN OUT OF THE DOCUMENT (the Fable read's W3): removeChild alone,
+    // no setMesh(null) — does the GPU scene's mesh entry go? Every item of one DAG mesh
+    // leaves the document for 20 frames; the engine's trace names the release (or not).
+    bool removeChildReleased = false;
+    {
+        const iris::MeshPtr probeMesh = w.items.size() > 4 ? w.items[4]->getMesh() : iris::MeshPtr();
+        std::vector<iris::MeshNodePtr> gone;
+        auto releasesInLog = [] {
+            QFile f(QStringLiteral("test-atom-coverage-trace-ogre.log"));
+            if (!f.open(QIODevice::ReadOnly)) return -1;
+            return int(f.readAll().count("mesh released:"));
+        };
+        const int before = releasesInLog();
+        for (auto &it : w.items)
+            if (it->getMesh() == probeMesh) { gone.push_back(it); env.doc->getRootNode()->removeChild(it); }
+        for (int f = 0; f < 20; ++f) sample("removechild", f);
+        const int after = releasesInLog();
+        removeChildReleased = before >= 0 && after > before;
+        std::printf("coverage_trace: removeChild of %zu items of one mesh: the GPU scene's entry %s (\"mesh released\" "
+                    "lines %d -> %d)\n", gone.size(), removeChildReleased ? "RELEASED" : "KEPT", before, after);
+        for (auto &it : gone) env.doc->getRootNode()->addChild(it);
+        exempt = 2;
+        for (int f = 0; f < 10; ++f) sample("readd", f);
+    }
 
     // ---- 2. THE WALK, with teleports, mesh releases/adds and a forced small budget ------
     iris::MeshPtr extra = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/models/head.obj"), "head");
@@ -2187,6 +2222,13 @@ static int coverageTraceMain()
                 atomReleased, atomExtra);
         REQUIRE(maxCoarse > 0u, "the forced small budget overflowed the main region (%u drawn coarse)", maxCoarse);
     }
+    // MEASURED (ATOM-BLACK-FRAMES-1, the Fable read's W3): removeChild takes the items out of
+    // the split and the picture at once (atom 10,001 -> 9,376) but the GPU scene keeps the
+    // mesh's entry and its DAG for the whole window — the mirror keeps the hidden Item —
+    // and releases it only when the mesh itself leaves (setMesh(null), the walk's arm).
+    // Reported as a defect, not asserted here: this suite's subject is the picture.
+    std::printf("coverage_trace: FINDING removeChild %s the GPU scene's mesh entry\n",
+                removeChildReleased ? "releases" : "does NOT release");
     unsetenv("JAHSHAKA_ATOM_DISCRIMINATE");
     unsetenv("JAHSHAKA_ATOM_TRACE");
     shutdown(env);
