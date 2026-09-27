@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE QVariantMap atomStatus();
     /// THE SPLIT'S MEASUREMENT DOOR (ATOM S3-DRAW): paired arms in one process.
     Q_INVOKABLE bool setAtomDraw(bool on);
+    Q_INVOKABLE bool setAtomOcclusion(bool on);
     Q_INVOKABLE bool setAtomView(const QString &view);
     Q_INVOKABLE QString atomView();
     Q_INVOKABLE bool refreshGi();
