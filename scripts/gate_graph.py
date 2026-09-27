@@ -30,6 +30,9 @@ import sys
 CXX_EXT = (".cpp", ".cc", ".cxx", ".c", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm", ".ipp")
 HEADER_EXT = (".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp")
 _CACHE_VERSION = 5
+# the nm cache's own version: bumped whenever what a cached entry means changes (2: the refusal
+# of H1 — no entry may hold an nm failure's empty tables)
+SYMS_VERSION = 2
 
 
 def _split_ninja(s):
@@ -137,9 +140,16 @@ class NinjaGraph:
         self._libdefs = None
         self._members_all = None
         self._maps = None
+        # VERSIONED, and an empty member answer never survives a load (the second Fable read, (c)):
+        # a cache written by a tool that could cache nm's failure as empty tables is discarded
+        self._syms = {}
         try:
             with open(os.path.join(self.build, ".gate-scope-syms.pickle"), "rb") as f:
-                self._syms = pickle.load(f)
+                data = pickle.load(f)
+            if isinstance(data, dict) and data.get("version") == SYMS_VERSION:
+                self._syms = {k: v for k, v in data["syms"].items()
+                              if not (k[1] is False and v[1][0] == frozenset() and v[1][1] == frozenset()
+                                      and k[0] in self._member_set())}
         except Exception:
             self._syms = {}
 
@@ -148,7 +158,7 @@ class NinjaGraph:
         p = os.path.join(self.build, ".gate-scope-syms.pickle")
         try:
             with open(p + ".tmp", "wb") as f:
-                pickle.dump(self._syms, f, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump({"version": SYMS_VERSION, "syms": self._syms}, f, protocol=pickle.HIGHEST_PROTOCOL)
             os.replace(p + ".tmp", p)
             self._syms_dirty = False
         except OSError:
