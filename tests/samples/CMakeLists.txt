@@ -37,12 +37,7 @@ foreach(SAMPLE IN LISTS _samples)
     # start: its library already holds the sample, its store already holds the
     # objects, and the import half of this gate would be testing a re-import.
     # The setup fixture wipes and recreates the directory before the test runs.
-    add_test(NAME samples.freshhome.${_slug}
-             COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_home}
-                     -P ${CMAKE_CURRENT_SOURCE_DIR}/freshhome.cmake)
-    set_tests_properties(samples.freshhome.${_slug} PROPERTIES
-        FIXTURES_SETUP samples_home_${_slug}
-        LABELS "scripting")
+    jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS "scripting")
 
     add_test(NAME samples.cleanstart.${_slug}
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -65,12 +60,7 @@ endforeach()
 configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONLY)
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
-add_test(NAME samples.freshhome.session
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_shome}
-                 -P ${CMAKE_CURRENT_SOURCE_DIR}/freshhome.cmake)
-set_tests_properties(samples.freshhome.session PROPERTIES
-    FIXTURES_SETUP samples_home_session
-    LABELS "scripting")
+jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS "scripting")
 add_test(NAME samples.session
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/session.js

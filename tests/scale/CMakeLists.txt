@@ -140,7 +140,7 @@ jah_no_display(scale.bake)
 # still and without holes (its first form proved it byte-identical to the late-discard loop).
 # A pixel suite (no time measured): never the GPU lock. ~90 s (the world's boot).
 add_test(NAME atom.decode_exact COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 600 LABELS "engine"
+set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).

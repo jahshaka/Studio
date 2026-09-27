@@ -547,7 +547,7 @@ jah_document_graph(test_selection_cost)
 add_test(NAME ui.selection_cost COMMAND test_selection_cost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.selection_cost PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 
 # THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
 # this app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
@@ -591,7 +591,7 @@ jah_document_graph(test_components)
 add_test(NAME ui.components COMMAND test_components
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.components PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.components)
 # ui.components.timing — the pick's half-millisecond bar, nightly (lane D6B-GATE-SHAPE; audit
 # §5 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
@@ -762,7 +762,7 @@ jah_document_graph(test_panel_undo)
 add_test(NAME ui.panel_undo COMMAND test_panel_undo
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.panel_undo PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.panel_undo)
 
 # ui.panel_lifetime — A PANEL NEVER TOUCHES A ROW IT HAS RETIRED
@@ -894,7 +894,7 @@ jah_document_graph(test_panel_lifetime)
 add_test(NAME ui.panel_lifetime COMMAND test_panel_lifetime
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.panel_lifetime PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.panel_lifetime)
 
 
@@ -1471,7 +1471,7 @@ add_test(NAME ui.space_docks COMMAND test_space_docks
          WORKING_DIRECTORY ${_space_docks_home}/run)
 set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
-    TIMEOUT 600 LABELS "ui")
+    TIMEOUT 480 LABELS "ui")
 jah_tsan_blocked(ui.space_docks)   # spawns the app
 jah_lsan_blocked(ui.space_docks)   # spawns the app
 
@@ -1522,7 +1522,7 @@ add_test(NAME ui.material_drag COMMAND test_material_drag
          WORKING_DIRECTORY ${_matdrag_home}/run)
 set_tests_properties(ui.material_drag PROPERTIES
     ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "ui")
+    TIMEOUT 240 LABELS "ui")
 jah_tsan_blocked(ui.material_drag)   # spawns the app
 jah_lsan_blocked(ui.material_drag)   # spawns the app
 

@@ -49,6 +49,13 @@ set_tests_properties(scripting.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 # JahLibrary.db and projects folder and can never touch the user's live
 # library. XAUTHORITY/DISPLAY are inherited from the session (the engine needs
 # a reachable X display; XWayland on :0 in CI-like runs, lavapipe covers no-GPU).
+#
+# FRESH EVERY RUN, NOT ONLY THE FIRST (lane D6B-GATE-SHAPE; audit §9 H1): the row's
+# command is `${JAH_FRESH_HOME} --warm <home> -- <app> --script …`, so the home is wiped
+# before every run — library, store, projects, settings — while the shader caches stay
+# warm (a cold cache is ~4 s a boot and its own measurement). The homes used to
+# accumulate: 61 projects and a 220 MB store in e2e-home-full_surface, 1.1 GB in
+# e2e-home-export_web, measured on the main tree.
 # add_script_e2e(<name> <script.js>). (Its GPU_EXCLUSIVE option went with the last caller that
 # measured no time — scripting.e2e.sun_light, audit §4 R4; a timing row registers through
 # jah_gpu_exclusive_test itself.)
@@ -56,7 +63,8 @@ function(add_script_e2e name scriptfile)
     set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${name})
     file(MAKE_DIRECTORY ${_home})
     file(MAKE_DIRECTORY ${_home}/run)
-    set(_cmd $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${scriptfile})
+    set(_cmd ${JAH_FRESH_HOME} --warm ${_home} --
+             $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${scriptfile})
     add_test(NAME scripting.e2e.${name} COMMAND ${_cmd} WORKING_DIRECTORY ${_home}/run)
     set_tests_properties(scripting.e2e.${name} PROPERTIES TIMEOUT 180)
     set_tests_properties(scripting.e2e.${name} PROPERTIES
@@ -85,7 +93,8 @@ foreach(_variant live off)
         set(_name scripting.live_off)
     endif()
     add_test(NAME ${_name}
-             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+             COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_feedback.js ${_flag}
              WORKING_DIRECTORY ${_home}/run)
     set_tests_properties(${_name} PROPERTIES
@@ -112,7 +121,8 @@ add_script_e2e(build_scene e2e_build_scene.js)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mobility)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.mobility
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.mobility PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -130,7 +140,8 @@ set_tests_properties(scripting.e2e.mobility PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scale_lock)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.scale_lock
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scale_lock.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scale_lock.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.scale_lock PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -145,7 +156,8 @@ set_tests_properties(scripting.e2e.scale_lock PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-components)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.components
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_components.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_components.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.components PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -191,7 +203,8 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-cube_shade)
 file(MAKE_DIRECTORY ${_home})
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.cube_shade
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cube_shade.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cube_shade.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.cube_shade PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -207,7 +220,8 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lattice_placement)
 file(MAKE_DIRECTORY ${_home})
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.lattice_placement
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lattice_placement.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lattice_placement.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.lattice_placement PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -306,7 +320,8 @@ add_script_e2e(gi_status e2e_gi_status.js)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-gather_default)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME gi.gather_default
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_default.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_default.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(gi.gather_default PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -347,10 +362,7 @@ add_script_e2e(movable_lamp_rest e2e_movable_lamp_rest.js)
 # process down through the shader-cache save when it did. The script asserts the
 # engine's own self-check (world.shadowStatus().shaderLightMismatches).
 set(_scHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shadow_cache_probes)
-add_test(NAME scripting.e2e.shadow_cache_probes.fresh_home
-         COMMAND sh -c "rm -rf '${_scHome}' && mkdir -p '${_scHome}/run'")
-set_tests_properties(scripting.e2e.shadow_cache_probes.fresh_home PROPERTIES
-    FIXTURES_SETUP shadowCacheProbesFreshHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.shadow_cache_probes.fresh_home shadowCacheProbesFreshHome "${_scHome}" LABELS "scripting")
 add_test(NAME scripting.e2e.shadow_cache_probes
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadow_cache_probes.js
@@ -414,16 +426,18 @@ add_script_e2e(particles e2e_particles.js)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-memory)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.memory
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_memory.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_memory.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.memory PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    TIMEOUT 120)
+    TIMEOUT 120 LABELS "scripting")
 
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-anim)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.anim
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_anim.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_anim.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.anim PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -583,10 +597,7 @@ set_tests_properties(scripting.e2e.sky_name_recycle PROPERTIES TIMEOUT 300)
 # push behind it. Engine UP (a picture); the home is WIPED first, so no cached
 # shader or face stands between a change and its first frame. ~10 s solo.
 set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
-add_test(NAME scripting.e2e.sky_swap_transient.fresh_home
-         COMMAND sh -c "rm -rf '${_sstHome}' && mkdir -p '${_sstHome}/run'")
-set_tests_properties(scripting.e2e.sky_swap_transient.fresh_home PROPERTIES
-    FIXTURES_SETUP skySwapTransientFreshHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}" LABELS "scripting")
 add_test(NAME scripting.e2e.sky_swap_transient
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
@@ -603,7 +614,8 @@ configure_file(scripts/e2e_full_surface.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_fu
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-full_surface)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.full_surface
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.full_surface PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -619,7 +631,8 @@ configure_file(scripts/e2e_metadata.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_metada
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drawers)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.drawers
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.drawers PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -636,7 +649,8 @@ configure_file(scripts/e2e_asset_delete.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_as
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-asset_delete)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.asset_delete
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delete.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delete.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.asset_delete PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -651,7 +665,8 @@ configure_file(scripts/e2e_mesh_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mesh_roundtrip)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.mesh_roundtrip
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roundtrip.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roundtrip.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.mesh_roundtrip PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -669,7 +684,8 @@ configure_file(scripts/e2e_world_reach.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_wor
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_reach)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.world_reach
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_world_reach.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_world_reach.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.world_reach PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -682,7 +698,8 @@ configure_file(scripts/e2e_node_export.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_nod
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-node_export)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.node_export
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.node_export PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
@@ -707,7 +724,8 @@ configure_file(scripts/e2e_ai_surface.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_s
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ai_surface)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.ai_surface
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.ai_surface PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -721,34 +739,38 @@ set_tests_properties(scripting.e2e.ai_surface PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_query)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.scene_query
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.scene_query PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # AI_SURFACE_PROGRAM_SPEC lane 0 + lane A — DISCOVERY. app.apiProblems() runs
 # ApiRegistry::validate() over the real module set (the unit test only ever saw
 # its own fake module), and the lane A verbs that stop an agent guessing key
-# names: node.properties, material.properties, the world set* aliases, the
-# Ground primitive and addPrimitive {count}. Document verbs only -> --headless.
+# names: node.properties, material.properties, the world noun verbs (the set*
+# aliases are gone), the Ground primitive and addPrimitive {count}. Document verbs
+# only -> --headless.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-introspection)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.introspection
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_introspection.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_introspection.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.introspection PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # Web export (WEB_EXPORT_AUDIT): project.exportWeb through the real binary.
 # Document-only, so --headless.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_web)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.export_web
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_export_web.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_export_web.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.export_web PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -762,7 +784,8 @@ configure_file(scripts/e2e_export_raw.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_expo
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_raw)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.export_raw
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.export_raw PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -778,7 +801,8 @@ configure_file(scripts/e2e_light_bindings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-light_bindings)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.light_bindings
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.light_bindings PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -788,7 +812,8 @@ set_tests_properties(scripting.e2e.light_bindings PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-metadata)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.metadata
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.metadata PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -803,7 +828,8 @@ configure_file(scripts/e2e_video.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js 
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-video)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.video
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.video PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -824,10 +850,7 @@ set(STAMP e2e)
 configure_file(scripts/e2e_store_root.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js @ONLY)
 # The home is WIPED before every run: a crashed run cannot reach the script's
 # own exit reset, and would leave a moved store + a stale assets/storeRoot here.
-add_test(NAME scripting.e2e.store_root.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run' '${STORE_EMPTY_TARGET}'")
-set_tests_properties(scripting.e2e.store_root.fresh_home PROPERTIES
-    FIXTURES_SETUP storeRootFreshHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.store_root.fresh_home storeRootFreshHome "${_home}" ARGS --mkdir "${STORE_EMPTY_TARGET}" LABELS "scripting")
 add_test(NAME scripting.e2e.store_root
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js --headless
          WORKING_DIRECTORY ${_home}/run)
@@ -849,7 +872,8 @@ configure_file(scripts/e2e_import_pipeline.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_pipeline)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.import_pipeline
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_pipeline.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_pipeline.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.import_pipeline PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -865,7 +889,8 @@ configure_file(scripts/e2e_image_plane.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ima
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-image_plane)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.image_plane
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.image_plane PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -880,7 +905,8 @@ configure_file(scripts/e2e_decals.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.j
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-decals)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.decals
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.decals PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -896,7 +922,8 @@ configure_file(scripts/e2e_image_material.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-image_material)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.image_material
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_material.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_material.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.image_material PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -913,7 +940,8 @@ configure_file(scripts/e2e_uv_tiling.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_ti
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-uv_tiling)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.uv_tiling
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.uv_tiling PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -928,7 +956,8 @@ configure_file(scripts/e2e_pinned_reopen.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_p
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pinned_reopen)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.pinned_reopen
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_pinned_reopen.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_pinned_reopen.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.pinned_reopen PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -953,7 +982,7 @@ add_test(NAME scripting.e2e.shipped_assets
 set_tests_properties(scripting.e2e.shipped_assets PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
 # (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle:
@@ -975,7 +1004,7 @@ add_test(NAME scripting.e2e.perf_capture_frames
 set_tests_properties(scripting.e2e.perf_capture_frames PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PERF_ROOT=${_home}/perf"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 180)
 
 # Post-release fix (2026-08-31): an imported textured GLB RENDERS — texture
 # properties resolve to store files (no raw guid reaches Texture2D::load),
@@ -985,7 +1014,8 @@ configure_file(scripts/e2e_import_render.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_i
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_render)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.import_render
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.import_render PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1002,7 +1032,8 @@ configure_file(scripts/e2e_assets_page.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ass
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-assets_page)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.assets_page
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_page.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_page.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.assets_page PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1020,10 +1051,7 @@ configure_file(scripts/e2e_assets_scope.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_as
 # only meaningful on a library that has never seen them.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-assets_scope)
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.assets_scope.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(scripting.e2e.assets_scope.fresh_home PROPERTIES
-    FIXTURES_SETUP assetsScopeFreshHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.assets_scope.fresh_home assetsScopeFreshHome "${_home}" LABELS "scripting")
 add_test(NAME scripting.e2e.assets_scope
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_scope.js --headless
          WORKING_DIRECTORY ${_home}/run)
@@ -1031,7 +1059,7 @@ set_tests_properties(scripting.e2e.assets_scope PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED assetsScopeFreshHome
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # scripting.e2e.thumbnails_order — THE OWNER'S ORDER (THUMBS-1, 2026-09-18).
 # A material thumbnail FIRST, a model import SECOND: the renderer named its
@@ -1049,10 +1077,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_order)
 # A VIRGIN LIBRARY: the run counts what a sweep finds and which rows a tray
 # import added, and a home carried over from the last run answers both with
 # yesterday's assets.
-add_test(NAME scripting.e2e.thumbnails_order.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(scripting.e2e.thumbnails_order.fresh_home PROPERTIES
-    FIXTURES_SETUP thumbnailsOrderHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.thumbnails_order.fresh_home thumbnailsOrderHome "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.thumbnails_order
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js
@@ -1061,7 +1086,7 @@ set_tests_properties(scripting.e2e.thumbnails_order PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED thumbnailsOrderHome
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 180)
 
 # scripting.e2e.import_dialog — THE IMPORT DIALOG, DRIVEN
 # (SPECS/IMPORT_DIALOG_SPEC.md §8/§9). ui.import_dialog pins the record the
@@ -1075,7 +1100,8 @@ configure_file(scripts/e2e_import_dialog.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_i
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_dialog)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.import_dialog
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_dialog.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_dialog.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.import_dialog PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1090,12 +1116,13 @@ set_tests_properties(scripting.e2e.import_dialog PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shader_thumbnail)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.shader_thumbnail
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_thumbnail.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_thumbnail.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.shader_thumbnail PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # Avatar module, Part 0 (AVATAR_MODULE_SPEC S8): the Avatar page's surface
 # driven from outside the app — space switch, loadPreview off disk (no project,
@@ -1106,12 +1133,13 @@ configure_file(scripts/e2e_avatar.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.j
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.avatar
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.avatar PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 240)
+    TIMEOUT 180)
 
 # GPU_SKINNING_SPEC T10: a rigged character through the ONE import pipeline into
 # a real project, reporting its rig through node.skinningMode / node.boneNames,
@@ -1121,12 +1149,13 @@ configure_file(scripts/e2e_skinning.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinni
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-skinning)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.skinning
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.skinning PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 240)
+    TIMEOUT 180)
 
 # ENGINEERING_DEBT_SPEC A4.2 — the ONE fixed-step clock's determinism proof: a
 # 120-frame physics drop (six tumbling rigid bodies), a keyframe track and a
@@ -1138,7 +1167,8 @@ configure_file(scripts/e2e_fixed_clock.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_fix
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-fixed_clock)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.fixed_clock
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.fixed_clock PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1151,7 +1181,8 @@ set_tests_properties(scripting.e2e.fixed_clock PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_modes)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.world_modes
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_modes.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_modes.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.world_modes PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1167,7 +1198,8 @@ set_tests_properties(scripting.e2e.world_modes PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tier_table_atom)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.tier_table_atom
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tier_table_atom.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tier_table_atom.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.tier_table_atom PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1181,7 +1213,8 @@ set_tests_properties(scripting.e2e.tier_table_atom PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-looks)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.looks
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_looks.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_looks.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.looks PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1197,7 +1230,8 @@ set_tests_properties(scripting.e2e.looks PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.photon
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.photon PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1229,7 +1263,8 @@ foreach(_variant rays norays)
         set(_env "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka")
     endif()
     add_test(NAME ${_name}
-             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js
+             COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js
              WORKING_DIRECTORY ${_home}/run)
     set_tests_properties(${_name} PROPERTIES
         ENVIRONMENT "${_env}"
@@ -1245,7 +1280,8 @@ endforeach()
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-folders)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.folders
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_folders.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_folders.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.folders PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1276,7 +1312,8 @@ file(MAKE_DIRECTORY ${_home}/run)
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (its script's only Date.now names projects).
 add_test(NAME scripting.e2e.space_switch
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.space_switch PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1288,7 +1325,8 @@ set_tests_properties(scripting.e2e.space_switch PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-static_semantics)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.static_semantics
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_static_semantics.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_static_semantics.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.static_semantics PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1305,12 +1343,13 @@ configure_file(scripts/e2e_possession.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_poss
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-possession)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.possession
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.possession PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 240)
 
 # PLAY-SELECT-1 (owner R13): EDITING WHILE THE SCENE PLAYS, through the verbs —
 # who owns a click during a run (editor.playInputOwner), the eject latch
@@ -1328,12 +1367,13 @@ configure_file(scripts/e2e_play_select.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_pla
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-play_select)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.play_select
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.play_select PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 180)
 
 # AVATAR_LOCOMOTION_SPEC Stage 4 through the VERBS and a REAL scene file: the
 # four state-machine verbs, the shipped default asset generated for an imported
@@ -1346,7 +1386,8 @@ configure_file(scripts/e2e_locomotion.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_loco
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-locomotion)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.locomotion
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.locomotion PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1365,7 +1406,8 @@ configure_file(scripts/e2e_mannequin.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_manne
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mannequin)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.mannequin
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_mannequin.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_mannequin.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.mannequin PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1384,7 +1426,8 @@ configure_file(scripts/e2e_avatar_verbs.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_av
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar_verbs)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.avatar_verbs
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_verbs.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_verbs.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.avatar_verbs PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1404,10 +1447,7 @@ configure_file(scripts/e2e_one_asset.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_a
 # "one animation row"), and a home that persists across gates accumulates a
 # second copy of everything.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_asset)
-add_test(NAME scripting.e2e.one_asset.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(scripting.e2e.one_asset.fresh_home PROPERTIES
-    FIXTURES_SETUP one_asset_home LABELS "scripting" TIMEOUT 60)
+jah_fresh_home_fixture(scripting.e2e.one_asset.fresh_home one_asset_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.one_asset
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
@@ -1416,7 +1456,7 @@ set_tests_properties(scripting.e2e.one_asset PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_asset_home
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # scripting.e2e.default_floor — THE DEFAULT FLOOR (owner 2026-09-12, lane
 # L13): a new scene stands on the flagged floor wearing its own checker
@@ -1428,7 +1468,8 @@ configure_file(scripts/e2e_default_floor.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_d
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-default_floor)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.default_floor
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.default_floor PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1443,10 +1484,7 @@ set_tests_properties(scripting.e2e.default_floor PROPERTIES
 # A FRESH home per run: it asserts exact tile sets.
 configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
-add_test(NAME scripting.e2e.tray_panel.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(scripting.e2e.tray_panel.fresh_home PROPERTIES
-    FIXTURES_SETUP tray_panel_home LABELS "scripting" TIMEOUT 60)
+jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.tray_panel
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
@@ -1464,10 +1502,7 @@ set_tests_properties(scripting.e2e.tray_panel PROPERTIES
 set(JAH_ONE_WRITER_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_one_writer.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
-add_test(NAME gi.one_writer.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(gi.one_writer.fresh_home PROPERTIES
-    FIXTURES_SETUP one_writer_home LABELS "scripting" TIMEOUT 60)
+jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME gi.one_writer
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
@@ -1476,7 +1511,7 @@ set_tests_properties(gi.one_writer PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_writer_home
     LABELS "scripting"
-    TIMEOUT 600)
+    TIMEOUT 300)
 
 # gi.pcc_mirror.ray_tier — AT A RAY TIER THE PROBE GRID IS NOT BUILT (PHOTON-F12-PCC), on
 # Showroom 2 at Epic: no grid with rays on, the grid with rays off, gone again with rays back
@@ -1486,10 +1521,7 @@ set(JAH_PCC_RAY_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pcc_ray_tier)
 set(JAH_PCC_RAY_OUT "${_home}/run/")
 configure_file(scripts/gi_pcc_mirror_ray_tier.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js @ONLY)
-add_test(NAME gi.pcc_mirror.ray_tier.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(gi.pcc_mirror.ray_tier.fresh_home PROPERTIES
-    FIXTURES_SETUP pcc_ray_tier_home LABELS "scripting" TIMEOUT 60)
+jah_fresh_home_fixture(gi.pcc_mirror.ray_tier.fresh_home pcc_ray_tier_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME gi.pcc_mirror.ray_tier
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js
@@ -1498,7 +1530,7 @@ set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED pcc_ray_tier_home
     LABELS "scripting"
-    TIMEOUT 600)
+    TIMEOUT 420)
 
 # gi.chain_converge_scenes — ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT on the
 # default scene and Showroom 2 at High (PHOTON-WRITER-1 SWEEPS-3; the room half is
@@ -1509,10 +1541,7 @@ set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
 set(JAH_CONVERGE_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_chain_converge_scenes.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
-add_test(NAME gi.chain_converge_scenes.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(gi.chain_converge_scenes.fresh_home PROPERTIES
-    FIXTURES_SETUP chain_converge_scenes_home LABELS "scripting;nightly" TIMEOUT 60)
+jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting;nightly")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME gi.chain_converge_scenes
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js
@@ -1545,10 +1574,7 @@ configure_file(scripts/e2e_animation_assets.js.in
 # — and a home that persists across gates accumulates a second copy of
 # everything, so the suite would go red on nothing.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-animation_assets)
-add_test(NAME scripting.e2e.animation_assets.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' '${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export' && mkdir -p '${_home}/run' '${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export'")
-set_tests_properties(scripting.e2e.animation_assets.fresh_home PROPERTIES
-    FIXTURES_SETUP animationAssetsHomeA LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.animation_assets.fresh_home animationAssetsHomeA "${_home}" ARGS --reset "${CMAKE_CURRENT_BINARY_DIR}/animation_assets_export" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.animation_assets
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets.js --headless
@@ -1563,10 +1589,7 @@ set_tests_properties(scripting.e2e.animation_assets PROPERTIES
 configure_file(scripts/e2e_animation_assets_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets_import.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-animation_assets_import)
-add_test(NAME scripting.e2e.animation_assets_import.fresh_home
-         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
-set_tests_properties(scripting.e2e.animation_assets_import.fresh_home PROPERTIES
-    FIXTURES_SETUP animationAssetsHomeB LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.animation_assets_import.fresh_home animationAssetsHomeB "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.animation_assets_import
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_animation_assets_import.js --headless
@@ -1591,7 +1614,8 @@ set_tests_properties(scripting.e2e.player_verbs PROPERTIES TIMEOUT 300)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-graph_edit)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.graph_edit
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_graph_edit.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_graph_edit.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.graph_edit PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1608,7 +1632,8 @@ configure_file(scripts/e2e_material_refusal.js.in
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-refusal)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.material_refusal
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_refusal.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_refusal.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.material_refusal PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1626,7 +1651,8 @@ configure_file(scripts/e2e_import_settings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import-settings)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.import_settings
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_settings.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_settings.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.import_settings PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1679,7 +1705,8 @@ configure_file(scripts/e2e_glb_textures.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_gl
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-glb_textures)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.glb_textures
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.glb_textures PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1712,7 +1739,8 @@ configure_file(scripts/e2e_avatar_assets.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_a
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar_assets)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.avatar_assets
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_assets.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_assets.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1729,7 +1757,8 @@ set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
 set(_nr_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-node_rename)
 file(MAKE_DIRECTORY ${_nr_home}/run)
 add_test(NAME scripting.e2e.node_rename
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_node_rename.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_nr_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_node_rename.js --headless
          WORKING_DIRECTORY ${_nr_home}/run)
 set_tests_properties(scripting.e2e.node_rename PROPERTIES
     ENVIRONMENT "HOME=${_nr_home};JAHSHAKA_DATA_ROOT=${_nr_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
@@ -1741,7 +1770,8 @@ foreach(_ms multiselect multiselect_edit)
     file(MAKE_DIRECTORY ${_ms_home})
     file(MAKE_DIRECTORY ${_ms_home}/run)
     add_test(NAME scripting.e2e.${_ms}
-             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_${_ms}.js --headless
+             COMMAND ${JAH_FRESH_HOME} --warm ${_ms_home} --
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_${_ms}.js --headless
              WORKING_DIRECTORY ${_ms_home}/run)
     set_tests_properties(scripting.e2e.${_ms} PROPERTIES
         ENVIRONMENT "HOME=${_ms_home};JAHSHAKA_DATA_ROOT=${_ms_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
@@ -1758,7 +1788,8 @@ endforeach()
 set(_ref_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-refusals)
 file(MAKE_DIRECTORY ${_ref_home}/run)
 add_test(NAME scripting.e2e.refusals
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_refusals.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_ref_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_refusals.js --headless
          WORKING_DIRECTORY ${_ref_home}/run)
 set_tests_properties(scripting.e2e.refusals PROPERTIES
     ENVIRONMENT "HOME=${_ref_home};JAHSHAKA_DATA_ROOT=${_ref_home}/.local/share/Jahshaka"
@@ -1775,7 +1806,8 @@ jah_no_display(scripting.e2e.refusals)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_bounds)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.scene_bounds
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_bounds.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_bounds.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.scene_bounds PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1796,7 +1828,8 @@ set_tests_properties(scripting.e2e.scene_bounds PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_samples)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.ogre_samples
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_samples.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_samples.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.ogre_samples PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1819,12 +1852,7 @@ jah_no_display(scripting.e2e.ogre_samples)
 # at a third of the launches.
 configure_file(scripts/e2e_ogre_ports.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_ports)
-add_test(NAME scripting.freshhome.ogre_ports
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_home}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(scripting.freshhome.ogre_ports PROPERTIES
-    FIXTURES_SETUP scripting_home_ogre_ports
-    LABELS "scripting")
+jah_fresh_home_fixture(scripting.freshhome.ogre_ports scripting_home_ogre_ports "${_home}" LABELS "scripting")
 add_test(NAME scripting.e2e.ogre_ports
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1832,7 +1860,7 @@ set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED scripting_home_ogre_ports
     LABELS "scripting"
-    TIMEOUT 480)
+    TIMEOUT 420)
 
 # MATERIAL_GAPS_SPEC GAP 2 (P6 + P7): DETAIL LAYERS end to end, and the §3.7
 # acceptance port — Ogre's own `Marble` material (detail_map0 MRAMOR6X6.jpg at
@@ -1847,12 +1875,13 @@ configure_file(scripts/e2e_detail_layers.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_d
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-detail_layers)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.detail_layers
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.detail_layers PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 240)
+    TIMEOUT 180)
 
 # MATERIAL_GAPS_SPEC ADDENDUM A-1: LIVE TEXTURES — pixels a producer writes at
 # runtime, catalogued as a session-only asset kind so material.set can resolve
@@ -1862,12 +1891,13 @@ set_tests_properties(scripting.e2e.detail_layers PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-live_textures)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.live_textures
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_textures.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_textures.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.live_textures PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 jah_no_display(scripting.e2e.live_textures)
 
 # The PIXEL half of A-1: a live texture bound as a base colour map is sampled
@@ -1900,12 +1930,13 @@ configure_file(scripts/e2e_video_texture.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_v
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-video_texture)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.video_texture
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_texture.js --headless
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_texture.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.video_texture PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # MATERIAL_GAPS_SPEC ADDENDUM A-5: the PER-MATERIAL REFLECTION CUBEMAP. Two
 # spheres, one override: the hero's reflection moves and the control's does
@@ -1917,7 +1948,8 @@ file(MAKE_DIRECTORY ${_home}/run)
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (its flake was cold-cache uninitialised VRAM — a defect class, not time).
 add_test(NAME scripting.e2e.reflection_map
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.reflection_map PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -1965,7 +1997,8 @@ foreach(_clip clipboard clipboard_xproject clipboard_assets)
         set(_clip_script ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js)
     endif()
     add_test(NAME scripting.e2e.${_clip}
-             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${_clip_script} --headless
+             COMMAND ${JAH_FRESH_HOME} --warm ${_clip_home} --
+                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${_clip_script} --headless
              WORKING_DIRECTORY ${_clip_home}/run)
     set_tests_properties(scripting.e2e.${_clip} PROPERTIES
         ENVIRONMENT "HOME=${_clip_home};JAHSHAKA_DATA_ROOT=${_clip_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
@@ -1984,7 +2017,8 @@ configure_file(scripts/e2e_ssr_mirror.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_
 set(_ssrhome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ssr_mirror)
 file(MAKE_DIRECTORY ${_ssrhome}/run)
 add_test(NAME scripting.e2e.ssr_mirror
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_ssrhome} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
          WORKING_DIRECTORY ${_ssrhome}/run)
 # THE SCREEN-ONLY CONTRACT, AND IT STAYS THAT (lead ruling, PHOTON R5 round B;
 # the same ruling as tests/ssr/CMakeLists.txt). This suite is lane SSR-2's: it
@@ -1996,7 +2030,7 @@ add_test(NAME scripting.e2e.ssr_mirror
 set_tests_properties(scripting.e2e.ssr_mirror PROPERTIES
     ENVIRONMENT "HOME=${_ssrhome};JAHSHAKA_DATA_ROOT=${_ssrhome}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1"
     LABELS "scripting"
-    TIMEOUT 600)
+    TIMEOUT 540)
 
 # WHAT A SCREENSHOT IS A PICTURE OF (SS1, owner 2026-09-13 — "match the
 # screenshot to the scene properly"). The four ScreenshotGrade modes through
@@ -2012,7 +2046,8 @@ set_tests_properties(scripting.e2e.ssr_mirror PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-screenshot_grades)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.screenshot_grades
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_screenshot_grades.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_screenshot_grades.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.screenshot_grades PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -2037,7 +2072,8 @@ configure_file(scripts/e2e_atom_lods.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lods)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.atom_lods
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.atom_lods PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -2057,12 +2093,13 @@ configure_file(scripts/e2e_surface_cards.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_s
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-surface_cards)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.surface_cards
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.surface_cards PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 180)
 
 # ---------------------------------------------------------------------------
 # THE SMOKE OF PUSH #50, AS TWO SUITES (lane SMOKE-FIX-1, 2026-09-18).
@@ -2084,7 +2121,8 @@ configure_file(scripts/e2e_player_no_editor.js.in
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.player_no_editor
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
          WORKING_DIRECTORY ${_home}/run)
 # JAHSHAKA_TEST_NO_EDITOR_BOOT: the PERSON's boot shape (window up, Desktop
 # page, editor page never shown) instead of the script harness's, which shows
@@ -2108,7 +2146,8 @@ configure_file(scripts/e2e_player_bounce.js.in
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.player_bounce
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.player_bounce PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_PLAYER_TEST_NO_ATTACH=1"
@@ -2140,10 +2179,7 @@ add_script_e2e(add_primitive e2e_add_primitive.js)
 # points), so no --headless; its own home, wiped before the run, because the
 # tab set it leaves behind is what the relaunch half reads.
 set(_mtHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_tabs)
-add_test(NAME scripting.e2e.material_tabs.fresh_home
-         COMMAND sh -c "rm -rf '${_mtHome}' && mkdir -p '${_mtHome}/run'")
-set_tests_properties(scripting.e2e.material_tabs.fresh_home PROPERTIES
-    FIXTURES_SETUP materialTabsHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_tabs.fresh_home materialTabsHome "${_mtHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_mtHome}/run)
 add_test(NAME scripting.e2e.material_tabs
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs.js
@@ -2164,7 +2200,7 @@ set_tests_properties(scripting.e2e.material_tabs.relaunch PROPERTIES
     ENVIRONMENT "HOME=${_mtHome};JAHSHAKA_DATA_ROOT=${_mtHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED "materialTabsHome;materialTabsSession"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 120)
 
 # scripting.e2e.material_bundle — MATERIAL_BUNDLE_SPEC phase 1, the acceptance
 # flow the spec names: pick an image from disk -> ONE tile -> export -> an
@@ -2175,10 +2211,7 @@ set_tests_properties(scripting.e2e.material_tabs.relaunch PROPERTIES
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_material_bundle.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle.js @ONLY)
 set(_mbHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_bundle)
-add_test(NAME scripting.e2e.material_bundle.fresh_home
-         COMMAND sh -c "rm -rf '${_mbHome}' && mkdir -p '${_mbHome}/run'")
-set_tests_properties(scripting.e2e.material_bundle.fresh_home PROPERTIES
-    FIXTURES_SETUP materialBundleHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_bundle.fresh_home materialBundleHome "${_mbHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_mbHome}/run)
 add_test(NAME scripting.e2e.material_bundle
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle.js --headless
@@ -2197,10 +2230,7 @@ set_tests_properties(scripting.e2e.material_bundle PROPERTIES
 set(SHARE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_share.jbundle)
 configure_file(scripts/e2e_material_share.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js @ONLY)
 set(_msHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share)
-add_test(NAME scripting.e2e.material_share.fresh_home
-         COMMAND sh -c "rm -rf '${_msHome}' && mkdir -p '${_msHome}/run' && rm -f '${SHARE_PATH}'")
-set_tests_properties(scripting.e2e.material_share.fresh_home PROPERTIES
-    FIXTURES_SETUP materialShareHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" ARGS --rm "${SHARE_PATH}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_msHome}/run)
 add_test(NAME scripting.e2e.material_share
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
@@ -2215,10 +2245,7 @@ set_tests_properties(scripting.e2e.material_share PROPERTIES
 configure_file(scripts/e2e_material_share_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js @ONLY)
 set(_msiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share_import)
-add_test(NAME scripting.e2e.material_share_import.fresh_home
-         COMMAND sh -c "rm -rf '${_msiHome}' && mkdir -p '${_msiHome}/run'")
-set_tests_properties(scripting.e2e.material_share_import.fresh_home PROPERTIES
-    FIXTURES_SETUP materialShareImportHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_share_import.fresh_home materialShareImportHome "${_msiHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_msiHome}/run)
 add_test(NAME scripting.e2e.material_share_import
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
@@ -2227,7 +2254,7 @@ set_tests_properties(scripting.e2e.material_share_import PROPERTIES
     ENVIRONMENT "HOME=${_msiHome};JAHSHAKA_DATA_ROOT=${_msiHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED "materialShareImportHome;materialShareFile"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # The far side: a library that has never seen the material, the image or the
 # project, and one archive.
@@ -2235,10 +2262,7 @@ set(ARCHIVE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_bundle.zip)
 configure_file(scripts/e2e_material_bundle_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle_import.js @ONLY)
 set(_mbiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_bundle_import)
-add_test(NAME scripting.e2e.material_bundle_import.fresh_home
-         COMMAND sh -c "rm -rf '${_mbiHome}' && mkdir -p '${_mbiHome}/run'")
-set_tests_properties(scripting.e2e.material_bundle_import.fresh_home PROPERTIES
-    FIXTURES_SETUP materialBundleImportHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_bundle_import.fresh_home materialBundleImportHome "${_mbiHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_mbiHome}/run)
 add_test(NAME scripting.e2e.material_bundle_import
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_bundle_import.js --headless
@@ -2247,7 +2271,7 @@ set_tests_properties(scripting.e2e.material_bundle_import PROPERTIES
     ENVIRONMENT "HOME=${_mbiHome};JAHSHAKA_DATA_ROOT=${_mbiHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED "materialBundleImportHome;materialBundleArchive"
     LABELS "scripting"
-    TIMEOUT 180)
+    TIMEOUT 120)
 
 # scripting.e2e.preset_apply — MATERIAL_BUNDLE_SPEC phase 3: a preset is a
 # READ-ONLY LIBRARY BUNDLE and applying one PINS it. Three applies add ZERO
@@ -2257,10 +2281,7 @@ set_tests_properties(scripting.e2e.material_bundle_import PROPERTIES
 # Document verbs only -> --headless. A FRESH HOME, because the load-bearing
 # first assertion is that NOTHING is seeded until a preset is used.
 set(_paHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_apply)
-add_test(NAME scripting.e2e.preset_apply.fresh_home
-         COMMAND sh -c "rm -rf '${_paHome}' && mkdir -p '${_paHome}/run'")
-set_tests_properties(scripting.e2e.preset_apply.fresh_home PROPERTIES
-    FIXTURES_SETUP presetApplyHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.preset_apply.fresh_home presetApplyHome "${_paHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_paHome}/run)
 add_test(NAME scripting.e2e.preset_apply
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
@@ -2279,10 +2300,7 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
 # the only lock left. Document verbs only -> --headless. A FRESH HOME, because
 # the arms count library rows.
 set(_peHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_edit)
-add_test(NAME scripting.e2e.preset_edit.fresh_home
-         COMMAND sh -c "rm -rf '${_peHome}' && mkdir -p '${_peHome}/run'")
-set_tests_properties(scripting.e2e.preset_edit.fresh_home PROPERTIES
-    FIXTURES_SETUP presetEditHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.preset_edit.fresh_home presetEditHome "${_peHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_peHome}/run)
 add_test(NAME scripting.e2e.preset_edit
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_edit.js --headless
@@ -2313,10 +2331,7 @@ configure_file(scripts/e2e_preset_seed_user.js.in
 configure_file(scripts/e2e_preset_seed_boot.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_boot.js @ONLY)
 set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_boot)
-add_test(NAME scripting.e2e.preset_seed_boot.fresh_home
-         COMMAND sh -c "rm -rf '${_psHome}' && mkdir -p '${_psHome}/run'")
-set_tests_properties(scripting.e2e.preset_seed_boot.fresh_home PROPERTIES
-    FIXTURES_SETUP presetSeedBootHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.preset_seed_boot.fresh_home presetSeedBootHome "${_psHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_psHome}/run)
 add_test(NAME scripting.e2e.preset_seed_boot.user_first
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -2337,7 +2352,7 @@ set_tests_properties(scripting.e2e.preset_seed_boot PROPERTIES
     ENVIRONMENT "HOME=${_psHome};JAHSHAKA_DATA_ROOT=${_psHome}/.local/share/Jahshaka;JAHSHAKA_SEED_PRESETS=1"
     FIXTURES_REQUIRED "presetSeedBootHome;presetSeedBootUser"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 180)
 
 # scripting.e2e.preset_seed_race — THE USER'S IMPORT *DURING* THAT SEED
 # (SEED-SMALL-1). The two arms above are a BEFORE and an AFTER, one importer at
@@ -2354,10 +2369,7 @@ set_tests_properties(scripting.e2e.preset_seed_boot PROPERTIES
 set(_prHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_seed_race)
 configure_file(scripts/e2e_preset_seed_race.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js @ONLY)
-add_test(NAME scripting.e2e.preset_seed_race.fresh_home
-         COMMAND sh -c "rm -rf '${_prHome}' && mkdir -p '${_prHome}/run'")
-set_tests_properties(scripting.e2e.preset_seed_race.fresh_home PROPERTIES
-    FIXTURES_SETUP presetSeedRaceHome LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.preset_seed_race.fresh_home presetSeedRaceHome "${_prHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_prHome}/run)
 add_test(NAME scripting.e2e.preset_seed_race
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>

@@ -26,7 +26,7 @@ add_test(NAME avatar.responsive COMMAND test_avatar_async
          WORKING_DIRECTORY ${_avatar_async_home}/run)
 set_tests_properties(avatar.responsive PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_home};JAHSHAKA_DATA_ROOT=${_avatar_async_home}/.local/share/Jahshaka"
-    TIMEOUT 900 LABELS "avatar")
+    TIMEOUT 360 LABELS "avatar")
 # avatar.responsive.timing — THE MILLISECOND BARS, nightly (lane D6B-GATE-SHAPE; audit §5,
 # F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1 on a quiet box, under the
 # GPU-timing lock; the push row asserts the rest and prints the readings.

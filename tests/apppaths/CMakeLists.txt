@@ -22,7 +22,7 @@ add_test(NAME app.data_root
 # restores it byte for byte. An override here would delete the assertion.
 set_tests_properties(app.data_root PROPERTIES
     ENVIRONMENT "HOME=${_dr_home}"
-    TIMEOUT 300
+    TIMEOUT 180
     LABELS "app")
 # ...AND IT MUST NOT INHERIT ONE EITHER (lead law, 2026-09-10). The fourth arm
 # asserts `overridden:false`, which an ambient JAHSHAKA_DATA_ROOT — exported by

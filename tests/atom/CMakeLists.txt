@@ -26,7 +26,7 @@ add_test(NAME atom.dolly_gate COMMAND test_atom_dolly_gate
 # 153 poses, each rendering one 1024x1024 frame and downloading it, plus the
 # warm-up: comfortably inside 300 s on the rig (measured ~40 s) and with room
 # for a contended one.
-set_tests_properties(atom.dolly_gate PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(atom.dolly_gate PROPERTIES TIMEOUT 240 LABELS "engine")
 
 # ---------------------------------------------------------------------------
 # ATOM stage 2 — THE CLUSTER DAG (lane ATOM-CLUSTER-1; SPECS/atom/B2_CLUSTER_DAG_DESIGN.md).
@@ -200,7 +200,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         add_test(NAME engine.atom_parity_validation COMMAND test_atom_parity
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_parity_validation PROPERTIES
-            TIMEOUT 600 LABELS "engine"
+            TIMEOUT 120 LABELS "engine"
             ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
     endif()
@@ -214,7 +214,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     target_compile_definitions(test_atom_draw PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     add_test(NAME engine.atom_draw COMMAND test_atom_draw
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 600 LABELS "engine")
+    set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 480 LABELS "engine")
     # atom.occlusion_exact — THE ID PASS'S TWO-PASS OCCLUSION IS EXACT (ATOM-OCCLUSION-1): two
     # identical worlds in lockstep, one with the occlusion and one frustum-only, every
     # frame's id image compared word for word over a still pose, a walk past a wall, a
@@ -225,7 +225,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_atom_engine_target(test_atom_occlusion)
     add_test(NAME atom.occlusion_exact COMMAND test_atom_occlusion
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 300 LABELS "engine")
+    set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 120 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
@@ -262,14 +262,14 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         add_test(NAME engine.atom_negative_control_validation COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_negative_control_validation PROPERTIES
-            TIMEOUT 600 LABELS "engine"
+            TIMEOUT 120 LABELS "engine"
             ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         if(EXISTS "${_lvp_icd}")
             add_test(NAME engine.atom_negative_control_validation_lavapipe COMMAND test_atom_negative_control
                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
             set_tests_properties(engine.atom_negative_control_validation_lavapipe PROPERTIES
-                TIMEOUT 900 LABELS "engine"
+                TIMEOUT 120 LABELS "engine"
                 ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd};JAH_ATOM_EXPECT_VALIDATION=1"
                 FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         endif()
@@ -294,7 +294,7 @@ add_test(NAME atom.view
          WORKING_DIRECTORY ${_atom_view_home}/run)
 # 38 s solo on the rig (twenty-three settled shots and a Low-tier round trip); the rest is gate-load headroom.
 set_tests_properties(atom.view PROPERTIES
-    TIMEOUT 300 LABELS "scripting"
+    TIMEOUT 240 LABELS "scripting"
     ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")
 
 # ---------------------------------------------------------------------------
@@ -307,10 +307,7 @@ set_tests_properties(atom.view PROPERTIES
 set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
 set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
 configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js @ONLY)
-add_test(NAME atom.lod_switch.fixture
-         COMMAND sh -c "rm -rf '${_lod_switch_home}' && mkdir -p '${_lod_switch_home}/run' && '$<TARGET_FILE:test_mesh_bake>' --write-standin '${LOD_STANDIN}'")
-set_tests_properties(atom.lod_switch.fixture PROPERTIES
-    FIXTURES_SETUP atomLodSwitchHome LABELS "scripting")
+jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting")
 add_test(NAME atom.lod_switch
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js
@@ -331,14 +328,11 @@ set_tests_properties(atom.lod_switch PROPERTIES
 set(JAH_OCCLUSION_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/atom_occlusion.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js @ONLY)
 set(_occl_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_occlusion)
-add_test(NAME atom.occlusion_exact_app.fresh_home
-         COMMAND sh -c "rm -rf '${_occl_home}' && mkdir -p '${_occl_home}/run'")
-set_tests_properties(atom.occlusion_exact_app.fresh_home PROPERTIES
-    FIXTURES_SETUP atomOcclusionHome LABELS "scripting" TIMEOUT 60)
+jah_fresh_home_fixture(atom.occlusion_exact_app.fresh_home atomOcclusionHome "${_occl_home}" LABELS "scripting")
 add_test(NAME atom.occlusion_exact_app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
          WORKING_DIRECTORY ${_occl_home}/run)
 set_tests_properties(atom.occlusion_exact_app PROPERTIES
     FIXTURES_REQUIRED atomOcclusionHome
-    TIMEOUT 600 LABELS "scripting"
+    TIMEOUT 480 LABELS "scripting"
     ENVIRONMENT "HOME=${_occl_home};JAHSHAKA_DATA_ROOT=${_occl_home}/.local/share/Jahshaka")

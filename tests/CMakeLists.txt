@@ -193,6 +193,14 @@ endfunction()
 # keys with fixed sleeps between them).
 #
 # A new row takes 6x its own measured seconds, or the floor, whichever is more.
+#
+# RE-APPLIED 2026-09-27 (lane D6B-GATE-SHAPE; audit §9 H2): 171 registrations had drifted
+# back above it — 900 s on 3-23 s suites, 600 s on sixteen gi suites, 300 s on ~100 engine
+# rows whose policy value is the floor. Each was set to 6x the larger of the audit's gate
+# (2026-09-26) and D6B's before-run (-j4 beside two other lanes' gates), rounded up to a
+# minute, floor 120; none was widened. The contention class and the documented exceptions
+# kept their values. (A row in a RESOURCE_LOCK family does not start its clock until its
+# lock is free, so a family chain costs no row its budget.)
 # ROWS THAT SET NO TIMEOUT (46 of them: the sub-second document suites, the
 # wipe fixtures) get ctest's DEFAULT, which every documented gate command sets
 # to `--timeout 120` (docs/TESTING_GATE.md) — never ctest's own 1500 s. The
@@ -309,6 +317,34 @@ endfunction()
 # so a family's cost sits above every measured suite's and the longest chain's highest of all.
 set(JAH_COST_MONADO 100000)
 set(JAH_COST_GI_CHAIN 90000)
+
+# THE FRESH HOME (lane D6B-GATE-SHAPE; audit §9 H1): tests/support/fresh_home.sh is the ONE
+# implementation of "this suite's home is virgin every run" — it replaced 27 hand-copied
+# `sh -c "rm -rf …"` fixtures and tests/samples/freshhome.cmake. Two ways in:
+#   * jah_fresh_home_fixture(<row> <fixture> <home> [WARM] [ARGS <flags…>] [THEN <cmd…>]
+#                            [LABELS <labels>]) — a FIXTURES_SETUP row, for a home shared by a
+#     sequence of suites (A writes, B reads) or a suite that is not a plain `--script` run.
+#     Without WARM it wipes the caches too (a suite that asserts on a COLD shader cache);
+#     ARGS are fresh_home.sh's --reset/--rm/--mkdir; THEN runs after the wipe.
+#   * `${JAH_FRESH_HOME} --warm <home> -- <command…>` as a row's COMMAND — add_script_e2e's
+#     default: the wipe happens inside the row (no extra ctest row), keeping the shader caches.
+set(JAH_FRESH_HOME "${CMAKE_SOURCE_DIR}/tests/support/fresh_home.sh")
+function(jah_fresh_home_fixture row fixture home)
+    cmake_parse_arguments(F "WARM" "" "ARGS;THEN;LABELS" ${ARGN})
+    set(_flags)
+    if(F_WARM)
+        list(APPEND _flags --warm)
+    endif()
+    set(_then)
+    if(F_THEN)
+        set(_then -- ${F_THEN})
+    endif()
+    add_test(NAME ${row} COMMAND sh "${JAH_FRESH_HOME}" ${_flags} ${F_ARGS} "${home}" ${_then})
+    set_tests_properties(${row} PROPERTIES FIXTURES_SETUP ${fixture} TIMEOUT 60)
+    if(F_LABELS)
+        set_tests_properties(${row} PROPERTIES LABELS "${F_LABELS}")
+    endif()
+endfunction()
 
 # jah_timing_script(<in.js> <out.js>) — THE MILLISECOND BARS OF AN E2E SCRIPT, ARMED (lane
 # D6B-GATE-SHAPE; tests/support/timingbars.h is the C++ half). A `--script` run cannot read its

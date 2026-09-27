@@ -81,7 +81,7 @@ add_test(NAME import.shutdown COMMAND test_import_shutdown
          WORKING_DIRECTORY ${_shutdown_home}/run)
 set_tests_properties(import.shutdown PROPERTIES
     ENVIRONMENT "HOME=${_shutdown_home};JAHSHAKA_DATA_ROOT=${_shutdown_home}/.local/share/Jahshaka"
-    TIMEOUT 480 LABELS "importer")
+    TIMEOUT 300 LABELS "importer")
 
 # The race lane (scripts/sanitize.sh tsan). import.async IS the threaded-import
 # contract — prepare on a worker, commit on the DB thread, progress callbacks

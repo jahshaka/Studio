@@ -87,7 +87,7 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
 # parallel schedule cannot change its answer. Its own working directory because
 # both rows write an Ogre log.
 set_tests_properties(scenegraph.smoke PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "benchmark-smoke")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "benchmark-smoke")
 
 # THE RIG-PERF BENCH (SPECS/AVATAR_RIG_PERF_SPEC.md P0 / P3).
 #

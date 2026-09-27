@@ -218,8 +218,8 @@ endif()
 # (Why not a write/strip/read round trip: nothing in this tree links SceneReader
 # — it needs the library database, the asset store, the material helper, the bake
 # store and the load timeline. tests/mirror and tests/defaults record the same
-# constraint. The runtime half is scene.reopen_fidelity and
-# scripting.e2e.exposure_defaults, which open real archives with keys missing.)
+# constraint. The runtime half is scene.reopen_fidelity, which opens real archives
+# with keys missing.)
 if(Python3_Interpreter_FOUND)
     add_test(NAME document.reader_defaults
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/reader_defaults.py

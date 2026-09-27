@@ -92,10 +92,7 @@ target_compile_definitions(test_create_loop PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_create_loop_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-create-loop)
-add_test(NAME app.create_loop.fresh_home
-         COMMAND sh -c "rm -rf '${_create_loop_home}' && mkdir -p '${_create_loop_home}/run'")
-set_tests_properties(app.create_loop.fresh_home PROPERTIES
-    FIXTURES_SETUP createLoopFreshHome LABELS "openasync")
+jah_fresh_home_fixture(app.create_loop.fresh_home createLoopFreshHome "${_create_loop_home}" LABELS "openasync")
 add_test(NAME app.create_loop COMMAND test_create_loop
          WORKING_DIRECTORY ${_create_loop_home}/run)
 # TIMEOUT 750: six times the measured 125 s (solo on the rig display beside one

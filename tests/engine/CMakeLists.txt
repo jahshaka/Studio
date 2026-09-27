@@ -39,7 +39,9 @@ function(jahshaka_engine_test target)
     # TEST_GATE_AUDIT.md §3: test_engine measures 11.5 s and its sanitised twin
     # 20 s, so 600 was a fifty-fold ceiling and a hang cost ten minutes of a
     # gate the owner wants to finish in ten.
-    set_tests_properties(${target} PROPERTIES TIMEOUT 120)
+    # LABELLED like every engine row (D6B-GATE-SHAPE; audit §8: the three engine API rows
+    # were the tree's only unlabelled engine suites, invisible to -L engine).
+    set_tests_properties(${target} PROPERTIES TIMEOUT 120 LABELS "engine")
 endfunction()
 
 jahshaka_engine_test(test_engine)
@@ -62,7 +64,7 @@ target_link_libraries(test_engine_headless PRIVATE JahshakaEngine)
 add_dependencies(test_engine_headless JahshakaEngineMedia)
 add_test(NAME engine.headless COMMAND test_engine_headless
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.headless PROPERTIES TIMEOUT 300 LABELS "document")
+set_tests_properties(engine.headless PROPERTIES TIMEOUT 120 LABELS "document")
 jah_no_display(engine.headless)
 
 # Create/destroy/create in one process — needs the OgreVulkanDevice.cpp patch (OGRE_PLATFORM_DEPS.md).
@@ -86,8 +88,8 @@ add_test(NAME test_engine_recreate COMMAND test_engine_recreate WORKING_DIRECTOR
 # destroy that used to throw belongs in the suite that destroys three engines.
 add_test(NAME meshbake.shadow_vao_alias COMMAND test_engine_recreate --shadow-vao
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(meshbake.shadow_vao_alias PROPERTIES TIMEOUT 300 LABELS "engine")
-set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 120)
+set_tests_properties(meshbake.shadow_vao_alias PROPERTIES TIMEOUT 120 LABELS "engine")
+set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # Decals (DECALS_SPEC.md): pixel-asserted projected textures, and the permanent
 # home of the phase-0 spike's UV / -Y / pool findings.
@@ -119,7 +121,7 @@ target_link_libraries(test_engine_lod_hysteresis PRIVATE JahshakaEngine)
 add_dependencies(test_engine_lod_hysteresis JahshakaEngineMedia)
 add_test(NAME engine.lod_hysteresis COMMAND test_engine_lod_hysteresis
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.lod_hysteresis PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(engine.lod_hysteresis PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # The ON-SCREEN (swapchain) path — Linux/X11 only, and the only suite in the tree
 # that binds a View to a native window. It never MAPS that window, so it is safe
@@ -183,7 +185,7 @@ add_test(NAME engine.gi_scan COMMAND test_engine_gi_scan
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # In the gi_chain family like every cascade suite (tests/CMakeLists.txt) and
 # 300 s: the 1k-item arm voxelises once in a Debug build.
-set_tests_properties(engine.gi_scan PROPERTIES TIMEOUT 300 LABELS "engine"
+set_tests_properties(engine.gi_scan PROPERTIES TIMEOUT 120 LABELS "engine"
                      RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE GPU SCENE'S TABLES (lane GPU-SCENE-1; ENGINE V2's V2-2 pulled forward into
@@ -203,7 +205,7 @@ target_link_libraries(test_engine_gpu_scene PRIVATE JahshakaEngine)
 add_dependencies(test_engine_gpu_scene JahshakaEngineMedia)
 add_test(NAME engine.gpu_scene COMMAND test_engine_gpu_scene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.gpu_scene PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(engine.gpu_scene PROPERTIES TIMEOUT 120 LABELS "engine")
 
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)

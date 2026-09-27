@@ -227,7 +227,7 @@ add_dependencies(test_gi_probe_inputs JahshakaEngineMedia)
 add_test(NAME gi.probe_inputs COMMAND test_gi_probe_inputs
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.probe_inputs PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 300 LABELS "engine")
+                     TIMEOUT 120 LABELS "engine")
 
 # PROBE REBUILD PARITY + SHRINK-FIT LOCALITY (2026-09-07 fix wave, defect 2).
 # A CLUTTERED room — free-standing columns, which is what defeats the 1x1
@@ -359,7 +359,7 @@ target_link_libraries(test_gi_hidden_volume PRIVATE JahshakaEngine)
 add_dependencies(test_gi_hidden_volume JahshakaEngineMedia)
 add_test(NAME gi.hidden_volume COMMAND test_gi_hidden_volume
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.hidden_volume PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(gi.hidden_volume PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.volume_edge — THE AMBIENT MUST NOT STEP AT THE EDGE OF THE LIT VOLUME
 # (ledger 177 defect A, the owner's "black rectangle"): a flat scene ambient
@@ -380,17 +380,19 @@ target_link_libraries(test_gi_volume_edge PRIVATE JahshakaEngine)
 add_dependencies(test_gi_volume_edge JahshakaEngineMedia)
 add_test(NAME gi.volume_edge COMMAND test_gi_volume_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.volume_edge PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(gi.volume_edge PROPERTIES TIMEOUT 120 LABELS "engine")
 # gi.volume_edge_spec_target — THE SAME BINARY ON A SPECULAR SLAB (PHOTON-ENV-1,
 # audit F4): the voxel specular cone's escape (the raw directional composite,
 # which reads the slab's own voxels at a coarse mip) against the environment
 # outside the volume steps at the face. Owned by PHOTON-PCC-1 / REFLECT-1 (three
-# reflection sources make the cone's step irrelevant at the ray tiers); that lane
-# REMOVES `photon-target` from this row.
+# reflection sources make the cone's step irrelevant at the ray tiers). GREEN, and
+# the `photon-target` label is off (lane D6B-GATE-SHAPE, 2026-09-27: 3/3 green on the
+# rig, 0.0000 and 0.0011 against the 0.05 bar — the audit's §8 found it passing at
+# 94d147c28): an ordinary gating row now.
 add_test(NAME gi.volume_edge_spec_target COMMAND test_gi_volume_edge --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.volume_edge_spec_target PROPERTIES TIMEOUT 180
-                     LABELS "engine;photon-target")
+                     LABELS "engine")
 
 # gi.mobility — MOVERS LEAVE THE STILL-WORLD LAYER (REALTIME_REFLECTIONS_SPEC
 # §3.3, lane R2). A movable object is drawn by the per-frame layers (view,
@@ -412,7 +414,7 @@ target_link_libraries(test_gi_mobility PRIVATE JahshakaEngine)
 add_dependencies(test_gi_mobility JahshakaEngineMedia)
 add_test(NAME gi.mobility COMMAND test_gi_mobility
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.mobility PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.mobility PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.ddgi_edge — THE IRRADIANCE FIELD'S EDGE (ENGINE_CACHE_POLICY_SPEC P9): a
 # sealed box whose GI bounds top sits inside its ceiling slab, measured from
@@ -432,7 +434,7 @@ target_link_libraries(test_gi_ddgi_edge PRIVATE JahshakaEngine)
 add_dependencies(test_gi_ddgi_edge JahshakaEngineMedia)
 add_test(NAME gi.ddgi_edge COMMAND test_gi_ddgi_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.ddgi_edge PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.ddgi_edge PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # THE MATERIAL GATE (owner 2026-09-13 Q1, ogre-patch 0028): a material with
 # no specular response samples no reflection probe, and the ones beside it still
@@ -451,7 +453,7 @@ target_link_libraries(test_gi_probe_gate PRIVATE JahshakaEngine)
 add_dependencies(test_gi_probe_gate JahshakaEngineMedia)
 add_test(NAME gi.probe_gate COMMAND test_gi_probe_gate
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.probe_gate PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(gi.probe_gate PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # VISIBILITY FROM THE PROBE (owner 2026-09-13 Q2, ogre-patch 0029): a surface
 # occluded from a probe takes nothing from it. Synthetic room, never the
@@ -470,7 +472,7 @@ target_link_libraries(test_gi_probe_visibility PRIVATE JahshakaEngine)
 add_dependencies(test_gi_probe_visibility JahshakaEngineMedia)
 add_test(NAME gi.probe_visibility COMMAND test_gi_probe_visibility
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.probe_visibility PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(gi.probe_visibility PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # NO ENCLOSURE MEANS NO PROBE GRID (owner 2026-09-13 Q3): an open scene builds
 # no probes and reflects the sky; adding walls builds them.
@@ -488,7 +490,7 @@ target_link_libraries(test_gi_probe_open PRIVATE JahshakaEngine)
 add_dependencies(test_gi_probe_open JahshakaEngineMedia)
 add_test(NAME gi.probe_open COMMAND test_gi_probe_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.probe_open PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(gi.probe_open PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.pcc_second_scene — a second scene's mirror reads its OWN sky cubemap while
 # another scene holds a probe grid, is torn down, is destroyed (lane
@@ -507,7 +509,7 @@ target_link_libraries(test_gi_pcc_second_scene PRIVATE JahshakaEngine)
 add_dependencies(test_gi_pcc_second_scene JahshakaEngineMedia)
 add_test(NAME gi.pcc_second_scene COMMAND test_gi_pcc_second_scene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.pcc_second_scene PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(gi.pcc_second_scene PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.scene_switch — WHAT THE SHADER READS IS THE SCENE BEING DRAWN
 # (PHOTON-SCENE-SWITCH-1): two rooms, each with its own voxels, probe grid, field,
@@ -528,7 +530,7 @@ target_link_libraries(test_gi_scene_switch PRIVATE JahshakaEngine)
 add_dependencies(test_gi_scene_switch JahshakaEngineMedia)
 add_test(NAME gi.scene_switch COMMAND test_gi_scene_switch
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.scene_switch PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.scene_switch PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # PHOTON'S CAMERA-CENTRED VOXEL CASCADES (SPECS/PHOTON_SPEC.md P0): the chain
 # builds and binds, a still camera re-voxelises nothing, a scroll re-centres one
@@ -554,7 +556,7 @@ add_test(NAME gi.cascades COMMAND test_gi_cascades
 # the rest of the gate beside it (the old VRAM reason was measured false,
 # DEVPROCESS-1). A wide timeout: the teleport case renders and reads back a frame
 # at a time.
-set_tests_properties(gi.cascades PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.cascades PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # ATOM STAGE 1'S CONSUMER: WHICH MESH LOD A CASCADE VOXELISES (NANITE_SPEC §7
 # stage 1's hand-off, ogre-patch 0064). A cascade hands the voxeliser the
@@ -577,7 +579,7 @@ target_link_libraries(test_gi_cascade_lod PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cascade_lod JahshakaEngineMedia)
 add_test(NAME gi.cascade_lod COMMAND test_gi_cascade_lod
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cascade_lod PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.cascade_lod PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.voxel_resident — ATOM P4: the voxeliser reads the RASTER's own vertex and
 # index buffers through their device addresses, so the vertex format and the index
@@ -597,7 +599,7 @@ target_link_libraries(test_gi_voxel_resident PRIVATE JahshakaEngine)
 add_dependencies(test_gi_voxel_resident JahshakaEngineMedia)
 add_test(NAME gi.voxel_resident COMMAND test_gi_voxel_resident
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.voxel_resident PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.voxel_resident PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.material_swap — MATERIAL-SWAP-GI-1: Scene::setNodeMaterial swaps the datablock
 # on the live Item and invalidates the item's OWN box, so under the chain only
@@ -617,7 +619,7 @@ target_link_libraries(test_gi_material_swap PRIVATE JahshakaEngine)
 add_dependencies(test_gi_material_swap JahshakaEngineMedia)
 add_test(NAME gi.material_swap COMMAND test_gi_material_swap
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.material_swap PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.material_swap PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # AN EDIT UNDER THE CHAIN COSTS AT MOST ONE CASCADE PER FRAME (PHOTON_SPEC §7 G1,
 # and E2's own suite row). gi.cascades is about the camera SCROLL; this is about
@@ -638,7 +640,7 @@ target_link_libraries(test_gi_cascade_dirty PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cascade_dirty JahshakaEngineMedia)
 add_test(NAME gi.cascade_dirty COMMAND test_gi_cascade_dirty
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.cascade_dirty PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.drag_cadence — WHAT A DRAG COSTS THE CACHES (DRAG-1, render audit REFLECT
 # F2/F3): a dragged STILL item spends NO probe captures while it is moving (the
@@ -661,7 +663,7 @@ target_link_libraries(test_gi_drag_cadence PRIVATE JahshakaEngine)
 add_dependencies(test_gi_drag_cadence JahshakaEngineMedia)
 add_test(NAME gi.drag_cadence COMMAND test_gi_drag_cadence
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.drag_cadence PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.drag_cadence PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.drag_mover — A DRAGGED STILL ON THE MOVER CHANNEL (MOVER-1, the render
 # audit's PHOTON F3 second half). The rule is OFF by default and this suite
@@ -685,7 +687,7 @@ target_link_libraries(test_gi_drag_mover PRIVATE JahshakaEngine)
 add_dependencies(test_gi_drag_mover JahshakaEngineMedia)
 add_test(NAME gi.drag_mover COMMAND test_gi_drag_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.drag_mover PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.drag_mover PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE CHAIN'S BOUNCE IS A FUNCTION OF THE LIGHT, NOT OF ITS OWN HISTORY
 # (ogre-patch 0060). The pin binds the EXTRA CASCADES' light voxels once and
@@ -708,7 +710,7 @@ add_dependencies(test_gi_cascade_bounce_bindings JahshakaEngineMedia)
 add_test(NAME gi.cascade_bounce_bindings COMMAND test_gi_cascade_bounce_bindings
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_bounce_bindings PROPERTIES
-    TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # ONE AT-REST SWEEP IS THE CHAIN'S FIXED POINT, BYTE FOR BYTE (PHOTON-WRITER-1
 # SWEEPS-3; derived in EnginePrivate.h beside kAtRestSweeps): from a perturbed
@@ -732,7 +734,7 @@ add_dependencies(test_gi_chain_converge JahshakaEngineMedia)
 add_test(NAME gi.chain_converge COMMAND test_gi_chain_converge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_converge PROPERTIES
-    TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE SAME SCENE VOXELISES TO THE SAME PICTURE (ogre-patches 0061 and 0062): a
 # cascade SCROLLED to a place renders what a cascade BUILT at it renders, two
@@ -753,7 +755,7 @@ add_dependencies(test_gi_cascade_determinism JahshakaEngineMedia)
 add_test(NAME gi.cascade_determinism COMMAND test_gi_cascade_determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.cascade_determinism PROPERTIES
-    TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE IRRADIANCE FIELD RIDES CASCADE 0 (SPECS/PHOTON_SPEC.md E1): under a chain
 # the field is built over the INNERMOST cascade's box and follows it as the
@@ -777,7 +779,7 @@ add_test(NAME gi.field_follows COMMAND test_gi_field_follows
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # In the gi_chain family like every cascade suite, and a wide timeout: the walk
 # renders a frame at a time.
-set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.field_follows.timing — the walk's frame-time bars (no frame over the tier's 16.7 ms),
 # nightly (lane D6B-GATE-SHAPE; audit §5 F17 FIX-TIME): the same binary with
 # JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
@@ -829,7 +831,7 @@ target_link_libraries(test_gi_field_thin_wall PRIVATE JahshakaEngine)
 add_dependencies(test_gi_field_thin_wall JahshakaEngineMedia)
 add_test(NAME gi.field_thin_wall COMMAND test_gi_field_thin_wall wall
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 240 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.field_alias — ONE RAY THAT DOES NOT ALIAS (PHOTON-FIELD-ROTATE-1 part 2): the
 # same fixture and binary; the noise of one integration at 1 and 2 rays (rotated)
 # and at 1 ray static, the target sample count derived from it, convergence at
@@ -859,7 +861,7 @@ add_test(NAME gi.leak_room COMMAND test_gi_leak_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # In the gi_chain family, and a wide timeout: eight full GI builds (four rooms x
 # two arms), each with a shadowed room, a chain and a 14 MB probe atlas.
-set_tests_properties(gi.leak_room PROPERTIES TIMEOUT 600 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.leak_room PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # A SHADOW-ATLAS REBUILD IS NOT A GI REBUILD (PHOTON_SPEC gate G2, audit C
 # finding 2): the atlas change drops only the WORKSPACES that instantiate the
@@ -883,7 +885,7 @@ add_test(NAME gi.atlas_keeps_voxels COMMAND test_gi_atlas_voxels
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # In the gi_chain family like gi.cascades: it holds the cascade chain AND a
 # shadowed probe grid at once.
-set_tests_properties(gi.atlas_keeps_voxels PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.atlas_keeps_voxels PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # THE CASCADE SUITE UNDER ASan (PHOTON_SPEC G1, round-2 F1). The per-cascade
 # dirty path replaces a live cascade's VOXELISER under a kept VctLighting, and
@@ -912,7 +914,7 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
-    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 600 LABELS "engine"
+    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 180 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
@@ -974,7 +976,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
     add_test(NAME gi.rayquery_asan COMMAND test_gi_rayquery_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 300 LABELS "engine"
+    set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 120 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()
@@ -1004,7 +1006,7 @@ add_test(NAME gi.reenable COMMAND test_gi_reenable
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # In the gi_chain family like gi.cascades, and a wide timeout: this suite builds
 # the arm six times over.
-set_tests_properties(gi.reenable PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.reenable PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.chain_face — PHOTON-E3 item 0 (ii): the chain-to-world face and the faces
 # inside the chain, under a REAL sky (audit B8). Its own binary like every GI
@@ -1023,7 +1025,7 @@ target_link_libraries(test_gi_chain_face PRIVATE JahshakaEngine)
 add_dependencies(test_gi_chain_face JahshakaEngineMedia)
 add_test(NAME gi.chain_face COMMAND test_gi_chain_face
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.chain_face_target — THE SAME BINARY, THE CORRECT BAR (PHOTON phase A, A1
 # §0; lane FENCE-1). Every face ratio = 1.0 +- 0.05 under a real sky AND under a
@@ -1093,7 +1095,7 @@ target_link_libraries(test_gi_boot_textures PRIVATE JahshakaEngine)
 add_dependencies(test_gi_boot_textures JahshakaEngineMedia)
 add_test(NAME gi.boot_textures COMMAND test_gi_boot_textures
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.boot_textures PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.stream_edit — AN EDIT THAT ARRIVES WHILE THE ARM IS STILL BEING BUILT
 # (SPECS/OPEN_COVER_SPEC.md §2 A; lane OPEN-COVER-2a's fix round item 1).
@@ -1122,7 +1124,7 @@ target_link_libraries(test_gi_stream_edit PRIVATE JahshakaEngine)
 add_dependencies(test_gi_stream_edit JahshakaEngineMedia)
 add_test(NAME gi.stream_edit COMMAND test_gi_stream_edit
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.stream_edit PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # SURFACE-CACHE phase 2 (SURFACE-CACHE-1b) — the capture Component's gates.
 # SEVEN ctest names (gi.card_lighting + _indirect: PHOTON-CARDS-1's lit card; gi.cone_integrator_parity, gi.card_read_parity: PHOTON-CARDS-2) out of ONE binary, selected by argv: five different scenes
@@ -1145,7 +1147,7 @@ target_link_libraries(test_gi_cards_mover PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cards_mover JahshakaEngineMedia)
 add_test(NAME gi.cards_mover_shadow COMMAND test_gi_cards_mover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cards_mover_shadow PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.cards_mover_shadow PROPERTIES TIMEOUT 120 LABELS "engine")
 
 add_executable(test_gi_cards test_gi_cards.cpp)
 set_target_properties(test_gi_cards PROPERTIES
@@ -1161,44 +1163,44 @@ target_link_libraries(test_gi_cards PRIVATE JahshakaEngine)
 add_dependencies(test_gi_cards JahshakaEngineMedia)
 add_test(NAME gi.card_capture COMMAND test_gi_cards capture
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_capture PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_capture PROPERTIES TIMEOUT 120 LABELS "engine")
 add_test(NAME gi.card_shadow COMMAND test_gi_cards shadow
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.card_shadow PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 add_test(NAME gi.card_budget COMMAND test_gi_cards budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_budget PROPERTIES TIMEOUT 120 LABELS "engine")
 add_test(NAME gi.card_lighting COMMAND test_gi_cards lighting
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_lighting PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_lighting PROPERTIES TIMEOUT 120 LABELS "engine")
 add_test(NAME gi.card_lighting_indirect COMMAND test_gi_cards lighting_indirect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_lighting_indirect PROPERTIES TIMEOUT 120 LABELS "engine")
 # CLOUDS-2D-2: the card relight's direct sun crosses the 2D cloud sheet by the
 # pixel's own factor (half at shadow 0.5 under an opaque deck, none at 1).
 add_test(NAME gi.card_clouds COMMAND test_gi_cards clouds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_clouds PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_clouds PROPERTIES TIMEOUT 120 LABELS "engine")
 # gi.card_blend (PHOTON-GATHER-1d fix round): a Blend material on a card subject renders, holds no card.
 add_test(NAME gi.card_blend COMMAND test_gi_cards blend
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_blend PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_blend PROPERTIES TIMEOUT 120 LABELS "engine")
 # PHOTON-CARDS-5: a card read from a direction is the pixel seen from it — the
 # ray job's card read vs the float raster, head-on and grazing, per term (sun,
 # lamp x3, spot x2, ambient), GI off and on (Medium, High at the Epic trace).
 add_test(NAME gi.card_view COMMAND test_gi_cards view
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_view PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_view PROPERTIES TIMEOUT 120 LABELS "engine")
 # ...and the audit's F3: a capture batch past the relight budget is relit in its
 # own frame (the read never meets the capture's alpha = the world -Z direction).
 add_test(NAME gi.card_view_batch COMMAND test_gi_cards view_batch
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_view_batch PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_view_batch PROPERTIES TIMEOUT 120 LABELS "engine")
 # PHOTON-CARDS-2 part A: the pixel's diffuse cones and the card job's are ONE
 # text (JahVoxelCones) — their answers at a point, 1 % apart at most.
 add_test(NAME gi.cone_integrator_parity COMMAND test_gi_cards cone_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.cone_integrator_parity PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.cone_integrator_parity PROPERTIES TIMEOUT 120 LABELS "engine")
 # ...THE OFF-AXIS WALL, A TARGET (HDR-READBACK-1, 2026-09-24): read in float the
 # wall turned 30 degrees shows the card 1.64 % / 2.06 % below the pixel at two of
 # its six points (two R11G11B10F steps, and the card below the pixel at every
@@ -1214,7 +1216,7 @@ set_tests_properties(gi.cone_integrator_parity_offaxis PROPERTIES TIMEOUT 300
 # (jah_rq_card.glsl); the GLSL pick = SurfaceCache::readAt's for 1,000 hits.
 add_test(NAME gi.card_read_parity COMMAND test_gi_cards read_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.card_read_parity PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.card_read_parity PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # SURFACE-CACHE-1b's MEASUREMENT ARM — a TOOL, not a suite (no add_test): the
 # numbers in the lane's report are taken by code that is read, and re-taking
@@ -1285,7 +1287,7 @@ target_link_libraries(test_gi_far_blas PRIVATE JahshakaEngine)
 add_dependencies(test_gi_far_blas JahshakaEngineMedia)
 add_test(NAME gi.far_blas COMMAND test_gi_far_blas
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.far_blas PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.far_blas PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.gather — THE SCREEN-PROBE GATHER, phase 1
 # (SPECS/SCREEN_PROBE_GATHER_SPEC.md section 7 phase 1).
@@ -1306,7 +1308,7 @@ target_link_libraries(test_gi_gather PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather JahshakaEngineMedia)
 add_test(NAME gi.gather COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.gather PROPERTIES TIMEOUT 900 LABELS "engine")
+set_tests_properties(gi.gather PROPERTIES TIMEOUT 180 LABELS "engine")
 
 # THE COST, at the resolution the spec's budget table is stated at.
 #
@@ -1328,7 +1330,7 @@ set_tests_properties(gi.gather_cost PROPERTIES
 add_test(NAME gi.gather_norays COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_norays PROPERTIES
-                     TIMEOUT 300 LABELS "engine"
+                     TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # ---------------------------------------------------------------------------
@@ -1358,15 +1360,15 @@ target_link_libraries(test_gi_gather_reference PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_reference JahshakaEngineMedia)
 add_test(NAME gi.gather_reference COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.gather_reference PROPERTIES TIMEOUT 900 LABELS "engine")
-# ...and the brief's 1.00 +- 0.05 at every point against the COMPLETE closed form —
-# a TARGET row (photon-target: prints, does not gate). The residual that survives
-# the complete form (-5 % past 3.6 m) is the hits' voxel read, named by exclusion
-# in the suite; GA-1e's card read is predicted to close it.
+set_tests_properties(gi.gather_reference PROPERTIES TIMEOUT 180 LABELS "engine")
+# ...and the brief's 1.00 +- 0.05 at every point against the COMPLETE closed form.
+# It was a TARGET row until the card read at the hit closed the residual; GREEN, and
+# the `photon-target` label is off (lane D6B-GATE-SHAPE, 2026-09-27: 3/3 green on the
+# rig, worst 0.969 at x = 4.60 m): an ordinary gating row now.
 add_test(NAME gi.gather_reference_target COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_reference_target PROPERTIES
-                     TIMEOUT 900 LABELS "engine;photon-target"
+                     TIMEOUT 900 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_REFERENCE_TARGET=1")
 
 # ...and the TRACE's own bar, in R5's form: a probe a metre from a lit red wall
@@ -1375,7 +1377,7 @@ set_tests_properties(gi.gather_reference_target PROPERTIES
 add_test(NAME gi.gather_trace COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_trace PROPERTIES
-                     TIMEOUT 600 LABELS "engine"
+                     TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAH_GATHER_TRACE=1")
 
 # gi.voxel_coverage — THE STORE HOLDS A SURFACE'S PROJECTED AREA PER AXIS
@@ -1455,7 +1457,7 @@ add_dependencies(test_gi_voxel_emissive JahshakaEngineMedia)
 add_test(NAME gi.voxel_emissive COMMAND test_gi_voxel_emissive
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_emissive PROPERTIES
-    TIMEOUT 600 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.voxel_feed — THE VOXELISER IS FED ON THE DEVICE (ATOM P4b, SPECS/atom/
 # A5b_VOXELISER_FEED_AND_FAR_BLAS_DESIGN.md §2-§3). The gather jobs' own counts
@@ -1480,7 +1482,7 @@ add_dependencies(test_gi_voxel_feed JahshakaEngineMedia)
 add_test(NAME gi.voxel_feed COMMAND test_gi_voxel_feed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_feed PROPERTIES
-    TIMEOUT 600 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+    TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # gi.env_cone — THE ONE ENVIRONMENT'S CONE LOOKUP, MEASURED (PHOTON-ENV-1).
 # jahEnvCone reads the GGX-prefiltered sky chain at the mip whose lobe matches a
@@ -1520,7 +1522,7 @@ target_link_libraries(test_gi_hit_voxel PRIVATE JahshakaEngine)
 add_dependencies(test_gi_hit_voxel JahshakaEngineMedia)
 add_test(NAME gi.hit_voxel COMMAND test_gi_hit_voxel
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.hit_voxel PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.hit_voxel PROPERTIES TIMEOUT 120 LABELS "engine")
 # VOXEL-LEAK-TRACE (PHOTON-VOXEL-5 item (iii)) — a TOOL, not a suite: gi.gather's leak room,
 # the pixel's four cones from the -Z wall's inner face by the engine's own reader, per cone
 # colour / alpha / cascade, lamp on and off, and the store dumped (JAH_VOXEL_DUMP).
@@ -1572,7 +1574,7 @@ target_link_libraries(test_gi_env_one PRIVATE JahshakaEngine)
 add_dependencies(test_gi_env_one JahshakaEngineMedia)
 add_test(NAME gi.env_one COMMAND test_gi_env_one
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.env_one PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.env_one PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
 # ---------------------------------------------------------------------------
 # THE GATHER'S FOUR CORRECTNESS FINDINGS (PHOTON-GATHER-1b item 1; C2 design
@@ -1649,15 +1651,14 @@ foreach(_arm stable motion)
     set_tests_properties(gi.gather_${_arm} PROPERTIES TIMEOUT 600 LABELS "engine")
 endforeach()
 
-# ...and the plane fixture's COMPLETE closed form at the brief's 5 % — a TARGET
-# row (label photon-target: it runs in every scoped selection, prints its value
-# and does not decide a gate). What survives the complete form (-11 % at two
-# strides) is the hits' voxel read, named by exclusion in the suite; the card
-# read at the hit (GA-1e) is predicted to close it.
+# ...and the plane fixture's COMPLETE closed form at the brief's 5 %. It was a TARGET
+# row until the card read at the hit (GA-1e) closed the voxel-read residual; GREEN,
+# and the `photon-target` label is off (lane D6B-GATE-SHAPE, 2026-09-27: 3/3 green on
+# the rig at 1.000): an ordinary gating row now.
 add_test(NAME gi.gather_plane_target COMMAND test_gi_gather_phase2 plane --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_plane_target PROPERTIES TIMEOUT 600
-                     LABELS "engine;photon-target")
+                     LABELS "engine")
 
 # gi.settle_partial — THE OWED SETTLE INJECTS ONLY THE STALE CASCADES
 # (PHOTON-GATHER-1b item 6; WRITER-1's debt, audit F5): a cascade re-voxelised in
@@ -1679,7 +1680,7 @@ target_link_libraries(test_gi_settle_partial PRIVATE JahshakaEngine)
 add_dependencies(test_gi_settle_partial JahshakaEngineMedia)
 add_test(NAME gi.settle_partial COMMAND test_gi_settle_partial
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.settle_partial PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.settle_partial PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.sun_contact — HARD SUN CONTACT SHADOWS (PHOTON P5, RY-R3; PHOTON-RAYS-1)
 #
@@ -1703,11 +1704,11 @@ target_link_libraries(test_gi_sun_contact PRIVATE JahshakaEngine)
 add_dependencies(test_gi_sun_contact JahshakaEngineMedia)
 add_test(NAME gi.sun_contact COMMAND test_gi_sun_contact
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sun_contact PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.sun_contact PROPERTIES TIMEOUT 120 LABELS "engine")
 add_test(NAME gi.sun_contact_norays COMMAND test_gi_sun_contact
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sun_contact_norays PROPERTIES
-                     TIMEOUT 300 LABELS "engine"
+                     TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 # ...and the CURVED casters as the process's SECOND scene, drawn beside the
 # board's (PHOTON-SCENE-SWITCH-1 — they used to need a process of their own, and
@@ -1717,7 +1718,7 @@ set_tests_properties(gi.sun_contact_norays PROPERTIES
 # and half resolution, and a glass pane over the contact keeps the map's answer.
 add_test(NAME gi.sun_contact_both COMMAND test_gi_sun_contact --both
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sun_contact_both PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.sun_contact_both PROPERTIES TIMEOUT 120 LABELS "engine")
 # ...and THE GAP THE MAP LEAVES BY CONSTRUCTION (PHOTON-SCENE-SWITCH-2): a 1 m
 # board 2 cm thick on 5 cm legs under a 10-degree sun with a 1024 px atlas — the
 # receiver's normal-offset lift (>= 0.136 m) exceeds the board's 0.07 m top, so the
@@ -1727,7 +1728,7 @@ set_tests_properties(gi.sun_contact_both PROPERTIES TIMEOUT 300 LABELS "engine")
 # gi.sun_contact_legs_norays).
 add_test(NAME gi.sun_contact_legs COMMAND test_gi_sun_contact --legs
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sun_contact_legs PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.sun_contact_legs PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # gi.hit_shade — A RAY HIT IS A PIXEL OF A SECOND VISIBILITY BUFFER
 # (PHOTON-HIT-SHADE-1; SPECS/atom/D2_HIT_SHADING_DESIGN.md)
@@ -1755,7 +1756,7 @@ target_link_libraries(test_gi_hit_shade PRIVATE JahshakaEngine)
 add_dependencies(test_gi_hit_shade JahshakaEngineMedia)
 add_test(NAME gi.hit_shade COMMAND test_gi_hit_shade
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 180 LABELS "engine")
 
 # gi.skin_rays — THE GPU SKIN CACHE AND THE SKINNED BLAS (PHOTON P5, RY-R4;
 # PHOTON-SKIN-1)
@@ -1782,7 +1783,7 @@ target_link_libraries(test_gi_skin_rays PRIVATE JahshakaEngine)
 add_dependencies(test_gi_skin_rays JahshakaEngineMedia)
 add_test(NAME gi.skin_rays COMMAND test_gi_skin_rays
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.skin_rays PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.skin_rays PROPERTIES TIMEOUT 120 LABELS "engine")
 # ...and THE MIRROR, its own process: the rigged column bent by its clip, a
 # static control and a static MOVER, each reflected in a perfect mirror against
 # its raster through the reflected camera. Asserted: no T-pose ghost, the static
@@ -1791,11 +1792,11 @@ set_tests_properties(gi.skin_rays PROPERTIES TIMEOUT 300 LABELS "engine")
 # gi.hit_shade's arm (c)).
 add_test(NAME gi.skin_rays_mirror COMMAND test_gi_skin_rays --mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.skin_rays_mirror PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(gi.skin_rays_mirror PROPERTIES TIMEOUT 120 LABELS "engine")
 add_test(NAME gi.skin_rays_norays COMMAND test_gi_skin_rays
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.skin_rays_norays PROPERTIES
-                     TIMEOUT 300 LABELS "engine"
+                     TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # ---------------------------------------------------------------------------

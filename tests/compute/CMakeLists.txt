@@ -68,7 +68,7 @@ set_source_files_properties(test_lod_rule_parity.cpp PROPERTIES COMPILE_DEFINITI
 add_dependencies(test_lod_rule_parity JahshakaEngineMedia)
 add_test(NAME engine.lod_rule_parity COMMAND test_lod_rule_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(engine.lod_rule_parity PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # chain.hzb — the closest-depth pyramid: shape, the reduction texel by texel,
 # and its GPU cost at 1920x1080 through patch 0027's timestamps.
@@ -86,7 +86,7 @@ target_link_libraries(test_hzb PRIVATE JahshakaEngine)
 add_dependencies(test_hzb JahshakaEngineMedia)
 add_test(NAME chain.hzb COMMAND test_hzb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(chain.hzb PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(chain.hzb PROPERTIES TIMEOUT 120 LABELS "engine")
 # chain.hzb.timing — its millisecond bar(s), nightly (lane D6B-GATE-SHAPE; audit §5 F17
 # FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
 jah_gpu_exclusive_test(NAME chain.hzb.timing RUN_TIMEOUT 180 COMMAND test_hzb
@@ -113,4 +113,4 @@ target_link_libraries(test_voxel_reader_parity PRIVATE JahshakaEngine)
 add_dependencies(test_voxel_reader_parity JahshakaEngineMedia)
 add_test(NAME engine.voxel_reader_parity COMMAND test_voxel_reader_parity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(engine.voxel_reader_parity PROPERTIES TIMEOUT 180 LABELS "engine")
+set_tests_properties(engine.voxel_reader_parity PROPERTIES TIMEOUT 120 LABELS "engine")

@@ -17,7 +17,7 @@ target_link_libraries(test_frame_pacing PRIVATE Qt6::Core)
 add_test(NAME perf.pacing COMMAND test_frame_pacing
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(perf.pacing PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "perf")
 
 # perf.offscreen_isolation — a thumbnail/screenshot readback must not redraw
 # (and present) the editor's on-screen view (fps audit F5). Engine up, its own
@@ -31,7 +31,7 @@ add_test(NAME perf.offscreen_isolation
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(perf.offscreen_isolation PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
+    LABELS "perf"
     TIMEOUT 240)
 
 # perf.epic_steady_state — the GROWTH-ONLY steady-state gate (fps audit F11).
@@ -60,14 +60,9 @@ configure_file(epic_steady_state.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/epic_steady_state.js @ONLY)
 set(_ess_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-epic_steady_state)
 
-# Reuses the samples suite's wipe script rather than copying it: "a scratch HOME
-# that is virgin every run" is one idea and deserves one implementation.
-add_test(NAME perf.freshhome.epic_steady_state
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_ess_home}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(perf.freshhome.epic_steady_state PROPERTIES
-    FIXTURES_SETUP perf_home_epic_steady_state
-    LABELS "perf")
+# "A scratch HOME that is virgin every run" is one idea and has one implementation
+# (tests/support/fresh_home.sh through jah_fresh_home_fixture).
+jah_fresh_home_fixture(perf.freshhome.epic_steady_state perf_home_epic_steady_state "${_ess_home}" LABELS "perf")
 
 jah_gpu_exclusive_test(NAME perf.epic_steady_state RUN_TIMEOUT 300
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -109,12 +104,7 @@ configure_file(drag_mirror_room.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/drag_mirror_room.js @ONLY)
 set(_drag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drag_mirror_room)
 
-add_test(NAME perf.freshhome.drag_mirror_room
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_drag_home}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(perf.freshhome.drag_mirror_room PROPERTIES
-    FIXTURES_SETUP perf_home_drag_mirror_room
-    LABELS "perf")
+jah_fresh_home_fixture(perf.freshhome.drag_mirror_room perf_home_drag_mirror_room "${_drag_home}" LABELS "perf")
 
 jah_gpu_exclusive_test(NAME perf.drag_mirror_room RUN_TIMEOUT 600
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -152,12 +142,7 @@ set_tests_properties(perf.drag_mirror_room PROPERTIES
 configure_file(hide_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/hide_soak.js @ONLY)
 set(_hide_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-hide_soak)
 
-add_test(NAME perf.freshhome.hide_soak
-         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_hide_home}
-                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
-set_tests_properties(perf.freshhome.hide_soak PROPERTIES
-    FIXTURES_SETUP perf_home_hide_soak
-    LABELS "perf")
+jah_fresh_home_fixture(perf.freshhome.hide_soak perf_home_hide_soak "${_hide_home}" LABELS "perf")
 
 add_test(NAME perf.hide_soak
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
