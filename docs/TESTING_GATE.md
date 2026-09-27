@@ -478,8 +478,11 @@ this section is the contract.
   measured seconds). A crash or a timeout costs its own arm: the driver restarts the process
   and continues from the next arm. The row is red iff an arm is not `PASS`, and every red in
   a gate report is named BY ARM, never "the pool".
-- Every arm starts from the boot's baseline: a fresh JavaScript realm, no project open, and
-  (engine-up) the editor page re-begun on a new default scene. The arms share the pool's home
+- Every arm starts in a fresh JavaScript realm; after every arm, green or red, the pool's
+  baseline is restored (its own `BASELINE` script if it has one, then the window's size, the
+  open project closed, the deferred deletes delivered), so a later arm starts with NO project
+  open and creates or opens what it needs. A death, hang or lost baseline after an arm is
+  that arm's `CRASH`. The arms share the pool's home
   (fresh every run), so an arm never asserts on what another left in the library.
 - The solo retry of an arm is the flake protocol's unit (§4):
   `JAH_POOL_ARMS=<pool>.<arm> DISPLAY=:NN ctest -R '^pool\.<pool>$'`, three times. Red in its
@@ -532,8 +535,9 @@ gate live); "pooled" is the pool row in one run of every pool at -j4 on a quiet 
 **ORDER IS DECLARED, AND RARELY MATTERS.** Arms run in declaration order. Three arms carry a
 process-level claim and are pinned: `FIRST` for `player.player_verbs` and
 `vr_session.player_session` (the Player page was never shown in the process) and `doc.memory`
-(its burst reads the engine node pools' slots, which carry the process's history);
-`vr_noruntime.vr_hands` is declared last (the bare-hand bind state reaches a later stick).
-`world_vr` lives in `world_sky`, not `vr_noruntime`: a session override with no session has
-no release. A new arm with a claim like these says so on its `jah_pool_arm` line.
+(its burst reads the engine node pools' slots, which carry the process's history).
+`vr_noruntime` has a BASELINE script (injected hands withdrawn, the gizmo mode back to
+translate) run after every arm, green or red. `world_vr` lives in `world_sky`, not
+`vr_noruntime`: a session override set with no session has no release, and the VR arms read
+the defaults. A new arm with a claim like these says so on its `jah_pool_arm` line.
 

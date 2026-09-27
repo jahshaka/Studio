@@ -397,7 +397,7 @@ int main(int argc, char *argv[])
         return runScriptFile(window, app, cli.scriptPath, cli.headlessScript, cli.liveScript);
 
     if (!cli.poolScripts.isEmpty())
-        return runScriptPool(window, app, cli.poolScripts, cli.poolName, cli.poolArms,
+        return runScriptPool(window, app, cli.poolScripts, cli.poolName, cli.poolArms, cli.poolBaseline,
                              cli.headlessScript, cli.liveScript);
 
     if (cli.mcpServe)

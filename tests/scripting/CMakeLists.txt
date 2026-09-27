@@ -480,6 +480,7 @@ jah_pool_arm(vr_noruntime vr_verbs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_ve
 # makes all of it gateable on a box with no runtime at all; the arithmetic under
 # it is `vr.grab_maths` and the rig half is `vr.input_session`.
 jah_pool_arm(vr_noruntime vr_input_headless ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_input_headless.js 5)
+jah_pool_arm(vr_noruntime vr_hands ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_hands_headless.js 1)
 # BARE HANDS, WITH NO HEADSET AND NO HANDS (VR_INPUT_SPEC §7, phase 4b stage
 # 3) — the same injection route, and the rules only a HAND can exercise: the
 # profile is per hand, a grab follows the PINCH POINT rather than the palm
@@ -517,10 +518,6 @@ jah_pool_arm(vr_noruntime vr_teleport ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr
 # (switchSpace(PLAYER) starts the scene), and the plain player must be exactly
 # what it has always been. The session half is `vr.player_session`.
 jah_pool_arm(vr_noruntime player_vr ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_player_vr.js 1)
-# vr_hands runs LAST in its pool (declared here, after every other vr_noruntime arm): the bare-hand
-# gestures leave the VR interaction's per-hand state (the profile a hand was last bound as, the
-# re-bind rule's memory) in the process, and a later arm's controller stick reads it.
-jah_pool_arm(vr_noruntime vr_hands ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_hands_headless.js 1)
 jah_pool_arm(world_sky sky_ibl_churn ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_ibl_churn.js 20)
 # THE SKY'S RESOURCE NAMES (lane ENGINE-SMALL-C, SKYARRAY-LEAK-1): sixty sky
 # changes must not burn sixty texture NAMES, because a dead name in the sky
@@ -1770,24 +1767,8 @@ jah_add_pool(world_sky LABELS scripting)
 jah_add_pool(world_light LABELS scripting)
 jah_add_pool(player LABELS scripting)
 jah_add_pool(assets_import LABELS scripting)
-jah_add_pool(vr_noruntime LABELS scripting)
+jah_add_pool(vr_noruntime LABELS scripting
+    BASELINE ${CMAKE_CURRENT_SOURCE_DIR}/scripts/pool_baseline_vr_noruntime.js)   # injected hands + gizmo mode, after every arm
 jah_add_pool(avatar_anim LABELS scripting)
 jah_add_pool(atom LABELS scripting)
 
-# pool.runner — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py): the real app,
-# headless, over five fixture arms (a fresh realm and a closed project between arms, a thrown
-# assertion and a numeric completion value as FAIL, the pool going on, JAH_POOL_ARMS's subset
-# and its unknown-arm FAIL), and the driver against a stand-in app for what the real one cannot
-# be asked to do (a SIGSEGV mid-arm, a hang past the budget, a lost baseline — one arm each).
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-runner)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME pool.runner
-         COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} --
-                 ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/support/test_run_pool.py
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${JAH_RUN_POOL}
-                 ${CMAKE_CURRENT_SOURCE_DIR}/pool_selftest
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(pool.runner PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "pool;scripting" TIMEOUT 180)
-jah_no_display(pool.runner)

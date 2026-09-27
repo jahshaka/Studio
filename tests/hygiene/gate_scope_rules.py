@@ -118,10 +118,11 @@ def main(source, build):
     check(code == 0, "a code path exits 0 (%d)%s" % (code, ("\n" + err) if code else ""))
     check("SCOPED tier:" in out and "NOTHING to gate" not in out,
           "a code path selects a scoped tier rather than nothing")
-    # MODULAR-GATE-1: the rule picks the APP rows (vr.verbs_session runs the app); a compiled
+    # MODULAR-GATE-1: the rule picks the APP rows (the vr_session pool runs the app — its
+    # verbs_session arm was the vr.verbs_session row until SUITE-POOL-1); a compiled
     # row runs only when the build graph says its executable contains the file — test_vr_session
     # does not compile vrworld.cpp, so vr.session is not in (it used to be, by directory).
-    check("vr.verbs_session" in out, "the vr app suites are in it (the file's own area rule)")
+    check("pool.vr_session" in out, "the vr app suites are in it (the file's own area rule)")
     check("vr.session " not in out and "vr.session|" not in out.replace("\\", "") and "vr.session)" not in out.replace("\\", ""),
           "...and the compiled vr.session is not: its executable does not contain vrworld.cpp (the graph)")
     check("app.startup_quiet" in out and "api.contract" in out,

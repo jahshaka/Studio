@@ -29,11 +29,14 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
 
 /// --scripts <dir-or-list> [--pool <name>] [--arms <a,b>] [--headless]: THE
 /// POOL RUNNER (lane SUITE-POOL-1; jahshaka/docs/TESTING.md). Every arm runs
-/// in this ONE process, in a fresh JavaScript realm, on the boot's baseline —
-/// before an arm the editor page is re-begun on a new default scene (windowed
-/// runs), after it the pool closes whatever project the arm left open through
-/// the same verb a script would call (`project.close`) and asserts none is. The
-/// protocol, one line each on stdout, flushed:
+/// in this ONE process, in a fresh JavaScript realm. The first arm starts on
+/// the boot; after EVERY arm, green or red, the pool's baseline runs: the
+/// pool's own script (`--pool-baseline`, when it has one), then the runner's —
+/// the window back to the boot's size and out of full screen, whatever project
+/// the arm left open closed through the verb a script would call
+/// (`project.close`, which lands on the desktop page), and the deferred deletes
+/// delivered. So a later arm starts with no project open and opens or creates
+/// what it needs itself. The protocol, one line each on stdout, flushed:
 ///     ARM-BEGIN <pool>.<arm>
 ///     ARM <pool>.<arm> PASS <ms>
 ///     ARM <pool>.<arm> FAIL <ms> <first failure>
@@ -42,7 +45,8 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
 /// A CRASH is an ARM-BEGIN with no ARM line — the driver's verdict, because a
 /// dead process cannot print one. Exit code: the number of failed arms.
 int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
-                  const QString &pool, const QStringList &arms, bool headless, bool live);
+                  const QString &pool, const QStringList &arms, const QString &poolBaseline,
+                  bool headless, bool live);
 
 /// Writes the registry-generated verb reference (docs/SCRIPTING.md is this
 /// output — generated, never hand-edited). Returns the process exit code.

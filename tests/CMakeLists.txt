@@ -371,24 +371,28 @@ endfunction()
 # headless — so a family of N verb suites paid N boots, and app suites were 77 % of the gate.
 # A POOL is ONE ctest row, `pool.<pool>`, whose ONE process runs the family's scripts as named
 # ARMS (`Jahshaka --scripts … --pool <pool>`, src/app/cli/scriptrunner.cpp): every arm starts in
-# a fresh JavaScript realm on the boot's baseline (the project the previous arm left closed
-# through `project.close`, the editor page re-begun on a new default scene) and prints
-# `ARM <pool>.<arm> PASS|FAIL <ms>`; the driver (tests/support/run_pool.py) turns a dead process
-# into `CRASH` for the arm that was running (a hung one into `TIMEOUT`), restarts, and continues
-# from the next arm. The row is red iff an arm is; its last lines name every arm's verdict;
+# a fresh JavaScript realm; after every arm, green or red, the pool's baseline is restored (its
+# BASELINE script, then the window's size, the project closed through `project.close`, the
+# deferred deletes), so a later arm starts with NO project open and opens or creates what it
+# needs. The driver (tests/support/run_pool.py) prints each arm's final `ARM <pool>.<arm>
+# PASS|FAIL|CRASH|TIMEOUT <ms>` once the baseline behind it held; a dead or hung process is the
+# CRASH/TIMEOUT of the arm that was running — or of the arm just before, when it died in the
+# baseline — and the driver restarts and continues from the next arm. The row is red iff an arm is; its last lines name every arm's verdict;
 # `JAH_POOL_ARMS=<pool>.<arm> ctest -R '^pool\.<pool>$'` is the solo retry of one arm.
 #
 #   jah_pool_arm(<pool> <arm> <script> <seconds> [HEADLESS] [FIRST])
 #       — one arm, declared WHERE ITS SUITE'S COMMENT LIVES (the comment says what it claims).
 #         Arms run in declaration order; FIRST puts the one arm whose claim is about the
 #         PROCESS ("the Player page has never been shown") before every other (one per pool).
-#   jah_add_pool(<pool> [HEADLESS] [LABELS <label…>] [ENV <k=v…>]
+#   jah_add_pool(<pool> [HEADLESS] [BASELINE <script>] [LABELS <label…>] [ENV <k=v…>]
 #                [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
 #       — the row, after its arms (in the family's CMakeLists, so gate-scope's "a file under
 #         tests/<dir>/ selects that dir's rows" keeps holding). LAUNCHER runs the driver inside
 #         a fixture process (tests/vr/run_vr_app.sh --launch: a Monado runtime for the pool's
 #         life); APP_ARGS are latched by every process the pool starts (--vr); PROPS are extra
-#         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE).
+#         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE). BASELINE is a script the app
+#         runs after EVERY arm, green or red (--pool-baseline): what the family's arms change in
+#         the process and cannot put back on a red path.
 #
 # <seconds> is the arm's MEASURED time INSIDE its pool (whole seconds, rounded up — the pool's
 # `ARM … <ms>` lines are the measurement). THE BUDGETS ARE DERIVED, NEVER TYPED: an arm is
@@ -442,7 +446,7 @@ function(jah_pool_arm pool arm script secs)
 endfunction()
 
 function(jah_add_pool pool)
-    cmake_parse_arguments(P "HEADLESS" "" "LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
+    cmake_parse_arguments(P "HEADLESS" "BASELINE" "LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
     get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
     if(NOT _arms)
         message(FATAL_ERROR "jah_add_pool(${pool}): no jah_pool_arm(${pool} …) before it")
@@ -477,6 +481,13 @@ function(jah_add_pool pool)
     endforeach()
     set(_env "HOME=${_home}" "JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka" ${P_ENV})
     list(REMOVE_ITEM _env "")
+    set(_baseline)
+    if(P_BASELINE)
+        if(NOT EXISTS "${P_BASELINE}")
+            message(FATAL_ERROR "jah_add_pool(${pool}): no BASELINE script at ${P_BASELINE}")
+        endif()
+        set(_baseline --baseline ${P_BASELINE})
+    endif()
     set(_appargs)
     if(P_APP_ARGS)
         set(_appargs -- ${P_APP_ARGS})
@@ -485,7 +496,7 @@ function(jah_add_pool pool)
              COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} -- ${P_LAUNCHER}
                      ${Python3_EXECUTABLE} ${JAH_RUN_POOL} --pool ${pool}
                      --app $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${_modeflag}
-                     --boot-budget ${JAH_POOL_BOOT_BUDGET} ${_args} ${_appargs}
+                     --boot-budget ${JAH_POOL_BOOT_BUDGET} ${_baseline} ${_args} ${_appargs}
              WORKING_DIRECTORY ${_home}/run)
     set_tests_properties(pool.${pool} PROPERTIES
         ENVIRONMENT "${_env}"

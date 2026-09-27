@@ -58,26 +58,31 @@ headless (measured 2026-09-27) — so app tests are grouped into POOLS: one ctes
 
 For every arm the pool:
 
-1. begins the arm on the boot's baseline — a fresh JavaScript realm (no global of an earlier
-   arm survives), and in an engine-up pool the editor page re-begun on a new default scene;
+1. starts it in a fresh JavaScript realm (no global of an earlier arm survives). The first arm
+   starts on the boot; every later one starts where the previous arm's baseline left the app —
+   NO PROJECT OPEN, the desktop page up, the boot's window size — so an arm begins by creating
+   or opening what it needs (`project.create(...)`), as every script here already does;
 2. runs the script: it throws on a failed assertion, or ends with a non-zero number;
-3. prints ONE verdict line, `ARM <pool>.<arm> PASS <ms>` or `ARM <pool>.<arm> FAIL <ms> <the
-   first failure>`;
-4. closes whatever project the arm left open through `project.close()` and checks none is
-   open. If one still is, the process ends (`POOL-BASELINE-LOST`) and the driver restarts it
-   for the arms that remain.
+3. restores the baseline after it, green or red: the pool's own baseline script if it has one
+   (`jah_add_pool(... BASELINE <script>)` — `vr_noruntime`'s withdraws injected hands), then
+   the window back to the boot's size and out of full screen, the open project closed through
+   `project.close()`, the deferred deletes delivered. A baseline that cannot be restored ends
+   the process (`POOL-BASELINE-LOST`).
 
-The driver owns what a dying process cannot say: an arm that began and never printed its
-verdict is `CRASH` (the process died) or `TIMEOUT` (it ran past 6x its measured time and was
-killed); either way the driver starts a new process and continues from the NEXT arm, so a
-crash costs one arm, never the pool. The row fails iff an arm is not PASS, and the last lines
-of its output name every arm's verdict:
+The driver prints each arm's ONE verdict line, `ARM <pool>.<arm> PASS|FAIL|CRASH|TIMEOUT <ms>
+[why]`, once the baseline behind it held — that line is what the run log reads. It owns what a
+dying process cannot say: an arm that began and never finished is `CRASH` (the process died)
+or `TIMEOUT` (it ran past 6x its measured time and was killed), and a process that dies,
+hangs or loses its baseline AFTER an arm finished makes THAT arm `CRASH` — never a silent
+restart. Either way the driver starts a new process (`POOL <pool> RESTART <n>`) and continues
+from the NEXT arm, so a crash costs one arm, never the pool. The row fails iff an arm is not
+PASS, and a closing summary repeats every arm's verdict:
 
 ```
-POOL gi_verbs VERDICTS (2 process(es))
-ARM gi_verbs.gi_status PASS 9120
-ARM gi_verbs.gi_bounds CRASH 4410 the process died (signal 11)
-ARM gi_verbs.gi_ddgi PASS 6230
+POOL gi_verbs VERDICTS (2 process(es), 1 restart(s))
+  gi_verbs.gi_status: PASS 9120
+  gi_verbs.gi_bounds: CRASH 4410 the process died in the arm (signal 11)
+  gi_verbs.gi_ddgi: PASS 6230
 POOL gi_verbs: 3 arm(s) — 2 PASS, 1 not PASS, 1 restart(s)
 solo retry: JAH_POOL_ARMS=gi_verbs.gi_bounds ctest -R '^pool\.gi_verbs$'
 ```
@@ -93,8 +98,7 @@ solo retry: JAH_POOL_ARMS=gi_verbs.gi_bounds ctest -R '^pool\.gi_verbs$'
   arm. A name the pool does not have is a `FAIL` of its own ("no such arm"), never a silent
   pass. So a selector runs "arms a and b of pool p, all of pool q" as ONE ctest invocation:
   `JAH_POOL_ARMS=p.a,p.b ctest -R '^pool\.(p|q)$'`;
-- `JAH_POOL_RECORD=<file>` makes the driver APPEND one JSON line per arm
-  (`{"pool","arm","verdict","ms","process","reason"}`) — the run log's per-arm source.
+- the run log (§7) records one line per arm from the driver's `ARM` lines — the one channel.
 
 A pool's arms SHARE its home (fresh every run, the shader cache kept warm), so an arm never
 asserts on what another arm left in the library, and an arm that changes an app-wide setting
@@ -169,6 +173,41 @@ sleeping a number of milliseconds and hoping. A test that measures time warms up
 first seconds of a process are the shader-compile storm), runs under the GPU lock, and its
 millisecond bars run nightly; the per-merge tiers assert counts. The `<ms>` on an ARM line is
 a report for the scheduler, never an assertion.
+
+## 7. The run log and the merge refusal
+
+**Every gate leaves a record.** Whatever runs a gate — `scripts/gate-scope.sh <range> --run`,
+its solo retries (`--solo <suite>`), the joint suites, and the stage, nightly and push tiers
+(`scripts/gate_runlog.py run --tier <tier> -- <ctest …>`) — appends one JSON line per ctest row
+to `~/Developer/testing/runs/<date>-<tier>-<tip>.jsonl`, and ONE MORE PER ARM of every pool it
+ran, read from the pool's `ARM <pool>.<arm> PASS|FAIL|CRASH|TIMEOUT <ms>` lines (an arm that
+began and never ended is its `CRASH`). A record says what ran (row, arm, verdict, seconds, the
+GPU ms or target value it printed), why it was selected, at which tip (the Studio sha, the
+irisgl sha, the fork, and whether either tree was dirty), and on what box state (the load over
+the suite's own window, the -j, the display, the sibling ctests, the GPU clocks). The scripts
+write it; nobody edits it. The field list is `~/Developer/testing/runs/README.md`.
+
+**What it is for.** The timings a selection prints (`gate-scope.py`'s estimate) and
+`scripts/gate-times.txt` come from it (`--record-times`); `gate_runlog.py longest` lists the
+week's longest rows and arms (the next pool split, the next slow arm to re-measure);
+`gate_runlog.py load-reds` lists what went red in a gate and green alone at the same tip, with
+the load each ran under — the contention class by fact, not by memory. A run from an older
+ctest log can be added with `gate_runlog.py import <log> --tier … --tip …` (marked `import`).
+
+**The merge refusal.** `scripts/ci-gate-check.sh <base>..<tip>` re-derives your change's
+selection with the same code your gate ran, and reads the log: every selected row — and, for a
+pool selected in part, every selected ARM — needs a record AT THE TIP whose latest verdict is
+PASS, from a clean tree whose irisgl is the one the tip pins. It exits 0 with a one-line "N
+row(s) green" or 1 naming what is missing or red. So:
+
+- run your gate on the COMMITTED tip (a dirty tree's records do not count, and a later commit
+  is a new tip with no records);
+- a red fixed by a retry is fine — the solo retry's PASS is the latest record, and the red
+  stays beside it for the reviewer (`TESTING_GATE.md` §4);
+- a selection that is the whole tier (a fallback, a fork pin) needs a green record for every
+  tier row: run the tier through `gate_runlog.py run`, or the check refuses.
+
+A hook or a CI job calls the same script; it needs no server, only the log directory.
 
 ## 8. What your change selects, and why
 

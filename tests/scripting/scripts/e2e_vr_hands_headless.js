@@ -377,12 +377,4 @@ assert(vr.interactionMode().grabbing === true,
        "a re-bind of the OTHER hand leaves the gesture alone");
 assert(vr.release() === true, "and it can still be put down");
 
-// PUT BACK WHAT THIS RUN CHANGED IN THE PROCESS (it runs as an arm of the
-// vr_noruntime pool, SUITE-POOL-1): the injected hands stay until they are
-// cleared (vr.inject(hand) with no state), and the gestures above moved the
-// editor's gizmo mode. The next arm starts from what a fresh process has.
-vr.inject("left");
-vr.inject("right");
-editor.setGizmoMode("translate");
-
 console.log("scripting.e2e.vr_hands: PASS");

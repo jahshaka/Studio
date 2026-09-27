@@ -5,27 +5,35 @@ One ctest row = one POOL = one app process that runs N scripts ("arms") in turn
 (`Jahshaka --scripts <list> --pool <name>`, src/app/cli/scriptrunner.cpp). The app
 prints one line per arm; this driver owns what the app cannot:
 
-  * A CRASH. An arm that printed `ARM-BEGIN <pool>.<arm>` and never its `ARM` line
-    died with the process: the driver records `CRASH`, starts a NEW process and
+  * A CRASH. An arm that printed `ARM-BEGIN <pool>.<arm>` and never its result died
+    with the process: `CRASH`. A process that dies, hangs or loses its baseline
+    (`POOL-BASELINE-LOST`) AFTER an arm's result — in the pool's baseline restore or its
+    exit — is that arm's `CRASH` too: a result is final only once the baseline behind it
+    held. Either way the driver starts a NEW process (`POOL <pool> RESTART <n>`) and
     continues from the NEXT arm — one crash costs one arm, never the pool.
-  * A HANG. Every arm has a budget (6x its measured seconds, the row's TIMEOUT law):
-    an arm past it is killed and recorded `TIMEOUT`, and the pool continues.
+  * A HANG. Every arm has a budget (6x its measured seconds, the row's TIMEOUT law),
+    checked on every line and every silent second: an arm past it is killed and
+    recorded `TIMEOUT`; a baseline past the boot budget is its arm's `CRASH`.
   * THE SUBSET. `--arms a,b` here, or `JAH_POOL_ARMS=<pool>.<arm>[,...]` in the
     environment (so `JAH_POOL_ARMS=gi_verbs.gi_status ctest -R '^pool\\.gi_verbs$'`
     is the solo retry of one arm, through the real row). A pool the variable does
     not name runs every arm; `<pool>` alone names the whole pool.
-  * THE VERDICT, PER ARM. The row fails iff an arm is not PASS, and the last lines
-    of the output name every arm's verdict.
+  * THE VERDICT, PER ARM, ON ONE CHANNEL: each arm's final `ARM <pool>.<arm>
+    PASS|FAIL|CRASH|TIMEOUT <ms> [why]` line is printed exactly once, by this driver
+    (the app's own result line is echoed as `arm-result …`, which no reader counts) —
+    the run log (scripts/gate_runlog.py) reads these lines. The row fails iff an arm is
+    not PASS, and a closing summary (`  <pool>.<arm>: <verdict> …`) repeats them for a
+    reader of the output.
 
 Usage:
-  run_pool.py --pool <name> --app <Jahshaka> [--headless] [--arms a,b]
+  run_pool.py --pool <name> --app <Jahshaka> [--headless] [--arms a,b] [--baseline <js>]
               [--boot-budget <s>] --arm <name> <script> <budget-s> [--arm ...]
               [-- <extra app args>]
 
-JAH_POOL_RECORD=<file>: one JSON line per arm is APPENDED there (pool, arm, verdict,
-ms, process, reason) — the hook the gate's run log reads (MODULAR-GATE-1).
+--baseline <js>: the pool's own baseline script, run by the app after EVERY arm, green
+or red (`--pool-baseline`), before the runner's own (the project closed, the window
+size put back, the deferred deletes delivered).
 """
-import json
 import os
 import queue
 import re
@@ -47,7 +55,7 @@ def usage(msg):
 
 def parse(argv):
     opt = {"pool": None, "app": None, "headless": False, "arms": None,
-           "boot": 300.0, "list": [], "extra": []}
+           "boot": 300.0, "list": [], "extra": [], "baseline": None}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -58,6 +66,8 @@ def parse(argv):
             opt["pool"] = argv[i + 1]; i += 2
         elif a == "--app":
             opt["app"] = argv[i + 1]; i += 2
+        elif a == "--baseline":
+            opt["baseline"] = argv[i + 1]; i += 2
         elif a == "--headless":
             opt["headless"] = True; i += 1
         elif a == "--arms":
@@ -118,9 +128,17 @@ def main():
     pool = opt["pool"]
     arms, unknown = selected(opt)
     budget = {n: b for n, _, b in opt["list"]}
-    verdicts = {}   # arm -> (verdict, ms, reason, process#)
+    verdicts = {}   # arm -> (verdict, ms, reason)
+
+    def settle(arm, verdict, ms, why=""):
+        """THE ONE CHANNEL: an arm's verdict is printed exactly once, as an `ARM` line, when
+        it is FINAL — after the pool's baseline held (or failed) behind it. The app's own
+        `ARM` line is held until then (echoed as `arm-result`, which no reader counts)."""
+        verdicts[arm] = (verdict, ms, why)
+        say("ARM %s.%s %s %d%s" % (pool, arm, verdict, ms, (" " + why) if why else ""))
+
     for u in unknown:
-        verdicts[u] = ("FAIL", 0, "no such arm in pool %s" % pool, 0)
+        settle(u, "FAIL", 0, "no such arm in pool %s" % pool)
     order = [n for n, _, _ in arms] + unknown
     remaining = list(arms)
     process = 0
@@ -132,6 +150,8 @@ def main():
         cmd = [opt["app"], "--scripts", spec, "--pool", pool]
         if opt["headless"]:
             cmd.append("--headless")
+        if opt["baseline"]:
+            cmd += ["--pool-baseline", opt["baseline"]]
         cmd += opt["extra"]
         say("pool: %s process %d — %d arm(s): %s" % (pool, process, len(remaining),
                                                      " ".join(n for n, _, _ in remaining)))
@@ -142,79 +162,98 @@ def main():
         t = threading.Thread(target=reader, args=(proc.stdout, q), daemon=True)
         t.start()
 
-        current = None          # the arm that began and has no verdict yet
+        current = None          # the arm that began and has no result yet
         current_t0 = 0.0
+        held = None             # (arm, verdict, ms, why): a result waiting for its baseline
         deadline = started + opt["boot"]
-        killed_for = None
+        killed_for = None       # "arm:<name>", "baseline:<name>" or "boot"
         began_any = False
+        fails_here = 0
+        lost = None
         while True:
+            # THE BUDGET ON EVERY TURN, not only on a silent second: a hung arm that keeps
+            # printing must time out too.
+            if killed_for is None and time.monotonic() > deadline and proc.poll() is None:
+                if current: killed_for = "arm:" + current
+                elif held: killed_for = "baseline:" + held[0]
+                else: killed_for = "boot"
+                say("pool: %s — %s past its budget: killing the process" % (pool, killed_for))
+                proc.kill()
             try:
                 line = q.get(timeout=1.0)
             except queue.Empty:
-                line = ""
-                if time.monotonic() > deadline and proc.poll() is None:
-                    killed_for = current
-                    say("pool: %s — %s past its budget (%.0f s): killing the process" % (
-                        pool, ("arm " + current) if current else "the boot",
-                        budget.get(current, opt["boot"])))
-                    proc.kill()
                 continue
             if line is None:
                 break
+            m = ARM_END.match(line)
+            if m and m.group(1) == pool:
+                say("arm-result " + line[len("ARM "):])
+                held = (m.group(2), m.group(3), int(m.group(4)), m.group(5) or "")
+                if m.group(3) != "PASS": fails_here += 1
+                current = None
+                # between two arms the app restores its baseline: the next ARM-BEGIN (or the
+                # process's end) is due within the boot budget.
+                deadline = time.monotonic() + opt["boot"]
+                continue
+            m = BASELINE_LOST.match(line)
+            if m and m.group(1) == pool:
+                say(line)
+                lost = (m.group(2), m.group(3))
+                continue
             say(line)
             m = ARM_BEGIN.match(line)
             if m and m.group(1) == pool:
+                if held:            # the previous arm's baseline held: its result is final
+                    settle(*held); held = None
                 current = m.group(2)
                 began_any = True
                 current_t0 = time.monotonic()
                 deadline = current_t0 + budget.get(current, opt["boot"])
                 continue
-            m = ARM_END.match(line)
-            if m and m.group(1) == pool:
-                verdicts[m.group(2)] = (m.group(3), int(m.group(4)), m.group(5) or "", process)
-                current = None
-                # between two arms the app re-begins its baseline: the next
-                # ARM-BEGIN is due within the boot budget.
-                deadline = time.monotonic() + opt["boot"]
-                continue
         rc = proc.wait()
         t.join(timeout=5)
+        how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
 
-        if current is not None and current not in verdicts:
+        if current is not None:
             ms = int((time.monotonic() - current_t0) * 1000)
-            if killed_for == current:
-                verdicts[current] = ("TIMEOUT", ms, "past its %.0f s budget" % budget[current], process)
+            if killed_for == "arm:" + current:
+                settle(current, "TIMEOUT", ms, "past its %.0f s budget" % budget[current])
             else:
-                how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
-                verdicts[current] = ("CRASH", ms, "the process died (%s)" % how, process)
+                settle(current, "CRASH", ms, "the process died in the arm (%s)" % how)
+        if held:
+            # THE BASELINE BEHIND THE LAST ARM: it must hold, and the process must end the way
+            # its results say (exit = the number of failed arms). A death, a hang or a lost
+            # baseline there is THIS arm's CRASH — never a silent restart.
+            arm, v, ms, why = held
+            if lost and lost[0] == arm:
+                settle(arm, "CRASH", ms, "baseline lost after the arm: %s" % lost[1])
+            elif killed_for == "baseline:" + arm:
+                settle(arm, "CRASH", ms, "hung in the pool's baseline after the arm (killed)")
+            elif rc < 0 or rc != min(fails_here, 255):
+                settle(arm, "CRASH", ms, "the process died after the arm, in the pool's baseline "
+                                         "or its exit (%s, %d failed arm(s))" % (how, fails_here))
+            else:
+                settle(arm, v, ms, why)
         remaining = [a for a in remaining if a[0] not in verdicts]
         if remaining and not began_any:
-            # The process never started an arm: a boot failure, not an arm's.
-            # Restarting would fail the same way; every remaining arm is named.
-            how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
-            if killed_for is None and rc == 0:
-                how = "exit 0 with arms left"
+            # The process never started an arm: a boot failure. Restarting would fail the
+            # same way; every remaining arm is named.
             for n, _, _ in remaining:
-                verdicts[n] = ("CRASH", 0, "the pool's process never began an arm (%s)" % how, process)
+                settle(n, "CRASH", 0, "the pool's process never began an arm (%s)" % how)
             remaining = []
         elif remaining:
             restarts += 1
-            say("pool: %s — the process ended with %d arm(s) left (rc %d); restarting from %s" % (
-                pool, len(remaining), rc, remaining[0][0]))
+            say("POOL %s RESTART %d — the process ended with %d arm(s) left (%s); restarting from %s"
+                % (pool, restarts, len(remaining), how, remaining[0][0]))
 
-    record = os.environ.get("JAH_POOL_RECORD")
     say("")
-    say("POOL %s VERDICTS (%d process(es))" % (pool, process))
+    say("POOL %s VERDICTS (%d process(es), %d restart(s))" % (pool, process, restarts))
     bad = []
     for n in order:
-        v, ms, why, proc_no = verdicts.get(n, ("CRASH", 0, "no verdict", 0))
-        say("ARM %s.%s %s %d%s" % (pool, n, v, ms, (" " + why) if why else ""))
+        v, ms, why = verdicts.get(n, ("CRASH", 0, "no verdict"))
+        say("  %s.%s: %s %d%s" % (pool, n, v, ms, (" " + why) if why else ""))
         if v != "PASS":
             bad.append(n)
-        if record:
-            with open(record, "a") as f:
-                f.write(json.dumps({"pool": pool, "arm": n, "verdict": v, "ms": ms,
-                                    "process": proc_no, "reason": why}) + "\n")
     say("POOL %s: %d arm(s) — %d PASS, %d not PASS, %d restart(s)" % (
         pool, len(order), len(order) - len(bad), len(bad), restarts))
     if bad:

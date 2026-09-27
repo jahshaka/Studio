@@ -213,7 +213,8 @@ bool beginEditorBoot(MainWindow &window, QApplication &app, QString &why)
 }   // namespace
 
 int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
-                  const QString &poolIn, const QStringList &only, bool headless, bool live)
+                  const QString &poolIn, const QStringList &only, const QString &poolBaseline,
+                  bool headless, bool live)
 {
     const QString pool = poolIn.isEmpty() ? QStringLiteral("pool") : poolIn;
     const QByteArray poolUtf8 = pool.toUtf8();
@@ -262,6 +263,16 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
     });
     const ScriptRunPolicy policy = live ? ScriptRunPolicy::Live : ScriptRunPolicy::Off;
     QString bootWindow;     // "<w>x<h>" as the boot had it (engine-up pools)
+    QString poolBaselineSource;
+    if (!poolBaseline.isEmpty()) {
+        QFile f(poolBaseline);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            std::fprintf(stderr, "pool %s: cannot open --pool-baseline %s\n", poolUtf8.constData(),
+                         qPrintable(poolBaseline));
+            return finalizeAppExit(1);
+        }
+        poolBaselineSource = QString::fromUtf8(f.readAll());
+    }
     if (editorBoot) {
         const ScriptResult w = engine->evaluate(
             QStringLiteral("(function(){var w = app.window(); return w.width + 'x' + w.height;})()"),
@@ -320,6 +331,21 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
             ++failed;
             armLine("ARM %s.%s FAIL %s", poolUtf8, armUtf8, ms);
             armLine(" %s\n", failure.simplified().toUtf8());
+        }
+
+        // THE POOL'S OWN BASELINE FIRST (--pool-baseline), after every arm,
+        // green or red: what a family's arms change in the process and cannot
+        // put back on a red path (a throw skips a script's own tail). Its
+        // failure is a lost baseline like the runner's.
+        if (!poolBaselineSource.isEmpty()) {
+            const ScriptResult pb = engine->evaluate(poolBaselineSource, poolBaseline, false, 0,
+                                                     ScriptRunPolicy::Off);
+            if (!pb.ok) {
+                armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
+                        pb.toString().simplified().toUtf8());
+                if (editorBoot) window.endEngineSelftest();
+                return finalizeAppExit(qBound(1, failed, 255));
+            }
         }
 
         // THE BASELINE AFTER THE ARM, THROUGH THE VERBS (API-first: the pool

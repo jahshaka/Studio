@@ -57,6 +57,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         if (qstrcmp(argv[i], "--engine-selftest") == 0 && i + 1 < argc) o.selftestPng = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) o.scriptPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--scripts") == 0 && i + 1 < argc) o.poolScripts = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrcmp(argv[i], "--pool-baseline") == 0 && i + 1 < argc) o.poolBaseline = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--pool") == 0 && i + 1 < argc) o.poolName = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--arms") == 0 && i + 1 < argc)
             o.poolArms = QString::fromLocal8Bit(argv[++i]).split(QLatin1Char(','), Qt::SkipEmptyParts);
@@ -101,8 +102,9 @@ CliOptions CliOptions::parse(int argc, char *argv[])
     // the same run, and a command line naming both has no one meaning.
     if (!o.scriptPath.isEmpty() && !o.poolScripts.isEmpty())
         o.errors << QStringLiteral("--script and --scripts: pass one or the other, not both");
-    if ((!o.poolName.isEmpty() || !o.poolArms.isEmpty()) && o.poolScripts.isEmpty())
-        o.errors << QStringLiteral("--pool/--arms: need --scripts <dir-or-list>");
+    if ((!o.poolName.isEmpty() || !o.poolArms.isEmpty() || !o.poolBaseline.isEmpty()) &&
+        o.poolScripts.isEmpty())
+        o.errors << QStringLiteral("--pool/--arms/--pool-baseline: need --scripts <dir-or-list>");
     return o;
 }
 
