@@ -1256,6 +1256,8 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
             sys.stderr.write("gate-scope: the build dir has no ninja deps log (not built yet?) — the graph "
                              "selector is OFF and compiled rows go by the area rules' directories\n")
         graph = None
+    if graph is not None:
+        gate_graph.require_nm()
     app_exe = classify_rows(inv, graph, build)
     if graph is None:
         for t in inv.values():
@@ -1496,4 +1498,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except gate_graph.GraphError as e:
+        # H1: an unreadable graph is a refusal, never an empty (green) selection
+        sys.stderr.write(f"gate-scope: REFUSED — {e}. Install binutils (nm) or fix the build dir; "
+                         f"a selection from an unreadable graph would under-select silently.\n")
+        sys.exit(4)

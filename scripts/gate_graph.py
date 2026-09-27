@@ -62,6 +62,16 @@ def _find_unescaped(s, token):
         i = j + 1
 
 
+class GraphError(RuntimeError):
+    """The build graph cannot be read honestly: the selector refuses rather than under-select."""
+
+
+def require_nm():
+    import shutil
+    if shutil.which("nm") is None:
+        raise GraphError("`nm` (binutils) is not on PATH: the link graph cannot be read")
+
+
 class NinjaGraph:
     """The build graph of one configured, BUILT build dir.
 
@@ -265,6 +275,8 @@ class NinjaGraph:
             for L in libs:
                 for o in self.members(L):
                     ds |= self._nm(o, member=True)[0]
+            if not ds:
+                raise GraphError("the tree's libraries define no symbol by `nm`: the link graph is unreadable")
             self._libdefs = ds
         return self._libdefs
 
@@ -284,10 +296,15 @@ class NinjaGraph:
         c = self._syms.get(k)
         if c and c[0] == mt: return c[1]
         args = ["nm", "-P", "--no-sort"] + (["-D"] if dynamic else []) + [path]
+        # NO nm, NO ANSWER (the Fable read, H1): an empty symbol table would give the link graph no
+        # roots, an engine change would reach no compiled row — silently, and cached. Refuse.
         try:
-            out = subprocess.run(args, capture_output=True, text=True).stdout
-        except OSError:
-            out = ""
+            r = subprocess.run(args, capture_output=True, text=True)
+        except OSError as e:
+            raise GraphError(f"`nm` could not run ({e}): the link graph cannot be read")
+        if r.returncode != 0:
+            raise GraphError(f"`nm` failed on {path} ({r.returncode}): {r.stderr.strip()[:200]}")
+        out = r.stdout
         d, u, init = set(), set(), False
         intern = sys.intern
         for line in out.splitlines():
@@ -300,6 +317,8 @@ class NinjaGraph:
         if not member:
             u &= self.libdefs()
         v = (frozenset(d), frozenset(u), init)
+        if member and not d and not u:
+            return v                       # never cache an empty member: re-read it next time
         self._syms[k] = (mt, v)
         self._syms_dirty = True
         return v
