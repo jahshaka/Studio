@@ -81,7 +81,7 @@ target_compile_definitions(test_camera_play_routing PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_play_routing PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_play_routing JahshakaEngineMedia)
-add_test(NAME cameras.play_routing COMMAND test_camera_play_routing
+jah_gpu_row(cameras.play_routing CLASS engine COMMAND test_camera_play_routing
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.play_routing PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -105,7 +105,7 @@ target_compile_definitions(test_camera_body PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_body PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_body JahshakaEngineMedia)
-add_test(NAME cameras.body COMMAND test_camera_body
+jah_gpu_row(cameras.body CLASS engine COMMAND test_camera_body
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.body PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -132,7 +132,7 @@ target_compile_definitions(test_camera_pip PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_pip PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_pip JahshakaEngineMedia)
-add_test(NAME cameras.pip COMMAND test_camera_pip
+jah_gpu_row(cameras.pip CLASS engine COMMAND test_camera_pip
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.pip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -161,7 +161,7 @@ target_compile_definitions(test_camera_exposure PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_exposure PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_exposure JahshakaEngineMedia)
-add_test(NAME cameras.exposure COMMAND test_camera_exposure
+jah_gpu_row(cameras.exposure CLASS engine COMMAND test_camera_exposure
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.exposure PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -170,31 +170,7 @@ set_tests_properties(cameras.exposure PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 # The real app binary, --script, with HOME redirected to a scratch dir so the
 # run gets a fresh library and can never touch the user's (the same contract
 # every scripting.e2e.* suite has).
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/cameras-home)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME cameras.e2e
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cameras.js
-         WORKING_DIRECTORY ${_home}/run)
-# TIMEOUT, not RESOURCE_LOCK — recorded decision (N7, ENGINEERING_DEBT_SPEC
-# re-audit). The observed failure is a TIMEOUT under GI-rebuild contention: the
-# engine compiles shaders and PSOs on a parallel pool
-# (OGRE_SHADER_COMPILATION_THREADING_MODE=2) and a concurrent gi.* suite
-# voxelizing a scene starves it, so this app-spawning script run takes minutes
-# it normally does not (JOURNAL 2026-09-08). It is not a wrong answer, it is a
-# slow one.
-#
-# A RESOURCE_LOCK would express the contention directly, but a lock is only
-# real when EVERY participant carries the same name — the lock would have to be
-# added to tests/gi/CMakeLists.txt too, and it would serialize this suite
-# against the longest-running family in the tree for a hazard that costs
-# nothing but wall clock. The cheap, honest fix is to let the slow case finish:
-# 900 s is what cameras.exposure (the same engine, the same compile pool)
-# already allows. If cameras.e2e ever fails with an ASSERTION under contention
-# rather than a timeout, that reasoning is void and the lock is the answer.
-set_tests_properties(cameras.e2e PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 900)
+jah_pool_arm(cameras e2e ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cameras.js 10)
 
 # ---- cameras.e2e.lens -----------------------------------------------------
 # CAMERA_LENS_SPEC §3 (P1 + P2) through the verbs in the real binary: the preset
@@ -202,15 +178,7 @@ set_tests_properties(cameras.e2e PROPERTIES
 # camera.settings keys, focus TRACKING resolved on a real synced frame, and the
 # save/close/open round trip of every new field through the real writer and
 # reader. Same scratch-HOME contract as cameras.e2e.
-set(_lens_home ${CMAKE_CURRENT_BINARY_DIR}/lens-home)
-file(MAKE_DIRECTORY ${_lens_home}/run)
-add_test(NAME cameras.e2e.lens
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js
-         WORKING_DIRECTORY ${_lens_home}/run)
-set_tests_properties(cameras.e2e.lens PROPERTIES
-    ENVIRONMENT "HOME=${_lens_home};JAHSHAKA_DATA_ROOT=${_lens_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 300)
+jah_pool_arm(cameras lens ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js 4)
 
 # ---- cameras.e2e.postfx ---------------------------------------------------
 # CAMERA_LENS_SPEC §4 + §5 through the verbs in the real binary: the exposure
@@ -218,28 +186,12 @@ set_tests_properties(cameras.e2e.lens PROPERTIES
 # refusals, camera.clearPostOverride, the reflected (keyframeable) half, and the
 # save/close/open round trip through the real writer and reader. Same
 # scratch-HOME contract as cameras.e2e.
-set(_post_home ${CMAKE_CURRENT_BINARY_DIR}/postfx-home)
-file(MAKE_DIRECTORY ${_post_home}/run)
-add_test(NAME cameras.e2e.postfx
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_postfx.js
-         WORKING_DIRECTORY ${_post_home}/run)
-set_tests_properties(cameras.e2e.postfx PROPERTIES
-    ENVIRONMENT "HOME=${_post_home};JAHSHAKA_DATA_ROOT=${_post_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
+jah_pool_arm(cameras postfx ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_postfx.js 7)
 
 # ---- cameras.e2e.pilot ----------------------------------------------------
 # Phase 3 (D4/D8) and the phase-2c preview preference, through the verbs, in
 # the real binary. Same scratch-HOME contract as cameras.e2e.
-set(_pilot_home ${CMAKE_CURRENT_BINARY_DIR}/pilot-home)
-file(MAKE_DIRECTORY ${_pilot_home}/run)
-add_test(NAME cameras.e2e.pilot
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.js
-         WORKING_DIRECTORY ${_pilot_home}/run)
-set_tests_properties(cameras.e2e.pilot PROPERTIES
-    ENVIRONMENT "HOME=${_pilot_home};JAHSHAKA_DATA_ROOT=${_pilot_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 300)
+jah_pool_arm(cameras pilot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.js 1)
 
 # ---- cameras.e2e.axis_lock ------------------------------------------------
 # THE AXIS-VIEW ROTATION LOCK (owner report 2026-09-08) through the verbs, in
@@ -250,12 +202,9 @@ set_tests_properties(cameras.e2e.pilot PROPERTIES
 # exception, and F-focus centring instead of turning. The GESTURES themselves
 # are pinned by input.axis_view_lock, which drives the controllers directly.
 # Same scratch-HOME contract as cameras.e2e.
-set(_axis_home ${CMAKE_CURRENT_BINARY_DIR}/axislock-home)
-file(MAKE_DIRECTORY ${_axis_home}/run)
-add_test(NAME cameras.e2e.axis_lock
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js
-         WORKING_DIRECTORY ${_axis_home}/run)
-set_tests_properties(cameras.e2e.axis_lock PROPERTIES
-    ENVIRONMENT "HOME=${_axis_home};JAHSHAKA_DATA_ROOT=${_axis_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 300)
+jah_pool_arm(cameras axis_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js 5)
+
+# ---- THE POOL (lane SUITE-POOL-1): cameras.e2e and its four siblings (lens, postfx, pilot,
+# axis_lock) were five boots of the same verb module on the same scratch-home contract; they are
+# five arms of ONE process now (SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md §6).
+jah_add_pool(cameras LABELS scripting)

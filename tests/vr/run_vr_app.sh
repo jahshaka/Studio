@@ -3,6 +3,12 @@
 # SIMULATED headset (SPECS/VR_SPEC.md §6).
 #
 # Usage: run_vr_app.sh <app-binary> <monado-manifest> <script.js>
+#        run_vr_app.sh --launch <monado-manifest> -- <command…>
+#
+# The second form is a POOL's launcher (lane SUITE-POOL-1; tests/CMakeLists.txt,
+# jah_add_pool LAUNCHER): the same runtime, alive for the whole pool, and the
+# command — the pool driver, which starts `<app> --vr` for its arms and again
+# after a crash — run inside it with the runtime's environment.
 #
 # The same wrapper as run_vr_session.sh: a private, SHORT XDG_RUNTIME_DIR (the
 # 108-byte sun_path trap), a runtime named explicitly, the service spawned in
@@ -10,14 +16,25 @@
 # no-hardware runtime is not installed.
 set -u
 
-APP="${1:?app binary}"
-MANIFEST="${2:?monado manifest}"
-SCRIPT="${3:?script}"
+if [ "${1:-}" = "--launch" ]; then
+    LAUNCH=1
+    MANIFEST="${2:?monado manifest}"
+    [ "${3:-}" = "--" ] || { echo "run_vr_app.sh --launch <manifest> -- <command…>"; exit 2; }
+    shift 3
+    [ $# -gt 0 ] || { echo "run_vr_app.sh --launch: no command"; exit 2; }
+else
+    LAUNCH=0
+    APP="${1:?app binary}"
+    MANIFEST="${2:?monado manifest}"
+    SCRIPT="${3:?script}"
+fi
 
 command -v monado-service >/dev/null 2>&1 || { echo "SKIP: monado-service is not installed"; exit 77; }
 [ -r "$MANIFEST" ] || { echo "SKIP: no Monado manifest at $MANIFEST"; exit 77; }
-[ -x "$APP" ]      || { echo "SKIP: the app binary was not built ($APP)"; exit 77; }
-[ -r "$SCRIPT" ]   || { echo "SKIP: no script at $SCRIPT"; exit 77; }
+if [ "$LAUNCH" = 0 ]; then
+    [ -x "$APP" ]      || { echo "SKIP: the app binary was not built ($APP)"; exit 77; }
+    [ -r "$SCRIPT" ]   || { echo "SKIP: no script at $SCRIPT"; exit 77; }
+fi
 [ -n "${DISPLAY:-}" ] || { echo "SKIP: a Vulkan engine cannot boot with no display"; exit 77; }
 
 XDG_DIR="$(mktemp -d /tmp/jahvr.XXXXXX)" || exit 1
@@ -51,6 +68,10 @@ done
 [ -S "$XDG_DIR/monado_comp_ipc" ] || { echo "monado-service never opened its socket:"; tail -20 "$XDG_DIR/monado.log"; exit 1; }
 
 rc=0
-XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" \
-    "$APP" --vr --script "$SCRIPT" || rc=$?
+if [ "$LAUNCH" = 1 ]; then
+    XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" "$@" || rc=$?
+else
+    XDG_RUNTIME_DIR="$XDG_DIR" XR_RUNTIME_JSON="$MANIFEST" \
+        "$APP" --vr --script "$SCRIPT" || rc=$?
+fi
 exit $rc

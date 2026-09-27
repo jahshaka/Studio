@@ -153,7 +153,7 @@ target_link_libraries(test_importer_meshformats PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
 jah_links_assimp(test_importer_meshformats)
 add_dependencies(test_importer_meshformats JahshakaEngineMedia)
-add_test(NAME importer.meshformats COMMAND test_importer_meshformats
+jah_gpu_row(importer.meshformats CLASS engine COMMAND test_importer_meshformats
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.meshformats PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")
@@ -343,7 +343,7 @@ target_compile_definitions(test_importer_materials PRIVATE
 target_link_libraries(test_importer_materials PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
 add_dependencies(test_importer_materials JahshakaEngineMedia)
-add_test(NAME importer.materials COMMAND test_importer_materials
+jah_gpu_row(importer.materials CLASS engine COMMAND test_importer_materials
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.materials PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "importer")

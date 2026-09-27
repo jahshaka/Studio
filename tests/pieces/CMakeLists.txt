@@ -25,7 +25,7 @@ endfunction()
 # the emitter would target — it compiles, it renders, the clock moves it, an
 # edit is a new file, and a scene without a piece stays byte-identical.
 jahshaka_piece_test(test_piece_spike test_piece_spike.cpp)
-add_test(NAME pieces.spike
+jah_gpu_row(pieces.spike CLASS engine
          COMMAND test_piece_spike "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(pieces.spike PROPERTIES TIMEOUT 120 LABELS "pieces")
@@ -71,7 +71,7 @@ target_include_directories(test_emitter_parity PRIVATE
 target_link_libraries(test_emitter_parity PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_dependencies(test_emitter_parity JahshakaEngineMedia)
-add_test(NAME shadergraph.emitter_parity
+jah_gpu_row(shadergraph.emitter_parity CLASS engine
          COMMAND test_emitter_parity "${CMAKE_CURRENT_BINARY_DIR}/pieces"
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.emitter_parity PROPERTIES TIMEOUT 120 LABELS "pieces")
@@ -160,7 +160,7 @@ target_include_directories(test_piece_mirror PRIVATE
 target_link_libraries(test_piece_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
     Qt6::Widgets Qt6::Sql Qt6::Concurrent Qt6::Multimedia)
 add_dependencies(test_piece_mirror JahshakaEngineMedia)
-add_test(NAME pieces.mirror COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
+jah_gpu_row(pieces.mirror CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(pieces.mirror PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "pieces")

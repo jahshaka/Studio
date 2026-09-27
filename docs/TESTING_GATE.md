@@ -68,8 +68,10 @@ the store alone. Measured 1.255x unpatched / 3.745x patched.
 
 `-j4` is the ceiling on this box (RTX 4080 16 GB: ~1.6 GB of VRAM per Vulkan boot since the
 probe-shadow merge of 2026-09-10, ~3 GB before; boots are CPU-bound too — expect ~1.6× over
--j2, not 2×). One sibling gate at -j4 fits beside yours; drop to `-j2` only when two or more
-other Vulkan gates (or the owner's app plus one) are live.
+-j2, not 2×). Every gate runs at `-j4`, however many other lanes gate beside it: the box admits
+Vulkan processes by VRAM itself (§4b, GATE-ADMIT-1) — a row that does not fit waits for tokens
+instead of failing an allocation, so the old "-j2 while two or more other Vulkan gates are live"
+rule is retired.
 
 
 ### 1c. SCALE TARGETS — the `scale-target` label (lane D1-SCALE-FIXTURES)
@@ -280,8 +282,11 @@ merge time instead of at the batch gate.
 ## 4. Flake protocol (unchanged)
 
 A failure is re-run SOLO on a quiet box up to 3×; 3/3 green = environmental, with the
-evidence string in the report (host-load timing, `VK_ERROR_OUT_OF_DEVICE_MEMORY`, the
-texture-worker SEGV class). Known contention-sensitive suites: open.responsive,
+evidence string in the report (host-load timing, the texture-worker SEGV class). A
+`VK_ERROR_OUT_OF_DEVICE_MEMORY` red is NOT environmental since GATE-ADMIT-1 (§4b): the box admits
+by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
+unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
+`nvidia-smi` beside the red). Known contention-sensitive suites: open.responsive,
 app.engine_selftest_validation, app.input_keys, threading.newproject_stall,
 scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
 sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM contention
@@ -340,6 +345,98 @@ cascade-chain rows (their VRAM reason was measured false). RUN_SERIAL remains on
 audit kept it (app.input_keys, app.watchdog_stall, gi.field_scroll, threading.mode /
 mode_serial / gi_resolve / gi_resolve_serial / newproject_stall, and the nightly benches).
 
+## 4b. THE VRAM BUDGET — box-wide tokens (lane GATE-ADMIT-1, 2026-09-27)
+
+**Why.** Every lane's gate is its own ctest process, and ctest's own admission (RESOURCE_GROUPS,
+RESOURCE_LOCK, RUN_SERIAL) stops at the edge of ONE ctest process. Four lanes at -j4 put ~16
+Vulkan processes on one 16.4 GB card; on 2026-09-27 ~47 reds printed
+`VK_ERROR_OUT_OF_DEVICE_MEMORY` (a 64 MB pool allocation, latched by Ogre as a device loss), all
+where four gates overlapped (SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md A3: the model peaks 6.5 GB
+for one lane, 19.5 GB for three, 26 GB for four). So the budget lives outside ctest, like the
+GPU-timing lock.
+
+**THE MECHANISM.** `scripts/gpu-admit.sh <k> [--label <row>] -- <command…>` (implementation
+`scripts/vram_tokens.py`): N = 11 flock TOKENS in `/tmp/jah-vram/` (`JAH_VRAM_TOKENS` overrides;
+0 = admission off). DEFAULT 11: 1 token measured 1,090 MiB at the peak (two MERGE tiers sharing
+the budget: 13,333 MiB with 12 held over a 280 MiB desktop; ~820 MiB at p95), so 11 tokens peak at
+~12.2 GB and leave ~1.3 GB beside the owner's 2.8 GB instance on the 16.4 GB card (12 left 243 MiB).
+The owner's instance, the desktop and any app started by hand without the helper take no token
+(start such an app as `scripts/gpu-admit.sh 2 -- ./Jahshaka …` — `nvidia-smi` is never consulted: racy,
+slow, and blind to what a process allocates next; the token count is the contract, tuned by
+measurement). An acquirer takes the TURNSTILE, reads the free tokens from `/proc/locks` and locks
+the k LOWEST only when k are free — all or nothing, never hold-and-wait, and a 3-token row at the
+head of the queue is not starved by 1-token rows behind it. The command is EXEC'D IN PLACE with
+the token fds inherited: the pid ctest started is the suite, and the tokens are freed when it and
+everything it spawned exit, for any reason (a crash, a ctest timeout kill). A nested admission
+(`JAH_VRAM_HELD` in the environment) runs on its parent's tokens. A wait prints ONE line —
+`vram: waiting for <k> tokens, <n> free` — and `vram: admitted with <k> tokens <i,j> after <s> s`;
+it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (exit 75) and prints
+`NOADMIT vram: no admission for <k> tokens within 900 s (<n> of <N> free …) — <row>`: the run log
+(`scripts/gate_runlog.py`) records that row — or a pool's never-started arms — as verdict
+`NOADMIT` with the line as its status, never a generic FAIL (the box was over-subscribed; nothing
+about the row's code). A burst of NOADMITs means the lanes asked for more than 900 s of queue.
+`scripts/gpu-admit.sh status` lists the holders (the file of a held token names its pid and row).
+
+**THE CLASSES** (the audit's A2 table, nvidia-smi per pid, 2026-09-26) — `jah_vram_tokens()` in
+`tests/CMakeLists.txt` is the one lookup:
+
+| class | tokens | what | measured |
+|---|---|---|---|
+| `app` | 2 | an app process (`Jahshaka --script`, a pool process, a harness that spawns it) at the document default, Epic | per pid median 2,000 / p90 2,270 / max 2,600 MiB — a THIN margin against 2 × 1,090 = 2,180; TEST-TIER-1's Low tier widens it |
+| `selftest` | 2 | `--engine-selftest` (the app's route) | = app |
+| `engine` | 1 | a headless engine / Qt+engine suite at its own tier (mostly Medium) | ~0.6-1.2 GB |
+| `vr` | 3 | a VR / Monado row (the app, stereo views, the runtime's compositor) | ~2 GB (est.) |
+| `none` | 0 | RenderSystem_NULL, no display, lavapipe — never registered | 0 |
+
+A pool with a declared `TIER low` (TEST-TIER-1's test tier, ~0.65 GB) costs 1 token as an app. A
+row MEASURED heavier than its class declares `TOKENS <k>` = round(its peak GB) with the number in
+its comment (GATE-ADMIT-1's run, nvidia-smi per pid: test_gi_gather 3.6 GB → 4, voxel_coverage
+2.8 → 3, gather_reference / hit_shade / chain_face / every test_scale row 1.5-2.0 → 2). A HARNESS
+that spawns the app over MCP (compiled with JAHSHAKA_BINARY: open.responsive, ui.column_law,
+mcp.e2e, …) is `CLASS app` — the app it starts is the process that holds the VRAM.
+
+**HOW A ROW DECLARES ITS CLASS.** Every row that boots Vulkan is registered through ONE of:
+`jah_gpu_row(<row> CLASS <class> COMMAND <exe-or-target> [args…] [WORKING_DIRECTORY <dir>])` (a
+drop-in for `add_test(NAME … COMMAND …)`); `jah_gpu_exclusive_test(NAME … CLASS <class> …)` (a
+timing row holds the GPU lock FIRST, then its tokens: the lock for exclusivity, the tokens for
+memory); `jah_add_pool(<pool> [CLASS vr] [TIER …])` — the pool's tokens are taken by
+`run_pool.py --vram-tokens <k>` once per APP PROCESS (a restart re-takes them; the driver holds
+none; a `HEADLESS` pool takes none). A row that boots no Vulkan is a plain `add_test` with
+`jah_no_display()`. **The wait never eats a row's budget**: it happens before the command starts,
+and every registered row's TIMEOUT is its own budget plus the 900 s bound, added once by the
+helper at the end of the row's directory — never typed at a site.
+
+**THE CLOSURE.** `source.gpu_rows_closure` (hygiene) reads what ctest will run
+(`ctest --show-only=json-v1`): every row whose command or environment names an Ogre-linked
+binary (`ldd` → libOgreNextMain), runs a binary that carries the app's path as a literal (a
+harness that spawns the app) or runs the pool driver, minus the `jah_no_display` rows, the
+app `--headless` rows and the lavapipe rows (host memory), minus the registered rows, must be
+EMPTY, and every row that runs an app process declared an app-sized class (app/selftest/vr, read
+from its `--label <row>:<class>`) — each offender is named with its CMakeLists line. At
+GATE-ADMIT-1: 322 Vulkan rows, all registered (192 at 1 token, 113 at 2, 14 at 3, 3 at 4 — the
+suite prints the count).
+`--self-test` proves the detector names a synthetic unregistered row. The helper's own guard is
+`devprocess.vram_admit` (tooling): 14 fake rows of the three classes against 12 tokens on the
+kernel's lock table — the bound, all or nothing, lowest first, a killed holder frees,
+`JAH_VRAM_TOKENS=4`, the bounded wait, exec in place, nesting.
+
+**THE KERNEL'S WORD IN A POOL.** After each app process, `run_pool.py` reads the kernel journal
+since its launch (`journalctl -k`, never sudo): an `NVRM: Xid` line from THAT pid turns the arm
+running at the fault's second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts
+are printed once, after that read). An unreadable journal is a printed FINDING in the pool, never a red of every pool: the ONE row that
+reds for it is `devprocess.kernel_journal` (tooling; it names the fix — the user joins `adm`).
+The read waits 1 s after the exit: the Xid is logged at the fault, seconds before the process ends
+(the fence wait until DEVICE_LOST measured 10-11 s), so only journald's millisecond ingest is left. The non-pool
+photon.view rows keep `tests/support/no_xid_run.sh`.
+
+**THE MEASUREMENT** (`~/Developer/spikes/gate-admit-1/`, 12 tokens then): two MERGE tiers at -j4
+started together on :63/:64, the box otherwise quiet: 0 `OUT_OF_DEVICE_MEMORY`, 0 Xid, peak 13,333
+MiB (p95 10.1 GB), walls 42.9 / 42.1 min, 56 admission waits (max 160 s). Both tiers ran from ONE
+build dir (a driver slip: `gate_runlog.py run` defaults to `--build build-linux`), so their 42-45
+reds each (`database is locked`, `could not save`, `No such file`) were the two tiers sharing every
+`e2e-home-*`/`pool-home-*` under that dir — the run's own artefact, not a rig defect; the union of
+those reds re-run alone was 100 of 101 green (the one red vr.eye_grade, a base red).
+
 ## 5. What the full gate costs, and where its wall goes
 
 **CURRENT COUNTS (2026-09-27, lane D6B-GATE-SHAPE, Studio d-build): 697 rows registered,
@@ -364,8 +461,9 @@ and apps held 15.0 of 16.4 GB (nvidia-smi: ~1.5-2.8 GB per Jahshaka process, not
 2026-09-10); those 19 and a segfault of the same minutes were all green solo, three timing rows
 of the lock were 3/3 green solo, and the last two (vr.eye_grade, threading.newproject_stall)
 were red on the base tree's before-run with the same assertion. DEVPROCESS-1's "VRAM is not the
-constraint" was measured with three processes; with four gates it is. Keep the `-j2 while two or
-more other Vulkan gates are live` rule, and read a device-lost red beside nvidia-smi.
+constraint" was measured with three processes; with four gates it is. The box enforces that law
+itself since GATE-ADMIT-1 (§4b: box-wide VRAM tokens); the `-j2 while two or more other Vulkan
+gates are live` rule it replaced is retired.
 
 WHAT THE SHAPE CAN STILL WIN is the gap to busy/4 — about 8 % after D6B. The rest is
 suite-seconds: the tier grew ~20 rows between the audit and D6B (atom.lod_switch alone is
@@ -406,8 +504,8 @@ At `-j4` the floor is 572 + 410 ≈ 16 min by construction. The cleanup lane
 restructures and moves the cache attacks nightly, folds 14 duplicate sample boots into
 `samples.cleanstart`, merges the three xdotool drivers, fixes the port-8751 collision that
 makes `-j4` unsafe, and trims timeouts to 6× measured. Projection: ~9 min for the full gate at
-`-j4`, ~5 min for MERGE. Phase 2 (own lane): a multi-script runner so ~65 document-only
-suites share one live instance (−340 suite-seconds).
+`-j4`, ~5 min for MERGE. The multi-script runner this section once
+scheduled as "phase 2" is built: §8 (the pools).
 
 ## 6. Who does what
 
@@ -460,3 +558,84 @@ description rather than inherited from the on-screen view's temporal filter, so 
 deterministic by construction. At that grade the rays move 30,448 of 65,536 pixels, worst
 78/255 — and the runner asserts B1 != B2 whenever the machine has ray queries (equal hashes on
 a machine WITHOUT them is the correct answer and is said so, not asserted away).
+
+## 8. The pools — app tests as named ARMS (lane SUITE-POOL-1, 2026-09-27)
+
+The app runs one script per `--script` process, and its boot is the expensive part: measured
+on this box 2026-09-27, ~13.7 s engine-up with a cold shader cache (every gate after a
+rebuild), ~5.5 s warm, ~3.2 s `--headless`. With one process per verb suite, app suites were
+77 % of the gate's suite-seconds (SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md). A POOL is
+one ctest row, `pool.<pool>`, whose one process (`Jahshaka --scripts … --pool <pool>`,
+`tests/support/run_pool.py`) runs a family's scripts as named ARMS. The developer's
+description — the arm protocol, the verdict lines, the solo retry — is `docs/TESTING.md` §2;
+this section is the contract.
+
+**THE CONTRACT.**
+- Every arm is `<pool>.<arm>` and prints exactly one verdict: `PASS`, `FAIL` (its first
+  failing assertion), `CRASH` (the process died in it) or `TIMEOUT` (killed past 6x its
+  measured seconds). A crash or a timeout costs its own arm: the driver restarts the process
+  and continues from the next arm. The row is red iff an arm is not `PASS`, and every red in
+  a gate report is named BY ARM, never "the pool".
+- Every arm starts in a fresh JavaScript realm; after every arm, green or red, the pool's
+  baseline is restored (its own `BASELINE` script if it has one, then the window's size, the
+  open project closed, the deferred deletes delivered), so a later arm starts with NO project
+  open and creates or opens what it needs. A death, hang or lost baseline after an arm is
+  that arm's `CRASH`. The arms share the pool's home
+  (fresh every run), so an arm never asserts on what another left in the library.
+- The solo retry of an arm is the flake protocol's unit (§4):
+  `JAH_POOL_ARMS=<pool>.<arm> DISPLAY=:NN ctest -R '^pool\.<pool>$'`, three times. Red in its
+  pool and green alone three times is a STATE LEAK between arms — fixed in the arm's baseline,
+  never with a budget.
+- A row's TIMEOUT is derived (`jah_add_pool`: the sum of 6x each arm's measured seconds, floor
+  30 s an arm, plus one 300 s boot budget) — never typed, never widened. An arm that got
+  slower is re-measured.
+- Selection (§3) names ARMS: a changed script or API module selects the arms that run it, and
+  the scoped command runs them through their pools' rows with `JAH_POOL_ARMS`; a pool whose
+  every arm is selected runs whole. The MERGE/PUSH tiers list pools as rows like any other.
+
+**THE RULE FOR A NEW TEST.** A lane adds an ARM to its family's pool — a script and one
+`jah_pool_arm(<pool> <arm> <script> <seconds>)` line beside the comment that says what it
+claims. It adds a ROW of its own only for a new FIXTURE or a PROCESS SWITCH, and its brief
+names which: a fresh home as the claim (a first launch, a cold cache); a boot latch (an
+environment variable such as `JAHSHAKA_NO_RAY_QUERY` or `JAHSHAKA_TEST_NO_EDITOR_BOOT`, a flag
+such as `--vr` or `--script-live`, a Monado session of its own); a GPU-lock timing measurement;
+a private display (an xdotool/xinput driver); an MCP driver that restarts the app; a
+crash-class churn. Engine and unit binaries keep one row per claim — their boot is ~2 s. A
+brief's named acceptance tests are arm names as often as row names.
+
+**THE MEASUREMENT** (the MERGE tier at -j4 on one rig display, one run each, one other lane
+building beside them): at `b3039193a` (D6B's shape, before the pools) 656 rows in 2,841 s
+(47.4 min; 2 reds: vr.eye_grade, mirror.scale timeout); at `95b7de06b` (the pools) 529 rows in
+1,807 s (30.1 min; 2 reds: vr.eye_grade — the same red as before —, vr.session_undithered —
+an engine binary this lane does not build differently, 1 of 3 solo retries red). −1,034 s of
+wall, −127 rows, no arm and no assertion lost. The per-row seconds are
+`scripts/gate-times.txt` (re-recorded from the after run).
+
+**THE POOLS** (lane SUITE-POOL-1, 2026-09-27; the proof and the seconds are
+`spikes/suite-pool-1/`): 142 former rows, 17 pool rows plus `pool.runner` (the runner's own
+test). "solo" is the sum of the former rows in the MERGE tier at `b3039193a` (-j4, one sibling
+gate live); "pooled" is the pool row in one run of every pool at -j4 on a quiet box.
+
+| pool | arms | solo s | pooled s | the family |
+|---|---|---|---|---|
+| doc / doc_assets | 29 / 23 | 110 / 90 | 13 / 12 | the `--headless` document verbs / the asset, import, export and clipboard verbs |
+| gi_verbs / gi_movers | 8 / 7 | 213 / 168 | 92 / 78 | world.gi rows and status / movers, mirror, rays, cards |
+| editor / editor_view | 10 / 7 | 248 / 194 | 89 / 73 | scene building / the viewport, gizmo, outline, stats |
+| shading / shading_live | 9 / 5 | 226 / 155 | 90 / 91 | materials and the PBS knobs / live textures, thumbnails, reflection maps |
+| world_sky / world_light | 7 / 4 | 310 / 218 | 108 / 157 | sky, clouds, ground, planar, world.vr / sun, lights, grades |
+| player | 7 | 208 | 86 | play, possession, space switches |
+| assets_import | 5 | 144 | 96 | the Assets page, the import dialog, samples, desktops |
+| vr_noruntime | 6 | 120 | 24 | every `vr.*` verb with no runtime |
+| vr_session | 4 | 153 | 75 | ONE Monado runtime, one `--vr` process (tests/vr/run_vr_app.sh --launch) |
+| avatar_anim / atom / cameras | 3 / 3 / 5 | 64 / 98 / 201 | 17 / 55 / 32 | the avatar page and skinning / the Atom view, draw and LODs / every camera verb |
+| **total** | **142** | **2,918** | **1,186** | **1,732 suite-seconds** |
+
+**ORDER IS DECLARED, AND RARELY MATTERS.** Arms run in declaration order. Three arms carry a
+process-level claim and are pinned: `FIRST` for `player.player_verbs` and
+`vr_session.player_session` (the Player page was never shown in the process) and `doc.memory`
+(its burst reads the engine node pools' slots, which carry the process's history).
+`vr_noruntime` has a BASELINE script (injected hands withdrawn, the gizmo mode back to
+translate) run after every arm, green or red. `world_vr` lives in `world_sky`, not
+`vr_noruntime`: a session override set with no session has no release, and the VR arms read
+the defaults. A new arm with a claim like these says so on its `jah_pool_arm` line.
+

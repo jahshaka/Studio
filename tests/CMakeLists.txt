@@ -264,20 +264,107 @@ set(JAH_GPU_EXCLUSIVE_SUITES
 # the site. Widening by exactly the wait keeps every run budget the suite's own verdict.
 set(JAH_GPU_LOCK_WAIT_S 900)
 
-# jah_gpu_exclusive_test(NAME <suite> RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
-#                        [WORKING_DIRECTORY <dir>])
-# add_test() through the lock. `set_tests_properties` cannot change a registered COMMAND, so the
-# wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
-# $<TARGET_FILE:...> (it is an argument of the wrapper now, and add_test resolves target names
-# only in the command position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
-function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "" "NAME;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
-    if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
-        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
-                            "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
+# THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b; SPECS/audits/
+# GPU_LOSS_AUDIT_2026-09-27.md A3/A4). Every lane's gate is its own ctest process, so nothing
+# inside ctest (RESOURCE_GROUPS, RESOURCE_LOCK, RUN_SERIAL) can bound what FOUR gates put on one
+# 16 GB card: the audit's model peaks 19.5 GB for three lanes at -j4 and 26 GB for four, and
+# every one of 2026-09-27's ~47 VK_ERROR_OUT_OF_DEVICE_MEMORY reds sat where four gates
+# overlapped. The budget lives outside ctest, like the GPU-timing lock: 11 flock TOKENS in
+# /tmp/jah-vram/ (scripts/gpu-admit.sh -> scripts/vram_tokens.py; JAH_VRAM_TOKENS overrides),
+# 1 token = 1,090 MiB at the measured peak (GATE-ADMIT-1's two-tier run: 13,333 MiB with 12 held
+# over a 280 MiB desktop; ~820 at p95) — 11 tokens ~12.2 GB, ~1.3 GB beside the owner's 2.8 GB
+# instance on the 16.4 GB card. Taken ALL OR NOTHING before the process starts and freed when it exits. A row
+# that cannot be admitted WAITS (one `vram: waiting for <k> tokens, <n> free` line) instead of
+# failing an allocation mid-run. The owner's instance and a stray agent app take no token: the
+# slack the count leaves is theirs.
+#
+# THE CLASSES (the audit's A2 table, measured 2026-09-26 with nvidia-smi per pid):
+#   app      2  an app process or pool process at the document default (Epic) — `Jahshaka
+#               --script`, a harness that spawns it. THIN MARGIN: measured per pid median
+#               2,000 / p90 2,270 / max 2,600 MiB against 2 x 1,090 = 2,180; TEST-TIER-1's Low
+#               tier (~0.65 GB) is what widens it.
+#   selftest 2  `--engine-selftest` (the app's route at Epic)
+#   engine   1  a headless engine suite (its own tier, mostly Medium: ~0.6-1.2 GB)
+#   vr       3  a VR / Monado row (app + stereo views + the runtime's compositor, ~2 GB)
+#   none     0  RenderSystem_NULL / no display — such a row carries jah_no_display() and is
+#               not registered through jah_gpu_row at all; `none` exists only for a GPU-timing
+#               row (jah_gpu_exclusive_test) that runs with no display (a CPU-time claim).
+# A pool's TIER (TEST-TIER-1: the test tier boots Low, ~0.65 GB) lowers an app-class process
+# to 1 token; the lookup below is the one place that says so. A row MEASURED heavier than its
+# class (GATE-ADMIT-1's two-tier run, nvidia-smi per pid: the gather family at Epic, 2-3.6 GB)
+# says `TOKENS <k>` beside its CLASS, with the measured number in its comment — round(GB).
+set(JAH_GPU_ADMIT "${CMAKE_SOURCE_DIR}/scripts/gpu-admit.sh")
+set(JAH_VRAM_TOKENS_APP 2)
+set(JAH_VRAM_TOKENS_SELFTEST 2)
+set(JAH_VRAM_TOKENS_ENGINE 1)
+set(JAH_VRAM_TOKENS_VR 3)
+set(JAH_VRAM_TOKENS_LOW_TIER 1)
+# The admission wait's bound (JAH_VRAM_WAIT in the helper). The wait happens BEFORE the command
+# starts but inside ctest's clock, so every registered row's TIMEOUT is its own budget PLUS this
+# bound, added ONCE, here (at the end of the row's directory, after its site set its TIMEOUT) —
+# never typed at a site. A row that sets no TIMEOUT gets the gates' --timeout 120 plus the bound.
+set(JAH_VRAM_WAIT_S 900)
+set(JAH_DEFAULT_ROW_TIMEOUT 120)
+
+# jah_vram_tokens(<class> <out-var> [TIER <tier>]) — THE CLASS -> TOKENS LOOKUP.
+function(jah_vram_tokens _class _out)
+    cmake_parse_arguments(V "" "TIER" "" ${ARGN})
+    if(_class STREQUAL "app")
+        set(_k ${JAH_VRAM_TOKENS_APP})
+        if(V_TIER STREQUAL "low")
+            set(_k ${JAH_VRAM_TOKENS_LOW_TIER})
+        endif()
+    elseif(_class STREQUAL "selftest")
+        set(_k ${JAH_VRAM_TOKENS_SELFTEST})
+    elseif(_class STREQUAL "engine")
+        set(_k ${JAH_VRAM_TOKENS_ENGINE})
+    elseif(_class STREQUAL "vr")
+        set(_k ${JAH_VRAM_TOKENS_VR})
+    elseif(_class STREQUAL "none")
+        set(_k 0)
+    else()
+        message(FATAL_ERROR "jah_vram_tokens: unknown class '${_class}' (app|selftest|engine|vr|none)")
     endif()
-    if(NOT G_RUN_TIMEOUT OR NOT G_COMMAND)
-        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): RUN_TIMEOUT and COMMAND are required")
+    set(${_out} ${_k} PARENT_SCOPE)
+endfunction()
+
+# The deferred half: at the end of the row's directory (after every set_tests_properties of the
+# site), its TIMEOUT += the admission wait's bound.
+function(_jah_vram_widen_timeout _row)
+    get_test_property(${_row} TIMEOUT _t)
+    if(NOT _t)
+        set(_t ${JAH_DEFAULT_ROW_TIMEOUT})
+    endif()
+    math(EXPR _t "${_t} + ${JAH_VRAM_WAIT_S}")
+    set_tests_properties(${_row} PROPERTIES TIMEOUT ${_t})
+endfunction()
+function(_jah_vram_register _row _class _k)
+    set_property(GLOBAL APPEND PROPERTY JAH_GPU_ROWS "${_row}|${_class}|${_k}")
+    cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_vram_widen_timeout [[${_row}]])")
+endfunction()
+
+# jah_gpu_row(<row> CLASS app|selftest|engine|vr [TIER <tier>] COMMAND <exe-or-target> [args...]
+#             [WORKING_DIRECTORY <dir>])
+# add_test() through the VRAM budget — the ONE way a row that boots Vulkan is registered
+# (source.gpu_rows_closure fails a Vulkan row that is not). Like jah_gpu_exclusive_test, the
+# wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
+# $<TARGET_FILE:...>. A pool is not registered here: its tokens are taken per APP PROCESS by
+# run_pool.py (jah_add_pool), so a restart re-takes them and the driver holds none.
+function(jah_gpu_row _row)
+    cmake_parse_arguments(G "" "CLASS;TIER;TOKENS;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    if(NOT G_CLASS OR NOT G_COMMAND)
+        message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
+    endif()
+    if(G_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "jah_gpu_row(${_row}): unexpected arguments '${G_UNPARSED_ARGUMENTS}'")
+    endif()
+    jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")
+    if(G_TOKENS)
+        set(_k ${G_TOKENS})
+    endif()
+    if(_k EQUAL 0)
+        message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS none — a row that boots no Vulkan is a plain "
+                            "add_test() with jah_no_display()")
     endif()
     list(POP_FRONT G_COMMAND _exe)
     if(TARGET ${_exe})
@@ -287,7 +374,46 @@ function(jah_gpu_exclusive_test)
     if(G_WORKING_DIRECTORY)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
-    add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" "${_exe}" ${G_COMMAND} ${_wd})
+    # the label carries the class (`<row>:<class>`): source.gpu_rows_closure checks an app-spawning
+    # row declared an app-sized class
+    add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row}:${G_CLASS} -- "${_exe}" ${G_COMMAND} ${_wd})
+    _jah_vram_register(${_row} ${G_CLASS} ${_k})
+endfunction()
+
+# jah_gpu_exclusive_test(NAME <suite> CLASS <class> RUN_TIMEOUT <s> COMMAND <exe-or-target> [args...]
+#                        [WORKING_DIRECTORY <dir>])
+# add_test() through the lock AND the VRAM budget (the lock for exclusivity, the tokens for
+# memory: the lock is taken FIRST, so a queued timing row holds no tokens while it waits for it).
+# `set_tests_properties` cannot change a registered COMMAND, so the
+# wrapper is applied at registration: a TARGET name as the first COMMAND word becomes
+# $<TARGET_FILE:...> (it is an argument of the wrapper now, and add_test resolves target names
+# only in the command position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
+function(jah_gpu_exclusive_test)
+    cmake_parse_arguments(G "" "NAME;CLASS;TOKENS;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
+                            "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
+    endif()
+    if(NOT G_RUN_TIMEOUT OR NOT G_COMMAND OR NOT G_CLASS)
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): CLASS, RUN_TIMEOUT and COMMAND are required")
+    endif()
+    jah_vram_tokens(${G_CLASS} _k)
+    if(G_TOKENS)
+        set(_k ${G_TOKENS})
+    endif()
+    list(POP_FRONT G_COMMAND _exe)
+    if(TARGET ${_exe})
+        set(_exe "$<TARGET_FILE:${_exe}>")
+    endif()
+    set(_wd)
+    if(G_WORKING_DIRECTORY)
+        set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
+    endif()
+    set(_admit)
+    if(_k GREATER 0)
+        set(_admit "${JAH_GPU_ADMIT}" ${_k} --label ${G_NAME}:${G_CLASS} --)
+    endif()
+    add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" ${_admit} "${_exe}" ${G_COMMAND} ${_wd})
     math(EXPR _timeout "${G_RUN_TIMEOUT} + ${JAH_GPU_LOCK_WAIT_S}")
     # ...AND ctest's own `gpu_timing` resource lock (D6B-GATE-SHAPE): two lock holders of ONE
     # gate never start together, so the second does not sit in a slot waiting on the flock
@@ -296,6 +422,10 @@ function(jah_gpu_exclusive_test)
     set_tests_properties(${G_NAME} PROPERTIES TIMEOUT ${_timeout})
     set_property(TEST ${G_NAME} APPEND PROPERTY RESOURCE_LOCK gpu_timing)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
+    # the tokens' wait bound on top (deferred, like every jah_gpu_row)
+    if(_k GREATER 0)
+        _jah_vram_register(${G_NAME} ${G_CLASS} ${_k})
+    endif()
 endfunction()
 
 # THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4
@@ -363,6 +493,162 @@ function(jah_no_display)
         set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION
                      "DISPLAY=unset:;WAYLAND_DISPLAY=unset:")
     endforeach()
+endfunction()
+
+# THE POOLS (lane SUITE-POOL-1; SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md §5; the
+# developer's read is docs/TESTING.md). The app runs ONE script per `--script` process, and a
+# boot costs ~14 s engine-up on a cold cache (every gate after a rebuild), ~5.5 s warm, ~3.2 s
+# headless — so a family of N verb suites paid N boots, and app suites were 77 % of the gate.
+# A POOL is ONE ctest row, `pool.<pool>`, whose ONE process runs the family's scripts as named
+# ARMS (`Jahshaka --scripts … --pool <pool>`, src/app/cli/scriptrunner.cpp): every arm starts in
+# a fresh JavaScript realm; after every arm, green or red, the pool's baseline is restored (its
+# BASELINE script, then the window's size, the project closed through `project.close`, the
+# deferred deletes), so a later arm starts with NO project open and opens or creates what it
+# needs. The driver (tests/support/run_pool.py) prints each arm's final `ARM <pool>.<arm>
+# PASS|FAIL|CRASH|TIMEOUT <ms>` once the baseline behind it held; a dead or hung process is the
+# CRASH/TIMEOUT of the arm that was running — or of the arm just before, when it died in the
+# baseline — and the driver restarts and continues from the next arm. The row is red iff an arm is; its last lines name every arm's verdict;
+# `JAH_POOL_ARMS=<pool>.<arm> ctest -R '^pool\.<pool>$'` is the solo retry of one arm.
+#
+#   jah_pool_arm(<pool> <arm> <script> <seconds> [HEADLESS] [FIRST])
+#       — one arm, declared WHERE ITS SUITE'S COMMENT LIVES (the comment says what it claims).
+#         Arms run in declaration order; FIRST puts the one arm whose claim is about the
+#         PROCESS ("the Player page has never been shown") before every other (one per pool).
+#   jah_add_pool(<pool> [HEADLESS] [BASELINE <script>] [LABELS <label…>] [ENV <k=v…>]
+#                [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
+#       — the row, after its arms (in the family's CMakeLists, so gate-scope's "a file under
+#         tests/<dir>/ selects that dir's rows" keeps holding). LAUNCHER runs the driver inside
+#         a fixture process (tests/vr/run_vr_app.sh --launch: a Monado runtime for the pool's
+#         life); APP_ARGS are latched by every process the pool starts (--vr); PROPS are extra
+#         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE). BASELINE is a script the app
+#         runs after EVERY arm, green or red (--pool-baseline): what the family's arms change in
+#         the process and cannot put back on a red path.
+#
+# <seconds> is the arm's MEASURED time INSIDE its pool (whole seconds, rounded up — the pool's
+# `ARM … <ms>` lines are the measurement). THE BUDGETS ARE DERIVED, NEVER TYPED: an arm is
+# killed past 6x its measured time (never under 30 s), and the row's TIMEOUT is the sum of the
+# arms' budgets plus one boot budget (300 s). A slower arm is re-measured, never re-budgeted.
+# The home is fresh every run (fresh_home.sh --warm, as add_script_e2e); the arms SHARE it, so
+# an arm never asserts on what another arm left behind — each pool was proved arm by arm against
+# its solo suites before they were deleted (spikes/suite-pool-1/).
+#
+# THE RULE FOR A NEW TEST (docs/TESTING_GATE.md §8): a lane adds an ARM to its family's pool —
+# a script and one jah_pool_arm line. A ROW of its own only for a new fixture or a process
+# switch: a fresh home as the claim, an environment variable or flag the process latches at boot
+# (--vr, --script-live, JAHSHAKA_NO_RAY_QUERY, JAHSHAKA_TEST_NO_EDITOR_BOOT…), a GPU-lock timing,
+# a private display, or a crash-class churn.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(JAH_RUN_POOL "${CMAKE_SOURCE_DIR}/tests/support/run_pool.py")
+set(JAH_POOL_BOOT_BUDGET 300)
+function(jah_pool_arm pool arm script secs)
+    cmake_parse_arguments(A "HEADLESS;FIRST" "" "" ${ARGN})
+    if(NOT secs MATCHES "^[0-9]+$")
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): seconds '${secs}' is not a whole number")
+    endif()
+    if(NOT EXISTS "${script}")
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): no script at ${script}")
+    endif()
+    get_property(_names GLOBAL PROPERTY JAH_POOL_${pool}_NAMES)
+    if("${arm}" IN_LIST _names)
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): the arm is declared twice")
+    endif()
+    get_property(_done GLOBAL PROPERTY JAH_POOL_${pool}_ADDED)
+    if(_done)
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): declared after jah_add_pool(${pool})")
+    endif()
+    set(_mode engine)
+    if(A_HEADLESS)
+        set(_mode headless)
+    endif()
+    set_property(GLOBAL APPEND PROPERTY JAH_POOL_${pool}_NAMES "${arm}")
+    if(A_FIRST)
+        get_property(_first GLOBAL PROPERTY JAH_POOL_${pool}_FIRST)
+        if(_first)
+            message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): ${_first} is already the pool's FIRST arm")
+        endif()
+        set_property(GLOBAL PROPERTY JAH_POOL_${pool}_FIRST "${arm}")
+        get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
+        list(PREPEND _arms "${arm}|${script}|${secs}|${_mode}")
+        set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ARMS "${_arms}")
+    else()
+        set_property(GLOBAL APPEND PROPERTY JAH_POOL_${pool}_ARMS "${arm}|${script}|${secs}|${_mode}")
+    endif()
+endfunction()
+
+function(jah_add_pool pool)
+    cmake_parse_arguments(P "HEADLESS" "BASELINE;CLASS;TIER" "LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
+    get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
+    if(NOT _arms)
+        message(FATAL_ERROR "jah_add_pool(${pool}): no jah_pool_arm(${pool} …) before it")
+    endif()
+    set(_want engine)
+    set(_modeflag)
+    # THE VRAM BUDGET (GATE-ADMIT-1): run_pool.py takes the class's tokens once per APP PROCESS
+    # (a restart re-takes them; the driver itself holds none). A HEADLESS pool boots the NULL
+    # render system and takes none. CLASS defaults to app; a VR pool says `CLASS vr`.
+    if(NOT P_CLASS)
+        set(P_CLASS app)
+    endif()
+    jah_vram_tokens(${P_CLASS} _vram TIER "${P_TIER}")
+    if(P_HEADLESS)
+        set(_want headless)
+        set(_modeflag --headless)
+        set(_vram 0)
+    endif()
+    set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-${pool})
+    file(MAKE_DIRECTORY ${_home}/run)
+    set(_args)
+    set(_timeout ${JAH_POOL_BOOT_BUDGET})
+    set(_cost 0)
+    foreach(_entry IN LISTS _arms)
+        string(REPLACE "|" ";" _f "${_entry}")
+        list(GET _f 0 _arm)
+        list(GET _f 1 _script)
+        list(GET _f 2 _secs)
+        list(GET _f 3 _mode)
+        if(NOT _mode STREQUAL _want)
+            message(FATAL_ERROR "jah_add_pool(${pool}): arm ${_arm} is ${_mode}, the pool is ${_want}")
+        endif()
+        math(EXPR _budget "${_secs} * 6")
+        if(_budget LESS 30)
+            set(_budget 30)
+        endif()
+        math(EXPR _timeout "${_timeout} + ${_budget}")
+        math(EXPR _cost "${_cost} + ${_secs}")
+        list(APPEND _args --arm ${_arm} ${_script} ${_budget})
+    endforeach()
+    set(_env "HOME=${_home}" "JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka" ${P_ENV})
+    list(REMOVE_ITEM _env "")
+    set(_baseline)
+    if(P_BASELINE)
+        if(NOT EXISTS "${P_BASELINE}")
+            message(FATAL_ERROR "jah_add_pool(${pool}): no BASELINE script at ${P_BASELINE}")
+        endif()
+        set(_baseline --baseline ${P_BASELINE})
+    endif()
+    set(_appargs)
+    if(P_APP_ARGS)
+        set(_appargs -- ${P_APP_ARGS})
+    endif()
+    add_test(NAME pool.${pool}
+             COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} -- ${P_LAUNCHER}
+                     ${Python3_EXECUTABLE} ${JAH_RUN_POOL} --pool ${pool}
+                     --app $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${_modeflag}
+                     --boot-budget ${JAH_POOL_BOOT_BUDGET} --vram-tokens ${_vram}
+                     ${_baseline} ${_args} ${_appargs}
+             WORKING_DIRECTORY ${_home}/run)
+    set_tests_properties(pool.${pool} PROPERTIES
+        ENVIRONMENT "${_env}"
+        LABELS "pool;${P_LABELS}"
+        TIMEOUT ${_timeout}
+        COST ${_cost})
+    if(P_PROPS)
+        set_tests_properties(pool.${pool} PROPERTIES ${P_PROPS})
+    endif()
+    set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ADDED TRUE)
+    if(NOT P_HEADLESS)
+        _jah_vram_register(pool.${pool} ${P_CLASS} ${_vram})
+    endif()
 endfunction()
 
 add_subdirectory(engine)

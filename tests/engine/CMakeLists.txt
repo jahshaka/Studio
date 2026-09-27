@@ -32,7 +32,7 @@ function(jahshaka_engine_test target)
         JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
         JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
     add_dependencies(${target} JahshakaEngineMedia)
-    add_test(NAME ${target} COMMAND ${target}
+    jah_gpu_row(${target} CLASS engine COMMAND ${target}
              # The backend writes its log to the working directory.
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # 6x measured with a 120 s floor, like every other row since
@@ -77,7 +77,7 @@ target_compile_definitions(test_engine_recreate PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_recreate PRIVATE JahshakaEngine)
 add_dependencies(test_engine_recreate JahshakaEngineMedia)
-add_test(NAME test_engine_recreate COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(test_engine_recreate CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # meshbake.shadow_vao_alias — THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11;
 # PHOTON-SCENE-SWITCH-1), as its own ctest name so gate-scope can select it: a
 # 6-level mesh must hold one SHRUNK shadow VAO per level over one vertex buffer
@@ -86,7 +86,7 @@ add_test(NAME test_engine_recreate COMMAND test_engine_recreate WORKING_DIRECTOR
 # `createMesh` must REFUSE a hand-built level that names a vertex the mesh has not.
 # The same arm also runs inside test_engine_recreate's three cycles, because a
 # destroy that used to throw belongs in the suite that destroys three engines.
-add_test(NAME meshbake.shadow_vao_alias COMMAND test_engine_recreate --shadow-vao
+jah_gpu_row(meshbake.shadow_vao_alias CLASS engine COMMAND test_engine_recreate --shadow-vao
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.shadow_vao_alias PROPERTIES TIMEOUT 120 LABELS "engine")
 set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 120 LABELS "engine")
@@ -102,7 +102,7 @@ target_compile_definitions(test_decals PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_decals PRIVATE JahshakaEngine)
 add_dependencies(test_decals JahshakaEngineMedia)
-add_test(NAME decals.engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(decals.engine CLASS engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(decals.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 
 # THE LOD SWITCH BAND IS THE PASS'S, NOT THE PROCESS'S (ogre-patch 0075 as
@@ -119,7 +119,7 @@ target_compile_definitions(test_engine_lod_hysteresis PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_lod_hysteresis PRIVATE JahshakaEngine)
 add_dependencies(test_engine_lod_hysteresis JahshakaEngineMedia)
-add_test(NAME engine.lod_hysteresis COMMAND test_engine_lod_hysteresis
+jah_gpu_row(engine.lod_hysteresis CLASS engine COMMAND test_engine_lod_hysteresis
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.lod_hysteresis PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -138,7 +138,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
     target_link_libraries(test_engine_window PRIVATE JahshakaEngine ${X11_LIBRARIES})
     add_dependencies(test_engine_window JahshakaEngineMedia)
-    add_test(NAME engine.window COMMAND test_engine_window
+    jah_gpu_row(engine.window CLASS engine COMMAND test_engine_window
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.window PROPERTIES TIMEOUT 120 LABELS "engine")
 endif()
@@ -159,7 +159,7 @@ target_compile_definitions(test_engine_frame_catch PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_frame_catch PRIVATE JahshakaEngine)
 add_dependencies(test_engine_frame_catch JahshakaEngineMedia)
-add_test(NAME engine.frame_catch COMMAND test_engine_frame_catch
+jah_gpu_row(engine.frame_catch CLASS engine COMMAND test_engine_frame_catch
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.frame_catch PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -201,7 +201,7 @@ target_compile_definitions(test_engine_gi_scan PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_gi_scan PRIVATE JahshakaEngine)
 add_dependencies(test_engine_gi_scan JahshakaEngineMedia)
-add_test(NAME engine.gi_scan COMMAND test_engine_gi_scan
+jah_gpu_row(engine.gi_scan CLASS engine COMMAND test_engine_gi_scan
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # In the gi_chain family like every cascade suite (tests/CMakeLists.txt) and
 # 300 s: the 1k-item arm voxelises once in a Debug build.
@@ -223,7 +223,7 @@ target_compile_definitions(test_engine_gpu_scene PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_gpu_scene PRIVATE JahshakaEngine)
 add_dependencies(test_engine_gpu_scene JahshakaEngineMedia)
-add_test(NAME engine.gpu_scene COMMAND test_engine_gpu_scene
+jah_gpu_row(engine.gpu_scene CLASS engine COMMAND test_engine_gpu_scene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpu_scene PROPERTIES TIMEOUT 120 LABELS "engine")
 

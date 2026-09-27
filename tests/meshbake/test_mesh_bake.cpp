@@ -1420,7 +1420,8 @@ static void surfaceCards()
 
 
 // ---------------------------------------------------------------------------
-// 9. THE MEASURED BOUND (ATOM P1's AT-A5) — the `atom.error_bound` suite.
+// 9. THE MEASURED BOUND (ATOM P1's AT-A5) — an arm of the `atom.lod_bound_bar` suite
+// (`--bound-bar` runs it after the bar, section 14).
 //
 // THE CLAIM UNDER TEST, in one sentence: for every level of every shipped mesh,
 // no point of that level's surface lies further from level 0's surface than the
@@ -1437,6 +1438,10 @@ static void surfaceCards()
 // `ground.obj` reads ~0.20 because its bound is the precision floor. The physics bar —
 // bound >= the dense reference AND <= 2x the simplifier's error — is
 // atom.lod_bound_bar; `test_mesh_bake --bound-terms <file>` prints a chain's terms.
+//
+// WHAT IT ADDS TO THE BAR: the same dense re-measure through the BAKE's own route
+// (`MeshBake::buildFromFile`, where the bar loads through GraphicsHelper), one bound and
+// one quadric per level, the bounds non-decreasing, and the ratio table.
 //
 // AND `lodBounds[k] >= lodErrors[k]` IS DELIBERATELY NOT ASSERTED. The quadric can
 // over-state as easily as it under-states — it is a different quantity, not a
@@ -2565,16 +2570,8 @@ int main(int argc, char **argv)
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
     }
-    // `--error-bound` is atom.error_bound; `--sdf` is meshbake.sdf. Their own
-    // suites because they are their own claims (and each prints a table the
-    // design asked for).
-    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--error-bound")) {
-        std::printf("== 9. the measured bound ==\n");
-        errorBound();
-        if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
-        else          std::printf("ALL %d CHECKS PASSED\n", checks);
-        return failures ? 1 : 0;
-    }
+    // `--sdf` is meshbake.sdf: its own suite because it is its own claim (and it
+    // prints a table the design asked for).
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--sdf")) {
         std::printf("== 10. the signed distance field ==\n");
         signedDistanceField();
@@ -2602,6 +2599,8 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bound-bar")) {
         std::printf("== 14. the LOD bound's physics bar ==\n");
         boundBar();
+        std::printf("== 9. the measured bound, through the bake's own route ==\n");
+        errorBound();
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;

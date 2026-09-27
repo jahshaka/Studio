@@ -15,7 +15,7 @@ target_compile_definitions(test_particles PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_particles PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_particles JahshakaEngineMedia)
-add_test(NAME particles.document_to_engine COMMAND test_particles WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(particles.document_to_engine CLASS engine COMMAND test_particles WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
 # ParticleFX2 adoption (PARTICLES_FX2_SPEC.md phase 0): the ENGINE's own
@@ -31,7 +31,7 @@ target_compile_definitions(test_particles_pfx2 PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_particles_pfx2 PRIVATE JahshakaEngine Qt6::Gui)
 add_dependencies(test_particles_pfx2 JahshakaEngineMedia)
-add_test(NAME engine.particles_pfx2 COMMAND test_particles_pfx2 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(engine.particles_pfx2 CLASS engine COMMAND test_particles_pfx2 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.particles_pfx2 PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")
 
@@ -82,7 +82,7 @@ target_compile_definitions(test_particles_fire PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_particles_fire PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_particles_fire JahshakaEngineMedia)
-add_test(NAME particles.fire_shape COMMAND test_particles_fire
+jah_gpu_row(particles.fire_shape CLASS engine COMMAND test_particles_fire
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(particles.fire_shape PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "particles")

@@ -223,6 +223,9 @@ AREA_RULES = [
     (r"^scripts/gate[-_]", ["hygiene"], []),
     # THE GPU-TIMING LOCK's wrapper (DEVPROCESS-1): its own tooling suite, devprocess.gpu_lock.
     (r"^scripts/gpu-exclusive", ["tooling"], []),
+    # THE VRAM BUDGET's helper (GATE-ADMIT-1): its tooling suite (devprocess.vram_admit), the
+    # pool driver's own test that imports it (pool.runner, tests/app) and the closure (hygiene).
+    (r"^scripts/(gpu-admit|vram_tokens)", ["tooling", "app", "hygiene"], []),
     (r"^scripts/", [], []),
 ]
 
@@ -389,14 +392,23 @@ def load_inventory(build):
         # source tree or a configured script (a .js the build dir generated from a .js.in, a
         # wrapper .sh, a lint .py). The audit (§7): wrapper-run app rows never got module
         # selection because only cmd[1] of a bash row was read.
+        # THE WRAPPERS ARE NOT THE ROW'S SUBJECT (GATE-ADMIT-1): the GPU lock and the VRAM budget
+        # (scripts/gpu-exclusive.sh, scripts/gpu-admit.sh <k> --label <l> --) are peeled off
+        # before the row's script and argv files are read; `cmd` itself keeps them (the lock
+        # rules read it).
+        run = list(cmd)
+        if run and os.path.basename(run[0]) == "gpu-exclusive.sh":
+            run = run[1:]
+        if run and os.path.basename(run[0]) == "gpu-admit.sh":
+            run = run[run.index("--") + 1:] if "--" in run else run[2:]
         script = None
-        m = re.search(r"--script\s+(\S+)", " ".join(cmd))
+        m = re.search(r"--script\s+(\S+)", " ".join(run))
         if m: script = m.group(1)
-        files_in_argv = [os.path.normpath(c) for c in cmd[1:]
+        files_in_argv = [os.path.normpath(c) for c in run[1:]
                          if c.endswith((".js", ".sh", ".py", ".js.in", ".cmake")) and os.path.isfile(c)]
         if not script:
             script = next((f for f in files_in_argv if f.endswith(".js")), None)
-        if not script and cmd and cmd[0].endswith(("bash", "/sh", "sh")) and files_in_argv:
+        if not script and run and run[0].endswith(("bash", "/sh", "sh")) and files_in_argv:
             script = files_in_argv[0]
         # A POOL row (SUITE-POOL-1: `run_pool.py --pool <p> --arm <arm> <script> <budget> ...`):
         # its arms and their scripts, read from the command line the pool's CMake built — the
@@ -1109,6 +1121,77 @@ class Selection:
     _STRUCTURAL = {"endfunction", "endmacro", "else", "elseif", "endif", "foreach", "endforeach",
                    "while", "endwhile", "return", "break", "continue"}
 
+    # the commands that register or decorate a TEST (their first arguments are row names)
+    _TEST_REGISTRATION = {"add_test", "add_script_e2e", "set_tests_properties", "jah_fresh_home_fixture",
+                          "jah_no_display", "jah_tsan_blocked", "jah_lsan_blocked", "jah_tsan_lane",
+                          "jah_gpu_exclusive_test"}
+    # what a retired suite's check became, printed with its `retired:` reason
+    RETIRED = {
+        "app.create_loop": "SUITE-POOL-1; its one unique check (the Properties column after 40 "
+                           "creates) is open.responsive's full-library arm",
+        "test_create_loop": "app.create_loop's executable (SUITE-POOL-1; open.responsive carries its check)",
+        "app.create_loop.fresh_home": "app.create_loop's fixture (SUITE-POOL-1; open.responsive carries its check)",
+        "atom.error_bound": "SUITE-POOL-1; merged into atom.lod_bound_bar (test_mesh_bake --bound-bar)",
+    }
+
+    def gone_row(self, name, args, toks, whole=""):
+        """(`arm`, [pool::arm…]) when the row a test command registers or names is gone and its
+        script is now an arm's; (`retired`, why) when what it names exists nowhere in this tree;
+        None when it names something live (or cannot tell — the other resolutions then run)."""
+        a_ = args.split()
+        arm_names = {f"{t['pool']}.{a}" for t in self.inv.values() for a in t["arms"]}
+        live = lambda n: n in self.row_names or n in arm_names or self.names_anywhere(n)
+        if name in self._TEST_REGISTRATION:
+            if name in ("add_test", "jah_gpu_exclusive_test"):
+                k = a_.index("NAME") + 1 if "NAME" in a_ else len(a_)
+                named = a_[k:k + 1]
+            elif name == "add_script_e2e":
+                named = [f"scripting.e2e.{a_[0]}"] if a_ else []
+            elif name == "set_tests_properties":
+                named = a_[:a_.index("PROPERTIES")] if "PROPERTIES" in a_ else a_[:1]
+            else:
+                named = [x for x in a_ if "." in x and not x.startswith(("$", '"'))][:4]
+            named = [n for n in named if n and "$" not in n]
+            if not named or any(live(n) for n in named):
+                return None             # a live row: the ordinary resolutions own it
+            # its script (on this command, or on the gone row's own registration in the same
+            # file) is now a pool ARM's → that arm
+            cands = [toks]
+            for c in gate_graph.cmake_commands(whole or ""):
+                ca = c[3].split()
+                regs = ([ca[ca.index("NAME") + 1]] if c[0] in ("add_test", "jah_gpu_exclusive_test")
+                        and "NAME" in ca and ca.index("NAME") + 1 < len(ca) else
+                        [f"scripting.e2e.{ca[0]}"] if c[0] == "add_script_e2e" and ca else [])
+                if set(regs) & set(named):
+                    cands.append(set(re.findall(r"[A-Za-z0-9_.+\-/${}]+", c[3])))
+            for tk in cands:
+                scripts = {os.path.basename(t).replace(".js.in", "").replace(".js", "")
+                           for t in tk if t.endswith((".js", ".js.in"))}
+                arms = sorted({r for b in scripts for r in self.script_base.get(b, []) if "::" in r})
+                if arms: return ("arm", arms)
+            return ("retired", "; ".join(f"{n} — {self.RETIRED.get(n, 'no row, arm or fixture of that name')}"
+                                         for n in named))
+        # a target command: the target must be gone from the build graph AND from every build
+        # file of the tree
+        tgt = a_[0] if a_ else ""
+        if not tgt or "$" in tgt or not self.graph or tgt in self.graph.targets or self.names_anywhere(tgt):
+            return None
+        return ("retired", f"{tgt} — {self.RETIRED.get(tgt, 'no target of that name in this tree')}")
+
+    def names_anywhere(self, token):
+        """Whether any build file of THIS tree still names the token (a fixture, a target, a
+        row registered under a variable the inventory cannot see)."""
+        if not hasattr(self, "_all_cmake"):
+            texts = []
+            for dp, dns, fs in os.walk(ROOT):
+                dns[:] = [x for x in dns if not x.startswith(("build", ".")) and x != "thirdparty"]
+                for f in fs:
+                    if f == "CMakeLists.txt" or f.endswith(".cmake"):
+                        try: texts.append(open(os.path.join(dp, f), errors="replace").read())
+                        except OSError: pass
+            self._all_cmake = "\n".join(texts)
+        return re.search(r"(?<![\w.\-])" + re.escape(token) + r"(?![\w.\-])", self._all_cmake) is not None
+
     def cmake_command(self, p, d, name, args, fn, changed_text, whole, tag, notes, depth=0):
         """Resolve one changed CMake command to what it names. True when something owned it.
 
@@ -1138,6 +1221,22 @@ class Selection:
         rows = sorted(t for t in toks if t in self.row_names)
         if rows:
             self.add(rows, f"{tag}: names the row"); notes.append(f"names {len(rows)} row(s)"); got = True
+        # 1b. A ROW THAT IS GONE (SUITE-POOL-1; a replayed or long-lived diff meets a tree where
+        # its row no longer exists): a registration whose SCRIPT is now a pool arm's resolves to
+        # that ARM ("the row became an arm"); one naming a suite or a test target that exists
+        # nowhere any more — no row, no arm, no fixture, no target — resolves to NOTHING, said
+        # out loud (`retired: <name>`), never a fallback and never silent.
+        if not rows and name in self._TEST_REGISTRATION | {"add_executable", "set_target_properties"} \
+                or (not rows and name.startswith("target_")):
+            gone = self.gone_row(name, args, toks, whole)
+            if gone is not None:
+                kind, what = gone
+                if kind == "arm":
+                    self.add(what, f"{tag}: the row became an arm")
+                    notes.append(f"the row became an arm: {', '.join(what)}")
+                else:
+                    notes.append(f"retired: {what}")
+                return True
         # 2. a helper function: its body (fn) or its own header line
         helper = fn if fn else (args.split()[0].lower() if name in ("function", "macro") and args.split() else None)
         if helper:

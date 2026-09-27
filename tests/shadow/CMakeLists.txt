@@ -33,7 +33,7 @@ jah_no_display(shadow.layout)
 # found that an all-cached node with no sun let Ogre's barrier solver throw
 # mid-pass and desync a layout: any "Validation Error" — or that solver
 # message — fails the row, whatever the exit code says.
-add_test(NAME shadow.cache_kinds COMMAND test_shadow_spike cachekinds
+jah_gpu_row(shadow.cache_kinds CLASS engine COMMAND test_shadow_spike cachekinds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.cache_kinds PROPERTIES
     TIMEOUT 120 LABELS "engine"
@@ -54,7 +54,7 @@ target_compile_definitions(test_shadow_maps PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_shadow_maps PRIVATE JahshakaEngine)
 add_dependencies(test_shadow_maps JahshakaEngineMedia)
-add_test(NAME lights.shadows COMMAND test_shadow_maps
+jah_gpu_row(lights.shadows CLASS engine COMMAND test_shadow_maps
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -63,7 +63,7 @@ set_tests_properties(lights.shadows PROPERTIES TIMEOUT 120 LABELS "engine")
 # open can only be seen on a VIRGIN atlas — the atlas never shrinks within a
 # session (owner decision D4), so the first case to grow it takes that
 # observation away from every case after it.
-add_test(NAME shadow.atlas_rebuilds COMMAND test_shadow_maps t3x
+jah_gpu_row(shadow.atlas_rebuilds CLASS engine COMMAND test_shadow_maps t3x
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -72,6 +72,6 @@ set_tests_properties(shadow.atlas_rebuilds PROPERTIES TIMEOUT 120 LABELS "engine
 # when it does come up the count and the clear strategy settle in ONE rebuild.
 # Its own process for T3x's reason — a virgin atlas is the only place an open
 # can be observed.
-add_test(NAME shadow.atlas_binding COMMAND test_shadow_maps t3y
+jah_gpu_row(shadow.atlas_binding CLASS engine COMMAND test_shadow_maps t3y
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.atlas_binding PROPERTIES TIMEOUT 120 LABELS "engine")

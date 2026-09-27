@@ -22,7 +22,7 @@ endfunction()
 
 jahshaka_rt_reflect_test(test_rt_reflect)
 target_link_libraries(test_rt_reflect PRIVATE JahshakaEngine)
-add_test(NAME gi.rt_reflect COMMAND test_rt_reflect
+jah_gpu_row(gi.rt_reflect CLASS engine COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -40,11 +40,11 @@ set_tests_properties(gi.rt_reflect PROPERTIES TIMEOUT 120 LABELS "engine")
 #                             which the 8-bit readback forced this row into a grey
 #                             mirror's ratio against a reference below 1.0 is over
 #                             and that form is deleted.
-add_test(NAME gi.rt_reflect_lamp COMMAND test_rt_reflect --lamp
+jah_gpu_row(gi.rt_reflect_lamp CLASS engine COMMAND test_rt_reflect --lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp PROPERTIES TIMEOUT 120 LABELS "engine")
 
-add_test(NAME gi.rt_reflect_lamp_clip COMMAND test_rt_reflect --lamp --target
+jah_gpu_row(gi.rt_reflect_lamp_clip CLASS engine COMMAND test_rt_reflect --lamp --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
                      TIMEOUT 120 LABELS "engine")
@@ -52,7 +52,7 @@ set_tests_properties(gi.rt_reflect_lamp_clip PROPERTIES
 # F1-HITRES (PHOTON-CARDS-2 part B): a perfect mirror's hit reads the hit
 # surface's CARD — the reflected panel's row held to the card's closed form pixel
 # by pixel, its edge a two-pixel step (the voxel read's numbers printed beside).
-add_test(NAME gi.rt_reflect_hitres COMMAND test_rt_reflect --hitres
+jah_gpu_row(gi.rt_reflect_hitres CLASS engine COMMAND test_rt_reflect --hitres
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_hitres PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -79,11 +79,11 @@ endif()
 # pixels, read as radiance, at five roughnesses. Every environment reader looks
 # along jahEnvDominantDir; the bars are per roughness (0.5 code up to r = 0.05,
 # the measured split-sum residual + 25 % above) — see envRayMatchMain.
-add_test(NAME gi.env_ray_match COMMAND test_rt_reflect --env-ray-match
+jah_gpu_row(gi.env_ray_match CLASS engine COMMAND test_rt_reflect --env-ray-match
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.env_ray_match PROPERTIES TIMEOUT 120 LABELS "engine")
 
-add_test(NAME gi.rt_reflect_norays COMMAND test_rt_reflect
+jah_gpu_row(gi.rt_reflect_norays CLASS engine COMMAND test_rt_reflect
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_norays PROPERTIES
                      TIMEOUT 120 LABELS "engine"
@@ -104,14 +104,14 @@ target_compile_definitions(test_reflect_motion PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_reflect_motion JahshakaEngineMedia)
 target_link_libraries(test_reflect_motion PRIVATE JahshakaEngine)
-add_test(NAME gi.reflect_motion COMMAND test_reflect_motion
+jah_gpu_row(gi.reflect_motion CLASS engine COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion PROPERTIES TIMEOUT 120 LABELS "engine")
 # THE LETTERBOX (SSR-LETTERBOX-1): both rows run a 2.4:1 "the rectangle IS the
 # shot" arm and a 2.39:1 moving-vs-settled arm, and both gate them — the march
 # takes the shot's uv in its pass buffer, the ray tier its image basis expanded
 # to the target on the CPU.
-add_test(NAME gi.reflect_motion_norays COMMAND test_reflect_motion
+jah_gpu_row(gi.reflect_motion_norays CLASS engine COMMAND test_reflect_motion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.reflect_motion_norays PROPERTIES
                      TIMEOUT 120 LABELS "engine"
@@ -126,7 +126,7 @@ set_tests_properties(gi.reflect_motion_norays PROPERTIES
 # the clock, not a sibling's work inside one of the two windows). The four
 # millisecond bars print as `target:` (ATOM-FARBLAS-1); the ratio bars gate. The
 # bars' arithmetic over both clock states (free and locked) is in costMain.
-jah_gpu_exclusive_test(NAME gi.rt_reflect_cost RUN_TIMEOUT 300 COMMAND test_rt_reflect
+jah_gpu_exclusive_test(NAME gi.rt_reflect_cost CLASS engine RUN_TIMEOUT 300 COMMAND test_rt_reflect
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.rt_reflect_cost PROPERTIES
                      LABELS "engine"

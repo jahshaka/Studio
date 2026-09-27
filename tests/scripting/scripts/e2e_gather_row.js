@@ -26,6 +26,10 @@ function assert(cond, msg) {
 }
 
 // ---- 1. the key is accepted, and the row reads back -----------------------
+// Its own world (the arm's baseline, SUITE-POOL-1): a pool arm starts with no project
+// open, where a one-script process had the boot's default scene.
+assert(project.create("Gather Row " + Date.now()).length > 10, "project.create");
+
 assert(world.gi({ gather: "off" }), "world.gi accepts gather: off");
 // (the row is READ through `world.get().gi` — `world.gi()` is a SETTER and
 // answers a bool, like every other world setter; and the three-state rows read

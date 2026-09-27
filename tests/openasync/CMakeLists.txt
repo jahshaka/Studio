@@ -19,7 +19,9 @@
 #     and project.createAsync hands back a guid before the world is installed,
 #   * AND (CREATE-GAP-1) THE FULL LIBRARY: a create over a 40-project desktop
 #     stays inside the same budget, rebuilds no grid, leaves one tile per
-#     project, and its ledger carries the close it began with.
+#     project, and its ledger carries the close it began with — and after those
+#     40+ creates in one process the Properties column is shown, mounted and owes
+#     nothing (the create-loop SIGSEGV's column; ui.show_walk is its mechanism).
 # EVERY RUN STARTS FROM A FIXED LIBRARY: the suite deletes the home's library
 # database, its lock, the asset store and the project folders before it spawns
 # the app (the shader cache stays) — the home used to grow ~14 projects a run.
@@ -39,7 +41,7 @@ file(MAKE_DIRECTORY ${_open_home}/run)
 # assertion and prints each UI-gap / frame / watchdog reading; open.responsive.timing
 # (below) is the same binary with JAHSHAKA_TIMING_BARS=1 — the bars armed, on a quiet box,
 # under the GPU-timing lock. The push row measures no time, so it left the lock.
-add_test(NAME open.responsive COMMAND test_open_responsive
+jah_gpu_row(open.responsive CLASS app COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_home}/run)
 # TIMEOUT 400, from the MEASUREMENT and not from an estimate. OPEN-ASSIMP-1
 # added the seven remaining shipped samples (import + a synchronous open each,
@@ -63,7 +65,7 @@ set_tests_properties(open.responsive PROPERTIES
 # Its own home, so the nightly run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
-jah_gpu_exclusive_test(NAME open.responsive.timing RUN_TIMEOUT 1740 COMMAND test_open_responsive
+jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app RUN_TIMEOUT 1740 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
@@ -74,35 +76,6 @@ set_tests_properties(open.responsive.timing PROPERTIES
 # WALL-CLOCK assertion — under TSan's 5-15x slowdown it can legitimately fail
 # while proving no race; read the race reports, not the verdict.
 jah_tsan_blocked(open.responsive open.responsive.timing)   # spawns the app: see jah_tsan_blocked
-
-# app.create_loop — FORTY CREATES BACK TO BACK, AND THE APP IS STILL UP (lane
-# CREATE-CRASH-1). The D1 library generator's create loop died at the 33rd
-# create (SIGSEGV in QWidgetPrivate::showChildren under the reveal's
-# applyDockVisibilityForSpace). The real binary over MCP on the rig display: a
-# 300-asset library through assets.importFile, then project.create in four
-# scripts of ten; every create returns a project, the last is the one open, the
-# Properties column is settled, the process never went away and quits cleanly.
-# The deterministic red of the mechanism is ui.show_walk; this is the product
-# loop. A FRESH HOME per run (the fixture below): forty projects a run would
-# otherwise accumulate into the next run's library.
-add_executable(test_create_loop test_create_loop.cpp)
-set_target_properties(test_create_loop PROPERTIES CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_create_loop PRIVATE ${CMAKE_SOURCE_DIR}/tests)
-target_link_libraries(test_create_loop PRIVATE Qt6::Core Qt6::Gui Qt6::Network)
-target_compile_definitions(test_create_loop PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-set(_create_loop_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-create-loop)
-jah_fresh_home_fixture(app.create_loop.fresh_home createLoopFreshHome "${_create_loop_home}" LABELS "openasync")
-add_test(NAME app.create_loop COMMAND test_create_loop
-         WORKING_DIRECTORY ${_create_loop_home}/run)
-# TIMEOUT 750: six times the measured 125 s (solo on the rig display beside one
-# other app instance, 2026-09-26: 4 s of imports, 105 s of creates at ~2.6 s each).
-set_tests_properties(app.create_loop PROPERTIES
-    FIXTURES_REQUIRED createLoopFreshHome
-    TIMEOUT 750 LABELS "openasync")
-jah_tsan_blocked(app.create_loop)   # spawns the app: see jah_tsan_blocked
 
 # open.frames — THE THREADED OPEN DRIVES ITS OWN FRAMES (lane OPEN-FRAMES-1).
 #
@@ -117,7 +90,7 @@ jah_tsan_blocked(app.create_loop)   # spawns the app: see jah_tsan_blocked
 configure_file(e2e_open_frames.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js @ONLY)
 set(_frames_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-frames)
 file(MAKE_DIRECTORY ${_frames_home}/run)
-add_test(NAME open.frames
+jah_gpu_row(open.frames CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js
          WORKING_DIRECTORY ${_frames_home}/run)
 # TIMEOUT 300: three opens of the dragon sample plus two archive imports, cold
@@ -139,7 +112,7 @@ jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 # single failure as "run it again"; read three as a regression. RUN_SERIAL: it
 # spawns twelve engine processes in sequence and a parallel gate would both slow
 # it and change what it measures.
-add_test(NAME open.crash_soak
+jah_gpu_row(open.crash_soak CLASS app
          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/open_crash_soak.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_SOURCE_DIR}/scenes

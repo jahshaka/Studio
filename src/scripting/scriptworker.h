@@ -181,6 +181,7 @@ private:
     VerbDispatcher *mDispatcher;
     QJSEngine      *mJs = nullptr;
     ScriptBridge   *mBridge = nullptr;
+    QObject        *mConsole = nullptr;     // the realm's console bridge
     ScriptResult    mResult;
 };
 

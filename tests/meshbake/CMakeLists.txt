@@ -99,29 +99,11 @@ set_tests_properties(meshbake.cards PROPERTIES
 # meshbake.cards.timing — the bake's two wall-clock bars (the 4x-triangles-not-4x-time
 # ratio and the 4,000 ms ceiling), nightly (lane D6B-GATE-SHAPE; audit §5 FIX-TIME):
 # the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME meshbake.cards.timing RUN_TIMEOUT 180 COMMAND test_mesh_bake --cards
+jah_gpu_exclusive_test(NAME meshbake.cards.timing CLASS none RUN_TIMEOUT 180 COMMAND test_mesh_bake --cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(meshbake.cards.timing PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
     LABELS "meshbake;nightly;quiet-box")
-
-# THE MEASURED LOD BOUND (ATOM P1's AT-A5) — `atom.error_bound`. Its own test name
-# because it is its own claim: for every level of every shipped mesh, an AREA-ONLY
-# sampling eight times as dense as the bake's finds no point of that level further
-# from level 0 than the length the bake stored. It also prints the bound-versus-
-# quadric ratio table, which is the evidence AT-A5 was missing.
-#
-# IT IS A REGRESSION CHECK, NOT AN INDEPENDENT DERIVATION: the dense re-measure walks
-# the same exact removed vertices, so where that term carries the maximum it reads
-# 1.0000 by construction; what it judges is the sampling margin and the pipeline
-# (sampler, grid, floor, monotonicity). The physics bar is atom.lod_bound_bar below.
-# In tests/meshbake because the subject is the BAKE and needs no engine; the name
-# is the design's (SPECS/atom/A2_HONEST_GEOMETRY_AND_EVERY_ASSET_DESIGN.md §1.1).
-add_test(NAME atom.error_bound COMMAND test_mesh_bake --error-bound
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.error_bound PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
-    TIMEOUT 180 LABELS "meshbake")
 
 # THE LOD BOUND'S PHYSICS BAR (ATOM-LOD-BOUND-1) — `atom.lod_bound_bar`. Every
 # level of the shipped primitives, the Stanford dragon and a scan stand-in (a floor,
@@ -130,6 +112,12 @@ set_tests_properties(atom.error_bound PROPERTIES
 # on the stand-in (c) no dropped island is bigger than its level's bound and level 1
 # is affordable by 150 m on a 1080-line view. Chains only (no DAG/SDF/cards), so it
 # is the bound's own claim; the dragon's chain dominates the run.
+# ITS SECOND ARM IS THE MEASURED BOUND (ATOM P1's AT-A5; test_mesh_bake.cpp section 9; it
+# was the atom.error_bound row): through the BAKE's own route (MeshBake::buildFromFile) every
+# subject carries one bound and one quadric per level, the bounds non-decreasing, every level
+# inside its stored bound under an 8x-dense re-measure, and the bound-versus-quadric ratio
+# table — the evidence AT-A5 was missing — is printed. A regression check, not an independent
+# derivation (the dense re-measure walks the same exact removed vertices).
 add_test(NAME atom.lod_bound_bar COMMAND test_mesh_bake --bound-bar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.lod_bound_bar PROPERTIES
@@ -225,5 +213,4 @@ jah_no_display(meshbake.hemisphere_winding)
 
 jah_no_display(meshbake.roundtrip)
 jah_no_display(meshbake.cards meshbake.cards.timing)
-jah_no_display(atom.error_bound)
 jah_no_display(meshbake.sdf)

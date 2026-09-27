@@ -137,6 +137,27 @@ int main(int argc, char **argv)
               "an ordinary command line parses with no errors");
     }
 
+    // ---- the pool runner's flags (lane SUITE-POOL-1) -------------------------
+    {
+        const CliOptions o = parsed({ "--scripts", "a=x.js,y.js", "--pool", "p", "--arms", "a,y",
+                                      "--headless" });
+        CHECK(o.errors.isEmpty() && o.poolScripts == QStringLiteral("a=x.js,y.js") &&
+                  o.poolName == QStringLiteral("p") &&
+                  o.poolArms == QStringList({ QStringLiteral("a"), QStringLiteral("y") }) &&
+                  o.headlessScript && o.isScriptRun() && o.scriptPath.isEmpty(),
+              "--scripts/--pool/--arms parse, and a pool is a script run");
+    }
+    {
+        const CliOptions o = parsed({ "--script", "x.js", "--scripts", "y.js" });
+        CHECK(o.errors.size() == 1, "--script and --scripts together are refused (%d error(s))",
+              int(o.errors.size()));
+    }
+    {
+        const CliOptions o = parsed({ "--arms", "a" });
+        CHECK(o.errors.size() == 1 && !o.isScriptRun(),
+              "--arms without --scripts is refused, not ignored");
+    }
+
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

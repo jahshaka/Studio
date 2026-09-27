@@ -119,6 +119,35 @@ void ScriptEngine::installApi()
     if (mInstalled) return;
     mInstalled = true;
 
+    mDispatcher = new VerbDispatcher(mRegistry, mHost, this);
+    mWorker = new ScriptWorker(mDispatcher);
+    mThread = new QThread;
+    mThread->setObjectName(QStringLiteral("jah-script"));
+    mWorker->moveToThread(mThread);
+    connect(mWorker, &ScriptWorker::consoleLine, this, &ScriptEngine::consoleOutput);
+    mThread->start();
+
+    QMetaObject::invokeMethod(mWorker, "setup", Qt::BlockingQueuedConnection,
+                              Q_ARG(QVariantList, moduleSpecs()),
+                              Q_ARG(QString, QString::fromLatin1(ApiRegistry::apiVersion())));
+}
+
+bool ScriptEngine::resetScriptContext()
+{
+    if (mRunning) return false;
+    if (!mInstalled) { installApi(); return true; }   // the first realm IS fresh
+    // Both hops BLOCKING: nothing runs on the worker between two runs, so there
+    // is no hop back to this thread for the wait to deadlock on (the reason
+    // ~ScriptEngine queues its teardown does not apply here).
+    QMetaObject::invokeMethod(mWorker, "teardown", Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(mWorker, "setup", Qt::BlockingQueuedConnection,
+                              Q_ARG(QVariantList, moduleSpecs()),
+                              Q_ARG(QString, QString::fromLatin1(ApiRegistry::apiVersion())));
+    return mWorker->engine() != nullptr;
+}
+
+QVariantList ScriptEngine::moduleSpecs() const
+{
     // THE SHIM SPEC IS BUILT HERE, on the UI thread, from the registry — the
     // worker never reads the registry directly, so there is no shared structure
     // for the two threads to disagree about.
@@ -134,18 +163,7 @@ void ScriptEngine::installApi()
     specs.append(QVariantMap{ { QStringLiteral("name"), QStringLiteral("api") },
                               { QStringLiteral("verbs"),
                                 QStringList{ QStringLiteral("help"), QStringLiteral("verbs") } } });
-
-    mDispatcher = new VerbDispatcher(mRegistry, mHost, this);
-    mWorker = new ScriptWorker(mDispatcher);
-    mThread = new QThread;
-    mThread->setObjectName(QStringLiteral("jah-script"));
-    mWorker->moveToThread(mThread);
-    connect(mWorker, &ScriptWorker::consoleLine, this, &ScriptEngine::consoleOutput);
-    mThread->start();
-
-    QMetaObject::invokeMethod(mWorker, "setup", Qt::BlockingQueuedConnection,
-                              Q_ARG(QVariantList, specs),
-                              Q_ARG(QString, QString::fromLatin1(ApiRegistry::apiVersion())));
+    return specs;
 }
 
 void ScriptEngine::setVerbTracing(bool on)

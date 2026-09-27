@@ -20,7 +20,7 @@ target_compile_definitions(test_shader_cache PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_shader_cache PRIVATE JahshakaEngine)
 add_dependencies(test_shader_cache JahshakaEngineMedia)
-add_test(NAME shadercache.container COMMAND test_shader_cache
+jah_gpu_row(shadercache.container CLASS engine COMMAND test_shader_cache
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.container PROPERTIES TIMEOUT 720 LABELS "shadercache")
 
@@ -70,7 +70,7 @@ target_link_libraries(test_shader_cache_app PRIVATE Qt6::Core)
 target_compile_definitions(test_shader_cache_app PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-add_test(NAME shadercache.app COMMAND test_shader_cache_app
+jah_gpu_row(shadercache.app CLASS app COMMAND test_shader_cache_app
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache")
 
@@ -87,7 +87,7 @@ target_compile_definitions(test_warm_up PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_warm_up PRIVATE JahshakaEngine)
 add_dependencies(test_warm_up JahshakaEngineMedia)
-add_test(NAME shadercache.warmup COMMAND test_warm_up
+jah_gpu_row(shadercache.warmup CLASS engine COMMAND test_warm_up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 120 LABELS "shadercache")
 
@@ -100,7 +100,7 @@ set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 120 LABELS "shadercac
 # this twin is what keeps the code honest and measures what it buys: case 6
 # compiles a permutation parked behind the camera here and zero in the default
 # run above. Its own working directory: both runs write an Ogre log.
-add_test(NAME shadercache.warmup_pass COMMAND test_warm_up
+jah_gpu_row(shadercache.warmup_pass CLASS engine COMMAND test_warm_up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 set_tests_properties(shadercache.warmup_pass PROPERTIES

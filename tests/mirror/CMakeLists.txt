@@ -19,7 +19,7 @@ target_compile_definitions(test_scene_mirror PRIVATE
     JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_scene_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_scene_mirror JahshakaEngineMedia)
-add_test(NAME mirror.document_to_engine COMMAND test_scene_mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(mirror.document_to_engine CLASS engine COMMAND test_scene_mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # mirror.skinned_outline — the SELECTION SILHOUETTE over a skinned character.
@@ -42,7 +42,7 @@ target_compile_definitions(test_skinned_outline PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_skinned_outline PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_skinned_outline JahshakaEngineMedia)
-add_test(NAME mirror.skinned_outline COMMAND test_skinned_outline WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(mirror.skinned_outline CLASS engine COMMAND test_skinned_outline WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.skinned_outline PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
@@ -69,7 +69,7 @@ add_dependencies(test_mirror_scale JahshakaEngineMedia)
 # RUN_SERIAL, which reaches only inside one ctest). The ratios are load-tolerant by
 # construction (every arm pays the same contention), and the lock keeps every other
 # measurement on the box out of its window.
-jah_gpu_exclusive_test(NAME mirror.scale RUN_TIMEOUT 300 COMMAND test_mirror_scale
+jah_gpu_exclusive_test(NAME mirror.scale CLASS engine RUN_TIMEOUT 300 COMMAND test_mirror_scale
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.scale PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror")
@@ -94,7 +94,7 @@ target_compile_definitions(test_dirty_mirror PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_dirty_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_dirty_mirror JahshakaEngineMedia)
-add_test(NAME mirror.dirty_equals_full COMMAND test_dirty_mirror
+jah_gpu_row(mirror.dirty_equals_full CLASS engine COMMAND test_dirty_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.dirty_equals_full PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
@@ -117,7 +117,7 @@ target_compile_definitions(test_grid_floor PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_grid_floor PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_grid_floor JahshakaEngineMedia)
-add_test(NAME mirror.grid_floor COMMAND test_grid_floor WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(mirror.grid_floor CLASS engine COMMAND test_grid_floor WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.grid_floor PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
 
@@ -140,7 +140,7 @@ target_compile_definitions(test_ground_horizon PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_ground_horizon PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_ground_horizon JahshakaEngineMedia)
-add_test(NAME mirror.ground_horizon COMMAND test_ground_horizon
+jah_gpu_row(mirror.ground_horizon CLASS engine COMMAND test_ground_horizon
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.ground_horizon PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
@@ -164,7 +164,7 @@ target_compile_definitions(test_sun_night PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_sun_night PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_sun_night JahshakaEngineMedia)
-add_test(NAME mirror.sun_night COMMAND test_sun_night WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(mirror.sun_night CLASS engine COMMAND test_sun_night WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.sun_night PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
 
@@ -199,7 +199,7 @@ target_compile_definitions(test_vr_proxies PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_vr_proxies PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_vr_proxies JahshakaEngineMedia)
-add_test(NAME mirror.vr_proxies COMMAND test_vr_proxies
+jah_gpu_row(mirror.vr_proxies CLASS engine COMMAND test_vr_proxies
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.vr_proxies PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "mirror")
