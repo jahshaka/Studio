@@ -3997,6 +3997,38 @@ void MainWindow::setupViewPort()
         });
     }
 
+    // THE PHOTON VIEW (PHOTON-VIEW-1): the lighting's debug pictures, beside the
+    // Atom view and in its shape — the rows call the scene's setPhotonView behind
+    // its refusal (world.setPhotonView's path), re-read on open, and a row that
+    // cannot paint here is disabled.
+    {
+        QMenu *photonMenu = wireFramesMenu->addMenu(tr("Photon View"));
+        auto *photonGroup = new QActionGroup(photonMenu);
+        photonGroup->setExclusive(true);
+        const QStringList photonLabels = { tr("Off"), tr("Voxels"), tr("Probes"), tr("Cards"),
+                                           tr("Screen Probes"), tr("Diffuse GI Only"),
+                                           tr("Reflections Only"), tr("Ray Hits") };
+        for (int mode = 0; mode < photonLabels.size(); ++mode) {
+            QAction *action = photonMenu->addAction(photonLabels[mode]);
+            action->setCheckable(true);
+            action->setChecked(mode == 0);
+            photonGroup->addAction(action);
+            connect(action, &QAction::triggered, this, [this, mode]() { setPhotonViewMode(mode); });
+            photonViewActions.push_back(action);
+        }
+        connect(photonMenu, &QMenu::aboutToShow, this, [this]() {
+            const int mode = photonViewMode();
+            jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+            for (int i = 0; i < photonViewActions.size(); ++i) {
+                photonViewActions[i]->setChecked(i == mode);
+                const bool paints =
+                    i == 0 || (es && es->photonViewRefusal(
+                                         static_cast<jahshaka::engine::PhotonView>(i)).empty());
+                photonViewActions[i]->setEnabled(paints);
+            }
+        });
+    }
+
     // Qlementine: the checkable actions become Switch rows (and stay in sync
     // with their QActions); a bonus is the menu no longer closes per toggle.
     ThemeManager::switchifyMenuToggles(wireFramesMenu);
@@ -4816,6 +4848,22 @@ void MainWindow::setupShortcuts()
     // -> Off (the View Options sub-menu picks one directly).
     reg.add("view.atomView", "Cycle Atom View", "View", QKeySequence(Qt::Key_F6), this,
             [this]() { setAtomViewMode((atomViewMode() + 1) % 5); });
+    // F7 — THE PHOTON VIEW, cycled Off -> Voxels -> ... -> Ray Hits -> Off through
+    // the modes that can paint here (the View Options sub-menu picks one directly).
+    reg.add("view.photonView", "Cycle Photon View", "View", QKeySequence(Qt::Key_F7), this,
+            [this]() {
+                jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+                if (!es) return;
+                const int n = jahshaka::engine::kPhotonViewCount;
+                int next = photonViewMode();
+                for (int step = 0; step < n; ++step) {
+                    next = (next + 1) % n;
+                    if (next == 0 || es->photonViewRefusal(
+                                         static_cast<jahshaka::engine::PhotonView>(next)).empty())
+                        break;
+                }
+                setPhotonViewMode(next);
+            });
     reg.add("window.fullscreen", "Immersive Fullscreen", "View", QKeySequence(Qt::Key_F11), this,
             [this]() { toggleImmersiveFullscreen(); });
     // Ctrl+F4 — THE CAPTURE KEY (owner, 2026-09-12: "I would prefer to activate
@@ -5507,6 +5555,22 @@ void MainWindow::setAtomViewMode(int mode)
     if (mode != 0 && !es->atomViewPaintable()) return;   // world.setAtomView's refusal
     es->setAtomView(static_cast<jahshaka::engine::AtomView>(mode));
     for (int i = 0; i < atomViewActions.size(); ++i) atomViewActions[i]->setChecked(i == mode);
+}
+
+int MainWindow::photonViewMode()
+{
+    jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+    return es ? int(es->photonView()) : 0;
+}
+
+void MainWindow::setPhotonViewMode(int mode)
+{
+    jahshaka::engine::Scene *es = sceneView ? sceneView->engineScene() : nullptr;
+    if (!es || mode < 0 || mode >= jahshaka::engine::kPhotonViewCount) return;
+    const auto view = static_cast<jahshaka::engine::PhotonView>(mode);
+    if (!es->photonViewRefusal(view).empty()) return;   // world.setPhotonView's refusal
+    es->setPhotonView(view);
+    for (int i = 0; i < photonViewActions.size(); ++i) photonViewActions[i]->setChecked(i == mode);
 }
 
 void MainWindow::takeScreenshot()
