@@ -141,7 +141,7 @@
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/meshbake.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
@@ -419,8 +419,8 @@ static iris::MaterialPtr gMaterial;
 static void loadSharedAssets()
 {
     gCube = previewmesh::load(":assets/models/cube.obj");
-    auto mat = iris::DefaultMaterial::create();
-    mat->setDiffuseColor(QColor(204, 96, 51));
+    auto mat = iris::PbrMaterial::create();
+    mat->setBaseColor(QColor(204, 96, 51));
     gMaterial = mat;
 }
 

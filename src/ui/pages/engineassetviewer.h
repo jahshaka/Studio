@@ -85,9 +85,8 @@ private:
     iris::SceneNodePtr readJafModel(const QString &path, const QString &guid);
     iris::MaterialPtr readJafMaterial(const QString &guid);
     void applyJafSky(const QString &guid);
-    /// The mirror renders PbrMaterial and DefaultMaterial. Default.shader
-    /// CustomMaterials (what the readers produce) become a DefaultMaterial with
-    /// the same colours and textures; other materials are kept as they are.
+    /// IDENTITY: the mirror renders PbrMaterial, the one material class the
+    /// document holds (engineassetviewer.cpp says why the seam is kept).
     static iris::MaterialPtr mirrorable(iris::MaterialPtr material);
     static void mirrorableMaterials(iris::SceneNodePtr node);
     void showProgress();

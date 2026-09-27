@@ -34,7 +34,6 @@
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -344,7 +343,7 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
 // ---- materials the mirror can render ----
 //
 // Both of these are IDENTITY since HLMS_ADOPTION P4b. They existed to convert an
-// iris::CustomMaterial into a DefaultMaterial the mirror could render; every
+// iris::CustomMaterial into a Blinn material the mirror could render; every
 // material the document holds is now a PbrMaterial, which it renders natively.
 // They are kept as the seam (the interface declares them, and a future material
 // class that needs converting has a place to be converted) — not as work.

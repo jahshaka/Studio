@@ -21,7 +21,6 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/core/properties/property.h"
 #include <QFileInfo>
@@ -339,7 +338,7 @@ static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
 
 // THE THIRD MATERIAL-CONSTRUCTION PATH, retired (hygiene lane, 2026-09-09).
 //
-// This built an iris::DefaultMaterial out of the legacy Blinn fields —
+// This built a Blinn material out of the legacy fields —
 // diffuse/specular/ambient/shininess plus the diffuse, specular and normal
 // maps — and IGNORED every PBR field the importer reads. A thumbnail of a
 // glTF model was therefore rendered from a lossy back-conversion of data the
@@ -361,7 +360,7 @@ iris::MaterialPtr EngineThumbnailRenderer::previewMaterialForMeshData(const iris
 
 // (previewMaterialFor and previewMaterials are GONE with HLMS_ADOPTION P4b.
 // They existed to convert an iris::CustomMaterial's Property rows into a
-// DefaultMaterial so a shader-graph material showed its real look in a
+// Blinn material so a shader-graph material showed its real look in a
 // thumbnail instead of a grey stand-in. There is no CustomMaterial any more —
 // every material the document holds is a PbrMaterial, which the mirror renders
 // natively — so the conversion has nothing left to convert.)
@@ -393,7 +392,7 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
     }
     auto node = iris::MeshNode::create();
     node->setMesh(mSphere);
-    node->setMaterial(material ? material : iris::DefaultMaterial::create().staticCast<iris::Material>());
+    node->setMaterial(material ? material : iris::PbrMaterial::create().staticCast<iris::Material>());
 
     iris::CameraNodePtr cam;
     auto document = studioDocument(cam);

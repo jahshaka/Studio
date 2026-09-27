@@ -15,7 +15,7 @@
 #include "irisgl/core/geometry/boundingsphere.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -92,13 +92,12 @@ void EngineAssetScene::buildDocument()
         floor->isBuiltIn = true;
         floor->setFaceCullingMode(iris::FaceCullingMode::None);
         floor->setShadowCastingEnabled(true);
-        // The legacy floor is Default.shader (a CustomMaterial) with the tile texture;
-        // the mirror renders DefaultMaterial, so the floor is that here.
-        auto m = iris::DefaultMaterial::create();
-        m->setDiffuseColor(QColor(255, 255, 255));
+        // The tile texture on the one PBR material, tiled four times.
+        auto m = iris::PbrMaterial::create();
+        m->setBaseColor(QColor(255, 255, 255));
         const QString tile = IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
-        if (QFileInfo(tile).isFile()) m->setDiffuseTexture(iris::Texture2D::load(tile));
-        m->setTextureScale(4.0f);
+        if (QFileInfo(tile).isFile()) m->setBaseColorMap(iris::Texture2D::load(tile));
+        m->setTextureScale(4.0f, 4.0f);
         floor->setMaterial(m);
         mDocument->rootNode->addChild(floor);
         mFloor = floor;
@@ -194,7 +193,7 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
 
     if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = node.staticCast<iris::MeshNode>();
-        if (!meshNode->getMaterial()) meshNode->setMaterial(iris::DefaultMaterial::create());
+        if (!meshNode->getMaterial()) meshNode->setMaterial(iris::PbrMaterial::create());
     }
 
     clearSubject();
