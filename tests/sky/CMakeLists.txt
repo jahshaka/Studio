@@ -31,7 +31,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_sun_transmittance_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_sun_transmittance_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_sun_transmittance_asan PRIVATE -fsanitize=address)
-    add_test(NAME sky.sun_transmittance_asan COMMAND test_sun_transmittance_asan
+    jah_gpu_row(sky.sun_transmittance_asan CLASS engine COMMAND test_sun_transmittance_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine, tests/ssr and tests/hdr: the only leaks LSan
     # finds here are libdbus-1 allocations reached from the Vulkan loader.

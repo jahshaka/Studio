@@ -31,7 +31,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_drag_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_drag_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_drag_asan PRIVATE -fsanitize=address)
-    add_test(NAME hdr.drag_stable_asan COMMAND test_hdr_drag_asan
+    jah_gpu_row(hdr.drag_stable_asan CLASS engine COMMAND test_hdr_drag_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds here
     # are libdbus-1 allocations reached from the Vulkan loader's device-select layer.
@@ -54,7 +54,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_meter_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_meter_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_meter_asan PRIVATE -fsanitize=address)
-    add_test(NAME hdr.meter_asan COMMAND test_hdr_meter_asan
+    jah_gpu_row(hdr.meter_asan CLASS engine COMMAND test_hdr_meter_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.meter_asan PROPERTIES TIMEOUT 180 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -93,7 +93,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_bloom_amount_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_bloom_amount_asan PRIVATE -fsanitize=address)
-    add_test(NAME hdr.bloom_amount_asan COMMAND test_hdr_bloom_amount_asan
+    jah_gpu_row(hdr.bloom_amount_asan CLASS engine COMMAND test_hdr_bloom_amount_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.bloom_amount_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -104,7 +104,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_hdr_dither_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_hdr_dither_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_hdr_dither_asan PRIVATE -fsanitize=address)
-    add_test(NAME hdr.dither_asan COMMAND test_hdr_dither_asan
+    jah_gpu_row(hdr.dither_asan CLASS engine COMMAND test_hdr_dither_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(hdr.dither_asan PROPERTIES TIMEOUT 120 LABELS "engine"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")

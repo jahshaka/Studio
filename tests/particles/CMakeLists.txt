@@ -53,7 +53,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_particles_pfx2_asan PRIVATE -fsanitize=address)
     target_link_libraries(test_particles_pfx2_asan PRIVATE JahshakaEngineAsan Qt6::Gui)
     add_dependencies(test_particles_pfx2_asan JahshakaEngineMedia)
-    add_test(NAME engine.particles_pfx2_asan COMMAND test_particles_pfx2_asan
+    jah_gpu_row(engine.particles_pfx2_asan CLASS engine COMMAND test_particles_pfx2_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Leak detection off for the same reason the engine suite turns it off: the
     # only leaks are libdbus allocations behind the Vulkan loader.

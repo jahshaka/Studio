@@ -143,7 +143,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_rt_reflect_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_rt_reflect_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_rt_reflect_asan PRIVATE -fsanitize=address)
-    add_test(NAME gi.rt_reflect_asan COMMAND test_rt_reflect_asan
+    jah_gpu_row(gi.rt_reflect_asan CLASS engine COMMAND test_rt_reflect_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_asan PROPERTIES
                          TIMEOUT 180 LABELS "engine"

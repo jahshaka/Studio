@@ -42,7 +42,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_shader_cache_asan PRIVATE -fsanitize=address)
     target_link_libraries(test_shader_cache_asan PRIVATE JahshakaEngineAsan)
     add_dependencies(test_shader_cache_asan JahshakaEngineMedia)
-    add_test(NAME shadercache.container_asan COMMAND test_shader_cache_asan --corruption-only
+    jah_gpu_row(shadercache.container_asan CLASS engine COMMAND test_shader_cache_asan --corruption-only
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/asan")
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/asan")
     # LeakSanitizer off for the same reason tests/engine turns it off: the only
