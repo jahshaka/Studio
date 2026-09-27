@@ -125,6 +125,9 @@ jah_scale_row(scale.cut_cost     --cut-cost      ${SCALE_T_CUT_COST}     TRUE)  
 jah_scale_row(scale.residency    --residency     ${SCALE_T_RESIDENCY}    FALSE)  # W5 (the engine's pool stats)
 jah_scale_row(scale.decode       --decode        ${SCALE_T_DECODE}       TRUE)   # W6
 jah_scale_row(scale.occlusion    --occlusion     ${SCALE_T_OCCLUSION}    FALSE)  # W7 (triangle counts)
+# W7 IS CLOSED (ATOM-OCCLUSION-1): its row is a BAR — the two-pass id pass within 1.25x of the
+# reference cull and its id image the frustum-only one at every pose — and not a target.
+set_tests_properties(scale.occlusion PROPERTIES LABELS "scale")
 jah_scale_row(scale.tlas         --tlas          ${SCALE_T_TLAS}         TRUE)   # W8
 jah_scale_row(scale.atlas        --atlas         ${SCALE_T_ATLAS}        FALSE)  # W9 (card counts)
 jah_scale_row(scale.far_field    --far-field     ${SCALE_T_FAR}          FALSE)  # W10 (two pictures)
@@ -136,6 +139,13 @@ jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)  
 # removes the label, so the row gates. The dirty scan stays a printed target inside it.
 set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 jah_no_display(scale.bake)
+
+# atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified decode
+# still and without holes (its first form proved it byte-identical to the late-discard loop).
+# A pixel suite (no time measured): never the GPU lock. ~90 s (the world's boot).
+add_test(NAME atom.decode_exact COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 600 LABELS "engine"
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
 jah_gpu_exclusive_test(NAME scale.library RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library

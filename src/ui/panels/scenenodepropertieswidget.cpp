@@ -89,6 +89,10 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	cloudsPropView->setPanelTitle("Clouds");
 	connect(skyPropView, &SkyPropertyWidget::skyTypeApplied,
 	        cloudsPropView, &WorldCloudsPropertyWidget::refreshRows);
+	// ...and the Fog blade: its colour row is greyed under the realistic sky,
+	// whose own scattering colours the fog (FOG-ATMO-1).
+	connect(skyPropView, &SkyPropertyWidget::skyTypeApplied,
+	        fogPropView, &FogPropertyWidget::refreshRows);
 
 	// World Modes (POST_CHAIN_SPEC §9.6) sits FIRST among the quality sections:
 	// it is the tier every one of them resolves through.

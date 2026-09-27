@@ -1,0 +1,141 @@
+// atom.occlusion_exact_app — THE ID PASS'S OCCLUSION IS EXACT IN THE PRODUCT (ATOM-OCCLUSION-1,
+// the script half of atom.occlusion_exact): on the DEFAULT SCENE and SHOWROOM 2, at three
+// poses each, the editor's own shots with the occlusion on (the default) and with its
+// measuring door shut (world.setAtomOcclusion(false): the id pass frustum-only) are the
+// same picture, pixel for pixel —
+//   * the 'triangles' Atom view (every triangle its own colour by object, cluster and
+//     triangle: the id image itself, painted), and
+//   * the ordinary picture ('off'): a second occluding arm (after the door is shut and
+//     opened again) against the frustum-only one on both scenes, and the first arm too on
+//     the default scene (Showroom 2's first arm is still settling: printed beside the
+//     control).
+// A shot is its own view, settled over many frames (the GI settle), so its last frame
+// culls against the previous frame's pyramid and tests the rejected set again: the
+// two-pass form. Every pixel of a 240 x 135 shot is probed (its centre).
+// Also: the verb's answers, world.atomStatus()'s 'occlusion' / 'occluded' /
+// 'disoccluded' in the viewport, and the door restored.
+// Frames, never time: every shot renders until the scene is at rest.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var SHOWROOM = "@JAH_OCCLUSION_SHOWROOM@";
+var W = 240, H = 135;
+var probes = [];
+for (var y = 0; y < H; ++y)
+    for (var x = 0; x < W; ++x) probes.push({ x: (x + 0.5) / W, y: (y + 0.5) / H });
+
+function shot(name) {
+    var r = editor.screenshot("atom_occlusion_" + name + ".png", W, H, probes, "scene");
+    assert(r && r.probes && r.probes.length === W * H, "shot " + name + " read every pixel");
+    return r.probes;
+}
+function changed(a, b) {
+    var n = 0;
+    for (var i = 0; i < a.length; ++i)
+        if (a[i].r !== b[i].r || a[i].g !== b[i].g || a[i].b !== b[i].b) ++n;
+    return n;
+}
+
+function waitSplit() {
+    var st = world.atomStatus();
+    for (var i = 0; i < 90 && (st.pending > 0 || st.atomItems < 1 || !st.cutValid); ++i) {
+        editor.frame(2);
+        st = world.atomStatus();
+    }
+    return st;
+}
+
+// THE POSES: the scene's own camera and two moves of it (a step back and up, and a
+// step to the side turned across the room), set identically in both arms.
+function posesFrom(cam) {
+    var p = cam.position;
+    return [
+        { position: { x: p.x, y: p.y, z: p.z }, rotation: cam.rotation },
+        { position: { x: p.x, y: p.y + 1.5, z: p.z + 4.0 }, lookAt: { x: 0, y: 0.5, z: 0 } },
+        { position: { x: p.x + 5.0, y: p.y, z: p.z - 2.0 }, lookAt: { x: -2.0, y: 0.8, z: -2.0 } },
+    ];
+}
+
+function arm(label, poses) {
+    var out = [];
+    for (var i = 0; i < poses.length; ++i) {
+        editor.setCamera(poses[i]);
+        editor.frame(4);
+        world.setAtomView("off");
+        var lit = shot(label + "_pose" + i + "_off");
+        assert(world.setAtomView("triangles") === true, label + " pose " + i + ": the 'triangles' view");
+        var tri = shot(label + "_pose" + i + "_triangles");
+        world.setAtomView("off");
+        out.push({ lit: lit, tri: tri });
+    }
+    return out;
+}
+
+// `strictPicture`: the first arm's picture is compared too — Showroom 2's first arm is not
+// deterministic against later identical arms (DOCS/traps/ENGINE.md: VCT + autoRefresh +
+// planar actors keep moving it while it settles).
+function exactOn(sceneName, strictPicture) {
+    var st = waitSplit();
+    console.log(sceneName + " atomStatus: " + J(st));
+    assert(st.live && st.on && st.atomItems >= 1, sceneName + ": the split is live");
+    assert(world.setAtomOcclusion(true) === true, sceneName + ": world.setAtomOcclusion(true) answers true");
+    editor.frame(8);
+    st = waitSplit();
+    assert(st.occlusion === true, sceneName + ": atomStatus().occlusion is true with the door open");
+    console.log(sceneName + " occlusion in the viewport: occluded " + st.occluded + ", disoccluded " +
+                st.disoccluded + ", cutTriangles " + st.cutTriangles);
+    var poses = posesFrom(editor.camera());
+    var withOcc = arm(sceneName + "_on", poses);
+    // THE DOOR SHUT: every chain rebuilt frustum-only.
+    assert(world.setAtomOcclusion(false) === false, sceneName + ": world.setAtomOcclusion(false) answers false");
+    editor.frame(8);
+    st = waitSplit();
+    assert(st.occlusion === false && st.occluded === 0 && st.disoccluded === 0,
+           sceneName + ": with the door shut the view culls frustum-only (" + J({ occlusion: st.occlusion,
+           occluded: st.occluded, disoccluded: st.disoccluded }) + ")");
+    var without = arm(sceneName + "_off", poses);
+    // THE CONTROL: the door open again (a second rebuild) and the same shots — what two
+    // arms that differ in NOTHING the occlusion does look like on this scene.
+    assert(world.setAtomOcclusion(true) === true, sceneName + ": the door opens again");
+    editor.frame(8);
+    assert(waitSplit().occlusion === true, sceneName + ": ...and the view culls against the depth again");
+    var again = arm(sceneName + "_on2", poses);
+    for (var i = 0; i < poses.length; ++i) {
+        var dTri = changed(withOcc[i].tri, without[i].tri);
+        var dTri2 = changed(again[i].tri, without[i].tri);
+        var dLit = changed(withOcc[i].lit, without[i].lit);
+        var dLit2 = changed(again[i].lit, without[i].lit);
+        var dCtl = changed(withOcc[i].lit, again[i].lit);
+        console.log(sceneName + " pose " + i + ": triangles view on/off " + dTri + " and on2/off " + dTri2 +
+                    " px differ; picture on/off " + dLit + ", on2/off " + dLit2 + ", on/on2 (the control) " + dCtl);
+        assert(dTri === 0 && dTri2 === 0, sceneName + " pose " + i + ": the id image (the 'triangles' view) is the " +
+               "frustum-only one, pixel for pixel, in both arms (" + dTri + ", " + dTri2 + " differ)");
+        // THE PICTURE: the second occluding arm against the frustum-only one on both scenes
+        // (both taken after the scene has run its settles); the first arm too where the
+        // scene is deterministic from its first shots (the default scene — Showroom 2's
+        // first arm still settles: measured, its control differs from the others exactly
+        // where the first arm does).
+        assert(dLit2 === 0, sceneName + " pose " + i + ": the picture with the occlusion is the frustum-only one, " +
+               "pixel for pixel (" + dLit2 + " differ)");
+        if (strictPicture)
+            assert(dLit === 0 && dCtl === 0, sceneName + " pose " + i + ": ...and so is the first arm's (" + dLit +
+                   ", control " + dCtl + ")");
+    }
+}
+
+// ---- THE DEFAULT SCENE -------------------------------------------------------
+var proj = project.create("Atom Occlusion " + Date.now());
+assert(proj.length > 10, "project.create");
+exactOn("default", true);
+
+// ---- SHOWROOM 2 --------------------------------------------------------------
+app.engineErrors(true);
+var imported = project.importArchive(SHOWROOM);
+assert(imported && imported.guid, "importArchive(Showroom 2)");
+assert(project.open(imported.guid) === true, "project.open(Showroom 2)");
+editor.frame(60);
+exactOn("showroom2", false);
