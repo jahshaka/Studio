@@ -39,7 +39,7 @@ foreach(SAMPLE IN LISTS _samples)
     # The setup fixture wipes and recreates the directory before the test runs.
     jah_fresh_home_fixture(samples.freshhome.${_slug} samples_home_${_slug} "${_home}" LABELS "scripting")
 
-    add_test(NAME samples.cleanstart.${_slug}
+    jah_gpu_row(samples.cleanstart.${_slug} CLASS app
              COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_BINARY_DIR}/cleanstart_${_slug}.js
              WORKING_DIRECTORY ${_home}/run)
@@ -61,7 +61,7 @@ configure_file(scripts/session.js.in ${CMAKE_CURRENT_BINARY_DIR}/session.js @ONL
 set(_shome ${CMAKE_CURRENT_BINARY_DIR}/home-session)
 file(MAKE_DIRECTORY ${_shome}/run)
 jah_fresh_home_fixture(samples.freshhome.session samples_home_session "${_shome}" LABELS "scripting")
-add_test(NAME samples.session
+jah_gpu_row(samples.session CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/session.js
          WORKING_DIRECTORY ${_shome}/run)

@@ -91,7 +91,7 @@ target_compile_definitions(test_engine_error_pump PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_error_pump PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(test_engine_error_pump JahshakaEngineMedia)
-add_test(NAME engine.error_pump COMMAND test_engine_error_pump
+jah_gpu_row(engine.error_pump CLASS engine COMMAND test_engine_error_pump
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(engine.error_pump PROPERTIES TIMEOUT 120 LABELS "services")
 

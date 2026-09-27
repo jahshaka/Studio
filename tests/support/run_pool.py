@@ -18,6 +18,20 @@ prints one line per arm; this driver owns what the app cannot:
     environment (so `JAH_POOL_ARMS=gi_verbs.gi_status ctest -R '^pool\\.gi_verbs$'`
     is the solo retry of one arm, through the real row). A pool the variable does
     not name runs every arm; `<pool>` alone names the whole pool.
+  * THE VRAM BUDGET (lane GATE-ADMIT-1; docs/TESTING_GATE.md §4b). `--vram-tokens <k>`: before
+    every app process the driver takes k box-wide VRAM tokens (scripts/vram_tokens.py — the
+    same flock files as scripts/gpu-admit.sh), all or nothing, waiting (one `vram: waiting …`
+    line) rather than letting the card over-fill; the app inherits them and they are released
+    when it ends, so a restart re-takes them and the driver holds none between processes. The
+    wait is BEFORE the process starts, outside every arm's budget; a wait past its bound makes
+    every remaining arm `TIMEOUT` ("never admitted"), never a run on a full card.
+  * THE KERNEL'S WORD (GPU_LOSS_AUDIT_2026-09-27 B: a device loss is not always a red arm). After
+    each process ends, the driver reads the kernel journal since its launch (`journalctl -k`,
+    readable by the adm group, never sudo) and a `NVRM: Xid` line from THAT process's pid turns
+    the arm that was running at the fault's second (or the baseline behind it — the arm before)
+    into `CRASH xid <n>`. An unreadable journal on Linux fails the row (the half that matters
+    would be missing); macOS has no NVRM log and says so. JAH_KERNEL_JOURNAL=<file> reads a file
+    of `journalctl -o short-unix` lines instead (the runner's own test).
   * THE VERDICT, PER ARM, ON ONE CHANNEL: each arm's final `ARM <pool>.<arm>
     PASS|FAIL|CRASH|TIMEOUT <ms> [why]` line is printed exactly once, by this driver
     (the app's own result line is echoed as `arm-result …`, which no reader counts) —
@@ -27,7 +41,7 @@ prints one line per arm; this driver owns what the app cannot:
 
 Usage:
   run_pool.py --pool <name> --app <Jahshaka> [--headless] [--arms a,b] [--baseline <js>]
-              [--boot-budget <s>] --arm <name> <script> <budget-s> [--arm ...]
+              [--boot-budget <s>] [--vram-tokens <k>] --arm <name> <script> <budget-s> [--arm ...]
               [-- <extra app args>]
 
 --baseline <js>: the pool's own baseline script, run by the app after EVERY arm, green
@@ -43,6 +57,11 @@ import sys
 import threading
 import time
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+import vram_tokens  # noqa: E402  (scripts/vram_tokens.py — THE box-wide VRAM budget)
+
+XID = re.compile(r"^(\d+(?:\.\d+)?)\s.*NVRM: Xid \([^)]*\): (\d+), pid=(\d+),")
+
 ARM_BEGIN = re.compile(r"^ARM-BEGIN (\S+)\.(\S+)\s*$")
 ARM_END = re.compile(r"^ARM (\S+)\.(\S+) (PASS|FAIL) (\d+)(?: (.*))?$")
 BASELINE_LOST = re.compile(r"^POOL-BASELINE-LOST (\S+)\.(\S+) (.*)$")
@@ -55,7 +74,7 @@ def usage(msg):
 
 def parse(argv):
     opt = {"pool": None, "app": None, "headless": False, "arms": None,
-           "boot": 300.0, "list": [], "extra": [], "baseline": None}
+           "boot": 300.0, "list": [], "extra": [], "baseline": None, "vram": 0}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -72,6 +91,8 @@ def parse(argv):
             opt["headless"] = True; i += 1
         elif a == "--arms":
             opt["arms"] = [x for x in argv[i + 1].split(",") if x]; i += 2
+        elif a == "--vram-tokens":
+            opt["vram"] = int(argv[i + 1]); i += 2
         elif a == "--boot-budget":
             opt["boot"] = float(argv[i + 1]); i += 2
         elif a == "--arm":
@@ -118,6 +139,36 @@ def reader(stream, q):
     q.put(None)
 
 
+def kernel_xids(since, pids):
+    """[(epoch, xid, pid)] for every `NVRM: Xid` line logged since `since` from one of `pids`.
+    None when the journal cannot be read (on Linux that is a red, never a silent pass); [] off
+    Linux (no NVRM log)."""
+    fake = os.environ.get("JAH_KERNEL_JOURNAL")
+    if fake:
+        try:
+            lines = open(fake).read().splitlines()
+        except OSError:
+            return None
+    elif not sys.platform.startswith("linux"):
+        return []
+    else:
+        try:
+            r = subprocess.run(["journalctl", "-k", "--no-pager", "-q", "-o", "short-unix",
+                                "--since", "@%d" % int(since)],
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if r.returncode != 0:
+            return None
+        lines = r.stdout.decode("utf-8", "replace").splitlines()
+    out = []
+    for line in lines:
+        m = XID.match(line)
+        if m and int(m.group(3)) in pids and float(m.group(1)) >= int(since):
+            out.append((float(m.group(1)), int(m.group(2)), int(m.group(3))))
+    return out
+
+
 def say(text):
     sys.stdout.write(text + "\n")
     sys.stdout.flush()
@@ -139,10 +190,17 @@ def main():
     pending = {}    # arm -> its buffered lines
     boot = []       # lines of the current process before its first arm
 
-    def settle(arm, verdict, ms, why=""):
+    batch = []      # this process's settled arms, printed once its end and the kernel are read
+    journal_bad = []
+
+    def settle(arm, verdict, ms, why="", now=False):
         """THE ONE CHANNEL: an arm's verdict is printed exactly once, as an `ARM` line, when
-        it is FINAL — after the pool's baseline held (or failed) behind it. The app's own
-        `ARM` line is not repeated (it is `arm-result …` in the per-process log)."""
+        it is FINAL — after the pool's baseline held (or failed) behind it AND the kernel's
+        journal for its process was read (an Xid from the process's pid overrides it). The
+        app's own `ARM` line is not repeated (it is `arm-result …` in the per-process log)."""
+        if not now:
+            batch.append([arm, verdict, ms, why])
+            return
         verdicts[arm] = (verdict, ms, why)
         lines = pending.pop(arm, [])
         if verdict != "PASS" and lines:
@@ -150,8 +208,33 @@ def main():
             for l in lines: say("| " + l)
         say("ARM %s.%s %s %d%s" % (pool, arm, verdict, ms, (" " + why) if why else ""))
 
+    def flush(pid, since, begins):
+        """The process ended: read the kernel's word for its pid, then print its arms."""
+        if pid is not None and batch:
+            if not os.environ.get("JAH_KERNEL_JOURNAL") and sys.platform.startswith("linux"):
+                time.sleep(1.0)     # journald ingests the kernel ring asynchronously
+            xids = kernel_xids(since, {pid})
+            if xids is None:
+                journal_bad.append(pid)
+                say("pool: %s — the kernel journal is unreadable (journalctl -k): the zero-Xid half "
+                    "cannot be asserted" % pool)
+            for t, n, xp in xids or []:
+                arm = None
+                for bt, name in begins:
+                    if bt <= t: arm = name
+                if arm is None: arm = batch[0][0]
+                for e in batch:
+                    if e[0] == arm:
+                        e[1] = "CRASH"
+                        e[3] = "xid %d (the kernel's GPU fault from pid %d at %s)%s" % (
+                            n, xp, time.strftime("%H:%M:%S", time.localtime(t)),
+                            ("; " + e[3]) if e[3] else "")
+        for arm, v, ms, why in batch:
+            settle(arm, v, ms, why, now=True)
+        del batch[:]
+
     for u in unknown:
-        settle(u, "FAIL", 0, "no such arm in pool %s" % pool)
+        settle(u, "FAIL", 0, "no such arm in pool %s" % pool, now=True)
     order = [n for n, _, _ in arms] + unknown
     remaining = list(arms)
     process = 0
@@ -168,13 +251,31 @@ def main():
         cmd += opt["extra"]
         say("pool: %s process %d — %d arm(s): %s" % (pool, process, len(remaining),
                                                      " ".join(n for n, _, _ in remaining)))
-        started = time.monotonic()
         logname = os.path.join("pool-logs", "%s-process%d.log" % (pool, process))
         plog = open(logname, "w")
         say("pool: %s process %d output -> %s" % (pool, process, os.path.abspath(logname)))
         boot = []
+        # THE VRAM BUDGET: this process's tokens, taken BEFORE it starts (outside every budget)
+        # and inherited by it; released below when it has ended. A restart re-takes them.
+        try:
+            tokens = vram_tokens.acquire(opt["vram"], "pool.%s process %d" % (pool, process),
+                                         log=sys.stdout)
+        except vram_tokens.AdmitTimeout as e:
+            plog.close()
+            say("pool: %s — %s" % (pool, e))
+            for n, _, _ in remaining:
+                settle(n, "TIMEOUT", 0, "never admitted: no %d VRAM tokens within the wait bound"
+                       % opt["vram"], now=True)
+            remaining = []
+            break
+        env = dict(os.environ)
+        if tokens:
+            env["JAH_VRAM_HELD"] = str(len(tokens))
+        started = time.monotonic()
+        since = time.time()
+        begins = []             # (epoch, arm) of every ARM-BEGIN in this process
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                preexec_fn=child_setup)
+                                preexec_fn=child_setup, pass_fds=tokens, env=env)
         q = queue.Queue()
         t = threading.Thread(target=reader, args=(proc.stdout, q), daemon=True)
         t.start()
@@ -224,6 +325,7 @@ def main():
                 if held:            # the previous arm's baseline held: its result is final
                     settle(*held); held = None
                 current = m.group(2)
+                begins.append((time.time(), current))
                 say(line)           # ARM-BEGIN: the run log's crash detector reads it
                 pending[current] = [line]
                 began_any = True
@@ -231,6 +333,7 @@ def main():
                 deadline = current_t0 + budget.get(current, opt["boot"])
                 continue
         rc = proc.wait()
+        vram_tokens.release(tokens)
         t.join(timeout=5)
         plog.close()
         how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
@@ -255,6 +358,7 @@ def main():
                                          "or its exit (%s, %d failed arm(s))" % (how, fails_here))
             else:
                 settle(arm, v, ms, why)
+        flush(proc.pid, since, begins)
         remaining = [a for a in remaining if a[0] not in verdicts]
         if remaining and not began_any:
             say("---- %s process %d: its output before any arm (%d line(s)) ----" % (pool, process, len(boot)))
@@ -263,6 +367,7 @@ def main():
             # same way; every remaining arm is named.
             for n, _, _ in remaining:
                 settle(n, "CRASH", 0, "the pool's process never began an arm (%s)" % how)
+            flush(proc.pid, since, begins)
             remaining = []
         elif remaining:
             restarts += 1
@@ -282,6 +387,9 @@ def main():
     if bad:
         say("solo retry: JAH_POOL_ARMS=%s ctest -R '^pool\\.%s$'" % (
             ",".join("%s.%s" % (pool, n) for n in bad), pool))
+    if journal_bad:
+        say("POOL %s: RED — the kernel journal was unreadable for %d process(es)" % (pool, len(journal_bad)))
+        return 1
     return 1 if bad else 0
 
 

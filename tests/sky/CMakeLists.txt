@@ -22,7 +22,7 @@ endfunction()
 
 jahshaka_sky_test(test_sun_transmittance)
 target_link_libraries(test_sun_transmittance PRIVATE JahshakaEngine)
-add_test(NAME sky.sun_transmittance COMMAND test_sun_transmittance
+jah_gpu_row(sky.sun_transmittance CLASS engine COMMAND test_sun_transmittance
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.sun_transmittance PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -49,7 +49,7 @@ endif()
 # cube really samples the sky (so the layer half cannot pass by accident).
 jahshaka_sky_test_src(test_env_layout test_env_layout.cpp)
 target_link_libraries(test_env_layout PRIVATE JahshakaEngine)
-add_test(NAME sky.env_layout COMMAND test_env_layout
+jah_gpu_row(sky.env_layout CLASS engine COMMAND test_env_layout
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.env_layout PROPERTIES
     TIMEOUT 120 LABELS "engine"
@@ -62,6 +62,6 @@ set_tests_properties(sky.env_layout PROPERTIES
 # exp(-sigma d) at the atmosphere's one density.
 jahshaka_sky_test_src(test_aerial_perspective test_aerial_perspective.cpp)
 target_link_libraries(test_aerial_perspective PRIVATE JahshakaEngine)
-add_test(NAME sky.aerial_perspective COMMAND test_aerial_perspective
+jah_gpu_row(sky.aerial_perspective CLASS engine COMMAND test_aerial_perspective
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.aerial_perspective PROPERTIES TIMEOUT 120 LABELS "engine")

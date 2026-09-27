@@ -153,7 +153,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(test_engine_view_winid
         PRIVATE JahshakaEngine Qt6::Widgets Qt6::Test)
     add_dependencies(test_engine_view_winid JahshakaEngineMedia)
-    add_test(NAME ui.engine_view_winid COMMAND test_engine_view_winid
+    jah_gpu_row(ui.engine_view_winid CLASS engine COMMAND test_engine_view_winid
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(ui.engine_view_winid PROPERTIES
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb"
@@ -595,7 +595,7 @@ set_tests_properties(ui.components PROPERTIES
 jah_no_display(ui.components)
 # ui.components.timing — the pick's half-millisecond bar, nightly (lane D6B-GATE-SHAPE; audit
 # §5 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
-jah_gpu_exclusive_test(NAME ui.components.timing RUN_TIMEOUT 300 COMMAND test_components
+jah_gpu_exclusive_test(NAME ui.components.timing CLASS none RUN_TIMEOUT 300 COMMAND test_components
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.components.timing PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;nightly;quiet-box")
@@ -1104,7 +1104,7 @@ set_tests_properties(ui.properties_filter PROPERTIES
 jah_no_display(ui.properties_filter)
 # ui.properties_filter.timing — the keystroke's 5 ms bars, nightly (lane D6B-GATE-SHAPE;
 # audit §5 F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the lock.
-jah_gpu_exclusive_test(NAME ui.properties_filter.timing RUN_TIMEOUT 120 COMMAND test_properties_filter
+jah_gpu_exclusive_test(NAME ui.properties_filter.timing CLASS none RUN_TIMEOUT 120 COMMAND test_properties_filter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.properties_filter.timing PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAHSHAKA_TIMING_BARS=1" LABELS "ui;nightly;quiet-box")

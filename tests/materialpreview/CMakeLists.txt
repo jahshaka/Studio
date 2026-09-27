@@ -42,5 +42,5 @@ target_compile_definitions(test_engine_material_preview PRIVATE
 target_link_libraries(test_engine_material_preview PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL
     Qt6::Widgets Qt6::Sql Qt6::Concurrent)
 add_dependencies(test_engine_material_preview JahshakaEngineMedia)
-add_test(NAME materialpreview.engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_material_preview WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+jah_gpu_row(materialpreview.engine CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_material_preview WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(materialpreview.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

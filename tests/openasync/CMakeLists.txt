@@ -65,7 +65,7 @@ set_tests_properties(open.responsive PROPERTIES
 # Its own home, so the nightly run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
-jah_gpu_exclusive_test(NAME open.responsive.timing RUN_TIMEOUT 1740 COMMAND test_open_responsive
+jah_gpu_exclusive_test(NAME open.responsive.timing CLASS engine RUN_TIMEOUT 1740 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
@@ -90,7 +90,7 @@ jah_tsan_blocked(open.responsive open.responsive.timing)   # spawns the app: see
 configure_file(e2e_open_frames.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js @ONLY)
 set(_frames_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-frames)
 file(MAKE_DIRECTORY ${_frames_home}/run)
-add_test(NAME open.frames
+jah_gpu_row(open.frames CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js
          WORKING_DIRECTORY ${_frames_home}/run)
 # TIMEOUT 300: three opens of the dragon sample plus two archive imports, cold
@@ -112,7 +112,7 @@ jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 # single failure as "run it again"; read three as a regression. RUN_SERIAL: it
 # spawns twelve engine processes in sequence and a parallel gate would both slow
 # it and change what it measures.
-add_test(NAME open.crash_soak
+jah_gpu_row(open.crash_soak CLASS app
          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/open_crash_soak.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_SOURCE_DIR}/scenes

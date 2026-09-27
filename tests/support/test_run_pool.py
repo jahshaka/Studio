@@ -106,8 +106,9 @@ os.chmod(fake.name, 0o755)
 fargs = []
 for n in ("p1", "crash", "p2", "hang", "p3", "lost", "p4", "chatty", "diesafter", "p5", "hangsafter", "p6"):
     fargs += ["--arm", n, "x.js", "3" if n in ("hang", "chatty") else "30"]
+empty_journal = tempfile.NamedTemporaryFile("w", suffix=".journal", delete=False); empty_journal.close()
 rc, out = run([sys.executable, driver, "--pool", "fake", "--app", fake.name, "--boot-budget", "4"] + fargs,
-              {"JAH_POOL_ARMS": ""})
+              {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": empty_journal.name})
 os.unlink(fake.name)
 show(out)
 v = verdicts(out)
@@ -128,6 +129,92 @@ check(not verdicts.twice, "every arm's verdict is ONE `ARM` line (twice: %s)" % 
 check(out.count("POOL fake RESTART ") == 6, "every restart is a named line (%d)" % out.count("POOL fake RESTART "))
 check(rc == 1 and "solo retry: JAH_POOL_ARMS=fake.crash,fake.hang,fake.lost" in out,
       "the row fails and prints the solo retry")
+
+# ---- part 3: THE VRAM BUDGET and THE KERNEL'S WORD (lane GATE-ADMIT-1) --------------------
+# A private token directory (never the box's /tmp/jah-vram): the stand-in app reports the token
+# files IT holds open (inherited from the driver) and, in arm `xid`, writes a kernel-journal line
+# naming its own pid — the fake journal the driver reads through JAH_KERNEL_JOURNAL.
+import shutil, signal as _signal, time as _time
+vdir = tempfile.mkdtemp(prefix="pool-vram-")
+journal = os.path.join(vdir, "journal")
+open(journal, "w").close()
+fake = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False)
+fake.write(r'''#!/usr/bin/env python3
+import os, sys, time, signal
+a = sys.argv; spec = a[a.index("--scripts") + 1]; pool = a[a.index("--pool") + 1]
+def held():
+    out = []
+    for fd in os.listdir("/proc/self/fd"):
+        try: t = os.readlink("/proc/self/fd/" + fd)
+        except OSError: continue
+        if os.path.dirname(t) == os.environ["JAH_VRAM_DIR"] and os.path.basename(t).startswith("token."):
+            out.append(int(t.rsplit(".", 1)[1]))
+    return sorted(set(out))
+for e in spec.split(","):
+    n = e.split("=", 1)[0]
+    print("ARM-BEGIN %s.%s" % (pool, n), flush=True)
+    print("tokens-held %s held-env %s" % (held(), os.environ.get("JAH_VRAM_HELD")), flush=True)
+    if n == "xid":
+        time.sleep(0.3)     # the driver stamps ARM-BEGIN when it READS it; the fault comes later
+        with open(os.environ["JAH_KERNEL_JOURNAL"], "a") as j:
+            j.write("%.6f box kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=%d, name=Jahshaka, Graphics Exception\n"
+                    % (time.time(), os.getpid()))
+        j = None
+    if n == "crash": os.kill(os.getpid(), signal.SIGSEGV)
+    print("ARM %s.%s PASS 1" % (pool, n), flush=True)
+''')
+fake.close()
+os.chmod(fake.name, 0o755)
+fargs = []
+for n in ("t1", "xid", "t2", "crash", "t3"):
+    fargs += ["--arm", n, "x.js", "30"]
+admit = os.path.join(os.path.dirname(os.path.abspath(driver)), "..", "..", "scripts", "gpu-admit.sh")
+venv = {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": journal, "JAH_VRAM_DIR": vdir, "JAH_VRAM_TOKENS": "12"}
+e = dict(os.environ); e.update(venv); e.pop("JAH_VRAM_HELD", None)
+# a blocker holds 11 of the 12 tokens: the pool (2 tokens) must WAIT, then run once it is killed
+blocker = subprocess.Popen([admit, "11", "--label", "blocker", "--", "sleep", "300"], env=e,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+n = 0
+while n < 200 and len([f for f in os.listdir(vdir) if f.startswith("token.")]) < 12:
+    n += 1; _time.sleep(0.05)
+for f in glob.glob("pool-logs/*.log"): os.unlink(f)
+p = subprocess.Popen([sys.executable, driver, "--pool", "vram", "--app", fake.name, "--vram-tokens", "2",
+                      "--boot-budget", "10"] + fargs, env=e, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                     text=True, errors="replace")
+lines = []
+for line in p.stdout:
+    lines.append(line.rstrip("\n"))
+    if line.startswith("vram: waiting for 2 tokens"):
+        blocker.kill()      # SIGKILL: the kernel frees a killed holder's tokens
+        blocker.wait()
+rc = p.wait()
+out = "\n".join(lines)
+os.unlink(fake.name)
+show(out)
+v = verdicts(out)
+log = app_log()
+check("vram: waiting for 2 tokens, 1 free" in out,
+      "a pool process that cannot get its tokens WAITS, with the one wait line (not a run on a full card)")
+check("vram: admitted with 2 tokens 0,1" in out,
+      "...and a KILLED holder's tokens are free again: admitted on the lowest two, 0 and 1")
+check(log.count("tokens-held [0, 1] held-env 2") == 5,
+      "every arm's app process holds exactly its 2 tokens, inherited (%d of 5 arms)" % log.count("tokens-held [0, 1] held-env 2"))
+check(out.count("POOL vram RESTART ") == 1 and len(glob.glob("pool-logs/vram-process*.log")) == 2,
+      "the crash restarted the process once, and the restart RE-TOOK the tokens (both processes held 0,1)")
+check(v.get("vram.xid", ("", ""))[0] == "CRASH" and v["vram.xid"][1].startswith("xid 13"),
+      "a kernel Xid from the pool's pid is the running arm's `CRASH xid 13` (%s)" % (v.get("vram.xid"),))
+check(all(v.get("vram." + n, ("",))[0] == "PASS" for n in ("t1", "t2", "t3")),
+      "the Xid is charged to the arm running at its second only (t1, t2, t3 PASS)")
+check(v.get("vram.crash", ("",))[0] == "CRASH", "the crash arm is still its own CRASH")
+check(not verdicts.twice, "every arm's verdict is ONE `ARM` line, the Xid override included (twice: %s)" % verdicts.twice)
+held_after = subprocess.run([admit, "status"], env=e, stdout=subprocess.PIPE, text=True).stdout
+check("vram: 0 of 12 tokens held" in held_after, "after the pool ends no token is held (the driver keeps none)")
+# an unreadable journal is a RED, never a silent pass
+rc3, out3 = run([sys.executable, driver, "--pool", "nojournal", "--app", sys.executable, "--arm", "a", "x.js", "30"],
+                {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": os.path.join(vdir, "missing"), "JAH_VRAM_DIR": vdir})
+check(rc3 == 1 and "the kernel journal is unreadable" in out3, "an unreadable kernel journal fails the row")
+shutil.rmtree(vdir, ignore_errors=True)
+os.unlink(empty_journal.name)
 
 print("pool.runner: %s" % ("%d failure(s)" % failures if failures else "all ok"))
 sys.exit(1 if failures else 0)

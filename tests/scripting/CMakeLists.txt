@@ -92,7 +92,7 @@ foreach(_variant live off)
         set(_flag)
         set(_name scripting.live_off)
     endif()
-    add_test(NAME ${_name}
+    jah_gpu_row(${_name} CLASS app
              COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                      $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_feedback.js ${_flag}
@@ -182,7 +182,7 @@ jah_pool_arm(shading_live cube_shade ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cub
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lattice_placement)
 file(MAKE_DIRECTORY ${_home})
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.lattice_placement
+jah_gpu_row(scripting.e2e.lattice_placement CLASS app
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lattice_placement.js
          WORKING_DIRECTORY ${_home}/run)
@@ -236,7 +236,7 @@ set(_ect_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_controls-timing)
 file(MAKE_DIRECTORY ${_ect_home}/run)
 jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js
                   ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js)
-jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing RUN_TIMEOUT 180
+jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing CLASS app RUN_TIMEOUT 180
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js
     WORKING_DIRECTORY ${_ect_home}/run)
 set_tests_properties(scripting.e2e.editor_controls.timing PROPERTIES
@@ -317,7 +317,7 @@ jah_pool_arm(gi_movers movable_lamp_rest ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e
 # engine's own self-check (world.shadowStatus().shaderLightMismatches).
 set(_scHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shadow_cache_probes)
 jah_fresh_home_fixture(scripting.e2e.shadow_cache_probes.fresh_home shadowCacheProbesFreshHome "${_scHome}" LABELS "scripting")
-add_test(NAME scripting.e2e.shadow_cache_probes
+jah_gpu_row(scripting.e2e.shadow_cache_probes CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadow_cache_probes.js
          WORKING_DIRECTORY ${_scHome}/run)
@@ -533,7 +533,7 @@ jah_pool_arm(world_sky sky_name_recycle ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_
 # shader or face stands between a change and its first frame. ~10 s solo.
 set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
 jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}" LABELS "scripting")
-add_test(NAME scripting.e2e.sky_swap_transient
+jah_gpu_row(scripting.e2e.sky_swap_transient CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
          WORKING_DIRECTORY ${_sstHome}/run)
@@ -748,7 +748,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 set(JAH_TEST_BUNDLE ${_home}/perf/bundle)
 configure_file(scripts/e2e_perf_capture_frames.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js @ONLY)
-add_test(NAME scripting.e2e.perf_capture_frames
+jah_gpu_row(scripting.e2e.perf_capture_frames CLASS app
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/perf_capture_frames.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js
@@ -814,7 +814,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_order)
 # yesterday's assets.
 jah_fresh_home_fixture(scripting.e2e.thumbnails_order.fresh_home thumbnailsOrderHome "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.thumbnails_order
+jah_gpu_row(scripting.e2e.thumbnails_order CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_thumbnails_order.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.thumbnails_order PROPERTIES
@@ -908,7 +908,7 @@ jah_pool_arm(doc photon ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js 1 HEAD
 # the DEVICE a question, and there is no device without a display.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ray_row_norays)
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.ray_row_norays
+jah_gpu_row(scripting.e2e.ray_row_norays CLASS app
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1054,7 +1054,7 @@ configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
 jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.tray_panel
+jah_gpu_row(scripting.e2e.tray_panel CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.tray_panel PROPERTIES
@@ -1072,7 +1072,7 @@ configure_file(scripts/gi_one_writer.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_one_wr
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
 jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME gi.one_writer
+jah_gpu_row(gi.one_writer CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(gi.one_writer PROPERTIES
@@ -1091,7 +1091,7 @@ set(JAH_PCC_RAY_OUT "${_home}/run/")
 configure_file(scripts/gi_pcc_mirror_ray_tier.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js @ONLY)
 jah_fresh_home_fixture(gi.pcc_mirror.ray_tier.fresh_home pcc_ray_tier_home "${_home}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME gi.pcc_mirror.ray_tier
+jah_gpu_row(gi.pcc_mirror.ray_tier CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_pcc_mirror_ray_tier.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(gi.pcc_mirror.ray_tier PROPERTIES
@@ -1111,7 +1111,7 @@ configure_file(scripts/gi_chain_converge_scenes.js.in ${CMAKE_CURRENT_BINARY_DIR
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-chain_converge_scenes)
 jah_fresh_home_fixture(gi.chain_converge_scenes.fresh_home chain_converge_scenes_home "${_home}" LABELS "scripting;nightly")
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME gi.chain_converge_scenes
+jah_gpu_row(gi.chain_converge_scenes CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_chain_converge_scenes.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(gi.chain_converge_scenes PROPERTIES
@@ -1298,7 +1298,7 @@ jah_pool_arm(doc ogre_samples ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_sampl
 configure_file(scripts/e2e_ogre_ports.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_ports)
 jah_fresh_home_fixture(scripting.freshhome.ogre_ports scripting_home_ogre_ports "${_home}" LABELS "scripting")
-add_test(NAME scripting.e2e.ogre_ports
+jah_gpu_row(scripting.e2e.ogre_ports CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ogre_ports.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
@@ -1412,7 +1412,7 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_ssr_mirror.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js @ONLY)
 set(_ssrhome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ssr_mirror)
 file(MAKE_DIRECTORY ${_ssrhome}/run)
-add_test(NAME scripting.e2e.ssr_mirror
+jah_gpu_row(scripting.e2e.ssr_mirror CLASS app
          COMMAND ${JAH_FRESH_HOME} --warm ${_ssrhome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ssr_mirror.js
          WORKING_DIRECTORY ${_ssrhome}/run)
@@ -1488,7 +1488,7 @@ configure_file(scripts/e2e_player_no_editor.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_no_editor)
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.player_no_editor
+jah_gpu_row(scripting.e2e.player_no_editor CLASS app
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1513,7 +1513,7 @@ configure_file(scripts/e2e_player_bounce.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
 file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.player_bounce
+jah_gpu_row(scripting.e2e.player_bounce CLASS app
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
          WORKING_DIRECTORY ${_home}/run)
@@ -1549,7 +1549,7 @@ jah_pool_arm(editor add_primitive ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_add_pr
 set(_mtHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_tabs)
 jah_fresh_home_fixture(scripting.e2e.material_tabs.fresh_home materialTabsHome "${_mtHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_mtHome}/run)
-add_test(NAME scripting.e2e.material_tabs
+jah_gpu_row(scripting.e2e.material_tabs CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs.js
          WORKING_DIRECTORY ${_mtHome}/run)
 set_tests_properties(scripting.e2e.material_tabs PROPERTIES
@@ -1561,7 +1561,7 @@ set_tests_properties(scripting.e2e.material_tabs PROPERTIES
 
 # ...and a SECOND process on the same home: the tab set is persisted in the
 # app's settings, and only a relaunch can prove it is read back.
-add_test(NAME scripting.e2e.material_tabs.relaunch
+jah_gpu_row(scripting.e2e.material_tabs.relaunch CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_tabs_relaunch.js
          WORKING_DIRECTORY ${_mtHome}/run)
 set_tests_properties(scripting.e2e.material_tabs.relaunch PROPERTIES
@@ -1712,7 +1712,7 @@ set_tests_properties(scripting.e2e.preset_seed_boot.user_first PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 jah_no_display(scripting.e2e.preset_seed_boot.user_first)
-add_test(NAME scripting.e2e.preset_seed_boot
+jah_gpu_row(scripting.e2e.preset_seed_boot CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_boot.js
          WORKING_DIRECTORY ${_psHome}/run)
@@ -1739,7 +1739,7 @@ configure_file(scripts/e2e_preset_seed_race.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js @ONLY)
 jah_fresh_home_fixture(scripting.e2e.preset_seed_race.fresh_home presetSeedRaceHome "${_prHome}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_prHome}/run)
-add_test(NAME scripting.e2e.preset_seed_race
+jah_gpu_row(scripting.e2e.preset_seed_race CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preset_seed_race.js
          WORKING_DIRECTORY ${_prHome}/run)

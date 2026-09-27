@@ -199,3 +199,17 @@ add_test(NAME source.settings_keys
                  "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.settings_keys PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.settings_keys)
+
+# source.gpu_rows_closure — GATE-ADMIT-1: every row that boots Vulkan takes the box-wide VRAM
+# budget (jah_gpu_row / jah_gpu_exclusive_test / jah_add_pool; docs/TESTING_GATE.md §4b). Read
+# from what ctest will actually RUN (`ctest --show-only=json-v1`): a row whose command or
+# environment names an Ogre-linked binary, or runs the pool driver, and is neither registered nor
+# jah_no_display() fails, named with its CMakeLists line; --self-test proves the detector names a
+# synthetic unregistered row. Unlike its neighbours it reads the BUILD (ldd on the binaries), so
+# it runs after the build like every other row of a gate.
+add_test(NAME source.gpu_rows_closure
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gpu_rows_closure.py"
+                 --build "${CMAKE_BINARY_DIR}" --ctest "${CMAKE_CTEST_COMMAND}"
+                 --app "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" --self-test)
+set_tests_properties(source.gpu_rows_closure PROPERTIES TIMEOUT 120 LABELS "hygiene")
+jah_no_display(source.gpu_rows_closure)

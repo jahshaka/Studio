@@ -108,10 +108,10 @@ set(SCALE_T_WALKS 340)        # 47-57 s
 set(SCALE_T_LIBRARY 1800)
 function(jah_scale_row _name _mode _timeout _locked)
     if(_locked)
-        jah_gpu_exclusive_test(NAME ${_name} RUN_TIMEOUT ${_timeout} COMMAND test_scale ${_mode}
+        jah_gpu_exclusive_test(NAME ${_name} CLASS engine RUN_TIMEOUT ${_timeout} COMMAND test_scale ${_mode}
                                WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     else()
-        add_test(NAME ${_name} COMMAND test_scale ${_mode} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        jah_gpu_row(${_name} CLASS engine COMMAND test_scale ${_mode} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(${_name} PROPERTIES TIMEOUT ${_timeout})
     endif()
     set_tests_properties(${_name} PROPERTIES LABELS "scale-target" ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
@@ -143,7 +143,7 @@ jah_no_display(scale.bake)
 # atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified decode
 # still and without holes (its first form proved it byte-identical to the late-discard loop).
 # A pixel suite (no time measured): never the GPU lock. ~90 s (the world's boot).
-add_test(NAME atom.decode_exact COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(atom.decode_exact CLASS engine COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -152,11 +152,11 @@ set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
 # added and released, the cut's budget forced small twice) with the decode's discriminator
 # on: no frame fails more than 0.5 % of what the id pass covered. A pixel suite (no time
 # measured, frames counted): never the GPU lock. 212 s measured; the timeout is 6x that.
-add_test(NAME atom.coverage_trace COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(atom.coverage_trace CLASS engine COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1300 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
-jah_gpu_exclusive_test(NAME scale.library RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
+jah_gpu_exclusive_test(NAME scale.library CLASS engine RUN_TIMEOUT ${SCALE_T_LIBRARY} COMMAND test_scale_library
                        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(scale.library PROPERTIES LABELS "scale-target")
