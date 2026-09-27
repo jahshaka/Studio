@@ -1327,6 +1327,57 @@ static void buildLattice(Env &env)
     for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
 }
 
+/// THE PAIRED FRAME ARMS (ATOM-CPU-WALKS-1, a TOOL, not a suite): a still frame and
+/// a frame with one thing moving, on the 10k world (`--frame-arms-world`: its Movable
+/// mover jittered, scale.cpu_walks' shape) or on the lattice (`--frame-arms-lattice`:
+/// one still cube dragged — the editor's drag). Each arm prints its PATH line and the
+/// four walks' stages; a base binary built from the same source is the other arm
+/// (one process per arm, alternated, under scripts/gpu-exclusive.sh).
+static int frameArmsMain(bool lattice)
+{
+    Env env;
+    World w;
+    iris::SceneNodePtr moving;
+    if (lattice) {
+        if (!boot(env, "test-scale-frame-arms-lattice-ogre.log")) return 1;
+        buildLattice(env);
+        armMonitor(env);
+        moving = env.doc->getRootNode()->children().at(4210);
+    } else {
+        if (!bootWorld(env, w, "test-scale-frame-arms-world-ogre.log")) return 1;
+        pathStill(env, 30);
+        iris::MeshNodePtr m = w.items[w.items.size() / 3];
+        m->setMobility(iris::Mobility::Movable);
+        moving = m;
+    }
+    frame(env, 30);
+    const iris::Vec3 home = moving->getLocalPos();
+    static const char *kWalks[5] = { "engine.gpuscene", "engine.cards", "engine.cards.lights", "engine.atomwords",
+                                     "engine.rayquery" };
+    auto arm = [&](const char *label, bool move) {
+        const auto recs = collect(env, [&] {
+            for (int f = 0; f < 120; ++f) {
+                if (move) moving->setLocalPos(home + iris::Vec3(lattice ? 0.05f * float(f % 40) : 0.02f * float(f % 2 ? 1 : -1), 0, 0));
+                frame(env, 1);
+            }
+        });
+        printPath(label, recs);
+        std::printf("WALKS %-9s", label);
+        for (const char *wk : kWalks) {
+            std::vector<double> v;
+            for (const FrameRecord &r : recs) v.push_back(stageMs(r, wk));
+            std::printf(" | %s %.3f", wk, stats(v).median);
+        }
+        std::printf("\n");
+        std::fflush(stdout);
+    };
+    arm(lattice ? "lat-still" : "wld-still", false);
+    arm(lattice ? "lat-mover" : "wld-mover", true);
+    moving->setLocalPos(home);
+    shutdown(env);
+    return 0;
+}
+
 static int latticeOwedMain()
 {
     Env env;
@@ -1421,6 +1472,8 @@ int main(int argc, char **argv)
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
     if (mode == "--lattice-owed") return latticeOwedMain();
+    if (mode == "--frame-arms-world") return frameArmsMain(false);
+    if (mode == "--frame-arms-lattice") return frameArmsMain(true);
     std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
                 "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed\n");
     return 2;
