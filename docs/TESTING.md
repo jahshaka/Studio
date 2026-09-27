@@ -18,6 +18,12 @@ It prints what your change selects and why, runs exactly that, and writes every 
 the run log. That is your gate. You never pick suites by hand and you never widen the selection
 "to be safe" — if it looks wrong, read on.
 
+A merge is refused without it: `scripts/ci-gate-check.sh <base>..HEAD` checks the run log for a
+green record of every test your change selects, at your exact commit, from a clean tree, and says
+which are missing or red. The rules behind the gate are checked by the `source.testing_rules`
+test (a timing test outside the GPU lock, a copied tier command, a `RUN_SERIAL` without its
+reason, a test nothing can select): if it goes red on your change, its line names the rule.
+
 ### How the selection is made
 
 Your diff is read three ways. None of them is a list someone keeps by hand; all three are read
@@ -87,6 +93,13 @@ path it named — it gets a rule.
   `scripts/gate-scope.py` and your lane's diff becomes a new case in
   `tests/hygiene/gate_selection_cases.json`, which the `gate.selection` test replays on every
   change to the tool. The selector learns from facts, not from a wider rule.
+
+### Two lanes that touched the same files
+
+When two lanes that changed the same file family merge, the lead runs
+`scripts/gate-scope.sh --joint <rangeA> <rangeB> --run`: the union of both selections, with each
+lane's own tests that the other lane's change also reaches named apart — the combination neither
+gate saw. You do not run it for your own lane.
 
 ### A red in your gate
 

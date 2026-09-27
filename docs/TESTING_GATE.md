@@ -239,6 +239,25 @@ scoped selection missed is a SELECTOR DEFECT: it is fixed in `gate-scope.py` and
 cases file** — never answered with a wider rule "to be safe". `source.gate_scope_rules` guards the
 tool's own traps (the empty inventory, `--build .`, the targets' split, the fallback's -j).
 
+**ENFORCEMENT (T6; §7b "the rules are tooling, not text").** (1) THE ONE COMMAND a developer runs
+before a merge is `scripts/gate-scope.sh <base>..HEAD --run`: it prints the selection and every
+reason, runs it, writes the run log, and exits non-zero on any gating red (target tests report,
+never gate). (2) `source.testing_rules` (label `hygiene`) lints the rules the tree can show: R1
+every measuring row (`.timing`, `.benchmark`, `JAHSHAKA_TIMING_BARS=1`) inside the GPU lock; R2
+every `nightly` row priced in `scripts/gate-times.txt`; R3 no copied `ctest -LE` tier outside
+`gate-scope.py`; R4 no `RUN_SERIAL` without a comment naming its reason (or the GPU lock); R5 every
+app/lint row reachable from a subject (an API module its script or harness calls, a rule's
+directory, a tree file it runs). (3) THE MERGE REFUSAL: `scripts/ci-gate-check.sh <range>` exits 1
+with the reason unless the run log holds, at the range's tip on a clean tree, a latest-PASS record
+for every row and arm the range selects (a solo retry's green after a red counts; both stay in the
+log). A hook or a CI job calls it; `gate.ci_check` proves it.
+
+**THE JOINT SUITES (T4).** At a merge where two lanes touched one file family, the lead runs
+`scripts/gate-scope.sh --joint <rangeA> <rangeB> [--run]`: the gate is the UNION of both
+selections, printed with the paths both touched and the JOINT ROWS — each lane's own guards
+(selected by its test-side changes) that the other lane's change also reaches, the combination
+neither lane's gate saw. No automation triggers it.
+
 **Measured at the landing** (thirteen recorded diffs of D's last eleven lanes, costed with the
 per-row seconds of a -j4 MERGE-tier run; `spikes/modular-gate-1/table.md`): the five that FELL
 BACK (tests/CMakeLists ×2, irisgl/CMakeLists, tests/support, irisgl/irisglfwd.h) now select 3,
