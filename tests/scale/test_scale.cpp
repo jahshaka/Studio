@@ -800,22 +800,6 @@ static int decodeMain()
         pathStill(env, 30);
         const AtomDrawStatus st = env.scene->atomDrawStatus();
         const IdRead r = readIdPass(env, 60);
-        // THE PAIRED ARMS (ATOM-DECODE-CLASS-1's measurement, SCALE_DECODE_PAIRED=1):
-        // the late-discard loop (JAHSHAKA_ATOM_CLASSIFY_OFF, the chain rebuilt on the
-        // next frame) and the classification again, in this process at this pose.
-        if (std::getenv("SCALE_DECODE_PAIRED")) {
-            setenv("JAHSHAKA_ATOM_CLASSIFY_OFF", "1", 1);
-            pathStill(env, 30);
-            const IdRead off = readIdPass(env, 60);
-            unsetenv("JAHSHAKA_ATOM_CLASSIFY_OFF");
-            pathStill(env, 30);
-            const IdRead on2 = readIdPass(env, 60);
-            std::printf("W6 PAIRED buckets %4u | classified %s (decode pass %s) | late discard %s | classified again %s"
-                        " (decode pass %s)\n",
-                        st.buckets, msText(r.decodeMs).c_str(), msText(r.decodePassMs).c_str(),
-                        msText(off.decodeMs).c_str(), msText(on2.decodeMs).c_str(),
-                        msText(on2.decodePassMs).c_str());
-        }
         std::printf("W6 materials %4d textures %4d -> buckets %4u screen draws %4u decode draws %4u | decode GPU %s"
                     " (the decode pass alone %s; id %s)\n",
                     a.materials, a.textures, st.buckets, st.screenDraws, st.decodeDraws, msText(r.decodeMs).c_str(),
@@ -843,32 +827,33 @@ static int decodeMain()
 // ===========================================================================
 // atom.decode_exact — THE CLASSIFICATION CHANGES WHO SHADES A PIXEL, NEVER WHAT IT
 // SHADES (ATOM-DECODE-CLASS-1). D1's world (10,000 instances) wearing ~200 buckets,
-// one still pose, BOTH chain shapes — no prepass (the opaque decode pass classifies)
-// and the SSR prepass (the prepass's decode pass classifies, the opaque one loads):
-//   EXACT   the classified picture against the late-discard loop's
-//           (JAHSHAKA_ATOM_CLASSIFY_OFF, read per pass: no rebuild), byte for byte,
-//           bracketed by a second classified picture (the control);
-//   HOLES   (no prepass) the classified picture under two different clear colours: a
-//           pixel that follows the clear is one no draw wrote — a bucket draw's EQUAL
-//           test that missed its own pixel, or a pixel handed to the wrong bucket (its
-//           guard discards it) — unless the Atom view (Objects), which paints every
-//           pixel the id pass covered, lets it follow too (this world's night sky is
-//           the clear). Bloom, SMAA and SSAO off for it (each carries a neighbour into
-//           a pixel). The base's own seams are the bar (below); the NEGATIVE CONTROL
-//           (JAHSHAKA_ATOM_DECODE_OFF: no decode at all) must see the Atom items.
-// The EXACT arms run under a MAGENTA clear, so they compare the unwritten pixels too.
+// one still pose, both chain shapes — no prepass (the opaque decode pass classifies)
+// and the SSR prepass (the prepass's decode pass classifies, the opaque one loads).
+// THE PROOF THAT THE PICTURE IS THE LATE-DISCARD LOOP'S was this suite's first form,
+// run before that loop was deleted (in one process, both shapes, byte for byte under a
+// magenta clear: 0 px — spikes/atom-decode-class-1/decode-exact-pre-deletion.log).
+// What stays is what can be asked of the classified decode alone:
+//   STILL   each shape's picture repeats byte for byte (a class that flickers between
+//           buckets, or a missed EQUAL test, would not);
+//   HOLES   (no prepass) a pixel the id pass covered that follows the clear colour is
+//           one no draw wrote — a bucket draw's EQUAL test that missed its surface, or
+//           a surface handed to the wrong bucket (the decode's guard discards it). The
+//           Atom view (Objects), which paints every covered pixel, says which pixels
+//           follow the clear anyway (this world's night sky is the clear). Bloom, SMAA
+//           and SSAO off for it (each carries a neighbour into a pixel). The base's own
+//           seams are the bar (below); the NEGATIVE CONTROL (JAHSHAKA_ATOM_DECODE_OFF:
+//           no decode at all) must see the Atom items.
 // A DETERMINISTIC PICTURE: every term that moves between frames of a still pose is
-// off for the proof and the same in every arm — the output dither
-// (JAHSHAKA_NO_DITHER), the ray tier (JAHSHAKA_NO_RAY_QUERY: stochastic reflections),
-// Photon (the field's and the voxels' updates), the auto exposure (Manual). A picture
-// is taken when it stops moving: read every 16 frames until two consecutive reads are
-// the same bytes (at most 12 reads).
+// off and the same in every read — the output dither (JAHSHAKA_NO_DITHER), the ray
+// tier (JAHSHAKA_NO_RAY_QUERY: stochastic reflections), Photon (the field's and the
+// voxels' updates), the auto exposure (Manual). A picture is taken when it stops
+// moving: read every 16 frames until two consecutive reads are the same bytes (at
+// most 12 reads).
 // ===========================================================================
 static int decodeExactMain()
 {
     setenv("JAHSHAKA_NO_DITHER", "1", 1);
     setenv("JAHSHAKA_NO_RAY_QUERY", "1", 1);
-    unsetenv("JAHSHAKA_ATOM_CLASSIFY_OFF");
     unsetenv("JAHSHAKA_ATOM_DECODE_OFF");
     Env env;
     World w;
@@ -919,9 +904,7 @@ static int decodeExactMain()
     for (int shape = 0; shape < 2; ++shape) {
         const char *shapeName = shape ? "the SSR prepass" : "no prepass";
         worldmodes::setRowValue(env.doc, QStringLiteral("ssr"), shape ? 1 : 0);
-        // THE MAGENTA CLEAR: a pixel no draw writes shows it, so the EXACT arms also
-        // compare the pixels each path leaves unwritten.
-        env.view->setBackground(bgB);
+        env.view->setBackground(bgA);
         // SETTLED: the 200 textures landed (a datablock still baking is PENDING and
         // drawn by PBS; every landing re-routes items) and the frames after it.
         int settle = 0;
@@ -946,22 +929,11 @@ static int decodeExactMain()
                 shapeName);
         REQUIRE(decodeRan && prepassRan == (shape == 1), "[%s] the chain carries its decode passes", shapeName);
 
-        // EXACT: classified, the late-discard loop, classified again.
-        Image a, b, c;
+        // STILL: the classified picture repeats.
+        Image a;
         const bool sa = still("classified", a);
-        setenv("JAHSHAKA_ATOM_CLASSIFY_OFF", "1", 1);
-        const bool sb = still("late discard", b);
-        unsetenv("JAHSHAKA_ATOM_CLASSIFY_OFF");
-        const bool sc = still("classified again", c);
-        REQUIRE(sa && sb && sc, "[%s] every picture stopped moving (%d %d %d)", shapeName, int(sa), int(sb), int(sc));
-        const size_t control = differing(a, c), ab = differing(a, b);
-        std::printf("decode_exact: [%s] classified vs classified again %zu px differ (the control) | classified vs late "
-                    "discard %zu px differ\n", shapeName, control, ab);
+        REQUIRE(sa, "[%s] the classified picture stopped moving", shapeName);
         save(a, std::string("decode-exact-") + (shape ? "prepass" : "fwd") + "-classified.png");
-        save(b, std::string("decode-exact-") + (shape ? "prepass" : "fwd") + "-discard.png");
-        REQUIRE(control == 0u, "[%s] the pose is still: two classified pictures are the same bytes", shapeName);
-        REQUIRE(ab == 0u, "[%s] the classified picture is the late-discard picture, byte for byte", shapeName);
-
     }
     // HOLES (no prepass): bloom, SMAA and SSAO off (each carries a neighbour into a
     // pixel), then the pixels that follow the clear with the Atom view on (never
@@ -1027,11 +999,11 @@ static int decodeExactMain()
     std::printf("decode_exact: [%s] never covered (the Atom view follows the clear) %zu px | holes %zu | the negative "
                 "control (no decode) %zu\n", shapeName, sky, holes, controlHoles);
     REQUIRE(su && sf && sn, "[%s] the hole pictures stopped moving", shapeName);
-    // THE BAR IS NOT ZERO (measured on the base's late-discard path, which the EXACT
-    // arms above show leaves the same pixels unwritten): 99-137 px of one- to
-    // two-pixel seams INSIDE surfaces the id pass covered, which the decode's own
-    // covering test refuses — a pre-existing finding of ATOM-DECODE-CLASS-1's. A
-    // bucket whose EQUAL test missed leaves its surfaces.
+    // THE BAR IS NOT ZERO: 99 px of one- to two-pixel seams INSIDE surfaces the id
+    // pass covered, which the decode's own covering test refuses, measured identical
+    // on the late-discard loop (the first form's EXACT arms, under the magenta clear)
+    // — a pre-existing finding of ATOM-DECODE-CLASS-1's. A bucket whose EQUAL test
+    // missed leaves its surfaces.
     REQUIRE(holes <= 1000u, "[%s] no surface the id pass covered is left unwritten (%zu px)", shapeName, holes);
     REQUIRE(controlHoles > 100000u, "[%s] the hole test sees the Atom items when nothing decodes them", shapeName);
     shutdown(env);
@@ -1569,12 +1541,6 @@ static int latticeOwedMain()
         worldmodes::setPhoton(env.doc, true, t);
         for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
         const AtomDrawStatus st = env.scene->atomDrawStatus();
-        // THE PAIRED ARMS (SCALE_DECODE_PAIRED=1, ATOM-DECODE-CLASS-1): classified,
-        // the late-discard loop, classified again — one process, one pose.
-        for (int arm = 0; arm < (std::getenv("SCALE_DECODE_PAIRED") ? 3 : 1); ++arm) {
-        if (arm == 1) setenv("JAHSHAKA_ATOM_CLASSIFY_OFF", "1", 1);
-        if (arm == 2) unsetenv("JAHSHAKA_ATOM_CLASSIFY_OFF");
-        if (arm) frame(env, 30);
         std::vector<double> dec, id, pre;
         unsigned decodePasses = 0;
         const auto recs = collect(env, [&] { frame(env, 90); });
@@ -1595,15 +1561,13 @@ static int latticeOwedMain()
             if (const FramePass *p = passNamed(r, "Jahshaka atom id")) if (p->gpuMs >= 0) id.push_back(p->gpuMs);
         }
         const double mpx = 1920.0 * 1080.0 / 1e6, d = stats(dec).median;
-        std::printf("OWED S3-DRAW lattice at %s%s: buckets %u, decode passes a frame %u, decode GPU ms med %.3f (id %.3f) -> "
+        std::printf("OWED S3-DRAW lattice at %s: buckets %u, decode passes a frame %u, decode GPU ms med %.3f (id %.3f) -> "
                     "%.4f ms per bucket-pass, %.4f ms per bucket-pass-Mpx (the prologue's cost per pixel x buckets x "
                     "passes)\n",
-                    tierArm ? "Epic" : "High", arm == 1 ? " [late discard]" : (arm == 2 ? " [classified again]" : ""),
-                    st.buckets, decodePasses, d, stats(id).median,
+                    tierArm ? "Epic" : "High", st.buckets, decodePasses, d, stats(id).median,
                     d / std::max(1u, st.buckets * decodePasses), d / std::max(1u, st.buckets * decodePasses) / mpx);
         if (!pre.empty())
             std::printf("   ... the prepass side (its decode pass + the prepass) GPU ms med %.3f\n", stats(pre).median);
-        }
     }
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
     worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
