@@ -778,6 +778,14 @@ class Selection:
         # every row that runs this very file (a script, a wrapper, a lint)
         hit_argv = self.argv_rows(p, tag)
         if hit_argv: notes.append(f"{len(hit_argv)} row(s) run it")
+        # A DATA FILE OUTSIDE tests/ that tests load by name (app/content/primitives/cube.obj, read
+        # by seven gi/atom tests): the test sources that name it are reached paths (the Fable read,
+        # small item a) — a runtime read is no build edge
+        if (not is_cxx and not p.startswith(("tests/", "docs/", "scripts/", ".")) and not p.endswith(".md")
+                and depth == 0):
+            users = [u for u in self.naming_tests(os.path.basename(p)) if u.endswith(CXX_EXT + (".js", ".js.in", ".sh"))]
+            for u in users: self.path(u, 1, via=f"loads {os.path.basename(p)}")
+            if users: notes.append(f"loaded by name in {len(users)} test file(s)")
 
         # a build input that is not C/C++ (a .ui form, a .qrc, a shader the build compiles into
         # SPIR-V) is the graph's too; runtime data (engine media, scenes) is not in it
