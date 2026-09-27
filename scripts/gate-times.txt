@@ -1,23 +1,54 @@
 # suite seconds — snapshot of a full gate; refresh with gate-scope.sh --record-times <ctest log>
 # (D6B-GATE-SHAPE, 2026-09-27: the after-run at 58b216b46, -j4 beside three other lanes; the rows it lost to the box's load carry their solo re-run seconds)
+# Fix round F1's thirteen rows carry their WORST measured run (the one their 6x timeout is set from:
+#   spikes/d6b-gate-shape/f1-timeouts.txt).
+# The NIGHTLY rows (fix round F4) — never in a MERGE run, so their seconds come from elsewhere:
+#   app.shutdown_order.timing 46.81  <- its push row's worst gate run (same binary)
+#   app.update_check.timing 1.07  <- its D6B dev run
+#   archive.responsive.timing 79.57  <- its push row's worst gate run (same binary)
+#   atom.cluster_crack 135.80  <- the audit's gate (2026-09-26; the larger)
+#   atom.cluster_cut 140.60  <- the audit's gate (2026-09-26; the larger)
+#   avatar.responsive.timing 58.59  <- its push row's worst gate run (same binary)
+#   chain.hzb.timing 1.84  <- its D6B dev run
+#   engine.gpu_cull.timing 62.82  <- its D6B dev run
+#   gi.chain_converge_scenes 116.59  <- the before-run at 51e9f2c49
+#   gi.chain_converge_scenes.fresh_home 0.00  <- the before-run at 51e9f2c49
+#   gi.field_follows.timing 12.58  <- its push row's worst gate run (same binary)
+#   gi.gather_cost 33.04  <- the worst recorded run (spikes/)
+#   meshbake.cards.timing 0.78  <- its D6B dev run
+#   open.crash_soak 114.30  <- a recorded nightly run (spikes/)
+#   open.responsive.timing 281.33  <- its push row's worst gate run (same binary)
+#   rigperf.benchmark 100.00  <- NO recorded run: its 600 s budget / 6
+#   scenegraph.benchmark 283.84  <- a recorded nightly run (spikes/)
+#   scripting.e2e.editor_controls.timing 71.87  <- its D6B dev run
+#   shadercache.container_asan 247.95  <- a recorded nightly run (spikes/)
+#   ui.components.timing 2.97  <- its D6B dev run
+#   ui.properties_filter.timing 0.73  <- its D6B dev run
+#   vr.frame_budget 129.68  <- the before-run at 51e9f2c49
+#   vr.warmup.timing 49.73  <- its push row's worst gate run (same binary)
+#   vr.warmup.timing.fresh_home 0.01  <- a wipe
+# gi.budget: its gate seconds include the GPU lock's flock WAIT (458 s once) — the run itself is ~9 s.
 api.contract 2.81
 app.cli_options 0.01
 app.create_loop 91.63
 app.create_loop.fresh_home 0.02
 app.data_root 28.82
-app.engine_selftest_validation 66.19
+app.engine_selftest_validation 107.60
 app.first_launch 0.01
 app.input_keys 66.81
 app.multiselect_outline 15.3
 app.play_select 35.27
 app.reset_library 71.16
 app.scene_switch_after_play 32.95
-app.shutdown_order 42.5
+app.shutdown_order 46.80
+app.shutdown_order.timing 46.81
 app.startup_quiet 36.43
 app.update_check 1.13
+app.update_check.timing 1.07
 app.watchdog_stall 56.85
 app.window_fits 11.7
 archive.responsive 59.84
+archive.responsive.timing 79.57
 assets.cas 0.21
 assets.delete_roundtrip 0.12
 assets.engine 5.79
@@ -27,12 +58,14 @@ assets.paths 0.08
 assets.seed_restamp 0.07
 assets.torn_write 0.05
 assets.tray 0.43
+atom.cluster_crack 135.80
+atom.cluster_cut 140.60
 atom.dag_bound_bar 17.84
 atom.decode_exact 61.22
 atom.dolly_gate 33.86
 atom.error_bound 1.79
 atom.lod_bound_bar 4.49
-atom.lod_switch 257.44
+atom.lod_switch 257.40
 atom.lod_switch.fixture 0.05
 atom.occlusion_exact 15.4
 atom.occlusion_exact_app 88.26
@@ -47,6 +80,7 @@ avatar.movement 0.35
 avatar.possession 0.35
 avatar.preview 4.66
 avatar.responsive 52.86
+avatar.responsive.timing 58.59
 bake.determinism 68.38
 cameras.body 4.03
 cameras.document 0.07
@@ -60,6 +94,7 @@ cameras.lens 0.03
 cameras.pip 3.92
 cameras.play_routing 1.97
 chain.hzb 3.1
+chain.hzb.timing 1.84
 claude.chat 3.24
 commands.db_batch 0.12
 commands.pin_asset 0.06
@@ -96,6 +131,7 @@ engine.error_pump 1.49
 engine.frame_catch 2.11
 engine.gi_scan 4.12
 engine.gpu_cull 64.16
+engine.gpu_cull.timing 62.82
 engine.gpu_scene 2.54
 engine.headless 0.05
 engine.lod_hysteresis 2.13
@@ -132,6 +168,8 @@ gi.cascade_lod 6.72
 gi.cascades 17.72
 gi.cascades_asan 40.47
 gi.chain_converge 17.04
+gi.chain_converge_scenes 116.59
+gi.chain_converge_scenes.fresh_home 0.00
 gi.chain_face 19.04
 gi.cliff 4.04
 gi.coalesce 7.26
@@ -145,12 +183,14 @@ gi.env_cone 10.26
 gi.env_one 12.37
 gi.env_ray_match 7.0
 gi.far_blas 7.64
-gi.field_alias 149.93
+gi.field_alias 149.90
 gi.field_follows 12.58
+gi.field_follows.timing 12.58
 gi.field_scroll 15.55
 gi.field_thin_wall 45.93
 gi.gather 32.64
 gi.gather_cards 75.45
+gi.gather_cost 33.04
 gi.gather_default 41.47
 gi.gather_deterministic 15.64
 gi.gather_edge 17.48
@@ -270,6 +310,7 @@ math.parity 24.01
 mcp.e2e 52.89
 mcp.e2e.fresh_home 0.01
 meshbake.cards 0.76
+meshbake.cards.timing 0.78
 meshbake.hemisphere_winding 0.18
 meshbake.primitives_baked 0.59
 meshbake.rebake_generation 0.08
@@ -284,8 +325,10 @@ mirror.scale 3.58
 mirror.skinned_outline 2.79
 mirror.sun_night 4.56
 mirror.vr_proxies 2.81
+open.crash_soak 114.30
 open.frames 42.18
-open.responsive 228.72
+open.responsive 281.30
+open.responsive.timing 281.33
 particles.document_to_engine 1.89
 particles.fire_shape 1.65
 perf.capture_bundle 59.02
@@ -308,6 +351,7 @@ player.engine 3.86
 player.playback_routing 0.04
 player.vr 0.01
 preview.lifecycle 3.26
+rigperf.benchmark 100.00
 rigperf.smoke 2.56
 samples.cleanstart.Matcaps 53.02
 samples.cleanstart.Mirror_Room 57.07
@@ -326,9 +370,10 @@ samples.freshhome.Showroom_2 0.01
 samples.freshhome.Skeletal_Animation 0.01
 samples.freshhome.World_Background 0.45
 samples.freshhome.session 0.01
-samples.session 117.95
-scale.occlusion 88.39
+samples.session 161.00
+scale.occlusion 98.60
 scene.reopen_fidelity 64.71
+scenegraph.benchmark 283.84
 scenegraph.smoke 15.32
 scripting.e2e.add_primitive 24.11
 scripting.e2e.ai_surface 3.78
@@ -351,7 +396,7 @@ scripting.e2e.build_scene 27.67
 scripting.e2e.clipboard 8.56
 scripting.e2e.clipboard_assets 3.93
 scripting.e2e.clipboard_xproject 4.37
-scripting.e2e.clouds_2d 98.84
+scripting.e2e.clouds_2d 98.80
 scripting.e2e.components 4.29
 scripting.e2e.cube_shade 55.24
 scripting.e2e.custom_piece 31.68
@@ -365,6 +410,7 @@ scripting.e2e.drag_mover 37.16
 scripting.e2e.drawers 3.67
 scripting.e2e.duplicate_material 21.98
 scripting.e2e.editor_controls 35.01
+scripting.e2e.editor_controls.timing 71.87
 scripting.e2e.export_raw 5.05
 scripting.e2e.export_web 4.75
 scripting.e2e.field_every_tier 47.35
@@ -391,7 +437,7 @@ scripting.e2e.introspection 3.92
 scripting.e2e.lattice_placement 104.5
 scripting.e2e.light_bindings 4.28
 scripting.e2e.light_masks 39.03
-scripting.e2e.live_texture_pixels 70.25
+scripting.e2e.live_texture_pixels 70.20
 scripting.e2e.live_textures 5.98
 scripting.e2e.locomotion 4.32
 scripting.e2e.looks 3.99
@@ -406,7 +452,7 @@ scripting.e2e.material_share 10.28
 scripting.e2e.material_share.fresh_home 0.76
 scripting.e2e.material_share_import 3.63
 scripting.e2e.material_share_import.fresh_home 0.03
-scripting.e2e.material_tabs 114.18
+scripting.e2e.material_tabs 173.80
 scripting.e2e.material_tabs.fresh_home 0.01
 scripting.e2e.material_tabs.relaunch 10.57
 scripting.e2e.memory 5.37
@@ -480,7 +526,7 @@ scripting.e2e.static_semantics 4.18
 scripting.e2e.store_root 3.74
 scripting.e2e.store_root.fresh_home 0.34
 scripting.e2e.sun_contact 43.42
-scripting.e2e.sun_light 118.31
+scripting.e2e.sun_light 118.30
 scripting.e2e.surface_cards 56.45
 scripting.e2e.texture_missing 29.53
 scripting.e2e.thumbnails_order 20.51
@@ -516,7 +562,8 @@ services.ogre_samples 0.02
 services.scene_stats 0.07
 services.selection_set 0.06
 shadercache.app 89.71
-shadercache.container 72.01
+shadercache.container 120.00
+shadercache.container_asan 247.95
 shadercache.warmup 2.45
 shadercache.warmup_pass 2.13
 shadergraph.ao_removed 0.06
@@ -573,7 +620,7 @@ ssr.engine 13.29
 ssr.engine_asan 33.45
 ssr.rings 2.78
 test_engine 37.05
-test_engine_asan 68.26
+test_engine_asan 68.30
 test_engine_recreate 7.89
 theme.manager 0.1
 theme.no_raw_sheets 0.08
@@ -604,6 +651,7 @@ thumbnails.studio_env 4.12
 thumbnails.sweep 0.06
 ui.column_law 40.28
 ui.components 2.78
+ui.components.timing 2.97
 ui.db_handles 0.15
 ui.dock_state 0.09
 ui.drag_owner 0.02
@@ -623,6 +671,7 @@ ui.photon_panel 2.97
 ui.presets_favorites 0.02
 ui.project_tile 2.67
 ui.properties_filter 0.85
+ui.properties_filter.timing 0.73
 ui.properties_tabs 0.54
 ui.properties_width 1.19
 ui.property_anim 0.03
@@ -637,6 +686,7 @@ ui.tree_scroll 0.08
 ui.vr_panel 0.09
 ui.window_minimum 47.2
 vr.eye_grade 259.71
+vr.frame_budget 129.68
 vr.gather_stereo 86.93
 vr.grab_maths 0.0
 vr.input_session 50.4
@@ -651,5 +701,7 @@ vr.spike_1a 5.88
 vr.verbs_session 71.04
 vr.warmup 32.8
 vr.warmup.fresh_home 0.01
+vr.warmup.timing 49.73
+vr.warmup.timing.fresh_home 0.01
 vr.warmup_control 48.15
 vr.warmup_control.fresh_home 0.03
