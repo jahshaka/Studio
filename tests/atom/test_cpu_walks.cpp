@@ -2,10 +2,12 @@
 //
 // `--tlas-compute` (engine.tlas_compute): THE TOP-LEVEL INSTANCES ARE WRITTEN ON THE
 // DEVICE (the Jahshaka/TlasWrite job, one thread per GPU scene slot, two instances a
-// slot at fixed places, an untraced slot's pair inactive). The array is read back and
-// its ACTIVE entries, in order, are held BYTE FOR BYTE against the CPU writer run over
-// the same mirror and the same bottom-level structures (OgreScene::verifyTlasCompute),
-// with the far copies' hand-over width, the counts and the per-slot rows. Over:
+// slot at fixed places, an untraced slot's pair inactive). The array is read back
+// (OgreScene::readTlasInstances) and its ACTIVE entries, in order, are held BYTE FOR
+// BYTE against a REFERENCE WRITER kept in this suite — the product's CPU writer,
+// deleted once this suite proved the two equal — run over the same mirror and the
+// same bottom-level structures, with the far copies' hand-over width, the counts and
+// the per-slot rows. Over:
 //   (a) a mixed set — static casters, movers, non-casters, a hidden item, a cut-out
 //       and a blended material (both out of the traced set), LOD chains whose near
 //       level the ray rule moves with the camera and whose far copy is the coarsest,
@@ -36,6 +38,12 @@
 #include "EnginePrivate.h"
 #include "GpuScene.h"
 
+#include <OgreMesh2.h>
+#include <OgreSubMesh2.h>
+#include <Vao/OgreVertexArrayObject.h>
+
+#include <algorithm>
+
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -44,7 +52,7 @@
 
 using namespace jahshaka::engine;
 using jahshaka::engine::detail::OgreScene;
-using jahshaka::engine::detail::TlasVerifyReport;
+using jahshaka::engine::detail::TlasReadback;
 
 static int failures = 0;
 #define CHECK_MSG(cond, ...)                                                    \
@@ -204,26 +212,124 @@ static NodeId place(Scene *s, MeshId mesh, MaterialId mat, const Vec3 &pos, cons
     return n;
 }
 
-/// One verification: every active device instance equal to the CPU writer's.
+/// VkAccelerationStructureInstanceKHR's 64 bytes, as the reference writes them.
+struct RefInstance {
+    float transform[12];
+    uint32_t indexMask;    ///< instanceCustomIndex : 24 | mask : 8
+    uint32_t sbtFlags;     ///< shader binding table offset : 24 | flags : 8
+    uint64_t reference;
+};
+static_assert(sizeof(RefInstance) == 64, "VkAccelerationStructureInstanceKHR is 64 bytes");
+
+/// THE REFERENCE WRITER — the CPU instance writer the product deleted, kept HERE:
+/// every traced slot of the GPU scene's MIRROR, in slot order, a near copy over the
+/// RAY RULE's level (read from the scene's own CPU array, not the table: the table's
+/// ids.w is what the device reads, so this is also the patch's proof) and a far copy
+/// over the coarsest level; a rigged slot through its ready skin structure or not at
+/// all; the far copies' width the coarsest bound times the largest axis scale.
+static void referenceInstances(OgreScene *os, const TlasReadback &rb, std::vector<RefInstance> &out,
+                               std::vector<uint32_t> &rows, float &overlap, unsigned &far)
+{
+    namespace d = jahshaka::engine::detail;
+    const d::GpuScene &gs = os->gpuScene();
+    out.clear();
+    overlap = 0.0f;
+    far = 0u;
+    rows.assign(rb.slots, d::GpuScene::kNoGeomRow);
+    auto address = [&](const void *mesh, uint32_t level) {
+        for (const TlasReadback::Structure &st : rb.structures)
+            if (st.mesh == mesh && st.level == level) return st.address;
+        return uint64_t(0);
+    };
+    auto push = [&](const float *world, uint32_t slot, uint32_t mask, uint64_t ref) {
+        RefInstance r{};
+        std::memcpy(r.transform, world, sizeof(r.transform));
+        r.indexMask = (slot & 0xFFFFFFu) | ((mask & 0xFFu) << 24u);
+        r.sbtFlags = 1u << 24u;   // VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR
+        r.reference = ref;
+        out.push_back(r);
+    };
+    for (uint32_t i = 0; i < rb.slots && i < gs.slotCount(); ++i) {
+        const d::GpuInstance &e = gs.entry(i);
+        uint32_t flags = 0u, meshIndex = 0u;
+        std::memcpy(&flags, &e.boundsMax[3], sizeof(flags));
+        std::memcpy(&meshIndex, &e.boundsMin[3], sizeof(meshIndex));
+        if (!(flags & d::kGpuRayTraced)) continue;
+        const Ogre::MeshPtr &mesh = gs.meshAt(meshIndex);
+        if (!mesh) continue;
+        uint32_t mask = kRayMaskNear;
+        mask |= (flags & d::kGpuCaster) ? kRayMaskCaster : 0u;
+        mask |= (flags & d::kGpuMover) ? kRayMaskMover : kRayMaskStill;
+        if ((flags & d::kGpuMover) && (flags & d::kGpuCaster)) mask |= kRayMaskMoverCaster;
+        if (flags & d::kGpuSkinned) {
+            const TlasReadback::Skin *sk = nullptr;
+            for (const TlasReadback::Skin &k : rb.skins)
+                if (k.node == e.ids[0]) sk = &k;
+            if (!sk) continue;
+            push(e.world, i, mask, sk->address);
+            push(e.world, i, kRayMaskFar, sk->address);
+            rows[i] = sk->row;
+            ++far;
+            continue;
+        }
+        const size_t vaos = mesh->getNumSubMeshes() ? mesh->getSubMesh(0)->mVao[Ogre::VpNormal].size() : 0u;
+        const uint32_t coarsest = vaos > 1u ? uint32_t(vaos - 1u) : 0u;
+        const uint32_t nearLevel = std::min(os->rayLevelOf(i), coarsest);
+        push(e.world, i, mask, address(mesh.get(), nearLevel));
+        push(e.world, i, kRayMaskFar, address(mesh.get(), coarsest));
+        ++far;
+        if (nearLevel < d::GpuScene::kLevelsPerMesh) rows[i] = d::GpuScene::geomRowIndex(meshIndex, nearLevel, 0u);
+        if (coarsest > 0u) {
+            const std::vector<float> *b = os->lodBoundsFor(mesh.get());
+            const float bound = (b && !b->empty()) ? b->back() : 0.0f;
+            if (bound > 0.0f) {
+                const float grown = bound * worldMaxAxisScale(e.world);
+                if (std::isfinite(grown) && grown > overlap) overlap = grown;
+            }
+        }
+    }
+}
+
+/// One verification: every active device instance equal to the reference's.
 static void verify(Scene *s, const char *what, unsigned expectTraced = ~0u)
 {
-    TlasVerifyReport r;
+    auto *os = static_cast<OgreScene *>(s);
+    TlasReadback rb;
     std::string err;
-    const bool ok = static_cast<OgreScene *>(s)->verifyTlasCompute(r, err);
+    const bool ok = os->readTlasInstances(rb, err);
+    std::vector<RefInstance> dev;
+    for (size_t at = 0; at + sizeof(RefInstance) <= rb.instances.size(); at += sizeof(RefInstance)) {
+        RefInstance r;
+        std::memcpy(&r, rb.instances.data() + at, sizeof(r));
+        if (r.reference) dev.push_back(r);
+    }
+    std::vector<RefInstance> ref;
+    std::vector<uint32_t> rows;
+    float overlap = 0.0f;
+    unsigned far = 0u;
+    referenceInstances(os, rb, ref, rows, overlap, far);
+    unsigned missing = 0u, mismatched = 0u;
+    int first = -1;
+    for (const RefInstance &r : ref)
+        if (!r.reference) ++missing;
+    for (size_t i = 0; i < std::min(dev.size(), ref.size()); ++i)
+        if (std::memcmp(&dev[i], &ref[i], sizeof(RefInstance)) != 0) {
+            if (first < 0) first = int(i);
+            ++mismatched;
+        }
     const RayQueryStatus rq = s->rayQueryStatus();
-    std::printf("  [%s] slots %u, device active %u, cpu %u, compared %u, mismatched %u (first %d), "
-                "overlap %.6f / %.6f, missing BLAS %u, traced %d, far %d, skinned %d\n",
-                what, r.slots, r.deviceActive, r.cpuCount, r.compared, r.mismatched,
-                r.mismatched ? int(r.firstMismatch) : -1, r.deviceOverlap, r.cpuOverlap, r.cpuMissingBlas,
+    std::printf("  [%s] slots %u, device active %zu, reference %zu, mismatched %u (first %d), overlap %.6f / %.6f, "
+                "missing BLAS %u, traced %d, far %d, skinned %d\n",
+                what, rb.slots, dev.size(), ref.size(), mismatched, first, rb.farOverlap, overlap, missing,
                 rq.instances, rq.farInstances, rq.skinnedInstances);
     CHECK_MSG(ok, "%s: the instance array read back (%s)", what, err.c_str());
-    CHECK_MSG(r.cpuCount > 0 && r.compared == r.cpuCount && r.deviceActive == r.cpuCount && r.mismatched == 0,
-              "%s: the device's %u active instances equal the CPU writer's %u byte for byte", what, r.deviceActive,
-              r.cpuCount);
-    CHECK_MSG(r.countsEqual && r.rowsEqual && r.cpuMissingBlas == 0,
-              "%s: the counts, the per-slot rows and the structures agree", what);
-    CHECK_MSG(r.deviceOverlap == r.cpuOverlap, "%s: the far copies' hand-over width is the writer's (%.6f)", what,
-              r.cpuOverlap);
+    CHECK_MSG(!ref.empty() && dev.size() == ref.size() && mismatched == 0 && missing == 0,
+              "%s: the device's %zu active instances equal the reference writer's %zu byte for byte", what,
+              dev.size(), ref.size());
+    CHECK_MSG(rb.instanceCount == ref.size() && rb.farInstanceCount == far && rb.rows == rows,
+              "%s: the counts (%u / %u) and the per-slot rows agree", what, rb.instanceCount, rb.farInstanceCount);
+    CHECK_MSG(rb.farOverlap == overlap, "%s: the far copies' hand-over width is the reference's (%.6f)", what,
+              overlap);
     if (expectTraced != ~0u)
         CHECK_MSG(unsigned(rq.instances) == expectTraced, "%s: %u traced objects (expected %u)", what,
                   unsigned(rq.instances), expectTraced);
@@ -309,16 +415,28 @@ static int tlasMain()
     // Traced: floor + 20 + 5 movers + 3 non-casters + the edit target + 12 LOD + 2 rigged
     // (the hidden, the cut-out and the blended one are out... the blended one is
     // TRACED: only a cut-out leaves, the opaque BLAS carries glass — see the writer).
+    // How many slots the RAY RULE put above level 0 — the camera walk below must move it.
+    auto coarseSlots = [&](Scene *sc) {
+        auto *os = static_cast<OgreScene *>(sc);
+        unsigned n = 0u;
+        for (uint32_t i = 0; i < os->gpuScene().slotCount(); ++i) n += os->rayLevelOf(i) > 0u ? 1u : 0u;
+        return n;
+    };
     verify(s, "(a) the mixed set");
     const unsigned tracedA = unsigned(s->rayQueryStatus().instances);
+    const unsigned coarseA = coarseSlots(s);
 
     // (a2) THE CAMERA WALKS: the ray rule moves the near levels (patched in place).
     enginetest::testCameraLookAt(view, Vec3(0.0f, 30.0f, 160.0f), Vec3(0.0f, 0.5f, -40.0f));
     render(e, 3);
     verify(s, "(a2) the camera far away: new near levels");
+    const unsigned coarseFar = coarseSlots(s);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, -5.0f), Vec3(0.0f, 0.5f, -8.0f));
     render(e, 3);
     verify(s, "(a3) the camera close to the chains");
+    const unsigned coarseNear = coarseSlots(s);
+    CHECK_MSG(coarseFar > coarseNear, "(a2/a3) the camera walk moved the ray rule's levels (slots above level 0: "
+              "%u at the start, %u far away, %u close)", coarseA, coarseFar, coarseNear);
 
     // (b) REMOVALS (swap-remove), ADDITIONS, a mover, toggles.
     s->removeNode(nodes[3]);
