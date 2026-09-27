@@ -16,7 +16,13 @@
 //       tracing off; every mode at the Low world mode (its viewport draws no post
 //       chain); 'voxels' with GI off — and world.giStatus() reports the view and the
 //       reasons;
-//   (d) the project's save (its thumbnail shot parks the view Off) leaves the view on.
+//   (d) the project's save (its thumbnail shot parks the view Off) leaves the view on;
+//   (e) THE PROBES AFTER A FOLLOW (the fix round's F1): the irradiance field is a toroidal
+//       window, and after the camera walks it SCROLLS (ifdScrolls > 0) — a probe's atlas
+//       tile is then not its lattice position. In the dark (no lights, a black sky) with
+//       one red emissive cube, the spheres round the cube must read red; a picture that
+//       draws tile i at position i (the defect) shows them dark (measured on the rig: 0
+//       red sphere pixels round the cube with the offset ignored, 237 with it honoured).
 // Frames, never time: every shot renders until the scene is at rest.
 
 function assert(cond, msg) {
@@ -151,4 +157,48 @@ assert(world.setPhotonView("probes") === true, "probes on for the save");
 assert(project.save() === true, "project.save (its thumbnail shot parks the view)");
 assert(world.photonView() === "probes", "the view is back on after the thumbnail shot");
 assert(world.setPhotonView("off") === true, "off at the end");
+
+// ---- (e) the probes after a follow ------------------------------------------------------
+assert(project.create("Photon View follow " + Date.now()).length > 10, "project.create (the follow arm)");
+world.gi({ tier: "high" });
+var lights = scene.nodes();
+for (var li = 0; li < lights.length; ++li)
+    if (/light/i.test(lights[li].type)) node.setProperty(lights[li].id, "visible", false);
+world.sky("color", { color: "#000000" });
+var cube = scene.addPrimitive("cube", { position: { x: 4.5, y: 0.3, z: 6.5 }, scale: { x: 0.6, y: 0.6, z: 0.6 } });
+material.set(cube, { baseColor: "#000000", emissiveColor: "#ff0000", emissiveIntensity: 3 });
+function walkTo(x, z) {
+    editor.setCamera({ position: { x: x, y: 3.0, z: z }, lookAt: { x: x + 1.5, y: 0.3, z: z - 5 } });
+}
+settle();
+// THE WALK, a step a couple of frames, then the field at rest.
+for (var wk = 1; wk <= 30; ++wk) { walkTo(0.1 * wk, 14 - 0.13 * wk); editor.frame(2); }
+editor.frame(3);
+var fs = settle();
+console.log("follow arm: ifdFollows " + fs.ifdFollows + " ifdScrolls " + fs.ifdScrolls + " field " +
+            J(fs.ifdMin) + " .. " + J(fs.ifdMax));
+assert(fs.ifdScrolls > 0, "the walk scrolled the field (" + fs.ifdScrolls + " scrolls)");
+var fOff = shot("follow_off");
+assert(world.setPhotonView("probes") === true, "probes on after the follow");
+var fPro = shot("follow_probes");
+assert(world.setPhotonView("off") === true, "off after the follow arm");
+function redness(p) { return Math.max(0, p.r - Math.max(p.g, p.b)); }
+// The cube where the off picture shows it; the RED SPHERE PIXELS within 30 pixels of it,
+// off the cube's own pixels (a pixel the off picture does not show red, that the probes
+// picture shows red: a sphere lit by the cube).
+var ccx = 0, ccy = 0, ccn = 0;
+for (var ci = 0; ci < fOff.length; ++ci)
+    if (redness(fOff[ci]) > 80) { ccx += ci % W; ccy += Math.floor(ci / W); ++ccn; }
+assert(ccn > 200, "the emissive cube is in the off picture (" + ccn + " pixels)");
+ccx /= ccn; ccy /= ccn;
+var nearRed = 0, allRed = 0;
+for (var pi = 0; pi < fPro.length; ++pi) {
+    if (redness(fOff[pi]) >= 40 || redness(fPro[pi]) <= 40) continue;
+    ++allRed;
+    var dx = pi % W - ccx, dy = Math.floor(pi / W) - ccy;
+    if (dx * dx + dy * dy <= 900) ++nearRed;
+}
+console.log("follow arm: " + nearRed + " red sphere pixels round the cube (" + allRed + " in the picture)");
+assert(nearRed > 60, "the spheres nearest the emissive cube read red after the follow (" + nearRed +
+       " red sphere pixels within 30 of it; the offset ignored measured 0)");
 "ok";

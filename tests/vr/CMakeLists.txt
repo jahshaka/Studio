@@ -244,6 +244,25 @@ set_tests_properties(vr.player_session PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_player_home};JAHSHAKA_DATA_ROOT=${_vr_player_home}/.local/share/Jahshaka")
 
 # ---------------------------------------------------------------------------
+# vr.photon_view — THE PHOTON VIEW WITH A HEADSET UP (PHOTON-VIEW-1 fix round, F6):
+# while a stereo view draws the scene, Ogre's voxel and probe visualizers (low-level
+# materials the pin's instanced stereo does not serve) are refused, naming stereo;
+# every other mode stays; the refusal ends with the session. The same wrapper and
+# app as vr.player_session.
+set(_vr_photon_home "${CMAKE_CURRENT_BINARY_DIR}/vr-photon-view-home")
+add_test(NAME vr.photon_view
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.photon_view PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 600
+    RUN_SERIAL TRUE
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_photon_home};JAHSHAKA_DATA_ROOT=${_vr_photon_home}/.local/share/Jahshaka")
+
+# ---------------------------------------------------------------------------
 # vr.no_picture_start — THE OWNER'S FAILED WiVRn SMOKE, AS A SUITE (lane VR-3b,
 # 2026-09-17; VR_SPEC §6).
 #
