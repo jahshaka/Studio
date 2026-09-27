@@ -436,7 +436,7 @@ target_compile_definitions(test_texture_missing PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_texmiss_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-texture_missing)
 file(MAKE_DIRECTORY ${_texmiss_home}/run)
-add_test(NAME scripting.e2e.texture_missing COMMAND test_texture_missing
+jah_gpu_row(scripting.e2e.texture_missing CLASS app COMMAND test_texture_missing
          WORKING_DIRECTORY ${_texmiss_home}/run)
 set_tests_properties(scripting.e2e.texture_missing PROPERTIES
     ENVIRONMENT "HOME=${_texmiss_home};JAHSHAKA_DATA_ROOT=${_texmiss_home}/.local/share/Jahshaka"

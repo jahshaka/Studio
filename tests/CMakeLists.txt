@@ -286,7 +286,9 @@ set(JAH_GPU_LOCK_WAIT_S 900)
 #               not registered through jah_gpu_row at all; `none` exists only for a GPU-timing
 #               row (jah_gpu_exclusive_test) that runs with no display (a CPU-time claim).
 # A pool's TIER (TEST-TIER-1: the test tier boots Low, ~0.65 GB) lowers an app-class process
-# to 1 token; the lookup below is the one place that says so.
+# to 1 token; the lookup below is the one place that says so. A row MEASURED heavier than its
+# class (GATE-ADMIT-1's two-tier run, nvidia-smi per pid: the gather family at Epic, 2-3.6 GB)
+# says `TOKENS <k>` beside its CLASS, with the measured number in its comment — round(GB).
 set(JAH_GPU_ADMIT "${CMAKE_SOURCE_DIR}/scripts/gpu-admit.sh")
 set(JAH_VRAM_TOKENS_APP 2)
 set(JAH_VRAM_TOKENS_SELFTEST 2)
@@ -345,7 +347,7 @@ endfunction()
 # $<TARGET_FILE:...>. A pool is not registered here: its tokens are taken per APP PROCESS by
 # run_pool.py (jah_add_pool), so a restart re-takes them and the driver holds none.
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "" "CLASS;TIER;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "CLASS;TIER;TOKENS;WORKING_DIRECTORY" "COMMAND" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
     endif()
@@ -353,6 +355,9 @@ function(jah_gpu_row _row)
         message(FATAL_ERROR "jah_gpu_row(${_row}): unexpected arguments '${G_UNPARSED_ARGUMENTS}'")
     endif()
     jah_vram_tokens(${G_CLASS} _k TIER "${G_TIER}")
+    if(G_TOKENS)
+        set(_k ${G_TOKENS})
+    endif()
     if(_k EQUAL 0)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS none — a row that boots no Vulkan is a plain "
                             "add_test() with jah_no_display()")
@@ -365,7 +370,9 @@ function(jah_gpu_row _row)
     if(G_WORKING_DIRECTORY)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
-    add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row} -- "${_exe}" ${G_COMMAND} ${_wd})
+    # the label carries the class (`<row>:<class>`): source.gpu_rows_closure checks an app-spawning
+    # row declared an app-sized class
+    add_test(NAME ${_row} COMMAND "${JAH_GPU_ADMIT}" ${_k} --label ${_row}:${G_CLASS} -- "${_exe}" ${G_COMMAND} ${_wd})
     _jah_vram_register(${_row} ${G_CLASS} ${_k})
 endfunction()
 
@@ -378,7 +385,7 @@ endfunction()
 # $<TARGET_FILE:...> (it is an argument of the wrapper now, and add_test resolves target names
 # only in the command position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "" "NAME;CLASS;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(G "" "NAME;CLASS;TOKENS;RUN_TIMEOUT;WORKING_DIRECTORY" "COMMAND" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the GPU-timing list changes by a verdict only")
@@ -387,6 +394,9 @@ function(jah_gpu_exclusive_test)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): CLASS, RUN_TIMEOUT and COMMAND are required")
     endif()
     jah_vram_tokens(${G_CLASS} _k)
+    if(G_TOKENS)
+        set(_k ${G_TOKENS})
+    endif()
     list(POP_FRONT G_COMMAND _exe)
     if(TARGET ${_exe})
         set(_exe "$<TARGET_FILE:${_exe}>")
@@ -397,7 +407,7 @@ function(jah_gpu_exclusive_test)
     endif()
     set(_admit)
     if(_k GREATER 0)
-        set(_admit "${JAH_GPU_ADMIT}" ${_k} --label ${G_NAME} --)
+        set(_admit "${JAH_GPU_ADMIT}" ${_k} --label ${G_NAME}:${G_CLASS} --)
     endif()
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" ${_admit} "${_exe}" ${G_COMMAND} ${_wd})
     math(EXPR _timeout "${G_RUN_TIMEOUT} + ${JAH_GPU_LOCK_WAIT_S}")

@@ -381,7 +381,12 @@ it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (ex
 | `vr` | 3 | a VR / Monado row (the app, stereo views, the runtime's compositor) | ~2 GB (est.) |
 | `none` | 0 | RenderSystem_NULL, no display, lavapipe — never registered | 0 |
 
-A pool with a declared `TIER low` (TEST-TIER-1's test tier, ~0.65 GB) costs 1 token as an app.
+A pool with a declared `TIER low` (TEST-TIER-1's test tier, ~0.65 GB) costs 1 token as an app. A
+row MEASURED heavier than its class declares `TOKENS <k>` = round(its peak GB) with the number in
+its comment (GATE-ADMIT-1's run, nvidia-smi per pid: test_gi_gather 3.6 GB → 4, voxel_coverage
+2.8 → 3, gather_reference / hit_shade / chain_face / every test_scale row 1.5-2.0 → 2). A HARNESS
+that spawns the app over MCP (compiled with JAHSHAKA_BINARY: open.responsive, ui.column_law,
+mcp.e2e, …) is `CLASS app` — the app it starts is the process that holds the VRAM.
 
 **HOW A ROW DECLARES ITS CLASS.** Every row that boots Vulkan is registered through ONE of:
 `jah_gpu_row(<row> CLASS <class> COMMAND <exe-or-target> [args…] [WORKING_DIRECTORY <dir>])` (a
@@ -396,10 +401,13 @@ helper at the end of the row's directory — never typed at a site.
 
 **THE CLOSURE.** `source.gpu_rows_closure` (hygiene) reads what ctest will run
 (`ctest --show-only=json-v1`): every row whose command or environment names an Ogre-linked
-binary (`ldd` → libOgreNextMain) or runs the pool driver, minus the `jah_no_display` rows, the
+binary (`ldd` → libOgreNextMain), runs a binary that carries the app's path as a literal (a
+harness that spawns the app) or runs the pool driver, minus the `jah_no_display` rows, the
 app `--headless` rows and the lavapipe rows (host memory), minus the registered rows, must be
-EMPTY — each missing row is named with its CMakeLists line. At GATE-ADMIT-1: 301 Vulkan rows,
-all registered (225 at 1 token, 70 at 2, 13 at 3... counted by the suite's own line).
+EMPTY, and every row that runs an app process declared an app-sized class (app/selftest/vr, read
+from its `--label <row>:<class>`) — each offender is named with its CMakeLists line. At
+GATE-ADMIT-1: 322 Vulkan rows, all registered (192 at 1 token, 113 at 2, 14 at 3, 3 at 4 — the
+suite prints the count).
 `--self-test` proves the detector names a synthetic unregistered row. The helper's own guard is
 `devprocess.vram_admit` (tooling): 14 fake rows of the three classes against 12 tokens on the
 kernel's lock table — the bound, all or nothing, lowest first, a killed holder frees,

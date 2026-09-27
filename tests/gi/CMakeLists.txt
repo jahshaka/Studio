@@ -1023,7 +1023,8 @@ target_compile_definitions(test_gi_chain_face PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_chain_face PRIVATE JahshakaEngine)
 add_dependencies(test_gi_chain_face JahshakaEngineMedia)
-jah_gpu_row(gi.chain_face CLASS engine COMMAND test_gi_chain_face
+# VRAM (GATE-ADMIT-1): test_gi_chain_face peaked 1.5 GB -> 2 tokens.
+jah_gpu_row(gi.chain_face CLASS engine TOKENS 2 COMMAND test_gi_chain_face
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 120 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 
@@ -1038,7 +1039,7 @@ set_tests_properties(gi.chain_face PROPERTIES TIMEOUT 120 LABELS "engine" RESOUR
 # MERGE and PUSH tiers -LE it). THE LANE THAT LANDS PHOTON P4 (ONE-READER +
 # ONE-ENV + F10-TABLES) DELETES `photon-target` FROM THIS ROW and deletes the
 # bracket from gi.chain_face above — that deletion IS the part's acceptance.
-jah_gpu_row(gi.chain_face_target CLASS engine COMMAND test_gi_chain_face --target
+jah_gpu_row(gi.chain_face_target CLASS engine TOKENS 2 COMMAND test_gi_chain_face --target
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.chain_face_target PROPERTIES
     TIMEOUT 300 LABELS "engine;photon-target" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
@@ -1306,7 +1307,8 @@ target_compile_definitions(test_gi_gather PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_gather PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather JahshakaEngineMedia)
-jah_gpu_row(gi.gather CLASS engine COMMAND test_gi_gather
+# VRAM (GATE-ADMIT-1, nvidia-smi per pid in the two-tier run): test_gi_gather peaked 3.6 GB -> 4 tokens.
+jah_gpu_row(gi.gather CLASS engine TOKENS 4 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather PROPERTIES TIMEOUT 180 LABELS "engine")
 
@@ -1319,7 +1321,7 @@ set_tests_properties(gi.gather PROPERTIES TIMEOUT 180 LABELS "engine")
 # not a measurement. The suite PRINTS its milliseconds and asserts only a
 # catastrophe ceiling; the numbers of record are taken by hand with the clocks
 # locked (spikes/gather-1a/FINDINGS.md).
-jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine RUN_TIMEOUT 900 COMMAND test_gi_gather
+jah_gpu_exclusive_test(NAME gi.gather_cost CLASS engine TOKENS 4 RUN_TIMEOUT 900 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_cost PROPERTIES
                      LABELS "nightly;quiet-box" RUN_SERIAL TRUE
@@ -1327,7 +1329,7 @@ set_tests_properties(gi.gather_cost PROPERTIES
 
 # ...and the picture a machine WITHOUT ray queries draws, which this lane may
 # not move by one byte.
-jah_gpu_row(gi.gather_norays CLASS engine COMMAND test_gi_gather
+jah_gpu_row(gi.gather_norays CLASS engine TOKENS 4 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_norays PROPERTIES
                      TIMEOUT 120 LABELS "engine"
@@ -1358,14 +1360,15 @@ target_compile_definitions(test_gi_gather_reference PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_gather_reference PRIVATE JahshakaEngine)
 add_dependencies(test_gi_gather_reference JahshakaEngineMedia)
-jah_gpu_row(gi.gather_reference CLASS engine COMMAND test_gi_gather_reference
+# VRAM (GATE-ADMIT-1): test_gi_gather_reference peaked 2.0 GB -> 2 tokens.
+jah_gpu_row(gi.gather_reference CLASS engine TOKENS 2 COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_reference PROPERTIES TIMEOUT 180 LABELS "engine")
 # ...and the brief's 1.00 +- 0.05 at every point against the COMPLETE closed form.
 # It was a TARGET row until the card read at the hit closed the residual; GREEN, and
 # the `photon-target` label is off (lane D6B-GATE-SHAPE, 2026-09-27: 3/3 green on the
 # rig, worst 0.969 at x = 4.60 m): an ordinary gating row now.
-jah_gpu_row(gi.gather_reference_target CLASS engine COMMAND test_gi_gather_reference
+jah_gpu_row(gi.gather_reference_target CLASS engine TOKENS 2 COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_reference_target PROPERTIES
                      TIMEOUT 900 LABELS "engine"
@@ -1374,7 +1377,7 @@ set_tests_properties(gi.gather_reference_target PROPERTIES
 # ...and the TRACE's own bar, in R5's form: a probe a metre from a lit red wall
 # reads at least 0.6 of that wall's albedo times its lighting, in the wall's
 # direction.
-jah_gpu_row(gi.gather_trace CLASS engine COMMAND test_gi_gather_reference
+jah_gpu_row(gi.gather_trace CLASS engine TOKENS 2 COMMAND test_gi_gather_reference
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_trace PROPERTIES
                      TIMEOUT 120 LABELS "engine"
@@ -1401,7 +1404,8 @@ target_compile_definitions(test_gi_voxel_coverage PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_voxel_coverage PRIVATE JahshakaEngine)
 add_dependencies(test_gi_voxel_coverage JahshakaEngineMedia)
-jah_gpu_row(gi.voxel_coverage CLASS engine COMMAND test_gi_voxel_coverage
+# VRAM (GATE-ADMIT-1): test_gi_voxel_coverage peaked 2.8 GB -> 3 tokens.
+jah_gpu_row(gi.voxel_coverage CLASS engine TOKENS 3 COMMAND test_gi_voxel_coverage
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.voxel_coverage PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # gi.voxel_lab — THE VOXEL LAB (PHOTON-VOXEL-4): the reader's plane march on the CPU
@@ -1754,7 +1758,8 @@ target_compile_definitions(test_gi_hit_shade PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_hit_shade PRIVATE JahshakaEngine)
 add_dependencies(test_gi_hit_shade JahshakaEngineMedia)
-jah_gpu_row(gi.hit_shade CLASS engine COMMAND test_gi_hit_shade
+# VRAM (GATE-ADMIT-1): test_gi_hit_shade peaked 1.8 GB -> 2 tokens.
+jah_gpu_row(gi.hit_shade CLASS engine TOKENS 2 COMMAND test_gi_hit_shade
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.hit_shade PROPERTIES TIMEOUT 180 LABELS "engine")
 

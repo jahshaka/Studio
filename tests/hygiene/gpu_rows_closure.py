@@ -16,10 +16,13 @@ row's resolved command, environment and properties), not on what a CMakeLists sa
   engine at all — the declaration is enforced by physics), runs the app `--headless` (the
   NULL render system), or pins lavapipe (VK_ICD_FILENAMES/VK_DRIVER_FILES = lvp_icd: a CPU
   Vulkan whose "VRAM" is host memory).
+  ...or when a binary it runs carries the app's path as a literal (a harness compiled with
+  JAHSHAKA_BINARY that spawns the app over MCP: an app process no command line shows).
   A row is REGISTERED when its command runs scripts/gpu-admit.sh (jah_gpu_row,
   jah_gpu_exclusive_test) or the pool driver with `--vram-tokens` (jah_add_pool).
-  THE CHECK: Vulkan rows minus registered rows = EMPTY. Each missing row is named with the
-  CMakeLists line that registered it.
+  THE CHECK: Vulkan rows minus registered rows = EMPTY, and every row that runs an APP process
+  (the app, a harness that spawns it) declared an app-sized class (app/selftest/vr, read from
+  its `--label <row>:<class>`). Each offender is named with the CMakeLists line that registered it.
 
 --self-test runs the detector on a SYNTHETIC ctest listing (an unregistered app row, a
 registered one, a no-display one) and fails unless exactly the unregistered row is named — so a
@@ -55,6 +58,39 @@ def links_ogre(path):
     return res
 
 
+_embeds_cache = {}
+
+
+def embeds_app(path, app):
+    """True when the ELF `path` carries the app's absolute path as a literal (utf-8 or a Qt
+    utf-16 string): a HARNESS compiled with JAHSHAKA_BINARY that spawns the app (over MCP) —
+    an app process no command line shows."""
+    key = (path, app)
+    if key not in _embeds_cache:
+        res = False
+        try:
+            if os.path.isfile(path) and os.access(path, os.X_OK) and os.path.realpath(path) != os.path.realpath(app):
+                with open(path, "rb") as f:
+                    data = f.read()
+                res = data[:4] == b"\x7fELF" and (app.encode() in data or app.encode("utf-16-le") in data)
+        except OSError:
+            res = False
+        _embeds_cache[key] = res
+    return _embeds_cache[key]
+
+
+APP_CLASSES = ("app", "selftest", "vr")
+
+
+def admitted_class(words):
+    """The class a gpu-admit.sh row declared (its `--label <row>:<class>`), else None."""
+    if "--label" in words:
+        lab = words[words.index("--label") + 1]
+        if ":" in lab:
+            return lab.rsplit(":", 1)[1]
+    return None
+
+
 def props_of(test):
     return {p["name"]: p["value"] for p in test.get("properties", [])}
 
@@ -66,7 +102,8 @@ def as_list(v):
 
 
 def classify(test, app):
-    """-> (vulkan, registered, why) for one ctest row."""
+    """-> (vulkan, registered, why) for one ctest row; `why` starts with "APP " when the row
+    runs an app process (the app itself, a harness that spawns it, a pool)."""
     cmd = test.get("command") or []
     props = props_of(test)
     envmod = as_list(props.get("ENVIRONMENT_MODIFICATION"))
@@ -82,13 +119,20 @@ def classify(test, app):
     if any(re.match(r"^VK_(ICD_FILENAMES|DRIVER_FILES)=.*lvp_icd", str(e)) for e in env):
         return False, registered, "lavapipe (CPU Vulkan: host memory, no VRAM)"
     if any(os.path.basename(w) == "run_pool.py" for w in words):
-        return True, registered, "the pool driver"
+        return True, registered, "APP the pool driver"
+    found = None
     for w in words + [str(e) for e in env]:
         cands = [w] if w.startswith("/") else []
         cands += PATH_IN_WORD.findall(w)
         for c in cands:
-            if links_ogre(c):
-                return True, registered, os.path.basename(c)
+            if os.path.realpath(c) == os.path.realpath(app):
+                return True, registered, "APP " + os.path.basename(c)
+            if embeds_app(c, app):
+                return True, registered, "APP %s (spawns the app)" % os.path.basename(c)
+            if found is None and links_ogre(c):
+                found = os.path.basename(c)
+    if found:
+        return True, registered, found
     return False, registered, "no engine binary"
 
 
@@ -111,16 +155,20 @@ def site(test, listing):
 def check(listing, app, out):
     rows = listing.get("tests") or []
     vulkan, missing, reg, exempt_ogre = 0, [], 0, 0
+    undersized = []
     by_class = {}
     for t in rows:
         v, r, why = classify(t, app)
+        words = [str(w) for w in (t.get("command") or [])]
         if v:
             vulkan += 1
             if r:
                 reg += 1
+                cls = admitted_class(words)
+                if why.startswith("APP ") and cls is not None and cls not in APP_CLASSES:
+                    undersized.append((t["name"], why[4:], cls, site(t, listing)))
             else:
                 missing.append((t["name"], why, site(t, listing)))
-        words = [str(w) for w in (t.get("command") or [])]
         if v and r:
             k = None
             if "--vram-tokens" in words:
@@ -137,7 +185,11 @@ def check(listing, app, out):
     for name, why, where in missing:
         out.write("  MISSING %s (runs %s) — registered at %s: use jah_gpu_row(%s CLASS …) or, if it "
                   "boots no Vulkan, jah_no_display(%s)\n" % (name, why, where, name, name))
-    return missing
+    out.write("gpu_rows_closure: %d app-spawning row(s) registered under a non-app class\n" % len(undersized))
+    for name, why, cls, where in undersized:
+        out.write("  UNDERSIZED %s runs %s but declared CLASS %s — registered at %s: an app process is "
+                  "CLASS app (or selftest/vr)\n" % (name, why, cls, where))
+    return missing + undersized
 
 
 def self_test(app, out):
@@ -151,11 +203,13 @@ def self_test(app, out):
         {"name": "synthetic.pool_registered", "command": ["/usr/bin/python3", "/x/tests/support/run_pool.py",
                                                           "--vram-tokens", "2", "--app", app]},
         {"name": "synthetic.shell_only", "command": ["/usr/bin/sh", "-c", "true"]},
+        {"name": "synthetic.app_as_engine", "command": ["/x/scripts/gpu-admit.sh", "1", "--label",
+                                                        "synthetic.app_as_engine:engine", "--", app, "--script", "x.js"]},
     ]}
     import io
     buf = io.StringIO()
     missing = [m[0] for m in check(synthetic, app, buf)]
-    want = ["synthetic.unregistered_app", "synthetic.pool_unregistered"]
+    want = ["synthetic.unregistered_app", "synthetic.pool_unregistered", "synthetic.app_as_engine"]
     ok = sorted(missing) == sorted(want)
     out.write("gpu_rows_closure --self-test: the detector named %s (want %s): %s\n"
               % (missing, want, "ok" if ok else "FAIL"))

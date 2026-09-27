@@ -22,7 +22,7 @@ target_compile_definitions(test_avatar_async PRIVATE
 
 set(_avatar_async_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async)
 file(MAKE_DIRECTORY ${_avatar_async_home}/run)
-add_test(NAME avatar.responsive COMMAND test_avatar_async
+jah_gpu_row(avatar.responsive CLASS app COMMAND test_avatar_async
          WORKING_DIRECTORY ${_avatar_async_home}/run)
 set_tests_properties(avatar.responsive PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_home};JAHSHAKA_DATA_ROOT=${_avatar_async_home}/.local/share/Jahshaka"
@@ -32,7 +32,7 @@ set_tests_properties(avatar.responsive PROPERTIES
 # GPU-timing lock; the push row asserts the rest and prints the readings.
 set(_avatar_async_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async-timing)
 file(MAKE_DIRECTORY ${_avatar_async_timing_home}/run)
-jah_gpu_exclusive_test(NAME avatar.responsive.timing CLASS engine RUN_TIMEOUT 900 COMMAND test_avatar_async
+jah_gpu_exclusive_test(NAME avatar.responsive.timing CLASS app RUN_TIMEOUT 900 COMMAND test_avatar_async
          WORKING_DIRECTORY ${_avatar_async_timing_home}/run)
 set_tests_properties(avatar.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_timing_home};JAHSHAKA_DATA_ROOT=${_avatar_async_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"

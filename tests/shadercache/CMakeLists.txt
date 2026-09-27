@@ -70,7 +70,7 @@ target_link_libraries(test_shader_cache_app PRIVATE Qt6::Core)
 target_compile_definitions(test_shader_cache_app PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-add_test(NAME shadercache.app COMMAND test_shader_cache_app
+jah_gpu_row(shadercache.app CLASS app COMMAND test_shader_cache_app
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app PROPERTIES TIMEOUT 600 LABELS "shadercache")
 

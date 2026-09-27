@@ -1443,7 +1443,7 @@ target_compile_definitions(test_column_law PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_columns_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-columns)
 file(MAKE_DIRECTORY ${_columns_home}/run)
-add_test(NAME ui.column_law COMMAND test_column_law
+jah_gpu_row(ui.column_law CLASS app COMMAND test_column_law
          WORKING_DIRECTORY ${_columns_home}/run)
 set_tests_properties(ui.column_law PROPERTIES
     ENVIRONMENT "HOME=${_columns_home};JAHSHAKA_DATA_ROOT=${_columns_home}/.local/share/Jahshaka"
@@ -1467,7 +1467,7 @@ target_compile_definitions(test_space_docks PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_space_docks_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks)
 file(MAKE_DIRECTORY ${_space_docks_home}/run)
-add_test(NAME ui.space_docks COMMAND test_space_docks
+jah_gpu_row(ui.space_docks CLASS app COMMAND test_space_docks
          WORKING_DIRECTORY ${_space_docks_home}/run)
 set_tests_properties(ui.space_docks PROPERTIES
     ENVIRONMENT "HOME=${_space_docks_home};JAHSHAKA_DATA_ROOT=${_space_docks_home}/.local/share/Jahshaka"
@@ -1490,7 +1490,7 @@ target_compile_definitions(test_window_minimum PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_winmin_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-window-minimum)
 file(MAKE_DIRECTORY ${_winmin_home}/run)
-add_test(NAME ui.window_minimum COMMAND test_window_minimum
+jah_gpu_row(ui.window_minimum CLASS app COMMAND test_window_minimum
          WORKING_DIRECTORY ${_winmin_home}/run)
 set_tests_properties(ui.window_minimum PROPERTIES
     ENVIRONMENT "HOME=${_winmin_home};JAHSHAKA_DATA_ROOT=${_winmin_home}/.local/share/Jahshaka"
@@ -1518,7 +1518,7 @@ target_compile_definitions(test_material_drag PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_matdrag_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-drag)
 file(MAKE_DIRECTORY ${_matdrag_home}/run)
-add_test(NAME ui.material_drag COMMAND test_material_drag
+jah_gpu_row(ui.material_drag CLASS app COMMAND test_material_drag
          WORKING_DIRECTORY ${_matdrag_home}/run)
 set_tests_properties(ui.material_drag PROPERTIES
     ENVIRONMENT "HOME=${_matdrag_home};JAHSHAKA_DATA_ROOT=${_matdrag_home}/.local/share/Jahshaka"
@@ -1536,7 +1536,7 @@ target_compile_definitions(test_shot_aspect PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_shot_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shot-aspect)
 file(MAKE_DIRECTORY ${_shot_home}/run)
-add_test(NAME ui.shot_aspect COMMAND test_shot_aspect
+jah_gpu_row(ui.shot_aspect CLASS app COMMAND test_shot_aspect
          WORKING_DIRECTORY ${_shot_home}/run)
 set_tests_properties(ui.shot_aspect PROPERTIES
     ENVIRONMENT "HOME=${_shot_home};JAHSHAKA_DATA_ROOT=${_shot_home}/.local/share/Jahshaka"

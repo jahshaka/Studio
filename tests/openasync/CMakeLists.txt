@@ -41,7 +41,7 @@ file(MAKE_DIRECTORY ${_open_home}/run)
 # assertion and prints each UI-gap / frame / watchdog reading; open.responsive.timing
 # (below) is the same binary with JAHSHAKA_TIMING_BARS=1 — the bars armed, on a quiet box,
 # under the GPU-timing lock. The push row measures no time, so it left the lock.
-add_test(NAME open.responsive COMMAND test_open_responsive
+jah_gpu_row(open.responsive CLASS app COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_home}/run)
 # TIMEOUT 400, from the MEASUREMENT and not from an estimate. OPEN-ASSIMP-1
 # added the seven remaining shipped samples (import + a synchronous open each,
@@ -65,7 +65,7 @@ set_tests_properties(open.responsive PROPERTIES
 # Its own home, so the nightly run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
-jah_gpu_exclusive_test(NAME open.responsive.timing CLASS engine RUN_TIMEOUT 1740 COMMAND test_open_responsive
+jah_gpu_exclusive_test(NAME open.responsive.timing CLASS app RUN_TIMEOUT 1740 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"

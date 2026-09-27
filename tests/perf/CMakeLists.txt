@@ -195,7 +195,7 @@ target_compile_definitions(test_capture_bundle PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
     JAH_TEST_SCRIPT="${CMAKE_CURRENT_BINARY_DIR}/capture_bundle.js"
     JAH_TEST_BUNDLE="${JAH_TEST_BUNDLE}")
-add_test(NAME perf.capture_bundle COMMAND test_capture_bundle
+jah_gpu_row(perf.capture_bundle CLASS app COMMAND test_capture_bundle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(perf.capture_bundle PROPERTIES
     LABELS "perf"
