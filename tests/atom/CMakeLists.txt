@@ -21,7 +21,7 @@ target_compile_definitions(test_atom_dolly_gate PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_atom_dolly_gate PRIVATE JahshakaEngine)
 add_dependencies(test_atom_dolly_gate JahshakaEngineMedia)
-add_test(NAME atom.dolly_gate COMMAND test_atom_dolly_gate
+jah_gpu_row(atom.dolly_gate CLASS engine COMMAND test_atom_dolly_gate
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # 153 poses, each rendering one 1024x1024 frame and downloading it, plus the
 # warm-up: comfortably inside 300 s on the rig (measured ~40 s) and with room
@@ -129,7 +129,7 @@ target_compile_definitions(test_atom_cluster_crack PRIVATE
     CLUSTER_TEST_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
 target_link_libraries(test_atom_cluster_crack PRIVATE OgreNext)
 add_dependencies(test_atom_cluster_crack JahshakaEngineMedia)
-add_test(NAME atom.cluster_crack COMMAND test_atom_cluster_crack
+jah_gpu_row(atom.cluster_crack CLASS engine COMMAND test_atom_cluster_crack
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_crack PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
@@ -191,13 +191,13 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
         ${Vulkan_INCLUDE_DIRS})
     target_link_libraries(test_atom_parity PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
-    add_test(NAME engine.atom_parity COMMAND test_atom_parity
+    jah_gpu_row(engine.atom_parity CLASS engine COMMAND test_atom_parity
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # 220 cells in 20 arms, each read until stable, plus a material destroyed mid-grid.
     set_tests_properties(engine.atom_parity PROPERTIES TIMEOUT 300 LABELS "engine")
     # ...its quick arm (one row, the destroyed material included) UNDER THE LAYER.
     if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
-        add_test(NAME engine.atom_parity_validation COMMAND test_atom_parity
+        jah_gpu_row(engine.atom_parity_validation CLASS engine COMMAND test_atom_parity
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_parity_validation PROPERTIES
             TIMEOUT 120 LABELS "engine"
@@ -212,7 +212,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     add_executable(test_atom_draw test_atom_draw.cpp)
     jah_atom_engine_target(test_atom_draw)
     target_compile_definitions(test_atom_draw PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-    add_test(NAME engine.atom_draw COMMAND test_atom_draw
+    jah_gpu_row(engine.atom_draw CLASS engine COMMAND test_atom_draw
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 480 LABELS "engine")
     # ATOM-CPU-WALKS-1 — the per-frame CPU walks moved onto the GPU scene's change feed
@@ -222,10 +222,10 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # frame visits its slot; an in-place material edit re-routes in one frame.
     add_executable(test_cpu_walks test_cpu_walks.cpp)
     jah_atom_engine_target(test_cpu_walks)
-    add_test(NAME engine.tlas_compute COMMAND test_cpu_walks --tlas-compute
+    jah_gpu_row(engine.tlas_compute CLASS engine COMMAND test_cpu_walks --tlas-compute
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.tlas_compute PROPERTIES TIMEOUT 300 LABELS "engine")
-    add_test(NAME atom.words_still COMMAND test_cpu_walks --words-still
+    jah_gpu_row(atom.words_still CLASS engine COMMAND test_cpu_walks --words-still
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.words_still PROPERTIES TIMEOUT 180 LABELS "engine")
     # atom.occlusion_exact — THE ID PASS'S TWO-PASS OCCLUSION IS EXACT (ATOM-OCCLUSION-1): two
@@ -236,7 +236,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # Showroom 2 through the app.
     add_executable(test_atom_occlusion test_atom_occlusion.cpp)
     jah_atom_engine_target(test_atom_occlusion)
-    add_test(NAME atom.occlusion_exact COMMAND test_atom_occlusion
+    jah_gpu_row(atom.occlusion_exact CLASS engine COMMAND test_atom_occlusion
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 120 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
@@ -272,7 +272,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     # (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into the layer's library), so a
     # machine without the layer cannot read as green.
     if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
-        add_test(NAME engine.atom_negative_control_validation COMMAND test_atom_negative_control
+        jah_gpu_row(engine.atom_negative_control_validation CLASS engine COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_negative_control_validation PROPERTIES
             TIMEOUT 120 LABELS "engine"
@@ -312,7 +312,9 @@ set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
 set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
 configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js @ONLY)
 jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting")
-add_test(NAME atom.lod_switch
+# The stand-in is written on the CPU (an .obj), so the fixture boots no Vulkan (GATE-ADMIT-1: no VRAM tokens).
+jah_no_display(atom.lod_switch.fixture)
+jah_gpu_row(atom.lod_switch CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js
          WORKING_DIRECTORY ${_lod_switch_home}/run)
@@ -333,7 +335,7 @@ set(JAH_OCCLUSION_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/atom_occlusion.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js @ONLY)
 set(_occl_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_occlusion)
 jah_fresh_home_fixture(atom.occlusion_exact_app.fresh_home atomOcclusionHome "${_occl_home}" LABELS "scripting")
-add_test(NAME atom.occlusion_exact_app
+jah_gpu_row(atom.occlusion_exact_app CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
          WORKING_DIRECTORY ${_occl_home}/run)
 set_tests_properties(atom.occlusion_exact_app PROPERTIES

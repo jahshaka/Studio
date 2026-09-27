@@ -19,7 +19,7 @@ target_compile_definitions(test_thumbnails PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_thumbnails PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_thumbnails JahshakaEngineMedia)
-add_test(NAME thumbnails.engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnails WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+jah_gpu_row(thumbnails.engine CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnails WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(thumbnails.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # Shader-asset thumbnails (VISUAL_PARITY_SPEC item 5): MaterialReader::
@@ -118,7 +118,7 @@ target_link_libraries(test_shader_thumbnail PRIVATE IrisGL JahshakaEngine Qt6::G
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
 add_dependencies(test_shader_thumbnail JahshakaEngineMedia)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
-add_test(NAME thumbnails.shader COMMAND ${CMAKE_BINARY_DIR}/bin/test_shader_thumbnail
+jah_gpu_row(thumbnails.shader CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_shader_thumbnail
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 set_tests_properties(thumbnails.shader PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
@@ -208,7 +208,7 @@ target_compile_definitions(test_thumbnail_sweep PRIVATE
 target_link_libraries(test_thumbnail_sweep PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::Sql
     Qt6::Widgets Qt6::Multimedia Qt6::Concurrent)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
-add_test(NAME thumbnails.sweep COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnail_sweep
+jah_gpu_row(thumbnails.sweep CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_thumbnail_sweep
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/sweep-run)
 set_tests_properties(thumbnails.sweep PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
 
@@ -235,6 +235,6 @@ target_compile_definitions(test_preview_environment PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_preview_environment PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_preview_environment JahshakaEngineMedia)
-add_test(NAME thumbnails.studio_env COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
+jah_gpu_row(thumbnails.studio_env CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")

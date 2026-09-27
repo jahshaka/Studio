@@ -23,7 +23,7 @@ endfunction()
 
 jahshaka_planar_test(test_planar)
 target_link_libraries(test_planar PRIVATE JahshakaEngine)
-add_test(NAME engine.planar COMMAND test_planar
+jah_gpu_row(engine.planar CLASS engine COMMAND test_planar
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.planar PROPERTIES TIMEOUT 120 LABELS "engine")
 

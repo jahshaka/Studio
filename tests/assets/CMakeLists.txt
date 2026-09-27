@@ -24,7 +24,7 @@ target_compile_definitions(test_engine_asset_viewer PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_asset_viewer PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_engine_asset_viewer JahshakaEngineMedia)
-add_test(NAME assets.engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_asset_viewer WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+jah_gpu_row(assets.engine CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_asset_viewer WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(assets.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
 
 # EnginePreviewScene, the base class the four preview surfaces share
@@ -46,5 +46,5 @@ target_compile_definitions(test_preview_scene_lifecycle PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_preview_scene_lifecycle PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_preview_scene_lifecycle JahshakaEngineMedia)
-add_test(NAME preview.lifecycle COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_scene_lifecycle WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+jah_gpu_row(preview.lifecycle CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_scene_lifecycle WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(preview.lifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "mirror")
