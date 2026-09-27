@@ -92,6 +92,7 @@ set(SCALE_T_VOXEL 1100)       # 180 s (the 200 m walk + 8 teleports: 1,697 frame
 set(SCALE_T_LIGHTS 120)       # 11 s
 set(SCALE_T_CUT 600)          # 12 s on the 5 M shell; the 10 M one and the owed 1/5/10 M table
 set(SCALE_T_LEVELS 300)       # 8 s on the 5 M shell
+set(SCALE_T_CUT_COST 900)     # the world's boot + five poses (ATOM-CLUSTER-CUT)
 set(SCALE_T_RESIDENCY 600)    # 9 s over 1 M + 5 M; every cached shell loaded in turn
 set(SCALE_T_DECODE 840)       # 139 s (four material arms, GI to rest after each)
 set(SCALE_T_OCCLUSION 210)    # 34 s
@@ -120,6 +121,7 @@ jah_scale_row(scale.voxel_scroll --voxel-scroll  ${SCALE_T_VOXEL}        TRUE)  
 jah_scale_row(scale.lights       --lights        ${SCALE_T_LIGHTS}       FALSE)  # W2 (a voxel digest: exact, not timed)
 jah_scale_row(scale.cluster_cut  --cluster-cut   ${SCALE_T_CUT}          TRUE)   # W3 (+ the owed id/decode ms)
 jah_scale_row(scale.levels       --levels        ${SCALE_T_LEVELS}       FALSE)  # W4
+jah_scale_row(scale.cut_cost     --cut-cost      ${SCALE_T_CUT_COST}     TRUE)   # D1: the flat cut's ms at 10k
 jah_scale_row(scale.residency    --residency     ${SCALE_T_RESIDENCY}    FALSE)  # W5 (the engine's pool stats)
 jah_scale_row(scale.decode       --decode        ${SCALE_T_DECODE}       TRUE)   # W6
 jah_scale_row(scale.occlusion    --occlusion     ${SCALE_T_OCCLUSION}    FALSE)  # W7 (triangle counts)

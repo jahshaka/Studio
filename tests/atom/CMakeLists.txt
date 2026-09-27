@@ -273,11 +273,11 @@ set_tests_properties(atom.view PROPERTIES
     ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")
 
 # ---------------------------------------------------------------------------
-# atom.lod_switch — THE PER-OBJECT LOD RULE IN THE VIEWPORT (ATOM-LOD-BOUND-1). A scan
-# stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar bakes)
-# imported through the owner's route: the GPU-selected level steps down over 30-500 m,
-# comes back to 0, holds across a band edge, and the Levels view paints the level's
-# colour. The fixture is WRITTEN by test_mesh_bake before the run (a setup test), so no
+# atom.lod_switch — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
+# scan stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar bakes)
+# imported through the owner's route: the chain's per-object level (shadows, stock PBR)
+# steps down over 30-500 m, comes back to 0 and holds across a band edge; the Levels view
+# paints the CUT's depth, coarser further out; and a slow zoom shows no pop (no band). The fixture is WRITTEN by test_mesh_bake before the run (a setup test), so no
 # mesh is checked in. An app run on the rig's display, like atom.view.
 set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
 set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
@@ -290,8 +290,9 @@ add_test(NAME atom.lod_switch
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js
          WORKING_DIRECTORY ${_lod_switch_home}/run)
-# The stand-in's bake (~25 k triangles: chain + DAG + SDF + cards) is most of the run.
+# The stand-in's bake (~25 k triangles: chain + DAG + SDF + cards) and the slow zoom's two
+# 60-shot walks (ATOM-CLUSTER-CUT, ~100 s of the 234 s measured solo) are the run.
 set_tests_properties(atom.lod_switch PROPERTIES
     FIXTURES_REQUIRED atomLodSwitchHome
-    TIMEOUT 300 LABELS "scripting"
+    TIMEOUT 480 LABELS "scripting"
     ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")

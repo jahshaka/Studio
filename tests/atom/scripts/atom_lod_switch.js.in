@@ -1,22 +1,28 @@
-// atom.lod_switch — THE PER-OBJECT LOD RULE WORKS IN THE VIEWPORT (ATOM-LOD-BOUND-1).
+// atom.lod_switch — THE LOD RULES WORK IN THE VIEWPORT (ATOM-LOD-BOUND-1; the cut's arms
+// ATOM-CLUSTER-CUT).
 //
 // The owner's scan never left level 0 inside 1 km because its baked bound was
 // 100x too large (debris islands measured against unrelated surface). This drives
 // the scan's stand-in (a 60 m floor, eight columns, 600 debris islands — written by
 // `test_mesh_bake --write-standin`, the same generator atom.lod_bound_bar bakes)
-// through the owner's import route and reads the GPU-selected level per object:
+// through the owner's import route. Two rules draw it, and each is read:
+//   THE CHAIN'S PER-OBJECT LEVEL (what the shadow casters and every stock-PBR pass
+//   draw, CLUSTER_CUT D6), read per object through app.renderStats().perObject:
 //   (a) at 30 / 60 / 120 / 250 / 500 m the level steps DOWN with distance: level 0
 //       close, a coarser level by 250 m, coarser still by 500 m, never finer
 //       further out;
 //   (b) walking back in returns to level 0 (nothing sticks);
 //   (c) NO FLICKER AT A BAND EDGE: the camera is walked out in 2 m steps to the
 //       first switch, then rocked +-1 m across that edge ten times — the level may
-//       change at most once (the GPU switch band, ogre-patch 0075's rule);
-//   (d) the Levels view's picture changes with the level: the colour at the object's
-//       centre is a ramp colour whose level never gets finer further out and is
-//       coarser at 500 m than at 30 m. The shot is 320 x 180 and the level rule is
-//       a PIXEL rule, so the shot picks its own (coarser-or-equal) level than the
-//       window's — asserted too: never finer than what the viewport drew.
+//       change at most once (the switch band, ogre-patch 0075's rule).
+//   THE CLUSTER CUT (what the id pass draws, per cluster group), read through the
+//   Levels view, which paints each pixel's DAG DEPTH:
+//   (d) at the same five distances the depth at the object's centre is a ramp
+//       colour, never finer further out, and coarser at 500 m than at 30 m;
+//   (e) THE SLOW ZOOM: a dolly out from 40 m to 480 m in 60 geometric steps (4.2 %
+//       a step), walked with the cut and with the leaves forced (the LOD bias at 0):
+//       the cut has NO band (D4), so no step may move the plain picture more than 3x
+//       the control's median step beyond the control's own step at that pose.
 // Frames, never time: every reading follows a fixed frame count.
 
 function assert(cond, msg) {
@@ -94,12 +100,14 @@ for (var rock = 0; rock < 10; ++rock) {
 console.log("rocking across " + edge + " m: " + J(seen));
 assert(changes <= 1, "rocking +-1 m across the switch changes the level at most once (" + changes + ")");
 
-// (d) the Levels view
+// (d) the Levels view: the CUT's depth
 assert(world.setAtomView("levels") === true, "world.setAtomView('levels')");
-// JahAtomView_ps.glsl's ramp, level 0 warm to 7 cold, as the plain grade stores it.
+// JahAtomView_ps.glsl's ramp, depth 0 warm to 15 dark, as the plain grade stores it.
 var RAMP = [[1.0, 0.15, 0.1], [1.0, 0.55, 0.0], [1.0, 0.95, 0.1], [0.6, 1.0, 0.1],
-            [0.1, 0.85, 0.2], [0.1, 0.9, 0.95], [0.15, 0.35, 1.0], [0.6, 0.2, 1.0]];
-function rampLevel(px) {
+            [0.1, 0.85, 0.2], [0.1, 0.9, 0.95], [0.15, 0.35, 1.0], [0.6, 0.2, 1.0],
+            [1.0, 0.4, 0.8], [0.85, 0.85, 0.85], [0.55, 0.35, 0.2], [0.3, 0.6, 0.5],
+            [0.9, 0.7, 0.5], [0.4, 0.4, 0.7], [0.7, 0.1, 0.4], [0.2, 0.2, 0.2]];
+function rampDepth(px) {
     var best = -1, bestD = 1e9;
     for (var r = 0; r < RAMP.length; ++r) {
         var dr = px.r - 255 * RAMP[r][0], dg = px.g - 255 * RAMP[r][1], db = px.b - 255 * RAMP[r][2];
@@ -111,30 +119,81 @@ function rampLevel(px) {
 var probes = [];
 for (var py = -2; py <= 2; ++py)
     for (var px = -2; px <= 2; ++px) probes.push({ x: 0.5 + px * 0.004, y: 0.5 + py * 0.004 });
-function centreLevel(d) {
+function centreDepth(d) {
     editor.frameNode(placed.nodeId, { yaw: 30, pitch: -20, distance: d });
     editor.frame(20);
-    var drawn = row().level;
     var shot = editor.screenshot("atom_lod_switch_levels_" + d + ".png", 320, 180, probes, "plain");
-    var votes = [0, 0, 0, 0, 0, 0, 0, 0], best = -1;
+    var votes = [], best = -1;
     for (var s = 0; s < shot.probes.length; ++s) {
-        var lv = rampLevel(shot.probes[s]);
-        if (lv >= 0 && ++votes[lv] > (best >= 0 ? votes[best] : 0)) best = lv;
+        var lv = rampDepth(shot.probes[s]);
+        if (lv < 0) continue;
+        votes[lv] = (votes[lv] || 0) + 1;
+        if (best < 0 || votes[lv] > votes[best]) best = lv;
     }
-    return { drawn: drawn, painted: best, votes: best >= 0 ? votes[best] : 0 };
+    return { painted: best, votes: best >= 0 ? votes[best] : 0 };
 }
 var painted = [];
 for (var c = 0; c < D.length; ++c) {
-    var pc = centreLevel(D[c]);
+    var pc = centreDepth(D[c]);
     painted.push(pc.painted);
-    console.log("levels view at " + D[c] + " m: the window drew L" + pc.drawn + ", the shot paints L" +
-                pc.painted + " (" + pc.votes + "/25 centre pixels)");
+    var cs = world.atomStatus();
+    console.log("levels view at " + D[c] + " m: the cut paints depth " + pc.painted + " (" + pc.votes +
+                "/25 centre pixels); the view drew " + cs.cutClusters + " clusters, " + cs.cutTriangles + " triangles");
     assert(pc.painted >= 0 && pc.votes >= 13, "the centre of the shot is a Levels colour at " + D[c] + " m");
-    assert(pc.painted >= pc.drawn, "the 320 x 180 shot never draws a finer level than the window (L" +
-           pc.painted + " vs L" + pc.drawn + ")");
-    if (c > 0) assert(painted[c] >= painted[c - 1], "the painted level never gets finer further out");
+    if (c > 0) assert(painted[c] >= painted[c - 1], "the painted depth never gets finer further out (" + D[c] +
+                      " m: " + painted[c] + " after " + painted[c - 1] + ")");
 }
-assert(painted[D.length - 1] > painted[0], "the Levels picture changes: L" + painted[0] + " at 30 m, L" +
+assert(painted[D.length - 1] > painted[0], "the Levels picture changes: depth " + painted[0] + " at 30 m, " +
        painted[D.length - 1] + " at 500 m");
+
+// (e) THE SLOW ZOOM — NO BAND, NO POP. The cut has no switch band (D4): a group's
+// frontier moves when its error drops under one sample, which must not show. So the
+// dolly is walked twice over the same 60 poses, in the PLAIN picture: with the cut
+// (the LOD bias at 1) and with the leaves forced everywhere (bias 0: every cluster at
+// depth 0, the level-0 control). Per step the picture moves by the dolly itself; the
+// cut's pop is whatever it moves BEYOND the control's step at that pose. Bar
+// (atom.cluster_crack's dolly rule): no step's excess over the control exceeds 3x the
+// control's median step. The Levels view's own step deltas are printed beside it (a
+// deep group covers most of a far object, so a legitimate frontier change there
+// repaints much of the Levels picture — which is why the bar is on the picture).
+world.setAtomView("off");
+var grid = [];
+for (var gy = 0; gy < 36; ++gy)
+    for (var gx = 0; gx < 64; ++gx) grid.push({ x: (gx + 0.5) / 64, y: (gy + 0.5) / 36 });
+function zoomWalk(bias) {
+    editor.setLodBias(bias);
+    var prev = null, deltas = [];
+    for (var k = 0; k <= 60; ++k) {
+        var dist = 40 * Math.pow(480 / 40, k / 60);
+        editor.frameNode(placed.nodeId, { yaw: 30, pitch: -20, distance: dist });
+        editor.frame(3);
+        var sh = editor.screenshot("atom_lod_switch_zoom.png", 320, 180, grid, "plain");
+        if (prev) {
+            var sum = 0;
+            for (var q = 0; q < grid.length; ++q)
+                sum += Math.abs(sh.probes[q].r - prev[q].r) + Math.abs(sh.probes[q].g - prev[q].g) +
+                       Math.abs(sh.probes[q].b - prev[q].b);
+            deltas.push(sum / (3 * grid.length));
+        }
+        prev = sh.probes;
+    }
+    return deltas;
+}
+var cutWalk = zoomWalk(1.0);
+var controlWalk = zoomWalk(0.0);
+editor.setLodBias(1.0);
+var sorted = controlWalk.slice().sort(function (a, b) { return a - b; });
+var median = sorted[Math.floor(sorted.length / 2)];
+var worstExcess = 0, worstAt = -1;
+for (var i = 0; i < cutWalk.length; ++i) {
+    var ex = cutWalk[i] - controlWalk[i];
+    if (ex > worstExcess) { worstExcess = ex; worstAt = i; }
+}
+console.log("slow zoom: " + cutWalk.length + " steps; the control's median step " + median.toFixed(3) +
+            " codes; the cut's worst excess over the control " + worstExcess.toFixed(3) + " codes at step " + worstAt +
+            " (" + (40 * Math.pow(480 / 40, (worstAt + 1) / 60)).toFixed(0) + " m)");
+assert(cutWalk.length === 60 && controlWalk.length === 60, "both walks took 60 steps");
+assert(worstExcess <= 3 * median, "THE POP: no step of the slow zoom moves the picture more than 3x the control's " +
+       "median step beyond the control (" + worstExcess.toFixed(3) + " <= " + (3 * median).toFixed(3) + ")");
 world.setAtomView("off");
 "ok";

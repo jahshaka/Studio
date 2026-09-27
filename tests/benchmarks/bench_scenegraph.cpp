@@ -845,6 +845,10 @@ int main(int argc, char **argv)
         CHECK(!dense.isNull(), "(f) the dense fixture mesh loaded");
         if (!dense.isNull()) {
             iris::MeshBake::buildLodChain(dense);
+            // ...AND ITS CLUSTER DAG, as the importer bakes both (ATOM-CLUSTER-CUT): the id
+            // pass draws an Atom item's CLUSTER CUT, and a mesh with a chain but no DAG is
+            // cut as a flat one — its level 0, whatever the dial says.
+            iris::MeshBake::buildClusterDag(dense);
             const int levels = int(dense->lodIndices.size());
             std::printf("    fixture: %d triangles, %d LOD level(s)\n",
                         dense->getIndexBuffer() ? dense->getIndexBuffer()->dataSize / 12 : 0, levels);

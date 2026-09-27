@@ -14,7 +14,7 @@ struct ParityView
 {
 	vec4 row[3];        // the instance's 3x4 transform, ROW i in element i
 	vec4 eyeScale;      // xyz the eye, w unused (the scale is derived here, from the rows)
-	vec4 lod;           // x tolerance (samples), y proj[1][1], z viewport height
+	vec4 lod;           // x tolerance (samples), y proj[1][1], z viewport height, w 1 = orthographic
 };
 
 layout( std430, ogre_U0 ) readonly restrict buffer countLayout { uvec4 counts; };
@@ -33,7 +33,7 @@ bool jahParityAffordable( uint g, uint v )
 	// The level rule's scale: the longest COLUMN of the rows (the cull's own helper).
 	float scale = jahWorldMaxAxisScale( pv.row[0], pv.row[1], pv.row[2] );
 	float allowed = jahClusterGroupAllowed( groups[g].sphere, pv.row[0], pv.row[1], pv.row[2],
-											scale, pv.eyeScale.xyz, pv.lod.x, pv.lod.y, pv.lod.z );
+											scale, pv.eyeScale.xyz, pv.lod.x, pv.lod.y, pv.lod.z, pv.lod.w > 0.5 );
 	return jahClusterGroupAffordable( groups[g].error.x, allowed );
 }
 
