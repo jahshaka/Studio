@@ -2572,11 +2572,18 @@ QImage EngineSceneViewport::takeScreenshot(QSize dimension)
     // THE PROJECT TILE'S SHOT (ProjectService's four thumbnail captures are this
     // overload's only callers): the Atom view (world.setAtomView) is a viewing aid,
     // never the project's picture, so it is parked Off for the length of the shot.
+    // ...AND SO IS THE PHOTON VIEW (world.setPhotonView, PHOTON-VIEW-1), for the
+    // same reason.
     jahshaka::engine::Scene *es = engineScene();
     const jahshaka::engine::AtomView parked = es ? es->atomView() : jahshaka::engine::AtomView::Off;
+    const jahshaka::engine::PhotonView parkedPhoton =
+        es ? es->photonView() : jahshaka::engine::PhotonView::Off;
     if (es && parked != jahshaka::engine::AtomView::Off) es->setAtomView(jahshaka::engine::AtomView::Off);
+    if (es && parkedPhoton != jahshaka::engine::PhotonView::Off)
+        es->setPhotonView(jahshaka::engine::PhotonView::Off);
     QImage img = takeScreenshot(dimension.width(), dimension.height());
     if (es && parked != jahshaka::engine::AtomView::Off) es->setAtomView(parked);
+    if (es && parkedPhoton != jahshaka::engine::PhotonView::Off) es->setPhotonView(parkedPhoton);
     return img;
 }
 
