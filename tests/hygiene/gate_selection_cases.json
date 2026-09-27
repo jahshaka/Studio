@@ -341,13 +341,15 @@
    ]
   },
   {
-   "case": "U1-B a struct member's default reaches the header-only helper that names the struct (gi.voxel_lab links no engine)",
+   "case": "U1-B a struct member's default reaches every reader of the header-only helper that names the struct (enginetesthelpers.h boxCards names MeshCardDesc)",
    "file": "irisgl/engine/include/jahshaka/engine/Types.h",
-   "old": "    /// The store's normalisation k (a voxel holds k x the surface's radiance).\n    float multiplier = 0.0f;\n",
-   "new": "    /// The store's normalisation k (a voxel holds k x the surface's radiance).\n    float multiplier = 1.0f;\n",
+   "old": "    float halfDepth = 0.0f;       ///< half the depth range the capture must cover\n",
+   "new": "    float halfDepth = 0.5f;       ///< half the depth range the capture must cover\n",
    "must": [
-    "gi.voxel_lab"
-   ]
+    "ui.presets_favorites",
+    "vr.grab_maths"
+   ],
+   "note": "the Fable read's GiVoxelVolume -> gi.voxel_lab case is NOT a dependency: voxel_lab.h includes no engine header and names GiVoxelVolume in a comment only (line 173); test_gi_voxel_lab cannot see Types.h. Replaced by the same class on a real include chain."
   },
   {
    "case": "SMALL(c) a changed script path on an add_test COMMAND line is a changed row, not a source-list entry",

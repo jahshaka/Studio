@@ -780,11 +780,25 @@ class Selection:
                     self.expand(["hygiene"], [], f"{tag}: comment/whitespace only")
                     self.rationale.append((p, "comments/whitespace only → no code reached (the source lints ride)"))
                     return
+            if is_cxx and self.revs.base and depth == 0:
+                self.expand(["hygiene"], [], f"{tag}: source text changed")   # the source lints read it
             if p.endswith(HEADER_EXT) and self.revs.base and depth == 0:
                 if self.header_symbols(p, tag, notes):
                     self.rationale.append((p, "; ".join(notes)))
                     return
             g = self.graph_rows(p, tag)
+            if g is not None and p.endswith(HEADER_EXT) and self.graph is not None:
+                # EVERY INCLUDER of a header, for the app rows too: each reading source's own
+                # rule — the superset of any symbol narrowing (a symbol's namers read the header)
+                srcs = sorted({os.path.relpath(self.graph.obj_src[o], ROOT)
+                               for o in self.graph.includers(os.path.join(ROOT, p)) if o in self.graph.obj_src})
+                for src in srcs:
+                    if src.startswith(("src/", "irisgl/")) and not src.startswith("irisgl/thirdparty/"):
+                        self.rules_for(src, f"{tag} (read by {src})", kinds={"app", "other"})
+                notes.append(f"{len(srcs)} reading source(s)' rules (app/other rows)")
+                for f in getattr(self, "_script_namers", []):
+                    self.path(f, 1, via=f"{os.path.basename(p)} symbol (a script)")
+                self._script_namers = []
             if g is not None:
                 n_exe, app = g
                 notes.append(f"graph: {n_exe} executable(s)" + (" incl. the app" if app else ""))
@@ -879,11 +893,23 @@ class Selection:
             notes.append("no specific identifier on the changed lines → every includer")
             return False
         naming = gate_graph.files_naming(ROOT, ids)
+        self._script_namers = sorted(f for f in naming if f.endswith((".js", ".js.in")))
         per_id = collections.Counter(t for toks in naming.values() for t in toks)
         common = sorted(t for t in ids if per_id[t] > self.SYMBOL_SPECIFICITY)
         if common:
             notes.append(f"symbol(s) {common[:6]} too common to select by (> {self.SYMBOL_SPECIFICITY} files) "
                          f"→ every includer")
+            return False
+        # USED INSIDE ITS OWN HEADER (a #define, a constexpr, an inline helper another inline
+        # helper calls — enginetesthelpers.h's testCameraDescLookAt behind testCameraLookAt): its
+        # users name the WRAPPER, not it, so no name-search can find them — every includer
+        # (the Fable read, U1). Counted on the header's code text: more than one occurrence of
+        # the name = a declaration plus a use.
+        body = "\n".join(gate_graph.strip_cxx(b))
+        inner = sorted(t for t in ids if len(re.findall(r"\b" + re.escape(t) + r"\b", body)) > 1)
+        if inner:
+            notes.append(f"symbol(s) {inner[:6]} used inside the header itself (a wrapper's callers name "
+                         f"the wrapper) → every includer")
             return False
         # the header's own companion source always counts (x.h -> x.cpp)
         stem = os.path.splitext(p)[0]
@@ -892,30 +918,32 @@ class Selection:
         # A NAME COUNTS ONLY WHERE THIS HEADER IS READ: a source that names `DefaultMaterial`
         # but never includes this header is naming another declaration (measured: without this
         # an irisglfwd.h hunk reached the engine through its own DefaultMaterial). The graph's
-        # deps log says who reads the header; scripts (verbs by name) always count.
-        if self.graph is not None and self.graph.known(os.path.join(ROOT, p)):
-            readers = {os.path.relpath(self.graph.obj_src.get(o, ""), ROOT)
-                       for o in self.graph.includers(os.path.join(ROOT, p))}
+        # deps log says who reads the header; scripts (verbs by name) always count. A naming
+        # HEADER counts through EVERY object that reads both it and this header (U1: a
+        # header-only helper — voxel_lab.h names GiVoxelVolume — has no .cpp companion; its code
+        # is compiled into its includers).
+        pa = os.path.join(ROOT, p)
+        both = {}
+        if self.graph is not None and self.graph.known(pa):
+            p_readers = self.graph.includers(pa)
+            readers = {os.path.relpath(self.graph.obj_src.get(o, ""), ROOT) for o in p_readers}
+            for f in [f for f in naming if f.endswith(HEADER_EXT) and f != p]:
+                objs = self.graph.includers(os.path.join(ROOT, f)) & p_readers
+                both[f] = sorted({os.path.relpath(self.graph.obj_src[o], ROOT) for o in objs if o in self.graph.obj_src})
             def reads(f):
                 if f.endswith((".js", ".js.in")): return True
-                if f.endswith(HEADER_EXT):
-                    st = os.path.splitext(f)[0]
-                    return any(st + e in readers for e in (".cpp", ".cc", ".mm"))
+                if f.endswith(HEADER_EXT): return bool(both.get(f))
                 return f in readers
             naming = {f: v for f, v in naming.items() if reads(f)}
         reached = sorted(f for f in naming if f != p)
         shown = sorted(ids)[:12]
         notes.append(f"symbols {shown}{' …' if len(ids) > 12 else ''} named by {len(reached)} file(s)")
         # The files that NAME a changed identifier are the reached paths, each through its own
-        # graph reach and rules. A naming HEADER counts through its companion source only: its
-        # includers are not all selected (the brief's rule — the files that name the identifiers
-        # — and the one the gate.selection replay guards).
+        # graph reach and rules; a naming header through every source that reads it with this one.
         for f in reached:
             if f.endswith(HEADER_EXT):
-                st = os.path.splitext(f)[0]
-                for ext in (".cpp", ".cc", ".mm"):
-                    if os.path.exists(os.path.join(ROOT, st + ext)):
-                        self.path(st + ext, 1, via=f"companion of {os.path.basename(f)}, which names {sorted(naming[f])[0]}")
+                for src in both.get(f, []):
+                    self.path(src, 1, via=f"reads {os.path.basename(f)}, which names {sorted(naming[f])[0]}")
             else:
                 self.path(f, 1, via=f"{os.path.basename(p)} symbol {sorted(naming[f])[0]}")
         self.expand(["hygiene"], [], f"{tag}: source text changed")
