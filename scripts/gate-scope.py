@@ -708,6 +708,21 @@ class Selection:
             self.add(self.exe_rows.get(e, []), f"{why} [relinks {os.path.basename(e)}]")
         return len(exes), self.app_exe in exes
 
+    def engine_rows(self, tag):
+        """U2: ENGINE RUNTIME DATA (Hlms pieces, GLSL, compositor scripts, material JSON) is read
+        by every executable that extracts the engine archive — the graph knows which (any engine
+        object's reach; the facade pulls them all), so no directory list is consulted. Returns
+        the executable count, or None without a graph."""
+        if not self.graph: return None
+        if not hasattr(self, "_engine_exes"):
+            art = self.graph.targets.get("JahshakaEngine")
+            mem = sorted(self.graph.members(art)) if art else []
+            # every member: an executable that extracts any engine object runs the engine
+            self._engine_exes = self.graph.reach_objects(mem)
+        for e in self._engine_exes:
+            if e != self.app_exe: self.add(self.exe_rows.get(e, []), f"{tag} [reads engine media: {os.path.basename(e)}]")
+        return len(self._engine_exes)
+
     def argv_rows(self, p, why):
         """Rows whose command line or script IS this file (a wrapper, a lint, a configured .js)."""
         ap = os.path.normpath(os.path.join(ROOT, p))
@@ -752,6 +767,9 @@ class Selection:
             # its rule; every other build file is read by what its changed commands name
             if any(re.match(pat, p) for pat, _, _ in AREA_RULES):
                 r = self.rules_for(p, tag)
+                if p.startswith("irisgl/cmake/WrapHlmsPiece"):
+                    n = self.engine_rows(tag)
+                    if n is not None: r += f"; every executable that extracts the engine ({n})"
                 if depth == 0: self.rationale.append((p, r))
                 return
             self.cmake(p, tag, depth)
@@ -820,6 +838,10 @@ class Selection:
             return
         r = self.rules_for(p, tag)
         if r: notes.append(r)
+        if p.startswith("irisgl/engine/") or p.startswith("irisgl/cmake/WrapHlmsPiece"):
+            n = self.engine_rows(tag)
+            if n is not None: notes.append(f"engine runtime data: every executable that extracts the engine ({n})")
+        if r: pass
         elif not hit_argv:
             g = None if is_cxx else self.graph_rows(p, tag)     # a build input (.ui, .qrc, a shader source)
             if g is not None:
