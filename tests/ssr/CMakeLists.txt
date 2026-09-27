@@ -34,7 +34,7 @@ target_link_libraries(test_ssr PRIVATE JahshakaEngine)
 # about the march. So the suite runs in the picture it was written for; not one
 # of its bars is re-anchored. The COMBINED picture (march + rays, and the
 # fallback beside it) is `gi.rt_reflect` / `gi.rt_reflect_norays`.
-add_test(NAME ssr.engine COMMAND test_ssr
+jah_gpu_row(ssr.engine CLASS engine COMMAND test_ssr
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.engine PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
@@ -69,7 +69,7 @@ target_compile_definitions(test_ssr_rings PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_ssr_rings JahshakaEngineMedia)
 target_link_libraries(test_ssr_rings PRIVATE JahshakaEngine)
-add_test(NAME ssr.rings COMMAND test_ssr_rings
+jah_gpu_row(ssr.rings CLASS engine COMMAND test_ssr_rings
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.rings PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
@@ -91,7 +91,7 @@ target_compile_definitions(test_ssr_edge PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 add_dependencies(test_ssr_edge JahshakaEngineMedia)
 target_link_libraries(test_ssr_edge PRIVATE JahshakaEngine)
-add_test(NAME ssr.edge COMMAND test_ssr_edge
+jah_gpu_row(ssr.edge CLASS engine COMMAND test_ssr_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ssr.edge PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")

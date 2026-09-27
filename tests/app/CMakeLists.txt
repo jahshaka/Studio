@@ -39,7 +39,7 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}JAHSHAKA_DATA_ROOT=${_selftest_root};")
 # satisfies its centre-pixel check (engine_selftest.sh says why, in full).
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (a hash-free selftest under the layer; it was in the lock by flake history only).
-add_test(NAME app.engine_selftest_validation
+jah_gpu_row(app.engine_selftest_validation CLASS selftest
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
@@ -72,7 +72,7 @@ set_tests_properties(app.engine_selftest_validation PROPERTIES
 # runs on whatever Xvfb the gate uses.
 set(_sq_home ${CMAKE_CURRENT_BINARY_DIR}/startup-quiet-home)
 file(MAKE_DIRECTORY ${_sq_home}/run)
-add_test(NAME app.startup_quiet
+jah_gpu_row(app.startup_quiet CLASS app
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
@@ -117,7 +117,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # it back; two suites both naming 8751 is what made -j4 unsafe
         # (TEST_GATE_AUDIT.md §4.1).
         # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-        jah_gpu_exclusive_test(NAME app.input_keys RUN_TIMEOUT 600
+        jah_gpu_exclusive_test(NAME app.input_keys CLASS app RUN_TIMEOUT 600
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/input_keys.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ik_home}/run)
@@ -149,7 +149,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
         set(_ps_home ${CMAKE_CURRENT_BINARY_DIR}/play-select-home)
         file(MAKE_DIRECTORY ${_ps_home}/run)
-        jah_gpu_exclusive_test(NAME app.play_select RUN_TIMEOUT 400
+        jah_gpu_exclusive_test(NAME app.play_select CLASS app RUN_TIMEOUT 400
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/play_select.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
                  WORKING_DIRECTORY ${_ps_home}/run)

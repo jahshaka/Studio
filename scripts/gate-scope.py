@@ -223,6 +223,9 @@ AREA_RULES = [
     (r"^scripts/gate[-_]", ["hygiene"], []),
     # THE GPU-TIMING LOCK's wrapper (DEVPROCESS-1): its own tooling suite, devprocess.gpu_lock.
     (r"^scripts/gpu-exclusive", ["tooling"], []),
+    # THE VRAM BUDGET's helper (GATE-ADMIT-1): its tooling suite (devprocess.vram_admit), the
+    # pool driver's own test that imports it (pool.runner, tests/app) and the closure (hygiene).
+    (r"^scripts/(gpu-admit|vram_tokens)", ["tooling", "app", "hygiene"], []),
     (r"^scripts/", [], []),
 ]
 
@@ -389,14 +392,23 @@ def load_inventory(build):
         # source tree or a configured script (a .js the build dir generated from a .js.in, a
         # wrapper .sh, a lint .py). The audit (§7): wrapper-run app rows never got module
         # selection because only cmd[1] of a bash row was read.
+        # THE WRAPPERS ARE NOT THE ROW'S SUBJECT (GATE-ADMIT-1): the GPU lock and the VRAM budget
+        # (scripts/gpu-exclusive.sh, scripts/gpu-admit.sh <k> --label <l> --) are peeled off
+        # before the row's script and argv files are read; `cmd` itself keeps them (the lock
+        # rules read it).
+        run = list(cmd)
+        if run and os.path.basename(run[0]) == "gpu-exclusive.sh":
+            run = run[1:]
+        if run and os.path.basename(run[0]) == "gpu-admit.sh":
+            run = run[run.index("--") + 1:] if "--" in run else run[2:]
         script = None
-        m = re.search(r"--script\s+(\S+)", " ".join(cmd))
+        m = re.search(r"--script\s+(\S+)", " ".join(run))
         if m: script = m.group(1)
-        files_in_argv = [os.path.normpath(c) for c in cmd[1:]
+        files_in_argv = [os.path.normpath(c) for c in run[1:]
                          if c.endswith((".js", ".sh", ".py", ".js.in", ".cmake")) and os.path.isfile(c)]
         if not script:
             script = next((f for f in files_in_argv if f.endswith(".js")), None)
-        if not script and cmd and cmd[0].endswith(("bash", "/sh", "sh")) and files_in_argv:
+        if not script and run and run[0].endswith(("bash", "/sh", "sh")) and files_in_argv:
             script = files_in_argv[0]
         # A POOL row (SUITE-POOL-1: `run_pool.py --pool <p> --arm <arm> <script> <budget> ...`):
         # its arms and their scripts, read from the command line the pool's CMake built — the

@@ -57,7 +57,7 @@ target_compile_definitions(test_socket_render PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_socket_render PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_socket_render JahshakaEngineMedia)
-add_test(NAME sockets.render COMMAND test_socket_render
+jah_gpu_row(sockets.render CLASS engine COMMAND test_socket_render
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sockets.render PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -73,7 +73,7 @@ file(MAKE_DIRECTORY ${_sockets_home}/run)
 set(JAHSHAKA_SOCKETS_RIG "${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sockets.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js @ONLY)
-add_test(NAME sockets.e2e
+jah_gpu_row(sockets.e2e CLASS app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js
          WORKING_DIRECTORY ${_sockets_home}/run)
 set_tests_properties(sockets.e2e PROPERTIES
