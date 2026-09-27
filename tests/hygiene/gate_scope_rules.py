@@ -25,7 +25,8 @@ directories it had decided to skip.
 THE FOUR CASES, and each one is a rule of the tool rather than a number:
 
   1. A CODE PATH SELECTS SUITES. `src/services/vrworld.cpp` selects the vr
-     suites (its area rule) and always the smoke pair.
+     app suites (its area rule) and always the smoke pair — and NOT the compiled
+     vr.session, whose executable the build graph says does not contain it.
   2. `--build .` FROM INSIDE THE BUILD DIR MEANS THE BUILD DIR — the same
      selection as the absolute form, byte for byte. FAILS BEFORE the fix.
   3. A DIRECTORY THAT IS NOT A BUILD DIR IS AN ERROR, not an empty answer
@@ -56,7 +57,8 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
      falls back reports a MERGE-tier `command` at -j2, and the printed tier line
      follows `-j` too; `--run` runs that same string.
 
-  8. The decode's own suite (engine.atom_parity) rides the Atom media, HlmsAtom and the pin.
+  8. The decode's own suite (engine.atom_parity) rides the Atom media and HlmsAtom; the fork
+     pin selects the whole MERGE tier by rule (MODULAR-GATE-1; contract §7b rule 4).
 
   9. THE TIER DOC QUOTES THE SCRIPT (POST-C-FIXES-1): docs/TESTING_GATE.md carries
      no literal `-LE` label list — it names `gate-scope.py --merge-tier`, which
@@ -116,7 +118,12 @@ def main(source, build):
     check(code == 0, "a code path exits 0 (%d)%s" % (code, ("\n" + err) if code else ""))
     check("SCOPED tier:" in out and "NOTHING to gate" not in out,
           "a code path selects a scoped tier rather than nothing")
-    check("vr.session" in out, "the vr suites are in it (the file's own area rule)")
+    # MODULAR-GATE-1: the rule picks the APP rows (vr.verbs_session runs the app); a compiled
+    # row runs only when the build graph says its executable contains the file — test_vr_session
+    # does not compile vrworld.cpp, so vr.session is not in (it used to be, by directory).
+    check("vr.verbs_session" in out, "the vr app suites are in it (the file's own area rule)")
+    check("vr.session " not in out and "vr.session|" not in out.replace("\\", "") and "vr.session)" not in out.replace("\\", ""),
+          "...and the compiled vr.session is not: its executable does not contain vrworld.cpp (the graph)")
     check("app.startup_quiet" in out and "api.contract" in out,
           "the smoke pair rides every code path")
     absolute_form = out
@@ -229,10 +236,20 @@ def main(source, build):
     # the fork pin (Ogre's Pbs pieces are the decode's text too) select engine.atom_parity;
     # a lane that changed all three gated without it once.
     for path in ("irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any",
-                 "irisgl/engine/src/HlmsAtom.cpp", "irisgl/thirdparty/ogre-next"):
+                 "irisgl/engine/src/HlmsAtom.cpp"):
         code, out, err = run([tool, "--files", path, "--build", build], source)
         check(code == 0 and ("engine.atom_parity|" in plain(out) or "engine.atom_parity)" in plain(out)),
               "%s selects engine.atom_parity" % path)
+    # the fork pin reaches everything: the MERGE tier BY RULE (PHOTON_ATOM_CONTRACT §7b rule 4),
+    # which carries engine.atom_parity — not a fallback, and said so
+    code, out, err = run([tool, "--files", "irisgl/thirdparty/ogre-next", "--build", build, "--json"], source)
+    try:
+        doc = json.loads(out)
+    except ValueError:
+        doc = {}
+    check(code == 0 and doc.get("full_tier") and not doc.get("fallback")
+          and "-LE" in doc.get("command", ""),
+          "irisgl/thirdparty/ogre-next selects the MERGE tier by rule (the tier carries engine.atom_parity)")
 
     # 9. THE TIER DOC QUOTES THE SCRIPT, NEVER A COPY OF ITS SET (POST-C-FIXES-1).
     # docs/TESTING_GATE.md's MERGE row carried a literal

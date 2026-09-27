@@ -1,34 +1,50 @@
 #!/usr/bin/env python3
-"""gate-scope — derive the SCOPED ctest tier from the paths a change touched.
+"""gate-scope — the SCOPED tier: what a change CAN REACH, and why (MODULAR-GATE-1).
 
-    scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run] [--json]
+    scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run] [--json] [-j N]
     scripts/gate-scope.sh --files path [path ...]
+    scripts/gate-scope.sh --solo <suite> [...] [--times 3]     # the flake protocol, logged
+    scripts/gate-scope.sh --record-times                       # gate-times.txt from the run log
+    scripts/gate-scope.sh --merge-tier [-j N] | --nightly-tier
 
-The owner's rule (2026-09-09 night): the full gate (298 suites, ~25 min wall) runs once
-per BATCH before a push; a lane gates on what its work can break. This tool turns a git
-range (or a file list) into an exact `ctest -R '^(a|b|c)$'` selection, with one rationale
-line per touched path, an estimated wall time from scripts/gate-times.txt (a full-gate snapshot) and the build dir's last run, and a
-loud FALLBACK to the MERGE tier whenever a path matches nothing precise (a rule that
-guesses is worse than the merge tier). Tiers are contracts: the selection printed here is
-what the gate-runner runs, nothing hand-picked out of it.
+A lane runs everything its change can reach and nothing it cannot — read from the build and
+the diff, never guessed — and the full tiers stay where the process needs them (a stage
+close, a fork pin bump, nightly, the phase's push: PHOTON_ATOM_CONTRACT §7b). The tool turns a
+git range into an exact `ctest -R '^(a|b|c)$'` selection with one rationale line per touched
+path and one reason per selected row, estimates the wall time from THE RUN LOG (T8), and
+`--run` writes every row's verdict into the run log (scripts/gate_runlog.py).
 
-How suites are found (all read from the tree and the build dir, nothing hard-wired to a
-suite NAME so new suites are covered the day they are registered):
-  * every suite's home is its tests/<dir>/CMakeLists.txt (ctest's backtrace) — a touched
-    file under tests/<dir>/ selects that dir's suites; a touched script selects the suites
-    that run it;
-  * a compiled test target lists the src/ files it builds — a touched source selects every
-    dir whose CMakeLists names it;
-  * an app-spawning suite (--script / bash) is selected by the API MODULES its script calls
-    (`assets.`, `node.`, ...) when a module's api file changed;
-  * everything else goes through the AREA RULES below (a src/ or irisgl/ directory → test
-    dirs + module prefixes), which are the part a human maintains.
+THE THREE SELECTORS (the Selection class below has the detail):
+  1. REBUILT ARTEFACTS — a compiled row runs iff the build graph (build.ninja + ninja's deps
+     log + the libraries' link references, scripts/gate_graph.py) says one of its executables
+     contains code from, or includes, a touched file;
+  2. SYMBOLS — a header hunk selects through the identifiers it declares or changes, via the
+     files that name them; a comment-only change to C/C++ reaches nothing;
+  3. REACH — the rows that run the app (--script suites, harnesses that spawn it) follow the
+     AREA RULES' families and the scripts' API modules; when the app relinked and no rule
+     narrows a path, every app row.
+Build files are read by what their changed commands name. The FALLBACK to the MERGE tier is
+only for a path with no rule, no symbol and no graph owner; a fork pin bump selects the MERGE
+tier BY RULE. Tiers are contracts: the selection printed here is what runs, nothing
+hand-picked out of it; a red a later tier finds that this selection missed is a defect of
+this tool, fixed here and added to tests/hygiene/gate_selection_cases.json.
 """
 import argparse, json, os, re, subprocess, sys, collections
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gate_graph                                   # noqa: E402  the build graph, symbols, CMake
+import gate_runlog                                  # noqa: E402  THE RUN LOG (T8)
+from gate_graph import CXX_EXT, HEADER_EXT          # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ---- AREA RULES: path prefix (or regex) -> (test dirs, script modules) --------------
+# MODULAR-GATE-1: for a C/C++ path (and any other build input the graph knows) the rules pick
+# only the APP rows and the source-reading OTHER rows of their dirs — the compiled rows are the
+# build graph's (Selection.graph_rows). For runtime data the graph cannot see (engine media,
+# scenes, sample content) a rule's dirs still pick every row. The '*merge-tier' rules for the
+# build files, irisgl/CMakeLists and 'any other src/ file' are GONE: the build files are read
+# by what their changed commands name, and a src/ file no rule narrows selects every app row.
 # A touched path picks the FIRST rule whose prefix matches (most specific first). Test
 # dirs are tests/<dir>; modules are the `<module>.` prefixes an e2e script calls. The
 # special dir "*vulkan-scripts" means every app-spawning suite that is NOT --headless
@@ -104,7 +120,6 @@ AREA_RULES = [
     # eight lane gates fell back to the MERGE tier this phase on paths like this one).
     # The wrapped pieces are Hlms text HlmsAtom's decode compiles too: the atom dir with it.
     (r"^irisgl/cmake/WrapHlmsPiece", ENGINE_FAMILY + ["atom"], []),
-    (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name
     # THE THREADED AVATAR IMPORT/SWITCH (D6B-GATE-SHAPE; audit S1): avatar.responsive's subject
@@ -188,7 +203,6 @@ AREA_RULES = [
      ["ui", "app", "theme", "shortcuts", "desktops", "drawers", "hygiene"],
      ["editor", "app", "desktop"]),
     (r"^src/app/", ["app", "apppaths", "log", "shutdown", "hygiene", "threading", "api"], ["app"]),
-    (r"^src/", ["*merge-tier"], []),
     # --- data, docs, build ---------------------------------------------------------------
     (r"^docs/SCRIPTING\.md$", ["api"], []),
     # THE TIER DOC'S OWN GUARD (POST-C-FIXES-1): docs/TESTING_GATE.md must quote the
@@ -199,13 +213,14 @@ AREA_RULES = [
     (r"^(docs/|README|LICENSE|\.claude/|\.github/|[A-Za-z_\-]+\.md$|\.gitignore$|\.gitmodules$)", [], []),   # no suite at all
     (r"^(scenes/|app/content/|app/samples/)", ["samples", "reopen", "assets"], ["project"]),
     (r"^app/", ["ui", "theme", "app"], []),
-    (r"^(CMakeLists\.txt|cmake/|tests/CMakeLists\.txt)", ["*merge-tier"], []),
     # THE TOOL'S OWN GUARD (source.gate_scope_rules): scripts/gate-scope.* is the
     # one path under scripts/ that a suite reads, so an edit to it selects the
     # hygiene rows (seven display-free shell/python lints, well under a second
     # together). Without this line an edit to the scoping tool selected NOTHING
     # and its own guard never ran — the rule class GATE-SCOPE-2 audited.
-    (r"^scripts/gate-scope", ["hygiene"], []),
+    # MODULAR-GATE-1: the selector's two libraries (gate_graph.py, gate_runlog.py) are the
+    # tool too, and gate.selection (the replay of recorded lanes) lives beside the rule guard.
+    (r"^scripts/gate[-_]", ["hygiene"], []),
     # THE GPU-TIMING LOCK's wrapper (DEVPROCESS-1): its own tooling suite, devprocess.gpu_lock.
     (r"^scripts/gpu-exclusive", ["tooling"], []),
     (r"^scripts/", [], []),
@@ -335,7 +350,7 @@ def load_inventory(build):
             f"the repo root, or\n            '.' from inside the build dir itself). Refusing "
             f"to scope against an empty inventory.\n")
         sys.exit(2)
-    bt = j["backtraceGraph"]; files = bt["files"]; nodes = bt["nodes"]
+    bt = j["backtraceGraph"]; files = bt["files"]; nodes = bt["nodes"]; commands = bt.get("commands", [])
     inv = {}
     for t in j["tests"]:
         # THE SUITE'S OWN DIRECTORY IS WHERE IT WAS REGISTERED, NOT WHERE add_test RAN
@@ -347,10 +362,12 @@ def load_inventory(build):
         # take the first frame that lies in a tests/<dir>/ (the call site); the
         # add_test frame is kept only when no such frame exists.
         n = nodes[t["backtrace"]]
-        frames = []
+        frames, via = [], set()
         while True:
             if n.get("file") is not None:
                 frames.append(files[n["file"]])
+            if n.get("command") is not None and n["command"] < len(commands):
+                via.add(commands[n["command"]].lower())     # the helper functions it came through
             if "parent" not in n:
                 break
             n = nodes[n["parent"]]
@@ -361,66 +378,688 @@ def load_inventory(build):
         d = os.path.relpath(os.path.dirname(cm), ROOT)          # tests/<dir>
         cmd = t.get("command", [])   # absent for a not-yet-built executable (partial build dir)
         props = {p["name"]: p["value"] for p in t.get("properties", [])}
+        # THE SCRIPTS A ROW RUNS: the --script argument, and every argument that is a file of the
+        # source tree or a configured script (a .js the build dir generated from a .js.in, a
+        # wrapper .sh, a lint .py). The audit (§7): wrapper-run app rows never got module
+        # selection because only cmd[1] of a bash row was read.
         script = None
         m = re.search(r"--script\s+(\S+)", " ".join(cmd))
         if m: script = m.group(1)
-        if cmd and cmd[0].endswith("bash"):
-            script = cmd[1]
+        files_in_argv = [os.path.normpath(c) for c in cmd[1:]
+                         if c.endswith((".js", ".sh", ".py", ".js.in", ".cmake")) and os.path.isfile(c)]
+        if not script:
+            script = next((f for f in files_in_argv if f.endswith(".js")), None)
+        if not script and cmd and cmd[0].endswith(("bash", "/sh", "sh")) and files_in_argv:
+            script = files_in_argv[0]
         inv[t["name"]] = {
             "dir": d.split("/")[-1] if d.startswith("tests") else d,
-            "app": any("bin/Jahshaka" in c for c in cmd) or (cmd and cmd[0].endswith("bash")),
+            "reldir": d,
+            "cmd": [os.path.normpath(c) if os.path.isabs(c) else c for c in cmd],
+            "app": any(c.endswith("bin/Jahshaka") for c in cmd),
             "headless": "--headless" in cmd,
             "script": script,
+            "argv_files": set(files_in_argv),
+            "via": via,
+            "frames": set(os.path.normpath(f) for f in frames),
             "serial": bool(props.get("RUN_SERIAL")),
             "labels": set(props.get("LABELS", []) or []),
+            "kind": "other", "exes": set(),
         }
     return inv
+
+
+def classify_rows(inv, graph, build):
+    """Row kinds, read from the graph: `app` (runs bin/Jahshaka, or a harness compiled with
+    JAHSHAKA_BINARY that spawns it), `compiled` (runs one of the tree's own executables),
+    `other` (a lint, a python/cmake check, a shell script over the source tree)."""
+    app_exe = os.path.normpath(os.path.join(build, "bin", "Jahshaka"))
+    for t in inv.values():
+        exes = {c for c in t["cmd"] if graph and c in graph.exes}
+        t["exes"] = exes
+        if t["app"] or app_exe in exes or (graph and exes & graph.app_driving):
+            t["kind"] = "app"
+        elif exes:
+            t["kind"] = "compiled"
+        else:
+            t["kind"] = "other"
+    return app_exe
 
 
 TIMES_FILE = os.path.join(ROOT, "scripts", "gate-times.txt")
 
 
-def record_times(log):
-    """Snapshot per-suite seconds from a ctest OUTPUT log into scripts/gate-times.txt."""
-    times = {}
-    for line in open(log, errors="replace"):
-        m = re.search(r"Test +#\d+: (\S+) .*?(?:Passed|Failed|\*\*\*\w+) +([\d.]+) sec", line)
-        if m: times[m.group(1)] = float(m.group(2))
+def record_times():
+    """Refresh scripts/gate-times.txt from THE RUN LOG (T8): each suite's median PASS seconds
+    over the last 14 days of gate runs, every tier and lane — never one gate's output."""
+    times = gate_runlog.median_times(days=14)
+    if not times:
+        sys.stderr.write(f"gate-scope: the run log ({gate_runlog.log_dir()}) holds no PASS record "
+                         f"in the last 14 days — nothing to record\n")
+        sys.exit(2)
+    old = {}
+    if os.path.exists(TIMES_FILE):
+        for line in open(TIMES_FILE):
+            p = line.split()
+            if len(p) == 2 and not line.startswith("#"): old[p[0]] = p[1]
     with open(TIMES_FILE, "w") as f:
-        f.write("# suite seconds — snapshot of a full gate; refresh with gate-scope.sh --record-times <ctest log>\n")
-        for n in sorted(times): f.write(f"{n} {times[n]}\n")
-    print(f"recorded {len(times)} suite times into {os.path.relpath(TIMES_FILE, ROOT)}")
+        f.write("# suite seconds — the run log's median PASS time over 14 days "
+                "(gate-scope.sh --record-times; testing/runs/README.md)\n")
+        for n in sorted(set(old) | set(times)):
+            f.write(f"{n} {times[n]:.2f}\n" if n in times else f"{n} {old[n]}\n")
+    print(f"recorded {len(times)} suite times from the run log into {os.path.relpath(TIMES_FILE, ROOT)}")
 
 
-def load_costs(build):
-    """Per-suite seconds from the build dir's last ctest run (LastTest.log) — CTestCostData's
-    'cost' column is ctest's scheduling weight, not seconds."""
+def load_costs():
+    """Per-suite seconds: scripts/gate-times.txt overlaid with the run log's medians (fresher)."""
     costs = {}
     if os.path.exists(TIMES_FILE):
         for line in open(TIMES_FILE):
             if line.startswith("#"): continue
             parts = line.split()
             if len(parts) == 2: costs[parts[0]] = float(parts[1])
-    p = os.path.join(build, "Testing/Temporary/LastTest.log")
-    if os.path.exists(p):
-        cur = None
-        for line in open(p, errors="replace"):
-            m = re.match(r"\d+/\d+ Testing: (\S+)", line)
-            if m: cur = m.group(1); continue
-            m = re.match(r"Test time =\s+([\d.]+) sec", line)
-            if m and cur: costs[cur] = float(m.group(1)); cur = None
+    costs.update(gate_runlog.median_times(days=14))
     return costs
 
 
 def script_modules(path):
-    """The `<module>.` prefixes a script (js, js.in, sh) calls."""
+    """The `<module>.` prefixes a JS script calls (a shell wrapper's text is not JS)."""
+    if not path or not path.endswith((".js", ".js.in")): return set()
     try: txt = open(path).read()
     except OSError: return set()
     return set(re.findall(r"\b([a-z]+)\.[a-zA-Z_]+\(", txt))
 
 
+# A build-registration edit that only adds or removes SOURCE FILES from a list (a new
+# .cpp beside its header, a deleted dead file) says nothing on its own: the files it
+# names are in the same diff and scope precisely (2026-09-11).
+_LIST_ENTRY = re.compile(r'^"?[\w${}./+\-]+\.(?:cpp|cc|cxx|c|h|hh|hpp|ui|qrc|mm|js|js\.in|sh)"?\)?$')
+
+
+def _git_show(rev, path):
+    """A file's text at a revision of the Studio repo or (for irisgl/...) of the irisgl submodule;
+    '' when it does not exist there."""
+    try:
+        if path.startswith("irisgl/"):
+            r = subprocess.run(["git", "show", f"{rev}:{path[len('irisgl/'):]}"], cwd=os.path.join(ROOT, "irisgl"),
+                               capture_output=True, text=True, errors="replace")
+        else:
+            r = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=ROOT, capture_output=True, text=True,
+                               errors="replace")
+        return r.stdout if r.returncode == 0 else ""
+    except OSError:
+        return ""
+
+
+class Revs:
+    """The two sides of the range, in each repo (Studio; irisgl at the pins the range names)."""
+    def __init__(self, rng):
+        self.rng = rng
+        self.base, self.tip = rng.split("..", 1) if rng and ".." in rng else (None, None)
+        self._ig = None
+
+    def pair(self, path):
+        if not self.base: return None, None
+        if path.startswith("irisgl/"):
+            if self._ig is None:
+                self._ig = (sh(f"git rev-parse {self.base}:irisgl").strip(), sh(f"git rev-parse {self.tip}:irisgl").strip())
+            return self._ig
+        return self.base, self.tip
+
+    def texts(self, path):
+        a, b = self.pair(path)
+        if not a: return None, None
+        return _git_show(a, path), _git_show(b, path)
+
+    def diff_u0(self, path):
+        a, b = self.pair(path)
+        if not a: return ""
+        if path.startswith("irisgl/"):
+            return sh(f"git diff -U0 {a} {b} -- {path[len('irisgl/'):]}", cwd=os.path.join(ROOT, "irisgl"))
+        return sh(f"git diff -U0 {a} {b} -- {path}")
+
+
+def _changed_line_numbers(diff_text):
+    """(old line numbers removed, new line numbers added) of a -U0 diff."""
+    old, new = set(), set()
+    o = n = 0
+    for line in diff_text.splitlines():
+        m = re.match(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
+        if m:
+            o, n = int(m.group(1)), int(m.group(3)); continue
+        if line.startswith(("+++", "---")): continue
+        if line.startswith("-"): old.add(o); o += 1
+        elif line.startswith("+"): new.add(n); n += 1
+    return old, new
+
+
+class Selection:
+    """One scoped selection: what a change can reach, and why (MODULAR-GATE-1).
+
+    THREE SELECTORS, in the order a path meets them:
+      1. REBUILT ARTEFACTS (compiled rows). A C/C++ file's reach is the build graph's: the
+         executables whose objects — or whose linked libraries' objects — were compiled from it
+         or read it as a header (build.ninja + ninja's deps log). A compiled row runs iff one of
+         its executables is in that set. The area rules' test DIRECTORIES no longer pick
+         compiled rows for such a path: the graph is exact where the rules guessed.
+      2. SYMBOLS (shared headers). A header hunk selects through the identifiers it touches (the
+         names on its changed lines and the struct/class/enum/function they sit in, comments and
+         whitespace stripped): the files of src/, irisgl/ and tests/ that NAME one of them are
+         the reached paths, each through its own graph reach and rules. A comment-only change to
+         any C/C++ file reaches nothing (the source lints still ride).
+      3. REACH (app rows). The app relinks for almost any change, so the rows that run it (the
+         --script suites, the harnesses that spawn it) are chosen by the AREA RULES' families
+         and the scripts' API modules — and when the graph says the app relinked and no rule
+         narrows a path, by every app row (the app's reach, un-narrowed; never the whole tier).
+    CMake edits are read by what their changed commands name (rows, targets, sources,
+    sub-directories, helper functions, variables); a directory-scope setting reaches every
+    target under that directory. The FALLBACK to the MERGE tier is left for a path with no rule,
+    no symbol and no graph owner — and printed with its reason.
+    """
+
+    def __init__(self, inv, graph, app_exe, revs, jobs):
+        self.inv, self.graph, self.app_exe, self.revs, self.jobs = inv, graph, app_exe, revs, jobs
+        self.selected = {}
+        self.fallback = []
+        self.full_tier = []          # rules that select the whole tier (a fork bump, a root setting)
+        self.rationale = []
+        self.code_moved = False
+        self.skipped_ubiquitous = set()
+        self.by_dir = collections.defaultdict(list)
+        for n, t in inv.items(): self.by_dir[t["dir"]].append(n)
+        self.mods = {n: script_modules(t["script"]) for n, t in inv.items() if t["script"]}
+        freq = collections.Counter(m for ms in self.mods.values() for m in ms)
+        self.ubiquitous = {m for m, c in freq.items() if c > 0.4 * max(1, len(self.mods))}
+        self.script_rows = collections.defaultdict(list)       # abs script/argv file -> rows
+        for n, t in inv.items():
+            for f in ({t["script"]} if t["script"] else set()) | t["argv_files"]:
+                self.script_rows[os.path.normpath(f)].append(n)
+        self.script_base = collections.defaultdict(list)
+        for f, ns in self.script_rows.items():
+            self.script_base[os.path.basename(f).replace(".js.in", "").replace(".js", "")] += ns
+        self.exe_rows = collections.defaultdict(list)
+        for n, t in inv.items():
+            for e in t["exes"]: self.exe_rows[e].append(n)
+        self.row_names = set(inv)
+        self._visited = set()
+
+    # -- adding rows -----------------------------------------------------------------------
+    def add(self, suites, why):
+        for s in suites:
+            if s in self.inv: self.selected.setdefault(s, why)
+
+    def expand(self, dirs, modules, why, own_api=False, kinds=None):
+        """An area rule's families. `kinds` limits the dirs to row kinds (the graph owns the
+        compiled rows of a C/C++ path, so its rules pick only app and other rows)."""
+        for d in dirs:
+            if d == "*merge-tier": self.fallback.append(why); continue
+            if d in ("*vulkan-scripts", "*headless-scripts", "*all-scripts", "*app-rows"):
+                for n, t in self.inv.items():
+                    if t["kind"] != "app": continue
+                    if d == "*vulkan-scripts" and t["headless"]: continue
+                    if d == "*headless-scripts" and not t["headless"]: continue
+                    self.add([n], why)
+                continue
+            self.add([n for n in self.by_dir.get(d, []) if kinds is None or self.inv[n]["kind"] in kinds], why)
+        for m in modules:
+            if m in self.ubiquitous and not own_api:
+                self.skipped_ubiquitous.add(m); continue
+            self.add([n for n, ms in self.mods.items() if m in ms], f"{why} [module {m}]")
+
+    def rules_for(self, p, why_prefix, kinds=None):
+        """Apply the first matching AREA_RULE. Returns the rule text, or None when none matched."""
+        for pat, dirs, modules in AREA_RULES:
+            m = re.match(pat, p)
+            if not m: continue
+            mm = []
+            for x in modules:
+                if x == "$1": mm.append(m.group(1))
+                elif x == "$module": mm.append(re.sub(r"api\.(cpp|h)$", "", os.path.basename(p)))
+                else: mm.append(x)
+            self.expand(dirs, mm, f"{why_prefix}: rule {pat}",
+                        own_api=any(x in ("$1", "$module") for x in modules), kinds=kinds)
+            return f"rule {pat}" + (f" modules={mm}" if mm else "")
+        return None
+
+    def graph_rows(self, p, why):
+        """Selector 1: the rows whose executables the graph says this file reaches. Returns
+        (n executables, app relinked?) or None when the graph does not know the file."""
+        if not self.graph: return None
+        ap = os.path.join(ROOT, p)
+        if not self.graph.known(ap): return None
+        exes = self.graph.reach_refined(ap)
+        for e in exes:
+            if e == self.app_exe: continue
+            self.add(self.exe_rows.get(e, []), f"{why} [relinks {os.path.basename(e)}]")
+        return len(exes), self.app_exe in exes
+
+    def argv_rows(self, p, why):
+        """Rows whose command line or script IS this file (a wrapper, a lint, a configured .js)."""
+        ap = os.path.normpath(os.path.join(ROOT, p))
+        hit = list(self.script_rows.get(ap, []))
+        base = os.path.basename(p).replace(".js.in", "").replace(".js", "")
+        if not hit and p.endswith((".js", ".js.in")) and base in self.script_base:
+            hit = list(self.script_base[base])      # a .js.in configured into the build dir
+        self.add(hit, f"{why}: its command line runs it")
+        return hit
+
+    # -- the path walk ---------------------------------------------------------------------
+    def path(self, p, depth=0, via=None):
+        """Select for one reached path. `via` names why a path is reached indirectly (a symbol,
+        a CMake command); a directly touched path has via=None."""
+        key = (p, depth > 0)
+        if key in self._visited: return
+        self._visited.add(key)
+        tag = p if via is None else f"{p} (via {via})"
+        notes = []
+        if p.startswith(("src/", "irisgl/", "tests/")): self.code_moved = True
+
+        # THE FORK PIN: an Ogre change reaches everything (PHOTON_ATOM_CONTRACT §7b rule 4).
+        if p == "irisgl/thirdparty/ogre-next" or p.startswith("irisgl/thirdparty/ogre-next/"):
+            self.full_tier.append(f"{p}: the fork pin moved — an Ogre change reaches every suite (§7b rule 4)")
+            self.expand(ENGINE_FAMILY + ["atom"], [], f"{p}: fork pin")
+            if depth == 0: self.rationale.append((p, "fork pin bump → the MERGE tier by rule (§7b.4)"))
+            return
+        if p.startswith("irisgl/thirdparty/") or p.startswith("thirdparty/"):
+            # vendored code: compiled into the tree (graph) or a submodule gitlink (no graph node)
+            g = self.graph_rows(p, tag)
+            if g is None:
+                self.full_tier.append(f"{p}: a vendored component moved — nothing narrower owns it")
+            if depth == 0: self.rationale.append((p, "vendored" + (f": graph {g[0]} executables" if g else " → the tier")))
+            return
+
+        base = os.path.basename(p)
+        is_cmake = base == "CMakeLists.txt" or p.endswith(".cmake")
+        is_cxx = p.endswith(CXX_EXT) and not p.startswith(("irisgl/thirdparty/", "thirdparty/"))
+
+        if is_cmake:
+            # a CMake helper an area rule owns (WrapHlmsPiece: the engine's media staging) keeps
+            # its rule; every other build file is read by what its changed commands name
+            if any(re.match(pat, p) for pat, _, _ in AREA_RULES):
+                r = self.rules_for(p, tag)
+                if depth == 0: self.rationale.append((p, r))
+                return
+            self.cmake(p, tag, depth)
+            return
+
+        # every row that runs this very file (a script, a wrapper, a lint)
+        hit_argv = self.argv_rows(p, tag)
+        if hit_argv: notes.append(f"{len(hit_argv)} row(s) run it")
+
+        # a build input that is not C/C++ (a .ui form, a .qrc, a shader the build compiles into
+        # SPIR-V) is the graph's too; runtime data (engine media, scenes) is not in it
+        graph_input = (not is_cxx and self.graph is not None and not p.startswith("tests/")
+                       and "/media/" not in p and self.graph.known(os.path.join(ROOT, p))
+                       and bool(self.graph.reach(os.path.join(ROOT, p))))
+        if is_cxx or graph_input:
+            # comments/whitespace only → nothing reached (the lints still ride)
+            if is_cxx and self.revs.base and depth == 0:
+                a, b = self.revs.texts(p)
+                if a is not None and b and a and gate_graph.strip_cxx(a) == gate_graph.strip_cxx(b):
+                    self.expand(["hygiene"], [], f"{tag}: comment/whitespace only")
+                    self.rationale.append((p, "comments/whitespace only → no code reached (the source lints ride)"))
+                    return
+            if p.endswith(HEADER_EXT) and self.revs.base and depth == 0:
+                if self.header_symbols(p, tag, notes):
+                    self.rationale.append((p, "; ".join(notes)))
+                    return
+            g = self.graph_rows(p, tag)
+            if g is not None:
+                n_exe, app = g
+                notes.append(f"graph: {n_exe} executable(s)" + (" incl. the app" if app else ""))
+                r = self.rules_for(p, tag, kinds={"app", "other"}) if not p.startswith("tests/") else None
+                if r: notes.append(r + " (app/other rows)")
+                elif app and not p.startswith("tests/"):
+                    self.expand(["*app-rows"], [], f"{tag}: the app relinked and no rule narrows it")
+                    notes.append("the app relinked, no rule narrows it → every app row")
+                if depth == 0: self.rationale.append((p, "; ".join(notes)))
+                return
+            notes.append("not in the build graph")
+            if self.graph is None:
+                # no graph (an unbuilt dir): the tests CMake files that list this source, as before
+                for d, files in cmake_src_refs().items():
+                    if p in files: self.add(self.by_dir.get(d, []), f"{tag}: compiled into tests/{d}")
+        if p.startswith("tests/"):
+            self.tests_path(p, tag, notes, hit_argv)
+            if depth == 0: self.rationale.append((p, "; ".join(notes) or "fallback"))
+            return
+        r = self.rules_for(p, tag)
+        if r: notes.append(r)
+        elif not hit_argv:
+            g = None if is_cxx else self.graph_rows(p, tag)     # a build input (.ui, .qrc, a shader source)
+            if g is not None:
+                notes.append(f"graph: {g[0]} executable(s)" + (" incl. the app" if g[1] else ""))
+                if g[1]:
+                    self.expand(["*app-rows"], [], f"{tag}: the app relinked and no rule narrows it")
+                    notes.append("the app relinked, no rule narrows it → every app row")
+            else:
+                self.fallback.append(f"{tag}: no rule, no symbol, no graph owner")
+                notes.append("NO RULE, no symbol, no graph owner → merge tier")
+        if depth == 0: self.rationale.append((p, "; ".join(notes)))
+
+    def tests_path(self, p, tag, notes, hit_argv):
+        parts = p.split("/")
+        d = parts[1] if len(parts) > 2 else ""
+        if hit_argv:
+            return
+        base = os.path.basename(p).replace(".js.in", "").replace(".js", "").replace(".sh", "")
+        if base in self.script_base and p.endswith((".js", ".js.in", ".sh")):
+            self.add(self.script_base[base], f"{tag}: script"); notes.append("script"); return
+        if d in self.by_dir:
+            # a fixture, a data file, a helper script of a directory: its rows
+            self.add(self.by_dir[d], f"{tag}: tests/{d}"); notes.append(f"tests/{d}"); return
+        if p.endswith(HEADER_EXT):
+            # a shared test header the graph does not know (a platform-only include)
+            name = os.path.basename(p)
+            owners = sorted(dd for dd in self.by_dir if header_included_by_dir(name, dd))
+            if owners:
+                for dd in owners: self.add(self.by_dir[dd], f"{tag}: included by tests/{dd}")
+                notes.append("included by " + ", ".join(f"tests/{dd}" for dd in owners)); return
+        # a shared helper (tests/support/*.js, *.sh) that other scripts source by name
+        users = self.naming_tests(os.path.basename(p))
+        if users:
+            for u in users: self.path(u, 1, via=f"names {os.path.basename(p)}")
+            notes.append(f"named by {len(users)} test file(s)"); return
+        self.fallback.append(f"{tag}: no suite owns this tests/ path")
+        notes.append("no suite owns it → fallback")
+
+    def naming_tests(self, fname):
+        try:
+            r = subprocess.run(["git", "grep", "-l", "-F", fname, "--", "tests"], cwd=ROOT,
+                               capture_output=True, text=True)
+        except OSError:
+            return []
+        return [f for f in r.stdout.split() if not f.endswith(fname)]
+
+    # An identifier named by more files than this is too common to select by (a member called
+    # `bound` or `positions`): the header then selects every includer, the graph's answer.
+    SYMBOL_SPECIFICITY = 60
+
+    def header_symbols(self, p, tag, notes):
+        """Selector 2. Returns True when the header's change was resolved through its symbols;
+        False sends the header to the graph (every object that includes it)."""
+        a, b = self.revs.texts(p)
+        if a is None: return False
+        if not a:
+            # A NEW header: everything that includes it is in this diff, and the graph has it
+            notes.append("a new header → its includers (all in this change)")
+            return False
+        ids, changed = gate_graph.cxx_changed_identifiers(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)))
+        if changed == 0:
+            self.expand(["hygiene"], [], f"{tag}: comment/whitespace only")
+            notes.append("comments/whitespace only → no code reached")
+            return True
+        if not ids:
+            notes.append("no specific identifier on the changed lines → every includer")
+            return False
+        naming = gate_graph.files_naming(ROOT, ids)
+        per_id = collections.Counter(t for toks in naming.values() for t in toks)
+        common = sorted(t for t in ids if per_id[t] > self.SYMBOL_SPECIFICITY)
+        if common:
+            notes.append(f"symbol(s) {common[:6]} too common to select by (> {self.SYMBOL_SPECIFICITY} files) "
+                         f"→ every includer")
+            return False
+        # the header's own companion source always counts (x.h -> x.cpp)
+        stem = os.path.splitext(p)[0]
+        for ext in (".cpp", ".cc", ".mm"):
+            if os.path.exists(os.path.join(ROOT, stem + ext)): naming.setdefault(stem + ext, set()).add("(companion)")
+        reached = sorted(f for f in naming if f != p)
+        shown = sorted(ids)[:12]
+        notes.append(f"symbols {shown}{' …' if len(ids) > 12 else ''} named by {len(reached)} file(s)")
+        # The files that NAME a changed identifier are the reached paths, each through its own
+        # graph reach and rules. A naming HEADER counts through its companion source only: its
+        # includers are not all selected (the brief's rule — the files that name the identifiers
+        # — and the one the gate.selection replay guards).
+        for f in reached:
+            if f.endswith(HEADER_EXT):
+                st = os.path.splitext(f)[0]
+                for ext in (".cpp", ".cc", ".mm"):
+                    if os.path.exists(os.path.join(ROOT, st + ext)):
+                        self.path(st + ext, 1, via=f"companion of {os.path.basename(f)}, which names {sorted(naming[f])[0]}")
+            else:
+                self.path(f, 1, via=f"{os.path.basename(p)} symbol {sorted(naming[f])[0]}")
+        self.expand(["hygiene"], [], f"{tag}: source text changed")
+        return True
+
+    # -- CMake -----------------------------------------------------------------------------
+    def cmake(self, p, tag, depth):
+        """A build file, read by what its CHANGED commands name (see cmake_command)."""
+        notes = []
+        d = os.path.dirname(p)
+        parts = p.split("/")
+        if not self.revs.base:
+            # --files: no diff to read. A test dir's CMakeLists registers its dir's rows; any
+            # other build file cannot be resolved without its diff.
+            if p.startswith("tests/") and len(parts) == 3 and parts[1] in self.by_dir:
+                self.add(self.by_dir[parts[1]], f"{tag}: tests/{parts[1]} registration")
+                if depth == 0: self.rationale.append((p, f"tests/{parts[1]}'s registration → its rows"))
+                return
+            self.fallback.append(f"{tag}: a build file with no diff to read (--files)")
+            if depth == 0: self.rationale.append((p, "a build file without a range → merge tier"))
+            return
+        a, b = self.revs.texts(p)
+        if not a and b:
+            # A NEW build file: everything it registers and builds is new — its rows and the
+            # executables built under its directory
+            rows = [n for n, t in self.inv.items() if os.path.join(ROOT, p) in t["frames"]]
+            self.add(rows, f"{tag}: a new build file's rows")
+            n_exe = self.exes_under(d, tag)
+            if depth == 0: self.rationale.append((p, f"a new build file → its {len(rows)} row(s), {n_exe} executable(s) built under {d}"))
+            return
+        old_l, new_l = _changed_line_numbers(self.revs.diff_u0(p))
+        a_lines, b_lines = (a or "").split("\n"), (b or "").split("\n")
+        # list-only lines (a source added/removed) say nothing: the files are in the diff
+        def interesting(lines, nums):
+            out = set()
+            for n in nums:
+                t = lines[n - 1].strip() if 0 < n <= len(lines) else ""
+                if not t or t.startswith("#") or _LIST_ENTRY.match(t): continue
+                out.add(n)
+            return out
+        old_i, new_i = interesting(a_lines, old_l), interesting(b_lines, new_l)
+        if not old_i and not new_i:
+            if depth == 0: self.rationale.append((p, "source-list / comment edit only → scoped by the files it names"))
+            return
+        cmds = []
+        for text, nums in ((a or "", old_i), (b or "", new_i)):
+            if not nums: continue
+            for c in gate_graph.cmake_commands(text):
+                if any(c[1] <= n <= c[2] for n in nums):
+                    # the changed lines' text, a trailing comment cut (a token in a comment names nothing)
+                    changed_text = "\n".join(re.sub(r'\s#[^"]*$', "", text.split("\n")[n - 1])
+                                             for n in sorted(nums) if c[1] <= n <= c[2])
+                    cmds.append((c, changed_text, text))
+        unresolved = []
+        for (name, first, last, args, fn), changed_text, whole in cmds:
+            got = self.cmake_command(p, d, name, args, fn, changed_text, whole, tag, notes)
+            if not got: unresolved.append(f"{name}() at line {first}")
+        if unresolved:
+            self.fallback.append(f"{tag}: CMake command(s) that name nothing a suite owns: {', '.join(unresolved)}")
+            notes.append("unresolved: " + ", ".join(unresolved))
+        if depth == 0: self.rationale.append((p, "; ".join(dict.fromkeys(notes)) or "CMake"))
+
+    def exes_under(self, d, tag):
+        """Every executable built under a source directory (its build dir), and its rows."""
+        if not self.graph: return 0
+        bsub = os.path.join(self.graph.build, d) if d else self.graph.build
+        exes = {e for e in self.graph.exes if e.startswith(bsub + "/")}
+        for e in exes:
+            if e != self.app_exe: self.add(self.exe_rows.get(e, []), f"{tag}: built under {d}")
+        if self.app_exe in exes:
+            self.expand(["*app-rows"], [], f"{tag}: the app is built under {d or '.'}")
+        return len(exes)
+
+    def target_changed(self, t, tag, notes):
+        """A build target's objects changed (a flag, a property, a link): its executables' rows."""
+        art = self.graph.targets[t]
+        if self.graph.kind.get(art) == "static":
+            # an archive's objects, through the link graph: where they are referenced
+            mem = self.graph.members(art)
+            exes = self.graph.reach_objects(mem)
+            vendored = all("/thirdparty/" in self.graph.obj_src.get(o, "/thirdparty/") for o in mem)
+        else:
+            exes = self.graph.target_reach(t) or set()
+            vendored = False
+        for e in exes:
+            if e == self.app_exe: continue
+            self.add(self.exe_rows.get(e, []), f"{tag}: target {t}")
+        if self.app_exe in exes:
+            refs = []
+            if vendored:
+                # a vendored archive enters our code through the objects that call it: the
+                # app rows are those objects' families (the mesh simplifier -> the bake's)
+                refs = sorted({self.graph.obj_src[o] for o in
+                               self.graph.first_party_referrers(art, ("/thirdparty/",)) if o in self.graph.obj_src})
+                for r_ in refs:
+                    self.path(os.path.relpath(r_, ROOT), 1, via=f"calls into {t}")
+                notes.append(f"target {t} (vendored) enters our code through "
+                             f"{[os.path.relpath(r_, ROOT) for r_ in refs]}")
+            if not refs:
+                self.expand(["*app-rows"], [], f"{tag}: target {t} is in the app")
+        notes.append(f"target {t}: {len(exes)} executable(s)")
+
+    _STRUCTURAL = {"endfunction", "endmacro", "else", "elseif", "endif", "foreach", "endforeach",
+                   "while", "endwhile", "return", "break", "continue"}
+
+    def cmake_command(self, p, d, name, args, fn, changed_text, whole, tag, notes, depth=0):
+        """Resolve one changed CMake command to what it names. True when something owned it.
+
+        In order: rows the command names (anywhere in it: an add_test's NAME sits on another line
+        than its changed COMMAND); a helper function's body or header (the rows registered
+        through it, the targets it is called on); a target the command CHANGES (target_*(),
+        set_target_properties(), a helper called on a target); sources it names; a
+        sub-directory; a variable (its user commands, once); and last a directory-scope
+        setting, which reaches every target under the directory."""
+        if name in ("message",):
+            notes.append("message() only"); return True
+        # the whole command for anything but a list: an add_test's NAME sits on another line than
+        # its changed COMMAND; a suite list's change is only the names it adds or drops
+        full = changed_text if name in ("set", "list") else changed_text + "\n" + args
+        toks = set(re.findall(r"[A-Za-z0-9_.+\-/${}]+", full))
+        toks = {t.replace("${CMAKE_PROJECT_NAME}", "Jahshaka") for t in toks}
+        got = False
+        # 1. rows named outright (an add_test, a set_tests_properties, a suite list)
+        rows = sorted(t for t in toks if t in self.row_names)
+        if rows:
+            self.add(rows, f"{tag}: names the row"); notes.append(f"names {len(rows)} row(s)"); got = True
+        # 2. a helper function: its body (fn) or its own header line
+        helper = fn if fn else (args.split()[0].lower() if name in ("function", "macro") and args.split() else None)
+        if helper:
+            via = [n for n, t in self.inv.items() if helper in t["via"]]
+            if via:
+                self.add(via, f"{tag}: inside {helper}()"); notes.append(f"{helper}(): {len(via)} row(s)")
+            calls = self.cmake_calls(helper)
+            for tgt in calls:
+                if self.graph and tgt in self.graph.targets:
+                    self.target_changed(tgt, f"{tag}: {helper}({tgt})", notes)
+            if via or calls or p.startswith("tests/"):
+                notes.append(f"{helper}() called on {len(calls)} target(s)")
+                got = True
+        if name in self._STRUCTURAL and (fn or got):
+            return True
+        # 3. a target this command changes (target_*(), set_target_properties(), a helper on it)
+        a0 = [x.replace("${CMAKE_PROJECT_NAME}", "Jahshaka") for x in args.split()[:1]]
+        if (self.graph and a0 and a0[0] in self.graph.targets and not rows
+                and name not in ("add_test", "set_tests_properties", "add_custom_command")):
+            self.target_changed(a0[0], tag, notes); got = True
+        # 4. source files named (set_source_files_properties, a list outside a target)
+        srcs = []
+        for t in toks:
+            if not t.endswith(CXX_EXT) or "$" in t: continue
+            for cand in (os.path.normpath(os.path.join(d, t)), os.path.normpath(t)):
+                if os.path.isfile(os.path.join(ROOT, cand)): srcs.append(cand); break
+        for s_ in sorted(set(srcs)):
+            self.path(s_, 1, via=f"{os.path.basename(p)} {name}()")
+        if srcs: notes.append(f"{len(set(srcs))} source(s) named"); got = True
+        # 4b. a configured script (configure_file(x.js.in x.js)): the rows that run it
+        if name == "configure_file":
+            a_ = args.split()
+            for x in a_[:2]:
+                bn = os.path.basename(x).replace(".js.in", "").replace(".js", "").replace(".in", "")
+                hit = self.script_base.get(bn, [])
+                if hit:
+                    self.add(hit, f"{tag}: configures {os.path.basename(x)}")
+                    notes.append(f"configures the script of {len(hit)} row(s)"); got = True; break
+        # 5. a sub-directory
+        if name.startswith("add_subdirectory"):
+            a_ = args.split()
+            sd = (a_[1] if name == "add_subdirectory_with_folder" and len(a_) > 1 else (a_[0] if a_ else "")).strip('"')
+            sub = os.path.normpath(os.path.join(d, sd))
+            reg = [n for n, t in self.inv.items() if t["reldir"] == sub or t["reldir"].startswith(sub + "/")]
+            self.add(reg, f"{tag}: add_subdirectory({sd})")
+            n_exe = self.exes_under(sub, f"{tag}: add_subdirectory({sd})")
+            notes.append(f"add_subdirectory({sd}): {len(reg)} row(s), {n_exe} executable(s)"); got = True
+        # 6. a variable: follow its users in the same file, once (not when the change only
+        # listed rows: a suite list's change is the rows it adds or drops)
+        if name in ("set", "list", "option", "string") and depth == 0 and not rows:
+            a_ = args.split()
+            var = a_[1] if name in ("list", "string") and len(a_) > 1 else (a_[0] if a_ else "")
+            users = [c for c in gate_graph.cmake_commands(whole)
+                     if re.search(r"\$\{" + re.escape(var) + r"\}|\b" + re.escape(var) + r"\b", c[3])
+                     and not (c[0] == name and c[3].split()[:1] == a_[:1])]
+            for (un, uf, ul, ua, ufn) in users:
+                if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=1): got = True
+            if users: notes.append(f"variable {var}: {len(users)} user command(s)")
+            # ...and the configured scripts that substitute it (@VAR@ in a .in beside this file)
+            if var and not got:
+                for dp, _, fs in os.walk(os.path.join(ROOT, d or ".")):
+                    for f in fs:
+                        if not f.endswith(".in"): continue
+                        try:
+                            if "@" + var + "@" not in open(os.path.join(dp, f), errors="replace").read(): continue
+                        except OSError:
+                            continue
+                        hit = self.script_base.get(f.replace(".js.in", "").replace(".in", ""), [])
+                        if hit:
+                            self.add(hit, f"{tag}: {var} is substituted into {f}")
+                            notes.append(f"{var} substituted into {f}: {len(hit)} row(s)"); got = True
+                    if d in ("", "."): break
+        # 6b. a local variable the command reads (${_home} in a file(MAKE_DIRECTORY)): the
+        # commands that read it too — the row whose ENVIRONMENT names that home
+        if not got and depth == 0:
+            for var in sorted(set(re.findall(r"\$\{(_\w+)\}", args))):
+                users = [c for c in gate_graph.cmake_commands(whole)
+                         if "${" + var + "}" in c[3] and c[3] != args and c[0] != "set"]
+                for (un, uf, ul, ua, ufn) in users:
+                    if self.cmake_command(p, d, un, ua, ufn, ua, whole, tag, notes, depth=1): got = True
+                if users and got: notes.append(f"{name}() reads {var}, which {len(users)} command(s) use")
+        # 7. a directory-scope setting: every target under this directory
+        if not got and depth == 0 and (name in gate_graph.DIRECTORY_SCOPE or name in self._STRUCTURAL
+                        or name in ("if", "option", "set", "list", "string")):
+            under = d or "."
+            if under in (".", "cmake", "tests", "irisgl", "irisgl/cmake") or p.startswith("cmake/"):
+                self.full_tier.append(f"{tag}: {name}() at directory scope of {under} reaches every target under it")
+            elif under.startswith("tests/"):
+                dd = under.split("/")[1]
+                self.add(self.by_dir.get(dd, []), f"{tag}: {name}() at directory scope of {under}")
+                self.exes_under(under, tag)
+            else:
+                self.exes_under(under, tag)
+            notes.append(f"{name}() at directory scope of {under}"); got = True
+        return got
+
+    def cmake_calls(self, fn):
+        """The first arguments of every call of a CMake helper across the tree's build files."""
+        if not hasattr(self, "_cmake_texts"):
+            self._cmake_texts = []
+            for top in ("CMakeLists.txt", "cmake", "tests", "irisgl/CMakeLists.txt", "irisgl/cmake",
+                        "irisgl/engine", "src"):
+                full = os.path.join(ROOT, top)
+                if os.path.isfile(full):
+                    self._cmake_texts.append(open(full, errors="replace").read()); continue
+                for dp, _, fs in os.walk(full):
+                    for f in fs:
+                        if f == "CMakeLists.txt" or f.endswith(".cmake"):
+                            try: self._cmake_texts.append(open(os.path.join(dp, f), errors="replace").read())
+                            except OSError: pass
+        out = []
+        pat = re.compile(r"^\s*" + re.escape(fn) + r"\s*\(\s*([^\s)]+)", re.M | re.I)
+        for t in self._cmake_texts:
+            out += [m.group(1).replace("${CMAKE_PROJECT_NAME}", "Jahshaka") for m in pat.finditer(t)]
+        return sorted(set(o for o in out if not o.startswith(("_", "${"))))
+
+
 def cmake_src_refs():
-    """tests/<dir> -> src/irisgl files its CMakeLists compiles."""
+    """tests/<dir> -> src/irisgl files its CMakeLists compiles (the no-graph fallback only)."""
     refs = collections.defaultdict(set)
     tests = os.path.join(ROOT, "tests")
     for d in os.listdir(tests):
@@ -431,49 +1070,9 @@ def cmake_src_refs():
     return refs
 
 
-# A build-registration edit that only adds or removes SOURCE FILES from a list (a new
-# .cpp beside its header, a deleted dead file) says nothing on its own: the files it
-# names are in the same diff and scope precisely. Such an edit no longer forces the
-# merge tier (2026-09-11, owner: "don't run the full gate twice" — seven lanes fell back
-# to MERGE in one day for exactly this). Anything else in the file (a flag, a target,
-# a find_package, a condition) still falls back, loudly.
-_LIST_ENTRY = re.compile(r'^"?[\w${}./+\-]+\.(?:cpp|cc|cxx|c|h|hh|hpp|ui|qrc|mm|js|js\.in|sh)"?\)?$')
-# A one-line `add_subdirectory(<dir>)` in tests/CMakeLists.txt REGISTERS a suite whose own
-# files are in the same diff and scope it precisely (2026-09-13 audit: three of the last
-# five lanes ran the full MERGE tier for exactly this one line).
-_SUBDIR_ENTRY = re.compile(r'^add_subdirectory\(\s*[\w\-]+\s*\)$')
-
-
-def _changed_lines(diff_text):
-    for line in diff_text.splitlines():
-        if line.startswith(("+++", "---")): continue
-        if line.startswith(("+", "-")): yield line[1:].strip()
-
-
-def cmake_list_only(rng, relpath):
-    """True when every changed line of `relpath` in `rng` is a source-file list entry,
-    a comment or blank (and at least one line changed)."""
-    if not rng or ".." not in rng: return False
-    base, tip = rng.split("..", 1)
-    if relpath.startswith("irisgl/"):
-        old = sh(f"git rev-parse {base}:irisgl").strip()
-        new = sh(f"git rev-parse {tip}:irisgl").strip()
-        text = sh(f"git diff -U0 {old} {new} -- {relpath[len('irisgl/'):]}",
-                  cwd=os.path.join(ROOT, "irisgl"))
-    else:
-        text = sh(f"git diff -U0 {rng} -- {relpath}")
-    lines = [l for l in _changed_lines(text)]
-    if not lines: return False
-    subdir_ok = relpath == "tests/CMakeLists.txt"
-    return all(l == "" or l.startswith("#") or _LIST_ENTRY.match(l)
-               or (subdir_ok and _SUBDIR_ENTRY.match(l)) for l in lines)
-
-
 def header_included_by_dir(name, d):
     """True when a source under tests/<d>/ includes the header `name` (by basename)."""
     pat = re.compile(r'^\s*#\s*include\s*[<"](?:[^">]*/)?' + re.escape(name) + r'[">]', re.M)
-    # `d` is the inventory's dir key as ctest's backtrace spells it, relative to the BUILD
-    # dir ("../../../tests/gi"); a bare "gi" or "tests/gi" is accepted too. Walk the source dir.
     rel = d.split("tests/", 1)[1] if "tests/" in d else d
     if not rel or rel.startswith(".."): return False
     root = os.path.join(ROOT, "tests", rel)
@@ -488,16 +1087,45 @@ def header_included_by_dir(name, d):
     return False
 
 
+def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
+    """The whole selection as data (gate.selection replays call this in-process)."""
+    inv = inv if inv is not None else load_inventory(build)
+    if graph is None:
+        graph = gate_graph.NinjaGraph.load(build)
+    if graph is not None and graph.deps_objects == 0:
+        if not quiet_graph:
+            sys.stderr.write("gate-scope: the build dir has no ninja deps log (not built yet?) — the graph "
+                             "selector is OFF and compiled rows go by the area rules' directories\n")
+        graph = None
+    app_exe = classify_rows(inv, graph, build)
+    if graph is None:
+        for t in inv.values():
+            if t["kind"] == "compiled": t["kind"] = "other"     # the rules' dirs pick them, as before
+    S = Selection(inv, graph, app_exe, Revs(rng), jobs)
+    for p in paths:
+        S.path(p)
+    if S.code_moved: S.add(ALWAYS_ON_CODE, "code moved: smoke + contract")
+    if graph is not None: graph.save_syms()
+    return S
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
     ap.add_argument("--files", nargs="*", help="explicit touched paths instead of a range")
     ap.add_argument("--build", default="build-linux")
-    ap.add_argument("--run", action="store_true", help="run the selection now (DISPLAY must be set)")
+    ap.add_argument("--run", action="store_true", help="run the selection now (DISPLAY must be set); "
+                    "every suite's verdict goes to the run log")
     ap.add_argument("-j", "--jobs", type=int, default=4,
                     help="ctest parallelism (default 4 — the tier's contract; a lane beside other live lanes runs 2)")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--record-times", metavar="CTEST_LOG", help="snapshot suite seconds from a ctest output log")
+    ap.add_argument("--lane", default=None, help="the lane/stage name the run log records (default: the branch)")
+    ap.add_argument("--tier", default=None, help="the run log's tier name (default: scoped, or merge on a fallback)")
+    ap.add_argument("--record-times", action="store_true",
+                    help="refresh scripts/gate-times.txt from the run log (median PASS seconds, 14 days)")
+    ap.add_argument("--solo", metavar="SUITE", nargs="+",
+                    help="the flake protocol: run each suite alone --times times, logged as retries")
+    ap.add_argument("--times", type=int, default=3)
     ap.add_argument("--merge-tier", action="store_true",
                     help="print the MERGE tier's ctest command (at -j) and exit — the one source "
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
@@ -505,176 +1133,93 @@ def main():
                     help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
     a = ap.parse_args()
     if a.record_times:
-        record_times(a.record_times); return
+        record_times(); return
     if a.merge_tier:
         print(merge_tier(a.jobs)); return
     if a.nightly_tier:
         print(nightly_tier()); return
     build = resolve_build(a.build)
+    lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
+    if a.solo:
+        rc = 0
+        for s in a.solo:
+            for _ in range(a.times):
+                rx = "^" + re.escape(s) + "$"
+                r = gate_runlog.run_ctest(f"ctest -j1 --timeout 900 --output-on-failure --no-tests=error -R '{rx}'",
+                                          build, a.tier or "scoped", lane, 1, reasons={s: "solo retry"},
+                                          rng=a.range, retry=True)
+                rc = rc or r
+        sys.exit(rc)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
     paths = a.files if a.files else touched_paths(a.range)
-    list_only = {p for p in paths
-                 if p in ("CMakeLists.txt", "irisgl/CMakeLists.txt", "tests/CMakeLists.txt")
-                 and cmake_list_only(a.range, p)}
 
     # THE COSTS FIRST (D6B-GATE-SHAPE; audit H4): load_inventory's `ctest --show-only`
-    # TRUNCATES Testing/Temporary/LastTest.log, so the last run's overlay read an empty file
-    # whenever it came second.
-    costs = load_costs(build)
-    inv = load_inventory(build)
-    refs = cmake_src_refs()
-    by_dir = collections.defaultdict(list)
-    for n, t in inv.items(): by_dir[t["dir"]].append(n)
-    mods = {n: script_modules(t["script"]) for n, t in inv.items() if t["script"]}
-    # A module every script calls (project.create, console.log, app.*) selects nothing by
-    # itself — it would turn any rule into "all scripts". Such a module still selects
-    # everything when ITS api file is the touched one (rule "$1"/"$module").
-    freq = collections.Counter(m for ms in mods.values() for m in ms)
-    ubiquitous = {m for m, c in freq.items() if c > 0.4 * max(1, len(mods))}
-    script_suites = collections.defaultdict(list)
-    for n, t in inv.items():
-        if t["script"]: script_suites[os.path.relpath(t["script"], ROOT)].append(n)
-    # a .js.in script is configured into the build dir; map by basename too
-    script_base = collections.defaultdict(list)
-    for s, ns in script_suites.items(): script_base[os.path.basename(s).replace(".js", "")] += ns
-
-    selected = {}            # suite -> reason
-    skipped_ubiquitous = set()
-    fallback = []            # paths that force the merge tier
-    rationale = []
-    code_moved = False
-
-    def add(suites, why):
-        for s in suites:
-            if s in inv: selected.setdefault(s, why)
-
-    def expand(dirs, modules, why, own_api=False):
-        for d in dirs:
-            if d == "*merge-tier": fallback.append(why); continue
-            if d in ("*vulkan-scripts", "*headless-scripts", "*all-scripts"):
-                for n, t in inv.items():
-                    if not t["app"]: continue
-                    if d == "*vulkan-scripts" and t["headless"]: continue
-                    if d == "*headless-scripts" and not t["headless"]: continue
-                    add([n], why)
-                continue
-            add(by_dir.get(d, []), why)
-        for m in modules:
-            if m in ubiquitous and not own_api:
-                skipped_ubiquitous.add(m); continue
-            add([n for n, ms in mods.items() if m in ms], f"{why} [module {m}]")
-
-    for p in paths:
-        hit = []
-        if p in list_only:
-            rationale.append((p, "source-list edit only → scoped by the files it names"))
-            code_moved = True
-            continue
-        # 1. a test file → its dir's suites / the suites running that script
-        if p.startswith("tests/"):
-            parts = p.split("/")
-            d = parts[1] if len(parts) > 1 else ""
-            base = os.path.basename(p).replace(".js.in", "").replace(".js", "").replace(".sh", "")
-            if p in script_suites: add(script_suites[p], f"{p}: script"); hit.append("script")
-            elif base in script_base: add(script_base[base], f"{p}: script"); hit.append("script")
-            elif d in by_dir: add(by_dir[d], f"{p}: tests/{d}"); hit.append(f"tests/{d}")
-            elif p.endswith((".h", ".hpp")) and (len(parts) == 2 or d == "support"):
-                # A SHARED TEST HEADER (tests/enginetesthelpers.h, tests/support/*.h): its owners
-                # are exactly the dirs whose sources include it — scanned, never guessed
-                # (DEVPROCESS-2, 2026-09-24: this path used to fall back to the whole MERGE tier).
-                name = os.path.basename(p)
-                owners = sorted(dd for dd in by_dir if header_included_by_dir(name, dd))
-                if owners:
-                    for dd in owners: add(by_dir[dd], f"{p}: included by tests/{dd}")
-                    hit.append("included by " + ", ".join(f"tests/{dd}" for dd in owners))
-                    code_moved = True
-                else:
-                    fallback.append(f"{p}: a tests/ header no suite source includes")
-            else:
-                # tests/CMakeLists.txt, tests/support/*.h (included by ~40 test sources), a
-                # dir with no registered suite: nothing precise owns it → merge tier, loudly
-                # (platform audit H4.1: this used to select ZERO suites and continue).
-                fallback.append(f"{p}: no suite owns this tests/ path")
-            rationale.append((p, ", ".join(hit) or "no suite in that dir → fallback"))
-            continue
-        # A pin bump of irisgl/thirdparty/ogre-next COUNTS as code moving (2026-09-22): since
-        # the fork, that gitlink is how every engine change — C++ and media alike — arrives.
-        if p.startswith(("src/", "irisgl/")):
-            code_moved = True
-        # 2. a source a compiled test target names
-        for d, files in refs.items():
-            if p in files: add(by_dir.get(d, []), f"{p}: compiled into tests/{d}"); hit.append(f"tests/{d}")
-        # 3. the area rules
-        for pat, dirs, modules in AREA_RULES:
-            m = re.match(pat, p)
-            if not m: continue
-            mm = []
-            for x in modules:
-                if x == "$1": mm.append(m.group(1))
-                elif x == "$module": mm.append(re.sub(r"api\.(cpp|h)$", "", os.path.basename(p)))
-                else: mm.append(x)
-            expand(dirs, mm, f"{p}: rule {pat}", own_api=any(x in ("$1", "$module") for x in modules))
-            hit.append(f"rule {pat}" + (f" modules={mm}" if mm else ""))
-            break
-        else:
-            fallback.append(f"{p}: no rule")
-        rationale.append((p, "; ".join(hit) or "NO RULE → merge tier"))
-    if code_moved: add(ALWAYS_ON_CODE, "code moved: smoke + contract")
+    # TRUNCATES Testing/Temporary/LastTest.log.
+    costs = load_costs()
+    S = select(paths, a.range if not a.files else None, build, a.jobs)
+    inv, selected = S.inv, S.selected
 
     # The quiet-box measurements never ride a scoped gate (see NIGHTLY_LABELS). A `nightly`
     # row without `quiet-box` stays: its subject changed, and it is that change's guard.
     nightly = [n for n in selected if inv[n]["labels"] & SCOPE_EXCLUDED_LABELS]
     for n in nightly: selected.pop(n)
-    # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS): they run, they
-    # print their value, and their exit code is not the gate's.
+    # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS).
     targets = sorted(n for n in selected if inv[n]["labels"] & TARGET_LABELS)
     selected_targets = {n: selected.pop(n) for n in targets}
     names = sorted(selected)
     est = sum(costs.get(n, 10.0) for n in names)
     serial = sum(costs.get(n, 10.0) for n in names if inv[n]["serial"])
     wall = max(est / float(a.jobs), serial) + 5
+    tier_rows = [n for n, t in inv.items() if not (t["labels"] & (NIGHTLY_LABELS | TARGET_LABELS))]
+    tier_est = sum(costs.get(n, 10.0) for n in tier_rows)
 
     def ctest_for(suites, jobs):
         rx = "^(" + "|".join(re.escape(n) for n in suites) + ")$"
         return f"ctest -j{jobs} --timeout 120 --output-on-failure --no-tests=error -R '{rx}'"
 
+    whole_tier = bool(S.fallback or S.full_tier)
     cmd = ctest_for(names, a.jobs) if names else ""
-    # The targets run SERIALLY (-j1): they are measurements, and a measurement
-    # sharing the GPU with three siblings prints a number nobody can use.
     target_cmd = ctest_for(targets, 1) if targets else ""
 
     if a.json:
-        print(json.dumps({"paths": paths, "suites": names, "targets": targets, "fallback": fallback,
+        print(json.dumps({"paths": paths, "suites": names, "targets": targets, "fallback": S.fallback,
+                          "full_tier": S.full_tier, "reasons": {n: selected[n] for n in names},
+                          "rationale": [{"path": p, "why": w} for p, w in S.rationale],
+                          "graph": S.graph is not None,
                           "estimated_seconds": est, "estimated_wall": wall,
-                          "command": merge_tier(a.jobs) if fallback else cmd,
+                          "tier_rows": len(tier_rows), "tier_estimated_seconds": tier_est,
+                          "command": merge_tier(a.jobs) if whole_tier else cmd,
                           "target_command": target_cmd}, indent=1))
         return
-    print(f"gate-scope: {len(paths)} touched path(s)")
-    for p, why in rationale: print(f"  {p}\n      -> {why}")
-    if fallback:
-        print("\nFALLBACK → MERGE TIER (a touched path has no precise rule):")
-        for f in fallback: print(f"  {f}")
-        print(f"\n{merge_tier(a.jobs)}")
-        if a.run: sys.exit(subprocess.call(merge_tier(a.jobs), cwd=build, shell=True))
-        return
-    if skipped_ubiquitous:
-        print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
+    print(f"gate-scope: {len(paths)} touched path(s)"
+          + ("" if S.graph else "   [NO BUILD GRAPH: compiled rows by directory rules]"))
+    for p, why in S.rationale: print(f"  {p}\n      -> {why}")
+
+    def run_tier(reason):
+        tier = merge_tier(a.jobs)
+        print(f"\n{tier}")
+        if a.run:
+            sys.exit(gate_runlog.run_ctest(tier, build, a.tier or "merge", lane, a.jobs,
+                                           reasons={}, rng=a.range, labels={n: t["labels"] for n, t in inv.items()}))
+    if S.full_tier and not S.fallback:
+        print("\nTHE MERGE TIER BY RULE (the change reaches every suite):")
+        for f in S.full_tier: print(f"  {f}")
+        run_tier("rule"); return
+    if S.fallback:
+        print("\nFALLBACK → MERGE TIER (a touched path has no rule, no symbol and no graph owner):")
+        for f in S.fallback + S.full_tier: print(f"  {f}")
+        run_tier("fallback"); return
+    if S.skipped_ubiquitous:
+        print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(S.skipped_ubiquitous)})")
     if nightly: print(f"\n(quiet-box / nightly measurements left out: {sorted(nightly)})")
     if targets:
         print(f"\nTARGET TESTS (label {'/'.join(sorted(TARGET_LABELS))}) — they RUN and PRINT their "
               f"value, and they do NOT decide this gate:")
         for n in targets: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected_targets[n]}")
     if not names and not targets:
-        # THE ONLY HONEST EMPTY SELECTION is a change that moved no code: docs,
-        # a spec, a data file, a scratch script. A change that DID move code
-        # cannot select nothing, because ALWAYS_ON_CODE adds the smoke pair to
-        # every code path — so an empty selection there is a defect in this
-        # tool (or an inventory that does not know the suites the rules name),
-        # and it exits non-zero rather than reading as a green gate. That is
-        # the second half of the trap resolve_build documents: the first half
-        # made `--build .` work, this one makes a wrong answer loud.
-        if code_moved:
+        # THE ONLY HONEST EMPTY SELECTION is a change that moved no code.
+        if S.code_moved:
             sys.stderr.write(
                 "gate-scope: a code path selected NO suite — the rules fired (see the rationale "
                 "above) but\n            named nothing this build dir registers. That is a rule "
@@ -685,8 +1230,9 @@ def main():
               "(a code path always adds app.startup_quiet + api.contract)")
         return
     if names:
-        print(f"\nSCOPED tier: {len(names)} suite(s), ~{est:.0f} suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} "
-              f"(serial islands {serial:.0f} s); costs from scripts/gate-times.txt + the build dir's last run, 10 s assumed otherwise")
+        print(f"\nSCOPED tier: {len(names)} of {len(tier_rows)} tier row(s), ~{est:.0f} of ~{tier_est:.0f} "
+              f"suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} (serial islands {serial:.0f} s); "
+              f"costs from the run log + scripts/gate-times.txt, 10 s assumed otherwise")
         for n in names: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
         print(f"\n{cmd}")
     else:
@@ -694,14 +1240,16 @@ def main():
               "of its own, and the targets below still run and report.")
     if target_cmd: print(f"\n{target_cmd}    # target tests: reported, NOT gating")
     if a.run:
-        rc = subprocess.call(cmd, cwd=build, shell=True) if cmd else 0
+        labels = {n: t["labels"] for n, t in inv.items()}
+        rc = gate_runlog.run_ctest(cmd, build, a.tier or "scoped", lane, a.jobs, reasons=selected,
+                                   rng=a.range, labels=labels) if cmd else 0
         if target_cmd:
-            # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown
-            # away: a target is red until its part lands, and a lane that had to
-            # go green on one could not merge anything.
+            # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown away.
             print("\n=== target tests (label %s): reported, not gating ==="
                   % "/".join(sorted(TARGET_LABELS)))
-            trc = subprocess.call(target_cmd, cwd=build, shell=True)
+            trc = gate_runlog.run_ctest(target_cmd, build, a.tier or "scoped", lane, 1,
+                                        reasons=selected_targets, rng=a.range, labels=labels,
+                                        gating=lambda n: False)
             print("=== target tests exited %d — NOT part of this gate's verdict ===" % trc)
         sys.exit(rc)
 
