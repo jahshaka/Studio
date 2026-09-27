@@ -27,7 +27,7 @@ endfunction()
 
 jahshaka_distortion_test(test_distortion)
 target_link_libraries(test_distortion PRIVATE JahshakaEngine)
-add_test(NAME distortion.engine COMMAND test_distortion
+jah_gpu_row(distortion.engine CLASS engine COMMAND test_distortion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(distortion.engine PROPERTIES TIMEOUT 120 LABELS "engine")
 

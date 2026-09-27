@@ -81,7 +81,7 @@ target_compile_definitions(test_camera_play_routing PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_play_routing PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_play_routing JahshakaEngineMedia)
-add_test(NAME cameras.play_routing COMMAND test_camera_play_routing
+jah_gpu_row(cameras.play_routing CLASS engine COMMAND test_camera_play_routing
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.play_routing PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -105,7 +105,7 @@ target_compile_definitions(test_camera_body PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_body PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_body JahshakaEngineMedia)
-add_test(NAME cameras.body COMMAND test_camera_body
+jah_gpu_row(cameras.body CLASS engine COMMAND test_camera_body
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.body PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -132,7 +132,7 @@ target_compile_definitions(test_camera_pip PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_pip PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_pip JahshakaEngineMedia)
-add_test(NAME cameras.pip COMMAND test_camera_pip
+jah_gpu_row(cameras.pip CLASS engine COMMAND test_camera_pip
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.pip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -161,7 +161,7 @@ target_compile_definitions(test_camera_exposure PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_camera_exposure PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_camera_exposure JahshakaEngineMedia)
-add_test(NAME cameras.exposure COMMAND test_camera_exposure
+jah_gpu_row(cameras.exposure CLASS engine COMMAND test_camera_exposure
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cameras.exposure PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")

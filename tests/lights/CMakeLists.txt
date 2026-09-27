@@ -20,7 +20,7 @@ target_compile_definitions(test_light_falloff PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_light_falloff PRIVATE JahshakaEngine)
 add_dependencies(test_light_falloff JahshakaEngineMedia)
-add_test(NAME lights.falloff COMMAND test_light_falloff
+jah_gpu_row(lights.falloff CLASS engine COMMAND test_light_falloff
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.falloff PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -40,7 +40,7 @@ target_compile_definitions(test_light_masks PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_light_masks PRIVATE JahshakaEngine)
 add_dependencies(test_light_masks JahshakaEngineMedia)
-add_test(NAME lights.masks COMMAND test_light_masks
+jah_gpu_row(lights.masks CLASS engine COMMAND test_light_masks
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.masks PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -56,7 +56,7 @@ target_compile_definitions(test_light_hygiene PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_light_hygiene PRIVATE JahshakaEngine)
 add_dependencies(test_light_hygiene JahshakaEngineMedia)
-add_test(NAME lights.hygiene COMMAND test_light_hygiene
+jah_gpu_row(lights.hygiene CLASS engine COMMAND test_light_hygiene
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.hygiene PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -75,7 +75,7 @@ target_compile_definitions(test_light_icons PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_light_icons PRIVATE JahshakaEngine)
 add_dependencies(test_light_icons JahshakaEngineMedia)
-add_test(NAME lights.icons COMMAND test_light_icons
+jah_gpu_row(lights.icons CLASS engine COMMAND test_light_icons
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.icons PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -96,7 +96,7 @@ target_compile_definitions(test_sealed_room PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_sealed_room PRIVATE JahshakaEngine)
 add_dependencies(test_sealed_room JahshakaEngineMedia)
-add_test(NAME lights.sealed_room COMMAND test_sealed_room
+jah_gpu_row(lights.sealed_room CLASS engine COMMAND test_sealed_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.sealed_room PROPERTIES TIMEOUT 120 LABELS "engine")
 
@@ -116,6 +116,6 @@ target_compile_definitions(test_secondary_directional PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_secondary_directional PRIVATE JahshakaEngine)
 add_dependencies(test_secondary_directional JahshakaEngineMedia)
-add_test(NAME lights.secondary_directional COMMAND test_secondary_directional
+jah_gpu_row(lights.secondary_directional CLASS engine COMMAND test_secondary_directional
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.secondary_directional PROPERTIES TIMEOUT 120 LABELS "engine")

@@ -68,7 +68,7 @@ target_link_libraries(bench_scenegraph PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_scenegraph JahshakaEngineMedia)
 
 # DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME scenegraph.benchmark RUN_TIMEOUT 1200 COMMAND bench_scenegraph --assert
+jah_gpu_exclusive_test(NAME scenegraph.benchmark CLASS engine RUN_TIMEOUT 1200 COMMAND bench_scenegraph --assert
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # RUN_SERIAL: wall-clock measurements — a parallel ctest schedule distorts the
 # scale-1000/200 regress clause into random reds (2026-09-05 gate: the violating
@@ -80,7 +80,7 @@ set_tests_properties(scenegraph.benchmark PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "nightly;quiet-box"
     RUN_SERIAL TRUE)
 
-add_test(NAME scenegraph.smoke COMMAND bench_scenegraph --smoke
+jah_gpu_row(scenegraph.smoke CLASS engine COMMAND bench_scenegraph --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/smoke")
 # NOT RUN_SERIAL, deliberately: --smoke asserts nothing about time, so a
@@ -119,13 +119,13 @@ add_dependencies(bench_rigperf JahshakaEngineMedia)
 # RUN_SERIAL for the same reason scenegraph.benchmark is: it times wall clock,
 # and a parallel ctest schedule turns the dispersion bound into a coin flip — and
 # the GPU-timing lock like it (D6B-GATE-SHAPE: the lock list is the timing list).
-jah_gpu_exclusive_test(NAME rigperf.benchmark RUN_TIMEOUT 600 COMMAND bench_rigperf --assert
+jah_gpu_exclusive_test(NAME rigperf.benchmark CLASS engine RUN_TIMEOUT 600 COMMAND bench_rigperf --assert
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(rigperf.benchmark PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "nightly;quiet-box"
     RUN_SERIAL TRUE)
 
-add_test(NAME rigperf.smoke COMMAND bench_rigperf --smoke
+jah_gpu_row(rigperf.smoke CLASS engine COMMAND bench_rigperf --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 set_tests_properties(rigperf.smoke PROPERTIES

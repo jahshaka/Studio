@@ -133,6 +133,13 @@ names which:
 Engine and unit binaries keep one row per claim — their boot is cheap. A lane's "named
 acceptance tests" are arm names (`gi_verbs.my_claim`) as often as row names.
 
+**A row that boots Vulkan declares its VRAM class** (`TESTING_GATE.md` §4b): register it with
+`jah_gpu_row(<row> CLASS app|selftest|engine|vr COMMAND …)` instead of `add_test(NAME <row>
+COMMAND …)` — `app` for a `Jahshaka` process, `engine` for an engine/Qt suite binary, `vr` for a
+Monado row. A row that boots no Vulkan is a plain `add_test` with `jah_no_display()`. A pool
+declares nothing (its class is `app`, `CLASS vr` for a VR pool). `source.gpu_rows_closure` fails
+the gate on a Vulkan row registered any other way, naming its CMakeLists line.
+
 ## 4. The rig
 
 - **Your own X display**, `Xvfb :NN -screen 0 1920x1080x24` (NN in 60-99, `/tmp/.X<NN>-lock`
@@ -147,6 +154,12 @@ acceptance tests" are arm names (`gi_verbs.my_claim`) as often as row names.
   `scripts/gpu-exclusive.sh` (a box-wide `flock`); it is registered with
   `jah_gpu_exclusive_test()` and nothing else takes it. A measurement you run by hand wraps its
   app in the same script.
+- **The VRAM budget.** Every Vulkan row takes box-wide tokens before it starts
+  (`scripts/gpu-admit.sh`, 11 tokens shared by every lane's gate): a row that does not fit
+  WAITS — its output then carries `vram: waiting for <k> tokens, <n> free` — instead of dying of
+  `VK_ERROR_OUT_OF_DEVICE_MEMORY`. Gate at `-j4` whoever else is gating; there is no `-j2`
+  rule. `scripts/gpu-admit.sh status` shows who holds what. A long hand-started app run on a
+  box where gates are running takes its tokens too: `scripts/gpu-admit.sh 2 -- ./Jahshaka …`.
 - **Priority.** Builds, ctest and hand-started app instances run under
   `nice -n 19 ionice -c 3`; a person's live app always wins the CPU.
 
@@ -158,6 +171,8 @@ acceptance tests" are arm names (`gi_verbs.my_claim`) as often as row names.
    `pool-logs/<pool>-process<N>.log` in the row's working directory — its path is printed.
    `CRASH`/`TIMEOUT` mean the process died or was killed IN that arm or in the baseline
    right after it; the next arms ran in a new process and have their own verdicts.
+   `CRASH <ms> xid <n>` is the kernel's word: an NVIDIA Xid from the pool's pid, logged while
+   that arm ran — a GPU fault, never environmental, even when the arm's own assertions held.
 2. **Retry the arm alone**, through the real row:
    `JAH_POOL_ARMS=<pool>.<arm> DISPLAY=:NN ctest -R '^pool\.<pool>$' --output-on-failure`.
    Green alone and red in its pool, three times, is a STATE LEAK between arms: fix the arm's

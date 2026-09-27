@@ -24,7 +24,7 @@ target_compile_definitions(test_exposure_plane PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_exposure_plane PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_exposure_plane JahshakaEngineMedia)
-add_test(NAME defaults.exposure_plane COMMAND test_exposure_plane
+jah_gpu_row(defaults.exposure_plane CLASS engine COMMAND test_exposure_plane
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(defaults.exposure_plane PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 120 LABELS "mirror")
@@ -51,7 +51,7 @@ target_include_directories(test_primitive_table PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_primitive_table PRIVATE IrisGL Qt6::Gui)
-add_test(NAME defaults.primitive_table COMMAND test_primitive_table
+jah_gpu_row(defaults.primitive_table CLASS engine COMMAND test_primitive_table
          WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set_tests_properties(defaults.primitive_table PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
