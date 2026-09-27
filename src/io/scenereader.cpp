@@ -70,11 +70,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 
-#include "irisgl/document/materials/postprocess.h"
-#include "irisgl/document/materials/postprocessmanager.h"
-
-#include "irisgl/document/materials/postfx/fxaapostprocess.h"
-
 #include "irisgl/document/physics/physicsproperties.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/materials/pbrmaterial.h"

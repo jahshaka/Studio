@@ -37,7 +37,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/animation.h"
-#include "irisgl/document/materials/postprocessmanager.h"
 #include "irisgl/core/logger.h"
 #include "services/jahlog.h"
 #include "services/sessionmarkers.h"

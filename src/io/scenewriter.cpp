@@ -51,8 +51,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 
-#include "irisgl/document/materials/postprocess.h"
-#include "irisgl/document/materials/postprocessmanager.h"
 
 #include "io/assetiobase.h"
 #include "data/constants.h"
@@ -86,7 +84,6 @@ QString SceneWriter::relativeToStaticBase(QString filename)
 
 QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        iris::ScenePtr scene,
-                                       iris::PostProcessManagerPtr postMan,
                                        EditorData *editorData)
 {
     dir = projectPath;
@@ -116,10 +113,6 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         QJsonObject editorObj = projectObj["editor"].toObject();
         scenefolders::writeEditorBlock(editorObj, scene);
         projectObj["editor"] = editorObj;
-    }
-
-    if (!!postMan) {
-        writePostProcessData(projectObj, postMan);
     }
 
     return QJsonDocument(projectObj).toJson();
@@ -328,29 +321,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["rootNode"] = rootNodeObj;
 
     projectObj["scene"] = sceneObj;
-}
-
-void SceneWriter::writePostProcessData(QJsonObject &projectObj, iris::PostProcessManagerPtr postMan)
-{
-    QJsonArray processesObj;
-
-    for(auto process : postMan->getPostProcesses()) {
-        QJsonObject processObj;
-
-        processObj["name"] = process->getName();
-
-        QJsonObject props;
-
-        for ( auto prop : process->getProperties()) {
-            props.insert(prop->name, QJsonValue::fromVariant(prop->getValue()));
-        }
-
-        processObj["properties"] = props;
-
-        processesObj.append(processObj);
-    }
-
-    projectObj["postprocesses"] = processesObj;
 }
 
 void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorData)
