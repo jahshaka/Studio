@@ -641,11 +641,14 @@ class Selection:
         for n, t in inv.items():
             for e in t["exes"]: self.exe_rows[e].append(n)
         self.row_names = set(inv)
+        self.owned = set()
         self._visited = set()
 
     # -- adding rows -----------------------------------------------------------------------
     def add(self, suites, why):
         for s in suites:
+            if why.startswith("tests/"):
+                self.owned.add(s.split("::", 1)[0])     # the lane's own guard (--joint)
             if "::" in s:
                 row, arm = s.split("::", 1)
                 if row in self.inv and row not in self.whole:
@@ -1215,6 +1218,41 @@ def select(paths, rng, build, jobs, graph=None, inv=None, quiet_graph=False):
     return S
 
 
+def joint(range_a, range_b, build, jobs):
+    """THE JOINT SUITES (TESTING_V2 T4, the simple form): two lanes that touched one file family
+    are merged on the UNION of their selections, and the rows BOTH select — the shared map in
+    practice: the subjects both changes reach — are named, because a combination is what neither
+    lane's own gate could see. Returns a dict (the --json form)."""
+    graph = gate_graph.NinjaGraph.load(build)
+    inv0 = load_inventory(build)
+    import copy as _copy
+    out = {}
+    sels = []
+    for rng in (range_a, range_b):
+        S = select(touched_paths(rng), rng, build, jobs, graph=graph, inv=_copy.deepcopy(inv0), quiet_graph=True)
+        sels.append(S)
+    A, B = sels
+    whole = bool(A.fallback or A.full_tier or B.fallback or B.full_tier)
+    gating = lambda n: not (inv0[n]["labels"] & (SCOPE_EXCLUDED_LABELS | TARGET_LABELS))
+    sa = {n for n in A.selected if gating(n)}
+    sb = {n for n in B.selected if gating(n)}
+    shared_paths = sorted(set(touched_paths(range_a)) & set(touched_paths(range_b)))
+    # THE JOINT ROWS: the lanes' OWN guards (the rows their test-side changes selected: a test
+    # source, a script, a registration) that the OTHER lane's change also reaches. Each guard
+    # passed on its own lane's tree; the merge is the first tree where the other change is in it.
+    # (Plain "selected by both" is the engine's whole reach for two engine lanes — hundreds of
+    # rows that say nothing about the combination.)
+    own = lambda S: {n for n in S.owned if n in S.selected}
+    both = sorted((own(A) & sb) | (own(B) & sa))
+    union = sorted(sa | sb)
+    out = {"ranges": [range_a, range_b], "shared_paths": shared_paths, "joint": both,
+           "union": union, "whole_tier": whole,
+           "command": merge_tier(jobs) if whole else
+           ("ctest -j%d --timeout 120 --output-on-failure --no-tests=error -R '^(%s)$'"
+            % (jobs, "|".join(re.escape(n) for n in union)) if union else "")}
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("range", nargs="?", help="git range base..tip (Studio repo)")
@@ -1235,6 +1273,9 @@ def main():
     ap.add_argument("--merge-tier", action="store_true",
                     help="print the MERGE tier's ctest command (at -j) and exit — the one source "
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
+    ap.add_argument("--joint", nargs=2, metavar=("RANGE_A", "RANGE_B"),
+                    help="the joint suites of two lanes merged together: the union of both selections, "
+                         "naming the rows BOTH select (the shared map) and the paths both touched")
     ap.add_argument("--nightly-tier", action="store_true",
                     help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
     a = ap.parse_args()
@@ -1245,6 +1286,25 @@ def main():
     if a.nightly_tier:
         print(nightly_tier()); return
     build = resolve_build(a.build)
+    if a.joint:
+        J = joint(a.joint[0], a.joint[1], build, a.jobs)
+        if a.json:
+            print(json.dumps(J, indent=1)); return
+        print(f"gate-scope --joint: {a.joint[0]}  +  {a.joint[1]}")
+        print(f"\npaths BOTH changes touched ({len(J['shared_paths'])}):")
+        for p in J["shared_paths"]: print(f"  {p}")
+        print(f"\nTHE JOINT ROWS — each lane's own guards that the other lane's change also reaches (the "
+              f"shared map; the combination neither lane's gate saw) ({len(J['joint'])}):")
+        for n in J["joint"]: print(f"  {n}")
+        print(f"\nthe merge gate = the UNION of both selections: "
+              + ("the MERGE tier (one side selects it)" if J["whole_tier"] else f"{len(J['union'])} row(s)"))
+        print(f"\n{J['command']}")
+        if a.run and J["command"]:
+            lane = a.lane or "joint"
+            sys.exit(gate_runlog.run_ctest(J["command"], build, a.tier or "joint", lane, a.jobs,
+                                           reasons={n: ("joint: both" if n in J["joint"] else "joint: union")
+                                                    for n in J["union"]}))
+        return
     lane = a.lane or gate_runlog._git(["rev-parse", "--abbrev-ref", "HEAD"])
     # the run log records the range by sha (HEAD moves; the record must not)
     log_range = a.range

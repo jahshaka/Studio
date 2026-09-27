@@ -110,6 +110,22 @@ def arm_cases(gs, graph, build, inv0):
           "an engine rule's app group selects the pool whole (every arm)")
 
 
+def joint_case(gs, build, cases):
+    """THE JOINT SUITES (T4): ATOM-CLUSTER-CUT and ATOM-OCCLUSION-1 both changed the id pass
+    (OgreAtomIdPass.cpp, the cull's compute pieces). Merged together, the union must hold every
+    real red of both lanes, and the joint rows must carry each lane's own id-pass guards."""
+    print("\njoint (ATOM-CLUSTER-CUT + ATOM-OCCLUSION-1, the id pass):")
+    lanes = {c["lane"]: c for c in cases["lanes"]}
+    a, b = lanes["ATOM-CLUSTER-CUT"], lanes["ATOM-OCCLUSION-1"]
+    J = gs.joint(a["range"], b["range"], build, 4)
+    check("irisgl/engine/src/OgreAtomIdPass.cpp" in J["shared_paths"], "both touched the id pass (%d shared paths)"
+          % len(J["shared_paths"]))
+    for m in a["must"] + b["must"]:
+        check(J["whole_tier"] or m in J["union"], "the union holds %s" % m)
+    for m in ("atom.cluster_crack", "atom.occlusion_exact", "engine.atom_draw", "engine.atom_parity"):
+        check(m in J["joint"], "the joint rows carry %s (%d joint of %d)" % (m, len(J["joint"]), len(J["union"])))
+
+
 def main(source, build):
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
         print("gate_selection: %s is not a configured build dir" % build)
@@ -195,6 +211,7 @@ def main(source, build):
             check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
                                                                          S.selected.get(m, "")))
     arm_cases(gs, graph, build, inv0)
+    joint_case(gs, build, cases)
     print("\n  the MERGE tier: %d rows, ~%.0f suite-seconds" % (len(tier_rows), tier_s))
     if FAILURES:
         print("gate.selection: FAILED (%d)" % len(FAILURES))
