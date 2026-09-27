@@ -39,8 +39,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # the ray arm reads from the voxels and two scoped gates came back green while
 # gi.rt_reflect was red. The entries are test DIRECTORY names, not ctest labels, so a
 # suite whose dir is not named is invisible however it is labelled.
+# `atom` and `defaults` (D6B-GATE-SHAPE; audit S2): the visibility buffer IS the product's
+# opaque path (engine.atom_draw) and defaults.exposure_plane is an exposure picture — an
+# OgreChain.cpp change selected 415 suites and none of tests/atom before.
 ENGINE_FAMILY = ["engine", "gi", "rtreflect", "lights", "looks", "distortion", "planar", "ssr", "shadow",
-                 "shadercache", "compute", "hdr", "sky", "pieces", "vr",
+                 "shadercache", "compute", "hdr", "sky", "pieces", "vr", "atom", "defaults",
                  "mirror", "cameras", "samples", "picking", "skeletal", "particles", "thumbnails",
                  "materialpreview", "player", "sockets", "threading", "perf", "gizmo", "assets", "log",
                  "shutdown", "openasync", "*vulkan-scripts"]
@@ -71,9 +74,13 @@ AREA_RULES = [
     # bake's format version is HAND-bumped, and the lane that has to bump it is
     # exactly a lane whose scoped selection comes from these rules. Five
     # display-free shell scripts, well under a second.
+    # `atom` and `compute` (D6B-GATE-SHAPE; audit S2): irisgl/import/meshbake.cpp carries the
+    # cluster-DAG bake, and atom.cluster_cut / atom.cluster_crack / engine.lod_rule_parity are
+    # its only guards.
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
-      "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene"],
+      "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene",
+      "atom", "compute"],
      ["assets", "avatar", "anim"]),
     (r"^irisgl/document/(physics|animation)/",
      ["document", "skeletal", "avatar", "particles", "player", "cameras", "samples",
@@ -99,13 +106,21 @@ AREA_RULES = [
     (r"^irisgl/CMakeLists|^irisgl/cmake/|^irisgl/irisglfwd", ["*merge-tier"], []),
     # --- Studio ---------------------------------------------------------------------------
     (r"^src/scripting/modules/([a-z]+)api\.(cpp|h)$", ["api"], ["$1"]),   # $1 = module name
+    # THE THREADED AVATAR IMPORT/SWITCH (D6B-GATE-SHAPE; audit S1): avatar.responsive's subject
+    # is avatarapi.cpp + the module + services/avatarassets.cpp, and no path selected it.
+    (r"^src/modules/avatar/api/avatarapi\.(cpp|h)$", ["api", "avatarasync"], ["$module"]),
     (r"^src/(modules/[a-z]+/(api/)?[a-z]+api|player/api/playerapi)\.(cpp|h)$", ["api"], ["$module"]),
     (r"^src/scripting/(mcp/|claude/)", ["mcp", "claudechat", "api"], ["app"]),
     (r"^src/scripting/", ["api", "*all-scripts", "mcp"], []),
     (r"^src/services/import/", ["importer", "importasync", "assetdelete", "assetgc", "assetmeta",
                                 "assetmigrate", "assetpaths", "assets", "drawers", "thumbnails",
                                 "meshbake", "samples"], ["assets", "project"]),
-    (r"^src/services/(asset|projectassets|thumbnail|meshbake|audiopeaks|videoutils|rigsignature|animationfile|avatarassets|extentmeasure)",
+    (r"^src/services/avatarassets",
+     ["assetdelete", "assetgc", "assetmeta", "assetmigrate", "assetpaths", "assets", "drawers",
+      "thumbnails", "importer", "importasync", "export", "avatar", "reopen", "samples",
+      "avatarasync"],
+     ["assets", "project", "avatar"]),
+    (r"^src/services/(asset|projectassets|thumbnail|meshbake|audiopeaks|videoutils|rigsignature|animationfile|extentmeasure)",
      ["assetdelete", "assetgc", "assetmeta", "assetmigrate", "assetpaths", "assets", "drawers",
       "thumbnails", "importer", "importasync", "export", "avatar", "reopen", "samples"],
      ["assets", "project", "avatar"]),
@@ -123,6 +138,11 @@ AREA_RULES = [
      ["editor", "scene", "node"]),
     (r"^src/services/(looks|worldmodes|sunlink|planarreflectors|gibounds|lightbindings|iesprofile|sceneextents)",
      ["services", "looks", "planar", "lights", "gi"], ["world", "scene", "node"]),
+    # THE THREADED ARCHIVER (D6B-GATE-SHAPE; audit S1): projectarchiver.cpp is archive.responsive's
+    # subject, and the generic project rule below never named tests/archiveasync.
+    (r"^src/services/projectarchiv",
+     ["archiveasync", "services", "app", "apppaths", "openasync", "export", "hygiene"],
+     ["app", "project"]),
     (r"^src/services/(project|sceneopen|apppaths|sessionheader|sessionmarkers|jahlog|loadtimeline|perfsampler|framepacing|mainthread|engineerror|ogresamples|shutdown)",
      ["services", "app", "apppaths", "log", "perf", "shutdown", "openasync", "hygiene", "threading"],
      ["app", "project"]),
@@ -158,7 +178,7 @@ AREA_RULES = [
                                   "materialbundle", "assets", "assetdelete", "assetgc",
                                   "assettray", "thumbnails"],
      ["materials", "material", "graph"]),
-    (r"^src/modules/avatar/", ["avatar", "skeletal", "ui"], ["avatar", "anim"]),
+    (r"^src/modules/avatar/", ["avatar", "skeletal", "ui", "avatarasync"], ["avatar", "anim"]),
     (r"^src/modules/vr/", ["vr", "player", "app"], ["vr", "player"]),
     (r"^src/(modules/publish|export)/", ["export", "ui"], ["project", "publish"]),
     # …and here because source.panel_rows_guarded and source.db_pointers_initialised
@@ -475,8 +495,11 @@ def main():
                  if p in ("CMakeLists.txt", "irisgl/CMakeLists.txt", "tests/CMakeLists.txt")
                  and cmake_list_only(a.range, p)}
 
-    inv = load_inventory(build)
+    # THE COSTS FIRST (D6B-GATE-SHAPE; audit H4): load_inventory's `ctest --show-only`
+    # TRUNCATES Testing/Temporary/LastTest.log, so the last run's overlay read an empty file
+    # whenever it came second.
     costs = load_costs(build)
+    inv = load_inventory(build)
     refs = cmake_src_refs()
     by_dir = collections.defaultdict(list)
     for n, t in inv.items(): by_dir[t["dir"]].append(n)

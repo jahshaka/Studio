@@ -68,6 +68,12 @@ THE FOUR CASES, and each one is a rule of the tool rather than a number:
       tests/openasync/test_open_responsive.cpp selects open.responsive. FAILS
       BEFORE the fix (the backtrace's add_test frame is tests/CMakeLists.txt).
 
+  11. THE SUBJECTS SELECT THEIR SUITES (D6B-GATE-SHAPE; the suites audit's S1/S2). A change
+      to the engine chain selects the Atom suites and the exposure-default picture; a change
+      to the mesh bake selects the cluster suites and the LOD-rule parity; the archiver and
+      the avatar import/switch select their `*.responsive` harnesses. Each FAILED before
+      (measured by the audit: OgreChain.cpp selected 415 suites and no tests/atom row).
+
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
 
@@ -261,6 +267,35 @@ def main(source, build):
             doc = {}
         check(code == 0 and suite in doc.get("suites", []),
               "%s selects its own GPU-lock suite %s (%d suites selected)" % (path, suite, len(doc.get("suites", []))))
+
+    # 11. THE SUBJECTS SELECT THEIR SUITES (audit S1/S2). Only suites this build registers
+    # are asked for: the Atom rows exist only where the Vulkan stack does, and a box without
+    # them must not red on their absence.
+    inventory = set()
+    try:
+        raw = subprocess.run(["ctest", "--show-only=json-v1"], cwd=build, capture_output=True, text=True).stdout
+        inventory = {t["name"] for t in json.loads(raw).get("tests", [])}
+    except (ValueError, OSError):
+        pass
+    for path, suites in (
+            ("irisgl/engine/src/OgreChain.cpp", ("engine.atom_draw", "engine.atom_parity", "defaults.exposure_plane")),
+            ("irisgl/import/meshbake.cpp", ("atom.cluster_cut", "atom.cluster_crack", "engine.lod_rule_parity")),
+            ("src/services/projectarchiver.cpp", ("archive.responsive",)),
+            ("src/services/avatarassets.cpp", ("avatar.responsive",)),
+            ("src/modules/avatar/api/avatarapi.cpp", ("avatar.responsive",)),
+            ("src/modules/avatar/avatarmodule.cpp", ("avatar.responsive",))):
+        code, out, err = run([tool, "--files", path, "--build", build, "--json"], source)
+        try:
+            doc = json.loads(out)
+        except ValueError:
+            doc = {}
+        chosen = set(doc.get("suites", [])) | set(doc.get("targets", []))
+        for suite in suites:
+            if suite not in inventory:
+                print("  (skip: %s is not registered in this build)" % suite)
+                continue
+            check(code == 0 and not doc.get("fallback") and suite in chosen,
+                  "%s selects %s (%d suites selected)" % (path, suite, len(chosen)))
 
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
