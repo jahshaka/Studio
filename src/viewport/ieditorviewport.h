@@ -493,6 +493,19 @@ public:
     /// the on-screen views quiet, so nothing is presented - until the scene's
     /// GiStatus::giAtRest, at most `maxFrames`. Consumed by that one screenshot.
     virtual void settleGiBeforeNextScreenshot(int maxFrames) { (void)maxFrames; }
+    /// THE NEXT PLAIN SCREENSHOT ALSO READS ITS SCENE RADIANCE IN FLOAT
+    /// (FOG-ATMO-1 fix round; the engine's View::readPixelsHdr, HDR-READBACK-1):
+    /// the linear, scene-referred value before any 8-bit store, so a measurement
+    /// that lives inside one code of the plain bytes has a real instrument.
+    /// Consumed by that one screenshot; takeScreenshotRadiance() hands over what
+    /// it read (RGBA floats, row-major, top-left origin; empty when the view
+    /// could not read it, a viewport with no engine, or a graded shot).
+    virtual void readRadianceWithNextScreenshot() {}
+    virtual QVector<float> takeScreenshotRadiance(int *width, int *height) {
+        if (width) *width = 0;
+        if (height) *height = 0;
+        return QVector<float>();
+    }
 
     /// THE SCRIPT SPELLINGS, in ONE place — "plain" (and "raw", the spelling
     /// the pixel suites were written with), "tonemap", "scene", "viewport".

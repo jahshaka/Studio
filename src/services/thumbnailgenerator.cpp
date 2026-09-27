@@ -33,7 +33,6 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "bridge/enginethumbnailrenderer.h"
 #include "services/thumbnailstop.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;

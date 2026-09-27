@@ -71,7 +71,7 @@ add_dependencies(test_ssr_rings JahshakaEngineMedia)
 target_link_libraries(test_ssr_rings PRIVATE JahshakaEngine)
 add_test(NAME ssr.rings COMMAND test_ssr_rings
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ssr.rings PROPERTIES TIMEOUT 180 LABELS "engine"
+set_tests_properties(ssr.rings PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # ssr.edge — SSR-EDGE-1: the rim of the accepted region, read on the reflection's
@@ -93,5 +93,5 @@ add_dependencies(test_ssr_edge JahshakaEngineMedia)
 target_link_libraries(test_ssr_edge PRIVATE JahshakaEngine)
 add_test(NAME ssr.edge COMMAND test_ssr_edge
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ssr.edge PROPERTIES TIMEOUT 180 LABELS "engine"
+set_tests_properties(ssr.edge PROPERTIES TIMEOUT 120 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")

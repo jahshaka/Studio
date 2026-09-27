@@ -95,7 +95,7 @@ set(SCALE_T_LEVELS 300)       # 8 s on the 5 M shell
 set(SCALE_T_CUT_COST 900)     # the world's boot + five poses (ATOM-CLUSTER-CUT)
 set(SCALE_T_RESIDENCY 600)    # 9 s over 1 M + 5 M; every cached shell loaded in turn
 set(SCALE_T_DECODE 840)       # 139 s (four material arms, GI to rest after each)
-set(SCALE_T_OCCLUSION 210)    # 34 s
+set(SCALE_T_OCCLUSION 600)    # 34 s solo; 99 s in a -j4 gate (D6B fix round F1: 6x the worst)
 set(SCALE_T_TLAS 300)         # 42-51 s
 set(SCALE_T_ATLAS 320)        # 53 s
 set(SCALE_T_FAR 120)          # ~12 s (two pictures)
@@ -134,13 +134,17 @@ jah_scale_row(scale.far_field    --far-field     ${SCALE_T_FAR}          FALSE) 
 jah_scale_row(scale.bake         --bake          ${SCALE_T_BAKE}         FALSE)  # W11 (CPU only: no GPU, no display)
 jah_scale_row(scale.hit_list     --hit-list      ${SCALE_T_HIT}          FALSE)  # W12 (record counts)
 jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)   # W13
+# ...A BAR SINCE ATOM-CPU-WALKS-1 (the card candidates, the words and the ray tier's
+# frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall
+# removes the label, so the row gates. The dirty scan stays a printed target inside it.
+set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 jah_no_display(scale.bake)
 
 # atom.decode_exact — ATOM-DECODE-CLASS-1: the world at ~200 buckets, the classified decode
 # still and without holes (its first form proved it byte-identical to the late-discard loop).
 # A pixel suite (no time measured): never the GPU lock. ~90 s (the world's boot).
 add_test(NAME atom.decode_exact COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 600 LABELS "engine"
+set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # atom.coverage_trace — ATOM-BLACK-FRAMES-1: 2,600 frames of the world (the 200 materials

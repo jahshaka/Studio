@@ -292,7 +292,7 @@ static int planeMain(Engine *e, bool targetRow)
     // obliquely); GA-1e's card read at the hit is predicted to close it. The
     // gating floor is 0.85 (the reading less a 2 % allowance for the 96-frame
     // mean's noise, less 2 % for the sequence), the ceiling 1.05; the brief's
-    // 5 % is the TARGET row (gi.gather_plane_target, photon-target).
+    // 5 % is the target row (gi.gather_plane_target; green, gating since D6B-GATE-SHAPE).
     if (targetRow) {
         std::printf("target: %.3f (bar 1.00 +- 0.05)\n", r2);
         CHECK_MSG(std::fabs(r2 - 1.0) <= 0.05,

@@ -103,9 +103,7 @@ QString textureSlotName(const QString &slot)
 {
     static const QHash<QString, QString> kNames = {
         { QStringLiteral("u_baseColorMap"), QStringLiteral("Base Color") },
-        { QStringLiteral("u_diffuseTexture"), QStringLiteral("Base Color") },
         { QStringLiteral("u_normalMap"), QStringLiteral("Normal") },
-        { QStringLiteral("u_normalTexture"), QStringLiteral("Normal") },
         { QStringLiteral("u_metallicMap"), QStringLiteral("Metallic") },
         { QStringLiteral("u_roughnessMap"), QStringLiteral("Roughness") },
         { QStringLiteral("u_emissiveMap"), QStringLiteral("Emissive") },

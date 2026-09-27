@@ -7,7 +7,7 @@
 // primary's. A set whose secondaries quietly stopped drawing would still pass
 // every verb test in the program, which is exactly why this one exists.
 //
-// THE PROBE TRICK is app.selection_outline's, for the same reason: the gizmo
+// THE PROBE TRICK (it was app.selection_outline's, which this suite absorbed): the gizmo
 // renders into screenshots too, so selected-vs-deselected deltas mix gizmo and
 // highlight. Holding the selection and toggling only the highlight STYLE (hull
 // outline <-> wireframe) leaves the gizmo identical in both shots, so every
@@ -73,7 +73,7 @@ var right = scene.addPrimitive("cube", { position: [ 2.5, 1, 0] });
 assert(left && right, "two cubes added");
 
 // GI is progressive and the geometry just changed; let it settle before any
-// pixel comparison (the same reason app.selection_outline waits).
+// pixel comparison.
 editor.frame(40);
 
 // ---- one selected: only ITS half moves -------------------------------------
@@ -214,6 +214,22 @@ assert(st.primaryColor !== st.color,
        "the derived primary is LIGHTER than the outline colour (" + st.primaryColor + ")");
 assert(editor.overlays().outlinePrimaryColor === st.primaryColor,
        "editor.overlays() reports the same primary colour");
+
+// ---- THE GROUND IS NEVER OUTLINED (the surviving owner ask) ---------------------
+// Folded in from app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): that
+// suite's other claim — a builtin-flagged Add-menu primitive IS outlined, the isBuiltIn
+// regression of 2026-09-06 — is this suite's "one selected" arm above (both cubes are
+// scene.addPrimitive cubes). With the Ground selected the style toggle must move nothing
+// in either half (its gizmo is in both shots and cancels). GI settles first, because the
+// equality is exact (the reason app.selection_outline waited forty frames).
+editor.frame(40);
+var ground = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];
+assert(ground, "default scene has a Ground");
+editor.select(ground.id);
+var gd = styleDelta("ground");
+console.log("ground selected -> left " + gd.left + ", right " + gd.right);
+assert(gd.left === 0 && gd.right === 0,
+       "ground selection draws no highlight in either style (" + gd.left + "/" + gd.right + ")");
 
 // ---- deselect: neither half moves -------------------------------------------
 editor.selectNone();

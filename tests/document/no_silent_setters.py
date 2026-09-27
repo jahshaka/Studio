@@ -77,7 +77,6 @@ ALLOWED = {
     "setOutlineColor": "iris::Scene; same",
     "setOutlinePrimaryColor": "iris::Scene; same",
     "setResolution": "iris::ShadowMap; LightNode::setShadowMapResolution is the marked wrapper",
-    "setPostProcesses": "the retired post-process manager; nothing in the renderer reads it",
     "setRasterizerState": "iris::RenderStates, hashed through the material fingerprint",
     "setDepthState": "iris::RenderStates, hashed through the material fingerprint",
 }

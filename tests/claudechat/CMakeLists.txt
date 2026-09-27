@@ -17,12 +17,13 @@ target_include_directories(test_claude_chat PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_claude_chat PRIVATE Qt6::Widgets)
-# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait. (Run budget: ctest's 120 s default.)
-jah_gpu_exclusive_test(NAME claude.chat RUN_TIMEOUT 120 COMMAND test_claude_chat
+# OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
+# (its flake was a /proc read, not GPU time).
+add_test(NAME claude.chat COMMAND test_claude_chat
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(claude.chat PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CLAUDECHAT_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
-    LABELS "scripting")
+    TIMEOUT 120 LABELS "scripting")
 
 # The leak lane (scripts/sanitize.sh lsan).
 jah_lsan_lane(claude.chat)

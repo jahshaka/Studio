@@ -33,7 +33,7 @@
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -243,7 +243,7 @@ int main(int argc, char **argv)
         // D. THE OWNER'S RENDERABLE IS REBUILT -> the engine frees the tag ->
         // the reconciler puts it back, with no help from anybody.
         {
-            character->setMaterial(iris::DefaultMaterial::create());
+            character->setMaterial(iris::PbrMaterial::create());
             mirror.sync();
             mirror.sync();
             CHECK(scene->boneAttachment(riderId) == ownerId ||

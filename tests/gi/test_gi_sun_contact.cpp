@@ -677,7 +677,7 @@ static int costMain(Engine *e)
 
 // ---------------------------------------------------------------------------
 // THE GAP THE MAP LEAVES BY CONSTRUCTION (PHOTON-SCENE-SWITCH-2) — `gi.sun_contact_legs`
-// and `gi.sun_contact_legs_norays` (`--legs`).
+// (`--legs`); its no-rays half runs inside `gi.sun_contact_norays` since D6B-GATE-SHAPE.
 //
 // After the shadow-VAO fix no other arm has a map gap for the ray to close (the
 // board's is 0.0 mm, the lattice's 0 of 433 px), so the ray's benefit was
@@ -830,7 +830,7 @@ static int legsArm(Engine *e, bool raysWanted, const char *dumpDir)
     if (!raysWanted) {
         CHECK_MSG(off.rgba == onFull.rgba && off.rgba == onHalf.rgba,
                   "legs, no rays: the row on renders EXACTLY the row-off picture");
-        std::printf("%s\n", failures ? "gi.sun_contact_legs_norays: FAILED" : "gi.sun_contact_legs_norays: all ok");
+        std::printf("%s\n", failures ? "gi.sun_contact_norays (legs): FAILED" : "gi.sun_contact_norays (legs): all ok");
         return failures ? 1 : 0;
     }
     const auto mean = [&](const Image &img, const std::vector<unsigned> &px) {
@@ -1117,6 +1117,14 @@ int main(int argc, char **argv)
 
     const BoardResult board = boardArm(e, raysWanted, dumpDir);
     if (board == BoardFatal) return 1;
+    if (board == BoardDone && !raysWanted) {
+        // THE LEGS FIXTURE'S NO-RAYS CLAIM RIDES THIS PROCESS (lane D6B-GATE-SHAPE; audit
+        // verdict MERGE — it was its own row, gi.sun_contact_legs_norays): the same "row on
+        // == row off, byte for byte, without rays" on the second fixture, drawn as the
+        // process's second scene beside the board's (the --both pattern).
+        const int legs = legsArm(e, false, dumpDir);
+        return (failures || legs) ? 1 : 0;
+    }
     if (board == BoardDone) return failures ? 1 : 0;
     std::printf("%s\n", failures ? "gi.sun_contact: FAILED" : "gi.sun_contact: all ok");
     if (both) {

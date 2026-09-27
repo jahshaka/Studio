@@ -70,11 +70,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 
-#include "irisgl/document/materials/postprocess.h"
-#include "irisgl/document/materials/postprocessmanager.h"
-
-#include "irisgl/document/materials/postfx/fxaapostprocess.h"
-
 #include "irisgl/document/physics/physicsproperties.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -445,15 +440,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 			break;
 		}
 
-        case iris::SkyType::MATERIAL: {
-			// The Material sky type was removed from the UI (it never worked, even
-			// in the legacy renderer). Old scenes fall back to a single-colour sky.
-			scene->skyType = iris::SkyType::SINGLE_COLOR;
-			if (scene->skyData.contains("SingleColor"))
-				scene->skyColor = readColor(scene->skyData.value("SingleColor").value("skyColor").toObject());
-			break;
-		}
-
         default: break;
     }
 
@@ -466,22 +452,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         if (fogColor.isValid()) scene->fogColor = fogColor;
     }
     scene->fogEnabled = sceneObj.value("fogEnabled").toBool(scene->fogEnabled);
-    // Fog became EXPONENTIAL, and THE LINEAR PAIR IS GONE FROM THE DOCUMENT
-    // (CRUD law, render audit I-6): `fogStart`/`fogEnd` were two fields nothing
-    // rendered — one disabled panel row said so in its own label — whose last
-    // remaining job was to derive a density for a scene written before
-    // `fogDensity` existed. That job is done HERE, from the file's own keys, and
-    // the two numbers are then forgotten: read, used, never stored and never
-    // written again. 100 and 180 appear in this one expression because they are
-    // the shape of the fog those old files had, not a default of anything.
-    if (sceneObj.contains("fogDensity"))
-        scene->fogDensity = sceneObj.value("fogDensity").toDouble(scene->fogDensity);
-    else if (sceneObj.contains("fogStart") || sceneObj.contains("fogEnd"))
-        scene->fogDensity = iris::Scene::fogDensityFromLinear(
-            float(sceneObj.value("fogStart").toDouble(100.0)),
-            float(sceneObj.value("fogEnd").toDouble(180.0)));
+    // Fog is EXPONENTIAL; `fogDensity` is the whole distance fog. (The retired
+    // LINEAR pair `fogStart`/`fogEnd` and the retired `fogAtmosphere` switch are
+    // not read — forward-building, FOG-ATMO-1: every shipped sample carries
+    // `fogDensity`, and the realistic sky now decides the fog's colour.)
+    scene->fogDensity = sceneObj.value("fogDensity").toDouble(scene->fogDensity);
     scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(scene->fogHeightDensity);
-    scene->fogAtmosphere = sceneObj.value("fogAtmosphere").toBool(scene->fogAtmosphere);
     scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(scene->fogHeightFalloff);
     scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(scene->fogHeightLevel);
     scene->fogBreakMinBrightness =
@@ -495,13 +471,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // are not repeated here as second definitions of Scene's own defaults.
         // An unknown spelling still reads OFF / MEDIUM, which is what a corrupt
         // or newer-build document deserves.
-        // "instant_radiosity" IS READ, and reads as VCT (PHOTON_SPEC E2 (4)).
-        // The technique is deleted; the scenes that named it are not, and what
-        // its tier means now IS the voxel arm — so an old document opens lit
-        // rather than dark. It is never written again.
         if (sceneObj.contains("giMode")) {
             const QString giMode = sceneObj.value("giMode").toString();
-            if (giMode == "vct" || giMode == "instant_radiosity") scene->giMode = iris::GiMode::VCT;
+            if (giMode == "vct") scene->giMode = iris::GiMode::VCT;
             else if (giMode == "vct_pcc_hybrid") scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
             else scene->giMode = iris::GiMode::OFF;
         }
@@ -517,18 +489,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // which is the only behaviour left. Deliberately no tolerance and no
         // migration — there is nothing the pin could be migrated to.
         scene->giNumBounces = qBound(1, sceneObj.value("giNumBounces").toInt(scene->giNumBounces), 4);
-        // THE GI UPDATE BUDGET (FIX WAVE B1), with the legacy mapping: a
-        // document written before the fix wave carries the giAutoRefresh bool
-        // and nothing else, and false meant exactly what budget 0 means.
+        // THE GI UPDATE BUDGET (FIX WAVE B1).
         scene->giUpdateBudget =
-            sceneObj.contains("giUpdateBudget")
-                ? qBound(0, sceneObj.value("giUpdateBudget").toInt(scene->giUpdateBudget), 512)
-                : (sceneObj.value("giAutoRefresh").toBool(true) ? 1 : 0);
-        // (`giDynamicProbes` — Photon Epic's old fifth column — is READ BY
-        // NOTHING. The feature is deleted, R2 2026-09-12: a moving object is not
-        // in a probe capture at all any more, so there is nothing to reserve
-        // captures for. An old file may carry the key; it is simply ignored,
-        // and the pin it may have left in worldOverrides is dropped below.)
+            qBound(0, sceneObj.value("giUpdateBudget").toInt(scene->giUpdateBudget), 512);
         if (sceneObj.contains("giPccGrid"))   // pre-hybrid documents keep the 3x2x3 default
             scene->giPccGrid = readVector3(sceneObj.value("giPccGrid").toObject());
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
@@ -550,17 +513,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // PHOTON cascades (SPECS/PHOTON_SPEC.md P0). Absent in every document
         // written before the flag existed, and the default is the arm those
         // documents were authored against — there is nothing to migrate.
-        // THE KEY IS ABSENT in every document written before the column existed
-        // and was a BOOL for the first day of P0's flag; -1 was written for one
-        // afternoon by a tri-state that is gone (scene.h says why). All four
-        // spellings read here; only "absent" is left unresolved, and the block
-        // after worldMode is read resolves it through the tier.
+        // The writer always emits 1 or 0. An ABSENT key is left unresolved
+        // (-1) and the block after worldMode is read resolves it through the
+        // tier (scene.h says why the field itself is not a tri-state).
         {
             const QJsonValue casc = sceneObj.value("giCascades");
-            scene->giCascades = casc.isUndefined() || casc.isNull() ? -1
-                              : casc.isBool()                      ? (casc.toBool() ? 1 : 0)
-                              : casc.toInt(-1) < 0                 ? -1
-                              : (casc.toInt(0) != 0 ? 1 : 0);
+            scene->giCascades = casc.isUndefined() ? -1
+                              : (casc.toInt(scene->giCascades) != 0 ? 1 : 0);
         }
         scene->giCascadeInstanceCap = qBound(
             0, sceneObj.value("giCascadeInstanceCap").toInt(scene->giCascadeInstanceCap), 1 << 20);
@@ -721,8 +680,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->smaaPreset = qBound(-1, sceneObj.value("smaaPreset").toInt(scene->smaaPreset), 3);
     scene->ssrMode = qBound(0, sceneObj.value("ssrMode").toInt(scene->ssrMode), 2);
     scene->ssrMarch = qBound(0, sceneObj.value("ssrMarch").toInt(scene->ssrMarch), 2);
-    // BOTH SPELLINGS, absent = 40 — the helper carries the reasoning and the
-    // tolerance for the old `rayReflectRoughness` key (sceneformat.h).
+    // Absent = 40, clamped to the row — the helper carries why (sceneformat.h).
     scene->reflectionRoughnessCutoff = sceneformat::readReflectionRoughnessCutoff(sceneObj);
     scene->refractionsMode = qBound(0, sceneObj.value("refractionsMode").toInt(scene->refractionsMode), 2);
     // Distortion: absent = AUTO, which is what a document written before the
@@ -763,23 +721,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     {
         const QString m = sceneObj.value("worldMode").toString().trimmed().toLower();
         scene->worldOverrides = sceneObj.value("worldOverrides").toObject();
-        // A PIN OF A ROW THAT NO LONGER EXISTS is dropped on the way in (CRUD).
-        // `giDynamicProbes` was Photon's fifth column until R2 deleted the
-        // feature; a scene the user had pinned it on (the shipped Showroom was
-        // one) would otherwise carry the dead key through every save for ever,
-        // and the World panel would have nothing to show for it.
-        scene->worldOverrides.remove(QStringLiteral("giDynamicProbes"));
-        // THE PRODUCT RENAME (owner 2026-09-13): the GI dial's row was `rayon`
-        // and is `photon`. Nothing else about the row changed, so a pin written
-        // under the old spelling is carried over rather than dropped — the ONE
-        // thing tolerated here, read-only and never written back. No shipped
-        // sample carries it; a scene the owner pinned the dial on does.
-        if (scene->worldOverrides.contains(QStringLiteral("rayon"))) {
-            const QJsonValue pin = scene->worldOverrides.value(QStringLiteral("rayon"));
-            scene->worldOverrides.remove(QStringLiteral("rayon"));
-            if (!scene->worldOverrides.contains(worldmodes::photonRowId()))
-                scene->worldOverrides.insert(worldmodes::photonRowId(), pin);
-        }
         if (m.isEmpty()) {
             // A document written before World Modes existed — the shipped sample
             // scenes, and nothing else. §12 decision 8: it reads as EPIC, and the
@@ -1261,23 +1202,12 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
                     key->leftSlope = float(keyObj["leftSlope"].toDouble(key->leftSlope));
                     key->rightSlope = float(keyObj["rightSlope"].toDouble(key->rightSlope));
 
-                    // SPELLING MISMATCH, fixed 2026-09-04: SceneWriter has
-                    // always written "leftTangentType"/"rightTangentType" and
-                    // this read "leftTangent"/"rightTangent", so BOTH tangent
-                    // types were silently reset to the default on every single
-                    // reload — a curve authored Linear or Constant came back
-                    // Free. The writer's spelling wins going forward; the short
-                    // one is still accepted because a file may carry it (the
-                    // reader is the only thing that ever named it).
-                    const auto tangentName = [&keyObj](const char *preferred, const char *legacy) {
-                        return keyObj.contains(QLatin1String(preferred))
-                                   ? keyObj[QLatin1String(preferred)].toString()
-                                   : keyObj[QLatin1String(legacy)].toString();
-                    };
+                    // The writer's spelling (SceneWriter: "leftTangentType" /
+                    // "rightTangentType"); e2e_anim guards the round trip.
                     key->leftTangent = getTangentTypeFromName(
-                        tangentName("leftTangentType", "leftTangent"));
+                        keyObj.value(QLatin1String("leftTangentType")).toString());
                     key->rightTangent = getTangentTypeFromName(
-                        tangentName("rightTangentType", "rightTangent"));
+                        keyObj.value(QLatin1String("rightTangentType")).toString());
 
                     key->handleMode = getHandleModeFromName(keyObj["handleMode"].toString());
                 }

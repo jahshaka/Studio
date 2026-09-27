@@ -455,6 +455,17 @@ int main() {
         CHECK(engine->vrView() == nullptr);
     }
 
+    // THE UNDITHERED PROCESS STOPS HERE (lane D6B-GATE-SHAPE; audit verdict MERGE):
+    // vr.session_undithered exists for the byte-identity arm above and nothing else —
+    // every later case is vr.session's, and running it twice asserted it twice for
+    // 61 s of a VR run.
+    if (std::getenv("JAHSHAKA_NO_DITHER")) {
+        std::printf("%s  %d checks, %d failures (the undithered byte-identity arm; every "
+                    "other case is vr.session's)\n",
+                    gFailures ? "FAIL" : "PASS", gChecks, gFailures);
+        return gFailures ? 1 : 0;
+    }
+
     // =======================================================================
     // 2. THE REAL SESSION: worldScale ONE — the same two halves must now DIFFER.
     // =======================================================================

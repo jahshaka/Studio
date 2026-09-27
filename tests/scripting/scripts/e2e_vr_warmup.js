@@ -101,9 +101,16 @@ assert(after.compiledThisRun === warmed.compiledThisRun,
 // measured 13-19 ms of work per shown frame (plus this rig's 10-18 ms present
 // copy) and a pre-warm-up first frame of 890-1,180 ms: four times clear of
 // both, so a loaded box cannot red it and the defect cannot pass it.
-assert(worstMs < 250,
-       "and none of them hitched: worst " + worstMs + " ms (the same frame cost " +
-       "890-1,180 ms before the warm-up existed)");
+// AND IT IS NIGHTLY (lane D6B-GATE-SHAPE): vr.warmup.timing runs a copy of this script with
+// JAH_TIMING_BARS defined (tests/CMakeLists.txt, jah_timing_script); here it prints.
+var worstOk = worstMs < 250;
+var worstMsg = "and none of them hitched: worst " + worstMs + " ms (the same frame cost " +
+               "890-1,180 ms before the warm-up existed)";
+if (typeof JAH_TIMING_BARS !== "undefined" && JAH_TIMING_BARS)
+    assert(worstOk, worstMsg);
+else
+    console.log("time: " + (worstOk ? "within" : "OVER") + ": " + worstMsg +
+                " (a millisecond bar: vr.warmup.timing asserts it)");
 assert(!app.lastError(), "nothing failed: " + JSON.stringify(app.lastError()));
 
 // ---- 3. A SECOND SESSION FINDS EVERYTHING BUILT -------------------------

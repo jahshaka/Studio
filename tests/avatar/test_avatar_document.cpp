@@ -29,7 +29,7 @@
 #include "irisgl/document/animation/clipextractor.h"
 #include "irisgl/import/importflags.h"
 #include "irisgl/document/assets/skeleton.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     // in it (_applyMeshNodeTransform). The importer/thumbnails/assets suites
     // cover the values; this pins the shape.
     {
-        auto make = [](iris::MeshPtr, iris::MeshMaterialData &) { return iris::DefaultMaterial::create(); };
+        auto make = [](iris::MeshPtr, iris::MeshMaterialData &) { return iris::PbrMaterial::create(); };
         // R0.12, learned the hard way: an EMPTY extractDir writes a file's
         // embedded textures BESIDE the source — here that meant five stray
         // PNGs in tests/importer/fixtures/. Never pass an empty one.

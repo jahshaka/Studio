@@ -23,6 +23,15 @@
 //       one red emissive cube, the spheres round the cube must read red; a picture that
 //       draws tile i at position i (the defect) shows them dark (measured on the rig: 0
 //       red sphere pixels round the cube with the offset ignored, 237 with it honoured).
+//   (f) THE COMBINATION (VIEWS-DEPTH-1: the owner's session died of a GPU fault — Xid 13,
+//       a depth attachment violation — with the Photon view and the Atom view on together,
+//       and no arm had ever turned both on): every Photon mode that can paint with the
+//       Atom view on (Triangles), in BOTH orders, CARDS LAST (his last switch), on the
+//       default scene and on Showroom 2; each combination paints, and both Off after it
+//       restores the off picture exactly. The live viewport renders every combination too
+//       (editor.frame), and — when the rig's screen is tall enough — again in the owner's
+//       window, 1867 x 1339. ZERO Xid from this run's pid is asserted OUTSIDE the script,
+//       by the suite's wrapper (tests/support/no_xid_run.sh) reading the kernel journal.
 // Frames, never time: every shot renders until the scene is at rest.
 
 function assert(cond, msg) {
@@ -63,6 +72,84 @@ function refusedWith(view, pattern) {
 
 var MODES = ["voxels", "probes", "cards", "screenProbes", "diffuse", "reflections", "hits"];
 
+// ---- (f) the combination, as a function: called on each scene ----------------------
+// Cards LAST — the owner's last switch before the fault.
+var COMBO = ["voxels", "probes", "screenProbes", "diffuse", "reflections", "hits", "cards"];
+function bothOff() {
+    assert(world.setPhotonView("off") === true && world.setAtomView("off") === true, "both views off");
+}
+// `tolerance`: how many pixels 'off' may differ from the off picture. ZERO on the default
+// scene (deterministic, the atom.view rule). NOT zero on Showroom 2 at High: its picture is
+// not bit-stable from one shot to the next with no view ever on (measured on the rig: 255
+// of 14,400 pixels between two consecutive shots, 274 after 150 frames — the ray-traced
+// reflections' temporal edges), so there 'restores' means within five times that noise's
+// order (5 % of the pixels) — the arm logs its own consecutive-shot count beside it.
+function combination(tag, offPic, refusals, tolerance) {
+    var ran = 0;
+    for (var c = 0; c < COMBO.length; ++c) {
+        var m = COMBO[c];
+        if (refusals[m] !== "") { console.log(tag + ": '" + m + "' cannot paint here — " + refusals[m]); continue; }
+        // THE ATOM VIEW FIRST, then the Photon view...
+        assert(world.setAtomView("triangles") === true, tag + ": atom view on (" + m + ", atom first)");
+        editor.frame(3);
+        assert(world.setPhotonView(m) === true, tag + ": photon '" + m + "' over the atom view");
+        editor.frame(8);
+        var p1 = shot(tag + "_atom_then_" + m);
+        assert(changed(offPic, p1) > 0, tag + ": atom + '" + m + "' paints (" + changed(offPic, p1) + " pixels)");
+        bothOff();
+        var b1 = shot(tag + "_off_after_atom_then_" + m);
+        assert(changed(offPic, b1) <= tolerance, tag + ": off after atom then '" + m + "' is the off picture (" +
+               changed(offPic, b1) + " pixels differ, tolerance " + tolerance + ")");
+        // ...and THE PHOTON VIEW FIRST, then the Atom view; off in the other order.
+        assert(world.setPhotonView(m) === true, tag + ": photon '" + m + "' on (photon first)");
+        editor.frame(3);
+        assert(world.setAtomView("triangles") === true, tag + ": atom view over photon '" + m + "'");
+        editor.frame(8);
+        var p2 = shot(tag + "_" + m + "_then_atom");
+        assert(changed(offPic, p2) > 0, tag + ": '" + m + "' + atom paints (" + changed(offPic, p2) + " pixels)");
+        assert(world.setAtomView("off") === true && world.setPhotonView("off") === true, "both views off (atom first)");
+        var b2 = shot(tag + "_off_after_" + m + "_then_atom");
+        assert(changed(offPic, b2) <= tolerance, tag + ": off after '" + m + "' then atom is the off picture (" +
+               changed(offPic, b2) + " pixels differ, tolerance " + tolerance + ")");
+        ++ran;
+    }
+    return ran;
+}
+// THE OWNER'S WINDOW (his session's, 1867 x 1339 — taller than the rig's usual 1080),
+// when the screen holds it: every combination on the live viewport, Cards last, left on
+// for a second of frames. Returns false (and says why) on a screen too short.
+function ownerWindowCombination(tag, refusals) {
+    var w = app.window();
+    if (!w || !w.screen || w.screen.height < 1339 || w.screen.width < 1867) {
+        console.log(tag + ": the screen (" + (w && w.screen ? w.screen.width + " x " + w.screen.height : "none") +
+                    ") cannot hold the owner's 1867 x 1339 window — that half runs on a tall rig display");
+        return false;
+    }
+    var was = { w: w.width, h: w.height };
+    app.resizeWindow(1867, 1339);
+    editor.frame(6);
+    for (var c = 0; c < COMBO.length; ++c) {
+        if (refusals[COMBO[c]] !== "") continue;
+        assert(world.setAtomView("triangles") === true && world.setPhotonView(COMBO[c]) === true,
+               tag + ": the owner's window, atom + '" + COMBO[c] + "'");
+        editor.frame(8);
+        bothOff();
+        assert(world.setPhotonView(COMBO[c]) === true && world.setAtomView("triangles") === true,
+               tag + ": the owner's window, '" + COMBO[c] + "' + atom");
+        editor.frame(8);
+        bothOff();
+    }
+    assert(world.setAtomView("triangles") === true && world.setPhotonView("cards") === true,
+           tag + ": the owner's window, both on, cards last");
+    editor.frame(60);
+    bothOff();
+    console.log(tag + ": the owner's window " + J(app.window().width) + " x " + J(app.window().height) +
+                ", viewport " + editor.viewportState().width + " x " + editor.viewportState().height);
+    app.resizeWindow(was.w, was.h);
+    editor.frame(6);
+    return true;
+}
+
 // ---- (a) the default scene: every mode that can paint, and 'off' exact ------------
 var proj = project.create("Photon View " + Date.now());
 assert(proj.length > 10, "project.create");
@@ -91,6 +178,12 @@ for (var m = 0; m < MODES.length; ++m) {
            "' restores the off picture exactly (" + changed(off, back) + " pixels differ)");
 }
 assert(painted >= 5, "the default scene painted at least five modes (" + painted + ")");
+var comboDefault = combination("default", off, st.viewRefusals, 0);
+assert(comboDefault >= 5, "the default scene ran at least five combinations (" + comboDefault + ")");
+// THE GROUND'S SIZE, once, for the record (PHOTON-VIEW-2: the Cards quad's lift grows with it).
+var nodes0 = scene.nodes();
+for (var gi0 = 0; gi0 < nodes0.length; ++gi0)
+    if (nodes0[gi0].name === "Ground") console.log("default Ground size " + J(node.size(nodes0[gi0].id)));
 
 // ---- (c) the refusals ---------------------------------------------------------------
 var unknown = false;
@@ -151,6 +244,12 @@ for (var k = 0; k < MODES.length; ++k) {
     console.log("Showroom 2 " + MODES[k] + ": " + (100 * frac).toFixed(1) + " % of pixels changed");
     assert(frac > 0.2, "Showroom 2: '" + MODES[k] + "' repaints more than 20 % (" + (100 * frac).toFixed(1) + " %)");
 }
+assert(world.setPhotonView("off") === true, "Showroom 2: off before the combination");
+var srNoise = changed(shot("showroom_noise_a"), shot("showroom_noise_b"));
+console.log("Showroom 2: two consecutive off shots differ in " + srNoise + " pixels (the scene's own noise)");
+var comboShowroom = combination("showroom", srOff, ss.viewRefusals, Math.round(0.05 * W * H));
+assert(comboShowroom === COMBO.length, "Showroom 2 ran every combination (" + comboShowroom + ")");
+ownerWindowCombination("showroom", ss.viewRefusals);
 
 // ---- (d) the thumbnail parks the view ------------------------------------------------
 assert(world.setPhotonView("probes") === true, "probes on for the save");

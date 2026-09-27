@@ -6,18 +6,19 @@
 // renderer through SceneMirror, and the mirror must push a clock so the surface
 // moves. That is what this renders.
 //
-// The comparison is deliberately about MOTION, not exact values: the mirror
-// drives the clock from the wall clock (a scrubbed timeline or a test can pin
-// it with setShaderTimeOverride, which the engine suites use), so what a real
-// editor gets is "the surface changes on its own". The control is the same
-// scene with a material that has no piece — its pixels must not move at all.
+// The comparison is about MOTION, and the clock is the DOCUMENT's: the mirror
+// accumulates the SimulationClock's frameSeconds() — the whole 1/60 s steps
+// each host frame bought (no wall clock, trap 7) — unless a scrubbed timeline
+// or a test pins it with setShaderTimeOverride. So what a real editor gets is
+// "the surface changes on its own" at simulated speed, whatever the frame rate.
+// The control is the same scene with a material that has no piece — its
+// pixels must not move at all.
 #include <QApplication>
 #include <QColor>
 #include <QDir>
 #include <QTemporaryDir>
 #include <cmath>
 #include <cstdio>
-#include <thread>
 
 #include "jahshaka/engine/Engine.h"
 
@@ -84,14 +85,14 @@ iris::PbrMaterialPtr pulsingMaterial(const QString &dir, QString *pathOut)
     return material;
 }
 
-/// Renders for `seconds` of WALL clock, sampling the centre pixel, and returns
-/// how far the samples spread. The mirror's clock is the wall clock unless a
-/// caller pins it, so this is what a user sees.
-int spread(EngineMaterialPreviewScene &preview, Engine &engine, View *view, double seconds)
+/// Renders `frames` frames of one grid step each, sampling the centre pixel,
+/// and returns how far the samples spread. The mirror's clock is the
+/// document's SimulationClock unless a caller pins it, so this is what a user
+/// sees.
+int spread(EngineMaterialPreviewScene &preview, Engine &engine, View *view, int frames)
 {
     int lo = 255, hi = 0;
-    const auto start = std::chrono::steady_clock::now();
-    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < seconds) {
+    for (int f = 0; f < frames; ++f) {
         preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
         engine.renderOneFrame();
         Image img;
@@ -101,7 +102,6 @@ int spread(EngineMaterialPreviewScene &preview, Engine &engine, View *view, doub
             lo = std::min(lo, v);
             hi = std::max(hi, v);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(8));
     }
     std::printf("      samples r in [%d, %d]\n", lo, hi);
     return hi - lo;
@@ -152,8 +152,8 @@ int main(int argc, char **argv)
     plain->setBaseColor(QColor::fromRgbF(0.6, 0.3, 0.2));
     plain->setRoughnessFactor(0.6f);
     preview.setMaterial(plain);
-    const int still = spread(preview, *engine, view, 0.4);
-    std::printf("    plain material centre spread over 0.4 s: %d/255\n", still);
+    const int still = spread(preview, *engine, view, 24);
+    std::printf("    plain material centre spread over 24 frames: %d/255\n", still);
     CHECK(still <= 2, "a material with no generated piece renders a still image");
 
     // ---- the subject: a graph material carrying a piece ---------------------
@@ -164,11 +164,34 @@ int main(int argc, char **argv)
     if (animated.isNull()) return 1;
 
     preview.setMaterial(animated);
-    const int moving = spread(preview, *engine, view, 0.6);
-    std::printf("    piece material centre spread over 0.6 s: %d/255\n", moving);
+    const int moving = spread(preview, *engine, view, 36);
+    std::printf("    piece material centre spread over 36 frames: %d/255\n", moving);
     CHECK(moving >= 20,
           "the document material's piece reached the renderer through the mirror AND the "
           "mirror pushed a clock (the surface animates)");
+    // THE CLOCK IS FRAME-COUNTED: N syncs advance it by exactly N grid steps,
+    // however long the frames took on the wall.
+    {
+        const float before = preview.engineScene()->shaderTime();
+        const int n = 30;
+        for (int f = 0; f < n; ++f) {
+            preview.step(1.0f / 60.0f, int(view->width()), int(view->height()));
+            engine->renderOneFrame();
+        }
+        const float advanced = preview.engineScene()->shaderTime() - before;
+        std::printf("    shader clock advanced %.6f s over %d frames\n", double(advanced), n);
+        CHECK(std::fabs(advanced - float(n) / 60.0f) < 1e-4f,
+              "the mirror's shader clock advances one 1/60 s grid step per frame (no wall clock)");
+        // A FRAME THAT BUYS TWO STEPS (a 30 fps host) advances it two steps:
+        // the clock is the document's simulated time, not a count of syncs.
+        const float before2 = preview.engineScene()->shaderTime();
+        preview.step(2.0f / 60.0f, int(view->width()), int(view->height()));
+        engine->renderOneFrame();
+        const float advanced2 = preview.engineScene()->shaderTime() - before2;
+        std::printf("    one frame of 2/60 s advanced the shader clock %.6f s\n", double(advanced2));
+        CHECK(std::fabs(advanced2 - 2.0f / 60.0f) < 1e-4f,
+              "a frame that buys two grid steps advances the shader clock 2/60 s (stepped, not sync-counted)");
+    }
 
     // ---- and back: dropping the piece stops the motion ----------------------
     animated->setCustomPiecePixel(QString());
@@ -176,7 +199,7 @@ int main(int argc, char **argv)
     stopped->setBaseColor(QColor::fromRgbF(0.6, 0.3, 0.2));
     stopped->setRoughnessFactor(0.6f);
     preview.setMaterial(stopped);
-    const int stoppedSpread = spread(preview, *engine, view, 0.4);
+    const int stoppedSpread = spread(preview, *engine, view, 24);
     std::printf("    after swapping back to a plain material: %d/255\n", stoppedSpread);
     CHECK(stoppedSpread <= 2, "swapping back to a piece-less material stops the animation");
 

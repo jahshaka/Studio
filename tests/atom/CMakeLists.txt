@@ -26,7 +26,7 @@ add_test(NAME atom.dolly_gate COMMAND test_atom_dolly_gate
 # 153 poses, each rendering one 1024x1024 frame and downloading it, plus the
 # warm-up: comfortably inside 300 s on the rig (measured ~40 s) and with room
 # for a contended one.
-set_tests_properties(atom.dolly_gate PROPERTIES TIMEOUT 300 LABELS "engine")
+set_tests_properties(atom.dolly_gate PROPERTIES TIMEOUT 240 LABELS "engine")
 
 # ---------------------------------------------------------------------------
 # ATOM stage 2 — THE CLUSTER DAG (lane ATOM-CLUSTER-1; SPECS/atom/B2_CLUSTER_DAG_DESIGN.md).
@@ -98,13 +98,17 @@ add_dependencies(far_blas_measure JahshakaEngineMedia)
 # from 40 (eye, tolerance) pairs, monotone refinement, and the format's round trip
 # and refusal — over every shipped mesh the bake gives a DAG, the 20k sphere and
 # the 40 m bar. Document-side: no engine boots, no display.
+# NIGHTLY (lane D6B-GATE-SHAPE; audit §3c, verdict NIGHTLY): 141 s of one process, the bake's
+# sweep over every shipped mesh. It left the PUSH tier only after the scope fix (audit S2):
+# a change to the bake (irisgl/import) or the engine selects it in its own scoped gate —
+# label `nightly` without `quiet-box` rides that gate (scripts/gate-scope.py).
 add_executable(test_atom_cluster_cut test_atom_cluster_cut.cpp ${_cluster_fixture_sources})
 jah_cluster_target(test_atom_cluster_cut)
 add_test(NAME atom.cluster_cut COMMAND test_atom_cluster_cut
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_cut PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "meshbake")
+    TIMEOUT 600 LABELS "meshbake;nightly")
 jah_no_display(atom.cluster_cut)
 
 # atom.cluster_crack — THE CUT, RENDERED (B2 §3): the uploaded stream checked
@@ -114,6 +118,8 @@ jah_no_display(atom.cluster_cut)
 # the 40 m bar's triangle numbers against the chain. Draws through the TEST
 # HARNESS (cluster_draw.*, route B2) — the product draws no cut in stage 2 — so it
 # reaches EnginePrivate.h and links Ogre, as tests/shadow's spike does.
+# NIGHTLY (lane D6B-GATE-SHAPE; audit §3c, verdict NIGHTLY): 136 s of a harness draw of a cut
+# the product does not draw (Types.h). Scope-selected by a bake or engine change (audit S2).
 add_executable(test_atom_cluster_crack test_atom_cluster_crack.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cluster_draw.cpp ${_cluster_fixture_sources})
 jah_cluster_target(test_atom_cluster_crack)
@@ -127,7 +133,7 @@ add_test(NAME atom.cluster_crack COMMAND test_atom_cluster_crack
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_crack PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    TIMEOUT 600 LABELS "engine")
+    TIMEOUT 600 LABELS "engine;nightly")
 
 # ---------------------------------------------------------------------------
 # ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
@@ -194,7 +200,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         add_test(NAME engine.atom_parity_validation COMMAND test_atom_parity
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_parity_validation PROPERTIES
-            TIMEOUT 600 LABELS "engine"
+            TIMEOUT 120 LABELS "engine"
             ENVIRONMENT "ATOM_PARITY_QUICK=1;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
     endif()
@@ -208,7 +214,20 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     target_compile_definitions(test_atom_draw PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     add_test(NAME engine.atom_draw COMMAND test_atom_draw
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 600 LABELS "engine")
+    set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 480 LABELS "engine")
+    # ATOM-CPU-WALKS-1 — the per-frame CPU walks moved onto the GPU scene's change feed
+    # and the device. engine.tlas_compute: the device-written top-level instance array
+    # byte-equal to the CPU writer over a mixed set, its edits and the lattice.
+    # atom.words_still: a still frame visits no slot and re-hashes nothing; a mover
+    # frame visits its slot; an in-place material edit re-routes in one frame.
+    add_executable(test_cpu_walks test_cpu_walks.cpp)
+    jah_atom_engine_target(test_cpu_walks)
+    add_test(NAME engine.tlas_compute COMMAND test_cpu_walks --tlas-compute
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.tlas_compute PROPERTIES TIMEOUT 300 LABELS "engine")
+    add_test(NAME atom.words_still COMMAND test_cpu_walks --words-still
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.words_still PROPERTIES TIMEOUT 180 LABELS "engine")
     # atom.occlusion_exact — THE ID PASS'S TWO-PASS OCCLUSION IS EXACT (ATOM-OCCLUSION-1): two
     # identical worlds in lockstep, one with the occlusion and one frustum-only, every
     # frame's id image compared word for word over a still pose, a walk past a wall, a
@@ -219,7 +238,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     jah_atom_engine_target(test_atom_occlusion)
     add_test(NAME atom.occlusion_exact COMMAND test_atom_occlusion
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 300 LABELS "engine")
+    set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 120 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
@@ -227,35 +246,43 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
         ${Vulkan_INCLUDE_DIRS})
     target_link_libraries(test_atom_negative_control PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
-    add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 300 LABELS "engine")
-    # ...on lavapipe, the second device of the spike's recipe (the software rasteriser
+    # ONE ROW PER DEVICE (lane D6B-GATE-SHAPE; audit verdict MERGE): where the Khronos
+    # validation layer is installed, the `_validation` rows below ARE the suite — the same
+    # binary and the same assertions, plus the layer, FAIL_REGULAR_EXPRESSION on any report
+    # and the positive control that the layer is active (a strict superset, the
+    # app.engine_selftest precedent). The plain rows register only where the layer is
+    # missing, so a box without it still runs the byte-identity assertion.
+    # ...lavapipe is the second device of the spike's recipe (the software rasteriser
     # exposes neither ray queries nor the RTX's timing, so it is the other half of
     # "validation clean on both devices").
     set(_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
-    if(EXISTS "${_lvp_icd}")
-        add_test(NAME engine.atom_negative_control_lavapipe COMMAND test_atom_negative_control
+    if(NOT EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+        add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(engine.atom_negative_control_lavapipe PROPERTIES
-            TIMEOUT 600 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
+        set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 300 LABELS "engine")
+        if(EXISTS "${_lvp_icd}")
+            add_test(NAME engine.atom_negative_control_lavapipe COMMAND test_atom_negative_control
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+            set_tests_properties(engine.atom_negative_control_lavapipe PROPERTIES
+                TIMEOUT 600 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
+        endif()
     endif()
-    # ...and both UNDER THE VALIDATION LAYER, failing on any report: our recorder's
-    # barriers and the provider's restoration are what the layer reads. Each asserts
-    # the layer is ACTIVE (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into
-    # the layer's library), so a machine without the layer cannot read as green.
+    # UNDER THE VALIDATION LAYER, failing on any report: our recorder's barriers and the
+    # provider's restoration are what the layer reads. Each asserts the layer is ACTIVE
+    # (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into the layer's library), so a
+    # machine without the layer cannot read as green.
     if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
         add_test(NAME engine.atom_negative_control_validation COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(engine.atom_negative_control_validation PROPERTIES
-            TIMEOUT 600 LABELS "engine"
+            TIMEOUT 120 LABELS "engine"
             ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAH_ATOM_EXPECT_VALIDATION=1"
             FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         if(EXISTS "${_lvp_icd}")
             add_test(NAME engine.atom_negative_control_validation_lavapipe COMMAND test_atom_negative_control
                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
             set_tests_properties(engine.atom_negative_control_validation_lavapipe PROPERTIES
-                TIMEOUT 900 LABELS "engine"
+                TIMEOUT 120 LABELS "engine"
                 ENVIRONMENT "VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;VK_ICD_FILENAMES=${_lvp_icd};JAH_ATOM_EXPECT_VALIDATION=1"
                 FAIL_REGULAR_EXPRESSION "Validation Error;Validation Warning")
         endif()
@@ -280,7 +307,7 @@ add_test(NAME atom.view
          WORKING_DIRECTORY ${_atom_view_home}/run)
 # 38 s solo on the rig (twenty-three settled shots and a Low-tier round trip); the rest is gate-load headroom.
 set_tests_properties(atom.view PROPERTIES
-    TIMEOUT 300 LABELS "scripting"
+    TIMEOUT 240 LABELS "scripting"
     ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")
 
 # ---------------------------------------------------------------------------
@@ -293,10 +320,7 @@ set_tests_properties(atom.view PROPERTIES
 set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
 set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
 configure_file(scripts/atom_lod_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js @ONLY)
-add_test(NAME atom.lod_switch.fixture
-         COMMAND sh -c "rm -rf '${_lod_switch_home}' && mkdir -p '${_lod_switch_home}/run' && '$<TARGET_FILE:test_mesh_bake>' --write-standin '${LOD_STANDIN}'")
-set_tests_properties(atom.lod_switch.fixture PROPERTIES
-    FIXTURES_SETUP atomLodSwitchHome LABELS "scripting")
+jah_fresh_home_fixture(atom.lod_switch.fixture atomLodSwitchHome "${_lod_switch_home}" THEN "$<TARGET_FILE:test_mesh_bake>" "--write-standin" "${LOD_STANDIN}" LABELS "scripting")
 add_test(NAME atom.lod_switch
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/atom_lod_switch.js
@@ -305,7 +329,7 @@ add_test(NAME atom.lod_switch
 # 60-shot walks (ATOM-CLUSTER-CUT, ~100 s of the 234 s measured solo) are the run.
 set_tests_properties(atom.lod_switch PROPERTIES
     FIXTURES_REQUIRED atomLodSwitchHome
-    TIMEOUT 480 LABELS "scripting"
+    TIMEOUT 1560 LABELS "scripting"  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
     ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
 
 # ---------------------------------------------------------------------------
@@ -317,14 +341,11 @@ set_tests_properties(atom.lod_switch PROPERTIES
 set(JAH_OCCLUSION_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/atom_occlusion.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js @ONLY)
 set(_occl_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_occlusion)
-add_test(NAME atom.occlusion_exact_app.fresh_home
-         COMMAND sh -c "rm -rf '${_occl_home}' && mkdir -p '${_occl_home}/run'")
-set_tests_properties(atom.occlusion_exact_app.fresh_home PROPERTIES
-    FIXTURES_SETUP atomOcclusionHome LABELS "scripting" TIMEOUT 60)
+jah_fresh_home_fixture(atom.occlusion_exact_app.fresh_home atomOcclusionHome "${_occl_home}" LABELS "scripting")
 add_test(NAME atom.occlusion_exact_app
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
          WORKING_DIRECTORY ${_occl_home}/run)
 set_tests_properties(atom.occlusion_exact_app PROPERTIES
     FIXTURES_REQUIRED atomOcclusionHome
-    TIMEOUT 600 LABELS "scripting"
+    TIMEOUT 480 LABELS "scripting"
     ENVIRONMENT "HOME=${_occl_home};JAHSHAKA_DATA_ROOT=${_occl_home}/.local/share/Jahshaka")

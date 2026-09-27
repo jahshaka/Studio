@@ -3683,46 +3683,18 @@ void analytic_sky_is_blue_white_at_a_mid_afternoon_sun() {
     CHECK_MSG(low.r > low.b * 1.5f, "a 5-degree sun is warm (r %.3f vs b %.3f)", low.r, low.b);
 }
 
-// THE ANALYTIC SKY BRINGS NO FOG WITH IT (round-2 review item 1). Picking the
-// sky CREATES the atmosphere component, and upstream's constructor preset
-// carries fogDensity 1e-4 — 0.7 % of a surface's colour at 100 m and 13 % at
-// the horizon plane, for a fog no scene asked for and no panel row admits to.
-// A far surface under the analytic sky must read exactly what it reads with no
-// sky at all.
-void analytic_sky_brings_no_fog() {
-    Fixture fx;
-    View *v = fx.view("atmo-fog-view", 96, 96, kBlue); REQUIRE(v);
-    Scene *s = fx.scene("atmo-fog-scene");             REQUIRE(s);
-    buildFogRig(v, s);              // the far cube at ~60 units, the near one at ~3
-    Image img;
-    render(fx.e); REQUIRE(v->readPixels(img));
-    const Px far0 = px(img, img.width / 2, 6);
+// (THE ANALYTIC SKY BRINGS NO FOG WITH IT — `analytic_sky_brings_no_fog` —
+// IS DELETED with the zeroing it guarded, lane FOG-ATMO-1. Under the realistic
+// sky the air is now a medium at the atmosphere's own density, which is
+// sky.aerial_perspective's physics bar: a far surface keeps exp(-sigma d) of
+// itself, 75.8 % at 2 km at the shipped turbidity.)
 
-    SkyDesc sky;
-    sky.mode = SkyMode::Atmosphere;
-    sky.atmosphere.hasSun = true;
-    sky.atmosphere.sunDir[1] = 0.5f;
-    sky.atmosphere.sunDir[2] = -0.87f;
-    // NO setFog CALL AT ALL — which is the case that was broken: the zeroing
-    // lived in setFog's off-branch, so a scene that never touched the fog
-    // inherited upstream's default and kept it.
-    CHECK_MSG(s->setSky(sky), "the analytic sky applies: %s", fx.e->lastError().c_str());
-    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
-    const Px far1 = px(img, img.width / 2, 6);
-    std::printf("    far surface: no sky %d %d %d -> analytic sky %d %d %d\n",
-                far0.r, far0.g, far0.b, far1.r, far1.g, far1.b);
-    // The AMBIENT legitimately changes (the sky lights the scene now), so this
-    // is not a byte comparison — it is "the distance did not eat it": fog at
-    // 1e-4 over ~60 units takes 0.4 %, and the surface only ever gets BRIGHTER
-    // from a sky. A drop is fog and nothing else.
-    CHECK_MSG(far1.g + 1 >= far0.g,
-              "the analytic sky does not fog a far surface (%d vs %d)", far1.g, far0.g);
-}
-
-// THE AERIAL FOG MODE CANNOT OUTLIVE THE SKY IT IS MADE OF (round-2 review
-// item 2). It used to be decided once, at setFog time: turn it on under the
-// analytic sky, switch to a photograph, and the fog went on being coloured by
-// an atmosphere nobody could see.
+// THE SKY'S FOG COLOUR CANNOT OUTLIVE THE SKY IT IS MADE OF (round-2 review
+// item 2; FOG-ATMO-1 made the colour a function of the sky alone). Under the
+// analytic sky the fog is that sky's scattering colour; switch to a photograph
+// and the fog must go straight back to the AUTHORED colour, touching nothing
+// else — the colour mode is re-derived on every sky change, never pinned at the
+// moment setFog ran.
 void fog_atmosphere_colour_follows_the_sky() {
     Fixture fx;
     View *v = fx.view("fog-atmo2-view", 96, 96, kBlue); REQUIRE(v);
@@ -3741,7 +3713,6 @@ void fog_atmosphere_colour_follows_the_sky() {
     fog.colour = kMagenta;
     fog.breakFalloff = 0.0f;
     fog.density = 0.2f;
-    fog.atmosphereColour = true;
     s->setFog(fog);
     render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
     const Px aerial = px(img, img.width / 2, 6);
@@ -3755,15 +3726,21 @@ void fog_atmosphere_colour_follows_the_sky() {
     render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
     const Px afterLeaving = px(img, img.width / 2, 6);
 
-    // ...and what the authored colour looks like under that same image sky.
-    fog.atmosphereColour = false;
+    // ...and what the authored colour looks like under that same image sky,
+    // pushed fresh (off, then on again: the fog state rebuilt from nothing).
+    fog.enabled = false;
+    s->setFog(fog);
+    fog.enabled = true;
     s->setFog(fog);
     render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
     const Px authored = px(img, img.width / 2, 6);
-    std::printf("    far surface: aerial under the analytic sky %d %d %d -> after leaving it "
-                "%d %d %d (authored %d %d %d)\n",
+    std::printf("    far surface: the analytic sky's fog %d %d %d -> after leaving it "
+                "%d %d %d (authored, fresh %d %d %d)\n",
                 aerial.r, aerial.g, aerial.b, afterLeaving.r, afterLeaving.g, afterLeaving.b,
                 authored.r, authored.g, authored.b);
+    CHECK_MSG(aerial.g > authored.g + 8,
+              "under the analytic sky the fog was the sky's colour (green %d vs %d)",
+              aerial.g, authored.g);
     CHECK_MSG(afterLeaving.r == authored.r && afterLeaving.g == authored.g &&
                   afterLeaving.b == authored.b,
               "leaving the analytic sky puts the fog back on the AUTHORED colour "
@@ -3957,9 +3934,11 @@ void sun_disc_stays_out_of_the_skys_ambient() {
               "is doing (%.6f vs %.6f)", double(band0Huge), double(band0Out));
 }
 
-// The fog's AERIAL PERSPECTIVE mode: the distance fog's colour comes from the
-// analytic sky instead of the authored one. Off must stay exactly off — the
-// authored colour, to the byte — and on must visibly differ.
+// THE FOG'S COLOUR IS THE SKY'S UNDER THE ANALYTIC SKY, THE AUTHORED ONE
+// UNDER ANY OTHER (FOG-ATMO-1 — there is no switch). Both layers: the distance
+// fog and the height layer take the analytic sky's own scattering for the
+// direction each surface is seen from, so a magenta authored colour (no green
+// at all) shows green only where the sky's colour is in force.
 void fog_atmosphere_colour_is_the_skys() {
     Fixture fx;
     View *v = fx.view("fog-atmo-view", 96, 96, kBlue); REQUIRE(v);
@@ -3970,39 +3949,51 @@ void fog_atmosphere_colour_is_the_skys() {
     sky.atmosphere.hasSun = true;
     sky.atmosphere.sunDir[1] = 0.5f;
     sky.atmosphere.sunDir[2] = -0.87f;
-    REQUIRE(s->setSky(sky));
+    SkyDesc image;
+    const unsigned char grey[4] = { 128, 128, 128, 255 };
+    image.mode = SkyMode::Equirectangular;
+    image.equirect = s->createTexture(1, 1, grey, true);
 
     Image img;
+    bool ok = true;
+    auto shoot = [&](const SkyDesc &sd, const FogDesc &f) {
+        ok = s->setSky(sd) && ok;
+        s->setFog(f);
+        render(fx.e); render(fx.e);
+        ok = v->readPixels(img) && ok;
+        return px(img, img.width / 2, 6);
+    };
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
     fog.breakFalloff = 0.0f;
     fog.density = 0.2f;
-    s->setFog(fog);
-    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
-    const Px authored = px(img, img.width / 2, 6);
-
-    fog.atmosphereColour = true;
-    s->setFog(fog);
-    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
-    const Px aerial = px(img, img.width / 2, 6);
-    std::printf("    far surface: authored fog %d %d %d -> aerial %d %d %d\n",
-                authored.r, authored.g, authored.b, aerial.r, aerial.g, aerial.b);
-    // Magenta has no green at all, so the sky's own scattering shows up as
-    // green where the authored colour could never put any.
-    CHECK_MSG(aerial.g > authored.g + 8,
-              "the aerial mode fogs into the SKY's colour, not the authored one (%d vs %d)",
-              aerial.g, authored.g);
-
-    // ...and back off is back to the authored colour EXACTLY: the property is
-    // part of the pass hash, so the shader is rebuilt, not reused.
-    fog.atmosphereColour = false;
-    s->setFog(fog);
-    render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
-    const Px back = px(img, img.width / 2, 6);
-    CHECK_MSG(back.r == authored.r && back.g == authored.g && back.b == authored.b,
-              "turning the aerial colour off restores the authored fog exactly: %d %d %d vs %d %d %d",
-              back.r, back.g, back.b, authored.r, authored.g, authored.b);
+    // (1) THE DISTANCE LAYER.
+    const Px distAuthored = shoot(image, fog);
+    const Px distSky = shoot(sky, fog);
+    // (2) THE HEIGHT LAYER alone (no falloff: a uniform medium of its colour).
+    fog.density = 0.0f;
+    fog.heightDensity = 0.2f;
+    fog.heightFalloff = 0.0f;
+    const Px heightAuthored = shoot(image, fog);
+    const Px heightSky = shoot(sky, fog);
+    REQUIRE(ok);
+    std::printf("    far surface, distance fog: authored %d %d %d -> sky %d %d %d | "
+                "height layer: authored %d %d %d -> sky %d %d %d\n",
+                distAuthored.r, distAuthored.g, distAuthored.b, distSky.r, distSky.g, distSky.b,
+                heightAuthored.r, heightAuthored.g, heightAuthored.b,
+                heightSky.r, heightSky.g, heightSky.b);
+    CHECK_MSG(distSky.g > distAuthored.g + 8,
+              "the distance fog fogs into the SKY's colour under the analytic sky (%d vs %d)",
+              distSky.g, distAuthored.g);
+    CHECK_MSG(heightSky.g > heightAuthored.g + 8,
+              "...and so does the HEIGHT layer (%d vs %d)", heightSky.g, heightAuthored.g);
+    // The two layers of one colour at one density are the same medium: the
+    // height layer with no falloff reads what the distance fog reads.
+    CHECK_MSG(std::abs(heightSky.r - distSky.r) <= 3 && std::abs(heightSky.g - distSky.g) <= 3 &&
+                  std::abs(heightSky.b - distSky.b) <= 3,
+              "...in the SAME colour as the distance fog (%d %d %d vs %d %d %d)",
+              heightSky.r, heightSky.g, heightSky.b, distSky.r, distSky.g, distSky.b);
 }
 
 void fog_height_layer() {
@@ -6370,7 +6361,6 @@ int main(int argc, char **argv) {
         { "analytic_sky_is_blue_white_at_a_mid_afternoon_sun",
                                                     analytic_sky_is_blue_white_at_a_mid_afternoon_sun },
         { "fog_atmosphere_colour_is_the_skys",       fog_atmosphere_colour_is_the_skys },
-        { "analytic_sky_brings_no_fog",              analytic_sky_brings_no_fog },
         { "fog_atmosphere_colour_follows_the_sky",   fog_atmosphere_colour_follows_the_sky },
         { "sun_disc_stays_out_of_the_skys_ambient",  sun_disc_stays_out_of_the_skys_ambient },
         { "fog_breakthrough_spares_bright_surfaces", fog_breakthrough_spares_bright_surfaces },

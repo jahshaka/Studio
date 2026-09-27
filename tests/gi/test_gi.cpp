@@ -1,5 +1,6 @@
-// Global illumination: Instant Radiosity, VCT and the VCT+PCC hybrid, all
-// pixel-asserted (GI_SPEC.md phases 1-3).
+// Global illumination: VCT and the VCT+PCC hybrid, pixel-asserted (GI_SPEC.md
+// phases 1-3; Instant Radiosity, the third mode this suite was written for, is
+// deleted — its "IR" mentions below are history).
 //
 // Scene: a red wall, a white floor, and a directional light aimed almost
 // horizontally at the wall. The wall is brightly lit; the floor only catches

@@ -193,6 +193,14 @@ endfunction()
 # keys with fixed sleeps between them).
 #
 # A new row takes 6x its own measured seconds, or the floor, whichever is more.
+#
+# RE-APPLIED 2026-09-27 (lane D6B-GATE-SHAPE; audit §9 H2): 171 registrations had drifted
+# back above it — 900 s on 3-23 s suites, 600 s on sixteen gi suites, 300 s on ~100 engine
+# rows whose policy value is the floor. Each was set to 6x the larger of the audit's gate
+# (2026-09-26) and D6B's before-run (-j4 beside two other lanes' gates), rounded up to a
+# minute, floor 120; none was widened. The contention class and the documented exceptions
+# kept their values. (A row in a RESOURCE_LOCK family does not start its clock until its
+# lock is free, so a family chain costs no row its budget.)
 # ROWS THAT SET NO TIMEOUT (46 of them: the sub-second document suites, the
 # wipe fixtures) get ctest's DEFAULT, which every documented gate command sets
 # to `--timeout 120` (docs/TESTING_GATE.md) — never ctest's own 1500 s. The
@@ -218,19 +226,31 @@ endfunction()
 # GPU with it; RUN_SERIAL serialises only inside ONE ctest process, and every lane is its own
 # ctest process. So these suites — and only these — are REGISTERED THROUGH
 # scripts/gpu-exclusive.sh, one box-wide flock on /tmp/jah-gpu-timing.lock; every other suite
-# shares the GPU freely. The list is the known contention-sensitive class of TESTING_GATE §4
-# plus app.watchdog_stall (DOCS/traps/GATE_AND_RIG.md) — a suite joins it by a verdict, never
-# by convenience. RUN_SERIAL stays wherever a suite already carries it.
+# shares the GPU freely. THE LOCK LIST IS THE TIMING LIST (lane D6B-GATE-SHAPE; audit
+# SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4 R3/R4/R5, §5): a suite is on it because it
+# asserts a millisecond, a ratio of milliseconds or a frame budget — never for a flake history
+# (the six members that measured no time left it: app.engine_selftest_validation, claude.chat,
+# ui.media_lazy, scripting.e2e.space_switch / sun_light / reflection_map). A suite joins it by a
+# verdict, never by convenience.
 set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
 set(JAH_GPU_EXCLUSIVE_SUITES
-    open.responsive app.engine_selftest_validation app.input_keys threading.newproject_stall
-    scenegraph.benchmark shadergraph.bake_output claude.chat scripting.e2e.space_switch
-    scripting.e2e.sun_light ui.media_lazy gi.budget scripting.e2e.reflection_map
+    # the timing suites of the push tier
+    app.input_keys app.play_select threading.newproject_stall shadergraph.bake_output gi.budget
     app.watchdog_stall
     # POST-C-FIXES-1: GPU-budget suites that measured outside the lock (the verdicts:
     # gi.field_scroll flaked 1 of 2 on the base under a sibling's load; gi.rt_reflect_cost
     # read 1.213 ms against 0.90 and 8.76x against 7.5x inside a -j2 gate, 3/3 solo).
     gi.field_scroll gi.rt_reflect_cost
+    # D6B-GATE-SHAPE (audit §4 R3): timing ratios that sat under RUN_SERIAL only.
+    mirror.scale perf.epic_steady_state perf.drag_mirror_room perf.capture_off_is_free
+    # the nightly timing rows: the wall-clock benchmark, the stereo frame budget, and the
+    # millisecond halves of the suites whose counts stay at push (tests/support/timingbars.h;
+    # audit §5 — F17's seven and the six beside them).
+    scenegraph.benchmark rigperf.benchmark gi.gather_cost vr.frame_budget
+    open.responsive.timing archive.responsive.timing avatar.responsive.timing
+    chain.hzb.timing engine.gpu_cull.timing gi.field_follows.timing ui.properties_filter.timing
+    ui.components.timing meshbake.cards.timing app.update_check.timing app.shutdown_order.timing
+    vr.warmup.timing scripting.e2e.editor_controls.timing
     # D1-SCALE-FIXTURES: the scale rows that print GPU or frame milliseconds or the UI
     # thread's gaps (tests/scale/CMakeLists.txt) — measurements by design, so a sibling's
     # GPU work inside their window would print someone else's number.
@@ -269,8 +289,73 @@ function(jah_gpu_exclusive_test)
     endif()
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" "${_exe}" ${G_COMMAND} ${_wd})
     math(EXPR _timeout "${G_RUN_TIMEOUT} + ${JAH_GPU_LOCK_WAIT_S}")
+    # ...AND ctest's own `gpu_timing` resource lock (D6B-GATE-SHAPE): two lock holders of ONE
+    # gate never start together, so the second does not sit in a slot waiting on the flock
+    # (ui.media_lazy waited 88.2 s that way at the audit's gate). The flock still guards the
+    # box against every other lane.
     set_tests_properties(${G_NAME} PROPERTIES TIMEOUT ${_timeout})
+    set_property(TEST ${G_NAME} APPEND PROPERTY RESOURCE_LOCK gpu_timing)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED ${G_NAME})
+endfunction()
+
+# THE SERIAL FAMILIES (lane D6B-GATE-SHAPE; SPECS/audits/GATE_SUITES_AUDIT_2026-09-26.md §4
+# R1/R2). RUN_SERIAL stops EVERY other suite of the gate while one runs: 54 rows carried it,
+# 1,487 s of a 3,125 s gate at -j4, and 48 % of that gate's wall had ONE suite running with three
+# slots idle. A group of suites that must not overlap EACH OTHER takes a ctest RESOURCE_LOCK
+# instead: its members still run one at a time, and the other slots keep working through them.
+# Like RUN_SERIAL, a RESOURCE_LOCK reaches only inside one ctest process — which is all these
+# claims ever needed (neither is a timing claim; timing suites take the GPU lock above).
+#   monado   — every suite that starts a Monado runtime (tests/vr). Each runner gives its
+#              runtime a PRIVATE XDG_RUNTIME_DIR (run_vr_*.sh: mktemp -d /tmp/jahvr.XXXXXX), so
+#              the old "one IPC socket" reason was void; two runtimes at once is unmeasured,
+#              so the family stays mutually exclusive.
+#   gi_chain — the cascade-chain suites (tests/gi, engine.gi_scan). Their reason was VRAM ("the
+#              chain holds four voxel volumes"), which DEVPROCESS-1 measured false (2.3 of 16 GB
+#              with three GPU processes live); they stay exclusive among themselves.
+# THE COST PUTS A FAMILY FIRST. A locked family is a CHAIN (the monado one is ~12 min end to
+# end), and a chain that starts late is the gate's tail: ctest starts rows in descending COST,
+# so a family's cost sits above every measured suite's and the longest chain's highest of all.
+set(JAH_COST_MONADO 100000)
+set(JAH_COST_GI_CHAIN 90000)
+
+# THE FRESH HOME (lane D6B-GATE-SHAPE; audit §9 H1): tests/support/fresh_home.sh is the ONE
+# implementation of "this suite's home is virgin every run" — it replaced 27 hand-copied
+# `sh -c "rm -rf …"` fixtures and tests/samples/freshhome.cmake. Two ways in:
+#   * jah_fresh_home_fixture(<row> <fixture> <home> [WARM] [ARGS <flags…>] [THEN <cmd…>]
+#                            [LABELS <labels>]) — a FIXTURES_SETUP row, for a home shared by a
+#     sequence of suites (A writes, B reads) or a suite that is not a plain `--script` run.
+#     Without WARM it wipes the caches too (a suite that asserts on a COLD shader cache);
+#     ARGS are fresh_home.sh's --reset/--rm/--mkdir; THEN runs after the wipe.
+#   * `${JAH_FRESH_HOME} --warm <home> -- <command…>` as a row's COMMAND — add_script_e2e's
+#     default: the wipe happens inside the row (no extra ctest row), keeping the shader caches.
+set(JAH_FRESH_HOME "${CMAKE_SOURCE_DIR}/tests/support/fresh_home.sh")
+function(jah_fresh_home_fixture row fixture home)
+    cmake_parse_arguments(F "WARM" "" "ARGS;THEN;LABELS" ${ARGN})
+    set(_flags)
+    if(F_WARM)
+        list(APPEND _flags --warm)
+    endif()
+    set(_then)
+    if(F_THEN)
+        set(_then -- ${F_THEN})
+    endif()
+    add_test(NAME ${row} COMMAND sh "${JAH_FRESH_HOME}" ${_flags} ${F_ARGS} "${home}" ${_then})
+    set_tests_properties(${row} PROPERTIES FIXTURES_SETUP ${fixture} TIMEOUT 60)
+    if(F_LABELS)
+        set_tests_properties(${row} PROPERTIES LABELS "${F_LABELS}")
+    endif()
+endfunction()
+
+# jah_timing_script(<in.js> <out.js>) — THE MILLISECOND BARS OF AN E2E SCRIPT, ARMED (lane
+# D6B-GATE-SHAPE; tests/support/timingbars.h is the C++ half). A `--script` run cannot read its
+# environment, so the nightly `<suite>.timing` row runs a generated copy of the script whose
+# first line defines JAH_TIMING_BARS; the push-tier row runs the script itself, where the
+# variable is undefined and a millisecond bar only PRINTS its reading. The copy is rewritten at
+# configure time and the source is a configure dependency, so the two never drift.
+function(jah_timing_script _in _out)
+    file(READ "${_in}" _body)
+    file(WRITE "${_out}" "var JAH_TIMING_BARS = true;   // generated by jah_timing_script() from ${_in}\n${_body}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_in}")
 endfunction()
 
 function(jah_no_display)
@@ -365,7 +450,7 @@ add_subdirectory(sockets)
 add_subdirectory(threading)
 # The scene-graph BENCHMARK GATE (SCENEGRAPH_SPEC §6) — the measurement suite
 # that exists BEFORE the swap, so v1 has a recorded baseline to be judged
-# against. Label `benchmark`: minutes, not seconds; `ctest -LE benchmark` skips it.
+# against. Labels `nightly;quiet-box`: minutes, not seconds; the MERGE tier skips it.
 add_subdirectory(benchmarks)
 # THE SCALE SUITES (lane D1-SCALE-FIXTURES): phase E's measuring stick — one
 # `scale.*` suite per wall W1-W14, label `scale-target` (printed, never gating).
@@ -392,12 +477,15 @@ add_subdirectory(update)
 add_subdirectory(vr)
 
 # The lock's tooling suite (devprocess.gpu_lock) and the list's closure: every suite the list
-# names is registered through the lock (app.input_keys is optional — it needs xdotool/curl/jq/
-# Xvfb and is absent without them).
+# names is registered through the lock (app.input_keys and app.play_select need xdotool/curl/
+# jq/Xvfb, vr.warmup.timing the VR stack — absent without them).
 add_subdirectory(tooling)
 get_property(_gpu_registered GLOBAL PROPERTY JAH_GPU_EXCLUSIVE_REGISTERED)
+set(_gpu_optional app.input_keys app.play_select vr.warmup.timing vr.frame_budget)
 foreach(_t IN LISTS JAH_GPU_EXCLUSIVE_SUITES)
-    if(NOT _t IN_LIST _gpu_registered AND NOT _t STREQUAL "app.input_keys")
+    # The rows registered only when their tools exist (the private-Xvfb input drivers, the
+    # VR stack) are exempt: a box without them registers neither the row nor the lock.
+    if(NOT _t IN_LIST _gpu_registered AND NOT _t IN_LIST _gpu_optional)
         # FATAL on the box the list was measured on; a port that skips a suite is told, not stopped.
         set(_sev WARNING)
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
