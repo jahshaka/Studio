@@ -1,7 +1,7 @@
 // ATOM-CPU-WALKS-1 — the per-frame CPU walks moved onto the change feed and the device.
 //
 // `--tlas-compute` (engine.tlas_compute): THE TOP-LEVEL INSTANCES ARE WRITTEN ON THE
-// DEVICE (the Jahshaka/TlasWrite job, one thread per GPU scene slot, two instances a
+// DEVICE (the instance job rq_tlas_write.comp, one thread per GPU scene slot, two instances a
 // slot at fixed places, an untraced slot's pair inactive). The array is read back
 // (OgreScene::readTlasInstances) and its ACTIVE entries, in order, are held BYTE FOR
 // BYTE against a REFERENCE WRITER kept in this suite — the product's CPU writer,

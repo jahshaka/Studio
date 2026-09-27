@@ -1534,7 +1534,7 @@ static int hitListMain()
 // stage, engine.cards.lights, printed beside it), engine.atomwords (the split's word
 // set — the change feed and the PBS change log, OgreAtomDraw.cpp) and
 // engine.rayquery (the ray tier's frame — the instances written on the device by
-// Jahshaka/TlasWrite, OgreRayQuery.cpp).
+// the instance job rq_tlas_write.comp, OgreRayQuery.cpp).
 // THE GATE (ATOM-CPU-WALKS-1, fix round F2): the change-driven walks visit 0 slots on
 // a still frame and at most the moved slot on a mover frame (the change feed's
 // notifications, the split's words, the ray tier's feed). Their CPU ms — the brief's
