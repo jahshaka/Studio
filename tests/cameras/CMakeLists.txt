@@ -170,7 +170,7 @@ set_tests_properties(cameras.exposure PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 # The real app binary, --script, with HOME redirected to a scratch dir so the
 # run gets a fresh library and can never touch the user's (the same contract
 # every scripting.e2e.* suite has).
-jah_pool_arm(cameras e2e ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cameras.js 23)
+jah_pool_arm(cameras e2e ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cameras.js 10)
 
 # ---- cameras.e2e.lens -----------------------------------------------------
 # CAMERA_LENS_SPEC §3 (P1 + P2) through the verbs in the real binary: the preset
@@ -178,7 +178,7 @@ jah_pool_arm(cameras e2e ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cameras.js 23)
 # camera.settings keys, focus TRACKING resolved on a real synced frame, and the
 # save/close/open round trip of every new field through the real writer and
 # reader. Same scratch-HOME contract as cameras.e2e.
-jah_pool_arm(cameras lens ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js 22)
+jah_pool_arm(cameras lens ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js 4)
 
 # ---- cameras.e2e.postfx ---------------------------------------------------
 # CAMERA_LENS_SPEC §4 + §5 through the verbs in the real binary: the exposure
@@ -186,12 +186,12 @@ jah_pool_arm(cameras lens ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js
 # refusals, camera.clearPostOverride, the reflected (keyframeable) half, and the
 # save/close/open round trip through the real writer and reader. Same
 # scratch-HOME contract as cameras.e2e.
-jah_pool_arm(cameras postfx ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_postfx.js 32)
+jah_pool_arm(cameras postfx ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_postfx.js 7)
 
 # ---- cameras.e2e.pilot ----------------------------------------------------
 # Phase 3 (D4/D8) and the phase-2c preview preference, through the verbs, in
 # the real binary. Same scratch-HOME contract as cameras.e2e.
-jah_pool_arm(cameras pilot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.js 19)
+jah_pool_arm(cameras pilot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.js 1)
 
 # ---- cameras.e2e.axis_lock ------------------------------------------------
 # THE AXIS-VIEW ROTATION LOCK (owner report 2026-09-08) through the verbs, in
@@ -202,7 +202,7 @@ jah_pool_arm(cameras pilot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.
 # exception, and F-focus centring instead of turning. The GESTURES themselves
 # are pinned by input.axis_view_lock, which drives the controllers directly.
 # Same scratch-HOME contract as cameras.e2e.
-jah_pool_arm(cameras axis_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js 20)
+jah_pool_arm(cameras axis_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js 5)
 
 # ---- THE POOL (lane SUITE-POOL-1): cameras.e2e and its four siblings (lens, postfx, pilot,
 # axis_lock) were five boots of the same verb module on the same scratch-home contract; they are

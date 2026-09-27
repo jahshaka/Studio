@@ -486,10 +486,10 @@ set_tests_properties(vr.spike_1a PROPERTIES
 # (see vr.player_session); every arm counts frames, never time. The rows that stay their own:
 # the warm-up pair (the control cannot share a process), and the suites that latch an
 # environment variable at boot (mirror_live, input_session, no_picture_start).
-jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_player_vr_session.js 20 FIRST)
-jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 30)
-jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 20)
-jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 10)
+jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_player_vr_session.js 21 FIRST)
+jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
+jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 9)
+jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 9)
 jah_add_pool(vr_session LABELS scripting
     LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
     APP_ARGS --vr

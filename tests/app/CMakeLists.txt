@@ -168,7 +168,7 @@ endif()
 # crash-1788594910 regression gate: switching scenes with play/simulate state
 # still armed must not crash (PlayBack::stopScene + updateSceneAnimation ran
 # against the closed project's torn-down scene). Real binary, scratch HOME.
-jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js 21)
+jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js 10)
 
 # ---- app.multiselect_outline ------------------------------------------------
 # EVERY member of a selection SET is outlined, not just the primary
@@ -179,7 +179,7 @@ jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
 # the old app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): an
 # Add-menu primitive IS outlined (the isBuiltIn regression gate of 2026-09-06 — its
 # "one selected" arm) and the GROUND never is (its ground arm).
-jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 4)
+jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 11)
 
 # ---- app.window_fits --------------------------------------------------------
 # A FRESH PROFILE'S WINDOW FITS ON ITS SCREEN (hygiene lane, 2026-09-09).
@@ -188,4 +188,4 @@ jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts
 # --headless: offscreen QPA, no engine, no display at all (jah_no_display), and
 # the offscreen screen is smaller than the .ui's authored 1612x1530 — which is
 # the condition the clamp exists for.
-jah_pool_arm(doc window_fits ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js 9 HEADLESS)
+jah_pool_arm(doc window_fits ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js 1 HEADLESS)

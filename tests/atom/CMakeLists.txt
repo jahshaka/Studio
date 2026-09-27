@@ -299,7 +299,7 @@ endif()
 # with the split shut, and a stock-PBR object in front of the floor left lit (the
 # depth-equality test). Every shot is 160 x 90 with every pixel probed. An app run on
 # the rig's display, like the scripting e2e suites.
-jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 33)
+jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 12)
 
 # ---------------------------------------------------------------------------
 # atom.lod_switch — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
