@@ -299,16 +299,6 @@ endif()
 # with the split shut, and a stock-PBR object in front of the floor left lit (the
 # depth-equality test). Every shot is 160 x 90 with every pixel probed. An app run on
 # the rig's display, like the scripting e2e suites.
-set(_atom_view_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_view)
-file(MAKE_DIRECTORY ${_atom_view_home}/run)
-add_test(NAME atom.view
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js
-         WORKING_DIRECTORY ${_atom_view_home}/run)
-# 38 s solo on the rig (twenty-three settled shots and a Low-tier round trip); the rest is gate-load headroom.
-set_tests_properties(atom.view PROPERTIES
-    TIMEOUT 240 LABELS "scripting"
-    ENVIRONMENT "HOME=${_atom_view_home};JAHSHAKA_DATA_ROOT=${_atom_view_home}/.local/share/Jahshaka")
 jah_pool_arm(atom view ${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_view.js 33)
 
 # ---------------------------------------------------------------------------

@@ -103,7 +103,6 @@ foreach(_variant live off)
         TIMEOUT 180)
 endforeach()
 
-add_script_e2e(build_scene e2e_build_scene.js)
 jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_scene.js 16)
 # EDITOR_MULTISELECT_SPEC §5: the selection SET's semantics (primary, Ctrl
 # toggle with topmost promotion, the owner's Shift range, the World root rule)
@@ -119,16 +118,6 @@ jah_pool_arm(editor build_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_build_sc
 # It also opens a scene written BEFORE mobility, through the same
 # writer/reader pair the file uses (node.serialize/deserialize). Document verbs
 # only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mobility)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.mobility
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.mobility PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(doc mobility ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility.js 2 HEADLESS)
 
 # THE SCALE-RATIO LOCK (SCALE-LOCK-1, the owner's "a lock for the
@@ -139,16 +128,6 @@ jah_pool_arm(doc mobility ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility.js 2 
 # duplicate, and the save/close/open round trip through the real writer and
 # reader. The panel and gizmo halves are ui.panel_undo and gizmo.scale_lock.
 # Document verbs only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scale_lock)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.scale_lock
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scale_lock.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.scale_lock PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(doc scale_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scale_lock.js 2 HEADLESS)
 
 # THE PARTS OF A GROUPED NODE (owner review R14, COMPONENTS-1): node.components
@@ -156,29 +135,16 @@ jah_pool_arm(doc scale_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scale_lock.j
 # hides, in document order, with their depth and their own visibility, lock and
 # selection state. The panel half is ui.components. Document verbs only ->
 # --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-components)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.components
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_components.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.components PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(doc components ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_components.js 2 HEADLESS)
 
-add_script_e2e(undo_macro e2e_undo_macro.js)
 jah_pool_arm(editor undo_macro ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_undo_macro.js 16)
 # SCENEGRAPH_SPEC §3 step 4: the v2 scene format's fragment pair
 # (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,
 # driven through the verbs against the real database and a real save/reopen.
-add_script_e2e(fragments e2e_fragments.js)
 jah_pool_arm(editor fragments ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_fragments.js 16)
 # PBR material persistence: container applies (imported-model roots), saved
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
-add_script_e2e(pbr_materials e2e_pbr_materials.js)
 jah_pool_arm(shading pbr_materials ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbr_materials.js 22)
 
 # THE LIVE HOVER PREVIEW, for every material source (MATERIAL-PREVIEW-1). The
@@ -189,18 +155,15 @@ jah_pool_arm(shading pbr_materials ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbr_m
 # dirty flag, a save during a preview writes the ORIGINAL, a locked node
 # refuses, an unresolvable payload refuses, and a preset apply reuses its one
 # project row instead of minting a new one per apply.
-add_script_e2e(material_preview e2e_material_preview.js)
 jah_pool_arm(shading material_preview ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_material_preview.js 31)
 # GF1: the DEFAULT GROUND in pixels — matte at a grazing angle, and no edge from
 # a high oblique view (the two things the owner reported while testing push #18).
 # The document half of the floor is scripting.e2e.default_floor, which is
 # headless; this one needs a camera.
-add_script_e2e(default_ground e2e_default_ground.js)
 jah_pool_arm(world_sky default_ground ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_default_ground.js 20)
 # ATOM S3-DRAW: world.atomStatus() on the default scene (the floor through the id
 # pass and the decode, its horizon plane on PBS as a backdrop) and world.setAtomDraw,
 # the split's measuring door — the editor's shot agrees with the split on and off.
-add_script_e2e(atom_draw e2e_atom_draw.js)
 jah_pool_arm(atom atom_draw ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_atom_draw.js 12)
 # CUBE-SHADE-1: the two things the owner saw on a cube (review R8) — a flat
 # face shaded as two triangles (ogre-patch 0083, the diffuse cone basis) and the
@@ -209,17 +172,6 @@ jah_pool_arm(atom atom_draw ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_atom_draw.js
 # add_script_e2e's own 180 s is not enough for it: four 2 m cubes at Epic mean
 # four GI re-solves (one per turn of the first cube) and seven settled shots.
 # 71 s solo on the rig; 400 s is the gate-load headroom.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-cube_shade)
-file(MAKE_DIRECTORY ${_home})
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.cube_shade
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cube_shade.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.cube_shade PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 400)
 jah_pool_arm(shading_live cube_shade ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cube_shade.js 20)
 # LATTICE-1: the picture does not know where the voxel lattice sits. Five arms,
 # each one standing the whole Photon chain somewhere else (up to eight cascade-0
@@ -243,14 +195,12 @@ set_tests_properties(scripting.e2e.lattice_placement PROPERTIES
 # plus the generic enum row they forced (alphaMode rides it now too). Asserts
 # the DEFAULTS are the renderer's own, which is the byte-identical-pixels
 # argument expressed as a test.
-add_script_e2e(pbs_knobs e2e_pbs_knobs.js)
 jah_pool_arm(shading pbs_knobs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pbs_knobs.js 21)
 # HLMS_ADOPTION_SPEC P4a (§6.5): the UNLIT shading model — the renderer's other
 # material family, reached through the same declared-row/material.set path
 # everything else uses. Asserts it reaches PIXELS (an unlit surface renders its
 # authored colour, a lit one does not), that the switch is one undo step, and
 # that every value the family cannot use survives the round trip.
-add_script_e2e(shading_model e2e_shading_model.js)
 jah_pool_arm(shading shading_model ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shading_model.js 33)
 # MATERIAL_GAPS_SPEC GAP 1: the per-material SPECULAR / FRESNEL WORKFLOW. The
 # I-1 fence lives here — metalness and F0 are the SAME float in the renderer's
@@ -259,7 +209,6 @@ jah_pool_arm(shading shading_model ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shadi
 # default (the renderer's own default is Specular; ours is what every existing
 # material has), the enum accepts its vocabulary BY NAME, and the workflow
 # reaches pixels.
-add_script_e2e(workflows e2e_workflows.js)
 jah_pool_arm(shading workflows ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflows.js 31)
 # MATERIAL_GAPS_SPEC GAP 1 ACCEPTANCE (§2.7): Ogre's own PbsMaterials 8x8
 # roughness x fresnel grid, rebuilt FROM OUR DOCUMENT MODEL through the verbs.
@@ -267,22 +216,18 @@ jah_pool_arm(shading workflows ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflows
 # (post-chain-free) readbacks and a FIXED camera — and asserted as monotonic
 # relations inside one frame plus a metallic-workflow CONTROL, never as absolute
 # colours.
-add_script_e2e(workflow_grid e2e_workflow_grid.js)
 jah_pool_arm(shading workflow_grid ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_workflow_grid.js 17)
 
 # MATERIALS_EVALUATOR_SPEC: graph verbs -> bakeInfo/bake -> BakedMaps PNGs ->
 # toMaterial/save/regenerate; baked maps land inside the project folder (and
 # so ride the recursive .jaf zip).
-add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
 jah_pool_arm(shading bake_pipeline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_bake_pipeline.js 20)
 # HLMS_ADOPTION P5: a GENERATED SHADER PIECE end to end — the emitter's verdict
 # through graph.emitInfo, the content-addressed cache file, the piece riding a
 # real scene material to the renderer, and the save/close/open round trip that
 # proves re-emission is deterministic.
-add_script_e2e(custom_piece e2e_custom_piece.js)
 jah_pool_arm(shading custom_piece ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_custom_piece.js 20)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
-add_script_e2e(editor_controls e2e_editor_controls.js)
 jah_pool_arm(editor_view editor_controls ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js 24)
 # scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, nightly (lane
 # D6B-GATE-SHAPE; audit §5 F17 FIX-TIME): a generated copy of the script with the bar armed
@@ -300,15 +245,12 @@ set_tests_properties(scripting.e2e.editor_controls.timing PROPERTIES
 # smoke S15: every rotation ring clickable from every camera, asked through
 # editor.gizmoHitTest in the REAL viewport (gizmo.ring_pick covers the geometry
 # document-side).
-add_script_e2e(gizmo_rings e2e_gizmo_rings.js)
 jah_pool_arm(editor_view gizmo_rings ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gizmo_rings.js 28)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).
-add_script_e2e(desktops e2e_desktops.js)
 jah_pool_arm(assets_import desktops ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_desktops.js 20)
 # PLAY-FLY-1: the play-in-place FLY, driven by a held key through the viewport's
 # own key path (editor.key) — the camera must move monotonically along the key's
 # axis over 30 frames. Engine up: play runs in the editor viewport.
-add_script_e2e(play_fly e2e_play_fly.js)
 jah_pool_arm(player play_fly ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_play_fly.js 12)
 # STATS_OVERLAY_SPEC phase 1 — the DATA half of the engine-drawn stats overlay,
 # landed and tested before a pixel of it exists (the API-first rule). Pins the
@@ -316,11 +258,9 @@ jah_pool_arm(player play_fly ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_play_fly.js
 # the timing fields, and the driver's new work-per-tick numbers — the honest
 # performance figure this architecture has, which the render loop used to
 # measure and throw away.
-add_script_e2e(render_stats e2e_render_stats.js)
 jah_pool_arm(editor_view render_stats ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_render_stats.js 21)
 # PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
 # settings, the World Mode row driving them, and the save/reopen round trip.
-add_script_e2e(planar e2e_planar.js)
 jah_pool_arm(world_sky planar ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_planar.js 23)
 # LIGHTING CHANNELS (light masks): node.setLightMask / node.lightMask, the
 # reflected `lightMask` row and its signed spelling, and the save/reopen round
@@ -328,30 +268,18 @@ jah_pool_arm(world_sky planar ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_planar.js 
 # comes back on ALL of them, which is what an absent key has to mean). The pixel
 # half — that the channels actually filter light, and that shadows do not follow
 # them — is the lights.masks engine suite.
-add_script_e2e(light_masks e2e_light_masks.js)
 jah_pool_arm(world_light light_masks ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_light_masks.js 28)
 # REFLECTIONS_ADOPTION_SPEC §3: world.giStatus() — the ACHIEVED reading of
 # global illumination (probe count, and whether the probe/VCT bindings are live
 # on the PBR shader). The API-first half of the PCC gate; the pixel half is the
 # gi.pcc_mirror engine suite. Engine UP, not --headless: the verb's entire value
 # is that it measures the renderer rather than echoing the document.
-add_script_e2e(gi_status e2e_gi_status.js)
 jah_pool_arm(gi_verbs gi_status ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_status.js 34)
 # gi.gather_default (PHOTON-GATHER-1d): the screen-probe gather is the diffuse BY
 # TIER — Low off, Medium 36 rays, High 64, Epic a probe per 8 px — through the
 # app's own path, and at High the default ground's picture is the gather's (the
 # world.gi({gather:false}) A/B moves it). Its own ctest name in the gi family
 # (the brief's), the scripting harness's home and data root.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-gather_default)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME gi.gather_default
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_default.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(gi.gather_default PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 300)
 jah_pool_arm(gi_verbs gather_default ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_default.js 30)
 # THE SURPRISE MOVER (REALTIME_REFLECTIONS_SPEC §3.3.3, owner decision O3): an
 # object nobody marked as moving starts moving during PLAY. It moves smoothly,
@@ -360,7 +288,6 @@ jah_pool_arm(gi_verbs gather_default ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gat
 # matters, world.giStatus().rebuilds does not move while it happens (option B
 # was a half-second freeze at that exact moment). Engine UP, not --headless:
 # editor.mirrorStats() and world.giStatus() are measurements of the renderer.
-add_script_e2e(mobility_play e2e_mobility_play.js)
 jah_pool_arm(gi_movers mobility_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mobility_play.js 22)
 
 # WHAT THE MIRROR LOOKS AT, THROUGH THE REAL APP
@@ -372,7 +299,6 @@ jah_pool_arm(gi_movers mobility_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_mob
 # list of one; hiding a group is its subtree (the F6 contract); a material edit
 # reaches the object that draws it without that object having changed; and the
 # always-on verifier finds NOTHING behind any of it.
-add_script_e2e(dirty_mirror e2e_dirty_mirror.js)
 jah_pool_arm(gi_movers dirty_mirror ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_dirty_mirror.js 24)
 
 # A MOVABLE LAMP THAT STOPS MOVING GETS ITS BOUNCES BACK (round-2 review F1 of
@@ -381,7 +307,6 @@ jah_pool_arm(gi_movers dirty_mirror ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_dirt
 # frame the motion ends — and for a MOVABLE lamp the mirror is the only thing
 # that can say when that is, because this path arms no settle at all. Engine UP:
 # the assertion is a picture.
-add_script_e2e(movable_lamp_rest e2e_movable_lamp_rest.js)
 jah_pool_arm(gi_movers movable_lamp_rest ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_movable_lamp_rest.js 25)
 
 # THE LAMP-MAP CACHE UNDER REFLECTION PROBES, ON A COLD SHADER CACHE
@@ -406,33 +331,28 @@ set_tests_properties(scripting.e2e.shadow_cache_probes PROPERTIES
 # world.fitGiBounds are deleted — plus the per-node exclude flag, the three
 # retired keys refused by name, and world.refreshGi. Engine UP for the same
 # reason as gi_status: the interesting numbers are the renderer's.
-add_script_e2e(gi_bounds e2e_gi_bounds.js)
 jah_pool_arm(gi_verbs gi_bounds ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_bounds.js 22)
 # ENGINE_CACHE_POLICY_SPEC P10: a page return (editor -> assets -> editor, and
 # editor -> player -> editor) never re-pushes or rebuilds GI — giPushes,
 # giStatus().rebuilds and the whole giStatus reading are unchanged, and the
 # editor's passes still bind its own arms. Engine + real pages -> needs a display.
-add_script_e2e(page_gi e2e_page_gi.js)
 jah_pool_arm(gi_verbs page_gi ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_page_gi.js 23)
 # GI_UNIFIED_SPEC.md §4 P1: the DDGI verb surface — world.gi's {ddgi} (the
 # intensity dial is gone and refused) and the four ifd* readings on world.giStatus(). Engine UP for
 # the same reason as the two above: "asked for a field" and "the shader is
 # sampling one" are different readings, and only the renderer knows the second.
 # The pixel half is the gi.ddgi engine suite.
-add_script_e2e(gi_ddgi e2e_gi_ddgi.js)
 jah_pool_arm(gi_verbs gi_ddgi ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_ddgi.js 22)
 # GATHER-1a: the SCREEN-PROBE GATHER's row — `world.gi({gather})`, its undo step
 # and `world.giStatus().gather`. Engine UP for the same reason as gi_ddgi: "the
 # project asked for a gather" and "this machine is running one" are different
 # readings and only the renderer knows the second. The pixel half is the
 # gi.gather engine suite.
-add_script_e2e(gather_row e2e_gather_row.js)
 jah_pool_arm(gi_verbs gather_row ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gather_row.js 16)
 # PHOTON-M3 (ogre-patch 0080): the voxel TOTAL volume is a float that holds the
 # bounce's fixed point — the direct term bounded by the ceiling, the bounced
 # total above it in a real set of voxels. Read through world.giVoxelStats: a
 # clipped voxel draws a merely dimmer picture, so only the volume can say it.
-add_script_e2e(gi_voxel_store e2e_gi_voxel_store.js)
 jah_pool_arm(gi_verbs gi_voxel_store ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_voxel_store.js 13)
 # PHOTON_SPEC §7 E2 (9): the irradiance field rides CASCADE 0 at EVERY TIER.
 # Engine UP for the same reason as gi_ddgi — "the tier says on" and "the shader
@@ -440,14 +360,12 @@ jah_pool_arm(gi_verbs gi_voxel_store ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_gi_
 # and in the scripting tier rather than as an engine suite because the tier
 # table is the Studio registry's and a second copy of it is the defect this
 # lane deleted five of.
-add_script_e2e(field_every_tier e2e_field_every_tier.js)
 jah_pool_arm(gi_verbs field_every_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_field_every_tier.js 36)
 # PARTICLES_FX2_SPEC §11 phase 2: the emitter verbs. scene.addParticles with a
 # recipe, every scalar row through the shared node.setProperty, the two over-life
 # ramps (which no Property kind can carry), the scene clock, the save round trip
 # for keys that are all optional in the reader — and pixels, because a perfect
 # document proves nothing about what the engine draws.
-add_script_e2e(particles e2e_particles.js)
 jah_pool_arm(editor particles ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_particles.js 48)
 # DEEP_AUDIT_2026_09 List B #7: the anim.* verbs — the keyframe/timeline domain,
 # which had no verbs and therefore no test at all. Animations on a node, the
@@ -459,27 +377,8 @@ jah_pool_arm(editor particles ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_particles.
 # NULL render system has a VaoManager and scene managers, and the document's
 # nodes live in the engine's staging manager, so the verbs are real headless
 # (shape + counts; magnitudes are the box's, never pinned) -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-memory)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.memory
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_memory.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.memory PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    TIMEOUT 120 LABELS "scripting")
-jah_pool_arm(doc memory ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_memory.js 3 HEADLESS FIRST)   # FIRST: its burst reads the engine node pools' slots, which carry the process's history (a hole left by an earlier arm is refilled, not counted)
+jah_pool_arm(doc memory ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_memory.js 3 HEADLESS FIRST) # FIRST: its burst reads the engine node pools' slots, which carry the process's history (a hole left by an earlier arm is refilled, not counted)
 
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-anim)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.anim
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_anim.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.anim PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc anim ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_anim.js 2 HEADLESS)
 
 # The viewport's presentation state machine (editor.viewportState) — what
@@ -491,7 +390,6 @@ jah_pool_arm(doc anim ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_anim.js 2 HEADLESS
 # widget, it tests the STATE MACHINE that drives it, which is exactly why its
 # assertions did not change when the cover moved into the engine. That makes it
 # the regression gate for the port.
-add_script_e2e(presentation_state e2e_presentation_state.js)
 jah_pool_arm(editor_view presentation_state ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_presentation_state.js 32)
 # The IBL-cubemap-swap crash guard (2026-09-03): a sky re-bake frees and
 # re-allocates the environment cubemap — usually AT THE SAME ADDRESS — while
@@ -501,31 +399,26 @@ jah_pool_arm(editor_view presentation_state ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
 # VISUAL_PARITY re-audit F5: sun/sky-light coupling — world.sunLight links a
 # directional light to the realistic sky's sun, the light follows the dials,
 # unlinking gives manual control back, and the link is a document field.
-add_script_e2e(sun_light e2e_sun_light.js)   # out of the GPU-timing lock: it measures no time (audit §4 R4)
 jah_pool_arm(world_light sun_light ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sun_light.js 107)
 # THE 2D CLOUD LAYER (CLOUDS-2D-1): the world.clouds block (defaults, clamps,
 # refusals, undo, save/reopen), coverage 0 byte-identical to no layer, the
 # environment SH moving with the coverage, the ground shadow against the sun's
 # measured direct term, the scroll and its capture cadence, an image sky
 # ignoring the block, and the export bake.
-add_script_e2e(clouds_2d e2e_clouds_2d.js)
 jah_pool_arm(world_sky clouds_2d ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clouds_2d.js 87)
 # HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): world.sunContact's contract — off by
 # default, validation, one undo step, the file round trip, and what the renderer
 # did (gi.sun_contact is the picture).
-add_script_e2e(sun_contact e2e_sun_contact.js)
 jah_pool_arm(world_light sun_contact ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sun_contact.js 32)
 # A WORLD ROW SHOWS WHAT A VERB WROTE (SMALL-FIXES-3): every World section that
 # shows a sceneprops key (or a World Mode registry row) re-reads it on a
 # changed external write — one verb, then the row read with no gesture between.
-add_script_e2e(world_rows_follow e2e_world_rows_follow.js)
 jah_pool_arm(world_sky world_rows_follow ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_rows_follow.js 14)
 # SUN_AND_LIGHT_DEFAULTS_SPEC Q1b/Q1c: THE SCENE-ERROR AREA. The general
 # facility (raise / never repeat / dismiss / clear / scan) and its two first
 # customers — two directional lights fighting to be the sun, and a light whose
 # shadows are off standing over something it lights straight through. Plus the
 # case that is deliberately NOT an issue: a scene with no directional light.
-add_script_e2e(scene_issues e2e_scene_issues.js)
 jah_pool_arm(editor_view scene_issues ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_issues.js 34)
 # TEXTURE-FAIL-ISSUE-1 (SMALL-FIXES-3): a material's texture file deleted on
 # disk under a running editor is a `texture.missing` scene issue — raised
@@ -559,28 +452,24 @@ jah_lsan_blocked(scripting.e2e.texture_missing)   # spawns the app
 # document's side: `vr.locomotion` overrides these for one session and writes
 # nothing here. The rig actually moving is `vr.input_session`; the panel is
 # `ui.vr_panel`.
-add_script_e2e(world_vr e2e_world_vr.js)
 jah_pool_arm(world_sky world_vr ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_vr.js 20)   # not vr_noruntime: its session override has no release without a session, and the VR arms read the defaults
 # THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1) — the document half of the
 # knob the owner picks from: three spellings, the refusals, one undo step per
 # call, save/close/open, and the two properties that make it safe to ship
 # unchosen (the default is the shipped march, and no World Mode touches it).
 # The pixels are `ssr.rings`.
-add_script_e2e(ssr_march e2e_ssr_march.js)
 jah_pool_arm(gi_movers ssr_march ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ssr_march.js 15)
 # A DRAGGED STILL ON THE MOVER CHANNEL (MOVER-1) — the document half: the key,
 # its refusals, one undo step per call, save/close/open, the two giStatus
 # readings, and the two properties that make it safe to ship unchosen (the
 # default is today's behaviour and no World Mode touches it). The counters and
 # the pixels are gi.drag_mover.
-add_script_e2e(drag_mover e2e_drag_mover.js)
 jah_pool_arm(gi_movers drag_mover ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_drag_mover.js 26)
 # vr.* WITH NO RUNTIME (SPECS/VR_SPEC.md §6) — the cheap case, and the one that
 # runs on every box in every gate: this app is launched WITHOUT --vr, so no
 # OpenXR loader is opened at all, and every verb must still answer with a
 # refusal in words instead of throwing, hanging or crashing. The session half
 # lives in tests/vr (vr.verbs_session), where the simulated runtime is.
-add_script_e2e(vr_verbs e2e_vr_verbs.js)
 jah_pool_arm(vr_noruntime vr_verbs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_verbs.js 16)
 # EVERY VR GESTURE, WITH NO HEADSET (SPECS/VR_INPUT_SPEC.md stage 1 §10) — the
 # ray, the document pick, select/toggle/deselect, the near and far rigid grabs,
@@ -590,7 +479,6 @@ jah_pool_arm(vr_noruntime vr_verbs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_ve
 # hands into the ENGINE's own store, `vr.step()` runs the frame), which is what
 # makes all of it gateable on a box with no runtime at all; the arithmetic under
 # it is `vr.grab_maths` and the rig half is `vr.input_session`.
-add_script_e2e(vr_input_headless e2e_vr_input_headless.js)
 jah_pool_arm(vr_noruntime vr_input_headless ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_input_headless.js 19)
 # BARE HANDS, WITH NO HEADSET AND NO HANDS (VR_INPUT_SPEC §7, phase 4b stage
 # 3) — the same injection route, and the rules only a HAND can exercise: the
@@ -602,7 +490,6 @@ jah_pool_arm(vr_noruntime vr_input_headless ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
 # gesture and records nothing. The pinch hysteresis is `vr.grab_maths`, the
 # DRAWING is `mirror.vr_proxies`, and the bindings parsing against a real
 # runtime is `vr.input_session`.
-add_script_e2e(vr_hands e2e_vr_hands_headless.js)
 # THE EDITOR'S GIZMO IN THE WEARER'S HANDS (VR_INPUT_SPEC §5.2, phase 4b stage
 # 2) — the same injection route, and the same claim: the gizmo a controller
 # drags is the gizmo the mouse drags. A press on a handle drags it and leaves
@@ -611,7 +498,6 @@ add_script_e2e(vr_hands e2e_vr_hands_headless.js)
 # entry and a cancelled one is none. The pick geometry under it is
 # gizmo.ring_pick's and gizmo.plane_handles' ray arms, and the size rule is
 # gizmo.screen_size's — all three document-only.
-add_script_e2e(vr_gizmo e2e_vr_gizmo.js)
 jah_pool_arm(vr_noruntime vr_gizmo ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_gizmo.js 45)
 # THE TELEPORT ARC, WITH NO HEADSET (VR_INPUT_SPEC §6 row L4; the owner's answer
 # 8) — the same injection route, and the whole gesture: the dominant stick
@@ -623,7 +509,6 @@ jah_pool_arm(vr_noruntime vr_gizmo ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_gi
 # rule, the rig that arrives level at the wearer's own height) is
 # `vr.grab_maths`; the wearer ACTUALLY moving needs a rig and is
 # `vr.input_session` on Monado.
-add_script_e2e(vr_teleport e2e_vr_teleport.js)
 jah_pool_arm(vr_noruntime vr_teleport ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_teleport.js 13)
 # THE PLAYER'S VR MODE WITH NO RUNTIME (SPECS/VR_SPEC.md §4.5, phase 3) — the
 # other everywhere case, and the owner's rule in executable form: without a
@@ -631,23 +516,18 @@ jah_pool_arm(vr_noruntime vr_teleport ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr
 # leave the scene STOPPED, the toggle must refuse without switching the page
 # (switchSpace(PLAYER) starts the scene), and the plain player must be exactly
 # what it has always been. The session half is `vr.player_session`.
-add_script_e2e(player_vr e2e_player_vr.js)
 jah_pool_arm(vr_noruntime player_vr ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_player_vr.js 15)
 # vr_hands runs LAST in its pool (declared here, after every other vr_noruntime arm): the bare-hand
 # gestures leave the VR interaction's per-hand state (the profile a hand was last bound as, the
 # re-bind rule's memory) in the process, and a later arm's controller stick reads it.
 jah_pool_arm(vr_noruntime vr_hands ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_vr_hands_headless.js 13)
-add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 jah_pool_arm(world_sky sky_ibl_churn ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_ibl_churn.js 41)
-set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 # THE SKY'S RESOURCE NAMES (lane ENGINE-SMALL-C, SKYARRAY-LEAK-1): sixty sky
 # changes must not burn sixty texture NAMES, because a dead name in the sky
 # material's texture unit resolves against the resource groups and leaves the
 # layer blank ("Cannot locate resource skyarray_NN"). Reads the live names
 # through app.textureMemory(); the file header carries the mechanism.
-add_script_e2e(sky_name_recycle e2e_sky_name_recycle.js)
 jah_pool_arm(world_sky sky_name_recycle ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_name_recycle.js 20)
-set_tests_properties(scripting.e2e.sky_name_recycle PROPERTIES TIMEOUT 300)
 # THE ENVIRONMENT LANDS AS ONE SET (PHOTON-SKY-TRANSIENT-1): the first frame
 # after a sky power change, a sun move, a sky type change either way and the
 # cloud layer on/off equals the frame after it within 2/255 — the change frame
@@ -669,16 +549,6 @@ set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
 # repo paths (a mesh to import, a shipped .effect) — configured in.
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_full_surface.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-full_surface)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.full_surface
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.full_surface PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 240)
 jah_pool_arm(editor full_surface ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js 18)
 
 # Asset drawers (ASSET_DRAWERS_SPEC.md §4/§5): drawer verbs round-trip +
@@ -687,16 +557,6 @@ jah_pool_arm(editor full_surface ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js
 # fixture paths are configured in.
 configure_file(scripts/e2e_drawers.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js @ONLY)
 configure_file(scripts/e2e_metadata.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drawers)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.drawers
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.drawers PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc drawers ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js 1 HEADLESS)
 
 # Rich asset metadata (ASSET_DRAWERS_SPEC addendum): import-time "metadata"
@@ -706,16 +566,6 @@ jah_pool_arm(doc drawers ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js 1 HEADLESS)
 # must report the database's real answer, and the row must actually go.
 # Document-only, so --headless; fixture paths configured in.
 configure_file(scripts/e2e_asset_delete.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delete.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-asset_delete)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.asset_delete
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delete.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.asset_delete PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets asset_delete ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delete.js 2 HEADLESS)
 
 # AI_SURFACE_AUDIT F1: scene.addMesh was a DATA-LOSS verb (disk path written
@@ -723,16 +573,6 @@ jah_pool_arm(doc_assets asset_delete ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delet
 # correct flow in the message, and the correct flow's save/close/reopen round
 # trip — the test that never existed — is asserted here. Document verbs only.
 configure_file(scripts/e2e_mesh_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roundtrip.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mesh_roundtrip)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.mesh_roundtrip
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roundtrip.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.mesh_roundtrip PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets mesh_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roundtrip.js 20 HEADLESS)
 
 # AI_SURFACE_PROGRAM_SPEC lane D #7 + #12: assets.importAndPlace — the correct
@@ -743,32 +583,11 @@ jah_pool_arm(doc_assets mesh_roundtrip ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roun
 # resolves) is the reason this suite exists. Document verbs only -> --headless;
 # fixture paths configured in.
 configure_file(scripts/e2e_world_reach.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_world_reach.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_reach)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.world_reach
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_world_reach.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.world_reach PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc world_reach ${CMAKE_CURRENT_BINARY_DIR}/e2e_world_reach.js 22 HEADLESS)
 
 # node.exportArchive (STUDIO-CRUD-1 item 9): the verb behind the outliner's
 # Export Object / Export Particle System. Document verbs only -> --headless.
 configure_file(scripts/e2e_node_export.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-node_export)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.node_export
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.node_export PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
-    LABELS "scripting"
-    TIMEOUT 120)
-jah_no_display(scripting.e2e.node_export)
 jah_pool_arm(doc_assets node_export ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.js 3 HEADLESS)
 
 # AI_SURFACE_PROGRAM_SPEC lane D #14: node.physics / node.physicsInfo — the last
@@ -778,40 +597,18 @@ jah_pool_arm(doc_assets node_export ${CMAKE_CURRENT_BINARY_DIR}/e2e_node_export.
 # the same world — one falls, one does not). ENGINE UP, not --headless: the
 # physics stepper lives in the engine viewport's syncFrame and the headless
 # stand-in's startPhysicsSimulation is an empty override.
-add_script_e2e(physics e2e_physics.js)
 jah_pool_arm(editor physics ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_physics.js 23)
-set_tests_properties(scripting.e2e.physics PROPERTIES TIMEOUT 240)
 
 # AI_SURFACE_AUDIT F7/F8/F9 — the three SILENT SUCCESSES. A verb that accepts a
 # value it does not understand, changes nothing and answers true is the worst
 # defect class on an agent surface. Document verbs only.
 configure_file(scripts/e2e_ai_surface.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ai_surface)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.ai_surface
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.ai_surface PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc ai_surface ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js 1 HEADLESS)
 
 # AI_SURFACE_PROGRAM_SPEC lane B #8 (verb half): scene.nodes({subtree, depth,
 # include}). describe_scene is only the byte-carrying view of these options, so
 # the bounding (childCount/truncated) and the enrichment blocks are gated here,
 # on the verb. Document verbs only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_query)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.scene_query
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.scene_query PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc scene_query ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js 2 HEADLESS)
 
 # AI_SURFACE_PROGRAM_SPEC lane 0 + lane A — DISCOVERY. app.apiProblems() runs
@@ -820,46 +617,16 @@ jah_pool_arm(doc scene_query ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query
 # names: node.properties, material.properties, the world noun verbs (the set*
 # aliases are gone), the Ground primitive and addPrimitive {count}. Document verbs
 # only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-introspection)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.introspection
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_introspection.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.introspection PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc introspection ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_introspection.js 1 HEADLESS)
 
 # Web export (WEB_EXPORT_AUDIT): project.exportWeb through the real binary.
 # Document-only, so --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_web)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.export_web
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_export_web.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.export_web PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets export_web ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_export_web.js 2 HEADLESS)
 
 # Unified export front half (ASSET_PIPELINE_SPEC phase 5): assets.exportRaw +
 # project.exportManifest through the real binary. Document-only, --headless;
 # fixture paths configured in.
 configure_file(scripts/e2e_export_raw.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_raw)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.export_raw
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.export_raw PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets export_raw ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js 3 HEADLESS)
 
 # Light asset bindings (LIGHTS_COMPLETION_SPEC): the .ies library type
@@ -868,28 +635,8 @@ jah_pool_arm(doc_assets export_raw ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js
 # boundary (a texture bound to a light is a DEPENDENCY — no companion
 # material). Every verb is a document verb, so --headless.
 configure_file(scripts/e2e_light_bindings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-light_bindings)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.light_bindings
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.light_bindings PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc light_bindings ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.js 2 HEADLESS)
 
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-metadata)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.metadata
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.metadata PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc metadata ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js 1 HEADLESS)
 
 # Video assets (ASSET_MEDIA_SPEC §1): importFile(mp4) → Video row + frame-grab
@@ -897,16 +644,6 @@ jah_pool_arm(doc metadata ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js 1 HEADLESS
 # with no display (verified under QT_QPA_PLATFORM=offscreen), so this runs
 # --headless like the drawers/metadata suites.
 configure_file(scripts/e2e_video.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-video)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.video
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.video PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets video ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js 3 HEADLESS)
 
 # Relocatable store root (ASSET_PIPELINE_SPEC §3.1.1/§3.1.2 phase 1):
@@ -942,16 +679,6 @@ set_tests_properties(scripting.e2e.store_root PROPERTIES
 # The ONE import pipeline (phase 3): determinism record + checkConsistency +
 # identical object sets on double import, in the real binary.
 configure_file(scripts/e2e_import_pipeline.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_pipeline.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_pipeline)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.import_pipeline
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_pipeline.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.import_pipeline PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets import_pipeline ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_pipeline.js 2 HEADLESS)
 
 # IMAGE_PLANE_SPEC option A: scene.addImagePlane — aspect-correct plane
@@ -960,16 +687,6 @@ jah_pool_arm(doc_assets import_pipeline ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_p
 # (no --headless): the camera-facing assertion reads editor.camera(), an
 # engine verb. Fixture paths configured in.
 configure_file(scripts/e2e_image_plane.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-image_plane)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.image_plane
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.image_plane PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(editor image_plane ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js 9)
 
 # DECALS_SPEC: scene.addDecal — the projected-texture object, its box and
@@ -977,16 +694,6 @@ jah_pool_arm(editor image_plane ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js 9
 # companion material), property round-trip, duplicate, undo and save/reopen.
 # Document verbs only -> --headless; fixture paths configured in.
 configure_file(scripts/e2e_decals.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-decals)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.decals
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.decals PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets decals ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js 3 HEADLESS)
 
 # IMAGE_PLANE_SPEC option B1: the companion image material — automatic on a
@@ -995,16 +702,6 @@ jah_pool_arm(doc_assets decals ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js 3 HEADL
 # the material applies to a mesh and survives a reopen. Document verbs only
 # -> --headless; fixture paths configured in.
 configure_file(scripts/e2e_image_material.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_material.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-image_material)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.image_material
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_material.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.image_material PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets image_material ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_material.js 2 HEADLESS)
 
 # MATERIAL_UV_NODES_SPEC phase 3: the UV input end to end — the fold (a
@@ -1014,16 +711,6 @@ jah_pool_arm(doc_assets image_material ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_mat
 # the pixel proof that the material's transform tiles/offsets/rotates the
 # render belongs to tests/engine (pbr_texture_scale_tiles_uvs).
 configure_file(scripts/e2e_uv_tiling.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-uv_tiling)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.uv_tiling
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.uv_tiling PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets uv_tiling ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js 3 HEADLESS)
 
 # IMAGE_PLANE_SPEC §6: pinned library assets hydrate on project REOPEN —
@@ -1031,16 +718,6 @@ jah_pool_arm(doc_assets uv_tiling ${CMAKE_CURRENT_BINARY_DIR}/e2e_uv_tiling.js 3
 # cube → document material asserted. Document verbs only -> --headless;
 # fixture paths configured in.
 configure_file(scripts/e2e_pinned_reopen.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_pinned_reopen.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pinned_reopen)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.pinned_reopen
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_pinned_reopen.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.pinned_reopen PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets pinned_reopen ${CMAKE_CURRENT_BINARY_DIR}/e2e_pinned_reopen.js 2 HEADLESS)
 
 # Plan item 15c: SHIPPED ASSETS THROUGH THE CAS. The default ground's tile, the
@@ -1090,16 +767,6 @@ set_tests_properties(scripting.e2e.perf_capture_frames PROPERTIES
 # the Mesh member carries the model bytes (scene placement has geometry),
 # and the preview pixel shows the bound map. Engine up (no --headless).
 configure_file(scripts/e2e_import_render.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_render)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.import_render
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.import_render PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js 20)
 
 # scripting.e2e.assets_page — the owner's Assets-module smoke round (S4-S7,
@@ -1109,16 +776,6 @@ jah_pool_arm(assets_import import_render ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_
 # live in the deleted staging dir), and the preview flies. Engine up (no
 # --headless): the thumbnail is a render and the preview is a scene.
 configure_file(scripts/e2e_assets_page.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_page.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-assets_page)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.assets_page
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_page.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.assets_page PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(assets_import assets_page ${CMAKE_CURRENT_BINARY_DIR}/e2e_assets_page.js 35)
 
 # scripting.e2e.assets_scope — ASSETS-SCOPE-1 (owner 2026-09-26): the Assets
@@ -1178,16 +835,6 @@ set_tests_properties(scripting.e2e.thumbnails_order PROPERTIES
 # --headless.
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_import_dialog.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_dialog.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_dialog)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.import_dialog
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_dialog.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.import_dialog PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(assets_import import_dialog ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_dialog.js 29)
 
 # VISUAL_PARITY_SPEC item 5: a saved shader GRAPH gets a real thumbnail —
@@ -1195,16 +842,6 @@ jah_pool_arm(assets_import import_dialog ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_
 # renders the evaluated PbrMaterial on the preview sphere, and the stored PNG's
 # centre pixel is the graph's colour (assets.thumbnail reads it back). Engine up
 # (no --headless): the render is the point.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shader_thumbnail)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.shader_thumbnail
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_thumbnail.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.shader_thumbnail PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(shading_live shader_thumbnail ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_thumbnail.js 17)
 
 # Avatar module, Part 0 (AVATAR_MODULE_SPEC S8): the Avatar page's surface
@@ -1213,16 +850,6 @@ jah_pool_arm(shading_live shader_thumbnail ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e
 # and avatar.snapshot proving all the toggle combinations at the pixel level.
 # NOT --headless: the snapshot needs the engine.
 configure_file(scripts/e2e_avatar.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.avatar
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.avatar PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(avatar_anim avatar ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js 28)
 
 # GPU_SKINNING_SPEC T10: a rigged character through the ONE import pipeline into
@@ -1230,16 +857,6 @@ jah_pool_arm(avatar_anim avatar ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js 28)
 # with the engine viewport up. NOT --headless: the point is the production
 # mirror and the production skinning path.
 configure_file(scripts/e2e_skinning.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-skinning)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.skinning
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.skinning PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(avatar_anim skinning ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js 26)
 
 # ENGINEERING_DEBT_SPEC A4.2 — the ONE fixed-step clock's determinism proof: a
@@ -1249,31 +866,11 @@ jah_pool_arm(avatar_anim skinning ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js 26
 # bodies where play did; a pause holds the clock; an over-bound dt is refused.
 # Renders (physics steps in the engine viewport's syncFrame) -> needs a display.
 configure_file(scripts/e2e_fixed_clock.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-fixed_clock)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.fixed_clock
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.fixed_clock PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 240)
 jah_pool_arm(player fixed_clock ${CMAKE_CURRENT_BINARY_DIR}/e2e_fixed_clock.js 47)
 
 # World Modes (POST_CHAIN_SPEC.md §9): the scalability registry, tier
 # write-through, pins that survive mode switches, and the save/open round-trip.
 # Every verb is a document verb -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_modes)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.world_modes
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_modes.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.world_modes PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc world_modes ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_modes.js 2 HEADLESS)
 
 # world.tierTable(): WHAT A TIER PHYSICALLY IS — the chain, the VR column and the
@@ -1282,32 +879,12 @@ jah_pool_arm(doc world_modes ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_modes
 # + the engine's giQualityFacts) where world_modes reads the registry, and the
 # block was moved out of that script whole rather than copied. Own home, like
 # every suite in this family.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tier_table_atom)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.tier_table_atom
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tier_table_atom.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.tier_table_atom PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc tier_table_atom ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tier_table_atom.js 1 HEADLESS)
 
 # THE LOOKS STACK (POST_LOOKS_SPEC.md §4.1): the catalogue, the six verbs, the
 # one-instance-per-look rule, clamping, undo and the save/open round trip. The
 # pixel half of the program is the looks.engine suite; these are all document
 # verbs -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-looks)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.looks
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_looks.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.looks PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc looks ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_looks.js 1 HEADLESS)
 
 # PHOTON (GI_UNIFIED_SPEC.md §2 / P2): the one GI switch and its quality tier —
@@ -1316,16 +893,6 @@ jah_pool_arm(doc looks ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_looks.js 1 HEADLE
 # save/open, and the registry saying which dial owns which row. Document verbs
 # only -> --headless; the pixel half is gi.modes/gi.ddgi and the resolution half
 # is the gi.tiers suite.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-photon)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.photon
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.photon PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc photon ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js 2 HEADLESS)
 
 # HARDWARE RAY TRACING IS A PROJECT ROW (owner, 2026-09-15; ledger §425):
@@ -1342,25 +909,18 @@ jah_pool_arm(doc photon ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_photon.js 2 HEAD
 # (no ray queries at all) both entries take the no-rays branch and both still
 # mean something. NOT --headless and NOT in jah_no_display: the issue half asks
 # the DEVICE a question, and there is no device without a display.
-foreach(_variant rays norays)
-    set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ray_row_${_variant})
-    file(MAKE_DIRECTORY ${_home}/run)
-    if(_variant STREQUAL norays)
-        set(_name scripting.e2e.ray_row_norays)
-        set(_env "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1")
-    else()
-        set(_name scripting.e2e.ray_row)
-        set(_env "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka")
-    endif()
-    add_test(NAME ${_name}
-             COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js
-             WORKING_DIRECTORY ${_home}/run)
-    set_tests_properties(${_name} PROPERTIES
-        ENVIRONMENT "${_env}"
-        LABELS "scripting"
-        TIMEOUT 240)
-endforeach()
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ray_row_norays)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.ray_row_norays
+         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js
+         WORKING_DIRECTORY ${_home}/run)
+# A ROW OF ITS OWN (the process latch): JAHSHAKA_NO_RAY_QUERY is read when the device is made.
+# The as-this-machine-is half is the gi_movers.ray_row arm.
+set_tests_properties(scripting.e2e.ray_row_norays PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_NO_RAY_QUERY=1"
+    LABELS "scripting"
+    TIMEOUT 240)
 jah_pool_arm(gi_movers ray_row ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.js 35)
 
 # OUTLINER FOLDERS (SCENEGRAPH_SPEC.md §6b): scene.folders/createFolder/
@@ -1368,16 +928,6 @@ jah_pool_arm(gi_movers ray_row ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ray_row.j
 # of the suite — filing a node never reparents it, removing a folder never
 # deletes a node — plus one undo step per gesture and the save/reopen round trip
 # through the EDITOR section. Document verbs only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-folders)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.folders
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_folders.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.folders PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets folders ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_folders.js 4 HEADLESS)
 
 # The leak lane (scripts/sanitize.sh lsan): the QJSEngine host only. The
@@ -1399,32 +949,13 @@ jah_lsan_lane(scripting.engine)
 # pages -> needs a display.
 set(JAH_SAMPLES_DIR ${CMAKE_BINARY_DIR}/bin/scenes)
 configure_file(scripts/e2e_space_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space_switch)
-file(MAKE_DIRECTORY ${_home}/run)
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (its script's only Date.now names projects).
-add_test(NAME scripting.e2e.space_switch
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.space_switch PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    TIMEOUT 300 LABELS "scripting")
 jah_pool_arm(player space_switch ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js 71)
 
 # The verb surface's SCENE_STATIC contract + scene.raycast — the 2026-09-05
 # scripting-audit regression net (F1/F2/F4/F7/F12; F3's undo half waits for
 # undo v1.5). Document verbs only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-static_semantics)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.static_semantics
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_static_semantics.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.static_semantics PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc static_semantics ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_static_semantics.js 2 HEADLESS)
 
 # AVATAR_LOCOMOTION_SPEC Stage 3 through the VERBS and the REAL play path:
@@ -1434,16 +965,6 @@ jah_pool_arm(doc static_semantics ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_static
 # so this needs the engine viewport) and scene.playMode surviving a save and
 # reopen. NOT --headless, deliberately.
 configure_file(scripts/e2e_possession.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-possession)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.possession
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.possession PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 240)
 jah_pool_arm(player possession ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js 34)
 
 # PLAY-SELECT-1 (owner R13): EDITING WHILE THE SCENE PLAYS, through the verbs —
@@ -1459,16 +980,6 @@ jah_pool_arm(player possession ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js 34)
 # NOT --headless: play-in-place, the physics stepper and the input routing all
 # live in the engine viewport.
 configure_file(scripts/e2e_play_select.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-play_select)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.play_select
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.play_select PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(player play_select ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js 36)
 
 # AVATAR_LOCOMOTION_SPEC Stage 4 through the VERBS and a REAL scene file: the
@@ -1479,16 +990,6 @@ jah_pool_arm(player play_select ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js 3
 # close + open, which is the only thing that exercises SceneWriter's and
 # SceneReader's locomotion hunks.
 configure_file(scripts/e2e_locomotion.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-locomotion)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.locomotion
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.locomotion PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc locomotion ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js 2 HEADLESS)
 
 # The DEFAULT AVATAR fixture's contract: beta_mannequin.dae (generated by
@@ -1500,16 +1001,6 @@ jah_pool_arm(doc locomotion ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js 2 HEAD
 # the tests/avatar cache var) because tests/avatar configures AFTER this dir.
 set(JAHSHAKA_MANNEQUIN_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_mannequin.dae")
 configure_file(scripts/e2e_mannequin.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_mannequin.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mannequin)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.mannequin
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_mannequin.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.mannequin PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc mannequin ${CMAKE_CURRENT_BINARY_DIR}/e2e_mannequin.js 2 HEADLESS)
 
 # The Avatar module AS VERBS (verb-coverage audit F15) plus avatar.loadClip
@@ -1521,16 +1012,6 @@ jah_pool_arm(doc mannequin ${CMAKE_CURRENT_BINARY_DIR}/e2e_mannequin.js 2 HEADLE
 # suite's is).
 set(JAHSHAKA_BETA_WALK_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_walk.dae")
 configure_file(scripts/e2e_avatar_verbs.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_verbs.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar_verbs)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.avatar_verbs
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_verbs.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.avatar_verbs PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc avatar_verbs ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_verbs.js 9 HEADLESS)
 
 # ONE ASSET IN THE EDITOR (smoke S9, owner rule 2026-09-11): the tray collapse
@@ -1564,16 +1045,6 @@ set_tests_properties(scripting.e2e.one_asset PROPERTIES
 # uses it); a node with no default answers false; the flag survives reopen.
 # Document verbs only -> --headless.
 configure_file(scripts/e2e_default_floor.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-default_floor)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.default_floor
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.default_floor PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc default_floor ${CMAKE_CURRENT_BINARY_DIR}/e2e_default_floor.js 2 HEADLESS)
 
 # scripting.e2e.tray_panel — the asset tray shows EVERY ASSET A SCENE USES,
@@ -1705,23 +1176,11 @@ set_tests_properties(scripting.e2e.animation_assets_import PROPERTIES
 # player.screenshot rendering the player's OWN engine Scene through the
 # document's camera. NOT --headless: a headless run has no player backend at
 # all, which is the one thing player.state().available exists to report.
-add_script_e2e(player_verbs e2e_player_verbs.js)
 jah_pool_arm(player player_verbs ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_player_verbs.js 21 FIRST)   # FIRST: it asserts the Player page was never shown in the process
-set_tests_properties(scripting.e2e.player_verbs PROPERTIES TIMEOUT 300)
 
 # The graph READ/EDIT verbs (verb-coverage audit F2): graph.connections,
 # graph.nodeInfo, graph.removeNode and graph.disconnect over a script graph.
 # Document verbs only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-graph_edit)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.graph_edit
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_graph_edit.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.graph_edit PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc graph_edit ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_graph_edit.js 7 HEADLESS)
 
 # scripting.e2e.material_refusal — LEGACY-CONVERT-CRUD fix round: a material
@@ -1731,16 +1190,6 @@ jah_pool_arm(doc graph_edit ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_graph_edit.j
 # written over another. See the script's header.
 configure_file(scripts/e2e_material_refusal.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_refusal.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material-refusal)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.material_refusal
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_refusal.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.material_refusal PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets material_refusal ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_refusal.js 1 HEADLESS)
 
 # scripting.e2e.import_settings — the import decision end to end
@@ -1751,50 +1200,11 @@ jah_pool_arm(doc_assets material_refusal ${CMAKE_CURRENT_BINARY_DIR}/e2e_materia
 # the retirement of assets.setFit. Document verbs only -> --headless.
 # It replaces scripting.e2e.fitsize.
 configure_file(scripts/e2e_import_settings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_settings.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import-settings)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.import_settings
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_settings.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.import_settings PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets import_settings ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_settings.js 2 HEADLESS)
 
 jah_no_display(
-    scripting.e2e.avatar_verbs
-    scripting.e2e.graph_edit
-    scripting.e2e.mannequin
-    scripting.e2e.locomotion
-    scripting.e2e.static_semantics
-    scripting.e2e.mobility
-    scripting.e2e.anim
-    scripting.e2e.drawers
-    scripting.e2e.asset_delete
-    scripting.e2e.mesh_roundtrip
-    scripting.e2e.world_reach
-    scripting.e2e.ai_surface
-    scripting.e2e.scene_query
-    scripting.e2e.introspection
-    scripting.e2e.export_web
-    scripting.e2e.export_raw
-    scripting.e2e.light_bindings
-    scripting.e2e.metadata
-    scripting.e2e.video
     scripting.e2e.store_root
-    scripting.e2e.import_pipeline
-    scripting.e2e.decals
-    scripting.e2e.image_material
-    scripting.e2e.uv_tiling
-    scripting.e2e.pinned_reopen
-    scripting.e2e.shipped_assets
-    scripting.e2e.world_modes
-    scripting.e2e.looks
-    scripting.e2e.photon
-    scripting.e2e.import_settings
-    scripting.e2e.folders)
+    scripting.e2e.shipped_assets)
 
 # scripting.e2e.glb_textures — the owner's "the glb imports still don't work,
 # they import without the textures" (2026-09-09), as the round trip it really
@@ -1806,22 +1216,11 @@ jah_no_display(
 # NAME — in the CAS that name is the content's sha256. Document verbs only ->
 # --headless.
 configure_file(scripts/e2e_glb_textures.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-glb_textures)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.glb_textures
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.glb_textures PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets glb_textures ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js 1 HEADLESS)
 
 # AVATAR_RIG_PERF_SPEC §3.5: the rig-cost read surface, in the real binary with
 # the ENGINE UP — `available` is half of what the suite checks, and a headless
 # session reports false by design.
-add_script_e2e(rig_stats e2e_rig_stats.js)
 jah_pool_arm(avatar_anim rig_stats ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_rig_stats.js 12)
 
 # scripting.e2e.avatar_assets — AVATAR_ASSET_SPEC §9 gate T14.
@@ -1842,16 +1241,6 @@ jah_pool_arm(avatar_anim rig_stats ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_rig_s
 set(JAHSHAKA_BETA_WALK_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_walk.dae")
 set(JAHSHAKA_MANNEQUIN_DAE "${CMAKE_BINARY_DIR}/tests/avatar/fixtures/beta_mannequin.dae")
 configure_file(scripts/e2e_avatar_assets.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_assets.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar_assets)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.avatar_assets
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_assets.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets avatar_assets ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_assets.js 4 HEADLESS)
 
 # --- multi-selection (EDITOR_MULTISELECT_SPEC §5) ---------------------------
@@ -1861,31 +1250,8 @@ jah_pool_arm(doc_assets avatar_assets ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar_ass
 # node.rename (plan item 15): the sibling-unique copy rule and ONE recorded undo
 # step per rename; the undo itself is asserted in mcp.e2e (a --script run's
 # macro never closes). Document verbs only -> --headless.
-set(_nr_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-node_rename)
-file(MAKE_DIRECTORY ${_nr_home}/run)
-add_test(NAME scripting.e2e.node_rename
-         COMMAND ${JAH_FRESH_HOME} --warm ${_nr_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_node_rename.js --headless
-         WORKING_DIRECTORY ${_nr_home}/run)
-set_tests_properties(scripting.e2e.node_rename PROPERTIES
-    ENVIRONMENT "HOME=${_nr_home};JAHSHAKA_DATA_ROOT=${_nr_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
-    LABELS "scripting" TIMEOUT 120)
-jah_no_display(scripting.e2e.node_rename)
 jah_pool_arm(doc node_rename ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_node_rename.js 1 HEADLESS)
 
-foreach(_ms multiselect multiselect_edit)
-    set(_ms_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${_ms})
-    file(MAKE_DIRECTORY ${_ms_home})
-    file(MAKE_DIRECTORY ${_ms_home}/run)
-    add_test(NAME scripting.e2e.${_ms}
-             COMMAND ${JAH_FRESH_HOME} --warm ${_ms_home} --
-                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_${_ms}.js --headless
-             WORKING_DIRECTORY ${_ms_home}/run)
-    set_tests_properties(scripting.e2e.${_ms} PROPERTIES
-        ENVIRONMENT "HOME=${_ms_home};JAHSHAKA_DATA_ROOT=${_ms_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
-        LABELS "scripting" TIMEOUT 300)
-    jah_no_display(scripting.e2e.${_ms})
-endforeach()
 foreach(_ms multiselect multiselect_edit)
     jah_pool_arm(doc ${_ms} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_${_ms}.js 5 HEADLESS)
 endforeach()
@@ -1896,17 +1262,6 @@ endforeach()
 # asked on purpose. node.info on a deleted node, editor.selection with nothing
 # selected, editor.copy on an empty selection — plus the other half, that real
 # misuse still throws. Document verbs only -> --headless, no display.
-set(_ref_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-refusals)
-file(MAKE_DIRECTORY ${_ref_home}/run)
-add_test(NAME scripting.e2e.refusals
-         COMMAND ${JAH_FRESH_HOME} --warm ${_ref_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_refusals.js --headless
-         WORKING_DIRECTORY ${_ref_home}/run)
-set_tests_properties(scripting.e2e.refusals PROPERTIES
-    ENVIRONMENT "HOME=${_ref_home};JAHSHAKA_DATA_ROOT=${_ref_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
-jah_no_display(scripting.e2e.refusals)
 jah_pool_arm(doc refusals ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_refusals.js 2 HEADLESS)
 
 # SCENE-SCALE CONVENTION (owner 2026-09-08), verb half: scene.bounds — the world
@@ -1915,16 +1270,6 @@ jah_pool_arm(doc refusals ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_refusals.js 2 
 # it on a GPU is why the samples' 70 and 75 degree lenses went unnoticed for a
 # week). samples.cleanstart measures the shipped archives THROUGH these two; this
 # gates them against primitives of known size. Document verbs only -> --headless.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_bounds)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.scene_bounds
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_bounds.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.scene_bounds PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc scene_bounds ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_bounds.js 4 HEADLESS)
 
 # scripting.e2e.ogre_samples — SPECS/OGRE_SAMPLES_TAB_SPEC.md §6, the API-first
@@ -1938,17 +1283,6 @@ jah_pool_arm(doc scene_bounds ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_boun
 # so this suite proves the verbs answer honestly and spawn NOTHING when they
 # are absent — never that a sample runs. A gate that launched a second Vulkan
 # application would be a gate that fights the machine it runs on.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_samples)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.ogre_samples
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_samples.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.ogre_samples PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
-jah_no_display(scripting.e2e.ogre_samples)
 jah_pool_arm(doc ogre_samples ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_samples.js 2 HEADLESS)
 
 # scripting.e2e.ogre_ports — THE PORTS (SPECS/OGRE_SAMPLES_TAB_SPEC.md §3): the
@@ -1986,16 +1320,6 @@ set_tests_properties(scripting.e2e.ogre_ports PROPERTIES
 # scale is the detail-tiling knob, and — the byte-identical argument as a test —
 # that an unauthored layer at its defaults changes nothing.
 configure_file(scripts/e2e_detail_layers.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-detail_layers)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.detail_layers
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.detail_layers PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(shading detail_layers ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js 22)
 
 # MATERIAL_GAPS_SPEC ADDENDUM A-1: LIVE TEXTURES — pixels a producer writes at
@@ -2003,24 +1327,12 @@ jah_pool_arm(shading detail_layers ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers
 # them by guid like any other texture. Document verbs only -> --headless. The
 # load-bearing assertion is the WRITER one: a saved scene must not carry a live
 # guid, because nothing could ever resolve it again.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-live_textures)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.live_textures
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_textures.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.live_textures PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
-jah_no_display(scripting.e2e.live_textures)
 jah_pool_arm(doc_assets live_textures ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_textures.js 3 HEADLESS)
 
 # The PIXEL half of A-1: a live texture bound as a base colour map is sampled
 # by the renderer, a write changes what is drawn with no re-bind, and a run of
 # writes creates no new engine texture. Engine UP (no --headless): the whole
 # point is what the renderer does with the generation counter.
-add_script_e2e(live_texture_pixels e2e_live_texture_pixels.js)
 jah_pool_arm(shading_live live_texture_pixels ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_texture_pixels.js 59)
 
 # RENDER_PIPELINE_AUDIT 3.2 (smoke lane L12): a DUPLICATE RENDERS LIKE ITS
@@ -2029,7 +1341,6 @@ jah_pool_arm(shading_live live_texture_pixels ${CMAKE_CURRENT_SOURCE_DIR}/script
 # Material and the mirror drew it grey. Pixel probes on the original, a
 # node.duplicate copy and a duplicateSelection copy, then a repaint of the copy
 # that must leave the original red (a copy, not a shared material).
-add_script_e2e(duplicate_material e2e_duplicate_material.js)
 jah_pool_arm(shading_live duplicate_material ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_duplicate_material.js 10)
 # RENDER_PIPELINE_AUDIT 1.1/1.2 (smoke lane L12): EFFECTIVE VISIBILITY at the
 # Epic tier, full stack. Hiding a model's ROOT takes every part out of the lit
@@ -2037,7 +1348,6 @@ jah_pool_arm(shading_live duplicate_material ${CMAKE_CURRENT_SOURCE_DIR}/scripts
 # it again brings back every part EXCEPT one the user hid itself (the engine's
 # setVisible cascade re-drew it). Read through world.giStatus, scene.raycast and
 # the visibility report. Engine up: the lit volume is the renderer's answer.
-add_script_e2e(hierarchy_visibility e2e_hierarchy_visibility.js)
 jah_pool_arm(editor_view hierarchy_visibility ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_hierarchy_visibility.js 35)
 
 # ASSET_MEDIA_SPEC §3 Option A + A-1: a VIDEO decoded into a live texture —
@@ -2046,16 +1356,6 @@ jah_pool_arm(editor_view hierarchy_visibility ${CMAKE_CURRENT_SOURCE_DIR}/script
 # scripting.e2e.video relies on) -> --headless. Fixture: tests/scripting/
 # fixtures/tiny.mp4 (64x64, 16 frames at 8 fps).
 configure_file(scripts/e2e_video_texture.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_texture.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-video_texture)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.video_texture
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_texture.js --headless
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.video_texture PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 120)
 jah_pool_arm(doc_assets video_texture ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_texture.js 5 HEADLESS)
 
 # MATERIAL_GAPS_SPEC ADDENDUM A-5: the PER-MATERIAL REFLECTION CUBEMAP. Two
@@ -2063,17 +1363,8 @@ jah_pool_arm(doc_assets video_texture ${CMAKE_CURRENT_BINARY_DIR}/e2e_video_text
 # not. Engine UP — the row is only interesting because of what the renderer
 # binds, and the document cannot answer that.
 configure_file(scripts/e2e_reflection_map.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-reflection_map)
-file(MAKE_DIRECTORY ${_home}/run)
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (its flake was cold-cache uninitialised VRAM — a defect class, not time).
-add_test(NAME scripting.e2e.reflection_map
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.reflection_map PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    TIMEOUT 240 LABELS "scripting")
 jah_pool_arm(shading_live reflection_map ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js 40)
 
 # ---------------------------------------------------------------------------
@@ -2086,7 +1377,7 @@ jah_pool_arm(shading_live reflection_map ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflect
 # jah_no_display runs these with DISPLAY and WAYLAND_DISPLAY UNSET, which turns
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
-jah_no_display(scripting.e2e.video_texture scripting.e2e.animation_assets scripting.e2e.animation_assets_import scripting.e2e.avatar_assets scripting.e2e.glb_textures scripting.e2e.memory scripting.e2e.scene_bounds scripting.engine)
+jah_no_display(scripting.e2e.animation_assets scripting.e2e.animation_assets_import scripting.engine)
 # --- THE DEEP CLIPBOARD (SPECS/CLIPBOARD_SPEC.md P0 + P1) --------------------
 #
 # clipboard        the payload and the paste: one self-identifying TEXT envelope
@@ -2108,23 +1399,6 @@ jah_no_display(scripting.e2e.video_texture scripting.e2e.animation_assets script
 # All three are document verbs only -> --headless, no display, no GPU.
 foreach(_clip clipboard_xproject clipboard_assets)
     configure_file(scripts/e2e_${_clip}.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js @ONLY)
-endforeach()
-foreach(_clip clipboard clipboard_xproject clipboard_assets)
-    set(_clip_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${_clip})
-    file(MAKE_DIRECTORY ${_clip_home}/run)
-    if(_clip STREQUAL "clipboard")
-        set(_clip_script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard.js)
-    else()
-        set(_clip_script ${CMAKE_CURRENT_BINARY_DIR}/e2e_${_clip}.js)
-    endif()
-    add_test(NAME scripting.e2e.${_clip}
-             COMMAND ${JAH_FRESH_HOME} --warm ${_clip_home} --
-                     $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${_clip_script} --headless
-             WORKING_DIRECTORY ${_clip_home}/run)
-    set_tests_properties(scripting.e2e.${_clip} PROPERTIES
-        ENVIRONMENT "HOME=${_clip_home};JAHSHAKA_DATA_ROOT=${_clip_home}/.local/share/Jahshaka;QT_QPA_PLATFORM=offscreen"
-        LABELS "scripting" TIMEOUT 300)
-    jah_no_display(scripting.e2e.${_clip})
 endforeach()
 jah_pool_arm(doc_assets clipboard ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard.js 5 HEADLESS)
 foreach(_clip clipboard_xproject clipboard_assets)
@@ -2168,16 +1442,6 @@ set_tests_properties(scripting.e2e.ssr_mirror PROPERTIES
 # exposure is read off the VIEWPORT's converged luminance history, so the suite
 # is only meaningful with a real viewport rendering real frames. Four settle()
 # runs of 240 frames at Epic is what the timeout is for.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-screenshot_grades)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.screenshot_grades
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_screenshot_grades.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.screenshot_grades PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 600)
 jah_pool_arm(world_light screenshot_grades ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_screenshot_grades.js 99)
 
 # ATOM STAGE 1 — DETERMINISTIC LEVEL SELECTION (SPECS/NANITE_SPEC.md §7.3).
@@ -2195,16 +1459,6 @@ jah_pool_arm(world_light screenshot_grades ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e
 # static, measured to simplify to 480 and 240), configured in by path.
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_atom_lods.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lods)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.atom_lods
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.atom_lods PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 300)
 jah_pool_arm(atom atom_lods ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js 53)
 
 # ---------------------------------------------------------------------------
@@ -2217,16 +1471,6 @@ jah_pool_arm(atom atom_lods ${CMAKE_CURRENT_BINARY_DIR}/e2e_atom_lods.js 53)
 # enough to carry a chain, which is what makes the card's LOD level mean
 # something).
 configure_file(scripts/e2e_surface_cards.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js @ONLY)
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-surface_cards)
-file(MAKE_DIRECTORY ${_home}/run)
-add_test(NAME scripting.e2e.surface_cards
-         COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js
-         WORKING_DIRECTORY ${_home}/run)
-set_tests_properties(scripting.e2e.surface_cards PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting"
-    TIMEOUT 180)
 jah_pool_arm(gi_movers surface_cards ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_cards.js 45)
 
 # ---------------------------------------------------------------------------
@@ -2240,10 +1484,8 @@ jah_pool_arm(gi_movers surface_cards ${CMAKE_CURRENT_BINARY_DIR}/e2e_surface_car
 #                      shown DRAWS, instead of enabling a View with no scene and
 #                      leaving the previous page's pixels on the screen.
 # Both are engine-up (they assert frames), so neither is --headless.
-add_script_e2e(sample_open e2e_sample_open.js)
 jah_pool_arm(assets_import sample_open ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sample_open.js 50)
 # 300 like the other open-and-render suites: it imports an archive and opens it.
-set_tests_properties(scripting.e2e.sample_open PROPERTIES TIMEOUT 300)
 
 configure_file(scripts/e2e_player_no_editor.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_no_editor.js @ONLY)
@@ -2287,7 +1529,6 @@ set_tests_properties(scripting.e2e.player_bounce PROPERTIES
 # the New Scene dialog's two new controls (owner review R1 / R1b, lane
 # SMALL-UI-A). Engine up: the default template's sky is a RENDERER fact as much
 # as a document one, and the empty world has to be built by the same route.
-add_script_e2e(new_scene e2e_new_scene.js)
 jah_pool_arm(editor new_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_new_scene.js 26)
 
 # scripting.e2e.primitives — the ONE primitive table through the VERB (owner
@@ -2295,7 +1536,6 @@ jah_pool_arm(editor new_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_new_scene.
 # the tile icons, the old-guid mapping — is defaults.primitive_table; this is
 # "every name the drawer offers is a name the verb accepts", plus the retired
 # four refused by name, plus the Mirror Room still opening with its teapot.
-add_script_e2e(primitives e2e_primitives.js)
 jah_pool_arm(editor primitives ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_primitives.js 21)
 
 # scripting.e2e.add_primitive — ATOM P2's acceptance for the VERB: a primitive is a
@@ -2303,7 +1543,6 @@ jah_pool_arm(editor primitives ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_primitive
 # `app.renderStats().perObject` (a renderer reading, so the chain is proven all the
 # way through the mirror and the upload), and a bias of 0 pins every object at its
 # finest level. Needs the engine: no --headless.
-add_script_e2e(add_primitive e2e_add_primitive.js)
 jah_pool_arm(editor add_primitive ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_add_primitive.js 13)
 
 # scripting.e2e.material_tabs — MATERIALS_TABS_SPEC §5: SEVERAL MATERIALS OPEN

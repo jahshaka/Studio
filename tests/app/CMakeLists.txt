@@ -168,15 +168,6 @@ endif()
 # crash-1788594910 regression gate: switching scenes with play/simulate state
 # still armed must not crash (PlayBack::stopScene + updateSceneAnimation ran
 # against the closed project's torn-down scene). Real binary, scratch HOME.
-set(_ssap_home ${CMAKE_CURRENT_BINARY_DIR}/scene-switch-home)
-file(MAKE_DIRECTORY ${_ssap_home}/run)
-add_test(NAME app.scene_switch_after_play
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js
-         WORKING_DIRECTORY ${_ssap_home}/run)
-set_tests_properties(app.scene_switch_after_play PROPERTIES
-    ENVIRONMENT "HOME=${_ssap_home};JAHSHAKA_DATA_ROOT=${_ssap_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 300)
 jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js 21)
 
 # ---- app.multiselect_outline ------------------------------------------------
@@ -188,15 +179,6 @@ jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/
 # the old app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): an
 # Add-menu primitive IS outlined (the isBuiltIn regression gate of 2026-09-06 — its
 # "one selected" arm) and the GROUND never is (its ground arm).
-set(_mso_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-outline-home)
-file(MAKE_DIRECTORY ${_mso_home}/run)
-add_test(NAME app.multiselect_outline
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js
-         WORKING_DIRECTORY ${_mso_home}/run)
-set_tests_properties(app.multiselect_outline PROPERTIES
-    ENVIRONMENT "HOME=${_mso_home};JAHSHAKA_DATA_ROOT=${_mso_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 300)
 jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 4)
 
 # ---- app.window_fits --------------------------------------------------------
@@ -206,14 +188,4 @@ jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts
 # --headless: offscreen QPA, no engine, no display at all (jah_no_display), and
 # the offscreen screen is smaller than the .ui's authored 1612x1530 — which is
 # the condition the clamp exists for.
-set(_wf_home ${CMAKE_CURRENT_BINARY_DIR}/window-fits-home)
-file(MAKE_DIRECTORY ${_wf_home}/run)
-add_test(NAME app.window_fits
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js --headless
-         WORKING_DIRECTORY ${_wf_home}/run)
-set_tests_properties(app.window_fits PROPERTIES
-    ENVIRONMENT "HOME=${_wf_home};JAHSHAKA_DATA_ROOT=${_wf_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 120)
-jah_no_display(app.window_fits)
 jah_pool_arm(doc window_fits ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js 9 HEADLESS)
