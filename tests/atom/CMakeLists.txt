@@ -209,6 +209,19 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     add_test(NAME engine.atom_draw COMMAND test_atom_draw
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 600 LABELS "engine")
+    # ATOM-CPU-WALKS-1 — the per-frame CPU walks moved onto the GPU scene's change feed
+    # and the device. engine.tlas_compute: the device-written top-level instance array
+    # byte-equal to the CPU writer over a mixed set, its edits and the lattice.
+    # atom.words_still: a still frame visits no slot and re-hashes nothing; a mover
+    # frame visits its slot; an in-place material edit re-routes in one frame.
+    add_executable(test_cpu_walks test_cpu_walks.cpp)
+    jah_atom_engine_target(test_cpu_walks)
+    add_test(NAME engine.tlas_compute COMMAND test_cpu_walks --tlas-compute
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.tlas_compute PROPERTIES TIMEOUT 300 LABELS "engine")
+    add_test(NAME atom.words_still COMMAND test_cpu_walks --words-still
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.words_still PROPERTIES TIMEOUT 180 LABELS "engine")
     # atom.occlusion_exact — THE ID PASS'S TWO-PASS OCCLUSION IS EXACT (ATOM-OCCLUSION-1): two
     # identical worlds in lockstep, one with the occlusion and one frustum-only, every
     # frame's id image compared word for word over a still pose, a walk past a wall, a

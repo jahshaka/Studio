@@ -1527,18 +1527,23 @@ static int hitListMain()
 }
 
 // ===========================================================================
-// scale.cpu_walks — W13: FOUR O(N) CPU WALKS A FRAME.
-// Anchors: irisgl/engine/src/OgreGpuScene.cpp:841-900 (the dirty scan: stage
-// engine.gpuscene), OgreScene.cpp:2041-2063 (the card candidate walk, every frame: stage
-// engine.cards, around OgreScene::updateSurfaceCache), OgreAtomDraw.cpp:250-265 (the
-// Atom words walk + sort: stage engine.atomwords, around updateAtomDraw) and
-// OgreRayQuery.cpp:2035-2100 (the TLAS writer: stage engine.rayquery). The two middle
-// stages are this lane's (monitor stages only; nothing they wrap changed).
-// Numbers: each walk's CPU ms on a still frame and on a frame with one mover, at 10k.
-// (engine.rayquery also carries the ray tier's per-material decode WITNESS walk —
-// OgreRayQuery.cpp:3056-3068, every frame, before its movement gate — and
-// engine.atomwords runs the split's own witness twice a frame: at 10k materials those,
-// not the item walks, are most of a still frame's CPU.)
+// scale.cpu_walks — W13: FOUR O(N) CPU WALKS A FRAME, and ATOM-CPU-WALKS-1's bars.
+// The stages: engine.gpuscene (the dirty scan, OgreGpuScene.cpp ensureGpuScene),
+// engine.cards (the card candidates — since ATOM-CPU-WALKS-1 the change feed's
+// columns, OgreScene::CardFeed; the LIGHT walk it used to hide is its own nested
+// stage, engine.cards.lights, printed beside it), engine.atomwords (the split's word
+// set — the change feed and the PBS change log, OgreAtomDraw.cpp) and
+// engine.rayquery (the ray tier's frame — the instances written on the device by
+// the instance job rq_tlas_write.comp, OgreRayQuery.cpp).
+// THE GATE (ATOM-CPU-WALKS-1, fix round F2): the change-driven walks visit 0 slots on
+// a still frame and at most the moved slot on a mover frame (the change feed's
+// notifications, the split's words, the ray tier's feed). Their CPU ms — the brief's
+// 0.5 ms still / 1.5 ms mover — are printed `target:` lines: an ms bar under sibling
+// lanes' builds is a load flake, the visit count is the property. The DIRTY SCAN stays
+// a printed target: its bound needs a record of WHICH
+// nodes the document wrote (ENGINE V2's journal, V2-1) and none exists — the only
+// signal is a process-wide write counter (nodegraph.cpp markMoved), so a mover
+// frame still compares every item (the lane's STOP, stated in its report).
 // ===========================================================================
 static int cpuWalksMain()
 {
@@ -1550,9 +1555,27 @@ static int cpuWalksMain()
     mover->setMobility(iris::Mobility::Movable);   // see scale.tlas: a mover the renderer moves every frame
     frame(env, 30);
     const iris::Vec3 home = mover->getLocalPos();
-    static const char *kWalks[4] = { "engine.gpuscene", "engine.cards", "engine.atomwords", "engine.rayquery" };
-    static const char *kWhat[4] = { "the dirty scan", "the card candidate walk (the card cache's frame)",
-                                    "the Atom words walk + sort", "the TLAS writer" };
+    static const char *kWalks[5] = { "engine.gpuscene", "engine.cards", "engine.atomwords", "engine.rayquery",
+                                     "engine.cards.lights" };
+    static const char *kWhat[5] = { "the dirty scan", "the card candidates (the card cache's frame)",
+                                    "the Atom words (the change feed)", "the ray tier's frame (the TLAS by compute)",
+                                    "the card cache's light walk" };
+    // THE GATE IS THE WORK, NOT THE CLOCK (ATOM-CPU-WALKS-1 fix round F2): the three
+    // change-driven walks are gated on the SLOTS they visit — the change feed's
+    // notifications (every consumer is told exactly these), the split's word set and
+    // the ray tier's feed — 0 on a still frame and at most one per moved slot per
+    // frame on a mover frame. Their milliseconds are printed as `target:` lines: a CPU
+    // ms bar reads a sibling lane's -j3 build as much as this code (0.506 against 0.5
+    // once, under load).
+    struct Visits { unsigned long long feed = 0, words = 0, rays = 0; };
+    auto visits = [&] {
+        Visits v;
+        v.feed = env.scene->gpuSceneStatus().feedNotifies;
+        v.words = env.scene->atomDrawStatus().wordSlotVisits;
+        v.rays = env.scene->rayQueryStatus().feedSlotVisits;
+        return v;
+    };
+    size_t frames = 0;
     auto measure = [&](const char *label, bool move) {
         const auto recs = collect(env, [&] {
             for (int f = 0; f < 120; ++f) {
@@ -1560,9 +1583,9 @@ static int cpuWalksMain()
                 frame(env, 1);
             }
         });
-        std::array<double, 4> med{};
-        std::array<size_t, 4> seen{};
-        for (int k = 0; k < 4; ++k) {
+        std::array<double, 5> med{};
+        std::array<size_t, 5> seen{};
+        for (int k = 0; k < 5; ++k) {
             std::vector<double> v;
             for (const FrameRecord &r : recs) {
                 bool has = false;
@@ -1574,18 +1597,36 @@ static int cpuWalksMain()
             med[size_t(k)] = v.empty() ? 0.0 : stats(v).median;
             seen[size_t(k)] = v.size();
         }
+        frames = recs.size();
         std::printf("W13 %-10s frames %3zu | gpuscene %6.3f ms | cards %6.3f ms | atomwords %6.3f ms | rayquery %6.3f ms"
-                    " (medians; frames carrying each: %zu %zu %zu %zu)\n",
-                    label, recs.size(), med[0], med[1], med[2], med[3], seen[0], seen[1], seen[2], seen[3]);
+                    " | cards.lights %6.3f ms (medians; frames carrying each: %zu %zu %zu %zu %zu)\n",
+                    label, recs.size(), med[0], med[1], med[2], med[3], med[4], seen[0], seen[1], seen[2], seen[3],
+                    seen[4]);
         return med;
     };
+    const Visits v0 = visits();
     const auto still = measure("still", false);
+    const Visits v1 = visits();
     const auto moving = measure("one mover", true);
+    const Visits v2 = visits();
+    const unsigned long long moverFrames = frames;   // frames of the mover arm (one moved slot each)
+    std::printf("W13 visits  still: feed %llu, words %llu, ray tier %llu | mover (%llu frames, 1 mover): feed %llu, "
+                "words %llu, ray tier %llu\n",
+                v1.feed - v0.feed, v1.words - v0.words, v1.rays - v0.rays, moverFrames, v2.feed - v1.feed,
+                v2.words - v1.words, v2.rays - v1.rays);
     REQUIRE(moving[0] >= 0 && moving[1] >= 0 && moving[2] >= 0 && moving[3] >= 0,
             "every walk's stage was filed on the mover frames");
-    for (int k = 0; k < 4; ++k) {
+    REQUIRE(v1.feed == v0.feed && v1.words == v0.words && v1.rays == v0.rays,
+            "W13 a STILL frame at 10k visits 0 slots (the change feed %llu, the split's words %llu, the ray tier %llu)",
+            v1.feed - v0.feed, v1.words - v0.words, v1.rays - v0.rays);
+    REQUIRE(v2.feed > v1.feed && v2.feed - v1.feed <= moverFrames && v2.words - v1.words <= moverFrames &&
+                v2.rays - v1.rays <= moverFrames,
+            "W13 a MOVER frame visits at most the moved slot (feed %llu, words %llu, ray tier %llu over %llu frames)",
+            v2.feed - v1.feed, v2.words - v1.words, v2.rays - v1.rays, moverFrames);
+    for (int k = 0; k < 5; ++k) {
         const std::string what = std::string(kWhat[k]) + " (" + kWalks[k] + ") on a mover frame at 10k; still " +
-                                 std::to_string(still[size_t(k)]) + " ms";
+                                 std::to_string(still[size_t(k)]) + " ms" +
+                                 ((k >= 1 && k <= 3) ? " (bars 0.5 still / 1.5 mover)" : "");
         target("W13", moving[size_t(k)], "ms", what.c_str());
     }
     shutdown(env);
@@ -1628,6 +1669,57 @@ static void buildLattice(Env &env)
     env.doc->getRootNode()->applyStaticDefaults();
     setCamera(env, iris::Vec3(0, 12, 30), iris::Vec3(0, 8, 0));
     for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->giStatus().giAtRest) break; }
+}
+
+/// THE PAIRED FRAME ARMS (ATOM-CPU-WALKS-1, a TOOL, not a suite): a still frame and
+/// a frame with one thing moving, on the 10k world (`--frame-arms-world`: its Movable
+/// mover jittered, scale.cpu_walks' shape) or on the lattice (`--frame-arms-lattice`:
+/// one still cube dragged — the editor's drag). Each arm prints its PATH line and the
+/// four walks' stages; a base binary built from the same source is the other arm
+/// (one process per arm, alternated, under scripts/gpu-exclusive.sh).
+static int frameArmsMain(bool lattice)
+{
+    Env env;
+    World w;
+    iris::SceneNodePtr moving;
+    if (lattice) {
+        if (!boot(env, "test-scale-frame-arms-lattice-ogre.log")) return 1;
+        buildLattice(env);
+        armMonitor(env);
+        moving = env.doc->getRootNode()->children().at(4210);
+    } else {
+        if (!bootWorld(env, w, "test-scale-frame-arms-world-ogre.log")) return 1;
+        pathStill(env, 30);
+        iris::MeshNodePtr m = w.items[w.items.size() / 3];
+        m->setMobility(iris::Mobility::Movable);
+        moving = m;
+    }
+    frame(env, 30);
+    const iris::Vec3 home = moving->getLocalPos();
+    static const char *kWalks[5] = { "engine.gpuscene", "engine.cards", "engine.cards.lights", "engine.atomwords",
+                                     "engine.rayquery" };
+    auto arm = [&](const char *label, bool move) {
+        const auto recs = collect(env, [&] {
+            for (int f = 0; f < 120; ++f) {
+                if (move) moving->setLocalPos(home + iris::Vec3(lattice ? 0.05f * float(f % 40) : 0.02f * float(f % 2 ? 1 : -1), 0, 0));
+                frame(env, 1);
+            }
+        });
+        printPath(label, recs);
+        std::printf("WALKS %-9s", label);
+        for (const char *wk : kWalks) {
+            std::vector<double> v;
+            for (const FrameRecord &r : recs) v.push_back(stageMs(r, wk));
+            std::printf(" | %s %.3f", wk, stats(v).median);
+        }
+        std::printf("\n");
+        std::fflush(stdout);
+    };
+    arm(lattice ? "lat-still" : "wld-still", false);
+    arm(lattice ? "lat-mover" : "wld-mover", true);
+    moving->setLocalPos(home);
+    shutdown(env);
+    return 0;
 }
 
 static int latticeOwedMain()
@@ -1832,6 +1924,8 @@ int main(int argc, char **argv)
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
     if (mode == "--lattice-owed") return latticeOwedMain();
+    if (mode == "--frame-arms-world") return frameArmsMain(false);
+    if (mode == "--frame-arms-lattice") return frameArmsMain(true);
     if (mode == "--decode-exact") return decodeExactMain();
     std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
                 "--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed\n");
