@@ -117,6 +117,25 @@ set_tests_properties(gi.reflect_motion_norays PROPERTIES
                      TIMEOUT 300 LABELS "engine"
                      ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
+# A MOVING OBJECT'S REFLECTIONS (REFLECT-MOVERS-1): a sphere on a circle over a
+# glossy floor, a mirror floor, and a glossy sphere — the moving frame against
+# the settled one at the same pose, against the still case's same error.
+add_executable(test_reflect_mover test_reflect_mover.cpp)
+set_target_properties(test_reflect_mover PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_reflect_mover PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_reflect_mover JahshakaEngineMedia)
+target_link_libraries(test_reflect_mover PRIVATE JahshakaEngine)
+add_test(NAME gi.reflect_mover COMMAND test_reflect_mover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.reflect_mover PROPERTIES TIMEOUT 300 LABELS "engine")
+
 # THE COST, at the resolution the bar is stated at. Same binary, same fixture
 # builder, a different question (see costMain).
 #
