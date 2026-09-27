@@ -276,10 +276,8 @@ def build(clips=CLIPS, time_mode=None):
     # the canonical preset now carries aiProcess_GlobalScale (the FBX
     # unit-scale fix, irisgl/import/importflags.h), so a file declaring
     # centimetres imports at 1/100 scale — correctly, and it would have made
-    # this rig 12 mm tall and every golden pose in
-    # fixtures/golden_document_poses.txt wrong by a factor of 100. Declaring
-    # the unit the fixture is actually authored in keeps it byte-comparable
-    # with those goldens AND makes it the metres half of the unit gate
+    # this rig 12 mm tall. Declaring the unit the fixture is actually authored
+    # in keeps its limbs ~1 unit AND makes it the metres half of the unit gate
     # (the centimetre half is tests/importer/fixtures/unit_cube_cm.fbx).
     w("GlobalSettings:  {\n")
     w("\tVersion: 1000\n")

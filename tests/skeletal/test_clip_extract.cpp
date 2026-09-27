@@ -7,26 +7,31 @@
 // track therefore passes every glTF fixture in the tree and produces a FROZEN
 // character on every Mixamo FBX — invisibly.
 //
-// So this suite proves the "compose then resample" extractor (§3.1) against the
-// CURRENT document evaluator, on both a glTF rig (no pivots) and the tree's
-// first FBX fixture (five pivot nodes between two bones, every clip channel on
-// a pivot node and none on a bone). Document-only: no engine, no window.
+// So this suite proves the "compose then resample" extractor (§3.1) against
+// THE FILE'S OWN MOTION, on both a glTF rig (no pivots) and the tree's first
+// FBX fixture (five pivot nodes between two bones, every clip channel on a
+// pivot node and none on a bone). Document-only: no engine, no window.
 //
-// The oracle is FROZEN. The document evaluator this suite was written against
-// no longer exists — full retirement was the point of the program — so its
-// answers were recorded first, into fixtures/golden_document_poses.txt, and
-// that recording is what the extractor is checked against now.
+// THE ORACLE IS THE FILE. For every sample the suite takes, the bone's
+// parent-local TRS is composed straight from assimp's aiScene — the node
+// hierarchy's rest transforms and the raw aiNodeAnim keys, sampled by the
+// document's key rule (linear position/scale, slerp rotation, held outside the
+// key range) — over the same pivot chain. Nothing of the document import path
+// or of the extractor is in it, so what it guards is the behaviour: the
+// extracted track reproduces the motion the file authored.
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QFile>
 #include <QGuiApplication>
 #include <QTemporaryDir>
+#include <QHash>
 #include <QSet>
 #include <QTextStream>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <memory>
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
@@ -58,27 +63,112 @@ static const QString kFbxTpose =
 
 struct Trs { iris::Vec3 pos; iris::Quat rot; iris::Vec3 scale; };
 
-// THE FROZEN ORACLE.
-//
-// This suite's whole point is comparing the extractor against the document's
-// clip evaluator — and that evaluator is being deleted. A parity gate cannot
-// outlive its oracle unless the oracle's ANSWERS are kept, so they are: the
-// evaluator's bone-parent-local pose for every (fixture, clip, time, bone) this
-// suite samples, written out by `--write-golden` while the evaluator still
-// existed and committed beside the fixtures.
-//
-// Regenerating it is not possible any more, by design: the `--write-golden`
-// mode that produced it was deleted with the evaluator it read. The file
-// records what the document evaluator said before it was retired; if the
-// extractor stops agreeing with it, the extractor changed, and no amount of
-// re-running will make that go away. A writer that ran on the TIP would record
-// what the extractor says and compare the extractor with itself — which is why
-// there is a README beside the fixture archiving the recipe (and the two
-// commits it needs) instead of a --write-golden flag in this file.
-static const QString kGolden =
-    QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/golden_document_poses.txt");
+// ---- THE FILE ORACLE -----------------------------------------------------
 
-static QMap<QString, Trs> gGolden;      // "fixture|clip|time|bone" -> pose
+/// The document's key rule (keyframeanimation.h), restated over assimp's raw
+/// keys: the first key before the range, the last after it, linear between.
+template <typename Key, typename V, typename Lerp>
+static V sampleKeys(const Key *keys, unsigned count, double tps, double t, V fallback, Lerp lerp,
+                    V (*value)(const Key &))
+{
+    if (count == 0) return fallback;
+    const auto at = [&](unsigned i) { return keys[i].mTime / tps; };
+    if (count == 1 || t <= at(0)) return value(keys[0]);
+    if (t >= at(count - 1)) return value(keys[count - 1]);
+    for (unsigned i = 1; i < count; ++i) {
+        if (at(i) <= t) continue;
+        const double span = at(i) - at(i - 1);
+        const float u = span != 0.0 ? float((t - at(i - 1)) / span) : 0.0f;
+        return lerp(value(keys[i - 1]), value(keys[i]), u);
+    }
+    return value(keys[count - 1]);
+}
+
+static iris::Vec3 vecOf(const aiVectorKey &k) { return iris::Vec3(k.mValue.x, k.mValue.y, k.mValue.z); }
+static iris::Quat quatOf(const aiQuatKey &k) { return iris::Quat(k.mValue.w, k.mValue.x, k.mValue.y, k.mValue.z); }
+
+/// One file, one clip: the parent-local TRS of every bone at a time, composed
+/// from the aiScene alone.
+struct FileOracle
+{
+    const aiScene *scene = nullptr;
+    const aiAnimation *anim = nullptr;
+    double tps = 25.0;
+    QHash<QString, const aiNode *> byName;
+    QHash<QString, const aiNodeAnim *> channel;
+
+    bool init(const aiScene *s, const QString &clipName)
+    {
+        scene = s;
+        for (unsigned a = 0; a < s->mNumAnimations; ++a)
+            if (QString(s->mAnimations[a]->mName.C_Str()) == clipName) anim = s->mAnimations[a];
+        if (!anim) return false;
+        tps = anim->mTicksPerSecond > 0.0 ? anim->mTicksPerSecond : 25.0;   // mesh.cpp's rule
+        for (unsigned c = 0; c < anim->mNumChannels; ++c)
+            channel.insert(QString(anim->mChannels[c]->mNodeName.C_Str()), anim->mChannels[c]);
+        QVector<const aiNode *> order{ s->mRootNode };
+        for (int i = 0; i < order.size(); ++i) {
+            byName.insert(QString(order[i]->mName.C_Str()), order[i]);
+            for (unsigned k = 0; k < order[i]->mNumChildren; ++k) order.append(order[i]->mChildren[k]);
+        }
+        return true;
+    }
+
+    iris::Mat4 localAt(const aiNode *n, double t) const
+    {
+        const auto it = channel.constFind(QString(n->mName.C_Str()));
+        if (it == channel.constEnd()) {
+            aiVector3D sc, p; aiQuaternion r;
+            n->mTransformation.Decompose(sc, r, p);
+            return iris::composeTRS(iris::Vec3(p.x, p.y, p.z), iris::Quat(r.w, r.x, r.y, r.z),
+                                    iris::Vec3(sc.x, sc.y, sc.z));
+        }
+        const aiNodeAnim *c = it.value();
+        const auto lerpV = [](iris::Vec3 a, iris::Vec3 b, float u) { return a + (b - a) * u; };
+        const auto slerpQ = [](iris::Quat a, iris::Quat b, float u) { return iris::Quat::slerp(a, b, u); };
+        const iris::Vec3 p = sampleKeys(c->mPositionKeys, c->mNumPositionKeys, tps, t, iris::Vec3(), lerpV, &vecOf);
+        const iris::Quat r = sampleKeys(c->mRotationKeys, c->mNumRotationKeys, tps, t, iris::Quat(), slerpQ, &quatOf);
+        const iris::Vec3 sc = sampleKeys(c->mScalingKeys, c->mNumScalingKeys, tps, t, iris::Vec3(), lerpV, &vecOf);
+        return iris::composeTRS(p, r.normalized(), sc);
+    }
+
+    /// Root-first product of every local from `n` up to (not including) `stop`.
+    iris::Mat4 chain(const aiNode *n, const aiNode *stop, double t) const
+    {
+        iris::Mat4 m; m.setToIdentity();
+        for (; n && n != stop; n = n->mParent) m = localAt(n, t) * m;
+        return m;
+    }
+
+    /// `bone` in the frame of `frame` (its parent bone's node, or the skinned
+    /// mesh's node for a root bone) at time t. The shared ancestry cancels, so
+    /// it is not composed at all.
+    bool pose(const QString &bone, const QString &frame, double t, Trs &out) const
+    {
+        const aiNode *b = byName.value(bone, nullptr), *f = byName.value(frame, nullptr);
+        if (!b || !f) return false;
+        QSet<const aiNode *> above;
+        for (const aiNode *n = f; n; n = n->mParent) above.insert(n);
+        const aiNode *common = b;
+        while (common && !above.contains(common)) common = common->mParent;
+        const iris::Mat4 local = chain(f, common, t).inverted() * chain(b, common, t);
+        iris::decomposeTRS(local, out.pos, out.rot, out.scale);
+        return true;
+    }
+};
+
+/// The node that carries the skinned mesh in the FILE (the root bones' frame).
+static QString skinnedMeshNodeName(const aiScene *s)
+{
+    QVector<const aiNode *> order{ s->mRootNode };
+    for (int i = 0; i < order.size(); ++i) {
+        const aiNode *n = order[i];
+        for (unsigned m = 0; m < n->mNumMeshes; ++m)
+            if (s->mMeshes[n->mMeshes[m]]->mNumBones > 0) return QString(n->mName.C_Str());
+        for (unsigned k = 0; k < n->mNumChildren; ++k) order.append(n->mChildren[k]);
+    }
+    return QString();
+}
 
 static iris::MaterialPtr makeMat(iris::MeshPtr, iris::MeshMaterialData &)
 {
@@ -118,39 +208,6 @@ static float trsError(const Trs &a, const Trs &b)
     for (int i = 0; i < 16; ++i)
         worst = std::max(worst, std::fabs(ma.constData()[i] - mb.constData()[i]));
     return worst;
-}
-
-/// The frozen evaluator's answer for one sample, or a null pose when the file
-/// has no entry — which is itself a failure: the samples this suite takes and
-/// the ones the file holds must be the same set.
-static bool frozen(const QString &fixture, const QString &clip, float t, int bone, Trs &out)
-{
-    const QString key = QStringLiteral("%1|%2|%3|%4")
-                            .arg(fixture, clip, QString::number(double(t), 'f', 6))
-                            .arg(bone);
-    const auto it = gGolden.constFind(key);
-    if (it == gGolden.constEnd()) return false;
-    out = it.value();
-    return true;
-}
-
-static bool loadGolden()
-{
-    QFile f(kGolden);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
-    QTextStream in(&f);
-    while (!in.atEnd()) {
-        const QString line = in.readLine().trimmed();
-        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
-        const QStringList parts = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
-        if (parts.size() != 11) continue;
-        Trs v;
-        v.pos = iris::Vec3(parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat());
-        v.rot = iris::Quat(parts[7].toFloat(), parts[4].toFloat(), parts[5].toFloat(), parts[6].toFloat());
-        v.scale = iris::Vec3(parts[8].toFloat(), parts[9].toFloat(), parts[10].toFloat());
-        gGolden.insert(parts[0], v);
-    }
-    return !gGolden.isEmpty();
 }
 
 /// Sampling an extracted track the way an engine v1 track does: linear on
@@ -196,6 +253,9 @@ struct Loaded
     /// a clip has played is not the rest pose — the Avatar page's
     /// snapshot/restore hack exists for exactly this reason.
     iris::ClipExtractor::RestPose rest;
+    /// The same file read straight through assimp, for the oracle.
+    std::shared_ptr<Assimp::Importer> importer;
+    const aiScene *file = nullptr;
 };
 
 static bool load(const QString &path, const QString &extractDir, Loaded &out)
@@ -208,20 +268,21 @@ static bool load(const QString &path, const QString &extractDir, Loaded &out)
     out.mesh = findSkinned(node);
     out.host = findClipHost(node);
     out.rest = iris::ClipExtractor::captureRest(node);
-    return !out.mesh.isNull() && !out.host.isNull();
+    out.importer = std::make_shared<Assimp::Importer>();
+    out.file = out.importer->ReadFile(path.toStdString().c_str(), iris::ImportFlags::Canonical);
+    return !out.mesh.isNull() && !out.host.isNull() && out.file;
 }
 
 /// The whole gate for one (rig, clip): the extractor's tracks reproduce the
-/// document evaluator's bone-parent-local pose EXACTLY at every key time the
-/// extractor emitted, and within the resampling tolerance in between.
-static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const QString &fixture,
+/// FILE's bone-parent-local pose EXACTLY at every key time the extractor
+/// emitted, and within the resampling tolerance in between.
+static void gateClip(Loaded &f, const iris::AnimationPtr &anim,
                      const char *label, float exactTol, float betweenTol)
 {
     f.fragment->setAnimation(anim);
-    // Animation::getSampleTime is `fmod(time, length)` while looping, so the
-    // evaluator sampled at exactly the clip length answers for t = 0. The
-    // extractor pins a terminal key AT the length (R4), so the oracle has to be
-    // driven unwrapped or the comparison at that key is against the wrong pose.
+    // Animation::getSampleTime is `fmod(time, length)` while looping; the
+    // extractor pins a terminal key AT the length (R4), and the file oracle is
+    // unwrapped, so the clip is driven unwrapped too.
     const bool wasLooping = anim->getLooping();
     anim->setLooping(false);
     iris::ExtractedClip clip;
@@ -256,14 +317,22 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const QString &f
     CHECK(wellFormed, (QString("[%1] tracks are sorted, strictly increasing, and pinned "
                                "at 0 and at the clip length (R4)").arg(label)).toUtf8().constData());
 
-    // THE ORACLE: what the document clip evaluator said this bone's
-    // parent-local TRS was at time t, read out of the frozen recording.
-    bool goldenComplete = true;
-    const int boneCount = f.mesh->getSkeleton()->bones.size();
+    // THE ORACLE: this bone's parent-local TRS at time t, composed from the
+    // file's own hierarchy and keys (FileOracle). The frame is the parent
+    // BONE's node, or the skinned mesh's node for a root bone.
+    FileOracle file;
+    const bool fileClip = file.init(f.file, anim->getName());
+    CHECK(fileClip, (QString("[%1] the clip is in the file the oracle reads").arg(label))
+                        .toUtf8().constData());
+    bool oracleComplete = fileClip;
+    const auto &bones = f.mesh->getSkeleton()->bones;
+    const QString meshFrame = skinnedMeshNodeName(f.file);
     const auto oracleAt = [&](float t) {
-        QVector<Trs> pose(boneCount);
-        for (int b = 0; b < boneCount; ++b)
-            if (!frozen(fixture, anim->getName(), t, b, pose[b])) goldenComplete = false;
+        QVector<Trs> pose(bones.size());
+        for (int b = 0; b < bones.size(); ++b) {
+            const QString frame = bones[b]->parentBone.isNull() ? meshFrame : bones[b]->parent()->name;
+            if (!fileClip || !file.pose(bones[b]->name, frame, t, pose[b])) oracleComplete = false;
+        }
         return pose;
     };
 
@@ -280,7 +349,7 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const QString &f
     }
     std::printf("    worst |error| at %d key times: %.3e\n", samplesAtKeys, double(worstAtKeys));
     CHECK(worstAtKeys < exactTol,
-          (QString("[%1] the composed track reproduces the document evaluator at every key "
+          (QString("[%1] the composed track reproduces the file's motion at every key "
                    "time (< %2)").arg(label).arg(double(exactTol))).toUtf8().constData());
 
     // ---- resampling error between keys ------------------------------------
@@ -303,8 +372,8 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const QString &f
           (QString("[%1] resampled error stays inside the documented tolerance (< %2)")
                .arg(label).arg(double(betweenTol))).toUtf8().constData());
 
-    CHECK(goldenComplete,
-          (QString("[%1] the frozen oracle covers every sample this suite takes")
+    CHECK(oracleComplete,
+          (QString("[%1] the file oracle answers for every bone this suite samples")
                .arg(label)).toUtf8().constData());
     anim->setLooping(wasLooping);
 }
@@ -320,8 +389,6 @@ int main(int argc, char **argv)
     if (!graph.require()) return 1;
     QTemporaryDir extract;
 
-    CHECK(loadGolden(), "the frozen document-evaluator oracle loads");
-    std::printf("    frozen oracle entries: %lld\n", (long long)gGolden.size());
 
     // =====================================================================
     // 1. The FBX fixture really is what it claims to be.
@@ -385,8 +452,7 @@ int main(int argc, char **argv)
 
         for (const auto &anim : f.fragment->getAnimations()) {
             if (!anim || !anim->hasSkeletalAnimation()) continue;
-            gateClip(f, anim, QStringLiteral("rig2.glb"),
-                     ("glTF/" + anim->getName()).toUtf8().constData(), 1e-5f, 1e-2f);
+            gateClip(f, anim, ("glTF/" + anim->getName()).toUtf8().constData(), 1e-5f, 1e-2f);
         }
     }
 
@@ -419,8 +485,7 @@ int main(int argc, char **argv)
             // The FBX composition is genuinely lossier than the glTF one: three
             // channels on one bone chain, sampled at 2, 3 and 3 times over a
             // second, are as sparse as a clip ever gets.
-            gateClip(f, anim, QStringLiteral("pivot_rig.fbx"),
-                     ("FBX/" + anim->getName()).toUtf8().constData(), 1e-5f, 6e-2f);
+            gateClip(f, anim, ("FBX/" + anim->getName()).toUtf8().constData(), 1e-5f, 6e-2f);
         }
         CHECK(walkClips == 1 && zeroLengthClips == 1,
               "the file carries one real clip and one ZERO-LENGTH clip (one key, no "
