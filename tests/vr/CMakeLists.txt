@@ -406,6 +406,28 @@ foreach(_arm warmup warmup_control)
         FIXTURES_REQUIRED vr${_arm}FreshHome
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_home};JAHSHAKA_DATA_ROOT=${_vr_warm_home}/.local/share/Jahshaka")
 endforeach()
+# vr.warmup.timing — the warmed arm's 250 ms worst-frame bar, nightly (lane D6B-GATE-SHAPE;
+# audit §5 F17 FIX-TIME). The COUNT (no compile on a shown frame) is vr.warmup's at push; this
+# is a generated copy of the same script with the bar armed (jah_timing_script), on its own
+# wiped home (the bar means something only cold, like the count), quiet box, the GPU lock.
+set(_vr_warm_timing_home "${CMAKE_CURRENT_BINARY_DIR}/vr-warmup-timing-home")
+jah_timing_script("${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_warmup.js"
+                  "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js")
+add_test(NAME vr.warmup.timing.fresh_home
+         COMMAND sh -c "rm -rf '${_vr_warm_timing_home}' && mkdir -p '${_vr_warm_timing_home}'")
+set_tests_properties(vr.warmup.timing.fresh_home PROPERTIES
+    FIXTURES_SETUP vrwarmuptimingFreshHome LABELS "scripting;nightly;quiet-box")
+jah_gpu_exclusive_test(NAME vr.warmup.timing RUN_TIMEOUT 600
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+            "${CMAKE_CURRENT_BINARY_DIR}/e2e_vr_warmup.timing.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.warmup.timing PROPERTIES
+    LABELS "scripting;nightly;quiet-box"
+    RESOURCE_LOCK monado
+    SKIP_RETURN_CODE 77
+    FIXTURES_REQUIRED vrwarmuptimingFreshHome
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_warm_timing_home};JAHSHAKA_DATA_ROOT=${_vr_warm_timing_home}/.local/share/Jahshaka")
 
 # vr.frame_budget — THE 90 Hz BAR'S RIG ARMS (lane V1-RIG item 5;
 # SPECS/PHOTON_SPEC.md §11 item 8, MASTER_QUEUE §681-C).

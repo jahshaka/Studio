@@ -96,6 +96,14 @@ add_test(NAME meshbake.cards COMMAND test_mesh_bake --cards
 set_tests_properties(meshbake.cards PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka"
     TIMEOUT 180 LABELS "meshbake")
+# meshbake.cards.timing — the bake's two wall-clock bars (the 4x-triangles-not-4x-time
+# ratio and the 4,000 ms ceiling), nightly (lane D6B-GATE-SHAPE; audit §5 FIX-TIME):
+# the same binary with JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
+jah_gpu_exclusive_test(NAME meshbake.cards.timing RUN_TIMEOUT 180 COMMAND test_mesh_bake --cards
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(meshbake.cards.timing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home};JAHSHAKA_DATA_ROOT=${_bake_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+    LABELS "meshbake;nightly;quiet-box")
 
 # THE MEASURED LOD BOUND (ATOM P1's AT-A5) — `atom.error_bound`. Its own test name
 # because it is its own claim: for every level of every shipped mesh, an AREA-ONLY
@@ -216,6 +224,6 @@ jah_no_display(meshbake.rebake_generation)
 jah_no_display(meshbake.hemisphere_winding)
 
 jah_no_display(meshbake.roundtrip)
-jah_no_display(meshbake.cards)
+jah_no_display(meshbake.cards meshbake.cards.timing)
 jah_no_display(atom.error_bound)
 jah_no_display(meshbake.sdf)

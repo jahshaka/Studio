@@ -49,22 +49,16 @@ set_tests_properties(scripting.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 # JahLibrary.db and projects folder and can never touch the user's live
 # library. XAUTHORITY/DISPLAY are inherited from the session (the engine needs
 # a reachable X display; XWayland on :0 in CI-like runs, lavapipe covers no-GPU).
-# add_script_e2e(<name> <script.js> [GPU_EXCLUSIVE]) — GPU_EXCLUSIVE registers the row through
-# the GPU-timing lock (tests/CMakeLists.txt, jah_gpu_exclusive_test; DEVPROCESS-1): its run budget
-# stays 180 s and the lock's 900 s wait rides on top.
+# add_script_e2e(<name> <script.js>). (Its GPU_EXCLUSIVE option went with the last caller that
+# measured no time — scripting.e2e.sun_light, audit §4 R4; a timing row registers through
+# jah_gpu_exclusive_test itself.)
 function(add_script_e2e name scriptfile)
-    cmake_parse_arguments(E "GPU_EXCLUSIVE" "" "" ${ARGN})
     set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${name})
     file(MAKE_DIRECTORY ${_home})
     file(MAKE_DIRECTORY ${_home}/run)
     set(_cmd $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${scriptfile})
-    if(E_GPU_EXCLUSIVE)
-        jah_gpu_exclusive_test(NAME scripting.e2e.${name} RUN_TIMEOUT 180 COMMAND ${_cmd}
-                               WORKING_DIRECTORY ${_home}/run)
-    else()
-        add_test(NAME scripting.e2e.${name} COMMAND ${_cmd} WORKING_DIRECTORY ${_home}/run)
-        set_tests_properties(scripting.e2e.${name} PROPERTIES TIMEOUT 180)
-    endif()
+    add_test(NAME scripting.e2e.${name} COMMAND ${_cmd} WORKING_DIRECTORY ${_home}/run)
+    set_tests_properties(scripting.e2e.${name} PROPERTIES TIMEOUT 180)
     set_tests_properties(scripting.e2e.${name} PROPERTIES
         ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
         LABELS "scripting")
@@ -258,6 +252,19 @@ add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
 add_script_e2e(custom_piece e2e_custom_piece.js)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 add_script_e2e(editor_controls e2e_editor_controls.js)
+# scripting.e2e.editor_controls.timing — the per-selection 11 ms frame bar, nightly (lane
+# D6B-GATE-SHAPE; audit §5 F17 FIX-TIME): a generated copy of the script with the bar armed
+# (jah_timing_script), its own home, quiet box, the GPU-timing lock.
+set(_ect_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_controls-timing)
+file(MAKE_DIRECTORY ${_ect_home}/run)
+jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js
+                  ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js)
+jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing RUN_TIMEOUT 180
+    COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js
+    WORKING_DIRECTORY ${_ect_home}/run)
+set_tests_properties(scripting.e2e.editor_controls.timing PROPERTIES
+    ENVIRONMENT "HOME=${_ect_home};JAHSHAKA_DATA_ROOT=${_ect_home}/.local/share/Jahshaka"
+    LABELS "scripting;nightly;quiet-box")
 # smoke S15: every rotation ring clickable from every camera, asked through
 # editor.gizmoHitTest in the REAL viewport (gizmo.ring_pick covers the geometry
 # document-side).
@@ -441,7 +448,7 @@ add_script_e2e(presentation_state e2e_presentation_state.js)
 # VISUAL_PARITY re-audit F5: sun/sky-light coupling — world.sunLight links a
 # directional light to the realistic sky's sun, the light follows the dials,
 # unlinking gives manual control back, and the link is a document field.
-add_script_e2e(sun_light e2e_sun_light.js GPU_EXCLUSIVE)   # DEVPROCESS-1: the GPU-timing lock
+add_script_e2e(sun_light e2e_sun_light.js)   # out of the GPU-timing lock: it measures no time (audit §4 R4)
 # THE 2D CLOUD LAYER (CLOUDS-2D-1): the world.clouds block (defaults, clamps,
 # refusals, undo, save/reopen), coverage 0 byte-identical to no layer, the
 # environment SH moving with the coverage, the ground shadow against the sun's
@@ -1266,13 +1273,14 @@ set(JAH_SAMPLES_DIR ${CMAKE_BINARY_DIR}/bin/scenes)
 configure_file(scripts/e2e_space_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space_switch)
 file(MAKE_DIRECTORY ${_home}/run)
-# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME scripting.e2e.space_switch RUN_TIMEOUT 300
+# OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
+# (its script's only Date.now names projects).
+add_test(NAME scripting.e2e.space_switch
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.space_switch PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting")
+    TIMEOUT 300 LABELS "scripting")
 
 # The verb surface's SCENE_STATIC contract + scene.raycast — the 2026-09-05
 # scripting-audit regression net (F1/F2/F4/F7/F12; F3's undo half waits for
@@ -1904,13 +1912,14 @@ set_tests_properties(scripting.e2e.video_texture PROPERTIES
 configure_file(scripts/e2e_reflection_map.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-reflection_map)
 file(MAKE_DIRECTORY ${_home}/run)
-# DEVPROCESS-1: registered through the GPU-timing lock; TIMEOUT = RUN_TIMEOUT + the lock's 900 s wait.
-jah_gpu_exclusive_test(NAME scripting.e2e.reflection_map RUN_TIMEOUT 240
+# OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
+# (its flake was cold-cache uninitialised VRAM — a defect class, not time).
+add_test(NAME scripting.e2e.reflection_map
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_reflection_map.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.reflection_map PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-    LABELS "scripting")
+    TIMEOUT 240 LABELS "scripting")
 
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here

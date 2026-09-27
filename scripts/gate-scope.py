@@ -76,7 +76,8 @@ AREA_RULES = [
     # display-free shell scripts, well under a second.
     # `atom` and `compute` (D6B-GATE-SHAPE; audit S2): irisgl/import/meshbake.cpp carries the
     # cluster-DAG bake, and atom.cluster_cut / atom.cluster_crack / engine.lod_rule_parity are
-    # its only guards.
+    # its only guards — nightly-labelled or not, a change to the bake selects them (§1 of
+    # docs/TESTING_GATE.md: a `nightly` row still rides the scoped gate of its own subject).
     (r"^irisgl/import/",
      ["importer", "importasync", "meshbake", "avatar", "skeletal", "assetdelete", "assetgc",
       "assetmeta", "assetmigrate", "assetpaths", "assets", "samples", "thumbnails", "hygiene",
@@ -213,10 +214,21 @@ AREA_RULES = [
 # Cheap smoke suites always added when src/ or irisgl/ moved (a boot that renders + the
 # contract of the scripting surface), ~15 s together.
 ALWAYS_ON_CODE = ["app.startup_quiet", "api.contract"]
-# Anchored: `benchmark` alone would also drop the `benchmark-smoke` rows and `shadercache`
-# would drop the product-contract cache suites (code review 2026-09-10). `--timeout 120` is
-# ctest's DEFAULT for the rows that set no TIMEOUT (46 of them) — a hang costs 2 min, not 25.
-NIGHTLY_LABELS = {"benchmark", "shadercache-attack"}
+# THE NIGHTLY TIER (D6B-GATE-SHAPE; audit §8 — `benchmark` used to be overloaded as this
+# marker, so open.crash_soak and gi.gather_cost carried a label that said the wrong thing).
+#   `nightly`     — every row the MERGE and PUSH tiers leave out: minutes of one process whose
+#                   push-time guard lives elsewhere, or a millisecond bar that needs a quiet box.
+#   `quiet-box`   — beside `nightly` on the rows that MEASURE (the wall-clock benchmarks, the
+#                   `<suite>.timing` millisecond rows, a GPU clock). A scoped gate never runs
+#                   them: it shares the box with other lanes by construction.
+# A `nightly` row WITHOUT `quiet-box` still rides the scoped gate of its own subject — it is
+# that change's guard (atom.cluster_cut for a bake change: audit §3c's condition for the move).
+# Anchored in the -LE: `shadercache` alone would drop the product-contract cache suites (code
+# review 2026-09-10). `--timeout 120` is ctest's DEFAULT for the rows that set no TIMEOUT — a
+# hang costs 2 min, not 25.
+NIGHTLY_LABELS = {"nightly", "shadercache-attack"}
+# Never selected by a scoped gate (the shader-cache attack is minutes under ASan).
+SCOPE_EXCLUDED_LABELS = {"quiet-box", "shadercache-attack"}
 
 # TARGET TESTS (PHOTON phase A, A1 §0; the label's ONE definition lives here).
 #
@@ -249,6 +261,13 @@ NIGHTLY_LABEL_RE = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS | TARGET
 def merge_tier(jobs=4):
     return (f'ctest -j{jobs} --timeout 120 --output-on-failure '
             f'-LE "^({NIGHTLY_LABEL_RE})$"')
+
+
+# The NIGHTLY tier: every `nightly` row, one at a time (they are minutes of one process or a
+# measurement that wants the box), on a quiet box, by the lead.
+def nightly_tier():
+    rx = "|".join(sorted(re.escape(l) for l in NIGHTLY_LABELS))
+    return f'ctest -j1 --output-on-failure -L "^({rx})$"'
 
 
 def sh(cmd, cwd=ROOT):
@@ -482,11 +501,15 @@ def main():
     ap.add_argument("--merge-tier", action="store_true",
                     help="print the MERGE tier's ctest command (at -j) and exit — the one source "
                          "docs/TESTING_GATE.md quotes instead of a copy of the -LE set")
+    ap.add_argument("--nightly-tier", action="store_true",
+                    help="print the NIGHTLY tier's ctest command (every `nightly` row, -j1) and exit")
     a = ap.parse_args()
     if a.record_times:
         record_times(a.record_times); return
     if a.merge_tier:
         print(merge_tier(a.jobs)); return
+    if a.nightly_tier:
+        print(nightly_tier()); return
     build = resolve_build(a.build)
     if not (a.range or a.files):
         ap.error("give a range (base..tip) or --files")
@@ -599,10 +622,9 @@ def main():
         rationale.append((p, "; ".join(hit) or "NO RULE → merge tier"))
     if code_moved: add(ALWAYS_ON_CODE, "code moved: smoke + contract")
 
-    # The nightly guards never ride a scoped gate (they are the PUSH/NIGHTLY tier's).
-    # (gi.ddgi_raster used to be named here beside them; the suite was deleted with the
-    # irradiance field's rasterised probe source on 2026-09-17, lane FIELD-RASTER-CRUD.)
-    nightly = [n for n in selected if inv[n]["labels"] & NIGHTLY_LABELS]
+    # The quiet-box measurements never ride a scoped gate (see NIGHTLY_LABELS). A `nightly`
+    # row without `quiet-box` stays: its subject changed, and it is that change's guard.
+    nightly = [n for n in selected if inv[n]["labels"] & SCOPE_EXCLUDED_LABELS]
     for n in nightly: selected.pop(n)
     # TARGET TESTS ARE SPLIT OUT, NOT DROPPED (see TARGET_LABELS): they run, they
     # print their value, and their exit code is not the gate's.
@@ -638,7 +660,7 @@ def main():
         return
     if skipped_ubiquitous:
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(skipped_ubiquitous)})")
-    if nightly: print(f"\n(nightly-tier suites left out: {sorted(nightly)})")
+    if nightly: print(f"\n(quiet-box / nightly measurements left out: {sorted(nightly)})")
     if targets:
         print(f"\nTARGET TESTS (label {'/'.join(sorted(TARGET_LABELS))}) — they RUN and PRINT their "
               f"value, and they do NOT decide this gate:")

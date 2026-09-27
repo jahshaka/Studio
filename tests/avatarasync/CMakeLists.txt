@@ -27,7 +27,17 @@ add_test(NAME avatar.responsive COMMAND test_avatar_async
 set_tests_properties(avatar.responsive PROPERTIES
     ENVIRONMENT "HOME=${_avatar_async_home};JAHSHAKA_DATA_ROOT=${_avatar_async_home}/.local/share/Jahshaka"
     TIMEOUT 900 LABELS "avatar")
+# avatar.responsive.timing — THE MILLISECOND BARS, nightly (lane D6B-GATE-SHAPE; audit §5,
+# F17 FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1 on a quiet box, under the
+# GPU-timing lock; the push row asserts the rest and prints the readings.
+set(_avatar_async_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar-async-timing)
+file(MAKE_DIRECTORY ${_avatar_async_timing_home}/run)
+jah_gpu_exclusive_test(NAME avatar.responsive.timing RUN_TIMEOUT 900 COMMAND test_avatar_async
+         WORKING_DIRECTORY ${_avatar_async_timing_home}/run)
+set_tests_properties(avatar.responsive.timing PROPERTIES
+    ENVIRONMENT "HOME=${_avatar_async_timing_home};JAHSHAKA_DATA_ROOT=${_avatar_async_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+    LABELS "avatar;nightly;quiet-box")
 
 # Spawns the app (and therefore a Vulkan driver): neither sanitizer lane can
 # take it — same reason import.shutdown and archive.responsive are blocked.
-jah_tsan_blocked(avatar.responsive)
+jah_tsan_blocked(avatar.responsive avatar.responsive.timing)

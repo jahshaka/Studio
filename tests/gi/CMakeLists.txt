@@ -778,6 +778,13 @@ add_test(NAME gi.field_follows COMMAND test_gi_field_follows
 # In the gi_chain family like every cascade suite, and a wide timeout: the walk
 # renders a frame at a time.
 set_tests_properties(gi.field_follows PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+# gi.field_follows.timing — the walk's frame-time bars (no frame over the tier's 16.7 ms),
+# nightly (lane D6B-GATE-SHAPE; audit §5 F17 FIX-TIME): the same binary with
+# JAHSHAKA_TIMING_BARS=1, quiet box, the GPU-timing lock.
+jah_gpu_exclusive_test(NAME gi.field_follows.timing RUN_TIMEOUT 300 COMMAND test_gi_field_follows
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_follows.timing PROPERTIES
+    ENVIRONMENT "JAHSHAKA_TIMING_BARS=1" LABELS "engine;nightly;quiet-box" RESOURCE_LOCK gi_chain)
 # gi.field_scroll — THE IRRADIANCE FIELD SCROLLS (PHOTON-WRITER-1, FIELD-SCROLL):
 # a cascade-0 step keeps the probes that stay in the field's toroidal window byte
 # for byte and integrates only the planes that entered; three steps out and back
@@ -1302,17 +1309,17 @@ set_tests_properties(gi.gather PROPERTIES TIMEOUT 900 LABELS "engine")
 
 # THE COST, at the resolution the spec's budget table is stated at.
 #
-# LABELLED `benchmark`, AND RUN_SERIAL, BECAUSE IT READS THE GPU'S CLOCK. The
-# MERGE and PUSH tiers exclude that label by construction (-LE benchmark), and
-# they must: this rig's GPU idles at 210 of 3105 MHz under Xvfb unless the
+# LABELLED `nightly;quiet-box`, RUN_SERIAL AND IN THE GPU-TIMING LOCK, BECAUSE IT READS
+# THE GPU'S CLOCK. The MERGE and PUSH tiers exclude `nightly` by construction and a
+# scoped gate never runs `quiet-box`, and they must: this rig's GPU idles at 210 of 3105 MHz under Xvfb unless the
 # clocks are locked by hand, so a GPU-time number taken inside a -j4 gate is
 # not a measurement. The suite PRINTS its milliseconds and asserts only a
 # catastrophe ceiling; the numbers of record are taken by hand with the clocks
 # locked (spikes/gather-1a/FINDINGS.md).
-add_test(NAME gi.gather_cost COMMAND test_gi_gather
+jah_gpu_exclusive_test(NAME gi.gather_cost RUN_TIMEOUT 900 COMMAND test_gi_gather
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_cost PROPERTIES
-                     TIMEOUT 900 LABELS "benchmark" RUN_SERIAL TRUE
+                     LABELS "nightly;quiet-box" RUN_SERIAL TRUE
                      ENVIRONMENT "JAH_GATHER_COST=1")
 
 # ...and the picture a machine WITHOUT ray queries draws, which this lane may

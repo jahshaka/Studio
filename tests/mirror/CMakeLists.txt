@@ -65,12 +65,14 @@ target_compile_definitions(test_mirror_scale PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_mirror_scale PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_mirror_scale JahshakaEngineMedia)
-add_test(NAME mirror.scale COMMAND test_mirror_scale WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# RUN_SERIAL: it is a TIMING suite. The ratios are load-tolerant by construction
-# (every arm pays the same contention) but a suite sharing a core with four
-# Vulkan gates measures the scheduler, not the walk.
+# THE GPU-TIMING LOCK: it is a TIMING suite (lane D6B-GATE-SHAPE; audit §4 R3 — it was
+# RUN_SERIAL, which reaches only inside one ctest). The ratios are load-tolerant by
+# construction (every arm pays the same contention), and the lock keeps every other
+# measurement on the box out of its window.
+jah_gpu_exclusive_test(NAME mirror.scale RUN_TIMEOUT 300 COMMAND test_mirror_scale
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.scale PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 RUN_SERIAL TRUE LABELS "mirror")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "mirror")
 
 # mirror.dirty_equals_full — THE DIFFERENTIAL TEST of the dirty-set mirror
 # (SPECS/DIRTY_SET_MIRROR_SPEC.md §7.1). For every class of mutation the
