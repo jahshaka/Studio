@@ -1213,18 +1213,20 @@ static int hitListMain()
 }
 
 // ===========================================================================
-// scale.cpu_walks — W13: FOUR O(N) CPU WALKS A FRAME.
-// Anchors: irisgl/engine/src/OgreGpuScene.cpp:841-900 (the dirty scan: stage
-// engine.gpuscene), OgreScene.cpp:2041-2063 (the card candidate walk, every frame: stage
-// engine.cards, around OgreScene::updateSurfaceCache), OgreAtomDraw.cpp:250-265 (the
-// Atom words walk + sort: stage engine.atomwords, around updateAtomDraw) and
-// OgreRayQuery.cpp:2035-2100 (the TLAS writer: stage engine.rayquery). The two middle
-// stages are this lane's (monitor stages only; nothing they wrap changed).
-// Numbers: each walk's CPU ms on a still frame and on a frame with one mover, at 10k.
-// (engine.rayquery also carries the ray tier's per-material decode WITNESS walk —
-// OgreRayQuery.cpp:3056-3068, every frame, before its movement gate — and
-// engine.atomwords runs the split's own witness twice a frame: at 10k materials those,
-// not the item walks, are most of a still frame's CPU.)
+// scale.cpu_walks — W13: FOUR O(N) CPU WALKS A FRAME, and ATOM-CPU-WALKS-1's bars.
+// The stages: engine.gpuscene (the dirty scan, OgreGpuScene.cpp ensureGpuScene),
+// engine.cards (the card candidates — since ATOM-CPU-WALKS-1 the change feed's
+// columns, OgreScene::CardFeed; the LIGHT walk it used to hide is its own nested
+// stage, engine.cards.lights, printed beside it), engine.atomwords (the split's word
+// set — the change feed and the PBS change log, OgreAtomDraw.cpp) and
+// engine.rayquery (the ray tier's frame — the instances written on the device by
+// Jahshaka/TlasWrite, OgreRayQuery.cpp).
+// BARS (ATOM-CPU-WALKS-1 §1): the card candidates, the words and the ray tier's
+// frame each <= 0.5 ms on a still frame and <= 1.5 ms on a frame with one mover, at
+// 10k. The DIRTY SCAN stays a printed target: its bound needs a record of WHICH
+// nodes the document wrote (ENGINE V2's journal, V2-1) and none exists — the only
+// signal is a process-wide write counter (nodegraph.cpp markMoved), so a mover
+// frame still compares every item (the lane's STOP, stated in its report).
 // ===========================================================================
 static int cpuWalksMain()
 {
@@ -1236,9 +1238,11 @@ static int cpuWalksMain()
     mover->setMobility(iris::Mobility::Movable);   // see scale.tlas: a mover the renderer moves every frame
     frame(env, 30);
     const iris::Vec3 home = mover->getLocalPos();
-    static const char *kWalks[4] = { "engine.gpuscene", "engine.cards", "engine.atomwords", "engine.rayquery" };
-    static const char *kWhat[4] = { "the dirty scan", "the card candidate walk (the card cache's frame)",
-                                    "the Atom words walk + sort", "the TLAS writer" };
+    static const char *kWalks[5] = { "engine.gpuscene", "engine.cards", "engine.atomwords", "engine.rayquery",
+                                     "engine.cards.lights" };
+    static const char *kWhat[5] = { "the dirty scan", "the card candidates (the card cache's frame)",
+                                    "the Atom words (the change feed)", "the ray tier's frame (the TLAS by compute)",
+                                    "the card cache's light walk" };
     auto measure = [&](const char *label, bool move) {
         const auto recs = collect(env, [&] {
             for (int f = 0; f < 120; ++f) {
@@ -1246,9 +1250,9 @@ static int cpuWalksMain()
                 frame(env, 1);
             }
         });
-        std::array<double, 4> med{};
-        std::array<size_t, 4> seen{};
-        for (int k = 0; k < 4; ++k) {
+        std::array<double, 5> med{};
+        std::array<size_t, 5> seen{};
+        for (int k = 0; k < 5; ++k) {
             std::vector<double> v;
             for (const FrameRecord &r : recs) {
                 bool has = false;
@@ -1261,15 +1265,22 @@ static int cpuWalksMain()
             seen[size_t(k)] = v.size();
         }
         std::printf("W13 %-10s frames %3zu | gpuscene %6.3f ms | cards %6.3f ms | atomwords %6.3f ms | rayquery %6.3f ms"
-                    " (medians; frames carrying each: %zu %zu %zu %zu)\n",
-                    label, recs.size(), med[0], med[1], med[2], med[3], seen[0], seen[1], seen[2], seen[3]);
+                    " | cards.lights %6.3f ms (medians; frames carrying each: %zu %zu %zu %zu %zu)\n",
+                    label, recs.size(), med[0], med[1], med[2], med[3], med[4], seen[0], seen[1], seen[2], seen[3],
+                    seen[4]);
         return med;
     };
     const auto still = measure("still", false);
     const auto moving = measure("one mover", true);
     REQUIRE(moving[0] >= 0 && moving[1] >= 0 && moving[2] >= 0 && moving[3] >= 0,
             "every walk's stage was filed on the mover frames");
-    for (int k = 0; k < 4; ++k) {
+    for (int k = 1; k <= 3; ++k) {
+        REQUIRE(still[size_t(k)] <= 0.5, "W13 %s (%s) on a STILL frame at 10k: %.3f ms (bar 0.5)", kWhat[k], kWalks[k],
+                still[size_t(k)]);
+        REQUIRE(moving[size_t(k)] <= 1.5, "W13 %s (%s) on a MOVER frame at 10k: %.3f ms (bar 1.5)", kWhat[k],
+                kWalks[k], moving[size_t(k)]);
+    }
+    for (int k : { 0, 4 }) {
         const std::string what = std::string(kWhat[k]) + " (" + kWalks[k] + ") on a mover frame at 10k; still " +
                                  std::to_string(still[size_t(k)]) + " ms";
         target("W13", moving[size_t(k)], "ms", what.c_str());

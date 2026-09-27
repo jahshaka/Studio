@@ -131,6 +131,10 @@ jah_scale_row(scale.far_field    --far-field     ${SCALE_T_FAR}          FALSE) 
 jah_scale_row(scale.bake         --bake          ${SCALE_T_BAKE}         FALSE)  # W11 (CPU only: no GPU, no display)
 jah_scale_row(scale.hit_list     --hit-list      ${SCALE_T_HIT}          FALSE)  # W12 (record counts)
 jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)   # W13
+# ...A BAR SINCE ATOM-CPU-WALKS-1 (the card candidates, the words and the ray tier's
+# frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall
+# removes the label, so the row gates. The dirty scan stays a printed target inside it.
+set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 jah_no_display(scale.bake)
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
