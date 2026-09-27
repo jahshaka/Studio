@@ -33,6 +33,24 @@ struct CliOptions
     /// written against. Exists for demos and for the suite that proves the
     /// live half does what it claims.
     bool liveScript = false;
+    /// --scripts <dir-or-list> [--pool <name>] [--arms <a,b>]: THE POOL RUNNER
+    /// (lane SUITE-POOL-1; jahshaka/docs/TESTING.md). Runs several scripts —
+    /// the ARMS of one test pool — in ONE process, so a family of suites pays
+    /// one boot instead of one per suite. <dir-or-list> is a directory (every
+    /// `*.js` in it, sorted; the arm is the file's base name) or a comma list
+    /// of `[<arm>=]<path>`. Each arm runs in a FRESH JavaScript realm on the
+    /// boot's baseline (the project closed, the editor page re-begun on a new
+    /// default scene) and prints `ARM <pool>.<arm> PASS|FAIL <ms> [reason]`;
+    /// `--arms` runs the named subset (the solo retry). A crash is detected
+    /// and the pool continued by the ctest driver (tests/support/run_pool.py),
+    /// never here. Exit code: the number of failed arms (clamped 0-255).
+    QString poolScripts;
+    /// --pool <name>: the pool's name in the ARM lines (default "pool").
+    QString poolName;
+    /// --arms <a,b>: only these arms, in the list's order.
+    QStringList poolArms;
+    /// A script run of either shape (--script or --scripts).
+    bool isScriptRun() const { return !scriptPath.isEmpty() || !poolScripts.isEmpty(); }
     /// --dump-api-docs <file.md>: write the registry-generated verb reference.
     QString dumpDocsPath;
     /// --mcp-port=N: serve MCP on 127.0.0.1:N for this run (implies enabled;

@@ -434,6 +434,7 @@ void ScriptWorker::setup(const QVariantList &moduleSpecs, const QString &apiVers
     mJs->globalObject().setProperty(QStringLiteral("__bridge"), mJs->newQObject(mBridge));
 
     auto *console = new ConsoleBridge(this);
+    mConsole = console;
     mJs->globalObject().setProperty(QStringLiteral("__console_bridge"), mJs->newQObject(console));
 
     QJSValue installer = mJs->evaluate(QString::fromLatin1(kInstallShim));
@@ -499,7 +500,13 @@ void ScriptWorker::teardown()
 {
     delete mJs;     // a QJSEngine must be destroyed on the thread that made it
     mJs = nullptr;
+    // The bridges die with their realm: setup() makes a new pair for the next
+    // one (ScriptEngine::resetScriptContext), and a pair per realm left parented
+    // to this worker would accumulate one per pool arm.
+    delete mBridge;
     mBridge = nullptr;
+    delete mConsole;
+    mConsole = nullptr;
 }
 
 #include "scriptworker.moc"

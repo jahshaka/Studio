@@ -2380,3 +2380,21 @@ set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
     FIXTURES_REQUIRED presetSeedRaceHome
     LABELS "scripting"
     TIMEOUT 300)
+
+# pool.runner — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py): the real app,
+# headless, over five fixture arms (a fresh realm and a closed project between arms, a thrown
+# assertion and a numeric completion value as FAIL, the pool going on, JAH_POOL_ARMS's subset
+# and its unknown-arm FAIL), and the driver against a stand-in app for what the real one cannot
+# be asked to do (a SIGSEGV mid-arm, a hang past the budget, a lost baseline — one arm each).
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-runner)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME pool.runner
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} --
+                 ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/support/test_run_pool.py
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${JAH_RUN_POOL}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/pool_selftest
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(pool.runner PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "pool;scripting" TIMEOUT 180)
+jah_no_display(pool.runner)

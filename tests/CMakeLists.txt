@@ -365,6 +365,139 @@ function(jah_no_display)
     endforeach()
 endfunction()
 
+# THE POOLS (lane SUITE-POOL-1; SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md §5; the
+# developer's read is docs/TESTING.md). The app runs ONE script per `--script` process, and a
+# boot costs ~14 s engine-up on a cold cache (every gate after a rebuild), ~5.5 s warm, ~3.2 s
+# headless — so a family of N verb suites paid N boots, and app suites were 77 % of the gate.
+# A POOL is ONE ctest row, `pool.<pool>`, whose ONE process runs the family's scripts as named
+# ARMS (`Jahshaka --scripts … --pool <pool>`, src/app/cli/scriptrunner.cpp): every arm starts in
+# a fresh JavaScript realm on the boot's baseline (the project the previous arm left closed
+# through `project.close`, the editor page re-begun on a new default scene) and prints
+# `ARM <pool>.<arm> PASS|FAIL <ms>`; the driver (tests/support/run_pool.py) turns a dead process
+# into `CRASH` for the arm that was running (a hung one into `TIMEOUT`), restarts, and continues
+# from the next arm. The row is red iff an arm is; its last lines name every arm's verdict;
+# `JAH_POOL_ARMS=<pool>.<arm> ctest -R '^pool\.<pool>$'` is the solo retry of one arm.
+#
+#   jah_pool_arm(<pool> <arm> <script> <seconds> [HEADLESS] [FIRST])
+#       — one arm, declared WHERE ITS SUITE'S COMMENT LIVES (the comment says what it claims).
+#         Arms run in declaration order; FIRST puts the one arm whose claim is about the
+#         PROCESS ("the Player page has never been shown") before every other (one per pool).
+#   jah_add_pool(<pool> [HEADLESS] [LABELS <label…>] [ENV <k=v…>]
+#                [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
+#       — the row, after its arms (in the family's CMakeLists, so gate-scope's "a file under
+#         tests/<dir>/ selects that dir's rows" keeps holding). LAUNCHER runs the driver inside
+#         a fixture process (tests/vr/run_vr_app.sh --launch: a Monado runtime for the pool's
+#         life); APP_ARGS are latched by every process the pool starts (--vr); PROPS are extra
+#         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE).
+#
+# <seconds> is the arm's MEASURED time INSIDE its pool (whole seconds, rounded up — the pool's
+# `ARM … <ms>` lines are the measurement). THE BUDGETS ARE DERIVED, NEVER TYPED: an arm is
+# killed past 6x its measured time (never under 30 s), and the row's TIMEOUT is the sum of the
+# arms' budgets plus one boot budget (300 s). A slower arm is re-measured, never re-budgeted.
+# The home is fresh every run (fresh_home.sh --warm, as add_script_e2e); the arms SHARE it, so
+# an arm never asserts on what another arm left behind — each pool was proved arm by arm against
+# its solo suites before they were deleted (spikes/suite-pool-1/).
+#
+# THE RULE FOR A NEW TEST (docs/TESTING_GATE.md §8): a lane adds an ARM to its family's pool —
+# a script and one jah_pool_arm line. A ROW of its own only for a new fixture or a process
+# switch: a fresh home as the claim, an environment variable or flag the process latches at boot
+# (--vr, --script-live, JAHSHAKA_NO_RAY_QUERY, JAHSHAKA_TEST_NO_EDITOR_BOOT…), a GPU-lock timing,
+# a private display, or a crash-class churn.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(JAH_RUN_POOL "${CMAKE_SOURCE_DIR}/tests/support/run_pool.py")
+set(JAH_POOL_BOOT_BUDGET 300)
+function(jah_pool_arm pool arm script secs)
+    cmake_parse_arguments(A "HEADLESS;FIRST" "" "" ${ARGN})
+    if(NOT secs MATCHES "^[0-9]+$")
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): seconds '${secs}' is not a whole number")
+    endif()
+    if(NOT EXISTS "${script}")
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): no script at ${script}")
+    endif()
+    get_property(_names GLOBAL PROPERTY JAH_POOL_${pool}_NAMES)
+    if("${arm}" IN_LIST _names)
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): the arm is declared twice")
+    endif()
+    get_property(_done GLOBAL PROPERTY JAH_POOL_${pool}_ADDED)
+    if(_done)
+        message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): declared after jah_add_pool(${pool})")
+    endif()
+    set(_mode engine)
+    if(A_HEADLESS)
+        set(_mode headless)
+    endif()
+    set_property(GLOBAL APPEND PROPERTY JAH_POOL_${pool}_NAMES "${arm}")
+    if(A_FIRST)
+        get_property(_first GLOBAL PROPERTY JAH_POOL_${pool}_FIRST)
+        if(_first)
+            message(FATAL_ERROR "jah_pool_arm(${pool} ${arm}): ${_first} is already the pool's FIRST arm")
+        endif()
+        set_property(GLOBAL PROPERTY JAH_POOL_${pool}_FIRST "${arm}")
+        get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
+        list(PREPEND _arms "${arm}|${script}|${secs}|${_mode}")
+        set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ARMS "${_arms}")
+    else()
+        set_property(GLOBAL APPEND PROPERTY JAH_POOL_${pool}_ARMS "${arm}|${script}|${secs}|${_mode}")
+    endif()
+endfunction()
+
+function(jah_add_pool pool)
+    cmake_parse_arguments(P "HEADLESS" "" "LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
+    get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
+    if(NOT _arms)
+        message(FATAL_ERROR "jah_add_pool(${pool}): no jah_pool_arm(${pool} …) before it")
+    endif()
+    set(_want engine)
+    set(_modeflag)
+    if(P_HEADLESS)
+        set(_want headless)
+        set(_modeflag --headless)
+    endif()
+    set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-${pool})
+    file(MAKE_DIRECTORY ${_home}/run)
+    set(_args)
+    set(_timeout ${JAH_POOL_BOOT_BUDGET})
+    set(_cost 0)
+    foreach(_entry IN LISTS _arms)
+        string(REPLACE "|" ";" _f "${_entry}")
+        list(GET _f 0 _arm)
+        list(GET _f 1 _script)
+        list(GET _f 2 _secs)
+        list(GET _f 3 _mode)
+        if(NOT _mode STREQUAL _want)
+            message(FATAL_ERROR "jah_add_pool(${pool}): arm ${_arm} is ${_mode}, the pool is ${_want}")
+        endif()
+        math(EXPR _budget "${_secs} * 6")
+        if(_budget LESS 30)
+            set(_budget 30)
+        endif()
+        math(EXPR _timeout "${_timeout} + ${_budget}")
+        math(EXPR _cost "${_cost} + ${_secs}")
+        list(APPEND _args --arm ${_arm} ${_script} ${_budget})
+    endforeach()
+    set(_env "HOME=${_home}" "JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka" ${P_ENV})
+    list(REMOVE_ITEM _env "")
+    set(_appargs)
+    if(P_APP_ARGS)
+        set(_appargs -- ${P_APP_ARGS})
+    endif()
+    add_test(NAME pool.${pool}
+             COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} -- ${P_LAUNCHER}
+                     ${Python3_EXECUTABLE} ${JAH_RUN_POOL} --pool ${pool}
+                     --app $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${_modeflag}
+                     --boot-budget ${JAH_POOL_BOOT_BUDGET} ${_args} ${_appargs}
+             WORKING_DIRECTORY ${_home}/run)
+    set_tests_properties(pool.${pool} PROPERTIES
+        ENVIRONMENT "${_env}"
+        LABELS "pool;${P_LABELS}"
+        TIMEOUT ${_timeout}
+        COST ${_cost})
+    if(P_PROPS)
+        set_tests_properties(pool.${pool} PROPERTIES ${P_PROPS})
+    endif()
+    set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ADDED TRUE)
+endfunction()
+
 add_subdirectory(engine)
 add_subdirectory(document)
 add_subdirectory(math)
