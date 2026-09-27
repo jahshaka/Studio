@@ -153,9 +153,11 @@ acceptance tests" are arm names (`gi_verbs.my_claim`) as often as row names.
 ## 5. Reading a red
 
 1. **Find the arm.** A pool's last lines name every arm's verdict. `FAIL` carries the first
-   failing assertion; the arm's own output is above it, between its `ARM-BEGIN` and its `ARM`
-   line. `CRASH`/`TIMEOUT` mean the process died or was killed IN that arm; the next arms ran
-   in a new process and have their own verdicts.
+   failing assertion; a red arm's own output is quoted (`| …`) just above its `ARM` line. A
+   green arm's output stays out of the row's output (ctest truncates a passing row's), in
+   `pool-logs/<pool>-process<N>.log` in the row's working directory — its path is printed.
+   `CRASH`/`TIMEOUT` mean the process died or was killed IN that arm or in the baseline
+   right after it; the next arms ran in a new process and have their own verdicts.
 2. **Retry the arm alone**, through the real row:
    `JAH_POOL_ARMS=<pool>.<arm> DISPLAY=:NN ctest -R '^pool\.<pool>$' --output-on-failure`.
    Green alone and red in its pool, three times, is a STATE LEAK between arms: fix the arm's

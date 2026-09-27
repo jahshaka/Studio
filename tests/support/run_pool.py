@@ -130,11 +130,24 @@ def main():
     budget = {n: b for n, _, b in opt["list"]}
     verdicts = {}   # arm -> (verdict, ms, reason)
 
+    # THE OUTPUT IS TRIAGE, NOT A LOG: the app's own lines go to one file per process
+    # (pool-logs/, in the row's working directory, which fresh_home wipes every run) and reach
+    # ctest's output only for an arm that did NOT pass (or a process that never began one). A
+    # pool's whole output is megabytes, and ctest truncates what it keeps of a passing row —
+    # the run log's `ARM` lines were cut away with it (measured: 21 of 29 doc arms recorded).
+    os.makedirs("pool-logs", exist_ok=True)
+    pending = {}    # arm -> its buffered lines
+    boot = []       # lines of the current process before its first arm
+
     def settle(arm, verdict, ms, why=""):
         """THE ONE CHANNEL: an arm's verdict is printed exactly once, as an `ARM` line, when
         it is FINAL — after the pool's baseline held (or failed) behind it. The app's own
-        `ARM` line is held until then (echoed as `arm-result`, which no reader counts)."""
+        `ARM` line is not repeated (it is `arm-result …` in the per-process log)."""
         verdicts[arm] = (verdict, ms, why)
+        lines = pending.pop(arm, [])
+        if verdict != "PASS" and lines:
+            say("---- %s.%s: its output (%d line(s)) ----" % (pool, arm, len(lines)))
+            for l in lines: say("| " + l)
         say("ARM %s.%s %s %d%s" % (pool, arm, verdict, ms, (" " + why) if why else ""))
 
     for u in unknown:
@@ -156,6 +169,10 @@ def main():
         say("pool: %s process %d — %d arm(s): %s" % (pool, process, len(remaining),
                                                      " ".join(n for n, _, _ in remaining)))
         started = time.monotonic()
+        logname = os.path.join("pool-logs", "%s-process%d.log" % (pool, process))
+        plog = open(logname, "w")
+        say("pool: %s process %d output -> %s" % (pool, process, os.path.abspath(logname)))
+        boot = []
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 preexec_fn=child_setup)
         q = queue.Queue()
@@ -185,9 +202,12 @@ def main():
                 continue
             if line is None:
                 break
+            plog.write(line + "\n")
+            if current is not None: pending.setdefault(current, []).append(line)
+            elif held: pending.setdefault(held[0], []).append(line)
+            else: boot.append(line)
             m = ARM_END.match(line)
             if m and m.group(1) == pool:
-                say("arm-result " + line[len("ARM "):])
                 held = (m.group(2), m.group(3), int(m.group(4)), m.group(5) or "")
                 if m.group(3) != "PASS": fails_here += 1
                 current = None
@@ -197,21 +217,22 @@ def main():
                 continue
             m = BASELINE_LOST.match(line)
             if m and m.group(1) == pool:
-                say(line)
                 lost = (m.group(2), m.group(3))
                 continue
-            say(line)
             m = ARM_BEGIN.match(line)
             if m and m.group(1) == pool:
                 if held:            # the previous arm's baseline held: its result is final
                     settle(*held); held = None
                 current = m.group(2)
+                say(line)           # ARM-BEGIN: the run log's crash detector reads it
+                pending[current] = [line]
                 began_any = True
                 current_t0 = time.monotonic()
                 deadline = current_t0 + budget.get(current, opt["boot"])
                 continue
         rc = proc.wait()
         t.join(timeout=5)
+        plog.close()
         how = ("signal %d" % -rc) if rc < 0 else ("exit %d" % rc)
 
         if current is not None:
@@ -236,6 +257,8 @@ def main():
                 settle(arm, v, ms, why)
         remaining = [a for a in remaining if a[0] not in verdicts]
         if remaining and not began_any:
+            say("---- %s process %d: its output before any arm (%d line(s)) ----" % (pool, process, len(boot)))
+            for l in boot[-200:]: say("| " + l)
             # The process never started an arm: a boot failure. Restarting would fail the
             # same way; every remaining arm is named.
             for n, _, _ in remaining:

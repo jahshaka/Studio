@@ -11,7 +11,7 @@ arm's budget, a lost baseline — each costs exactly its own arm and the pool co
 
 Usage: test_run_pool.py <Jahshaka> <run_pool.py> <fixture dir>
 """
-import os, subprocess, sys, tempfile
+import glob, os, subprocess, sys, tempfile
 
 failures = 0
 def check(cond, what):
@@ -33,8 +33,17 @@ def verdicts(out):
 
 def run(cmd, env=None):
     e = dict(os.environ); e.update(env or {})
+    for f in glob.glob("pool-logs/*.log"): os.unlink(f)
     r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=e, text=True, errors="replace")
     return r.returncode, r.stdout
+
+def show(out):
+    """The inner pools' output, quoted: its `ARM` lines are THIS row's fixtures, not arms of
+    pool.runner, and the run log must not read them as such."""
+    for line in out.splitlines(): print("| " + line)
+
+def app_log():
+    return "".join(open(f).read() for f in sorted(glob.glob("pool-logs/*.log")))
 
 app, driver, fixtures = sys.argv[1:4]
 arms = []
@@ -46,7 +55,7 @@ base = [sys.executable, driver, "--pool", "selftest", "--app", app, "--headless"
 
 # ---- part 1: the real app -------------------------------------------------------------
 rc, out = run(base + arms, {"JAH_POOL_ARMS": ""})
-print(out)
+show(out)
 v = verdicts(out)
 check(rc == 1, "the pool row fails when an arm fails (driver exit %d)" % rc)
 check(v.get("selftest.a", ("",))[0] == "PASS", "arm a PASS")
@@ -57,13 +66,16 @@ check(v.get("selftest.c", ("", ""))[0] == "FAIL" and "the expected failure" in v
 check(v.get("selftest.d", ("", ""))[0] == "FAIL" and "completion value 2" in v["selftest.d"][1],
       "arm d FAIL: a numeric completion value is the arm's failure count")
 check(v.get("selftest.e", ("",))[0] == "PASS", "arm e PASS: the pool goes on after failed arms")
-check(out.count("pool: selftest process") == 1, "one process ran all five arms")
-check(out.count("pool-baseline-ran") == 5,
-      "the pool's BASELINE script ran after every arm, the red ones too (%d of 5)" % out.count("pool-baseline-ran"))
+check("RESTART" not in out, "one process ran all five arms")
+log = app_log()
+check(log.count("pool-baseline-ran") == 5,
+      "the pool's BASELINE script ran after every arm, the red ones too (%d of 5)" % log.count("pool-baseline-ran"))
+check("the expected failure" in out and "ok: arm a created" not in out,
+      "a red arm's own output reaches the row's output; a green arm's stays in pool-logs/")
 check(not verdicts.twice, "every arm's verdict is ONE `ARM` line (twice: %s)" % verdicts.twice)
 
 rc, out = run(base + arms, {"JAH_POOL_ARMS": "other.x,selftest.b,selftest.nope"})
-print(out)
+show(out)
 v = verdicts(out)
 check(set(v) == {"selftest.b", "selftest.nope"}, "JAH_POOL_ARMS ran only the arms it named for this pool (%s)" % sorted(v))
 check(v.get("selftest.b", ("",))[0] == "PASS", "...and arm b passes alone")
@@ -97,7 +109,7 @@ for n in ("p1", "crash", "p2", "hang", "p3", "lost", "p4", "chatty", "diesafter"
 rc, out = run([sys.executable, driver, "--pool", "fake", "--app", fake.name, "--boot-budget", "4"] + fargs,
               {"JAH_POOL_ARMS": ""})
 os.unlink(fake.name)
-print(out)
+show(out)
 v = verdicts(out)
 check(v.get("fake.crash", ("",))[0] == "CRASH" and "signal 11" in v["fake.crash"][1],
       "a process that dies mid-arm is that arm's CRASH, with the signal")
