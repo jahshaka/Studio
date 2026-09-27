@@ -129,10 +129,10 @@ jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 
 # open.crash_soak — the crash itself, N times, under glibc's heap checks.
 #
-# NIGHTLY (label `nightly`, D6B-GATE-SHAPE — it was labelled `benchmark` when that label
-# doubled as the nightly marker): out of the MERGE and PUSH tiers (`gate-scope.py
-# --merge-tier`), and — being minutes of one process rather than a measurement — still
-# selected by the scoped gate of a change to its own directory.
+# NIGHTLY (labels `nightly;quiet-box`, D6B-GATE-SHAPE — it was labelled `benchmark` when that
+# label doubled as the nightly marker): out of the MERGE and PUSH tiers (`gate-scope.py
+# --merge-tier`) AND out of every scoped gate — twelve RUN_SERIAL engine processes read
+# probabilistically would stop a lane's scoped gate for minutes and ask for re-runs.
 #
 # PROBABILISTIC ON THE BASE, deterministic-ish on the fix: 9 failures in 12 runs
 # before the slice boundary drove a frame, 0 in 12 after, measured twice. Read a
@@ -145,5 +145,5 @@ add_test(NAME open.crash_soak
                  ${CMAKE_SOURCE_DIR}/scenes
                  ${CMAKE_CURRENT_BINARY_DIR}/soak 12)
 set_tests_properties(open.crash_soak PROPERTIES
-    TIMEOUT 900 RUN_SERIAL TRUE LABELS "nightly")
+    TIMEOUT 900 RUN_SERIAL TRUE LABELS "nightly;quiet-box")
 jah_tsan_blocked(open.crash_soak)

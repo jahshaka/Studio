@@ -97,12 +97,14 @@ measures the largest one that is, or a 250 k shell it bakes, and says so.
 - **`nightly`** — the row leaves the MERGE and PUSH tiers (`NIGHTLY_LABELS`) and runs in the
   nightly tier. It is either MINUTES OF ONE PROCESS whose push-time guard lives elsewhere
   (atom.cluster_cut 141 s and atom.cluster_crack 136 s — the bake's sweeps; gi.chain_converge_scenes
-  80 s, whose claim gi.chain_converge holds at every push; open.crash_soak) or a measurement.
+  80 s, whose claim gi.chain_converge holds at every push) or a measurement.
   **A `nightly` row still rides the SCOPED gate of its own subject**: a change to the bake
   (irisgl/import) selects the cluster suites, a GI change the converge sweep — the move was
   made only after the scope rules could see them (the audit's condition, S2).
 - **`quiet-box`**, beside `nightly` on every row that MEASURES — the wall-clock benchmarks,
-  gi.gather_cost (the GPU clock), vr.frame_budget, and the `<suite>.timing` rows (§4). A scoped
+  gi.gather_cost (the GPU clock), vr.frame_budget, and the `<suite>.timing` rows (§4) — and on
+  open.crash_soak (twelve RUN_SERIAL processes read probabilistically: a scoped gate that ran
+  it would stop for minutes). A scoped
   gate NEVER runs these (it shares the box with other lanes by construction); they are also
   the rows the GPU-timing lock is for.
 
