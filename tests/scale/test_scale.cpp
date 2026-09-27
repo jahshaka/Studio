@@ -825,25 +825,6 @@ static int decodeMain()
 }
 
 // ===========================================================================
-<<<<<<< HEAD
-// scale.occlusion — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
-// The id pass culls the Atom queue against the depth pyramid in the two-pass form
-// (OgreAtomIdPass.cpp: the previous frame's pyramid, then the rejected set again against
-// the one built from the first pass's depth). Three arms over the SAME 8 poses of the walk,
-// one process (the measuring door world.setAtomOcclusion = Scene::setAtomOcclusionEnabled):
-//   OFF  the door shut: the frustum-only id pass (before this lane), with the view's own
-//        pyramid of the COMPLETE depth switched on so that THE REFERENCE can be taken —
-//        the id pass's own request (the cut, mode 3) replayed through Engine::gpuCull
-//        against that pyramid: what a single cull against this frame's whole depth keeps;
-//   ON   the product: the door open, no pyramid of the view's own (the id pass's alone);
-//   ON+  the door open WITH the view's complete-depth pyramid rebuilt after the opaque pass
-//        (the design question: does the first cull gain from the complete depth).
-// THE BAR (brief §1): the ON arm draws within 1.25x of the reference (median over the
-// walk), and its SETTLED id image equals the OFF arm's word for word at every pose. The
-// frame-by-frame proof — the first frame after a camera cut included — is
-// atom.occlusion_exact's (two worlds in lockstep): this world's first frames after a jump
-// are not a picture of the pose even frustum-only (settledIds says why).
-=======
 // atom.decode_exact — THE CLASSIFICATION CHANGES WHO SHADES A PIXEL, NEVER WHAT IT
 // SHADES (ATOM-DECODE-CLASS-1). D1's world (10,000 instances) wearing ~200 buckets,
 // one still pose, both chain shapes — no prepass (the opaque decode pass classifies)
@@ -1030,14 +1011,23 @@ static int decodeExactMain()
 }
 
 // ===========================================================================
-// scale.occlusion — W7: NO OCCLUSION CULLING.
-// Anchor: irisgl/engine/src/OgreAtomIdPass.cpp:523 (req.hzbLevels = 0u: frustum only);
-// no view builds the HZB (PostFxDesc::hzb is set by nothing in Studio or the mirror).
-// Number: on the walk, the triangles the id pass draws (frustum only — its own cull,
-// replayed through Engine::gpuCull with the id pass's predicates) against what the SAME
-// cull draws with the depth pyramid the cull already supports (the view's HZB switched on
-// for the measurement only) — the instance-level answer occlusion would give.
->>>>>>> b1a872cd3547e6e0760675ed672f3d253fd5798f
+// scale.occlusion — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
+// The id pass culls the Atom queue against the depth pyramid in the two-pass form
+// (OgreAtomIdPass.cpp: the previous frame's pyramid, then the rejected set again against
+// the one built from the first pass's depth). Three arms over the SAME 8 poses of the walk,
+// one process (the measuring door world.setAtomOcclusion = Scene::setAtomOcclusionEnabled):
+//   OFF  the door shut: the frustum-only id pass (before this lane), with the view's own
+//        pyramid of the COMPLETE depth switched on so that THE REFERENCE can be taken —
+//        the id pass's own request (the cut, mode 3) replayed through Engine::gpuCull
+//        against that pyramid: what a single cull against this frame's whole depth keeps;
+//   ON   the product: the door open, no pyramid of the view's own (the id pass's alone);
+//   ON+  the door open WITH the view's complete-depth pyramid rebuilt after the opaque pass
+//        (the design question: does the first cull gain from the complete depth).
+// THE BAR (brief §1): the ON arm draws within 1.25x of the reference (median over the
+// walk), and its SETTLED id image equals the OFF arm's word for word at every pose. The
+// frame-by-frame proof — the first frame after a camera cut included — is
+// atom.occlusion_exact's (two worlds in lockstep): this world's first frames after a jump
+// are not a picture of the pose even frustum-only (settledIds says why).
 // ===========================================================================
 static bool readIdsAt(Env &env, std::vector<uint32_t> &ids)
 {
