@@ -16,7 +16,6 @@
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/vertexlayout.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "viewport/translationgizmo.h"
 #include "viewport/rotationgizmo.h"
 #include "viewport/scalegizmo.h"

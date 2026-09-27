@@ -59,8 +59,11 @@ using namespace mcpharness;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 /// THE MILLISECOND ARMS ARE NIGHTLY (lane D6B-GATE-SHAPE; tests/support/timingbars.h).
-/// Every UI-gap budget, frame budget and the watchdog's 2,000 ms stall trigger below
-/// is a reading of the BOX as much as of the open: at -j4 the 300 ms create-frame bar
+/// The UI-gap budgets, the frame budgets and the watchdog's 2,000 ms stall trigger below
+/// are readings of the BOX as much as of the open — EXCEPT the two regression CEILINGS
+/// (kColdCeilingMs, kSampleCeilingMs), which sit 5-10x above any box noise and are the
+/// guard against the 12,500 ms frozen open itself: those stay CHECKs at push (fix round F2).
+/// For the others: at -j4 the 300 ms create-frame bar
 /// read 605 ms cold on a UI thread that was not blocked. The push-tier row
 /// (open.responsive) asserts the COUNTS — the open loads the world, the app answers
 /// while it is in flight, no model is parsed on the UI thread, the create rebuilds no
@@ -283,9 +286,8 @@ int main(int argc, char **argv)
     // 4 s, and the worst this box produced with 40 spinners on 20 cores was
     // 1 002 ms — four times the headroom is enough, and a control measured
     // before any world is open would be measuring an app that renders nothing.
-    CHECK(cold.maxGap > 0.0, "the heartbeat probe measured the cold open");
-    TIMING_CHECK(cold.maxGap < kColdCeilingMs,
-                 "the cold open's worst UI gap stays under the regression ceiling");
+    CHECK(cold.maxGap > 0.0 && cold.maxGap < kColdCeilingMs,
+          "the cold open's worst UI gap stays under the regression ceiling");
 
     const QJsonObject nodes = mcp.runScript(QStringLiteral("scene.nodes().length"));
     std::printf("info: nodes after the threaded open: %d\n", nodes.value("result").toInt());
@@ -474,20 +476,10 @@ int main(int argc, char **argv)
             // binary, on the threaded path as well as this one. What this
             // guards is the defect's return (the open that froze the window
             // for 12 500 ms), and it does that with room for the storm.
-            if (gap <= 0.0) {
-                std::printf("FAIL: %s: the heartbeat probe measured no gap (%.1f ms)\n",
-                            sample.name, gap);
+            if (gap <= 0.0 || gap >= kSampleCeilingMs) {
+                std::printf("FAIL: %s: worst UI gap %.1f ms is outside (0, %.0f)\n",
+                            sample.name, gap, kSampleCeilingMs);
                 ++failures;
-            } else if (gap >= kSampleCeilingMs) {
-                if (gTimingBars) {
-                    std::printf("FAIL: %s: worst UI gap %.1f ms is outside (0, %.0f)\n",
-                                sample.name, gap, kSampleCeilingMs);
-                    ++failures;
-                } else {
-                    std::printf("time: OVER: %s: worst UI gap %.1f ms against %.0f (a "
-                                "millisecond bar: open.responsive.timing asserts it)\n",
-                                sample.name, gap, kSampleCeilingMs);
-                }
             }
             mcp.runScript(QStringLiteral("project.close()"));
         }

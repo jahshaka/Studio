@@ -519,8 +519,8 @@ int main(int argc, char **argv)
         const std::string firstName = engineNameFor(editorScene, swapNode, "Padded");
         CHECK(!firstName.empty(), "...and its ZERO-LENGTH clip attached (padded, not refused)");
 
-        auto swapped = iris::DefaultMaterial::create();
-        swapped->setDiffuseColor(QColor(0, 255, 0));
+        auto swapped = iris::PbrMaterial::create();
+        swapped->setBaseColor(QColor(0, 255, 0));
         swapper->setMaterial(swapped);
 
         doc->updateSceneAnimation(0.1f);

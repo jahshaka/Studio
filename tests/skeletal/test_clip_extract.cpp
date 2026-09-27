@@ -7,31 +7,31 @@
 // track therefore passes every glTF fixture in the tree and produces a FROZEN
 // character on every Mixamo FBX — invisibly.
 //
-// So this suite proves the "compose then resample" extractor (§3.1) against the
-// pose COMPOSED FROM THE FIXTURE'S OWN KEYS, on both a glTF rig (no pivots) and
-// the tree's first FBX fixture (five pivot nodes between two bones, every clip
-// channel on a pivot node and none on a bone). Document-only: no engine, no window.
+// So this suite proves the "compose then resample" extractor (§3.1) against
+// THE FILE'S OWN MOTION, on both a glTF rig (no pivots) and the tree's first
+// FBX fixture (five pivot nodes between two bones, every clip channel on a
+// pivot node and none on a bone). Document-only: no engine, no window.
 //
-// THE ORACLE IS A BEHAVIOUR, NOT A RECORDING (lane D6B-GATE-SHAPE; the suites
-// audit §12 item 10). It used to be fixtures/golden_document_poses.txt, a frozen
-// recording of the document clip evaluator this program deleted — a bar nobody
-// could re-derive. composedPose() below states the rule instead: every node of
-// the fragment posed at t (its clip channel if the clip animates it, its authored
-// rest otherwise), composed root-down into fragment space, and each bone read in
-// its rig parent's frame. It shares no code with the extractor's chain walk (no
-// common-prefix cancellation, no key-time union), and before the recording was
-// deleted it reproduced every recorded sample (spikes/d6b-gate-shape).
+// THE ORACLE IS THE FILE. For every sample the suite takes, the bone's
+// parent-local TRS is composed straight from assimp's aiScene — the node
+// hierarchy's rest transforms and the raw aiNodeAnim keys, sampled by the
+// document's key rule (linear position/scale, slerp rotation, held outside the
+// key range) — over the same pivot chain. Nothing of the document import path
+// or of the extractor is in it, so what it guards is the behaviour: the
+// extracted track reproduces the motion the file authored.
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include <QFile>
 #include <QGuiApplication>
-#include <QHash>
 #include <QTemporaryDir>
+#include <QHash>
 #include <QSet>
-#include <QVector>
+#include <QTextStream>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <memory>
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
@@ -42,7 +42,7 @@
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -63,9 +63,116 @@ static const QString kFbxTpose =
 
 struct Trs { iris::Vec3 pos; iris::Quat rot; iris::Vec3 scale; };
 
+// ---- THE FILE ORACLE -----------------------------------------------------
+
+/// The document's key rule (keyframeanimation.h), restated over assimp's raw
+/// keys: the first key before the range, the last after it, linear between.
+template <typename Key, typename V, typename Lerp>
+static V sampleKeys(const Key *keys, unsigned count, double tps, double t, V fallback, Lerp lerp,
+                    V (*value)(const Key &))
+{
+    if (count == 0) return fallback;
+    const auto at = [&](unsigned i) { return keys[i].mTime / tps; };
+    if (count == 1 || t <= at(0)) return value(keys[0]);
+    if (t >= at(count - 1)) return value(keys[count - 1]);
+    for (unsigned i = 1; i < count; ++i) {
+        if (at(i) <= t) continue;
+        const double span = at(i) - at(i - 1);
+        const float u = span != 0.0 ? float((t - at(i - 1)) / span) : 0.0f;
+        return lerp(value(keys[i - 1]), value(keys[i]), u);
+    }
+    return value(keys[count - 1]);
+}
+
+static iris::Vec3 vecOf(const aiVectorKey &k) { return iris::Vec3(k.mValue.x, k.mValue.y, k.mValue.z); }
+static iris::Quat quatOf(const aiQuatKey &k) { return iris::Quat(k.mValue.w, k.mValue.x, k.mValue.y, k.mValue.z); }
+
+/// One file, one clip: the parent-local TRS of every bone at a time, composed
+/// from the aiScene alone.
+struct FileOracle
+{
+    const aiScene *scene = nullptr;
+    const aiAnimation *anim = nullptr;
+    double tps = 25.0;
+    QHash<QString, const aiNode *> byName;
+    QHash<QString, const aiNodeAnim *> channel;
+
+    bool init(const aiScene *s, const QString &clipName)
+    {
+        scene = s;
+        for (unsigned a = 0; a < s->mNumAnimations; ++a)
+            if (QString(s->mAnimations[a]->mName.C_Str()) == clipName) anim = s->mAnimations[a];
+        if (!anim) return false;
+        tps = anim->mTicksPerSecond > 0.0 ? anim->mTicksPerSecond : 25.0;   // mesh.cpp's rule
+        for (unsigned c = 0; c < anim->mNumChannels; ++c)
+            channel.insert(QString(anim->mChannels[c]->mNodeName.C_Str()), anim->mChannels[c]);
+        QVector<const aiNode *> order{ s->mRootNode };
+        for (int i = 0; i < order.size(); ++i) {
+            byName.insert(QString(order[i]->mName.C_Str()), order[i]);
+            for (unsigned k = 0; k < order[i]->mNumChildren; ++k) order.append(order[i]->mChildren[k]);
+        }
+        return true;
+    }
+
+    iris::Mat4 localAt(const aiNode *n, double t) const
+    {
+        const auto it = channel.constFind(QString(n->mName.C_Str()));
+        if (it == channel.constEnd()) {
+            aiVector3D sc, p; aiQuaternion r;
+            n->mTransformation.Decompose(sc, r, p);
+            return iris::composeTRS(iris::Vec3(p.x, p.y, p.z), iris::Quat(r.w, r.x, r.y, r.z),
+                                    iris::Vec3(sc.x, sc.y, sc.z));
+        }
+        const aiNodeAnim *c = it.value();
+        const auto lerpV = [](iris::Vec3 a, iris::Vec3 b, float u) { return a + (b - a) * u; };
+        const auto slerpQ = [](iris::Quat a, iris::Quat b, float u) { return iris::Quat::slerp(a, b, u); };
+        const iris::Vec3 p = sampleKeys(c->mPositionKeys, c->mNumPositionKeys, tps, t, iris::Vec3(), lerpV, &vecOf);
+        const iris::Quat r = sampleKeys(c->mRotationKeys, c->mNumRotationKeys, tps, t, iris::Quat(), slerpQ, &quatOf);
+        const iris::Vec3 sc = sampleKeys(c->mScalingKeys, c->mNumScalingKeys, tps, t, iris::Vec3(), lerpV, &vecOf);
+        return iris::composeTRS(p, r.normalized(), sc);
+    }
+
+    /// Root-first product of every local from `n` up to (not including) `stop`.
+    iris::Mat4 chain(const aiNode *n, const aiNode *stop, double t) const
+    {
+        iris::Mat4 m; m.setToIdentity();
+        for (; n && n != stop; n = n->mParent) m = localAt(n, t) * m;
+        return m;
+    }
+
+    /// `bone` in the frame of `frame` (its parent bone's node, or the skinned
+    /// mesh's node for a root bone) at time t. The shared ancestry cancels, so
+    /// it is not composed at all.
+    bool pose(const QString &bone, const QString &frame, double t, Trs &out) const
+    {
+        const aiNode *b = byName.value(bone, nullptr), *f = byName.value(frame, nullptr);
+        if (!b || !f) return false;
+        QSet<const aiNode *> above;
+        for (const aiNode *n = f; n; n = n->mParent) above.insert(n);
+        const aiNode *common = b;
+        while (common && !above.contains(common)) common = common->mParent;
+        const iris::Mat4 local = chain(f, common, t).inverted() * chain(b, common, t);
+        iris::decomposeTRS(local, out.pos, out.rot, out.scale);
+        return true;
+    }
+};
+
+/// The node that carries the skinned mesh in the FILE (the root bones' frame).
+static QString skinnedMeshNodeName(const aiScene *s)
+{
+    QVector<const aiNode *> order{ s->mRootNode };
+    for (int i = 0; i < order.size(); ++i) {
+        const aiNode *n = order[i];
+        for (unsigned m = 0; m < n->mNumMeshes; ++m)
+            if (s->mMeshes[n->mMeshes[m]]->mNumBones > 0) return QString(n->mName.C_Str());
+        for (unsigned k = 0; k < n->mNumChildren; ++k) order.append(n->mChildren[k]);
+    }
+    return QString();
+}
+
 static iris::MaterialPtr makeMat(iris::MeshPtr, iris::MeshMaterialData &)
 {
-    return iris::DefaultMaterial::create();
+    return iris::PbrMaterial::create();
 }
 
 static iris::MeshNodePtr findSkinned(const iris::SceneNodePtr &n)
@@ -146,6 +253,9 @@ struct Loaded
     /// a clip has played is not the rest pose — the Avatar page's
     /// snapshot/restore hack exists for exactly this reason.
     iris::ClipExtractor::RestPose rest;
+    /// The same file read straight through assimp, for the oracle.
+    std::shared_ptr<Assimp::Importer> importer;
+    const aiScene *file = nullptr;
 };
 
 static bool load(const QString &path, const QString &extractDir, Loaded &out)
@@ -158,74 +268,21 @@ static bool load(const QString &path, const QString &extractDir, Loaded &out)
     out.mesh = findSkinned(node);
     out.host = findClipHost(node);
     out.rest = iris::ClipExtractor::captureRest(node);
-    return !out.mesh.isNull() && !out.host.isNull();
+    out.importer = std::make_shared<Assimp::Importer>();
+    out.file = out.importer->ReadFile(path.toStdString().c_str(), iris::ImportFlags::Canonical);
+    return !out.mesh.isNull() && !out.host.isNull() && out.file;
 }
 
-/// THE ORACLE: the rig's bone-parent-local pose at time t, composed from the
-/// fixture's own keys. Every node of the fragment takes its clip channel at t (the
-/// document's KeyFrame evaluation — the keys ARE the authored motion) or, with no
-/// channel, its authored rest local; the locals are composed ROOT-DOWN into a
-/// fragment-space matrix per node; a bone's pose is then its node's matrix in the
-/// frame of its rig parent's node (the mesh node for a root bone — the frame
-/// SceneMirror::toSkeletonDesc authors the bind in). `complete` goes false when a
-/// bone has no scene node to pose.
-static QVector<Trs> composedPose(const Loaded &f, const iris::SkeletalAnimationPtr &clip,
-                                 float t, bool &complete)
-{
-    QHash<const iris::SceneNode *, iris::Mat4> world;
-    QHash<QString, const iris::SceneNode *> byName;
-    struct Item { iris::SceneNode *node; iris::Mat4 parent; };
-    iris::Mat4 identity;
-    identity.setToIdentity();
-    QVector<Item> stack{ Item{ f.fragment.data(), identity } };
-    while (!stack.isEmpty()) {
-        const Item it = stack.takeLast();
-        iris::Mat4 local;
-        const auto ch = clip->boneAnimations.constFind(it.node->name);
-        if (ch != clip->boneAnimations.constEnd() && !ch.value().isNull()) {
-            local = iris::composeTRS(ch.value()->posKeys->getValueAt(t),
-                                     ch.value()->rotKeys->getValueAt(t).normalized(),
-                                     ch.value()->scaleKeys->getValueAt(t));
-        } else {
-            const auto r = f.rest.constFind(it.node);
-            local = r != f.rest.constEnd() ? iris::composeTRS(r->pos, r->rot, r->scale)
-                                           : iris::composeTRS(it.node->getLocalPos(),
-                                                              it.node->getLocalRot(),
-                                                              it.node->getLocalScale());
-        }
-        const iris::Mat4 m = it.parent * local;
-        world.insert(it.node, m);
-        byName.insert(it.node->name, it.node);
-        for (int c = 0; c < it.node->childCount(); ++c)
-            if (iris::SceneNode *child = it.node->childAt(c)) stack.append(Item{ child, m });
-    }
-    const auto &bones = f.mesh->getSkeleton()->bones;
-    QVector<Trs> pose(bones.size());
-    for (int b = 0; b < bones.size(); ++b) {
-        const iris::SceneNode *boneNode = byName.value(bones[b]->name, nullptr);
-        const iris::SceneNode *frameNode = f.mesh.data();
-        if (!bones[b]->parentBone.isNull())
-            frameNode = byName.value(bones[b]->parent()->name, f.mesh.data());
-        if (!boneNode || !world.contains(boneNode) || !world.contains(frameNode)) {
-            complete = false;
-            continue;
-        }
-        const iris::Mat4 local = world.value(frameNode).inverted() * world.value(boneNode);
-        iris::decomposeTRS(local, pose[b].pos, pose[b].rot, pose[b].scale);
-    }
-    return pose;
-}
-
-/// The whole gate for one (rig, clip): the extractor's tracks reproduce the pose
-/// composed from the clip's own keys EXACTLY at every key time the extractor
+/// The whole gate for one (rig, clip): the extractor's tracks reproduce the
+/// FILE's bone-parent-local pose EXACTLY at every key time the extractor
 /// emitted, and within the resampling tolerance in between.
 static void gateClip(Loaded &f, const iris::AnimationPtr &anim,
                      const char *label, float exactTol, float betweenTol)
 {
     f.fragment->setAnimation(anim);
-    // The extractor pins a terminal key AT the length (R4). The oracle evaluates the
-    // keys at t itself, unwrapped, so that key is compared against the clip's END
-    // pose (a looping evaluator's fmod(t, length) would answer for t = 0).
+    // Animation::getSampleTime is `fmod(time, length)` while looping; the
+    // extractor pins a terminal key AT the length (R4), and the file oracle is
+    // unwrapped, so the clip is driven unwrapped too.
     const bool wasLooping = anim->getLooping();
     anim->setLooping(false);
     iris::ExtractedClip clip;
@@ -260,10 +317,24 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim,
     CHECK(wellFormed, (QString("[%1] tracks are sorted, strictly increasing, and pinned "
                                "at 0 and at the clip length (R4)").arg(label)).toUtf8().constData());
 
-    // THE ORACLE: the bone-parent-local pose composed from the clip's own keys.
-    bool oracleComplete = true;
-    const iris::SkeletalAnimationPtr keys = anim->getSkeletalAnimation();
-    const auto oracleAt = [&](float t) { return composedPose(f, keys, t, oracleComplete); };
+    // THE ORACLE: this bone's parent-local TRS at time t, composed from the
+    // file's own hierarchy and keys (FileOracle). The frame is the parent
+    // BONE's node, or the skinned mesh's node for a root bone.
+    FileOracle file;
+    const bool fileClip = file.init(f.file, anim->getName());
+    CHECK(fileClip, (QString("[%1] the clip is in the file the oracle reads").arg(label))
+                        .toUtf8().constData());
+    bool oracleComplete = fileClip;
+    const auto &bones = f.mesh->getSkeleton()->bones;
+    const QString meshFrame = skinnedMeshNodeName(f.file);
+    const auto oracleAt = [&](float t) {
+        QVector<Trs> pose(bones.size());
+        for (int b = 0; b < bones.size(); ++b) {
+            const QString frame = bones[b]->parentBone.isNull() ? meshFrame : bones[b]->parent()->name;
+            if (!fileClip || !file.pose(bones[b]->name, frame, t, pose[b])) oracleComplete = false;
+        }
+        return pose;
+    };
 
     // ---- G1: EXACT at every emitted key time ------------------------------
     float worstAtKeys = 0.0f;
@@ -278,8 +349,8 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim,
     }
     std::printf("    worst |error| at %d key times: %.3e\n", samplesAtKeys, double(worstAtKeys));
     CHECK(worstAtKeys < exactTol,
-          (QString("[%1] the composed track reproduces the pose composed from the clip's "
-                   "own keys at every key time (< %2)").arg(label).arg(double(exactTol))).toUtf8().constData());
+          (QString("[%1] the composed track reproduces the file's motion at every key "
+                   "time (< %2)").arg(label).arg(double(exactTol))).toUtf8().constData());
 
     // ---- resampling error between keys ------------------------------------
     // Lossy by construction (§7): a rotation split across two pivots composes
@@ -302,7 +373,7 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim,
                .arg(label).arg(double(betweenTol))).toUtf8().constData());
 
     CHECK(oracleComplete,
-          (QString("[%1] the oracle composes a pose for every bone of the rig")
+          (QString("[%1] the file oracle answers for every bone this suite samples")
                .arg(label)).toUtf8().constData());
     anim->setLooping(wasLooping);
 }

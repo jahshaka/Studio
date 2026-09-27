@@ -50,7 +50,7 @@
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/vertexlayout.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -109,8 +109,8 @@ int main(int argc, char **argv)
     auto floorNode = iris::MeshNode::create();
     floorNode->setName("floor");
     floorNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto grey = iris::DefaultMaterial::create();
-    grey->setDiffuseColor(QColor(90, 90, 90));
+    auto grey = iris::PbrMaterial::create();
+    grey->setBaseColor(QColor(90, 90, 90));
     floorNode->setMaterial(grey);
     // THE MESH'S OWN HALF-SIZE, read rather than assumed: getMeshRadius() is 1
     // for cube.obj and the first cut of this suite took that to mean a
@@ -130,8 +130,8 @@ int main(int argc, char **argv)
     auto box = iris::MeshNode::create();
     box->setName("box");
     box->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto green = iris::DefaultMaterial::create();
-    green->setDiffuseColor(QColor(0, 220, 0));
+    auto green = iris::PbrMaterial::create();
+    green->setBaseColor(QColor(0, 220, 0));
     box->setMaterial(green);
     // A 1 m cube standing ON the floor (its top face at y = 1).
     box->setLocalScale(iris::Vec3(0.5f / cubeHalf.x(), 0.5f / cubeHalf.y(), 0.5f / cubeHalf.z()));

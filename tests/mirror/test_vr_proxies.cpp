@@ -54,7 +54,7 @@
 #include <vector>
 
 #include "irisgl/irisglfwd.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -93,8 +93,8 @@ int main(int argc, char **argv)
     auto cube = iris::MeshNode::create();
     cube->setName("Cube");
     cube->setMesh(previewmesh::load(":/assets/models/cube.obj"));
-    auto grey = iris::DefaultMaterial::create();
-    grey->setDiffuseColor(QColor(160, 160, 160));
+    auto grey = iris::PbrMaterial::create();
+    grey->setBaseColor(QColor(160, 160, 160));
     cube->setMaterial(grey);
     cube->setLocalPos(iris::Vec3(0.0f, 0.0f, -6.0f));
     doc->getRootNode()->addChild(cube);

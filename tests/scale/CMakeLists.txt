@@ -95,7 +95,7 @@ set(SCALE_T_LEVELS 300)       # 8 s on the 5 M shell
 set(SCALE_T_CUT_COST 900)     # the world's boot + five poses (ATOM-CLUSTER-CUT)
 set(SCALE_T_RESIDENCY 600)    # 9 s over 1 M + 5 M; every cached shell loaded in turn
 set(SCALE_T_DECODE 840)       # 139 s (four material arms, GI to rest after each)
-set(SCALE_T_OCCLUSION 210)    # 34 s
+set(SCALE_T_OCCLUSION 600)    # 34 s solo; 99 s in a -j4 gate (D6B fix round F1: 6x the worst)
 set(SCALE_T_TLAS 300)         # 42-51 s
 set(SCALE_T_ATLAS 320)        # 53 s
 set(SCALE_T_FAR 120)          # ~12 s (two pictures)

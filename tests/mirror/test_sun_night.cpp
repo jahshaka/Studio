@@ -89,7 +89,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -159,8 +159,8 @@ int main(int argc, char **argv)
     auto floorNode = iris::MeshNode::create();
     floorNode->setName("floor");
     floorNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto grey = iris::DefaultMaterial::create();
-    grey->setDiffuseColor(QColor(120, 120, 120));
+    auto grey = iris::PbrMaterial::create();
+    grey->setBaseColor(QColor(120, 120, 120));
     floorNode->setMaterial(grey);
     const iris::Vec3 cubeHalf = floorNode->getMesh()->getAABB().getHalfSize();
     floorNode->setLocalScale(iris::Vec3(60.0f / cubeHalf.x(), 0.1f / cubeHalf.y(),
@@ -172,8 +172,8 @@ int main(int argc, char **argv)
     auto box = iris::MeshNode::create();
     box->setName("box");
     box->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto white = iris::DefaultMaterial::create();
-    white->setDiffuseColor(QColor(210, 210, 210));
+    auto white = iris::PbrMaterial::create();
+    white->setBaseColor(QColor(210, 210, 210));
     box->setMaterial(white);
     box->setLocalScale(iris::Vec3(1.0f / cubeHalf.x(), 1.0f / cubeHalf.y(), 1.0f / cubeHalf.z()));
     box->setLocalPos(iris::Vec3(3.0f, 1.0f, -4.0f));

@@ -69,4 +69,4 @@ set_tests_properties(samples.session PROPERTIES
     ENVIRONMENT "HOME=${_shome};JAHSHAKA_DATA_ROOT=${_shome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED samples_home_session
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 1020)  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
