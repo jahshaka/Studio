@@ -68,8 +68,10 @@ the store alone. Measured 1.255x unpatched / 3.745x patched.
 
 `-j4` is the ceiling on this box (RTX 4080 16 GB: ~1.6 GB of VRAM per Vulkan boot since the
 probe-shadow merge of 2026-09-10, ~3 GB before; boots are CPU-bound too — expect ~1.6× over
--j2, not 2×). One sibling gate at -j4 fits beside yours; drop to `-j2` only when two or more
-other Vulkan gates (or the owner's app plus one) are live.
+-j2, not 2×). Every gate runs at `-j4`, however many other lanes gate beside it: the box admits
+Vulkan processes by VRAM itself (§4b, GATE-ADMIT-1) — a row that does not fit waits for tokens
+instead of failing an allocation, so the old "-j2 while two or more other Vulkan gates are live"
+rule is retired.
 
 
 ### 1c. SCALE TARGETS — the `scale-target` label (lane D1-SCALE-FIXTURES)
@@ -280,8 +282,11 @@ merge time instead of at the batch gate.
 ## 4. Flake protocol (unchanged)
 
 A failure is re-run SOLO on a quiet box up to 3×; 3/3 green = environmental, with the
-evidence string in the report (host-load timing, `VK_ERROR_OUT_OF_DEVICE_MEMORY`, the
-texture-worker SEGV class). Known contention-sensitive suites: open.responsive,
+evidence string in the report (host-load timing, the texture-worker SEGV class). A
+`VK_ERROR_OUT_OF_DEVICE_MEMORY` red is NOT environmental since GATE-ADMIT-1 (§4b): the box admits
+by VRAM, so an OOM means the budget is wrong (a class under-counted, a row outside it) or an
+unadmitted process filled the card — the verdict names which (`scripts/gpu-admit.sh status` and
+`nvidia-smi` beside the red). Known contention-sensitive suites: open.responsive,
 app.engine_selftest_validation, app.input_keys, threading.newproject_stall,
 scenegraph.benchmark, shadergraph.bake_output, claude.chat, scripting.e2e.space_switch /
 sun_light, ui.media_lazy, gi.budget, scripting.e2e.reflection_map (the GI/VRAM contention
@@ -340,6 +345,75 @@ cascade-chain rows (their VRAM reason was measured false). RUN_SERIAL remains on
 audit kept it (app.input_keys, app.watchdog_stall, gi.field_scroll, threading.mode /
 mode_serial / gi_resolve / gi_resolve_serial / newproject_stall, and the nightly benches).
 
+## 4b. THE VRAM BUDGET — box-wide tokens (lane GATE-ADMIT-1, 2026-09-27)
+
+**Why.** Every lane's gate is its own ctest process, and ctest's own admission (RESOURCE_GROUPS,
+RESOURCE_LOCK, RUN_SERIAL) stops at the edge of ONE ctest process. Four lanes at -j4 put ~16
+Vulkan processes on one 16.4 GB card; on 2026-09-27 ~47 reds printed
+`VK_ERROR_OUT_OF_DEVICE_MEMORY` (a 64 MB pool allocation, latched by Ogre as a device loss), all
+where four gates overlapped (SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md A3: the model peaks 6.5 GB
+for one lane, 19.5 GB for three, 26 GB for four). So the budget lives outside ctest, like the
+GPU-timing lock.
+
+**THE MECHANISM.** `scripts/gpu-admit.sh <k> [--label <row>] -- <command…>` (implementation
+`scripts/vram_tokens.py`): N = 12 flock TOKENS in `/tmp/jah-vram/` (`JAH_VRAM_TOKENS` overrides;
+0 = admission off), 1 token ≈ 1 GB, leaving ~4 GB of the card to the owner's instance, the desktop
+and any stray agent app (none of which takes a token — `nvidia-smi` is never consulted: racy,
+slow, and blind to what a process allocates next; the token count is the contract, tuned by
+measurement). An acquirer takes the TURNSTILE, reads the free tokens from `/proc/locks` and locks
+the k LOWEST only when k are free — all or nothing, never hold-and-wait, and a 3-token row at the
+head of the queue is not starved by 1-token rows behind it. The command is EXEC'D IN PLACE with
+the token fds inherited: the pid ctest started is the suite, and the tokens are freed when it and
+everything it spawned exit, for any reason (a crash, a ctest timeout kill). A nested admission
+(`JAH_VRAM_HELD` in the environment) runs on its parent's tokens. A wait prints ONE line —
+`vram: waiting for <k> tokens, <n> free` — and `vram: admitted with <k> tokens <i,j> after <s> s`;
+it is bounded at 900 s (`JAH_VRAM_WAIT`), after which the command never runs (exit 75).
+`scripts/gpu-admit.sh status` lists the holders (the file of a held token names its pid and row).
+
+**THE CLASSES** (the audit's A2 table, nvidia-smi per pid, 2026-09-26) — `jah_vram_tokens()` in
+`tests/CMakeLists.txt` is the one lookup:
+
+| class | tokens | what | measured |
+|---|---|---|---|
+| `app` | 2 | an app process (`Jahshaka --script`, a pool process) at the document default, Epic | 1.5 GB (2.4 with the probe grid) |
+| `selftest` | 2 | `--engine-selftest` (the app's route) | = app |
+| `engine` | 1 | a headless engine / Qt+engine suite at its own tier (mostly Medium) | ~0.6-1.2 GB |
+| `vr` | 3 | a VR / Monado row (the app, stereo views, the runtime's compositor) | ~2 GB (est.) |
+| `none` | 0 | RenderSystem_NULL, no display, lavapipe — never registered | 0 |
+
+A pool with a declared `TIER low` (TEST-TIER-1's test tier, ~0.65 GB) costs 1 token as an app.
+
+**HOW A ROW DECLARES ITS CLASS.** Every row that boots Vulkan is registered through ONE of:
+`jah_gpu_row(<row> CLASS <class> COMMAND <exe-or-target> [args…] [WORKING_DIRECTORY <dir>])` (a
+drop-in for `add_test(NAME … COMMAND …)`); `jah_gpu_exclusive_test(NAME … CLASS <class> …)` (a
+timing row holds the GPU lock FIRST, then its tokens: the lock for exclusivity, the tokens for
+memory); `jah_add_pool(<pool> [CLASS vr] [TIER …])` — the pool's tokens are taken by
+`run_pool.py --vram-tokens <k>` once per APP PROCESS (a restart re-takes them; the driver holds
+none; a `HEADLESS` pool takes none). A row that boots no Vulkan is a plain `add_test` with
+`jah_no_display()`. **The wait never eats a row's budget**: it happens before the command starts,
+and every registered row's TIMEOUT is its own budget plus the 900 s bound, added once by the
+helper at the end of the row's directory — never typed at a site.
+
+**THE CLOSURE.** `source.gpu_rows_closure` (hygiene) reads what ctest will run
+(`ctest --show-only=json-v1`): every row whose command or environment names an Ogre-linked
+binary (`ldd` → libOgreNextMain) or runs the pool driver, minus the `jah_no_display` rows, the
+app `--headless` rows and the lavapipe rows (host memory), minus the registered rows, must be
+EMPTY — each missing row is named with its CMakeLists line. At GATE-ADMIT-1: 301 Vulkan rows,
+all registered (225 at 1 token, 70 at 2, 13 at 3... counted by the suite's own line).
+`--self-test` proves the detector names a synthetic unregistered row. The helper's own guard is
+`devprocess.vram_admit` (tooling): 14 fake rows of the three classes against 12 tokens on the
+kernel's lock table — the bound, all or nothing, lowest first, a killed holder frees,
+`JAH_VRAM_TOKENS=4`, the bounded wait, exec in place, nesting.
+
+**THE KERNEL'S WORD IN A POOL.** After each app process, `run_pool.py` reads the kernel journal
+since its launch (`journalctl -k`, never sudo): an `NVRM: Xid` line from THAT pid turns the arm
+running at the fault's second into `ARM <pool>.<arm> CRASH <ms> xid <n> …` (a process's verdicts
+are printed once, after that read). An unreadable journal on Linux reds the row. The non-pool
+photon.view rows keep `tests/support/no_xid_run.sh`.
+
+**THE MEASUREMENT** — see the lane's evidence (`~/Developer/spikes/gate-admit-1/`): two MERGE
+tiers at -j4 started together on two displays of this box, sharing the one budget.
+
 ## 5. What the full gate costs, and where its wall goes
 
 **CURRENT COUNTS (2026-09-27, lane D6B-GATE-SHAPE, Studio d-build): 697 rows registered,
@@ -364,8 +438,9 @@ and apps held 15.0 of 16.4 GB (nvidia-smi: ~1.5-2.8 GB per Jahshaka process, not
 2026-09-10); those 19 and a segfault of the same minutes were all green solo, three timing rows
 of the lock were 3/3 green solo, and the last two (vr.eye_grade, threading.newproject_stall)
 were red on the base tree's before-run with the same assertion. DEVPROCESS-1's "VRAM is not the
-constraint" was measured with three processes; with four gates it is. Keep the `-j2 while two or
-more other Vulkan gates are live` rule, and read a device-lost red beside nvidia-smi.
+constraint" was measured with three processes; with four gates it is. The box enforces that law
+itself since GATE-ADMIT-1 (§4b: box-wide VRAM tokens); the `-j2 while two or more other Vulkan
+gates are live` rule it replaced is retired.
 
 WHAT THE SHAPE CAN STILL WIN is the gap to busy/4 — about 8 % after D6B. The rest is
 suite-seconds: the tier grew ~20 rows between the audit and D6B (atom.lod_switch alone is

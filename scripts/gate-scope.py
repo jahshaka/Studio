@@ -223,6 +223,9 @@ AREA_RULES = [
     (r"^scripts/gate[-_]", ["hygiene"], []),
     # THE GPU-TIMING LOCK's wrapper (DEVPROCESS-1): its own tooling suite, devprocess.gpu_lock.
     (r"^scripts/gpu-exclusive", ["tooling"], []),
+    # THE VRAM BUDGET's helper (GATE-ADMIT-1): its tooling suite (devprocess.vram_admit), the
+    # pool driver's own test that imports it (pool.runner, tests/app) and the closure (hygiene).
+    (r"^scripts/(gpu-admit|vram_tokens)", ["tooling", "app", "hygiene"], []),
     (r"^scripts/", [], []),
 ]
 
