@@ -120,7 +120,7 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
     const bool editorBoot = !headless && !noEditorBoot;
     if (editorBoot) {
         QString why;
-        if (!window.beginEngineSelftest(why)) {
+        if (!window.enterEditorOnNewScene(why)) {
             std::fprintf(stderr, "script: %s\n", qPrintable(why));
             return finalizeAppExit(1);      // ordered teardown, see above
         }
@@ -154,7 +154,7 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
             rc = qBound(0, result.value.toInt(), 255);
     }
 
-    if (editorBoot) window.endEngineSelftest();   // symmetrical with the begin above
+    if (editorBoot) window.leaveEditorSpace();   // symmetrical with the begin above
     return finalizeAppExit(rc);
 }
 
@@ -202,7 +202,7 @@ void armLine(const char *fmt, const QByteArray &a, const QByteArray &b = {}, con
 // shown on a new default scene, ten settling frames.
 bool beginEditorBoot(MainWindow &window, QApplication &app, QString &why)
 {
-    if (!window.beginEngineSelftest(why)) return false;
+    if (!window.enterEditorOnNewScene(why)) return false;
     for (int frame = 0; frame < 10; ++frame) {
         app.processEvents(QEventLoop::AllEvents, 50);
         QThread::msleep(16);
@@ -292,11 +292,12 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
         // arm's baseline left the window (the project closed, the desktop page
         // up) and reaches the editor through the product's own route, the
         // `project.create`/`project.open` it begins with. Re-showing the editor
-        // page directly (the selftest's begin, which sets the stacked page
-        // without switchSpace) after an arm had a second engine View up — the
-        // Player's, a camera PIP's — lost the device with an Xid 13 "3D WIDTH ZT
-        // Violation" three times out of three (lane SUITE-POOL-1's first run,
-        // spikes/suite-pool-1/xid/): a path no user takes is not a baseline.
+        // page after an arm had a camera PiP up lost the device with an Xid 13
+        // "3D WIDTH ZT Violation" (lane SUITE-POOL-1's first run,
+        // spikes/suite-pool-1/xid/): the View kept the closed scene's PiP
+        // request and rebuilt it on the new scene (VIEWS-XID-1, fixed in the
+        // engine and the viewport; the second route onto the page is deleted).
+        // A path no user takes is not a baseline.
         // ...part 2: a fresh JavaScript realm — no global of an earlier arm.
         if (!engine->resetScriptContext()) {
             armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
@@ -343,7 +344,7 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
             if (!pb.ok) {
                 armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
                         pb.toString().simplified().toUtf8());
-                if (editorBoot) window.endEngineSelftest();
+                if (editorBoot) window.leaveEditorSpace();
                 return finalizeAppExit(qBound(1, failed, 255));
             }
         }
@@ -380,13 +381,13 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
                     (base.ok ? QStringLiteral("a project is still open after project.close()")
                              : base.toString()).simplified().toUtf8());
             if (i + 1 < arms.size()) {
-                if (editorBoot) window.endEngineSelftest();
+                if (editorBoot) window.leaveEditorSpace();
                 return finalizeAppExit(qBound(1, failed, 255));
             }
         }
     }
 
-    if (editorBoot) window.endEngineSelftest();
+    if (editorBoot) window.leaveEditorSpace();
     return finalizeAppExit(qBound(0, failed, 255));
 }
 
@@ -400,7 +401,7 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
         // live, a default scene up — screenshot works immediately, and
         // run_script's project.create() switches to a real project.
         QString why;
-        if (!window.beginEngineSelftest(why)) {
+        if (!window.enterEditorOnNewScene(why)) {
             std::fprintf(stderr, "mcp: %s\n", qPrintable(why));
             // THROUGH THE SAME EXIT AS A SUCCESSFUL RUN (ledger 150). A bare
             // `return 1` here skipped EngineHost::shutdown() entirely, leaving

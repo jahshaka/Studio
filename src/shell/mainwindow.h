@@ -181,11 +181,16 @@ public:
     /// visible row order — editor.selectRange has to ask it what lies between
     /// two rows (EDITOR_MULTISELECT_SPEC §2.7); null in headless sessions.
     SceneHierarchyWidget *hierarchyPanel() const { return sceneHierarchyWidget; }
-    /// --engine-selftest: show the editor page, build the default scene the way
-    /// newScene() does and start the viewport. False (with a reason) if the engine
-    /// viewport is not in use or has no view.
-    bool beginEngineSelftest(QString &why);
-    void endEngineSelftest();
+    /// The engine-up boot of --engine-selftest, --script, --scripts and
+    /// --mcp-port: a new default scene (newScene) shown through the PRODUCT's
+    /// editor entry (enterEditorSpace) — there is no second way onto the page.
+    /// False (with a reason) if the engine is not running or the viewport
+    /// cannot draw. currentSpace is not moved: a scripted boot still reports
+    /// the Desktop until a script switches space.
+    bool enterEditorOnNewScene(QString &why);
+    /// The product's editor leave (switchSpace's EDITOR case): the dock
+    /// snapshot, then the viewport's end().
+    void leaveEditorSpace();
     void goToDesktop();
     /// If the on-screen View could not be created, say so and land the user on
     /// a page that works. Returns true when it bounced — callers must then stop

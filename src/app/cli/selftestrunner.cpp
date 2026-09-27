@@ -230,7 +230,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     app.processEvents();
 
     QString why;
-    if (!window.beginEngineSelftest(why)) {
+    if (!window.enterEditorOnNewScene(why)) {
         std::fprintf(stderr, "engine-selftest: %s\n", qPrintable(why));
         return 1;
     }
@@ -240,7 +240,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // (found by the broken-ground arm: ctest's 180 s timeout, not an exit code).
     struct EndSelftest {
         MainWindow &window;
-        ~EndSelftest() { window.endEngineSelftest(); EngineHost::instance().shutdown(); }
+        ~EndSelftest() { window.leaveEditorSpace(); EngineHost::instance().shutdown(); }
     } endSelftest{ window };
 
     // THE DEFAULT SCENE MUST BE THE DEFAULT SCENE (smoke L10 item 3). On

@@ -259,8 +259,8 @@ gt()   { jq -rn --argjson a "$1" --argjson b "$2" 'if $a > $b then "yes" else "n
 # quietest log they can get.
 #
 # Note on the first space switch: --mcp-port boots through
-# beginEngineSelftest, which shows the editor PAGE by setting the stack
-# index directly while `currentSpace` stays DESKTOP. Part 1 therefore
+# enterEditorOnNewScene, which enters the editor PAGE (enterEditorSpace)
+# while `currentSpace` stays DESKTOP. Part 1 therefore
 # switches to the editor space properly first, so that leaving it runs the
 # real transition.
 TAG=pacing_undo
