@@ -504,6 +504,8 @@ def script_modules(path):
 # A build-registration edit that only adds or removes SOURCE FILES from a list (a new
 # .cpp beside its header, a deleted dead file) says nothing on its own: the files it
 # names are in the same diff and scope precisely (2026-09-11).
+_SOURCE_LISTS = {"set", "list", "add_executable", "add_library", "target_sources", "qt_add_resources",
+                 "qt6_add_resources", "qt_add_executable", "qt_add_library", "source_group", None}
 _LIST_ENTRY = re.compile(r'^"?[\w${}./+\-]+\.(?:cpp|cc|cxx|c|h|hh|hpp|ui|qrc|mm|js|js\.in|sh)"?\)?$')
 
 
@@ -1006,12 +1008,18 @@ class Selection:
             return
         old_l, new_l = _changed_line_numbers(self.revs.diff_u0(p))
         a_lines, b_lines = (a or "").split("\n"), (b or "").split("\n")
-        # list-only lines (a source added/removed) say nothing: the files are in the diff
+        # list-only lines (a source added/removed) say nothing: the files are in the diff — but
+        # ONLY inside a source list. The same shape on an add_test's COMMAND (a script path on its
+        # own line) is a changed ROW (the Fable read, small item c).
         def interesting(lines, nums):
+            spans = gate_graph.cmake_commands("\n".join(lines))
             out = set()
             for n in nums:
                 t = lines[n - 1].strip() if 0 < n <= len(lines) else ""
-                if not t or t.startswith("#") or _LIST_ENTRY.match(t): continue
+                if not t or t.startswith("#"): continue
+                if _LIST_ENTRY.match(t):
+                    owner = next((c[0] for c in spans if c[1] <= n <= c[2]), None)
+                    if owner in _SOURCE_LISTS: continue
                 out.add(n)
             return out
         old_i, new_i = interesting(a_lines, old_l), interesting(b_lines, new_l)
