@@ -178,25 +178,15 @@ set_tests_properties(app.scene_switch_after_play PROPERTIES
     LABELS "app"
     TIMEOUT 300)
 
-# ---- app.selection_outline --------------------------------------------------
-# The isBuiltIn outline-suppression regression gate (2026-09-06): selecting an
-# Add-menu primitive must draw the outline; selecting the ground must not.
-set(_selo_home ${CMAKE_CURRENT_BINARY_DIR}/selection-outline-home)
-file(MAKE_DIRECTORY ${_selo_home}/run)
-add_test(NAME app.selection_outline
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_selection_outline.js
-         WORKING_DIRECTORY ${_selo_home}/run)
-set_tests_properties(app.selection_outline PROPERTIES
-    ENVIRONMENT "HOME=${_selo_home};JAHSHAKA_DATA_ROOT=${_selo_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 300)
-
 # ---- app.multiselect_outline ------------------------------------------------
 # EVERY member of a selection SET is outlined, not just the primary
 # (EDITOR_MULTISELECT_SPEC §2.3/D4 a). Two cubes, one per half of the frame,
 # probed in their own half — a secondary that quietly stopped drawing would pass
-# every verb suite in the program and fail only here. Same hull<->wireframe
-# style-toggle trick as app.selection_outline, so the gizmo cancels out.
+# every verb suite in the program and fail only here. The hull<->wireframe
+# style-toggle trick, so the gizmo cancels out. It also carries the two claims of
+# the old app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): an
+# Add-menu primitive IS outlined (the isBuiltIn regression gate of 2026-09-06 — its
+# "one selected" arm) and the GROUND never is (its ground arm).
 set(_mso_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-outline-home)
 file(MAKE_DIRECTORY ${_mso_home}/run)
 add_test(NAME app.multiselect_outline

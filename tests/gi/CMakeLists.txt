@@ -1721,16 +1721,13 @@ set_tests_properties(gi.sun_contact_both PROPERTIES TIMEOUT 300 LABELS "engine")
 # ...and THE GAP THE MAP LEAVES BY CONSTRUCTION (PHOTON-SCENE-SWITCH-2): a 1 m
 # board 2 cm thick on 5 cm legs under a 10-degree sun with a 1024 px atlas — the
 # receiver's normal-offset lift (>= 0.136 m) exceeds the board's 0.07 m top, so the
-# map shadows none of the board's shadow; the contact ray closes all of it. The
-# no-rays row: row on == row off, byte for byte.
+# map shadows none of the board's shadow; the contact ray closes all of it. Its no-rays
+# claim (row on == row off, byte for byte) runs inside gi.sun_contact_norays as the
+# process's second scene (lane D6B-GATE-SHAPE; audit verdict MERGE — it was the row
+# gi.sun_contact_legs_norays).
 add_test(NAME gi.sun_contact_legs COMMAND test_gi_sun_contact --legs
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sun_contact_legs PROPERTIES TIMEOUT 300 LABELS "engine")
-add_test(NAME gi.sun_contact_legs_norays COMMAND test_gi_sun_contact --legs
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sun_contact_legs_norays PROPERTIES
-                     TIMEOUT 300 LABELS "engine"
-                     ENVIRONMENT "JAHSHAKA_NO_RAY_QUERY=1")
 
 # gi.hit_shade — A RAY HIT IS A PIXEL OF A SECOND VISIBILITY BUFFER
 # (PHOTON-HIT-SHADE-1; SPECS/atom/D2_HIT_SHADING_DESIGN.md)

@@ -149,8 +149,9 @@ set_tests_properties(vr.session PROPERTIES
 # picture needs would wave both through. The switch cannot be flipped mid-run
 # for the session's View — it is not a View the engine's frame loop drives, so
 # it is never armed with a per-view push (measured in the arm's own comment) —
-# so the strong form gets its own process. Everything else the suite asserts is
-# asserted twice, which costs one VR run and is the price of keeping the bar.
+# so the strong form gets its own process — and ONLY the strong form: the binary
+# returns after the worldScale-0 arm under JAHSHAKA_NO_DITHER (lane D6B-GATE-SHAPE;
+# audit verdict MERGE — every other case used to be asserted twice, 61 s a gate).
 add_test(NAME vr.session_undithered
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_session.sh"
                  "$<TARGET_FILE:test_vr_session>" "${JAH_MONADO_MANIFEST}"

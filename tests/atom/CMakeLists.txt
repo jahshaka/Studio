@@ -233,23 +233,31 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         "${OGRE_NEXT_PREFIX}/include/OGRE-Next/RenderSystems/Vulkan/include"
         ${Vulkan_INCLUDE_DIRS})
     target_link_libraries(test_atom_negative_control PRIVATE "${OGRE_NEXT_VULKAN_RS_LIB}" ${Vulkan_LIBRARIES} ${CMAKE_DL_LIBS})
-    add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 300 LABELS "engine")
-    # ...on lavapipe, the second device of the spike's recipe (the software rasteriser
+    # ONE ROW PER DEVICE (lane D6B-GATE-SHAPE; audit verdict MERGE): where the Khronos
+    # validation layer is installed, the `_validation` rows below ARE the suite — the same
+    # binary and the same assertions, plus the layer, FAIL_REGULAR_EXPRESSION on any report
+    # and the positive control that the layer is active (a strict superset, the
+    # app.engine_selftest precedent). The plain rows register only where the layer is
+    # missing, so a box without it still runs the byte-identity assertion.
+    # ...lavapipe is the second device of the spike's recipe (the software rasteriser
     # exposes neither ray queries nor the RTX's timing, so it is the other half of
     # "validation clean on both devices").
     set(_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
-    if(EXISTS "${_lvp_icd}")
-        add_test(NAME engine.atom_negative_control_lavapipe COMMAND test_atom_negative_control
+    if(NOT EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
+        add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(engine.atom_negative_control_lavapipe PROPERTIES
-            TIMEOUT 600 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
+        set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 300 LABELS "engine")
+        if(EXISTS "${_lvp_icd}")
+            add_test(NAME engine.atom_negative_control_lavapipe COMMAND test_atom_negative_control
+                     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+            set_tests_properties(engine.atom_negative_control_lavapipe PROPERTIES
+                TIMEOUT 600 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
+        endif()
     endif()
-    # ...and both UNDER THE VALIDATION LAYER, failing on any report: our recorder's
-    # barriers and the provider's restoration are what the layer reads. Each asserts
-    # the layer is ACTIVE (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into
-    # the layer's library), so a machine without the layer cannot read as green.
+    # UNDER THE VALIDATION LAYER, failing on any report: our recorder's barriers and the
+    # provider's restoration are what the layer reads. Each asserts the layer is ACTIVE
+    # (JAH_ATOM_EXPECT_VALIDATION: vkCmdDraw must resolve into the layer's library), so a
+    # machine without the layer cannot read as green.
     if(EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
         add_test(NAME engine.atom_negative_control_validation COMMAND test_atom_negative_control
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
