@@ -33,7 +33,7 @@
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -170,8 +170,8 @@ int main(int argc, char **argv)
     arm->setName("arm");
     arm->name = "arm";
     arm->setMesh(armMesh);
-    auto mat = iris::DefaultMaterial::create();
-    mat->setDiffuseColor(QColor(255, 0, 0));
+    auto mat = iris::PbrMaterial::create();
+    mat->setBaseColor(QColor(255, 0, 0));
     arm->setMaterial(mat);
     doc->getRootNode()->addChild(arm);
     auto jointRoot = iris::SceneNode::create();

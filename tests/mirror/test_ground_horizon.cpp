@@ -35,7 +35,7 @@
 #include <cmath>
 
 #include "irisgl/irisglfwd.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -76,8 +76,8 @@ int main(int argc, char **argv)
     floorNode->setName("Ground");
     floorNode->setMesh(previewmesh::load(":/models/ground.obj"));
     floorNode->defaultFloor = true;              // what makes it THE floor
-    auto grey = iris::DefaultMaterial::create();
-    grey->setDiffuseColor(QColor(200, 200, 200));
+    auto grey = iris::PbrMaterial::create();
+    grey->setBaseColor(QColor(200, 200, 200));
     floorNode->setMaterial(grey);
     doc->getRootNode()->addChild(floorNode);
 

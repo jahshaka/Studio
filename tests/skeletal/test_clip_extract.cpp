@@ -37,7 +37,7 @@
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -82,7 +82,7 @@ static QMap<QString, Trs> gGolden;      // "fixture|clip|time|bone" -> pose
 
 static iris::MaterialPtr makeMat(iris::MeshPtr, iris::MeshMaterialData &)
 {
-    return iris::DefaultMaterial::create();
+    return iris::PbrMaterial::create();
 }
 
 static iris::MeshNodePtr findSkinned(const iris::SceneNodePtr &n)

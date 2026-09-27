@@ -27,7 +27,6 @@
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "io/builtinmaterials.h"
 #include "irisgl/core/properties/property.h"
@@ -90,9 +89,9 @@ int main(int argc, char **argv)
     auto meshNode = iris::MeshNode::create();
     meshNode->setName("cube");
     meshNode->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto legacyOrange = iris::DefaultMaterial::create();
-    legacyOrange->setDiffuseColor(QColor(204, 76, 51));   // the document decides the colour now
-    meshNode->setMaterial(legacyOrange);
+    auto orange = iris::PbrMaterial::create();
+    orange->setBaseColor(QColor(204, 76, 51));   // the document decides the colour
+    meshNode->setMaterial(orange);
     CHECK(!!meshNode->getMesh(), "cube.obj loaded into the document (no GL)");
     const float r = meshNode->getMeshRadius();
     const float s = r > 0.0f ? 1.0f / r : 1.0f;      // normalise to unit radius
@@ -264,27 +263,25 @@ int main(int argc, char **argv)
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("material edited -> red", img);
     CHECK(isMaterial(centre(img)), "runtime material edit reached the engine");
-    // Legacy DefaultMaterial maps too.
-    auto legacy = iris::DefaultMaterial::create();
-    legacy->setDiffuseColor(QColor(20, 200, 40));
-    meshNode2->setMaterial(legacy);
+    // The RESTING material the blocks below put back on the cube: green.
+    auto resting = iris::PbrMaterial::create();
+    resting->setBaseColor(QColor(20, 200, 40));
+    meshNode2->setMaterial(resting);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
-    view->readPixels(img); show("DefaultMaterial green", img);
-    CHECK(centre(img).g > centre(img).r && centre(img).g > centre(img).b, "DefaultMaterial diffuse -> albedo");
 
     // ---- step 4b: a diffuse TEXTURE from the document reaches the engine ----
     {
         const QString pngPath = QDir::temp().filePath("jahshaka_mirror_test_green.png");
         QImage tex(32, 32, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
-        auto textured = iris::DefaultMaterial::create();
-        textured->setDiffuseColor(QColor(255, 255, 255));                 // white tint: the texture decides
-        textured->setDiffuseTexture(iris::Texture2D::load(pngPath));     // deferred: no GL, path recorded
+        auto textured = iris::PbrMaterial::create();
+        textured->setBaseColor(QColor(255, 255, 255));                 // white tint: the texture decides
+        textured->setBaseColorMap(iris::Texture2D::load(pngPath));     // deferred: no GL, path recorded
         meshNode2->setMaterial(textured);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("diffuse texture (green)", img);
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f, "document texture colours the cube");
-        textured->setDiffuseTexture(iris::Texture2DPtr());
-        textured->setDiffuseColor(QColor(230, 60, 20));
+        textured->setBaseColorMap(iris::Texture2DPtr());
+        textured->setBaseColor(QColor(230, 60, 20));
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img); show("texture removed", img);
         CHECK(isMaterial(centre(img)), "removing the texture goes back to the material colour");
@@ -356,7 +353,7 @@ int main(int argc, char **argv)
                   centre(img).b < 0.08f,
               "Flat renders its AUTHORED colour, unshaded (decoded, like a texture)");
 
-        meshNode2->setMaterial(legacy);
+        meshNode2->setMaterial(resting);
     }
 
     // ---- a grayscale texture samples grey, not red ----
@@ -376,7 +373,7 @@ int main(int argc, char **argv)
         CHECK(c.g > c.r * 0.8f && c.b > c.r * 0.8f && c.r > 0.1f,
               "a grayscale image renders grey (all channels), not red");
         QFile::remove(grayPath);
-        meshNode2->setMaterial(legacy);
+        meshNode2->setMaterial(resting);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
@@ -468,7 +465,7 @@ int main(int argc, char **argv)
         mirror.applySky(view);
         for (int i = 0; i < 6; ++i) QFile::remove(facePaths[i]);
         QDir().rmdir(skyDir);
-        meshNode2->setMaterial(legacy);
+        meshNode2->setMaterial(resting);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
@@ -564,7 +561,7 @@ int main(int argc, char **argv)
         view->readPixels(img); show("round-tripped PBR texture", img);
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
               "texture from the round-tripped material colours the cube");
-        meshNode2->setMaterial(legacy);
+        meshNode2->setMaterial(resting);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         QFile::remove(pngPath);
         QDir().rmdir(dir);
@@ -614,7 +611,7 @@ int main(int argc, char **argv)
     cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f)); cam->lookAt(iris::Vec3(0, 0, 0));
     mirror.applyCamera(cam, view);
     // A green cube under the strong white point light: nothing but the highlight can read as yellow.
-    meshNode2->setMaterial(legacy);
+    meshNode2->setMaterial(resting);
     auto countYellow = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++n; } return n; };
     mirror.setHighlightedNodes({ meshNode2 });
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
@@ -663,7 +660,7 @@ int main(int argc, char **argv)
             part->setMesh(previewmesh::load(":assets/models/cube.obj"));
             part->setLocalScale(iris::Vec3(s, s, s));
             part->setLocalPos(iris::Vec3(x, 0, 0));
-            part->setMaterial(legacy);
+            part->setMaterial(resting);
             part->setAttached(true);
             group->addChild(part, false);
             return part;
@@ -1309,7 +1306,7 @@ int main(int argc, char **argv)
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         doc->setSkyTexture(iris::Texture2DPtr());
         doc->getRootNode()->removeChild(docSkyLight);
-        meshNode->setMaterial(legacyOrange);
+        meshNode->setMaterial(orange);
         doc->getRootNode()->removeChild(meshNode);
         QFile::remove(redSkyPath);
         QFile::remove(flipSkyPath);
@@ -1364,7 +1361,7 @@ int main(int argc, char **argv)
         const Colour swapped = centre(img);
         CHECK(swapped.b > 0.25f && swapped.b > swapped.g * 1.5f && swapped.b > swapped.r * 1.5f,
               "a colour sky is a real environment: the metal cube reflects IT now");
-        meshNode->setMaterial(legacyOrange);
+        meshNode->setMaterial(orange);
         doc->getRootNode()->removeChild(meshNode);
         QFile::remove(eqPath);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
@@ -1450,7 +1447,7 @@ int main(int argc, char **argv)
         doc->skyType = iris::SkyType::SINGLE_COLOR;
         doc->skyColor = QColor(0, 0, 255);
         doc->setSkyTexture(iris::Texture2DPtr());
-        meshNode->setMaterial(legacyOrange);
+        meshNode->setMaterial(orange);
         doc->getRootNode()->removeChild(meshNode);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
         mirror.applySky(view);

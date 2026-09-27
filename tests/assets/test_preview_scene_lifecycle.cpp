@@ -34,7 +34,7 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "bridge/enginepreviewscene.h"
@@ -74,8 +74,8 @@ public:
 
         auto cube = iris::MeshNode::create();
         cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
-        auto mat = iris::DefaultMaterial::create();
-        mat->setDiffuseColor(QColor(230, 40, 40));
+        auto mat = iris::PbrMaterial::create();
+        mat->setBaseColor(QColor(230, 40, 40));
         cube->setMaterial(mat);
         mDocument->rootNode->addChild(cube);
 

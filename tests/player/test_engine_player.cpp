@@ -19,7 +19,7 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/physicsproperties.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/assets/mesh.h"
@@ -451,8 +451,8 @@ int main(int argc, char **argv)
     auto cube = iris::MeshNode::create();
     cube->setName("cube");
     cube->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto orange = iris::DefaultMaterial::create();
-    orange->setDiffuseColor(QColor(204, 76, 51));
+    auto orange = iris::PbrMaterial::create();
+    orange->setBaseColor(QColor(204, 76, 51));
     cube->setMaterial(orange);
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document (no GL)");
     const float r = cube->getMeshRadius();

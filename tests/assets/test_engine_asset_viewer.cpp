@@ -1,5 +1,5 @@
 // The Assets page viewer on the engine, headless: a cube with a coloured
-// DefaultMaterial goes through EngineAssetScene (assets Scene + SceneMirror +
+// PbrMaterial goes through EngineAssetScene (assets Scene + SceneMirror +
 // the preview document and its orbit camera) into an offscreen View. The cube
 // must fill the centre from the framing camera with the corner showing the
 // background; orbiting 180 degrees must change the picture but keep the cube
@@ -21,7 +21,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/core/math/quat.h"
 #include "jahshaka/engine/Engine.h"
@@ -118,8 +118,8 @@ int main(int argc, char **argv)
         // (a lone cube looks the same from either side).
         auto cube = iris::SceneNode::create();
         cube->setName("model");
-        auto red = iris::DefaultMaterial::create();
-        red->setDiffuseColor(QColor(204, 40, 30));
+        auto red = iris::PbrMaterial::create();
+        red->setBaseColor(QColor(204, 40, 30));
         auto body = iris::MeshNode::create();
         body->setName("cube");
         body->setMesh(previewmesh::load(":assets/models/cube.obj"));
@@ -174,8 +174,8 @@ int main(int argc, char **argv)
         CHECK(backAgain <= 12, "a 180 degree left drag brings the first picture back");
 
         // ---- 3. a second material on the preview sphere ----
-        auto green = iris::DefaultMaterial::create();
-        green->setDiffuseColor(QColor(30, 200, 40));
+        auto green = iris::PbrMaterial::create();
+        green->setBaseColor(QColor(30, 200, 40));
         auto ball = assets.setMaterialSubject(green.staticCast<iris::Material>());
         assets.resetCamera();
         CHECK(!!ball && assets.subject() == ball, "the material ball replaced the cube as the subject");
@@ -203,8 +203,8 @@ int main(int argc, char **argv)
         auto giant = iris::MeshNode::create();
         giant->setName("giant");
         giant->setMesh(previewmesh::load(":assets/models/cube.obj"));
-        auto blue = iris::DefaultMaterial::create();
-        blue->setDiffuseColor(QColor(30, 60, 220));
+        auto blue = iris::PbrMaterial::create();
+        blue->setBaseColor(QColor(30, 60, 220));
         giant->setMaterial(blue);
         giant->setLocalScale(iris::Vec3(200.0f, 200.0f, 200.0f));
         const iris::AABB gbox = preview::worldBoundingBox(giant);

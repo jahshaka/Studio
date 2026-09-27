@@ -47,7 +47,6 @@
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/propertyanim.h"
@@ -101,9 +100,9 @@ int main(int argc, char **argv)
     CHECK(!!meshNode->getMesh(), "mesh loaded from resources without GL");
     scene->getRootNode()->addChild(meshNode);
 
-    // --- Materials: DefaultMaterial builds its shader source; compile is lazy
-    auto mat = iris::DefaultMaterial::create();
-    CHECK(!!mat, "DefaultMaterial constructed without GL");
+    // --- Materials: the one PBR material constructs without GL
+    auto mat = iris::PbrMaterial::create();
+    CHECK(!!mat, "PbrMaterial constructed without GL");
     meshNode->setMaterial(mat);
 
     // --- Texture2D::load: previously qFatal("Failed to get QOpenGLFunctions_3_2_Core")

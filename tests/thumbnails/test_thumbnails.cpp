@@ -1,5 +1,5 @@
 // Thumbnails through the engine, main thread, offscreen: a cube.obj with a known
-// DefaultMaterial colour renders to a QImage of the requested size whose centre is
+// PbrMaterial colour renders to a QImage of the requested size whose centre is
 // the material, not the background; a second colour differs; a third request
 // identical to the first reproduces it (nothing leaks between requests).
 #include "../support/previewdump.h"
@@ -20,7 +20,7 @@
 #include "irisgl/document/assets/mesh.h"          // MeshMaterialData
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "bridge/enginethumbnailrenderer.h"
@@ -59,11 +59,11 @@ static void show(const char *tag, const QImage &img)
 }
 static QImage thumbnail(EngineThumbnailRenderer &r, QColor diffuse, QSize size)
 {
-    // Exactly what ThumbnailGenerator's Mesh path builds: a MeshNode with a DefaultMaterial.
+    // Exactly what ThumbnailGenerator's Mesh path builds: a MeshNode with a PbrMaterial.
     auto node = iris::MeshNode::create();
     node->setMesh(previewmesh::load(":assets/models/cube.obj"));
-    auto mat = iris::DefaultMaterial::create();
-    mat->setDiffuseColor(diffuse);
+    auto mat = iris::PbrMaterial::create();
+    mat->setBaseColor(diffuse);
     node->setMaterial(mat);
     return r.renderNode(node, size);
 }
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
         CHECK(centre(e).green() > centre(e).red() + 40, "and renders the material");
 
         // 5. the material preview sphere path
-        auto mat = iris::DefaultMaterial::create(); mat->setDiffuseColor(QColor(230, 200, 20));
+        auto mat = iris::PbrMaterial::create(); mat->setBaseColor(QColor(230, 200, 20));
         QImage m = renderer.renderMaterial(mat, size); show("material sphere", m);
         CHECK(!m.isNull() && m.size() == size, "material preview renders at the requested size");
         CHECK(centre(m).red() > centre(m).blue() + 40 && centre(m).green() > centre(m).blue() + 40, "material sphere shows the material colour");
@@ -155,8 +155,8 @@ int main(int argc, char **argv)
         {
             auto giant = iris::MeshNode::create();
             giant->setMesh(previewmesh::load(":assets/models/cube.obj"));
-            auto gm = iris::DefaultMaterial::create();
-            gm->setDiffuseColor(QColor(220, 30, 30));
+            auto gm = iris::PbrMaterial::create();
+            gm->setBaseColor(QColor(220, 30, 30));
             giant->setMaterial(gm);
             giant->setLocalScale(iris::Vec3(200.0f, 200.0f, 200.0f));
             QImage h = renderer.renderNode(giant, size); show("giant cube x200", h);
@@ -213,8 +213,8 @@ int main(int argc, char **argv)
         {
             auto hot = iris::MeshNode::create();
             hot->setMesh(previewmesh::load(":assets/models/cube.obj"));
-            auto hm = iris::DefaultMaterial::create();
-            hm->setDiffuseColor(QColor(255, 255, 255));
+            auto hm = iris::PbrMaterial::create();
+            hm->setBaseColor(QColor(255, 255, 255));
             hot->setMaterial(hm);
             QImage w = renderer.renderNode(hot, size); show("white cube", w);
 

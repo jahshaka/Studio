@@ -25,7 +25,7 @@
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 
 namespace armrig {
 
@@ -92,8 +92,8 @@ inline iris::MeshNodePtr buildArmNode(const iris::MeshPtr &mesh, const QString &
     auto arm = iris::MeshNode::create();
     arm->setName(name);
     arm->setMesh(mesh);
-    auto mat = iris::DefaultMaterial::create();
-    mat->setDiffuseColor(QColor(255, 0, 0));
+    auto mat = iris::PbrMaterial::create();
+    mat->setBaseColor(QColor(255, 0, 0));
     arm->setMaterial(mat);
 
     auto jointRoot = iris::SceneNode::create();

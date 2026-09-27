@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/core/viewport.h"
