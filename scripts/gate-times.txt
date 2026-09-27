@@ -1,4 +1,4 @@
-# suite seconds — snapshot of a full gate; refresh with gate-scope.sh --record-times <ctest log>
+# suite seconds — the run log's median PASS time (refresh: scripts/gate-scope.sh --record-times, which reads ~/Developer/testing/runs; no ctest-log argument)
 # (D6B-GATE-SHAPE, 2026-09-27: the after-run at 58b216b46, -j4 beside three other lanes; the rows it lost to the box's load carry their solo re-run seconds)
 # Fix round F1's thirteen rows carry their WORST measured run (the one their 6x timeout is set from:
 #   spikes/d6b-gate-shape/f1-timeouts.txt).

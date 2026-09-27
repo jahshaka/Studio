@@ -115,6 +115,34 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.gate_scope_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
     jah_no_display(source.gate_scope_rules)
+    # gate.selection — THE SELECTOR'S REPLAY (MODULAR-GATE-1): the recorded lanes' diffs
+    # re-selected against this build's graph (gate_selection_cases.json): every REAL red of
+    # theirs must be selected, no lane may fall back, and the graph's precision holds. Needs the
+    # BUILT tree (ninja's deps log) and the recorded shas; a cold run pays ~1 min of `nm` once
+    # (cached in the build dir), a warm one ~15 s.
+    add_test(NAME gate.selection
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_selection.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.selection PROPERTIES TIMEOUT 300 LABELS "hygiene")
+    jah_no_display(gate.selection)
+    # source.testing_rules — THE TESTING RULES A LINT CAN READ (MODULAR-GATE-1, T6; §7b):
+    # R1 every measuring row is inside the GPU lock; R2 every nightly row is priced; R3 no
+    # copied `ctest -LE` tier; R4 no RUN_SERIAL without its verdict; R5 every app/lint row has a
+    # subject that selects it. Each rule is first fed a violation (a lint that cannot fail
+    # guards nothing).
+    add_test(NAME source.testing_rules
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/testing_rules.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.testing_rules PROPERTIES TIMEOUT 120 LABELS "hygiene")
+    jah_no_display(source.testing_rules)
+    # gate.ci_check — THE MERGE REFUSAL (MODULAR-GATE-1, T6): scripts/ci-gate-check.sh <range>
+    # refuses unless the run log holds a green record at the tip for every row the range selects
+    # (a recorded range against a private run log: six cases, ~30 s).
+    add_test(NAME gate.ci_check
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/ci_gate_check_test.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(gate.ci_check PROPERTIES TIMEOUT 180 LABELS "hygiene")
+    jah_no_display(gate.ci_check)
 endif()
 
 # source.member_init — UNINIT-SWEEP-1: every scalar, pointer and enum member of ours
