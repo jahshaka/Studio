@@ -455,6 +455,28 @@ class NinjaGraph:
         return s
 
 
+def ctest_inventory(build):
+    """`ctest --show-only=json-v1` for a build dir, run in a COPY of its CTestTestfile.cmake tree.
+    ctest opens <build>/Testing/Temporary/LastTest.log even for a listing, which TRUNCATES the log
+    of a gate still running in that dir (the suites audit proved it, GATE_AND_RIG) — and the
+    selector's own guards list the inventory from inside a gate. The copy answers the same
+    (backtraces and commands are absolute paths) and leaves the build dir's log alone.
+    Returns (stdout, returncode)."""
+    import shutil
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="gate-inventory-")
+    try:
+        for dp, _, fs in os.walk(build):
+            if "CTestTestfile.cmake" in fs:
+                rel = os.path.relpath(dp, build)
+                os.makedirs(os.path.join(tmp, rel), exist_ok=True)
+                shutil.copy2(os.path.join(dp, "CTestTestfile.cmake"), os.path.join(tmp, rel, "CTestTestfile.cmake"))
+        r = subprocess.run(["ctest", "--show-only=json-v1"], cwd=tmp, capture_output=True, text=True)
+        return r.stdout, r.returncode
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 # -- C/C++ text ------------------------------------------------------------------------------
 _CXX_KEYWORDS = set("""
 alignas alignof and asm auto bool break case catch char char8_t char16_t char32_t class const

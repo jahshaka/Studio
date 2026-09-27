@@ -296,7 +296,11 @@ def main(source, build):
     # them must not red on their absence.
     inventory = set()
     try:
-        raw = subprocess.run(["ctest", "--show-only=json-v1"], cwd=build, capture_output=True, text=True).stdout
+        # from a copy of the CTestTestfile tree: a listing in the build dir truncates the
+        # LastTest.log of the gate this guard runs inside (gate_graph.ctest_inventory)
+        sys.path.insert(0, os.path.join(source, "scripts"))
+        import gate_graph
+        raw = gate_graph.ctest_inventory(build)[0]
         inventory = {t["name"] for t in json.loads(raw).get("tests", [])}
     except (ValueError, OSError):
         pass

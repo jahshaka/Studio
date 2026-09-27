@@ -338,8 +338,15 @@ def resolve_build(arg):
 
 
 def load_inventory(build):
-    raw = sh(f"ctest --show-only=json-v1", cwd=build)
-    j = json.loads(raw)
+    # listed from a copy of the CTestTestfile tree: a listing in the build dir itself truncates
+    # the LastTest.log of a gate running there (gate_graph.ctest_inventory)
+    if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
+        raw, rc = "{}", 0
+    else:
+        raw, rc = gate_graph.ctest_inventory(build)
+        if rc != 0:
+            sys.stderr.write(f"gate-scope: ctest --show-only failed ({rc}) for {build}\n"); sys.exit(2)
+    j = json.loads(raw or "{}")
     if not j.get("tests"):
         # See resolve_build: an unconfigured directory answers with an empty
         # inventory and a zero exit status, and an empty inventory selects
@@ -413,6 +420,8 @@ def load_inventory(build):
             "via": via,
             "frames": set(os.path.normpath(f) for f in frames),
             "serial": bool(props.get("RUN_SERIAL")),
+            "env": list(props.get("ENVIRONMENT", []) or []),
+            "fixture_setup": bool(props.get("FIXTURES_SETUP")),
             "labels": set(props.get("LABELS", []) or []),
             "kind": "other", "exes": set(),
         }
@@ -470,6 +479,18 @@ def load_costs():
             if len(parts) == 2: costs[parts[0]] = float(parts[1])
     costs.update(gate_runlog.median_times(days=14))
     return costs
+
+
+def api_modules():
+    """Every scripting module that has an API file (src/scripting/modules/<m>api.cpp,
+    src/modules/*/api/<m>api.cpp, src/player/api/<m>api.cpp)."""
+    out = set()
+    for pat in ("src/scripting/modules/*api.cpp", "src/modules/*/*api.cpp", "src/modules/*/api/*api.cpp",
+                "src/player/api/*api.cpp"):
+        import glob as _g
+        for f in _g.glob(os.path.join(ROOT, pat)):
+            out.add(os.path.basename(f)[:-len("api.cpp")])
+    return out
 
 
 def script_modules(path):
@@ -578,6 +599,22 @@ class Selection:
         self.by_dir = collections.defaultdict(list)
         for n, t in inv.items(): self.by_dir[t["dir"]].append(n)
         self.mods = {n: script_modules(t["script"]) for n, t in inv.items() if t["script"] and not t["arms"]}
+        # A HARNESS that drives the app over MCP (compiled with JAHSHAKA_BINARY; open.responsive,
+        # avatar.responsive, scripting.e2e.texture_missing, ...) calls verbs by name in its own
+        # source ("avatar.importAvatar(..."): those are its modules, so an API change selects it
+        # like a script (the suites audit's S1 class, closed by the selector, not by a rule)
+        if graph is not None:
+            known = api_modules()
+            for n, t in inv.items():
+                if t["kind"] != "app" or t["script"] or t["arms"]: continue
+                ms = set()
+                for e in t["exes"] & graph.app_driving:
+                    for o in graph.members(e):
+                        src = graph.obj_src.get(o, "")
+                        if "/tests/" in src and src.endswith(CXX_EXT):
+                            try: ms |= set(re.findall(r"\b([a-z]+)\.[a-zA-Z_]+\(", open(src, errors="replace").read()))
+                            except OSError: pass
+                if ms & known: self.mods[n] = ms & known
         # an ARM is `<row>::<arm>` wherever a script is mapped: its modules and its script select
         # the arm alone; a rule's directory or group selects the pool row whole
         for n, t in inv.items():
@@ -1229,8 +1266,6 @@ def main():
         ap.error("give a range (base..tip) or --files")
     paths = a.files if a.files else touched_paths(a.range)
 
-    # THE COSTS FIRST (D6B-GATE-SHAPE; audit H4): load_inventory's `ctest --show-only`
-    # TRUNCATES Testing/Temporary/LastTest.log.
     costs = load_costs()
     S = select(paths, a.range if not a.files else None, build, a.jobs)
     inv, selected = S.inv, S.selected

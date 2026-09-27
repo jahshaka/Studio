@@ -258,12 +258,13 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
 
 
 def inventory_labels(build):
-    """suite -> labels, read BEFORE the run (`ctest --show-only` truncates LastTest.log, so never
-    after one whose log is still wanted)."""
+    """suite -> labels (listed from a copy of the CTestTestfile tree: gate_graph.ctest_inventory)."""
     try:
-        r = subprocess.run(["ctest", "--show-only=json-v1"], cwd=build, capture_output=True, text=True)
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import gate_graph
+        raw, _ = gate_graph.ctest_inventory(build)
         out = {}
-        for t in json.loads(r.stdout).get("tests", []):
+        for t in json.loads(raw or "{}").get("tests", []):
             props = {p["name"]: p["value"] for p in t.get("properties", [])}
             out[t["name"]] = props.get("LABELS", []) or []
         return out
