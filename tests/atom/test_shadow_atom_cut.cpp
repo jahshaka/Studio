@@ -57,6 +57,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <set>
@@ -98,7 +99,19 @@ struct World {
     View *view = nullptr;
     OgreView *ov = nullptr;
     std::vector<Placed> placed;
+    struct Lamp { NodeId node; Vec3 pos; };
+    std::vector<Lamp> lamps;   ///< the spot and the point: CACHED maps (re-rendered on a change only)
 };
+
+/// THE LAMP MAPS ARE CACHED (ENGINE_CACHE_POLICY_SPEC): a still lamp's map renders once and
+/// is reused. A test that wants the map drawn by the code under test NOW moves the lamps by
+/// `dy` (a millimetre: past the pose key's 1/65536 m, no visible change) — the next frame
+/// re-renders their maps.
+static void nudgeLamps(World &w, float dy)
+{
+    for (const World::Lamp &l : w.lamps)
+        w.scene->setNodeTransform(l.node, Vec3(l.pos.x, l.pos.y + dy, l.pos.z), Quat(), Vec3(1, 1, 1));
+}
 
 static std::vector<clusterfix::Fixture> gFixtures;
 
@@ -151,11 +164,6 @@ static void buildWorld(World &w, bool dense)
     std::vector<MeshId> meshes;
     for (const clusterfix::Fixture &f : gFixtures) {
         MeshData d = f.data;
-        if (dense) {   // THE DENSE CASTER: level 0 is the only level
-            d.lodIndices.clear();
-            d.lodErrors.clear();
-            d.lodBounds.clear();
-        }
         meshes.push_back(s->createMesh(d));
     }
     // A FIELD from 4 m to 70 m down -Z, each object scaled to ~1.6 m, lifted clear of
@@ -177,6 +185,7 @@ static void buildWorld(World &w, bool dense)
     {   // THE SPOT: over the near group, straight down (-Y, the helpers' light convention)
         const NodeId n = s->createNode();
         s->setNodeTransform(n, Vec3(0.5f, 7.0f, -9.0f), Quat(), Vec3(1, 1, 1));
+        w.lamps.push_back({ n, Vec3(0.5f, 7.0f, -9.0f) });
         LightDesc l;
         l.type = LightType::Spot;
         l.intensity = 30.0f;
@@ -187,6 +196,7 @@ static void buildWorld(World &w, bool dense)
     {   // THE POINT: beside the second row
         const NodeId n = s->createNode();
         s->setNodeTransform(n, Vec3(-4.0f, 2.8f, -15.0f), Quat(), Vec3(1, 1, 1));
+        w.lamps.push_back({ n, Vec3(-4.0f, 2.8f, -15.0f) });
         LightDesc l;
         l.type = LightType::Point;
         l.intensity = 20.0f;
@@ -201,7 +211,12 @@ static bool makeWorld(World &w, const char *name, bool dense)
     w.scene = gE->createScene(name);
     if (!w.view || !w.scene) return false;
     buildWorld(w, dense);
-    if (dense) w.scene->setAtomDrawEnabled(false);
+    // THE DENSE CASTER: the split's door shut (every item on the stock PBS caster) and a LOD
+    // bias of 0 (no level affordable: every object at level 0 in every pass).
+    if (dense) {
+        w.scene->setAtomDrawEnabled(false);
+        w.scene->setLodBias(0.0f);
+    }
     w.view->setOffscreenContract(OffscreenContract::StillPicture);
     w.view->setScene(w.scene);
     w.view->setShadows(true);
@@ -242,7 +257,7 @@ struct CutTally {
 };
 
 static void checkOneCut(World &w, const OgreScene::CasterProbe &p, const char *label, bool orthographicExpected,
-                        unsigned mapHeight, CutTally &all)
+                        unsigned mapHeight, CutTally &all, bool mayBeEmpty = false)
 {
     auto *os = static_cast<OgreScene *>(w.scene);
     CutTally t;
@@ -332,7 +347,9 @@ static void checkOneCut(World &w, const OgreScene::CasterProbe &p, const char *l
     std::printf("   %-18s survivors %4u | instances checked %3u | clusters %6u (not level 0: %6u) | triangles %8llu | "
                 "worst producer bound %.3f texel\n",
                 label, p.survivors, t.instances, t.clusters, t.coarse, p.triangles, t.worstBoundRatio);
-    CHECK_MSG(t.instances > 0u, "%s: the map drew Atom casters (%u instances)", label, t.instances);
+    // A point light's face may look at nothing (the face towards the sky): the six faces are
+    // checked together by the caller.
+    if (!mayBeEmpty) CHECK_MSG(t.instances > 0u, "%s: the map drew Atom casters (%u instances)", label, t.instances);
     CHECK_MSG(t.mismatched == 0u, "%s: every instance's drawn clusters are the rule's set at the light's request (%u "
               "differ; %u only at a threshold)", label, t.mismatched, t.nearMismatched);
     CHECK_MSG(t.overBound == 0u, "%s: every drawn cluster's displacement bound is under ONE texel of the map (%u over; "
@@ -345,10 +362,12 @@ static void checkOneCut(World &w, const OgreScene::CasterProbe &p, const char *l
     all.worstBoundRatio = std::max(all.worstBoundRatio, t.worstBoundRatio);
 }
 
+static int gNudge = 0;
 static bool probe(World &w, unsigned map, unsigned face, OgreScene::CasterProbe &out)
 {
     auto *os = static_cast<OgreScene *>(w.scene);
     os->armCasterProbeForTest(map, face);
+    nudgeLamps(w, 0.001f * float(++gNudge % 2));   // a lamp map renders only when dirty
     for (int i = 0; i < 24; ++i) {
         gE->renderOneFrame();
         if (os->casterProbeForTest(out)) return true;
@@ -390,6 +409,7 @@ static int cutMain()
         const bool isPoint = m.second == Ogre::Light::LT_POINT;
         const bool ortho = m.second == Ogre::Light::LT_DIRECTIONAL;
         const unsigned faces = isPoint ? 6u : 1u;
+        unsigned pointInstances = 0;
         for (unsigned face = 0; face < faces; ++face) {
             OgreScene::CasterProbe p;
             char label[64];
@@ -401,8 +421,13 @@ static int cutMain()
                 ++failures;
                 continue;
             }
-            checkOneCut(w, p, label, ortho, mapHeightOf(sn, m.first, isPoint), all);
+            const unsigned before = all.instances;
+            checkOneCut(w, p, label, ortho, mapHeightOf(sn, m.first, isPoint), all, isPoint);
+            pointInstances += isPoint ? all.instances - before : 0u;
         }
+        if (isPoint)
+            CHECK_MSG(pointInstances > 0u, "map %u: the point light's faces drew Atom casters (%u instance-faces)",
+                      m.first, pointInstances);
         (ortho ? pssm : isPoint ? point : spot)++;
     }
     CHECK_MSG(pssm == 3u && spot >= 1u && point >= 1u, "the maps: 3 PSSM splits, %u spot, %u point", spot, point);
@@ -452,9 +477,8 @@ static int parityMain()
     for (int i = 0; i < 40; ++i) gE->renderOneFrame();
     {
         const AtomDrawStatus sa = a.scene->atomDrawStatus(), sb = b.scene->atomDrawStatus();
-        CHECK_MSG(sa.on && sa.atomItems >= 35u && !sb.on && sb.atomItems == 0u,
-                  "one world through the caster cut (%u atom items), the other all stock PBS (%u)", sa.atomItems,
-                  sb.atomItems);
+        CHECK_MSG(sa.on && sa.atomItems >= 35u && !sb.on,
+                  "one world through the caster cut (%u atom items), the other all stock PBS (split off)", sa.atomItems);
     }
     Ogre::CompositorShadowNode *sa = shadowNodeOf(a.ov), *sb = shadowNodeOf(b.ov);
     if (!sa || !sb) { std::printf("FAIL: shadow nodes\n"); return 1; }
@@ -465,7 +489,11 @@ static int parityMain()
         OgreScene::CasterProbe p;
         if (probe(a, m.first, 0u, p)) probes[m.first] = p;
     }
-    for (int i = 0; i < 4; ++i) gE->renderOneFrame();
+    // BOTH WORLDS' LAMP MAPS RE-RENDERED NOW, identically (the cut world's by the caster
+    // cut: its first render was before the GPU scene was live, through PBS).
+    nudgeLamps(a, 0.002f);
+    nudgeLamps(b, 0.002f);
+    for (int i = 0; i < 6; ++i) gE->renderOneFrame();
     Atlas A, B;
     CHECK(readAtlas(sa, A) && readAtlas(sb, B) && A.w == B.w && A.h == B.h, "both atlases read back");
     if (A.d.empty() || A.w != B.w || A.h != B.h) return 1;
@@ -517,7 +545,8 @@ static int parityMain()
                 if (kv.second > best) { best = kv.second; empty = kv.first; }
         }
         std::vector<float> errTexels;
-        unsigned both = 0, silhouette = 0, flips = 0;
+        unsigned both = 0, silhouette = 0, flips = 0, aGreater = 0;
+        double signedSum = 0.0;
         for (unsigned y = y0; y < y0 + mh; ++y)
             for (unsigned x = x0; x < x0 + mw; ++x) {
                 const float da = A.d[size_t(y) * A.w + x], db = B.d[size_t(y) * B.w + x];
@@ -546,12 +575,16 @@ static int parityMain()
                     texel = std::fabs(zb) / (r0len * float(A.w));
                 }
                 errTexels.push_back(texel > 0.0f ? errWorld / texel : 0.0f);
+                signedSum += double(da) - double(db);
+                if (da > db) ++aGreater;
                 if (errWorld > bias) ++flips;
             }
         std::sort(errTexels.begin(), errTexels.end());
         const float mx = errTexels.empty() ? 0.0f : errTexels.back();
         const float p99 = errTexels.empty() ? 0.0f : errTexels[size_t(double(errTexels.size() - 1) * 0.99)];
         const unsigned covered = both + silhouette;
+        std::printf("   %-14s signed: mean (cut - dense) %.3g in the map's units, cut greater at %u of %u texels\n",
+                    label, both ? signedSum / double(both) : 0.0, aGreater, both);
         std::printf("   %-14s %4ux%-4u covered %7u | depth error in texels: max %.3f p99 %.3f | silhouette %6u | "
                     "flips at the shipped bias (%.4f m) %6u (%.3f %%)\n",
                     label, mw, mh, covered, double(mx), double(p99), silhouette, double(bias), flips,

@@ -1734,7 +1734,7 @@ static int frameArmsMain(bool lattice)
 // own timer bleeds, ENGINE.md); on a SMALL world (200 objects, 4 lamps) neither slower
 // (<= 1.10x both). The caster pass = every pass of the view's shadow node (PassBucket::
 // ShadowView), its scene passes and the caster cut's passes together.
-static int shadowCutMain()
+static int shadowCutMain(bool smallWorld)
 {
     struct Arm { std::vector<double> cpu, gpu; unsigned passes = 0; };
     auto measure = [&](Env &env, Arm &arm) {
@@ -1795,12 +1795,17 @@ static int shadowCutMain()
                 "%s: ...and its GPU not slower (%.3f vs %.3f ms, bar %.2fx)", label, cg.median, pg.median, gpuBar);
         shutdown(env);
     };
-    runWorld("world", WorldSpec(), 1.0 / 3.0, 1.10);
-    WorldSpec small;
-    small.instances = 200;
-    small.lights = 4;
-    small.spacing = 3.0f;
-    runWorld("small", small, 1.10, 1.10);
+    // ONE WORLD A PROCESS (the frame monitor does not survive a second engine in one process:
+    // a boot after a shutdown crashed in FrameMonitor::beginFrame, measured) — two rows.
+    if (!smallWorld) {
+        runWorld("world", WorldSpec(), 1.0 / 3.0, 1.10);
+    } else {
+        WorldSpec small;
+        small.instances = 200;
+        small.lights = 4;
+        small.spacing = 3.0f;
+        runWorld("small", small, 1.10, 1.10);
+    }
     return failures ? 1 : 0;
 }
 
@@ -2339,7 +2344,8 @@ int main(int argc, char **argv)
     if (mode == "--bake") return bakeMain();
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
-    if (mode == "--shadow-cut") return shadowCutMain();
+    if (mode == "--shadow-cut") return shadowCutMain(false);
+    if (mode == "--shadow-cut-small") return shadowCutMain(true);
     if (mode == "--lattice-owed") return latticeOwedMain();
     if (mode == "--frame-arms-world") return frameArmsMain(false);
     if (mode == "--frame-arms-lattice") return frameArmsMain(true);
