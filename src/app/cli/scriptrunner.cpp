@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <cstdlib>
 
 #include <QApplication>
+#include <QEvent>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -260,6 +261,13 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
         std::fflush(stdout);
     });
     const ScriptRunPolicy policy = live ? ScriptRunPolicy::Live : ScriptRunPolicy::Off;
+    QString bootWindow;     // "<w>x<h>" as the boot had it (engine-up pools)
+    if (editorBoot) {
+        const ScriptResult w = engine->evaluate(
+            QStringLiteral("(function(){var w = app.window(); return w.width + 'x' + w.height;})()"),
+            QStringLiteral("<pool-baseline>"), false, 0, ScriptRunPolicy::Off);
+        if (w.ok) bootWindow = w.value.toString();
+    }
 
     for (int i = 0; i < arms.size(); ++i) {
         const PoolArm &arm = arms.at(i);
@@ -268,16 +276,16 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
         QElapsedTimer clock;
         clock.start();
 
-        // THE ARM'S BASELINE, part 1: the boot a one-script process gets. The
-        // first arm has it from the boot above; every later one gets it again.
-        if (i > 0 && editorBoot) {
-            window.endEngineSelftest();
-            QString why;
-            if (!beginEditorBoot(window, app, why)) {
-                armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8, why.toUtf8());
-                return finalizeAppExit(qBound(1, failed + 1, 255));
-            }
-        }
+        // THE ARM'S BASELINE, part 1 — NOT a second boot. The first arm has the
+        // boot a one-script process gets; a later arm starts where the previous
+        // arm's baseline left the window (the project closed, the desktop page
+        // up) and reaches the editor through the product's own route, the
+        // `project.create`/`project.open` it begins with. Re-showing the editor
+        // page directly (the selftest's begin, which sets the stacked page
+        // without switchSpace) after an arm had a second engine View up — the
+        // Player's, a camera PIP's — lost the device with an Xid 13 "3D WIDTH ZT
+        // Violation" three times out of three (lane SUITE-POOL-1's first run,
+        // spikes/suite-pool-1/xid/): a path no user takes is not a baseline.
         // ...part 2: a fresh JavaScript realm — no global of an earlier arm.
         if (!engine->resetScriptContext()) {
             armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
@@ -319,9 +327,28 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
         // closed; if one is still open afterwards the next arm cannot start
         // from the boot's state, so the process ends here and the driver
         // restarts it for the arms that remain.
+        //
+        // THE WINDOW TOO (engine-up): an arm that resized the window or left it
+        // in immersive full screen (editor_controls does both) would hand the
+        // next arm a different viewport — its framing, its pick pixels. Put
+        // back to the size the boot had, through the same verbs.
+        QString windowBaseline;
+        if (editorBoot && !bootWindow.isEmpty()) {
+            windowBaseline = QStringLiteral(
+                "if (editor.fullscreen()) editor.fullscreen(false);"
+                "(function(){var w = app.window(); if (w.width + 'x' + w.height !== '%1') app.resizeWindow(%2, %3);})();")
+                .arg(bootWindow, bootWindow.section(QLatin1Char('x'), 0, 0),
+                     bootWindow.section(QLatin1Char('x'), 1, 1));
+        }
         const ScriptResult base = engine->evaluate(
-            QStringLiteral("if (project.current()) project.close(); !project.current()"),
+            windowBaseline +
+                QStringLiteral("if (project.current()) project.close(); !project.current()"),
             QStringLiteral("<pool-baseline>"), false, 0, ScriptRunPolicy::Off);
+        // ...and what the close handed to the event loop to delete is deleted
+        // now, not in the middle of the next arm's measurement (doc.memory
+        // counted a previous arm's node leaving during its own burst).
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        app.processEvents();
         if (!base.ok || !base.value.toBool()) {
             armLine("POOL-BASELINE-LOST %s.%s %s\n", poolUtf8, armUtf8,
                     (base.ok ? QStringLiteral("a project is still open after project.close()")
