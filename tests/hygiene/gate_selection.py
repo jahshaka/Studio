@@ -38,6 +38,7 @@ import copy
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -112,6 +113,51 @@ def arm_cases(gs, graph, build, inv0):
                   inv=copy.deepcopy(inv), quiet_graph=True)
     check("pool.synth" in S.selected and "pool.synth" not in S.arm_subsets(),
           "an engine rule's app group selects the pool whole (every arm)")
+
+
+def gone_cases(gs, graph, build, inv0):
+    """A ROW THAT IS GONE (SUITE-POOL-1): a registration hunk from before a row became a pool arm
+    resolves to that ARM; one naming a suite or test target that exists nowhere any more resolves
+    to NOTHING with a `retired:` reason — and neither rule may fire on a LIVE row or target."""
+    print("\ngone rows (a row that became an arm; a retired one):")
+    inv = copy.deepcopy(inv0)
+    app_exe = gs.classify_rows(inv, graph, build)
+    sel = gs.Selection(inv, graph, app_exe, gs.Revs(None), 4)
+    pools = [(n, a, s_) for n, t in inv.items() for a, s_ in t["arms"].items()]
+    check(bool(pools), "the build registers pool arms")
+    if not pools: return
+    row, arm, scr = pools[0]
+    toks = lambda text: set(re.findall(r"[A-Za-z0-9_.+\-/${}]+", text))
+    # POSITIVE: a gone row whose registration ran an arm's script → that arm, by the command
+    # itself and by a properties line whose registration sits in the same file
+    reg = "NAME gone.suite_x COMMAND Jahshaka --script %s" % scr
+    got = sel.gone_row("add_test", reg, toks(reg))
+    check(got == ("arm", ["%s::%s" % (row, arm)]), "a gone row that ran an arm's script → the arm (%s)" % (got,))
+    whole = "add_test(%s)\nset_tests_properties(gone.suite_x PROPERTIES TIMEOUT 9)\n" % reg
+    got = sel.gone_row("set_tests_properties", "gone.suite_x PROPERTIES TIMEOUT 9", toks("gone.suite_x"), whole)
+    check(got and got[0] == "arm", "...and its set_tests_properties line, through its registration (%s)" % (got,))
+    # POSITIVE: a suite and a target that exist nowhere → retired, with the reason
+    got = sel.gone_row("add_test", "NAME gone.suite_y COMMAND test_gone_y", toks("gone.suite_y test_gone_y"))
+    check(got and got[0] == "retired" and "gone.suite_y" in got[1], "a suite that exists nowhere → retired (%s)" % (got,))
+    got = sel.gone_row("add_test", "NAME app.create_loop COMMAND test_create_loop", toks("app.create_loop"))
+    check(got and got[0] == "retired" and "open.responsive" in got[1],
+          "app.create_loop → retired, naming what carries its check (%s)" % (got,))
+    if graph is not None:
+        got = sel.gone_row("add_executable", "test_gone_z test_gone_z.cpp", toks("test_gone_z"))
+        check(got and got[0] == "retired", "a test target that exists nowhere → retired (%s)" % (got,))
+    # NEGATIVE: a LIVE row is never an arm or retired, even when its script is also an arm's
+    live = [n for n, t in inv.items() if t["script"] and not t["arms"] and any(
+            os.path.basename(t["script"]) == os.path.basename(s_) for _, _, s_ in pools)]
+    target = live[0] if live else next(n for n, t in inv.items() if not t["arms"])
+    text = "NAME %s COMMAND Jahshaka --script %s" % (target, inv[target]["script"] or "x.js")
+    check(sel.gone_row("add_test", text, toks(text)) is None,
+          "a LIVE row (%s) is neither an arm nor retired, whatever script it runs" % target)
+    # NEGATIVE: a live target is not retired
+    if graph is not None:
+        tgt = next(iter(sorted(t for t in graph.targets if t.startswith("test_"))), None)
+        if tgt:
+            check(sel.gone_row("set_target_properties", "%s PROPERTIES X Y" % tgt, toks(tgt)) is None,
+                  "a LIVE test target (%s) is not retired" % tgt)
 
 
 def hunk_cases(gs, graph, build, inv0, cases):
@@ -272,6 +318,7 @@ def main(source, build):
             check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
                                                                          S.selected.get(m, "")))
     arm_cases(gs, graph, build, inv0)
+    gone_cases(gs, graph, build, inv0)
     hunk_cases(gs, graph, build, inv0, cases)
     nm_refusal(source, build)
     joint_case(gs, build, cases)

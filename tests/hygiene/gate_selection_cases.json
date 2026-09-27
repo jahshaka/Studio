@@ -36,7 +36,7 @@
    "evidence": "spikes/create-crash-1/gate-scoped.log",
    "must": [
     "ui.show_walk",
-    "app.create_loop"
+    "open.responsive"
    ],
    "env": [],
    "note": "scoped 170/170"
@@ -126,7 +126,7 @@
    "must": [
     "document.reader_defaults",
     "scripting.e2e.sky_swap_transient",
-    "gi.gather_default",
+    "gi_verbs.gather_default",
     "sky.aerial_perspective"
    ],
    "env": [
@@ -142,7 +142,7 @@
    "evidence": "spikes/fog-atmo-1/gate-scope-fix3.log",
    "must": [
     "api.contract",
-    "gi.gather_default"
+    "gi_verbs.gather_default"
    ],
    "env": [
     "app.engine_selftest_validation",
@@ -200,16 +200,16 @@
     "gi.rt_reflect_cost",
     "open.responsive",
     "threading.newproject_stall",
-    "scripting.e2e.desktops",
-    "scripting.e2e.light_masks",
-    "scripting.e2e.gi_status",
-    "scripting.e2e.movable_lamp_rest",
-    "scripting.e2e.field_every_tier",
-    "scripting.e2e.presentation_state",
-    "scripting.e2e.sun_light",
-    "scripting.e2e.clouds_2d",
-    "scripting.e2e.world_rows_follow",
-    "scripting.e2e.scene_issues",
+    "assets_import.desktops",
+    "world_light.light_masks",
+    "gi_verbs.gi_status",
+    "gi_movers.movable_lamp_rest",
+    "gi_verbs.field_every_tier",
+    "editor_view.presentation_state",
+    "world_light.sun_light",
+    "world_sky.clouds_2d",
+    "world_sky.world_rows_follow",
+    "editor_view.scene_issues",
     "scripting.e2e.texture_missing"
    ],
    "note": "fell back on irisgl/irisglfwd.h (-1,188 lines, eleven files deleted); 14 reds all green solo (VRAM 14.2/16.4 GB with three gates live: device lost, no Xid); a deleted C/C++ file reaches nothing of its own (its users are in the diff)"
@@ -280,7 +280,7 @@
     "src/services/vrworld.cpp"
    ],
    "must": [
-    "vr.verbs_session"
+    "vr_session.verbs_session"
    ],
    "must_not": [
     "vr.session"

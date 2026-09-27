@@ -194,75 +194,22 @@ set_tests_properties(vr.gather_stereo PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}JAHSHAKA_DATA_ROOT=${CMAKE_CURRENT_BINARY_DIR}/vr-gather-home")
 
 # ---------------------------------------------------------------------------
-# vr.verbs_session — the `vr.*` verbs through the APP, against the simulated
-# runtime (VR_SPEC §6 / §4.6). The other half of scripting.e2e.vr_verbs, which
-# proves the same verbs refuse cleanly with no runtime at all.
+# vr_session.verbs_session — the `vr.*` verbs through the APP, against the simulated
+# runtime (VR_SPEC §6 / §4.6). The other half of vr_noruntime.vr_verbs, which proves the
+# same verbs refuse cleanly with no runtime at all.
 #
-# It runs the real binary with `--vr --script`, inside the same monado wrapper
-# the suites above use, with its own HOME and data root like every other
-# app-spawning suite.
-set(_vr_verbs_home "${CMAKE_CURRENT_BINARY_DIR}/vr-verbs-home")
-# THE WORKING DIRECTORY IS THE SUITE'S OWN BUILD DIRECTORY, not a subdirectory
-# of the scratch HOME: ctest chdir's into it BEFORE the command runs, so a run
-# whose home was swept between a configure and a gate does not start at all
-# ("Failed to change working directory ... Not Run", measured on this lane's own
-# gate after a cleanup). The build directory always exists — the test binary is
-# in it — and HOME still isolates the library, the settings and the data root.
-add_test(NAME vr.verbs_session
-         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
-                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js"
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(vr.verbs_session PROPERTIES
-    LABELS "scripting"
-    TIMEOUT 480
-    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
-    SKIP_RETURN_CODE 77
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_verbs_home};JAHSHAKA_DATA_ROOT=${_vr_verbs_home}/.local/share/Jahshaka")
-
-# ---------------------------------------------------------------------------
-# vr.player_session — THE PLAYER IN THE HEADSET (SPECS/VR_SPEC.md §4.5, phase 3).
+# vr_session.player_session — THE PLAYER IN THE HEADSET (SPECS/VR_SPEC.md §4.5, phase 3):
+# the app with `--vr`, a real session, the Player page up, the mirror on the player's own
+# view, the rig placed on the play camera and flown by the verb the fly keys call. The
+# no-runtime half is vr_noruntime.player_vr; the rig's arithmetic is `player.vr`.
 #
-# The same wrapper as vr.verbs_session, pointed at the Player's own script: the
-# app with `--vr`, a real session, the Player page up, the mirror on the
-# player's own view, the rig placed on the play camera and flown by the verb the
-# fly keys call. The no-runtime half is `scripting.e2e.player_vr`; the rig's
-# arithmetic is `player.vr`, which needs nothing at all.
-set(_vr_player_home "${CMAKE_CURRENT_BINARY_DIR}/vr-player-home")
-add_test(NAME vr.player_session
-         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
-                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_player_vr_session.js"
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(vr.player_session PROPERTIES
-    LABELS "scripting"
-    # 600, like every other app-spawning suite: this one is PACED BY THE
-    # RUNTIME (Monado's null compositor runs the second session of a process at
-    # 20 Hz), so it is longer than a desktop suite — it measured 16 s — but it
-    # is not in the class that needs 900.
-    TIMEOUT 480
-    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
-    SKIP_RETURN_CODE 77
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_player_home};JAHSHAKA_DATA_ROOT=${_vr_player_home}/.local/share/Jahshaka")
-
-# ---------------------------------------------------------------------------
-# vr.photon_view — THE PHOTON VIEW WITH A HEADSET UP (PHOTON-VIEW-1 fix round, F6):
-# while a stereo view draws the scene, Ogre's voxel and probe visualizers (low-level
-# materials the pin's instanced stereo does not serve) are refused, naming stereo;
-# every other mode stays; the refusal ends with the session. The same wrapper and
-# app as vr.player_session.
-set(_vr_photon_home "${CMAKE_CURRENT_BINARY_DIR}/vr-photon-view-home")
-add_test(NAME vr.photon_view
-         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
-                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js"
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(vr.photon_view PROPERTIES
-    LABELS "scripting"
-    TIMEOUT 420
-    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
-    SKIP_RETURN_CODE 77
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_photon_home};JAHSHAKA_DATA_ROOT=${_vr_photon_home}/.local/share/Jahshaka")
+# vr_session.photon_view — THE PHOTON VIEW WITH A HEADSET UP (PHOTON-VIEW-1 fix round,
+# F6): while a stereo view draws the scene, Ogre's voxel and probe visualizers (low-level
+# materials the pin's instanced stereo does not serve) are refused, naming stereo; every
+# other mode stays; the refusal ends with the session.
+#
+# All three (and vr_session.sample_open, below) are arms of ONE pool row: one Monado
+# runtime, one `--vr` process (the pool is declared at the end of this file).
 
 # ---------------------------------------------------------------------------
 # vr.no_picture_start — THE OWNER'S FAILED WiVRn SMOKE, AS A SUITE (lane VR-3b,
@@ -518,18 +465,6 @@ set_tests_properties(vr.eye_grade PROPERTIES
 # window then showing the Desktop page's pixels. The desktop twin is
 # scripting.e2e.sample_open; this is the same route on the boot that reported
 # it. No session is begun — the subject is the boot, not the headset.
-set(_vr_sample_home "${CMAKE_CURRENT_BINARY_DIR}/vr-sample-open-home")
-add_test(NAME vr.sample_open
-         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js"
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(vr.sample_open PROPERTIES
-    LABELS "scripting"
-    TIMEOUT 180
-    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
-    SKIP_RETURN_CODE 77
-    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_sample_home};JAHSHAKA_DATA_ROOT=${_vr_sample_home}/.local/share/Jahshaka")
 
 set_tests_properties(vr.spike_1a PROPERTIES
     LABELS "engine"
@@ -544,6 +479,23 @@ set_tests_properties(vr.spike_1a PROPERTIES
 # EVERY ROW OF THIS DIRECTORY CARRIES THE `vr` LABEL (lane D6B-GATE-SHAPE; audit §8: the VR
 # rows were labelled `scripting`, `engine` or `services` and there was no way to say "the VR
 # suites" to ctest). Appended here, after every registration above, so a new row cannot miss it.
+# ---- THE SHARED MONADO SESSION (lane SUITE-POOL-1): four runtime suites, ONE runtime and ONE
+# app process (`--vr`), four arms. ORDER IS LOAD-BEARING for one arm: player_session asserts
+# `player.play({vr:true})` refuses from a Player page that has never been shown IN THIS PROCESS,
+# so it is the pool's FIRST arm. A later session of a process is paced at 20 Hz by Monado's null compositor
+# (see vr.player_session); every arm counts frames, never time. The rows that stay their own:
+# the warm-up pair (the control cannot share a process), and the suites that latch an
+# environment variable at boot (mirror_live, input_session, no_picture_start).
+jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_player_vr_session.js 21 FIRST)
+jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
+jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 9)
+jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 9)
+jah_add_pool(vr_session LABELS scripting
+    LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
+    APP_ARGS --vr
+    ENV "${JAH_TEST_DISPLAY_ENV}"
+    PROPS RESOURCE_LOCK monado COST ${JAH_COST_MONADO} SKIP_RETURN_CODE 77)
+
 get_property(_vr_rows DIRECTORY PROPERTY TESTS)
 foreach(_t IN LISTS _vr_rows)
     set_property(TEST ${_t} APPEND PROPERTY LABELS vr)

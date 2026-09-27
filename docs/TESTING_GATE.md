@@ -406,8 +406,8 @@ At `-j4` the floor is 572 + 410 ≈ 16 min by construction. The cleanup lane
 restructures and moves the cache attacks nightly, folds 14 duplicate sample boots into
 `samples.cleanstart`, merges the three xdotool drivers, fixes the port-8751 collision that
 makes `-j4` unsafe, and trims timeouts to 6× measured. Projection: ~9 min for the full gate at
-`-j4`, ~5 min for MERGE. Phase 2 (own lane): a multi-script runner so ~65 document-only
-suites share one live instance (−340 suite-seconds).
+`-j4`, ~5 min for MERGE. The multi-script runner this section once
+scheduled as "phase 2" is built: §8 (the pools).
 
 ## 6. Who does what
 
@@ -460,3 +460,84 @@ description rather than inherited from the on-screen view's temporal filter, so 
 deterministic by construction. At that grade the rays move 30,448 of 65,536 pixels, worst
 78/255 — and the runner asserts B1 != B2 whenever the machine has ray queries (equal hashes on
 a machine WITHOUT them is the correct answer and is said so, not asserted away).
+
+## 8. The pools — app tests as named ARMS (lane SUITE-POOL-1, 2026-09-27)
+
+The app runs one script per `--script` process, and its boot is the expensive part: measured
+on this box 2026-09-27, ~13.7 s engine-up with a cold shader cache (every gate after a
+rebuild), ~5.5 s warm, ~3.2 s `--headless`. With one process per verb suite, app suites were
+77 % of the gate's suite-seconds (SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md). A POOL is
+one ctest row, `pool.<pool>`, whose one process (`Jahshaka --scripts … --pool <pool>`,
+`tests/support/run_pool.py`) runs a family's scripts as named ARMS. The developer's
+description — the arm protocol, the verdict lines, the solo retry — is `docs/TESTING.md` §2;
+this section is the contract.
+
+**THE CONTRACT.**
+- Every arm is `<pool>.<arm>` and prints exactly one verdict: `PASS`, `FAIL` (its first
+  failing assertion), `CRASH` (the process died in it) or `TIMEOUT` (killed past 6x its
+  measured seconds). A crash or a timeout costs its own arm: the driver restarts the process
+  and continues from the next arm. The row is red iff an arm is not `PASS`, and every red in
+  a gate report is named BY ARM, never "the pool".
+- Every arm starts in a fresh JavaScript realm; after every arm, green or red, the pool's
+  baseline is restored (its own `BASELINE` script if it has one, then the window's size, the
+  open project closed, the deferred deletes delivered), so a later arm starts with NO project
+  open and creates or opens what it needs. A death, hang or lost baseline after an arm is
+  that arm's `CRASH`. The arms share the pool's home
+  (fresh every run), so an arm never asserts on what another left in the library.
+- The solo retry of an arm is the flake protocol's unit (§4):
+  `JAH_POOL_ARMS=<pool>.<arm> DISPLAY=:NN ctest -R '^pool\.<pool>$'`, three times. Red in its
+  pool and green alone three times is a STATE LEAK between arms — fixed in the arm's baseline,
+  never with a budget.
+- A row's TIMEOUT is derived (`jah_add_pool`: the sum of 6x each arm's measured seconds, floor
+  30 s an arm, plus one 300 s boot budget) — never typed, never widened. An arm that got
+  slower is re-measured.
+- Selection (§3) names ARMS: a changed script or API module selects the arms that run it, and
+  the scoped command runs them through their pools' rows with `JAH_POOL_ARMS`; a pool whose
+  every arm is selected runs whole. The MERGE/PUSH tiers list pools as rows like any other.
+
+**THE RULE FOR A NEW TEST.** A lane adds an ARM to its family's pool — a script and one
+`jah_pool_arm(<pool> <arm> <script> <seconds>)` line beside the comment that says what it
+claims. It adds a ROW of its own only for a new FIXTURE or a PROCESS SWITCH, and its brief
+names which: a fresh home as the claim (a first launch, a cold cache); a boot latch (an
+environment variable such as `JAHSHAKA_NO_RAY_QUERY` or `JAHSHAKA_TEST_NO_EDITOR_BOOT`, a flag
+such as `--vr` or `--script-live`, a Monado session of its own); a GPU-lock timing measurement;
+a private display (an xdotool/xinput driver); an MCP driver that restarts the app; a
+crash-class churn. Engine and unit binaries keep one row per claim — their boot is ~2 s. A
+brief's named acceptance tests are arm names as often as row names.
+
+**THE MEASUREMENT** (the MERGE tier at -j4 on one rig display, one run each, one other lane
+building beside them): at `b3039193a` (D6B's shape, before the pools) 656 rows in 2,841 s
+(47.4 min; 2 reds: vr.eye_grade, mirror.scale timeout); at `95b7de06b` (the pools) 529 rows in
+1,807 s (30.1 min; 2 reds: vr.eye_grade — the same red as before —, vr.session_undithered —
+an engine binary this lane does not build differently, 1 of 3 solo retries red). −1,034 s of
+wall, −127 rows, no arm and no assertion lost. The per-row seconds are
+`scripts/gate-times.txt` (re-recorded from the after run).
+
+**THE POOLS** (lane SUITE-POOL-1, 2026-09-27; the proof and the seconds are
+`spikes/suite-pool-1/`): 142 former rows, 17 pool rows plus `pool.runner` (the runner's own
+test). "solo" is the sum of the former rows in the MERGE tier at `b3039193a` (-j4, one sibling
+gate live); "pooled" is the pool row in one run of every pool at -j4 on a quiet box.
+
+| pool | arms | solo s | pooled s | the family |
+|---|---|---|---|---|
+| doc / doc_assets | 29 / 23 | 110 / 90 | 13 / 12 | the `--headless` document verbs / the asset, import, export and clipboard verbs |
+| gi_verbs / gi_movers | 8 / 7 | 213 / 168 | 92 / 78 | world.gi rows and status / movers, mirror, rays, cards |
+| editor / editor_view | 10 / 7 | 248 / 194 | 89 / 73 | scene building / the viewport, gizmo, outline, stats |
+| shading / shading_live | 9 / 5 | 226 / 155 | 90 / 91 | materials and the PBS knobs / live textures, thumbnails, reflection maps |
+| world_sky / world_light | 7 / 4 | 310 / 218 | 108 / 157 | sky, clouds, ground, planar, world.vr / sun, lights, grades |
+| player | 7 | 208 | 86 | play, possession, space switches |
+| assets_import | 5 | 144 | 96 | the Assets page, the import dialog, samples, desktops |
+| vr_noruntime | 6 | 120 | 24 | every `vr.*` verb with no runtime |
+| vr_session | 4 | 153 | 75 | ONE Monado runtime, one `--vr` process (tests/vr/run_vr_app.sh --launch) |
+| avatar_anim / atom / cameras | 3 / 3 / 5 | 64 / 98 / 201 | 17 / 55 / 32 | the avatar page and skinning / the Atom view, draw and LODs / every camera verb |
+| **total** | **142** | **2,918** | **1,186** | **1,732 suite-seconds** |
+
+**ORDER IS DECLARED, AND RARELY MATTERS.** Arms run in declaration order. Three arms carry a
+process-level claim and are pinned: `FIRST` for `player.player_verbs` and
+`vr_session.player_session` (the Player page was never shown in the process) and `doc.memory`
+(its burst reads the engine node pools' slots, which carry the process's history).
+`vr_noruntime` has a BASELINE script (injected hands withdrawn, the gizmo mode back to
+translate) run after every arm, green or red. `world_vr` lives in `world_sky`, not
+`vr_noruntime`: a session override set with no session has no release, and the VR arms read
+the defaults. A new arm with a claim like these says so on its `jah_pool_arm` line.
+

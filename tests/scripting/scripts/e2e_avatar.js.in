@@ -45,7 +45,10 @@ assert(avatar.spaceMode("grid") === "grid", "pin the space to Grid for pixel pro
 // ---- the scratch store: nothing here may touch the real library ----------
 var storeRoot = assets.storeStatus().root;
 console.log("store root: " + storeRoot);
-assert(storeRoot.indexOf("e2e-home-avatar") >= 0,
+// Read against the run's OWN data root rather than a home directory's name: the suite
+// runs as an arm of a pool (SUITE-POOL-1), whose home is the pool's.
+var dr = app.dataRoot();
+assert(dr.overridden === true && storeRoot.indexOf(dr.root) === 0,
        "the content store is inside this suite's throwaway HOME, not the real library");
 
 // EVERY LOAD IS AN IMPORT (D7). The character becomes an avatar ASSET and the

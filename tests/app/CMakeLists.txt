@@ -168,15 +168,7 @@ endif()
 # crash-1788594910 regression gate: switching scenes with play/simulate state
 # still armed must not crash (PlayBack::stopScene + updateSceneAnimation ran
 # against the closed project's torn-down scene). Real binary, scratch HOME.
-set(_ssap_home ${CMAKE_CURRENT_BINARY_DIR}/scene-switch-home)
-file(MAKE_DIRECTORY ${_ssap_home}/run)
-add_test(NAME app.scene_switch_after_play
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js
-         WORKING_DIRECTORY ${_ssap_home}/run)
-set_tests_properties(app.scene_switch_after_play PROPERTIES
-    ENVIRONMENT "HOME=${_ssap_home};JAHSHAKA_DATA_ROOT=${_ssap_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 300)
+jah_pool_arm(player scene_switch_after_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js 10)
 
 # ---- app.multiselect_outline ------------------------------------------------
 # EVERY member of a selection SET is outlined, not just the primary
@@ -187,15 +179,7 @@ set_tests_properties(app.scene_switch_after_play PROPERTIES
 # the old app.selection_outline (lane D6B-GATE-SHAPE; audit verdict MERGE): an
 # Add-menu primitive IS outlined (the isBuiltIn regression gate of 2026-09-06 — its
 # "one selected" arm) and the GROUND never is (its ground arm).
-set(_mso_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-outline-home)
-file(MAKE_DIRECTORY ${_mso_home}/run)
-add_test(NAME app.multiselect_outline
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js
-         WORKING_DIRECTORY ${_mso_home}/run)
-set_tests_properties(app.multiselect_outline PROPERTIES
-    ENVIRONMENT "HOME=${_mso_home};JAHSHAKA_DATA_ROOT=${_mso_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 300)
+jah_pool_arm(editor_view multiselect_outline ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js 11)
 
 # ---- app.window_fits --------------------------------------------------------
 # A FRESH PROFILE'S WINDOW FITS ON ITS SCREEN (hygiene lane, 2026-09-09).
@@ -204,13 +188,23 @@ set_tests_properties(app.multiselect_outline PROPERTIES
 # --headless: offscreen QPA, no engine, no display at all (jah_no_display), and
 # the offscreen screen is smaller than the .ui's authored 1612x1530 — which is
 # the condition the clamp exists for.
-set(_wf_home ${CMAKE_CURRENT_BINARY_DIR}/window-fits-home)
-file(MAKE_DIRECTORY ${_wf_home}/run)
-add_test(NAME app.window_fits
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js --headless
-         WORKING_DIRECTORY ${_wf_home}/run)
-set_tests_properties(app.window_fits PROPERTIES
-    ENVIRONMENT "HOME=${_wf_home};JAHSHAKA_DATA_ROOT=${_wf_home}/.local/share/Jahshaka"
-    LABELS "app"
-    TIMEOUT 120)
-jah_no_display(app.window_fits)
+jah_pool_arm(doc window_fits ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_window_fits.js 1 HEADLESS)
+
+# pool.runner — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py; the runner is
+# src/app/cli/scriptrunner.cpp, so the row lives with the app's): the real app,
+# headless, over five fixture arms (a fresh realm and a closed project between arms, a thrown
+# assertion and a numeric completion value as FAIL, the pool going on, JAH_POOL_ARMS's subset
+# and its unknown-arm FAIL), and the driver against a stand-in app for what the real one cannot
+# be asked to do (a SIGSEGV mid-arm, a hang past the budget, a lost baseline — one arm each).
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-runner)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME pool.runner
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} --
+                 ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/support/test_run_pool.py
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${JAH_RUN_POOL}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/pool_selftest
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(pool.runner PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "pool;scripting" TIMEOUT 180)
+jah_no_display(pool.runner)
