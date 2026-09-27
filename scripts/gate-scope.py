@@ -935,16 +935,27 @@ class Selection:
         # USED INSIDE ITS OWN HEADER (a #define, a constexpr, an inline helper another inline
         # helper calls — enginetesthelpers.h's testCameraDescLookAt behind testCameraLookAt): its
         # users name the WRAPPER, not it, so no name-search can find them — every includer
-        # (the Fable read, U1). Counted on the header's code text: more than one occurrence of
-        # the name = a declaration plus a use.
+        # (the Fable read, U1). Counted on the header's code text: an occurrence that is not the
+        # identifier's own declaration is a use.
         # The count is taken OUTSIDE the changed lines: a use on a changed line is new code in
         # this very diff (StageMs used by the stageMs member added beside it), and its own
         # identifiers are already in the set.
         changed_new = set()
         for _os, _oc, ns, nc in gate_graph.hunks_of(self.revs.diff_u0(p)):
             changed_new |= set(range(ns - 1, ns - 1 + nc))
-        body = "\n".join(l for k, l in enumerate(gate_graph.strip_cxx(b)) if k not in changed_new)
-        inner = sorted(t for t in ids if re.search(r"\b" + re.escape(t) + r"\b", body))
+        kept = [l for k, l in enumerate(gate_graph.strip_cxx(b)) if k not in changed_new]
+        # ...and never on the identifier's OWN declaration line (`struct MeshCardDesc {`, a
+        # member's `float halfDepth = 0.0f;`): a declaration is not a use, and counting it sent
+        # every member-default change to every includer (the second Fable read, precision (a))
+        def used_inside(t):
+            rx = re.compile(r"\b" + re.escape(t) + r"\b")
+            decl = re.compile(r"\b(?:struct|class|union|enum(?:\s+class|\s+struct)?)\s+(?:\w+\s+)*?" + re.escape(t) + r"\b")
+            for l in kept:
+                if not rx.search(l) or decl.search(l): continue
+                if t in gate_graph.declared_names(l, False)[0]: continue
+                return True
+            return False
+        inner = sorted(t for t in ids if used_inside(t))
         if inner:
             notes.append(f"symbol(s) {inner[:6]} used inside the header itself (a wrapper's callers name "
                          f"the wrapper) → every includer")
