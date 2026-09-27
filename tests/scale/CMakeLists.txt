@@ -151,9 +151,9 @@ set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
 # landing, a 2,000-frame walk with teleports, a DAG mesh released and re-added, a new mesh
 # added and released, the cut's budget forced small twice) with the decode's discriminator
 # on: no frame fails more than 0.5 % of what the id pass covered. A pixel suite (no time
-# measured): never the GPU lock. ~180 s.
+# measured, frames counted): never the GPU lock. 212 s measured; the timeout is 6x that.
 add_test(NAME atom.coverage_trace COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 900 LABELS "engine"
+set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1300 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).
