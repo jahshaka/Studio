@@ -3,7 +3,8 @@
 
 Given a range, it re-derives the scoped selection (gate-scope.py, the same code the lane ran)
 and reads THE RUN LOG: every selected row — and, for a pool selected in part, every selected
-arm — must have a record at the range's tip (the studio sha, a clean tree) whose LATEST verdict
+arm — must have a record at the range's tip (the studio sha, irisgl at the sha the tip pins,
+neither tree dirty) whose LATEST verdict
 is PASS. A solo retry that passed after a gate red counts (the flake protocol, TESTING_GATE §4:
 the red and the retries sit side by side in the log for the reviewer); a row never run, or
 whose last run is red, refuses. A selection that is the whole tier (a fork pin, a fallback)
@@ -28,8 +29,9 @@ def load_gs():
     return gs
 
 
-def latest_verdicts(tip):
-    """(suite, arm) -> the latest record at this tip (clean tree), across every tier's file."""
+def latest_verdicts(tip, irisgl=None):
+    """(suite, arm) -> the latest record at this tip (clean tree, and irisgl at the tip's pin),
+    across every tier's file."""
     out = {}
     d = gate_runlog.log_dir()
     if not os.path.isdir(d): return out
@@ -39,7 +41,10 @@ def latest_verdicts(tip):
             try: r = json.loads(line)
             except ValueError: continue
             t = r.get("tip") or {}
-            if t.get("studio") != tip or t.get("studio_dirty"): continue
+            if t.get("studio") != tip or t.get("studio_dirty") or t.get("irisgl_dirty"): continue
+            # the engine that ran must be the one the tip PINS (F1): a record from a tree whose
+            # irisgl was checked out elsewhere tested other code
+            if irisgl and t.get("irisgl") != irisgl: continue
             k = (r.get("suite"), r.get("arm"))
             if k not in out or (r.get("ts") or "") >= (out[k].get("ts") or ""):
                 out[k] = r
@@ -69,7 +74,8 @@ def check(rng, build, gs=None):
             for arm in subsets.get(n, []):
                 need.append((n, f"{inv[n]['pool']}.{arm}"))
         what = "the scoped selection"
-    got = latest_verdicts(tip_sha)
+    pin = subprocess.run(["git", "rev-parse", f"{tip_sha}:irisgl"], cwd=gs.ROOT, capture_output=True, text=True).stdout.strip()
+    got = latest_verdicts(tip_sha, pin or None)
     missing = [f"{n}{' :: ' + a if a else ''}" for n, a in need if (n, a) not in got]
     red = [f"{n}{' :: ' + a if a else ''} ({got[(n, a)]['verdict']})" for n, a in need
            if (n, a) in got and got[(n, a)]["verdict"] != "PASS"]

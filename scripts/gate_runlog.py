@@ -89,8 +89,14 @@ def tree_shas():
     studio = _git(["rev-parse", "HEAD"])
     irisgl = _git(["rev-parse", "HEAD"], cwd=os.path.join(ROOT, "irisgl"))
     fork = _git(["rev-parse", "HEAD"], cwd=os.path.join(ROOT, "irisgl", "thirdparty", "ogre-next"))
-    dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"]))
-    return {"studio": studio, "irisgl": irisgl, "fork": fork, "studio_dirty": dirty}
+    # THE TREE THAT RAN: Studio's own files AND irisgl's (an uncommitted engine edit gates green
+    # and is never committed otherwise — the second Fable read, F1). irisgl's vendored submodules'
+    # CONTENT is ignored: assimp's applied patch stack is configure-time state, not dirt.
+    s_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"]))
+    i_dirty = bool(_git(["status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty"],
+                        cwd=os.path.join(ROOT, "irisgl")))
+    return {"studio": studio, "irisgl": irisgl, "fork": fork, "studio_dirty": s_dirty or i_dirty,
+            "irisgl_dirty": i_dirty}
 
 
 def gpu_clocks():
