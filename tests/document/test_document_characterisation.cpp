@@ -868,35 +868,16 @@ int main(int argc, char **argv)
               "format: an absent type string is not 'retired'");
     }
 
-    // --- The reflection roughness cutoff reads BOTH spellings --------------
-    // Lane SMALL-ITEMS D (ledger §453 finding 4). The document field, the
-    // engine desc, the mirror push, the file key and the World row's id are ONE
-    // name now — `reflectionRoughnessCutoff` — because the number stopped being
-    // ray-only when lane SSR-3 gave the screen-space march the same dial.
-    // Every project the owner has saved to date carries the OLD key, so the
-    // reader takes both and the writer emits only the new one. This is the
-    // whole tolerance, asserted where the helper lives (SceneReader itself
-    // links a Database and a Project and is not unit-testable; it calls exactly
-    // this function).
+    // --- The reflection roughness cutoff: one key, absent = the ctor's ------
+    // The document field, the engine desc, the mirror push, the file key and
+    // the World row's id are ONE name — `reflectionRoughnessCutoff`. Asserted
+    // where the helper lives (SceneReader itself links a Database and a
+    // Project and is not unit-testable; it calls exactly this function).
     {
         QJsonObject fresh;
         fresh[QStringLiteral("reflectionRoughnessCutoff")] = 65;
         CHECK(sceneformat::readReflectionRoughnessCutoff(fresh) == 65,
               "cutoff: a document written today reads its own key");
-
-        QJsonObject legacy;
-        legacy[QStringLiteral("rayReflectRoughness")] = 65;
-        CHECK(sceneformat::readReflectionRoughnessCutoff(legacy) == 65,
-              "cutoff: a document written BEFORE the rename still opens at its author's value");
-
-        // A document saved once by this build carries both (the reader wrote
-        // the new key into a blob that still held the old): the NEW one wins,
-        // so a value edited after the rename is never undone by a stale twin.
-        QJsonObject both;
-        both[QStringLiteral("rayReflectRoughness")] = 65;
-        both[QStringLiteral("reflectionRoughnessCutoff")] = 20;
-        CHECK(sceneformat::readReflectionRoughnessCutoff(both) == 20,
-              "cutoff: the new key wins when a blob carries both");
 
         // ABSENT = the renderer's own answer, not zero (the reader-defaults
         // trap: a fallback that disagrees with iris::Scene's constructor ships
@@ -920,14 +901,12 @@ int main(int argc, char **argv)
         CHECK(sceneformat::readReflectionRoughnessCutoff(wild) == 5,
               "cutoff: a negative value is clamped to the row's minimum");
 
-        // Reading must not MINT keys — QJsonObject::operator[] on a non-const
-        // object inserts a null on a subscript READ, which would make a later
-        // contains() lie (gate fact, rayontiers lane). The helper uses value().
-        QJsonObject probe;
-        probe[QStringLiteral("rayReflectRoughness")] = 30;
-        (void)sceneformat::readReflectionRoughnessCutoff(probe);
-        CHECK(!probe.contains(QStringLiteral("reflectionRoughnessCutoff")),
-              "cutoff: reading an old blob does not mint the new key in it");
+        // FORWARD-BUILDING: the retired `rayReflectRoughness` spelling is not
+        // read — a blob carrying only it opens at the default.
+        QJsonObject retired;
+        retired[QStringLiteral("rayReflectRoughness")] = 65;
+        CHECK(sceneformat::readReflectionRoughnessCutoff(retired) == 40,
+              "cutoff: the retired spelling is not read (absent = 40)");
     }
 
     // --- Platform deep audit 2026-09-10, document-layer defects (B5.1, B5.2, B8.1, B11.1)

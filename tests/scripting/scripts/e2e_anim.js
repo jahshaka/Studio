@@ -322,10 +322,8 @@ assert(skf.tracks.length === 3 && skf.tracks[0].keys.length === 2,
        "both keys survived on every channel");
 assert(near(skf.tracks[0].keys[1].value, 3), "with their values");
 
-// THE serializer-mismatch anti-regression (anim-lane finding, 2026-09-04):
-// SceneWriter writes "leftTangentType"/"rightTangentType" and SceneReader read
-// "leftTangent"/"rightTangent", so BOTH tangent types were silently reset to
-// free on EVERY reload — a curve authored Constant/Linear came back straight.
+// The tangent types round-trip: SceneWriter's "leftTangentType" /
+// "rightTangentType" are exactly the keys SceneReader reads.
 var reShaped = skf.tracks[0].keys[0];
 assert(reShaped.leftTangent === "constant",
        "leftTangent survived the round trip: " + reShaped.leftTangent);
