@@ -32,7 +32,7 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_planar_asan PRIVATE JahshakaEngineAsan)
     target_compile_options(test_planar_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_planar_asan PRIVATE -fsanitize=address)
-    add_test(NAME engine.planar_asan COMMAND test_planar_asan
+    jah_gpu_row(engine.planar_asan CLASS engine COMMAND test_planar_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.

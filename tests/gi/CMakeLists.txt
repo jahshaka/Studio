@@ -909,7 +909,7 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     add_dependencies(test_gi_cascades_asan JahshakaEngineMedia)
     target_compile_options(test_gi_cascades_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_cascades_asan PRIVATE -fsanitize=address)
-    add_test(NAME gi.cascades_asan COMMAND test_gi_cascades_asan
+    jah_gpu_row(gi.cascades_asan CLASS engine COMMAND test_gi_cascades_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
@@ -974,7 +974,7 @@ if(JAHSHAKA_ASAN)
     add_dependencies(test_gi_rayquery_asan JahshakaEngineMedia)
     target_compile_options(test_gi_rayquery_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
-    add_test(NAME gi.rayquery_asan COMMAND test_gi_rayquery_asan
+    jah_gpu_row(gi.rayquery_asan CLASS engine COMMAND test_gi_rayquery_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 120 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
