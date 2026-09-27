@@ -3054,8 +3054,23 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height)
 // whole switch, in both directions.
 static constexpr bool kUserShotKeepsEditorHelpers = false;
 
+QVector<float> EngineSceneViewport::takeScreenshotRadiance(int *width, int *height)
+{
+    if (width) *width = mShotRadianceW;
+    if (height) *height = mShotRadianceH;
+    QVector<float> out;
+    out.swap(mShotRadiance);
+    mShotRadianceW = mShotRadianceH = 0;
+    return out;
+}
+
 QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrade grade)
 {
+    // THE RADIANCE REQUEST is one shot's, taken whatever happens below.
+    const bool wantRadiance = mShotRadianceWanted && grade == ScreenshotGrade::Plain;
+    mShotRadianceWanted = false;
+    mShotRadiance.clear();
+    mShotRadianceW = mShotRadianceH = 0;
     // Offscreen render of the same engine scene at the requested size, then readback.
     if (!mEngine || !mEngineScene || width <= 0 || height <= 0) return QImage();
     View *shot = mEngine->createOffscreenView("screenshot-" + std::to_string(++mViewSerial),
@@ -3208,6 +3223,13 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
             // caller's default and the World's value was thrown away, so every
             // regraded world photographed at +0.6).
             secondaryfx::apply(shot, true, shot->postFx().exposure);
+        } else if (wantRadiance) {
+            // THE PLAIN PICTURE, KEPT IN FLOAT TOO (readRadianceWithNextScreenshot):
+            // honoured on an offscreen view whatever allowOffscreen says — it is a
+            // property of what the view keeps, not a post effect (PostFxDesc).
+            jahshaka::engine::PostFxDesc fx = shot->postFx();
+            fx.hdrReadback = true;
+            shot->setPostFx(fx);
         }
     }
     // A screenshot is an offscreen render of this same scene: without this
@@ -3271,6 +3293,14 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
         for (unsigned y = 0; y < img.height; ++y)
             memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
+    }
+    if (wantRadiance) {
+        jahshaka::engine::ImageF hdr;
+        if (shot->readPixelsHdr(hdr) && hdr.width && hdr.height) {
+            mShotRadiance = QVector<float>(hdr.rgba.begin(), hdr.rgba.end());
+            mShotRadianceW = int(hdr.width);
+            mShotRadianceH = int(hdr.height);
+        }
     }
     mEngine->destroyView(shot);
     // ...and the viewport gets its own sizing back, before anything presents
