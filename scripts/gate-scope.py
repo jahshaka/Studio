@@ -4,8 +4,9 @@
     scripts/gate-scope.sh <base>..<tip> [--build build-linux] [--run] [--json]
     scripts/gate-scope.sh --files path [path ...]
 
-The owner's rule (2026-09-09 night): the full gate (298 suites, ~25 min wall) runs once
-per BATCH before a push; a lane gates on what its work can break. This tool turns a git
+The owner's rule (2026-09-09 night): the full gate (the MERGE tier, `--merge-tier`; its row
+count and measured wall live in docs/TESTING_GATE.md §5, never here) runs once per BATCH
+before a push; a lane gates on what its work can break. This tool turns a git
 range (or a file list) into an exact `ctest -R '^(a|b|c)$'` selection, with one rationale
 line per touched path, an estimated wall time from scripts/gate-times.txt (a full-gate snapshot) and the build dir's last run, and a
 loud FALLBACK to the MERGE tier whenever a path matches nothing precise (a rule that
