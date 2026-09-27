@@ -101,12 +101,6 @@ ALLOWED = [
     ('float(rot["z"].toDouble(0.0))', 'the identity quaternion'),
 
     # --- retired keys, read once on the way to the bin -----------------------
-    ('sceneObj.value("fogStart").toDouble(100.0)',
-     'the RETIRED linear fog pair. There is no fogStart field any more '
-     '(CRUD, render audit I-6): the two keys are read into locals to derive a '
-     'density for a file that predates fogDensity, and forgotten. 100/180 is '
-     'the shape of that old fog, not a default of anything that exists'),
-    ('sceneObj.value("fogEnd").toDouble(180.0)', 'the retired linear fog pair'),
     ('sceneObj.value("giAutoRefresh").toBool(true)',
      'a RETIRED key mapped onto giUpdateBudget: `false` meant budget 0 and '
      'absent meant the pre-fix-wave behaviour, which is what true expresses. '
