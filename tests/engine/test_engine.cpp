@@ -708,6 +708,61 @@ void pip_composites_a_second_camera_into_the_rect() {
               pixelHash(ref), pixelHash(restored));
 }
 
+/// VIEWS-XID-1: A PIP REQUEST DIES WITH ITS SCENE. detachScene destroyed the
+/// inset's workspace but kept the desc enabled, so the next setScene's attach
+/// rebuilt the inset on a scene nobody had asked it for — in the app, the
+/// editor's re-show drew it from its synchronous cover frames and the device
+/// was lost (Xid 13 "3D WIDTH ZT", 14/14 runs before the fix, 0/31 after;
+/// spikes/views-xid-1/). NEGATIVE CONTROL: with the reset in
+/// OgreView::detachScene removed, all three checks after the rebind fail — the
+/// desc reports enabled, pipGeneration moves, and the rect is the wall.
+void pip_request_dies_with_its_scene() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-rebind", 128, 128, kBlue);  REQUIRE(v);
+    Scene *s1 = f.scene("pip-rebind-a");              REQUIRE(s1);
+    Scene *s2 = f.scene("pip-rebind-b");              REQUIRE(s2);
+    REQUIRE(pip::build(s1).wall);
+    REQUIRE(pip::build(s2).wall);     // the stale inset camera would find a wall here too
+    CHECK(v->setScene(s1));
+    pip::aimMain(v);
+    const ViewPipDesc d = pip::desc(0.60f, 0.60f, 0.36f, 0.36f);
+    v->setPip(d);
+    render(e, 3);
+    Image before; REQUIRE(v->readPixels(before));
+    const pip::RectStats on = pip::compare(before, before, d, kGreen);
+    CHECK_MSG(on.inside >= on.insideTotal * 95 / 100,
+              "precondition: the inset owns its rect on the first scene: %u/%u",
+              on.inside, on.insideTotal);
+    CHECK(v->pip().enabled);
+
+    CHECK(v->setScene(nullptr));
+    CHECK_MSG(!v->pip().enabled, "detaching the scene must drop the PiP request");
+    const unsigned pipGen = v->pipGeneration();
+    CHECK(v->setScene(s2));
+    CHECK_MSG(!v->pip().enabled, "the next scene must not inherit the request");
+    CHECK_MSG(v->pipGeneration() == pipGen,
+              "no inset may be BUILT on a scene that did not ask for one: pipGeneration %u -> %u",
+              pipGen, v->pipGeneration());
+    pip::aimMain(v);
+    render(e, 3);
+    Image after; REQUIRE(v->readPixels(after));
+    const pip::RectStats off = pip::compare(after, after, d, kGreen);
+    CHECK_MSG(off.inside == 0, "the rect must show the main view, not an inset: %u/%u px are the wall",
+              off.inside, off.insideTotal);
+    std::printf("    inset on scene A %u/%u px; after the rebind %u/%u px, pipGeneration %u\n",
+                on.inside, on.insideTotal, off.inside, off.insideTotal, v->pipGeneration());
+
+    // ...and a host that wants it on the new scene asks again, and gets it.
+    v->setPip(d);
+    render(e, 3);
+    Image again; REQUIRE(v->readPixels(again));
+    const pip::RectStats re = pip::compare(again, again, d, kGreen);
+    CHECK_MSG(re.inside >= re.insideTotal * 95 / 100,
+              "asked again on the new scene, the inset draws: %u/%u", re.inside, re.insideTotal);
+    v->setPip(ViewPipDesc());
+    render(e, 1);
+}
+
 /// CAMERAS_SPEC §7.3 correction 1, the DISCRIMINATING half of the store-action
 /// fix (see msaa_overlay_pass_resolves_at_every_sample_count for the other).
 ///
@@ -6397,6 +6452,7 @@ int main(int argc, char **argv) {
         { "pip_is_ignored_offscreen_unless_asked",  pip_is_ignored_offscreen_unless_asked },
         { "pip_composites_a_second_camera_into_the_rect",
                                                     pip_composites_a_second_camera_into_the_rect },
+        { "pip_request_dies_with_its_scene",        pip_request_dies_with_its_scene },
         { "pip_over_msaa_keeps_the_main_frame",     pip_over_msaa_keeps_the_main_frame },
         { "pip_letterboxes_to_the_authored_aspect", pip_letterboxes_to_the_authored_aspect },
         { "pip_survives_a_main_workspace_rebuild",  pip_survives_a_main_workspace_rebuild },

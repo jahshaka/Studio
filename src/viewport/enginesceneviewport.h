@@ -113,6 +113,8 @@ public:
     void setPipEnabled(bool on) override;
     double pipSize() const override { return mPipSize; }
     void setPipSize(double fraction) override;
+    bool pipOnView() const override;
+    unsigned pipBuilds() const override;
     void onCameraSpeedChanged() override { emit mEvents.cameraSpeedChanged(); }
 
 private:
