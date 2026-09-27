@@ -170,6 +170,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // Worthless without mode 2 — P1 — and free the moment it lands, because the
     // per-scene warm-up on the editor scene (viewport/enginesceneviewport.cpp)
     // already runs at Tier::Primary and always satisfied the predicate.
+    GiParams warmGi;            // the GI the warm scene was given (the bound frames below)
+    bool haveWarmGi = false;
     Scene *warmScene = warmView ? engine->createScene(
                                       "startup-warmup",
                                       sceneworkers::count(sceneworkers::Tier::Primary))
@@ -243,6 +245,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             gi.cascades = worldmodes::photonCascades(tier) > 0;
             gi.ddgi = worldmodes::photonDdgi(tier) ? GiToggle::On : GiToggle::Off;
             warmScene->setGlobalIllumination(gi);
+            warmGi = gi;
+            haveWarmGi = true;
         }
     }
     // What this covers is everything PROCESS-WIDE: Hlms registration, all the
@@ -267,16 +271,49 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     const bool coldCache = compiled > 0;
     unsigned lastCompiled = compiled;
     int quiet = 0;
-    for (; coldCache && warmScene && giFrames < kWarmUpGiFrames && quiet < kGiQuietFrames &&
-           !warmScene->giStatus().giAtRest; ++giFrames) {
+    // ...AND UNTIL THE LIGHTING ARM IS BOUND (TEST-TIER-1): the ungathered frames below draw the
+    // box WITH the cone tracer, which means nothing before the arm is bound; "quiet" alone does not
+    // promise that, so the loop also runs until the arm has been bound for kWarmUpFrames frames
+    // (the log line says so when it never was).
+    auto armBound = [&]() {
+        if (!haveWarmGi || warmGi.mode == GiMode::Off) return true;
+        // Every GI mode the tiers ship voxelises (VCT, alone or under the probes): the arm is
+        // bound when the cone tracer is.
+        return warmScene->giStatus().vctBound;
+    };
+    int boundFrames = 0;
+    for (; coldCache && warmScene && giFrames < kWarmUpGiFrames &&
+           ((quiet < kGiQuietFrames && !warmScene->giStatus().giAtRest) || boundFrames < kWarmUpFrames);
+         ++giFrames) {
         engine->renderOneFrame();
         poll();
         engine->shaderBuildProgress(compiled, cached, expected);
         quiet = compiled == lastCompiled ? quiet + 1 : 0;
         lastCompiled = compiled;
+        if (armBound()) ++boundFrames;
     }
-    qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s", giFrames,
-          static_cast<long long>(giTimer.elapsed()), coldCache ? "" : " (a warm cache: skipped)");
+    // ...AND THE STATE A WARM CACHE DRAWS FIRST (the diagnosis: spikes/test-tier-1/coldgate/). On a
+    // warm cache the arm binds inside the first frames — before the visibility buffer has taken
+    // the box over and before the screen-probe gather is on — so the box is drawn once through
+    // STOCK PBS with the cone tracer and the probes' cube and no prepass. A cold boot, whose arm
+    // binds only after its compute set compiled, has handed the box to Atom by then and never
+    // draws that permutation; the second boot after every cache rebuild compiled it and ran this
+    // whole warm-up again. Drawn here on the cold boot: the id pass off, the gather parked.
+    if (coldCache && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) {
+        GiParams ungathered = warmGi;
+        ungathered.gather = GiToggle::Off;
+        warmScene->setAtomDrawEnabled(false);
+        warmScene->setGlobalIllumination(ungathered);
+        for (int i = 0; i < kWarmUpFrames; ++i) {
+            engine->renderOneFrame();
+            poll();
+        }
+        warmScene->setAtomDrawEnabled(true);
+        warmScene->setGlobalIllumination(warmGi);
+    }
+    qInfo("startup shader build: the GI compute set's warm-up took %d frames, %lld ms%s%s", giFrames,
+          static_cast<long long>(giTimer.elapsed()), coldCache ? "" : " (a warm cache: skipped)",
+          coldCache && boundFrames == 0 ? " (the lighting arm never bound)" : "");
 
     // THE DEFAULT WORLD'S OWN MATERIAL, IN THE PASSES A NEW PROJECT DRAWS IT IN (ATOM
     // S3-DRAW). The visibility buffer shades the ground through a DECODE TWIN of its

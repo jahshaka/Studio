@@ -82,6 +82,25 @@ set_tests_properties(app.startup_quiet PROPERTIES
     TIMEOUT 300
     LABELS "app")
 
+# app.shader_gate_warm — THE STARTUP SHADER GATE KNOWS A WARM CACHE (TEST-TIER-1): a cold boot
+# (--clear-shader-cache) compiles and runs the GI warm-up; the second boot in the same home compiles
+# ZERO programs and skips it. A ROW of its own: its claim is two boots of one home, the first
+# with its shader cache wiped (a pool process cannot reboot). The home is fresh every run; the
+# row's own first boot is what makes the cache cold. At the document's tier (Epic): the race the
+# gate had is the Epic lighting arm's.
+set(_sgw_home ${CMAKE_CURRENT_BINARY_DIR}/shader-gate-warm-home)
+file(MAKE_DIRECTORY ${_sgw_home}/run)
+jah_gpu_row(app.shader_gate_warm CLASS app
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_sgw_home} --
+                 bash "${CMAKE_CURRENT_SOURCE_DIR}/shader_gate_warm.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/startup_quiet.js"
+         WORKING_DIRECTORY ${_sgw_home}/run)
+set_tests_properties(app.shader_gate_warm PROPERTIES
+    ENVIRONMENT "HOME=${_sgw_home};JAHSHAKA_DATA_ROOT=${_sgw_home}/.local/share/Jahshaka"
+    TIMEOUT 195   # 6x the measured 32 s (two boots, the first cold; spikes/test-tier-1/shader_gate_warm.log)
+    LABELS "app")
+
 # app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
 #
 # This was three ctest rows until 2026-09-09: app.pacing_undo (the frame-pacing
