@@ -1723,6 +1723,87 @@ static int frameArmsMain(bool lattice)
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// scale.shadow_cut — THE CASTER PASS FROM THE CUT (ATOM-SHADOWS-1): the shadow node's CPU
+// and GPU time with the Atom casters drawn by the light's cluster cut (one indirect draw a
+// map) against the per-instance stock PBS caster path (the split's door shut: every item
+// back on PBS, its caster drawn per instance). PAIRED ARMS in one process, alternated
+// (cut, PBS, cut, PBS), each 120 still frames after a 60-frame settle, under the GPU lock.
+// THE BAR (the lead's, 2026-09-27): on D1's world the caster pass's CPU <= 1/3 of the
+// per-instance path's and its GPU not slower (<= 1.10x: two arms' medians of a pass whose
+// own timer bleeds, ENGINE.md); on a SMALL world (200 objects, 4 lamps) neither slower
+// (<= 1.10x both). The caster pass = every pass of the view's shadow node (PassBucket::
+// ShadowView), its scene passes and the caster cut's passes together.
+static int shadowCutMain()
+{
+    struct Arm { std::vector<double> cpu, gpu; unsigned passes = 0; };
+    auto measure = [&](Env &env, Arm &arm) {
+        const auto recs = collect(env, [&] { frame(env, 120); });
+        for (const FrameRecord &r : recs) {
+            double cpu = 0, gpu = 0;
+            bool gpuOk = true;
+            unsigned n = 0;
+            for (const FramePass &p : r.passes) {
+                if (p.bucket != PassBucket::ShadowView || p.orphaned) continue;
+                ++n;
+                // A scene pass's cpuMs INCLUDES its nested shadow-node update only for the
+                // VIEW's passes; the node's own passes carry their own time.
+                cpu += p.cpuMs;
+                if (p.gpuMs < 0) gpuOk = false; else gpu += p.gpuMs;
+            }
+            if (!n) continue;
+            arm.passes = std::max(arm.passes, n);
+            arm.cpu.push_back(cpu);
+            if (gpuOk) arm.gpu.push_back(gpu);
+        }
+    };
+    auto runWorld = [&](const char *label, WorldSpec spec, double cpuBar, double gpuBar) {
+        Env env;
+        World w;
+        const std::string log = std::string("test-scale-shadow-cut-") + label + "-ogre.log";
+        if (!bootWorld(env, w, log.c_str(), spec)) { ++failures; return; }
+        pathStill(env, 60);
+        Arm cut, pbs;
+        for (int round = 0; round < 2; ++round) {
+            env.scene->setAtomDrawEnabled(true);
+            frame(env, 60);
+            measure(env, cut);
+            env.scene->setAtomDrawEnabled(false);
+            frame(env, 60);
+            measure(env, pbs);
+        }
+        env.scene->setAtomDrawEnabled(true);
+        frame(env, 30);
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        const Stats cc = stats(cut.cpu), pc = stats(pbs.cpu), cg = stats(cut.gpu), pg = stats(pbs.gpu);
+        std::printf("SHADOW %-6s atom items %u | caster maps a frame %u, caster triangles %llu, instances %u | "
+                    "shadow-node passes cut %u / pbs %u | CPU ms med cut %.3f pbs %.3f (ratio %.3f) | "
+                    "GPU ms med cut %.3f pbs %.3f (ratio %.3f) | frames %zu / %zu\n",
+                    label, st.atomItems, st.casterMaps, st.casterTriangles, st.casterInstances, cut.passes,
+                    pbs.passes, cc.median, pc.median, pc.median > 0 ? cc.median / pc.median : -1.0, cg.median,
+                    pg.median, pg.median > 0 ? cg.median / pg.median : -1.0, cc.n, pc.n);
+        std::printf("target: scale.shadow_cut %s caster CPU ratio %.3f (bar %.2f), GPU ratio %.3f (bar %.2f)\n", label,
+                    pc.median > 0 ? cc.median / pc.median : -1.0, cpuBar,
+                    pg.median > 0 ? cg.median / pg.median : -1.0, gpuBar);
+        REQUIRE(st.on && st.atomItems > 0 && st.casterValid && st.casterMissing == 0u,
+                "%s: the caster cut drew (%u maps, %u missing)", label, st.casterMaps, st.casterMissing);
+        REQUIRE(cc.n >= 100 && pc.n >= 100, "%s: both arms measured (%zu, %zu frames)", label, cc.n, pc.n);
+        REQUIRE(pc.median > 0 && cc.median <= cpuBar * pc.median,
+                "%s: the caster pass's CPU from the cut <= %.2fx the per-instance path's (%.3f vs %.3f ms)", label,
+                cpuBar, cc.median, pc.median);
+        REQUIRE(cg.n > 0 && pg.n > 0 && cg.median <= gpuBar * pg.median,
+                "%s: ...and its GPU not slower (%.3f vs %.3f ms, bar %.2fx)", label, cg.median, pg.median, gpuBar);
+        shutdown(env);
+    };
+    runWorld("world", WorldSpec(), 1.0 / 3.0, 1.10);
+    WorldSpec small;
+    small.instances = 200;
+    small.lights = 4;
+    small.spacing = 3.0f;
+    runWorld("small", small, 1.10, 1.10);
+    return failures ? 1 : 0;
+}
+
 static int latticeOwedMain()
 {
     Env env;
@@ -2258,6 +2339,7 @@ int main(int argc, char **argv)
     if (mode == "--bake") return bakeMain();
     if (mode == "--hit-list") return hitListMain();
     if (mode == "--cpu-walks") return cpuWalksMain();
+    if (mode == "--shadow-cut") return shadowCutMain();
     if (mode == "--lattice-owed") return latticeOwedMain();
     if (mode == "--frame-arms-world") return frameArmsMain(false);
     if (mode == "--frame-arms-lattice") return frameArmsMain(true);

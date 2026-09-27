@@ -239,6 +239,23 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     add_test(NAME atom.occlusion_exact COMMAND test_atom_occlusion
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 120 LABELS "engine")
+    # shadow.atom_cut / shadow.atom_parity — THE SHADOW MAPS' ATOM CASTERS ARE THE LIGHT'S
+    # OWN CLUSTER CUT (ATOM-SHADOWS-1): every map's cut (PSSM, spot, the point's six faces)
+    # captured by the engine's test door and checked against the rule at the LIGHT's request
+    # and the bound (one texel of the map); and the maps against DENSE stock casters, texel
+    # by texel in light space (test_shadow_atom_cut.cpp states the metrics). Pixel suites,
+    # frames counted: never the GPU lock.
+    add_executable(test_shadow_atom_cut test_shadow_atom_cut.cpp ${_cluster_fixture_sources})
+    jah_cluster_target(test_shadow_atom_cut)
+    jah_atom_engine_target(test_shadow_atom_cut)
+    # EnginePrivate.h names a local `slots`: Qt's keyword macro would eat it.
+    set_source_files_properties(test_shadow_atom_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+    add_test(NAME shadow.atom_cut COMMAND test_shadow_atom_cut --cut
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(shadow.atom_cut PROPERTIES TIMEOUT 300 LABELS "engine")
+    add_test(NAME shadow.atom_parity COMMAND test_shadow_atom_cut --parity
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(shadow.atom_parity PROPERTIES TIMEOUT 300 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
