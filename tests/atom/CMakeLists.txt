@@ -209,6 +209,17 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
     add_test(NAME engine.atom_draw COMMAND test_atom_draw
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.atom_draw PROPERTIES TIMEOUT 600 LABELS "engine")
+    # atom.occlusion_exact — THE ID PASS'S TWO-PASS OCCLUSION IS EXACT (ATOM-OCCLUSION-1): two
+    # identical worlds in lockstep, one with the occlusion and one frustum-only, every
+    # frame's id image compared word for word over a still pose, a walk past a wall, a
+    # camera cut, a turn, a letterboxed and an orthographic view. The script half
+    # (tests/atom/scripts/atom_occlusion.js) proves the same on the default scene and
+    # Showroom 2 through the app.
+    add_executable(test_atom_occlusion test_atom_occlusion.cpp)
+    jah_atom_engine_target(test_atom_occlusion)
+    add_test(NAME atom.occlusion_exact COMMAND test_atom_occlusion
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.occlusion_exact PROPERTIES TIMEOUT 300 LABELS "engine")
     add_executable(test_atom_negative_control test_atom_negative_control.cpp ${_atom_neg_headers})
     jah_atom_engine_target(test_atom_negative_control)
     target_include_directories(test_atom_negative_control PRIVATE "${_atom_neg_gen}"
@@ -296,3 +307,24 @@ set_tests_properties(atom.lod_switch PROPERTIES
     FIXTURES_REQUIRED atomLodSwitchHome
     TIMEOUT 480 LABELS "scripting"
     ENVIRONMENT "HOME=${_lod_switch_home};JAHSHAKA_DATA_ROOT=${_lod_switch_home}/.local/share/Jahshaka")
+
+# ---------------------------------------------------------------------------
+# atom.occlusion_exact_app — THE ID PASS'S OCCLUSION IS EXACT IN THE PRODUCT (ATOM-OCCLUSION-1,
+# the script half of atom.occlusion_exact): the default scene and Showroom 2 at three
+# poses, the 'triangles' Atom view (the id image, painted) and the ordinary picture with
+# the occlusion on and with world.setAtomOcclusion(false), pixel for pixel. An app run on
+# the rig's display; a FRESH home per run (the sample is imported).
+set(JAH_OCCLUSION_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
+configure_file(scripts/atom_occlusion.js.in ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js @ONLY)
+set(_occl_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_occlusion)
+add_test(NAME atom.occlusion_exact_app.fresh_home
+         COMMAND sh -c "rm -rf '${_occl_home}' && mkdir -p '${_occl_home}/run'")
+set_tests_properties(atom.occlusion_exact_app.fresh_home PROPERTIES
+    FIXTURES_SETUP atomOcclusionHome LABELS "scripting" TIMEOUT 60)
+add_test(NAME atom.occlusion_exact_app
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/atom_occlusion.js
+         WORKING_DIRECTORY ${_occl_home}/run)
+set_tests_properties(atom.occlusion_exact_app PROPERTIES
+    FIXTURES_REQUIRED atomOcclusionHome
+    TIMEOUT 600 LABELS "scripting"
+    ENVIRONMENT "HOME=${_occl_home};JAHSHAKA_DATA_ROOT=${_occl_home}/.local/share/Jahshaka")

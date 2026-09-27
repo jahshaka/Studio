@@ -1011,60 +1011,164 @@ static int decodeExactMain()
 }
 
 // ===========================================================================
-// scale.occlusion — W7: NO OCCLUSION CULLING.
-// Anchor: irisgl/engine/src/OgreAtomIdPass.cpp:523 (req.hzbLevels = 0u: frustum only);
-// no view builds the HZB (PostFxDesc::hzb is set by nothing in Studio or the mirror).
-// Number: on the walk, the triangles the id pass draws (frustum only — its own cull,
-// replayed through Engine::gpuCull with the id pass's predicates) against what the SAME
-// cull draws with the depth pyramid the cull already supports (the view's HZB switched on
-// for the measurement only) — the instance-level answer occlusion would give.
+// scale.occlusion — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
+// The id pass culls the Atom queue against the depth pyramid in the two-pass form
+// (OgreAtomIdPass.cpp: the previous frame's pyramid, then the rejected set again against
+// the one built from the first pass's depth). Three arms over the SAME 8 poses of the walk,
+// one process (the measuring door world.setAtomOcclusion = Scene::setAtomOcclusionEnabled):
+//   OFF  the door shut: the frustum-only id pass (before this lane), with the view's own
+//        pyramid of the COMPLETE depth switched on so that THE REFERENCE can be taken —
+//        the id pass's own request (the cut, mode 3) replayed through Engine::gpuCull
+//        against that pyramid: what a single cull against this frame's whole depth keeps;
+//   ON   the product: the door open, no pyramid of the view's own (the id pass's alone);
+//   ON+  the door open WITH the view's complete-depth pyramid rebuilt after the opaque pass
+//        (the design question: does the first cull gain from the complete depth).
+// THE BAR (brief §1): the ON arm draws within 1.25x of the reference (median over the
+// walk), and its SETTLED id image equals the OFF arm's word for word at every pose. The
+// frame-by-frame proof — the first frame after a camera cut included — is
+// atom.occlusion_exact's (two worlds in lockstep): this world's first frames after a jump
+// are not a picture of the pose even frustum-only (settledIds says why).
 // ===========================================================================
+static bool readIdsAt(Env &env, std::vector<uint32_t> &ids)
+{
+    unsigned w = 0, h = 0;
+    return env.engine->readAtomIds(env.view, ids, w, h) && !ids.empty();
+}
+static size_t idDiff(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b, size_t &missing)
+{
+    missing = 0;
+    if (a.size() != b.size()) return ~size_t(0);
+    size_t d = 0;
+    for (size_t p = 0; p + 1 < a.size(); p += 2)
+        if (a[p] != b[p] || a[p + 1] != b[p + 1]) {
+            ++d;
+            if (a[p] == 0xFFFFFFFFu) ++missing;
+        }
+    return d;
+}
+/// THE SETTLED ID IMAGE at a still pose: frames until two CONSECUTIVE images are equal
+/// (at most 40). NOT a formality — the finding this lane reports: on the base (cee4f48fd)
+/// the 10k world's id image is intermittently GARBAGE for a few frames after a camera jump
+/// (frames 1, 4, 7 after it; up to the whole image; both readback routes), with the
+/// occlusion door shut as well — so one read after N frames is not a picture of the pose.
+/// `unstable` counts the reads that disagreed with the frame after them.
+static bool settledIds(Env &env, std::vector<uint32_t> &ids, unsigned &unstable)
+{
+    std::vector<uint32_t> prev;
+    frame(env, 1);
+    if (!readIdsAt(env, prev)) return false;
+    for (int f = 0; f < 40; ++f) {
+        frame(env, 1);
+        if (!readIdsAt(env, ids)) return false;
+        size_t m = 0;
+        if (idDiff(ids, prev, m) == 0) return true;
+        ++unstable;
+        prev.swap(ids);
+    }
+    return false;
+}
+
 static int occlusionMain()
 {
     Env env;
     World w;
     if (!bootWorld(env, w, "test-scale-occlusion-ogre.log")) return 1;
-    env.fxOverride = [](PostFxDesc &fx) { fx.hzb = true; fx.hzbFarthest = true; };
-    frame(env, 10);
-    HzbStatus hz;
-    const bool hasHzb = env.engine->hzbStatus(env.view, hz);
-    REQUIRE(hasHzb && hz.built, "the measurement's depth pyramid is built (%u levels)", hz.levels);
-    std::vector<double> frustum, occl, ratio;
-    unsigned sampled = 0;
-    for (int s = 0; s < 8; ++s) {
+    const int kPoses = 8, kSettle = 10;
+    auto pose = [&](int s) {
         const float x = -90.0f + 25.0f * float(s);
         setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
-        frame(env, 4);
-        env.engine->hzbStatus(env.view, hz);
+    };
+    std::vector<std::vector<uint32_t>> offIds(kPoses);
+    std::vector<double> offTris(kPoses, 0.0), refTris(kPoses, 0.0), onTris(kPoses, 0.0), onPlusTris(kPoses, 0.0);
+    std::vector<unsigned> occluded(kPoses, 0u), disoccluded(kPoses, 0u), refOccluded(kPoses, 0u);
+    unsigned bad = 0, missingPx = 0, comparedPoses = 0, unstableOff = 0, unstableOn = 0;
+
+    // ---- OFF + the reference ------------------------------------------------------
+    env.scene->setAtomOcclusionEnabled(false);
+    env.fxOverride = [](PostFxDesc &fx) { fx.hzb = true; fx.hzbFarthest = true; };
+    frame(env, 10);
+    for (int s = 0; s < kPoses; ++s) {
+        pose(s);
+        frame(env, kSettle);
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        offTris[s] = double(st.cutTriangles);
+        if (!settledIds(env, offIds[s], unstableOff)) offIds[s].clear();
+        HzbStatus hz;
         GpuCullRequest req;
-        if (!env.engine->fillCullView(env.view, req)) continue;
-        req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
-        req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
-        req.mode = 2u;
-        GpuCullResult a, b;
-        req.hzbLevels = 0u;
-        const bool okA = env.engine->gpuCull(env.scene, env.view, req, true, a);
-        req.hzbLevels = hz.primed ? hz.levels : 0u;
-        const bool okB = hz.primed && env.engine->gpuCull(env.scene, env.view, req, true, b);
-        if (!okA || !okB) continue;
-        auto tris = [](const GpuCullResult &r) {
-            double t = 0;
-            for (size_t i = 0; i + 4 < r.drawCommands.size(); i += 5) t += double(r.drawCommands[i]) / 3.0;
-            return t;
-        };
-        const double ta = tris(a), tb = tris(b);
-        frustum.push_back(ta);
-        occl.push_back(tb);
-        ratio.push_back(tb > 0 ? ta / tb : 0.0);
-        ++sampled;
-        std::printf("W7 x %6.1f: frustum-only %6u instances %11.0f tris | with the HZB %6u instances %11.0f tris | "
-                    "drawn/occlusion-kept %.2fx\n",
-                    double(x), a.survivors, ta, b.survivors, tb, tb > 0 ? ta / tb : 0.0);
+        if (env.engine->hzbStatus(env.view, hz) && hz.primed && env.engine->fillCullView(env.view, req)) {
+            req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h): the id pass's
+            req.pixelTolerance = kLodBudgetPixels * env.scene->lodBias();
+            req.mode = 3u;
+            req.hzbLevels = hz.levels;
+            GpuCullResult ref;
+            if (env.engine->gpuCull(env.scene, env.view, req, false, ref)) {
+                refTris[s] = double(ref.cutTriangles);
+                refOccluded[s] = ref.occluded;
+            }
+        }
     }
-    REQUIRE(sampled > 0, "the walk was sampled (%u poses)", sampled);
-    target("W7", stats(frustum).median, "tris", "drawn per frame on the walk (frustum only: today)");
-    target("W7", stats(occl).median, "tris", "what the HZB cull keeps at the same poses (instance level)");
-    target("W7", stats(ratio).median, "x", "drawn / occlusion-kept, median over the walk");
+    // ---- ON (the product) -----------------------------------------------------------
+    env.scene->setAtomOcclusionEnabled(true);
+    env.fxOverride = nullptr;
+    frame(env, 10);
+    for (int s = 0; s < kPoses; ++s) {
+        pose(s);
+        frame(env, kSettle);
+        const AtomDrawStatus st = env.scene->atomDrawStatus();
+        onTris[s] = double(st.cutTriangles);
+        occluded[s] = st.occluded;
+        disoccluded[s] = st.disoccluded;
+        std::vector<uint32_t> settled;
+        const bool ok = settledIds(env, settled, unstableOn);
+        size_t m = 0;
+        const size_t d = ok && !offIds[s].empty() ? idDiff(settled, offIds[s], m) : ~size_t(0);
+        if (d != ~size_t(0)) ++comparedPoses;
+        if (d) ++bad;
+        missingPx += unsigned(m);
+        std::printf("W7 x %6.1f: frustum-only %9.0f tris | reference (one cull, this frame's whole depth) %9.0f "
+                    "(%u rejected) | two-pass %9.0f (occluded %u, disoccluded %u) = %.2fx the reference, %.2fx fewer "
+                    "than frustum-only | id image vs frustum-only: %zu px differ (%zu empty with the occlusion)\n",
+                    -90.0 + 25.0 * s, offTris[s], refTris[s], refOccluded[s], onTris[s], occluded[s], disoccluded[s],
+                    refTris[s] > 0 ? onTris[s] / refTris[s] : 0.0, onTris[s] > 0 ? offTris[s] / onTris[s] : 0.0,
+                    d == ~size_t(0) ? size_t(0) : d, m);
+    }
+    // ---- ON+ (the complete-depth pyramid rebuilt after the opaque pass too) ---------
+    env.fxOverride = [](PostFxDesc &fx) { fx.hzb = true; fx.hzbFarthest = true; };
+    frame(env, 10);
+    for (int s = 0; s < kPoses; ++s) {
+        pose(s);
+        frame(env, kSettle);
+        onPlusTris[s] = double(env.scene->atomDrawStatus().cutTriangles);
+    }
+    env.fxOverride = nullptr;
+
+    std::vector<double> ratio, gain, ratioPlus;
+    for (int s = 0; s < kPoses; ++s) {
+        if (refTris[s] > 0 && onTris[s] > 0) {
+            ratio.push_back(onTris[s] / refTris[s]);
+            gain.push_back(offTris[s] / onTris[s]);
+        }
+        if (refTris[s] > 0 && onPlusTris[s] > 0) ratioPlus.push_back(onPlusTris[s] / refTris[s]);
+        std::printf("W7 x %6.1f: the ON+ arm (the complete-depth pyramid first) %9.0f tris = %.2fx the reference\n",
+                    -90.0 + 25.0 * s, onPlusTris[s], refTris[s] > 0 ? onPlusTris[s] / refTris[s] : 0.0);
+    }
+    std::printf("W7 settle: reads that disagreed with the next frame's before two agreed — frustum-only %u, two-pass %u "
+                "(the base's id-image transient after a jump; see settledIds)\n", unstableOff, unstableOn);
+    const double medRatio = stats(ratio).median;
+    REQUIRE(comparedPoses == unsigned(kPoses), "every pose's settled id images were read in both arms (%u of %d)",
+            comparedPoses, kPoses);
+    REQUIRE(bad == 0u,
+            "the settled id image with the occlusion equals the frustum-only one at every pose (%u differ; %u pixels "
+            "empty with the occlusion)", bad, missingPx);
+    REQUIRE(!ratio.empty() && medRatio <= 1.25,
+            "the two-pass id pass draws within 1.25x of the reference cull (median %.3fx over %zu poses)", medRatio,
+            ratio.size());
+    target("W7", stats(offTris).median, "tris", "drawn per frame on the walk, frustum only (the door shut)");
+    target("W7", stats(refTris).median, "tris", "the reference: one cull against this frame's whole depth");
+    target("W7", stats(onTris).median, "tris", "drawn per frame on the walk, the two-pass occlusion (the product)");
+    target("W7", stats(gain).median, "x", "frustum-only / two-pass, median over the walk");
+    target("W7", medRatio, "x", "two-pass / the reference, median over the walk", "<= 1.25");
+    target("W7", stats(ratioPlus).median, "x", "the ON+ arm (the complete-depth pyramid first) / the reference");
     shutdown(env);
     return failures ? 1 : 0;
 }
@@ -1609,6 +1713,101 @@ static int latticeOwedMain()
     return 0;
 }
 
+
+// ===========================================================================
+// scale.occlusion_cost — ATOM-OCCLUSION-1's COST TABLE: the door open / shut in ONE
+// process, alternating, twice (paired arms), on the WORLD (its still pose and the 8 walk
+// poses) and the LATTICE; per arm the frame's GPU ms (the monitor's passes summed) and the
+// occlusion's own passes — the first id pass, the pyramid's build (every "Jahshaka atom HZB"
+// pass), the late id pass — and the triangles each id pass drew. `W H` (optional) boots
+// the view at another size: the pyramid's cost at the Quest Pro's eye (1800 x 1920).
+// ===========================================================================
+struct OcclArm {
+    std::vector<double> frame, id, late, hzb, idTris, lateTris;
+};
+static void occlCollect(Env &env, OcclArm &arm, const std::function<void()> &body)
+{
+    for (const FrameRecord &r : collect(env, body)) {
+        if (r.gpuMs >= 0) arm.frame.push_back(r.gpuMs);
+        double hz = 0.0;
+        bool anyHz = false;
+        for (const FramePass &p : r.passes) {
+            if (p.gpuMs < 0) continue;
+            if (p.pass == "Jahshaka atom id") { arm.id.push_back(p.gpuMs); arm.idTris.push_back(double(p.triangles)); }
+            else if (p.pass == "Jahshaka atom id late") { arm.late.push_back(p.gpuMs); arm.lateTris.push_back(double(p.triangles)); }
+            else if (p.pass.rfind("Jahshaka atom HZB", 0) == 0) { hz += p.gpuMs; anyHz = true; }
+        }
+        if (anyHz) arm.hzb.push_back(hz);
+    }
+}
+static void occlPrint(const char *label, const char *arm, int rep, const OcclArm &a)
+{
+    std::printf("COST %-8s %-3s #%d: frame GPU med %.3f ms (p95 %.3f, %zu frames) | id %.4f ms (%.0f tris) | pyramid %.4f ms "
+                "| late %.4f ms (%.0f tris)\n",
+                label, arm, rep, stats(a.frame).median, stats(a.frame).p95, a.frame.size(), stats(a.id).median,
+                stats(a.idTris).median, a.hzb.empty() ? 0.0 : stats(a.hzb).median, a.late.empty() ? 0.0 : stats(a.late).median,
+                a.lateTris.empty() ? 0.0 : stats(a.lateTris).median);
+    std::fflush(stdout);
+}
+
+static int occlusionCostMain(int w, int h)
+{
+    Env env;
+    World world;
+    if (!bootWorld(env, world, "test-scale-occlcost-ogre.log", WorldSpec())) return 1;
+    (void)w; (void)h;
+    REQUIRE(gpuTimed(env), "the frame monitor has GPU timing");
+    for (int rep = 0; rep < 2; ++rep)
+        for (int arm = 0; arm < 2; ++arm) {
+            env.scene->setAtomOcclusionEnabled(arm == 0);
+            frame(env, 30);
+            OcclArm still, walk;
+            occlCollect(env, still, [&] { pathStill(env, 120); });
+            occlCollect(env, walk, [&] {
+                for (int s = 0; s < 8; ++s) {
+                    const float x = -90.0f + 25.0f * float(s);
+                    setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
+                    frame(env, 20);
+                }
+            });
+            occlPrint("world", arm == 0 ? "on" : "off", rep, still);
+            occlPrint("walk", arm == 0 ? "on" : "off", rep, walk);
+        }
+    env.scene->setAtomOcclusionEnabled(true);
+    // THE LATTICE (8,000 cubes, the S3-DRAW cost fixture) in the same process.
+    buildLattice(env);
+    armMonitor(env);
+    for (int rep = 0; rep < 2; ++rep)
+        for (int arm = 0; arm < 2; ++arm) {
+            env.scene->setAtomOcclusionEnabled(arm == 0);
+            frame(env, 30);
+            OcclArm lat;
+            occlCollect(env, lat, [&] { frame(env, 120); });
+            occlPrint("lattice", arm == 0 ? "on" : "off", rep, lat);
+        }
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
+/// THE PYRAMID AT ANOTHER SIZE (the Quest Pro's eye, 1800 x 1920): the lattice (cheap to
+/// build) at `w` x `h`, the door open, the "Jahshaka atom HZB" passes' GPU ms.
+static int occlusionPyramidMain(int w, int h)
+{
+    Env env;
+    if (!boot(env, "test-scale-occlpyr-ogre.log", w, h)) return 1;
+    buildLattice(env);
+    armMonitor(env);
+    REQUIRE(gpuTimed(env), "the frame monitor has GPU timing");
+    frame(env, 30);
+    OcclArm lat;
+    occlCollect(env, lat, [&] { frame(env, 120); });
+    char label[32];
+    std::snprintf(label, sizeof(label), "%dx%d", w, h);
+    occlPrint(label, "on", 0, lat);
+    shutdown(env);
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -1623,6 +1822,9 @@ int main(int argc, char **argv)
     if (mode == "--residency") return residencyMain();
     if (mode == "--decode") return decodeMain();
     if (mode == "--occlusion") return occlusionMain();
+    if (mode == "--occlusion-cost") return occlusionCostMain(0, 0);
+    if (mode == "--occlusion-pyramid")
+        return occlusionPyramidMain(argc > 3 ? std::atoi(argv[2]) : 1800, argc > 3 ? std::atoi(argv[3]) : 1920);
     if (mode == "--tlas") return tlasMain();
     if (mode == "--atlas") return atlasMain();
     if (mode == "--far-field") return farFieldMain();
