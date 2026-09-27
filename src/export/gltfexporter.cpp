@@ -1537,10 +1537,12 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             fog["heightFalloff"] = double(scene->fogHeightFalloff);
             fog["heightLevel"] = double(scene->fogHeightLevel);
         }
-        // AERIAL PERSPECTIVE, for information like the two above it: the
-        // viewer has no atmosphere to take a fog colour from, and saying the
-        // scene asked for one is the honest half of what an archive can do.
-        if (scene->fogAtmosphere) fog["atmosphere"] = true;
+        // AERIAL PERSPECTIVE, for information like the two above it: under the
+        // realistic sky the editor fogs towards the sky's own scattering colour
+        // (FOG-ATMO-1 — the sky decides, there is no switch). The viewer has no
+        // atmosphere to take a fog colour from; saying the scene's fog is the
+        // sky's is the honest half of what an archive can do.
+        if (scene->skyType == iris::SkyType::REALISTIC) fog["atmosphere"] = true;
         // (NO `start`/`end`. The retired linear pair is gone from the document
         // — CRUD law — and `exp2Density` above is what the viewer reads.)
         jahScene["fog"] = fog;

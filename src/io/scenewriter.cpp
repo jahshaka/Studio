@@ -168,14 +168,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["gravity"] = scene->gravity;
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
-    // (`fogStart`/`fogEnd`, the retired LINEAR pair, are no longer written —
-    // the fields are gone from the document, CRUD law. `fogDensity` below is
-    // the whole fog; the reader still READS the old pair, once, to derive a
-    // density for a file that predates this key.)
+    // (`fogStart`/`fogEnd`, the retired LINEAR pair, and `fogAtmosphere`, the
+    // retired aerial switch, are neither written nor read — CRUD law.
+    // `fogDensity` below is the whole distance fog.)
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["fogDensity"] = scene->fogDensity;
     sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
-    sceneObj["fogAtmosphere"] = scene->fogAtmosphere;
     sceneObj["fogHeightFalloff"] = scene->fogHeightFalloff;
     sceneObj["fogHeightLevel"] = scene->fogHeightLevel;
     sceneObj["fogBreakMinBrightness"] = scene->fogBreakMinBrightness;
