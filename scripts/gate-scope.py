@@ -391,7 +391,18 @@ def load_inventory(build):
             script = next((f for f in files_in_argv if f.endswith(".js")), None)
         if not script and cmd and cmd[0].endswith(("bash", "/sh", "sh")) and files_in_argv:
             script = files_in_argv[0]
+        # A POOL row (SUITE-POOL-1: `run_pool.py --pool <p> --arm <arm> <script> <budget> ...`):
+        # its arms and their scripts, read from the command line the pool's CMake built — the
+        # selector's unit for an app family (TESTING_V2 T2/T3). No name is hard-wired.
+        pool, arms = None, {}
+        if "--pool" in cmd:
+            k = cmd.index("--pool")
+            pool = cmd[k + 1] if k + 1 < len(cmd) else None
+            for k, c in enumerate(cmd):
+                if c == "--arm" and k + 2 < len(cmd):
+                    arms[cmd[k + 1]] = os.path.normpath(cmd[k + 2])
         inv[t["name"]] = {
+            "pool": pool, "arms": arms,
             "dir": d.split("/")[-1] if d.startswith("tests") else d,
             "reldir": d,
             "cmd": [os.path.normpath(c) if os.path.isabs(c) else c for c in cmd],
@@ -566,12 +577,25 @@ class Selection:
         self.skipped_ubiquitous = set()
         self.by_dir = collections.defaultdict(list)
         for n, t in inv.items(): self.by_dir[t["dir"]].append(n)
-        self.mods = {n: script_modules(t["script"]) for n, t in inv.items() if t["script"]}
+        self.mods = {n: script_modules(t["script"]) for n, t in inv.items() if t["script"] and not t["arms"]}
+        # an ARM is `<row>::<arm>` wherever a script is mapped: its modules and its script select
+        # the arm alone; a rule's directory or group selects the pool row whole
+        for n, t in inv.items():
+            for arm, scr in t["arms"].items():
+                self.mods[f"{n}::{arm}"] = script_modules(scr)
+        self.whole = set()                 # rows selected whole (a pool: every arm)
+        self.arms = collections.defaultdict(dict)   # pool row -> {arm: reason}
         freq = collections.Counter(m for ms in self.mods.values() for m in ms)
         self.ubiquitous = {m for m, c in freq.items() if c > 0.4 * max(1, len(self.mods))}
         self.script_rows = collections.defaultdict(list)       # abs script/argv file -> rows
         for n, t in inv.items():
-            for f in ({t["script"]} if t["script"] else set()) | t["argv_files"]:
+            if t["arms"]:
+                for arm, scr in t["arms"].items():
+                    self.script_rows[scr].append(f"{n}::{arm}")
+                files = t["argv_files"] - set(t["arms"].values())
+            else:
+                files = ({t["script"]} if t["script"] else set()) | t["argv_files"]
+            for f in files:
                 self.script_rows[os.path.normpath(f)].append(n)
         self.script_base = collections.defaultdict(list)
         for f, ns in self.script_rows.items():
@@ -585,7 +609,19 @@ class Selection:
     # -- adding rows -----------------------------------------------------------------------
     def add(self, suites, why):
         for s in suites:
-            if s in self.inv: self.selected.setdefault(s, why)
+            if "::" in s:
+                row, arm = s.split("::", 1)
+                if row in self.inv and row not in self.whole:
+                    self.arms[row].setdefault(arm, why)
+                    self.selected.setdefault(row, why)
+                continue
+            if s in self.inv:
+                self.selected.setdefault(s, why)
+                self.whole.add(s)
+
+    def arm_subsets(self):
+        """pool row -> the arms selected, for every pool NOT selected whole."""
+        return {r: sorted(a) for r, a in self.arms.items() if r not in self.whole and r in self.selected}
 
     def expand(self, dirs, modules, why, own_api=False, kinds=None):
         """An area rule's families. `kinds` limits the dirs to row kinds (the graph owns the
@@ -937,6 +973,14 @@ class Selection:
         toks = set(re.findall(r"[A-Za-z0-9_.+\-/${}]+", full))
         toks = {t.replace("${CMAKE_PROJECT_NAME}", "Jahshaka") for t in toks}
         got = False
+        # 0. a pool's arm or row (SUITE-POOL-1's helpers): the arm alone, or the pool whole
+        a_ = args.split()
+        if name == "jah_pool_arm" and len(a_) >= 2 and f"pool.{a_[0]}" in self.inv:
+            self.add([f"pool.{a_[0]}::{a_[1]}"], f"{tag}: its arm")
+            notes.append(f"arm {a_[0]}.{a_[1]}"); return True
+        if name == "jah_add_pool" and a_ and f"pool.{a_[0]}" in self.inv:
+            self.add([f"pool.{a_[0]}"], f"{tag}: the pool's row")
+            notes.append(f"pool {a_[0]} (every arm)"); return True
         # 1. rows named outright (an add_test, a set_tests_properties, a suite list)
         rows = sorted(t for t in toks if t in self.row_names)
         if rows:
@@ -1168,8 +1212,18 @@ def main():
     targets = sorted(n for n in selected if inv[n]["labels"] & TARGET_LABELS)
     selected_targets = {n: selected.pop(n) for n in targets}
     names = sorted(selected)
-    est = sum(costs.get(n, 10.0) for n in names)
-    serial = sum(costs.get(n, 10.0) for n in names if inv[n]["serial"])
+    # POOLS SELECTED BY ARM (TESTING_V2 T3 §2.3): one environment variable carries every partial
+    # pool's arms for the whole ctest line (run_pool.py reads its own pool's entries; a pool
+    # absent from it runs every arm)
+    subsets = {r: arms for r, arms in S.arm_subsets().items() if r in selected}
+    pool_env = ",".join(f"{inv[r]['pool']}.{arm}" for r in sorted(subsets) for arm in subsets[r])
+
+    def cost(n):
+        if n in subsets:   # the selected arms plus one boot
+            return 10.0 + sum(costs.get(f"{n}::{arm}", 10.0) for arm in subsets[n])
+        return costs.get(n, 10.0)
+    est = sum(cost(n) for n in names)
+    serial = sum(cost(n) for n in names if inv[n]["serial"])
     wall = max(est / float(a.jobs), serial) + 5
     tier_rows = [n for n, t in inv.items() if not (t["labels"] & (NIGHTLY_LABELS | TARGET_LABELS))]
     tier_est = sum(costs.get(n, 10.0) for n in tier_rows)
@@ -1180,11 +1234,15 @@ def main():
 
     whole_tier = bool(S.fallback or S.full_tier)
     cmd = ctest_for(names, a.jobs) if names else ""
+    if cmd and pool_env:
+        cmd = f"JAH_POOL_ARMS='{pool_env}' {cmd}"
     target_cmd = ctest_for(targets, 1) if targets else ""
 
     if a.json:
         print(json.dumps({"paths": paths, "suites": names, "targets": targets, "fallback": S.fallback,
                           "full_tier": S.full_tier, "reasons": {n: selected[n] for n in names},
+                          "arms": {r: {arm: S.arms[r][arm] for arm in subsets[r]} for r in subsets},
+                          "pool_arms_env": pool_env,
                           "rationale": [{"path": p, "why": w} for p, w in S.rationale],
                           "graph": S.graph is not None,
                           "estimated_seconds": est, "estimated_wall": wall,
@@ -1233,7 +1291,10 @@ def main():
         print(f"\nSCOPED tier: {len(names)} of {len(tier_rows)} tier row(s), ~{est:.0f} of ~{tier_est:.0f} "
               f"suite-seconds, ~{wall/60:.1f} min wall at -j{a.jobs} (serial islands {serial:.0f} s); "
               f"costs from the run log + scripts/gate-times.txt, 10 s assumed otherwise")
-        for n in names: print(f"  {costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
+        for n in names:
+            print(f"  {cost(n) if n in subsets else costs.get(n, 0):7.1f}  {n}   <- {selected[n]}")
+            for arm in subsets.get(n, []):
+                print(f"           arm {inv[n]['pool']}.{arm}   <- {S.arms[n][arm]}")
         print(f"\n{cmd}")
     else:
         print("\nSCOPED tier: every selected suite is a TARGET test — this change gates on nothing "
@@ -1241,8 +1302,12 @@ def main():
     if target_cmd: print(f"\n{target_cmd}    # target tests: reported, NOT gating")
     if a.run:
         labels = {n: t["labels"] for n, t in inv.items()}
-        rc = gate_runlog.run_ctest(cmd, build, a.tier or "scoped", lane, a.jobs, reasons=selected,
-                                   rng=a.range, labels=labels) if cmd else 0
+        reasons = dict(selected)
+        for r in subsets:
+            for arm in subsets[r]: reasons[f"{r}::{arm}"] = S.arms[r][arm]
+        env = dict(os.environ, JAH_POOL_ARMS=pool_env) if pool_env else None
+        rc = gate_runlog.run_ctest(cmd.split(" ", 1)[1] if pool_env else cmd, build, a.tier or "scoped", lane,
+                                   a.jobs, reasons=reasons, rng=a.range, labels=labels, env=env) if cmd else 0
         if target_cmd:
             # THE TARGETS' RUN IS A REPORT. Its exit code is printed and thrown away.
             print("\n=== target tests (label %s): reported, not gating ==="

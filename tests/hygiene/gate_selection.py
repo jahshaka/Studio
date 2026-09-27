@@ -16,6 +16,8 @@ WHAT IT REPLAYS (tests/hygiene/gate_selection_cases.json):
     with `max_rows` must stay under it (the precision the lane is there to prove).
   * FILES: the suites audit's S1/S2 subjects, and the graph's precision (a compiled row whose
     executable does not contain the file is NOT selected).
+  * ARMS: a pool row is selected arm by arm where a script or an API module selects, and whole
+    where a directory or a group does (a synthetic pool of two real scripts).
   * IDENTIFIERS: the symbol reader on fixed texts — a comment-only hunk touches nothing; a
     member's modified default selects its struct; an added member selects only itself; a body
     line selects its function; a parameter changed on a declaration's second line selects the
@@ -76,6 +78,38 @@ def identifier_cases(gg):
     check(ids == {"setFog"}, "a parameter changed on a declaration's second line selects the function (%s)" % sorted(ids))
 
 
+def arm_cases(gs, graph, build, inv0):
+    """THE ARM IS THE UNIT (TESTING_V2 T2/T3): a pool row (`run_pool.py --pool <p> --arm <arm>
+    <script> <budget> ...`, SUITE-POOL-1) is selected ARM BY ARM where a script or a module
+    selects, and whole where a directory or a group does. Proved on a synthetic pool built from
+    two real --script rows of this build, so the case holds before and after the pools land."""
+    print("\narms (a synthetic pool of two real scripts):")
+    world = [n for n, t in inv0.items() if t["app"] and t["script"] and not t["arms"]
+             and t["script"].endswith(".js") and "world." in open(t["script"], errors="replace").read()]
+    plain = [n for n, t in inv0.items() if t["app"] and t["script"] and not t["arms"] and t["script"].endswith(".js")
+             and "world." not in open(t["script"], errors="replace").read()
+             and "project." in open(t["script"], errors="replace").read()]
+    check(bool(world) and bool(plain), "the build has a world-calling and a world-free --script row")
+    if not (world and plain): return
+    a_s, b_s = inv0[world[0]]["script"], inv0[plain[0]]["script"]
+    inv = copy.deepcopy(inv0)
+    inv["pool.synth"] = dict(copy.deepcopy(inv0[world[0]]), pool="synth", arms={"w": a_s, "p": b_s},
+                             script=None, argv_files=set(), dir="synthpool", reldir="tests/synthpool",
+                             cmd=["run_pool.py", "--pool", "synth", "--arm", "w", a_s, "30", "--arm", "p", b_s, "30"])
+    S = gs.select(["src/scripting/modules/worldapi.cpp"], None, build, 4, graph=graph, inv=inv, quiet_graph=True)
+    sub = S.arm_subsets().get("pool.synth")
+    check(sub == ["w"], "a changed world API selects the world-calling arm alone (%s)" % sub)
+    rel = os.path.relpath(b_s, gs.ROOT)
+    if not rel.startswith(".."):
+        S = gs.select([rel], None, build, 4, graph=graph, inv=copy.deepcopy(inv), quiet_graph=True)
+        check(S.arm_subsets().get("pool.synth") == ["p"], "a touched arm script selects that arm (%s)"
+              % S.arm_subsets().get("pool.synth"))
+    S = gs.select(["irisgl/engine/media/Hlms/Atom/Any/800.Atom_piece_ps.any"], None, build, 4, graph=graph,
+                  inv=copy.deepcopy(inv), quiet_graph=True)
+    check("pool.synth" in S.selected and "pool.synth" not in S.arm_subsets(),
+          "an engine rule's app group selects the pool whole (every arm)")
+
+
 def main(source, build):
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
         print("gate_selection: %s is not a configured build dir" % build)
@@ -96,11 +130,21 @@ def main(source, build):
     tier_rows = [n for n, t in inv0.items() if not (t["labels"] & (gs.NIGHTLY_LABELS | gs.TARGET_LABELS))]
     tier_s = sum(costs.get(n, 10.0) for n in tier_rows)
 
-    # every name a case asks for must be a suite this build registers: a renamed suite (or one
-    # that became a pool's arm) is renamed in the cases file in the same commit
+    # every name a case asks for must be a row this build registers, or a pool's arm written
+    # `<pool>.<arm>`: a suite that is renamed or becomes an arm is renamed in the cases file in
+    # the same commit
+    arm_rows = {f"{t['pool']}.{a}": r for r, t in inv0.items() for a in t["arms"]}
     for c in cases["lanes"] + cases["files"]:
         for n in c.get("must", []) + c.get("env", []) + c.get("must_not", []):
-            check(n in inv0, "%s: %s is a registered suite" % (c.get("lane") or c.get("case"), n))
+            check(n in inv0 or n in arm_rows, "%s: %s is a registered suite or arm" % (c.get("lane") or c.get("case"), n))
+
+    def chosen(S, n):
+        """A row selected, or an arm whose pool is selected whole or with that arm."""
+        if n in inv0: return n in S.selected
+        r = arm_rows.get(n)
+        if not r or r not in S.selected: return False
+        sub = S.arm_subsets().get(r)
+        return sub is None or n.split(".", 1)[1] in sub
 
     print("\nlanes (recorded diffs re-selected against this build):")
     print("  %-42s %9s %10s  %s" % ("lane", "rows", "est. s", "env reds selected"))
@@ -127,7 +171,7 @@ def main(source, build):
         sel = set(S.selected)
         gating = [n for n in sel if not (inv0[n]["labels"] & (gs.SCOPE_EXCLUDED_LABELS | gs.TARGET_LABELS))]
         est = tier_s if whole else sum(costs.get(n, 10.0) for n in gating)
-        env_hit = [e for e in c.get("env", []) if whole or e in sel]
+        env_hit = [e for e in c.get("env", []) if whole or chosen(S, e)]
         table.append((c["lane"], "TIER" if whole else len(gating), est))
         print("  %-42s %9s %10.0f  %d/%d   (%.1f s)" % (c["lane"][:42], "TIER" if whole else len(gating), est,
                                                      len(env_hit), len(c.get("env", [])), time.time() - t0))
@@ -135,7 +179,7 @@ def main(source, build):
         if c.get("whole_tier"):
             check(bool(S.full_tier), "%s: the MERGE tier by rule (%s)" % (c["lane"], S.full_tier[:1]))
         for m in c.get("must", []):
-            check(whole or m in sel, "%s: selects %s" % (c["lane"], m))
+            check(whole or chosen(S, m), "%s: selects %s" % (c["lane"], m))
         if "max_rows" in c:
             check(not whole and len(gating) <= c["max_rows"],
                   "%s: stays at <= %d rows (%s)" % (c["lane"], c["max_rows"], "TIER" if whole else len(gating)))
@@ -146,10 +190,11 @@ def main(source, build):
         sel = set(S.selected)
         check(not S.fallback, "%s: no fallback" % c["case"])
         for m in c.get("must", []):
-            check(m in sel, "%s: %s selects %s" % (c["case"], c["files"][0], m))
+            check(chosen(S, m), "%s: %s selects %s" % (c["case"], c["files"][0], m))
         for m in c.get("must_not", []):
-            check(m not in sel, "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
-                                                                     S.selected.get(m, "")))
+            check(not chosen(S, m), "%s: %s does NOT select %s (%s)" % (c["case"], c["files"][0], m,
+                                                                         S.selected.get(m, "")))
+    arm_cases(gs, graph, build, inv0)
     print("\n  the MERGE tier: %d rows, ~%.0f suite-seconds" % (len(tier_rows), tier_s))
     if FAILURES:
         print("gate.selection: FAILED (%d)" % len(FAILURES))

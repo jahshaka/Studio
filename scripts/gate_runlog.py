@@ -207,7 +207,7 @@ def append_records(records, tier, tip):
 
 
 def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, retry=False,
-              labels=None, echo=True):
+              labels=None, echo=True, env=None):
     """Run a ctest command line (a string, as gate-scope prints it), stream its output, and
     append one record per suite (+ per arm) to the run log. Returns ctest's exit code."""
     reasons = reasons or {}
@@ -221,7 +221,7 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
     run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{shas['studio'][:9]}"
     seen = []
     p = subprocess.Popen(full, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         text=True, bufsize=1, errors="replace")
+                         text=True, bufsize=1, errors="replace", env=env)
     for line in p.stdout:
         if echo:
             sys.stdout.write(line); sys.stdout.flush()
@@ -246,7 +246,10 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
         recs.append(dict(base, arm=None, verdict=verdict_of(status), status=status.strip("* "),
                          seconds=secs, gpu_ms=gpu, target=target))
         for arm, v, s in arms:
-            recs.append(dict(base, arm=arm, verdict=v, status=v, seconds=s, gpu_ms=None, target=None))
+            # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
+            ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])
+            recs.append(dict(base, arm=arm, verdict=v, status=v, seconds=s, gpu_ms=None, target=None,
+                             reason=ar))
     if recs:
         path = append_records(recs, tier, shas["studio"])
         if echo:
@@ -299,8 +302,10 @@ def median_times(days=14, verdicts=("PASS",)):
         for line in open(os.path.join(d, f)):
             try: r = json.loads(line)
             except ValueError: continue
-            if r.get("arm") or r.get("verdict") not in verdicts or r.get("seconds") is None: continue
-            acc.setdefault(r["suite"], []).append(r["seconds"])
+            if r.get("verdict") not in verdicts or r.get("seconds") is None: continue
+            # an arm is costed as `<row>::<arm>` (gate-scope's key for a partial pool)
+            k = r["suite"] if not r.get("arm") else f"{r['suite']}::{r['arm'].split('.', 1)[-1]}"
+            acc.setdefault(k, []).append(r["seconds"])
     return {k: statistics.median(v) for k, v in acc.items()}
 
 
