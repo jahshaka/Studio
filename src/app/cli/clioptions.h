@@ -125,6 +125,16 @@ struct CliOptions
     /// that has never heard of VR. JAHSHAKA_VR=1 does the same for a runner
     /// that cannot pass an argument.
     bool vr = false;
+    /// `--test-tier <low|medium|high|epic>`: THE PROCESS'S TEST TIER (lane
+    /// TEST-TIER-1, services/testtier.h). Every scene this process binds to the
+    /// editor — new or opened — is put on that World Mode (the `world.mode`
+    /// path, after the reader), and a windowed script run boots 1280x720. For
+    /// test processes whose claims need no shipped picture: a Low process holds
+    /// a fraction of the Epic chain's VRAM. Empty = none (the document's own
+    /// tier, the product's behaviour). JAHSHAKA_TEST_TIER is the same switch for
+    /// a runner that cannot pass an argument; the flag wins. main() validates
+    /// the name (an unknown one, or "custom", is a CLI error).
+    QString testTier;
 
     static CliOptions parse(int argc, char *argv[]);
 

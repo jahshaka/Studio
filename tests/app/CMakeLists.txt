@@ -126,7 +126,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # fixed sleeps between them, and a loaded box stretches every one of
         # them. 600 s against a ~40 s measured run.
         set_tests_properties(app.input_keys PROPERTIES
-            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
+            # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
+            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
             RUN_SERIAL TRUE
             LABELS "app")
     else()
@@ -157,7 +158,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # of synthesised gestures with fixed sleeps between them, every one of
         # which a loaded box stretches. 400 s against a ~50 s measured run.
         set_tests_properties(app.play_select PROPERTIES
-            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka"
+            # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
+            ENVIRONMENT "HOME=${_ps_home};JAHSHAKA_DATA_ROOT=${_ps_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
             LABELS "app")
     else()
         message(STATUS "app.play_select skipped: needs xdotool, curl, jq and Xvfb")

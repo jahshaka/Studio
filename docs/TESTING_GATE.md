@@ -522,7 +522,7 @@ gate live); "pooled" is the pool row in one run of every pool at -j4 on a quiet 
 |---|---|---|---|---|
 | doc / doc_assets | 29 / 23 | 110 / 90 | 13 / 12 | the `--headless` document verbs / the asset, import, export and clipboard verbs |
 | gi_verbs / gi_movers | 8 / 7 | 213 / 168 | 92 / 78 | world.gi rows and status / movers, mirror, rays, cards |
-| editor / editor_view | 10 / 7 | 248 / 194 | 89 / 73 | scene building / the viewport, gizmo, outline, stats |
+| editor / editor_view | 10 / 7 | 248 / 194 | 89 / 73 | scene building / the viewport, gizmo, outline, stats (TEST-TIER-1 since: editor 9 arms Low incl. `tier`, editor_view 9 Epic with full_surface, play_select; shading_live 6 with particles; player 6) |
 | shading / shading_live | 9 / 5 | 226 / 155 | 90 / 91 | materials and the PBS knobs / live textures, thumbnails, reflection maps |
 | world_sky / world_light | 7 / 4 | 310 / 218 | 108 / 157 | sky, clouds, ground, planar, world.vr / sun, lights, grades |
 | player | 7 | 208 | 86 | play, possession, space switches |
@@ -531,6 +531,23 @@ gate live); "pooled" is the pool row in one run of every pool at -j4 on a quiet 
 | vr_session | 4 | 153 | 75 | ONE Monado runtime, one `--vr` process (tests/vr/run_vr_app.sh --launch) |
 | avatar_anim / atom / cameras | 3 / 3 / 5 | 64 / 98 / 201 | 17 / 55 / 32 | the avatar page and skinning / the Atom view, draw and LODs / every camera verb |
 | **total** | **142** | **2,918** | **1,186** | **1,732 suite-seconds** |
+
+**THE POOL'S TIER** (lane TEST-TIER-1, 2026-09-27; `SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md`
+§A2; the proof is `spikes/test-tier-1/`). Every engine-up pool declares `TIER low|epic` on its
+`jah_add_pool` line. A Low pool's process runs `--test-tier low`: every scene it binds is put on
+the Low World Mode (after the reader, the `world.mode` path) and the window boots 1280x720. An
+Epic pool has no test tier (the product's own tiers). At every boot the row prints
+`MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>` and the run log records it
+(`mem`). Measured on this box (warm cache, one process, nvidia-smi per pid): Epic 1,532 MiB at
+boot (peak 1,672), gpuPoolUsed 1,445 MB, textures 1,093 MB; Low 280 MiB at boot (peak 468),
+gpuPoolUsed 323-327 MB, textures 40 MB. The split: LOW = editor, player, assets_import,
+avatar_anim, vr_noruntime, cameras (every arm the same verdict and `ok` count as at Epic); EPIC =
+gi_verbs, gi_movers, shading, shading_live, world_sky, world_light, atom, vr_session and
+editor_view (gizmo_rings, render_stats, hierarchy_visibility, and full_surface / play_select
+moved into it, are red at Low: picture, framing or Epic-row claims); particles (red at Low, and
+short of its line after editor_view's window-changing arms) moved to shading_live. A Low pool never
+hosts a GI, pixel or shipped-tier assertion — such an arm MOVES to an Epic pool. The same arm
+`<pool>.tier` runs in one pool of each tier and asserts which it is in.
 
 **ORDER IS DECLARED, AND RARELY MATTERS.** Arms run in declaration order. Three arms carry a
 process-level claim and are pinned: `FIRST` for `player.player_verbs` and

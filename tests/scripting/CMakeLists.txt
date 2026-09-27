@@ -56,21 +56,9 @@ set_tests_properties(scripting.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 # warm (a cold cache is ~4 s a boot and its own measurement). The homes used to
 # accumulate: 61 projects and a 220 MB store in e2e-home-full_surface, 1.1 GB in
 # e2e-home-export_web, measured on the main tree.
-# add_script_e2e(<name> <script.js>). (Its GPU_EXCLUSIVE option went with the last caller that
-# measured no time — scripting.e2e.sun_light, audit §4 R4; a timing row registers through
-# jah_gpu_exclusive_test itself.)
-function(add_script_e2e name scriptfile)
-    set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-${name})
-    file(MAKE_DIRECTORY ${_home})
-    file(MAKE_DIRECTORY ${_home}/run)
-    set(_cmd ${JAH_FRESH_HOME} --warm ${_home} --
-             $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/${scriptfile})
-    add_test(NAME scripting.e2e.${name} COMMAND ${_cmd} WORKING_DIRECTORY ${_home}/run)
-    set_tests_properties(scripting.e2e.${name} PROPERTIES TIMEOUT 180)
-    set_tests_properties(scripting.e2e.${name} PROPERTIES
-        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
-        LABELS "scripting")
-endfunction()
+# (add_script_e2e, the one-row-per-script helper, went with its last caller: every e2e script
+# is a pool ARM since SUITE-POOL-1, and a row of its own is a hand-written add_test with its
+# reason — TEST-TIER-1 deleted the dead function.)
 
 # ---- THE RUN POLICY (SCRIPTING_LIVE_SPEC §3.1) --------------------------
 #
@@ -98,7 +86,8 @@ foreach(_variant live off)
                      --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_live_feedback.js ${_flag}
              WORKING_DIRECTORY ${_home}/run)
     set_tests_properties(${_name} PROPERTIES
-        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+        # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
+        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_TIER=low"
         LABELS "scripting"
         TIMEOUT 180)
 endforeach()
@@ -169,7 +158,7 @@ jah_pool_arm(atom atom_draw ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_atom_draw.js
 # face shaded as two triangles (ogre-patch 0083, the diffuse cone basis) and the
 # dark climb up its sides (the AO radius, now a contact scale). Needs a camera
 # and the whole post chain, so it is an engine-up e2e and not a headless one.
-# add_script_e2e's own 180 s is not enough for it: four 2 m cubes at Epic mean
+# a one-script row's old 180 s was not enough for it: four 2 m cubes at Epic mean
 # four GI re-solves (one per turn of the first cube) and seven settled shots.
 # 71 s solo on the rig; 400 s is the gate-load headroom.
 jah_pool_arm(shading_live cube_shade ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cube_shade.js 49)
@@ -366,7 +355,7 @@ jah_pool_arm(gi_verbs field_every_tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_f
 # ramps (which no Property kind can carry), the scene clock, the save round trip
 # for keys that are all optional in the reader — and pixels, because a perfect
 # document proves nothing about what the engine draws.
-jah_pool_arm(editor particles ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_particles.js 11)
+jah_pool_arm(shading_live particles ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_particles.js 11)   # shading_live, an Epic pool (TEST-TIER-1): pixel probes of the plume, framed by the viewport's aspect — red at the Low test tier (9/25 after editor_view's window-changing arms, 11 alone)
 # DEEP_AUDIT_2026_09 List B #7: the anim.* verbs — the keyframe/timeline domain,
 # which had no verbs and therefore no test at all. Animations on a node, the
 # active one, tracks per property, keys (write/overwrite/read/remove), the
@@ -546,7 +535,7 @@ set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
 # repo paths (a mesh to import, a shipped .effect) — configured in.
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(scripts/e2e_full_surface.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js @ONLY)
-jah_pool_arm(editor full_surface ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js 6)
+jah_pool_arm(editor_view full_surface ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js 6)   # editor_view, an Epic pool (TEST-TIER-1): asserts a new scene's Epic rows (a 2048 shadow atlas) — red at the Low test tier
 
 # Asset drawers (ASSET_DRAWERS_SPEC.md §4/§5): drawer verbs round-trip +
 # importFile(png/wav) creating first-class AssetsView rows. Every verb is a
@@ -977,7 +966,7 @@ jah_pool_arm(player possession ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js 15)
 # NOT --headless: play-in-place, the physics stepper and the input routing all
 # live in the engine viewport.
 configure_file(scripts/e2e_play_select.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js @ONLY)
-jah_pool_arm(player play_select ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js 6)
+jah_pool_arm(editor_view play_select ${CMAKE_CURRENT_BINARY_DIR}/e2e_play_select.js 6)   # editor_view, an Epic pool (TEST-TIER-1): a click on a pixel of the framed ground — red at the Low test tier
 
 # AVATAR_LOCOMOTION_SPEC Stage 4 through the VERBS and a REAL scene file: the
 # four state-machine verbs, the shipped default asset generated for an imported
@@ -1497,7 +1486,8 @@ add_test(NAME scripting.e2e.player_no_editor
 # the editor page before the script's first line. Without it the editor's
 # engine scene already exists and this suite proves nothing — see the script.
 set_tests_properties(scripting.e2e.player_no_editor PROPERTIES
-    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1"
+    # JAHSHAKA_TEST_TIER=low (TEST-TIER-1): no claim here needs the shipped picture — the same verdict and ok count at Low (spikes/test-tier-1/solo-okcount.txt)
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka;JAHSHAKA_TEST_NO_EDITOR_BOOT=1;JAHSHAKA_TEST_TIER=low"
     LABELS "scripting"
     TIMEOUT 300)
 
@@ -1749,6 +1739,20 @@ set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
+# <pool>.tier — THE POOL'S TIER IS THE PROCESS'S (lane TEST-TIER-1, services/testtier.h): in a
+# `TIER low` pool app.testTier() is "low", a new scene AND an opened one (saved at Medium) report
+# world.mode() "low", and the window booted 1280x720; in a `TIER epic` pool the same script finds
+# no test tier, a new scene at the document's Epic and the reopened one at the Medium it saved.
+# One arm in a pool of each tier.
+jah_pool_arm(editor tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pool_tier.js 3)
+jah_pool_arm(gi_verbs tier ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pool_tier.js 3)
+# THE SPLIT BY TIER (TEST-TIER-1, measured arm by arm, spikes/test-tier-1/okcount.md): editor,
+# player, assets_import, avatar_anim, vr_noruntime, cameras run Low — the same verdict and the
+# same count of `ok` lines as at Epic. editor_view is Epic: gizmo_rings (clickable handles at the
+# boot window), render_stats (the Epic pre-pass), hierarchy_visibility (asserts the Epic GI) and
+# the two arms moved into it (full_surface, play_select) are red at Low; particles, red at Low
+# and short of its line after editor_view's window-changing arms, moved to shading_live.
+
 # ---- THE POOLS (lane SUITE-POOL-1; tests/CMakeLists.txt, jah_pool_arm/jah_add_pool) --------
 # One row, one process per family; every arm is declared beside the comment that says what it
 # claims (above, and in tests/app, tests/shadergraph and tests/atom, which configure before this
@@ -1757,18 +1761,18 @@ set_tests_properties(scripting.e2e.preset_seed_race PROPERTIES
 # -j4 critical path (~200 s).
 jah_add_pool(doc HEADLESS LABELS scripting)
 jah_add_pool(doc_assets HEADLESS LABELS scripting)
-jah_add_pool(gi_verbs LABELS scripting)
-jah_add_pool(gi_movers LABELS scripting)
-jah_add_pool(editor LABELS scripting)
-jah_add_pool(editor_view LABELS scripting)
-jah_add_pool(shading LABELS scripting)
-jah_add_pool(shading_live LABELS scripting)
-jah_add_pool(world_sky LABELS scripting)
-jah_add_pool(world_light LABELS scripting)
-jah_add_pool(player LABELS scripting)
-jah_add_pool(assets_import LABELS scripting)
-jah_add_pool(vr_noruntime LABELS scripting
+jah_add_pool(gi_verbs TIER epic LABELS scripting)
+jah_add_pool(gi_movers TIER epic LABELS scripting)
+jah_add_pool(editor TIER low LABELS scripting)
+jah_add_pool(editor_view TIER epic LABELS scripting)
+jah_add_pool(shading TIER epic LABELS scripting)
+jah_add_pool(shading_live TIER epic LABELS scripting)
+jah_add_pool(world_sky TIER epic LABELS scripting)
+jah_add_pool(world_light TIER epic LABELS scripting)
+jah_add_pool(player TIER low LABELS scripting)
+jah_add_pool(assets_import TIER low LABELS scripting)
+jah_add_pool(vr_noruntime TIER low LABELS scripting
     BASELINE ${CMAKE_CURRENT_SOURCE_DIR}/scripts/pool_baseline_vr_noruntime.js)   # injected hands + gizmo mode, after every arm
-jah_add_pool(avatar_anim LABELS scripting)
-jah_add_pool(atom LABELS scripting)
+jah_add_pool(avatar_anim TIER low LABELS scripting)
+jah_add_pool(atom TIER epic LABELS scripting)
 

@@ -5,6 +5,7 @@
 #include "bridge/enginehost.h"
 #include "services/defaultfloor.h"
 #include "services/worldmodes.h"
+#include "services/testtier.h"
 #include "bridge/secondarysurfacetonemap.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -23,6 +24,13 @@ namespace {
 /// second, 19 in the second, then nothing. The gaps INSIDE a burst are tens of
 /// milliseconds, so 250 ms is comfortably outside them — and every millisecond
 /// here is paid on every launch, warm or cold, so it is not free.
+/// The World Mode a new scene of this process is born with: Epic (the product), or the
+/// process's test tier (TEST-TIER-1) — the tier the warm-up must compile for.
+worldmodes::Mode bornMode()
+{
+    return testtier::active() ? worldmodes::modeFromName(testtier::name()) : worldmodes::Mode::Epic;
+}
+
 constexpr int kSettleMs = 250;
 
 /// Hard ceiling. A gate that can hang the launch forever is worse than a launch
@@ -219,9 +227,16 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             warmScene->setSky(sky);
         }
         if (box && boxMesh && boxMatId && warmScene->attachMesh(box, boxMesh, boxMatId)) {
-            const worldmodes::PhotonTier tier = worldmodes::PhotonTier::Epic;
+            // ...the tier a new scene of THIS PROCESS is born with: Epic, or the process's
+            // test tier (TEST-TIER-1, services/testtier.h — a Low test process must not build
+            // the Epic chain here either: measured, this warm-up was a 1.28 GB transient in a
+            // process whose scenes then held 0.3 GB), resolved through the World Mode registry.
+            const iris::ScenePtr born = iris::Scene::create();
+            worldmodes::setMode(born, bornMode());
+            const worldmodes::PhotonTier tier = worldmodes::photonTier(born);
             GiParams gi;
-            gi.mode = GiMode(qBound(0, worldmodes::photonTechnique(tier), 2));
+            gi.mode = worldmodes::photonEnabled(born)
+                          ? GiMode(qBound(0, worldmodes::photonTechnique(tier), 2)) : GiMode::Off;
             gi.quality = GiQuality(qBound(0, worldmodes::photonQuality(tier), 2));
             gi.epicTier = tier == worldmodes::PhotonTier::Epic;
             gi.numBounces = worldmodes::photonBounces(tier);
@@ -287,7 +302,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         warmScene = engine->createScene("startup-warmup-world",
                                         sceneworkers::count(sceneworkers::Tier::Primary));
         iris::ScenePtr world = iris::Scene::create();
-        worldmodes::setMode(world, worldmodes::Mode::Epic);
+        worldmodes::setMode(world, bornMode());
         PbrParams floorParams;
         const iris::PbrMaterialPtr floorMat = defaultfloor::createMaterial(nullptr, nullptr);
         if (warmScene && warmView->setScene(warmScene) && floorMat &&

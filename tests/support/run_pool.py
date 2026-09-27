@@ -18,6 +18,14 @@ prints one line per arm; this driver owns what the app cannot:
     environment (so `JAH_POOL_ARMS=gi_verbs.gi_status ctest -R '^pool\\.gi_verbs$'`
     is the solo retry of one arm, through the real row). A pool the variable does
     not name runs every arm; `<pool>` alone names the whole pool.
+  * THE TIER (TEST-TIER-1). `--tier low` starts every process with `--test-tier low`
+    (every scene it binds on the Low World Mode, the window 1280x720 — services/testtier.h);
+    `--tier epic` (the default) passes nothing, so each scene keeps its own tier — the
+    pixel pools. At every boot the app prints `POOL-MEM <pool> gpuPoolUsed=<MB>
+    textures=<MB> tier=<t>` (app.memoryStats / app.textureMemory); this driver prints it as
+    `MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>`, the last figure
+    the process's own nvidia-smi line, and the run log (scripts/gate_runlog.py) records it on
+    the pool's row.
   * THE VERDICT, PER ARM, ON ONE CHANNEL: each arm's final `ARM <pool>.<arm>
     PASS|FAIL|CRASH|TIMEOUT <ms> [why]` line is printed exactly once, by this driver
     (the app's own result line is echoed as `arm-result …`, which no reader counts) —
@@ -27,7 +35,7 @@ prints one line per arm; this driver owns what the app cannot:
 
 Usage:
   run_pool.py --pool <name> --app <Jahshaka> [--headless] [--arms a,b] [--baseline <js>]
-              [--boot-budget <s>] --arm <name> <script> <budget-s> [--arm ...]
+              [--boot-budget <s>] [--tier low|epic] --arm <name> <script> <budget-s> [--arm ...]
               [-- <extra app args>]
 
 --baseline <js>: the pool's own baseline script, run by the app after EVERY arm, green
@@ -46,6 +54,8 @@ import time
 ARM_BEGIN = re.compile(r"^ARM-BEGIN (\S+)\.(\S+)\s*$")
 ARM_END = re.compile(r"^ARM (\S+)\.(\S+) (PASS|FAIL) (\d+)(?: (.*))?$")
 BASELINE_LOST = re.compile(r"^POOL-BASELINE-LOST (\S+)\.(\S+) (.*)$")
+POOL_MEM = re.compile(r"^POOL-MEM (\S+) (.*?) tier=(\S+)\s*$")
+TIERS = ("low", "epic")
 
 
 def usage(msg):
@@ -55,7 +65,7 @@ def usage(msg):
 
 def parse(argv):
     opt = {"pool": None, "app": None, "headless": False, "arms": None,
-           "boot": 300.0, "list": [], "extra": [], "baseline": None}
+           "boot": 300.0, "list": [], "extra": [], "baseline": None, "tier": "epic"}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -68,6 +78,10 @@ def parse(argv):
             opt["app"] = argv[i + 1]; i += 2
         elif a == "--baseline":
             opt["baseline"] = argv[i + 1]; i += 2
+        elif a == "--tier":
+            opt["tier"] = argv[i + 1]; i += 2
+            if opt["tier"] not in TIERS:
+                usage("--tier: '%s' is not one of %s" % (opt["tier"], ", ".join(TIERS)))
         elif a == "--headless":
             opt["headless"] = True; i += 1
         elif a == "--arms":
@@ -118,6 +132,23 @@ def reader(stream, q):
     q.put(None)
 
 
+def process_mib(pid):
+    """The process's own VRAM as nvidia-smi reports it (MiB), or None (no GPU, no tool, or a
+    process the driver does not list — a headless one)."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,used_memory",
+                              "--format=csv,noheader,nounits"], capture_output=True, text=True,
+                             timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for row in out.splitlines():
+        parts = [x.strip() for x in row.split(",")]
+        if len(parts) == 2 and parts[0] == str(pid):
+            try: return int(parts[1])
+            except ValueError: return None
+    return None
+
+
 def say(text):
     sys.stdout.write(text + "\n")
     sys.stdout.flush()
@@ -163,6 +194,8 @@ def main():
         cmd = [opt["app"], "--scripts", spec, "--pool", pool]
         if opt["headless"]:
             cmd.append("--headless")
+        if opt["tier"] != "epic":
+            cmd += ["--test-tier", opt["tier"]]
         if opt["baseline"]:
             cmd += ["--pool-baseline", opt["baseline"]]
         cmd += opt["extra"]
@@ -214,6 +247,14 @@ def main():
                 # between two arms the app restores its baseline: the next ARM-BEGIN (or the
                 # process's end) is due within the boot budget.
                 deadline = time.monotonic() + opt["boot"]
+                continue
+            m = POOL_MEM.match(line)
+            if m and m.group(1) == pool:
+                mib = process_mib(proc.pid) if not opt["headless"] else 0
+                body = m.group(2)
+                if body == "headless": body = "gpuPoolUsed=0 textures=0"
+                say("MEM %s %s processMiB=%s tier=%s" % (pool, body,
+                                                         "?" if mib is None else mib, m.group(3)))
                 continue
             m = BASELINE_LOST.match(line)
             if m and m.group(1) == pool:

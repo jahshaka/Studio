@@ -158,6 +158,29 @@ int main(int argc, char **argv)
               "--arms without --scripts is refused, not ignored");
     }
 
+    // ---- the process's test tier (lane TEST-TIER-1) --------------------------
+    // The parser keeps the name; main() validates it against the World Modes
+    // (an unknown name or "custom" exits 2 before a window exists).
+    {
+        const CliOptions o = parsed({ "--scripts", "x.js", "--test-tier", "low" });
+        CHECK(o.errors.isEmpty() && o.testTier == QStringLiteral("low"),
+              "--test-tier <mode> parses");
+    }
+    {
+        const CliOptions o = parsed({ "--test-tier=epic" });
+        CHECK(o.errors.isEmpty() && o.testTier == QStringLiteral("epic"),
+              "--test-tier=<mode> parses");
+    }
+    {
+        const CliOptions o = parsed({ "--scripts", "x.js" });
+        CHECK(o.testTier.isEmpty(), "no --test-tier = no test tier (the document's own)");
+    }
+    {
+        const CliOptions o = parsed({ "--test-tier" });
+        CHECK(o.errors.size() == 1 && o.testTier.isEmpty(),
+              "a bare --test-tier is refused, not ignored");
+    }
+
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

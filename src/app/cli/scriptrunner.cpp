@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "services/mainthreadwatchdog.h"
 #include "services/jahlog.h"
 #include "shell/shutdownorder.h"
+#include "services/testtier.h"
 
 int finalizeAppExit(int rc)
 {
@@ -86,6 +87,22 @@ int finalizeAppExit(int rc)
     return rc;
 }
 
+namespace {
+
+// THE TEST TIER'S WINDOW (TEST-TIER-1, services/testtier.h): a windowed script
+// run whose process has a test tier boots at 1280x720 instead of the screen's
+// size — the chain's render targets follow the window. What app.resizeWindow
+// does, before the first frame; an arm that needs another size resizes itself.
+void applyTestTierWindow(MainWindow &window, QApplication &app, bool headless)
+{
+    if (headless || !testtier::active()) return;
+    if (window.isFullScreen() || window.isMaximized()) window.showNormal();
+    window.resize(testtier::kWindowWidth, testtier::kWindowHeight);
+    app.processEvents();
+}
+
+}   // namespace
+
 int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bool headless,
                   bool live)
 {
@@ -103,6 +120,7 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
 
     window.show();
     app.processEvents();
+    applyTestTierWindow(window, app, headless);
 
     // A WINDOWED SCRIPT RUN SHOWS THE EDITOR PAGE, so a script has a live
     // viewport from its first line — and that is a difference from the boot a
@@ -245,6 +263,7 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
 
     window.show();
     app.processEvents();
+    applyTestTierWindow(window, app, headless);
 
     const bool noEditorBoot = qEnvironmentVariableIntValue("JAHSHAKA_TEST_NO_EDITOR_BOOT") > 0;
     const bool editorBoot = !headless && !noEditorBoot;
@@ -278,6 +297,27 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
             QStringLiteral("(function(){var w = app.window(); return w.width + 'x' + w.height;})()"),
             QStringLiteral("<pool-baseline>"), false, 0, ScriptRunPolicy::Off);
         if (w.ok) bootWindow = w.value.toString();
+    }
+
+    // WHAT THIS PROCESS HOLDS AT BOOT (TEST-TIER-1): one `POOL-MEM` line per
+    // process, through the verbs a script would use, for the driver to put in
+    // the run log (run_pool.py prints it as `MEM <pool> …` with the process's
+    // own nvidia-smi figure beside it). gpuPoolUsed = the VaoManager pools'
+    // capacity minus their free bytes (textures included on Vulkan); textures =
+    // every texture the texture manager knows.
+    {
+        const QString tier = testtier::active() ? testtier::name() : QStringLiteral("document");
+        QString mem = QStringLiteral("headless");
+        if (!headless) {
+            const ScriptResult m = engine->evaluate(
+                QStringLiteral("(function(){var m = app.memoryStats(); var t = app.textureMemory({top: 1});"
+                               "return 'gpuPoolUsed=' + Math.round((m.gpuPoolCapacityBytes - m.gpuPoolFreeBytes) / 1048576)"
+                               " + ' textures=' + Math.round(t.totalBytes / 1048576);})()"),
+                QStringLiteral("<pool-mem>"), false, 0, ScriptRunPolicy::Off);
+            mem = m.ok ? m.value.toString()
+                       : QStringLiteral("unavailable (%1)").arg(m.toString().simplified());
+        }
+        armLine("POOL-MEM %s %s tier=%s\n", poolUtf8, mem.toUtf8(), tier.toUtf8());
     }
 
     for (int i = 0; i < arms.size(); ++i) {

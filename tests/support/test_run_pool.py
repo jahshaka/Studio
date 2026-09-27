@@ -55,6 +55,7 @@ base = [sys.executable, driver, "--pool", "selftest", "--app", app, "--headless"
 
 # ---- part 1: the real app -------------------------------------------------------------
 rc, out = run(base + arms, {"JAH_POOL_ARMS": ""})
+out1 = out
 show(out)
 v = verdicts(out)
 check(rc == 1, "the pool row fails when an arm fails (driver exit %d)" % rc)
@@ -128,6 +129,47 @@ check(not verdicts.twice, "every arm's verdict is ONE `ARM` line (twice: %s)" % 
 check(out.count("POOL fake RESTART ") == 6, "every restart is a named line (%d)" % out.count("POOL fake RESTART "))
 check(rc == 1 and "solo retry: JAH_POOL_ARMS=fake.crash,fake.hang,fake.lost" in out,
       "the row fails and prints the solo retry")
+
+# ---- part 3: the pool's TIER and its MEM line (lane TEST-TIER-1) -------------------------
+# The real app's headless boot (part 1) prints its footprint as `headless`: the driver's MEM line
+# reads it as zero, at the document's tier.
+check(any(l.startswith("MEM selftest gpuPoolUsed=0 textures=0 processMiB=0 tier=document")
+          for l in out1.splitlines()), "a headless pool's MEM line: zero, at the document's tier")
+tierapp = tempfile.NamedTemporaryFile("w", suffix=".py", delete=False)
+tierapp.write(r'''#!/usr/bin/env python3
+import sys
+a = sys.argv; pool = a[a.index("--pool") + 1]
+tier = a[a.index("--test-tier") + 1] if "--test-tier" in a else "document"
+print("POOL-MEM %s gpuPoolUsed=%d textures=40 tier=%s" % (pool, 300 if tier == "low" else 1445, tier), flush=True)
+for e in a[a.index("--scripts") + 1].split(","):
+    n = e.split("=", 1)[0]
+    print("ARM-BEGIN %s.%s" % (pool, n), flush=True)
+    print("ARM %s.%s PASS 1" % (pool, n), flush=True)
+''')
+tierapp.close()
+os.chmod(tierapp.name, 0o755)
+mems = {}
+for t in ("low", "epic"):
+    rc3, out3 = run([sys.executable, driver, "--pool", "tiered", "--app", tierapp.name, "--tier", t,
+                     "--arm", "only", "x.js", "30"], {"JAH_POOL_ARMS": ""})
+    show(out3)
+    mems[t] = [l for l in out3.splitlines() if l.startswith("MEM tiered ")]
+    check(rc3 == 0, "--tier %s: the pool runs" % t)
+os.unlink(tierapp.name)
+check(len(mems["low"]) == 1 and mems["low"][0].startswith("MEM tiered gpuPoolUsed=300 textures=40 processMiB=")
+      and mems["low"][0].endswith("tier=low"),
+      "TIER low: every process gets --test-tier low, and the boot's MEM line is printed once (%s)" % mems["low"])
+check(len(mems["epic"]) == 1 and mems["epic"][0].endswith("tier=document") and "gpuPoolUsed=1445" in mems["epic"][0],
+      "TIER epic: no --test-tier is passed (the document's own tier) (%s)" % mems["epic"])
+rc4, out4 = run([sys.executable, driver, "--pool", "x", "--app", "true", "--tier", "medium",
+                 "--arm", "a", "x.js", "30"])
+check(rc4 == 2 and "--tier" in out4, "a TIER the driver does not know is refused (exit %d)" % rc4)
+# ...and the run log reads the field (scripts/gate_runlog.py, the `mem` of a pool's row).
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(driver)))), "scripts"))
+import gate_runlog
+m = gate_runlog._mem_of("\n".join(mems["low"] + ["MEM tiered gpuPoolUsed=310 textures=41 processMiB=? tier=low"]))
+check(m is not None and m["gpuPoolUsedMB"] == 310 and m["tier"] == "low" and m["boots"] == 2,
+      "the run log records a pool row's MEM: the largest over its boots (%s)" % m)
 
 print("pool.runner: %s" % ("%d failure(s)" % failures if failures else "all ok"))
 sys.exit(1 if failures else 0)

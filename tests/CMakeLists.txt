@@ -326,8 +326,8 @@ set(JAH_COST_GI_CHAIN 90000)
 #     sequence of suites (A writes, B reads) or a suite that is not a plain `--script` run.
 #     Without WARM it wipes the caches too (a suite that asserts on a COLD shader cache);
 #     ARGS are fresh_home.sh's --reset/--rm/--mkdir; THEN runs after the wipe.
-#   * `${JAH_FRESH_HOME} --warm <home> -- <command…>` as a row's COMMAND — add_script_e2e's
-#     default: the wipe happens inside the row (no extra ctest row), keeping the shader caches.
+#   * `${JAH_FRESH_HOME} --warm <home> -- <command…>` as a row's COMMAND — a one-script
+#     row's default: the wipe happens inside the row (no extra ctest row), keeping the shader caches.
 set(JAH_FRESH_HOME "${CMAKE_SOURCE_DIR}/tests/support/fresh_home.sh")
 function(jah_fresh_home_fixture row fixture home)
     cmake_parse_arguments(F "WARM" "" "ARGS;THEN;LABELS" ${ARGN})
@@ -384,8 +384,8 @@ endfunction()
 #       — one arm, declared WHERE ITS SUITE'S COMMENT LIVES (the comment says what it claims).
 #         Arms run in declaration order; FIRST puts the one arm whose claim is about the
 #         PROCESS ("the Player page has never been shown") before every other (one per pool).
-#   jah_add_pool(<pool> [HEADLESS] [BASELINE <script>] [LABELS <label…>] [ENV <k=v…>]
-#                [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
+#   jah_add_pool(<pool> [HEADLESS] [TIER low|epic] [BASELINE <script>] [LABELS <label…>]
+#                [ENV <k=v…>] [LAUNCHER <cmd…>] [APP_ARGS <arg…>] [PROPS <property value…>])
 #       — the row, after its arms (in the family's CMakeLists, so gate-scope's "a file under
 #         tests/<dir>/ selects that dir's rows" keeps holding). LAUNCHER runs the driver inside
 #         a fixture process (tests/vr/run_vr_app.sh --launch: a Monado runtime for the pool's
@@ -393,12 +393,21 @@ endfunction()
 #         ctest properties (a RESOURCE_LOCK, a SKIP_RETURN_CODE). BASELINE is a script the app
 #         runs after EVERY arm, green or red (--pool-baseline): what the family's arms change in
 #         the process and cannot put back on a red path.
+#         TIER (lane TEST-TIER-1; SPECS/audits/GPU_LOSS_AUDIT_2026-09-27.md §A2) is REQUIRED on an
+#         engine-up pool: `low` = every process runs `--test-tier low` (every scene it binds on
+#         the Low World Mode, the window 1280x720 — services/testtier.h; its measured VRAM is the
+#         `MEM` line run_pool.py prints at every boot) — for arms whose claims are verbs, UI
+#         state, counts, open/close; `epic` = no test tier, each scene keeps its own (a new one
+#         is Epic) — for an arm that asserts a picture, GI, Atom or a shipped-tier number. An
+#         arm that needs Epic lives in an Epic pool: MOVE it, never mix. A headless pool has no
+#         chain and takes no TIER. The tier is readable as the GLOBAL property
+#         JAH_POOL_<pool>_TIER (low|epic|headless) — the VRAM admission's class reads it.
 #
 # <seconds> is the arm's MEASURED time INSIDE its pool (whole seconds, rounded up — the pool's
 # `ARM … <ms>` lines are the measurement). THE BUDGETS ARE DERIVED, NEVER TYPED: an arm is
 # killed past 6x its measured time (never under 30 s), and the row's TIMEOUT is the sum of the
 # arms' budgets plus one boot budget (300 s). A slower arm is re-measured, never re-budgeted.
-# The home is fresh every run (fresh_home.sh --warm, as add_script_e2e); the arms SHARE it, so
+# The home is fresh every run (fresh_home.sh --warm, as a one-script row); the arms SHARE it, so
 # an arm never asserts on what another arm left behind — each pool was proved arm by arm against
 # its solo suites before they were deleted (spikes/suite-pool-1/).
 #
@@ -446,16 +455,26 @@ function(jah_pool_arm pool arm script secs)
 endfunction()
 
 function(jah_add_pool pool)
-    cmake_parse_arguments(P "HEADLESS" "BASELINE" "LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
+    cmake_parse_arguments(P "HEADLESS" "BASELINE;TIER" "LABELS;ENV;LAUNCHER;APP_ARGS;PROPS" ${ARGN})
     get_property(_arms GLOBAL PROPERTY JAH_POOL_${pool}_ARMS)
     if(NOT _arms)
         message(FATAL_ERROR "jah_add_pool(${pool}): no jah_pool_arm(${pool} …) before it")
     endif()
     set(_want engine)
     set(_modeflag)
+    set(_tier headless)
     if(P_HEADLESS)
         set(_want headless)
         set(_modeflag --headless)
+        if(P_TIER)
+            message(FATAL_ERROR "jah_add_pool(${pool}): a HEADLESS pool has no chain and takes no TIER")
+        endif()
+    elseif(NOT P_TIER MATCHES "^(low|epic)$")
+        message(FATAL_ERROR "jah_add_pool(${pool}): TIER low|epic is required on an engine-up pool "
+                            "(low = no arm asserts a picture, GI, Atom or a shipped-tier number)")
+    else()
+        set(_tier ${P_TIER})
+        list(APPEND _modeflag --tier ${P_TIER})
     endif()
     set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-${pool})
     file(MAKE_DIRECTORY ${_home}/run)
@@ -507,6 +526,7 @@ function(jah_add_pool pool)
         set_tests_properties(pool.${pool} PROPERTIES ${P_PROPS})
     endif()
     set_property(GLOBAL PROPERTY JAH_POOL_${pool}_ADDED TRUE)
+    set_property(GLOBAL PROPERTY JAH_POOL_${pool}_TIER ${_tier})
 endfunction()
 
 add_subdirectory(engine)

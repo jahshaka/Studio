@@ -100,6 +100,25 @@ solo retry: JAH_POOL_ARMS=gi_verbs.gi_bounds ctest -R '^pool\.gi_verbs$'
   `JAH_POOL_ARMS=p.a,p.b ctest -R '^pool\.(p|q)$'`;
 - the run log (§7) records one line per arm from the driver's `ARM` lines — the one channel.
 
+**THE POOL'S TIER** (lane TEST-TIER-1). Every engine-up pool declares one,
+`jah_add_pool(<pool> TIER low|epic …)`, and it is the PROCESS's, never the document's:
+
+- `TIER low` — the process runs `--test-tier low` (`services/testtier.h`): every scene it binds,
+  a new one and an opened one (after its reader), is put on the Low World Mode through the call
+  `world.mode` makes, and the window boots 1280x720. For arms whose claims are verbs, UI state,
+  counts, open/close, thumbnails — nothing that needs the shipped picture. `app.testTier()`
+  reads it (`"low"`).
+- `TIER epic` — no test tier: a new scene is the product's Epic, an opened scene keeps the tier
+  it saved (`app.testTier()` is `""`). For an arm that asserts a picture, GI, Atom, or a
+  number measured at the shipped tier.
+
+An arm that needs Epic lives in an Epic pool — MOVE it, never mix (a Low pool must never host a
+GI assertion: the irradiance field and the chain differ by tier). At every boot the pool prints
+`MEM <pool> gpuPoolUsed=<MB> textures=<MB> processMiB=<MiB> tier=<t>` — the boot footprint
+through `app.memoryStats`/`app.textureMemory` and the process's own `nvidia-smi` line — and the
+run log records it on the pool's row (`mem`). A `--script` row takes the same switch as
+`JAHSHAKA_TEST_TIER=low` in its ENVIRONMENT (the flag wins where both are given).
+
 A pool's arms SHARE its home (fresh every run, the shader cache kept warm), so an arm never
 asserts on what another arm left in the library, and an arm that changes an app-wide setting
 puts it back. Each pool was proved arm by arm against the solo suites it replaced before they

@@ -46,6 +46,9 @@ _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]
 # and never ended is a CRASH (the runner restarts the app and goes on).
 _ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|SKIP)\b(?:\s+(\d+(?:\.\d+)?)\s*(ms|s)?)?")
 _ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
+# A pool's boot footprint (TEST-TIER-1, run_pool.py): `MEM <pool> gpuPoolUsed=<MB> textures=<MB>
+# processMiB=<MiB|?> tier=<t>`, once per process the pool started; the row records the largest.
+_MEM = re.compile(r"^\s*MEM\s+\S+\s+gpuPoolUsed=(\d+)\s+textures=(\d+)\s+processMiB=(\d+|\?)\s+tier=(\S+)")
 _GPU = re.compile(r"^\s*gpu_ms:\s*([0-9.]+)")
 _TARGET = re.compile(r"^\s*target:\s*(.+?)\s*$")
 
@@ -158,6 +161,26 @@ def _junit_outputs(path):
     return out
 
 
+def _mem_of(text):
+    """A pool row's `mem` field: the largest boot footprint over its processes, or None."""
+    mem = None
+    for line in (text or "").splitlines():
+        m = _MEM.match(line)
+        if not m: continue
+        pool_mb, tex_mb = int(m.group(1)), int(m.group(2))
+        proc = None if m.group(3) == "?" else int(m.group(3))
+        if mem is None:
+            mem = {"gpuPoolUsedMB": pool_mb, "texturesMB": tex_mb, "processMiB": proc,
+                   "tier": m.group(4), "boots": 1}
+            continue
+        mem["boots"] += 1
+        mem["gpuPoolUsedMB"] = max(mem["gpuPoolUsedMB"], pool_mb)
+        mem["texturesMB"] = max(mem["texturesMB"], tex_mb)
+        if proc is not None:
+            mem["processMiB"] = max(mem["processMiB"] or 0, proc)
+    return mem
+
+
 def _suite_facts(text):
     gpu, target, arms, begun = None, None, [], []
     for line in (text or "").splitlines():
@@ -249,8 +272,12 @@ def run_ctest(cmd, cwd, tier, lane, jobs, reasons=None, gating=None, rng=None, r
                 "box": dict(box0, load=[round(x, 2) for x in load],
                             load_mean=sampler.mean(t_end - secs, t_end)),
                 "source": "run"}
-        recs.append(dict(base, arm=None, verdict=verdict_of(status), status=status.strip("* "),
-                         seconds=secs, gpu_ms=gpu, target=target))
+        row = dict(base, arm=None, verdict=verdict_of(status), status=status.strip("* "),
+                   seconds=secs, gpu_ms=gpu, target=target)
+        mem = _mem_of(outputs.get(name, ""))
+        if mem is not None:
+            row["mem"] = mem
+        recs.append(row)
         for arm, v, s in arms:
             # an arm's reason: the selector's for that arm (`<row>::<arm>`), else its row's
             ar = reasons.get(f"{name}::{arm.split('.', 1)[-1]}", base["reason"])

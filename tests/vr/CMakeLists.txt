@@ -490,7 +490,7 @@ jah_pool_arm(vr_session player_session ${CMAKE_SOURCE_DIR}/tests/scripting/scrip
 jah_pool_arm(vr_session verbs_session ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_session_verbs.js 39)
 jah_pool_arm(vr_session photon_view ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_view.js 9)
 jah_pool_arm(vr_session sample_open ${CMAKE_CURRENT_SOURCE_DIR}/vr_sample_open.js 9)
-jah_add_pool(vr_session LABELS scripting
+jah_add_pool(vr_session TIER epic LABELS scripting
     LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh" --launch "${JAH_MONADO_MANIFEST}" --
     APP_ARGS --vr
     ENV "${JAH_TEST_DISPLAY_ENV}"

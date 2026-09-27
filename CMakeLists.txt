@@ -631,6 +631,7 @@ set(HEADERS
     src/services/shortcutregistry.h
     src/services/vrworld.h
     src/services/worldmodes.h
+    src/services/testtier.h
     src/services/scenefolders.h
     src/services/planarreflectors.h
     src/services/animationedits.h
