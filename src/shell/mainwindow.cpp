@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/core/viewport.h"
@@ -37,7 +36,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/animation.h"
-#include "irisgl/document/materials/postprocessmanager.h"
 #include "irisgl/core/logger.h"
 #include "services/jahlog.h"
 #include "services/sessionmarkers.h"
@@ -155,7 +153,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/input/inputmap.h"
-#include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "modules/materials/effectspage.h"
 #include "modules/materials/materialsmodule.h"

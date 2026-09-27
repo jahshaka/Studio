@@ -839,7 +839,7 @@ set_tests_properties(gi.field_thin_wall PROPERTIES TIMEOUT 240 LABELS "engine" R
 # of one whole-field integration at 1 and 2 rays in one process.
 add_test(NAME gi.field_alias COMMAND test_gi_field_thin_wall alias
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 300 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
+set_tests_properties(gi.field_alias PROPERTIES TIMEOUT 900 LABELS "engine" RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN})
 # THE FIELD'S LEAK FIX SURVIVES THE MOVE ONTO A CASCADE (PHOTON_SPEC E1's bar,
 # promoted from the PHOTON-S2 spike harness): a sealed room with a lamp outside
 # it, four wall thicknesses, measured with the scene-fitted single volume and

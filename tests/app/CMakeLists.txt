@@ -45,7 +45,7 @@ add_test(NAME app.engine_selftest_validation
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
 set_tests_properties(app.engine_selftest_validation PROPERTIES
     ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
-    TIMEOUT 180 LABELS "app")
+    TIMEOUT 660 LABELS "app")  # 6x measured (D6B fix round F1; spikes/d6b-gate-shape/f1-timeouts.txt)
 
 # app.startup_quiet — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only

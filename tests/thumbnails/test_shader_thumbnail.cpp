@@ -34,7 +34,6 @@
 #include "../support/previewdump.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "data/database/database.h"
 #include "io/materialreader.h"
 #include "services/assetstorepaths.h"
@@ -207,7 +206,7 @@ int main(int argc, char **argv)
 
         // ---- 5. it is NOT the grey fallback the old route produced ----
         QImage grey = renderer.renderMaterial(
-            iris::DefaultMaterial::create().staticCast<iris::Material>(), size);
+            iris::PbrMaterial::create().staticCast<iris::Material>(), size);
         show("default material", grey);
         const int d = maxAbsDiff(img, grey);
         std::printf("    max |graph - default| = %d\n", d);

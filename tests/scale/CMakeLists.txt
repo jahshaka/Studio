@@ -95,7 +95,7 @@ set(SCALE_T_LEVELS 300)       # 8 s on the 5 M shell
 set(SCALE_T_CUT_COST 900)     # the world's boot + five poses (ATOM-CLUSTER-CUT)
 set(SCALE_T_RESIDENCY 600)    # 9 s over 1 M + 5 M; every cached shell loaded in turn
 set(SCALE_T_DECODE 840)       # 139 s (four material arms, GI to rest after each)
-set(SCALE_T_OCCLUSION 210)    # 34 s
+set(SCALE_T_OCCLUSION 600)    # 34 s solo; 99 s in a -j4 gate (D6B fix round F1: 6x the worst)
 set(SCALE_T_TLAS 300)         # 42-51 s
 set(SCALE_T_ATLAS 320)        # 53 s
 set(SCALE_T_FAR 120)          # ~12 s (two pictures)
@@ -145,6 +145,15 @@ jah_no_display(scale.bake)
 # A pixel suite (no time measured): never the GPU lock. ~90 s (the world's boot).
 add_test(NAME atom.decode_exact COMMAND test_scale --decode-exact WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.decode_exact PROPERTIES TIMEOUT 480 LABELS "engine"
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# atom.coverage_trace — ATOM-BLACK-FRAMES-1: 2,600 frames of the world (the 200 materials
+# landing, a 2,000-frame walk with teleports, a DAG mesh released and re-added, a new mesh
+# added and released, the cut's budget forced small twice) with the decode's discriminator
+# on: no frame fails more than 0.5 % of what the id pass covered. A pixel suite (no time
+# measured, frames counted): never the GPU lock. 212 s measured; the timeout is 6x that.
+add_test(NAME atom.coverage_trace COMMAND test_scale --coverage-trace WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.coverage_trace PROPERTIES TIMEOUT 1300 LABELS "engine"
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # W14 — the real binary over MCP, the UI thread's gaps: locked (open.responsive's class).

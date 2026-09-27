@@ -131,6 +131,9 @@ jah_fresh_home_fixture(threading.freshhome.gi_resolve threading_home_gi_resolve 
 
 jah_fresh_home_fixture(threading.freshhome.gi_resolve_serial threading_home_gi_resolve_serial "${_gir_home_ser}" LABELS "threading")
 
+# RUN_SERIAL on both halves (threading.gi_resolve and threading.gi_resolve_serial), for the
+# mode pair's reason above: each opens a project at Epic and compiles a few dozen shaders (not a
+# timing gate).
 add_test(NAME threading.gi_resolve
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
@@ -239,24 +242,26 @@ set_tests_properties(threading.texture_wait_watchdog PROPERTIES
     LABELS "threading" TIMEOUT 240)
 
 # The SEGV's precondition, greped off the logs both runs just wrote
-# (nogrouplesstexture.cmake carries the mechanism). FIXTURES_REQUIRED on the run
-# it inspects — each run is the FIXTURES_SETUP of its logs (D6B-GATE-SHAPE: these
-# said so and used DEPENDS, which orders but never pulls the run in, so a -R of the
-# inspector alone read the previous run's logs) — so it can never pass by looking at
-# an empty or a stale directory.
+# (nogrouplesstexture.cmake carries the mechanism, and fails on an empty directory).
+# DEPENDS on the run it inspects (ordering: it reads THIS gate's logs, and it still
+# runs when that run went red — the grep is its own claim) AND FIXTURES_REQUIRED on
+# the run's fresh-home wipe (D6B-GATE-SHAPE: the comment used to claim a fixture the
+# row did not have, so a -R of the inspector alone read the PREVIOUS run's logs; now
+# the wipe runs first and an inspector without its run fails on the empty directory
+# instead of passing on a stale one).
 add_test(NAME threading.import_soak.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_soak}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
-set_property(TEST threading.import_soak APPEND PROPERTY FIXTURES_SETUP threading_import_soak_logs)
 set_tests_properties(threading.import_soak.no_groupless_texture PROPERTIES
-    FIXTURES_REQUIRED threading_import_soak_logs LABELS "threading" TIMEOUT 60)
+    DEPENDS threading.import_soak FIXTURES_REQUIRED threading_home_import_soak
+    LABELS "threading" TIMEOUT 60)
 
 add_test(NAME threading.newproject_stall.no_groupless_texture
          COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_stall}/run/logs
                  -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
-set_property(TEST threading.newproject_stall APPEND PROPERTY FIXTURES_SETUP threading_newproject_stall_logs)
 set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
-    FIXTURES_REQUIRED threading_newproject_stall_logs LABELS "threading" TIMEOUT 60)
+    DEPENDS threading.newproject_stall FIXTURES_REQUIRED threading_home_newproject_stall
+    LABELS "threading" TIMEOUT 60)
 
 # Same toolchain quarantine as threading.mode: the real binary cannot start
 # under GCC 15's libtsan.

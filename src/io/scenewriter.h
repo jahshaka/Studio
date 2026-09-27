@@ -71,12 +71,10 @@ public:
     /// unchecked truncate on the only copy of a world.
     QByteArray getSceneObject(QString projectPath,
                               iris::ScenePtr scene,
-                              iris::PostProcessManagerPtr postMan,
                               EditorData *editorData);
 
 public:
     void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);
-    void writePostProcessData(QJsonObject& projectObj, iris::PostProcessManagerPtr postMan);
     void writeEditorData(QJsonObject& projectObj, EditorData* ediorData = nullptr);
 
     /// A SUBTREE plus where it belongs (src/io/sceneformat.h). The unit undo

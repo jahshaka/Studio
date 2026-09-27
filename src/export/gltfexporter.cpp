@@ -49,7 +49,6 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/document/scenegraph/skybake.h"
-#include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/core/properties/property.h"
 
 namespace {
@@ -690,39 +689,6 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     return c.materials.size() - 1;
 }
 
-int convertDefaultMaterial(Ctx &c, iris::DefaultMaterial *def, iris::FaceCullingMode cullMode)
-{
-    // Legacy Blinn-Phong: diffuse -> albedo, shininess -> roughness — the same
-    // conversion the mirror applies (scenemirror.cpp).
-    QJsonObject m;
-    m["name"] = QStringLiteral("default");
-    QJsonObject mr;
-    const QColor dc = def->getDiffuseColor();
-    const iris::LinearColor dcl = iris::linearOf(dc);
-    mr["baseColorFactor"] = colorArray(dcl.r, dcl.g, dcl.b, 1.0f);
-    mr["metallicFactor"] = 0.0;
-    const float shin = std::max(0.0f, std::min(def->getShininess(), 128.0f));
-    mr["roughnessFactor"] = double(1.0f - std::sqrt(shin / 128.0f) * 0.9f);
-    const QString diffSrc = textureSlotSource(def, "u_diffuseTexture");
-    // The legacy material has one uniform scale and no offset/rotation.
-    const UvTransform uvScale{ def->getTextureScale(), def->getTextureScale(), 0.0f, 0.0f, 0.0f };
-    if (!diffSrc.isEmpty()) {
-        const QImage img = loadDocumentImage(diffSrc, c);
-        const int tex = addTexture(c, addImage(c, "src:" + diffSrc, img, true));
-        if (tex >= 0) mr["baseColorTexture"] = textureRef(c, tex, uvScale);
-    }
-    m["pbrMetallicRoughness"] = mr;
-    const QString normalSrc = textureSlotSource(def, "u_normalTexture");
-    if (!normalSrc.isEmpty()) {
-        const QImage img = loadDocumentImage(normalSrc, c);
-        const int tex = addTexture(c, addImage(c, "src:" + normalSrc, img, false));
-        if (tex >= 0) m["normalTexture"] = textureRef(c, tex, uvScale);
-    }
-    if (cullMode == iris::FaceCullingMode::None) m["doubleSided"] = true;
-    c.materials.append(m);
-    return c.materials.size() - 1;
-}
-
 // (convertCustomMaterial is GONE with iris::CustomMaterial, HLMS_ADOPTION P4b.
 // It was a best-effort scrape of a shader material's Property rows — colour,
 // shininess-or-roughness, the first albedo-ish texture — into glTF. The
@@ -739,8 +705,6 @@ int materialFor(Ctx &c, iris::Material *material, iris::FaceCullingMode cullMode
     int idx = -1;
     if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material))
         idx = convertPbrMaterial(c, pbr, cullMode);
-    else if (auto *def = dynamic_cast<iris::DefaultMaterial *>(material))
-        idx = convertDefaultMaterial(c, def, cullMode);
     else {
         // Unknown material kinds get one neutral grey — the mirror's fallback.
         QJsonObject m;

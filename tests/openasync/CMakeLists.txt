@@ -58,12 +58,14 @@ add_test(NAME open.responsive COMMAND test_open_responsive
 # its own control measurement and settle — about 45 s solo. 400 still stands.
 set_tests_properties(open.responsive PROPERTIES
     ENVIRONMENT "HOME=${_open_home};JAHSHAKA_DATA_ROOT=${_open_home}/.local/share/Jahshaka"
-    TIMEOUT 400 LABELS "openasync")
+    # 1740: 6x the worst measured run (281 s, -j4 beside other lanes; D6B fix round F1 —
+    # the lock used to add 900 s on top of 400, so leaving it cut the budget below 3x).
+    TIMEOUT 1740 LABELS "openasync")
 # open.responsive.timing — the millisecond bars (nightly; `quiet-box`: never a scoped gate).
 # Its own home, so the nightly run and a lane's push-row run never share a library.
 set(_open_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-open-timing)
 file(MAKE_DIRECTORY ${_open_timing_home}/run)
-jah_gpu_exclusive_test(NAME open.responsive.timing RUN_TIMEOUT 400 COMMAND test_open_responsive
+jah_gpu_exclusive_test(NAME open.responsive.timing RUN_TIMEOUT 1740 COMMAND test_open_responsive
          WORKING_DIRECTORY ${_open_timing_home}/run)
 set_tests_properties(open.responsive.timing PROPERTIES
     ENVIRONMENT "HOME=${_open_timing_home};JAHSHAKA_DATA_ROOT=${_open_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
@@ -100,10 +102,10 @@ jah_tsan_blocked(open.frames)   # spawns the app: see jah_tsan_blocked
 
 # open.crash_soak — the crash itself, N times, under glibc's heap checks.
 #
-# NIGHTLY (label `nightly`, D6B-GATE-SHAPE — it was labelled `benchmark` when that label
-# doubled as the nightly marker): out of the MERGE and PUSH tiers (`gate-scope.py
-# --merge-tier`), and — being minutes of one process rather than a measurement — still
-# selected by the scoped gate of a change to its own directory.
+# NIGHTLY (labels `nightly;quiet-box`, D6B-GATE-SHAPE — it was labelled `benchmark` when that
+# label doubled as the nightly marker): out of the MERGE and PUSH tiers (`gate-scope.py
+# --merge-tier`) AND out of every scoped gate — twelve RUN_SERIAL engine processes read
+# probabilistically would stop a lane's scoped gate for minutes and ask for re-runs.
 #
 # PROBABILISTIC ON THE BASE, deterministic-ish on the fix: 9 failures in 12 runs
 # before the slice boundary drove a frame, 0 in 12 after, measured twice. Read a
@@ -116,5 +118,5 @@ add_test(NAME open.crash_soak
                  ${CMAKE_SOURCE_DIR}/scenes
                  ${CMAKE_CURRENT_BINARY_DIR}/soak 12)
 set_tests_properties(open.crash_soak PROPERTIES
-    TIMEOUT 900 RUN_SERIAL TRUE LABELS "nightly")
+    TIMEOUT 900 RUN_SERIAL TRUE LABELS "nightly;quiet-box")
 jah_tsan_blocked(open.crash_soak)

@@ -53,7 +53,7 @@
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/vertexlayout.h"
-#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/irisglfwd.h"
@@ -237,8 +237,8 @@ inline Character buildCharacter(const QString &name)
         auto mn = iris::MeshNode::create();
         mn->setName(QString::fromLatin1(pieces()[i].name));
         mn->setMesh(meshes[i]);                     // clones the rig template per node
-        auto mat = iris::DefaultMaterial::create();
-        mat->setDiffuseColor(QColor(220, 60, 60));
+        auto mat = iris::PbrMaterial::create();
+        mat->setBaseColor(QColor(220, 60, 60));
         mn->setMaterial(mat);
         c.root->addChild(mn, false);                // identity local: every piece at the root
         c.pieces.append(mn);

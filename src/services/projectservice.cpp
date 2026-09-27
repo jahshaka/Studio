@@ -374,7 +374,6 @@ bool ProjectService::saveProjectBlob()
     SceneWriter writer;
     auto blob = writer.getSceneObject(project->getProjectFolder(),
                                       scene,
-                                      iris::PostProcessManagerPtr(),
                                       (viewport && viewport->isInitialized()) ? viewport->getEditorData() : nullptr);
 
     bool ok;
@@ -427,7 +426,6 @@ void ProjectService::saveOpenScene()
         SceneWriter writer;
         blob = writer.getSceneObject(project->getProjectFolder(),
                                      sceneProvider(),
-                                     iris::PostProcessManagerPtr(),
                                      viewport->getEditorData());
     }
     QImage img;
@@ -459,7 +457,6 @@ void ProjectService::saveInitialScene(const QString &projectPath)
         LoadTimeline::Accumulate row(QStringLiteral("save:serialize"));
         sceneObject = writer.getSceneObject(projectPath,
                                             sceneProvider(),
-                                            iris::PostProcessManagerPtr(),
                                             viewport->isInitialized() ? viewport->getEditorData()
                                                                       : nullptr);
     }
