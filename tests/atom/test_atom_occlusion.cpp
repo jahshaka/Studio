@@ -18,6 +18,8 @@
 //       frame after each jump is compared like every other (the previous pyramid is
 //       read with the matrix it was drawn with, and the late pass recovers whatever
 //       its prediction rejected);
+//   (c2) the same cut with the LATE list's budget forced tiny first (F1): the late list
+//       follows the first list's budget, nothing drawn coarse;
 //   (d) a turn of 180 degrees over 30 frames;
 //   (e) a LETTERBOXED view (the pass's inset is the pyramid's rectangle) and
 //   (f) an ORTHOGRAPHIC one, each over a short walk.
@@ -305,6 +307,29 @@ int main()
         for (int i = 0; i < 12; ++i) stepCompare(on, off, cut, "(c) cut");
     }
     report("(c) cut", cut);
+
+    // (c2) THE LATE LIST BORN SMALL (the Fable read's F1): the late list's cut budget is
+    // forced TINY (GpuCull::setCutBudgetForTest, the cut lane's own overflow door) right
+    // before a whole-world disocclusion — the teleport behind the wall, whose first frame
+    // the late pass draws nearly all of. The late list follows the first list's budget
+    // before it records (GpuCull::followCutBudget), so nothing is drawn coarse: 0 px, and
+    // no overflow counted.
+    Tally small;
+    setBoth(on, off, enginetest::testCameraDescLookAt(eyeA, Vec3(0.0f, 1.2f, -20.0f)));
+    for (int i = 0; i < 12; ++i) stepCompare(on, off, small, "(c2) settle");
+    on.ov->atomCullLate().setCutBudgetForTest(3000u);
+    setBoth(on, off, enginetest::testCameraDescLookAt(Vec3(2.0f, 1.7f, -40.0f), Vec3(0.0f, 1.2f, 0.0f)));
+    unsigned overflowMax = 0u, missingMax = 0u;
+    for (int i = 0; i < 12; ++i) {
+        stepCompare(on, off, small, "(c2) small late list");
+        const AtomDrawStatus st = on.scene->atomDrawStatus();
+        overflowMax = std::max(overflowMax, st.cutOverflow);
+        missingMax = std::max(missingMax, st.cutMissing);
+    }
+    report("(c2) small", small);
+    CHECK_MSG(small.disoccludedMax > 20u && overflowMax == 0u && missingMax == 0u,
+              "(c2) the late list drew the whole-world disocclusion (disoccluded max %u) with no overflow (%u) "
+              "and nothing missing (%u)", small.disoccludedMax, overflowMax, missingMax);
 
     // (d) THE TURN: 180 degrees over 30 frames about the eye
     Tally turn;
