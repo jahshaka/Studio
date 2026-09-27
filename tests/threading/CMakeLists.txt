@@ -131,8 +131,9 @@ jah_fresh_home_fixture(threading.freshhome.gi_resolve threading_home_gi_resolve 
 
 jah_fresh_home_fixture(threading.freshhome.gi_resolve_serial threading_home_gi_resolve_serial "${_gir_home_ser}" LABELS "threading")
 
-# RUN_SERIAL on both halves, for the mode pair's reason above: each opens a project at Epic
-# and compiles a few dozen shaders (not a timing gate).
+# RUN_SERIAL on both halves (threading.gi_resolve and threading.gi_resolve_serial), for the
+# mode pair's reason above: each opens a project at Epic and compiles a few dozen shaders (not a
+# timing gate).
 add_test(NAME threading.gi_resolve
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/gi_resolve.js
