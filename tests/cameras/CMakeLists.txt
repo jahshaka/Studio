@@ -204,6 +204,14 @@ jah_pool_arm(cameras pilot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.
 # Same scratch-HOME contract as cameras.e2e.
 jah_pool_arm(cameras axis_lock ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js 5)
 
+# ---- cameras.pip_rebuild ---------------------------------------------------
+# VIEWS-XID-1: a camera's selection preview up, project.close(), a new scene,
+# 20 frames — the new scene's View holds no inset request and built none (the
+# View's own build count through editor.pip().builds), and the pool's kernel
+# journal read shows no Xid from the process. The engine half is
+# engine.test_engine's pip_request_dies_with_its_scene.
+jah_pool_arm(cameras pip_rebuild ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_pip_rebuild.js 6)
+
 # ---- THE POOL (lane SUITE-POOL-1): cameras.e2e and its four siblings (lens, postfx, pilot,
 # axis_lock) were five boots of the same verb module on the same scratch-home contract; they are
 # five arms of ONE process now (SPECS/audits/SUITE_REDUNDANCY_AUDIT_2026-09-27.md §6).
